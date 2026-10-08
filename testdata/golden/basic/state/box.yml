@@ -1,0 +1,12 @@
+domain: example.home
+timezone: Europe/Berlin
+dataDir: /mnt/data/stacks
+lanIp: 192.168.1.10
+roles:
+  proxy: caddy
+  sso: authelia
+gpu:
+  present: false
+dns:
+  provider: cloudflare
+  secretRef: CLOUDFLARE_API_TOKEN

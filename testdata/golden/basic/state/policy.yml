@@ -1,0 +1,10 @@
+tiers: [read, propose, apply, destroy]
+hands:
+  resident: {ceiling: read}
+  ops: {ceiling: propose}
+  pi: {ceiling: propose}
+  claude: {ceiling: apply, ttl: 8h}
+  human: {ceiling: destroy}
+approvals:
+  apply: {by: human}
+  destroy: {by: human, snapshot: required}

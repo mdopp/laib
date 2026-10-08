@@ -1,0 +1,4 @@
+/laib
+/dist/
+*.test
+coverage.out

@@ -1,0 +1,50 @@
+# Laib — house rules for every session, human or agent
+
+Laib is the agent-first control plane for one home box. Read `README.md`, then
+`docs/DESIGN.md`, then the ADR index in `docs/adr/README.md`. The decisions in
+`docs/adr/` are binding; the weirdness you are about to "fix" is usually one of
+them.
+
+## The three rules that outrank everything else
+
+1. **Scripts do the mechanics, agents produce artifacts.** An agent's output is
+   a diff, a proposal, a question, a report or a test. Applying, waiting,
+   polling, snapshotting, rolling back and notifying are done by `laib` itself,
+   because those must happen 100 % of the time, also when the session dies.
+   Never put a step that must always happen into prose an LLM re-reads.
+2. **Proof is on the box, not in-process.** A green unit test proves the
+   renderer. `laib apply` ending green on the box proves the feature. If you
+   cannot verify on the box, say so in those words.
+3. **KISS.** Under 15k production lines for the kernel, tests at most equal to
+   production lines, no gate until something recurs. Three similar lines beat a
+   premature abstraction. No feature flags for cases that cannot happen.
+
+## Where things are
+
+- State repo on the box: `/mnt/data/laib/state` (`docs/STATE.md`).
+- Journal: `/mnt/data/laib/journal/YYYY-MM-DD.jsonl`.
+- Quadlet output: `~/.config/containers/systemd/<service>/`.
+- Rendered proxy / sso / dns configs: `/mnt/data/laib/render/<role>/`.
+- The binary: `/var/opt/laib/laib`, unit `laib.service` (user `core`).
+
+## Working
+
+- **Issues first.** Non-trivial work starts as a GitHub issue: symptom, goal,
+  starting-point files, acceptance. The "how" evolves in the PR.
+- **Conventional Commits**, paren-free subjects beyond `(scope)`. Scopes mirror
+  the path: `feat(render)`, `fix(apply)`, `docs(adr)`, `feat(template)`.
+- **Releases via release-please only.** Never bump a version by hand.
+- **A renderer change ships with its golden file.** A PR that touches
+  `internal/render` and no `testdata/golden` fails review.
+- **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
+  check. Not the first time.
+- **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
+  live only in `secrets.age` on the box.
+- **Finish the work.** Done means merged, released, applied on the box and
+  verified green. If the operator must decide something, ask with concrete
+  options, as early as you know, then carry on.
+
+## Language
+
+Docs and commit messages in English. The operator speaks German; user-facing
+strings in the pages and the Solaris cards are German.

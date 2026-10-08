@@ -1,0 +1,22 @@
+name: whoami
+template: {registry: builtin, name: whoami, version: 1}
+routes:
+  - host: whoami
+    port: 8080
+    exposure: internal
+    auth: one_factor
+    group: family
+    caddy: |
+      request_body {
+        max_size 10MB
+      }
+secrets:
+  - name: WHOAMI_TOKEN
+oidc:
+  clientId: whoami
+  redirectUris: ["https://whoami.${DOMAIN}/callback"]
+data: []
+health:
+  http: http://127.0.0.1:8080/
+ports:
+  - {port: 8080, lan: false}

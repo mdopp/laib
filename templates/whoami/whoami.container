@@ -1,0 +1,15 @@
+[Unit]
+Description=whoami — the smallest service with a route, SSO and a secret
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:8080:80
+Environment=WHOAMI_NAME=${SERVICE}.${DOMAIN}
+Environment=TOKEN=${TOKEN}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

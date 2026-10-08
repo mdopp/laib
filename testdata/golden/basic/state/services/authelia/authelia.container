@@ -1,0 +1,19 @@
+[Unit]
+Description=Authelia (laib role: sso)
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:9091:9091
+Environment=TZ=${TZ}
+Environment=X_AUTHELIA_CONFIG=/config/configuration.yml,/laib/laib-access.yml,/laib/laib-clients.yml
+Environment=AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET=${JWT_SECRET}
+Environment=AUTHELIA_SESSION_SECRET=${SESSION_SECRET}
+Environment=AUTHELIA_STORAGE_ENCRYPTION_KEY=${STORAGE_KEY}
+Volume=${DATA_DIR}/authelia/config:/config:z
+Volume=/mnt/data/laib/render/authelia:/laib:ro,z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

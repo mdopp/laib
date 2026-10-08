@@ -1,0 +1,2 @@
+IMAGE: ghcr.io/mdopp/laib-caddy:2
+DNS_TOKEN: !secret CLOUDFLARE_API_TOKEN

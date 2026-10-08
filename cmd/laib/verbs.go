@@ -1,0 +1,489 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
+)
+
+// Exit codes (docs/INTERFACE.md).
+const (
+	exitOK       = 0
+	exitUsage    = 1
+	exitRed      = 2
+	exitRefused  = 3
+	exitLocked   = 4
+)
+
+func loadState(env *cliEnv) (*state.State, error) {
+	st, err := state.Load(env.paths.State)
+	if err != nil {
+		return nil, err
+	}
+	if err := policy.Validate(st.Policy); err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+// readiness is the one state with three values (docs/DESIGN.md).
+type readiness struct {
+	State     string `json:"state"`
+	Services  int    `json:"services"`
+	Green     int    `json:"green"`
+	Yellow    int    `json:"yellow"`
+	Red       int    `json:"red"`
+	LastHeard string `json:"lastHeard"`
+	Lock      string `json:"lock,omitempty"`
+}
+
+type serviceStatus struct {
+	Name   string            `json:"name"`
+	State  string            `json:"state"` // grün | gelb | rot
+	Units  map[string]string `json:"units"`
+	Detail string            `json:"detail,omitempty"`
+}
+
+func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness, []serviceStatus) {
+	var rows []serviceStatus
+	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
+	if holder := apply.LockHolder(env.paths); holder != "" {
+		r.State, r.Lock = "eingeschränkt", holder
+	}
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		row := serviceStatus{Name: name, State: "grün", Units: map[string]string{}}
+		for _, u := range svc.UnitNames() {
+			a := sysd.Active(ctx, u)
+			row.Units[u] = a
+			switch a {
+			case "active":
+			case "activating", "reloading":
+				if row.State == "grün" {
+					row.State = "gelb"
+				}
+			default:
+				row.State = "rot"
+			}
+		}
+		rows = append(rows, row)
+		r.Services++
+		switch row.State {
+		case "grün":
+			r.Green++
+		case "gelb":
+			r.Yellow++
+		default:
+			r.Red++
+		}
+	}
+	return r, rows
+}
+
+func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	r, rows := collectStatus(ctx, env, st)
+	if len(args) > 0 {
+		var one []serviceStatus
+		for _, row := range rows {
+			if row.Name == args[0] {
+				one = append(one, row)
+			}
+		}
+		rows = one
+	}
+	if env.json {
+		return emit(env, map[string]any{"ready": r, "services": rows})
+	}
+	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot\n", r.State, r.Services, r.Green, r.Yellow, r.Red)
+	if r.Lock != "" {
+		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
+	}
+	for _, row := range rows {
+		fmt.Printf("  %-5s %-20s", row.State, row.Name)
+		for u, a := range row.Units {
+			if a != "active" {
+				fmt.Printf(" %s=%s", u, a)
+			}
+		}
+		fmt.Println()
+	}
+	if e, ok := journal.Last(env.paths.Journal); ok {
+		fmt.Printf("Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+	}
+	return exitOK
+}
+
+func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+	if err != nil {
+		return fail(err)
+	}
+	only := ""
+	if len(args) > 0 {
+		only = args[0]
+	}
+	p, err := plan.Compute(ctx, st, sec, env.paths, only)
+	if err != nil {
+		return fail(err)
+	}
+	if env.json {
+		return emit(env, p)
+	}
+	if p.Empty() {
+		fmt.Println("Keine Änderung: die Box entspricht dem State.")
+	}
+	for _, c := range p.Changes {
+		fmt.Printf("%-6s %s\n", c.Kind, c.Target)
+		if c.Diff != "" {
+			fmt.Println(c.Diff)
+		}
+	}
+	for _, u := range p.Unmanaged {
+		fmt.Printf("nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+	}
+	return exitOK
+}
+
+func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	hand := strings.SplitN(env.actor, ":", 2)[0]
+	if !policy.Allowed(st.Policy, hand, "apply") {
+		fmt.Fprintf(os.Stderr, "laib: %s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"\n", env.actor, st.Policy.Hands[hand].Ceiling)
+		return exitRefused
+	}
+	only, reason := "", ""
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--reason" && i+1 < len(args):
+			reason = args[i+1]
+			i++
+		default:
+			only = args[i]
+		}
+	}
+	unlock, err := apply.Lock(env.paths, "apply:"+env.actor)
+	if errors.Is(err, apply.ErrLocked) {
+		fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
+		return exitLocked
+	}
+	if err != nil {
+		return fail(err)
+	}
+	defer unlock()
+
+	// Secrets: generate every declared non-external secret that is missing.
+	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+	if err != nil {
+		return fail(err)
+	}
+	changed := false
+	for _, s := range render.SecretNames(st) {
+		if _, ok := sec[s.Name]; ok {
+			continue
+		}
+		if s.External {
+			fmt.Fprintf(os.Stderr, "laib: secret %s is external and not set; add it to secrets.age first\n", s.Name)
+			return exitUsage
+		}
+		sec[s.Name] = secrets.Generate()
+		changed = true
+	}
+	if changed {
+		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
+			return fail(err)
+		}
+	}
+
+	p, err := plan.Compute(ctx, st, sec, env.paths, only)
+	if err != nil {
+		return fail(err)
+	}
+	start := time.Now()
+	res, err := apply.Run(ctx, st, p, env.paths, reason)
+	entry := journal.Entry{Actor: env.actor, Verb: "apply", Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
+	if err != nil {
+		entry.Result, entry.Detail = "red", err.Error()
+		journal.Append(env.paths.Journal, entry)
+		return fail(err)
+	}
+	entry.Result = "green"
+	if !res.Green {
+		entry.Result = "red"
+		var bad []string
+		for _, c := range res.Checks {
+			if !c.OK {
+				bad = append(bad, c.Service+": "+c.What+" "+c.Detail)
+			}
+		}
+		entry.Detail = strings.Join(bad, "; ")
+	}
+	if p.Empty() {
+		entry.Result, entry.Detail = "info", "no change"
+	}
+	if err := journal.Append(env.paths.Journal, entry); err != nil {
+		return fail(err)
+	}
+	if env.json {
+		emit(env, res)
+	} else {
+		for _, w := range res.Written {
+			fmt.Println("geschrieben:", w)
+		}
+		for _, u := range res.Restarted {
+			fmt.Println("neu gestartet:", u)
+		}
+		for _, c := range res.Checks {
+			mark := "ok "
+			if !c.OK {
+				mark = "ROT"
+			}
+			fmt.Printf("%s %s %s %s\n", mark, c.Service, c.What, c.Detail)
+		}
+		if res.Green {
+			fmt.Printf("grün · %s\n", res.Commit)
+		} else {
+			fmt.Printf("rot · %s · angewendet, aber verify ist rot\n", res.Commit)
+		}
+	}
+	if !res.Green {
+		return exitRed
+	}
+	return exitOK
+}
+
+func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
+	since := 24 * time.Hour
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--since" && i+1 < len(args) {
+			d, err := time.ParseDuration(args[i+1])
+			if err != nil {
+				return fail(err)
+			}
+			since = d
+			i++
+		}
+	}
+	es, err := journal.Read(env.paths.Journal, time.Now().Add(-since))
+	if err != nil {
+		return fail(err)
+	}
+	if env.json {
+		return emit(env, es)
+	}
+	for _, e := range es {
+		fmt.Printf("%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
+	}
+	return exitOK
+}
+
+func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	r, rows := collectStatus(ctx, env, st)
+	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
+	if env.json {
+		return emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
+	}
+	fmt.Printf("# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
+	fmt.Println("## Services")
+	for _, row := range rows {
+		fmt.Printf("- %s: %s\n", row.Name, row.State)
+	}
+	fmt.Println("\n## Journal, letzte 24h")
+	for _, e := range es {
+		fmt.Printf("- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
+	}
+	fmt.Println("\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
+	return exitOK
+}
+
+func cmdTemplate(_ context.Context, env *cliEnv, args []string) int {
+	if len(args) == 0 {
+		return fail(errors.New("usage: laib template lint <dir> | list"))
+	}
+	switch args[0] {
+	case "lint":
+		if len(args) < 2 {
+			return fail(errors.New("usage: laib template lint <dir>"))
+		}
+		return lintTemplate(args[1])
+	case "list":
+		st, err := loadState(env)
+		if err != nil {
+			return fail(err)
+		}
+		for _, name := range st.ServiceNames() {
+			t := st.Services[name].Contract.Template
+			fmt.Printf("%-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+		}
+		return exitOK
+	}
+	return fail(fmt.Errorf("unknown template subcommand %q", args[0]))
+}
+
+// lintTemplate loads a template folder as if it were the only service of a
+// throw-away state, so the same validation applies (ADR 0004).
+func lintTemplate(dir string) int {
+	tmp, err := os.MkdirTemp("", "laib-lint")
+	if err != nil {
+		return fail(err)
+	}
+	defer os.RemoveAll(tmp)
+	name := filepath.Base(filepath.Clean(dir))
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /tmp/lint\nlanIp: 10.0.0.2\ngpu: {present: true}\nroles: {sso: "+name+"}\n"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
+	dst := filepath.Join(tmp, "services", name)
+	os.MkdirAll(dst, 0o755)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fail(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+		os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "values.yml")); err != nil {
+		// A template ships values.example.yml; lint with it.
+		if b, err := os.ReadFile(filepath.Join(dir, "values.example.yml")); err == nil {
+			os.WriteFile(filepath.Join(dst, "values.yml"), b, 0o644)
+		}
+	}
+	st, err := state.Load(tmp)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return exitUsage
+	}
+	if _, err := render.Render(st, nil); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
+	return exitOK
+}
+
+func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
+	if len(args) != 1 {
+		return fail(errors.New("usage: laib adopt <quadlet folder>"))
+	}
+	name := args[0]
+	src := filepath.Join(env.paths.Quadlet, name)
+	dst := filepath.Join(env.paths.State, "services", name)
+	if _, err := os.Stat(dst); err == nil {
+		return fail(fmt.Errorf("services/%s exists already", name))
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fail(err)
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return fail(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		b, _ := os.ReadFile(filepath.Join(src, e.Name()))
+		os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
+	}
+	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
+	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
+	fmt.Printf("adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
+	return exitOK
+}
+
+func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
+	if len(args) != 1 {
+		return fail(errors.New("usage: laib ignore <unit>"))
+	}
+	p := filepath.Join(env.paths.State, "ignore.yml")
+	b, _ := os.ReadFile(p)
+	content := string(b)
+	if content == "" {
+		content = "units:\n"
+	}
+	if strings.Contains(content, "- "+args[0]+"\n") {
+		fmt.Println("already ignored:", args[0])
+		return exitOK
+	}
+	content += "  - " + args[0] + "\n"
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		return fail(err)
+	}
+	fmt.Println("ignored:", args[0])
+	return exitOK
+}
+
+func cmdInit(_ context.Context, env *cliEnv, args []string) int {
+	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
+	for i := 0; i+1 < len(args); i += 2 {
+		switch args[i] {
+		case "--domain":
+			domain = args[i+1]
+		case "--data-dir":
+			dataDir = args[i+1]
+		case "--lan-ip":
+			lanIP = args[i+1]
+		}
+	}
+	if domain == "" {
+		return fail(errors.New("usage: laib init --domain <domain> [--data-dir /mnt/data/stacks] [--lan-ip <ip>]"))
+	}
+	for _, d := range []string{env.paths.Home, env.paths.State, env.paths.Journal, env.paths.Render, filepath.Join(env.paths.State, "services")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return fail(err)
+		}
+	}
+	recipient, err := secrets.EnsureKey(env.paths.Key)
+	if err != nil {
+		return fail(err)
+	}
+	write := func(name, content string) error {
+		p := filepath.Join(env.paths.State, name)
+		if _, err := os.Stat(p); err == nil {
+			return nil
+		}
+		return os.WriteFile(p, []byte(content), 0o644)
+	}
+	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: false}\n", domain, dataDir, lanIP)); err != nil {
+		return fail(err)
+	}
+	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: propose}\n  pi: {ceiling: propose}\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  apply: {by: human}\n  destroy: {by: human, snapshot: required}\n"); err != nil {
+		return fail(err)
+	}
+	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
+		return fail(err)
+	}
+	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
+	return exitOK
+}

@@ -1,0 +1,10 @@
+# Rendered by laib: one OIDC client per service that declares oidc.
+identity_providers:
+  oidc:
+    clients:
+      - client_id: whoami
+        client_name: whoami
+        client_secret: "${secret:OIDC_WHOAMI_SECRET}"
+        redirect_uris:
+          - https://whoami.example.home/callback
+        scopes: [openid, profile, email, groups]

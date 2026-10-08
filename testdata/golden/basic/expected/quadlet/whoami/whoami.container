@@ -1,0 +1,15 @@
+[Unit]
+Description=whoami — the smallest service with a route, SSO and a secret
+
+[Container]
+Image=docker.io/traefik/whoami:v1.10
+PublishPort=127.0.0.1:8080:80
+Environment=WHOAMI_NAME=whoami.example.home
+Environment=TOKEN=${secret:WHOAMI_TOKEN}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
