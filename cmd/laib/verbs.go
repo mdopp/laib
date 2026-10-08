@@ -13,6 +13,7 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -21,11 +22,11 @@ import (
 
 // Exit codes (docs/INTERFACE.md).
 const (
-	exitOK       = 0
-	exitUsage    = 1
-	exitRed      = 2
-	exitRefused  = 3
-	exitLocked   = 4
+	exitOK      = 0
+	exitUsage   = 1
+	exitRed     = 2
+	exitRefused = 3
+	exitLocked  = 4
 )
 
 func loadState(env *cliEnv) (*state.State, error) {
@@ -185,94 +186,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 			only = args[i]
 		}
 	}
-	unlock, err := apply.Lock(env.paths, "apply:"+env.actor)
-	if errors.Is(err, apply.ErrLocked) {
-		fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
-		return exitLocked
-	}
-	if err != nil {
-		return fail(err)
-	}
-	defer unlock()
-
-	// Secrets: generate every declared non-external secret that is missing.
-	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
-	if err != nil {
-		return fail(err)
-	}
-	changed := false
-	for _, s := range render.SecretNames(st) {
-		if _, ok := sec[s.Name]; ok {
-			continue
-		}
-		if s.External {
-			fmt.Fprintf(os.Stderr, "laib: secret %s is external and not set; add it to secrets.age first\n", s.Name)
-			return exitUsage
-		}
-		sec[s.Name] = secrets.Generate()
-		changed = true
-	}
-	if changed {
-		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-			return fail(err)
-		}
-	}
-
-	p, err := plan.Compute(ctx, st, sec, env.paths, only)
-	if err != nil {
-		return fail(err)
-	}
-	start := time.Now()
-	res, err := apply.Run(ctx, st, p, env.paths, reason)
-	entry := journal.Entry{Actor: env.actor, Verb: "apply", Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
-	if err != nil {
-		entry.Result, entry.Detail = "red", err.Error()
-		journal.Append(env.paths.Journal, entry)
-		return fail(err)
-	}
-	entry.Result = "green"
-	if !res.Green {
-		entry.Result = "red"
-		var bad []string
-		for _, c := range res.Checks {
-			if !c.OK {
-				bad = append(bad, c.Service+": "+c.What+" "+c.Detail)
-			}
-		}
-		entry.Detail = strings.Join(bad, "; ")
-	}
-	if p.Empty() {
-		entry.Result, entry.Detail = "info", "no change"
-	}
-	if err := journal.Append(env.paths.Journal, entry); err != nil {
-		return fail(err)
-	}
-	if env.json {
-		emit(env, res)
-	} else {
-		for _, w := range res.Written {
-			fmt.Println("geschrieben:", w)
-		}
-		for _, u := range res.Restarted {
-			fmt.Println("neu gestartet:", u)
-		}
-		for _, c := range res.Checks {
-			mark := "ok "
-			if !c.OK {
-				mark = "ROT"
-			}
-			fmt.Printf("%s %s %s %s\n", mark, c.Service, c.What, c.Detail)
-		}
-		if res.Green {
-			fmt.Printf("grün · %s\n", res.Commit)
-		} else {
-			fmt.Printf("rot · %s · angewendet, aber verify ist rot\n", res.Commit)
-		}
-	}
-	if !res.Green {
-		return exitRed
-	}
-	return exitOK
+	return runApply(ctx, env, st, only, reason)
 }
 
 func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
@@ -441,7 +355,7 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 	return exitOK
 }
 
-func cmdInit(_ context.Context, env *cliEnv, args []string) int {
+func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
 	for i := 0; i+1 < len(args); i += 2 {
 		switch args[i] {
@@ -479,6 +393,9 @@ func cmdInit(_ context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
+		return fail(err)
+	}
+	if err := proposal.EnsureRepo(ctx, env.paths.State); err != nil {
 		return fail(err)
 	}
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {

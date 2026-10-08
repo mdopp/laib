@@ -28,11 +28,11 @@ type Check struct {
 
 // Result is what apply reports.
 type Result struct {
-	Commit   string   `json:"commit"`
-	Written  []string `json:"written"`
+	Commit    string   `json:"commit"`
+	Written   []string `json:"written"`
 	Restarted []string `json:"restarted"`
-	Checks   []Check  `json:"checks"`
-	Green    bool     `json:"green"`
+	Checks    []Check  `json:"checks"`
+	Green     bool     `json:"green"`
 }
 
 // ErrLocked means another apply holds the lock (state `eingeschränkt`).
