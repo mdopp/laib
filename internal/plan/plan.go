@@ -29,6 +29,7 @@ type Plan struct {
 	Changes   []Change      `json:"changes"`
 	Unmanaged []string      `json:"unmanaged"`
 	Services  []string      `json:"services"` // services with at least one change
+	Only      string        `json:"only,omitempty"`
 	Output    render.Output `json:"-"`
 }
 
@@ -62,7 +63,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	if err != nil {
 		return nil, err
 	}
-	p := &Plan{Output: out}
+	p := &Plan{Output: out, Only: only}
 	keys := make([]string, 0, len(out))
 	for k := range out {
 		keys = append(keys, k)

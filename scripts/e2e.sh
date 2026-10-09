@@ -72,5 +72,16 @@ NEW="$(grep -o 'TOKEN=[^ ]*' "$LAIB_QUADLET/whoami/whoami.container")"
 [ "$OLD" != "$NEW" ] || { echo "FAIL: rotate changed nothing"; exit 1; }
 if LAIB_ACTOR=ops "$BIN" secret rotate WHOAMI_TOKEN >/dev/null 2>&1; then echo "FAIL: ops rotated"; exit 1; fi
 
+# template update: service files refreshed from the template, values kept
+LAIB_ACTOR=ops "$BIN" template update whoami >/dev/null || { echo "FAIL: template update exit $?"; exit 1; }
+# the template brings its health URL back; nothing listens here, so verify
+# is red (exit 2) and says so, while the files are applied
+LAIB_ACTOR=human:e2e "$BIN" approve 3 >/dev/null && CODE=0 || CODE=$?
+[ "$CODE" = 2 ] || { echo "FAIL: approve #3 expected exit 2 (red verify), got $CODE"; exit 1; }
+grep -q "whoami:v1.11" "$LAIB_HOME/state/services/whoami/values.yml" || { echo "FAIL: values.yml not kept on template update"; exit 1; }
+"$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); reds=[e for e in es if e["result"]=="red"]; assert any("health" in e.get("detail","") for e in reds), "red verify not journaled: %r" % reds'
+sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME/state/services/whoami/laib.yml"
+LAIB_ACTOR=human:e2e "$BIN" apply whoami --reason "e2e: health stripped again" >/dev/null || { echo "FAIL: re-apply exit $?"; exit 1; }
+
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); verbs=[e["verb"] for e in es]; assert "apply" in verbs and "rollback" in verbs and "approve" in verbs, verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

@@ -61,7 +61,7 @@ func init() {
 		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", cmdRestore},
 		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 		{"context", "read", "starter bundle for an agent session", cmdContext},
-		{"template", "read", "lint <dir> | list", cmdTemplate},
+		{"template", "read", "lint <dir> | list | sync | update <service>", cmdTemplate},
 		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
 		{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
 		{"reject", "apply", "drop a proposal", cmdReject},

@@ -253,9 +253,9 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	return exitOK
 }
 
-func cmdTemplate(_ context.Context, env *cliEnv, args []string) int {
+func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib template lint <dir> | list"))
+		return fail(errors.New("usage: laib template lint <dir> | list | sync | update <service>"))
 	}
 	switch args[0] {
 	case "lint":
@@ -268,11 +268,46 @@ func cmdTemplate(_ context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return fail(err)
 		}
+		avail := availableTemplates(env)
+		if env.json {
+			return emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
+		}
+		fmt.Println("installiert:")
 		for _, name := range st.ServiceNames() {
 			t := st.Services[name].Contract.Template
-			fmt.Printf("%-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+			fmt.Printf("  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+		}
+		fmt.Println("verfügbar:")
+		for _, name := range sortedKeys(avail) {
+			fmt.Printf("  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return exitOK
+	case "sync":
+		st, err := loadState(env)
+		if err != nil {
+			return fail(err)
+		}
+		lines, err := syncRegistries(ctx, env, st)
+		for _, l := range lines {
+			fmt.Println("registry:", l)
+		}
+		if err != nil {
+			return fail(err)
+		}
+		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "template", Result: "info", Detail: "sync " + strings.Join(lines, "; ")})
+		return exitOK
+	case "update":
+		if len(args) < 2 {
+			return fail(errors.New("usage: laib template update <service>"))
+		}
+		st, err := loadState(env)
+		if err != nil {
+			return fail(err)
+		}
+		if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
+			return exitRefusedMsg(env, env.actor+" may not propose")
+		}
+		return templateUpdate(ctx, env, st, args[1])
 	}
 	return fail(fmt.Errorf("unknown template subcommand %q", args[0]))
 }

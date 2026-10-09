@@ -16,9 +16,16 @@ import (
 
 // Edit is one change an agent asks for without file access (issue #11).
 type Edit struct {
-	Patch string            // unified diff against the repo root
-	Set   map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
-	Add   *AddService
+	Patch  string            // unified diff against the repo root
+	Set    map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
+	Add    *AddService
+	Update *UpdateService // replace a service's template files, keep values.yml (#14)
+}
+
+// UpdateService refreshes services/<name> from a newer template folder.
+type UpdateService struct {
+	Name     string
+	Template fs.FS
 }
 
 // AddService copies a template folder into services/<name>.
@@ -76,6 +83,11 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	}
 	if e.Add != nil {
 		if err := addService(wt, e.Add); err != nil {
+			return fail(err)
+		}
+	}
+	if e.Update != nil {
+		if err := updateService(wt, e.Update); err != nil {
 			return fail(err)
 		}
 	}
@@ -196,6 +208,57 @@ func addService(wt string, a *AddService) error {
 	for k, v := range a.Values {
 		if err := setValue(filepath.Join(dst, "values.yml"), k, v); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// updateService copies every template file except values.example.yml over
+// services/<name>, removes unit files the new template no longer ships, and
+// keeps values.yml. The contract's name line follows the service name.
+func updateService(wt string, u *UpdateService) error {
+	dst := filepath.Join(wt, "services", u.Name)
+	if _, err := os.Stat(filepath.Join(dst, "laib.yml")); err != nil {
+		return fmt.Errorf("services/%s does not exist", u.Name)
+	}
+	entries, err := fs.ReadDir(u.Template, ".")
+	if err != nil {
+		return err
+	}
+	shipped := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() || e.Name() == "values.example.yml" || e.Name() == "README.md" {
+			continue
+		}
+		b, err := fs.ReadFile(u.Template, e.Name())
+		if err != nil {
+			return err
+		}
+		if e.Name() == "laib.yml" {
+			lines := strings.Split(string(b), "\n")
+			for i, l := range lines {
+				if strings.HasPrefix(l, "name: ") {
+					lines[i] = "name: " + u.Name
+				}
+			}
+			b = []byte(strings.Join(lines, "\n"))
+		}
+		mode := fs.FileMode(0o644)
+		if e.Name() == "post-deploy" {
+			mode = 0o755
+		}
+		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, mode); err != nil {
+			return err
+		}
+		shipped[e.Name()] = true
+	}
+	old, _ := os.ReadDir(dst)
+	for _, e := range old {
+		if e.IsDir() || e.Name() == "values.yml" || e.Name() == "laib.yml" || shipped[e.Name()] {
+			continue
+		}
+		if ext := filepath.Ext(e.Name()); ext == ".container" || ext == ".pod" || ext == ".volume" || ext == ".network" || ext == ".kube" || e.Name() == "post-deploy" {
+			os.Remove(filepath.Join(dst, e.Name()))
 		}
 	}
 	return nil

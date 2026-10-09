@@ -92,7 +92,7 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 		}
 		entry.Detail = strings.Join(bad, "; ")
 	}
-	if p.Empty() {
+	if p.Empty() && res.Green {
 		entry.Result, entry.Detail = "info", "no change"
 	}
 	record(env, st, entry)

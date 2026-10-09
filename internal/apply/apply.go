@@ -149,7 +149,16 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Restarted = append(res.Restarted, unit)
 		}
 	}
-	res.Checks = append(res.Checks, Verify(ctx, st, st.Order(p.Services))...)
+	// Verify what changed; with no change, the scoped service or everything.
+	targets := p.Services
+	if len(targets) == 0 {
+		if p.Only != "" {
+			targets = []string{p.Only}
+		} else {
+			targets = st.ServiceNames()
+		}
+	}
+	res.Checks = append(res.Checks, Verify(ctx, st, st.Order(targets))...)
 	// Post-deploy hooks run only for services whose verify is green.
 	redByService := map[string]bool{}
 	for _, c := range res.Checks {

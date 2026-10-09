@@ -14,9 +14,17 @@ type Box struct {
 	Laib     Laib   `yaml:"laib"`
 	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
 	// over, #16): only these services may declare hostNetwork: true.
-	HostNetwork []string `yaml:"hostNetwork"`
-	Notify      Notify   `yaml:"notify"`
-	Updates     Updates  `yaml:"updates"`
+	HostNetwork []string   `yaml:"hostNetwork"`
+	Notify      Notify     `yaml:"notify"`
+	Updates     Updates    `yaml:"updates"`
+	Registries  []Registry `yaml:"registries"`
+}
+
+// Registry is a Git repo whose templates/<name>/ folders are installable (#14).
+type Registry struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	Ref  string `yaml:"ref"` // branch or tag; default main
 }
 
 // Updates is the window for podman auto-update (#13). Empty days keep
