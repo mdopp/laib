@@ -49,6 +49,7 @@ type readiness struct {
 	Red       int    `json:"red"`
 	LastHeard string `json:"lastHeard"`
 	Lock      string `json:"lock,omitempty"`
+	Drift     int    `json:"drift"` // files on the box that differ from the state
 }
 
 type serviceStatus struct {
@@ -63,6 +64,11 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
+	}
+	if sec, err := secrets.Load(env.paths.Secrets, env.paths.Key); err == nil {
+		if p, err := plan.Compute(ctx, st, sec, env.paths, ""); err == nil {
+			r.Drift = len(p.Changes)
+		}
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
@@ -112,7 +118,7 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot\n", r.State, r.Services, r.Green, r.Yellow, r.Red)
+	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift)
 	if r.Lock != "" {
 		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
 	}

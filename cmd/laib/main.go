@@ -42,6 +42,7 @@ var verbs []verb
 func init() {
 	verbs = []verb{
 		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
+		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", cmdDiag},
 		{"plan", "read", "render the state and diff it against the box", cmdPlan},
 		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
