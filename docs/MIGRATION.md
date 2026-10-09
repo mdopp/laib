@@ -13,11 +13,17 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
 
 ## Order
 
-1. **Laib binary + state repo**, nothing applied. `laib init` writes `box.yml`
-   from ServiceBay's `config.json` (domain, data dir, timezone) and
-   `secrets.age` from ServiceBay's secrets store. `laib migrate servicebay`
-   writes `services/<name>/values.yml` for every installed template from
-   `installedTemplates` + `installedVariables`. Nothing runs yet.
+1. **Laib binary + state repo**, nothing applied. `laib init --domain …`,
+   then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
+   --templates <servicebay>/templates --out /mnt/data/laib/state` writes a draft
+   `services/<name>/` (laib.yml with routes from `reverseProxy.hosts`, secrets
+   and ports from `variables.json`, values.yml from `installedVariables`) for
+   every installed template and prints what it could not map. The drafts are
+   reviewed by hand; the Quadlet files are written from each template's Pod
+   YAML by the agent in the Werkstatt (ADR 0004: `.container` is the primary
+   form). Secrets: `laib secret set` for the external ones (DNS token, SMTP,
+   Fritz!Box, GitHub, Claude OAuth); everything else is re-generated on first
+   apply and the post-deploy hook re-seeds the app. Nothing runs yet.
 2. **Caddy beside NPM** on a different port, `laib apply caddy`. Routes are
    verified against `127.0.0.1` before DNS moves. Then AdGuard rewrites
    switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;

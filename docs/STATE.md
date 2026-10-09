@@ -93,6 +93,25 @@ and backup conventions spread over the ServiceBay codebase. It is the
 irreducible part of a template: an agent writing Quadlet files from an upstream
 compose file does not know on its own that port 8000 must never reach the WLAN.
 
+## services/<name>/post-deploy (optional)
+
+An executable. Runs after `laib apply` verified the service green, in the
+service folder, with `LAIB_SERVICE`, `LAIB_DOMAIN`, `LAIB_DATA_DIR`,
+`LAIB_TZ`, `LAIB_LAN_IP`, every `values.yml` key (secrets resolved) and
+`LAIB_SECRET_<NAME>` for every declared secret in its environment. Ten-minute
+timeout. Its output is journaled with secrets redacted; a non-zero exit turns
+the apply red. A line `laib-secret: NAME=value` on stdout stores a credential
+the hook created (an API token, a generated admin password) into
+`secrets.age`, so it is never printed again and survives a reinstall.
+
+This is where ServiceBay's `post-deploy.py` work lives on: first-run
+provisioning that only the app can do (Jellyfin's setup wizard, Immich's
+admin sign-up, Home Assistant onboarding, AdGuard's admin user, LLDAP
+seeding, a Mosquitto integration in Home Assistant). What those scripts also
+did, Laib renders instead: proxy hosts, OIDC clients, Authelia rules, LAN
+blocks, credential surfacing. A hook must be idempotent: it runs on every
+apply that touches the service.
+
 ## values.yml
 
 Plain `KEY: value`. Secrets are referenced, never written here:
