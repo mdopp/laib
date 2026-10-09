@@ -1,0 +1,21 @@
+[Unit]
+Description=llama-server router (laib role: model)
+After=network-online.target
+
+[Container]
+Image=${IMAGE}
+Network=host
+AddDevice=nvidia.com/gpu=all
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/llama/models:/models:z
+# Router mode: one server holds every preset and loads the one a request
+# names; the policy proxy in front decides which presets a mode allows.
+Exec=--host 127.0.0.1 --port ${ROUTER_PORT} --models-dir /models --models-max 1 --ctx-size ${CONTEXT_LENGTH} --alias ${MODEL_ALIAS}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

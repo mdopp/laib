@@ -1,0 +1,19 @@
+[Unit]
+Description=llama policy proxy and GPU lease (laib role: model)
+After=llama.service
+
+[Container]
+Image=docker.io/library/python:3.12-slim
+Network=host
+Volume=${DATA_DIR}/llama/lease:/lease:z
+Volume=%h/.config/containers/systemd/llama/lease.py:/lease.py:ro,z
+Environment=LEASE_DIR=/lease
+Environment=ROUTER_URL=http://127.0.0.1:${ROUTER_PORT}
+Environment=LISTEN_PORT=${PORT}
+Exec=python3 /lease.py
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

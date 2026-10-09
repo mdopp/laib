@@ -1,0 +1,18 @@
+[Unit]
+Description=llama-server embeddings (laib role: model)
+After=network-online.target
+
+[Container]
+Image=${IMAGE}
+Network=host
+AddDevice=nvidia.com/gpu=all
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/llama/models:/models:z
+Exec=--host 127.0.0.1 --port ${EMBED_PORT} --embeddings -m /models/${EMBED_FILE} --alias ${EMBED_ALIAS} --ctx-size 2048
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

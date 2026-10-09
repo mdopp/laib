@@ -1,0 +1,26 @@
+name: llama
+template: {registry: builtin, name: llama, version: 1}
+# The model role (ADR 0011): llama-server in router mode behind the policy
+# proxy that also serves the GPU lease. Host network (carve-out) so the
+# proxy, the router and the embeddings server share loopback and every
+# consumer reaches them at 127.0.0.1 (host services) or
+# host.containers.internal (isolated pods).
+hostNetwork: true
+gpu: true
+routes:
+  - host: llama                  # llama.<domain>: humans with a browser, Authelia-gated
+    port: 11435
+    exposure: public
+    auth: one_factor
+secrets: []
+data:
+  - path: ${DATA_DIR}/llama/models
+    backup: false                # GGUF downloads; re-fetched by the hook, never backed up
+  - path: ${DATA_DIR}/llama/lease
+health:
+  http: http://127.0.0.1:11435/health
+ports:
+  - {port: 11434, lan: false}    # the router, loopback only
+  - {port: 11436, lan: false}    # embeddings
+  # 11435 is deliberately reachable from the LAN (operator decision in
+  # solarisbay #1420): the house may use its models without a login.
