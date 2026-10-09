@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
     && mkdir -p /run/sshd /workspace \
-    && useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace
+    && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 22
