@@ -24,6 +24,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		addr = v
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/mcp", mcpHandler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		st, err := loadState(env)
 		w.Header().Set("Content-Type", "application/json")

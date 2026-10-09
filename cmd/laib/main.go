@@ -35,24 +35,31 @@ type cliEnv struct {
 
 func (e *cliEnv) err() *os.File { return os.Stderr }
 
-var verbs = []verb{
-	{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
-	{"plan", "read", "render the state and diff it against the box", cmdPlan},
-	{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
-	{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
-	{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
-	{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
-	{"context", "read", "starter bundle for an agent session", cmdContext},
-	{"template", "read", "lint <dir> | list", cmdTemplate},
-	{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
-	{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
-	{"reject", "apply", "drop a proposal", cmdReject},
-	{"adopt", "propose", "adopt an unmanaged Quadlet folder into services/", cmdAdopt},
-	{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
-	{"secret", "apply", "set <NAME> (value on stdin) | list", cmdSecret},
-	{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
-	{"serve", "read", "daemon: /ready, the three pages", cmdServe},
-	{"version", "read", "print the version", cmdVersion},
+// verbs is filled in init so the MCP handler (reached through cmdServe) may
+// read it without an initialization cycle.
+var verbs []verb
+
+func init() {
+	verbs = []verb{
+		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
+		{"plan", "read", "render the state and diff it against the box", cmdPlan},
+		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
+		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
+		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
+		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
+		{"context", "read", "starter bundle for an agent session", cmdContext},
+		{"template", "read", "lint <dir> | list", cmdTemplate},
+		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
+		{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
+		{"reject", "apply", "drop a proposal", cmdReject},
+		{"adopt", "propose", "adopt an unmanaged Quadlet folder into services/", cmdAdopt},
+		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
+		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},
+		{"secret", "apply", "set <NAME> (value on stdin) | list", cmdSecret},
+		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
+		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
+		{"version", "read", "print the version", cmdVersion},
+	}
 }
 
 func main() {

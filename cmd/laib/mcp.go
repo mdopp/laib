@@ -1,0 +1,196 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/token"
+)
+
+// MCP over streamable HTTP, JSON-RPC 2.0, stdlib only. The tool list is the
+// verb table filtered by the hand's ceiling (docs/INTERFACE.md); a call runs
+// the verb in-process with --json. One call at a time, because the verbs
+// write to os.Stdout and the capture swaps it.
+var mcpMu sync.Mutex
+
+// mcpVerbs are the verbs an agent may reach at all. serve, init and token are
+// the box's own business; secret set would put a value into a transcript.
+var mcpVerbs = map[string]bool{
+	"status": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true,
+	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "adopt": true, "ignore": true, "version": true,
+}
+
+type rpcRequest struct {
+	ID     json.RawMessage `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func rpcReply(w http.ResponseWriter, id json.RawMessage, result any, rerr *rpcError) {
+	w.Header().Set("Content-Type", "application/json")
+	msg := map[string]any{"jsonrpc": "2.0", "id": id}
+	if rerr != nil {
+		msg["error"] = rerr
+	} else {
+		msg["result"] = result
+	}
+	json.NewEncoder(w).Encode(msg)
+}
+
+// mcpHandler authenticates the bearer, then dispatches.
+func mcpHandler(env *cliEnv) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		store, err := token.Load(tokenPath(env))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rec, ok := store.Lookup(bearer, time.Now())
+		if bearer == "" || !ok {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		st, err := loadState(env)
+		if err != nil {
+			http.Error(w, "state: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		var req rpcRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			rpcReply(w, nil, nil, &rpcError{-32700, "parse error"})
+			return
+		}
+		hand := rec.Hand
+		switch req.Method {
+		case "initialize":
+			rpcReply(w, req.ID, map[string]any{
+				"protocolVersion": "2025-03-26",
+				"capabilities":    map[string]any{"tools": map[string]any{}},
+				"serverInfo":      map[string]any{"name": "laib", "version": Version},
+				"instructions":    "Laib is the control plane of this box. Your hand is " + hand + " (ceiling " + st.Policy.Hands[hand].Ceiling + "). Run laib_context first. Changes below your ceiling become proposals a human approves.",
+			}, nil)
+		case "notifications/initialized", "ping":
+			rpcReply(w, req.ID, map[string]any{}, nil)
+		case "tools/list":
+			rpcReply(w, req.ID, map[string]any{"tools": mcpTools(st, hand)}, nil)
+		case "tools/call":
+			var p struct {
+				Name string            `json:"name"`
+				Args map[string]string `json:"arguments"`
+			}
+			json.Unmarshal(req.Params, &p)
+			out, code := mcpCall(r.Context(), env, st, hand, p.Name, p.Args)
+			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != exitOK}, nil)
+		default:
+			rpcReply(w, req.ID, nil, &rpcError{-32601, "method not found: " + req.Method})
+		}
+	}
+}
+
+// mcpTools derives the tool list from the verb table.
+func mcpTools(st *state.State, hand string) []map[string]any {
+	var tools []map[string]any
+	for _, v := range verbs {
+		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) {
+			continue
+		}
+		tools = append(tools, map[string]any{
+			"name":        "laib_" + v.name,
+			"description": v.help + " (tier " + v.tier + ")",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"args": map[string]any{"type": "string", "description": "arguments exactly as on the command line, e.g. \"media --since 2h\" or \"\\\"reason text\\\"\""},
+				},
+			},
+		})
+	}
+	return tools
+}
+
+// mcpCall runs one verb as the hand, capturing stdout.
+func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]string) (string, int) {
+	verbName := strings.TrimPrefix(name, "laib_")
+	var v *verb
+	for i := range verbs {
+		if verbs[i].name == verbName {
+			v = &verbs[i]
+		}
+	}
+	if v == nil || !mcpVerbs[verbName] {
+		return "unknown tool " + name, exitUsage
+	}
+	if !policy.Allowed(st.Policy, hand, v.tier) {
+		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), exitRefused
+	}
+	mcpMu.Lock()
+	defer mcpMu.Unlock()
+	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand}
+	r, w, err := os.Pipe()
+	if err != nil {
+		return err.Error(), exitUsage
+	}
+	saved, savedErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() { io.Copy(&buf, r); close(done) }()
+	code := v.run(ctx, callEnv, splitArgs(args["args"]))
+	w.Close()
+	<-done
+	os.Stdout, os.Stderr = saved, savedErr
+	return buf.String(), code
+}
+
+// splitArgs splits a command-line string, honouring double quotes.
+func splitArgs(s string) []string {
+	var out []string
+	var cur strings.Builder
+	inQuote := false
+	has := false
+	for _, c := range s {
+		switch {
+		case c == '"':
+			inQuote = !inQuote
+			has = true
+		case c == ' ' && !inQuote:
+			if has {
+				out = append(out, cur.String())
+				cur.Reset()
+				has = false
+			}
+		default:
+			cur.WriteRune(c)
+			has = true
+		}
+	}
+	if has {
+		out = append(out, cur.String())
+	}
+	return out
+}
+
+var _ = proposal.Hand

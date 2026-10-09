@@ -20,6 +20,18 @@ def load_variables(template_dirs, name):
                 return json.load(f), p
     return None, None
 
+def backup_subdirs(template_dirs, name):
+    """dataSubdir entries of the template's servicebay.backup annotation, by regex
+    (no PyYAML dependency; the annotation is a YAML block inside Pod YAML)."""
+    for d in template_dirs:
+        p = os.path.join(d, name, "template.yml")
+        if os.path.exists(p):
+            text = open(p).read()
+            if "servicebay.backup" not in text:
+                return None
+            return re.findall(r"dataSubdir:\s*([^\s#]+)", text)
+    return None
+
 def yaml_str(s):
     return json.dumps(s)  # JSON strings are valid YAML scalars
 
@@ -98,8 +110,17 @@ def main():
         laib.append("secrets:" if secrets else "secrets: []")
         for s_ in secrets:
             laib.append(f"  - {{name: {s_['name']}" + (", external: true}" if s_["external"] else "}"))
-        laib.append("data:            # TODO: copy from the template's servicebay.backup annotation or declare `data: []` with a reason")
-        laib.append("  - path: ${DATA_DIR}/" + name)
+        subdirs = backup_subdirs(tdirs, name)
+        if subdirs:
+            laib.append("data:            # from the template's servicebay.backup annotation; review")
+            for sd in subdirs:
+                laib.append("  - path: ${DATA_DIR}/" + sd)
+        elif subdirs is None:
+            laib.append("data:            # TODO: the template declared no backup; declare paths or `data: []` with a reason")
+            laib.append("  - path: ${DATA_DIR}/" + name)
+            unmapped.append(f"{name}: no servicebay.backup annotation; data[] is a guess")
+        else:
+            laib.append("data: []         # template declared servicebay.backup without stores")
         laib.append("health: {}       # TODO: http health URL")
         laib.append("ports:" if ports else "ports: []")
         for p in ports:

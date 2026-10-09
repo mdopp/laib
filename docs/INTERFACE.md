@@ -91,10 +91,14 @@ once when the state changes.
 
 ## MCP
 
-`laib serve` exposes `/mcp` (streamable HTTP). Auth is a bearer token minted by
-`laib token mint <hand>`. `tools/list` returns only the verbs the hand's tier
-allows. Tool names equal verb names with `_` (`laib_status`, `laib_plan`).
-A `destroy`-tier call returns `{"pending": "<proposal id>"}` and never acts.
+`laib serve` exposes `/mcp` (streamable HTTP, JSON-RPC 2.0, stdlib). Auth is
+a bearer token minted by `laib token mint <hand>`; tokens are hashed in
+`/mnt/data/laib/tokens.json`, never in the state repo. `tools/list` returns
+only the verbs the hand's ceiling allows, named `laib_<verb>`, each taking one
+`args` string exactly as on the command line. `serve`, `init`, `token` and
+`secret` are never tools. A call above the ceiling answers exit 3 with the
+hint to propose. Claude Code: `claude mcp add --transport http laib
+http://127.0.0.1:5900/mcp --header "Authorization: Bearer <token>"`.
 
 ## Exit codes
 
