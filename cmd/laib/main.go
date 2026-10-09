@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"sort"
@@ -31,9 +32,18 @@ type cliEnv struct {
 	paths boxfs.Paths
 	json  bool
 	actor string
+	in    io.Reader // stdin for --patch; MCP passes the patch here
+	mcp   bool      // the call came over MCP: no file access, so propose needs content
 }
 
 func (e *cliEnv) err() *os.File { return os.Stderr }
+
+func (e *cliEnv) stdin() io.Reader {
+	if e.in != nil {
+		return e.in
+	}
+	return os.Stdin
+}
 
 // verbs is filled in init so the MCP handler (reached through cmdServe) may
 // read it without an initialization cycle.

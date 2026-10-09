@@ -12,7 +12,10 @@ laib diag [service]                  findings with severity and a proposed diff 
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
 laib rollback <service|commit>       git revert + apply
-laib propose "<reason>"              commit the working tree to a proposal branch, create an inbox entry
+laib propose "<reason>"              human with a shell: commit the working tree to a proposal branch
+laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
+laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
+laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property); validated in a worktree
 laib approve <id> | laib reject <id> merge or drop a proposal (tier check from policy.yml)
 laib backup                          restic snapshot of state, journal and declared data paths
 laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply

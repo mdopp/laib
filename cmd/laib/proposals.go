@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/templates"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/journal"
@@ -121,10 +126,11 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 	return exitOK
 }
 
+// cmdPropose has two shapes. A human with a shell: `laib propose "<grund>"`
+// commits the working tree. An agent over MCP (issue #11): `--patch` (diff
+// on stdin), `--set services/x/values.yml:KEY=VALUE`, `--add <template>
+// [--name n] [KEY=VALUE…]`, applied in a worktree and validated first.
 func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
-	if len(args) < 1 {
-		return fail(errors.New("usage: laib propose \"<grund>\""))
-	}
 	st, err := loadState(env)
 	if err != nil {
 		return fail(err)
@@ -133,7 +139,78 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(os.Stderr, "laib: %s may not propose\n", env.actor)
 		return exitRefused
 	}
-	p, err := proposal.Create(ctx, env.paths.State, inboxDir(env), env.actor, strings.Join(args, " "))
+	var edit proposal.Edit
+	var words []string
+	usePatch := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--patch":
+			usePatch = true
+		case "--set":
+			if i+1 >= len(args) {
+				return fail(errors.New("--set wants path:KEY=VALUE"))
+			}
+			k, v, ok := strings.Cut(args[i+1], "=")
+			if !ok {
+				return fail(errors.New("--set wants path:KEY=VALUE"))
+			}
+			if edit.Set == nil {
+				edit.Set = map[string]string{}
+			}
+			edit.Set[k] = v
+			i++
+		case "--add":
+			if i+1 >= len(args) {
+				return fail(errors.New("--add wants a template name"))
+			}
+			tpl, err := templateFS(env, args[i+1])
+			if err != nil {
+				return fail(err)
+			}
+			edit.Add = &proposal.AddService{Name: args[i+1], Template: tpl, Values: map[string]string{}}
+			i++
+		case "--name":
+			if edit.Add == nil || i+1 >= len(args) {
+				return fail(errors.New("--name follows --add"))
+			}
+			edit.Add.Name = args[i+1]
+			i++
+		default:
+			if edit.Add != nil && strings.Contains(args[i], "=") && !strings.Contains(args[i], " ") {
+				k, v, _ := strings.Cut(args[i], "=")
+				edit.Add.Values[k] = v
+				continue
+			}
+			words = append(words, args[i])
+		}
+	}
+	if usePatch {
+		b, err := io.ReadAll(env.stdin())
+		if err != nil {
+			return fail(err)
+		}
+		edit.Patch = string(b)
+	}
+	reason := strings.Join(words, " ")
+	if reason == "" {
+		return fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]] \"<grund>\""))
+	}
+	var p *proposal.Proposal
+	if edit.Patch == "" && edit.Set == nil && edit.Add == nil {
+		if env.mcp {
+			return fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
+		}
+		p, err = proposal.Create(ctx, env.paths.State, inboxDir(env), env.actor, reason)
+	} else {
+		p, err = proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, edit, func(dir string) error {
+			st, err := state.Load(dir)
+			if err != nil {
+				return err
+			}
+			_, err = render.Render(st, nil)
+			return err
+		})
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -194,4 +271,21 @@ func cmdApprove(ctx context.Context, env *cliEnv, args []string) int {
 }
 func cmdReject(ctx context.Context, env *cliEnv, args []string) int {
 	return decide(ctx, env, args, false)
+}
+
+// templateFS finds a template: a registry under /mnt/data/laib/registries
+// first (issue #14), then the built-ins embedded in the binary.
+func templateFS(env *cliEnv, name string) (fs.FS, error) {
+	regs, _ := filepath.Glob(filepath.Join(env.paths.Home, "registries", "*", "templates", name, "laib.yml"))
+	if len(regs) > 0 {
+		return os.DirFS(filepath.Dir(regs[0])), nil
+	}
+	sub, err := fs.Sub(templates.FS, name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fs.Stat(sub, "laib.yml"); err != nil {
+		return nil, fmt.Errorf("no template %q (built-in or in a registry)", name)
+	}
+	return sub, nil
 }

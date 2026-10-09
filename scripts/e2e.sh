@@ -59,5 +59,11 @@ grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL
 LAIB_ACTOR=human:e2e "$BIN" rollback >/dev/null
 grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" && { echo "FAIL: rollback did not revert"; exit 1; }
 
+# an agent-style proposal with content, approved by the human
+LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "e2e: newer whoami" >/dev/null
+LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null || { echo "FAIL: approve #2 exit $?"; exit 1; }
+grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL: --set proposal not applied"; exit 1; }
+OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io/traefik/whoami:v1.11 "e2e: second whoami" 2>&1 || true)"; echo "$OUT" | grep -q "already published" || { echo "FAIL: duplicate host not refused: $OUT"; exit 1; }
+
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); verbs=[e["verb"] for e in es]; assert "apply" in verbs and "rollback" in verbs and "approve" in verbs, verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

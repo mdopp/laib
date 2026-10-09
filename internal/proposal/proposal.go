@@ -81,7 +81,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, 
 	if err != nil {
 		return nil, err
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: time.Now().UTC()}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now()}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		// Run trims the output, so the two status columns may be gone; the
 		// path is always the last field.
@@ -197,3 +197,5 @@ func save(inbox string, p *Proposal) error {
 	}
 	return os.Rename(tmp, strings.TrimSuffix(tmp, ".tmp"))
 }
+
+func now() time.Time { return time.Now().UTC() }

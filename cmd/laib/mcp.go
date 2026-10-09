@@ -120,15 +120,21 @@ func mcpTools(st *state.State, hand string) []map[string]any {
 		tools = append(tools, map[string]any{
 			"name":        "laib_" + v.name,
 			"description": v.help + " (tier " + v.tier + ")",
-			"inputSchema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"args": map[string]any{"type": "string", "description": "arguments exactly as on the command line, e.g. \"media --since 2h\" or \"\\\"reason text\\\"\""},
-				},
-			},
+			"inputSchema": inputSchema(v.name),
 		})
 	}
 	return tools
+}
+
+func inputSchema(verb string) map[string]any {
+	props := map[string]any{
+		"args": map[string]any{"type": "string", "description": "arguments exactly as on the command line, e.g. \"media --since 2h\" or \"\\\"reason text\\\"\""},
+	}
+	if verb == "propose" {
+		props["args"] = map[string]any{"type": "string", "description": "the reason in quotes, plus --set services/<svc>/values.yml:KEY=VALUE (repeatable), --add <template> [--name <svc>] [KEY=VALUE…], or --patch together with the patch property"}
+		props["patch"] = map[string]any{"type": "string", "description": "a unified diff against the state repo root (paths like services/x/values.yml); applied in a worktree, validated, refused if the state does not load"}
+	}
+	return map[string]any{"type": "object", "properties": props}
 }
 
 // mcpCall runs one verb as the hand, capturing stdout.
@@ -148,7 +154,12 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	}
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
-	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand}
+	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true}
+	callArgs := splitArgs(args["args"])
+	if patch := args["patch"]; patch != "" {
+		callEnv.in = strings.NewReader(patch)
+		callArgs = append([]string{"--patch"}, callArgs...)
+	}
 	r, w, err := os.Pipe()
 	if err != nil {
 		return err.Error(), exitUsage
@@ -158,7 +169,7 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	var buf bytes.Buffer
 	done := make(chan struct{})
 	go func() { io.Copy(&buf, r); close(done) }()
-	code := v.run(ctx, callEnv, splitArgs(args["args"]))
+	code := v.run(ctx, callEnv, callArgs)
 	w.Close()
 	<-done
 	os.Stdout, os.Stderr = saved, savedErr
