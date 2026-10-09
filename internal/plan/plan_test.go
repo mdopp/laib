@@ -61,3 +61,26 @@ func contains(s, sub string) bool {
 		return false
 	})()
 }
+
+func TestRootKubeFileConflictsWithAService(t *testing.T) {
+	st, err := state.Load("../../testdata/golden/basic/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	paths := boxfs.Paths{Quadlet: filepath.Join(home, "q"), Render: filepath.Join(home, "r")}
+	os.MkdirAll(paths.Quadlet, 0o755)
+	os.WriteFile(filepath.Join(paths.Quadlet, "whoami.kube"), []byte("[Kube]\nYaml=x\n"), 0o644)
+	p, err := Compute(context.Background(), st, nil, paths, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Conflicts) != 1 || !contains(p.Conflicts[0], "whoami.service") || !contains(p.Conflicts[0], "whoami.kube") {
+		t.Fatalf("%v", p.Conflicts)
+	}
+	for _, u := range p.Unmanaged {
+		if u == "whoami.kube" {
+			t.Fatal("a conflicting file must not also count as merely unmanaged")
+		}
+	}
+}

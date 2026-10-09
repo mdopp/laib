@@ -72,6 +72,9 @@ func LockHolder(paths boxfs.Paths) string {
 // written atomically.
 func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, secrets map[string]string, reason string) (Result, error) {
 	res := Result{NewSecrets: map[string]string{}}
+	if len(p.Conflicts) > 0 {
+		return res, fmt.Errorf("unit name conflict, remove the other source first: %s", strings.Join(p.Conflicts, "; "))
+	}
 	commit, err := snapshot(ctx, paths.State, reason)
 	if err != nil {
 		return res, fmt.Errorf("snapshot: %w", err)

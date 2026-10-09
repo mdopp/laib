@@ -4,6 +4,22 @@ Only one box runs ServiceBay. So: no compatibility layer, no dual control
 plane for months, no feature flags. One weekend, one order, one script that
 reads ServiceBay's config once.
 
+## Running side by side
+
+Both run at once: ServiceBay in its container on 5888, Laib as a user
+service on 5900; separate state, separate nftables tables
+(`servicebay_lanblock` / `laib`), separate tokens. ServiceBay's `<name>.kube`
+files sit in the Quadlet root, Laib's units in `<name>/` folders. Three
+things cannot be shared:
+
+1. **A unit name.** Quadlet names units after the file, not the folder:
+   `media.kube` and `media/media.container` both produce `media.service`.
+   `laib plan` reports this as `KONFLIKT` and `laib apply` refuses it; stop
+   and remove ServiceBay's file first, then apply.
+2. **Ports 80/443.** Caddy starts on alternative ports beside NPM (step 2).
+3. **Whole-file configs.** Authelia, AdGuard rewrites and the SSH port 2222
+   (claude-dev vs Werkstatt) move as a whole, never half.
+
 ## Principle
 
 A service belongs to exactly one control plane, recorded in

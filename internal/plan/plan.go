@@ -4,6 +4,7 @@ package plan
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,8 @@ type Change struct {
 type Plan struct {
 	Changes   []Change      `json:"changes"`
 	Unmanaged []string      `json:"unmanaged"`
-	Services  []string      `json:"services"` // services with at least one change
+	Conflicts []string      `json:"conflicts,omitempty"` // unit names another generator source would also produce
+	Services  []string      `json:"services"`            // services with at least one change
 	Only      string        `json:"only,omitempty"`
 	Output    render.Output `json:"-"`
 }
@@ -114,7 +116,39 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		}
 	}
 	p.Unmanaged = unmanaged(st, paths)
+	p.Conflicts = unitConflicts(st, paths)
 	return p, nil
+}
+
+// unitConflicts finds Quadlet files in the directory root (ServiceBay's
+// <name>.kube, a hand-rolled <name>.container) that would generate the same
+// unit name as one of this state's services. Quadlet derives the unit name
+// from the file name, not the folder, so both sources cannot coexist: the
+// old file must go before apply (docs/MIGRATION.md, one owner per service).
+func unitConflicts(st *state.State, paths boxfs.Paths) []string {
+	entries, _ := os.ReadDir(paths.Quadlet)
+	rootUnits := map[string]string{}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		base := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+		switch filepath.Ext(e.Name()) {
+		case ".container", ".kube":
+			rootUnits[base+".service"] = e.Name()
+		case ".pod":
+			rootUnits[base+"-pod.service"] = e.Name()
+		}
+	}
+	var out []string
+	for _, name := range st.ServiceNames() {
+		for _, u := range st.Services[name].UnitNames() {
+			if file, ok := rootUnits[u]; ok {
+				out = append(out, fmt.Sprintf("%s: %s would also be generated from %s", name, u, file))
+			}
+		}
+	}
+	return out
 }
 
 // unmanaged lists Quadlet entries on the box that no service and no
@@ -130,6 +164,12 @@ func unmanaged(st *state.State, paths boxfs.Paths) []string {
 		name := e.Name()
 		if _, ok := st.Services[name]; ok || ignored[name] {
 			continue
+		}
+		if !e.IsDir() {
+			base := strings.TrimSuffix(name, filepath.Ext(name))
+			if _, ok := st.Services[base]; ok {
+				continue // reported as a conflict instead
+			}
 		}
 		out = append(out, name)
 	}

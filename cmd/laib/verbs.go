@@ -179,6 +179,9 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 	for _, u := range p.Unmanaged {
 		fmt.Printf("nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
 	}
+	for _, c := range p.Conflicts {
+		fmt.Printf("KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
+	}
 	return exitOK
 }
 
