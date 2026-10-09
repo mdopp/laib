@@ -33,10 +33,14 @@ type cliEnv struct {
 	actor string
 }
 
+func (e *cliEnv) err() *os.File { return os.Stderr }
+
 var verbs = []verb{
 	{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
 	{"plan", "read", "render the state and diff it against the box", cmdPlan},
 	{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
+	{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
+	{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
 	{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 	{"context", "read", "starter bundle for an agent session", cmdContext},
 	{"template", "read", "lint <dir> | list", cmdTemplate},

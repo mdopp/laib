@@ -3,11 +3,13 @@
 package apply
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -28,11 +30,12 @@ type Check struct {
 
 // Result is what apply reports.
 type Result struct {
-	Commit    string   `json:"commit"`
-	Written   []string `json:"written"`
-	Restarted []string `json:"restarted"`
-	Checks    []Check  `json:"checks"`
-	Green     bool     `json:"green"`
+	Commit     string            `json:"commit"`
+	Written    []string          `json:"written"`
+	Restarted  []string          `json:"restarted"`
+	Checks     []Check           `json:"checks"`
+	Green      bool              `json:"green"`
+	NewSecrets map[string]string `json:"-"` // emitted by post-deploy hooks; the caller stores them
 }
 
 // ErrLocked means another apply holds the lock (state `eingeschränkt`).
@@ -67,8 +70,8 @@ func LockHolder(paths boxfs.Paths) string {
 // Run applies a computed plan. The snapshot is a Git commit of the state repo
 // (the data-volume snapshot comes with backup, later); every written file is
 // written atomically.
-func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, reason string) (Result, error) {
-	var res Result
+func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, secrets map[string]string, reason string) (Result, error) {
+	res := Result{NewSecrets: map[string]string{}}
 	commit, err := snapshot(ctx, paths.State, reason)
 	if err != nil {
 		return res, fmt.Errorf("snapshot: %w", err)
@@ -122,6 +125,21 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	res.Checks = append(res.Checks, Verify(ctx, st, p.Services)...)
+	// Post-deploy hooks run only for services whose verify is green.
+	redByService := map[string]bool{}
+	for _, c := range res.Checks {
+		if !c.OK {
+			redByService[c.Service] = true
+		}
+	}
+	for _, name := range p.Services {
+		if redByService[name] {
+			continue
+		}
+		if c, ok := postDeploy(ctx, st, st.Services[name], secrets, res.NewSecrets); ok {
+			res.Checks = append(res.Checks, c)
+		}
+	}
 	res.Green = true
 	for _, c := range res.Checks {
 		if !c.OK {
@@ -129,6 +147,63 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	return res, nil
+}
+
+// postDeploy runs services/<name>/post-deploy if it exists and is executable
+// (ADR 0004). It gets the builtins, every value and LAIB_SECRET_<NAME> for the
+// service's declared secrets in its environment, runs in the service folder,
+// and may print `laib-secret: NAME=value` lines to hand a credential it
+// created (an API token, say) back into secrets.age. Non-zero exit is red.
+func postDeploy(ctx context.Context, st *state.State, svc *state.Service, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
+	hook := filepath.Join(svc.Dir, "post-deploy")
+	info, err := os.Stat(hook)
+	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+		return Check{}, false
+	}
+	env := append(os.Environ(),
+		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
+		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP)
+	for k, v := range svc.Values {
+		val := v.Literal
+		if v.Secret != "" {
+			val = secrets[v.Secret]
+		}
+		env = append(env, k+"="+val)
+	}
+	for _, sec := range svc.Contract.Secrets {
+		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
+	}
+	hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(hctx, hook)
+	cmd.Dir = svc.Dir
+	cmd.Env = env
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err = cmd.Run()
+	var kept []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "laib-secret: ") {
+			if k, v, ok := strings.Cut(strings.TrimPrefix(line, "laib-secret: "), "="); ok && k != "" {
+				newSecrets[k] = v
+			}
+			continue
+		}
+		kept = append(kept, line)
+	}
+	tail := strings.TrimSpace(strings.Join(kept, "\n"))
+	if len(tail) > 2000 {
+		tail = "…" + tail[len(tail)-2000:]
+	}
+	for k, v := range secrets {
+		if v != "" {
+			tail = strings.ReplaceAll(tail, v, "${secret:"+k+"}")
+		}
+	}
+	if err != nil {
+		return Check{Service: svc.Name, What: "post-deploy", OK: false, Detail: err.Error() + "\n" + tail}, true
+	}
+	return Check{Service: svc.Name, What: "post-deploy", OK: true, Detail: tail}, true
 }
 
 // Verify checks the named services (all when nil): unit active, health answers.

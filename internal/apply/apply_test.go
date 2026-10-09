@@ -41,16 +41,31 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 		}
 		return "", nil
 	}
+	hook := filepath.Join(repo, "services", "whoami", "post-deploy")
+	os.WriteFile(hook, []byte("#!/bin/sh\necho hello $LAIB_SERVICE\necho \"laib-secret: WHOAMI_API=abc123\"\n"), 0o755)
+	st.Services["whoami"].Dir = filepath.Join(repo, "services", "whoami")
 	p, err := plan.Compute(context.Background(), st, nil, paths, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := Run(context.Background(), st, p, paths, "first apply")
+	res, err := Run(context.Background(), st, p, paths, nil, "first apply")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !res.Green || res.Commit == "" {
 		t.Fatalf("%+v", res)
+	}
+	if res.NewSecrets["WHOAMI_API"] != "abc123" {
+		t.Fatalf("hook secret not captured: %+v", res.NewSecrets)
+	}
+	hookRan := false
+	for _, c := range res.Checks {
+		if c.What == "post-deploy" && c.Service == "whoami" && c.OK && strings.Contains(c.Detail, "hello whoami") {
+			hookRan = true
+		}
+	}
+	if !hookRan {
+		t.Fatalf("hook check missing: %+v", res.Checks)
 	}
 	if _, err := os.Stat(filepath.Join(paths.Quadlet, "whoami", "whoami.container")); err != nil {
 		t.Fatal("unit not written")

@@ -61,12 +61,20 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 		return fail(err)
 	}
 	start := time.Now()
-	res, err := apply.Run(ctx, st, p, env.paths, reason)
+	res, err := apply.Run(ctx, st, p, env.paths, sec, reason)
 	entry := journal.Entry{Actor: env.actor, Verb: "apply", Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result, entry.Detail = "red", err.Error()
 		journal.Append(env.paths.Journal, entry)
 		return fail(err)
+	}
+	if len(res.NewSecrets) > 0 {
+		for k, v := range res.NewSecrets {
+			sec[k] = v
+		}
+		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
+			return fail(err)
+		}
 	}
 	entry.Result = "green"
 	if !res.Green {

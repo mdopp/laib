@@ -74,3 +74,30 @@ func TestRedactHidesSecrets(t *testing.T) {
 		t.Fatal(red["x"])
 	}
 }
+
+func TestClientSecretHashIsDeterministicAndVerifiable(t *testing.T) {
+	a := PBKDF2SHA512("hunter2", "whoami")
+	b := PBKDF2SHA512("hunter2", "whoami")
+	if a != b {
+		t.Fatal("hash changes between renders; plan would never be quiet")
+	}
+	if !strings.HasPrefix(a, "$pbkdf2-sha512$310000$") || strings.Contains(a, "+") || strings.Contains(a, "=") {
+		t.Fatal(a)
+	}
+	if PBKDF2SHA512("hunter2", "other") == a {
+		t.Fatal("salt must depend on the client")
+	}
+	out, _ := Render(mustLoad(t), map[string]string{"OIDC_WHOAMI_SECRET": "hunter2"})
+	if !strings.Contains(out["authelia/laib-clients.yml"], "$pbkdf2-sha512$") || strings.Contains(out["authelia/laib-clients.yml"], "hunter2") {
+		t.Fatal(out["authelia/laib-clients.yml"])
+	}
+}
+
+func mustLoad(t *testing.T) *state.State {
+	t.Helper()
+	st, err := state.Load("../../testdata/golden/basic/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}

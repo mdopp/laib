@@ -3,10 +3,15 @@
 package render
 
 import (
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+
+	"golang.org/x/crypto/pbkdf2"
 
 	"github.com/mdopp/laib/internal/state"
 )
@@ -201,7 +206,7 @@ func autheliaClients(st *state.State, secrets map[string]string) string {
 		if o == nil {
 			continue
 		}
-		fmt.Fprintf(&b, "      - client_id: %s\n        client_name: %s\n        client_secret: %q\n        redirect_uris:\n", o.ClientID, name, secretValue(secrets, oidcSecretName(o.ClientID)))
+		fmt.Fprintf(&b, "      - client_id: %s\n        client_name: %s\n        client_secret: %q\n        redirect_uris:\n", o.ClientID, name, clientSecretHash(secrets, o.ClientID))
 		for _, u := range o.RedirectURIs {
 			fmt.Fprintf(&b, "          - %s\n", strings.ReplaceAll(u, "${DOMAIN}", st.Box.Domain))
 		}
@@ -239,4 +244,32 @@ func nftables(st *state.State) string {
 	return "# Rendered by laib: ports declared lan: false are dropped on physical interfaces.\n" +
 		"table inet laib {\n\tchain input {\n\t\ttype filter hook input priority -10; policy accept;\n" +
 		"\t\tiifname != \"lo\" tcp dport { " + strings.Join(ports, ", ") + " } drop\n\t}\n}\n"
+}
+
+// clientSecretHash renders Authelia's expected PBKDF2-SHA512 digest of the
+// client secret: `$pbkdf2-sha512$<iter>$<salt>$<key>` with the salt and key
+// in passlib's adapted base64 ('.' for '+', no padding). The salt is derived
+// from the secret and client id so a re-render is byte-identical and `laib
+// plan` stays quiet (ADR 0001). The plain value stays with the service.
+func clientSecretHash(secrets map[string]string, clientID string) string {
+	name := oidcSecretName(clientID)
+	plain, ok := secrets[name]
+	if !ok || plain == "" {
+		return Placeholder(name)
+	}
+	return PBKDF2SHA512(plain, clientID)
+}
+
+const pbkdf2Iterations = 310000
+
+// PBKDF2SHA512 is exported for the test that re-derives it.
+func PBKDF2SHA512(plain, saltSeed string) string {
+	sum := sha256.Sum256([]byte("laib-oidc-salt:" + saltSeed + ":" + plain))
+	salt := sum[:16]
+	key := pbkdf2.Key([]byte(plain), salt, pbkdf2Iterations, 64, sha512.New)
+	return fmt.Sprintf("$pbkdf2-sha512$%d$%s$%s", pbkdf2Iterations, ab64(salt), ab64(key))
+}
+
+func ab64(b []byte) string {
+	return strings.ReplaceAll(base64.RawStdEncoding.EncodeToString(b), "+", ".")
 }
