@@ -12,6 +12,16 @@ type Box struct {
 	Backup   Backup `yaml:"backup"`
 	DNS      DNS    `yaml:"dns"`
 	Laib     Laib   `yaml:"laib"`
+	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
+	// over, #16): only these services may declare hostNetwork: true.
+	HostNetwork []string `yaml:"hostNetwork"`
+	Notify      Notify   `yaml:"notify"`
+}
+
+// Notify is the webhook Laib posts red results, proposals and readiness
+// changes to (#15). Empty means polling only.
+type Notify struct {
+	URL string `yaml:"url"`
 }
 
 // Laib is the box page and MCP listener itself (ADR 0012): where it listens,
@@ -81,6 +91,7 @@ type Contract struct {
 	Ports        []Port      `yaml:"ports"`
 	GPU          bool        `yaml:"gpu"`
 	HostNetwork  bool        `yaml:"hostNetwork"`
+	After        []string    `yaml:"after"` // services restarted and verified before this one (#12)
 	MigratedFrom string      `yaml:"migratedFrom"`
 }
 

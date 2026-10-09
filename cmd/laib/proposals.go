@@ -95,9 +95,7 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 	if p.Empty() {
 		entry.Result, entry.Detail = "info", "no change"
 	}
-	if err := journal.Append(env.paths.Journal, entry); err != nil {
-		return fail(err)
-	}
+	record(env, st, entry)
 	if env.json {
 		emit(env, res)
 	} else {
@@ -214,7 +212,7 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s", p.ID, strings.Join(p.Files, " "))})
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s", p.ID, strings.Join(p.Files, " "))})
 	if env.json {
 		return emit(env, p)
 	}
@@ -246,7 +244,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		if err := proposal.Reject(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
 			return fail(err)
 		}
-		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
 		fmt.Printf("Vorschlag #%d abgelehnt.\n", p.ID)
 		return exitOK
 	}
@@ -257,7 +255,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		}
 		return fail(err)
 	}
-	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
 	// The merged state is the new truth: reload and apply it.
 	st, err = loadState(env)
 	if err != nil {

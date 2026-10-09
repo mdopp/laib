@@ -203,6 +203,34 @@ func (st *State) validate() []error {
 		if c.GPU && !st.Box.GPU.Present {
 			fail("services/%s/laib.yml: gpu: true but box.yml gpu.present is false", name)
 		}
+		carveOut := false
+		for _, h := range st.Box.HostNetwork {
+			if h == name {
+				carveOut = true
+			}
+		}
+		unitHost := false
+		for _, content := range svc.Units {
+			if unitUsesHostNetwork(content) {
+				unitHost = true
+			}
+		}
+		switch {
+		case unitHost && !c.HostNetwork:
+			fail("services/%s: a unit says Network=host but laib.yml does not declare hostNetwork: true", name)
+		case !unitHost && c.HostNetwork:
+			fail("services/%s: laib.yml declares hostNetwork: true but no unit says Network=host", name)
+		case c.HostNetwork && !carveOut:
+			fail("services/%s: hostNetwork needs the service in box.yml hostNetwork (the closed carve-out list)", name)
+		}
+		for _, dep := range c.After {
+			if _, ok := st.Services[dep]; !ok {
+				fail("services/%s/laib.yml: after names %q, which is not under services/", name, dep)
+			}
+			if dep == name {
+				fail("services/%s/laib.yml: after names itself", name)
+			}
+		}
 		for file, content := range svc.Units {
 			for _, v := range Placeholders(content) {
 				if _, ok := svc.Values[v]; ok || builtin(v) {
@@ -268,4 +296,64 @@ func (svc *Service) UnitNames() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+var hostNetRe = regexp.MustCompile(`(?m)^\s*Network\s*=\s*host\s*$`)
+
+// unitUsesHostNetwork reports whether a Quadlet unit asks for the host
+// network namespace.
+func unitUsesHostNetwork(content string) bool { return hostNetRe.MatchString(content) }
+
+// Order returns the service names in apply order (#12): platform roles first
+// (identity, sso, proxy, dns, model), then everything else alphabetically,
+// with `after:` honoured by moving a service behind its dependencies.
+func (st *State) Order(names []string) []string {
+	rank := map[string]int{}
+	for i, role := range []string{st.Box.Roles.Identity, st.Box.Roles.SSO, st.Box.Roles.Proxy, st.Box.Roles.DNS, st.Box.Roles.Model} {
+		if role != "" {
+			rank[role] = i + 1
+		}
+	}
+	sorted := append([]string(nil), names...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		ri, rj := rank[sorted[i]], rank[sorted[j]]
+		if ri == 0 {
+			ri = 100
+		}
+		if rj == 0 {
+			rj = 100
+		}
+		if ri != rj {
+			return ri < rj
+		}
+		return sorted[i] < sorted[j]
+	})
+	// after: a few passes of "move behind the last dependency"; N is small.
+	for pass := 0; pass < len(sorted); pass++ {
+		moved := false
+		for i, name := range sorted {
+			svc, ok := st.Services[name]
+			if !ok {
+				continue
+			}
+			last := -1
+			for _, dep := range svc.Contract.After {
+				for j, other := range sorted {
+					if other == dep && j > last {
+						last = j
+					}
+				}
+			}
+			if last > i {
+				sorted = append(sorted[:i], sorted[i+1:]...)
+				sorted = append(sorted[:last], append([]string{name}, sorted[last:]...)...)
+				moved = true
+				break
+			}
+		}
+		if !moved {
+			break
+		}
+	}
+	return sorted
 }

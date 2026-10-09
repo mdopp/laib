@@ -133,10 +133,14 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			}
 		}
 	}
-	for _, name := range st.ServiceNames() {
-		if !restart[name] {
-			continue
+	var restartOrder []string
+	for name := range restart {
+		if _, ok := st.Services[name]; ok {
+			restartOrder = append(restartOrder, name)
 		}
+	}
+	restartOrder = st.Order(restartOrder)
+	for _, name := range restartOrder {
 		for _, unit := range st.Services[name].UnitNames() {
 			if err := sysd.Restart(ctx, unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: name, What: "restart " + unit, OK: false, Detail: err.Error()})
@@ -145,7 +149,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Restarted = append(res.Restarted, unit)
 		}
 	}
-	res.Checks = append(res.Checks, Verify(ctx, st, p.Services)...)
+	res.Checks = append(res.Checks, Verify(ctx, st, st.Order(p.Services))...)
 	// Post-deploy hooks run only for services whose verify is green.
 	redByService := map[string]bool{}
 	for _, c := range res.Checks {

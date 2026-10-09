@@ -74,3 +74,43 @@ func TestPlaceholdersAreDistinctAndOrdered(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestNetworkContractIsLinted(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "services/auth/auth.container", "[Container]\nImage=x\nNetwork=host\n")
+	_, err := Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "does not declare hostNetwork") {
+		t.Fatalf("unit on host network without contract accepted: %v", err)
+	}
+	write(t, dir, "services/auth/laib.yml", "name: auth\nhostNetwork: true\nroutes: [{host: auth, port: 9091, exposure: public, auth: none}]\n")
+	_, err = Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "closed carve-out list") {
+		t.Fatalf("hostNetwork outside the carve-out list accepted: %v", err)
+	}
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\nroles: {sso: auth}\nhostNetwork: [auth]\n")
+	if _, err := Load(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOrderRolesFirstThenAfter(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "services/zed/laib.yml", "name: zed\nafter: [bee]\n")
+	write(t, dir, "services/zed/zed.container", "[Container]\nImage=x\n")
+	write(t, dir, "services/bee/laib.yml", "name: bee\n")
+	write(t, dir, "services/bee/bee.container", "[Container]\nImage=x\n")
+	write(t, dir, "services/aaa/laib.yml", "name: aaa\nafter: [zed]\n")
+	write(t, dir, "services/aaa/aaa.container", "[Container]\nImage=x\n")
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(st.Order(st.ServiceNames()), ",")
+	if got != "auth,bee,zed,aaa" {
+		t.Fatal(got)
+	}
+	write(t, dir, "services/aaa/laib.yml", "name: aaa\nafter: [ghost, aaa]\n")
+	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "ghost") || !strings.Contains(err.Error(), "names itself") {
+		t.Fatalf("bad after accepted: %v", err)
+	}
+}

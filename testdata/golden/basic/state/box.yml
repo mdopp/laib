@@ -2,6 +2,9 @@ domain: example.home
 timezone: Europe/Berlin
 dataDir: /mnt/data/stacks
 lanIp: 192.168.1.10
+hostNetwork: [caddy]
+notify:
+  url: http://127.0.0.1:8787/api/laib-events
 roles:
   proxy: caddy
   sso: authelia
