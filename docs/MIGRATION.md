@@ -32,14 +32,16 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
 3. **auth** (Authelia + LLDAP): `laib apply auth`. OIDC clients are rendered
    from every `services/*/laib.yml`, which at this point is the full list,
    so no client is dropped (the #1724 failure class cannot occur).
-4. **adguard**, then **vaultwarden, radicale, mosquitto, file-share, beets,
+4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
+   moves from solarisbay into Laib with the lease sidecar; Solaris and
+   foundry-chronicle get the new lease address in their values. Then **vaultwarden, radicale, mosquitto, file-share, beets,
    immich, media, home-assistant** in that order: small and stateless first,
    the ones with migrations last. Each one: `laib plan <name>`, read the diff,
    `laib apply <name>`, verify green, disable ServiceBay's unit.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template, same
    `/workspace` volume, so checkouts and sessions survive.
-6. **Solaris**: `llama` and `solaris` templates move last; the `ops` profile
-   gets its token from `laib token mint ops`.
+6. **Solaris**: the `solaris` template moves; the `ops` profile gets its
+   token from `laib token mint ops`, the lease module becomes a client.
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    ServiceBay's assist catalog is imported into `docs/assists/` of this repo
    by `laib migrate assists` (text only, secrets scanned).

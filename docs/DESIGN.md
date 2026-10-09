@@ -122,8 +122,10 @@ the same card both times and never chooses the agent; a router does:
 
 ## Solaris and the GPU
 
-Solaris keeps the model lease and its modes. Laib declares the GPU as a
-resource in `box.yml` so `laib plan` shows a conflict before apply. The
+The model server, router, policy proxy and the lease endpoint are the Laib
+template `llama` with the role `model` (ADR 0011). Solaris is a client of the
+lease and keeps the judgement about when to ask for a mode. `box.yml`
+declares the GPU so `laib plan` shows a conflict before apply. The
 Werkstatt's working window is a systemd timer; deciding to postpone a ticket
 because of movie night is Solaris's call, because only Solaris knows the
 calendar. The `ops` profile always runs on the household model and never takes

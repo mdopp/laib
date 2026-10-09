@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/secrets"
 )
 
 // cmdServe is the daemon: /ready for Solaris and the pages, and the three
@@ -20,8 +23,34 @@ import (
 // Authelia sit in front of it; the listener is loopback only.
 func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	addr := "127.0.0.1:5900"
+	if st, err := loadState(env); err == nil {
+		addr = fmt.Sprintf("%s:%d", st.Box.Laib.Listen, st.Box.Laib.Port)
+	}
 	if v := os.Getenv("LAIB_LISTEN"); v != "" {
 		addr = v
+	}
+	// viaProxy: the pages trust Remote-User only behind Caddy's secret header.
+	// Before a proxy role exists there is no secret and loopback is the only
+	// listener, so the pages are open to the box operator (ADR 0012).
+	viaProxy := func(r *http.Request) bool {
+		sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+		if err != nil {
+			return false
+		}
+		want, ok := sec[render.ProxySecret]
+		if !ok || want == "" {
+			return strings.HasPrefix(r.RemoteAddr, "127.0.0.1:")
+		}
+		return subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Laib-Proxy")), []byte(want)) == 1
+	}
+	guard := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !viaProxy(r) {
+				http.Error(w, "nur über laib.<domain> (Authelia)", http.StatusForbidden)
+				return
+			}
+			h(w, r)
+		}
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpHandler(env))
@@ -36,7 +65,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		rd, _ := collectStatus(r.Context(), env, st)
 		json.NewEncoder(w).Encode(rd)
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -68,8 +97,8 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`)
 		page(w, "Status", b.String())
-	})
-	mux.HandleFunc("/inbox", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(inboxDir(env), true)
 		var b strings.Builder
 		b.WriteString("<h1>Inbox</h1>")
@@ -86,8 +115,8 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		b.WriteString("<p><a href=\"/\">Status</a> · <a href=\"/journal\">Journal</a></p>")
 		page(w, "Inbox", b.String())
-	})
-	mux.HandleFunc("POST /inbox/{id}/{decision}", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(func(w http.ResponseWriter, r *http.Request) {
 		// Authelia hands the user in Remote-User; without it the actor is the web itself.
 		actor := "human:" + r.Header.Get("Remote-User")
 		if actor == "human:" {
@@ -100,8 +129,8 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			return
 		}
 		http.Redirect(w, r, "/journal", http.StatusSeeOther)
-	})
-	mux.HandleFunc("/journal", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/journal", guard(func(w http.ResponseWriter, r *http.Request) {
 		es, err := journal.Read(env.paths.Journal, time.Now().Add(-7*24*time.Hour))
 		var b strings.Builder
 		b.WriteString("<h1>Journal · 7 Tage</h1>")
@@ -115,7 +144,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		b.WriteString("</table><p><a href=\"/\">Status</a></p>")
 		page(w, "Journal", b.String())
-	})
+	}))
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

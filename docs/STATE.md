@@ -30,6 +30,12 @@ roles:                            # which service plays which platform role
   sso: authelia
   identity: lldap
   dns: adguard
+  model: llama                    # llama-server + lease, needs gpu.present (ADR 0011)
+laib:                             # the box page and /mcp (ADR 0012); all optional
+  host: laib                      # laib.<domain>, Authelia group below
+  port: 5900
+  listen: 127.0.0.1               # 0.0.0.0 so pods reach /mcp; the LAN is dropped by nftables
+  group: admins
 gpu:
   present: true
   owner: solaris                  # the service that holds the lease

@@ -46,7 +46,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		}
 	}
 	if st.Box.Roles.Proxy != "" {
-		out["caddy/Caddyfile"] = caddyfile(st)
+		out["caddy/Caddyfile"] = caddyfile(st, secrets)
 	}
 	if st.Box.Roles.SSO != "" {
 		out["authelia/laib-access.yml"] = autheliaAccess(st)
@@ -116,9 +116,17 @@ func Redact(out Output, secrets map[string]string) Output {
 	return red
 }
 
-// SecretNames lists every secret a state declares, sorted.
+// ProxySecret is the header value Caddy adds so the pages know a request
+// came through Authelia and not from a process on the box (ADR 0012).
+const ProxySecret = "LAIB_PROXY_SECRET"
+
+// SecretNames lists every secret a state declares, sorted. Laib's own proxy
+// secret is always declared when a proxy role exists.
 func SecretNames(st *state.State) []state.Secret {
 	var out []state.Secret
+	if st.Box.Roles.Proxy != "" {
+		out = append(out, state.Secret{Name: ProxySecret})
+	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		out = append(out, svc.Contract.Secrets...)
@@ -179,7 +187,7 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
-func caddyfile(st *state.State) string {
+func caddyfile(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
 	b.WriteString("# Rendered by laib. Do not edit; change services/*/laib.yml and run laib apply.\n")
 	b.WriteString("{\n\temail admin@" + st.Box.Domain + "\n")
@@ -189,6 +197,15 @@ func caddyfile(st *state.State) string {
 	b.WriteString("}\n\n")
 	if st.Box.Roles.SSO != "" {
 		fmt.Fprintf(&b, "(authelia) {\n\tforward_auth 127.0.0.1:%d {\n\t\turi /api/authz/forward-auth\n\t\tcopy_headers Remote-User Remote-Groups Remote-Email Remote-Name\n\t}\n}\n\n", ssoPort(st))
+	}
+	if st.Box.Roles.Proxy != "" {
+		// Laib's own page: LAN only, Authelia, and a proxy secret so the pages
+		// trust Remote-User only when it arrived through Caddy (ADR 0012).
+		fmt.Fprintf(&b, "%s {\n\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host))
+		if st.Box.Roles.SSO != "" {
+			b.WriteString("\t\timport authelia\n")
+		}
+		fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d {\n\t\t\theader_up X-Laib-Proxy %q\n\t\t}\n\t}\n\trespond 403\n}\n\n", st.Box.Laib.Port, secretValue(secrets, ProxySecret))
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
@@ -220,6 +237,7 @@ func caddyfile(st *state.State) string {
 func autheliaAccess(st *state.State) string {
 	var b strings.Builder
 	b.WriteString("# Rendered by laib: one rule per route. The apex deny and the wildcard\n# default live in the auth service's own config.\naccess_control:\n  rules:\n")
+	fmt.Fprintf(&b, "    - domain: %s\n      policy: one_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
 			policy := r.Auth
@@ -268,6 +286,9 @@ func adguardRewrites(st *state.State) string {
 
 func nftables(st *state.State) string {
 	var ports []string
+	if st.Box.Laib.Listen != "127.0.0.1" {
+		ports = append(ports, fmt.Sprint(st.Box.Laib.Port))
+	}
 	for _, name := range st.ServiceNames() {
 		for _, p := range st.Services[name].Contract.Ports {
 			if !p.LAN {

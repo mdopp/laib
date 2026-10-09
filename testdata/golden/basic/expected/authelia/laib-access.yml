@@ -2,6 +2,9 @@
 # default live in the auth service's own config.
 access_control:
   rules:
+    - domain: laib.example.home
+      policy: one_factor
+      subject: "group:admins"
     - domain: auth.example.home
       policy: bypass
     - domain: whoami.example.home

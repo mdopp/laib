@@ -11,6 +11,16 @@ type Box struct {
 	GPU      GPU    `yaml:"gpu"`
 	Backup   Backup `yaml:"backup"`
 	DNS      DNS    `yaml:"dns"`
+	Laib     Laib   `yaml:"laib"`
+}
+
+// Laib is the box page and MCP listener itself (ADR 0012): where it listens,
+// and the host Caddy publishes it under for admins.
+type Laib struct {
+	Host   string `yaml:"host"`   // default "laib" → laib.<domain>
+	Port   int    `yaml:"port"`   // default 5900
+	Listen string `yaml:"listen"` // default 127.0.0.1; "0.0.0.0" lets pods reach /mcp, the nftables drop keeps the LAN out
+	Group  string `yaml:"group"`  // Authelia group for the pages, default "admins"
 }
 
 // Roles names the service that plays each platform role.
@@ -19,6 +29,7 @@ type Roles struct {
 	SSO      string `yaml:"sso"`
 	Identity string `yaml:"identity"`
 	DNS      string `yaml:"dns"`
+	Model    string `yaml:"model"` // the llama-server template (ADR 0011)
 }
 
 // GPU declares the box GPU and who holds it.

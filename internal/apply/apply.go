@@ -105,6 +105,17 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			}
 		}
 	}
+	for _, c := range p.Changes {
+		if c.Path == "nftables/laib.nft" && c.Kind != "delete" {
+			// core has passwordless sudo on CoreOS; the ruleset is idempotent
+			// (its own table), so loading it twice is harmless.
+			if out, err := sysd.Run(ctx, "sudo", "nft", "-f", c.Target); err != nil {
+				res.Checks = append(res.Checks, Check{Service: "laib", What: "nft -f", OK: false, Detail: out})
+			} else {
+				res.Restarted = append(res.Restarted, "nftables")
+			}
+		}
+	}
 	restart := map[string]bool{}
 	for _, name := range p.Services {
 		restart[name] = true

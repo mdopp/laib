@@ -125,7 +125,22 @@ func (st *State) validate() []error {
 			fail("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
 		}
 	}
-	for role, svc := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "dns": st.Box.Roles.DNS, "identity": st.Box.Roles.Identity} {
+	if st.Box.Laib.Host == "" {
+		st.Box.Laib.Host = "laib"
+	}
+	if st.Box.Laib.Port == 0 {
+		st.Box.Laib.Port = 5900
+	}
+	if st.Box.Laib.Listen == "" {
+		st.Box.Laib.Listen = "127.0.0.1"
+	}
+	if st.Box.Laib.Group == "" {
+		st.Box.Laib.Group = "admins"
+	}
+	if st.Box.Roles.Model != "" && !st.Box.GPU.Present {
+		fail("box.yml: roles.model is set but gpu.present is false")
+	}
+	for role, svc := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "dns": st.Box.Roles.DNS, "identity": st.Box.Roles.Identity, "model": st.Box.Roles.Model} {
 		if svc != "" {
 			if _, ok := st.Services[svc]; !ok {
 				fail("box.yml: roles.%s names %q, which is not under services/", role, svc)
@@ -133,7 +148,7 @@ func (st *State) validate() []error {
 		}
 	}
 
-	hosts := map[string]string{}
+	hosts := map[string]string{st.Box.Laib.Host: "laib (box.yml laib.host)"}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		c := svc.Contract

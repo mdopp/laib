@@ -11,6 +11,17 @@
 	}
 }
 
+laib.example.home {
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		reverse_proxy 127.0.0.1:5900 {
+			header_up X-Laib-Proxy "${secret:LAIB_PROXY_SECRET}"
+		}
+	}
+	respond 403
+}
+
 auth.example.home {
 	reverse_proxy 127.0.0.1:9091
 }

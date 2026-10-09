@@ -75,11 +75,14 @@ Vorschlag #17   von ops (Solaris)   Stufe: apply   braucht: Admin
 Journal: one line per entry, filter by service and actor. Nothing else.
 
 The pages are server-rendered HTML from `laib serve`, behind Caddy and
-Authelia (`admins`). No JavaScript framework; a form post per button.
+Authelia (`admins`). Caddy adds `X-Laib-Proxy: <secret>`; without it the pages
+answer 403, so a process on the box cannot forge `Remote-User` (ADR 0012).
+No JavaScript framework; a form post per button.
 
 ## Solaris cards
 
-The admin sees the same Inbox as a card, plus two more:
+The admin sees the Inbox as a card that links to `laib.<domain>/inbox`; the
+decision happens there, behind Authelia (ADR 0012). Plus two more cards:
 
 - **Ops report** (morning): "Alles grün, ein Zertifikat in 6 Tagen fällig, ich
   habe Vorschlag #18 vorbereitet."

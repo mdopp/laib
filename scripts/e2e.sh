@@ -19,6 +19,12 @@ cat > "$WORK/bin/journalctl" <<'SH'
 #!/usr/bin/env sh
 echo "shim journal for $*"
 SH
+cat > "$WORK/bin/sudo" <<'SH'
+#!/usr/bin/env sh
+# shim: records the privileged call (nft -f) instead of running it
+echo "sudo $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
+exit 0
+SH
 chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH" SYSTEMCTL_LOG="$WORK/systemctl.log"
 export LAIB_HOME="$WORK/home" LAIB_QUADLET="$WORK/quadlet"
@@ -32,11 +38,13 @@ echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set CLOUDFLARE_API_TOKEN >/
 
 LAIB_ACTOR=ops "$BIN" propose "e2e: three services" >/dev/null
 if LAIB_ACTOR=ops "$BIN" approve 1 >/dev/null 2>&1; then echo "FAIL: ops approved"; exit 1; fi
-LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null
+LAIB_ACTOR=human:e2e "$BIN" approve 1 || { echo "FAIL: approve exit $?"; exit 1; }
 test -f "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL: unit not written"; exit 1; }
 grep -q "cf-token" "$LAIB_QUADLET/caddy/caddy.container" || { echo "FAIL: secret not rendered on the box"; exit 1; }
 if grep -rq "cf-token" "$LAIB_HOME/state"; then echo "FAIL: secret in state repo"; exit 1; fi
 grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" || { echo "FAIL: systemctl not driven"; exit 1; }
+grep -q "sudo nft -f" "$SYSTEMCTL_LOG" || { echo "FAIL: nftables not loaded"; exit 1; }
+grep -q "X-Laib-Proxy" "$LAIB_HOME/render/caddy/Caddyfile" || { echo "FAIL: laib route missing"; exit 1; }
 
 STATUS="$("$BIN" status --json)"
 echo "$STATUS" | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
