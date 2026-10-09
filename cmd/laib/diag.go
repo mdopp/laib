@@ -39,6 +39,9 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 		only = args[0]
 	}
 	findings := runProbes(ctx, env, st, only)
+	if findings == nil {
+		findings = []Finding{} // JSON [] rather than null for callers
+	}
 	if env.json {
 		return emit(env, findings)
 	}

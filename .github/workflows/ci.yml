@@ -16,3 +16,4 @@ jobs:
       - run: CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o laib ./cmd/laib
       - run: for t in templates/*/; do ./laib template lint "$t"; done
       - run: scripts/loc.sh
+      - run: scripts/e2e.sh
