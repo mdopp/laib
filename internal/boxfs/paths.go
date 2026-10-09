@@ -14,6 +14,7 @@ type Paths struct {
 	Journal string // Home/journal
 	Render  string // Home/render — proxy/sso/dns/nftables outputs
 	Quadlet string // ~/.config/containers/systemd
+	Systemd string // ~/.config/systemd/user — plain units laib renders (backup timer)
 	Key     string // Home/age.key
 	Secrets string // State/secrets.age
 	Lock    string // Home/apply.lock
@@ -30,6 +31,7 @@ func Default() Paths {
 		Journal: filepath.Join(home, "journal"),
 		Render:  filepath.Join(home, "render"),
 		Quadlet: env("LAIB_QUADLET", filepath.Join(userHome, ".config", "containers", "systemd")),
+		Systemd: env("LAIB_SYSTEMD", filepath.Join(userHome, ".config", "systemd", "user")),
 		Key:     filepath.Join(home, "age.key"),
 		Secrets: filepath.Join(state, "secrets.age"),
 		Lock:    filepath.Join(home, "apply.lock"),

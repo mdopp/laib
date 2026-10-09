@@ -40,6 +40,9 @@ func Target(paths boxfs.Paths, outPath string) string {
 	if strings.HasPrefix(outPath, "quadlet/") {
 		return filepath.Join(paths.Quadlet, strings.TrimPrefix(outPath, "quadlet/"))
 	}
+	if strings.HasPrefix(outPath, "systemd/") {
+		return filepath.Join(paths.Systemd, strings.TrimPrefix(outPath, "systemd/"))
+	}
 	return filepath.Join(paths.Render, outPath)
 }
 

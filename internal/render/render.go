@@ -58,7 +58,44 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if nft := nftables(st); nft != "" {
 		out["nftables/laib.nft"] = nft
 	}
+	if st.Box.Backup.Repo != "" {
+		out["systemd/laib-backup.service"] = backupService()
+		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
+	}
 	return out, nil
+}
+
+// BackupPaths lists what `laib backup` snapshots: the state repo, the
+// journal and every declared data path not marked backup: false, with
+// ${DATA_DIR} expanded. Sorted and deduplicated.
+func BackupPaths(st *state.State, stateDir, journalDir string) []string {
+	seen := map[string]bool{stateDir: true, journalDir: true}
+	out := []string{stateDir, journalDir}
+	for _, name := range st.ServiceNames() {
+		for _, d := range st.Services[name].Contract.Data {
+			if d.Backup != nil && !*d.Backup {
+				continue
+			}
+			p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	sort.Strings(out[2:])
+	return out
+}
+
+func backupService() string {
+	return "# Rendered by laib: the nightly backup run (docs/BACKUP.md).\n[Unit]\nDescription=Laib backup\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib backup\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+}
+
+func backupTimer(schedule string) string {
+	if schedule == "" {
+		schedule = "03:00"
+	}
+	return "# Rendered by laib from box.yml backup.schedule.\n[Unit]\nDescription=Laib backup timer\n\n[Timer]\nOnCalendar=*-*-* " + schedule + ":00\nPersistent=true\nRandomizedDelaySec=10m\n\n[Install]\nWantedBy=timers.target\n"
 }
 
 // Redact replaces every secret value in the output with its placeholder, so

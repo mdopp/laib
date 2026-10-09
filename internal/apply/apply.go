@@ -95,6 +95,16 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	if err := sysd.DaemonReload(ctx); err != nil {
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
+	for _, c := range p.Changes {
+		if strings.HasPrefix(c.Path, "systemd/") && strings.HasSuffix(c.Path, ".timer") && c.Kind != "delete" {
+			unit := strings.TrimPrefix(c.Path, "systemd/")
+			if _, err := sysd.Run(ctx, "systemctl", "--user", "enable", "--now", unit); err != nil {
+				res.Checks = append(res.Checks, Check{Service: "laib", What: "enable " + unit, OK: false, Detail: err.Error()})
+			} else {
+				res.Restarted = append(res.Restarted, unit)
+			}
+		}
+	}
 	restart := map[string]bool{}
 	for _, name := range p.Services {
 		restart[name] = true

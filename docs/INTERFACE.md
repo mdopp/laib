@@ -14,11 +14,12 @@ laib apply [service] [--proposal id] snapshot → write → reload → restart �
 laib rollback <service|commit>       git revert + apply
 laib propose "<reason>"              commit the working tree to a proposal branch, create an inbox entry
 laib approve <id> | laib reject <id> merge or drop a proposal (tier check from policy.yml)
-laib backup | laib restore <when>    restic over state + declared data paths
+laib backup                          restic snapshot of state, journal and declared data paths
+laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply
 laib context [--since 24h]           starter bundle for an agent session
 laib template list|lint|add <git>    registries and the contract check
 laib adopt <unit> | laib ignore <unit>
-laib token mint <hand> [--ttl 8h]    one token per hand, scopes from policy.yml
+laib token mint <hand> | list | revoke <id>   humans only
 laib secret set <NAME> | list        value on stdin, never an argument; list prints names only
 laib init                            first setup as a dialogue
 laib serve                           daemon: /ready, /api, /mcp, the three pages

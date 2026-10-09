@@ -47,6 +47,8 @@ func init() {
 		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
+		{"backup", "propose", "restic snapshot of state, journal and declared data paths", cmdBackup},
+		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", cmdRestore},
 		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 		{"context", "read", "starter bundle for an agent session", cmdContext},
 		{"template", "read", "lint <dir> | list", cmdTemplate},
