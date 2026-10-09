@@ -1,0 +1,14 @@
+name: werkstatt
+template: {registry: builtin, name: werkstatt, version: 1}
+routes: []                       # v1 adds dev.<domain> for the pi-web surface
+secrets:
+  - name: WERKSTATT_SSH_PASSWORD
+  - name: CLAUDE_CODE_OAUTH_TOKEN
+    external: true
+  - name: LAIB_CLAUDE_TOKEN
+    external: true               # laib token mint claude --ttl 0 --note werkstatt
+data:
+  - path: ${DATA_DIR}/werkstatt/workspace
+health: {}
+ports:
+  - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password

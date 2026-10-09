@@ -13,3 +13,4 @@ state loader would.
 | caddy | proxy | host network (the one carve-out), reads `render/caddy/Caddyfile` |
 | authelia | sso | reads `render/authelia/*.yml` next to its own configuration |
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |
+| werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |

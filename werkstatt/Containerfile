@@ -1,0 +1,22 @@
+# Werkstatt v0: the one dev image (docs/DESIGN.md, issue #8).
+# Repos, Claude Code, pi, gh, git, tmux, sshd. The web surface (pi-web) and
+# the autoloop router come in v1; this image already replaces claude-dev's
+# SSH path so the mobile app has one place to attach.
+FROM docker.io/library/node:22-bookworm-slim
+ARG PI_VERSION=latest
+ARG CLAUDE_VERSION=latest
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git openssh-server tmux curl ca-certificates python3 jq less procps \
+      build-essential \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
+    && mkdir -p /run/sshd /workspace \
+    && useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 22
+VOLUME /workspace
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
