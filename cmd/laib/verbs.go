@@ -59,6 +59,10 @@ type serviceStatus struct {
 	Detail string            `json:"detail,omitempty"`
 }
 
+// bootUnclean is set by serve after its first comparison when the box did
+// not come up matching the state (#9); cleared by the next clean check.
+var bootUnclean string
+
 func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness, []serviceStatus) {
 	var rows []serviceStatus
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
@@ -96,6 +100,12 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 		default:
 			r.Red++
 		}
+	}
+	if r.Red == 0 && r.Drift == 0 {
+		bootUnclean = ""
+	}
+	if bootUnclean != "" && r.Lock == "" {
+		r.State, r.Lock = "eingeschränkt", bootUnclean
 	}
 	return r, rows
 }

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -34,13 +35,31 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	only := ""
-	if len(args) > 0 {
-		only = args[0]
+	only, toJournal := "", false
+	for _, a := range args {
+		if a == "--journal" {
+			toJournal = true
+			continue
+		}
+		only = a
 	}
 	findings := runProbes(ctx, env, st, only)
 	if findings == nil {
 		findings = []Finding{} // JSON [] rather than null for callers
+	}
+	if toJournal {
+		// #13: after an auto-update. Red findings become red journal lines
+		// and reach the webhook; a clean run is one green line.
+		red := 0
+		for _, f := range findings {
+			if f.Severity == "rot" {
+				red++
+				record(env, st, journal.Entry{Actor: env.actor, Verb: "diag", Service: f.Service, Result: "red", Detail: f.Probe + ": " + f.Detail})
+			}
+		}
+		if red == 0 {
+			record(env, st, journal.Entry{Actor: env.actor, Verb: "diag", Result: "green", Detail: "keine roten Befunde"})
+		}
 	}
 	if env.json {
 		return emit(env, findings)

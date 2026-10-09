@@ -157,6 +157,16 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
+	// Boot comparison (#9): bereit only once units and files match the state.
+	if st, err := loadState(env); err == nil {
+		r, _ := collectStatus(ctx, env, st)
+		if r.Red > 0 || r.Drift > 0 {
+			bootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
+			record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: bootUnclean})
+		} else {
+			record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
+		}
+	}
 	journal.Append(env.paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
 	fmt.Fprintln(os.Stderr, "laib serve: listening on", addr)
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {

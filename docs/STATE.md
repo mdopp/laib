@@ -42,6 +42,12 @@ gpu:
 backup:
   repo: sftp:nas:/backup/laib
   schedule: "03:00"
+hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
+notify:
+  url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
+updates:
+  days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
+  time: "03:00"
 ```
 
 ## policy.yml

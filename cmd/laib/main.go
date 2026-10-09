@@ -68,7 +68,7 @@ func init() {
 		{"adopt", "propose", "adopt an unmanaged Quadlet folder into services/", cmdAdopt},
 		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
 		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},
-		{"secret", "apply", "set <NAME> (value on stdin) | list", cmdSecret},
+		{"secret", "apply", "set <NAME> (value on stdin) | list | rotate <NAME>", cmdSecret},
 		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},

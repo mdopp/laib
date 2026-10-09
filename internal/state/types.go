@@ -16,6 +16,14 @@ type Box struct {
 	// over, #16): only these services may declare hostNetwork: true.
 	HostNetwork []string `yaml:"hostNetwork"`
 	Notify      Notify   `yaml:"notify"`
+	Updates     Updates  `yaml:"updates"`
+}
+
+// Updates is the window for podman auto-update (#13). Empty days keep
+// podman's daily timer; laib diag --journal runs after every update either way.
+type Updates struct {
+	Days []string `yaml:"days"` // Sat, Sun …
+	Time string   `yaml:"time"` // "03:00"
 }
 
 // Notify is the webhook Laib posts red results, proposals and readiness

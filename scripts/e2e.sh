@@ -65,5 +65,12 @@ LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null || { echo "FAIL: approve #2 exi
 grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL: --set proposal not applied"; exit 1; }
 OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io/traefik/whoami:v1.11 "e2e: second whoami" 2>&1 || true)"; echo "$OUT" | grep -q "already published" || { echo "FAIL: duplicate host not refused: $OUT"; exit 1; }
 
+# rotate a generated secret: the unit on the box carries the new value
+OLD="$(grep -o 'TOKEN=[^ ]*' "$LAIB_QUADLET/whoami/whoami.container")"
+LAIB_ACTOR=human:e2e "$BIN" secret rotate WHOAMI_TOKEN >/dev/null || { echo "FAIL: rotate exit $?"; exit 1; }
+NEW="$(grep -o 'TOKEN=[^ ]*' "$LAIB_QUADLET/whoami/whoami.container")"
+[ "$OLD" != "$NEW" ] || { echo "FAIL: rotate changed nothing"; exit 1; }
+if LAIB_ACTOR=ops "$BIN" secret rotate WHOAMI_TOKEN >/dev/null 2>&1; then echo "FAIL: ops rotated"; exit 1; fi
+
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); verbs=[e["verb"] for e in es]; assert "apply" in verbs and "rollback" in verbs and "approve" in verbs, verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
