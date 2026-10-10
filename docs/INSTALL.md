@@ -59,24 +59,51 @@ The unit restarts; state and journal are untouched.
 
 ## The stick: Fedora CoreOS with Laib on first boot
 
-ServiceBay's TUI built the install stick; Laib does it with one script and
-the official butane and coreos-installer containers:
+ServiceBay's TUI built the install stick; Laib has `laib-stick`, one
+binary for the laptop (Linux, macOS, Windows) with nothing to install
+beside it: no podman, no butane, no coreos-installer. Download it from
+the release, run it, answer the questions:
 
 ```
-scripts/make-usb.sh --hostname nuc --domain trial.example --lan-ip 192.168.178.30 \
-    --ssh-key ~/.ssh/id_ed25519.pub --password \
-    --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease \
-    --token "$LAIB_GH_TOKEN" --device /dev/sdX
+./laib-stick
+Name der Box [nuc]:
+Domain der Dienste: trial.example
+Feste LAN-Adresse (leer = DHCP): 192.168.178.30
+SSH Public Key (Datei) [~/.ssh/id_ed25519.pub]:
+Konsolen-Passwort für core setzen? [j/N]: j
+Hat die Box eine GPU? [j/N]:
+URL eines entfernten Modells: http://192.168.178.100:11435/v1
+Lease-URL der entfernten llama: http://192.168.178.100:8787/api/model-lease
+GitHub-Token (solange mdopp/laib privat ist): github_pat_…
+
+Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
+ISO fertig: laib-nuc.iso — Ignition eingebettet
+Laufwerke: …
+USB-Gerät beschreiben: /dev/sdb
+ALLES auf /dev/sdb wird gelöscht. Wirklich schreiben? [j/N]: j
 ```
 
-Boot the box from it: the live system picks the smallest non-removable
-disk, installs CoreOS with the Ignition (user `core` with your key, the
-hostname, `/mnt/data`, DNS stub off for AdGuard, linger), promotes the SSD
-in the EFI boot order and reboots. On the first boot
-`laib-firstboot.service` runs `install-box.sh` with the flags you gave,
-then shreds the token from the disk. After that, continue at step 2
-below (`laib` is installed and `laib init` has run). The stick carries the
-GitHub token in clear text while the repo is private: keep the stick.
+Every answer is also a flag (`laib-stick --yes --hostname nuc --domain …
+--device /dev/sdb` for a scripted run; `--print-ignition` shows the
+Ignition the box will get, `--iso` reuses a downloaded image). What it
+does: renders `usb/fedora-coreos.bu` with your answers and transpiles it
+in-process (the Butane library), wraps it in a live Ignition that runs
+`usb/pre-install.sh` (smallest non-removable disk), `coreos-installer
+install`, `usb/post-install.sh` (EFI boot order) and reboots, downloads
+the stream's ISO and verifies its sha256, and writes that live Ignition
+into the ISO's embed area exactly as `coreos-installer iso customize`
+would (a cpio in `IMAGES/IGNITION.IMG`). On Linux and macOS it then
+writes the stick with `dd` under sudo; on Windows it leaves the ISO for
+Rufus (DD mode) or balenaEtcher.
+
+Boot the box from it: the live system installs CoreOS with the Ignition
+(user `core` with your key, the hostname, `/mnt/data`, DNS stub off for
+AdGuard, linger), promotes the SSD in the EFI boot order and reboots. On
+the first boot `laib-firstboot.service` runs `install-box.sh` with the
+flags you gave, then shreds the token from the disk. After that, continue
+at step 2 below (`laib` is installed and `laib init` has run). The stick
+carries the GitHub token in clear text while the repo is private: keep
+the stick.
 
 Not on the stick (yet): the NVIDIA driver layering and CDI setup
 ServiceBay's TUI baked for the GPU box — Phase 4 brings them over.

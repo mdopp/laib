@@ -1,8 +1,8 @@
-# Laib — Fedora CoreOS Butane for a box (rendered by scripts/make-usb.sh;
+# Laib — Fedora CoreOS Butane for a box (rendered by laib-stick; the
 # ${VARS} are substituted there). Ported from ServiceBay's TUI build, cut
 # to what Laib needs: the core user, hostname, the data dir, DNS stub off
 # (AdGuard owns 53), Z-Wave udev, linger, and a first-boot unit that runs
-# scripts/install-box.sh with the flags you gave make-usb.sh.
+# scripts/install-box.sh with the answers you gave laib-stick.
 variant: fcos
 version: 1.5.0
 passwd:

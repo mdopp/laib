@@ -16,6 +16,7 @@ jobs:
       - run: CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o laib ./cmd/laib
       - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-operator ./cmd/laib-operator
       - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-lease ./cmd/laib-lease && CGO_ENABLED=0 go build -o /dev/null ./cmd/frage
+      - run: for t in linux/amd64 darwin/arm64 windows/amd64; do CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -o /dev/null ./cmd/laib-stick; done
       - run: for t in templates/*/; do ./laib template lint "$t"; done
       - run: python3 -m unittest werkstatt/tests/test_autoloop.py && python3 -m py_compile werkstatt/laibctl.py templates/llama/post-deploy
       - run: scripts/loc.sh

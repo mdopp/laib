@@ -34,6 +34,7 @@ layer (ADR 0010).
 
 ```
 cmd/laib/            the one binary: CLI + daemon (`laib serve`)
+cmd/laib-stick/      the laptop tool: builds the Fedora CoreOS install stick
 internal/state       load + validate the state repo
 internal/render      pure renderers: quadlet, caddy, authelia, adguard, nftables
 internal/plan        state → files → diff against the box
@@ -42,6 +43,7 @@ internal/journal     append-only JSONL, one file per day
 internal/policy      hands, tiers, who needs approval
 internal/probe       diag probes: scripts with structured output
 templates/           built-in templates (Quadlet files + laib.yml)
+usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop
 docs/                DESIGN.md, INTERFACE.md, STATE.md, TESTING.md, MIGRATION.md, adr/
 testdata/golden      renderer golden files
