@@ -66,7 +66,9 @@ testdata/golden      renderer golden files
    Android app split into Solaris, Haus, Stimme and the Laib Operator.
 7. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the
    "a service for the family" sequence.
-8. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
+8. [`docs/SERVICES.md`](docs/SERVICES.md) — what runs on the box today
+   and which templates Laib still needs for it.
+9. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
    [`docs/OUTSIDE.md`](docs/OUTSIDE.md) — backup, install, and what Laib
    leaves to the router, to LLDAP and to nobody.
 

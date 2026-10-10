@@ -5,10 +5,17 @@ service; after the install `laib plan` only *shows* what the box and the
 state differ in.
 
 ```
-curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
+# while the repo is private: a fine-grained GitHub token with Contents: read on mdopp/laib
+export LAIB_GH_TOKEN=github_pat_…
+curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" \
+  https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -H "Accept: application/vnd.github.raw" \
   | bash -s -- --domain <domain> --lan-ip <ip> \
        --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
 ```
+
+Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
+`SHA256SUMS`; the script verifies the sums. Once the repo is public the
+token and the API path go away and the plain raw URL works.
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points
