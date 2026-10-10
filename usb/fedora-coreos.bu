@@ -57,6 +57,8 @@ storage:
         inline: ""
     - path: /etc/laib/firstboot.env
       mode: 0600
+      user: {name: core}             # the first-boot unit runs as core
+      group: {name: core}
       contents:
         inline: |
           LAIB_DOMAIN=${DOMAIN}
