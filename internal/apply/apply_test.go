@@ -44,6 +44,7 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 	hook := filepath.Join(repo, "services", "whoami", "post-deploy")
 	os.WriteFile(hook, []byte("#!/bin/sh\necho hello $LAIB_SERVICE\necho \"laib-secret: WHOAMI_API=abc123\"\n"), 0o755)
 	st.Services["whoami"].Dir = filepath.Join(repo, "services", "whoami")
+	st.Box.DataDir = filepath.Join(home, "data") // apply creates the declared data paths; the fixture's /mnt/data is not writable here
 	p, err := plan.Compute(context.Background(), st, nil, paths, "")
 	if err != nil {
 		t.Fatal(err)
