@@ -234,6 +234,9 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	if st.Box.DNS.Provider != "" {
 		fmt.Fprintf(&b, "\tacme_dns %s {env.LAIB_DNS_TOKEN}\n", st.Box.DNS.Provider)
 	}
+	if st.Box.TLS == "internal" {
+		b.WriteString("\tlocal_certs\n") // every host from Caddy's internal CA; trust data/caddy/pki/authorities/local/root.crt on the devices
+	}
 	b.WriteString("}\n\n")
 	if st.Box.Roles.SSO != "" {
 		fmt.Fprintf(&b, "(authelia) {\n\tforward_auth 127.0.0.1:%d {\n\t\turi /api/authz/forward-auth\n\t\tcopy_headers Remote-User Remote-Groups Remote-Email Remote-Name\n\t}\n}\n\n", ssoPort(st))

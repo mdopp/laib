@@ -2,6 +2,7 @@ domain: nuc.home
 timezone: Europe/Berlin
 dataDir: /mnt/data/stacks
 lanIp: 192.168.1.10
+tls: internal                  # the trial box: port 80 of the house goes to the Kraftwerk, so Caddy signs itself
 hostNetwork: [caddy, adguard]
 notify:
   url: http://127.0.0.1:8787/api/laib-events

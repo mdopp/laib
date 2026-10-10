@@ -128,10 +128,12 @@ curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd
        --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
 laib=/var/opt/laib/laib
 
-# 2. the DNS provider and its token
-sed -i 's/^dns:.*//' /mnt/data/laib/state/box.yml
-printf 'dns:\n  provider: cloudflare\n  secretRef: DNS_API_TOKEN\n' >> /mnt/data/laib/state/box.yml
-echo '<the token>' | $laib secret set DNS_API_TOKEN
+# 2. certificates. dopp.cloud is at Strato (no DNS API) and the house's port 80
+#    goes to the Kraftwerk, so the NUC cannot pass HTTP-01 or DNS-01: let Caddy
+#    sign itself for the trial and trust its root on the laptop and the phones.
+echo 'tls: internal' >> /mnt/data/laib/state/box.yml
+#    (later, on the Kraftwerk: leave tls empty → HTTP-01 over port 80 like today;
+#     or delegate a sub-zone to a provider with an API and set dns.provider + DNS_API_TOKEN)
 
 # 3. the roles: proxy, sso + identity, dns, then a first app. `laib add` is
 #    propose + approve + apply as the human; a template that provides a

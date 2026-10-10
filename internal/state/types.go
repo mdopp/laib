@@ -11,6 +11,7 @@ type Box struct {
 	GPU      GPU    `yaml:"gpu"`
 	Backup   Backup `yaml:"backup"`
 	DNS      DNS    `yaml:"dns"`
+	TLS      string `yaml:"tls"` // "" = Let's Encrypt (HTTP-01, or DNS-01 with dns.provider); "internal" = Caddy's own CA (a trial box behind another box's port 80)
 	Laib     Laib   `yaml:"laib"`
 	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
 	// over, #16): only these services may declare hostNetwork: true.

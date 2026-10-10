@@ -168,3 +168,12 @@ regenerated.
 
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
+
+### `tls`
+
+`tls: internal` makes Caddy sign every host with its own CA (`local_certs`)
+instead of Let's Encrypt. For a trial box whose domain the house's port 80
+does not reach (the NUC behind the Kraftwerk) or a domain whose DNS has no
+API (Strato). Trust `data/caddy/pki/authorities/local/root.crt` on the
+laptop and the phones. Empty = Let's Encrypt: HTTP-01 when `dns.provider`
+is empty (port 80 must reach the box, as today), DNS-01 otherwise.
