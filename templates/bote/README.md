@@ -34,10 +34,12 @@ Verified from the Hermes docs (2026-10): the image and its `/opt/data`
 volume, the Signal env keys (`SIGNAL_HTTP_URL`, `SIGNAL_ACCOUNT`,
 `SIGNAL_ALLOWED_USERS`, `SIGNAL_HOME_CHANNEL`), `mcp_servers` with `url`,
 `headers` and `trust`, `${VAR}` references resolved from `.env`,
-`model.base_url`/`api_mode` and the `providers:` dict, `gateway run`,
-`non_interactive_hard_stop_enabled`. Not yet verified on a box: the exact
-`providers.<name>.api` key for an OpenAI-compatible endpoint and the
-`model_aliases` shape — run `hermes model` once inside the container and
-compare with what it writes; and whether Hermes' MCP client speaks HA's
-SSE transport (`/mcp_server/sse`) or needs a stdio bridge (`mcp-proxy`).
+`model.provider: custom` + `model.base_url` + `api_mode: chat_completions`,
+`model_aliases.<name>: {model, provider: custom, base_url}` (all from
+`cli-config.yaml.example`, 2026-10-10), `trust: full | untrusted` and the
+MCP client's Streamable-HTTP-then-SSE fallback (`tools/mcp_tool.py`), so
+Home Assistant's `/mcp_server/sse` needs no bridge. Not yet verified:
+`SIGNAL_HOME_CHANNEL` (the Signal adapter reads `SIGNAL_HTTP_URL`,
+`SIGNAL_ACCOUNT`, `SIGNAL_ALLOWED_USERS`; the home channel for cron
+delivery may be set in-chat instead), and the whole thing on a box.
 Issue: the Bote on the NUC (#23, phase 2).

@@ -22,18 +22,15 @@ chmod 600 "$H/.env"
 cat > "$H/config.yaml" <<YAML
 # rendered by laib post-deploy; do not edit by hand (ADR 0016)
 model:
-  provider: laib
+  provider: custom                 # any OpenAI-compatible endpoint (llama.cpp behind laib-lease)
   default: ${MODEL_NAME}
   base_url: ${MODEL_URL}
   api_mode: chat_completions
-providers:
-  laib:
-    api: ${MODEL_URL}
-    api_key: \${MODEL_API_KEY}
 model_aliases:
-  denken:
+  denken:                          # "/model denken" or a cron with model: denken
     model: ${THINKING_MODEL}
-    provider: laib
+    provider: custom
+    base_url: ${MODEL_URL}
 mcp_servers:
   laib:
     url: ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}
