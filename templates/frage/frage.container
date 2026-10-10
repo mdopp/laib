@@ -1,0 +1,19 @@
+[Unit]
+Description=Frage: search + summary
+After=frage-searx.service
+
+[Container]
+Image=${FRAGE_IMAGE}
+Pod=frage.pod
+Environment=SEARX_URL=http://127.0.0.1:8888
+Environment=MODEL_URL=${MODEL_URL}
+Environment=MODEL_KEY=${MODEL_KEY}
+Environment=MODEL_NAME=${MODEL_NAME}
+Environment=FRAGE_LISTEN=0.0.0.0:8710
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

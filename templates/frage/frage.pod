@@ -1,0 +1,3 @@
+[Pod]
+PodName=frage
+PublishPort=127.0.0.1:8710:8710

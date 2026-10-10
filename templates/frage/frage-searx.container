@@ -1,0 +1,16 @@
+[Unit]
+Description=Frage: SearXNG (JSON results for the summary)
+
+[Container]
+Image=${SEARX_IMAGE}
+Pod=frage.pod
+Environment=SEARXNG_SECRET=${SEARX_SECRET}
+Environment=SEARXNG_BASE_URL=http://127.0.0.1:8888/
+Volume=${DATA_DIR}/frage/searxng:/etc/searxng:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

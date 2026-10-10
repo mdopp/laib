@@ -1,0 +1,4 @@
+FRAGE_IMAGE: ghcr.io/mdopp/laib-frage:latest
+SEARX_IMAGE: docker.io/searxng/searxng:latest
+MODEL_NAME: gemma-4-e4b
+SEARX_SECRET: !secret SEARX_SECRET

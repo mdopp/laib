@@ -6,5 +6,5 @@ import "embed"
 
 // FS holds every built-in template folder (ADR 0004).
 //
-//go:embed authelia caddy whoami werkstatt
+//go:embed authelia caddy whoami werkstatt bote frage
 var FS embed.FS

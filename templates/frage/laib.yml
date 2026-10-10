@@ -1,0 +1,14 @@
+name: frage
+template: {registry: builtin, name: frage, version: 1}
+provides: [frage]
+# "Was ist …": SearXNG + a model summary, as Assist's conversation agent and
+# a Bote tool (ADR 0015). Two containers in one pod sharing loopback.
+routes: []
+secrets:
+  - name: SEARX_SECRET
+data:
+  - path: ${DATA_DIR}/frage/searxng
+health:
+  http: http://127.0.0.1:8710/health
+ports:
+  - {port: 8710, lan: false}

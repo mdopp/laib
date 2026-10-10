@@ -1,0 +1,15 @@
+[Unit]
+Description=Bote: signal-cli REST API (the phone number's linked device)
+
+[Container]
+Image=${SIGNAL_IMAGE}
+Pod=bote.pod
+Environment=MODE=native
+Volume=${DATA_DIR}/bote/signal:/home/.local/share/signal-cli:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

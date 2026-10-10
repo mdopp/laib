@@ -1,0 +1,17 @@
+[Unit]
+Description=Bote: Hermes gateway (stock image, config from the post-deploy hook)
+After=bote-signal.service
+
+[Container]
+Image=${HERMES_IMAGE}
+Pod=bote.pod
+Volume=${DATA_DIR}/bote/hermes:/opt/data:z
+Environment=HERMES_HOME=/opt/data
+Exec=gateway run
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
