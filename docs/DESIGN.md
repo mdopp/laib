@@ -120,6 +120,48 @@ the same card both times and never chooses the agent; a router does:
 | New template, migration, cross-service root cause | Claude directly | human |
 | Anything with destroy, reboot, secrets | nobody without a card | human |
 
+## When there is no template
+
+The user's path does not change; the first hop does. Solaris finds no
+template in `laib template list` (built-ins plus every registry) and says
+so: "Dafür gibt es noch kein Template, ich lege ein Ticket für die
+Werkstatt an." The ticket carries the upstream link and the wish in the
+user's words. In the Werkstatt:
+
+1. The router picks the hand: pi for an upstream compose file that maps
+   one-to-one onto Quadlet (`podlet` turns compose into `.container`
+   files), Claude for anything with OIDC, migrations or several containers.
+2. The agent writes the folder (units, `laib.yml` with routes, secrets,
+   data, health, ports, `provides`), runs `laib template lint`, and opens a
+   PR against the household registry.
+3. A human merges. `laib template sync` pulls it; Solaris sees it in the
+   list and asks: "Das Template ist da, soll ich es vorschlagen?" Then the
+   ordinary path: `laib propose --add`, Inbox, apply.
+
+Two registries, deliberately: the **built-ins** in this repo hold only the
+platform roles (caddy, authelia, adguard, llama), whoami and the Werkstatt,
+so the kernel repo does not grow with every app; the **household registry**
+(`mdopp/laib-templates`, one Git repo, `laib template lint` in its CI) holds
+everything the family actually uses, including what today sits in
+solarisbay, flutstunde and foundry-chronicle as ServiceBay registries. A
+template never adds a tool, a probe or a page to Laib; it is files.
+
+## Not a hundred tools for one topic
+
+Two sprawls, one rule each.
+
+- **Services.** `laib.yml provides: [photos]` names what a service is for.
+  A second service for a purpose is a `HINWEIS` in `laib plan` and in the
+  Inbox entry of the proposal that would add it, so the human decides with
+  the duplication in view. Adding is always a proposal; nobody installs by
+  accident. The status page groups by purpose, so "three things for photos"
+  is visible, not buried.
+- **Agent tools.** The verb table is the only source of MCP tools, filtered
+  by the hand's ceiling; `serve`, `init`, `token` and `secret` are never
+  tools; templates cannot add tools. A new verb needs a recurrence, like a
+  new probe. The count stays visible in `tools/list`. Solaris learned the
+  cost once: two thirds of a 12k-token prefill were tool definitions.
+
 ## Solaris and the GPU
 
 The model server, router, policy proxy and the lease endpoint are the Laib
