@@ -38,8 +38,9 @@ Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus
 |---|---|---|---|
 | **Laib** | `mdopp/laib` | the box: state, apply, converge, proxy, sso, dns, model, backup, journal, inbox | an LLM call, a household page |
 | **Laib Operator** | `mdopp/laib` (`cmd/laib-operator`, template `operator`) | the box's admin agent: watch, inspect, correct, escalate, morning report (ADR 0013) | the household, voice, a chat UI |
-| **Solaris** | `mdopp/solarisbay` → engine only | the household agent: turn loop, memory, tools, soul, per-resident identity, timers/reminders | pages, companion API, push, pairing, model lease server, admin tools |
-| **Stimme** | `mdopp/solarisbay` (`stimme/`), templates in the household registry | gatekeeper, whisper, TTS, wakeword trainer | anything but audio in/out and identity |
+| **Solaris** | retired (ADR 0015, proposed) | nothing; its memory moves into Haus as a library, its spoken intents into HA Assist, "was ist …" into Frage | — |
+| **Stimme** | templates in the household registry | openWakeWord, Whisper, Martin TTS, the wakeword trainer — the Wyoming set HA Assist speaks | identity: everyone is a guest |
+| **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and Haus's Sprechen backend | memory, tools, a loop |
 | **Haus** | new: `mdopp/haus` | the surface: pages and cards, companion API `/napi`, push, device tokens, favorites, energy, HA state aggregation, the "Sprechen" field that calls Solaris | an agent loop, memory, a model |
 | **Haus-Android** | `mdopp/solaris-android` → renamed | TWA of Haus, the native widgets, the tile | its own backend logic |
 | **Werkstatt** | `mdopp/laib` (`werkstatt/`) | pi, Claude Code, autoloop, tickets, transcripts | a chat for the family |
@@ -116,10 +117,14 @@ Geräte, Mitteilungen; new: *Box* (readiness + inbox count for admins).
 4. **Haus, step two: the pages.** Replace `index.html` page by page,
    Start first (it already exists as `/p/start`), Räume second. Each page
    a file, cards one renderer.
-5. **Solaris API:** `/v1/turn` and `/v1/events` as the only entry points;
-   Stimme and Haus switch to them; `/api/chat` goes.
-6. **Stimme** templates to the household registry; `solarisbay` becomes
-   engine plus stimme.
+5. **Solaris retired (ADR 0015, proposed).** The five spoken intents are
+   Home Assistant Assist with Music Assistant; "was ist …" is the small
+   Frage service as Assist's conversation agent; the memory (ingest, OKF,
+   notes search) becomes a library inside Haus. Soul, skills, sessions and
+   the chat go away. Gate: the two checks in ADR 0015 on the box.
+6. **Stimme**, **Frage**, **music-assistant** and **searxng** as templates
+   in the household registry; the speaker-identity gatekeeper is dropped;
+   `solarisbay` is archived once Haus holds the memory library.
 7. Rename `solaris-android` to `haus-android`.
 
 Each step leaves every surface working. Steps 1 and 2 are Laib work and
