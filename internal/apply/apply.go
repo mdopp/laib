@@ -95,6 +95,18 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		res.Written = append(res.Written, c.Target)
 	}
 
+	// The declared data paths exist before any unit starts: podman refuses a
+	// bind mount of a missing directory (statfs: no such file), and a
+	// directory podman created would belong to the wrong user.
+	for _, name := range st.ServiceNames() {
+		for _, d := range st.Services[name].Contract.Data {
+			dir := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return res, fmt.Errorf("data path %s: %w", dir, err)
+			}
+		}
+	}
+
 	if err := sysd.DaemonReload(ctx); err != nil {
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
