@@ -6,6 +6,7 @@ routes: []
 secrets:
   - name: DNS_API_TOKEN
     external: true               # laib secret set DNS_API_TOKEN; used by acme_dns <provider> in the Caddyfile
+    optional: true               # only with box.yml dns.provider; HTTP-01 and tls: internal need none
 data:
   - path: ${DATA_DIR}/caddy/data
 health:

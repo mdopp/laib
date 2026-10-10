@@ -169,6 +169,13 @@ regenerated.
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
 
+### Secrets that may stay unset
+
+A contract secret with `external: true` must be in `secrets.age` before
+`laib add`/`approve` renders the service; with `optional: true` as well it
+may be missing and the unit gets an empty value. Caddy's `DNS_API_TOKEN`
+is the case: needed only when `dns.provider` is set.
+
 ### `tls`
 
 `tls: internal` makes Caddy sign every host with its own CA (`local_certs`)

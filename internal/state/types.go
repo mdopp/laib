@@ -169,6 +169,7 @@ type Route struct {
 type Secret struct {
 	Name     string `yaml:"name"`
 	External bool   `yaml:"external"`
+	Optional bool   `yaml:"optional"` // external and unset is fine: the unit gets an empty value (Caddy's DNS token without dns.provider)
 }
 
 // OIDC is the service's Authelia client.

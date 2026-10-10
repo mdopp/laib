@@ -50,6 +50,9 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 			continue
 		}
 		if s.External {
+			if s.Optional {
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "laib: secret %s is external and not set; add it to secrets.age first\n", s.Name)
 			return exitUsage
 		}
