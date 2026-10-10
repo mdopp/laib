@@ -32,8 +32,34 @@ auth=()
 [ -n "$TOKEN" ] && auth=(-H "Authorization: Bearer $TOKEN")
 if [ "$VERSION" = "latest" ]; then REL="$API/releases/latest"; else REL="$API/releases/tags/$VERSION"; fi
 RELEASE_JSON="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
-TAG="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
-asset_url() { printf '%s' "$RELEASE_JSON" | python3 -c 'import sys,json; n=sys.argv[1]; print(next(a["url"] for a in json.load(sys.stdin)["assets"] if a["name"]==n))' "$1"; }
+# No python3 on Fedora CoreOS: pick the fields out of the JSON with sed. An
+# asset object starts with its API "url" and carries "name" before any nested
+# object, so url..name within one object is a match without a brace in between.
+FLAT="$(printf '%s' "$RELEASE_JSON" | tr -d '\n')"
+TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+[ -n "$TAG" ] || { echo "release JSON without tag_name" >&2; exit 1; }
+asset_url() {
+  local u
+  u="$(printf '%s' "$FLAT" | grep -o '"url": *"[^"]*/releases/assets/[0-9]*"[^{}]*"name": *"'"$1"'"' | head -1 | sed -n 's/^"url": *"\([^"]*\)".*/\1/p')"
+  [ -n "$u" ] || { echo "release $TAG has no asset $1" >&2; return 1; }
+  printf '%s' "$u"
+}
+
+# Fedora CoreOS ships without git, restic and diff; laib shells out to all
+# three (state repo, backups, plan diffs). Layer them live, once. If the live
+# apply is refused (a pending deployment), reboot into the layered tree: the
+# first-boot unit re-runs this script, it is idempotent.
+need=""
+for t in git:git restic:restic diff:diffutils; do command -v "${t%%:*}" >/dev/null 2>&1 || need="$need ${t##*:}"; done
+if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
+  echo "layering$need (rpm-ostree, live)"
+  # shellcheck disable=SC2086
+  if ! sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; then
+    echo "live apply refused; rebooting into the layered tree, the first-boot unit continues" >&2
+    sudo systemctl reboot; exit 0
+  fi
+fi
+for t in git restic diff; do command -v "$t" >/dev/null 2>&1 || { echo "$t still missing" >&2; exit 1; }; done
 
 sudo mkdir -p /var/opt/laib
 TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT

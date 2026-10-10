@@ -139,6 +139,10 @@ What makes or breaks the first boot is settled before the stick is built:
 - **A way back**: the NUC is wiped and reinstalled by the same stick at any
   time; the Kraftwerk is not touched by anything in this trial.
 
+`install-box.sh` layers `git`, `restic` and `diffutils` onto CoreOS with
+`rpm-ostree install --apply-live` (none of them ships in the image; laib
+shells out to all three). That is the one package layering Laib needs.
+
 What CI already proves (workflow `vm-install`): the stick's ISO boots in a
 KVM guest, installs CoreOS, reboots, the first boot fetches and runs
 `install-box.sh`, `laib` becomes ready and a real `laib add` applies on
