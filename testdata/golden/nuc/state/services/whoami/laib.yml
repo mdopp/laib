@@ -6,6 +6,7 @@ routes:
     port: 8080
     exposure: internal
     auth: one_factor
+    bypass: [/napi/]       # token-only API next to the page (Haus)
     group: family
     caddy: |
       request_body {

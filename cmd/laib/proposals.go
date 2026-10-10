@@ -409,3 +409,31 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	return runApply(ctx, env, st, "", reason)
 }
+
+// cmdInbox lists proposals: open ones by default, --all for every one.
+func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
+	openOnly := true
+	for _, a := range args {
+		if a == "--all" {
+			openOnly = false
+		}
+	}
+	ps, err := proposal.List(inboxDir(env), openOnly)
+	if err != nil {
+		return fail(err)
+	}
+	if env.json {
+		if ps == nil {
+			ps = []*proposal.Proposal{}
+		}
+		return emit(env, ps)
+	}
+	if len(ps) == 0 {
+		fmt.Println("Inbox leer")
+		return 0
+	}
+	for _, p := range ps {
+		fmt.Printf("#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
+	}
+	return 0
+}

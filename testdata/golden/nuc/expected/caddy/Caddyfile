@@ -47,6 +47,10 @@ ldap.nuc.home {
 whoami.nuc.home {
 	@lan remote_ip private_ranges
 	handle @lan {
+		@bypass path /napi/*
+		handle @bypass {
+			reverse_proxy 127.0.0.1:8080
+		}
 		import authelia
 		request_body {
 		  max_size 10MB

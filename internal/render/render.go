@@ -259,6 +259,14 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")
 				indent = "\t\t"
 			}
+			if len(r.Bypass) > 0 {
+				// the bypass paths go straight to the service; everything else below is behind Authelia
+				var ms []string
+				for _, p := range r.Bypass {
+					ms = append(ms, "path "+strings.TrimSuffix(p, "/")+"/*")
+				}
+				fmt.Fprintf(&b, "%s@bypass %s\n%shandle @bypass {\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, strings.Join(ms, " "), indent, indent, r.Port, indent)
+			}
 			if r.Auth != "none" && name != st.Box.Roles.SSO {
 				b.WriteString(indent + "import authelia\n")
 			}
@@ -286,6 +294,9 @@ func autheliaAccess(st *state.State) string {
 			policy := r.Auth
 			if policy == "none" {
 				policy = "bypass"
+			}
+			for _, p := range r.Bypass {
+				fmt.Fprintf(&b, "    - domain: %s\n      policy: bypass\n      resources: [\"^%s.*$\"]\n", fqdn(st, r.Host), strings.TrimSuffix(p, "/")+"/")
 			}
 			fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", fqdn(st, r.Host), policy)
 			if r.Group != "" {

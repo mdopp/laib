@@ -72,6 +72,7 @@ func init() {
 		{"context", "read", "starter bundle for an agent session", cmdContext},
 		{"template", "read", "lint <dir> | list | sync | update <service>", cmdTemplate},
 		{"add", "apply", "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", cmdAdd},
+		{"inbox", "read", "open proposals (--all for decided ones too)", cmdInbox},
 		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
 		{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
 		{"reject", "apply", "drop a proposal", cmdReject},

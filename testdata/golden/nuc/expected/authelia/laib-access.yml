@@ -14,5 +14,8 @@ access_control:
       policy: two_factor
       subject: "group:admins"
     - domain: whoami.nuc.home
+      policy: bypass
+      resources: ["^/napi/.*$"]
+    - domain: whoami.nuc.home
       policy: one_factor
       subject: "group:family"

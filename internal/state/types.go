@@ -157,12 +157,13 @@ type TemplateRef struct {
 
 // Route is one published hostname.
 type Route struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Exposure string `yaml:"exposure"` // internal | public
-	Auth     string `yaml:"auth"`     // none | one_factor | two_factor
-	Group    string `yaml:"group"`
-	Caddy    string `yaml:"caddy"`
+	Host     string   `yaml:"host"`
+	Port     int      `yaml:"port"`
+	Exposure string   `yaml:"exposure"` // internal | public
+	Auth     string   `yaml:"auth"`     // none | one_factor | two_factor
+	Group    string   `yaml:"group"`
+	Caddy    string   `yaml:"caddy"`
+	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages
 }
 
 // Secret is a declared secret; non-external ones are generated once.
