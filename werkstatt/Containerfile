@@ -1,7 +1,6 @@
 # Werkstatt v0: the one dev image (docs/DESIGN.md, issue #8).
-# Repos, Claude Code, pi, gh, git, tmux, sshd. The web surface (pi-web) and
-# the autoloop router come in v1; this image already replaces claude-dev's
-# SSH path so the mobile app has one place to attach.
+# Repos, Claude Code, pi, gh, git, tmux, sshd, podlet, `laib` as a shell
+# command (laibctl) and the autoloop with the pi-first / needs-claude router.
 FROM docker.io/library/node:22-bookworm-slim
 ARG PI_VERSION=latest
 ARG CLAUDE_VERSION=latest
@@ -15,8 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
     && mkdir -p /run/sshd /workspace \
     && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace
+# podlet turns an upstream compose file into Quadlet units (docs/DESIGN.md "When there is no template")
+ARG PODLET_VERSION=v0.3.0
+RUN curl -fsSL "https://github.com/containers/podlet/releases/download/${PODLET_VERSION}/podlet-x86_64-unknown-linux-gnu.tar.xz" \
+      | tar -xJ --strip-components=1 -C /usr/local/bin --wildcards '*/podlet' || echo "podlet: download failed, continuing without it"
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY laibctl.py /usr/local/bin/laib
+COPY autoloop.py /opt/werkstatt/autoloop.py
+COPY extensions /opt/werkstatt/extensions
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -18,8 +18,9 @@ Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and `${MODEL_LEASE}`.
 
 What it does, in order:
 
-1. Downloads the release binary to `/var/opt/laib/laib` (the `/var/opt`
-   prefix is writable on CoreOS; `/opt` is not).
+1. Downloads the three release binaries to `/var/opt/laib/`: `laib`,
+   `laib-operator` (the admin agent) and `laib-lease` (the model role's
+   sidecar). The `/var/opt` prefix is writable on CoreOS; `/opt` is not.
 2. Creates `/mnt/data/laib` owned by `core`.
 3. Installs `dist/laib.service` as a **user** unit and enables linger so it
    runs without a login session.

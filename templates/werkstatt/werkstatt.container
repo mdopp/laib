@@ -9,6 +9,7 @@ Environment=WERKSTATT_SSH_PASSWORD=${SSH_PASSWORD}
 Environment=CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_TOKEN}
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=LAIB_MCP_URL=http://host.containers.internal:5900/mcp
+Environment=MODEL_URL=${MODEL_URL}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
 AutoUpdate=registry
 

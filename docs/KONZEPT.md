@@ -103,7 +103,10 @@ command.
 - **Claude:** through the Werkstatt as `claude`; receives escalations
   with `laib context`; answers come back as PRs, journal lines and, via
   the Bote, on Signal.
-- **pi:** Werkstatt tickets labelled `pi:ready`; proposes, never applies.
+- **pi:** Werkstatt tickets labelled `pi:ready`; proposes, never applies;
+  a ticket it cannot finish gets `needs-claude`. Inside the Werkstatt,
+  `laib` is a shell command (laibctl over the MCP, token from a 0600 file)
+  for pi, Claude Code and a human alike.
 
 ### Template authors
 
