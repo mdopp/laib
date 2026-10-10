@@ -12,10 +12,14 @@ LIVE_DISK=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /run)" 2>/dev/null || echo
 BEST=""
 BEST_SIZE=0
 
-for dev in $(lsblk -dnpo NAME -I 8,259,254); do
+# Every whole disk by type, not by major number: SATA/SAS (8), NVMe (259),
+# virtio (253/254 — a VM, the CI boot test), MMC/eMMC (179). Not: rom
+# (the live CD), loop, zram.
+for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
   name=$(basename "$dev")
-  # Skip live USB
+  # Skip live USB, zram and loop devices
   [[ "$name" == "$LIVE_DISK" ]] && continue
+  [[ "$name" == zram* || "$name" == loop* ]] && continue
   # Skip removable
   [[ "$(cat /sys/block/${name}/removable 2>/dev/null)" == "1" ]] && continue
   size=$(blockdev --getsize64 "$dev" 2>/dev/null || echo 0)
