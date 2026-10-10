@@ -93,15 +93,21 @@ systemd:
       contents: |
         [Unit]
         Description=Laib first boot: install the binaries and init the state repo
-        After=network-online.target
-        Wants=network-online.target
+        After=network-online.target user@1000.service
+        Wants=network-online.target user@1000.service
         ConditionPathExists=!/var/opt/laib/laib
 
         [Service]
         Type=oneshot
         User=core
+        # install-box.sh talks to core's user systemd (systemctl --user): a system
+        # unit running as core needs the user bus spelled out, linger starts it.
+        Environment=XDG_RUNTIME_DIR=/run/user/1000
+        Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+        Environment=HOME=/var/home/core
         ExecStart=/usr/local/bin/laib-firstboot.sh
         RemainAfterExit=yes
+        StandardOutput=journal+console
 
         [Install]
         WantedBy=multi-user.target
