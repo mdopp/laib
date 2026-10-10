@@ -1,0 +1,16 @@
+[Unit]
+Description=Paperless Postgres
+
+[Container]
+Image=${DB_IMAGE}
+Pod=paperless.pod
+Environment=POSTGRES_DB=paperless
+Environment=POSTGRES_USER=paperless
+Environment=POSTGRES_PASSWORD=${DB_PASSWORD}
+Volume=${DATA_DIR}/paperless/pgdata:/var/lib/postgresql/data:z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

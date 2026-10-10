@@ -1,0 +1,36 @@
+name: file-share
+template: {registry: builtin, name: file-share, version: 1}
+provides: [files]
+# The household's files: Syncthing (phones and laptops), Samba (the LAN
+# share), File Browser (the web). The shared data folder is where music,
+# audiobooks, podcasts, photos, documents and notes live (ADR 0017). Host
+# network for Samba discovery and Syncthing's local announcements.
+hostNetwork: true
+routes:
+  - host: sync
+    port: 8384
+    exposure: internal
+    auth: one_factor
+    group: admins
+  - host: files
+    port: 8088
+    exposure: public
+    auth: one_factor
+secrets:
+  - name: SAMBA_PASSWORD
+data:
+  - path: ${DATA_DIR}/file-share/syncthing-config
+  - path: ${DATA_DIR}/file-share/filebrowser
+  - path: ${DATA_DIR}/file-share/data/notes
+  - path: ${DATA_DIR}/file-share/data/documents
+  - path: ${DATA_DIR}/file-share/data/music
+    backup: false                  # bulk: the mirror template's job, not the NAS repo
+  - path: ${DATA_DIR}/file-share/data/movies
+    backup: false
+  - path: ${DATA_DIR}/file-share/data/tv
+    backup: false
+health:
+  http: http://127.0.0.1:8384/rest/noauth/health
+ports:
+  - {port: 8384, lan: false}
+  - {port: 8088, lan: false}

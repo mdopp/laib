@@ -1,0 +1,19 @@
+[Unit]
+Description=Matter server
+After=network-online.target
+
+[Container]
+Image=${MATTER_IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/home-assistant/matter:/data:z
+Volume=/run/dbus:/run/dbus:ro
+PodmanArgs=--privileged
+Exec=--storage-path /data --paa-root-cert-dir /data/credentials --bluetooth-adapter 0
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

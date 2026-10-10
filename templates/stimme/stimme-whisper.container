@@ -1,0 +1,22 @@
+[Unit]
+Description=Stimme: Whisper STT (Wyoming, 10300)
+After=network-online.target
+
+[Container]
+Image=${WHISPER_IMAGE}
+Network=host
+Environment=WHISPER_MODEL=${WHISPER_MODEL}
+Environment=WHISPER_LANG=${WHISPER_LANG}
+Environment=WHISPER_BEAM=1
+EnvironmentFile=-${VOICE_ENV}
+Volume=${DATA_DIR}/stimme/whisper:/config:z
+AddDevice=nvidia.com/gpu=all
+SecurityLabelDisable=true
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

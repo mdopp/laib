@@ -1,0 +1,12 @@
+[Unit]
+Description=Immich Redis
+
+[Container]
+Image=${REDIS_IMAGE}
+Pod=immich.pod
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

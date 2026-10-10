@@ -1,0 +1,9 @@
+IMAGE: ghcr.io/paperless-ngx/paperless-ngx:latest
+DB_IMAGE: docker.io/library/postgres:16
+REDIS_IMAGE: docker.io/library/redis:7
+OCR_LANGUAGE: deu+eng
+CONSUME: /mnt/data/stacks/file-share/data/paperless-consume
+ADMIN_USER: admin
+DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD
+SECRET_KEY: !secret PAPERLESS_SECRET_KEY
+ADMIN_PW: !secret PAPERLESS_ADMIN_PASSWORD

@@ -1,0 +1,20 @@
+[Unit]
+Description=Stimme: wake-word trainer (microWakeWord, GPU) — runs queued training jobs
+After=network-online.target
+
+[Container]
+Image=${TRAINER_IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/stimme/trainer:/work:z
+Volume=${DATA_DIR}/stimme/wakeword:/out:z
+AddDevice=nvidia.com/gpu=all
+SecurityLabelDisable=true
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

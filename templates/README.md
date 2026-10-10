@@ -25,3 +25,8 @@ state loader would.
 | mosquitto | — | MQTT broker; password file by the hook; 1883 open to the LAN for devices |
 | esphome | — | ESPHome dashboard and OTA, host network for discovery |
 | beets | — | music tagging over the file share's music folder, admins only |
+| home-assistant | — | Home Assistant, Z-Wave JS UI and the Matter server on the host network; the house and the voice brain (ADR 0015) |
+| immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
+| file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network |
+| stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
+| paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's forward auth; consume folder on the file share |

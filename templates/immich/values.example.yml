@@ -1,0 +1,6 @@
+SERVER_IMAGE: ghcr.io/immich-app/immich-server:release
+ML_IMAGE: ghcr.io/immich-app/immich-machine-learning:release-cuda
+DB_IMAGE: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+REDIS_IMAGE: docker.io/library/redis:6.2-alpine
+DB_PASSWORD: !secret IMMICH_DB_PASSWORD
+PHOTOS_RO: /mnt/data/stacks/file-share/data/photos

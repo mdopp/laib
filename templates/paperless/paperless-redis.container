@@ -1,0 +1,12 @@
+[Unit]
+Description=Paperless Redis
+
+[Container]
+Image=${REDIS_IMAGE}
+Pod=paperless.pod
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

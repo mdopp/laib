@@ -1,0 +1,5 @@
+SYNCTHING_IMAGE: docker.io/syncthing/syncthing:latest
+SAMBA_IMAGE: docker.io/servercontainers/samba:latest
+FILEBROWSER_IMAGE: docker.io/filebrowser/filebrowser:latest
+SHARE_USER: samba
+SHARE_PW: !secret SAMBA_PASSWORD

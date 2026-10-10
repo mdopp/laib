@@ -1,0 +1,30 @@
+name: home-assistant
+template: {registry: builtin, name: home-assistant, version: 1}
+provides: [home, voice]
+# Home Assistant is the house brain and, with Assist, the voice brain
+# (ADR 0015). Host network for discovery, Matter, Z-Wave and the Voice PE
+# devices. Three containers: Home Assistant, Z-Wave JS UI, the Matter
+# server. The Z-Wave stick is a device path in values.yml.
+hostNetwork: true
+after: [auth, mosquitto]
+routes:
+  - host: home
+    port: 8123
+    exposure: public
+    auth: none                     # HA has its own login; the companion app and Voice PE need it
+  - host: zwave
+    port: 8091
+    exposure: internal
+    auth: two_factor
+    group: admins
+secrets:
+  - name: ZWAVE_SESSION_SECRET
+data:
+  - path: ${DATA_DIR}/home-assistant/homeassistant
+  - path: ${DATA_DIR}/home-assistant/zwave-js
+  - path: ${DATA_DIR}/home-assistant/matter
+health:
+  http: http://127.0.0.1:8123/
+ports:
+  - {port: 8091, lan: false}
+  - {port: 5580, lan: false}       # matter server websocket

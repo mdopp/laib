@@ -1,0 +1,16 @@
+[Unit]
+Description=Stimme: openWakeWord (Wyoming, 10400)
+After=network-online.target
+
+[Container]
+Image=${OPENWAKEWORD_IMAGE}
+Network=host
+Exec=--uri tcp://127.0.0.1:10400 --custom-model-dir /custom --preload-model ${WAKEWORD}
+Volume=${DATA_DIR}/stimme/wakeword:/custom:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

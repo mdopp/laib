@@ -1,0 +1,17 @@
+[Unit]
+Description=Immich Postgres
+
+[Container]
+Image=${DB_IMAGE}
+Pod=immich.pod
+Environment=POSTGRES_PASSWORD=${DB_PASSWORD}
+Environment=POSTGRES_USER=postgres
+Environment=POSTGRES_DB=immich
+Environment=POSTGRES_INITDB_ARGS=--data-checksums
+Volume=${DATA_DIR}/immich/pgdata:/var/lib/postgresql/data:z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

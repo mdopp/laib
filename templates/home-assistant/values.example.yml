@@ -1,0 +1,5 @@
+HA_IMAGE: ghcr.io/home-assistant/home-assistant:stable
+ZWAVE_IMAGE: ghcr.io/zwave-js/zwave-js-ui:latest
+MATTER_IMAGE: ghcr.io/home-assistant-libs/python-matter-server:stable
+ZWAVE_DEVICE: /dev/ttyACM0
+ZWAVE_SECRET: !secret ZWAVE_SESSION_SECRET

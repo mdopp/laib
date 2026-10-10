@@ -1,0 +1,20 @@
+[Unit]
+Description=Syncthing — Dateien zwischen Geräten
+After=network-online.target
+
+[Container]
+Image=${SYNCTHING_IMAGE}
+Network=host
+Environment=PUID=0
+Environment=PGID=0
+Environment=STGUIADDRESS=127.0.0.1:8384
+Environment=STNOUPNP=1
+Volume=${DATA_DIR}/file-share/data:/var/syncthing/Sync:z
+Volume=${DATA_DIR}/file-share/syncthing-config:/var/syncthing/config:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

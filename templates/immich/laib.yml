@@ -1,0 +1,31 @@
+name: immich
+template: {registry: builtin, name: immich, version: 1}
+provides: [photos]
+# Immich: server, machine learning (GPU), Postgres with vectors, Redis in
+# one pod. Only the server is published. Photos uploaded by the apps live
+# in the upload volume; external libraries are read-only mounts.
+after: [auth]
+routes:
+  - host: photos
+    port: 2283
+    exposure: public
+    auth: none                     # the apps do their own login (OIDC via Authelia)
+    caddy: |
+      request_body {
+        max_size 50GB
+      }
+secrets:
+  - name: IMMICH_DB_PASSWORD
+oidc:
+  clientId: immich
+  redirectUris: ["https://photos.${DOMAIN}/auth/login", "https://photos.${DOMAIN}/user-settings", "app.immich:///oauth-callback"]
+data:
+  - path: ${DATA_DIR}/immich/upload
+  - path: ${DATA_DIR}/immich/pgdata
+  - path: ${DATA_DIR}/immich/model-cache
+    backup: false
+health:
+  http: http://127.0.0.1:2283/api/server/ping
+ports:
+  - {port: 2283, lan: true}        # the apps at home
+gpu: true

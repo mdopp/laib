@@ -1,0 +1,20 @@
+[Unit]
+Description=File Browser — Dateien im Browser
+After=network-online.target
+
+[Container]
+Image=${FILEBROWSER_IMAGE}
+Network=host
+Environment=FB_PORT=8088
+Environment=FB_ADDRESS=127.0.0.1
+Environment=FB_DATABASE=/database/filebrowser.db
+Environment=FB_NOAUTH=true
+Volume=${DATA_DIR}/file-share/data:/srv:z
+Volume=${DATA_DIR}/file-share/filebrowser:/database:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=Home Assistant — das Haus und die Stimme (Assist)
+After=network-online.target
+
+[Container]
+Image=${HA_IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/home-assistant/homeassistant:/config:z
+Volume=/run/dbus:/run/dbus:ro
+PodmanArgs=--privileged
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

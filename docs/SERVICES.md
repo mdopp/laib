@@ -21,15 +21,15 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 
 | Today | Laib | Status |
 |---|---|---|
-| home-assistant (8123, zwave 8091, 3 containers) | `home-assistant`, also the voice brain (ADR 0015) | **port needed**; HA's config stays in its data dir; Assist, CalDAV and Music Assistant integrations are configuration on the box |
+| home-assistant (8123, zwave 8091, 3 containers) | `home-assistant` | built-in: HA, Z-Wave JS UI, Matter on the host network; onboarding and the Wyoming/CalDAV/MQTT integrations are configuration in HA |
 | solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` built-ins exist; **Haus missing** (new repo) |
-| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | Stimme: Wyoming whisper, TTS, trainer | **port needed** (4 units); the gatekeeper is dropped |
+| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, trainer as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moves with it |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); Music Assistant drives the speakers for Assist |
-| immich (4 containers, ML) | `immich` | **port needed** |
-| paperless (3 containers) | `paperless` | **port needed**; registry template today |
+| immich (4 containers, ML) | `immich` | built-in |
+| paperless (3 containers) | `paperless` | built-in with forward-auth logins |
 | radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
 | vaultwarden | `vaultwarden` | built-in with Authelia OIDC |
-| file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share`; notes live here (ADR 0017) | **port needed**; host-network carve-out |
+| file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share` | built-in on the host network; notes, documents, music, photos live here |
 | mosquitto, esphome | `mosquitto`, `esphome` | built-ins |
 | beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
@@ -50,11 +50,13 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 
 ## The count
 
-- Built-ins done: caddy, auth (Authelia + LLDAP), adguard, whoami,
+- Built-ins done (21): caddy, auth (Authelia + LLDAP), adguard, whoami,
   werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant,
-  radicale, vaultwarden, mosquitto, esphome, beets (16).
-- Ports still needed for the box as it runs today: home-assistant,
-  stimme ×4, immich, paperless, file-share (**7 templates**).
+  radicale, vaultwarden, mosquitto, esphome, beets, home-assistant,
+  immich, file-share, stimme (whisper, piper, openwakeword, trainer),
+  paperless. Every unit that runs on the box today has a Laib template.
+- Not yet run on any box: all of them. The NUC trial (Phase 1 to 3) and
+  the Kraftwerk migration (Phase 4) are where they prove themselves.
 
 ## The Jellyfin finding (2026-10-10)
 

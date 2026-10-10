@@ -1,0 +1,29 @@
+name: paperless
+template: {registry: builtin, name: paperless, version: 1}
+provides: [documents]
+# Paperless-ngx: documents with OCR. Logins come from Authelia's forward
+# auth (Remote-User), so the family uses it without a second password; the
+# consume folder is the file share's paperless-consume, so a scan dropped
+# there is filed. Postgres and Redis in the pod.
+after: [auth]
+routes:
+  - host: paperless
+    port: 8000
+    exposure: internal
+    auth: one_factor
+    caddy: |
+      request_body {
+        max_size 500MB
+      }
+secrets:
+  - name: PAPERLESS_DB_PASSWORD
+  - name: PAPERLESS_SECRET_KEY
+  - name: PAPERLESS_ADMIN_PASSWORD
+data:
+  - path: ${DATA_DIR}/paperless/data
+  - path: ${DATA_DIR}/paperless/media
+  - path: ${DATA_DIR}/paperless/pgdata
+health:
+  http: http://127.0.0.1:8000/api/
+ports:
+  - {port: 8000, lan: false}

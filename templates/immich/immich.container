@@ -1,0 +1,26 @@
+[Unit]
+Description=Immich server
+After=immich-db.service immich-redis.service
+
+[Container]
+Image=${SERVER_IMAGE}
+Pod=immich.pod
+Environment=TZ=${TZ}
+Environment=IMMICH_PORT=2283
+Environment=DB_HOSTNAME=127.0.0.1
+Environment=DB_USERNAME=postgres
+Environment=DB_PASSWORD=${DB_PASSWORD}
+Environment=DB_DATABASE_NAME=immich
+Environment=DB_VECTOR_EXTENSION=vectorchord
+Environment=REDIS_HOSTNAME=127.0.0.1
+Environment=IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:3003
+Volume=${DATA_DIR}/immich/upload:/usr/src/app/upload:z
+Volume=${PHOTOS_RO}:/mnt/photos:ro,z
+AddHost=auth.${DOMAIN}:${LAN_IP}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,26 @@
+name: stimme
+template: {registry: builtin, name: stimme, version: 1}
+provides: [voice]
+# The Wyoming set Home Assistant Assist speaks (ADR 0015): Whisper (STT),
+# Piper (TTS, German voice), openWakeWord (the trained wake word), and the
+# wake-word trainer. Host network so HA finds them at 127.0.0.1. On the
+# GPU box Whisper and the trainer take the card and follow the lease's
+# voice-device.env (cpu while a mode holds the card); on a box without a
+# GPU set the CPU image and device in values.yml.
+hostNetwork: true
+after: []
+routes: []
+secrets: []
+data:
+  - path: ${DATA_DIR}/stimme/whisper
+    backup: false                  # model cache
+  - path: ${DATA_DIR}/stimme/piper
+    backup: false
+  - path: ${DATA_DIR}/stimme/wakeword  # the trained models: keep
+  - path: ${DATA_DIR}/stimme/trainer
+health: {}
+ports:
+  - {port: 10300, lan: false}      # whisper
+  - {port: 10200, lan: false}      # piper
+  - {port: 10400, lan: false}      # openwakeword
+gpu: true

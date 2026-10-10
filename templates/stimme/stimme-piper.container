@@ -1,0 +1,16 @@
+[Unit]
+Description=Stimme: Piper TTS (Wyoming, 10200)
+After=network-online.target
+
+[Container]
+Image=${PIPER_IMAGE}
+Network=host
+Exec=--voice ${PIPER_VOICE} --uri tcp://127.0.0.1:10200 --data-dir /data --download-dir /data
+Volume=${DATA_DIR}/stimme/piper:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

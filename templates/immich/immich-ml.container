@@ -1,0 +1,16 @@
+[Unit]
+Description=Immich machine learning (GPU)
+
+[Container]
+Image=${ML_IMAGE}
+Pod=immich.pod
+AddDevice=nvidia.com/gpu=all
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/immich/model-cache:/cache:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
