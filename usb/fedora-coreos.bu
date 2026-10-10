@@ -46,6 +46,12 @@ storage:
         inline: |
           [Resolve]
           DNSStubListener=no
+    - path: /etc/sysctl.d/90-laib-ports.conf
+      mode: 0644
+      contents:
+        inline: |
+          # rootless Caddy binds 80/443 and AdGuard 53 (ServiceBay set this too)
+          net.ipv4.ip_unprivileged_port_start=0
     - path: /etc/udev/rules.d/99-zwave.rules
       mode: 0644
       contents:

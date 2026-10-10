@@ -49,10 +49,20 @@ jobs:
             sleep 10
           done
           $SSH 'systemctl status laib-firstboot --no-pager; /var/opt/laib/laib version; /var/opt/laib/laib status; /var/opt/laib/laib plan; /var/opt/laib/laib diag; cat /etc/laib/firstboot.env 2>/dev/null && { echo "firstboot.env still on disk"; exit 1; } || true'
-      - name: a real apply on real CoreOS
+      - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib; $L add whoami && $L status && podman ps && $L journal --since 1h'
+          $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                set -e
+                sysctl -n net.ipv4.ip_unprivileged_port_start
+                echo "tls: internal" >> /mnt/data/laib/state/box.yml
+                $L add caddy
+                $L status
+                podman ps
+                for i in $(seq 1 30); do code=$(curl -sk --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ -n "$code" ] && [ "$code" != 000 ] && break; sleep 2; done
+                echo "https://laib.vm.test -> HTTP $code (Caddy, own CA)"
+                echo "$code" | grep -Eq "^(200|30[0-9]|40[13])$"
+                $L journal --since 1h'
       - name: logs
         if: always()
         run: |

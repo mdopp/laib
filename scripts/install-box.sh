@@ -61,6 +61,13 @@ if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
 fi
 for t in git restic diff; do command -v "$t" >/dev/null 2>&1 || { echo "$t still missing" >&2; exit 1; }; done
 
+# Rootless Caddy (80/443) and AdGuard (53): low ports for unprivileged users.
+# The stick's Ignition sets it persistently; this covers a box installed otherwise.
+if [ "$(sysctl -n net.ipv4.ip_unprivileged_port_start 2>/dev/null || echo 1024)" -gt 53 ]; then
+  printf 'net.ipv4.ip_unprivileged_port_start=0\n' | sudo tee /etc/sysctl.d/90-laib-ports.conf >/dev/null
+  sudo sysctl -q -p /etc/sysctl.d/90-laib-ports.conf
+fi
+
 sudo mkdir -p /var/opt/laib
 TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 for BIN in laib laib-operator laib-lease; do
@@ -104,6 +111,9 @@ if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
 fi
 systemctl --user enable --now laib.service
 sleep 1
+# Laib's own units (converge loop, auto-update verify) come from the state too:
+# one apply, so the box is not "eingeschränkt" by its own drift on day one.
+LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib apply >/dev/null || echo "first apply red: /var/opt/laib/laib plan shows why" >&2
 echo "installed $TAG: $(/var/opt/laib/laib version)"
 echo -n "ready: "; curl -fsS http://127.0.0.1:5900/ready || echo "(not yet)"
 echo
