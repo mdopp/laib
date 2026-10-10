@@ -56,20 +56,19 @@ updates:
 tiers: [read, propose, apply, destroy]   # destroy covers reboot and exec
 hands:
   resident: { ceiling: read }
-  ops:      { ceiling: propose }
+  ops:      { ceiling: apply }  # the operator (ADR 0013)
   pi:       { ceiling: propose }
   claude:   { ceiling: apply, ttl: 8h }
   human:    { ceiling: destroy }
 approvals:
-  apply:   { by: human }        # a claude apply within a proposal still shows in the inbox
   destroy: { by: human, snapshot: required }
 autonomy:                       # the repair dial (docs/DESIGN.md "Repair")
   converge: on                  # ten-minute loop: re-apply drift, restart inactive units, budget 3/h
-  values: proposal              # auto | proposal
-  template-update: proposal     # weekly sync proposes; auto applies with rollback on red
-  new-service: proposal
-  patch: proposal
-  # remove is never auto
+  values: auto                  # auto | proposal; auto = laib applies and rolls back on red
+  template-update: auto
+  patch: auto
+  new-service: proposal         # adds surface: a human decides
+  # remove is never auto; a public route is always a human's call
 ```
 
 A hand never approves its own proposal. `destroy` requires a human on the box

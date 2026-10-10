@@ -19,11 +19,13 @@ layer (ADR 0010).
   apply whose verify is red is not a success.
 - **systemd runs the containers**, not Laib. Laib renders Podman Quadlet files
   and reloads systemd. Restart policy, timers and auto-update are systemd's.
-- **Agents are clients, never modules.** Laib has no LLM code. The household
-  agent (Solaris), the coding agents in the Werkstatt (pi, Claude Code) and a
-  remote Claude session all speak the same CLI, exposed as MCP. An agent's
-  output is an artifact: a diff, a proposal, a question, a report. Scripts do
-  the side effects.
+- **The agent is the operator; Laib is its hands, memory and safety net.**
+  Laib has no LLM code. The household agent (Solaris) watches, looks inside
+  containers, corrects and reports; the coding agents in the Werkstatt (pi,
+  Claude Code) build what is missing. All speak the same CLI, exposed as
+  MCP. Every action is journaled and reversible: snapshot before, verify
+  after, rollback on red, a budget against loops. Only the irreversible
+  waits for a human (ADR 0013).
 - **Three human surfaces, one conversation.** Solaris is where you talk. The
   Werkstatt (`dev.<domain>`) is where things get built. The box page
   (`laib.<domain>`) has three pages: Status, Inbox, Journal.

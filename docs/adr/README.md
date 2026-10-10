@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0013**. Each file's first paragraph after the title says *in which
+number: **0014**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -18,3 +18,4 @@ situation* it applies, so an agent can self-select.
 | [0010](0010-one-migration-no-compat.md) | One user, one migration, no compatibility layer |
 | [0011](0011-model-server-is-a-laib-role.md) | The model server (llama-server, router, policy proxy, lease) is a Laib platform role, Solaris is a client |
 | [0012](0012-one-approval-surface-and-the-trust-boundary.md) | One approval surface (the box page); the host shell is the human; pages trust only the proxy's secret header |
+| [0013](0013-the-agent-is-the-operator.md) | The agent is the operator: observe unbounded, correct inside an automatic envelope, ask only for the irreversible |

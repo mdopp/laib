@@ -27,7 +27,7 @@ var mcpMu sync.Mutex
 // mcpVerbs are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
-	"status": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true,
+	"status": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "inspect": true, "read": true, "write": true, "exec": true, "restart": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true,
 }
 
@@ -130,6 +130,9 @@ func inputSchema(verb string) map[string]any {
 	props := map[string]any{
 		"args": map[string]any{"type": "string", "description": "arguments exactly as on the command line, e.g. \"media --since 2h\" or \"\\\"reason text\\\"\""},
 	}
+	if verb == "write" {
+		props["stdin"] = map[string]any{"type": "string", "description": "the file content"}
+	}
 	if verb == "propose" {
 		props["args"] = map[string]any{"type": "string", "description": "the reason in quotes, plus --set services/<svc>/values.yml:KEY=VALUE (repeatable), --add <template> [--name <svc>] [KEY=VALUE…], or --patch together with the patch property"}
 		props["patch"] = map[string]any{"type": "string", "description": "a unified diff against the state repo root (paths like services/x/values.yml); applied in a worktree, validated, refused if the state does not load"}
@@ -159,6 +162,9 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if patch := args["patch"]; patch != "" {
 		callEnv.in = strings.NewReader(patch)
 		callArgs = append([]string{"--patch"}, callArgs...)
+	}
+	if in := args["stdin"]; in != "" {
+		callEnv.in = strings.NewReader(in)
 	}
 	r, w, err := os.Pipe()
 	if err != nil {

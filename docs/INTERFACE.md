@@ -9,6 +9,12 @@ the Solaris cards are views on it.
 laib status [service] [--watch]      one line per service; first line is the readiness state
 laib logs <service> [--since 1h]     journald + container logs, secrets redacted
 laib diag [service]                  findings with severity and a proposed diff each
+laib inspect <service>               units, containers, data files, health, last logs (class 1)
+laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
+laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
+laib write <service> <path>          content on stdin, in the data paths (envelope)
+laib restart <service>               restart + verify (envelope)
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
 laib rollback <service|commit>       git revert + apply
@@ -29,9 +35,11 @@ laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
 Every verb has `--json`. The MCP tool list is generated from the same verb
-table, so the two cannot drift. The `ops` hand in Solaris sees eight verbs:
-`status`, `logs`, `diag`, `plan`, `propose`, `context`, `template list`,
-`ticket`. Never `apply`, never `approve`.
+table, so the two cannot drift. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
+`escalate` and `propose`. What it never sees: `approve` of its own
+proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
+reboot, a public route) are not verbs at all for it, they are proposals.
 
 ## Readiness: `/ready`
 

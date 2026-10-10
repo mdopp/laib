@@ -29,14 +29,18 @@ building a kernel under 15k lines beside it. One user, one migration
    that needs understanding is a proposal by a hand, and the autonomy dial
    in `policy.yml` says which classes laib may approve itself, with rollback
    on a red verify. See "Repair" below.
-4. **Hands, not users** (ADR 0006). Four agent identities: `resident`, `ops`,
-   `pi`, `claude`. Each has a token and a tier ceiling in `policy.yml`.
-   `destroy`, `reboot` and `exec` are always a request to a human. No token
-   can approve its own request.
-5. **Laib is deterministic, agents are clients** (ADR 0001). No LLM code in the
-   kernel. Solaris hosts the local model; the Werkstatt hosts the coding
-   agents; Claude connects through the Werkstatt. All of them speak the CLI,
-   exposed as MCP generated from the CLI definition.
+4. **Hands, not users** (ADR 0006, ADR 0013). Four agent identities:
+   `resident`, `ops`, `pi`, `claude`. Each has a token and a tier ceiling in
+   `policy.yml`. The `ops` hand is the operator: it observes without limit
+   and corrects inside an automatic envelope. Only the irreversible is a
+   request to a human: removing, rebooting, exposing to the internet. No
+   token can approve its own request.
+5. **Laib is deterministic, agents are operators** (ADR 0001, ADR 0013). No
+   LLM code in the kernel. Solaris hosts the local model that is the
+   operator; the Werkstatt hosts the coding agents; Claude connects through
+   the Werkstatt. All of them speak the CLI, exposed as MCP generated from
+   the CLI definition, and every action they take is journaled and
+   reversible. Laib is their hands, memory and safety net, not their gate.
 
 ## Features that exist
 
@@ -98,13 +102,19 @@ Within the agent column:
 
 | Task | Local model (Solaris `ops`) | Claude (via Werkstatt) |
 |---|---|---|
-| Summarise, triage, rate severity | yes | rarely needed |
-| Answer residents about the box | yes | no |
-| Nightly ops report, draft a question for the admin | yes | no |
-| Root cause across services | groundwork only | yes |
-| Write a template, migration, assist | no | yes |
-| Review a proposed diff | no | review yes, approve never |
-| Tier ceiling | `read` + `propose` | `read` + `propose` + `apply` within policy, session TTL |
+| Watch state, logs, health; triage | yes, always on | no |
+| Look inside: inspect, read, exec for looking | yes | yes |
+| Correct: restart, fix a config, reset a password, apply a value | yes, inside the envelope | yes |
+| Answer residents about the box; the morning report | yes | no |
+| Root cause across services, an upstream that changed its format | first attempt, then `laib escalate` | yes |
+| Write a template, migration, hook | no | yes |
+| Remove, reboot, expose publicly | never: a proposal for the human | never |
+| Tier ceiling | `apply` | `apply`, session TTL |
+
+The envelope (ADR 0013): a pre-repair snapshot of the service's data once
+per hour, every action journaled with its output, verify after a restart,
+rollback on red, eight mutating actions per service per hour before the
+hand is stopped and `escalate` is the way on.
 
 ## The user's path
 
