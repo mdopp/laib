@@ -71,14 +71,17 @@ func TestLiveIgnitionCarriesDestAndScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(live)
-	for _, want := range []string{"/etc/laib/dest.ign", "laib-install.service", "/usr/local/bin/laib-install.sh", "laib-pre-install.sh", "laib-post-install.sh"} {
+	for _, want := range []string{"/etc/coreos/dest.ign", "/etc/coreos/installer.d/0000-customize.yaml", "pre-install-laib.service", "post-install-laib.service", "RequiredBy=coreos-installer.service", "RequiredBy=coreos-installer.target"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("live ignition lacks %q", want)
 		}
 	}
-	// file contents travel as data: URLs; decode and check the installer line
-	if !strings.Contains(decodeDataURLs(t, live), "coreos-installer install --ignition-file /etc/laib/dest.ign") {
-		t.Error("live ignition lacks the coreos-installer call")
+	// file contents travel as data: URLs; decode and check them
+	dec := decodeDataURLs(t, live)
+	for _, want := range []string{"ignition-file: /etc/coreos/dest.ign", "dest-device: /dev/disk/by-id/placeholder", "export SERVER_NAME='nuc'", "0050-dest-device.yaml", "efibootmgr"} {
+		if !strings.Contains(dec, want) {
+			t.Errorf("live files lack %q", want)
+		}
 	}
 	// the dest ignition travels as a data: URL and must round-trip
 	var doc struct {
@@ -93,7 +96,7 @@ func TestLiveIgnitionCarriesDestAndScripts(t *testing.T) {
 	}
 	json.Unmarshal(live, &doc)
 	for _, f := range doc.Storage.Files {
-		if f.Path == "/etc/laib/dest.ign" && !strings.HasPrefix(f.Contents.Source, "data:") {
+		if f.Path == "/etc/coreos/dest.ign" && !strings.HasPrefix(f.Contents.Source, "data:") {
 			t.Errorf("dest.ign is not inlined: %s", f.Contents.Source[:30])
 		}
 	}

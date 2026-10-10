@@ -8,71 +8,99 @@ import (
 	"github.com/mdopp/laib/usb"
 )
 
-// LiveIgnition is the Ignition the live ISO boots with: it carries the
-// box's Ignition as a file, the disk-picking pre-install, the EFI
-// post-install, and a unit that runs coreos-installer and reboots. This is
-// what `coreos-installer iso customize --dest-ignition --pre-install
-// --post-install` builds; here it is Butane we control.
+// LiveIgnition is the Ignition the live ISO boots with. It is what
+// `coreos-installer iso customize --dest-ignition --pre-install
+// --post-install` builds (src/live/customize.rs), reproduced here so the
+// ISO's own coreos-installer.service does the install and the reboot:
+//
+//   - /etc/coreos/dest.ign                      the box's Ignition
+//   - /etc/coreos/installer.d/0000-customize.yaml  ignition-file + a placeholder
+//     dest-device that the pre-install hook overrides with 0050-dest-device.yaml
+//   - pre-install-laib.service  RequiredBy=coreos-installer.service, runs
+//     usb/pre-install.sh (smallest non-removable disk, hostname for DHCP)
+//   - post-install-laib.service RequiredBy=coreos-installer.target, runs
+//     usb/post-install.sh (EFI boot order; harmless without EFI)
 func LiveIgnition(dest []byte, hostname string) ([]byte, error) {
 	var compact map[string]any
 	if err := json.Unmarshal(dest, &compact); err != nil {
 		return nil, err
 	}
 	destJSON, _ := json.Marshal(compact)
+	pre := withEnv(usb.PreInstall, "SERVER_NAME", hostname)
 	bu := `variant: fcos
 version: 1.5.0
 storage:
   files:
-    - path: /etc/laib/dest.ign
+    - path: /etc/coreos/dest.ign
       mode: 0600
       contents:
         inline: ` + yamlQuote(string(destJSON)) + `
-    - path: /usr/local/bin/laib-pre-install.sh
-      mode: 0755
-      contents:
-        inline: ` + yamlBlock(usb.PreInstall) + `
-    - path: /usr/local/bin/laib-post-install.sh
-      mode: 0755
-      contents:
-        inline: ` + yamlBlock(usb.PostInstall) + `
-    - path: /usr/local/bin/laib-install.sh
-      mode: 0755
+    - path: /etc/coreos/installer.d/0000-customize.yaml
+      mode: 0600
       contents:
         inline: |
-          #!/usr/bin/env bash
-          # The whole install, unattended: pick the disk, write CoreOS with the
-          # box's Ignition, promote the disk in the EFI order, reboot.
-          set -euo pipefail
-          export SERVER_NAME=` + yamlQuote(hostname) + `
-          exec > >(tee /dev/tty1 /dev/console 2>/dev/null) 2>&1 || true
-          echo "laib: installing — do not switch off"
-          /usr/local/bin/laib-pre-install.sh
-          coreos-installer install --ignition-file /etc/laib/dest.ign
-          /usr/local/bin/laib-post-install.sh || true
-          echo "laib: installed; rebooting in 5 s — remove the stick when the screen goes dark"
-          sleep 5
-          systemctl reboot
+          ignition-file: /etc/coreos/dest.ign
+          dest-device: /dev/disk/by-id/placeholder-overridden-by-pre-install
+    - path: /usr/local/bin/pre-install-laib
+      mode: 0700
+      contents:
+        inline: ` + yamlBlock(pre) + `
+    - path: /usr/local/bin/post-install-laib
+      mode: 0700
+      contents:
+        inline: ` + yamlBlock(usb.PostInstall) + `
 systemd:
   units:
-    - name: laib-install.service
+    - name: pre-install-laib.service
       enabled: true
       contents: |
         [Unit]
-        Description=Laib: install Fedora CoreOS to the box's disk
-        After=network-online.target coreos-installer-pre.target
-        Wants=network-online.target
-        ConditionPathExists=/etc/laib/dest.ign
-        OnFailure=emergency.target
+        Description=Pre-Install Script (laib): pick the OS disk
+        After=coreos-installer-pre.target
+        Before=coreos-installer.service
 
         [Service]
         Type=oneshot
-        ExecStart=/usr/local/bin/laib-install.sh
-        StandardOutput=journal+console
+        ExecStart=/usr/local/bin/pre-install-laib
+        RemainAfterExit=true
+        StandardOutput=kmsg+console
+        StandardError=kmsg+console
 
         [Install]
-        WantedBy=multi-user.target
+        RequiredBy=coreos-installer.service
+    - name: post-install-laib.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Post-Install Script (laib): EFI boot order
+        After=coreos-installer.service
+        Before=coreos-installer.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/post-install-laib
+        RemainAfterExit=true
+        StandardOutput=kmsg+console
+        StandardError=kmsg+console
+
+        [Install]
+        RequiredBy=coreos-installer.target
 `
 	return Transpile([]byte(bu))
+}
+
+// withEnv puts `export NAME=value` right after the script's shebang.
+func withEnv(script, name, value string) string {
+	lines := strings.SplitN(script, "\n", 2)
+	export := fmt.Sprintf("export %s=%s", name, shellQuote(value))
+	if len(lines) == 2 && strings.HasPrefix(lines[0], "#!") {
+		return lines[0] + "\n" + export + "\n" + lines[1]
+	}
+	return "#!/usr/bin/env bash\n" + export + "\n" + script
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func yamlQuote(s string) string {

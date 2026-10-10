@@ -29,6 +29,12 @@ jobs:
           go build -o laib-stick ./cmd/laib-stick
           ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --out laib-vm.iso
           ls -la laib-vm.iso
+      - name: cross-check with coreos-installer, serial console for the log
+        run: |
+          CI_IMG=quay.io/coreos/coreos-installer:release
+          podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso ignition show laib-vm.iso > live.ign
+          python3 -c "import json; d=json.load(open('live.ign')); print('units:', [u['name'] for u in d['systemd']['units']]); print('files:', [f['path'] for f in d['storage']['files']])"
+          podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso kargs modify -a console=ttyS0,115200n8 laib-vm.iso
       - name: boot, install, reboot, first boot
         run: |
           qemu-img create -q -f qcow2 disk.qcow2 20G
