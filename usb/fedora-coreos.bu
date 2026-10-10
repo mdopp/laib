@@ -1,0 +1,107 @@
+# Laib — Fedora CoreOS Butane for a box (rendered by scripts/make-usb.sh;
+# ${VARS} are substituted there). Ported from ServiceBay's TUI build, cut
+# to what Laib needs: the core user, hostname, the data dir, DNS stub off
+# (AdGuard owns 53), Z-Wave udev, linger, and a first-boot unit that runs
+# scripts/install-box.sh with the flags you gave make-usb.sh.
+variant: fcos
+version: 1.5.0
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - "${SSH_AUTHORIZED_KEY}"
+      groups: [wheel, sudo]
+      password_hash: "${PASSWORD_HASH}"
+storage:
+  directories:
+    - path: /mnt/data
+      mode: 0755
+      user: {name: core}
+      group: {name: core}
+    - path: /mnt/data/stacks
+      mode: 0755
+      user: {name: core}
+      group: {name: core}
+    - path: /mnt/data/laib
+      mode: 0755
+      user: {name: core}
+      group: {name: core}
+    - path: /var/home/core/.config/containers/systemd
+      mode: 0755
+      user: {name: core}
+      group: {name: core}
+    - path: /var/home/core/.config/systemd/user
+      mode: 0755
+      user: {name: core}
+      group: {name: core}
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      overwrite: true
+      contents:
+        inline: ${HOSTNAME}
+    - path: /etc/systemd/resolved.conf.d/no-stub.conf
+      mode: 0644
+      contents:
+        inline: |
+          [Resolve]
+          DNSStubListener=no
+    - path: /etc/udev/rules.d/99-zwave.rules
+      mode: 0644
+      contents:
+        inline: |
+          SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0666"
+    - path: /var/lib/systemd/linger/core
+      mode: 0644
+      contents:
+        inline: ""
+    - path: /etc/laib/firstboot.env
+      mode: 0600
+      contents:
+        inline: |
+          LAIB_DOMAIN=${DOMAIN}
+          LAIB_LAN_IP=${LAN_IP}
+          LAIB_MODEL_URL=${MODEL_URL}
+          LAIB_MODEL_LEASE=${MODEL_LEASE}
+          LAIB_GPU=${GPU}
+          LAIB_GH_TOKEN=${GH_TOKEN}
+    - path: /usr/local/bin/laib-firstboot.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          # Runs once as core: fetch and run the installer with the flags from the stick.
+          set -euo pipefail
+          set -a; . /etc/laib/firstboot.env; set +a
+          [ -f /var/opt/laib/laib ] && exit 0
+          for i in $(seq 1 60); do curl -fsS https://api.github.com >/dev/null 2>&1 && break; sleep 5; done
+          auth=(); [ -n "${LAIB_GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $LAIB_GH_TOKEN")
+          curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github.raw" \
+            https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -o /tmp/install-box.sh
+          flags=(--domain "$LAIB_DOMAIN")
+          [ -n "${LAIB_LAN_IP:-}" ] && flags+=(--lan-ip "$LAIB_LAN_IP")
+          [ -n "${LAIB_MODEL_URL:-}" ] && flags+=(--model-url "$LAIB_MODEL_URL")
+          [ -n "${LAIB_MODEL_LEASE:-}" ] && flags+=(--model-lease "$LAIB_MODEL_LEASE")
+          [ "${LAIB_GPU:-}" = "1" ] && flags+=(--gpu)
+          [ -n "${LAIB_GH_TOKEN:-}" ] && flags+=(--token "$LAIB_GH_TOKEN")
+          bash /tmp/install-box.sh "${flags[@]}"
+          sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env
+systemd:
+  units:
+    - name: laib-firstboot.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Laib first boot: install the binaries and init the state repo
+        After=network-online.target
+        Wants=network-online.target
+        ConditionPathExists=!/var/opt/laib/laib
+
+        [Service]
+        Type=oneshot
+        User=core
+        ExecStart=/usr/local/bin/laib-firstboot.sh
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target

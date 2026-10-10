@@ -57,9 +57,34 @@ Re-run the install script with `--version vX.Y.Z` or without for latest.
 The unit restarts; state and journal are untouched.
 
 
+## The stick: Fedora CoreOS with Laib on first boot
+
+ServiceBay's TUI built the install stick; Laib does it with one script and
+the official butane and coreos-installer containers:
+
+```
+scripts/make-usb.sh --hostname nuc --domain trial.example --lan-ip 192.168.178.30 \
+    --ssh-key ~/.ssh/id_ed25519.pub --password \
+    --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease \
+    --token "$LAIB_GH_TOKEN" --device /dev/sdX
+```
+
+Boot the box from it: the live system picks the smallest non-removable
+disk, installs CoreOS with the Ignition (user `core` with your key, the
+hostname, `/mnt/data`, DNS stub off for AdGuard, linger), promotes the SSD
+in the EFI boot order and reboots. On the first boot
+`laib-firstboot.service` runs `install-box.sh` with the flags you gave,
+then shreds the token from the disk. After that, continue at step 2
+below (`laib` is installed and `laib init` has run). The stick carries the
+GitHub token in clear text while the repo is private: keep the stick.
+
+Not on the stick (yet): the NVIDIA driver layering and CDI setup
+ServiceBay's TUI baked for the GPU box — Phase 4 brings them over.
+
 ## The first installation, step by step (the NUC, Phase 1)
 
-What you need before: Fedora CoreOS on the NUC with user `core` and SSH;
+What you need before: Fedora CoreOS on the NUC with user `core` and SSH
+(the stick above does exactly that);
 a domain for the trial (its DNS at a provider the Caddy image carries:
 Cloudflare, Hetzner, netcup, IONOS, INWX, deSEC, DuckDNS, Porkbun, OVH,
 Route53) with an API token; the GPU box's model proxy reachable on the
