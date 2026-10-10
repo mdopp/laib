@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
+	"gopkg.in/yaml.v3"
 )
 
 // Exit codes (docs/INTERFACE.md).
@@ -357,6 +358,24 @@ func lintTemplate(dir string) int {
 		// A template ships values.example.yml; lint with it.
 		if b, err := os.ReadFile(filepath.Join(dir, "values.example.yml")); err == nil {
 			os.WriteFile(filepath.Join(dst, "values.yml"), b, 0o644)
+		}
+	}
+	// after: names services the template expects to exist; stub them so the
+	// reference itself is checked, not the neighbour's presence.
+	if b, err := os.ReadFile(filepath.Join(dir, "laib.yml")); err == nil {
+		var c struct {
+			After []string `yaml:"after"`
+		}
+		if yaml.Unmarshal(b, &c) == nil {
+			for _, dep := range c.After {
+				if dep == name {
+					continue
+				}
+				stub := filepath.Join(tmp, "services", dep)
+				os.MkdirAll(stub, 0o755)
+				os.WriteFile(filepath.Join(stub, "laib.yml"), []byte("name: "+dep+"\n"), 0o644)
+				os.WriteFile(filepath.Join(stub, dep+".container"), []byte("[Container]\nImage=stub\n"), 0o644)
+			}
 		}
 	}
 	st, err := state.Load(tmp)

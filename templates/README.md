@@ -20,3 +20,8 @@ state loader would.
 | media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the admin and a phone user limited to Musik, registers libraries |
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
 | music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |
+| radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |
+| vaultwarden | — | Passwörter with SSO through Authelia's OIDC client |
+| mosquitto | — | MQTT broker; password file by the hook; 1883 open to the LAN for devices |
+| esphome | — | ESPHome dashboard and OTA, host network for discovery |
+| beets | — | music tagging over the file share's music folder, admins only |

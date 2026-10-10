@@ -1,0 +1,19 @@
+name: esphome
+template: {registry: builtin, name: esphome, version: 1}
+provides: [esphome]
+# ESPHome dashboard and OTA for the Voice PE devices and other ESP boards.
+# Host network for mDNS discovery and OTA (carve-out).
+hostNetwork: true
+routes:
+  - host: esphome
+    port: 6052
+    exposure: internal
+    auth: one_factor
+    group: admins
+secrets: []
+data:
+  - path: ${DATA_DIR}/esphome/config
+health:
+  http: http://127.0.0.1:6052/
+ports:
+  - {port: 6052, lan: false}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Mosquitto — MQTT für Geräte und Home Assistant
+
+[Container]
+Image=${IMAGE}
+PublishPort=1883:1883
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/mosquitto/config:/mosquitto/config:z
+Volume=${DATA_DIR}/mosquitto/data:/mosquitto/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

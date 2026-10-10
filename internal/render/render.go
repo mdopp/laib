@@ -174,9 +174,7 @@ func SecretNames(st *state.State) []state.Secret {
 	return out
 }
 
-func oidcSecretName(clientID string) string {
-	return "OIDC_" + strings.ToUpper(strings.ReplaceAll(clientID, "-", "_")) + "_SECRET"
-}
+func oidcSecretName(clientID string) string { return state.OIDCSecretName(clientID) }
 
 func variables(st *state.State, svc *state.Service, secrets map[string]string) (map[string]string, error) {
 	vars := map[string]string{

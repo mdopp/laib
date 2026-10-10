@@ -1,0 +1,14 @@
+name: mosquitto
+template: {registry: builtin, name: mosquitto, version: 1}
+provides: [mqtt]
+# MQTT broker for devices and Home Assistant. Password file from the hook.
+# 1883 is open to the LAN on purpose: devices on Wi-Fi publish into it.
+routes: []
+secrets:
+  - name: MQTT_PASSWORD
+data:
+  - path: ${DATA_DIR}/mosquitto/config
+  - path: ${DATA_DIR}/mosquitto/data
+health: {}
+ports:
+  - {port: 1883, lan: true}

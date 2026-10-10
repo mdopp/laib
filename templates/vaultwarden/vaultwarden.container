@@ -1,0 +1,26 @@
+[Unit]
+Description=Vaultwarden — Passwörter (SSO über Authelia)
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:8222:8222
+Environment=TZ=${TZ}
+Environment=DOMAIN=https://vault.${DOMAIN}
+Environment=SIGNUPS_ALLOWED=${SIGNUPS}
+Environment=ADMIN_TOKEN=${ADMIN_TOKEN}
+Environment=ROCKET_PORT=8222
+Environment=SSO_ENABLED=true
+Environment=SSO_ONLY=false
+Environment=SSO_AUTHORITY=https://auth.${DOMAIN}
+Environment=SSO_CLIENT_ID=vaultwarden
+Environment=SSO_CLIENT_SECRET=${SSO_SECRET}
+Environment=SSO_SCOPES=email profile offline_access
+AddHost=auth.${DOMAIN}:${LAN_IP}
+Volume=${DATA_DIR}/vaultwarden/data:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

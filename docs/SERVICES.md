@@ -27,11 +27,11 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); Music Assistant drives the speakers for Assist |
 | immich (4 containers, ML) | `immich` | **port needed** |
 | paperless (3 containers) | `paperless` | **port needed**; registry template today |
-| radicale (5232) | `radicale`, now actually used (ADR 0017) | **port needed**; LLDAP accounts + the Bote's service account |
-| vaultwarden | `vaultwarden` | **port needed** |
+| radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
+| vaultwarden | `vaultwarden` | built-in with Authelia OIDC |
 | file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share`; notes live here (ADR 0017) | **port needed**; host-network carve-out |
-| mosquitto, esphome | `mosquitto`, `esphome` | **port needed** (small) |
-| beets | `beets` | **port needed** (small) |
+| mosquitto, esphome | `mosquitto`, `esphome` | built-ins |
+| beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
 | usage-metrics (8095) | ? | **decide**: keep as a registry template or drop |
@@ -51,10 +51,10 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 ## The count
 
 - Built-ins done: caddy, auth (Authelia + LLDAP), adguard, whoami,
-  werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant (11).
-- Ports needed for the box as it runs today: home-assistant, stimme ×4,
-  immich, paperless, radicale, vaultwarden, file-share, mosquitto, esphome,
-  beets (**12 templates**).
+  werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant,
+  radicale, vaultwarden, mosquitto, esphome, beets (16).
+- Ports still needed for the box as it runs today: home-assistant,
+  stimme ×4, immich, paperless, file-share (**7 templates**).
 
 ## The Jellyfin finding (2026-10-10)
 

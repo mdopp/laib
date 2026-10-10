@@ -1,0 +1,16 @@
+[Unit]
+Description=ESPHome — Firmware und OTA für die ESP-Geräte
+
+[Container]
+Image=${IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Environment=ESPHOME_DASHBOARD_USE_PING=true
+Volume=${DATA_DIR}/esphome/config:/config:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

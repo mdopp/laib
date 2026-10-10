@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# mosquitto.conf and the password file (hashed with the image's own mosquitto_passwd).
+set -euo pipefail
+C="$LAIB_DATA_DIR/mosquitto/config"; mkdir -p "$C" "$LAIB_DATA_DIR/mosquitto/data"
+cat > "$C/mosquitto.conf" <<CFG
+# rendered by laib post-deploy (templates/mosquitto)
+listener 1883
+allow_anonymous false
+password_file /mosquitto/config/passwd
+persistence true
+persistence_location /mosquitto/data/
+log_dest stdout
+CFG
+printf '%s:%s\n' "$MQTT_USER" "$LAIB_SECRET_MQTT_PASSWORD" > "$C/passwd.plain"
+podman run --rm -v "$C:/cfg:z" "${IMAGE:-docker.io/library/eclipse-mosquitto:2}" sh -c "cp /cfg/passwd.plain /cfg/passwd && mosquitto_passwd -U /cfg/passwd" >/dev/null
+rm -f "$C/passwd.plain"; chmod 600 "$C/passwd"
+echo "mosquitto config and passwd rendered for $MQTT_USER"

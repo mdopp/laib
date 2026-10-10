@@ -1,0 +1,20 @@
+name: radicale
+template: {registry: builtin, name: radicale, version: 1}
+provides: [calendar, contacts]
+# CalDAV/CardDAV for the household (ADR 0017): phones via DAVx⁵, Home
+# Assistant's CalDAV integration, Haus, the Bote. Logins are LLDAP accounts
+# (the auth pod), so every resident has a calendar and the Bote a service
+# account. The app does its own auth; forward-auth would break DAV clients.
+after: [auth]
+routes:
+  - host: caldav
+    port: 5232
+    exposure: public
+    auth: none
+secrets: []
+data:
+  - path: ${DATA_DIR}/radicale/data
+health:
+  http: http://127.0.0.1:5232/
+ports:
+  - {port: 5232, lan: true}        # DAVx⁵ at home

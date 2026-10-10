@@ -1,0 +1,2 @@
+IMAGE: docker.io/tomsquest/docker-radicale:latest
+BASE_DN: dc=example,dc=home

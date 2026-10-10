@@ -1,0 +1,23 @@
+name: vaultwarden
+template: {registry: builtin, name: vaultwarden, version: 1}
+provides: [passwords]
+# Vaultwarden with SSO through Authelia (OIDC client rendered by laib).
+# The app does its own login; forward-auth would break the clients.
+after: [auth]
+routes:
+  - host: vault
+    port: 8222
+    exposure: public
+    auth: none
+secrets:
+  - name: VAULTWARDEN_ADMIN_TOKEN
+oidc:
+  clientId: vaultwarden
+  redirectUris: ["https://vault.${DOMAIN}/identity/connect/oidc-signin"]
+  scopes: [openid, email, profile, offline_access]
+data:
+  - path: ${DATA_DIR}/vaultwarden/data
+health:
+  http: http://127.0.0.1:8222/alive
+ports:
+  - {port: 8222, lan: false}

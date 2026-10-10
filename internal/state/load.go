@@ -178,6 +178,9 @@ func (st *State) validate() []error {
 		for _, s := range c.Secrets {
 			declared[s.Name] = true
 		}
+		if c.OIDC != nil && c.OIDC.ClientID != "" {
+			declared[OIDCSecretName(c.OIDC.ClientID)] = true // generated with the client, referenced by values
+		}
 		keys := make([]string, 0, len(svc.Values))
 		for k := range svc.Values {
 			keys = append(keys, k)
@@ -417,4 +420,10 @@ func (st *State) purposeWarnings() []string {
 		}
 	}
 	return out
+}
+
+// OIDCSecretName is the secret that holds a service's OIDC client secret;
+// generated on first apply like any declared secret.
+func OIDCSecretName(clientID string) string {
+	return "OIDC_" + strings.ToUpper(strings.ReplaceAll(clientID, "-", "_")) + "_SECRET"
 }

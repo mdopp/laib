@@ -1,0 +1,17 @@
+name: beets
+template: {registry: builtin, name: beets, version: 1}
+provides: [music-tagging]
+# beets tags and sorts the music folder the file share holds. Admin tool.
+routes:
+  - host: beets
+    port: 8337
+    exposure: internal
+    auth: one_factor
+    group: admins
+secrets: []
+data:
+  - path: ${DATA_DIR}/beets/config
+health:
+  http: http://127.0.0.1:8337/
+ports:
+  - {port: 8337, lan: false}

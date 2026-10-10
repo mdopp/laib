@@ -1,0 +1,2 @@
+IMAGE: docker.io/linuxserver/beets:latest
+MUSIC: /mnt/data/stacks/file-share/data/music

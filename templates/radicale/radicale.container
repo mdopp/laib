@@ -1,0 +1,17 @@
+[Unit]
+Description=Radicale — Kalender und Kontakte (CalDAV/CardDAV)
+
+[Container]
+Image=${IMAGE}
+PublishPort=5232:5232
+Environment=TZ=${TZ}
+Environment=RADICALE_CONFIG=/config/config
+Volume=${DATA_DIR}/radicale/data:/data:z
+Volume=${DATA_DIR}/radicale/config:/config:ro,z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
