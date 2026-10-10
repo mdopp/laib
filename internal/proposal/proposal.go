@@ -30,6 +30,7 @@ type Proposal struct {
 	DecidedBy string    `json:"decidedBy,omitempty"`
 	Files     []string  `json:"files"`
 	Warnings  []string  `json:"warnings,omitempty"` // e.g. a second service for one purpose
+	Class     string    `json:"class"`              // tree | values | new-service | template-update | patch
 }
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
@@ -82,7 +83,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, 
 	if err != nil {
 		return nil, err
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now()}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now(), Class: "tree"}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		// Run trims the output, so the two status columns may be gone; the
 		// path is always the last field.

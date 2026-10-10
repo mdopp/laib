@@ -8,3 +8,8 @@ hands:
 approvals:
   apply: {by: human}
   destroy: {by: human, snapshot: required}
+autonomy:
+  converge: on
+  values: auto
+  template-update: proposal
+  new-service: proposal

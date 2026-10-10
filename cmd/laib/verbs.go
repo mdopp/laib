@@ -301,6 +301,17 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "template", Result: "info", Detail: "sync " + strings.Join(lines, "; ")})
+		if len(args) > 1 && args[1] == "--propose" {
+			// Every installed service whose template changed gets an update
+			// proposal; the dial decides whether laib applies it itself.
+			code := exitOK
+			for _, name := range st.ServiceNames() {
+				if c := templateUpdate(ctx, env, st, name); c != exitOK && c != exitUsage {
+					code = c
+				}
+			}
+			return code
+		}
 		return exitOK
 	case "update":
 		if len(args) < 2 {
@@ -446,7 +457,7 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: false}\n", domain, dataDir, lanIP)); err != nil {
 		return fail(err)
 	}
-	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: propose}\n  pi: {ceiling: propose}\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  apply: {by: human}\n  destroy: {by: human, snapshot: required}\n"); err != nil {
+	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: propose}\n  pi: {ceiling: propose}\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  apply: {by: human}\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: proposal        # auto: laib applies value changes itself and rolls back on red\n  template-update: proposal\n  new-service: proposal\n  patch: proposal\n"); err != nil {
 		return fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {

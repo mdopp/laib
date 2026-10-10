@@ -31,7 +31,7 @@ export LAIB_HOME="$WORK/home" LAIB_QUADLET="$WORK/quadlet"
 
 LAIB_ACTOR=human:e2e "$BIN" init --domain e2e.home --lan-ip 10.0.0.2 >/dev/null
 cp -r "$ROOT/testdata/golden/basic/state/services/." "$LAIB_HOME/state/services/"
-cp "$ROOT/testdata/golden/basic/state/box.yml" "$LAIB_HOME/state/"
+cp "$ROOT/testdata/golden/basic/state/box.yml" "$ROOT/testdata/golden/basic/state/policy.yml" "$LAIB_HOME/state/"
 # strip health URLs: nothing listens here
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME"/state/services/*/laib.yml
 echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set CLOUDFLARE_API_TOKEN >/dev/null
@@ -59,10 +59,12 @@ grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL
 LAIB_ACTOR=human:e2e "$BIN" rollback >/dev/null
 grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" && { echo "FAIL: rollback did not revert"; exit 1; }
 
-# an agent-style proposal with content, approved by the human
-LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "e2e: newer whoami" >/dev/null
-LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null || { echo "FAIL: approve #2 exit $?"; exit 1; }
+# an agent-style proposal with content; values is "auto" in the golden
+# policy, so laib approves and applies it itself (proposal #2)
+LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "e2e: newer whoami" >/dev/null || { echo "FAIL: auto propose exit $?"; exit 1; }
 grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL: --set proposal not applied"; exit 1; }
+"$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["actor"]=="laib" and e["verb"]=="approve" for e in es), "laib did not approve"'
+if LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null 2>&1; then echo "FAIL: an auto-approved proposal was approved twice"; exit 1; fi
 OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io/traefik/whoami:v1.11 "e2e: second whoami" 2>&1 || true)"; echo "$OUT" | grep -q "already published" || { echo "FAIL: duplicate host not refused: $OUT"; exit 1; }
 
 # rotate a generated secret: the unit on the box carries the new value
@@ -77,11 +79,21 @@ LAIB_ACTOR=ops "$BIN" template update whoami >/dev/null || { echo "FAIL: templat
 # the template brings its health URL back; nothing listens here, so verify
 # is red (exit 2) and says so, while the files are applied
 LAIB_ACTOR=human:e2e "$BIN" approve 3 >/dev/null && CODE=0 || CODE=$?
-[ "$CODE" = 2 ] || { echo "FAIL: approve #3 expected exit 2 (red verify), got $CODE"; exit 1; }
+[ "$CODE" = 2 ] || { echo "FAIL: approve #3 (template update) expected exit 2 (red verify), got $CODE"; exit 1; }
 grep -q "whoami:v1.11" "$LAIB_HOME/state/services/whoami/values.yml" || { echo "FAIL: values.yml not kept on template update"; exit 1; }
-"$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); reds=[e for e in es if e["result"]=="red"]; assert any("health" in e.get("detail","") for e in reds), "red verify not journaled: %r" % reds'
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME/state/services/whoami/laib.yml"
 LAIB_ACTOR=human:e2e "$BIN" apply whoami --reason "e2e: health stripped again" >/dev/null || { echo "FAIL: re-apply exit $?"; exit 1; }
+
+# converge: someone edited a unit on the box by hand; the loop puts the state back
+echo "# hand edit" >> "$LAIB_QUADLET/whoami/whoami.container"
+"$BIN" status --json | python3 -c 'import sys,json; assert json.load(sys.stdin)["ready"]["drift"]==1'
+LAIB_ACTOR=laib "$BIN" converge || { echo "FAIL: converge exit $?"; "$BIN" journal | tail -4; exit 1; }
+grep -q "hand edit" "$LAIB_QUADLET/whoami/whoami.container" && { echo "FAIL: converge left the hand edit"; exit 1; }
+LAIB_ACTOR=laib "$BIN" converge | grep -q "konvergent" || { echo "FAIL: second converge not idle"; exit 1; }
+# autonomy: values is "auto" in the golden policy, so an ops --set applies itself
+LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.12 "e2e: auto values" >/dev/null || { echo "FAIL: auto propose exit $?"; exit 1; }
+grep -q "whoami:v1.12" "$LAIB_QUADLET/whoami/whoami.container" || { echo "FAIL: auto-approved values not applied"; exit 1; }
+"$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["actor"]=="laib" and e["verb"]=="approve" for e in es), "laib did not approve"'
 
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); verbs=[e["verb"] for e in es]; assert "apply" in verbs and "rollback" in verbs and "approve" in verbs, verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

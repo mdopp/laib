@@ -81,6 +81,11 @@ type Policy struct {
 	Tiers     []string            `yaml:"tiers"`
 	Hands     map[string]Hand     `yaml:"hands"`
 	Approvals map[string]Approval `yaml:"approvals"`
+	// Autonomy is the dial (docs/DESIGN.md "Repair"): per proposal class
+	// "auto" (laib approves, applies, rolls back on red) or "proposal"
+	// (a human decides). converge is "on" or "off" (the ten-minute loop).
+	// Classes: values, template-update, new-service, patch, remove.
+	Autonomy map[string]string `yaml:"autonomy"`
 }
 
 // Hand is one agent identity.

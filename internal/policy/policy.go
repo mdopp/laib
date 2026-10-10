@@ -48,6 +48,23 @@ func Validate(p state.Policy) error {
 			return fmt.Errorf("policy.yml: unknown tier %q", t)
 		}
 	}
+	for class, v := range p.Autonomy {
+		switch class {
+		case "converge":
+			if v != "on" && v != "off" {
+				return fmt.Errorf("policy.yml: autonomy.converge must be on or off")
+			}
+		case "values", "template-update", "new-service", "patch", "remove":
+			if v != "auto" && v != "proposal" {
+				return fmt.Errorf("policy.yml: autonomy.%s must be auto or proposal", class)
+			}
+			if class == "remove" && v == "auto" {
+				return fmt.Errorf("policy.yml: autonomy.remove can never be auto (ADR 0006)")
+			}
+		default:
+			return fmt.Errorf("policy.yml: unknown autonomy class %q", class)
+		}
+	}
 	for name, h := range p.Hands {
 		if Index(h.Ceiling) < 0 {
 			return fmt.Errorf("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
@@ -61,3 +78,13 @@ func Validate(p state.Policy) error {
 	}
 	return nil
 }
+
+// Auto reports whether the dial lets laib approve a proposal class itself.
+func Auto(p state.Policy, class string) bool { return p.Autonomy[class] == "auto" }
+
+// ConvergeOn reports whether the converge loop is enabled (default off).
+func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
+
+// ConvergeBudget is how many converge applies per hour are allowed before
+// laib stops and asks a human: a flapping service is a bug, not a chore.
+const ConvergeBudget = 3

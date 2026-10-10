@@ -22,6 +22,7 @@ import (
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 func inboxDir(env *cliEnv) string { return env.paths.Home + "/inbox" }
@@ -65,9 +66,27 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 	if err != nil {
 		return fail(err)
 	}
+	return runApplyPlan(ctx, env, st, p, sec, reason, "apply")
+}
+
+// runApplyPlan applies a computed plan under the lock the caller holds (or
+// takes it when none is held), journals as `verb`, stores hook secrets.
+func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Plan, sec map[string]string, reason, verb string) int {
+	only := p.Only
+	if apply.LockHolder(env.paths) == "" {
+		unlock, err := apply.Lock(env.paths, verb+":"+env.actor)
+		if errors.Is(err, apply.ErrLocked) {
+			fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
+			return exitLocked
+		}
+		if err != nil {
+			return fail(err)
+		}
+		defer unlock()
+	}
 	start := time.Now()
 	res, err := apply.Run(ctx, st, p, env.paths, sec, reason)
-	entry := journal.Entry{Actor: env.actor, Verb: "apply", Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
+	entry := journal.Entry{Actor: env.actor, Verb: verb, Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result, entry.Detail = "red", err.Error()
 		journal.Append(env.paths.Journal, entry)
@@ -212,7 +231,13 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s", p.ID, strings.Join(p.Files, " "))})
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
+		// The dial says laib decides this class itself: approve as laib,
+		// apply, and roll back on a red verify. A warning (a second service
+		// for one purpose) always goes to a human.
+		return autoApprove(ctx, env, p)
+	}
 	if env.json {
 		return emit(env, p)
 	}
@@ -221,6 +246,36 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Println("HINWEIS:", w)
 	}
 	return exitOK
+}
+
+// autoApprove is the "canary by rollback": laib merges and applies; if the
+// verify is red, it reverts the merge and applies again, and the journal
+// carries both so the human sees what was tried.
+func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
+	laibEnv := &cliEnv{paths: env.paths, json: env.json, actor: "laib", in: env.in, mcp: env.mcp}
+	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, "laib"); err != nil {
+		return fail(err)
+	}
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
+	code := runApply(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
+	if code == exitRed {
+		if out, err := sysd.Run(ctx, "git", "-C", env.paths.State, "-c", "user.name=laib", "-c", "user.email=laib@localhost", "revert", "--no-edit", "-m", "1", "HEAD"); err != nil {
+			record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + out})
+			return exitRed
+		}
+		record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d zurückgenommen: verify war rot", p.ID)})
+		st, err = loadState(env)
+		if err != nil {
+			return fail(err)
+		}
+		runApply(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
+		return exitRed
+	}
+	return code
 }
 
 func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {

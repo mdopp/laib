@@ -28,6 +28,21 @@ type UpdateService struct {
 	Template fs.FS
 }
 
+// Class names the proposal class the autonomy dial is keyed by.
+func (e Edit) Class() string {
+	switch {
+	case e.Add != nil:
+		return "new-service"
+	case e.Update != nil:
+		return "template-update"
+	case e.Patch != "":
+		return "patch"
+	case len(e.Set) > 0:
+		return "values"
+	}
+	return "tree"
+}
+
 // AddService copies a template folder into services/<name>.
 type AddService struct {
 	Name     string
@@ -111,7 +126,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings, Class: e.Class()}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])

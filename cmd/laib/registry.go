@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
@@ -98,9 +99,15 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 			return err
 		})
 	if err != nil {
+		if strings.Contains(err.Error(), "nothing to propose") {
+			return exitUsage // up to date; the caller's loop skips it
+		}
 		return fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s", p.ID, strings.Join(p.Files, " "))})
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
+		return autoApprove(ctx, env, p)
+	}
 	if env.json {
 		return emit(env, p)
 	}

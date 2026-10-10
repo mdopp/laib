@@ -37,3 +37,18 @@ func TestValidateRefusesEscalation(t *testing.T) {
 		t.Fatal("destroy must always need a human")
 	}
 }
+
+func TestAutonomyDial(t *testing.T) {
+	ok := state.Policy{Hands: map[string]state.Hand{"human": {Ceiling: "destroy"}}, Autonomy: map[string]string{"converge": "on", "values": "auto", "new-service": "proposal"}}
+	if err := Validate(ok); err != nil {
+		t.Fatal(err)
+	}
+	if !Auto(ok, "values") || Auto(ok, "new-service") || Auto(ok, "patch") || !ConvergeOn(ok) {
+		t.Fatal("dial misread")
+	}
+	for _, bad := range []map[string]string{{"remove": "auto"}, {"converge": "yes"}, {"values": "maybe"}, {"nuke": "auto"}} {
+		if Validate(state.Policy{Hands: ok.Hands, Autonomy: bad}) == nil {
+			t.Fatalf("accepted %v", bad)
+		}
+	}
+}

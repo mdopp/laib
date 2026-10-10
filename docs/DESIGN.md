@@ -24,10 +24,11 @@ building a kernel under 15k lines beside it. One user, one migration
 2. **One verb** (ADR 0001). `laib plan` shows, `laib apply` does. Install,
    update and repair are the same path. Apply ends with verify, and a red
    verify is not a success.
-3. **No self-healing in the product** (ADR 0001, ServiceBay ADR 0012 carried
-   over). Probes are scripts that emit findings and a proposed diff. The agent
-   proposes, the policy or a human approves, `laib apply` does. What may run
-   unattended is systemd's own: restart policies, `podman auto-update`, timers.
+3. **Repair in two halves** (ADR 0001 as amended). Mechanical repair runs
+   on its own: the converge loop brings the box back to the state. Repair
+   that needs understanding is a proposal by a hand, and the autonomy dial
+   in `policy.yml` says which classes laib may approve itself, with rollback
+   on a red verify. See "Repair" below.
 4. **Hands, not users** (ADR 0006). Four agent identities: `resident`, `ops`,
    `pi`, `claude`. Each has a token and a tier ceiling in `policy.yml`.
    `destroy`, `reboot` and `exec` are always a request to a human. No token
@@ -119,6 +120,49 @@ the same card both times and never chooses the agent; a router does:
 | Small, clear, one repo | pi with the local model, one attempt | failure or label `needs-claude` |
 | New template, migration, cross-service root cause | Claude directly | human |
 | Anything with destroy, reboot, secrets | nobody without a card | human |
+
+## Repair: the desired state wins, and a dial says how far laib goes alone
+
+The operator's picture: define the desired state, an agent keeps the box
+there. Laib does that in two halves, because the two need different
+guarantees.
+
+**Mechanical, always on.** `laib converge` runs every ten minutes and after
+boot (`autonomy.converge: on`): it re-applies files that drifted and
+restarts units that are not active, toward the state repo and never from
+the box into it. Guardrails carried over from ServiceBay ADR 0012: never
+regenerate a secret, diff-first and journaled, a budget of three runs per
+hour after which it stops and tells a human through the journal and the
+webhook. A service that needs more is flapping, and flapping is a finding,
+not a chore. `podman auto-update` keeps images current inside the window;
+`laib diag --journal` checks afterwards.
+
+**Understanding, by the dial.** When converge cannot help (a unit that fails
+on every start, a red health, an upstream that changed its config format),
+the ops hand reads the logs, forms a hypothesis and makes a proposal with
+content. `policy.yml autonomy` says per class whether laib approves it
+itself:
+
+| Class | Example | Default | "auto" means |
+|---|---|---|---|
+| values | a newer image tag, a changed port | proposal | laib merges, applies, and reverts the merge when verify is red |
+| template-update | the registry shipped a new version | proposal | the weekly sync proposes and laib applies, rollback on red |
+| new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
+| patch | anything else an agent can express as a diff | proposal | same |
+| remove | delete a service | never auto | a human, always (ADR 0006) |
+
+A warning (a second service for one purpose) always goes to a human, dial
+or not. Every auto decision is journaled as `laib approve` with the
+proposing hand named, so "who changed this?" has an answer.
+
+**Watching.** The ops hand watches the journal, `/ready` and `laib logs`
+on Solaris's own cadence; red lines also reach it through the webhook. Its
+job is triage and proposals, never apply.
+
+**The market.** Suggesting a better tool is judgement work for the
+Werkstatt: a periodic ticket per purpose ("is there something better for
+photos than Immich now?") answered by Claude with a short report in the
+journal and, if it convinces, a template PR. It never installs anything.
 
 ## When there is no template
 

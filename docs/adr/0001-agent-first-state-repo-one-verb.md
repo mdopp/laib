@@ -22,9 +22,16 @@ system must be diffable and attributable above all.
    change is a commit with author, reason and diff. There is no other store.
 2. `laib plan` renders and diffs; `laib apply` snapshots, writes, reloads,
    restarts and verifies. Install, upgrade and repair are the same path.
-3. Nothing in Laib runs a repair unattended. Probes emit findings and a
-   proposed diff; a hand proposes; policy or a human approves; apply does.
-   What may run unattended is systemd's own machinery.
+3. **Repair in two halves (amended 2026-10-10, operator decision).**
+   *Mechanical* repair runs unattended: the converge loop re-applies drifted
+   files and restarts inactive units every ten minutes, always toward the
+   state repo and never from the box into it, never generating a secret
+   anew, within a budget of three runs per hour before it stops and tells
+   a human. *Understanding* repair (a config change, a new template, a new
+   service) is a proposal by a hand; what laib may approve itself is the
+   autonomy dial in `policy.yml`, per proposal class, with rollback on a red
+   verify. `remove` is never automatic. systemd's own machinery (restart
+   policies, auto-update) runs regardless.
 4. The kernel contains no LLM call and no agent loop. Agents are clients over
    the CLI/MCP. An agent's output is an artifact, never a side effect.
 

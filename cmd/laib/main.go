@@ -59,6 +59,7 @@ func init() {
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
 		{"backup", "propose", "restic snapshot of state, journal and declared data paths", cmdBackup},
 		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", cmdRestore},
+		{"converge", "apply", "bring the box back to the state: re-apply drift, restart inactive units, within a budget", cmdConverge},
 		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 		{"context", "read", "starter bundle for an agent session", cmdContext},
 		{"template", "read", "lint <dir> | list | sync | update <service>", cmdTemplate},

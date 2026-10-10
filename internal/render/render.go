@@ -62,6 +62,14 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["systemd/laib-backup.service"] = backupService()
 		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
 	}
+	if st.Policy.Autonomy["converge"] == "on" {
+		out["systemd/laib-converge.service"] = "# Rendered by laib: the converge loop (docs/DESIGN.md Repair).\n[Unit]\nDescription=Laib converge\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib converge\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+		out["systemd/laib-converge.timer"] = "# Rendered by laib: every ten minutes, and after boot.\n[Unit]\nDescription=Laib converge timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=10m\n\n[Install]\nWantedBy=timers.target\n"
+	}
+	if v := st.Policy.Autonomy["template-update"]; v != "" && len(st.Box.Registries) > 0 {
+		out["systemd/laib-template-sync.service"] = "# Rendered by laib: pull registries and propose template updates.\n[Unit]\nDescription=Laib template sync\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib template sync --propose\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+		out["systemd/laib-template-sync.timer"] = "# Rendered by laib: weekly, inside the update window's day when one is set.\n[Unit]\nDescription=Laib template sync timer\n\n[Timer]\nOnCalendar=Sat *-*-* 04:00:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
+	}
 	// After every podman auto-update, diag writes red findings to the journal
 	// (and the webhook); the timer follows the update window when one is set.
 	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13): verify after an image update.\n[Service]\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"

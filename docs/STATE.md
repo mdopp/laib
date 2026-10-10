@@ -63,6 +63,13 @@ hands:
 approvals:
   apply:   { by: human }        # a claude apply within a proposal still shows in the inbox
   destroy: { by: human, snapshot: required }
+autonomy:                       # the repair dial (docs/DESIGN.md "Repair")
+  converge: on                  # ten-minute loop: re-apply drift, restart inactive units, budget 3/h
+  values: proposal              # auto | proposal
+  template-update: proposal     # weekly sync proposes; auto applies with rollback on red
+  new-service: proposal
+  patch: proposal
+  # remove is never auto
 ```
 
 A hand never approves its own proposal. `destroy` requires a human on the box
