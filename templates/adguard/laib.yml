@@ -1,0 +1,25 @@
+name: adguard
+template: {registry: builtin, name: adguard, version: 1}
+provides: [dns]
+# AdGuard Home as the LAN DNS (ServiceBay ADR 0005, Pattern A: the router
+# hands out this box as DNS). Host network for 53/udp+tcp and mDNS. Laib
+# renders render/adguard/rewrites.json (*.domain and the apex → this box);
+# the hook writes the first AdGuardHome.yaml with the admin user and keeps
+# the rewrites in step through AdGuard's API on every apply.
+hostNetwork: true
+routes:
+  - host: dns
+    port: 8083
+    exposure: internal
+    auth: two_factor
+    group: admins
+secrets:
+  - name: ADGUARD_ADMIN_PASSWORD
+data:
+  - path: ${DATA_DIR}/adguard/conf
+  - path: ${DATA_DIR}/adguard/work
+    backup: false                # query log and stats
+health:
+  http: http://127.0.0.1:8083/control/status
+ports:
+  - {port: 8083, lan: false}     # the web UI only through Caddy

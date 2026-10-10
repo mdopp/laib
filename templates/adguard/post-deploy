@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""adguard post-deploy: the first AdGuardHome.yaml (admin user, web on
+8083, DNS on 53, upstreams) when none exists, then the rewrites from
+render/adguard/rewrites.json synced through the API on every apply. The
+bcrypt hash comes from Caddy's hash-password, which the box has anyway."""
+import base64, json, os, subprocess, sys, time, urllib.request
+
+E = os.environ
+conf_dir = os.path.join(E["LAIB_DATA_DIR"], "adguard", "conf")
+os.makedirs(conf_dir, exist_ok=True)
+conf = os.path.join(conf_dir, "AdGuardHome.yaml")
+user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
+
+if not os.path.exists(conf):
+    r = subprocess.run(["podman", "run", "--rm", E.get("CADDY_IMAGE", "docker.io/library/caddy:2"), "caddy", "hash-password", "--plaintext", pw],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print("bcrypt via caddy failed:", r.stderr[-300:], file=sys.stderr); sys.exit(1)
+    bcrypt = r.stdout.strip()
+    upstreams = "\n".join(f"    - {u}" for u in E.get("UPSTREAMS", "https://dns.quad9.net/dns-query").split())
+    with open(conf, "w") as f:
+        f.write(f"""# written once by laib post-deploy; AdGuard rewrites it on changes in the UI
+http:
+  address: 0.0.0.0:8083
+users:
+  - name: {user}
+    password: {bcrypt}
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+{upstreams}
+  bootstrap_dns:
+    - 9.9.9.9
+    - 1.1.1.1
+schema_version: 29
+""")
+    os.chmod(conf, 0o600)
+    print("AdGuardHome.yaml written; AdGuard will complete it on first start")
+
+# rewrites: *.domain and the apex → this box (rendered by laib), synced via the API
+rewrites_path = "/mnt/data/laib/render/adguard/rewrites.json"
+try:
+    wanted = json.load(open(rewrites_path))
+except OSError:
+    print("no rewrites rendered yet (box.yml lanIp missing?)"); sys.exit(0)
+auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
+def api(path, body=None):
+    req = urllib.request.Request("http://127.0.0.1:8083/control" + path, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": "Basic " + auth, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        raw = r.read()
+        return json.loads(raw) if raw else None
+current = None
+for _ in range(45):
+    try:
+        current = api("/rewrite/list") or []
+        break
+    except Exception:
+        time.sleep(2)
+if current is None:
+    print("AdGuard API did not answer; rewrites not synced (re-run laib apply adguard)", file=sys.stderr); sys.exit(1)
+have = {(r["domain"], r["answer"]) for r in current}
+want = {(r["domain"], r["answer"]) for r in wanted}
+for d, a in want - have:
+    api("/rewrite/add", {"domain": d, "answer": a}); print("rewrite added:", d, "→", a)
+for d, a in have - want:
+    if d.endswith(E["LAIB_DOMAIN"]) or d == E["LAIB_DOMAIN"]:
+        api("/rewrite/delete", {"domain": d, "answer": a}); print("rewrite removed:", d)
+print(f"rewrites in step: {len(want)}")

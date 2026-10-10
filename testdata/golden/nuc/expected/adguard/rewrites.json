@@ -1,0 +1,10 @@
+[
+  {
+    "domain": "*.nuc.home",
+    "answer": "192.168.1.10"
+  },
+  {
+    "domain": "nuc.home",
+    "answer": "192.168.1.10"
+  }
+]

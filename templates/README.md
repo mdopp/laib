@@ -10,6 +10,7 @@ state loader would.
 
 | Template | Role | Notes |
 |---|---|---|
+| adguard | dns | AdGuard Home on the host network; the hook writes the first config with the admin user and syncs laib's rewrites via the API |
 | caddy | proxy | host network (the one carve-out), reads `render/caddy/Caddyfile` |
 | auth | sso, identity | Authelia + LLDAP in one pod; the hook writes configuration.yml, the OIDC key and seeds LLDAP |
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |

@@ -22,6 +22,15 @@ laib.nuc.home {
 	respond 403
 }
 
+dns.nuc.home {
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		reverse_proxy 127.0.0.1:8083
+	}
+	respond 403
+}
+
 auth.nuc.home {
 	reverse_proxy 127.0.0.1:9091
 }
