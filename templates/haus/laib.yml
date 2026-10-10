@@ -1,0 +1,24 @@
+name: haus
+template: {registry: builtin, name: haus, version: 1}
+provides: [haus]
+# Haus (ADR 0014, mdopp/haus): the family's pages and the companion API the
+# Android widgets speak. Loopback only; Caddy fronts it. /napi/ bypasses
+# Authelia (device tokens), the pages are behind it.
+after: [auth]
+routes:
+  - host: haus
+    port: 8650
+    exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia anyway
+    auth: one_factor
+    bypass: [/napi/]
+secrets:
+  - name: HAUS_LAIB_TOKEN          # laib token mint ops --note haus → laib secret set HAUS_LAIB_TOKEN
+    external: true
+  - name: HAUS_HUMAN_TOKEN         # laib token mint human --note haus-admin → verdicts from the phone and the Box page
+    external: true
+    optional: true
+data: []                           # Haus keeps nothing: Laib, Solaris and Home Assistant hold the state
+health:
+  http: http://127.0.0.1:8650/healthz
+ports:
+  - {port: 8650, lan: false}

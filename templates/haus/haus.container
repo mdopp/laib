@@ -1,0 +1,19 @@
+[Unit]
+Description=Haus: pages and the companion API (laib role: haus)
+
+[Container]
+Image=${HAUS_IMAGE}
+Network=host
+Environment=HAUS_LISTEN=127.0.0.1:8650
+Environment=LAIB_URL=http://127.0.0.1:5900
+Environment=LAIB_TOKEN=${LAIB_TOKEN}
+Environment=LAIB_HUMAN_TOKEN=${HUMAN_TOKEN}
+Environment=SOLARIS_URL=${SOLARIS_URL}
+Environment=HAUS_DEVICE_TOKENS=${DEVICE_TOKENS}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
