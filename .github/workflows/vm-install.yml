@@ -66,6 +66,9 @@ jobs:
       - name: the data disk — RAID1 with one member on /mnt/data, then the mirror joins
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # this commit's binaries replace the release's (installed on first boot), so laib disk / add / backup test main
+          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
+          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
           $SSH 'set -e
                 journalctl --no-pager -b -u laib-data-disk | tail -12
                 cat /proc/mdstat; cat /etc/laib/data-disk
@@ -73,13 +76,16 @@ jobs:
                 grep -q "\[U_\]" /proc/mdstat || { echo "array should be degraded by design"; exit 1; }
                 lsblk -ndo NAME,SIZE /dev/vda /dev/vdb /dev/vdc
                 echo "laib data disk marker $(date -u +%s)" | tee /mnt/data/laib/vm-marker
-                # the mirror: the spare 16G disk joins, resync to [UU]
-                spare=$(lsblk -dnpo NAME,TYPE | awk "\$2==\"disk\"{print \$1}" | while read d; do lsblk -no FSTYPE,PARTTYPE "$d" | grep -q . || echo "$d"; done | head -1)
-                echo "spare: $spare"
-                sudo sgdisk -Z -n 1:0:0 -t 1:fd00 -c 1:laib-data "$spare" >/dev/null; sudo udevadm settle
-                sudo mdadm --manage /dev/md/data --add "${spare}1"
-                for i in $(seq 1 90); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
-                cat /proc/mdstat; grep -q "\[UU\]" /proc/mdstat || { echo "mirror did not sync"; exit 1; }
+                # the mirror: the untouched 16G disk (no partitions) joins through laib disk add, resync to [UU]
+                spare=""; for d in /dev/vd?; do [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ] && spare=$d; done
+                echo "spare: $spare"; test -n "$spare"
+                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                $L disk status
+                $L disk add "$spare"
+                for i in $(seq 1 120); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
+                $L disk status; $L diag || true
+                grep -q "\[UU\]" /proc/mdstat || { echo "mirror did not sync"; exit 1; }
+                cat /etc/laib/data-disk | grep -q MEMBERS=2
                 sudo sync'
       - name: reinstall from the stick — the data disk survives
         run: |
@@ -98,8 +104,6 @@ jobs:
       - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
-          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
           # the job token may read this repo's packages; a box uses a PAT with packages:read or public packages
           $SSH "printf '%s' '${{ github.token }}' | podman login ghcr.io -u '${{ github.actor }}' --password-stdin && podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null && echo 'image pulled'"
           $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
@@ -113,6 +117,17 @@ jobs:
                 echo "https://laib.vm.test -> HTTP $code (Caddy, own CA)"
                 echo "$code" | grep -Eq "^(200|30[0-9]|40[13])$"
                 $L journal --since 1h'
+      - name: backup and restore — restic against a real repo
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH 'set -e; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                echo "backup:" >> /mnt/data/laib/state/box.yml; echo "  repo: /var/home/core/restic-repo" >> /mnt/data/laib/state/box.yml
+                echo "caddy marker before backup" > /mnt/data/stacks/caddy/data/vm-marker
+                $L backup
+                rm /mnt/data/stacks/caddy/data/vm-marker
+                $L restore latest caddy
+                cat /mnt/data/stacks/caddy/data/vm-marker | grep -q "before backup"
+                $L journal --since 1h | grep -E "backup|restore"'
       - name: logs
         if: always()
         run: |
