@@ -55,7 +55,7 @@ type AddService struct {
 // entry. The main checkout is never touched, so a bad patch leaves nothing
 // behind. Validate is injected so this package stays free of render.
 func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Edit, validate func(dir string) error) (*Proposal, error) {
-	if err := EnsureRepo(ctx, repo); err != nil {
+	if err := CommitDirty(ctx, repo, actor); err != nil {
 		return nil, err
 	}
 	id, err := nextID(inbox)
@@ -98,6 +98,9 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	}
 	if e.Add != nil {
 		if err := addService(wt, e.Add); err != nil {
+			return fail(err)
+		}
+		if err := wireBox(wt, e.Add.Name); err != nil {
 			return fail(err)
 		}
 	}
@@ -279,4 +282,81 @@ func updateService(wt string, u *UpdateService) error {
 		}
 	}
 	return nil
+}
+
+// wireBox: a template that provides a platform role (proxy, sso, identity,
+// dns, model) takes the role in box.yml when nobody holds it, and a
+// hostNetwork template joins the carve-out list. Both are what a human
+// would do by hand right after --add, and the order of the first
+// installation (caddy, auth, adguard, whoami) needs them before validate.
+func wireBox(wt, name string) error {
+	var contract struct {
+		Provides    []string `yaml:"provides"`
+		HostNetwork bool     `yaml:"hostNetwork"`
+	}
+	cb, err := os.ReadFile(filepath.Join(wt, "services", name, "laib.yml"))
+	if err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(cb, &contract); err != nil {
+		return err
+	}
+	var doc yaml.Node
+	b, err := os.ReadFile(filepath.Join(wt, "box.yml"))
+	if err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return err
+	}
+	root := doc.Content[0]
+	get := func(m *yaml.Node, key string) *yaml.Node {
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if m.Content[i].Value == key {
+				return m.Content[i+1]
+			}
+		}
+		return nil
+	}
+	changed := false
+	roles := get(root, "roles")
+	if roles == nil || roles.Kind != yaml.MappingNode {
+		roles = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "roles", Tag: "!!str"}, roles)
+		changed = true
+	}
+	for _, p := range contract.Provides {
+		switch p {
+		case "proxy", "sso", "identity", "dns", "model":
+			if cur := get(roles, p); cur == nil {
+				roles.Content = append(roles.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: p, Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"})
+				changed = true
+			} else if cur.Value == "" {
+				cur.Value, cur.Tag = name, "!!str"
+				changed = true
+			}
+		}
+	}
+	if contract.HostNetwork {
+		hn := get(root, "hostNetwork")
+		if hn == nil || hn.Kind != yaml.SequenceNode {
+			hn = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+			root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "hostNetwork", Tag: "!!str"}, hn)
+			changed = true
+		}
+		found := false
+		for _, n := range hn.Content {
+			if n.Value == name {
+				found = true
+			}
+		}
+		if !found {
+			hn.Content = append(hn.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"})
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return writeYAML(filepath.Join(wt, "box.yml"), &doc)
 }

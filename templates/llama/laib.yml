@@ -1,4 +1,5 @@
 name: llama
+provides: [model]
 template: {registry: builtin, name: llama, version: 1}
 # The model role (ADR 0011): llama-server in router mode behind the policy
 # proxy that also serves the GPU lease. Host network (carve-out) so the

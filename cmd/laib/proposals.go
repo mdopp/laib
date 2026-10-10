@@ -345,3 +345,64 @@ func templateFS(env *cliEnv, name string) (fs.FS, error) {
 	}
 	return sub, nil
 }
+
+// cmdAdd is the human's install verb: `laib add <template> [--name n]
+// [KEY=VALUE…] ["reason"]` — the --add proposal, approved by the same
+// human, applied. Agents keep proposing; this is sugar for the shell.
+func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
+	if len(args) < 1 {
+		return fail(errors.New("usage: laib add <template> [--name <service>] [KEY=VALUE…] [\"<grund>\"]"))
+	}
+	if proposal.Hand(env.actor) != "human" {
+		return exitRefusedMsg(env, "add is the human's verb; agents use propose --add")
+	}
+	st, err := loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	tpl, err := templateFS(env, args[0])
+	if err != nil {
+		return fail(err)
+	}
+	add := &proposal.AddService{Name: args[0], Template: tpl, Values: map[string]string{}}
+	var words []string
+	for i := 1; i < len(args); i++ {
+		switch {
+		case args[i] == "--name" && i+1 < len(args):
+			add.Name = args[i+1]
+			i++
+		case strings.Contains(args[i], "=") && !strings.Contains(args[i], " "):
+			k, v, _ := strings.Cut(args[i], "=")
+			add.Values[k] = v
+		default:
+			words = append(words, args[i])
+		}
+	}
+	reason := strings.Join(words, " ")
+	if reason == "" {
+		reason = "add " + add.Name
+	}
+	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, proposal.Edit{Add: add}, func(dir string) error {
+		st, err := state.Load(dir)
+		if err != nil {
+			return err
+		}
+		_, err = render.Render(st, nil)
+		return err
+	})
+	if err != nil {
+		return fail(err)
+	}
+	for _, w := range p.Warnings {
+		fmt.Println("HINWEIS:", w)
+	}
+	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
+		return fail(err)
+	}
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d add %s", p.ID, add.Name)})
+	st, err = loadState(env)
+	if err != nil {
+		return fail(err)
+	}
+	return runApply(ctx, env, st, "", reason)
+}

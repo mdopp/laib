@@ -79,19 +79,15 @@ sed -i 's/^dns:.*//' /mnt/data/laib/state/box.yml
 printf 'dns:\n  provider: cloudflare\n  secretRef: DNS_API_TOKEN\n' >> /mnt/data/laib/state/box.yml
 echo '<the token>' | $laib secret set DNS_API_TOKEN
 
-# 3. the roles: proxy, sso + identity, dns, then a first app
-$laib propose --add caddy "proxy"            # as human:core the proposal is yours; approve it
-$laib approve 1
-$laib propose --add auth OPERATOR_USER=mdopp OPERATOR_EMAIL=you@example "sso und identity"
-$laib approve 2                              # the hook seeds LLDAP: groups admins, family; your account
-$laib propose --add adguard "dns"
-$laib approve 3
-$laib propose --add whoami "der erste Dienst mit Route, SSO und Secret"
-$laib approve 4
+# 3. the roles: proxy, sso + identity, dns, then a first app. `laib add` is
+#    propose + approve + apply as the human; a template that provides a
+#    role takes it in box.yml, a host-network template joins the carve-outs.
+$laib add caddy
+$laib add auth OPERATOR_USER=mdopp OPERATOR_EMAIL=you@example   # the hook seeds LLDAP: admins, family, your account
+$laib add adguard
+$laib add whoami
 
-# 4. wire the roles in box.yml (one line each), apply, look
-sed -i 's/^roles: {}/roles: {proxy: caddy, sso: auth, identity: auth, dns: adguard}/' /mnt/data/laib/state/box.yml
-$laib apply --reason "roles wired"
+# 4. look
 $laib status; $laib diag; $laib plan
 # https://laib.trial.example — the box page behind Authelia, login with your LLDAP account
 # https://whoami.trial.example — the first service

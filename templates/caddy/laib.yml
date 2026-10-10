@@ -1,4 +1,5 @@
 name: caddy
+provides: [proxy]
 template: {registry: builtin, name: caddy, version: 1}
 hostNetwork: true
 routes: []

@@ -85,3 +85,33 @@ func TestAddServiceFromTemplate(t *testing.T) {
 		t.Fatal("example file copied as is")
 	}
 }
+
+func TestAddWiresRolesAndCarveOut(t *testing.T) {
+	ctx := context.Background()
+	repo, inbox := goldenRepo(t)
+	// drop the roles so the add has to wire them
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: example.home\ndataDir: /mnt/data/stacks\nlanIp: 192.168.1.10\nroles: {}\ngpu: {present: false}\n"), 0o644)
+	os.RemoveAll(filepath.Join(repo, "services", "auth"))
+	os.RemoveAll(filepath.Join(repo, "services", "caddy"))
+	os.RemoveAll(filepath.Join(repo, "services", "whoami"))
+	git(ctx, repo, "add", "-A")
+	git(ctx, repo, "commit", "-q", "-m", "bare")
+	tpl := fstest.MapFS{
+		"laib.yml":           {Data: []byte("name: dnsbox\nprovides: [dns]\nhostNetwork: true\nroutes: []\nsecrets: []\ndata: []\nports: []\n")},
+		"values.example.yml": {Data: []byte("IMAGE: x\n")},
+		"dnsbox.container":   {Data: []byte("[Container]\nImage=${IMAGE}\nNetwork=host\n")},
+	}
+	// an uncommitted shell edit in the main checkout must not block the merge
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: example.home\ndataDir: /mnt/data/stacks\nlanIp: 192.168.1.10\nroles: {}\ngpu: {present: false}\ndns: {provider: cloudflare}\n"), 0o644)
+	p, err := CreateFromEdit(ctx, repo, inbox, "human:core", "dns", Edit{Add: &AddService{Name: "dnsbox", Template: tpl, Values: map[string]string{}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Approve(ctx, repo, inbox, p, "human:core"); err != nil {
+		t.Fatal("a human may approve their own --add:", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(repo, "box.yml"))
+	if !strings.Contains(string(b), "dns: dnsbox") || !strings.Contains(string(b), "- dnsbox") || !strings.Contains(string(b), "provider: cloudflare") {
+		t.Fatalf("box.yml not wired or the shell edit lost:\n%s", b)
+	}
+}

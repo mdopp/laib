@@ -66,6 +66,29 @@ func EnsureRepo(ctx context.Context, repo string) error {
 	return nil
 }
 
+// CommitDirty records uncommitted edits in the main checkout as their own
+// commit before a branch is cut or merged. A human's shell edits (a dns
+// block in box.yml, a new secrets.age from laib secret set) are desired
+// state and must not block a merge; agents have no file access, so what
+// is dirty was done by a human on the box.
+func CommitDirty(ctx context.Context, repo, actor string) error {
+	if err := EnsureRepo(ctx, repo); err != nil {
+		return err
+	}
+	status, err := git(ctx, repo, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(status) == "" {
+		return nil
+	}
+	if _, err := git(ctx, repo, "add", "-A"); err != nil {
+		return err
+	}
+	_, err = git(ctx, repo, "commit", "-q", "-m", "edits on the box", "--author", actor+" <"+actor+"@laib>")
+	return err
+}
+
 // Create commits the working tree to proposal/<id> and returns to main with
 // a clean tree. The inbox entry lists the files the branch changes.
 func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, error) {
@@ -121,8 +144,13 @@ func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) er
 	if p.Status != "open" {
 		return fmt.Errorf("proposal %d is %s", p.ID, p.Status)
 	}
-	if Hand(by) == Hand(p.Actor) {
+	// A hand never approves its own proposal — except the human: on the
+	// shell a human is the authority, and --add is how they install.
+	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" {
 		return ErrOwnProposal
+	}
+	if err := CommitDirty(ctx, repo, by); err != nil {
+		return err
 	}
 	if _, err := git(ctx, repo, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("approve #%d by %s: %s", p.ID, by, p.Reason), p.Branch); err != nil {
 		return err
