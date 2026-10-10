@@ -75,6 +75,106 @@ storage:
       mode: 0644
       contents:
         inline: ""
+    - path: /usr/local/bin/laib-data-disk.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          # The data disk (ported from ServiceBay's setup-raid, servicebay#1666/#2526):
+          # the largest non-OS, non-removable disk carries /mnt/data as a RAID1 with
+          # two slots and one member — on purpose, so a mirror joins later with one
+          # `laib disk add`, no reformat. An existing array is assembled, never
+          # recreated: a reinstall from the stick keeps the data. No second disk
+          # (the NUC): /mnt/data stays a directory on the OS disk, and that is fine.
+          set -euo pipefail
+          MP=/mnt/data
+          # the OS disk: what holds / (composefs: /sysroot)
+          src=$(findmnt -n -o SOURCE / || true)
+          lsblk "$src" >/dev/null 2>&1 || src=$(findmnt -n -o SOURCE /sysroot)
+          osdisk=$(lsblk -ndo PKNAME "$src" | head -1)
+          best=""; bestsize=0
+          for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
+            n=$(basename "$dev")
+            [[ "$n" == "$osdisk"* || "$n" == zram* || "$n" == loop* ]] && continue
+            [[ "$(cat /sys/block/$n/removable 2>/dev/null)" == "1" ]] && continue
+            size=$(blockdev --getsize64 "$dev" 2>/dev/null || echo 0)
+            (( size > bestsize )) && { bestsize=$size; best=$dev; }
+          done
+          if [[ -z "$best" ]]; then
+            echo "laib-data-disk: no second disk; $MP stays on the OS disk ($osdisk)"
+            mkdir -p "$MP/stacks" "$MP/laib" "$MP/containers/storage"
+            chown core:core "$MP/stacks" "$MP/laib" "$MP/containers" "$MP/containers/storage"
+            chcon -R -t container_file_t "$MP/containers" 2>/dev/null || true
+            exit 0
+          fi
+          echo "laib-data-disk: OS disk $osdisk, data disk $best ($(( bestsize / 1073741824 )) GiB)"
+          md=""
+          # 1) auto-assembled already?
+          for cand in /dev/md/data /dev/md127 /dev/md0; do
+            [[ -e "$cand" ]] && mdadm --detail "$cand" 2>/dev/null | grep -q "$(basename "$best")" && { md=$(readlink -f "$cand"); break; }
+          done
+          # 2) a superblock on the disk or its first partition: assemble, keep the data
+          if [[ -z "$md" ]]; then
+            for part in "${best}p1" "${best}1" "$best"; do
+              if [[ -e "$part" ]] && mdadm --examine "$part" >/dev/null 2>&1; then
+                echo "laib-data-disk: RAID superblock on $part, assembling"
+                mdadm --assemble /dev/md/data "$part" --run 2>/dev/null && md=$(readlink -f /dev/md/data)
+                break
+              fi
+            done
+          fi
+          # 3) nothing: partition, degraded RAID1, xfs
+          if [[ -z "$md" ]]; then
+            echo "laib-data-disk: no array found, creating one on $best (one member, the mirror comes later)"
+            wipefs -a "$best"
+            sgdisk -Z -n 1:0:0 -t 1:fd00 -c 1:laib-data "$best"
+            udevadm settle
+            part="${best}1"; [[ -e "$part" ]] || part="${best}p1"
+            mdadm --create /dev/md/data --level=1 --raid-devices=2 --metadata=1.2 --run "$part" missing
+            mkfs.xfs -q -L data /dev/md/data
+            md=$(readlink -f /dev/md/data)
+          fi
+          { echo "# laib-data-disk: rewritten every boot, one ARRAY line per array"; mdadm --detail --scan | sort -u; } > /etc/mdadm.conf
+          # mount now, and on every later boot through the mount unit
+          mkdir -p "$MP"
+          if ! findmnt -n "$MP" >/dev/null 2>&1; then
+            keep=$(mktemp -d); cp -a "$MP/." "$keep/" 2>/dev/null || true   # what Ignition put there on the OS disk
+            mount -o noatime "$md" "$MP"
+            cp -an "$keep/." "$MP/" 2>/dev/null || true; rm -rf "$keep"
+            echo "laib-data-disk: mounted $md on $MP"
+          fi
+          cat > /etc/systemd/system/mnt-data.mount <<UNIT
+          [Unit]
+          Description=Laib data disk (RAID1 /dev/md/data)
+          After=local-fs.target
+
+          [Mount]
+          What=/dev/md/data
+          Where=$MP
+          Type=xfs
+          Options=noatime
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
+          mkdir -p "$MP/stacks" "$MP/laib" "$MP/containers/storage"
+          chown core:core "$MP/stacks" "$MP/laib" "$MP/containers" "$MP/containers/storage"
+          chcon -R -t container_file_t "$MP/containers" 2>/dev/null || true
+          members=$(mdadm --detail "$md" | awk '/Active Devices/{print $4}')
+          mkdir -p /etc/laib; echo "DEVICE=$md MEMBERS=${members:-1}" > /etc/laib/data-disk
+          echo "laib-data-disk: done ($md, $members member(s))"
+    # rootless podman keeps its images on the data disk (ServiceBay #1494): the
+    # Kraftwerk's images are big; without a data disk this is still the OS disk.
+    - path: /var/home/core/.config/containers/storage.conf
+      mode: 0644
+      user: {name: core}
+      group: {name: core}
+      contents:
+        inline: |
+          [storage]
+          driver = "overlay"
+          graphroot = "/mnt/data/containers/storage"
     - path: /etc/laib/firstboot.env
       mode: 0600
       user: {name: core}             # the first-boot unit runs as core
@@ -110,13 +210,30 @@ storage:
           sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env
 systemd:
   units:
+    - name: laib-data-disk.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Laib data disk: assemble or create the RAID1 and mount /mnt/data
+        DefaultDependencies=no
+        After=local-fs.target systemd-udevd.service
+        Before=user@1000.service laib-firstboot.service multi-user.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/laib-data-disk.sh
+        RemainAfterExit=yes
+        StandardOutput=journal+console
+
+        [Install]
+        WantedBy=multi-user.target
     - name: laib-firstboot.service
       enabled: true
       contents: |
         [Unit]
         Description=Laib first boot: install the binaries and init the state repo
-        After=network-online.target user@1000.service
-        Wants=network-online.target user@1000.service
+        After=network-online.target user@1000.service laib-data-disk.service
+        Wants=network-online.target user@1000.service laib-data-disk.service
         ConditionPathExists=!/var/opt/laib/laib
 
         [Service]
