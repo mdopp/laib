@@ -29,6 +29,7 @@ type Proposal struct {
 	Decided   time.Time `json:"decided,omitempty"`
 	DecidedBy string    `json:"decidedBy,omitempty"`
 	Files     []string  `json:"files"`
+	Warnings  []string  `json:"warnings,omitempty"` // e.g. a second service for one purpose
 }
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).

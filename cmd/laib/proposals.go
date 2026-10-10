@@ -217,6 +217,9 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, p)
 	}
 	fmt.Printf("Vorschlag #%d angelegt (%s). Braucht Freigabe durch eine andere Hand mit Stufe apply.\n", p.ID, strings.Join(p.Files, ", "))
+	for _, w := range p.Warnings {
+		fmt.Println("HINWEIS:", w)
+	}
 	return exitOK
 }
 

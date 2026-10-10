@@ -98,6 +98,8 @@ health:
 ports:
   - { port: 8000, lan: false }          # nftables drop on physical interfaces
 gpu: false
+provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
+after: [authelia]                # restarted and verified before this one
 ```
 
 This file is what used to be `variables.json` + the subdomain, secret, port

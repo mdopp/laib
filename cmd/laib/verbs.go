@@ -182,6 +182,9 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 	for _, c := range p.Conflicts {
 		fmt.Printf("KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
 	}
+	for _, w := range st.Warnings {
+		fmt.Printf("HINWEIS: %s\n", w)
+	}
 	return exitOK
 }
 

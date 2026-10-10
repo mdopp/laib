@@ -1,4 +1,5 @@
 name: whoami
+provides: [demo]
 template: {registry: builtin, name: whoami, version: 1}
 routes:
   - host: whoami

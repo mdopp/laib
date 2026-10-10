@@ -114,3 +114,17 @@ func TestOrderRolesFirstThenAfter(t *testing.T) {
 		t.Fatalf("bad after accepted: %v", err)
 	}
 }
+
+func TestTwoServicesForOnePurposeWarn(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "services/auth/laib.yml", "name: auth\nprovides: [sso]\nroutes: [{host: auth, port: 9091, exposure: public, auth: none}]\n")
+	write(t, dir, "services/keycloak/laib.yml", "name: keycloak\nprovides: [sso, oidc]\n")
+	write(t, dir, "services/keycloak/keycloak.container", "[Container]\nImage=x\n")
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Warnings) != 1 || !strings.Contains(st.Warnings[0], `"sso"`) || !strings.Contains(st.Warnings[0], "auth, keycloak") {
+		t.Fatalf("%v", st.Warnings)
+	}
+}

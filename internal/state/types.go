@@ -107,7 +107,8 @@ type Contract struct {
 	Ports        []Port      `yaml:"ports"`
 	GPU          bool        `yaml:"gpu"`
 	HostNetwork  bool        `yaml:"hostNetwork"`
-	After        []string    `yaml:"after"` // services restarted and verified before this one (#12)
+	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
+	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
 	MigratedFrom string      `yaml:"migratedFrom"`
 }
 
@@ -180,4 +181,7 @@ type State struct {
 	Policy   Policy
 	Services map[string]*Service
 	Ignore   []string
+	// Warnings are findings that do not stop a load but belong in a plan
+	// and in a proposal's text: today, two services serving one purpose.
+	Warnings []string
 }

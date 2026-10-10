@@ -111,6 +111,9 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		for _, p := range open {
 			fmt.Fprintf(&b, "<h2>Vorschlag #%d · von %s · Stufe: %s · braucht: andere Hand mit %s</h2><p>%s</p><pre>%s</pre>",
 				p.ID, html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(p.Reason), html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
+			for _, w := range p.Warnings {
+				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
+			}
 			fmt.Fprintf(&b, "<p>Snapshot vor Apply: ja · Rollback: laib rollback</p><form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form> <form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID, p.ID)
 		}
 		b.WriteString("<p><a href=\"/\">Status</a> · <a href=\"/journal\">Journal</a></p>")
@@ -190,6 +193,6 @@ func page(w http.ResponseWriter, title, body string) {
 	fmt.Fprintf(w, `<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Laib · %s</title><style>
 body{font:15px/1.5 system-ui,sans-serif;margin:1.5rem;max-width:60rem;color:#222;background:#faf8f3}
 h1{font-size:1.2rem}table{border-collapse:collapse}td{padding:.2rem .8rem .2rem 0;vertical-align:top}
-tr.grün td:first-child{color:#2a7}tr.gelb td:first-child{color:#c90}tr.rot td:first-child,p.rot{color:#c33}a{color:#246}
+tr.grün td:first-child{color:#2a7}p.gelb{color:#c90}tr.gelb td:first-child{color:#c90}tr.rot td:first-child,p.rot{color:#c33}a{color:#246}
 </style></head><body>%s</body></html>`, html.EscapeString(title), body)
 }

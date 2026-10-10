@@ -53,6 +53,7 @@ func Load(dir string) (*State, error) {
 	}
 
 	errs = append(errs, st.validate()...)
+	st.Warnings = st.purposeWarnings()
 	if len(errs) > 0 {
 		return st, errors.Join(errs...)
 	}
@@ -356,4 +357,29 @@ func (st *State) Order(names []string) []string {
 		}
 	}
 	return sorted
+}
+
+// purposeWarnings: a purpose served by more than one service is the "100
+// tools for one topic" smell. It is a warning, not an error: the human sees
+// it in the plan and in the Inbox and decides. Strict mode could make it an
+// error later; nothing in the tree asks for that yet.
+func (st *State) purposeWarnings() []string {
+	by := map[string][]string{}
+	for _, name := range st.ServiceNames() {
+		for _, p := range st.Services[name].Contract.Provides {
+			by[p] = append(by[p], name)
+		}
+	}
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []string
+	for _, k := range keys {
+		if len(by[k]) > 1 {
+			out = append(out, fmt.Sprintf("Zweck %q wird von %d Diensten erfüllt: %s", k, len(by[k]), strings.Join(by[k], ", ")))
+		}
+	}
+	return out
 }

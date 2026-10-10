@@ -91,9 +91,11 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 	}
-	if _, err := state.Load(wt); err != nil {
+	proposed, err := state.Load(wt)
+	if err != nil {
 		return fail(fmt.Errorf("the proposed state does not load:\n%w", err))
 	}
+	warnings := proposed.Warnings
 	if validate != nil {
 		if err := validate(wt); err != nil {
 			return fail(fmt.Errorf("the proposed state does not render: %w", err))
@@ -109,7 +111,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now()}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])
