@@ -13,7 +13,7 @@ on:
 jobs:
   install:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90   # install, mirror sync and a reinstall take ~60 min on the runner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -43,9 +43,9 @@ jobs:
           # three disks: the OS goes to the smallest (pre-install), the largest
           # becomes the data RAID1 with one member (laib-data-disk), the third
           # joins as the mirror later in this job
-          qemu-img create -q -f qcow2 disk.qcow2 12G
-          qemu-img create -q -f qcow2 data1.qcow2 16G
-          qemu-img create -q -f qcow2 data2.qcow2 16G
+          qemu-img create -q -f qcow2 disk.qcow2 10G
+          qemu-img create -q -f qcow2 data1.qcow2 12G
+          qemu-img create -q -f qcow2 data2.qcow2 12G
           cat > vm.sh <<'EOF'
           #!/usr/bin/env bash
           # $1 = boot order (cd: disk first; d: the stick first = reinstall)
@@ -76,7 +76,7 @@ jobs:
                 grep -q "\[U_\]" /proc/mdstat || { echo "array should be degraded by design"; exit 1; }
                 lsblk -ndo NAME,SIZE /dev/vda /dev/vdb /dev/vdc
                 echo "laib data disk marker $(date -u +%s)" | tee /mnt/data/laib/vm-marker
-                # the mirror: the untouched 16G disk (no partitions) joins through laib disk add, resync to [UU]
+                # the mirror: the untouched 12G disk (no partitions) joins through laib disk add, resync to [UU]
                 spare=""; for d in /dev/vd?; do [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ] && spare=$d; done
                 echo "spare: $spare"; test -n "$spare"
                 export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib

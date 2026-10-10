@@ -2,9 +2,8 @@
 
 `ghcr.io/mdopp/haus`, source `mdopp/haus`. First cut (laib#28): the Box page
 and `/napi/servicebay/*` from Laib; every other `/napi/*` path passed to
-Solaris, which also validates the phone's device token. Host network
-because the phone's SSE to Solaris and Laib's loopback are simplest that
-way; Caddy is the only thing that reaches port 8650 from outside the box.
+Solaris, which also validates the phone's device token. Port 8650 is
+published on the host's loopback only; Caddy is the only way in.
 
 1. `laib token mint ops --note haus` → `laib secret set HAUS_LAIB_TOKEN`
 2. optional: `laib token mint human --note haus-admin` → `laib secret set HAUS_HUMAN_TOKEN`

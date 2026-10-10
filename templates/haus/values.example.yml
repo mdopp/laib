@@ -1,5 +1,5 @@
 HAUS_IMAGE: ghcr.io/mdopp/haus:latest
 LAIB_TOKEN: {secret: HAUS_LAIB_TOKEN}
 HUMAN_TOKEN: {secret: HAUS_HUMAN_TOKEN}
-SOLARIS_URL: http://127.0.0.1:8787        # Solaris on the same box: validates device tokens, serves the portal paths; empty on the NUC
+SOLARIS_URL: http://host.containers.internal:8787        # Solaris on the same box: validates device tokens, serves the portal paths; empty on the NUC
 DEVICE_TOKENS: ""                          # fixed device tokens for a box without Solaris (comma-separated)
