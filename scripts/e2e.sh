@@ -46,6 +46,7 @@ j() { "$BIN" journal --json | python3 -c "import sys,json; es=json.load(sys.stdi
 LAIB_ACTOR=human:e2e "$BIN" init --domain e2e.home --lan-ip 10.0.0.2 --data-dir "$WORK/data" >/dev/null   # apply creates data paths; /mnt/data is not writable on a runner
 cp -r "$ROOT/testdata/golden/basic/state/services/." "$LAIB_HOME/state/services/"
 cp "$ROOT/testdata/golden/basic/state/box.yml" "$ROOT/testdata/golden/basic/state/policy.yml" "$LAIB_HOME/state/"
+sed -i "s|^dataDir: .*|dataDir: $WORK/data|" "$LAIB_HOME/state/box.yml"   # apply creates data paths; the golden /mnt/data is not writable on a runner
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME"/state/services/*/laib.yml   # nothing listens here
 echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set DNS_API_TOKEN >/dev/null
 
