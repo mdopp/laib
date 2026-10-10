@@ -1,4 +1,8 @@
 /laib
+/laib-operator
+/laib-lease
+/frage/frage
 /dist/
 *.test
 coverage.out
+__pycache__/
