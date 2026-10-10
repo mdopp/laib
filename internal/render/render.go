@@ -62,6 +62,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["systemd/laib-backup.service"] = backupService()
 		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
 	}
+	if st.Box.Operator.Enabled {
+		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
+	}
 	if st.Policy.Autonomy["converge"] == "on" {
 		out["systemd/laib-converge.service"] = "# Rendered by laib: the converge loop (docs/DESIGN.md Repair).\n[Unit]\nDescription=Laib converge\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib converge\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 		out["systemd/laib-converge.timer"] = "# Rendered by laib: every ten minutes, and after boot.\n[Unit]\nDescription=Laib converge timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=10m\n\n[Install]\nWantedBy=timers.target\n"
@@ -147,6 +150,9 @@ func SecretNames(st *state.State) []state.Secret {
 	}
 	if st.Box.Model.KeySecret != "" {
 		out = append(out, state.Secret{Name: st.Box.Model.KeySecret, External: true})
+	}
+	if st.Box.Operator.Enabled {
+		out = append(out, state.Secret{Name: OperatorToken, External: true}) // minted by laib operator enable
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
@@ -357,4 +363,27 @@ func PBKDF2SHA512(plain, saltSeed string) string {
 
 func ab64(b []byte) string {
 	return strings.ReplaceAll(base64.RawStdEncoding.EncodeToString(b), "+", ".")
+}
+
+// OperatorToken is the secret holding the operator's ops bearer.
+const OperatorToken = "OPERATOR_TOKEN"
+
+func operatorUnit(st *state.State, secrets map[string]string) string {
+	model := st.Box.Operator.Model
+	if model == "" {
+		model = "gemma-4-e4b"
+	}
+	reportAt := st.Box.Operator.ReportAt
+	if reportAt == "" {
+		reportAt = "07:00"
+	}
+	tick := st.Box.Operator.Tick
+	if tick == "" {
+		tick = "10m"
+	}
+	key := ""
+	if st.Box.Model.KeySecret != "" {
+		key = secretValue(secrets, st.Box.Model.KeySecret)
+	}
+	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=LAIB_TOKEN=" + secretValue(secrets, OperatorToken) + "\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_KEY=" + key + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
 }

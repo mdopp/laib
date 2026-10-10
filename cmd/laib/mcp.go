@@ -27,7 +27,7 @@ var mcpMu sync.Mutex
 // mcpVerbs are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
-	"status": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "inspect": true, "read": true, "write": true, "exec": true, "restart": true, "escalate": true,
+	"status": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "write": true, "exec": true, "restart": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true,
 }
 

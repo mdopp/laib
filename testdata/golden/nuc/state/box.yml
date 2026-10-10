@@ -1,0 +1,28 @@
+domain: nuc.home
+timezone: Europe/Berlin
+dataDir: /mnt/data/stacks
+lanIp: 192.168.1.10
+hostNetwork: [caddy]
+notify:
+  url: http://127.0.0.1:8787/api/laib-events
+roles:
+  proxy: caddy
+  sso: authelia
+gpu:
+  present: false
+model:
+  url: http://192.168.1.20:11435/v1
+  lease: http://192.168.1.20:8787/api/model-lease
+operator:
+  enabled: true
+  reportAt: "06:30"
+  tick: 5m
+dns:
+  provider: cloudflare
+  secretRef: CLOUDFLARE_API_TOKEN
+backup:
+  repo: sftp:nas:/backup/laib
+  schedule: "03:30"
+updates:
+  days: [Sat, Sun]
+  time: "03:00"

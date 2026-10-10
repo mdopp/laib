@@ -1,0 +1,12 @@
+# Rendered by laib: one rule per route. The apex deny and the wildcard
+# default live in the auth service's own config.
+access_control:
+  rules:
+    - domain: laib.nuc.home
+      policy: one_factor
+      subject: "group:admins"
+    - domain: auth.nuc.home
+      policy: bypass
+    - domain: whoami.nuc.home
+      policy: one_factor
+      subject: "group:family"

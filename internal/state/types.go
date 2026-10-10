@@ -24,6 +24,17 @@ type Box struct {
 	Model Model `yaml:"model"`
 	// Peers are the other boxes of the household (ADR 0018, issue #22).
 	Peers map[string]Peer `yaml:"peers"`
+	// Operator is the box's admin agent (ADR 0013): a user unit running
+	// laib-operator with the ops token from secrets.age.
+	Operator OperatorCfg `yaml:"operator"`
+}
+
+// OperatorCfg configures laib-operator.
+type OperatorCfg struct {
+	Enabled  bool   `yaml:"enabled"`
+	Model    string `yaml:"model"`    // preset alias, default gemma-4-e4b
+	ReportAt string `yaml:"reportAt"` // "07:00"
+	Tick     string `yaml:"tick"`     // "10m"
 }
 
 // Model is a remote OpenAI-compatible endpoint.

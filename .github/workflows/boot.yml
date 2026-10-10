@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib
+      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./cmd/laib-operator
       - run: |
           podman --version
           systemctl --user status --no-pager | head -3 || true

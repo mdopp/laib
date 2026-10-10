@@ -95,6 +95,9 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if e, ok := journal.Last(env.paths.Journal); ok {
 			fmt.Fprintf(&b, "<p>Letzte Änderung %s · %s · %s %s · %s</p>", e.T.Local().Format("02.01. 15:04"), html.EscapeString(e.Actor), e.Verb, html.EscapeString(e.Service), html.EscapeString(e.Reason))
 		}
+		if day, text := lastReport(env); day != "" {
+			fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(day), html.EscapeString(text))
+		}
 		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`)
 		page(w, "Status", b.String())
 	}))

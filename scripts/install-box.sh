@@ -24,12 +24,14 @@ else
   URL="https://github.com/mdopp/laib/releases/download/$VERSION/laib-linux-amd64"
 fi
 sudo mkdir -p /var/opt/laib
-TMP="$(mktemp)"
-curl -fsSL -o "$TMP" "$URL"
-chmod 0755 "$TMP"
-sudo install -m 0755 "$TMP" /var/opt/laib/laib.new
-sudo mv /var/opt/laib/laib.new /var/opt/laib/laib
-rm -f "$TMP"
+for BIN in laib laib-operator; do
+  TMP="$(mktemp)"
+  curl -fsSL -o "$TMP" "${URL%laib-linux-amd64}$BIN-linux-amd64"
+  chmod 0755 "$TMP"
+  sudo install -m 0755 "$TMP" "/var/opt/laib/$BIN.new"
+  sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
+  rm -f "$TMP"
+done
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
 
 mkdir -p ~/.config/systemd/user
@@ -45,3 +47,4 @@ sleep 1
 echo -n "ready: "; curl -fsS http://127.0.0.1:5900/ready || echo "(not yet)"
 echo
 echo "next: /var/opt/laib/laib plan   (shows every unit on the box as 'nicht verwaltet' until adopted or ignored)"
+echo "      /var/opt/laib/laib operator enable   (mints the ops token and starts the operator; needs a model)"

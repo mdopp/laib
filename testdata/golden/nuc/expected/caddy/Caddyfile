@@ -1,0 +1,40 @@
+# Rendered by laib. Do not edit; change services/*/laib.yml and run laib apply.
+{
+	email admin@nuc.home
+	acme_dns cloudflare {env.LAIB_DNS_TOKEN}
+}
+
+(authelia) {
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+}
+
+laib.nuc.home {
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		reverse_proxy 127.0.0.1:5900 {
+			header_up X-Laib-Proxy "${secret:LAIB_PROXY_SECRET}"
+		}
+	}
+	respond 403
+}
+
+auth.nuc.home {
+	reverse_proxy 127.0.0.1:9091
+}
+
+whoami.nuc.home {
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		request_body {
+		  max_size 10MB
+		}
+		reverse_proxy 127.0.0.1:8080
+	}
+	respond 403
+}
+

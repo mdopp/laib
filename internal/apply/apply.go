@@ -99,11 +99,14 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
 	for _, c := range p.Changes {
-		if strings.HasPrefix(c.Path, "systemd/") && strings.HasSuffix(c.Path, ".timer") && c.Kind != "delete" {
+		if strings.HasPrefix(c.Path, "systemd/") && (strings.HasSuffix(c.Path, ".timer") || strings.HasSuffix(c.Path, "laib-operator.service")) && c.Kind != "delete" {
 			unit := strings.TrimPrefix(c.Path, "systemd/")
 			if _, err := sysd.Run(ctx, "systemctl", "--user", "enable", "--now", unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: "laib", What: "enable " + unit, OK: false, Detail: err.Error()})
 			} else {
+				if strings.HasSuffix(unit, ".service") {
+					sysd.Restart(ctx, unit) // a changed service unit must pick up its new environment
+				}
 				res.Restarted = append(res.Restarted, unit)
 			}
 		}
@@ -305,8 +308,13 @@ func writeAtomic(target, content string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
+	// Unit files carry rendered secrets (Environment=…); keep them private.
+	mode := os.FileMode(0o644)
+	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") {
+		mode = 0o600
+	}
 	tmp := target + ".laib-tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp, target)

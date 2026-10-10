@@ -123,6 +123,52 @@ if LAIB_ACTOR=ops "$BIN" exec whoami -- true >/dev/null 2>&1; then fail "budget 
 LAIB_ACTOR=ops "$BIN" escalate whoami "budget spent, needs a look" | grep -q "eskaliert" || fail "escalate"
 [ "$(grep -c 'restic backup --tag pre-repair' "$SYSTEMCTL_LOG")" = 1 ] || fail "pre-repair snapshot expected exactly once per hour"
 
-# --- 10. the journal holds the whole story
-j 'verbs=[e["verb"] for e in es]; assert all(v in verbs for v in ["apply","rollback","approve","converge","exec","write","restart","escalate","snapshot"]), verbs'
+# --- 10. the operator against a real laib serve and a scripted model
+cat > "$WORK/bin/fake-model.py" <<'PY2'
+import json, sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+# a scripted model: inspect, restart, note, then stop
+SCRIPT = [
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"args":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"args":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"args":"--kind incident \"whoami war rot, Neustart, jetzt grün.\""})}}]},
+  {"role":"assistant","content":"fertig"},
+]
+i = 0
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        global i
+        n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n))
+        assert body["tools"], "no tools"
+        m = SCRIPT[min(i, len(SCRIPT)-1)]; i += 1
+        out = json.dumps({"choices":[{"message": m}]}).encode()
+        self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY2
+python3 "$WORK/bin/fake-model.py" 5977 & FAKE=$!
+LAIB_LISTEN=127.0.0.1:5976 "$BIN" serve >/dev/null 2>&1 & SERVE=$!
+sleep 1
+OPS_TOKEN="$(LAIB_ACTOR=human:e2e "$BIN" token mint ops --note e2e --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
+OPERATOR="${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}"
+LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:5977/v1 OPERATOR_HOME="$WORK/op" "$OPERATOR" -once event:caddy > "$WORK/op.json" || { echo "FAIL: operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
+kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
+python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and len(s["calls"])==3, s' "$WORK/op.json"
+j 'notes=[e for e in es if e["verb"]=="note" and e["actor"]=="ops"]; assert notes and "jetzt grün" in notes[-1]["detail"], notes'
+j 'assert any(e["verb"]=="restart" and e["actor"]=="ops" and e.get("service")=="caddy" for e in es), "operator restart not journaled"'
+test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"
+# operator enable: needs a model; mints the token into secrets.age, renders and enables the unit
+if LAIB_ACTOR=human:e2e "$BIN" operator enable >/dev/null 2>&1; then fail "operator enabled without a model"; fi
+printf 'model:\n  url: http://127.0.0.1:5977/v1\n' >> "$LAIB_HOME/state/box.yml"
+LAIB_ACTOR=human:e2e "$BIN" operator enable --report-at 06:30 >/dev/null || fail "operator enable exit $?"
+grep -q "MODEL_URL=http://127.0.0.1:5977/v1" "$LAIB_SYSTEMD/laib-operator.service" || fail "model url not rendered into the unit"
+test -f "$LAIB_SYSTEMD/laib-operator.service" || fail "operator unit not rendered"
+grep -q "OPERATOR_REPORT_AT=06:30" "$LAIB_SYSTEMD/laib-operator.service" || fail "report time not rendered"
+grep -q "LAIB_TOKEN=laib_ops_" "$LAIB_SYSTEMD/laib-operator.service" || fail "ops token not in the unit"
+[ "$(stat -c %a "$LAIB_SYSTEMD/laib-operator.service")" = 600 ] || fail "unit with a secret is not 0600"
+grep -q "enable --now laib-operator.service" "$SYSTEMCTL_LOG" || fail "operator unit not enabled"
+if LAIB_ACTOR=ops "$BIN" operator disable >/dev/null 2>&1; then fail "ops disabled the operator"; fi
+
+# --- 11. the journal holds the whole story
+j 'verbs=[e["verb"] for e in es]; assert all(v in verbs for v in ["apply","rollback","approve","converge","exec","write","restart","escalate","snapshot","note","operator"]), verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

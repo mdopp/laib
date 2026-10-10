@@ -52,6 +52,11 @@ model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
   lease: http://192.168.1.20:8787/api/model-lease
+operator:                         # laib-operator (ADR 0013); laib operator enable sets this
+  enabled: true
+  model: gemma-4-e4b
+  reportAt: "07:00"
+  tick: 10m
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
 ```

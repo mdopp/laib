@@ -1,0 +1,2 @@
+IMAGE: docker.io/traefik/whoami:v1.10
+TOKEN: !secret WHOAMI_TOKEN

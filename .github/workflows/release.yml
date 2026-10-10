@@ -28,6 +28,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-linux-amd64 ./cmd/laib
-      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-operator-linux-amd64 ./cmd/laib-operator
+      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64
         env:
           GH_TOKEN: ${{ github.token }}

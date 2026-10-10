@@ -15,6 +15,8 @@ laib exec <service> [--container c] -- <cmd>   inside the container, output jour
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
+laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
+laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
 laib rollback <service|commit>       git revert + apply

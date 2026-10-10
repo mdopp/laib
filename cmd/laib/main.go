@@ -61,6 +61,8 @@ func init() {
 		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the container, output journaled", cmdExec},
 		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", cmdRestart},
 		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
+		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
+		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
 		{"backup", "propose", "restic snapshot of state, journal and declared data paths", cmdBackup},
