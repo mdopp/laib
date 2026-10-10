@@ -1,0 +1,19 @@
+# A plain user unit (not a container): the sidecar stops and starts host
+# units, so it runs on the host like laib-operator. Binary from the release.
+[Unit]
+Description=llama policy proxy and GPU lease (laib role: model)
+After=llama.service
+Wants=llama.service
+
+[Service]
+ExecStart=/var/opt/laib/laib-lease
+Environment=ROUTER_URL=http://127.0.0.1:${ROUTER_PORT}
+Environment=LISTEN=0.0.0.0:${PORT}
+Environment=LEASE_DIR=${DATA_DIR}/llama/lease
+Environment=PRESETS_FILE=%h/.config/containers/systemd/llama/presets.json
+Environment=VOICE_UNITS=whisper.service,tts.service
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

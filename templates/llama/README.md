@@ -1,11 +1,15 @@
 # llama — the model role (ADR 0011)
 
-**Skeleton, not yet runnable.** The units above are the shape; the port of
-solarisbay's `templates/llama/post-deploy.py` (2,300 lines: presets, model
-download, policy proxy, lease, broker, GPU unit fallback) into this folder
-needs the GPU box to verify and is tracked in issue #18. Until then the
-template is excluded from the embedded built-ins and `template lint` is
-the only check it passes.
+**Ported, not yet verified on the GPU box.** The policy proxy and the lease
+are `cmd/laib-lease` (Go, tested with a fake router: household, mode
+follows the request, a named holder, 409 with the holder named, the
+catalogue marked, exclusive, release by holder). The post-deploy hook
+fetches every preset's weights idempotently and writes the router's
+`presets.ini` from `presets.json`. The broker and the expiry unit of the
+old script are gone: the sidecar is a long-running process and expires
+leases itself. What the GPU box must still confirm (issue #18): llama-server's
+router flags (`--models-preset`), speculative decoding active, the voice
+units reading `voice-device.env`, and the 1.3 s turn.
 
 ## What goes where
 

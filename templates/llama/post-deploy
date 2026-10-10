@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""llama post-deploy: fetch every preset's weights idempotently and write the
+router's presets.ini from presets.json. A download is streamed to a .part
+file and renamed only when complete, so a half file is never mistaken for
+a model. Stalls abort after LLAMA_DOWNLOAD_STALL_SECONDS without progress."""
+import json, os, sys, time, urllib.request
+
+DATA = os.environ["LAIB_DATA_DIR"]
+MODELS = os.path.join(DATA, "llama", "models")
+LEASE = os.path.join(DATA, "llama", "lease")
+STALL = int(os.environ.get("LLAMA_DOWNLOAD_STALL_SECONDS", "600"))
+here = os.path.dirname(os.path.abspath(__file__))
+presets = json.load(open(os.path.join(here, "presets.json")))
+os.makedirs(MODELS, exist_ok=True); os.makedirs(LEASE, exist_ok=True)
+
+def fetch(repo, name):
+    dst = os.path.join(MODELS, name)
+    if os.path.exists(dst):
+        return True
+    url = f"https://huggingface.co/{repo}/resolve/main/{name}?download=true"
+    part = dst + ".part"
+    print(f"download {name} from {repo}")
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r, open(part, "wb") as f:
+            last, got = time.time(), 0
+            while True:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                f.write(chunk); got += len(chunk)
+                if time.time() - last > STALL:
+                    raise TimeoutError("stalled")
+                last = time.time()
+        os.rename(part, dst)
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"download failed for {name}: {e}", file=sys.stderr)
+        try: os.remove(part)
+        except OSError: pass
+        return False
+
+ok = True
+lines = []
+for p in presets["presets"]:
+    files = [(p["repo"], p["file"])]
+    if p.get("draft"):
+        files.append((p.get("draftRepo", p["repo"]), p["draft"]))
+    if p.get("mmproj"):
+        files.append((p["repo"], p["mmproj"]))
+    for repo, name in files:
+        ok = fetch(repo, name) and ok
+    lines.append(f"[{p['alias']}]")
+    lines.append(f"model = /models/{p['file']}")
+    if p.get("draft"):
+        lines += [f"model-draft = /models/{p['draft']}", "spec-type = draft-mtp", f"draft-max = {p.get('draftMax', 4)}"]
+    if p.get("mmproj"):
+        lines.append(f"mmproj = /models/{p['mmproj']}")
+    lines.append(f"ctx-size = {p.get('ctx', 32768)}")
+    for k, key in (("cacheK", "cache-type-k"), ("cacheV", "cache-type-v"), ("ubatch", "ubatch-size")):
+        if p.get(k):
+            lines.append(f"{key} = {p[k]}")
+    lines.append("")
+with open(os.path.join(MODELS, "presets.ini"), "w") as f:
+    f.write("\n".join(lines))
+print(f"presets.ini written for {len(presets['presets'])} presets; weights complete: {ok}")
+sys.exit(0 if ok else 1)

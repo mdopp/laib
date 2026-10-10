@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -42,7 +43,15 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			return nil, err
 		}
 		for file, content := range svc.Units {
-			out["quadlet/"+name+"/"+file] = substitute(content, vars)
+			switch strings.TrimPrefix(filepath.Ext(file), ".") {
+			case "service", "timer":
+				out["systemd/"+file] = substitute(content, vars) // a plain host unit next to laib's own
+			default:
+				out["quadlet/"+name+"/"+file] = substitute(content, vars)
+			}
+		}
+		for file, content := range svc.Assets {
+			out["quadlet/"+name+"/"+file] = content
 		}
 	}
 	if st.Box.Roles.Proxy != "" {

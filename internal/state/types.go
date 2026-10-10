@@ -207,6 +207,7 @@ type Service struct {
 	Contract Contract
 	Values   map[string]Value
 	Units    map[string]string // file name -> template content with ${VAR}
+	Assets   map[string]string // file name -> content copied as is (presets.json …)
 }
 
 // State is the whole repo, loaded.

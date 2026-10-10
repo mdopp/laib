@@ -15,7 +15,11 @@ import (
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 
 // unitExts are the Quadlet file kinds Laib copies verbatim after substitution.
-var unitExts = map[string]bool{".container": true, ".pod": true, ".volume": true, ".network": true, ".kube": true}
+var unitExts = map[string]bool{".container": true, ".pod": true, ".volume": true, ".network": true, ".kube": true, ".service": true, ".timer": true}
+
+// assetExts are files copied next to the units without substitution
+// (a presets.json the sidecar reads, a config a hook renders from).
+var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".conf": true}
 
 // Load reads and validates a state repo. All validation errors are joined so
 // an agent sees every problem at once.
@@ -72,7 +76,7 @@ func readYAML(path string, into any) error {
 }
 
 func loadService(dir string) (*Service, error) {
-	svc := &Service{Name: filepath.Base(dir), Dir: dir, Values: map[string]Value{}, Units: map[string]string{}}
+	svc := &Service{Name: filepath.Base(dir), Dir: dir, Values: map[string]Value{}, Units: map[string]string{}, Assets: map[string]string{}}
 	if err := readYAML(filepath.Join(dir, "laib.yml"), &svc.Contract); err != nil {
 		return nil, fmt.Errorf("services/%s: %w", svc.Name, err)
 	}
@@ -95,12 +99,17 @@ func loadService(dir string) (*Service, error) {
 	}
 	files, _ := os.ReadDir(dir)
 	for _, f := range files {
-		if f.IsDir() || !unitExts[filepath.Ext(f.Name())] {
+		ext := filepath.Ext(f.Name())
+		if f.IsDir() || !(unitExts[ext] || assetExts[ext]) {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(dir, f.Name()))
 		if err != nil {
 			return nil, err
+		}
+		if assetExts[ext] {
+			svc.Assets[f.Name()] = string(b)
+			continue
 		}
 		svc.Units[f.Name()] = string(b)
 	}
@@ -163,7 +172,7 @@ func (st *State) validate() []error {
 			fail("services/%s/laib.yml: name is %q, folder is %q", name, c.Name, name)
 		}
 		if len(svc.Units) == 0 {
-			fail("services/%s: no .container/.pod/.kube file", name)
+			fail("services/%s: no .container/.pod/.kube/.service file", name)
 		}
 		declared := map[string]bool{}
 		for _, s := range c.Secrets {
@@ -317,6 +326,8 @@ func (svc *Service) UnitNames() []string {
 			out = append(out, base+".service")
 		case ".pod":
 			out = append(out, base+"-pod.service")
+		case ".service":
+			out = append(out, file) // a plain user unit, e.g. llama-lease.service
 		}
 	}
 	sort.Strings(out)

@@ -10,7 +10,8 @@ SecurityLabelDisable=true
 Volume=${DATA_DIR}/llama/models:/models:z
 # Router mode: one server holds every preset and loads the one a request
 # names; the policy proxy in front decides which presets a mode allows.
-Exec=--host 127.0.0.1 --port ${ROUTER_PORT} --models-dir /models --models-max 1 --ctx-size ${CONTEXT_LENGTH} --alias ${MODEL_ALIAS}
+# Router mode: presets come from /models/presets.ini, written by the post-deploy hook from presets.json.
+Exec=--host 127.0.0.1 --port ${ROUTER_PORT} --models-dir /models --models-max 1 --models-preset /models/presets.ini
 AutoUpdate=registry
 
 [Service]

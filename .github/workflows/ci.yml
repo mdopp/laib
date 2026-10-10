@@ -15,6 +15,7 @@ jobs:
       - run: go test ./...
       - run: CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o laib ./cmd/laib
       - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-operator ./cmd/laib-operator
+      - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-lease ./cmd/laib-lease && CGO_ENABLED=0 go build -o /dev/null ./cmd/frage
       - run: for t in templates/*/; do ./laib template lint "$t"; done
       - run: scripts/loc.sh
       - run: scripts/e2e.sh

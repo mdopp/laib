@@ -24,7 +24,7 @@ else
   URL="https://github.com/mdopp/laib/releases/download/$VERSION/laib-linux-amd64"
 fi
 sudo mkdir -p /var/opt/laib
-for BIN in laib laib-operator; do
+for BIN in laib laib-operator laib-lease; do
   TMP="$(mktemp)"
   curl -fsSL -o "$TMP" "${URL%laib-linux-amd64}$BIN-linux-amd64"
   chmod 0755 "$TMP"
