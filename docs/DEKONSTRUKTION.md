@@ -43,6 +43,7 @@ Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus
 | **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and Haus's Sprechen backend | memory, tools, a loop |
 | **Haus** | new: `mdopp/haus` | the surface: pages and cards, companion API `/napi`, push, device tokens, favorites, energy, HA state aggregation, the "Sprechen" field that calls Solaris | an agent loop, memory, a model |
 | **Haus-Android** | `mdopp/solaris-android` → renamed | TWA of Haus, the native widgets, the tile | its own backend logic |
+| **Bote** | Hermes as stock, template `bote` | the agent you talk to: Signal, the Sprechen field; house, box (read + propose), Frage, memory, approvals as the admin by verified number (ADR 0016) | the voice path, box repairs |
 | **Werkstatt** | `mdopp/laib` (`werkstatt/`) | pi, Claude Code, autoloop, tickets, transcripts | a chat for the family |
 
 Why this cut holds:
@@ -77,11 +78,10 @@ the Android widgets (which get the same JSON from `/napi`).
 | **Medien** (`/medien`) | Läuft gerade (Jellyfin, Radio), Weiterschauen, Radio-Presets | everyone |
 | **Notizen & Dokumente** (`/notizen`) | Suche, Zuletzt, Paperless-Eingang (Anzahl), Diktat | per person |
 | **Kalender** (`/kalender`) | Heute, Erinnerungen, Timer | per person |
-| **Verlauf** (`/verlauf`) | the conversation log, searchable; the former chat tab, demoted | per person |
 | **Box** (`/box`) | *Laib*: readiness line · *Inbox*: proposals with Freigeben/Ablehnen (delegates to Laib) · *Morgenbericht* · *Was läuft*: services grouped by purpose · *Operator*: was ich gerade tue · *Werkstatt*: offene Tickets · *Stimme*: Wakeword-Training starten | admins |
 
-**Sprechen** is not a page: a microphone/text field on every page. The
-reply comes back as transient cards into the current page ("Bürolicht ist
+**Sprechen** is not a page: a microphone/text field on every page that
+talks to the Bote. The reply comes back as transient cards into the current page ("Bürolicht ist
 aus", with the device card), with "auf meine Startseite" as the pin
 affordance. The Android quick-settings tile opens exactly this field.
 

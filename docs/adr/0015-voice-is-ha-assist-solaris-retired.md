@@ -36,8 +36,8 @@ enough: nobody needs to be recognised.
    onboarding to a Box card against LLDAP. Soul, skills, topics,
    chronicle, sessions, compaction and the chat go away. A chat UI against
    llama-server, if anyone wants one, is an ordinary template.
-5. **Hermes** has nothing left to do: there is no household agent
-   conversation; the only agent conversation is Claude in the Werkstatt.
+5. **Hermes** gets one job, the Bote (ADR 0016): the text agent on Signal
+   and behind Haus's Sprechen field. Not in the voice path.
 
 ## The two checks
 

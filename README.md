@@ -49,8 +49,9 @@ testdata/golden      renderer golden files
 
 ## Read first
 
-1. [`docs/DESIGN.md`](docs/DESIGN.md) — the whole concept: what exists, what
-   was dropped, and why.
+1. [`docs/KONZEPT.md`](docs/KONZEPT.md) — the whole concept as decided:
+   constructs, division of labour, interfaces by user group, models.
+   [`docs/DESIGN.md`](docs/DESIGN.md) is the kernel's design underneath.
 2. [`docs/INTERFACE.md`](docs/INTERFACE.md) — the CLI, the MCP surface, the
    three pages, the Solaris cards, the readiness signal.
 3. [`docs/STATE.md`](docs/STATE.md) — the state repo layout and every file's

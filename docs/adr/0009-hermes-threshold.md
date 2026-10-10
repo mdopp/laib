@@ -3,7 +3,7 @@
 Applies when someone suggests Hermes, OpenClaw, or any second agent runtime
 beside Solaris.
 
-- **Status:** Accepted, 2026-10-08
+- **Status:** Accepted for the voice path; superseded for text by ADR 0016 (2026-10-10)
 
 ## Context
 

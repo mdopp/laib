@@ -16,10 +16,11 @@ cannot reach a loopback listener at all for `/mcp`.
 
 ## Decision
 
-1. **One approval surface: the box page.** A Solaris card shows the proposal
-   and links to `laib.<domain>/inbox`; the decision is made there, behind
-   Authelia, as the signed-in admin. Laib never accepts an approval carried
-   by an agent token, and Solaris never holds a human token.
+1. **Approval surfaces: the box page and the admin's verified Signal number
+   (amended by ADR 0016).** A card links to `laib.<domain>/inbox`; the
+   decision is made there behind Authelia, or by the admin's own message
+   on Signal, where the Bote uses a `human` token bound to that number.
+   Laib never accepts an approval carried by an agent's own token.
 2. **The host shell is the human.** Hands are enforced only for MCP bearer
    tokens. `LAIB_ACTOR` on the CLI is attribution, not authorization: whoever
    runs the binary as `core` is a human. Therefore no agent gets a shell on
