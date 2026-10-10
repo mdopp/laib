@@ -49,6 +49,11 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "laib-stick %s — Installationsstick für eine Laib-Box\n\n", Version)
 	ask := !yes
+	if !stick.CanWriteDevices() {
+		fmt.Fprintln(os.Stderr, "Hinweis: ohne Administrator-Rechte kann laib-stick den Stick nicht beschreiben, nur die ISO bauen.")
+		fmt.Fprintln(os.Stderr, "         Rechtsklick → \"Als Administrator ausführen\", wenn es den Stick schreiben soll.")
+		fmt.Fprintln(os.Stderr)
+	}
 	if ask && !term.IsTerminal(int(os.Stdin.Fd())) {
 		die("stdin is not a terminal; pass the answers as flags with --yes")
 	}
@@ -139,12 +144,19 @@ func main() {
 		device = prompt(true, "USB-Gerät beschreiben (leer = nur die ISO behalten)", "", "", nil)
 	}
 	if device == "" {
-		fmt.Println("\nDie ISO auf einen Stick schreiben: balenaEtcher, Rufus (DD-Modus) oder")
-		fmt.Printf("  sudo dd if=%s of=/dev/sdX bs=4M status=progress conv=fsync\n", out)
+		fmt.Println("\nDie ISO später auf einen Stick schreiben:")
+		fmt.Printf("  laib-stick --yes --iso %s --out %s --device %s\n", out, out, deviceExample())
 		fmt.Println("Dann die Box vom Stick booten; sie installiert sich und startet neu.")
 		return
 	}
-	writeDevice(out, device, ask)
+	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", device), false) {
+		fmt.Println("nicht geschrieben; die ISO liegt in", out)
+		return
+	}
+	if err := stick.WriteDevice(out, device, progress); err != nil {
+		die(err.Error())
+	}
+	fmt.Println()
 	fmt.Println("\nStick geschrieben. Box vom Stick booten: sie installiert Fedora CoreOS auf die kleinste")
 	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`.")
 }
@@ -278,50 +290,27 @@ func copyFile(src, dst string) error {
 	return d.Close()
 }
 
-// listDevices shows the removable disks the OS knows, best effort.
+// listDevices shows the disks the OS knows, best effort.
 func listDevices() {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "linux":
-		cmd = exec.Command("lsblk", "-d", "-o", "NAME,SIZE,MODEL,TRAN,RM")
-	case "darwin":
-		cmd = exec.Command("diskutil", "list", "external", "physical")
-	default:
-		fmt.Println("\nUnter Windows: die ISO mit Rufus (DD-Modus) oder balenaEtcher schreiben.")
-		return
-	}
-	outb, err := cmd.CombinedOutput()
+	c := stick.ListDevicesCommand()
+	outb, err := exec.Command(c[0], c[1:]...).CombinedOutput()
 	if err == nil {
 		fmt.Println("\nLaufwerke:")
 		fmt.Println(indent(string(outb)))
 	}
+	if runtime.GOOS == "windows" {
+		fmt.Println("  (Gerät = die Nummer aus der Index-Spalte, z.B. 2)")
+	}
 }
 
-func writeDevice(iso, device string, ask bool) {
-	if runtime.GOOS == "windows" {
-		fmt.Println("Unter Windows schreibt laib-stick nicht selbst: die ISO mit Rufus (DD-Modus) oder balenaEtcher auf", device, "schreiben.")
-		return
-	}
-	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", device), false) {
-		fmt.Println("nicht geschrieben; die ISO liegt in", iso)
-		return
-	}
-	var cmds [][]string
+func deviceExample() string {
 	switch runtime.GOOS {
+	case "windows":
+		return "2"
 	case "darwin":
-		raw := strings.Replace(device, "/dev/disk", "/dev/rdisk", 1)
-		cmds = [][]string{{"diskutil", "unmountDisk", device}, {"sudo", "dd", "if=" + iso, "of=" + raw, "bs=4m"}, {"diskutil", "eject", device}}
-	default:
-		cmds = [][]string{{"sudo", "dd", "if=" + iso, "of=" + device, "bs=4M", "status=progress", "conv=fsync"}}
+		return "/dev/disk4"
 	}
-	for _, c := range cmds {
-		fmt.Println("$", strings.Join(c, " "))
-		cmd := exec.Command(c[0], c[1:]...)
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
-			die(fmt.Sprintf("%s: %v", c[0], err))
-		}
-	}
+	return "/dev/sdX"
 }
 
 func indent(s string) string {

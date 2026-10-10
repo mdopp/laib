@@ -223,3 +223,16 @@ func TestEmbedRefusesOversize(t *testing.T) {
 		t.Fatalf("expected a size error, got %v", err)
 	}
 }
+
+func TestDiskNumber(t *testing.T) {
+	for in, want := range map[string]int{"2": 2, "PhysicalDrive3": 3, `\\.\PhysicalDrive4`: 4, " 0 ": 0} {
+		if got, err := diskNumber(in); err != nil || got != want {
+			t.Errorf("diskNumber(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"/dev/sdb", "", "-1", "disk"} {
+		if _, err := diskNumber(in); err == nil {
+			t.Errorf("diskNumber(%q) accepted", in)
+		}
+	}
+}

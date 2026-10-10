@@ -7,6 +7,7 @@ require (
 	github.com/coreos/butane v0.29.0
 	github.com/vincent-petithory/dataurl v1.0.0
 	golang.org/x/crypto v0.47.0
+	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -23,5 +24,4 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 )

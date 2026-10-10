@@ -92,9 +92,11 @@ in-process (the Butane library), wraps it in a live Ignition that runs
 install`, `usb/post-install.sh` (EFI boot order) and reboots, downloads
 the stream's ISO and verifies its sha256, and writes that live Ignition
 into the ISO's embed area exactly as `coreos-installer iso customize`
-would (a cpio in `IMAGES/IGNITION.IMG`). On Linux and macOS it then
-writes the stick with `dd` under sudo; on Windows it leaves the ISO for
-Rufus (DD mode) or balenaEtcher.
+would (a cpio in `IMAGES/IGNITION.IMG`). Then it writes the stick: on
+Linux and macOS with `dd` under sudo, on Windows itself (as Rufus' DD
+mode does: lock and dismount the stick's volumes, raw write to
+`\\.\PhysicalDriveN`), which needs it started as Administrator; the
+device there is the disk number from the list it shows.
 
 Boot the box from it: the live system installs CoreOS with the Ignition
 (user `core` with your key, the hostname, `/mnt/data`, DNS stub off for
