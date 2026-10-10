@@ -10,3 +10,4 @@ HUMAN_TOKEN: !secret BOTE_HUMAN_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: http://host.containers.internal:8700/mcp   # Haus's Haushalt source; empty until Haus exists
 FRAGE_URL: http://host.containers.internal:8710/v1          # Frage as an OpenAI-compatible tool endpoint
+HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `haus` tool (only used when BOTE_HA_TOKEN is set)

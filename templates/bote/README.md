@@ -20,6 +20,14 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    approve with `laib exec bote -- hermes pairing approve signal <CODE>` or
    list the number in `SIGNAL_ALLOWED_USERS`.
 
+4. The house as a tool: in Home Assistant add the integration **Model
+   Context Protocol Server** (Settings → Integrations; it exposes the Assist
+   API: turn on/off, set, play, and what is on right now), create a
+   long-lived access token for a user who may see the exposed entities
+   (Profile → Security), then `laib secret set BOTE_HA_TOKEN`. Expose the
+   entities the family may touch under Settings → Voice assistants →
+   Expose. Without the token the `haus` tool is simply absent.
+
 ## What is verified and what is not
 
 Verified from the Hermes docs (2026-10): the image and its `/opt/data`
@@ -30,4 +38,6 @@ volume, the Signal env keys (`SIGNAL_HTTP_URL`, `SIGNAL_ACCOUNT`,
 `non_interactive_hard_stop_enabled`. Not yet verified on a box: the exact
 `providers.<name>.api` key for an OpenAI-compatible endpoint and the
 `model_aliases` shape — run `hermes model` once inside the container and
-compare with what it writes. Issue: the Bote on the NUC (#23, phase 2).
+compare with what it writes; and whether Hermes' MCP client speaks HA's
+SSE transport (`/mcp_server/sse`) or needs a stdio bridge (`mcp-proxy`).
+Issue: the Bote on the NUC (#23, phase 2).
