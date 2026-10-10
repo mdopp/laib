@@ -110,6 +110,41 @@ the stick.
 Not on the stick (yet): the NVIDIA driver layering and CDI setup
 ServiceBay's TUI baked for the GPU box — Phase 4 brings them over.
 
+## Before the first attempt (pre-flight, the NUC)
+
+What makes or breaks the first boot is settled before the stick is built:
+
+- **The NUC**: UEFI boot, Secure Boot off, one internal disk (the stick picks
+  the smallest non-removable one and wipes it), LAN cable. Nothing on it you
+  want to keep.
+- **A LAN address**: reserve one in the Fritz!Box for the NUC's MAC (or take
+  DHCP and look it up afterwards). It goes into `laib-stick` as the LAN
+  address and into AdGuard's `*.<domain>` rewrite.
+- **The domain**: `dopp.cloud` is at Strato, which has no DNS API, and the
+  house's port 80 reaches the Kraftwerk, not the NUC. So the trial runs with
+  `tls: internal` (Caddy signs; trust its root on the laptop and the phones)
+  and the NUC's AdGuard as the laptop's DNS for the trial, or `/etc/hosts`
+  lines for `laib`, `auth`, `whoami` under the trial domain. (Later, for real
+  certificates without port 80: Strato can delegate a sub-zone by NS record
+  to deSEC or Cloudflare, both free; then `dns.provider` + `DNS_API_TOKEN`.)
+- **The model**: the Kraftwerk's model proxy answers on
+  `http://192.168.178.100:11435/v1` and the lease on
+  `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
+  from the laptop and warns when they do not answer.
+- **The GitHub token**: fine-grained, repository `mdopp/laib` only,
+  permission *Contents: read*. It is on the stick in clear text and shredded
+  from the NUC after the first boot; revoke it after the trial.
+- **The SSH key**: the laptop's public key; the stick's console password is
+  the fallback at the screen.
+- **A way back**: the NUC is wiped and reinstalled by the same stick at any
+  time; the Kraftwerk is not touched by anything in this trial.
+
+What CI already proves (workflow `vm-install`): the stick's ISO boots in a
+KVM guest, installs CoreOS, reboots, the first boot fetches and runs
+`install-box.sh`, `laib` becomes ready and a real `laib add` applies on
+CoreOS. What only the NUC proves: UEFI boot order (`post-install.sh`),
+the real NIC, the LAN, the phones.
+
 ## The first installation, step by step (the NUC, Phase 1)
 
 What you need before: Fedora CoreOS on the NUC with user `core` and SSH

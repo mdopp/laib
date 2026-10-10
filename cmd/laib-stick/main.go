@@ -10,11 +10,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/stick"
 	"golang.org/x/term"
@@ -93,7 +95,11 @@ func main() {
 	if !b.GPU {
 		b.ModelURL = prompt(ask, "URL eines entfernten Modells, OpenAI-kompatibel (leer = später)", b.ModelURL, "", nil)
 		if b.ModelURL != "" {
+			probe(b.ModelURL+"/models", "Modell")
 			b.ModelLease = prompt(ask, "Lease-URL der entfernten llama (leer = keine)", b.ModelLease, "", nil)
+			if b.ModelLease != "" {
+				probe(b.ModelLease, "Lease")
+			}
 		}
 	}
 	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
@@ -159,6 +165,20 @@ func main() {
 	fmt.Println()
 	fmt.Println("\nStick geschrieben. Box vom Stick booten: sie installiert Fedora CoreOS auf die kleinste")
 	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`.")
+}
+
+// probe tells whether a URL answers from this laptop: the box will sit on
+// the same LAN, so an unreachable model here is almost surely unreachable
+// there. A warning, never a stop (the model may be off right now).
+func probe(url, what string) {
+	c := &http.Client{Timeout: 4 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		fmt.Printf("  Hinweis: %s unter %s antwortet von hier nicht (%v)\n", what, url, err)
+		return
+	}
+	resp.Body.Close()
+	fmt.Printf("  %s antwortet (HTTP %d)\n", what, resp.StatusCode)
 }
 
 func usage() {
