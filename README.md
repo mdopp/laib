@@ -57,7 +57,9 @@ testdata/golden      renderer golden files
    [`docs/adr/README.md`](docs/adr/README.md) before changing anything about
    runtime, identity, proxy, templates or tests.
 5. [`docs/MIGRATION.md`](docs/MIGRATION.md) — the one-shot move from ServiceBay.
-6. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
+6. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the
+   "a service for the family" sequence.
+7. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
    [`docs/OUTSIDE.md`](docs/OUTSIDE.md) — backup, install, and what Laib
    leaves to the router, to LLDAP and to nobody.
 
