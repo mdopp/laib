@@ -1,0 +1,55 @@
+# The first install, end to end, in a VM on the runner: laib-stick builds the
+# ISO, QEMU/KVM boots it, the live system installs Fedora CoreOS to a virtual
+# disk and reboots, the first boot fetches install-box.sh with the job's
+# token and runs `laib init`; then we SSH in and do a real `laib add`.
+# This is the closest thing to the NUC without the NUC. BIOS boot (the EFI
+# boot-order step is the NUC's job; post-install.sh tolerates no EFI).
+name: vm-install
+on:
+  push:
+    branches: [main]
+    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, templates/**, .github/workflows/vm-install.yml]
+  workflow_dispatch:
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: qemu + kvm
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
+          test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
+      - name: the stick
+        run: |
+          ssh-keygen -q -t ed25519 -N "" -f key
+          go build -o laib-stick ./cmd/laib-stick
+          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --out laib-vm.iso
+          ls -la laib-vm.iso
+      - name: boot, install, reboot, first boot
+        run: |
+          qemu-img create -q -f qcow2 disk.qcow2 20G
+          qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
+            -pidfile qemu.pid -serial file:serial.log \
+            -drive file=disk.qcow2,if=virtio,format=qcow2 -cdrom laib-vm.iso -boot order=cd \
+            -nic user,model=virtio,hostfwd=tcp::2222-:22
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
+          for i in $(seq 1 120); do
+            if $SSH 'curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "ready after $((i*10)) s"; break; fi
+            [ $i -eq 120 ] && { echo "laib never became ready"; exit 1; }
+            sleep 10
+          done
+          $SSH 'systemctl status laib-firstboot --no-pager; /var/opt/laib/laib version; /var/opt/laib/laib status; /var/opt/laib/laib plan; /var/opt/laib/laib diag; cat /etc/laib/firstboot.env 2>/dev/null && { echo "firstboot.env still on disk"; exit 1; } || true'
+      - name: a real apply on real CoreOS
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib; $L add whoami && $L status && podman ps && $L journal --since 1h'
+      - name: logs
+        if: always()
+        run: |
+          echo "--- serial"; tail -c 20000 serial.log || true
+          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50' || true
+          [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true
