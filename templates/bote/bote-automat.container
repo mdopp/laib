@@ -1,0 +1,16 @@
+[Unit]
+Description=Bote: Automat — Home Assistant automations as an MCP tool (#26)
+
+[Container]
+Image=${AUTOMAT_IMAGE}
+Pod=bote.pod
+Environment=HA_URL=${HA_URL}
+Environment=HA_TOKEN=${HA_TOKEN}
+Environment=AUTOMAT_LISTEN=127.0.0.1:8643
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

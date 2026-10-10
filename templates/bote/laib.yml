@@ -3,7 +3,8 @@ template: {registry: builtin, name: bote, version: 1}
 provides: [bote]
 # The Bote (ADR 0016): Hermes as stock, Signal gateway, the Laib MCP as the
 # hand `bote`, the Haus "Haushalt" MCP and Frage as tools. Two containers in
-# one pod: hermes and signal-cli's REST API, which share loopback.
+# one pod: hermes, signal-cli's REST API and the Automat (HA automations,
+# #26), which share loopback.
 routes: []
 secrets:
   - name: BOTE_LAIB_TOKEN            # laib token mint bote --note bote  → laib secret set BOTE_LAIB_TOKEN
@@ -22,3 +23,4 @@ health:
 ports:
   - {port: 8080, lan: false}         # signal-cli REST, loopback only
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server; Haus's Sprechen field uses it
+  - {port: 8643, lan: false}         # Automat MCP, loopback only

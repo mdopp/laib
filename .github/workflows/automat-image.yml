@@ -1,0 +1,25 @@
+name: automat-image
+on:
+  push:
+    branches: [main]
+    paths: ["cmd/automat/**", "internal/automat/**", "internal/mcpserver/**", "automat/**", "go.mod", "go.sum"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: automat/Containerfile
+          push: true
+          tags: ghcr.io/mdopp/laib-automat:latest,ghcr.io/mdopp/laib-automat:${{ github.sha }}

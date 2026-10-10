@@ -28,6 +28,13 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    entities the family may touch under Settings → Voice assistants →
    Expose. Without the token the `haus` tool is simply absent.
 
+5. Automations by sentence: the `bote-automat` container (image
+   `ghcr.io/mdopp/laib-automat`) serves HA's automation config API as MCP
+   on loopback; Hermes gets it as `automat` with `trust: untrusted`, so
+   every write asks you on Signal first. Same HA token as the `haus` tool.
+   Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
+   automation_loeschen, automation_schalten.
+
 ## What is verified and what is not
 
 Verified from the Hermes docs (2026-10): the image and its `/opt/data`

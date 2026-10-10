@@ -1,0 +1,11 @@
+# Automat: the Bote's Home Assistant automation tool (#26); one static binary.
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /automat ./cmd/automat
+FROM scratch
+COPY --from=build /automat /automat
+EXPOSE 8643
+ENTRYPOINT ["/automat"]

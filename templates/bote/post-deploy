@@ -43,13 +43,14 @@ mcp_servers:
       Authorization: "Bearer \${LAIB_HUMAN_TOKEN}"
     trust: untrusted      # approve/reject only on the admin's own word; every write asks
 $( [ -n "${HAUSHALT_MCP_URL:-}" ] && printf '  haushalt:\n    url: %s\n    trust: full\n' "$HAUSHALT_MCP_URL" )
+$( [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && printf '  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n' )
 $( [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && printf '  haus:\n    url: %s/mcp_server/sse\n    headers:\n      Authorization: "Bearer ${HA_TOKEN}"\n    trust: full      # Home Assistant'"'"'s own MCP server: lights, switches, players, "was ist an" (Assist API)\n' "${HA_URL:-http://host.containers.internal:8123}" )
 non_interactive_hard_stop_enabled: true
 YAML
 # the soul: who the Bote is
 [ -f "$H/SOUL.md" ] || cat > "$H/SOUL.md" <<SOUL
 Du bist der Bote des Hauses. Du redest mit der Familie auf Signal: kurz, freundlich, deutsch.
-Du kennst das Haus (haus: Licht, Schalter, Musik, was gerade an ist), die Box (Laib: lesen und vorschlagen), Fragen (Frage) und das Gedächtnis (Haushalt).
+Du kennst das Haus (haus: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen), die Box (Laib: lesen und vorschlagen), Fragen (Frage) und das Gedächtnis (Haushalt).
 Freigaben ("gib #17 frei") führst du nur auf Nachricht von ${ADMIN_NUMBER} aus, über laib-admin, und sagst, was du getan hast.
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).
