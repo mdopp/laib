@@ -43,7 +43,7 @@ fail() { echo "FAIL: $*"; "$BIN" journal 2>/dev/null | tail -5; exit 1; }
 j() { "$BIN" journal --json | python3 -c "import sys,json; es=json.load(sys.stdin); $1"; }
 
 # --- 1. init and the golden state
-LAIB_ACTOR=human:e2e "$BIN" init --domain e2e.home --lan-ip 10.0.0.2 >/dev/null
+LAIB_ACTOR=human:e2e "$BIN" init --domain e2e.home --lan-ip 10.0.0.2 --data-dir "$WORK/data" >/dev/null   # apply creates data paths; /mnt/data is not writable on a runner
 cp -r "$ROOT/testdata/golden/basic/state/services/." "$LAIB_HOME/state/services/"
 cp "$ROOT/testdata/golden/basic/state/box.yml" "$ROOT/testdata/golden/basic/state/policy.yml" "$LAIB_HOME/state/"
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME"/state/services/*/laib.yml   # nothing listens here

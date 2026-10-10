@@ -21,7 +21,7 @@ systemctl --user --version >/dev/null
 podman --version
 mkdir -p "$LAIB_QUADLET"
 
-LAIB_ACTOR=human:boot "$BIN" init --domain boot.test >/dev/null
+LAIB_ACTOR=human:boot "$BIN" init --domain boot.test --data-dir "$HOME/laib-data" >/dev/null
 # No proxy, no sso: just the one service, so the check is Quadlet itself.
 cat > "$LAIB_HOME/state/box.yml" <<YML
 domain: boot.test
