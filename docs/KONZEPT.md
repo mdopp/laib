@@ -143,14 +143,13 @@ holds the card (ADR 0011):
 
 Voice has no LLM in its path; the card is free for the agents.
 
-## Two boxes (ADR 0018)
+## One box, and a trial box
 
-Alltag (the NUC: always on, proxy, sso, dns, household, Bote, Operator)
-and Kraftwerk (the GPU box: model, Werkstatt, media, may sleep). One Laib
-each, roles referenced by peer, only the route list exchanged, no
-scheduler and no failover: a sleeping Kraftwerk is a sentence from the
-Bote, not a migration. A box without a GPU sets `box.yml model.url`.
-The path is `docs/ZIELBILD.md`.
+The end state is one box, the Kraftwerk (the GPU box). The Intel NUC is
+the proving ground for the kernel, the agents and Haus: no GPU, so
+`box.yml model.url` points at the Kraftwerk's model proxy; wiped after
+the trial. Two boxes with fixed roles would work (ADR 0018, parked) but
+are not the plan. The path is `docs/ZIELBILD.md`.
 
 ## Three days in the life
 

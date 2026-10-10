@@ -4,9 +4,10 @@ Applies when a second box appears, when a service should "move", when
 someone proposes shared storage, an overlay network or a scheduler, and
 when a box has no GPU.
 
-- **Status:** Accepted, 2026-10-10
-- **Deciders:** operator (mdopp): trial on an Intel NUC without a GPU;
-  "könnte das Ganze auch zwei Systeme tragen, ähnlich wie k8s?"
+- **Status:** Parked, 2026-10-10 — the operator asked the question and
+  decided for one box (the Kraftwerk); the NUC is a trial only. This
+  record keeps the design in case a second box ever becomes the plan.
+  What *is* in use from it: `box.yml model.url` for a box without a GPU.
 
 ## Context
 

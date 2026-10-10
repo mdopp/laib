@@ -1,30 +1,21 @@
 # Laib — the target picture and the way there
 
 2026-10-10. The concept is `docs/KONZEPT.md`; this is the end state in
-one picture and the ordered path, including the NUC trial and two boxes.
+one picture and the ordered path, with the NUC as the trial box.
 
 ## The end state
 
-Two boxes with fixed roles, one household (ADR 0018):
+**One box: the Kraftwerk** (the GPU box that runs ServiceBay today),
+running everything in `docs/KONZEPT.md`: Laib with all roles including
+the model, the Operator, the Bote, Haus, Frage, Home Assistant with
+Stimme, the household services, the Werkstatt. One state repo, one
+restic repo on the NAS, one Laib.
 
-| | **Alltag** (Intel NUC, no GPU, always on, low power) | **Kraftwerk** (the GPU box, may sleep) |
-|---|---|---|
-| Laib | its own Laib, state repo, Operator | its own Laib, state repo, Operator |
-| Roles | proxy (Caddy, public 443), sso (Authelia + LLDAP), dns (AdGuard), identity | model (llama router, proxy, lease, embeddings) |
-| Household | Haus, Bote (Hermes), Frage, Radicale, Paperless, Vaultwarden, file share, Home Assistant, Stimme (CPU: Whisper small, Piper) | Werkstatt, media (Jellyfin with transcoding), Immich (ML), foundry-chronicle, Martin TTS (GPU) |
-| Model | `box.yml model.url` → Kraftwerk's proxy; cloud fallback when it sleeps | the role itself |
-| Backup | restic to the NAS, own repo | restic to the NAS, own repo |
-
-What they exchange: the route list (`host → ip:port`) so the DNS box
-renders rewrites per host and the proxy box forwards public hosts to the
-peer, and the model URL. Nothing else. No scheduler, no shared storage,
-no failover: a sleeping Kraftwerk means the Bote says so and uses the
-cloud model; media waits.
-
-Everything a person touches: voice at home (HA Assist + Stimme + Frage),
-Haus pages and widgets, Signal with the Bote, the Box page and the
-Werkstatt for the admin. Everything an agent touches: the Laib MCP of
-each box, the Haushalt MCP of Haus, Home Assistant.
+The Intel NUC is a **proving ground only**: it has no GPU, so it uses the
+Kraftwerk's model proxy over the LAN (`box.yml model.url`), and it is
+wiped when the trial is over. Nothing stays on it. (Two boxes with fixed
+roles would work — ADR 0018 keeps the design as a parked option — but it
+is not the plan.)
 
 ## The way there
 
@@ -66,38 +57,35 @@ Gate: "was gibt's Neues" on Signal answers with the morning report; "gib
 Gate: the family uses Haus and the widgets for a week without opening the
 old Solaris PWA.
 
-### Phase 4 — the household moves to the NUC
+### Phase 4 — the Kraftwerk gets Laib (docs/MIGRATION.md)
 
-10. Radicale, Paperless, Vaultwarden, file share, Home Assistant, Stimme
-    (CPU variants) move from the GPU box to the NUC: one service at a
-    time, restic restore, `laib apply`, verify, old unit off.
-11. Voice: Assist sentences for timers and media (check 1 of ADR 0015),
-    Music Assistant with Jellyfin and radio; wake word trained.
+10. Laib installed on the GPU box beside ServiceBay with `--gpu`;
+    ServiceBay's units ignored; Caddy beside NPM (step 2 of MIGRATION.md),
+    then auth, adguard, llama as the model role (issue #18).
+11. The household services adopted one by one from ServiceBay: Radicale,
+    Paperless, Vaultwarden, file share, Home Assistant, media, Immich,
+    foundry-chronicle; each `laib plan`, `laib apply`, verify, old unit
+    off. Stimme with the GPU variants (Martin TTS).
+12. Operator, Bote, Frage and Haus move from the NUC to the Kraftwerk:
+    the same templates, `model.url` replaced by the local role, Haus's
+    data restored from the NUC's restic repo.
 
-Gate: voice and the five intents work from the NUC with the GPU box's TTS.
+Gate: ServiceBay disabled; `laib status` green; the Bote reports from the
+Kraftwerk; the NUC is wiped.
 
-### Phase 5 — the GPU box becomes the Kraftwerk
+### Phase 5 — voice and retire
 
-12. Laib on the GPU box beside ServiceBay (MIGRATION.md): llama as the
-    model role (issue #18), Werkstatt, media, Immich, foundry-chronicle
-    adopted one by one; ServiceBay's units ignored, then removed.
-13. Peers: `box.yml peers` on both, routes exchanged (issue #22); DNS on
-    the NUC rewrites media.<domain> to the GPU box; public 443 stays on
-    the NUC and forwards.
-
-Gate: ServiceBay disabled; `laib status` green on both; the Bote reports
-both boxes.
-
-### Phase 6 — retire
-
-14. Solaris the agent off; its memory library in Haus; solarisbay reduced
-    to templates in the household registry; solaris-android renamed.
-15. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
+13. Assist sentences for timers and media (check 1 of ADR 0015), Music
+    Assistant with Jellyfin and radio, the wake word trained; Solaris the
+    agent off; its memory library in Haus; solarisbay reduced to templates
+    in the household registry; solaris-android renamed.
+14. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
     as "what we have".
 
 ## What the trial proves, and what it does not
 
 Proves: the kernel on real hardware, DNS-01 and SSO, the Operator with a
-remote model, the Bote on Signal, Haus against a real family. Does not
-prove: the GPU role, the lease, media transcoding — those stay on the GPU
-box until Phase 5 and are the reason the GPU box is migrated last.
+remote model, the Bote on Signal, Haus against a real family — all
+without touching the GPU box. Does not prove: the GPU role, the lease,
+media transcoding — those are Phase 4 on the Kraftwerk itself, which is
+why that box is migrated last and nothing on it changes before.
