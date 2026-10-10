@@ -24,7 +24,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | home-assistant (8123, zwave 8091, 3 containers) | `home-assistant`, also the voice brain (ADR 0015) | **port needed**; HA's config stays in its data dir; Assist, CalDAV and Music Assistant integrations are configuration on the box |
 | solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` built-ins exist; **Haus missing** (new repo) |
 | solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | Stimme: Wyoming whisper, TTS, trainer | **port needed** (4 units); the gatekeeper is dropped |
-| media (Jellyfin, GPU) | `media` | **port needed**; Music Assistant comes new (Einslive, playlists) |
+| media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); Music Assistant drives the speakers for Assist |
 | immich (4 containers, ML) | `immich` | **port needed** |
 | paperless (3 containers) | `paperless` | **port needed**; registry template today |
 | radicale (5232) | `radicale`, now actually used (ADR 0017) | **port needed**; LLDAP accounts + the Bote's service account |
@@ -51,10 +51,24 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 ## The count
 
 - Built-ins done: caddy, auth (Authelia + LLDAP), adguard, whoami,
-  werkstatt, bote, frage, llama (8) — every platform role has a template.
+  werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant (11).
 - Ports needed for the box as it runs today: home-assistant, stimme ×4,
-  media, immich, paperless, radicale, vaultwarden, file-share, mosquitto,
-  esphome, beets (**14 templates**), plus music-assistant (new).
+  immich, paperless, radicale, vaultwarden, file-share, mosquitto, esphome,
+  beets (**12 templates**).
+
+## The Jellyfin finding (2026-10-10)
+
+Audiobooks played in the middle of music on the phone, and podcasts never
+appeared. Read-only look at the box: the music folder is clean (1,960
+artist folders, no audiobooks), audiobooks sit in `audiobooks/`, and
+Jellyfin registers them as a Books library. The player (Symfonium) syncs
+every audio library it is allowed to see, so AudioBook items land in the
+music queue. Podcasts: a hand-written `podcasts/sync_podcasts.py` exists
+with two feeds but nothing runs it, and the Jellyfin provisioning skips
+the `podcasts/` folder on purpose. On the box today, without changing
+anything: in Symfonium untick the Audiobooks library. In Laib: a `phone`
+Jellyfin user that sees Musik only, audiobooks and podcasts in
+Audiobookshelf, radio and speakers through Music Assistant.
 - Repos that need a `laib.yml`: flutstunde, foundry-chronicle (daggerheart).
 - Decisions: usage-metrics keep or drop; `mdopp/haus` and
   `mdopp/laib-templates` to create.

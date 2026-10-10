@@ -1,0 +1,4 @@
+IMAGE: ghcr.io/advplyr/audiobookshelf:latest
+AUDIOBOOKS: /mnt/data/stacks/file-share/data/audiobooks
+PODCASTS: /mnt/data/stacks/file-share/data/podcasts
+ROOT_PW: !secret ABS_ROOT_PASSWORD

@@ -1,0 +1,30 @@
+name: media
+template: {registry: builtin, name: media, version: 1}
+provides: [music, video]
+# Jellyfin for music and video. Audiobooks and podcasts are NOT here any
+# more (docs/SERVICES.md, the Symfonium finding): they live in
+# audiobookshelf, so a phone player that syncs Jellyfin's audio sees music
+# only. The hook completes the first-run wizard, creates the admin and a
+# "phone" user whose library access is Musik only, and registers the
+# libraries Musik (/media/music) and, when the folders exist, Filme and
+# Serien.
+routes:
+  - host: media
+    port: 8096
+    exposure: public
+    auth: one_factor
+    caddy: |
+      # Jellyfin streams and websockets
+      proxy_buffering off
+secrets:
+  - name: JELLYFIN_ADMIN_PASSWORD
+  - name: JELLYFIN_PHONE_PASSWORD
+data:
+  - path: ${DATA_DIR}/media/jellyfin-config
+  - path: ${DATA_DIR}/media/jellyfin-cache
+    backup: false
+health:
+  http: http://127.0.0.1:8096/health
+ports:
+  - {port: 8096, lan: true}        # LAN clients (TV, Symfonium at home) talk to it directly
+gpu: true

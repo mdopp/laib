@@ -1,0 +1,19 @@
+[Unit]
+Description=Audiobookshelf — Hörbücher und Podcasts
+
+[Container]
+Image=${IMAGE}
+PublishPort=13378:80
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/audiobookshelf/config:/config:z
+Volume=${DATA_DIR}/audiobookshelf/metadata:/metadata:z
+Volume=${AUDIOBOOKS}:/audiobooks:ro,z
+Volume=${PODCASTS}:/podcasts:z
+AddHost=auth.${DOMAIN}:${LAN_IP}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

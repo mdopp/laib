@@ -17,3 +17,6 @@ state loader would.
 | werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |
 | bote | — | Hermes as stock with signal-cli: the agent you talk to; config rendered by the hook (ADR 0016) |
 | frage | — | "was ist …": SearXNG + model summary; /ask and an OpenAI-compatible endpoint for Assist and the Bote (ADR 0015) |
+| media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the admin and a phone user limited to Musik, registers libraries |
+| audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
+| music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |

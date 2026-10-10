@@ -1,0 +1,18 @@
+[Unit]
+Description=Music Assistant — Radio, Playlists und Podcasts auf den Lautsprechern
+After=network-online.target
+
+[Container]
+Image=${IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Volume=${DATA_DIR}/music-assistant/data:/data:z
+AddCapability=DAC_READ_SEARCH,SYS_ADMIN
+SecurityLabelDisable=true
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

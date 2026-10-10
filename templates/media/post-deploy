@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""media post-deploy (Jellyfin): finish the first-run wizard, admin + phone
+users, libraries. Idempotent: every step checks before it acts. The phone
+user sees Musik only, so a player that syncs all audio (Symfonium) never
+mixes audiobooks into music — those are audiobookshelf's."""
+import json, os, sys, time, urllib.parse, urllib.request, urllib.error
+
+E = os.environ
+BASE = "http://127.0.0.1:8096"
+ADMIN, ADMIN_PW = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD"]
+PHONE, PHONE_PW = E.get("PHONE_USER", "phone"), E["LAIB_SECRET_JELLYFIN_PHONE_PASSWORD"]
+MEDIA_ROOT = E.get("MEDIA_ROOT", "/mnt/data/stacks/file-share/data")
+AUTH = 'MediaBrowser Client="laib", Device="laib", DeviceId="laib-post-deploy", Version="1"'
+LIBRARIES = [("Musik", "music", "music"), ("Filme", "movies", "movies"), ("Serien", "tvshows", "tv")]
+
+def req(method, path, body=None, token=None, raw=False):
+    h = {"Content-Type": "application/json", "X-Emby-Authorization": AUTH + (f', Token="{token}"' if token else "")}
+    r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
+    with urllib.request.urlopen(r, timeout=20) as resp:
+        data = resp.read()
+        return data if raw else (json.loads(data) if data else None)
+
+for _ in range(90):
+    try:
+        req("GET", "/health", raw=True); break
+    except Exception:
+        time.sleep(2)
+else:
+    print("jellyfin did not come up", file=sys.stderr); sys.exit(1)
+
+# 1. the wizard, once
+try:
+    info = req("GET", "/System/Info/Public")
+    if not info.get("StartupWizardCompleted"):
+        req("POST", "/Startup/Configuration", {"UICulture": "de", "MetadataCountryCode": "DE", "PreferredMetadataLanguage": "de"})
+        req("GET", "/Startup/User")
+        req("POST", "/Startup/User", {"Name": ADMIN, "Password": ADMIN_PW})
+        req("POST", "/Startup/RemoteAccess", {"EnableRemoteAccess": True, "EnableAutomaticPortMapping": False})
+        req("POST", "/Startup/Complete")
+        print("wizard completed, admin created:", ADMIN)
+except urllib.error.HTTPError as e:
+    print("wizard step failed:", e.code, file=sys.stderr); sys.exit(1)
+
+# 2. login as admin
+auth = req("POST", "/Users/AuthenticateByName", {"Username": ADMIN, "Pw": ADMIN_PW})
+token = auth["AccessToken"]
+
+# 3. libraries for the folders that exist
+have = {f["Name"] for f in req("GET", "/Library/VirtualFolders", token=token)}
+for name, ctype, sub in LIBRARIES:
+    path = os.path.join(MEDIA_ROOT, sub)
+    if name in have or not os.path.isdir(path):
+        continue
+    req("POST", f"/Library/VirtualFolders?name={urllib.parse.quote(name)}&collectionType={ctype}&refreshLibrary=true",
+        {"LibraryOptions": {"PathInfos": [{"Path": f"/media/{sub}"}], "EnableRealtimeMonitor": True}}, token=token)
+    print("library created:", name)
+
+# 4. the phone user: Musik only
+users = {u["Name"]: u for u in req("GET", "/Users", token=token)}
+if PHONE not in users:
+    u = req("POST", "/Users/New", {"Name": PHONE, "Password": PHONE_PW}, token=token)
+    users[PHONE] = u
+    print("phone user created:", PHONE)
+musik = next((f["ItemId"] for f in req("GET", "/Library/VirtualFolders", token=token) if f["Name"] == "Musik"), None)
+if musik:
+    uid = users[PHONE]["Id"]
+    pol = req("GET", f"/Users/{uid}", token=token)["Policy"]
+    if pol.get("EnableAllFolders") or pol.get("EnabledFolders") != [musik]:
+        pol.update({"EnableAllFolders": False, "EnabledFolders": [musik], "IsAdministrator": False, "EnableContentDownloading": True})
+        req("POST", f"/Users/{uid}/Policy", pol, token=token)
+        print("phone user limited to Musik")
+print("jellyfin provisioned")

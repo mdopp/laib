@@ -1,0 +1,20 @@
+name: music-assistant
+template: {registry: builtin, name: music-assistant, version: 1}
+provides: [music-players]
+# Music Assistant: the house's player brain for Home Assistant Assist —
+# "spiele Einslive", playlists, podcasts on the speakers (ADR 0015). Host
+# network for player discovery (mDNS, Chromecast, DLNA); Jellyfin is its
+# music provider, Radio Browser its radio provider.
+hostNetwork: true
+routes:
+  - host: musik
+    port: 8095
+    exposure: internal
+    auth: one_factor
+secrets: []
+data:
+  - path: ${DATA_DIR}/music-assistant/data
+health:
+  http: http://127.0.0.1:8095/
+ports:
+  - {port: 8095, lan: true}        # HA and the speakers at home

@@ -1,0 +1,24 @@
+name: audiobookshelf
+template: {registry: builtin, name: audiobookshelf, version: 1}
+provides: [audiobooks, podcasts]
+# Hörbücher und Podcasts: Audiobookshelf fetches podcast episodes itself
+# (RSS, auto-download, retention), keeps progress and chapters, has its own
+# apps. This replaces the hand-rolled sync_podcasts.py and takes audiobooks
+# out of Jellyfin (docs/SERVICES.md). OIDC through Authelia.
+routes:
+  - host: hoerbuecher
+    port: 13378
+    exposure: public
+    auth: none                     # ABS does its own login (OIDC via Authelia); forward-auth would break its apps
+secrets:
+  - name: ABS_ROOT_PASSWORD
+oidc:
+  clientId: audiobookshelf
+  redirectUris: ["https://hoerbuecher.${DOMAIN}/auth/openid/callback", "https://hoerbuecher.${DOMAIN}/auth/openid/mobile-redirect"]
+data:
+  - path: ${DATA_DIR}/audiobookshelf/config
+  - path: ${DATA_DIR}/audiobookshelf/metadata
+health:
+  http: http://127.0.0.1:13378/healthcheck
+ports:
+  - {port: 13378, lan: true}       # the apps at home talk to it directly
