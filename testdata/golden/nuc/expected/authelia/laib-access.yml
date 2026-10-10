@@ -7,6 +7,9 @@ access_control:
       subject: "group:admins"
     - domain: auth.nuc.home
       policy: bypass
+    - domain: ldap.nuc.home
+      policy: two_factor
+      subject: "group:admins"
     - domain: whoami.nuc.home
       policy: one_factor
       subject: "group:family"

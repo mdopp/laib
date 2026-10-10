@@ -7,7 +7,8 @@ notify:
   url: http://127.0.0.1:8787/api/laib-events
 roles:
   proxy: caddy
-  sso: authelia
+  sso: auth
+  identity: auth
 gpu:
   present: false
 dns:

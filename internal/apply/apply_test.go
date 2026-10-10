@@ -71,7 +71,7 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 		t.Fatal("unit not written")
 	}
 	joined := strings.Join(calls, "\n")
-	for _, want := range []string{"daemon-reload", "restart caddy.service", "restart authelia.service", "restart whoami.service"} {
+	for _, want := range []string{"daemon-reload", "restart caddy.service", "restart auth-authelia.service", "restart whoami.service"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q", want)
 		}

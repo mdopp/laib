@@ -17,7 +17,7 @@ func TestBackupPathsFollowDeclarations(t *testing.T) {
 	no := false
 	st.Services["whoami"].Contract.Data = []state.DataPath{{Path: "${DATA_DIR}/whoami/bulk", Backup: &no}, {Path: "${DATA_DIR}/whoami/cfg"}}
 	got := render.BackupPaths(st, "/s", "/j")
-	want := []string{"/s", "/j", "/mnt/data/stacks/authelia/config", "/mnt/data/stacks/caddy/data", "/mnt/data/stacks/whoami/cfg"}
+	want := []string{"/s", "/j", "/mnt/data/stacks/auth/authelia-config", "/mnt/data/stacks/auth/authelia-data", "/mnt/data/stacks/auth/lldap", "/mnt/data/stacks/caddy/data", "/mnt/data/stacks/whoami/cfg"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%v", got)
 	}

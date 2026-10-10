@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""auth post-deploy: Authelia's configuration.yml from the values, the OIDC
+signing key once, LLDAP seeded with the groups admins and family and the
+operator's account. Idempotent: the config is rewritten on every apply
+(values may change), the key is kept, seeding skips what exists."""
+import json, os, subprocess, sys, time, urllib.request
+
+E = os.environ
+D = E["LAIB_DATA_DIR"]
+DOMAIN = E["LAIB_DOMAIN"]
+cfg_dir = os.path.join(D, "auth", "authelia-config")
+os.makedirs(cfg_dir, exist_ok=True)
+
+# 1. the OIDC signing key, generated once with Authelia's own tool
+key_path = os.path.join(cfg_dir, "oidc.pem")
+if not os.path.exists(key_path):
+    r = subprocess.run(["podman", "run", "--rm", "-v", f"{cfg_dir}:/keys:z", E.get("AUTHELIA_IMAGE", "docker.io/authelia/authelia:4"),
+                        "authelia", "crypto", "pair", "rsa", "generate", "--directory", "/keys", "--file.private-key", "oidc.pem"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print("could not generate the OIDC key:", r.stderr[-400:], file=sys.stderr); sys.exit(1)
+    print("oidc signing key generated")
+key = open(key_path).read().rstrip("\n")
+indented = "\n".join("          " + line for line in key.splitlines())
+
+# 2. configuration.yml (secrets arrive as LAIB_SECRET_*; nothing is logged)
+S = lambda n: E["LAIB_SECRET_" + n]
+conf = f"""---
+# rendered by laib post-deploy (templates/auth); route rules and OIDC clients come from /laib/*.yml
+theme: dark
+server:
+  address: 'tcp://0.0.0.0:9091'
+log:
+  level: info
+identity_validation:
+  reset_password:
+    jwt_secret: '{S("AUTHELIA_JWT_SECRET")}'
+authentication_backend:
+  ldap:
+    address: 'ldap://127.0.0.1:3890'
+    base_dn: '{E["BASE_DN"]}'
+    additional_users_dn: 'ou=people'
+    users_filter: '(&(|({{username_attribute}}={{input}})({{mail_attribute}}={{input}}))(objectClass=person))'
+    additional_groups_dn: 'ou=groups'
+    groups_filter: '(member={{dn}})'
+    user: 'uid=admin,ou=people,{E["BASE_DN"]}'
+    password: '{S("LLDAP_ADMIN_PASSWORD")}'
+    attributes:
+      username: 'uid'
+      display_name: 'displayName'
+      mail: 'mail'
+      group_name: 'cn'
+session:
+  secret: '{S("AUTHELIA_SESSION_SECRET")}'
+  expiration: '1M'
+  inactivity: '1M'
+  remember_me: '1M'
+  cookies:
+    - domain: '{DOMAIN}'
+      authelia_url: 'https://auth.{DOMAIN}'
+      default_redirection_url: 'https://laib.{DOMAIN}/'
+storage:
+  encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'
+  local:
+    path: '/data/db.sqlite3'
+notifier:
+  filesystem:
+    filename: '/data/notification.txt'
+access_control:
+  default_policy: deny          # the bare apex and anything unlisted are denied (ServiceBay ADR 0006)
+  rules:
+    - domain: 'auth.{DOMAIN}'
+      policy: bypass
+    # per-route rules from laib come from /laib/laib-access.yml (X_AUTHELIA_CONFIG merges lists)
+    - domain: '*.{DOMAIN}'
+      policy: one_factor
+      subject:
+        - 'group:family'
+        - 'group:admins'
+identity_providers:
+  oidc:
+    hmac_secret: '{S("AUTHELIA_OIDC_HMAC_SECRET")}'
+    jwks:
+      - key_id: 'main'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: |
+{indented}
+"""
+tmp = os.path.join(cfg_dir, "configuration.yml.tmp")
+with open(tmp, "w") as f:
+    f.write(conf)
+os.chmod(tmp, 0o600)
+os.replace(tmp, os.path.join(cfg_dir, "configuration.yml"))
+print("authelia configuration.yml written")
+
+# 3. seed LLDAP through its GraphQL API: groups, the operator's account
+def http(path, body=None, token=None):
+    req = urllib.request.Request("http://127.0.0.1:17170" + path, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json", **({"Authorization": "Bearer " + token} if token else {})})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.load(r)
+
+token = None
+for attempt in range(60):
+    try:
+        token = http("/auth/simple/login", {"username": "admin", "password": S("LLDAP_ADMIN_PASSWORD")})["token"]
+        break
+    except Exception:
+        time.sleep(2)
+if not token:
+    print("LLDAP did not answer; groups and the operator account were NOT seeded (re-run laib apply auth)", file=sys.stderr); sys.exit(1)
+
+def gql(query, variables=None):
+    res = http("/api/graphql", {"query": query, "variables": variables or {}}, token)
+    if res.get("errors"):
+        raise RuntimeError(res["errors"])
+    return res["data"]
+
+groups = {g["displayName"]: g["id"] for g in gql("{ groups { id displayName } }")["groups"]}
+for name in ("admins", "family"):
+    if name not in groups:
+        groups[name] = gql("mutation($n:String!){ createGroup(name:$n){ id } }", {"n": name})["createGroup"]["id"]
+        print("group created:", name)
+users = {u["id"] for u in gql("{ users { id } }")["users"]}
+op = E["OPERATOR_USER"]
+if op not in users:
+    gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
+        {"u": {"id": op, "email": E["OPERATOR_EMAIL"], "displayName": E.get("OPERATOR_DISPLAY", op)}})
+    # the password: LLDAP's simple API has no password mutation in GraphQL for a fresh user beyond the admin tool;
+    # the operator sets it on first login via the reset link, or we use the known LDAP password modify (below)
+    print("operator account created:", op)
+    try:
+        import base64
+        # LLDAP accepts a password through its user-edit endpoint used by the web UI
+        http(f"/api/user/{op}/password", {"password": S("OPERATOR_PASSWORD")}, token)
+    except Exception as e:  # noqa: BLE001
+        print("could not set the operator password via API; set it in the LLDAP UI:", str(e)[:120])
+member = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": op})["user"]["groups"]
+if "admins" not in {g["displayName"] for g in member}:
+    gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": op, "g": groups["admins"]})
+    print("operator added to admins")
+print("lldap seeded: groups admins, family; operator", op)

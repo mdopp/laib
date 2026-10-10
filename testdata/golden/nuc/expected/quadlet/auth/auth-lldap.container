@@ -1,0 +1,23 @@
+[Unit]
+Description=LLDAP — users and groups (laib role: identity)
+
+[Container]
+Image=docker.io/lldap/lldap:stable
+Pod=auth.pod
+Environment=TZ=Europe/Berlin
+Environment=LLDAP_JWT_SECRET=${secret:LLDAP_JWT_SECRET}
+Environment=LLDAP_LDAP_BASE_DN=dc=example,dc=home
+Environment=LLDAP_LDAP_USER_DN=admin
+Environment=LLDAP_LDAP_USER_PASS=${secret:LLDAP_ADMIN_PASSWORD}
+Environment=LLDAP_HTTP_PORT=17170
+Environment=LLDAP_HTTP_HOST=0.0.0.0
+Environment=LLDAP_LDAP_PORT=3890
+Environment=LLDAP_LDAP_HOST=0.0.0.0
+Volume=/mnt/data/stacks/auth/lldap:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

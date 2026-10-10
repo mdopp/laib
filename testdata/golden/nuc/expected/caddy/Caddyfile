@@ -26,6 +26,14 @@ auth.nuc.home {
 	reverse_proxy 127.0.0.1:9091
 }
 
+ldap.nuc.home {
+	@lan remote_ip private_ranges
+	handle @lan {
+		reverse_proxy 127.0.0.1:17170
+	}
+	respond 403
+}
+
 whoami.nuc.home {
 	@lan remote_ip private_ranges
 	handle @lan {

@@ -11,7 +11,7 @@ state loader would.
 | Template | Role | Notes |
 |---|---|---|
 | caddy | proxy | host network (the one carve-out), reads `render/caddy/Caddyfile` |
-| authelia | sso | reads `render/authelia/*.yml` next to its own configuration |
+| auth | sso, identity | Authelia + LLDAP in one pod; the hook writes configuration.yml, the OIDC key and seeds LLDAP |
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |
 | werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |
 | bote | — | Hermes as stock with signal-cli: the agent you talk to; config rendered by the hook (ADR 0016) |

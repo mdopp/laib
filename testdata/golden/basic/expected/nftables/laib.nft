@@ -2,6 +2,6 @@
 table inet laib {
 	chain input {
 		type filter hook input priority -10; policy accept;
-		iifname != "lo" tcp dport { 9091, 8080 } drop
+		iifname != "lo" tcp dport { 9091, 17170, 3890, 8080 } drop
 	}
 }

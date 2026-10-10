@@ -7,6 +7,9 @@ access_control:
       subject: "group:admins"
     - domain: auth.example.home
       policy: bypass
+    - domain: ldap.example.home
+      policy: two_factor
+      subject: "group:admins"
     - domain: whoami.example.home
       policy: one_factor
       subject: "group:family"
