@@ -14,8 +14,10 @@ import (
 // ISO's own coreos-installer.service does the install and the reboot:
 //
 //   - /etc/coreos/dest.ign                      the box's Ignition
-//   - /etc/coreos/installer.d/0000-customize.yaml  ignition-file + a placeholder
-//     dest-device that the pre-install hook overrides with 0050-dest-device.yaml
+//   - /etc/coreos/installer.d/0000-customize.yaml  ignition-file only: dest-device
+//     is a positional argument and may appear once, so the pre-install hook's
+//     0050-dest-device.yaml is the only one (a non-empty installer.d is what
+//     makes the ISO run the installer and reboot)
 //   - pre-install-laib.service  RequiredBy=coreos-installer.service, runs
 //     usb/pre-install.sh (smallest non-removable disk, hostname for DHCP)
 //   - post-install-laib.service RequiredBy=coreos-installer.target, runs
@@ -40,7 +42,6 @@ storage:
       contents:
         inline: |
           ignition-file: /etc/coreos/dest.ign
-          dest-device: /dev/disk/by-id/placeholder-overridden-by-pre-install
     - path: /usr/local/bin/pre-install-laib
       mode: 0700
       contents:

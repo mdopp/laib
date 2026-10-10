@@ -78,7 +78,10 @@ func TestLiveIgnitionCarriesDestAndScripts(t *testing.T) {
 	}
 	// file contents travel as data: URLs; decode and check them
 	dec := decodeDataURLs(t, live)
-	for _, want := range []string{"ignition-file: /etc/coreos/dest.ign", "dest-device: /dev/disk/by-id/placeholder", "export SERVER_NAME='nuc'", "0050-dest-device.yaml", "efibootmgr"} {
+	if strings.Contains(dec, "dest-device: /dev/disk") {
+		t.Error("customize.yaml must not carry a dest-device: the hook's file is the only one allowed")
+	}
+	for _, want := range []string{"ignition-file: /etc/coreos/dest.ign", "export SERVER_NAME='nuc'", "0050-dest-device.yaml", "efibootmgr"} {
 		if !strings.Contains(dec, want) {
 			t.Errorf("live files lack %q", want)
 		}
