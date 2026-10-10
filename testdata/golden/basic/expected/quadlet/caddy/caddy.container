@@ -5,7 +5,7 @@ After=network-online.target
 [Container]
 Image=ghcr.io/mdopp/laib-caddy:2
 Network=host
-Environment=LAIB_DNS_TOKEN=${secret:CLOUDFLARE_API_TOKEN}
+Environment=LAIB_DNS_TOKEN=${secret:DNS_API_TOKEN}
 Volume=/mnt/data/laib/render/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,z
 Volume=/mnt/data/stacks/caddy/data:/data:z
 AutoUpdate=registry

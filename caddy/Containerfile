@@ -1,0 +1,17 @@
+# Caddy with DNS-01 providers for "public certificates, no public
+# reachability" (ADR 0007). Pinned Caddy, the common German and generic
+# providers; add one by appending a --with line.
+FROM docker.io/library/caddy:2.9-builder AS build
+RUN xcaddy build \
+    --with github.com/caddy-dns/cloudflare \
+    --with github.com/caddy-dns/hetzner \
+    --with github.com/caddy-dns/netcup \
+    --with github.com/caddy-dns/ionos \
+    --with github.com/caddy-dns/inwx \
+    --with github.com/caddy-dns/desec \
+    --with github.com/caddy-dns/duckdns \
+    --with github.com/caddy-dns/porkbun \
+    --with github.com/caddy-dns/ovh \
+    --with github.com/caddy-dns/route53
+FROM docker.io/library/caddy:2.9
+COPY --from=build /usr/bin/caddy /usr/bin/caddy

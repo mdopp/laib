@@ -11,33 +11,33 @@ os.makedirs(conf_dir, exist_ok=True)
 conf = os.path.join(conf_dir, "AdGuardHome.yaml")
 user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
 
+def install_api(path, body):
+    req = urllib.request.Request("http://127.0.0.1:3000/control" + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.read()
+
 if not os.path.exists(conf):
-    r = subprocess.run(["podman", "run", "--rm", E.get("CADDY_IMAGE", "docker.io/library/caddy:2"), "caddy", "hash-password", "--plaintext", pw],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        print("bcrypt via caddy failed:", r.stderr[-300:], file=sys.stderr); sys.exit(1)
-    bcrypt = r.stdout.strip()
-    upstreams = "\n".join(f"    - {u}" for u in E.get("UPSTREAMS", "https://dns.quad9.net/dns-query").split())
-    with open(conf, "w") as f:
-        f.write(f"""# written once by laib post-deploy; AdGuard rewrites it on changes in the UI
-http:
-  address: 0.0.0.0:8083
-users:
-  - name: {user}
-    password: {bcrypt}
-dns:
-  bind_hosts:
-    - 0.0.0.0
-  port: 53
-  upstream_dns:
-{upstreams}
-  bootstrap_dns:
-    - 9.9.9.9
-    - 1.1.1.1
-schema_version: 29
-""")
-    os.chmod(conf, 0o600)
-    print("AdGuardHome.yaml written; AdGuard will complete it on first start")
+    # AdGuard's own setup wizard, driven through its API on the setup port
+    # 3000: web on 8083, DNS on 53, the admin user. AdGuard writes the
+    # yaml itself, with the right schema version.
+    for _ in range(45):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:3000/control/install/get_addresses", timeout=5); break
+        except Exception:
+            time.sleep(2)
+    install_api("/install/configure", {
+        "web": {"ip": "0.0.0.0", "port": 8083},
+        "dns": {"ip": "0.0.0.0", "port": 53},
+        "username": user, "password": pw,
+    })
+    print("AdGuard configured through its setup API")
+    time.sleep(3)
+    upstreams = E.get("UPSTREAMS", "https://dns.quad9.net/dns-query").split()
+    auth0 = base64.b64encode(f"{user}:{pw}".encode()).decode()
+    req = urllib.request.Request("http://127.0.0.1:8083/control/dns_config", data=json.dumps({"upstream_dns": upstreams, "bootstrap_dns": ["9.9.9.9", "1.1.1.1"]}).encode(),
+                                 headers={"Authorization": "Basic " + auth0, "Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=10).read()
+    print("upstreams set")
 
 # rewrites: *.domain and the apex → this box (rendered by laib), synced via the API
 rewrites_path = "/mnt/data/laib/render/adguard/rewrites.json"

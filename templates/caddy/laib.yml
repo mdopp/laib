@@ -3,8 +3,8 @@ template: {registry: builtin, name: caddy, version: 1}
 hostNetwork: true
 routes: []
 secrets:
-  - name: CLOUDFLARE_API_TOKEN
-    external: true
+  - name: DNS_API_TOKEN
+    external: true               # laib secret set DNS_API_TOKEN; used by acme_dns <provider> in the Caddyfile
 data:
   - path: ${DATA_DIR}/caddy/data
 health:

@@ -130,12 +130,11 @@ if op not in users:
     # the password: LLDAP's simple API has no password mutation in GraphQL for a fresh user beyond the admin tool;
     # the operator sets it on first login via the reset link, or we use the known LDAP password modify (below)
     print("operator account created:", op)
-    try:
-        import base64
-        # LLDAP accepts a password through its user-edit endpoint used by the web UI
-        http(f"/api/user/{op}/password", {"password": S("OPERATOR_PASSWORD")}, token)
-    except Exception as e:  # noqa: BLE001
-        print("could not set the operator password via API; set it in the LLDAP UI:", str(e)[:120])
+    # the password: LLDAP's GraphQL has no password mutation; its own tool in the container does it
+    r = subprocess.run(["podman", "exec", "systemd-auth-lldap", "/app/lldap_set_password", "--base-url", "http://127.0.0.1:17170",
+                        "--admin-username", "admin", "--admin-password", S("LLDAP_ADMIN_PASSWORD"), "--username", op, "--password", S("OPERATOR_PASSWORD")],
+                       capture_output=True, text=True)
+    print("operator password set" if r.returncode == 0 else "operator password NOT set; set it in the LLDAP UI: " + r.stderr[-200:])
 member = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": op})["user"]["groups"]
 if "admins" not in {g["displayName"] for g in member}:
     gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": op, "g": groups["admins"]})

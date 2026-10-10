@@ -55,3 +55,52 @@ Then Caddy beside NPM (step 2). Nothing before that changes a service.
 
 Re-run the install script with `--version vX.Y.Z` or without for latest.
 The unit restarts; state and journal are untouched.
+
+
+## The first installation, step by step (the NUC, Phase 1)
+
+What you need before: Fedora CoreOS on the NUC with user `core` and SSH;
+a domain for the trial (its DNS at a provider the Caddy image carries:
+Cloudflare, Hetzner, netcup, IONOS, INWX, deSEC, DuckDNS, Porkbun, OVH,
+Route53) with an API token; the GPU box's model proxy reachable on the
+LAN; a GitHub token while this repo is private.
+
+```
+# 1. the binaries, the unit, the state repo
+export LAIB_GH_TOKEN=github_pat_…
+curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+  https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh \
+  | bash -s -- --domain trial.example --lan-ip 192.168.178.30 \
+       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
+laib=/var/opt/laib/laib
+
+# 2. the DNS provider and its token
+sed -i 's/^dns:.*//' /mnt/data/laib/state/box.yml
+printf 'dns:\n  provider: cloudflare\n  secretRef: DNS_API_TOKEN\n' >> /mnt/data/laib/state/box.yml
+echo '<the token>' | $laib secret set DNS_API_TOKEN
+
+# 3. the roles: proxy, sso + identity, dns, then a first app
+$laib propose --add caddy "proxy"            # as human:core the proposal is yours; approve it
+$laib approve 1
+$laib propose --add auth OPERATOR_USER=mdopp OPERATOR_EMAIL=you@example "sso und identity"
+$laib approve 2                              # the hook seeds LLDAP: groups admins, family; your account
+$laib propose --add adguard "dns"
+$laib approve 3
+$laib propose --add whoami "der erste Dienst mit Route, SSO und Secret"
+$laib approve 4
+
+# 4. wire the roles in box.yml (one line each), apply, look
+sed -i 's/^roles: {}/roles: {proxy: caddy, sso: auth, identity: auth, dns: adguard}/' /mnt/data/laib/state/box.yml
+$laib apply --reason "roles wired"
+$laib status; $laib diag; $laib plan
+# https://laib.trial.example — the box page behind Authelia, login with your LLDAP account
+# https://whoami.trial.example — the first service
+
+# 5. the operator
+$laib operator enable                        # mints the ops token, renders and starts laib-operator
+$laib journal --since 1h
+```
+
+Point the router (or the trial laptop's DNS) at the NUC for the trial
+domain only when AdGuard answers; until then test with `curl --resolve`.
+Gate for Phase 2: a week of `converge` and `diag` without a human touch.

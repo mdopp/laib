@@ -21,7 +21,7 @@ operator:
   tick: 5m
 dns:
   provider: cloudflare
-  secretRef: CLOUDFLARE_API_TOKEN
+  secretRef: DNS_API_TOKEN
 backup:
   repo: sftp:nas:/backup/laib
   schedule: "03:30"

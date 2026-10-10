@@ -501,7 +501,7 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			model += fmt.Sprintf("  lease: %s\n", modelLease)
 		}
 	}
-	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
+	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
 		return fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: auto\n  patch: auto\n  new-service: proposal   # adds surface: a human decides\n  # remove is never auto; a public route is always a human's call\n"); err != nil {

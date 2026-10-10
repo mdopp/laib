@@ -339,9 +339,12 @@ func nftables(st *state.State) string {
 	if len(ports) == 0 {
 		return ""
 	}
-	return "# Rendered by laib: ports declared lan: false are dropped on physical interfaces.\n" +
+	// Physical interfaces only: loopback, the pasta/bridge interfaces of
+	// pods (host.containers.internal) and VPN tunnels keep reaching these
+	// ports; the WLAN and the wired LAN do not.
+	return "# Rendered by laib: ports declared lan: false are dropped on physical interfaces (en*, eth*, wl*).\n" +
 		"table inet laib {\n\tchain input {\n\t\ttype filter hook input priority -10; policy accept;\n" +
-		"\t\tiifname != \"lo\" tcp dport { " + strings.Join(ports, ", ") + " } drop\n\t}\n}\n"
+		"\t\tiifname { \"en*\", \"eth*\", \"wl*\" } tcp dport { " + strings.Join(ports, ", ") + " } drop\n\t}\n}\n"
 }
 
 // clientSecretHash renders Authelia's expected PBKDF2-SHA512 digest of the

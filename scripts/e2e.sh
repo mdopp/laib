@@ -47,7 +47,7 @@ LAIB_ACTOR=human:e2e "$BIN" init --domain e2e.home --lan-ip 10.0.0.2 >/dev/null
 cp -r "$ROOT/testdata/golden/basic/state/services/." "$LAIB_HOME/state/services/"
 cp "$ROOT/testdata/golden/basic/state/box.yml" "$ROOT/testdata/golden/basic/state/policy.yml" "$LAIB_HOME/state/"
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME"/state/services/*/laib.yml   # nothing listens here
-echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set CLOUDFLARE_API_TOKEN >/dev/null
+echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set DNS_API_TOKEN >/dev/null
 
 # --- 2. a tree proposal by ops, approved by the human (#1)
 LAIB_ACTOR=ops "$BIN" propose "e2e: three services" >/dev/null
