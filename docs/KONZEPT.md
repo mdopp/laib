@@ -94,7 +94,8 @@ command.
 - **Operator:** Laib MCP as `ops`; wakes on the webhook, the ten-minute
   tick and the nightly report; llama household preset.
 - **Bote (Hermes):** Signal gateway; HA integration; Laib MCP as `bote`;
-  Frage and the Haus memory as tools; cron for reminders. Because nothing
+  the Haus MCP source "Haushalt" (calendar, contacts, notes, documents,
+  memory) and Frage as tools; reminders are calendar entries, not cron. Because nothing
   here is latency-critical, the Bote may ask the lease for the
   `thinking` preset (qwen3.6-35b-a3b, 131k context, MTP drafter) for a
   hard question and fall back to the household preset when the card is
@@ -110,6 +111,23 @@ command.
   ports, provides, after, hostNetwork), `values.example.yml`, optional
   `post-deploy` hook. `laib template lint` is the contract. `podlet` turns
   an upstream compose file into units.
+
+## Where the data lives (ADR 0017)
+
+| Data | Store | Written by | Read by | Surface |
+|---|---|---|---|---|
+| Appointments | Radicale (CalDAV) | you on the phone, the Bote, imports | HA (CalDAV integration), Haus Kalender, the Bote | phone calendar via DAVx⁵, Haus |
+| Contacts | Radicale (CardDAV) | you, imports | the Bote, Haus | phone contacts, Haus |
+| Reminders | calendar entries with alarms in Radicale | the Bote | HA rings, Haus push, phone | the same |
+| Timers, alarms | Home Assistant | voice | HA | the speaker |
+| Notes | Markdown files in the file share (Syncthing) | you with any app, the Bote | Haus search (memory library), the Bote | Haus Notizen, any phone app |
+| Documents | Paperless | scanner, import | Haus, the Bote | Paperless, Haus |
+| What the Bote knows about you | Hermes memory (Honcho), per number | the Bote | the Bote | none |
+
+Agents reach all of it through one MCP source, **Haushalt**, served by
+Haus (calendar, contacts, notes, document search, memory search); Claude
+mounts the same source in the Werkstatt. The Bote remembers *about* you,
+never *for* you.
 
 ## Models and the card
 
