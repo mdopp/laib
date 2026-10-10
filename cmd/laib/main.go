@@ -79,6 +79,7 @@ func init() {
 		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
 		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},
 		{"secret", "apply", "set <NAME> (value on stdin) | list | rotate <NAME>", cmdSecret},
+		{"disk", "apply", "status | add <device>: the data RAID; add joins the mirror (humans only)", cmdDisk},
 		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},

@@ -131,6 +131,12 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 			out = append(out, Finding{Severity: "gelb", Probe: "disk", Detail: fmt.Sprintf("%s hat %.1f%% frei", path, free)})
 		}
 	}
+	// The data RAID: one member by design is yellow, a lost member red.
+	if _, members := markerMembers(); members > 0 {
+		if b, err := os.ReadFile("/proc/mdstat"); err == nil {
+			out = append(out, raidFindings(string(b), members)...)
+		}
+	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })
 	return out

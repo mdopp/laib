@@ -126,3 +126,11 @@ http://127.0.0.1:5900/mcp --header "Authorization: Bearer <token>"`.
 | 2 | apply done but verify red (state is applied, journal says so) |
 | 3 | refused by policy (tier), proposal created if applicable |
 | 4 | locked (`eingeschränkt`) |
+
+### `laib disk`
+
+`laib disk status` shows the data RAID (`/proc/mdstat` parsed, the recorded
+member count). `laib disk add /dev/sdX` (humans only) wipes the device,
+partitions it and joins it as the mirror of `/dev/md/data`; the sync runs in
+the background and `laib diag` shows it. The stick creates the array with one
+member on purpose (#29).
