@@ -27,6 +27,9 @@ jobs:
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
           go build -o laib-stick ./cmd/laib-stick
+          # the box installs the latest release on first boot; the apply step
+          # below then swaps in this commit's binaries so every push is tested
+          for b in laib laib-operator laib-lease; do CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o bin-$b ./cmd/$b; done
           ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --out laib-vm.iso
           ls -la laib-vm.iso
       - name: cross-check with coreos-installer, serial console for the log
@@ -52,6 +55,8 @@ jobs:
       - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
+          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
           $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 set -e
                 sysctl -n net.ipv4.ip_unprivileged_port_start
