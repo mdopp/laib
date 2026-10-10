@@ -68,6 +68,11 @@ if [ "$(sysctl -n net.ipv4.ip_unprivileged_port_start 2>/dev/null || echo 1024)"
   sudo sysctl -q -p /etc/sysctl.d/90-laib-ports.conf
 fi
 
+# ~/.config must belong to core (Ignition may have created it as root): podman
+# refuses to run otherwise, and so would every Quadlet service.
+mkdir -p ~/.config/containers/systemd ~/.config/systemd/user 2>/dev/null || true
+[ "$(stat -c %U ~/.config)" = core ] || sudo chown -R core:core ~/.config
+
 # Laib's own images (ghcr.io/mdopp/laib-caddy, -frage, -werkstatt) are private
 # while the repo is: log podman in with the token so Quadlet and auto-update can
 # pull. Needs a token with packages:read; otherwise make the packages public.
