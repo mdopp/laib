@@ -18,6 +18,25 @@ type Box struct {
 	Notify      Notify     `yaml:"notify"`
 	Updates     Updates    `yaml:"updates"`
 	Registries  []Registry `yaml:"registries"`
+	// Model is where the LLM is when this box has no model role of its own
+	// (a NUC without a GPU): a peer box's llama proxy or a cloud API. The
+	// builtins MODEL_URL and MODEL_KEY resolve from here or from the role.
+	Model Model `yaml:"model"`
+	// Peers are the other boxes of the household (ADR 0018, issue #22).
+	Peers map[string]Peer `yaml:"peers"`
+}
+
+// Model is a remote OpenAI-compatible endpoint.
+type Model struct {
+	URL       string `yaml:"url"`       // e.g. http://192.168.1.20:11435/v1 or https://api.example/v1
+	KeySecret string `yaml:"keySecret"` // name in secrets.age; empty for a loopback proxy
+	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:8787/api/model-lease; empty = no lease
+}
+
+// Peer is another box running Laib.
+type Peer struct {
+	LanIP string `yaml:"lanIp"`
+	Laib  string `yaml:"laib"` // its /ready and /routes, e.g. http://192.168.1.20:5900
 }
 
 // Registry is a Git repo whose templates/<name>/ folders are installable (#14).

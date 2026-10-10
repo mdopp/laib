@@ -128,3 +128,24 @@ func TestTwoServicesForOnePurposeWarn(t *testing.T) {
 		t.Fatalf("%v", st.Warnings)
 	}
 }
+
+func TestModelIsLocalRoleOrRemoteURL(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\nroles: {sso: auth}\nmodel: {url: http://10.0.0.20:11435/v1, keySecret: MODEL_API_KEY}\n")
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ModelURL() != "http://10.0.0.20:11435/v1" || st.ModelLease() != "" {
+		t.Fatal(st.ModelURL(), st.ModelLease())
+	}
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\ngpu: {present: true}\nroles: {sso: auth, model: auth}\nmodel: {url: http://x/v1}\n")
+	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "both set") {
+		t.Fatalf("role and url together accepted: %v", err)
+	}
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\ngpu: {present: true}\nroles: {sso: auth, model: auth}\n")
+	st, _ = Load(dir)
+	if st.ModelURL() != "http://127.0.0.1:9091/v1" {
+		t.Fatal(st.ModelURL())
+	}
+}

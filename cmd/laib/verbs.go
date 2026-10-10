@@ -425,7 +425,16 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
-	for i := 0; i+1 < len(args); i += 2 {
+	modelURL, modelLease, gpu := "", "", false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--gpu":
+			gpu = true
+			continue
+		}
+		if i+1 >= len(args) {
+			break
+		}
 		switch args[i] {
 		case "--domain":
 			domain = args[i+1]
@@ -433,10 +442,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			dataDir = args[i+1]
 		case "--lan-ip":
 			lanIP = args[i+1]
+		case "--model-url":
+			modelURL = args[i+1]
+		case "--model-lease":
+			modelLease = args[i+1]
 		}
+		i++
 	}
 	if domain == "" {
-		return fail(errors.New("usage: laib init --domain <domain> [--data-dir /mnt/data/stacks] [--lan-ip <ip>]"))
+		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+	}
+	if !gpu && modelURL == "" {
+		fmt.Fprintln(os.Stderr, "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
 	}
 	for _, d := range []string{env.paths.Home, env.paths.State, env.paths.Journal, env.paths.Render, filepath.Join(env.paths.State, "services")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -454,7 +471,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		return os.WriteFile(p, []byte(content), 0o644)
 	}
-	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: false}\n", domain, dataDir, lanIP)); err != nil {
+	model := ""
+	if modelURL != "" {
+		model = fmt.Sprintf("model:                    # no GPU here: the LLM is remote (a peer's llama proxy or a cloud API)\n  url: %s\n", modelURL)
+		if strings.HasPrefix(modelURL, "https://") {
+			// A cloud API wants a key; a peer's LAN proxy does not.
+			model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply\n"
+		}
+		if modelLease != "" {
+			model += fmt.Sprintf("  lease: %s\n", modelLease)
+		}
+	}
+	if err := write("box.yml", fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
 		return fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: auto\n  patch: auto\n  new-service: proposal   # adds surface: a human decides\n  # remove is never auto; a public route is always a human's call\n"); err != nil {

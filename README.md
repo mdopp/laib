@@ -49,6 +49,8 @@ testdata/golden      renderer golden files
 
 ## Read first
 
+0. [`docs/ZIELBILD.md`](docs/ZIELBILD.md) — the end state with two boxes
+   and the six phases from the NUC trial to retiring ServiceBay.
 1. [`docs/KONZEPT.md`](docs/KONZEPT.md) — the whole concept as decided:
    constructs, division of labour, interfaces by user group, models.
    [`docs/DESIGN.md`](docs/DESIGN.md) is the kernel's design underneath.

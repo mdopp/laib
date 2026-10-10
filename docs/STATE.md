@@ -48,7 +48,17 @@ notify:
 updates:
   days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
   time: "03:00"
+model:                            # a box without a model role (ADR 0018)
+  url: http://192.168.1.20:11435/v1
+  keySecret: MODEL_API_KEY        # only for a cloud API
+  lease: http://192.168.1.20:8787/api/model-lease
+peers:                            # the other boxes of the household
+  kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
 ```
+
+Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
+`${MODEL_LEASE}` resolve from the model role when present, else from
+`model`.
 
 ## policy.yml
 

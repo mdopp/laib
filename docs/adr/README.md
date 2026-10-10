@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0018**. Each file's first paragraph after the title says *in which
+number: **0019**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -23,3 +23,4 @@ situation* it applies, so an agent can self-select.
 | [0015](0015-voice-is-ha-assist-solaris-retired.md) | Proposed: voice is HA Assist + Stimme + Frage; Solaris the agent is retired, its memory becomes a Haus library |
 | [0016](0016-the-bote-hermes-as-stock.md) | The Bote: the agent you talk to on Signal, Hermes as stock, approval by verified number |
 | [0017](0017-data-lives-in-standard-backends.md) | Data lives in standard backends (Radicale, Markdown files, Paperless, HA); agents are clients through one Haus MCP source; the Bote remembers about you, never for you |
+| [0018](0018-two-boxes-are-a-role-federation-not-a-cluster.md) | Two boxes are a role federation: one Laib each, remote roles by peer, only the route list is exchanged, no scheduler, no failover |

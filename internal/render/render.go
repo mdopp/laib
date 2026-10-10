@@ -145,6 +145,9 @@ func SecretNames(st *state.State) []state.Secret {
 	if st.Box.Roles.Proxy != "" {
 		out = append(out, state.Secret{Name: ProxySecret})
 	}
+	if st.Box.Model.KeySecret != "" {
+		out = append(out, state.Secret{Name: st.Box.Model.KeySecret, External: true})
+	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		out = append(out, svc.Contract.Secrets...)
@@ -162,11 +165,17 @@ func oidcSecretName(clientID string) string {
 
 func variables(st *state.State, svc *state.Service, secrets map[string]string) (map[string]string, error) {
 	vars := map[string]string{
-		"DOMAIN":   st.Box.Domain,
-		"DATA_DIR": st.Box.DataDir,
-		"TZ":       st.Box.Timezone,
-		"SERVICE":  svc.Name,
-		"LAN_IP":   st.Box.LanIP,
+		"DOMAIN":      st.Box.Domain,
+		"DATA_DIR":    st.Box.DataDir,
+		"TZ":          st.Box.Timezone,
+		"SERVICE":     svc.Name,
+		"LAN_IP":      st.Box.LanIP,
+		"MODEL_URL":   st.ModelURL(),
+		"MODEL_LEASE": st.ModelLease(),
+		"MODEL_KEY":   "",
+	}
+	if st.Box.Model.KeySecret != "" {
+		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
 	}
 	for k, v := range svc.Values {
 		if v.Secret != "" {

@@ -143,6 +143,15 @@ holds the card (ADR 0011):
 
 Voice has no LLM in its path; the card is free for the agents.
 
+## Two boxes (ADR 0018)
+
+Alltag (the NUC: always on, proxy, sso, dns, household, Bote, Operator)
+and Kraftwerk (the GPU box: model, Werkstatt, media, may sleep). One Laib
+each, roles referenced by peer, only the route list exchanged, no
+scheduler and no failover: a sleeping Kraftwerk is a sentence from the
+Bote, not a migration. A box without a GPU sets `box.yml model.url`.
+The path is `docs/ZIELBILD.md`.
+
 ## Three days in the life
 
 **A wish on the road.** You write the Bote: "Paperless für die Familie,

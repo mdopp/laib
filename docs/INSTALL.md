@@ -6,8 +6,15 @@ state differ in.
 
 ```
 curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
-  | bash -s -- --domain <domain> --lan-ip <ip>
+  | bash -s -- --domain <domain> --lan-ip <ip> \
+       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
 ```
+
+A box with its own GPU passes `--gpu` instead and later adds the `llama`
+template as its model role. A box without one (the NUC) points
+`--model-url` at a peer's llama proxy or at a cloud API (`https://…`,
+then `laib secret set MODEL_API_KEY` before the first apply). Operator,
+Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and `${MODEL_LEASE}`.
 
 What it does, in order:
 

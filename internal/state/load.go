@@ -141,6 +141,9 @@ func (st *State) validate() []error {
 	if st.Box.Roles.Model != "" && !st.Box.GPU.Present {
 		fail("box.yml: roles.model is set but gpu.present is false")
 	}
+	if st.Box.Roles.Model != "" && st.Box.Model.URL != "" {
+		fail("box.yml: roles.model and model.url are both set; a box either serves the model or points at one")
+	}
 	for role, svc := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "dns": st.Box.Roles.DNS, "identity": st.Box.Roles.Identity, "model": st.Box.Roles.Model} {
 		if svc != "" {
 			if _, ok := st.Services[svc]; !ok {
@@ -260,7 +263,28 @@ func Placeholders(content string) []string {
 }
 
 // Builtins are the placeholders every unit may use without a values.yml entry.
-var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP"}
+var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_URL", "MODEL_KEY", "MODEL_LEASE"}
+
+// ModelURL is where a service on this box finds the LLM: the local model
+// role's proxy, or box.yml model.url. Empty when there is neither.
+func (st *State) ModelURL() string {
+	if st.Box.Roles.Model != "" {
+		port := 11435
+		if svc, ok := st.Services[st.Box.Roles.Model]; ok && len(svc.Contract.Routes) > 0 {
+			port = svc.Contract.Routes[0].Port
+		}
+		return fmt.Sprintf("http://127.0.0.1:%d/v1", port)
+	}
+	return st.Box.Model.URL
+}
+
+// ModelLease is the lease endpoint, local or remote; empty when none.
+func (st *State) ModelLease() string {
+	if st.Box.Roles.Model != "" {
+		return "http://127.0.0.1:8787/api/model-lease"
+	}
+	return st.Box.Model.Lease
+}
 
 func builtin(v string) bool {
 	for _, b := range Builtins {
