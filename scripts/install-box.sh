@@ -68,6 +68,17 @@ if [ "$(sysctl -n net.ipv4.ip_unprivileged_port_start 2>/dev/null || echo 1024)"
   sudo sysctl -q -p /etc/sysctl.d/90-laib-ports.conf
 fi
 
+# Laib's own images (ghcr.io/mdopp/laib-caddy, -frage, -werkstatt) are private
+# while the repo is: log podman in with the token so Quadlet and auto-update can
+# pull. Needs a token with packages:read; otherwise make the packages public.
+if [ -n "$TOKEN" ]; then
+  if printf '%s' "$TOKEN" | podman login ghcr.io -u mdopp --password-stdin >/dev/null 2>&1; then
+    echo "podman: logged in to ghcr.io (the token stays in ~/.config/containers/auth.json)"
+  else
+    echo "podman login ghcr.io failed: the token lacks packages:read, or the images are public and need none" >&2
+  fi
+fi
+
 sudo mkdir -p /var/opt/laib
 TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 for BIN in laib laib-operator laib-lease; do

@@ -131,9 +131,13 @@ What makes or breaks the first boot is settled before the stick is built:
   `http://192.168.178.100:11435/v1` and the lease on
   `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
-- **The GitHub token**: fine-grained, repository `mdopp/laib` only,
-  permission *Contents: read*. It is on the stick in clear text and shredded
-  from the NUC after the first boot; revoke it after the trial.
+- **The GitHub token**: repository `mdopp/laib`, permission *Contents:
+  read*, and *Packages: read* for the three images `ghcr.io/mdopp/laib-caddy`,
+  `laib-frage`, `laib-werkstatt` (private while the repo is; or make those
+  three packages public in their package settings, then no packages scope
+  is needed). The token is on the stick in clear text, shredded from the
+  NUC after the first boot, but kept in podman's `auth.json` for pulls;
+  revoke it after the trial.
 - **The SSH key**: the laptop's public key; the stick's console password is
   the fallback at the screen.
 - **A way back**: the NUC is wiped and reinstalled by the same stick at any
