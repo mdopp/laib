@@ -61,7 +61,9 @@ LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null || fail "approve #1 exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "unit not written"
 grep -q "cf-token" "$LAIB_QUADLET/caddy/caddy.container" || fail "secret not rendered on the box"
 if grep -rq "cf-token" "$LAIB_HOME/state"; then fail "secret in state repo"; fi
-grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" && grep -q "restart auth-authelia.service" "$SYSTEMCTL_LOG" || fail "systemctl not driven"
+grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" && grep -q "restart auth-pod.service" "$SYSTEMCTL_LOG" || fail "systemctl not driven"
+# a pod's containers restart through the pod unit, never one by one (--exit-policy stop, #36)
+if grep -q "restart auth-authelia.service\|restart auth-lldap.service" "$SYSTEMCTL_LOG"; then fail "a pod container was restarted on its own"; fi
 grep -q "sudo nft -f" "$SYSTEMCTL_LOG" || fail "nftables not loaded"
 grep -q "X-Laib-Proxy" "$LAIB_HOME/render/caddy/Caddyfile" || fail "laib route missing"
 

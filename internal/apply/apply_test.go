@@ -112,10 +112,13 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 		t.Fatal("unit not written")
 	}
 	joined := strings.Join(calls, "\n")
-	for _, want := range []string{"daemon-reload", "restart caddy.service", "restart auth-authelia.service", "restart whoami.service"} {
+	for _, want := range []string{"daemon-reload", "restart caddy.service", "restart auth-pod.service", "restart whoami.service"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q", want)
 		}
+	}
+	if strings.Contains(joined, "restart auth-authelia.service") || strings.Contains(joined, "restart auth-lldap.service") {
+		t.Error("a pod's containers are restarted through the pod unit, never one by one (--exit-policy stop)")
 	}
 	// Second run: nothing to do, still green, no restarts.
 	calls = nil
@@ -196,9 +199,15 @@ func TestANonExecutableHookIsRed(t *testing.T) {
 	}
 }
 
-func TestPodUnitRestartsFirst(t *testing.T) {
-	got := podFirst([]string{"auth-authelia.service", "auth-lldap.service", "auth-pod.service"})
-	if got[0] != "auth-pod.service" || len(got) != 3 {
+// A pod service restarts through its pod unit alone: the containers are
+// bound to it, and a single container's restart can stop the pod
+// (--exit-policy stop) under the others.
+func TestPodServiceRestartsThePodUnitOnly(t *testing.T) {
+	got := podRestartSet([]string{"auth-authelia.service", "auth-lldap.service", "auth-pod.service"})
+	if len(got) != 1 || got[0] != "auth-pod.service" {
+		t.Fatalf("%v", got)
+	}
+	if got := podRestartSet([]string{"whoami.service"}); len(got) != 1 || got[0] != "whoami.service" {
 		t.Fatalf("%v", got)
 	}
 }
