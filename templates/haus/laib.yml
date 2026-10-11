@@ -17,7 +17,8 @@ secrets:
   - name: HAUS_HUMAN_TOKEN         # laib token mint human --note haus-admin → verdicts from the phone and the Box page
     external: true
     optional: true
-data: []                           # Haus keeps nothing: Laib, Solaris and Home Assistant hold the state
+data:
+  - path: ${DATA_DIR}/haus         # devices.json: the paired phones (hashed tokens)
 health:
   http: http://127.0.0.1:8650/healthz
 ports:

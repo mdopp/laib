@@ -9,4 +9,6 @@ published on the host's loopback only; Caddy is the only way in.
 2. optional: `laib token mint human --note haus-admin` → `laib secret set HAUS_HUMAN_TOKEN`
    (Freigeben/Ablehnen on the phone and the Box page; without it the page
    points at Laib's own inbox)
-3. `laib add haus`; the app's server URL becomes `https://haus.<domain>`.
+3. `laib add haus`; then `https://haus.<domain>/box/geraete` pairs a phone
+   (the setup link opens the app). Phones paired with Solaris keep working
+   while `SOLARIS_URL` is set.

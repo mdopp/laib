@@ -10,6 +10,9 @@ Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=LAIB_HUMAN_TOKEN=${HUMAN_TOKEN}
 Environment=SOLARIS_URL=${SOLARIS_URL}
 Environment=HAUS_DEVICE_TOKENS=${DEVICE_TOKENS}
+Environment=HAUS_DATA=/data
+Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
+Volume=${DATA_DIR}/haus:/data:Z
 AutoUpdate=registry
 
 [Service]
