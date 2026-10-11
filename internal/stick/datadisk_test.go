@@ -145,3 +145,52 @@ esac`)
 		t.Fatalf("the udev-held array was not started:\n%s\n%s", logged, out)
 	}
 }
+
+// unitFromIgnition returns the contents of one systemd unit in an Ignition.
+func unitFromIgnition(t *testing.T, ign []byte, name string) string {
+	t.Helper()
+	var doc struct {
+		Systemd struct {
+			Units []struct {
+				Name     string `json:"name"`
+				Contents string `json:"contents"`
+			} `json:"units"`
+		} `json:"systemd"`
+	}
+	json.Unmarshal(ign, &doc)
+	for _, u := range doc.Systemd.Units {
+		if u.Name == name {
+			return u.Contents
+		}
+	}
+	t.Fatalf("%s not in the ignition", name)
+	return ""
+}
+
+// The data-disk service lives in /usr/local/bin, which is /var/usrlocal on
+// CoreOS — a mount of its own. Ordered After=local-fs.target while the mount
+// it enables sits Before= that target, systemd found an ordering cycle,
+// dropped local-fs.target from the transaction and sometimes spawned the
+// service before /var was there: "Unable to locate executable
+// /usr/local/bin/laib-data-disk.sh" (203/EXEC), no /mnt/data, laib never
+// ready (VM runs on #63/#64, fix/33 9647ff1). The unit must wait for the
+// mount that holds it, not for a target the mount it creates belongs to.
+func TestDataDiskUnitWaitsForItsOwnScriptNotForLocalFs(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := unitFromIgnition(t, ign, "laib-data-disk.service")
+	for _, line := range strings.Split(unit, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "After=") && strings.Contains(line, "local-fs.target") {
+			t.Fatalf("the data-disk unit orders itself after local-fs.target, which its own mount is part of (an ordering cycle):\n%s", unit)
+		}
+	}
+	if !strings.Contains(unit, "RequiresMountsFor=/var/usrlocal/bin") {
+		t.Fatalf("the data-disk unit does not wait for the mount its script lives on:\n%s", unit)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
+	if strings.Contains(script, "After=local-fs.target laib-data-disk.service") {
+		t.Fatal("the mount unit the script writes orders itself after local-fs.target, which it is part of")
+	}
+}
