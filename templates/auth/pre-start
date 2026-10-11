@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""auth pre-start (#36): Authelia's configuration.yml from the values and the
+OIDC signing key, before the pod starts — Authelia does not start without
+them, so this cannot wait for a green verify. Idempotent: the config is
+rewritten on every apply (values may change), the key is kept. LLDAP is
+seeded by post-deploy. Runs in the hooks image, not on the host."""
+import os, subprocess, sys
+
+E = os.environ
+D = E["LAIB_DATA_DIR"]
+DOMAIN = E["LAIB_DOMAIN"]
+cfg_dir = os.path.join(D, "auth", "authelia-config")
+os.makedirs(cfg_dir, exist_ok=True)
+
+# 1. the OIDC signing key, generated once: a 4096-bit RSA key in PKCS#1 PEM
+# (what Authelia's own `crypto pair rsa generate` writes); openssl is in the image
+key_path = os.path.join(cfg_dir, "oidc.pem")
+if not os.path.exists(key_path):
+    r = subprocess.run(["openssl", "genrsa", "-traditional", "-out", key_path + ".tmp", "4096"], capture_output=True, text=True)
+    if r.returncode != 0:
+        print("could not generate the OIDC key:", r.stderr[-400:], file=sys.stderr); sys.exit(1)
+    os.chmod(key_path + ".tmp", 0o600)
+    os.replace(key_path + ".tmp", key_path)
+    print("oidc signing key generated")
+key = open(key_path).read().rstrip("\n")
+indented = "\n".join("          " + line for line in key.splitlines())
+
+# 2. configuration.yml (secrets arrive as LAIB_SECRET_*; nothing is logged)
+S = lambda n: E["LAIB_SECRET_" + n]
+conf = f"""---
+# rendered by laib pre-start (templates/auth); route rules and OIDC clients come from /laib/*.yml
+theme: dark
+server:
+  address: 'tcp://0.0.0.0:9091'
+log:
+  level: info
+identity_validation:
+  reset_password:
+    jwt_secret: '{S("AUTHELIA_JWT_SECRET")}'
+authentication_backend:
+  ldap:
+    address: 'ldap://127.0.0.1:3890'
+    base_dn: '{E["BASE_DN"]}'
+    additional_users_dn: 'ou=people'
+    users_filter: '(&(|({{username_attribute}}={{input}})({{mail_attribute}}={{input}}))(objectClass=person))'
+    additional_groups_dn: 'ou=groups'
+    groups_filter: '(member={{dn}})'
+    user: 'uid=admin,ou=people,{E["BASE_DN"]}'
+    password: '{S("LLDAP_ADMIN_PASSWORD")}'
+    attributes:
+      username: 'uid'
+      display_name: 'displayName'
+      mail: 'mail'
+      group_name: 'cn'
+session:
+  secret: '{S("AUTHELIA_SESSION_SECRET")}'
+  expiration: '1M'
+  inactivity: '1M'
+  remember_me: '1M'
+  cookies:
+    - domain: '{DOMAIN}'
+      authelia_url: 'https://auth.{DOMAIN}'
+      default_redirection_url: 'https://laib.{DOMAIN}/'
+storage:
+  encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'
+  local:
+    path: '/data/db.sqlite3'
+notifier:
+  filesystem:
+    filename: '/data/notification.txt'
+access_control:
+  default_policy: deny          # the bare apex and anything unlisted are denied (ServiceBay ADR 0006)
+  rules:
+    - domain: 'auth.{DOMAIN}'
+      policy: bypass
+    # per-route rules from laib come from /laib/laib-access.yml (X_AUTHELIA_CONFIG merges lists)
+    - domain: '*.{DOMAIN}'
+      policy: one_factor
+      subject:
+        - 'group:family'
+        - 'group:admins'
+identity_providers:
+  oidc:
+    hmac_secret: '{S("AUTHELIA_OIDC_HMAC_SECRET")}'
+    jwks:
+      - key_id: 'main'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: |
+{indented}
+"""
+tmp = os.path.join(cfg_dir, "configuration.yml.tmp")
+with open(tmp, "w") as f:
+    f.write(conf)
+os.chmod(tmp, 0o600)
+os.replace(tmp, os.path.join(cfg_dir, "configuration.yml"))
+print("authelia configuration.yml written")

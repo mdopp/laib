@@ -5,7 +5,7 @@ provides: [documents]
 # auth (Remote-User), so the family uses it without a second password; the
 # consume folder is the file share's paperless-consume, so a scan dropped
 # there is filed. Postgres and Redis in the pod.
-after: [auth]
+after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless
     port: 8000

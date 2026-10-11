@@ -4,7 +4,7 @@ provides: [photos]
 # Immich: server, machine learning (GPU), Postgres with vectors, Redis in
 # one pod. Only the server is published. Photos uploaded by the apps live
 # in the upload volume; external libraries are read-only mounts.
-after: [auth]
+after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: photos
     port: 2283

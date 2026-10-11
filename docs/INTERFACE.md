@@ -173,3 +173,11 @@ the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
 tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
 diag` turns the last four into findings. An enabled operator that does
 nothing is never silent.
+
+### Hooks: `pre-start` and `post-deploy`
+
+Both run in the hooks image (ADR 0004 amendment), never on the host:
+`pre-start` before the units start, `post-deploy` after a green verify.
+Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
+`laib-exec: <container> <command…>` (run by Laib in the service's own
+container). `box.yml laib.hooksImage` names the image.

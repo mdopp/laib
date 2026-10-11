@@ -3,13 +3,11 @@
 package apply
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -112,6 +110,14 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 
+	// pre-start hooks: config files and folders the units need, before anything starts
+	for _, name := range p.Services {
+		if svc, ok := st.Services[name]; ok {
+			if c, ok := runHook(ctx, st, svc, paths, "pre-start", secrets, res.NewSecrets); ok {
+				res.Checks = append(res.Checks, c)
+			}
+		}
+	}
 	if err := sysd.DaemonReload(ctx); err != nil {
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
@@ -196,7 +202,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		if redByService[name] {
 			continue
 		}
-		if c, ok := postDeploy(ctx, st, st.Services[name], secrets, res.NewSecrets); ok {
+		if c, ok := runHook(ctx, st, st.Services[name], paths, "post-deploy", secrets, res.NewSecrets); ok {
 			res.Checks = append(res.Checks, c)
 		}
 	}
@@ -209,13 +215,52 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	return res, nil
 }
 
-// postDeploy runs services/<name>/post-deploy if it exists and is executable
-// (ADR 0004). It gets the builtins, every value and LAIB_SECRET_<NAME> for the
-// service's declared secrets in its environment, runs in the service folder,
-// and may print `laib-secret: NAME=value` lines to hand a credential it
-// created (an API token, say) back into secrets.age. Non-zero exit is red.
-func postDeploy(ctx context.Context, st *state.State, svc *state.Service, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
-	hook := filepath.Join(svc.Dir, "post-deploy")
+// DefaultHooksImage is where hooks run when box.yml names none.
+const DefaultHooksImage = "ghcr.io/mdopp/laib-hooks:latest"
+
+// HookSpec is one hook run: what to mount, the environment file, the command.
+type HookSpec struct {
+	Image   string
+	Mounts  []string // host paths mounted at the same path inside; suffix ":ro" for read-only
+	EnvFile string   // KEY=value lines, mode 0600, removed after the run
+	Dir     string   // working directory (the service folder)
+	Command []string // the hook, by its path inside the container (same as on the host)
+}
+
+// RunHook executes a hook spec and returns its combined output. The default
+// runs it in the hooks image with podman (host network, so the hook reaches
+// the service on 127.0.0.1 and the service's data paths at their host
+// paths). Swapped in tests.
+var RunHook = func(ctx context.Context, h HookSpec) (string, error) {
+	args := []string{"run", "--rm", "--network", "host", "--env-file", h.EnvFile, "-w", h.Dir}
+	for _, m := range h.Mounts {
+		src, opt := m, "z"
+		if strings.HasSuffix(m, ":ro") {
+			src, opt = strings.TrimSuffix(m, ":ro"), "ro,z"
+		}
+		args = append(args, "-v", src+":"+src+":"+opt)
+	}
+	args = append(args, h.Image)
+	args = append(args, h.Command...)
+	return sysd.Run(ctx, "podman", args...)
+}
+
+// hookPhases are the two moments a template may act (ADR 0004 amended, #36):
+// pre-start renders config and folders before the units start and may not
+// assume the service is up; post-deploy talks to the running service.
+var hookPhases = []string{"pre-start", "post-deploy"}
+
+// runHook runs services/<name>/<phase> if it exists and is executable, in
+// the hooks image, never on the host. The hook gets the builtins, every
+// value and LAIB_SECRET_<NAME> for the service's declared secrets in its
+// environment, the service folder read-only, the render folder read-only
+// and the service's data paths read-write at their host paths. It may
+// print `laib-secret: NAME=value` to hand a credential back into
+// secrets.age, and `laib-exec: <container> <cmd…>` to have Laib run a
+// command in one of the service's own containers (the one thing a hook
+// cannot do from inside its image). Non-zero exit is red.
+func runHook(ctx context.Context, st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
+	hook := filepath.Join(svc.Dir, phase)
 	info, err := os.Stat(hook)
 	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
 		return Check{}, false
@@ -224,9 +269,10 @@ func postDeploy(ctx context.Context, st *state.State, svc *state.Service, secret
 	if st.Box.Model.KeySecret != "" {
 		modelKey = secrets[st.Box.Model.KeySecret]
 	}
-	env := append(os.Environ(),
+	var env []string
+	env = append(env,
 		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
-		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP,
+		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render,
 		"MODEL_URL="+st.ModelURL(), "MODEL_LEASE="+st.ModelLease(), "MODEL_KEY="+modelKey,
 		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
 	for k, v := range svc.Values {
@@ -239,37 +285,72 @@ func postDeploy(ctx context.Context, st *state.State, svc *state.Service, secret
 	for _, sec := range svc.Contract.Secrets {
 		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
 	}
+	envFile, err := os.CreateTemp(paths.Home, ".hook-env-*")
+	if err != nil {
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error()}, true
+	}
+	defer os.Remove(envFile.Name())
+	os.Chmod(envFile.Name(), 0o600)
+	envFile.WriteString(strings.Join(env, "\n") + "\n")
+	envFile.Close()
+	image := st.Box.Laib.HooksImage
+	if image == "" {
+		image = DefaultHooksImage
+	}
+	mounts := []string{svc.Dir + ":ro", paths.Render + ":ro"}
+	for _, d := range svc.Contract.Data {
+		p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+		os.MkdirAll(p, 0o755)
+		mounts = append(mounts, p)
+	}
 	hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(hctx, hook)
-	cmd.Dir = svc.Dir
-	cmd.Env = env
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	err = cmd.Run()
+	out, err := RunHook(hctx, HookSpec{Image: image, Mounts: mounts, EnvFile: envFile.Name(), Dir: svc.Dir, Command: []string{hook}})
 	var kept []string
-	for _, line := range strings.Split(out.String(), "\n") {
-		if strings.HasPrefix(line, "laib-secret: ") {
+	own := map[string]bool{}
+	for _, u := range svc.UnitNames() {
+		if strings.HasSuffix(u, ".service") && !strings.HasSuffix(u, "-pod.service") {
+			own["systemd-"+strings.TrimSuffix(u, ".service")] = true
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "laib-secret: "):
 			if k, v, ok := strings.Cut(strings.TrimPrefix(line, "laib-secret: "), "="); ok && k != "" {
 				newSecrets[k] = v
 			}
-			continue
+		case strings.HasPrefix(line, "laib-exec: "):
+			f := strings.Fields(strings.TrimPrefix(line, "laib-exec: "))
+			if len(f) < 2 || !own[f[0]] {
+				kept = append(kept, "laib-exec refused (not one of "+svc.Name+"'s containers): "+line)
+				err = errors.Join(err, fmt.Errorf("laib-exec refused: %s", line))
+				continue
+			}
+			o, e := sysd.Run(hctx, "podman", append([]string{"exec", f[0]}, f[1:]...)...)
+			kept = append(kept, "laib-exec "+f[0]+" "+f[1]+": "+tailOf(o, 200))
+			if e != nil {
+				err = errors.Join(err, fmt.Errorf("laib-exec %s: %w", f[1], e))
+			}
+		default:
+			kept = append(kept, line)
 		}
-		kept = append(kept, line)
 	}
 	tail := strings.TrimSpace(strings.Join(kept, "\n"))
 	if len(tail) > 2000 {
 		tail = "…" + tail[len(tail)-2000:]
 	}
-	for k, v := range secrets {
-		if v != "" {
-			tail = strings.ReplaceAll(tail, v, "${secret:"+k+"}")
-		}
-	}
 	if err != nil {
-		return Check{Service: svc.Name, What: "post-deploy", OK: false, Detail: err.Error() + "\n" + tail}, true
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error() + "\n" + tail}, true
 	}
-	return Check{Service: svc.Name, What: "post-deploy", OK: true, Detail: tail}, true
+	return Check{Service: svc.Name, What: phase, OK: true, Detail: tail}, true
+}
+
+func tailOf(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > n {
+		return "…" + s[len(s)-n:]
+	}
+	return s
 }
 
 // Verify checks the named services (all when nil): unit active, health answers.

@@ -20,9 +20,12 @@ echo "shim journal for $*"
 SH
 cat > "$WORK/bin/podman" <<'SH'
 #!/usr/bin/env sh
+# run: a hook in the hooks image (#36) — here it runs on this machine with the env file, same paths
 case "$1" in
   exec) shift; c=$1; shift; echo "exec in $c: $*";;
   inspect) echo "running exit=0 image=shim";;
+  run) shift; envf=""; while [ $# -gt 0 ]; do case "$1" in --env-file) envf=$2; shift 2;; -v|-w|--network) shift 2;; --rm) shift;; ghcr.io/*) shift; break;; *) shift;; esac; done
+       echo "podman run hook $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; set -a; . "$envf"; set +a; exec "$@";;
 esac
 exit 0
 SH

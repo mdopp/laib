@@ -8,6 +8,7 @@ provides: [music, video]
 # "phone" user whose library access is Musik only, and registers the
 # libraries Musik (/media/music) and, when the folders exist, Filme and
 # Serien.
+after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: media
     port: 8096
