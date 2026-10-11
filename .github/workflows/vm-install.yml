@@ -188,7 +188,7 @@ jobs:
                 grep -q "^ok  adguard pre-start" /tmp/add-adguard.txt || { echo "adguard pre-start is not green"; exit 1; }
                 grep -q "rewrites in step" /tmp/add-adguard.txt || { echo "post-deploy did not sync the rewrites through the API"; exit 1; }
                 test -s /mnt/data/stacks/adguard/conf/AdGuardHome.yaml || { echo "pre-start did not write AdGuardHome.yaml"; exit 1; }
-                code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code"; [ "$code" = 403 ] || [ "$code" = 200 ]
+                code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
                 # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
                 podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
                 grep -A2 "laib.vm.test" /tmp/dns.txt | grep -q "Address" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
