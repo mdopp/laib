@@ -141,6 +141,17 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		if err := setBoxOperator(filepath.Join(env.paths.State, "box.yml"), enable, model, reportAt); err != nil {
 			return fail(err)
 		}
+		if !enable {
+			// nothing keeps running with a valid token (#41): the ops tokens go
+			if store, err := token.Load(tokenPath(env)); err == nil {
+				for _, r := range store.List() {
+					if r.Hand == "ops" {
+						store.Revoke(r.ID)
+						journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "revoke " + r.ID + " (operator disabled)"})
+					}
+				}
+			}
+		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "operator", Result: "info", Detail: args[0]})
 		st, err = loadState(env)
 		if err != nil {

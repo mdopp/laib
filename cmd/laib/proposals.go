@@ -23,7 +23,6 @@ import (
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
-	"github.com/mdopp/laib/internal/sysd"
 )
 
 func inboxDir(env *cliEnv) string { return env.paths.Home + "/inbox" }
@@ -310,7 +309,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 		return code
 	}
 	defer unlock()
-	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, "laib"); err != nil {
+	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, "laib", stateLoads); err != nil {
 		return fail(err)
 	}
 	st, err := loadState(env)
@@ -320,8 +319,8 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 	record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
 	code = applyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
 	if code == exitRed {
-		if out, err := sysd.Run(ctx, "git", "-C", env.paths.State, "-c", "user.name=laib", "-c", "user.email=laib@localhost", "revert", "--no-edit", "-m", "1", "HEAD"); err != nil {
-			record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + out})
+		if _, err := revertProposal(ctx, laibEnv, st, p.ID); err != nil {
+			record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
 			return exitRed
 		}
 		record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d zurückgenommen: verify war rot", p.ID)})
@@ -368,7 +367,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		return code
 	}
 	defer unlock()
-	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
+	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, env.actor, stateLoads); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(os.Stderr, "laib:", err)
 			return exitRefused
@@ -458,7 +457,7 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	for _, w := range p.Warnings {
 		fmt.Println("HINWEIS:", w)
 	}
-	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
+	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, env.actor, stateLoads); err != nil {
 		return fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d add %s", p.ID, add.Name)})
@@ -495,4 +494,15 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 		fmt.Printf("#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
 	}
 	return 0
+}
+
+// stateLoads is the check every approve runs on the merged result (#41):
+// the state loads and renders, or main does not move.
+func stateLoads(dir string) error {
+	st, err := state.Load(dir)
+	if err != nil {
+		return err
+	}
+	_, err = render.Render(st, nil)
+	return err
 }
