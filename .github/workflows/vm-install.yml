@@ -58,7 +58,7 @@ jobs:
           nohup python3 -m http.server 8000 --bind 127.0.0.1 --directory dist > http.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
           echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --out laib-vm.iso
+          ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --out laib-vm.iso
           ls -la laib-vm.iso
       - name: cross-check with coreos-installer, serial console for the log
         run: |
