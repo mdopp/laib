@@ -145,3 +145,35 @@ func TestApproveValidatesTheMergedResult(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// #50 (3): the box's own proposals (the template-sync timer runs as laib)
+// are approved by the box when the dial says auto — "own proposal" is a
+// rule for hands with tokens, not for the box; and an identical open
+// proposal is reused, not duplicated.
+func TestTheBoxApprovesItsOwnTemplateUpdateAndDoesNotDuplicateIt(t *testing.T) {
+	ctx := context.Background()
+	repo, inbox := setup(t)
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
+	p1, err := Create(ctx, repo, inbox, "laib", "template update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
+	p2, err := Create(ctx, repo, inbox, "laib", "template update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.ID != p1.ID {
+		t.Fatalf("the same change proposed twice must reuse the open proposal: #%d and #%d", p1.ID, p2.ID)
+	}
+	open, _ := List(inbox, true)
+	if len(open) != 1 {
+		t.Fatalf("%d open proposals", len(open))
+	}
+	if err := Approve(ctx, repo, inbox, p1, "laib"); err != nil {
+		t.Fatalf("the box could not approve its own template update: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(repo, "box.yml")); string(b) != "domain: y\n" {
+		t.Fatal("not merged")
+	}
+}
