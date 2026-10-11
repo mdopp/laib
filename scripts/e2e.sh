@@ -25,6 +25,8 @@ case "$1" in
   exec) shift; c=$1; shift; echo "exec in $c: $*";;
   inspect) echo "running exit=0 image=shim";;
   run) shift; envf=""; while [ $# -gt 0 ]; do case "$1" in --env-file) envf=$2; shift 2;; -v|-w|--network) shift 2;; --rm) shift;; ghcr.io/*) shift; break;; *) shift;; esac; done
+       # a hook (with an env file) runs here; anything else in a container (caddy validate, #50) just succeeds
+       [ -n "$envf" ] || { echo "podman run $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; exit 0; }
        echo "podman run hook $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; set -a; . "$envf"; set +a; exec "$@";;
 esac
 exit 0
