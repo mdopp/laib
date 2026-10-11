@@ -93,7 +93,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"paths": paths, "ms": entry.MS})
 	}
-	fmt.Printf("grün · %d Pfade · %s\n", len(paths), tail(out, 200))
+	fmt.Fprintf(env.w(), "grün · %d Pfade · %s\n", len(paths), tail(out, 200))
 	return exitOK
 }
 
@@ -148,7 +148,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
 		}
 		snapshot = snaps[0].ID[:8]
-		fmt.Printf("latest = %s\n", snapshot)
+		fmt.Fprintf(env.w(), "latest = %s\n", snapshot)
 	}
 	// the one lock from here to the final verify, and a pause so a converge
 	// that outlives a killed restore does not restart on half-written data (#39)

@@ -28,14 +28,14 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	if !policy.ConvergeOn(st.Policy) && !has(args, "--force") {
-		fmt.Println("converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
+		fmt.Fprintln(env.w(), "converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
 		return exitOK
 	}
 	// one lock (#39): a tick beside a restore, a remove or a human's apply is
 	// skipped, never run alongside
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
-		fmt.Println("übersprungen: gesperrt durch", holder)
+		fmt.Fprintln(env.w(), "übersprungen: gesperrt durch", holder)
 		return exitOK
 	}
 	unlock, code := takeLock(env, st, "converge")
@@ -90,7 +90,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"converged": true, "paused": pausedNames})
 		}
-		fmt.Println("konvergent: Box entspricht dem State, alle Units aktiv")
+		fmt.Fprintln(env.w(), "konvergent: Box entspricht dem State, alle Units aktiv")
 		return exitOK
 	}
 	if len(pausedNames) > 0 {

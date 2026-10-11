@@ -5,11 +5,13 @@ import (
 	"context"
 	"io"
 	"os"
-	"strconv"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // #43 (7): verbs write to the writer the cliEnv carries; MCP passes a
@@ -49,13 +51,19 @@ func TestMCPCallDoesNotTouchTheProcessStdout(t *testing.T) {
 // of inspect output must not block on a pipe while mcpMu is held.
 func TestEscalateCompletesWithALargeInspectBundle(t *testing.T) {
 	c := newCbox(t)
-	data := filepath.Join(c.env.paths.Home, "data", "caddy", "data")
-	os.MkdirAll(data, 0o755)
-	for i := 0; i < 4000; i++ {
-		os.WriteFile(filepath.Join(data, strings.Repeat("f", 40)+string(rune('a'+i%26))+strings.Repeat("x", i%7)+"-"+itoa(i)), []byte("x"), 0o644)
+	// podman inspect of a container is long; here 200 KiB of it
+	inner := sysd.Run
+	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "podman" && len(args) > 0 && args[0] == "inspect" {
+			return strings.Repeat("{\"Id\":\"abc\",\"State\":{\"Status\":\"running\"}}\n", 200*1024/48), nil
+		}
+		return inner(ctx, name, args...)
 	}
+	t.Cleanup(func() { sysd.Run = inner })
 	done := make(chan int, 1)
-	go func() { done <- cmdEscalate(context.Background(), &cliEnv{paths: c.env.paths, actor: "ops", out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"}) }()
+	go func() {
+		done <- cmdEscalate(context.Background(), &cliEnv{paths: c.env.paths, actor: "ops", out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"})
+	}()
 	select {
 	case rc := <-done:
 		if rc != exitOK {
@@ -82,7 +90,8 @@ func TestOperatorWiringAndSilence(t *testing.T) {
 	}
 	c := newCbox(t)
 	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), append(b, []byte("model:\n  url: http://10.0.0.9:11435/v1\n")...), 0o644)
+	text := regexp.MustCompile(`(?m)^notify:\n(  .*\n)*`).ReplaceAllString(string(b), "") // a box without a webhook of its own
+	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), append([]byte(text), []byte("model:\n  url: http://10.0.0.9:11435/v1\n")...), 0o644)
 	if rc := cmdOperator(context.Background(), c.env, []string{"enable"}); rc != exitOK {
 		t.Fatalf("enable rc %d", rc)
 	}

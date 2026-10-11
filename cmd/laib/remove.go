@@ -72,7 +72,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	code = applyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {
-		fmt.Printf("Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
+		fmt.Fprintf(env.w(), "Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
 	}
 	return code
 }

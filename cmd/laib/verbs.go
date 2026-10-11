@@ -148,21 +148,21 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
+	fmt.Fprintf(env.w(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
-		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
+		fmt.Fprintf(env.w(), "  gesperrt durch: %s\n", r.Lock)
 	}
 	for _, row := range rows {
-		fmt.Printf("  %-5s %-20s", row.State, row.Name)
+		fmt.Fprintf(env.w(), "  %-5s %-20s", row.State, row.Name)
 		for u, a := range row.Units {
 			if a != "active" {
-				fmt.Printf(" %s=%s", u, a)
+				fmt.Fprintf(env.w(), " %s=%s", u, a)
 			}
 		}
-		fmt.Println()
+		fmt.Fprintln(env.w())
 	}
 	if e, ok := journal.Last(env.paths.Journal); ok {
-		fmt.Printf("Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+		fmt.Fprintf(env.w(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 	}
 	return exitOK
 }
@@ -188,22 +188,22 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, p)
 	}
 	if p.Empty() {
-		fmt.Println("Keine Änderung: die Box entspricht dem State.")
+		fmt.Fprintln(env.w(), "Keine Änderung: die Box entspricht dem State.")
 	}
 	for _, c := range p.Changes {
-		fmt.Printf("%-6s %s\n", c.Kind, c.Target)
+		fmt.Fprintf(env.w(), "%-6s %s\n", c.Kind, c.Target)
 		if c.Diff != "" {
-			fmt.Println(c.Diff)
+			fmt.Fprintln(env.w(), c.Diff)
 		}
 	}
 	for _, u := range p.Unmanaged {
-		fmt.Printf("nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+		fmt.Fprintf(env.w(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
 	}
 	for _, c := range p.Conflicts {
-		fmt.Printf("KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
+		fmt.Fprintf(env.w(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
 	}
 	for _, w := range st.Warnings {
-		fmt.Printf("HINWEIS: %s\n", w)
+		fmt.Fprintf(env.w(), "HINWEIS: %s\n", w)
 	}
 	return exitOK
 }
@@ -251,7 +251,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 		return emit(env, es)
 	}
 	for _, e := range es {
-		fmt.Printf("%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
+		fmt.Fprintf(env.w(), "%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
 	}
 	return exitOK
 }
@@ -266,16 +266,16 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
 	}
-	fmt.Printf("# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
-	fmt.Println("## Services")
+	fmt.Fprintf(env.w(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
+	fmt.Fprintln(env.w(), "## Services")
 	for _, row := range rows {
-		fmt.Printf("- %s: %s\n", row.Name, row.State)
+		fmt.Fprintf(env.w(), "- %s: %s\n", row.Name, row.State)
 	}
-	fmt.Println("\n## Journal, letzte 24h")
+	fmt.Fprintln(env.w(), "\n## Journal, letzte 24h")
 	for _, e := range es {
-		fmt.Printf("- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
+		fmt.Fprintf(env.w(), "- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
 	}
-	fmt.Println("\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
+	fmt.Fprintln(env.w(), "\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
 	return exitOK
 }
 
@@ -298,14 +298,14 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
-		fmt.Println("installiert:")
+		fmt.Fprintln(env.w(), "installiert:")
 		for _, name := range st.ServiceNames() {
 			t := st.Services[name].Contract.Template
-			fmt.Printf("  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+			fmt.Fprintf(env.w(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
-		fmt.Println("verfügbar:")
+		fmt.Fprintln(env.w(), "verfügbar:")
 		for _, name := range sortedKeys(avail) {
-			fmt.Printf("  %-20s %s\n", name, strings.Join(avail[name], ", "))
+			fmt.Fprintf(env.w(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return exitOK
 	case "sync":
@@ -315,7 +315,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		lines, err := syncRegistries(ctx, env, st)
 		for _, l := range lines {
-			fmt.Println("registry:", l)
+			fmt.Fprintln(env.w(), "registry:", l)
 		}
 		if err != nil {
 			return fail(err)
@@ -462,7 +462,7 @@ func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	}
 	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
-	fmt.Printf("adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
+	fmt.Fprintf(env.w(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
 	return exitOK
 }
 
@@ -477,14 +477,14 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 		content = "units:\n"
 	}
 	if strings.Contains(content, "- "+args[0]+"\n") {
-		fmt.Println("already ignored:", args[0])
+		fmt.Fprintln(env.w(), "already ignored:", args[0])
 		return exitOK
 	}
 	content += "  - " + args[0] + "\n"
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		return fail(err)
 	}
-	fmt.Println("ignored:", args[0])
+	fmt.Fprintln(env.w(), "ignored:", args[0])
 	return exitOK
 }
 
@@ -563,6 +563,6 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
 		return fail(err)
 	}
-	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
+	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
 }

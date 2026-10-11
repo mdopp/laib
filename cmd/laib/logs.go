@@ -54,7 +54,7 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, out)
 	}
 	for _, unit := range svc.UnitNames() {
-		fmt.Printf("── %s ──\n%s\n", unit, out[unit])
+		fmt.Fprintf(env.w(), "── %s ──\n%s\n", unit, out[unit])
 	}
 	return exitOK
 }

@@ -88,6 +88,6 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	if st, err := loadState(env); err == nil {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "self", Result: "info", Detail: "rollback: previous binaries restored, units restarted"})
 	}
-	fmt.Println("zurückgerollt: vorherige Binaries aktiv, laib/operator/lease neu gestartet")
+	fmt.Fprintln(env.w(), "zurückgerollt: vorherige Binaries aktiv, laib/operator/lease neu gestartet")
 	return exitOK
 }

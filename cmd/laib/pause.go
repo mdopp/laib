@@ -59,7 +59,7 @@ func cmdPause(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, pz)
 	}
-	fmt.Printf("%s pausiert bis %s: converge lässt die Units in Ruhe (laib resume %s hebt es auf)\n", name, until.Local().Format("02.01. 15:04"), name)
+	fmt.Fprintf(env.w(), "%s pausiert bis %s: converge lässt die Units in Ruhe (laib resume %s hebt es auf)\n", name, until.Local().Format("02.01. 15:04"), name)
 	return exitOK
 }
 
@@ -76,11 +76,11 @@ func cmdResume(ctx context.Context, env *cliEnv, args []string) int {
 		return exitRefusedMsg(env, env.actor+" may not resume a service")
 	}
 	if _, ok := apply.Paused(env.paths)[args[0]]; !ok {
-		fmt.Printf("%s ist nicht pausiert\n", args[0])
+		fmt.Fprintf(env.w(), "%s ist nicht pausiert\n", args[0])
 		return exitOK
 	}
 	apply.Resume(env.paths, args[0])
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "resume", Service: args[0], Result: "info", Detail: "Pause aufgehoben; der nächste converge fasst den Dienst wieder an"})
-	fmt.Printf("%s: Pause aufgehoben\n", args[0])
+	fmt.Fprintf(env.w(), "%s: Pause aufgehoben\n", args[0])
 	return exitOK
 }

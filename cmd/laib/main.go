@@ -34,6 +34,15 @@ type cliEnv struct {
 	actor string
 	in    io.Reader // stdin for --patch; MCP passes the patch here
 	mcp   bool      // the call came over MCP: no file access, so propose needs content
+	out   io.Writer // where a verb writes (#43): nil = os.Stdout; MCP and escalate pass a buffer
+}
+
+// w is the verb's output: never the process stdout when a caller passed its own.
+func (e *cliEnv) w() io.Writer {
+	if e != nil && e.out != nil {
+		return e.out
+	}
+	return os.Stdout
 }
 
 func (e *cliEnv) err() *os.File { return os.Stderr }
@@ -146,13 +155,13 @@ func cmdVersion(_ context.Context, env *cliEnv, _ []string) int {
 	if env.json {
 		return emit(env, map[string]string{"version": Version})
 	}
-	fmt.Println("laib", Version)
+	fmt.Fprintln(env.w(), "laib", Version)
 	return 0
 }
 
 // emit prints JSON and returns 0.
 func emit(env *cliEnv, v any) int {
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(env.w())
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
 		return fail(err)

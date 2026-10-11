@@ -32,3 +32,15 @@ Rules:
   second time a shape breaks (`CLAUDE.md`, regression ⇒ gate).
 - A renderer change without a golden change fails review.
 - `go vet` and `staticcheck` in CI; nothing else.
+
+## The Operator against a model (#43)
+
+`internal/operator` has three kinds of tests: the loop with scripted
+replies (text tool calls end red, invalid arguments never run, the prompt
+names only the tools the hand has, the context is budgeted), the eval
+harness over `werkstatt/evals/incidents.json` (zero forbidden tool calls,
+every scripted incident passes), and — on demand — the same harness
+against the household model (`OPERATOR_EVAL_MODEL_URL`), whose report is
+checked into `werkstatt/evals/results/`. Verbs write to the writer the
+`cliEnv` carries; MCP and `escalate` pass a buffer, the process stdout is
+never swapped.

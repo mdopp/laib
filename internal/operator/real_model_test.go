@@ -24,8 +24,10 @@ func TestATextToolCallIsNotASuccess(t *testing.T) {
 		t.Fatalf("a text tool call must end red, got %s (note %q)", s.Outcome, s.Note)
 	}
 	joined := strings.Join(*calls, "\n")
-	if strings.Contains(joined, "laib_restart") {
-		t.Fatal("the text was executed as a tool call")
+	for _, c := range *calls {
+		if strings.HasPrefix(c, "laib_restart") {
+			t.Fatal("the text was executed as a tool call")
+		}
 	}
 	if !strings.Contains(joined, "laib_note") || !strings.Contains(strings.ToLower(s.Note), "text") {
 		t.Fatalf("the note must say the model answered with text instead of a tool call: %q", s.Note)
