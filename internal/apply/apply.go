@@ -173,7 +173,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	}
 	restartOrder = st.Order(restartOrder)
 	for _, name := range restartOrder {
-		for _, unit := range podFirst(st.Services[name].UnitNames()) {
+		for _, unit := range podRestartSet(st.Services[name].UnitNames()) {
 			if err := sysd.Restart(ctx, unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: name, What: "restart " + unit, OK: false, Detail: err.Error()})
 				continue
@@ -472,20 +472,23 @@ func unitOfFile(path string) string {
 	return ""
 }
 
-// podFirst orders a service's units so the Quadlet pod unit is restarted
-// before the containers bound to it (BindsTo=): restarting a container
-// first and the pod after it stops the container again mid-start.
-func podFirst(units []string) []string {
-	out := make([]string, 0, len(units))
+// podRestartSet: a service with a Quadlet pod restarts the pod unit only.
+// Its containers are BindsTo= the pod and Wants= by it, so they stop and
+// start with it; restarting them one by one on top is not harmless — the
+// pod runs with --exit-policy stop, and a container restart that is the
+// last one running stops the pod under the others (#70's VM runs: lldap's
+// restart stopped the auth pod, Authelia then failed its start limit).
+func podRestartSet(units []string) []string {
+	var pods, rest []string
 	for _, u := range units {
 		if strings.HasSuffix(u, "-pod.service") {
-			out = append(out, u)
+			pods = append(pods, u)
+		} else {
+			rest = append(rest, u)
 		}
 	}
-	for _, u := range units {
-		if !strings.HasSuffix(u, "-pod.service") {
-			out = append(out, u)
-		}
+	if len(pods) > 0 {
+		return pods
 	}
-	return out
+	return rest
 }

@@ -174,6 +174,8 @@ jobs:
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
+                # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
