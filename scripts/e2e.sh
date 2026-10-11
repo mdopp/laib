@@ -194,6 +194,32 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
+# --- 11b. a template with both hooks, added by the human (#36): pre-start runs in the hooks
+# image before the unit starts, post-deploy after; both executable in the state repo
+R="$LAIB_HOME/registries/e2e/templates/hooked"; mkdir -p "$R"
+cat > "$R/laib.yml" <<'YML'
+name: hooked
+template: {registry: e2e, name: hooked, version: 1}
+routes: []
+secrets: []
+data:
+  - path: ${DATA_DIR}/hooked/cfg
+YML
+printf 'IMAGE: docker.io/library/busybox:stable\n' > "$R/values.example.yml"
+printf '[Container]\nImage=${IMAGE}\nVolume=${DATA_DIR}/hooked/cfg:/cfg:z\n\n[Install]\nWantedBy=default.target\n' > "$R/hooked.container"
+printf '#!/bin/sh\necho "phase $LAIB_PHASE"\nmkdir -p "$LAIB_DATA_DIR/hooked/cfg" && echo written > "$LAIB_DATA_DIR/hooked/cfg/by-pre-start"\n' > "$R/pre-start"
+printf '#!/bin/sh\necho "phase $LAIB_PHASE"\ntest -f "$LAIB_DATA_DIR/hooked/cfg/by-pre-start" || exit 1\n' > "$R/post-deploy"
+chmod 644 "$R/pre-start" "$R/post-deploy"   # the registry copy may lack the bit; the state repo must have it
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" add hooked 2>&1)" || fail "add hooked: $OUT"
+grep -q "^ok  hooked pre-start" <<<"$OUT" || fail "pre-start not green: $OUT"
+grep -q "^ok  hooked post-deploy" <<<"$OUT" || fail "post-deploy not green: $OUT"
+test -f "$WORK/data/hooked/cfg/by-pre-start" || fail "pre-start did not write into the data path"
+[ -x "$LAIB_HOME/state/services/hooked/pre-start" ] || fail "pre-start is not executable in the state repo"
+# order: the pre-start hook ran before the unit was started
+pre=$(grep -n "podman run hook .*pre-start" "$SYSTEMCTL_LOG" | head -1 | cut -d: -f1); start=$(grep -n "restart hooked.service" "$SYSTEMCTL_LOG" | head -1 | cut -d: -f1)
+[ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "pre-start ($pre) did not run before the first start ($start)"
+LAIB_ACTOR=human:e2e "$BIN" remove hooked >/dev/null || fail "remove hooked"
+
 # --- 12. remove: units stopped, files gone, data kept, state without the service
 if LAIB_ACTOR=ops "$BIN" remove whoami >/dev/null 2>&1; then fail "ops removed a service"; fi
 if LAIB_ACTOR=human:e2e "$BIN" remove caddy >/dev/null 2>&1; then fail "a role holder was removed"; fi

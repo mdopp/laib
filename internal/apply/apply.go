@@ -173,7 +173,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	}
 	restartOrder = st.Order(restartOrder)
 	for _, name := range restartOrder {
-		for _, unit := range st.Services[name].UnitNames() {
+		for _, unit := range podFirst(st.Services[name].UnitNames()) {
 			if err := sysd.Restart(ctx, unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: name, What: "restart " + unit, OK: false, Detail: err.Error()})
 				continue
@@ -262,8 +262,12 @@ var hookPhases = []string{"pre-start", "post-deploy"}
 func runHook(ctx context.Context, st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
 	hook := filepath.Join(svc.Dir, phase)
 	info, err := os.Stat(hook)
-	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+	if err != nil || info.IsDir() {
 		return Check{}, false
+	}
+	if info.Mode()&0o111 == 0 {
+		// present but not executable: a red check, never a silent skip (PR #70's first VM run)
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: "hook is not executable (chmod +x services/" + svc.Name + "/" + phase + ")"}, true
 	}
 	modelKey := ""
 	if st.Box.Model.KeySecret != "" {
@@ -466,4 +470,22 @@ func unitOfFile(path string) string {
 		return base
 	}
 	return ""
+}
+
+// podFirst orders a service's units so the Quadlet pod unit is restarted
+// before the containers bound to it (BindsTo=): restarting a container
+// first and the pod after it stops the container again mid-start.
+func podFirst(units []string) []string {
+	out := make([]string, 0, len(units))
+	for _, u := range units {
+		if strings.HasSuffix(u, "-pod.service") {
+			out = append(out, u)
+		}
+	}
+	for _, u := range units {
+		if !strings.HasSuffix(u, "-pod.service") {
+			out = append(out, u)
+		}
+	}
+	return out
 }
