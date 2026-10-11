@@ -113,6 +113,9 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	for _, c := range p.Changes {
 		if strings.HasPrefix(c.Path, "systemd/") && (strings.HasSuffix(c.Path, ".timer") || strings.HasSuffix(c.Path, ".service")) && !strings.Contains(c.Path, ".d/") && c.Kind != "delete" {
 			unit := strings.TrimPrefix(c.Path, "systemd/")
+			if !strings.Contains(p.Output[c.Path], "[Install]") {
+				continue // a timer's oneshot service: the timer is enabled, the service only runs when it fires (VM run 23)
+			}
 			if _, err := sysd.Run(ctx, "systemctl", "--user", "enable", "--now", unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: "laib", What: "enable " + unit, OK: false, Detail: err.Error()})
 			} else {
