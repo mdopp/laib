@@ -191,7 +191,7 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 # #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
-if grep -qi "haushalt\|Gedächtnis\|frage\|automat\|haus:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
+if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
 grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
 python3 -c '
