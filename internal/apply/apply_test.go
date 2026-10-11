@@ -180,3 +180,25 @@ func runSpecLocally(t *testing.T, h HookSpec) (string, error) {
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
+
+// A hook that is on disk but not executable is a red check, never a
+// silent skip: that is how Authelia started without its configuration.yml
+// on the first VM run of #70.
+func TestANonExecutableHookIsRed(t *testing.T) {
+	svc := &state.Service{Name: "x", Dir: t.TempDir()}
+	os.WriteFile(filepath.Join(svc.Dir, "pre-start"), []byte("#!/bin/sh\n"), 0o644)
+	c, ran := runHook(context.Background(), &state.State{Box: state.Box{DataDir: t.TempDir()}}, svc, boxfs.Paths{Home: t.TempDir()}, "pre-start", nil, map[string]string{})
+	if !ran || c.OK || !strings.Contains(c.Detail, "not executable") {
+		t.Fatalf("ran=%v check=%+v", ran, c)
+	}
+	if _, ran := runHook(context.Background(), &state.State{}, svc, boxfs.Paths{}, "post-deploy", nil, nil); ran {
+		t.Fatal("no file, nothing to run")
+	}
+}
+
+func TestPodUnitRestartsFirst(t *testing.T) {
+	got := podFirst([]string{"auth-authelia.service", "auth-lldap.service", "auth-pod.service"})
+	if got[0] != "auth-pod.service" || len(got) != 3 {
+		t.Fatalf("%v", got)
+	}
+}
