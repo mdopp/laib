@@ -129,11 +129,13 @@ LAIB_ACTOR=ops "$BIN" escalate whoami "budget spent, needs a look" | grep -q "es
 cat > "$WORK/bin/fake-model.py" <<'PY2'
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
-# a scripted model: inspect, restart, note, then stop
+# a scripted model on the typed surface (#53): inspect, a refused call
+# (a service that does not exist), restart, note, then stop
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"args":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"args":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"args":"--kind incident \"whoami war rot, Neustart, jetzt grün.\""})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"nas"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0
@@ -142,7 +144,14 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         global i
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n))
-        assert body["tools"], "no tools"
+        names = [t["function"]["name"] for t in body["tools"]]
+        # the incident menu for the ops hand: typed, small, without approve/apply/converge
+        assert "restart" in names and "note" in names and "diagnose" in names, names
+        assert not any(n.startswith("laib_") for n in names) and len(names) <= 8, names
+        svc = body["tools"][names.index("restart")]["function"]["parameters"]["properties"]["service"]
+        assert "caddy" in svc.get("enum", []), svc
+        if i == 2:  # the refused call came back as a tool message, not as an execution
+            last = body["messages"][-1]; assert last["role"] == "tool" and "nicht ausgef" in last["content"] and "nas" in last["content"], last
         m = SCRIPT[min(i, len(SCRIPT)-1)]; i += 1
         out = json.dumps({"choices":[{"message": m}]}).encode()
         self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)

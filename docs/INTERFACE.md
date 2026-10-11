@@ -43,6 +43,33 @@ up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
 reboot, a public route) are not verbs at all for it, they are proposals.
 
+## The Operator's typed surface (#53)
+
+A small local model does not get the verb table with one free-text `args`
+per tool. `laib-operator` (default `OPERATOR_INTERFACE=typed`; `cli` gives a
+large model the verbs) offers a **menu per trigger** of task-shaped tools
+with typed parameters, and code turns a call into the CLI arguments laib's
+MCP takes — the model never writes quoting, flags or `--`:
+
+| Trigger | Menu |
+|---|---|
+| tick | `status`, `diagnose(service?)`, `note(kind, text)` |
+| event (a red) | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
+| report | `status`, `diagnose`, `journal(hours)`, `note` |
+
+`service` is an enum of the installed services (from `laib status`),
+`kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
+`key` a values.yml key. A tool is in the menu only if the hand has its
+verb (`ops` at ceiling `propose` sees no `restart`). `approve`, `reject`,
+`restore`, `rollback`, `converge`, `template`, `adopt`, `apply`, `remove`
+are in no menu. A call with a missing or invalid argument — an unknown
+service, a kind outside the enum, a key with a path in it, a tool outside
+the menu — is answered to the model and never reaches laib. Results are
+cut to 2 000 characters, the context bundle to 6 000. The eval runs both
+interfaces over the same incidents (`werkstatt/evals/incidents-typed.json`).
+Still open from #53: runbooks in code for the known failure classes, and
+schema-constrained decoding through llama-server.
+
 ## Readiness: `/ready`
 
 `GET http://127.0.0.1:5900/ready` answers one JSON line:

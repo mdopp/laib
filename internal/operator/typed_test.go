@@ -167,3 +167,18 @@ func TestEvalTypedIncidents(t *testing.T) {
 		t.Fatalf("%+v", rep)
 	}
 }
+
+// the service enum comes from laib status — JSON over MCP, text on the CLI
+func TestServicesFromStatus(t *testing.T) {
+	got := ServicesFromStatus(`{"ready":{"state":"bereit"},"services":[{"name":"whoami","state":"rot"},{"name":"caddy","state":"grün"}]}`)
+	if strings.Join(got, ",") != "caddy,whoami" {
+		t.Fatalf("json: %v", got)
+	}
+	got = ServicesFromStatus("Laib · bereit · 2 Dienste\n  grün  caddy      \n  rot   whoami  unit failed\nLetzte Änderung …")
+	if strings.Join(got, ",") != "caddy,whoami" {
+		t.Fatalf("text: %v", got)
+	}
+	if got := ServicesFromStatus("kaputt"); len(got) != 0 {
+		t.Fatalf("nothing: %v", got)
+	}
+}
