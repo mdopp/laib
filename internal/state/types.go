@@ -15,10 +15,14 @@ type Box struct {
 	Laib     Laib   `yaml:"laib"`
 	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
 	// over, #16): only these services may declare hostNetwork: true.
-	HostNetwork []string   `yaml:"hostNetwork"`
-	Notify      Notify     `yaml:"notify"`
-	Updates     Updates    `yaml:"updates"`
-	Registries  []Registry `yaml:"registries"`
+	HostNetwork []string `yaml:"hostNetwork"`
+	Notify      Notify   `yaml:"notify"`
+	// Watchdog is the outside check (#57): serve pings url every five
+	// minutes while readiness is not red; the outside turns silence into a
+	// push. Contact is whom the family calls when the box is down.
+	Watchdog   Watchdog   `yaml:"watchdog"`
+	Updates    Updates    `yaml:"updates"`
+	Registries []Registry `yaml:"registries"`
 	// Model is where the LLM is when this box has no model role of its own
 	// (a NUC without a GPU): a peer box's llama proxy or a cloud API. The
 	// builtins MODEL_URL and MODEL_KEY resolve from here or from the role.
@@ -69,6 +73,12 @@ type Updates struct {
 // changes to (#15). Empty means polling only.
 type Notify struct {
 	URL string `yaml:"url"`
+}
+
+// Watchdog: the outside check and the family's contact (#57).
+type Watchdog struct {
+	URL     string `yaml:"url"`     // a healthchecks-style ping URL outside the box
+	Contact string `yaml:"contact"` // "Martin, 0170 …" — printed on the family card
 }
 
 // Laib is the box page and MCP listener itself (ADR 0012): where it listens,

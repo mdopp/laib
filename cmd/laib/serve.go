@@ -188,6 +188,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

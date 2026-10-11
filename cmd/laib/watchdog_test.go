@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"bytes"
-	"io"
 	"sync/atomic"
 	"testing"
 	"time"

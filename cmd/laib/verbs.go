@@ -56,6 +56,7 @@ type readiness struct {
 	Paused    []string `json:"paused,omitempty"`   // services converge leaves alone: "<svc> von <wer> bis <wann>" (#39)
 	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
 	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
+	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
 }
 
 type serviceStatus struct {
@@ -77,6 +78,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 		r.State, r.Lock = "eingeschränkt", holder
 	}
 	r.Firewall = firewallState(ctx, env)
+	r.Watchdog = watchdogState(env, st)
 	if r.Firewall == "fehlt" && r.Lock == "" {
 		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
