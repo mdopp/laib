@@ -166,6 +166,11 @@ type Route struct {
 	Group    string   `yaml:"group"`
 	Caddy    string   `yaml:"caddy"`
 	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages
+	// ProxySecret names a secret Caddy sends as the header `X-<Name>-Proxy`
+	// on the authenticated handler only, so the service trusts Remote-User
+	// solely behind the proxy (ADR 0012 §3; Laib's own page does the same).
+	ProxySecret string `yaml:"proxySecret"`
+	ProxyHeader string `yaml:"proxyHeader"` // the header's name, default X-<Service>-Proxy
 }
 
 // Secret is a declared secret; non-external ones are generated once.

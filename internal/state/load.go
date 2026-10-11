@@ -119,6 +119,11 @@ func loadService(dir string) (*Service, error) {
 func (st *State) validate() []error {
 	var errs []error
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
+	for _, svc := range st.Services {
+		if err := proxySecretsDeclared(svc); err != nil {
+			errs = append(errs, err)
+		}
+	}
 
 	if st.Box.Domain == "" {
 		fail("box.yml: domain is required")
@@ -272,6 +277,26 @@ func Placeholders(content string) []string {
 		}
 	}
 	return out
+}
+
+// proxySecretsDeclared: a route's proxySecret must be one of the service's
+// own declared secrets, so apply generates it and the renderer finds it.
+func proxySecretsDeclared(svc *Service) error {
+	for _, r := range svc.Contract.Routes {
+		if r.ProxySecret == "" {
+			continue
+		}
+		found := false
+		for _, s := range svc.Contract.Secrets {
+			if s.Name == r.ProxySecret {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("services/%s: route %s names proxySecret %s, which the service does not declare under secrets", svc.Name, r.Host, r.ProxySecret)
+		}
+	}
+	return nil
 }
 
 // Builtins are the placeholders every unit may use without a values.yml entry.
