@@ -144,6 +144,7 @@ type Contract struct {
 	GPU          bool        `yaml:"gpu"`
 	HostNetwork  bool        `yaml:"hostNetwork"`
 	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
+	Needs        []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
 	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
 	MigratedFrom string      `yaml:"migratedFrom"`
 }
@@ -190,6 +191,9 @@ type DataPath struct {
 // Health is what apply verifies.
 type Health struct {
 	HTTP string `yaml:"http"`
+	// None says why there is no probe (MQTT speaks no HTTP …): the unit
+	// state is the check. Lint wants one of the two (#46).
+	None string `yaml:"none"`
 }
 
 // Port is a published host port; LAN=false renders an nftables drop.

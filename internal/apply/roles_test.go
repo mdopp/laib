@@ -103,7 +103,7 @@ func TestNewContainersArePulledBeforeTheStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(*calls, "\n")
-	pull, reload := strings.Index(joined, "podman pull docker.io/traefik/whoami:v1.11"), strings.Index(joined, "daemon-reload")
+	pull, reload := strings.Index(joined, "podman pull -q docker.io/traefik/whoami:v1.11"), strings.Index(joined, "daemon-reload")
 	if pull < 0 || reload < 0 || pull > reload {
 		t.Fatalf("the image must be pulled before the unit starts:\n%s", joined)
 	}

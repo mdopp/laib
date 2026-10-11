@@ -26,7 +26,7 @@ Environment=USERMAP_GID=1000
 Volume=${DATA_DIR}/paperless/data:/usr/src/paperless/data:z
 Volume=${DATA_DIR}/paperless/media:/usr/src/paperless/media:z
 Volume=${CONSUME}:/usr/src/paperless/consume:z
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always
