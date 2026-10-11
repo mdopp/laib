@@ -412,3 +412,6 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	fmt.Println("eskaliert:", p)
 	return exitOK
 }
+
+// snapshotPaths: not written yet — the tests in envelope_test.go describe it (#35).
+func snapshotPaths(st *state.State, svc *state.Service) []string { return dataPaths(st, svc) }
