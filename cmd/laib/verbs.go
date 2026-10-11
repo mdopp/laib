@@ -41,6 +41,21 @@ func loadState(env *cliEnv) (*state.State, error) {
 	return st, nil
 }
 
+// LastBackup: the last successful backup and how many places hold it.
+type LastBackup struct {
+	At    string `json:"at,omitempty"` // RFC3339
+	Repos int    `json:"repos"`        // places: the configured repo counts one; off-box is the owner's second repo
+	OK    bool   `json:"ok"`
+}
+
+// LastChange: the last applied proposal in plain words (the card's summary).
+type LastChange struct {
+	Proposal   int    `json:"proposal,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	At         string `json:"at,omitempty"`
+	Reversible bool   `json:"reversible"`
+}
+
 // readiness is the one state with three values (docs/DESIGN.md).
 type readiness struct {
 	State     string `json:"state"`
@@ -52,6 +67,9 @@ type readiness struct {
 	Lock      string `json:"lock,omitempty"`
 	Drift     int    `json:"drift"`    // files on the box that differ from the state
 	Operator  string `json:"operator"` // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	// the three guarantees Haus's start page shows the family (haus#2)
+	LastBackup LastBackup `json:"lastBackup"`
+	LastChange LastChange `json:"lastChange"`
 }
 
 type serviceStatus struct {
@@ -69,6 +87,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 	var rows []serviceStatus
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
 	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
+	r.LastBackup, r.LastChange = guarantees(env, st)
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
 	}
@@ -521,4 +540,33 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
+}
+
+// guarantees reads the last successful backup from the journal and the
+// last approved proposal from the inbox (haus#2).
+func guarantees(env *cliEnv, st *state.State) (LastBackup, LastChange) {
+	var lb LastBackup
+	if es, err := journal.Read(env.paths.Journal, time.Time{}); err == nil {
+		for _, e := range es {
+			if e.Verb == "backup" && e.Result == "green" && e.Reason == "" {
+				lb = LastBackup{At: e.T.UTC().Format(time.RFC3339), OK: true}
+			}
+		}
+	}
+	if st.Box.Backup.Repo != "" {
+		lb.Repos = 1
+	}
+	var lc LastChange
+	if ps, err := proposal.List(inboxDir(env), false); err == nil {
+		var last *proposal.Proposal
+		for _, p := range ps {
+			if p.Status == "approved" && (last == nil || p.Decided.After(last.Decided)) {
+				last = p
+			}
+		}
+		if last != nil {
+			lc = LastChange{Proposal: last.ID, Summary: proposal.Card(last, st.Box.Domain).Summary, At: last.Decided.UTC().Format(time.RFC3339), Reversible: true}
+		}
+	}
+	return lb, lc
 }
