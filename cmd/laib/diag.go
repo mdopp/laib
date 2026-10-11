@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -131,6 +132,13 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		case free < 15:
 			out = append(out, Finding{Severity: "gelb", Probe: "disk", Detail: fmt.Sprintf("%s hat %.1f%% frei", path, free)})
 		}
+	}
+	// The backup target: none is yellow, one on the data disk itself is a nudge.
+	switch repo := st.Box.Backup.Repo; {
+	case repo == "":
+		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
+	case strings.HasPrefix(repo, "/") && strings.HasPrefix(repo, filepath.Dir(st.Box.DataDir)):
+		out = append(out, Finding{Severity: "info", Probe: "backup", Detail: "Backup liegt auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "zweites Repo auf NAS oder USB (backup.repo), oder ein Spiegel (laib disk add)"})
 	}
 	// The data RAID: one member by design is yellow, a lost member red.
 	if _, members := markerMembers(); members > 0 {

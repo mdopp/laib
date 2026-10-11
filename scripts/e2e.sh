@@ -191,6 +191,17 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
-# --- 12. the journal holds the whole story
+# --- 12. remove: units stopped, files gone, data kept, state without the service
+if LAIB_ACTOR=ops "$BIN" remove whoami >/dev/null 2>&1; then fail "ops removed a service"; fi
+if LAIB_ACTOR=human:e2e "$BIN" remove caddy >/dev/null 2>&1; then fail "a role holder was removed"; fi
+LAIB_ACTOR=human:e2e "$BIN" remove whoami | grep -q "Daten bleiben" || fail "remove exit $?"
+test -f "$LAIB_QUADLET/whoami/whoami.container" && fail "remove left the unit file"
+test -d "$LAIB_HOME/state/services/whoami" && fail "remove left the state folder"
+test -f "$WORK/data/whoami/cfg/app.conf" || fail "remove deleted data"
+grep -q "stop whoami.service" "$SYSTEMCTL_LOG" || fail "remove did not stop the unit"
+LAIB_ACTOR=human:e2e "$BIN" rollback >/dev/null || fail "rollback after remove exit $?"
+test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "rollback did not bring whoami back"
+
+# --- 13. the journal holds the whole story
 j 'verbs=[e["verb"] for e in es]; assert all(v in verbs for v in ["apply","rollback","approve","converge","exec","write","restart","escalate","snapshot","note","operator"]), verbs'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

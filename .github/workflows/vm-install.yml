@@ -151,6 +151,17 @@ jobs:
                 /var/opt/laib/laib version | grep -qv v0.3.2
                 curl -fsS http://127.0.0.1:5900/ready | grep -q bereit
                 systemctl --user is-active laib.service caddy.service'
+      - name: remove — units stopped, files gone, data kept
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2'
+          $SSH 'set -e; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                sed -i "s/^  proxy: caddy$//" /mnt/data/laib/state/box.yml   # caddy holds the proxy role; free it first
+                $L remove caddy
+                sleep 2; podman ps --format "{{.Names}}" | grep -q caddy && { echo "caddy still running"; exit 1; }
+                systemctl --user is-active caddy.service && exit 1 || true
+                test -f /mnt/data/stacks/caddy/data/vm-marker && echo "data kept"
+                $L status; $L diag || true'
       - name: logs
         if: always()
         run: |

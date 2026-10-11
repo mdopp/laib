@@ -171,6 +171,7 @@ type Secret struct {
 	Name     string `yaml:"name"`
 	External bool   `yaml:"external"`
 	Optional bool   `yaml:"optional"` // external and unset is fine: the unit gets an empty value (Caddy's DNS token without dns.provider)
+	Mint     string `yaml:"mint"`     // a Laib token for this hand (policy.yml hands, not human), minted on first add — no manual token mint + secret set
 }
 
 // OIDC is the service's Authelia client.

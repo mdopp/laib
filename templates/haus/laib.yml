@@ -12,8 +12,9 @@ routes:
     auth: one_factor
     bypass: [/napi/]
 secrets:
-  - name: HAUS_LAIB_TOKEN          # laib token mint ops --note haus → laib secret set HAUS_LAIB_TOKEN
+  - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the ops hand (reads, restarts)
     external: true
+    mint: ops
   - name: HAUS_HUMAN_TOKEN         # laib token mint human --note haus-admin → verdicts from the phone and the Box page
     external: true
     optional: true

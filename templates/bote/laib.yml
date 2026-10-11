@@ -7,10 +7,12 @@ provides: [bote]
 # #26), which share loopback.
 routes: []
 secrets:
-  - name: BOTE_LAIB_TOKEN            # laib token mint bote --note bote  → laib secret set BOTE_LAIB_TOKEN
+  - name: BOTE_LAIB_TOKEN            # minted on `laib add bote` as the bote hand (propose, note, escalate)
     external: true
-  - name: BOTE_HUMAN_TOKEN           # laib token mint human --note "signal <number>" (approvals as the admin, ADR 0016 §3)
+    mint: bote
+  - name: BOTE_HUMAN_TOKEN           # laib token mint human --note "signal <number>" (approvals as the admin, ADR 0016 §3); optional
     external: true
+    optional: true
   - name: BOTE_MODEL_KEY             # only for a cloud model
     external: true
   - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `haus` tool (README)

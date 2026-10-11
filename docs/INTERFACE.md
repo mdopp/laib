@@ -147,3 +147,20 @@ A route may list path prefixes that skip Authelia on its host, for a
 token-only API next to pages: Haus serves `/napi/` to the phone's device
 token and `/box` behind Authelia on `haus.<domain>`. Caddy proxies the
 bypass paths straight through; Authelia gets a bypass rule per prefix.
+
+### `laib remove <service>`
+
+Humans only. Stops the service's units, takes `services/<name>` out of the
+state (a commit: `laib rollback` brings the service back), removes its
+Quadlet and rendered files, applies (Caddy, Authelia, DNS lose the routes).
+Data paths stay, and Laib prints where; deleting data is a separate, human
+act. A role holder (proxy, sso, identity, dns, model) is refused until
+`box.yml roles` points elsewhere.
+
+### Tokens a template needs
+
+A contract secret with `mint: <hand>` is a Laib token the service itself
+uses (Haus as `ops`, the Bote as `bote`): `laib add` mints it on first
+install and stores it in `secrets.age`, so there is no manual `token mint`
+plus `secret set`. Human tokens are never minted this way: the admin's own
+verdicts stay the admin's (`laib token mint human`).

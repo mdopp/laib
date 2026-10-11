@@ -11,8 +11,8 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    and scan the QR code in Signal → Linked Devices on the phone that owns
    that number (a second SIM or a spare phone; the Bote should not share
    the admin's own number).
-2. Tokens: `laib token mint bote` → `laib secret set BOTE_LAIB_TOKEN`;
-   `laib token mint human --note "signal +49…"` → `laib secret set BOTE_HUMAN_TOKEN`.
+2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`) is minted on `laib add bote`;
+   optional `laib token mint human --note "signal +49…"` → `laib secret set BOTE_HUMAN_TOKEN`.
    The human token is used only through the `laib-admin` MCP entry, which
    Hermes marks `untrusted`: every write asks, and the SOUL says it may be
    used only on the admin's own message.

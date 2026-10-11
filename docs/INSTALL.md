@@ -185,8 +185,7 @@ $laib add caddy
 $laib add auth OPERATOR_USER=mdopp OPERATOR_EMAIL=you@example   # the hook seeds LLDAP: admins, family, your account
 $laib add adguard
 $laib add whoami
-#    the family's surface and the phone's API (Haus, mdopp/haus): tokens first, then the service
-$laib token mint ops --note haus --json | jq -r .token | $laib secret set HAUS_LAIB_TOKEN
+#    the family's surface and the phone's API (Haus, mdopp/haus); its Laib token is minted on add
 $laib add haus
 
 # 4. look

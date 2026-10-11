@@ -176,6 +176,20 @@ A contract secret with `external: true` must be in `secrets.age` before
 may be missing and the unit gets an empty value. Caddy's `DNS_API_TOKEN`
 is the case: needed only when `dns.provider` is set.
 
+### Backup target by default
+
+`laib init` writes `backup.repo` as a restic repo on the data disk
+(`/mnt/data/backup/restic`, 03:00). It exists from day one, so the operator
+snapshots before repairs and `laib restore` has something to restore, and it
+protects against mistakes and bad updates — not against the disk. `laib
+diag` says so until a NAS or second repo (or a mirror, `laib disk add`) is
+there. Point it at `sftp:nas:/backup/laib` when the NAS is ready.
+
+### Secrets a template mints
+
+`mint: <hand>` on an external secret makes `laib add` mint a Laib token for
+that hand (not human) and store it, once. See INTERFACE.md.
+
 ### `tls`
 
 `tls: internal` makes Caddy sign every host with its own CA (`local_certs`)

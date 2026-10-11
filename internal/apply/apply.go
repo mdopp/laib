@@ -83,6 +83,11 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
+			// a unit whose file goes must stop first: after daemon-reload systemd
+			// forgets it, and a running container would keep running unmanaged
+			if unit := unitOfFile(c.Path); unit != "" {
+				sysd.Stop(ctx, unit)
+			}
 			if err := os.Remove(c.Target); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return res, err
 			}
@@ -366,4 +371,18 @@ func snapshot(ctx context.Context, repo, reason string) (string, error) {
 		}
 	}
 	return git("rev-parse", "--short", "HEAD")
+}
+
+// unitOfFile maps a rendered Quadlet or systemd file to its unit name.
+func unitOfFile(path string) string {
+	base := filepath.Base(path)
+	switch {
+	case strings.HasSuffix(base, ".container"):
+		return strings.TrimSuffix(base, ".container") + ".service"
+	case strings.HasSuffix(base, ".pod"):
+		return strings.TrimSuffix(base, ".pod") + "-pod.service"
+	case strings.HasPrefix(path, "systemd/") && (strings.HasSuffix(base, ".service") || strings.HasSuffix(base, ".timer")):
+		return base
+	}
+	return ""
 }

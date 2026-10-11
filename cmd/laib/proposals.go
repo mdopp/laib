@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/token"
 	"github.com/mdopp/laib/templates"
 
 	"github.com/mdopp/laib/internal/apply"
@@ -50,6 +51,30 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 			continue
 		}
 		if s.External {
+			if s.Mint != "" {
+				// a Laib token the service needs: minted here, once, as the hand the template names
+				h, ok := st.Policy.Hands[s.Mint]
+				if !ok || s.Mint == "human" {
+					fmt.Fprintf(os.Stderr, "laib: secret %s wants a token for hand %q, which policy.yml does not have (or is human)\n", s.Name, s.Mint)
+					return exitUsage
+				}
+				store, err := token.Load(tokenPath(env))
+				if err != nil {
+					return fail(err)
+				}
+				ttl := time.Duration(0)
+				if h.TTL != "" {
+					ttl, _ = time.ParseDuration(h.TTL)
+				}
+				plain, rec, err := store.Mint(s.Mint, ttl, s.Name)
+				if err != nil {
+					return fail(err)
+				}
+				journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: fmt.Sprintf("mint %s for %s (%s)", rec.ID, s.Mint, s.Name)})
+				sec[s.Name] = plain
+				changed = true
+				continue
+			}
 			if s.Optional {
 				continue
 			}

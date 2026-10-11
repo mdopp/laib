@@ -3,6 +3,7 @@ hands:
   resident: {ceiling: read}
   ops: {ceiling: apply}
   pi: {ceiling: propose}
+  bote: {ceiling: propose}
   claude: {ceiling: apply, ttl: 8h}
   human: {ceiling: destroy}
 approvals:
