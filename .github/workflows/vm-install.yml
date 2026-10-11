@@ -43,15 +43,20 @@ jobs:
           # three disks: the OS goes to the smallest (pre-install), the largest
           # becomes the data RAID1 with one member (laib-data-disk), the third
           # joins as the mirror later in this job
-          qemu-img create -q -f qcow2 disk.qcow2 10G
-          qemu-img create -q -f qcow2 data1.qcow2 12G
-          qemu-img create -q -f qcow2 data2.qcow2 12G
+          # the runner has ~14 GB free: zero writes (the mirror sync copies a
+          # mostly empty 9G member) must punch holes in the qcow2 files, not fill them
+          qemu-img create -q -f qcow2 disk.qcow2 8G
+          qemu-img create -q -f qcow2 data1.qcow2 9G
+          qemu-img create -q -f qcow2 data2.qcow2 9G
+          df -h / | tail -1
           cat > vm.sh <<'EOF'
           #!/usr/bin/env bash
           # $1 = boot order (cd: disk first; d: the stick first = reinstall)
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
             -pidfile qemu.pid -serial file:serial.log \
-            -drive file=disk.qcow2,if=virtio,format=qcow2 -drive file=data1.qcow2,if=virtio,format=qcow2 -drive file=data2.qcow2,if=virtio,format=qcow2 \
+            -drive file=disk.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
+            -drive file=data1.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
+            -drive file=data2.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
             -cdrom laib-vm.iso -boot order=$1 \
             -nic user,model=virtio,hostfwd=tcp::2222-:22
           EOF
@@ -76,7 +81,7 @@ jobs:
                 grep -q "\[U_\]" /proc/mdstat || { echo "array should be degraded by design"; exit 1; }
                 lsblk -ndo NAME,SIZE /dev/vda /dev/vdb /dev/vdc
                 echo "laib data disk marker $(date -u +%s)" | tee /mnt/data/laib/vm-marker
-                # the mirror: the untouched 12G disk (no partitions) joins through laib disk add, resync to [UU]
+                # the mirror: the untouched 9G disk (no partitions) joins through laib disk add, resync to [UU]
                 spare=""; for d in /dev/vd?; do [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ] && spare=$d; done
                 echo "spare: $spare"; test -n "$spare"
                 export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
@@ -87,6 +92,7 @@ jobs:
                 grep -q "\[UU\]" /proc/mdstat || { echo "mirror did not sync"; exit 1; }
                 cat /etc/laib/data-disk | grep -q MEMBERS=2
                 sudo sync'
+          df -h / | tail -1; ls -la *.qcow2
       - name: reinstall from the stick — the data disk survives
         run: |
           sudo kill "$(cat qemu.pid)"; sleep 3
