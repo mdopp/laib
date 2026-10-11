@@ -164,3 +164,12 @@ uses (Haus as `ops`, the Bote as `bote`): `laib add` mints it on first
 install and stores it in `secrets.age`, so there is no manual `token mint`
 plus `secret set`. Human tokens are never minted this way: the admin's own
 verdicts stay the admin's (`laib token mint human`).
+
+### Operator heartbeat
+
+The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
+the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
+`läuft`, `stumm` (running but no note for three ticks: model unreachable or a
+tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
+diag` turns the last four into findings. An enabled operator that does
+nothing is never silent.

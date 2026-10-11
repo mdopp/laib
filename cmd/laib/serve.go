@@ -77,7 +77,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		rd, rows := collectStatus(r.Context(), env, st)
 		var b strings.Builder
-		fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste · zuletzt gehört %s</h1>", rd.State, rd.Services, rd.LastHeard[11:19])
+		fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste · Operator %s · zuletzt gehört %s</h1>", rd.State, rd.Services, html.EscapeString(rd.Operator), rd.LastHeard[11:19])
 		if rd.Lock != "" {
 			fmt.Fprintf(&b, "<p>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
 		}

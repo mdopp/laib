@@ -51,6 +51,7 @@ type readiness struct {
 	LastHeard string `json:"lastHeard"`
 	Lock      string `json:"lock,omitempty"`
 	Drift     int    `json:"drift"` // files on the box that differ from the state
+	Operator  string `json:"operator"` // aus | startet | läuft | stumm | antwortet nicht | fehlt
 }
 
 type serviceStatus struct {
@@ -67,6 +68,7 @@ var bootUnclean string
 func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness, []serviceStatus) {
 	var rows []serviceStatus
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
+	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
 	}
@@ -129,7 +131,7 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift)
+	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
 		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
 	}

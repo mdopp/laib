@@ -133,6 +133,10 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 			out = append(out, Finding{Severity: "gelb", Probe: "disk", Detail: fmt.Sprintf("%s hat %.1f%% frei", path, free)})
 		}
 	}
+	// The Operator: enabled but silent or down is the failure nobody notices.
+	if _, f := operatorState(operatorFacts(ctx, env, st)); f != nil {
+		out = append(out, *f)
+	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge.
 	switch repo := st.Box.Backup.Repo; {
 	case repo == "":
