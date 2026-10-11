@@ -111,7 +111,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	}
 
 	// pre-start hooks: config files and folders the units need, before anything starts
-	for _, name := range p.Services {
+	for _, name := range hookTargets(st, p) {
 		if svc, ok := st.Services[name]; ok {
 			if c, ok := runHook(ctx, st, svc, paths, "pre-start", secrets, res.NewSecrets); ok {
 				res.Checks = append(res.Checks, c)
@@ -491,4 +491,33 @@ func podRestartSet(units []string) []string {
 		return pods
 	}
 	return rest
+}
+
+// hookTargets: the services whose hooks run for this plan — those with a
+// change of their own, plus the role holders whose rendered files changed
+// (authelia/*.yml → sso, caddy/Caddyfile → proxy, adguard/rewrites.json →
+// dns): their config is written by their hook from those files.
+func hookTargets(st *state.State, p *plan.Plan) []string {
+	out := append([]string{}, p.Services...)
+	seen := map[string]bool{}
+	for _, n := range out {
+		seen[n] = true
+	}
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	for _, c := range p.Changes {
+		switch strings.SplitN(c.Path, "/", 2)[0] {
+		case "authelia":
+			add(st.Box.Roles.SSO)
+		case "caddy":
+			add(st.Box.Roles.Proxy)
+		case "adguard":
+			add(st.Box.Roles.DNS)
+		}
+	}
+	return out
 }

@@ -79,7 +79,17 @@ access_control:
       subject:
         - 'group:family'
         - 'group:admins'
-identity_providers:
+"""
+# OIDC only once a client exists: Authelia refuses an oidc block without
+# clients (VM run 38161974424). laib renders the clients into /laib/laib-clients.yml
+# (render/authelia); the hook runs again whenever that file changes.
+clients = os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "authelia", "laib-clients.yml")
+try:
+    has_clients = "client_id:" in open(clients).read()
+except OSError:
+    has_clients = False
+if has_clients:
+    conf += f"""identity_providers:
   oidc:
     hmac_secret: '{S("AUTHELIA_OIDC_HMAC_SECRET")}'
     jwks:
@@ -89,6 +99,8 @@ identity_providers:
         key: |
 {indented}
 """
+else:
+    print("no OIDC clients yet: identity_providers left out (Authelia refuses an empty block)")
 tmp = os.path.join(cfg_dir, "configuration.yml.tmp")
 with open(tmp, "w") as f:
     f.write(conf)
