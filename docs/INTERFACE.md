@@ -134,3 +134,16 @@ member count). `laib disk add /dev/sdX` (humans only) wipes the device,
 partitions it and joins it as the mirror of `/dev/md/data`; the sync runs in
 the background and `laib diag` shows it. The stick creates the array with one
 member on purpose (#29).
+
+### `laib inbox`
+
+Open proposals (`--all` for decided ones), as a table or `--json`; also an
+MCP tool (read tier), so the Bote and Haus can show the inbox. Deciding
+stays `laib approve` / `laib reject`.
+
+### Routes with `bypass:`
+
+A route may list path prefixes that skip Authelia on its host, for a
+token-only API next to pages: Haus serves `/napi/` to the phone's device
+token and `/box` behind Authelia on `haus.<domain>`. Caddy proxies the
+bypass paths straight through; Authelia gets a bypass rule per prefix.
