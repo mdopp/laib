@@ -87,8 +87,9 @@ jobs:
             f=qcow2; [[ $d == *.raw ]] && f=raw
             drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap")
           done
+          rm -f qmp.sock
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
-            -pidfile qemu.pid -serial file:serial.log "${drives[@]}" \
+            -pidfile qemu.pid -serial file:serial.log -qmp unix:qmp.sock,server,nowait "${drives[@]}" \
             -cdrom "${ISO:-laib-vm.iso}" -boot $1 \
             -nic user,model=virtio,hostfwd=tcp::2222-:22,hostfwd=tcp::18080-:8080
           EOF
@@ -181,17 +182,26 @@ jobs:
           ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           # a power cut during the first boot (#37): the binaries landed, the marker is not
-          # written yet — kill QEMU in that window; the next boot must finish the install
+          # written yet — a hard reset through QMP in that window (what the guest sees of a
+          # power cut: no flush, no shutdown; killing QEMU instead also throws away the
+          # host-side qcow2 cache and corrupted the root filesystem, run 38163289190);
+          # the next boot must finish the install
+          cat > reset.py <<'PY'
+          import json, socket
+          s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
+          f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
+          f.write(json.dumps({"execute": "system_reset"}) + "\n"); f.flush(); print(f.readline().strip())
+          PY
           killed=no
           for i in $(seq 1 900); do
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
-              sudo kill -9 "$(cat qemu.pid)"; killed=yes; echo "power cut $i s into the first boot, after the binaries landed"; break
+              python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
             sleep 1
           done
           [ "$killed" = yes ] || { echo "the resume path was not exercised: no window between the binaries and the marker"; exit 1; }
-          sleep 3; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c
+          # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
             [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || echo "(no ssh)"; echo "--- serial"; tail -c 12000 serial.log; exit 1; }
