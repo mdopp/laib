@@ -5,15 +5,17 @@
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
 #       [--version vX.Y.Z] [--token <github token, while the repo is private>]
+#       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
 # While mdopp/laib is private, release assets need a GitHub token (fine-grained,
 # Contents: read on this repo): pass --token or export LAIB_GH_TOKEN. A public
 # repo needs none.
 set -euo pipefail
-VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"
+VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="$2"; shift 2;;
+    --source) SOURCE="${2%/}"; shift 2;;
     --domain) DOMAIN="$2"; shift 2;;
     --lan-ip) LAN_IP="$2"; shift 2;;
     --model-url) MODEL_URL="$2"; shift 2;;
@@ -27,23 +29,32 @@ done
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
 
-# Resolve the release: its tag and the API url of every asset.
+# Resolve what to install: a release (its tag and the API url of every asset),
+# or one build served at --source under the release's asset names plus VERSION.
 auth=()
 [ -n "$TOKEN" ] && auth=(-H "Authorization: Bearer $TOKEN")
-if [ "$VERSION" = "latest" ]; then REL="$API/releases/latest"; else REL="$API/releases/tags/$VERSION"; fi
-RELEASE_JSON="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
-# No python3 on Fedora CoreOS: pick the fields out of the JSON with sed. An
-# asset object starts with its API "url" and carries "name" before any nested
-# object, so url..name within one object is a match without a brace in between.
-FLAT="$(printf '%s' "$RELEASE_JSON" | tr -d '\n')"
-TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
-[ -n "$TAG" ] || { echo "release JSON without tag_name" >&2; exit 1; }
-asset_url() {
-  local u
-  u="$(printf '%s' "$FLAT" | grep -o '"url": *"[^"]*/releases/assets/[0-9]*"[^{}]*"name": *"'"$1"'"' | head -1 | sed -n 's/^"url": *"\([^"]*\)".*/\1/p')"
-  [ -n "$u" ] || { echo "release $TAG has no asset $1" >&2; return 1; }
-  printf '%s' "$u"
-}
+if [ -n "$SOURCE" ]; then
+  TAG="$(curl -fsSL "$SOURCE/VERSION")" || { echo "cannot read $SOURCE/VERSION" >&2; exit 1; }
+  [ -n "$TAG" ] || { echo "$SOURCE/VERSION is empty" >&2; exit 1; }
+  get=(-H "Accept: application/octet-stream")   # the GitHub token never goes to a build server
+  asset_url() { printf '%s/%s' "$SOURCE" "$1"; }
+else
+  if [ "$VERSION" = "latest" ]; then REL="$API/releases/latest"; else REL="$API/releases/tags/$VERSION"; fi
+  RELEASE_JSON="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  # No python3 on Fedora CoreOS: pick the fields out of the JSON with sed. An
+  # asset object starts with its API "url" and carries "name" before any nested
+  # object, so url..name within one object is a match without a brace in between.
+  FLAT="$(printf '%s' "$RELEASE_JSON" | tr -d '\n')"
+  TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+  [ -n "$TAG" ] || { echo "release JSON without tag_name" >&2; exit 1; }
+  get=("${auth[@]}" -H "Accept: application/octet-stream")
+  asset_url() {
+    local u
+    u="$(printf '%s' "$FLAT" | grep -o '"url": *"[^"]*/releases/assets/[0-9]*"[^{}]*"name": *"'"$1"'"' | head -1 | sed -n 's/^"url": *"\([^"]*\)".*/\1/p')"
+    [ -n "$u" ] || { echo "release $TAG has no asset $1" >&2; return 1; }
+    printf '%s' "$u"
+  }
+fi
 
 # Fedora CoreOS ships without git, restic and diff; laib shells out to all
 # three (state repo, backups, plan diffs). Layer them live, once. If the live
@@ -87,9 +98,12 @@ fi
 sudo mkdir -p /var/opt/laib
 TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 for BIN in laib laib-operator laib-lease; do
-  curl -fsSL "${auth[@]}" -H "Accept: application/octet-stream" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
+  curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
-curl -fsSL "${auth[@]}" -H "Accept: application/octet-stream" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || true
+curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || true
+if [ -n "$SOURCE" ] && [ ! -s "$TMPD/SHA256SUMS" ]; then
+  echo "$SOURCE serves no SHA256SUMS: refusing an unverified build" >&2; exit 1
+fi
 if [ -s "$TMPD/SHA256SUMS" ]; then
   (cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
      want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"

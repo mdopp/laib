@@ -27,6 +27,7 @@ type Box struct {
 	ModelLease string
 	GPU        bool
 	GHToken    string
+	Source     string // base URL serving install-box.sh and the binaries of one build (the VM job); "" = the latest release
 }
 
 var placeholder = regexp.MustCompile(`\$\{([A-Z_]+)\}`)
@@ -47,7 +48,7 @@ func (b Box) Vars() map[string]string {
 	return map[string]string{
 		"SSH_AUTHORIZED_KEY": b.SSHKey, "PASSWORD_HASH": b.PassHash, "HOSTNAME": b.Hostname,
 		"DOMAIN": b.Domain, "LAN_IP": b.LanIP, "MODEL_URL": b.ModelURL, "MODEL_LEASE": b.ModelLease,
-		"GPU": gpu, "GH_TOKEN": b.GHToken,
+		"GPU": gpu, "GH_TOKEN": b.GHToken, "SOURCE": b.Source,
 	}
 }
 

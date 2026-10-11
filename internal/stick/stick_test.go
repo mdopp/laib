@@ -55,6 +55,39 @@ func TestDestIgnitionWithPassword(t *testing.T) {
 	}
 }
 
+// The VM job must boot the commit under test, not the last release (#38):
+// --source puts a base URL into firstboot.env, and first boot fetches
+// install-box.sh and the binaries from there.
+func TestSourceReachesFirstBoot(t *testing.T) {
+	b := box()
+	b.Source = "http://10.0.2.2:8000"
+	ign, err := DestIgnition(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	for _, want := range []string{"LAIB_SOURCE=http://10.0.2.2:8000\n", `"$LAIB_SOURCE/install-box.sh"`, `--source "$LAIB_SOURCE"`} {
+		if !strings.Contains(files, want) {
+			t.Errorf("first boot lacks %q", want)
+		}
+	}
+}
+
+// Without --source a box installs the latest release, as before.
+func TestNoSourceInstallsTheRelease(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	if !strings.Contains(files, "LAIB_SOURCE=\n") {
+		t.Error("firstboot.env should carry an empty LAIB_SOURCE")
+	}
+	if !strings.Contains(files, "api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh") {
+		t.Error("without a source, first boot must fetch install-box.sh from the repo")
+	}
+}
+
 func TestSHA512CryptKnownVector(t *testing.T) {
 	// from the reference implementation's test suite
 	got := sha512CryptSalt("Hello world!", "saltstring")
