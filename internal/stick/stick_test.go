@@ -322,7 +322,7 @@ func TestFirstBootResumesAndKeepsTheTokenOffArgv(t *testing.T) {
 	if !strings.Contains(script, "trap") || !strings.Contains(script, "shred") {
 		t.Fatal("the env file must be shredded in an EXIT trap")
 	}
-	if !strings.Contains(script, "/etc/laib/installed") || strings.Index(script, "/etc/laib/installed") < strings.Index(script, "install-box.sh") {
+	if !strings.Contains(script, "touch /etc/laib/installed") || strings.LastIndex(script, "touch /etc/laib/installed") < strings.Index(script, "bash /tmp/install-box.sh") {
 		t.Fatal("the marker must be written after the installer ran")
 	}
 	if !strings.Contains(script, "releases/latest") || !strings.Contains(script, "--version") {

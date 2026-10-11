@@ -50,8 +50,10 @@ type readiness struct {
 	Red       int    `json:"red"`
 	LastHeard string `json:"lastHeard"`
 	Lock      string `json:"lock,omitempty"`
-	Drift     int    `json:"drift"`    // files on the box that differ from the state
-	Operator  string `json:"operator"` // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	Drift     int    `json:"drift"`              // files on the box that differ from the state
+	Operator  string `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	Firewall  string `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
+	Version   string `json:"version"`            // of the running laib: the update path checks it (#37)
 }
 
 type serviceStatus struct {
@@ -67,10 +69,14 @@ var bootUnclean string
 
 func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness, []serviceStatus) {
 	var rows []serviceStatus
-	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339)}
+	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: Version}
 	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
+	}
+	r.Firewall = firewallState(ctx, env)
+	if r.Firewall == "fehlt" && r.Lock == "" {
+		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
 	if sec, err := secrets.Load(env.paths.Secrets, env.paths.Key); err == nil {
 		if p, err := plan.Compute(ctx, st, sec, env.paths, ""); err == nil {

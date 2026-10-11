@@ -67,7 +67,7 @@ if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
   # shellcheck disable=SC2086
   if ! sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; then
     echo "live apply refused; rebooting into the layered tree, the first-boot unit continues" >&2
-    sudo systemctl reboot; exit 0
+    sudo systemctl reboot; exit 75   # EX_TEMPFAIL: the caller keeps what the next run needs
   fi
 fi
 for t in git restic diff; do command -v "$t" >/dev/null 2>&1 || { echo "$t still missing" >&2; exit 1; }; done
@@ -87,9 +87,14 @@ mkdir -p ~/.config/containers/systemd ~/.config/systemd/user 2>/dev/null || true
 # Laib's own images (ghcr.io/mdopp/laib-caddy, -frage, -werkstatt) are private
 # while the repo is: log podman in with the token so Quadlet and auto-update can
 # pull. Needs a token with packages:read; otherwise make the packages public.
+# Without --authfile rootless podman writes ${XDG_RUNTIME_DIR}/containers/auth.json —
+# a tmpfs, gone at the first reboot, and with it every pull of a private image (#37).
+AUTHFILE="$HOME/.config/containers/auth.json"
 if [ -n "$TOKEN" ]; then
-  if printf '%s' "$TOKEN" | podman login ghcr.io -u mdopp --password-stdin >/dev/null 2>&1; then
-    echo "podman: logged in to ghcr.io (the token stays in ~/.config/containers/auth.json)"
+  mkdir -p "$(dirname "$AUTHFILE")"
+  if printf '%s' "$TOKEN" | podman login ghcr.io --authfile "$AUTHFILE" -u mdopp --password-stdin >/dev/null 2>&1; then
+    chmod 0600 "$AUTHFILE"
+    echo "podman: logged in to ghcr.io; the login is kept in $AUTHFILE (survives reboots; revoke the token to end it)"
   else
     echo "podman login ghcr.io failed: the token lacks packages:read, or the images are public and need none" >&2
   fi
@@ -100,17 +105,17 @@ TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 for BIN in laib laib-operator laib-lease; do
   curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
-curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || true
-if [ -n "$SOURCE" ] && [ ! -s "$TMPD/SHA256SUMS" ]; then
-  echo "$SOURCE serves no SHA256SUMS: refusing an unverified build" >&2; exit 1
-fi
-if [ -s "$TMPD/SHA256SUMS" ]; then
-  (cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
-     want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
-     [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
-   done)
-fi
+# SHA256SUMS is required: an unverified build is refused, release or --source (#37)
+curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || { echo "no SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+[ -s "$TMPD/SHA256SUMS" ] || { echo "empty SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+(cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
+   want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
+   [ -n "$want" ] || { echo "SHA256SUMS has no entry for $BIN" >&2; exit 1; }
+   [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
+ done)
+# the previous binaries stay as *.prev: `laib self rollback` puts them back
 for BIN in laib laib-operator laib-lease; do
+  if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
@@ -140,12 +145,25 @@ if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
   LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} $GPU
 fi
 systemctl --user enable --now laib.service
+# enable --now does not restart a running service: an update would keep the old
+# code running until the next reboot. try-restart touches only what runs (#37).
+for u in laib.service laib-operator.service laib-lease.service; do
+  systemctl --user try-restart "$u" 2>/dev/null || true
+done
 sleep 1
 # Laib's own units (converge loop, auto-update verify) come from the state too:
 # one apply, so the box is not "eingeschränkt" by its own drift on day one.
 LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib apply >/dev/null || echo "first apply red: /var/opt/laib/laib plan shows why" >&2
 echo "installed $TAG: $(/var/opt/laib/laib version)"
-echo -n "ready: "; curl -fsS http://127.0.0.1:5900/ready || echo "(not yet)"
-echo
+# the version the RUNNING service reports, not the file on disk
+ready=""
+for i in $(seq 1 30); do ready="$(curl -fsS http://127.0.0.1:5900/ready 2>/dev/null || true)"; [ -n "$ready" ] && break; sleep 1; done
+echo "ready: ${ready:-(not yet)}"
+case "$ready" in
+  *'"version":'*)
+    grep -q "\"version\":\"$TAG\"" <<<"$ready" || { echo "the running laib is not $TAG (restart failed?)" >&2; exit 1; }
+    echo "running: $TAG";;
+  *) echo "the running laib predates /ready's version field; the file on disk is $TAG" >&2;;
+esac
 echo "next: /var/opt/laib/laib plan   (shows every unit on the box as 'nicht verwaltet' until adopted or ignored)"
 echo "      /var/opt/laib/laib operator enable   (mints the ops token and starts the operator; needs a model)"

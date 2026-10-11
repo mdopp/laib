@@ -48,7 +48,7 @@ Sizes: kernel + tools 9.2k lines Go production, 1.8k tests (`scripts/loc.sh` cap
 
 - Never on hardware: UEFI boot order (`usb/post-install.sh`), the real NIC, phones trusting Caddy's root, Hermes on a box (`SIGNAL_HOME_CHANNEL` unverified), the Operator against a real model, GPU/CDI for llama.
 - Private ghcr images need `podman login` with a packages:read token (#30).
-- The GitHub token rides the stick in clear text and stays in podman's `auth.json`.
+- The GitHub token rides the stick in clear text and stays in `~/.config/containers/auth.json` (#37: deliberately, so private images pull after a reboot; revoke it after the trial).
 - `laib remove` scans only folders of services in the state; an unknown Quadlet folder is "unmanaged", never deleted.
 - Haus trusts `Remote-User` because only Caddy reaches its loopback port; no second proof.
 - Restore stops the service's units, restores per path, re-applies; the state repo restore (`--box`) was not exercised in the VM.

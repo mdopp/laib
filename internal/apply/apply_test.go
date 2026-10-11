@@ -94,7 +94,7 @@ func TestLockIsExclusive(t *testing.T) {
 	if _, err := Lock(paths, "apply:other"); err != ErrLocked {
 		t.Fatal("second lock succeeded")
 	}
-	if LockHolder(paths) != "apply:test" {
+	if !strings.HasPrefix(LockHolder(paths), "apply:test pid ") { // the pid tells a stale lock from a live one (#37)
 		t.Fatal(LockHolder(paths))
 	}
 	unlock()

@@ -54,7 +54,7 @@ Then Caddy beside NPM (step 2). Nothing before that changes a service.
 ## Updating
 
 Re-run the install script with `--version vX.Y.Z` or without for latest.
-The unit restarts; state and journal are untouched.
+The running services are restarted (`try-restart` of laib, operator, lease) and the installer checks that `/ready` reports the new version; the previous binaries stay as `*.prev` for `laib self rollback`. State and journal are untouched. `SHA256SUMS` is required: an unverified build is refused.
 
 
 ## The stick: Fedora CoreOS with Laib on first boot
@@ -136,7 +136,8 @@ What makes or breaks the first boot is settled before the stick is built:
   `laib-frage`, `laib-werkstatt` (private while the repo is; or make those
   three packages public in their package settings, then no packages scope
   is needed). The token is on the stick in clear text, shredded from the
-  NUC after the first boot, but kept in podman's `auth.json` for pulls;
+  NUC when the first boot finishes (a power cut in between resumes at the
+  next boot), and kept in `~/.config/containers/auth.json` for pulls;
   revoke it after the trial.
 - **The SSH key**: the laptop's public key; the stick's console password is
   the fallback at the screen.

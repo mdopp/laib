@@ -85,6 +85,7 @@ func init() {
 		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},
+		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
 	}
 }
 
