@@ -65,7 +65,8 @@ jobs:
           chmod +x vm.sh; ./vm.sh order=cd
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
-            if $SSH 'curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "ready after $((i*10)) s"; break; fi
+            # ready AND the first-boot unit finished (it applies and shreds the token after serve is up)
+            if $SSH 'systemctl is-active --quiet laib-firstboot.service && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "ready after $((i*10)) s"; break; fi
             [ $i -eq 120 ] && { echo "laib never became ready"; exit 1; }
             sleep 10
           done
