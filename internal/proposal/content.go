@@ -28,7 +28,32 @@ type UpdateService struct {
 	Template fs.FS
 }
 
-// Class names the proposal class the autonomy dial is keyed by.
+// Verdict is what the judge says about a change (internal/review).
+type Verdict struct {
+	Human []string // reasons only a human may allow it; empty = the dial decides
+	Mints []string // hands the change mints Laib tokens for
+	Added []string // services the change adds
+}
+
+// Judge reads the change — a checkout of main and one of the change — and
+// says what only a human may allow. It may refuse the proposal outright
+// (an error: nothing is kept), e.g. a token stronger than the proposer.
+type Judge func(base, changed string) (Verdict, error)
+
+// classOf is the class the dial is keyed by: human when the judge says so,
+// new-service when a service is added (whatever the edit's shape), else the
+// edit's shape.
+func classOf(kind string, v Verdict) string {
+	switch {
+	case len(v.Human) > 0:
+		return "human"
+	case len(v.Added) > 0:
+		return "new-service"
+	}
+	return kind
+}
+
+// Class names the shape of the edit (the proposal's Kind).
 func (e Edit) Class() string {
 	switch {
 	case e.Add != nil:
@@ -51,10 +76,11 @@ type AddService struct {
 }
 
 // CreateFromEdit applies the edit in a temporary worktree on a new branch,
-// validates the result with the state loader, commits and records the inbox
-// entry. The main checkout is never touched, so a bad patch leaves nothing
-// behind. Validate is injected so this package stays free of render.
-func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Edit, validate func(dir string) error) (*Proposal, error) {
+// validates the result with the state loader, lets the judge read it
+// against main, commits and records the inbox entry. The main checkout is
+// never touched, so a bad patch leaves nothing behind. The judge is
+// injected so this package stays free of render and review.
+func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Edit, judge Judge) (*Proposal, error) {
 	if err := CommitDirty(ctx, repo, actor); err != nil {
 		return nil, err
 	}
@@ -114,9 +140,11 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		return fail(fmt.Errorf("the proposed state does not load:\n%w", err))
 	}
 	warnings := proposed.Warnings
-	if validate != nil {
-		if err := validate(wt); err != nil {
-			return fail(fmt.Errorf("the proposed state does not render: %w", err))
+	var verdict Verdict
+	if judge != nil {
+		verdict, err = judge(repo, wt)
+		if err != nil {
+			return fail(err)
 		}
 	}
 	if _, err := git(ctx, wt, "add", "-A"); err != nil {
@@ -129,7 +157,8 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings, Class: e.Class()}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings,
+		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])

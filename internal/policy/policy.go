@@ -31,10 +31,12 @@ func Allowed(p state.Policy, hand, tier string) bool {
 	return want >= 0 && have >= want
 }
 
-// NeedsHuman reports whether a tier always needs a human approval.
-// `destroy` always does (ADR 0006); others follow approvals in policy.yml.
-func NeedsHuman(p state.Policy, tier string) bool {
-	if tier == "destroy" {
+// NeedsHuman reports whether only a human may approve a proposal: `destroy`
+// always (ADR 0006), class `human` always (the content said so, #34), and
+// tiers whose approvals say `by: human` in policy.yml. The dial (Auto) is
+// laib's own delegation and is never consulted for these.
+func NeedsHuman(p state.Policy, tier, class string) bool {
+	if tier == "destroy" || class == "human" || class == "remove" {
 		return true
 	}
 	a, ok := p.Approvals[tier]
@@ -80,7 +82,10 @@ func Validate(p state.Policy) error {
 }
 
 // Auto reports whether the dial lets laib approve a proposal class itself.
-func Auto(p state.Policy, class string) bool { return p.Autonomy[class] == "auto" }
+// Never for human or remove, whatever the dial says.
+func Auto(p state.Policy, class string) bool {
+	return class != "human" && class != "remove" && p.Autonomy[class] == "auto"
+}
 
 // ConvergeOn reports whether the converge loop is enabled (default off).
 func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }

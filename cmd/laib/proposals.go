@@ -21,6 +21,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/review"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -245,35 +246,70 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		if env.mcp {
 			return fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
 		}
-		p, err = proposal.Create(ctx, env.paths.State, inboxDir(env), env.actor, reason)
+		p, err = proposal.Create(ctx, env.paths.State, inboxDir(env), env.actor, reason, judgeFor(st, env.actor))
 	} else {
-		p, err = proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, edit, func(dir string) error {
-			st, err := state.Load(dir)
-			if err != nil {
-				return err
-			}
-			_, err = render.Render(st, nil)
-			return err
-		})
+		p, err = proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, edit, judgeFor(st, env.actor))
 	}
 	if err != nil {
 		return fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
+	if policy.Auto(st.Policy, p.Class) && !policy.NeedsHuman(st.Policy, p.Tier, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
 		// The dial says laib decides this class itself: approve as laib,
 		// apply, and roll back on a red verify. A warning (a second service
-		// for one purpose) always goes to a human.
+		// for one purpose) and anything the judge named always go to a human.
 		return autoApprove(ctx, env, p)
 	}
 	if env.json {
 		return emit(env, p)
 	}
-	fmt.Printf("Vorschlag #%d angelegt (%s). Braucht Freigabe durch eine andere Hand mit Stufe apply.\n", p.ID, strings.Join(p.Files, ", "))
+	if p.Class == "human" {
+		fmt.Printf("Vorschlag #%d angelegt (%s). Nur ein Mensch kann ihn freigeben:\n", p.ID, strings.Join(p.Files, ", "))
+		for _, r := range p.Reasons {
+			fmt.Println("  -", r)
+		}
+	} else {
+		fmt.Printf("Vorschlag #%d angelegt (%s). Braucht Freigabe durch eine andere Hand mit Stufe apply.\n", p.ID, strings.Join(p.Files, ", "))
+	}
 	for _, w := range p.Warnings {
 		fmt.Println("HINWEIS:", w)
 	}
 	return exitOK
+}
+
+// judgeFor is the judge every proposal passes: the state must render, the
+// content review (internal/review) names what only a human may allow, and
+// a token for a hand above the proposer's own ceiling is refused outright
+// (#34: a template may never mint a token stronger than the hand that
+// asked for it; a human may mint anything).
+func judgeFor(st *state.State, actor string) proposal.Judge {
+	return func(base, changed string) (proposal.Verdict, error) {
+		cst, err := state.Load(changed)
+		if err != nil {
+			return proposal.Verdict{}, err
+		}
+		if _, err := render.Render(cst, nil); err != nil {
+			return proposal.Verdict{}, fmt.Errorf("the proposed state does not render: %w", err)
+		}
+		r := review.Dirs(base, changed)
+		hand := proposal.Hand(actor)
+		if hand != "human" {
+			mine := policy.Index(st.Policy.Hands[hand].Ceiling)
+			for _, h := range r.Mints {
+				if policy.Index(st.Policy.Hands[h].Ceiling) > mine || h == "human" {
+					return proposal.Verdict{}, fmt.Errorf("%s may not add a Laib token for hand %s (ceiling %s is above its own %s): a human proposes that", actor, h, st.Policy.Hands[h].Ceiling, st.Policy.Hands[hand].Ceiling)
+				}
+			}
+		}
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added}, nil
+	}
+}
+
+func reasonsSuffix(p *proposal.Proposal) string {
+	if len(p.Reasons) == 0 {
+		return ""
+	}
+	return ": " + strings.Join(p.Reasons, "; ")
 }
 
 // autoApprove is the "canary by rollback": laib merges and applies; if the
@@ -324,6 +360,15 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), p.Tier) {
 		fmt.Fprintf(os.Stderr, "laib: %s may not decide a %s-tier proposal\n", env.actor, p.Tier)
+		return exitRefused
+	}
+	if approve && proposal.Hand(env.actor) != "human" && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
+		why := strings.Join(p.Reasons, "; ")
+		if why == "" {
+			why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"
+		}
+		fmt.Fprintf(os.Stderr, "laib: %s may not approve #%d — nur ein Mensch: %s\n", env.actor, p.ID, why)
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d abgelehnt für %s: nur ein Mensch — %s", p.ID, env.actor, why)})
 		return exitRefused
 	}
 	if !approve {
@@ -410,14 +455,7 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	if reason == "" {
 		reason = "add " + add.Name
 	}
-	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, proposal.Edit{Add: add}, func(dir string) error {
-		st, err := state.Load(dir)
-		if err != nil {
-			return err
-		}
-		_, err = render.Render(st, nil)
-		return err
-	})
+	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, proposal.Edit{Add: add}, judgeFor(st, env.actor))
 	if err != nil {
 		return fail(err)
 	}
@@ -459,6 +497,12 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 	}
 	for _, p := range ps {
 		fmt.Printf("#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
+		if p.Class == "human" {
+			fmt.Println("     nur ein Mensch kann freigeben:")
+			for _, r := range p.Reasons {
+				fmt.Println("       -", r)
+			}
+		}
 	}
 	return 0
 }

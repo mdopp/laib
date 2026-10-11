@@ -45,6 +45,18 @@ and reading the result was impossible by construction.
    adds surface); remove never. Public exposure of a route is class 3
    regardless of the dial.
 
+   *Amended 2026-10-11 (#34, #60 "calm before autonomy").* The defaults
+   `laib init` ships are `values: auto`; `template-update`, `patch` and
+   `new-service`: `proposal`. And the dial never sees the content: a
+   proposal is judged by what it changes (`internal/review`, docs/DESIGN.md
+   "The content decides"); anything the review marks — a script on the
+   box, a host unit, policy.yml, secrets, a public route, a token, a host
+   folder, privileges, a foreign image, … — is class `human`: a human
+   approves it or nobody does, and the reasons are shown. A hand may not
+   add a token for a hand above its own ceiling. Class 2 ("correct, inside
+   the envelope") therefore means: correct what exists; do not grow the
+   box's surface or its trust.
+
 ## Consequences
 
 - Hands `ops` and `claude` get the ceiling `apply`; `resident` stays read.
