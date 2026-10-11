@@ -237,11 +237,19 @@ jobs:
       - name: reboot — the firewall is back in the kernel, the registry login survives, services come up (#37)
         run: |
           . ./box.sh
-          probe() { # 18080 → the box's 8080, declared lan: false by whoami: dropped on the NIC = timeout; no rule = refused at once
+          probe() { # 18080 → the box's 8080, declared lan: false by the probe service: dropped on the NIC = timeout; no rule = answered
             local rc=0; curl -s -m 6 -o /dev/null http://127.0.0.1:18080/ || rc=$?; echo "$rc"; }
+          # a service that really listens on 0.0.0.0:8080 and declares the port lan: false (whoami needs
+          # the sso role for its route; busybox httpd needs nothing): from a registry on the box
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                $L add whoami
-                sudo nft list table inet laib | grep -q 8080 || { echo "8080 is not in the ruleset"; exit 1; }'
+                R=/mnt/data/laib/registries/vm/templates/probe; mkdir -p "$R"
+                printf "name: probe\ntemplate: {registry: vm, name: probe, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports:\n  - {port: 8080, lan: false}\n" > "$R/laib.yml"
+                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
+                $L add probe
+                sudo nft list table inet laib | grep -q 8080 || { echo "8080 is not in the ruleset"; exit 1; }
+                for i in $(seq 1 20); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+                curl -fsS -o /dev/null http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
           rc=$(probe); echo "probe with the ruleset: curl rc $rc"; [ "$rc" = 28 ] || { echo "a lan: false port answered through the NIC"; exit 1; }
           $SSH 'sudo nft delete table inet laib'
           rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
@@ -258,12 +266,14 @@ jobs:
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
                 grep -q "\"firewall\":\"geladen\"" /tmp/ready.json
                 grep -q "\"state\":\"bereit\"" /tmp/ready.json || { echo "not bereit after the reboot"; exit 1; }
-                systemctl --user is-active caddy.service whoami.service
+                systemctl --user is-active caddy.service probe.service
                 podman image rm -f ghcr.io/mdopp/laib-caddy:2 >/dev/null 2>&1 || true
                 podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null || { echo "a private image cannot be pulled after the reboot: the login did not survive"; exit 1; }
                 echo "private image pulled after the reboot with the kept login"
-                $L remove whoami >/dev/null'
+                echo "services up after the reboot"'
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
+
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
