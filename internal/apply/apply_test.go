@@ -211,3 +211,17 @@ func TestPodServiceRestartsThePodUnitOnly(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// A role holder's rendered files (authelia/*.yml, the Caddyfile, the
+// rewrites) belong to no quadlet service, but their change is the role
+// holder's business: its pre-start must run again — Authelia's
+// configuration.yml carries the OIDC block only once a client exists
+// (#36, VM run 38161974424).
+func TestHookTargetsIncludeRoleHoldersOfChangedRenderFiles(t *testing.T) {
+	st := &state.State{Box: state.Box{Roles: state.Roles{Proxy: "caddy", SSO: "auth", DNS: "adguard"}}}
+	p := &plan.Plan{Services: []string{"whoami"}, Changes: []plan.Change{{Path: "authelia/laib-clients.yml"}, {Path: "quadlet/whoami/whoami.container"}}}
+	got := hookTargets(st, p)
+	if len(got) != 2 || got[0] != "whoami" || got[1] != "auth" {
+		t.Fatalf("%v", got)
+	}
+}
