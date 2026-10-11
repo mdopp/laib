@@ -138,11 +138,20 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	for _, unit := range unitsOf(st, only) {
 		sysd.Stop(ctx, unit)
 	}
-	incl := []string{"restore", snapshot, "--target", "/"}
+	// One restore per path, straight into the path (restic's snapshot:subfolder
+	// form): a restore with --target / would also try to chown the parents,
+	// and on CoreOS /mnt is part of the immutable root (lchown: read-only).
+	var outs []string
+	err = nil
 	for _, p := range paths {
-		incl = append(incl, "--include", p)
+		var out string
+		out, err = resticRun(ctx, st, pw, "restore", snapshot+":"+p, "--target", p)
+		outs = append(outs, out)
+		if err != nil {
+			break
+		}
 	}
-	out, err := resticRun(ctx, st, pw, incl...)
+	out := strings.Join(outs, "\n")
 	entry := journal.Entry{Actor: env.actor, Verb: "restore", Service: only, Reason: snapshot, Detail: tail(out, 400)}
 	if err != nil {
 		entry.Result = "red"

@@ -117,8 +117,9 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
 		}
 	}
-	// Disk pressure on the data dir and the system root.
-	for _, path := range uniq([]string{st.Box.DataDir, "/"}) {
+	// Disk pressure on the data dir and the system's writable root (/var: on
+	// CoreOS / is the immutable, "full" composefs and would always read red).
+	for _, path := range uniq([]string{st.Box.DataDir, "/var"}) {
 		var fs syscall.Statfs_t
 		if err := syscall.Statfs(path, &fs); err != nil {
 			continue
