@@ -31,6 +31,7 @@ type Proposal struct {
 	Files     []string  `json:"files"`
 	Warnings  []string  `json:"warnings,omitempty"` // e.g. a second service for one purpose
 	Class     string    `json:"class"`              // tree | values | new-service | template-update | patch
+	Reasons   []string  `json:"reasons,omitempty"`
 }
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
