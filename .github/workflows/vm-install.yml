@@ -51,16 +51,18 @@ jobs:
           df -h / | tail -1
           cat > vm.sh <<'EOF'
           #!/usr/bin/env bash
-          # $1 = boot order (cd: disk first; d: the stick first = reinstall)
+          # $1 = qemu -boot argument: order=cd (disk first, empty disk falls through to the stick),
+          # once=d (the stick once = reinstall; without "once" the VM would reinstall forever,
+          # the job the EFI post-install step does on real hardware)
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
             -pidfile qemu.pid -serial file:serial.log \
             -drive file=disk.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
             -drive file=data1.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
             -drive file=data2.qcow2,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap \
-            -cdrom laib-vm.iso -boot order=$1 \
+            -cdrom laib-vm.iso -boot $1 \
             -nic user,model=virtio,hostfwd=tcp::2222-:22
           EOF
-          chmod +x vm.sh; ./vm.sh cd
+          chmod +x vm.sh; ./vm.sh order=cd
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
             if $SSH 'curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "ready after $((i*10)) s"; break; fi
@@ -96,7 +98,7 @@ jobs:
       - name: reinstall from the stick — the data disk survives
         run: |
           sudo kill "$(cat qemu.pid)"; sleep 3
-          ./vm.sh d
+          ./vm.sh once=d
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
             if $SSH 'test -f /var/opt/laib/laib && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled and ready after $((i*10)) s"; break; fi
