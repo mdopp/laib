@@ -50,13 +50,17 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
           echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
           ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --out laib-vm.iso
-          ls -la laib-vm.iso
+          # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box
+          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --reinstall --out laib-vm-reinstall.iso
+          ls -la laib-vm.iso laib-vm-reinstall.iso
       - name: cross-check with coreos-installer, serial console for the log
         run: |
           CI_IMG=quay.io/coreos/coreos-installer:release
           podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso ignition show laib-vm.iso > live.ign
           python3 -c "import json; d=json.load(open('live.ign')); print('units:', [u['name'] for u in d['systemd']['units']]); print('files:', [f['path'] for f in d['storage']['files']])"
-          podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso kargs modify -a console=ttyS0,115200n8 laib-vm.iso
+          for iso in laib-vm.iso laib-vm-reinstall.iso; do
+            podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso kargs modify -a console=ttyS0,115200n8 "$iso"
+          done
       - name: boot, install, reboot, first boot — of this commit
         run: |
           # three disks: the OS goes to the smallest (pre-install), the largest
@@ -85,7 +89,7 @@ jobs:
           done
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
             -pidfile qemu.pid -serial file:serial.log "${drives[@]}" \
-            -cdrom laib-vm.iso -boot $1 \
+            -cdrom "${ISO:-laib-vm.iso}" -boot $1 \
             -nic user,model=virtio,hostfwd=tcp::2222-:22
           EOF
           # a clean power-off (QEMU gone), and waiting for laib after a boot
@@ -149,10 +153,29 @@ jobs:
                 [ "$(sudo blkid -s TYPE -o value "$dev")" = ext4 ] || { echo "the foreign disk is no longer ext4"; exit 1; }
                 echo "foreign disk $dev: still ext4, label backup"'
           marker
-      - name: reinstall from the stick — the data disk survives, the foreign disk too
+      - name: a stick left in an installed box does nothing — the plain stick refuses
+        run: |
+          . ./box.sh
+          sudo kill "$(cat qemu.pid)"; sleep 3
+          # the plain stick, booted on purpose (as a USB-first firmware would): it must stop before any disk is touched
+          DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
+          for i in $(seq 1 60); do grep -aq "Diese Box ist schon installiert" serial.log && break; sleep 5; done
+          grep -a "Diese Box ist schon installiert" serial.log | tail -1 || { echo "the plain stick did not refuse an installed box"; tail -c 4000 serial.log; exit 1; }
+          sleep 20   # time for a wrong install to start, if one would
+          sudo kill "$(cat qemu.pid)"; sleep 3
+          DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c
+          ready
+          $SSH 'set -euo pipefail
+                v=$(/var/opt/laib/laib version); [ "$v" = "laib '"${GITHUB_SHA::7}"'" ] || { echo "the box changed: $v"; exit 1; }
+                boots=$(journalctl --list-boots --no-pager | wc -l); echo "boots in the journal: $boots"
+                [ "$boots" -ge 2 ] || { echo "the journal starts over: the box was reinstalled"; exit 1; }
+                test -f /mnt/data/laib/vm-marker || { echo "the data is gone"; exit 1; }
+                echo "the plain stick left the installed box alone"'
+          marker
+      - name: reinstall from a --reinstall stick — the data disk survives, the foreign disk too
         run: |
           sudo kill "$(cat qemu.pid)"; sleep 3
-          DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
+          ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled and ready after $((i*10)) s"; break; fi
