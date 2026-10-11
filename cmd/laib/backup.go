@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -130,6 +131,23 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		if len(paths) == 0 {
 			return fail(fmt.Errorf("%s declares no data paths to restore", only))
 		}
+	}
+	// "latest" means the latest regular backup (tag laib), resolved before the
+	// pre-restore snapshot below exists — otherwise latest would be that one,
+	// the state just before the restore, and nothing would change (VM run 25).
+	if snapshot == "latest" {
+		out, err := resticRun(ctx, st, pw, "snapshots", "--json", "--tag", "laib", "--latest", "1")
+		if err != nil {
+			return fail(err)
+		}
+		var snaps []struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal([]byte(out[max(strings.IndexAny(out, "["), 0):]), &snaps); err != nil || len(snaps) == 0 {
+			return fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
+		}
+		snapshot = snaps[0].ID[:8]
+		fmt.Printf("latest = %s\n", snapshot)
 	}
 	// What is there now goes into the repo first, so a restore is reversible.
 	if _, err := resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-restore"}, paths...)...); err != nil {
