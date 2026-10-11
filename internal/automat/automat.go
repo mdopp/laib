@@ -8,14 +8,18 @@ package automat
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mdopp/laib/internal/mcpserver"
@@ -32,6 +36,71 @@ type Config struct {
 type client struct {
 	cfg  Config
 	http *http.Client
+
+	mu      sync.Mutex
+	pending map[string]pendingChange // confirmation code → what will happen
+}
+
+// pendingChange is a write or a delete waiting for its code (#48): the
+// model shows it, the person confirms, only then does Home Assistant change.
+type pendingChange struct {
+	Kind    string // write | delete
+	ID      string
+	Alias   string
+	Config  map[string]any
+	Created time.Time
+}
+
+// newCode is four digits the person repeats back.
+func newCode() string {
+	var b [2]byte
+	rand.Read(b[:])
+	return fmt.Sprintf("%04d", (int(b[0])<<8|int(b[1]))%10000)
+}
+
+func (c *client) keep(kind, id, alias string, cfg map[string]any) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.pending == nil {
+		c.pending = map[string]pendingChange{}
+	}
+	for code, p := range c.pending {
+		if time.Since(p.Created) > 10*time.Minute {
+			delete(c.pending, code)
+		}
+	}
+	code := newCode()
+	for c.pending[code].ID != "" {
+		code = newCode()
+	}
+	c.pending[code] = pendingChange{Kind: kind, ID: id, Alias: alias, Config: cfg, Created: time.Now()}
+	return code
+}
+
+func (c *client) take(code string) (pendingChange, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	p, ok := c.pending[code]
+	if ok {
+		delete(c.pending, code)
+	}
+	if ok && time.Since(p.Created) > 10*time.Minute {
+		return pendingChange{}, false
+	}
+	return p, ok
+}
+
+// trash keeps a deleted automation's config for restore.
+func (c *client) trash(id string, cfg map[string]any) error {
+	if c.cfg.Data == "" {
+		return nil
+	}
+	dir := filepath.Join(c.cfg.Data, "geloescht")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	y, _ := yaml.Marshal(cfg)
+	return os.WriteFile(filepath.Join(dir, id+".yaml"), y, 0o644)
 }
 
 func (c *client) do(ctx context.Context, method, path string, body any) ([]byte, int, error) {
@@ -106,7 +175,7 @@ func Server(cfg Config, version string) *mcpserver.Server {
 	}
 	return &mcpserver.Server{
 		Name: "automat", Version: version,
-		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, löschen. Vor dem Schreiben: Entitäten mit `entitaeten` nachschlagen, die Automation als YAML zeigen und bestätigen lassen. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung.",
+		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, löschen. Schreiben und Löschen passieren nie sofort: die Antwort nennt einen vierstelligen Code; zeige der Person, was passieren würde, und rufe automation_bestaetigen erst, wenn sie den Code genannt hat. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung.",
 		Tools: []mcpserver.Tool{
 			{Name: "entitaeten", Description: "Entitäten von Home Assistant: id, Name, Zustand. Filter: domain (light, switch, media_player, binary_sensor, person …) und/oder suche (Teil des Namens oder der id).",
 				Schema: obj(map[string]any{"domain": map[string]any{"type": "string"}, "suche": map[string]any{"type": "string"}}),
@@ -209,6 +278,77 @@ func Server(cfg Config, version string) *mcpserver.Server {
 						cfg["description"] = strings.TrimSpace("laib: über den Boten angelegt. " + desc)
 					}
 					cfg["id"] = id
+					code := c.keep("write", id, alias, cfg)
+					y, _ := yaml.Marshal(cfg)
+					return fmt.Sprintf("Vorgemerkt, noch nicht geschrieben: %s (%s). Das wird angelegt:\n%s\nZum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", alias, id, string(y), code), nil
+				}},
+			{Name: "automation_loeschen", Description: "Automation löschen (id). Wird erst mit dem Code ausgeführt, den diese Antwort nennt; die alte Automation bleibt zum Wiederherstellen aufgehoben.",
+				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
+				Call: func(ctx context.Context, a map[string]any) (string, error) {
+					id := str(a, "id")
+					if !idRe.MatchString(id) {
+						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+					}
+					b, code, err := c.do(ctx, "GET", "/api/config/automation/config/"+url.PathEscape(id), nil)
+					if err != nil {
+						return "", err
+					}
+					if code == 404 {
+						return "", fmt.Errorf("keine Automation %s", id)
+					}
+					var cfg map[string]any
+					json.Unmarshal(b, &cfg)
+					alias, _ := cfg["alias"].(string)
+					conf := c.keep("delete", id, alias, cfg)
+					return fmt.Sprintf("Vorgemerkt, noch nicht gelöscht: %s (%s). Zum Löschen den Code %s bestätigen (automation_bestaetigen); automation_wiederherstellen %s holt sie danach zurück.", alias, id, conf, id), nil
+				}},
+			{Name: "automation_bestaetigen", Description: "Führt eine vorgemerkte Änderung aus: der vierstellige Code aus der Antwort von automation_schreiben oder automation_loeschen, wie die Person ihn bestätigt hat.",
+				Schema: obj(map[string]any{"code": map[string]any{"type": "string"}}, "code"),
+				Call: func(ctx context.Context, a map[string]any) (string, error) {
+					p, ok := c.take(str(a, "code"))
+					if !ok {
+						return "", fmt.Errorf("kein vorgemerkter Vorgang mit diesem Code (oder älter als zehn Minuten)")
+					}
+					switch p.Kind {
+					case "write":
+						b, code, err := c.do(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(p.ID), p.Config)
+						if err != nil {
+							return "", err
+						}
+						if code != 200 {
+							return "", fmt.Errorf("home assistant: %d %s", code, string(b))
+						}
+						return fmt.Sprintf("geschrieben: %s (%s) — automation.%s", p.Alias, p.ID, p.ID), nil
+					case "delete":
+						if err := c.trash(p.ID, p.Config); err != nil {
+							return "", fmt.Errorf("aufheben vor dem Löschen: %w", err)
+						}
+						b, code, err := c.do(ctx, "DELETE", "/api/config/automation/config/"+url.PathEscape(p.ID), nil)
+						if err != nil {
+							return "", err
+						}
+						if code != 200 {
+							return "", fmt.Errorf("home assistant: %d %s", code, string(b))
+						}
+						return fmt.Sprintf("gelöscht: %s (%s); automation_wiederherstellen %s holt sie zurück", p.Alias, p.ID, p.ID), nil
+					}
+					return "", fmt.Errorf("unbekannter Vorgang")
+				}},
+			{Name: "automation_wiederherstellen", Description: "Holt eine gelöschte Automation zurück (id).",
+				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
+				Call: func(ctx context.Context, a map[string]any) (string, error) {
+					id := str(a, "id")
+					if !idRe.MatchString(id) || c.cfg.Data == "" {
+						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+					}
+					y, err := os.ReadFile(filepath.Join(c.cfg.Data, "geloescht", id+".yaml"))
+					if err != nil {
+						return "", fmt.Errorf("nichts Aufgehobenes für %s", id)
+					}
+					var cfg map[string]any
+					if err := yaml.Unmarshal(y, &cfg); err != nil {
+						return "", err
+					}
 					b, code, err := c.do(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(id), cfg)
 					if err != nil {
 						return "", err
@@ -216,23 +356,7 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					if code != 200 {
 						return "", fmt.Errorf("home assistant: %d %s", code, string(b))
 					}
-					return fmt.Sprintf("geschrieben: %s (%s) — automation.%s", alias, id, id), nil
-				}},
-			{Name: "automation_loeschen", Description: "Automation löschen (id). Bestätigen lassen.",
-				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
-				Call: func(ctx context.Context, a map[string]any) (string, error) {
-					id := str(a, "id")
-					if !idRe.MatchString(id) {
-						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
-					}
-					b, code, err := c.do(ctx, "DELETE", "/api/config/automation/config/"+url.PathEscape(id), nil)
-					if err != nil {
-						return "", err
-					}
-					if code != 200 {
-						return "", fmt.Errorf("home assistant: %d %s", code, string(b))
-					}
-					return "gelöscht: " + id, nil
+					return "wiederhergestellt: " + id, nil
 				}},
 			{Name: "automation_schalten", Description: "Automation an- oder ausschalten (entity_id automation.<id>, an: true/false).",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}, "an": map[string]any{"type": "boolean"}}, "id", "an"),

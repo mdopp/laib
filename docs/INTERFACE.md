@@ -175,3 +175,12 @@ the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
 tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
 diag` turns the last four into findings. An enabled operator that does
 nothing is never silent.
+
+### Hands with a verb list, and the approver
+
+`policy.yml` may limit a hand to a few verbs (`verbs: [approve, reject,
+inbox, status, note]`) and mark it `human: true`, so its verdicts count as
+a human's. `laib init` ships the `approver` hand with exactly that: the
+Signal relay's token (#48) — it can decide and nothing else, and it acts
+only on the admin's verified number. Over MCP the tool list and every call
+honour the verb list.

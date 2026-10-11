@@ -13,3 +13,6 @@ FRAGE_URL: http://host.containers.internal:8710/v1          # Frage as an OpenAI
 HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `haus` tool (only used when BOTE_HA_TOKEN is set)
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_HA_TOKEN
 HA_TOKEN: {secret: BOTE_HA_TOKEN}
+RELAY_IMAGE: ghcr.io/mdopp/laib-relay:latest      # the approval relay (#48)
+APPROVER_TOKEN: {secret: BOTE_APPROVER_TOKEN}
+LAIB_MCP_URL: http://host.containers.internal:5900/mcp

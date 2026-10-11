@@ -362,7 +362,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		fmt.Fprintf(os.Stderr, "laib: %s may not decide a %s-tier proposal\n", env.actor, p.Tier)
 		return exitRefused
 	}
-	if approve && proposal.Hand(env.actor) != "human" && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
+	if approve && !policy.IsHuman(st.Policy, proposal.Hand(env.actor)) && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
 		why := strings.Join(p.Reasons, "; ")
 		if why == "" {
 			why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"

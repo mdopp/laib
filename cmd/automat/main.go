@@ -22,7 +22,7 @@ func env(k, def string) string {
 }
 
 func main() {
-	cfg := automat.Config{HAURL: env("HA_URL", "http://host.containers.internal:8123"), Token: os.Getenv("HA_TOKEN")}
+	cfg := automat.Config{HAURL: env("HA_URL", "http://host.containers.internal:8123"), Token: os.Getenv("HA_TOKEN"), Data: env("AUTOMAT_DATA", "/data")}
 	if cfg.Token == "" {
 		log.Fatal("automat: HA_TOKEN is required")
 	}

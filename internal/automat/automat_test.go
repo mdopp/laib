@@ -71,9 +71,9 @@ func text(res map[string]any) (string, bool) {
 func TestToolsRoundTrip(t *testing.T) {
 	ha, store := fakeHA(t)
 	defer ha.Close()
-	h := Server(Config{HAURL: ha.URL, Token: "tok"}, "test").Handler()
+	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir()}, "test").Handler()
 
-	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 6 {
+	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 8 {
 		t.Fatalf("tools: %v", res)
 	}
 	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "entitaeten", "arguments": map[string]any{"domain": "light"}}))
@@ -88,6 +88,9 @@ func TestToolsRoundTrip(t *testing.T) {
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_schreiben", "arguments": map[string]any{"yaml": y}}))
 	if isErr || !strings.Contains(out, "flur_licht_aus") {
 		t.Fatalf("schreiben: %q %v", out, isErr)
+	}
+	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr {
+		t.Fatalf("bestaetigen: %q", out)
 	}
 	cfg := store["flur_licht_aus"]
 	if cfg["id"] != "flur_licht_aus" || !strings.Contains(cfg["description"].(string), "laib:") || cfg["alias"] != "Flur Licht aus" {
@@ -107,8 +110,11 @@ func TestToolsRoundTrip(t *testing.T) {
 		t.Fatal("a path-like id was accepted")
 	}
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_loeschen", "arguments": map[string]any{"id": "flur_licht_aus"}}))
-	if isErr || store["flur_licht_aus"] != nil {
-		t.Fatalf("loeschen: %q %v", out, store)
+	if isErr || store["flur_licht_aus"] == nil {
+		t.Fatalf("loeschen must wait for the code: %q %v", out, store)
+	}
+	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("confirmed delete: %q %v", out, store)
 	}
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": false}}))
 	if isErr || !strings.Contains(out, "turn_off") {
