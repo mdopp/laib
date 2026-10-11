@@ -98,3 +98,50 @@ esac`)
 		t.Fatalf("the log line should say 1 of 2 members: %s", out)
 	}
 }
+
+// The other face of the same race: udev has already added the member, the
+// array sits INACTIVE in /proc/mdstat, `mdadm --detail --scan` does not list
+// it and `--assemble` fails because the member is busy. The script must
+// start the inactive array it sees in /proc/mdstat and carry on.
+func TestDataDiskStartsAnArrayUdevHoldsInactive(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
+	root := t.TempDir()
+	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
+	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
+		os.MkdirAll(d, 0o755)
+	}
+	os.WriteFile(filepath.Join(etc, "laib/data-disk"), []byte("DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n"), 0o644)
+	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("inactive\n"), 0o644)
+	mdstat := filepath.Join(root, "mdstat")
+	os.WriteFile(mdstat, []byte("Personalities : [raid1]\nmd127 : inactive vdb1[0](S)\n      9426880 blocks super 1.2\n\nunused devices: <none>\n"), 0o644)
+	log := filepath.Join(root, "shim.log")
+	shim(t, bin, "mdadm", `case "$*" in
+  "--detail --scan") grep -q active "$LAIB_SYS/block/md127/md/array_state" && echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
+  "--run /dev/md127") echo active > "$LAIB_SYS/block/md127/md/array_state"; printf 'Personalities : [raid1]\nmd127 : active raid1 vdb1[0]\n      9426880 blocks super 1.2 [2/1] [U_]\n' > "$LAIB_MDSTAT";;
+  --assemble*) echo "mdadm: /dev/vdb1 is busy - skipping" >&2; exit 1;;
+  "--detail /dev/md127") grep -q active "$LAIB_SYS/block/md127/md/array_state" && echo "     Active Devices : 1" || exit 1;;
+esac`)
+	shim(t, bin, "blkid", `grep -q active "$LAIB_SYS/block/md127/md/array_state" || exit 2; echo 1234-fs-uuid`)
+	shim(t, bin, "mount", `grep -q active "$LAIB_SYS/block/md127/md/array_state" || exit 32; echo mounted > "$LAIB_MP/.mounted"`)
+	shim(t, bin, "findmnt", `test -f "$LAIB_MP/.mounted"`)
+	shim(t, bin, "readlink", `echo "${@: -1}"`)
+	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep"} {
+		shim(t, bin, n, "exit 0")
+	}
+	sh := filepath.Join(root, "laib-data-disk.sh")
+	os.WriteFile(sh, []byte(script), 0o755)
+	cmd := exec.Command("bash", sh)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp, "LAIB_MDSTAT="+mdstat)
+	out, err := cmd.CombinedOutput()
+	logged, _ := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
+	}
+	if !strings.Contains(string(logged), "mdadm --run /dev/md127") || !strings.Contains(string(out), "1 of 2 member(s) active") {
+		t.Fatalf("the udev-held array was not started:\n%s\n%s", logged, out)
+	}
+}
