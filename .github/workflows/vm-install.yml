@@ -112,6 +112,9 @@ jobs:
       - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the reinstall brought the release's binaries back: this commit's again
+          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
+          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
           # the job token may read this repo's packages; a box uses a PAT with packages:read or public packages
           $SSH "printf '%s' '${{ github.token }}' | podman login ghcr.io -u '${{ github.actor }}' --password-stdin && podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null && echo 'image pulled'"
           $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
