@@ -93,3 +93,9 @@ func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
 // ConvergeBudget is how many converge applies per hour are allowed before
 // laib stops and asks a human: a flapping service is a bug, not a chore.
 const ConvergeBudget = 3
+
+// MayVerb: not written yet — hands_test.go describes it (#48).
+func MayVerb(p state.Policy, hand, verb string) bool { _, ok := p.Hands[hand]; return ok }
+
+// IsHuman: not written yet (#48).
+func IsHuman(p state.Policy, hand string) bool { return hand == "human" }

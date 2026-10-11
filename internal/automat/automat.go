@@ -26,6 +26,7 @@ import (
 type Config struct {
 	HAURL string // http://host.containers.internal:8123
 	Token string // long-lived access token
+	Data  string // where deleted automations are kept for restore (#48)
 }
 
 type client struct {

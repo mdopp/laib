@@ -121,8 +121,10 @@ type Policy struct {
 
 // Hand is one agent identity.
 type Hand struct {
-	Ceiling string `yaml:"ceiling"`
-	TTL     string `yaml:"ttl"`
+	Ceiling string   `yaml:"ceiling"`
+	TTL     string   `yaml:"ttl"`
+	Verbs   []string `yaml:"verbs"` // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
+	Human   bool     `yaml:"human"` // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
 }
 
 // Approval says who may approve a tier.
