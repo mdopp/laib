@@ -38,6 +38,10 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 			return runGit(t, args...)
 		case strings.Contains(line, "is-active"):
 			return "active", nil
+		case strings.Contains(line, "daemon-reload"):
+			if len(Pending(paths)) == 0 {
+				t.Error("the pending-activation marker must exist while files are written and not yet activated (#39)")
+			}
 		}
 		return "", nil
 	}
@@ -55,6 +59,9 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 	}
 	if !res.Green || res.Commit == "" {
 		t.Fatalf("%+v", res)
+	}
+	if len(Pending(paths)) != 0 {
+		t.Fatal("the pending marker must be cleared once verify ran (#39)")
 	}
 	if res.NewSecrets["WHOAMI_API"] != "abc123" {
 		t.Fatalf("hook secret not captured: %+v", res.NewSecrets)
