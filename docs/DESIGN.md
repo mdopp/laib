@@ -138,7 +138,9 @@ there. Laib does that in two halves, because the two need different
 guarantees.
 
 **Mechanical, always on.** `laib converge` runs every ten minutes and after
-boot (`autonomy.converge: on`): it re-applies files that drifted and
+boot (`autonomy.converge: on`), under the one lock every mutating verb
+holds (a tick beside a restore is skipped, #39), and it leaves paused
+services alone (`laib pause`): it re-applies files that drifted and
 restarts units that are not active, toward the state repo and never from
 the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per

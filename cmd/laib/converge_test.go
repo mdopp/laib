@@ -53,6 +53,8 @@ func newCbox(t *testing.T) *cbox {
 				return "inactive", nil
 			}
 			return "active", nil
+		case strings.Contains(line, "systemctl --user restart "):
+			delete(c.down, args[len(args)-1]) // a restarted unit comes up
 		case strings.Contains(line, "systemctl --user stop") && c.onStop != nil:
 			c.onStop()
 		case strings.Contains(line, "nft list table"):
@@ -63,7 +65,14 @@ func newCbox(t *testing.T) *cbox {
 	if rc := cmdInit(context.Background(), c.env, []string{"--domain", "e2e.home", "--data-dir", filepath.Join(home, "data")}); rc != exitOK {
 		t.Fatalf("init rc %d", rc)
 	}
-	copyDir(t, filepath.Join("..", "..", "testdata", "golden", "basic", "state", "services"), filepath.Join(paths.State, "services"))
+	golden := filepath.Join("..", "..", "testdata", "golden", "basic", "state")
+	copyDir(t, filepath.Join(golden, "services"), filepath.Join(paths.State, "services"))
+	// the golden box.yml (roles, carve-out) with this box's data dir, as scripts/e2e.sh does
+	for _, f := range []string{"box.yml", "policy.yml"} {
+		b, _ := os.ReadFile(filepath.Join(golden, f))
+		text := regexp.MustCompile(`(?m)^dataDir: .*$`).ReplaceAllString(string(b), "dataDir: "+filepath.Join(home, "data"))
+		os.WriteFile(filepath.Join(paths.State, f), []byte(text), 0o644)
+	}
 	// nothing listens here: no HTTP health probes
 	files, _ := filepath.Glob(filepath.Join(paths.State, "services", "*", "laib.yml"))
 	for _, f := range files {
@@ -191,12 +200,14 @@ func TestRestartOnlyConvergeRunsCountAgainstTheBudget(t *testing.T) {
 	c.down["whoami.service"] = true
 	for i := 0; i < 3; i++ {
 		c.calls = nil
+		c.down["whoami.service"] = true // down again: a flapping unit
 		cmdConverge(context.Background(), c.env, []string{"--force"})
 		if len(c.restarts()) == 0 {
 			t.Fatalf("run %d did not restart", i+1)
 		}
 	}
 	c.calls = nil
+	c.down["whoami.service"] = true
 	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != exitRed {
 		t.Fatalf("the fourth restart-only run must exhaust the budget: rc %d", rc)
 	}
@@ -247,7 +258,7 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 	if !strings.Contains(string(b), "backup:") {
 		t.Fatal("init writes a backup repo")
 	}
-	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "whoami"}); rc != exitOK {
+	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != exitOK { // caddy declares a data path
 		t.Fatalf("restore rc %d", rc)
 	}
 	if len(lockedAtStop) == 0 {

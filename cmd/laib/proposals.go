@@ -31,15 +31,33 @@ func inboxDir(env *cliEnv) string { return env.paths.Home + "/inbox" }
 // runApply is the apply mechanics after the policy check: lock, secrets,
 // plan, apply, journal. Used by `laib apply` and by an approval.
 func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason string) int {
-	unlock, err := apply.Lock(env.paths, "apply:"+env.actor)
-	if errors.Is(err, apply.ErrLocked) {
-		fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
-		return exitLocked
-	}
-	if err != nil {
-		return fail(err)
+	unlock, code := takeLock(env, st, "apply")
+	if code != exitOK {
+		return code
 	}
 	defer unlock()
+	return applyHeld(ctx, env, st, only, reason)
+}
+
+// takeLock takes the one lock (#39) for a verb; a stale lock (its process
+// gone) is taken over with a journal line, a live one refuses with exitLocked.
+func takeLock(env *cliEnv, st *state.State, verb string) (func(), int) {
+	unlock, stale, err := apply.Lock(env.paths, verb+":"+env.actor)
+	if errors.Is(err, apply.ErrLocked) {
+		fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
+		return nil, exitLocked
+	}
+	if err != nil {
+		return nil, fail(err)
+	}
+	if stale != "" {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: verb, Result: "info", Detail: "Sperre übernommen: " + stale + " (Prozess weg)"})
+	}
+	return unlock, exitOK
+}
+
+// applyHeld is apply under a lock the caller holds.
+func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason string) int {
 
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
@@ -94,23 +112,26 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 	if err != nil {
 		return fail(err)
 	}
-	return runApplyPlan(ctx, env, st, p, sec, reason, "apply")
+	return runApplyPlan(ctx, env, st, p, sec, reason, "apply", true)
 }
 
 // runApplyPlan applies a computed plan under the lock the caller holds (or
 // takes it when none is held), journals as `verb`, stores hook secrets.
-func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Plan, sec map[string]string, reason, verb string) int {
+func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Plan, sec map[string]string, reason, verb string, held bool) int {
 	only := p.Only
-	if apply.LockHolder(env.paths) == "" {
-		unlock, err := apply.Lock(env.paths, verb+":"+env.actor)
-		if errors.Is(err, apply.ErrLocked) {
-			fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
-			return exitLocked
-		}
-		if err != nil {
-			return fail(err)
+	if !held {
+		unlock, code := takeLock(env, st, verb)
+		if code != exitOK {
+			return code
 		}
 		defer unlock()
+	}
+	// an apply killed between write and restart (#39): its services are
+	// restarted and verified now, even with a clean file diff
+	for _, name := range apply.Pending(env.paths) {
+		if _, ok := st.Services[name]; ok && !has(p.Services, name) {
+			p.Services = append(p.Services, name)
+		}
 	}
 	start := time.Now()
 	res, err := apply.Run(ctx, st, p, env.paths, sec, reason)
@@ -141,6 +162,9 @@ func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Pla
 	}
 	if p.Empty() && res.Green {
 		entry.Result, entry.Detail = "info", "no change"
+		if len(res.Restarted) > 0 { // a restart-only run is a run: it counts against converge's budget (#39)
+			entry.Result, entry.Detail = "green", "neu gestartet: "+strings.Join(res.Restarted, ", ")
+		}
 	}
 	record(env, st, entry)
 	if env.json {
@@ -281,6 +305,11 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 // carries both so the human sees what was tried.
 func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 	laibEnv := &cliEnv{paths: env.paths, json: env.json, actor: "laib", in: env.in, mcp: env.mcp}
+	unlock, code := takeLock(laibEnv, nil, "approve")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
 	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, "laib"); err != nil {
 		return fail(err)
 	}
@@ -289,7 +318,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 		return fail(err)
 	}
 	record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
-	code := runApply(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
+	code = applyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
 	if code == exitRed {
 		if out, err := sysd.Run(ctx, "git", "-C", env.paths.State, "-c", "user.name=laib", "-c", "user.email=laib@localhost", "revert", "--no-edit", "-m", "1", "HEAD"); err != nil {
 			record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + out})
@@ -300,7 +329,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 		if err != nil {
 			return fail(err)
 		}
-		runApply(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
+		applyHeld(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
 		return exitRed
 	}
 	return code
@@ -334,6 +363,11 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		fmt.Printf("Vorschlag #%d abgelehnt.\n", p.ID)
 		return exitOK
 	}
+	unlock, code := takeLock(env, st, "approve")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
 	if err := proposal.Approve(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(os.Stderr, "laib:", err)
@@ -347,7 +381,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	if err != nil {
 		return fail(err)
 	}
-	return runApply(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
+	return applyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
 }
 
 func cmdApprove(ctx context.Context, env *cliEnv, args []string) int {

@@ -18,12 +18,12 @@ func TestLockTakesOverAStaleLock(t *testing.T) {
 	if LockHolder(paths) != "" {
 		t.Fatal("a stale lock must not restrict readiness")
 	}
-	unlock, err := Lock(paths, "human:core")
+	unlock, _, err := Lock(paths, "human:core")
 	if err != nil {
 		t.Fatalf("stale lock not taken over: %v", err)
 	}
 	defer unlock()
-	if _, err := Lock(paths, "ops"); err != ErrLocked {
+	if _, _, err := Lock(paths, "ops"); err != ErrLocked {
 		t.Fatalf("a live lock must still refuse: %v", err)
 	}
 	if h := LockHolder(paths); h == "" || h == "human:core pid 999999999" {

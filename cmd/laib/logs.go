@@ -75,6 +75,11 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(fmt.Errorf("unknown commit %s: %s", commit, subject))
 	}
+	unlock, code := takeLock(env, st, "rollback")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
 	if out, err := sysd.Run(ctx, "git", "-C", env.paths.State, "-c", "user.name=laib", "-c", "user.email=laib@localhost", "revert", "--no-edit", commit); err != nil {
 		return fail(fmt.Errorf("revert: %s", out))
 	}
@@ -83,7 +88,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	return runApply(ctx, env, st, "", "rollback "+subject)
+	return applyHeld(ctx, env, st, "", "rollback "+subject)
 }
 
 var _ = time.Now

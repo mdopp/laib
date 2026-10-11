@@ -37,6 +37,11 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
 		}
 	}
+	unlock, code := takeLock(env, st, "remove")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
 	for _, unit := range svc.UnitNames() {
 		sysd.Stop(ctx, unit)
 	}
@@ -56,7 +61,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
 	}
-	code := runApply(ctx, env, st2, "", "remove "+name)
+	code = applyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {
 		fmt.Printf("Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
 	}

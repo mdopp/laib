@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -149,6 +150,17 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		snapshot = snaps[0].ID[:8]
 		fmt.Printf("latest = %s\n", snapshot)
 	}
+	// the one lock from here to the final verify, and a pause so a converge
+	// that outlives a killed restore does not restart on half-written data (#39)
+	unlock, code := takeLock(env, st, "restore")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
+	if only != "" {
+		apply.WritePause(env.paths, apply.Pause{Service: only, By: "restore:" + env.actor, Until: time.Now().Add(2 * time.Hour).UTC(), Reason: "restore " + snapshot})
+		defer apply.Resume(env.paths, only)
+	}
 	// What is there now goes into the repo first, so a restore is reversible.
 	if _, err := resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-restore"}, paths...)...); err != nil {
 		return fail(err)
@@ -182,7 +194,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	return runApply(ctx, env, st, only, "restore "+snapshot)
+	return applyHeld(ctx, env, st, only, "restore "+snapshot)
 }
 
 func unitsOf(st *state.State, only string) []string {

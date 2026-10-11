@@ -94,11 +94,11 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 
 func TestLockIsExclusive(t *testing.T) {
 	paths := boxfs.Paths{Lock: filepath.Join(t.TempDir(), "lock")}
-	unlock, err := Lock(paths, "apply:test")
+	unlock, _, err := Lock(paths, "apply:test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Lock(paths, "apply:other"); err != ErrLocked {
+	if _, _, err := Lock(paths, "apply:other"); err != ErrLocked {
 		t.Fatal("second lock succeeded")
 	}
 	if !strings.HasPrefix(LockHolder(paths), "apply:test pid ") { // the pid tells a stale lock from a live one (#37)

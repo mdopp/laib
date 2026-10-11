@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
@@ -29,6 +31,18 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Println("converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
 		return exitOK
 	}
+	// one lock (#39): a tick beside a restore, a remove or a human's apply is
+	// skipped, never run alongside
+	if holder := apply.LockHolder(env.paths); holder != "" {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
+		fmt.Println("übersprungen: gesperrt durch", holder)
+		return exitOK
+	}
+	unlock, code := takeLock(env, st, "converge")
+	if code != exitOK {
+		return code
+	}
+	defer unlock()
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
 		return fail(err)
@@ -41,8 +55,18 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "KONFLIKT: " + strings.Join(p.Conflicts, "; ")})
 		return exitRed
 	}
+	// paused services (#39): a human's stop, a restore, the lease — not ours to restart
+	paused := apply.Paused(env.paths)
+	var pausedNames []string
+	for n, pz := range paused {
+		pausedNames = append(pausedNames, fmt.Sprintf("%s (von %s bis %s)", n, pz.By, pz.Until.Local().Format("02.01. 15:04")))
+	}
+	sort.Strings(pausedNames)
 	var inactive []string
 	for _, name := range st.ServiceNames() {
+		if _, ok := paused[name]; ok {
+			continue
+		}
 		for _, u := range st.Services[name].UnitNames() {
 			if a := sysd.Active(ctx, u); a != "active" && a != "activating" {
 				inactive = append(inactive, name)
@@ -58,12 +82,19 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	if fw {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
 	}
-	if p.Empty() && len(inactive) == 0 {
+	pending := apply.Pending(env.paths)
+	if p.Empty() && len(inactive) == 0 && len(pending) == 0 {
+		if len(pausedNames) > 0 {
+			record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
+		}
 		if env.json {
-			return emit(env, map[string]any{"converged": true})
+			return emit(env, map[string]any{"converged": true, "paused": pausedNames})
 		}
 		fmt.Println("konvergent: Box entspricht dem State, alle Units aktiv")
 		return exitOK
+	}
+	if len(pausedNames) > 0 {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
 	}
 	// Budget: three converge applies per hour; a service that needs more is
 	// flapping, and flapping is a bug for a human or the ops hand, not a loop.
@@ -80,6 +111,9 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		return exitRed
 	}
 	reason := fmt.Sprintf("converge: %d Dateien Drift, nicht aktiv: %s", len(p.Changes), strings.Join(inactive, ", "))
+	if len(pending) > 0 {
+		reason += "; Aktivierung ausstehend: " + strings.Join(pending, ", ")
+	}
 	// Units that are down but whose files match get a restart through apply
 	// by marking their service as changed.
 	for _, name := range inactive {
@@ -93,8 +127,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 			p.Services = append(p.Services, name)
 		}
 	}
-	code := runApplyPlan(ctx, env, st, p, sec, reason, "converge")
-	return code
+	return runApplyPlan(ctx, env, st, p, sec, reason, "converge", true)
 }
 
 func has(args []string, flag string) bool {

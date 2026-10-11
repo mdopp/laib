@@ -86,6 +86,8 @@ func init() {
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},
 		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
+		{"pause", "apply", "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", cmdPause},
+		{"resume", "apply", "<service>: lift a pause", cmdResume},
 	}
 }
 
@@ -110,7 +112,7 @@ func run(args []string) int {
 		usage()
 		return 1
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP) // an SSH drop ends an apply cleanly, the flock goes with the process
 	defer stop()
 	for _, v := range verbs {
 		if v.name == rest[0] {
