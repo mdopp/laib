@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +28,9 @@ func resticRecorder(t *testing.T, c *cbox) *[]string {
 		calls = append(calls, "restic "+strings.Join(args, " ")+" [lock="+apply.LockHolder(c.env.paths)+"]")
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
+		}
+		if args[0] == "cat" { // the golden repo is remote and not there yet
+			return "Fatal: repository does not exist", errors.New("exit status 1")
 		}
 		return "", nil
 	}
@@ -133,22 +137,10 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	if len(restores) < 3 || !strings.Contains(restores[0], c.env.paths.State) {
 		t.Fatalf("state first, then the services: %v", restores)
 	}
-	var order []string
-	for _, l := range restores[2:] {
-		order = append(order, l)
-	}
-	// roles first: caddy (proxy) and auth (sso) before whoami
-	wh, cd := -1, -1
-	for i, l := range order {
-		if strings.Contains(l, "/whoami/") {
-			wh = i
-		}
-		if strings.Contains(l, "/caddy/") {
-			cd = i
-		}
-	}
-	if cd < 0 || wh < 0 || cd > wh {
-		t.Fatalf("dependency order (caddy before whoami): %v", order)
+	// every service with data (auth: three paths, caddy: one; whoami declares none)
+	order := strings.Join(restores[2:], "\n")
+	if strings.Count(order, "restic restore") != 4 || !strings.Contains(order, "/auth/lldap") || !strings.Contains(order, "/caddy/data") {
+		t.Fatalf("every declared path of every service, each with --delete: %v", restores)
 	}
 	joined := strings.Join(c.calls, "\n")
 	if !strings.Contains(joined, "systemctl --user stop caddy.service") || !strings.Contains(joined, "daemon-reload") {
@@ -172,6 +164,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 // repo, password, four steps. Never for a hand, never over MCP.
 func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	c := newCbox(t)
+	resticRecorder(t, c)
 	if rc := cmdRecoverySheet(context.Background(), &cliEnv{paths: c.env.paths, actor: "ops"}, nil); rc == exitOK {
 		t.Fatal("a hand got the recovery sheet")
 	}
@@ -183,14 +176,20 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 			t.Errorf("rc %d", rc)
 		}
 	})
-	key, _ := os.ReadFile(c.env.paths.Key)
+	keyFile, _ := os.ReadFile(c.env.paths.Key)
+	key := ""
+	for _, line := range strings.Split(string(keyFile), "\n") {
+		if strings.HasPrefix(line, "AGE-SECRET-KEY-") {
+			key = line
+		}
+	}
 	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
-	for _, want := range []string{strings.TrimSpace(string(key)), sec["RESTIC_PASSWORD"], "restic", "1.", "2.", "3.", "4.", "laib restore --box latest"} {
+	for _, want := range []string{key, sec["RESTIC_PASSWORD"], "restic", "1.", "2.", "3.", "4.", "laib restore --box latest"} {
 		if want == "" || !strings.Contains(out, want) {
 			t.Fatalf("sheet lacks %q:\n%s", want, out)
 		}
 	}
-	if !strings.Contains(out, "backup/restic") {
+	if !strings.Contains(out, "sftp:nas:/backup/laib") {
 		t.Fatalf("sheet lacks the repo:\n%s", out)
 	}
 	st, _ := loadState(c.env)
@@ -217,6 +216,8 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 // restore test older than 35 days is yellow.
 func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 	c := newCbox(t)
+	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
+	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), []byte(strings.Replace(string(b), "repo: sftp:nas:/backup/laib", "repo: "+filepath.Join(c.env.paths.Home, "backup", "restic"), 1)), 0o644)
 	os.RemoveAll(c.env.paths.Journal)
 	journal.Append(c.env.paths.Journal, journal.Entry{T: time.Now().Add(-8 * 24 * time.Hour), Actor: "human:core", Verb: "init", Result: "info", Detail: "state repo created"})
 	st, _ := loadState(c.env)

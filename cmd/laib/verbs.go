@@ -534,6 +534,6 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
 		return fail(err)
 	}
-	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
+	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
 }

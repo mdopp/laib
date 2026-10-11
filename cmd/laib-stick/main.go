@@ -169,7 +169,8 @@ func main() {
 	}
 	fmt.Println()
 	fmt.Println("\nStick geschrieben. Box vom Stick booten: sie installiert Fedora CoreOS auf die kleinste")
-	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`.")
+	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`,")
+	fmt.Println("dann `laib recovery-sheet`: die eine Seite, die nach einem Plattenverlust alles zurückholt — ausdrucken.")
 }
 
 // probe tells whether a URL answers from this laptop: the box will sit on

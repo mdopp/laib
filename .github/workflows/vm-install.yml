@@ -24,7 +24,7 @@ concurrency:
 jobs:
   install:
     runs-on: ubuntu-latest
-    timeout-minutes: 90   # install, mirror sync and a reinstall take ~60 min on the runner
+    timeout-minutes: 120  # install, mirror sync, two reinstalls and the disaster recovery take ~80 min on the runner
     env:
       SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
     steps:
@@ -335,6 +335,61 @@ jobs:
                 d=$(LAIB_HOME=/mnt/data/laib /var/opt/laib/laib diag 2>&1 || true); echo "$d"
                 grep -qE "^rot +raid " <<<"$d" || { echo "diag does not say the mirror is gone"; exit 1; }'
           marker
+      - name: disaster recovery — backup to a second disk, data disks gone, reinstall, restore --box with only the sheet (#40)
+        run: |
+          . ./box.sh
+          # the foreign ext4 disk (label backup) is the off-box repo; a database service from a
+          # registry (postgres, quiesce: true) carries a row that must survive
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                sudo mkdir -p /mnt/backup && sudo mount -L backup /mnt/backup && sudo chown core:core /mnt/backup
+                sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml; grep -n "repo:" /mnt/data/laib/state/box.yml
+                R=/mnt/data/laib/registries/vm/templates/pgtest; mkdir -p "$R"
+                printf "name: pgtest\ntemplate: {registry: vm, name: pgtest, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: \${DATA_DIR}/pgtest/pgdata\n    quiesce: true\nports: []\n" > "$R/laib.yml"
+                printf "IMAGE: docker.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
+                podman pull -q docker.io/library/postgres:16-alpine >/dev/null
+                $L add caddy; $L add pgtest
+                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
+                podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"
+                echo "caddy marker for the recovery" > /mnt/data/stacks/caddy/data/vm-marker
+                $L backup | tee /tmp/backup.txt
+                grep -q "angehalten für den Snapshot: pgtest" /tmp/backup.txt || { echo "the database was not quiesced for the snapshot"; exit 1; }
+                systemctl --user is-active pgtest.service || { echo "pgtest not started again after the snapshot"; exit 1; }
+                $L backup check | tee /tmp/check.txt; grep -q "grün" /tmp/check.txt
+                $L recovery-sheet > /tmp/sheet.txt; sed -n "s/^  \(AGE-SECRET-KEY-.*\)$/\1/p" /tmp/sheet.txt > /tmp/age.key; sed -n "s/^restic-Passwort: *//p" /tmp/sheet.txt > /tmp/restic.pw
+                test -s /tmp/age.key && test -s /tmp/restic.pw || { echo "the sheet lacks the key or the password"; cat /tmp/sheet.txt; exit 1; }
+                $L recovery-sheet --confirm
+                $L diag || true
+                sudo umount /mnt/backup'
+          # the sheet, as the human would have it on paper
+          $SSH 'cat /tmp/age.key' > sheet-age.key; $SSH 'cat /tmp/restic.pw' > sheet-restic.pw
+          off
+          # the data disks are gone: two new, empty ones; the OS disk and the backup disk stay
+          qemu-img create -q -f qcow2 data1.qcow2 9G; qemu-img create -q -f qcow2 data2.qcow2 9G
+          ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
+          for i in $(seq 1 120); do
+            if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled on fresh data disks after $((i*10)) s"; break; fi
+            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall"; exit 1; }
+            sleep 10
+          done
+          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 sheet-age.key sheet-restic.pw core@127.0.0.1:/tmp/
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                test -f /mnt/data/laib/vm-marker && { echo "the old data disk is still there"; exit 1; } || echo "fresh data disk, as intended"
+                # step 2 of the sheet: the key, the repo reachable, box.yml pointing at it
+                install -m 0600 /tmp/sheet-age.key /mnt/data/laib/age.key
+                sudo mkdir -p /mnt/backup && sudo mount -L backup /mnt/backup
+                sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml
+                # step 3
+                RESTIC_PASSWORD="$(cat /tmp/sheet-restic.pw)" $L restore --box latest | tee /tmp/restore.txt
+                # step 4
+                $L status | tee /tmp/status.txt
+                grep -q "before\|for the recovery" /mnt/data/stacks/caddy/data/vm-marker || { echo "caddy data not back"; exit 1; }
+                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
+                v=$(podman exec systemd-pgtest psql -U postgres -tAc "select x from t"); echo "row after recovery: $v"; [ "$v" = 42 ]
+                curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo; grep -q "\"state\":\"bereit\"" /tmp/ready.json
+                $L secret list | grep -q RESTIC_PASSWORD
+                $L journal --since 1h | grep -E "restore|backup" | tail -8
+                echo "disaster recovery done with the sheet alone"'
       - name: logs
         if: always()
         run: |

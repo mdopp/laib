@@ -22,6 +22,7 @@ oidc:
 data:
   - path: ${DATA_DIR}/immich/upload
   - path: ${DATA_DIR}/immich/pgdata
+    quiesce: true                 # a database: stopped while it is snapshotted (#40)
   - path: ${DATA_DIR}/immich/model-cache
     backup: false
 health:
