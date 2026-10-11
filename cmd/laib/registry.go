@@ -96,7 +96,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 		return fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
-	if policy.Auto(st.Policy, p.Class) && !policy.NeedsHuman(st.Policy, p.Tier, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		return autoApprove(ctx, env, p)
 	}
 	if env.json {

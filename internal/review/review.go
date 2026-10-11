@@ -31,7 +31,7 @@ type Result struct {
 
 type file struct {
 	hash string
-	mode fs.FileMode
+	exec bool // the executable bit, the only mode Git tracks (a checkout may be 0600, a worktree 0644)
 	link bool
 }
 
@@ -56,7 +56,7 @@ func tree(dir string) (map[string]file, error) {
 		if err != nil {
 			return err
 		}
-		f := file{mode: info.Mode()}
+		f := file{exec: info.Mode()&0o111 != 0}
 		if info.Mode()&os.ModeSymlink != 0 {
 			f.link = true
 			target, _ := os.Readlink(p)
@@ -126,7 +126,7 @@ func Dirs(base, changed string) Result {
 	for _, p := range sorted {
 		b, inBase := before[p]
 		a, inAfter := after[p]
-		if inBase && inAfter && a.hash == b.hash && a.mode == b.mode {
+		if inBase && inAfter && a.hash == b.hash && a.exec == b.exec {
 			continue
 		}
 		if inAfter && a.link {
@@ -164,7 +164,7 @@ func Dirs(base, changed string) Result {
 				say("führt ein Skript direkt auf der Box aus (services/%s/post-deploy)", svc)
 			case strings.HasSuffix(name, ".service") || strings.HasSuffix(name, ".timer"):
 				say("%s läuft direkt auf der Box, nicht im Container (Host-Unit)", p)
-			case a.mode&0o111 != 0:
+			case a.exec:
 				say("%s ist ausführbar", p)
 			case name == "laib.yml", name == "values.yml", name == "README.md", knownUnit(name):
 				// judged by content below
