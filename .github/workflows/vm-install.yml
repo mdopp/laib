@@ -150,8 +150,10 @@ jobs:
                 root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
                 for i in $(seq 1 30); do [ -s "$root" ] && break; sleep 2; done
                 test -s "$root" || { echo "no local root CA at $root"; exit 1; }
+                # --cacert replaces only the bundle file; an empty --capath keeps the system roots out too
+                none=$(mktemp -d)
                 code=000
-                for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ "$code" = 200 ] && break; sleep 2; done
+                for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ "$code" = 200 ] && break; sleep 2; done
                 echo "https://laib.vm.test -> HTTP $code, certificate verified against the local Caddy root"
                 [ "$code" = 200 ]
                 $L journal --since 1h'
