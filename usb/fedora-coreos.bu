@@ -80,76 +80,45 @@ storage:
       contents:
         inline: |
           #!/usr/bin/env bash
-          # The data disk (ported from ServiceBay's setup-raid, servicebay#1666/#2526):
-          # the largest non-OS, non-removable disk carries /mnt/data as a RAID1 with
-          # two slots and one member — on purpose, so a mirror joins later with one
-          # `laib disk add`, no reformat. An existing array is assembled, never
-          # recreated: a reinstall from the stick keeps the data. No second disk
-          # (the NUC): /mnt/data stays a directory on the OS disk, and that is fine.
+          # The data disk (#29, #32): /mnt/data is a RAID1 with two slots and one
+          # member — on purpose, so a mirror joins later with `laib disk add`, no
+          # reformat. The disk is chosen ONCE and recorded by its array UUID in
+          # /etc/laib/data-disk; every later boot only assembles and mounts that array.
+          # Nothing here wipes a disk that holds anything, and a disk that appears later
+          # (a USB backup drive, a stick left in, an SD card) is never claimed. No empty
+          # disk at the first boot (the NUC): /mnt/data stays a directory on the OS
+          # disk, recorded as DEVICE=none.
           set -euo pipefail
           MP=/mnt/data
-          # the OS disk: what holds / (composefs: /sysroot)
-          src=$(findmnt -n -o SOURCE / || true)
-          lsblk "$src" >/dev/null 2>&1 || src=$(findmnt -n -o SOURCE /sysroot)
-          osdisk=$(lsblk -ndo PKNAME "$src" | head -1)
-          best=""; bestsize=0
-          for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
-            n=$(basename "$dev")
-            [[ "$n" == "$osdisk"* || "$n" == zram* || "$n" == loop* ]] && continue
-            [[ "$(cat /sys/block/$n/removable 2>/dev/null)" == "1" ]] && continue
-            size=$(blockdev --getsize64 "$dev" 2>/dev/null || echo 0)
-            (( size > bestsize )) && { bestsize=$size; best=$dev; }
-          done
-          if [[ -z "$best" ]]; then
-            echo "laib-data-disk: no second disk; $MP stays on the OS disk ($osdisk)"
-            mkdir -p "$MP/stacks" "$MP/laib" "$MP/containers/storage"
-            chown core:core "$MP/stacks" "$MP/laib" "$MP/containers" "$MP/containers/storage"
+          REC=/etc/laib/data-disk
+          log() { echo "laib-data-disk: $*"; }
+          field() { sed -n "s/.*\b$1=\([^ ]*\).*/\1/p" "$REC"; }
+          dirs() {   # what laib, podman and the day-one backup expect, owned by core
+            chown core:core "$MP"
+            mkdir -p "$MP/stacks" "$MP/laib" "$MP/containers/storage" "$MP/backup"
+            chown core:core "$MP/stacks" "$MP/laib" "$MP/containers" "$MP/containers/storage" "$MP/backup"
             chcon -R -t container_file_t "$MP/containers" 2>/dev/null || true
-            exit 0
-          fi
-          echo "laib-data-disk: OS disk $osdisk, data disk $best ($(( bestsize / 1073741824 )) GiB)"
-          md=""
-          # 1) auto-assembled already?
-          for cand in /dev/md/data /dev/md127 /dev/md0; do
-            [[ -e "$cand" ]] && mdadm --detail "$cand" 2>/dev/null | grep -q "$(basename "$best")" && { md=$(readlink -f "$cand"); break; }
-          done
-          # 2) a superblock on the disk or its first partition: assemble, keep the data
-          if [[ -z "$md" ]]; then
-            for part in "${best}p1" "${best}1" "$best"; do
-              if [[ -e "$part" ]] && mdadm --examine "$part" >/dev/null 2>&1; then
-                echo "laib-data-disk: RAID superblock on $part, assembling"
-                mdadm --assemble /dev/md/data "$part" --run 2>/dev/null && md=$(readlink -f /dev/md/data)
-                break
-              fi
-            done
-          fi
-          # 3) nothing: partition, degraded RAID1, xfs
-          if [[ -z "$md" ]]; then
-            echo "laib-data-disk: no array found, creating one on $best (one member, the mirror comes later)"
-            wipefs -a "$best"
-            sgdisk -Z -n 1:0:0 -t 1:fd00 -c 1:laib-data "$best"
-            udevadm settle
-            part="${best}1"; [[ -e "$part" ]] || part="${best}p1"
-            mdadm --create /dev/md/data --level=1 --raid-devices=2 --metadata=1.2 --run "$part" missing
-            mkfs.xfs -q -L data /dev/md/data
-            md=$(readlink -f /dev/md/data)
-          fi
-          { echo "# laib-data-disk: rewritten every boot, one ARRAY line per array"; mdadm --detail --scan | sort -u; } > /etc/mdadm.conf
-          # mount now, and on every later boot through the mount unit
-          mkdir -p "$MP"
-          if ! findmnt -n "$MP" >/dev/null 2>&1; then
-            keep=$(mktemp -d); cp -a "$MP/." "$keep/" 2>/dev/null || true   # what Ignition put there on the OS disk
-            mount -o noatime "$md" "$MP"
-            cp -an "$keep/." "$MP/" 2>/dev/null || true; rm -rf "$keep"
-            echo "laib-data-disk: mounted $md on $MP"
-          fi
-          cat > /etc/systemd/system/mnt-data.mount <<UNIT
+          }
+          md_of() {   # the active md device of an array UUID, or nothing
+            mdadm --detail --scan 2>/dev/null | awk -v u="UUID=$1" 'index($0, u) {print $2; exit}'
+          }
+          assemble() {   # $1 = array UUID: assemble it (degraded is fine) and print the device
+            local md; md=$(md_of "$1")
+            if [[ -z "$md" ]]; then
+              mdadm --assemble --scan --uuid="$1" --run >/dev/null 2>&1 || true
+              md=$(md_of "$1")
+            fi
+            [[ -n "$md" ]] && readlink -f "$md"
+          }
+          mount_array() {   # $1 = md device: mounted now, and by filesystem UUID on every boot
+            local md=$1 fs; fs=$(blkid -s UUID -o value "$md")
+            cat > /etc/systemd/system/mnt-data.mount <<UNIT
           [Unit]
-          Description=Laib data disk (RAID1 /dev/md/data)
-          After=local-fs.target
+          Description=Laib data disk (RAID1, filesystem $fs)
+          After=local-fs.target laib-data-disk.service
 
           [Mount]
-          What=/dev/md/data
+          What=/dev/disk/by-uuid/$fs
           Where=$MP
           Type=xfs
           Options=noatime
@@ -157,13 +126,99 @@ storage:
           [Install]
           WantedBy=multi-user.target
           UNIT
-          systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
-          mkdir -p "$MP/stacks" "$MP/laib" "$MP/containers/storage"
-          chown core:core "$MP/stacks" "$MP/laib" "$MP/containers" "$MP/containers/storage"
-          chcon -R -t container_file_t "$MP/containers" 2>/dev/null || true
-          members=$(mdadm --detail "$md" | awk '/Active Devices/{print $4}')
-          mkdir -p /etc/laib; echo "DEVICE=$md MEMBERS=${members:-1}" > /etc/laib/data-disk
-          echo "laib-data-disk: done ($md, $members member(s))"
+            systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
+            { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } > /etc/mdadm.conf
+            if ! findmnt -n "$MP" >/dev/null 2>&1; then
+              mkdir -p "$MP"; chattr -i "$MP" 2>/dev/null || true
+              mount -o noatime "$md" "$MP"
+            fi
+            dirs
+          }
+          active() { mdadm --detail "$1" | awk '/Active Devices/ {print $4}'; }
+          mkdir -p /etc/laib
+
+          # --- every boot after the first: only the recorded array, never anything else
+          if [[ -f "$REC" ]]; then
+            dev=$(field DEVICE); uuid=$(field UUID); members=$(field MEMBERS)
+            if [[ "$dev" == none ]]; then
+              mkdir -p "$MP"; dirs
+              log "no data disk recorded: $MP is on the OS disk; a disk that appears later is never claimed (laib disk status)"
+              exit 0
+            fi
+            if [[ -z "$uuid" ]]; then   # a record from before #32: learn the UUID once
+              [[ -e "$dev" ]] || mdadm --assemble --scan --run >/dev/null 2>&1 || true
+              uuid=$(mdadm --detail --export "$dev" 2>/dev/null | sed -n 's/^MD_UUID=//p')
+              [[ -n "$uuid" ]] && echo "DEVICE=$dev UUID=$uuid MEMBERS=${members:-1}" > "$REC"
+            fi
+            md=$(assemble "$uuid") || true
+            if [[ -z "$md" ]]; then
+              # nothing is written to the OS disk in its place: the mountpoint stays empty and immutable
+              mkdir -p "$MP"; findmnt -n "$MP" >/dev/null 2>&1 || chattr +i "$MP" 2>/dev/null || true
+              log "the recorded array $uuid is missing: $MP stays unmounted and read-only; laib cannot start until the disk is back"
+              exit 1
+            fi
+            mount_array "$md"
+            log "$md assembled, $(active "$md") of ${members:-?} member(s) active"
+            exit 0
+          fi
+
+          # --- the first boot (or the first after a reinstall): adopt Laib's array, or claim an empty disk
+          src=$(findmnt -n -o SOURCE / || true)
+          lsblk "$src" >/dev/null 2>&1 || src=$(findmnt -n -o SOURCE /sysroot)
+          osdisk=$(lsblk -ndo PKNAME "$src" | head -1)
+          # 1) a Laib array from an earlier install (name *:data, raid1, filesystem label data): keep its data
+          seen=""
+          for dev in $(lsblk -nrpo NAME,TYPE | awk '$2=="part" || $2=="disk" {print $1}'); do
+            info=$(mdadm --examine --export "$dev" 2>/dev/null || true)
+            [[ "$(sed -n 's/^MD_LEVEL=//p' <<<"$info")" == raid1 && "$(sed -n 's/^MD_NAME=//p' <<<"$info")" == *:data ]] || continue
+            uuid=$(sed -n 's/^MD_UUID=//p' <<<"$info"); seen="$seen $dev"
+            md=$(assemble "$uuid") || true
+            if [[ -n "$md" && "$(blkid -s LABEL -o value "$md")" == data ]]; then
+              log "Laib's array $uuid found on $dev: assembled as $md, the data stays"
+              mount_array "$md"
+              echo "DEVICE=$md UUID=$uuid MEMBERS=$(active "$md")" > "$REC"
+              exit 0
+            fi
+          done
+          if [[ -n "$seen" ]]; then
+            # Laib's array is there but will not come up: record nothing (the next boot tries again), write nothing
+            mkdir -p "$MP"; chattr +i "$MP" 2>/dev/null || true
+            log "Laib's array on$seen cannot be assembled: nothing recorded, $MP stays unmounted and read-only"
+            exit 1
+          fi
+          # 2) an empty, internal disk: the largest one
+          best=""; bestsize=0
+          for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk" {print $1}'); do
+            n=$(basename "$dev")
+            [[ "$n" == "$osdisk" || "$n" == zram* || "$n" == loop* ]] && continue
+            if [[ "$(cat /sys/block/$n/removable 2>/dev/null)" == 1 || "$(lsblk -dno TRAN "$dev" | tr -d ' ')" == usb ]]; then
+              log "$dev: removable or USB, never used for data"; continue
+            fi
+            parts=$(lsblk -nro NAME "$dev" | tail -n +2 | tr '\n' ' ')
+            sigs=$(wipefs -n --noheadings -O TYPE,LABEL "$dev" 2>/dev/null | tr -s ' \n' ' ')
+            if [[ -n "$parts$sigs" ]] || mdadm --examine "$dev" >/dev/null 2>&1; then
+              log "$dev: not empty (${parts}${sigs}), never claimed automatically"; continue
+            fi
+            size=$(blockdev --getsize64 "$dev")
+            if (( size > bestsize )); then bestsize=$size; best=$dev; fi
+          done
+          if [[ -z "$best" ]]; then
+            mkdir -p "$MP"; dirs
+            echo "DEVICE=none MEMBERS=0" > "$REC"
+            log "no empty internal disk: $MP stays on the OS disk ($osdisk); recorded, so a later disk is never claimed"
+            exit 0
+          fi
+          log "creating the array on the empty disk $best ($(( bestsize / 1073741824 )) GiB): one member, the mirror comes later"
+          sgdisk -Z -n 1:0:0 -t 1:fd00 -c 1:laib-data "$best"
+          udevadm settle
+          part="${best}1"; [[ -e "$part" ]] || part="${best}p1"
+          mdadm --create /dev/md/data --level=1 --raid-devices=2 --metadata=1.2 --run "$part" missing
+          mkfs.xfs -q -L data /dev/md/data
+          md=$(readlink -f /dev/md/data)
+          uuid=$(mdadm --detail --export "$md" | sed -n 's/^MD_UUID=//p')
+          mount_array "$md"
+          echo "DEVICE=$md UUID=$uuid MEMBERS=1" > "$REC"
+          log "done: $md, array $uuid, one member"
     # rootless podman keeps its images on the data disk (ServiceBay #1494): the
     # Kraftwerk's images are big; without a data disk this is still the OS disk.
     - path: /var/home/core/.config/containers/storage.conf
