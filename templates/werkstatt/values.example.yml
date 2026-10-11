@@ -7,4 +7,4 @@ LAIB_TOKEN: !secret LAIB_CLAUDE_TOKEN
 LAIB_PI_TOKEN: !secret LAIB_PI_TOKEN
 GIT_TOKEN: !secret WERKSTATT_GIT_TOKEN
 AUTOLOOP_ENABLED: "false"
-AUTOLOOP_REPOS: mdopp/laib-templates
+AUTOLOOP_REPOS: mdopp/laib               # templates are built in; a registry repo is #24's decision

@@ -32,6 +32,16 @@ type Box struct {
 	// Operator is the box's admin agent (ADR 0013): a user unit running
 	// laib-operator with the ops token from secrets.age.
 	Operator OperatorCfg `yaml:"operator"`
+	// Intake is where wishes and escalations become tickets (#56): a GitHub
+	// repo and the label a wish gets; the token is GITHUB_INTAKE_TOKEN in
+	// secrets.age. Empty = wishes are kept under <home>/wishes.
+	Intake Intake `yaml:"intake"`
+}
+
+// Intake: the ticket queue for wishes and escalations (#56).
+type Intake struct {
+	Repo  string `yaml:"repo"`  // owner/name
+	Label string `yaml:"label"` // the label a wish gets; default wunsch
 }
 
 // OperatorCfg configures laib-operator.

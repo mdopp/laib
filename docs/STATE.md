@@ -52,6 +52,9 @@ model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
   lease: http://192.168.1.20:11435/api/model-lease
+intake:                           # wishes and escalations become tickets (#56); token GITHUB_INTAKE_TOKEN in secrets.age
+  repo: mdopp/laib
+  label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator (ADR 0013); laib operator enable sets this
   enabled: true
   model: gemma-4-e4b
