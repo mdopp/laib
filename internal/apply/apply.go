@@ -67,6 +67,14 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			return res, err
 		}
 	}
+	previousImages := map[string]string{} // change path → Image= on the box before this apply
+	for _, c := range p.Changes {
+		if strings.HasSuffix(c.Path, ".container") {
+			if b, err := os.ReadFile(c.Target); err == nil {
+				previousImages[c.Path] = imageOf(string(b))
+			}
+		}
+	}
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
@@ -114,6 +122,13 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 
+	// a unit's first start has 90 s and must not include the image pull (#46):
+	// the images of new or re-imaged containers are pulled now
+	for _, image := range imagesToPull(p, previousImages) {
+		if out, err := sysd.Run(ctx, "podman", "pull", "-q", image); err != nil {
+			res.Checks = append(res.Checks, Check{Service: "laib", What: "pull " + image, OK: false, Detail: strings.TrimSpace(out)})
+		}
+	}
 	if err := sysd.DaemonReload(ctx); err != nil {
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
@@ -432,4 +447,33 @@ var ValidateOutput = func(ctx context.Context, st *state.State, key, content str
 		return fmt.Errorf("the rendered Caddyfile does not validate (nothing written): %s", strings.TrimSpace(out))
 	}
 	return nil
+}
+
+// imageOf returns the Image= of a container unit.
+func imageOf(unit string) string {
+	for _, line := range strings.Split(unit, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Image=") {
+			return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "Image="))
+		}
+	}
+	return ""
+}
+
+// imagesToPull: the images of added containers and of containers whose
+// Image= changed, each once.
+func imagesToPull(p *plan.Plan, previous map[string]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, c := range p.Changes {
+		if c.Kind == "delete" || !strings.HasSuffix(c.Path, ".container") {
+			continue
+		}
+		img := imageOf(p.Output[c.Path])
+		if img == "" || strings.Contains(img, "${") || seen[img] || (c.Kind == "change" && previous[c.Path] == img) {
+			continue
+		}
+		seen[img] = true
+		out = append(out, img)
+	}
+	return out
 }

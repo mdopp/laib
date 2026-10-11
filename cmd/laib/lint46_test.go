@@ -1,8 +1,26 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+// writeTemplate: a minimal template folder; extra files on top.
+func writeTemplate(t *testing.T, root, name, contract string, files map[string]string) string {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "laib.yml"), []byte(contract), 0o644)
+	for f, body := range files {
+		mode := os.FileMode(0o644)
+		if f == "pre-start" || f == "post-deploy" {
+			mode = 0o755
+		}
+		os.WriteFile(filepath.Join(dir, f), []byte(body), mode)
+	}
+	return dir
+}
 
 // #46: a template without a health check passes lint today; a service that
 // cannot be probed must say so (health: {none: "<why>"}).

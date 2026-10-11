@@ -18,7 +18,7 @@ data:
     backup: false
   - path: ${DATA_DIR}/stimme/wakeword  # the trained models: keep
   - path: ${DATA_DIR}/stimme/trainer
-health: {}
+health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}
 ports:
   - {port: 10300, lan: false}      # whisper
   - {port: 10200, lan: false}      # piper

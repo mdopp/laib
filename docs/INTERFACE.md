@@ -221,3 +221,21 @@ another service names it in `after:` („… braucht … — erst dort
 entfernen“), before anything is stopped. The box's own proposals (the
 template-sync timer, actor `laib`) are approved by the box when the dial
 says auto; the same change proposed twice reuses the open proposal.
+
+### Templates on CoreOS: ports, health, needs, images (#46)
+
+The state refuses two services publishing the same host port, and
+`laib template lint` refuses a template that publishes a port a sibling
+template already uses (whoami and the bote pod both had 8080; the bote's
+signal-cli is on 8085 now). Every template declares health: an `http:`
+probe or `none: "<why>"` (MQTT speaks no HTTP). A template whose
+containers talk to laib's MCP declares `needs: [mcp]`; the state then
+insists on `box.yml laib.listen: 0.0.0.0` (ADR 0012 §4) instead of a
+container that silently cannot reach laib. Apply pulls the images of new
+or re-imaged containers before the units start, so the first start never
+includes the pull. Services with a database (immich, paperless,
+vaultwarden, Home Assistant, auth, radicale, audiobookshelf, media, beets)
+no longer carry `AutoUpdate=registry` — podman's rollback restores an
+image, not migrated data; their images change by proposal. Where
+auto-update stays, `podman-auto-update.service` takes a `laib backup`
+first and the default window is 04:30, never the backup's 03:00.
