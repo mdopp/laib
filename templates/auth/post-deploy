@@ -9,6 +9,7 @@ import json, os, sys, time, urllib.request
 
 E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
+DOMAIN = E["LAIB_DOMAIN"]
 
 # seed LLDAP through its GraphQL API: groups, the operator's account
 def http(path, body=None, token=None):
