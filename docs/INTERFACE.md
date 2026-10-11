@@ -37,11 +37,15 @@ laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
 Every verb has `--json`. The MCP tool list is generated from the same verb
-table, so the two cannot drift. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+table (`mcpVerbs` names which of them an agent may reach at all), and
+`scripts/drift.sh` in CI checks that every tool the Operator's prompt
+names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
-proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
-reboot, a public route) are not verbs at all for it, they are proposals.
+proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
+ceiling and a reboot is not a verb; a public route is a values change,
+which the dial may auto-apply — the "always a human's call" in
+`policy.yml`'s comment is a convention today, not enforced (#47).
 
 ## Readiness: `/ready`
 
