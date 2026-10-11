@@ -197,8 +197,10 @@ func (s spareInfo) refuse(minBytes int64, wipe string) error {
 // memberDiskBytes is the size of the whole disk that holds an array member
 // (vdb1 → vdb): the least a new mirror disk needs.
 func memberDiskBytes(ctx context.Context, member string) (int64, error) {
-	parent, err := sysd.Run(ctx, "lsblk", "-no", "PKNAME", "/dev/"+member)
-	if err != nil || strings.TrimSpace(parent) == "" {
+	// -d: without it lsblk lists the member's children too (md127), one PKNAME per line
+	parent, err := sysd.Run(ctx, "lsblk", "-dno", "PKNAME", "/dev/"+member)
+	parent, _, _ = strings.Cut(strings.TrimSpace(parent), "\n")
+	if err != nil || parent == "" {
 		parent = member // the member is a whole disk
 	}
 	out, err := sysd.Run(ctx, "lsblk", "-dnbo", "SIZE", "/dev/"+strings.TrimSpace(parent))

@@ -36,6 +36,30 @@ func (f fakeDisk) run(_ context.Context, name string, args ...string) (string, e
 	return "", errors.New("unexpected command: " + cmd)
 }
 
+// lsblk lists a RAID member's children too: without -d, PKNAME of vdb1 comes
+// back as two lines ("vdb" for the partition, "vdb1" for md127 on top of it).
+// The VM job caught `laib disk add` asking lsblk for "/dev/vdb\nvdb1" (#32).
+func TestMemberDiskBytesAsksForTheParentOnly(t *testing.T) {
+	saved := sysd.Run
+	defer func() { sysd.Run = saved }()
+	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+		cmd := name + " " + strings.Join(args, " ")
+		switch cmd {
+		case "lsblk -no PKNAME /dev/vdb1":
+			return "vdb\nvdb1", nil // the partition, then md127 on top of it
+		case "lsblk -dno PKNAME /dev/vdb1":
+			return "vdb", nil
+		case "lsblk -dnbo SIZE /dev/vdb":
+			return "9663676416", nil
+		}
+		return "lsblk: not a block device", errors.New("exit status 32: " + cmd)
+	}
+	got, err := memberDiskBytes(context.Background(), "vdb1")
+	if err != nil || got != 9663676416 {
+		t.Fatalf("memberDiskBytes(vdb1) = %d, %v; want the size of vdb", got, err)
+	}
+}
+
 // The record keeps the array's UUID when the mirror joins: the boot script
 // assembles by UUID, and the old marker write dropped it (#32).
 func TestWithMembersKeepsTheUUID(t *testing.T) {
