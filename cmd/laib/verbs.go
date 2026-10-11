@@ -453,6 +453,7 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
 	modelURL, modelLease, gpu := "", "", false
+	dnsProvider, tlsMode := "", ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--gpu":
@@ -473,11 +474,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			modelURL = args[i+1]
 		case "--model-lease":
 			modelLease = args[i+1]
+		case "--dns-provider":
+			dnsProvider = args[i+1]
+		case "--tls":
+			tlsMode = args[i+1]
 		}
 		i++
 	}
 	if domain == "" {
-		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+	}
+	if tlsMode != "" && tlsMode != "internal" {
+		return fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
 	}
 	if !gpu && modelURL == "" {
 		fmt.Fprintln(os.Stderr, "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
@@ -509,8 +517,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			model += fmt.Sprintf("  lease: %s\n", modelLease)
 		}
 	}
+	// certificates (ADR 0007, #45): DNS-01 through the provider's API — the
+	// token is a secret (laib secret set DNS_API_TOKEN); tls: internal only
+	// for a trial nobody's phone has to trust
+	certs := ""
+	if dnsProvider != "" {
+		certs += fmt.Sprintf("# certificates: DNS-01 through the provider's API; the token is the secret DNS_API_TOKEN\ndns:\n  provider: %s\n  secretRef: DNS_API_TOKEN\n", dnsProvider)
+	}
+	if tlsMode != "" {
+		certs += fmt.Sprintf("# Caddy's own CA: a laptop-only trial; phones and their widgets need a real certificate (#45)\ntls: %s\n", tlsMode)
+	}
 	backup := fmt.Sprintf("backup:\n  repo: %s          # restic, on the data disk: protects against mistakes and bad updates from day one; a NAS or second repo protects against the disk\n  schedule: \"03:00\"\n", filepath.Join(filepath.Dir(dataDir), "backup", "restic"))
-	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
+	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
 		return fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; the admin's own token decides\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: auto\n  patch: auto\n  new-service: proposal   # adds surface: a human decides\n  # remove is never auto; a public route is always a human's call\n"); err != nil {

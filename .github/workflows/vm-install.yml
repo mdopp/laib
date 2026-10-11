@@ -49,9 +49,9 @@ jobs:
           nohup python3 -m http.server 8000 --bind 127.0.0.1 --directory dist > http.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
           echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --out laib-vm.iso
+          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
           # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --reinstall --out laib-vm-reinstall.iso
+          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --reinstall --out laib-vm-reinstall.iso
           ls -la laib-vm.iso laib-vm-reinstall.iso
       - name: cross-check with coreos-installer, serial console for the log
         run: |
@@ -219,7 +219,8 @@ jobs:
           $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 sysctl -n net.ipv4.ip_unprivileged_port_start
-                grep -q "^tls:" /mnt/data/laib/state/box.yml || echo "tls: internal" >> /mnt/data/laib/state/box.yml
+                # the stick's --tls internal reached box.yml through first boot and laib init (#45); no echo into box.yml here
+                grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
                 $L add caddy
                 $L status
                 podman ps
