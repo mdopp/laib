@@ -50,7 +50,7 @@ type readiness struct {
 	Red       int    `json:"red"`
 	LastHeard string `json:"lastHeard"`
 	Lock      string `json:"lock,omitempty"`
-	Drift     int    `json:"drift"` // files on the box that differ from the state
+	Drift     int    `json:"drift"`    // files on the box that differ from the state
 	Operator  string `json:"operator"` // aus | startet | läuft | stumm | antwortet nicht | fehlt
 }
 
