@@ -89,8 +89,10 @@ storage:
           # disk at the first boot (the NUC): /mnt/data stays a directory on the OS
           # disk, recorded as DEVICE=none.
           set -euo pipefail
-          MP=/mnt/data
-          REC=/etc/laib/data-disk
+          MP=${LAIB_MP:-/mnt/data}        # overridable for the test harness only
+          ETC=${LAIB_ETC:-/etc}
+          SYS=${LAIB_SYS:-/sys}
+          REC=$ETC/laib/data-disk
           log() { echo "laib-data-disk: $*"; }
           field() { sed -n "s/.*\b$1=\([^ ]*\).*/\1/p" "$REC"; }
           dirs() {   # what laib, podman and the day-one backup expect, owned by core
@@ -103,16 +105,26 @@ storage:
             mdadm --detail --scan 2>/dev/null | awk -v u="UUID=$1" 'index($0, u) {print $2; exit}'
           }
           assemble() {   # $1 = array UUID: assemble it (degraded is fine) and print the device
-            local md; md=$(md_of "$1")
+            local md i; md=$(md_of "$1")
             if [[ -z "$md" ]]; then
               mdadm --assemble --scan --uuid="$1" --run >/dev/null 2>&1 || true
               md=$(md_of "$1")
             fi
-            [[ -n "$md" ]] && readlink -f "$md"
+            [[ -n "$md" ]] || return 1
+            md=$(readlink -f "$md")
+            # udev assembles incrementally and leaves an array INACTIVE while a
+            # member is missing (it waits for it); this is OUR recorded array,
+            # so start it degraded — mdadm-last-resort would do the same 30 s later
+            for i in 1 2 3 4 5; do
+              [[ "$(cat "$SYS/block/$(basename "$md")/md/array_state" 2>/dev/null)" == inactive ]] || break
+              log "$md is inactive (a member missing?): starting it degraded" >&2
+              mdadm --run "$md" >/dev/null 2>&1 || sleep 2
+            done
+            echo "$md"
           }
           mount_array() {   # $1 = md device: mounted now, and by filesystem UUID on every boot
             local md=$1 fs; fs=$(blkid -s UUID -o value "$md")
-            cat > /etc/systemd/system/mnt-data.mount <<UNIT
+            cat > "$ETC/systemd/system/mnt-data.mount" <<UNIT
           [Unit]
           Description=Laib data disk (RAID1, filesystem $fs)
           After=local-fs.target laib-data-disk.service
@@ -127,7 +139,7 @@ storage:
           WantedBy=multi-user.target
           UNIT
             systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
-            { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } > /etc/mdadm.conf
+            { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } > "$ETC/mdadm.conf"
             if ! findmnt -n "$MP" >/dev/null 2>&1; then
               mkdir -p "$MP"; chattr -i "$MP" 2>/dev/null || true
               mount -o noatime "$md" "$MP"
@@ -135,7 +147,7 @@ storage:
             dirs
           }
           active() { mdadm --detail "$1" | awk '/Active Devices/ {print $4}'; }
-          mkdir -p /etc/laib
+          mkdir -p "$ETC/laib"
 
           # --- every boot after the first: only the recorded array, never anything else
           if [[ -f "$REC" ]]; then
@@ -191,7 +203,7 @@ storage:
           for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk" {print $1}'); do
             n=$(basename "$dev")
             [[ "$n" == "$osdisk" || "$n" == zram* || "$n" == loop* ]] && continue
-            if [[ "$(cat /sys/block/$n/removable 2>/dev/null)" == 1 || "$(lsblk -dno TRAN "$dev" | tr -d ' ')" == usb ]]; then
+            if [[ "$(cat "$SYS/block/$n/removable" 2>/dev/null)" == 1 || "$(lsblk -dno TRAN "$dev" | tr -d ' ')" == usb ]]; then
               log "$dev: removable or USB, never used for data"; continue
             fi
             parts=$(lsblk -nro NAME "$dev" | tail -n +2 | tr '\n' ' ')
