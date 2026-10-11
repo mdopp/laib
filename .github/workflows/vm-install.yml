@@ -161,7 +161,8 @@ jobs:
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                repo=$(sed -n "s/^  repo: *\([^ #]*\).*/\1/p" /mnt/data/laib/state/box.yml)
+                # box.yml is rewritten by laib add (yaml.Marshal, four-space indent): read repo: inside backup: at any indent
+                repo=$(sed -n "/^backup:/,/^[^ #]/s/^ *repo: *\([^ #]*\).*/\1/p" /mnt/data/laib/state/box.yml)
                 echo "backup.repo from box.yml: $repo"; test -n "$repo"
                 echo "caddy marker before backup" > /mnt/data/stacks/caddy/data/vm-marker
                 $L backup
