@@ -127,6 +127,17 @@ func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, 
 	if _, err := git(ctx, repo, "checkout", "-q", "main"); err != nil {
 		return nil, err
 	}
+	// the same change is already open (a timer proposing again, #50): reuse
+	// it, drop this branch — the inbox holds one proposal per change
+	if open, _ := List(inbox, true); len(open) > 0 {
+		mine := Diff(ctx, repo, p)
+		for _, o := range open {
+			if o.Branch != p.Branch && Diff(ctx, repo, o) == mine {
+				git(ctx, repo, "branch", "-q", "-D", p.Branch)
+				return o, nil
+			}
+		}
+	}
 	return p, save(inbox, p)
 }
 
@@ -156,7 +167,10 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 	}
 	// A hand never approves its own proposal — except the human: on the
 	// shell a human is the authority, and --add is how they install.
-	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" {
+	// … and the box itself (the template-sync timer, actor laib) is not a
+	// hand with a token: its proposals are approved by the box when the dial
+	// says so (#50), the policy check is the caller's.
+	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" && by != "laib" {
 		return ErrOwnProposal
 	}
 	if err := CommitDirty(ctx, repo, by); err != nil {

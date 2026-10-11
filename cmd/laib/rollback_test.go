@@ -139,12 +139,9 @@ func TestRemoveRefusesWhenAnotherServiceDependsOnIt(t *testing.T) {
 		t.Fatalf("add rc %d", rc)
 	}
 	c.calls = nil
-	out := captureStdout(t, func() {
-		if rc := cmdRemove(context.Background(), c.env, []string{"whoami"}); rc == exitOK {
-			t.Error("whoami removed although dep needs it")
-		}
-	})
-	_ = out
+	if rc := cmdRemove(context.Background(), c.env, []string{"whoami"}); rc == exitOK {
+		t.Fatal("whoami removed although dep needs it")
+	}
 	if strings.Contains(strings.Join(c.calls, "\n"), "systemctl --user stop") {
 		t.Fatalf("something was stopped before the refusal:\n%s", strings.Join(c.calls, "\n"))
 	}

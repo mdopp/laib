@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -51,7 +52,7 @@ func roleBox(t *testing.T) (*state.State, boxfs.Paths, *[]string) {
 // verifies it. A Caddyfile a snippet broke must not end as a green apply.
 func TestARestartedRoleIsVerified(t *testing.T) {
 	st, paths, calls := roleBox(t)
-	p := &plan.Plan{Output: plan.Output(map[string]string{"caddy/Caddyfile": "laib.e2e.home {\n}\n"}), Changes: []plan.Change{{Path: "caddy/Caddyfile", Target: plan.Target(paths, "caddy/Caddyfile"), Kind: "add"}}}
+	p := &plan.Plan{Output: render.Output(map[string]string{"caddy/Caddyfile": "laib.e2e.home {\n}\n"}), Changes: []plan.Change{{Path: "caddy/Caddyfile", Target: plan.Target(paths, "caddy/Caddyfile"), Kind: "add"}}}
 	res, err := Run(context.Background(), st, p, paths, map[string]string{}, "caddyfile only")
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +77,7 @@ func TestABrokenCaddyfileIsRefusedBeforeWriting(t *testing.T) {
 	t.Setenv("ROLE_TEST_BROKEN", "caddy")
 	st, paths, calls := roleBox(t)
 	target := plan.Target(paths, "caddy/Caddyfile")
-	p := &plan.Plan{Output: plan.Output(map[string]string{"caddy/Caddyfile": "laib.e2e.home {\n  nonsense_directive\n}\n"}), Changes: []plan.Change{{Path: "caddy/Caddyfile", Target: target, Kind: "add"}}}
+	p := &plan.Plan{Output: render.Output(map[string]string{"caddy/Caddyfile": "laib.e2e.home {\n  nonsense_directive\n}\n"}), Changes: []plan.Change{{Path: "caddy/Caddyfile", Target: target, Kind: "add"}}}
 	_, err := Run(context.Background(), st, p, paths, map[string]string{}, "broken caddyfile")
 	if err == nil || !strings.Contains(err.Error(), "Caddyfile") {
 		t.Fatalf("a broken Caddyfile must refuse the apply: %v", err)

@@ -209,3 +209,15 @@ vorschlagen“). Apply records every file it put on the box in
 whatever the manifest has but render no longer produces, so a removed
 service, a disabled operator or a removed llama does not keep running.
 `laib operator disable` also revokes the ops tokens.
+
+### Roles are verified, the Caddyfile validated, dependants protect a service (#50)
+
+A change to a role's output (the Caddyfile, Authelia's rules, AdGuard's
+rewrites) restarts the role's service and verifies it like any changed
+service; the rendered Caddyfile runs through `caddy validate` in the
+proxy's own image before anything is written, and a Caddyfile that does
+not validate refuses the whole apply. `laib remove <service>` refuses while
+another service names it in `after:` („… braucht … — erst dort
+entfernen“), before anything is stopped. The box's own proposals (the
+template-sync timer, actor `laib`) are approved by the box when the dial
+says auto; the same change proposed twice reuses the open proposal.
