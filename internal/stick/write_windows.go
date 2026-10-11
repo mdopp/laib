@@ -68,6 +68,23 @@ func volumesOnDisk(n int) []string {
 	return found
 }
 
+// InspectDevice reads what disk `device` is, without changing it (#51).
+// Get-Disk needs no Administrator rights.
+func InspectDevice(device string) (DeviceInfo, error) {
+	n, err := diskNumber(device)
+	if err != nil {
+		return DeviceInfo{Path: device}, err
+	}
+	out, err := run("powershell", "-NoProfile", "-Command", fmt.Sprintf(
+		`Get-Disk -Number %d | Select-Object FriendlyName,Size,@{n='Bus';e={"$($_.BusType)"}},IsBoot,IsSystem | ConvertTo-Json -Compress`, n))
+	if err != nil {
+		return DeviceInfo{Path: device}, fmt.Errorf("Get-Disk -Number %d: %v: %s", n, err, out)
+	}
+	d, err := parseWindowsDisk(out)
+	d.Path = device
+	return d, err
+}
+
 // WriteDevice writes the image file to physical disk `device`.
 func WriteDevice(image, device string, progress func(done, total int64)) error {
 	n, err := diskNumber(device)

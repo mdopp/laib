@@ -29,7 +29,7 @@ var in = bufio.NewReader(os.Stdin)
 func main() {
 	var b stick.Box
 	var sshKeyPath, password, out, device, streamName, isoPath string
-	var yes, printIgn, noGPU bool
+	var yes, printIgn, noGPU, forceDevice bool
 	flag.StringVar(&b.Hostname, "hostname", "", "box name, e.g. nuc")
 	flag.StringVar(&b.Domain, "domain", "", "domain the services live under, e.g. trial.example")
 	flag.StringVar(&b.LanIP, "lan-ip", "", "static LAN address of the box (empty = DHCP)")
@@ -44,6 +44,7 @@ func main() {
 	flag.StringVar(&isoPath, "iso", "", "use this downloaded live ISO instead of fetching one")
 	flag.StringVar(&out, "out", "", "where to write the customised ISO (default laib-<hostname>.iso)")
 	flag.StringVar(&device, "device", "", "USB device to write, e.g. /dev/sdb or /dev/disk4 (empty = ask)")
+	flag.BoolVar(&forceDevice, "force-device", false, "write even when --device is not a USB/SD device or is larger than 256 GB (never the system disk; --yes does not imply it)")
 	flag.BoolVar(&yes, "yes", false, "no questions: take flags and defaults")
 	flag.BoolVar(&printIgn, "print-ignition", false, "only print the box's Ignition and exit")
 	flag.Usage = usage
@@ -150,12 +151,22 @@ func main() {
 		device = prompt(true, "USB-Gerät beschreiben (leer = nur die ISO behalten)", "", "", nil)
 	}
 	if device == "" {
-		fmt.Println("\nDie ISO später auf einen Stick schreiben:")
-		fmt.Printf("  laib-stick --yes --iso %s --out %s --device %s\n", out, out, deviceExample())
+		fmt.Println("\nDie ISO später auf einen Stick schreiben (das Gerät des Sticks einsetzen):")
+		fmt.Printf("  laib-stick --yes --iso %s --out %s --device %s\n", out, out, stick.DeviceExample(runtime.GOOS))
 		fmt.Println("Dann die Box vom Stick booten; sie installiert sich und startet neu.")
 		return
 	}
-	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", device), false) {
+	// what the device is, before anything is written (#51): the system disk
+	// never, anything but a USB/SD device up to 256 GB only with --force-device
+	info, err := stick.InspectDevice(device)
+	if err != nil {
+		die(err.Error())
+	}
+	fmt.Println("\nZiel:", info)
+	if err := info.Refuse(forceDevice); err != nil {
+		die(err.Error())
+	}
+	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", info), false) {
 		fmt.Println("nicht geschrieben; die ISO liegt in", out)
 		return
 	}
@@ -321,16 +332,6 @@ func listDevices() {
 	if runtime.GOOS == "windows" {
 		fmt.Println("  (Gerät = die Nummer aus der Index-Spalte, z.B. 2)")
 	}
-}
-
-func deviceExample() string {
-	switch runtime.GOOS {
-	case "windows":
-		return "2"
-	case "darwin":
-		return "/dev/disk4"
-	}
-	return "/dev/sdX"
 }
 
 func indent(s string) string {
