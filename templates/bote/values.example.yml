@@ -2,11 +2,10 @@ HERMES_IMAGE: docker.io/nousresearch/hermes-agent:latest
 SIGNAL_IMAGE: docker.io/bbernhard/signal-cli-rest-api:latest
 SIGNAL_ACCOUNT: "+4915112345678"          # the Bote's own number, E.164, linked once via QR (README)
 SIGNAL_ALLOWED_USERS: "+4915198765432"    # the admin's number; more numbers comma-separated (ADR 0016 §5)
-ADMIN_NUMBER: "+4915198765432"            # whose messages may approve, with BOTE_HUMAN_TOKEN
+ADMIN_NUMBER: "+4915198765432"            # the one number the relay acts on (#48)
 MODEL_NAME: gemma-4-e4b
 THINKING_MODEL: qwen3.6-35b-a3b
 LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
-HUMAN_TOKEN: !secret BOTE_HUMAN_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: http://host.containers.internal:8700/mcp   # Haus's Haushalt source; empty until Haus exists
 FRAGE_URL: http://host.containers.internal:8710/v1          # Frage as an OpenAI-compatible tool endpoint
