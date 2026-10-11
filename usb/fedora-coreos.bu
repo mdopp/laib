@@ -92,6 +92,7 @@ storage:
           MP=${LAIB_MP:-/mnt/data}        # overridable for the test harness only
           ETC=${LAIB_ETC:-/etc}
           SYS=${LAIB_SYS:-/sys}
+          MDSTAT=${LAIB_MDSTAT:-/proc/mdstat}
           REC=$ETC/laib/data-disk
           log() { echo "laib-data-disk: $*"; }
           field() { sed -n "s/.*\b$1=\([^ ]*\).*/\1/p" "$REC"; }
@@ -104,17 +105,24 @@ storage:
           md_of() {   # the active md device of an array UUID, or nothing
             mdadm --detail --scan 2>/dev/null | awk -v u="UUID=$1" 'index($0, u) {print $2; exit}'
           }
+          start_inactive() {   # udev's incremental assembly holds an array INACTIVE while a member is
+            local m          # missing; the members are then busy, so --assemble cannot. Start it degraded:
+            for m in $(awk '/^md[0-9]+ : inactive/ {print $1}' "$MDSTAT" 2>/dev/null); do   # this is a recorded array of ours
+              log "/dev/$m is inactive (a member missing?): starting it degraded" >&2
+              mdadm --run "/dev/$m" >/dev/null 2>&1 || true
+            done
+          }
           assemble() {   # $1 = array UUID: assemble it (degraded is fine) and print the device
             local md i; md=$(md_of "$1")
-            if [[ -z "$md" ]]; then
+            for i in 1 2 3 4 5; do
+              [[ -z "$md" ]] || break
+              start_inactive
               mdadm --assemble --scan --uuid="$1" --run >/dev/null 2>&1 || true
               md=$(md_of "$1")
-            fi
+              [[ -n "$md" ]] || sleep 2   # udev may still be adding members
+            done
             [[ -n "$md" ]] || return 1
             md=$(readlink -f "$md")
-            # udev assembles incrementally and leaves an array INACTIVE while a
-            # member is missing (it waits for it); this is OUR recorded array,
-            # so start it degraded — mdadm-last-resort would do the same 30 s later
             for i in 1 2 3 4 5; do
               [[ "$(cat "$SYS/block/$(basename "$md")/md/array_state" 2>/dev/null)" == inactive ]] || break
               log "$md is inactive (a member missing?): starting it degraded" >&2
