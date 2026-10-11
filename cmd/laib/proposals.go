@@ -489,7 +489,19 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 		if ps == nil {
 			ps = []*proposal.Proposal{}
 		}
-		return emit(env, ps)
+		domain := ""
+		if st, err := loadState(env); err == nil {
+			domain = st.Box.Domain
+		}
+		type withCard struct {
+			*proposal.Proposal
+			Card proposal.Decision `json:"card"`
+		}
+		out := make([]withCard, 0, len(ps))
+		for _, p := range ps {
+			out = append(out, withCard{p, proposal.Card(p, domain)})
+		}
+		return emit(env, out)
 	}
 	if len(ps) == 0 {
 		fmt.Println("Inbox leer")
@@ -497,6 +509,19 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 	}
 	for _, p := range ps {
 		fmt.Printf("#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
+		if p.Status == "open" {
+			st, _ := loadState(env)
+			domain := ""
+			if st != nil {
+				domain = st.Box.Domain
+			}
+			c := proposal.Card(p, domain)
+			fmt.Printf("     %s\n", c.Summary)
+			for _, i := range c.Impact {
+				fmt.Printf("     · %s\n", i)
+			}
+			fmt.Printf("     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
+		}
 		if p.Class == "human" {
 			fmt.Println("     nur ein Mensch kann freigeben:")
 			for _, r := range p.Reasons {
