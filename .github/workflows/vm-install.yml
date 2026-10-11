@@ -194,7 +194,7 @@ jobs:
           sleep 3; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
-            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || true; exit 1; }
+            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || echo "(no ssh)"; echo "--- serial"; tail -c 12000 serial.log; exit 1; }
             sleep 10
           done
           $SSH 'set -euo pipefail
