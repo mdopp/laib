@@ -165,6 +165,18 @@ A warning (a second service for one purpose) always goes to a human, dial
 or not. Every auto decision is journaled as `laib approve` with the
 proposing hand named, so "who changed this?" has an answer.
 
+**The envelope fails closed (#35).** Every class-2 action (`write`, `exec`,
+`restart`) runs inside it: the budget (eight per service per hour) is read
+from the journal, and a journal that cannot be read refuses the action;
+the first action of an hour takes a restic snapshot of the service's
+backed-up data paths (`backup: false` paths are not snapshotted; pre-repair
+snapshots are kept seven days), and a missing backup target or a failed
+snapshot refuses the action — `policy.yml envelope.snapshot: optional` is
+the only way around it. `write` and `read` go through an `os.Root` opened
+on the service's data path, so no symlink and no `..` leaves it; `exec`
+runs only in the service's own containers; `look` runs a read-only command
+there without budget or snapshot, because looking is unbounded.
+
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
 on Solaris's own cadence; red lines also reach it through the webhook. Its
 job is triage and proposals, never apply.

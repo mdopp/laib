@@ -173,3 +173,11 @@ the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
 tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
 diag` turns the last four into findings. An enabled operator that does
 nothing is never silent.
+
+### `laib look <service> [--container c] -- <command>`
+
+A read-only command (cat, ls, grep, ps, df, stat, find, …) in one of the
+service's own containers: no budget, no snapshot, journaled. `laib exec`
+is for changing something and stays budgeted. Neither reaches another
+service's container. `policy.yml envelope.snapshot: optional` lets a
+class-2 action go ahead without a pre-repair snapshot; the default refuses.

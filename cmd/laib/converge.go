@@ -60,7 +60,11 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	// Budget: three converge applies per hour; a service that needs more is
 	// flapping, and flapping is a bug for a human or the ops hand, not a loop.
 	since := time.Now().Add(-time.Hour)
-	recent, _ := journal.Read(env.paths.Journal, since)
+	recent, _, err := journal.ReadCounted(env.paths.Journal, since)
+	if err != nil {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "Journal nicht lesbar, kein Converge: " + err.Error()})
+		return exitRed
+	}
 	runs := 0
 	for _, e := range recent {
 		if e.Verb == "converge" && e.Result != "info" {
