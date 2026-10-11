@@ -10,7 +10,7 @@ export LAIB_GH_TOKEN=github_pat_…
 curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" \
   https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -H "Accept: application/vnd.github.raw" \
   | bash -s -- --domain <domain> --lan-ip <ip> \
-       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
+       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease
 ```
 
 Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
@@ -19,9 +19,11 @@ token and the API path go away and the plain raw URL works.
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points
-`--model-url` at a peer's llama proxy or at a cloud API (`https://…`,
-then `laib secret set MODEL_API_KEY` before the first apply). Operator,
-Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and `${MODEL_LEASE}`.
+`--model-url` at a peer's llama proxy or at a cloud API, then
+`laib secret set MODEL_API_KEY` before the first apply: the cloud API's
+key, or the peer box's own `MODEL_API_KEY` (its lease API refuses without
+it, #42). Operator, Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and
+`${MODEL_LEASE}`.
 
 What it does, in order:
 
@@ -73,7 +75,7 @@ SSH Public Key (Datei) [~/.ssh/id_ed25519.pub]:
 Konsolen-Passwort für core setzen? [j/N]: j
 Hat die Box eine GPU? [j/N]:
 URL eines entfernten Modells: http://192.168.178.100:11435/v1
-Lease-URL der entfernten llama: http://192.168.178.100:8787/api/model-lease
+Lease-URL der entfernten llama: http://192.168.178.100:11435/api/model-lease
 GitHub-Token (solange mdopp/laib privat ist): github_pat_…
 
 Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
@@ -129,7 +131,7 @@ What makes or breaks the first boot is settled before the stick is built:
   to deSEC or Cloudflare, both free; then `dns.provider` + `DNS_API_TOKEN`.)
 - **The model**: the Kraftwerk's model proxy answers on
   `http://192.168.178.100:11435/v1` and the lease on
-  `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
+  `http://192.168.178.100:11435/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
 - **The GitHub token**: repository `mdopp/laib`, permission *Contents:
   read*, and *Packages: read* for the three images `ghcr.io/mdopp/laib-caddy`,
@@ -169,7 +171,7 @@ export LAIB_GH_TOKEN=github_pat_…
 curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh \
   | bash -s -- --domain trial.example --lan-ip 192.168.178.30 \
-       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
+       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:11435/api/model-lease
 laib=/var/opt/laib/laib
 
 # 2. certificates. dopp.cloud is at Strato (no DNS API) and the house's port 80

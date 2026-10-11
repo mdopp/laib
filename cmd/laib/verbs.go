@@ -539,10 +539,10 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	model := ""
 	if modelURL != "" {
 		model = fmt.Sprintf("model:                    # no GPU here: the LLM is remote (a peer's llama proxy or a cloud API)\n  url: %s\n", modelURL)
-		if strings.HasPrefix(modelURL, "https://") {
-			// A cloud API wants a key; a peer's LAN proxy does not.
-			model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply\n"
-		}
+		// A cloud API wants its key; a peer's proxy wants that box's model key
+		// (the lease API refuses without it, #42): laib secret set MODEL_API_KEY
+		// with the value the GPU box's `laib secret list` names.
+		model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply (cloud: the API key; a peer box: its MODEL_API_KEY)\n"
 		if modelLease != "" {
 			model += fmt.Sprintf("  lease: %s\n", modelLease)
 		}

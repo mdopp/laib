@@ -24,7 +24,7 @@ NUC runs the whole household side against the GPU box's model.
 
 ### Phase 1 — Laib on the NUC (no GPU, remote model)
 
-1. Fedora CoreOS on the NUC, `scripts/install-box.sh --domain <trial domain> --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease`.
+1. Fedora CoreOS on the NUC, `scripts/install-box.sh --domain <trial domain> --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease`.
 2. `laib propose --add caddy`, `--add authelia` (+ lldap), `--add adguard`, `--add whoami`; approve; `laib status` green; `laib.<domain>` behind Authelia.
 3. The two ADR 0015 checks are not needed here yet; this phase proves the kernel, Caddy with DNS-01, SSO, converge, backup to the NAS.
 

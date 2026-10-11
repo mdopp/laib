@@ -243,16 +243,16 @@ func TestHouseholdRequestsDoNotRenewTheForeignWindow(t *testing.T) {
 // after the 4 h TTL; the response says how often.
 func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 	s, srv, calls, cfg := server42(t)
-	s.cfg.Renew = 200 * time.Millisecond
+	s.cfg.Renew = time.Second
 	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"thinking","holder":"bote","ttl_s":14400}`)
 	if code != 200 {
 		t.Fatalf("%d %v", code, out)
 	}
-	if rs, _ := out["renew_s"].(float64); rs <= 0 || rs > 1 {
+	if rs, _ := out["renew_s"].(float64); rs != 1 {
 		t.Fatalf("the answer must say when to renew: %v", out)
 	}
 	l := s.read()
-	if l.Until.After(time.Now().Add(time.Second)) {
+	if l.Until.After(time.Now().Add(2 * time.Second)) {
 		t.Fatalf("until must be one renewal interval away, not the ttl: %v", l.Until)
 	}
 	if l.Deadline.Before(time.Now().Add(3 * time.Hour)) {
@@ -264,7 +264,7 @@ func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 	if l2 := s.read(); !l2.Until.After(l.Until) || !l2.Deadline.Equal(l.Deadline) {
 		t.Fatalf("renewal: %v→%v, deadline %v→%v", l.Until, l2.Until, l.Deadline, l2.Deadline)
 	}
-	time.Sleep(250 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	s.expireOnce(context.Background())
 	if s.read() != nil {
 		t.Fatal("a holder that stopped renewing still holds the card")
