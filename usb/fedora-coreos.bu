@@ -135,7 +135,8 @@ storage:
             cat > "$ETC/systemd/system/mnt-data.mount" <<UNIT
           [Unit]
           Description=Laib data disk (RAID1, filesystem $fs)
-          After=local-fs.target laib-data-disk.service
+          After=laib-data-disk.service
+          Requires=laib-data-disk.service
 
           [Mount]
           What=/dev/disk/by-uuid/$fs
@@ -298,7 +299,12 @@ systemd:
         [Unit]
         Description=Laib data disk: assemble or create the RAID1 and mount /mnt/data
         DefaultDependencies=no
-        After=local-fs.target systemd-udevd.service
+        # the script is in /usr/local/bin = /var/usrlocal, a mount of its own on CoreOS: wait
+        # for that mount, not for local-fs.target — mnt-data.mount (written below) is part of
+        # local-fs.target, and After= that target was an ordering cycle systemd broke by
+        # dropping the target, sometimes spawning this before /var was there (203/EXEC)
+        RequiresMountsFor=/var/usrlocal/bin
+        After=systemd-udevd.service systemd-udev-trigger.service
         Before=user@1000.service laib-firstboot.service multi-user.target
 
         [Service]
