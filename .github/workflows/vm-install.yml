@@ -134,6 +134,17 @@ jobs:
                 $L restore latest caddy
                 cat /mnt/data/stacks/caddy/data/vm-marker | grep -q "before backup"
                 $L journal --since 1h | grep -E "backup|restore"'
+      - name: update path — install-box.sh again, a pinned version, then latest
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH 'set -e; export LAIB_GH_TOKEN="${{ github.token }}"
+                fetch() { curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh; }
+                fetch | bash -s -- --version v0.3.2 | tail -3
+                /var/opt/laib/laib version | grep -q v0.3.2
+                fetch | bash -s -- | tail -3
+                /var/opt/laib/laib version | grep -qv v0.3.2
+                curl -fsS http://127.0.0.1:5900/ready | grep -q bereit
+                systemctl --user is-active laib.service caddy.service'
       - name: logs
         if: always()
         run: |
