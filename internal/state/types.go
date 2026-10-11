@@ -78,6 +78,9 @@ type Laib struct {
 	Port   int    `yaml:"port"`   // default 5900
 	Listen string `yaml:"listen"` // default 127.0.0.1; "0.0.0.0" lets pods reach /mcp, the nftables drop keeps the LAN out
 	Group  string `yaml:"group"`  // Authelia group for the pages, default "admins"
+	// HooksImage is the container template hooks run in (#36): Python, bcrypt,
+	// curl, openssl. Default ghcr.io/mdopp/laib-hooks:latest.
+	HooksImage string `yaml:"hooksImage"`
 }
 
 // Roles names the service that plays each platform role.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Radicale's config: LDAP auth against LLDAP in the auth pod; rights: every
+# pre-start (#36): Radicale's config before the unit starts. LDAP auth against LLDAP in the auth pod; rights: every
 # user owns their own collections. Rewritten on every apply (values may change).
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
 cat > "$C/config" <<CFG
-# rendered by laib post-deploy (templates/radicale)
+# rendered by laib pre-start (templates/radicale)
 [server]
 hosts = 0.0.0.0:5232
 [auth]

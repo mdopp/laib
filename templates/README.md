@@ -10,9 +10,9 @@ state loader would.
 
 | Template | Role | Notes |
 |---|---|---|
-| adguard | dns | AdGuard Home on the host network; the hook writes the first config with the admin user and syncs laib's rewrites via the API |
+| adguard | dns | AdGuard Home on the host network; pre-start writes the first config with the admin user, post-deploy syncs laib's rewrites via the API |
 | caddy | proxy | host network (the one carve-out), reads `render/caddy/Caddyfile` |
-| auth | sso, identity | Authelia + LLDAP in one pod; the hook writes configuration.yml, the OIDC key and seeds LLDAP |
+| auth | sso, identity | Authelia + LLDAP in one pod; pre-start writes configuration.yml and the OIDC key, post-deploy seeds LLDAP |
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |
 | werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |
 | bote | — | Hermes as stock with signal-cli: the agent you talk to; config rendered by the hook (ADR 0016) |

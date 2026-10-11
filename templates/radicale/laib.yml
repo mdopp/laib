@@ -14,6 +14,7 @@ routes:
 secrets: []
 data:
   - path: ${DATA_DIR}/radicale/data
+  - path: ${DATA_DIR}/radicale/config   # written by pre-start (#36)
 health:
   http: http://127.0.0.1:5232/
 ports:

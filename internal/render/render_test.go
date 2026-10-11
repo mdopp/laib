@@ -122,3 +122,23 @@ func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
 		t.Fatalf("the default update time must not be the backup's 03:00:\n%s", out["systemd/podman-auto-update.timer.d/laib.conf"])
 	}
 }
+
+// Without a service that declares oidc, the clients fragment must not open
+// an identity_providers block: Authelia refuses one without jwks and
+// clients and crash-loops (#36, VM run 38163402522).
+func TestNoOIDCClientsRendersNoIdentityProvidersBlock(t *testing.T) {
+	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range st.Services {
+		s.Contract.OIDC = nil
+	}
+	out, err := Render(st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out["authelia/laib-clients.yml"], "identity_providers") {
+		t.Fatalf("an empty oidc block:\n%s", out["authelia/laib-clients.yml"])
+	}
+}
