@@ -2,8 +2,11 @@ package apply
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -43,6 +46,26 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 	}
 	hook := filepath.Join(repo, "services", "whoami", "post-deploy")
 	os.WriteFile(hook, []byte("#!/bin/sh\necho hello $LAIB_SERVICE\necho \"laib-secret: WHOAMI_API=abc123\"\n"), 0o755)
+	// hooks run in the hooks image on a box; here the spec is executed directly
+	var specs []HookSpec
+	realHook := RunHook
+	t.Cleanup(func() { RunHook = realHook })
+	var phases []string // "<phase> after <n> systemctl starts": pre-start must see none
+	RunHook = func(ctx context.Context, h HookSpec) (string, error) {
+		specs = append(specs, h)
+		envb, _ := os.ReadFile(h.EnvFile)
+		phase := regexp.MustCompile(`LAIB_PHASE=(\S+)`).FindStringSubmatch(string(envb))
+		starts := 0
+		for _, c := range calls {
+			if strings.Contains(c, " start ") || strings.Contains(c, " restart ") {
+				starts++
+			}
+		}
+		phases = append(phases, fmt.Sprintf("%s after %d starts", phase[1], starts))
+		return runSpecLocally(t, h)
+	}
+	pre := filepath.Join(repo, "services", "whoami", "pre-start")
+	os.WriteFile(pre, []byte("#!/bin/sh\necho pre $LAIB_PHASE\nmkdir -p $LAIB_DATA_DIR/whoami/cfg && echo made > $LAIB_DATA_DIR/whoami/cfg/by-pre-start\n"), 0o755)
 	st.Services["whoami"].Dir = filepath.Join(repo, "services", "whoami")
 	st.Box.DataDir = filepath.Join(home, "data") // apply creates the declared data paths; the fixture's /mnt/data is not writable here
 	p, err := plan.Compute(context.Background(), st, nil, paths, "")
@@ -55,6 +78,23 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 	}
 	if !res.Green || res.Commit == "" {
 		t.Fatalf("%+v", res)
+	}
+	if len(specs) != 2 || specs[1].Image != DefaultHooksImage || !strings.HasSuffix(specs[1].Command[0], "/post-deploy") {
+		t.Fatalf("the hooks did not run in the hooks image: %+v", specs)
+	}
+	if phases[0] != "pre-start after 0 starts" || !strings.HasPrefix(phases[1], "post-deploy after ") || phases[1] == "post-deploy after 0 starts" {
+		t.Fatalf("pre-start must run before the first start, post-deploy after it: %v", phases)
+	}
+	if _, err := os.Stat(filepath.Join(st.Box.DataDir, "whoami", "cfg", "by-pre-start")); err != nil {
+		t.Fatal("pre-start did not write into the service's data path")
+	}
+	for _, m := range specs[0].Mounts {
+		if strings.HasPrefix(m, st.Services["whoami"].Dir) && !strings.HasSuffix(m, ":ro") {
+			t.Fatalf("the service folder is mounted writable: %v", specs[0].Mounts)
+		}
+	}
+	if _, err := os.Stat(specs[0].EnvFile); err == nil {
+		t.Fatal("the env file with the secrets was left behind")
 	}
 	if res.NewSecrets["WHOAMI_API"] != "abc123" {
 		t.Fatalf("hook secret not captured: %+v", res.NewSecrets)
@@ -124,4 +164,19 @@ func copyTree(t *testing.T, src, dst string) {
 		b, _ := os.ReadFile(p)
 		return os.WriteFile(target, b, 0o644)
 	})
+}
+
+// runSpecLocally executes a hook spec on this machine: the env file as
+// environment, the hook as the command — what the hooks image does.
+func runSpecLocally(t *testing.T, h HookSpec) (string, error) {
+	t.Helper()
+	envb, err := os.ReadFile(h.EnvFile)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(h.Command[0], h.Command[1:]...)
+	cmd.Dir = h.Dir
+	cmd.Env = append(os.Environ(), strings.Split(strings.TrimSpace(string(envb)), "\n")...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
