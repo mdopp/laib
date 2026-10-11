@@ -15,7 +15,7 @@ routes:
   - host: files
     port: 8088
     exposure: public
-    auth: one_factor
+    auth: none                     # File Browser logs in itself (#55); sync (Syncthing's GUI) stays behind Authelia
 secrets:
   - name: SAMBA_PASSWORD
 data:

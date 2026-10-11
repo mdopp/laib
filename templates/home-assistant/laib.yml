@@ -19,6 +19,9 @@ routes:
     group: admins
 secrets:
   - name: ZWAVE_SESSION_SECRET
+  - name: HA_TOKEN                   # optional: a long-lived HA token lets laib diag check the integrations (#55)
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/home-assistant/homeassistant
   - path: ${DATA_DIR}/home-assistant/zwave-js

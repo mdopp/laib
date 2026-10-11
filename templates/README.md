@@ -8,6 +8,25 @@ folder to `services/<name>/` in the state repo, renaming
 `laib template lint templates/<name>` validates a folder exactly like the
 state loader would.
 
+## Route policy
+
+Two kinds of route, written into every `laib.yml` (#55):
+
+| Kind | `auth:` | Why | Templates |
+|---|---|---|---|
+| browser only, behind Authelia | `auth: one_factor` / `two_factor` | admin surfaces people open in a browser; forward-auth does the login | laib, sync (Syncthing), ldap, dns, adguard, whoami |
+| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless, files (File Browser), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
+
+OIDC clients (immich, vaultwarden, audiobookshelf) fetch Authelia's
+discovery document over HTTPS: they need a certificate they trust — real
+certificates (#45, the trial domain at deSEC), never `tls: internal`.
+Radicale binds LDAP with LLDAP's read-only account `radicale`
+(`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
+auth template), never as the admin. Home Assistant's integrations (three
+Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server, Frage as
+conversation agent) are set up by hand once; with the optional secret
+`HA_TOKEN` (a long-lived HA token) `laib diag` lists what is still missing.
+
 | Template | Role | Notes |
 |---|---|---|
 | adguard | dns | AdGuard Home on the host network; pre-start writes the first config with the admin user, post-deploy syncs laib's rewrites via the API |

@@ -137,6 +137,8 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 	if _, f := operatorState(operatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
+	// Home Assistant's wiring (#55): with a token, the manual list becomes a checklist
+	out = append(out, haFindings(ctx, st, sec)...)
 	// The backup target: none is yellow, one on the data disk itself is a nudge.
 	switch repo := st.Box.Backup.Repo; {
 	case repo == "":

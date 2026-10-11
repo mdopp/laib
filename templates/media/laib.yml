@@ -13,7 +13,7 @@ routes:
   - host: media
     port: 8096
     exposure: public
-    auth: one_factor
+    auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP
     caddy: |
       # Jellyfin streams and websockets
       proxy_buffering off
