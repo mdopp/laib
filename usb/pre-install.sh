@@ -41,6 +41,36 @@ fi
 
 echo "pre-install: selected $BEST ($(( BEST_SIZE / 1073741824 )) GiB) as OS disk"
 
+# An installed box is not installed again by accident (#33): a stick left in a
+# machine that boots USB first runs this live system at every reboot. Only a
+# stick built with `laib-stick --reinstall` reinstalls; the data array stays
+# either way. Internal disks only, like the OS disk above (the stick itself
+# carries an EFI-SYSTEM partition too).
+INSTALLED=""
+for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
+  name=$(basename "$dev")
+  [[ "$name" == "$LIVE_DISK" || "$name" == zram* || "$name" == loop* ]] && continue
+  [[ "$(cat /sys/block/${name}/removable 2>/dev/null)" == "1" ]] && continue
+  [[ "$(lsblk -dno TRAN "$dev" 2>/dev/null | tr -d ' ')" == "usb" ]] && continue
+  labels=" $(lsblk -nro LABEL "$dev" | tr '\n' ' ') "
+  if [[ "$labels" == *" boot "* && "$labels" == *" root "* ]]; then
+    INSTALLED="$INSTALLED $dev (Fedora CoreOS)"
+  fi
+  for part in $(lsblk -nrpo NAME "$dev"); do
+    if mdadm --examine --export "$part" 2>/dev/null | grep -q '^MD_NAME=.*:data$'; then
+      INSTALLED="$INSTALLED $part (Laib-Daten)"
+      break
+    fi
+  done
+done
+if [[ -n "$INSTALLED" && "${LAIB_REINSTALL:-}" != "1" ]]; then
+  MSG="laib: Diese Box ist schon installiert:$INSTALLED. Dieser Stick installiert sie nicht noch einmal - bitte den Stick abziehen und die Box neu starten. Neu aufsetzen (die Daten bleiben) kann nur ein Stick von: laib-stick --reinstall"
+  echo "$MSG" >&2
+  echo "$MSG" > /dev/console 2>/dev/null || true
+  exit 1
+fi
+[[ -n "$INSTALLED" ]] && echo "pre-install: reinstalling over$INSTALLED (laib-stick --reinstall); the data array is kept"
+
 # Write dest-device into installer.d so coreos-installer picks it up
 mkdir -p /etc/coreos/installer.d
 cat > /etc/coreos/installer.d/0050-dest-device.yaml <<DISKEOF

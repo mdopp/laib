@@ -28,6 +28,7 @@ type Box struct {
 	GPU        bool
 	GHToken    string
 	Source     string // base URL serving install-box.sh and the binaries of one build (the VM job); "" = the latest release
+	Reinstall  bool   // this stick may install over an installed box (the data array is kept); off by default (#33)
 }
 
 var placeholder = regexp.MustCompile(`\$\{([A-Z_]+)\}`)

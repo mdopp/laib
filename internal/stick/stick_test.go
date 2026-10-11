@@ -97,9 +97,32 @@ func TestSHA512CryptKnownVector(t *testing.T) {
 	}
 }
 
+// A stick left in a USB-first machine boots the live system at every reboot;
+// it must not reinstall a box that is already installed (#33). Only a stick
+// built with --reinstall may, and the pre-install script knows which it is.
+func TestLiveIgnitionGuardsAnInstalledBox(t *testing.T) {
+	dest, _ := DestIgnition(box())
+	for _, tc := range []struct {
+		reinstall bool
+		want      string
+	}{{false, "export LAIB_REINSTALL=''"}, {true, "export LAIB_REINSTALL='1'"}} {
+		live, err := LiveIgnition(dest, "nuc", tc.reinstall)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := decodeDataURLs(t, live)
+		if !strings.Contains(files, tc.want) {
+			t.Errorf("reinstall=%v: pre-install lacks %q", tc.reinstall, tc.want)
+		}
+		if !strings.Contains(files, "Diese Box ist schon installiert") {
+			t.Error("pre-install has no guard against reinstalling an installed box")
+		}
+	}
+}
+
 func TestLiveIgnitionCarriesDestAndScripts(t *testing.T) {
 	dest, _ := DestIgnition(box())
-	live, err := LiveIgnition(dest, "nuc")
+	live, err := LiveIgnition(dest, "nuc", false)
 	if err != nil {
 		t.Fatal(err)
 	}
