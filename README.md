@@ -49,6 +49,23 @@ docs/                DESIGN.md, INTERFACE.md, STATE.md, TESTING.md, MIGRATION.md
 testdata/golden      renderer golden files
 ```
 
+## Stand (2026-10-11)
+
+Nothing has run on a real box yet. What exists and how far it is proven:
+
+| Piece | Where | Proof |
+|---|---|---|
+| Kernel: state repo, plan/apply, converge, operator verbs, MCP, pages | `cmd/laib`, `internal/` | unit + golden tests, e2e with shims, real Quadlet on a runner |
+| The stick: `laib-stick`, first boot, data disk (RAID1, one member) | `cmd/laib-stick`, `usb/` | CI `vm-install`: KVM guest installs CoreOS, reboots, `laib` ready, mirror joins, reinstall keeps data |
+| First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
+| Operator (admin agent), lease, Frage | `cmd/laib-operator`, `cmd/laib-lease`, `cmd/frage` | e2e with a scripted model; never against a real model |
+| Bote (Hermes on Signal) with the `haus` and `automat` tools | `templates/bote`, `cmd/automat` | config rendered and checked against Hermes' example; automat unit-tested against a fake HA |
+| Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
+| 21 templates for every unit the box runs today | `templates/` | lint + render; installed only in the VM (caddy) |
+
+The NUC trial (#23, #27) is the first real run; `docs/INSTALL.md` has the
+pre-flight. The Kraftwerk follows `docs/ZIELBILD.md`.
+
 ## Read first
 
 0. [`docs/ZIELBILD.md`](docs/ZIELBILD.md) — the end state (one box, the
