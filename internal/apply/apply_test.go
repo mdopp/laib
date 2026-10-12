@@ -27,7 +27,7 @@ func TestRunWritesReloadsRestartsAndVerifies(t *testing.T) {
 	home := t.TempDir()
 	repo := filepath.Join(home, "state")
 	copyTree(t, "../../testdata/golden/basic/state", repo)
-	paths := boxfs.Paths{Home: home, State: repo, Quadlet: filepath.Join(home, "q"), Render: filepath.Join(home, "r"), Lock: filepath.Join(home, "lock")}
+	paths := boxfs.Paths{Home: home, State: repo, Quadlet: filepath.Join(home, "q"), Render: filepath.Join(home, "r"), Systemd: filepath.Join(home, "s"), Lock: filepath.Join(home, "lock")}
 
 	var calls []string
 	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
