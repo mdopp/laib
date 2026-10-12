@@ -36,6 +36,7 @@ cat > "$WORK/bin/podman" <<'SH'
 #!/usr/bin/env sh
 # run: a hook in the hooks image (#36) — here it runs on this machine with the env file, same paths
 case "$1" in
+  unshare) shift; exec "$@";;   # restic in the user namespace (#40): the shim runs it as is
   exec)
     [ -n "${SHIM_PODMAN_EXEC_FAIL:-}" ] && { echo "Error: container is not running (shim)" >&2; exit 125; }
     shift; c=$1; shift; echo "exec in $c: $*";;

@@ -88,3 +88,14 @@ One tool, one declaration per service, one key.
 | SMB credentials in config.json | restic repo URL in `box.yml`, password in `secrets.age` |
 
 Issue #4 implements this.
+
+## Restic runs in podman's user namespace
+
+The services' files belong to the containers' users, which rootless podman
+maps onto subuids of `core` — a database's data directory (mode 0700) is
+not readable by `core` itself. `laib backup`, `restore` and `backup check`
+therefore run restic as `podman unshare restic …`: inside the namespace the
+files are readable, and a restore gives them their owners back. On a laptop
+without podman restic runs as is. (Found by vm-install's disaster-recovery
+scenario: without it the database was silently missing from every backup.)
+
