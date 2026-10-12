@@ -137,6 +137,10 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 	if _, f := operatorState(operatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
+	// The outside watchdog (#57): without it, a dead box tells nobody.
+	if st.Box.Watchdog.URL == "" {
+		out = append(out, Finding{Severity: "gelb", Probe: "watchdog", Detail: "kein Wächter außerhalb der Box (box.yml watchdog.url): wenn die Box ausfällt, erfährt es niemand", Fix: "einen healthchecks-artigen Ping-URL eintragen (eigener Dienst oder ein freier Anbieter); laib serve meldet sich alle fünf Minuten, Stille wird draußen zum Push"})
+	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
 	all, _ := journal.Read(env.paths.Journal, time.Time{})
