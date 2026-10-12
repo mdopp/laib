@@ -48,12 +48,23 @@ func Append(dir string, e Entry) error {
 
 // Read returns entries since a time, oldest first.
 func Read(dir string, since time.Time) ([]Entry, error) {
+	es, _, err := ReadCounted(dir, since)
+	return es, err
+}
+
+// ReadCounted reads like Read and also counts the lines it could not parse:
+// one broken line (a hand's note, a crash mid-write) must not hide a whole
+// day, and the caller that budgets by the journal decides what the count
+// means (#35). A line too long for the scanner or an unreadable file is an
+// error, never silently the end of the day.
+func ReadCounted(dir string, since time.Time) ([]Entry, int, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	sort.Strings(files)
 	var out []Entry
+	skipped := 0
 	for _, file := range files {
 		day := strings.TrimSuffix(filepath.Base(file), ".jsonl")
 		if d, err := time.Parse("2006-01-02", day); err == nil && d.Add(24*time.Hour).Before(since) {
@@ -61,23 +72,27 @@ func Read(dir string, since time.Time) ([]Entry, error) {
 		}
 		f, err := os.Open(file)
 		if err != nil {
-			return nil, err
+			return nil, skipped, err
 		}
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 1<<20), 1<<20)
 		for sc.Scan() {
 			var e Entry
 			if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
-				f.Close()
-				return nil, fmt.Errorf("%s: %w", file, err)
+				skipped++
+				continue
 			}
 			if !e.T.Before(since) {
 				out = append(out, e)
 			}
 		}
+		if err := sc.Err(); err != nil {
+			f.Close()
+			return nil, skipped, fmt.Errorf("%s: %w", file, err)
+		}
 		f.Close()
 	}
-	return out, nil
+	return out, skipped, nil
 }
 
 // Last returns the newest entry, if any.

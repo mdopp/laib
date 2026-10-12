@@ -41,7 +41,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 			if !r.Expires.IsZero() {
 				exp = r.Expires.Local().Format("02.01. 15:04")
 			}
-			fmt.Printf("%-8s %-8s created %s  expires %s  %s\n", r.ID, r.Hand, r.Created.Local().Format("02.01. 15:04"), exp, r.Note)
+			fmt.Fprintf(env.w(), "%-8s %-8s created %s  expires %s  %s\n", r.ID, r.Hand, r.Created.Local().Format("02.01. 15:04"), exp, r.Note)
 		}
 		return exitOK
 	case "revoke":
@@ -55,7 +55,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 			return fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "revoke " + args[1]})
-		fmt.Println("widerrufen:", args[1])
+		fmt.Fprintln(env.w(), "widerrufen:", args[1])
 		return exitOK
 	case "mint":
 		if len(args) < 2 {
@@ -95,7 +95,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"token": plain, "id": rec.ID, "hand": hand, "ceiling": h.Ceiling, "expires": rec.Expires})
 		}
-		fmt.Printf("%s\n# id %s · hand %s · ceiling %s · shown once, never stored in clear\n", plain, rec.ID, hand, h.Ceiling)
+		fmt.Fprintf(env.w(), "%s\n# id %s · hand %s · ceiling %s · shown once, never stored in clear\n", plain, rec.ID, hand, h.Ceiling)
 		return exitOK
 	}
 	return fail(fmt.Errorf("unknown token subcommand %q", args[0]))

@@ -29,21 +29,27 @@ var in = bufio.NewReader(os.Stdin)
 func main() {
 	var b stick.Box
 	var sshKeyPath, password, out, device, streamName, isoPath string
-	var yes, printIgn, noGPU bool
+	var yes, printIgn, noGPU, forceDevice bool
 	flag.StringVar(&b.Hostname, "hostname", "", "box name, e.g. nuc")
 	flag.StringVar(&b.Domain, "domain", "", "domain the services live under, e.g. trial.example")
 	flag.StringVar(&b.LanIP, "lan-ip", "", "static LAN address of the box (empty = DHCP)")
 	flag.StringVar(&sshKeyPath, "ssh-key", "", "public key file for the core user")
 	flag.StringVar(&password, "password", "", "console password for core (empty = none)")
 	flag.BoolVar(&b.GPU, "gpu", false, "the box has a GPU and runs llama itself")
+	flag.BoolVar(&b.Reinstall, "reinstall", false, "this stick may reinstall a box that is already installed (the data disk is kept); without it, a stick left in an installed box does nothing")
 	flag.BoolVar(&noGPU, "no-gpu", false, "no GPU: a remote model answers (--model-url)")
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
 	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token while mdopp/laib is private")
+	flag.StringVar(&b.DNSProvider, "dns-provider", "", "DNS provider with an API for DNS-01 certificates (desec, cloudflare, hetzner, …); the domain's zone must be there")
+	flag.StringVar(&b.DNSToken, "dns-token", os.Getenv("LAIB_DNS_TOKEN"), "the DNS provider's API token (becomes the secret DNS_API_TOKEN)")
+	flag.StringVar(&b.TLS, "tls", "", "\"internal\": Caddy's own CA instead of Let's Encrypt — a laptop-only trial, phones cannot trust it")
+	flag.StringVar(&b.Source, "source", "", "tests only: base URL serving install-box.sh and one build's binaries, instead of the latest release (the VM job)")
 	flag.StringVar(&streamName, "stream", "stable", "Fedora CoreOS stream")
 	flag.StringVar(&isoPath, "iso", "", "use this downloaded live ISO instead of fetching one")
 	flag.StringVar(&out, "out", "", "where to write the customised ISO (default laib-<hostname>.iso)")
 	flag.StringVar(&device, "device", "", "USB device to write, e.g. /dev/sdb or /dev/disk4 (empty = ask)")
+	flag.BoolVar(&forceDevice, "force-device", false, "write even when --device is not a USB/SD device or is larger than 256 GB (never the system disk; --yes does not imply it)")
 	flag.BoolVar(&yes, "yes", false, "no questions: take flags and defaults")
 	flag.BoolVar(&printIgn, "print-ignition", false, "only print the box's Ignition and exit")
 	flag.Usage = usage
@@ -103,6 +109,21 @@ func main() {
 		}
 	}
 	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
+	if b.TLS == "" {
+		b.DNSProvider = prompt(ask, "DNS-Anbieter mit API für echte Zertifikate (desec, cloudflare, hetzner, …; die Zone der Domain muss dort liegen; leer = Caddys eigene CA, nur für einen Laptop-Versuch)", b.DNSProvider, "", nil)
+		if b.DNSProvider != "" {
+			b.DNSToken = prompt(ask, "API-Token des DNS-Anbieters", b.DNSToken, "", nil)
+			if b.DNSToken == "" {
+				die("ohne Token kein DNS-01: --dns-token oder LAIB_DNS_TOKEN")
+			}
+		} else {
+			b.TLS = "internal"
+			fmt.Fprintln(os.Stderr, "Hinweis: ohne DNS-Anbieter signiert Caddy selbst (tls: internal); Handys und ihre Widgets vertrauen dem nicht (#45)")
+		}
+	}
+	if ask && !b.Reinstall {
+		b.Reinstall = yesno("Soll dieser Stick eine schon installierte Box neu aufsetzen? (Die Datenplatte bleibt. Ohne Ja tut ein vergessener Stick nichts.)", false)
+	}
 
 	dest, err := stick.DestIgnition(b)
 	if err != nil {
@@ -113,7 +134,7 @@ func main() {
 		fmt.Println()
 		return
 	}
-	live, err := stick.LiveIgnition(dest, b.Hostname)
+	live, err := stick.LiveIgnition(dest, b.Hostname, b.Reinstall)
 	if err != nil {
 		die(err.Error())
 	}
@@ -150,12 +171,22 @@ func main() {
 		device = prompt(true, "USB-Gerät beschreiben (leer = nur die ISO behalten)", "", "", nil)
 	}
 	if device == "" {
-		fmt.Println("\nDie ISO später auf einen Stick schreiben:")
-		fmt.Printf("  laib-stick --yes --iso %s --out %s --device %s\n", out, out, deviceExample())
+		fmt.Println("\nDie ISO später auf einen Stick schreiben (das Gerät des Sticks einsetzen):")
+		fmt.Printf("  laib-stick --yes --iso %s --out %s --device %s\n", out, out, stick.DeviceExample(runtime.GOOS))
 		fmt.Println("Dann die Box vom Stick booten; sie installiert sich und startet neu.")
 		return
 	}
-	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", device), false) {
+	// what the device is, before anything is written (#51): the system disk
+	// never, anything but a USB/SD device up to 256 GB only with --force-device
+	info, err := stick.InspectDevice(device)
+	if err != nil {
+		die(err.Error())
+	}
+	fmt.Println("\nZiel:", info)
+	if err := info.Refuse(forceDevice); err != nil {
+		die(err.Error())
+	}
+	if ask && !yesno(fmt.Sprintf("ALLES auf %s wird gelöscht. Wirklich schreiben?", info), false) {
 		fmt.Println("nicht geschrieben; die ISO liegt in", out)
 		return
 	}
@@ -164,7 +195,8 @@ func main() {
 	}
 	fmt.Println()
 	fmt.Println("\nStick geschrieben. Box vom Stick booten: sie installiert Fedora CoreOS auf die kleinste")
-	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`.")
+	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`,")
+	fmt.Println("dann `laib recovery-sheet`: die eine Seite, die nach einem Plattenverlust alles zurückholt — ausdrucken.")
 }
 
 // probe tells whether a URL answers from this laptop: the box will sit on
@@ -321,16 +353,6 @@ func listDevices() {
 	if runtime.GOOS == "windows" {
 		fmt.Println("  (Gerät = die Nummer aus der Index-Spalte, z.B. 2)")
 	}
-}
-
-func deviceExample() string {
-	switch runtime.GOOS {
-	case "windows":
-		return "2"
-	case "darwin":
-		return "/dev/disk4"
-	}
-	return "/dev/sdX"
 }
 
 func indent(s string) string {

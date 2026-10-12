@@ -19,16 +19,21 @@ import (
 //     0050-dest-device.yaml is the only one (a non-empty installer.d is what
 //     makes the ISO run the installer and reboot)
 //   - pre-install-laib.service  RequiredBy=coreos-installer.service, runs
-//     usb/pre-install.sh (smallest non-removable disk, hostname for DHCP)
+//     usb/pre-install.sh (smallest internal disk, hostname for DHCP; refuses
+//     an installed box unless the stick was built with --reinstall, #33)
 //   - post-install-laib.service RequiredBy=coreos-installer.target, runs
 //     usb/post-install.sh (EFI boot order; harmless without EFI)
-func LiveIgnition(dest []byte, hostname string) ([]byte, error) {
+func LiveIgnition(dest []byte, hostname string, reinstall bool) ([]byte, error) {
 	var compact map[string]any
 	if err := json.Unmarshal(dest, &compact); err != nil {
 		return nil, err
 	}
 	destJSON, _ := json.Marshal(compact)
-	pre := withEnv(usb.PreInstall, "SERVER_NAME", hostname)
+	again := ""
+	if reinstall {
+		again = "1"
+	}
+	pre := withEnv(withEnv(usb.PreInstall, "SERVER_NAME", hostname), "LAIB_REINSTALL", again)
 	bu := `variant: fcos
 version: 1.5.0
 storage:

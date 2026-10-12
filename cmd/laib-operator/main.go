@@ -43,6 +43,15 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The typed surface (#53) is the default: a household model gets a menu
+	// per trigger with typed parameters; OPERATOR_INTERFACE=cli gives a large
+	// model the verb table. The menu's service enum comes from laib status.
+	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
+	if op.Typed {
+		if text, _, err := op.MCP.Call(ctx, "laib_status", map[string]string{"args": ""}); err == nil {
+			op.Services = operator.ServicesFromStatus(text)
+		}
+	}
 
 	if *once != "" {
 		tr := operator.Trigger{Kind: *once}
