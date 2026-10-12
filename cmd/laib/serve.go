@@ -52,6 +52,14 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			h(w, r)
 		}
 	}
+	// boot-time convergence of the non-file state (#37): the ruleset
+	if loaded, err := ensureFirewall(ctx, env); err != nil {
+		fmt.Fprintln(os.Stderr, "laib serve: firewall:", err)
+	} else if loaded {
+		if st, err := loadState(env); err == nil {
+			record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpHandler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +106,31 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if day, text := lastReport(env); day != "" {
 			fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(day), html.EscapeString(text))
 		}
-		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`)
+		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a>`)
+		if boteSignalBase(st) != "" {
+			b.WriteString(` · <a href="/bote/link">Bote verbinden (QR)</a>`)
+		}
+		b.WriteString(`</p>`)
 		page(w, "Status", b.String())
+	}))
+	// the Bote's link QR from signal-cli (#54): scan it in Signal → Gekoppelte Geräte
+	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
+		page(w, "Bote verbinden", `<h1>Bote verbinden</h1><p>Auf dem Telefon mit der Nummer des Boten: Signal → Einstellungen → Gekoppelte Geräte → Neues Gerät koppeln, dann diesen Code scannen. Der Code gilt einige Minuten; die Seite neu laden holt einen frischen.</p><p><img src="/bote/link.png" alt="QR zum Koppeln" width=320 height=320></p><p><a href="/">zurück</a></p>`)
+	}))
+	mux.HandleFunc("/bote/link.png", guard(func(w http.ResponseWriter, r *http.Request) {
+		st, err := loadState(env)
+		if err != nil || boteSignalBase(st) == "" {
+			http.Error(w, "kein Bote auf dieser Box", http.StatusNotFound)
+			return
+		}
+		png, err := signalLinkQR(r.Context(), boteSignalBase(st), "Bote")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(png)
 	}))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(inboxDir(env), true)
@@ -111,13 +142,60 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if len(open) == 0 {
 			b.WriteString("<p>Keine offenen Vorschläge.</p>")
 		}
+		domain := ""
+		if st, err := loadState(env); err == nil {
+			domain = st.Box.Domain
+		}
 		for _, p := range open {
-			fmt.Fprintf(&b, "<h2>Vorschlag #%d · von %s · Stufe: %s · braucht: andere Hand mit %s</h2><p>%s</p><pre>%s</pre>",
-				p.ID, html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(p.Reason), html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
+			// the decision card (#58): consequence, reversibility, who and why,
+			// a safe default — the diff only behind Details
+			c := proposal.Card(p, domain)
+			fmt.Fprintf(&b, "<h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
+			b.WriteString("<ul>")
+			for _, i := range c.Impact {
+				cls := ""
+				if strings.HasPrefix(i, "Achtung") {
+					cls = " class=gelb"
+				}
+				fmt.Fprintf(&b, "<li%s>%s</li>", cls, html.EscapeString(i))
+			}
+			b.WriteString("</ul>")
+			fmt.Fprintf(&b, "<p>%s</p><p>%s</p>", html.EscapeString(c.Reversible), html.EscapeString(c.Why))
+			if p.Class == "human" {
+				b.WriteString("<p class=rot>Nur ein Mensch kann freigeben.</p>")
+			}
 			for _, w := range p.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
-			fmt.Fprintf(&b, "<p>Snapshot vor Apply: ja · Rollback: laib rollback</p><form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form> <form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID, p.ID)
+			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form>", p.ID)
+			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID)
+			later := "<a href=\"/\"><button>Später</button></a>"
+			if c.Risky {
+				fmt.Fprintf(&b, "<p>%s %s %s</p>", later, approve, reject)
+			} else {
+				fmt.Fprintf(&b, "<p>%s %s %s</p>", approve, reject, later)
+			}
+			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
+				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
+		}
+		// what was approved lately can be taken back (#41)
+		if all, err := proposal.List(inboxDir(env), false); err == nil {
+			n := 0
+			for _, p := range all {
+				if p.Status != "approved" || n >= 5 {
+					continue
+				}
+				if n == 0 {
+					b.WriteString("<h2>Zuletzt freigegeben</h2>")
+				}
+				n++
+				fmt.Fprintf(&b, "<p>#%d · %s · von %s · freigegeben von %s <form method=post action=/inbox/%d/rollback style=display:inline><button>Zurücknehmen</button></form></p>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), p.ID)
+			}
+			for _, p := range all {
+				if p.Status == "stale" {
+					fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+				}
+			}
 		}
 		b.WriteString("<p><a href=\"/\">Status</a> · <a href=\"/journal\">Journal</a></p>")
 		page(w, "Inbox", b.String())
@@ -129,7 +207,12 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			actor = "human:web"
 		}
 		webEnv := &cliEnv{paths: env.paths, actor: actor}
-		code := decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+		var code int
+		if r.PathValue("decision") == "rollback" {
+			code = cmdRollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
+		} else {
+			code = decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+		}
 		if code != exitOK && code != exitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
 			return
@@ -156,6 +239,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

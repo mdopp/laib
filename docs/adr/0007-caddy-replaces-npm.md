@@ -28,3 +28,26 @@ public reachability", which needs DNS-01.
 
 - No admin API, no SQLite, no proxy drift probes.
 - The DNS provider becomes a declared dependency of the box (`box.yml`).
+
+## Amendment 2026-10-11 (#45): the trial gets real certificates, `tls: internal` is for laptops only
+
+Android apps trust only system CAs unless they opt in; `mdopp/solaris-android`
+has no network security config and no custom trust manager. A trial on
+`tls: internal` therefore cannot pass the Phase 3 gate ("the widgets work")
+without asking the family to install a root CA, which is the opposite of
+fear-free. Decision: **(a) from the issue** — the trial box gets a domain
+whose zone lives at a provider with a DNS API. `dopp.cloud` stays at Strato;
+Strato can delegate a sub-zone by NS record, so the trial domain is
+`nuc.dopp.cloud` delegated to deSEC (free, API, in the Caddy image). Caddy
+then does DNS-01 natively (`acme_dns desec`), one certificate per host, no
+override domain, no CNAME per host. The stick asks for the provider and its
+token (`--dns-provider`, `--dns-token`), first boot sets the secret
+`DNS_API_TOKEN` and `box.yml dns.provider`; `laib init --tls internal` is
+the explicit opt-in for a laptop-only trial and prints why. (b) — trusting
+user CAs in the app — is not done: it would ship a weaker trust model to
+every phone for the sake of a trial. (c) is (a) with a foreign domain.
+
+Owner actions before the NUC: delegate `nuc.dopp.cloud` at Strato (NS
+records to deSEC's name servers), create the zone and an API token at
+deSEC, pass both to `laib-stick`. The one-box end state on the Kraftwerk
+keeps HTTP-01 over port 80 as today, or the same delegation.

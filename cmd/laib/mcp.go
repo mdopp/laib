@@ -27,8 +27,8 @@ var mcpMu sync.Mutex
 // mcpVerbs are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
-	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "write": true, "exec": true, "restart": true, "escalate": true,
-	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true,
+	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
+	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true,
 }
 
 type rpcRequest struct {
@@ -114,7 +114,7 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 func mcpTools(st *state.State, hand string) []map[string]any {
 	var tools []map[string]any
 	for _, v := range verbs {
-		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) {
+		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) || !policy.MayVerb(st.Policy, hand, v.name) {
 			continue
 		}
 		tools = append(tools, map[string]any{
@@ -155,9 +155,13 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if !policy.Allowed(st.Policy, hand, v.tier) {
 		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), exitRefused
 	}
+	if !policy.MayVerb(st.Policy, hand, verbName) {
+		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), exitRefused
+	}
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
-	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true}
+	var buf bytes.Buffer
+	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf}
 	callArgs := splitArgs(args["args"])
 	if patch := args["patch"]; patch != "" {
 		callEnv.in = strings.NewReader(patch)
@@ -166,20 +170,31 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if in := args["stdin"]; in != "" {
 		callEnv.in = strings.NewReader(in)
 	}
+	// the verb writes to buf (#43: the process stdout is never swapped, so
+	// nothing another goroutine prints can land here); fail()'s one-line
+	// errors still go to stderr — captured through a pipe read concurrently,
+	// never a pipe nobody drains
 	r, w, err := os.Pipe()
 	if err != nil {
 		return err.Error(), exitUsage
 	}
-	saved, savedErr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = w, w
-	var buf bytes.Buffer
+	savedErr := os.Stderr
+	os.Stderr = w
+	var errBuf bytes.Buffer
 	done := make(chan struct{})
-	go func() { io.Copy(&buf, r); close(done) }()
+	go func() { io.Copy(&errBuf, r); close(done) }()
 	code := v.run(ctx, callEnv, callArgs)
+	os.Stderr = savedErr
 	w.Close()
 	<-done
-	os.Stdout, os.Stderr = saved, savedErr
-	return buf.String(), code
+	out := buf.String()
+	if e := strings.TrimSpace(errBuf.String()); e != "" {
+		if out != "" {
+			out += "\n"
+		}
+		out += e
+	}
+	return out, code
 }
 
 // splitArgs splits a command-line string, honouring double quotes.

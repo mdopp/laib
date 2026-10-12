@@ -33,19 +33,34 @@ layer (ADR 0010).
 ## Layout
 
 ```
-cmd/laib/            the one binary: CLI + daemon (`laib serve`)
+cmd/laib/            the one binary: CLI + daemon (`laib serve`), diag probes
 cmd/laib-stick/      the laptop tool: builds the Fedora CoreOS install stick
+cmd/laib-operator/   the admin agent (ADR 0013), a host unit
+cmd/laib-lease/      the model role's policy proxy and GPU lease (ADR 0011)
+cmd/frage/           "was ist …": SearXNG + summary, OpenAI-compatible and MCP
+cmd/automat/         Home Assistant automations as an MCP tool in the bote pod
 internal/state       load + validate the state repo
 internal/render      pure renderers: quadlet, caddy, authelia, adguard, nftables
 internal/plan        state → files → diff against the box
-internal/apply       snapshot, write, reload, restart, verify
+internal/apply       snapshot, write, reload, restart, verify, the one lock
 internal/journal     append-only JSONL, one file per day
 internal/policy      hands, tiers, who needs approval
-internal/probe       diag probes: scripts with structured output
-templates/           built-in templates (Quadlet files + laib.yml)
+internal/proposal    proposals, cards, approval by content
+internal/secrets     age-encrypted secrets.age
+internal/token       hand tokens
+internal/operator    the Operator's loop, prompt and eval harness
+internal/lease       the lease and the policy proxy
+internal/frage       Frage's search and summary
+internal/automat     the Automat's tools
+internal/mcpserver   the smallest MCP server (Hermes, Claude Code, laib's client)
+internal/stick       the stick wizard's steps (Butane, ISO, Ignition, write)
+internal/boxfs       the box's paths
+internal/sysd        the systemctl seam
+templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop
-docs/                DESIGN.md, INTERFACE.md, STATE.md, TESTING.md, MIGRATION.md, adr/
+scripts/             install-box.sh, e2e.sh, loc.sh, drift.sh
+docs/                KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, INSTALL, BACKUP, adr/
 testdata/golden      renderer golden files
 ```
 
@@ -61,7 +76,7 @@ Nothing has run on a real box yet. What exists and how far it is proven:
 | Operator (admin agent), lease, Frage | `cmd/laib-operator`, `cmd/laib-lease`, `cmd/frage` | e2e with a scripted model; never against a real model |
 | Bote (Hermes on Signal) with the `haus` and `automat` tools | `templates/bote`, `cmd/automat` | config rendered and checked against Hermes' example; automat unit-tested against a fake HA |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
-| 21 templates for every unit the box runs today | `templates/` | lint + render; installed only in the VM (caddy) |
+| 22 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) is the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk follows `docs/ZIELBILD.md`.
@@ -104,5 +119,7 @@ via Ignition at `/var/opt/laib/laib` and runs as a systemd user service of the
 
 ## Status
 
-Founding commit, 2026-10-08. Nothing runs on the box yet. See
-`docs/MIGRATION.md` for the order in which services move.
+Founded 2026-10-08; reviewed 2026-10-11 (#31, worked through #60). Nothing
+has run on a real box yet: the VM job is the proof, the NUC trial (#23) is
+the first real run. See `docs/MIGRATION.md` for the order in which services
+move and `docs/REVIEW.md` for what is proven and what is not.

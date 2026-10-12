@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/internal/mcpserver"
 )
 
 // Config is what the service needs.
@@ -172,6 +174,27 @@ func Handler(c Config) http.Handler {
 		}
 		json.NewEncoder(w).Encode(a)
 	})
+	// /mcp: Frage as a tool the Bote calls (#54) — one tool, the answer with
+	// its sources, so Hermes lists it next to laib and automat.
+	mux.Handle("/mcp", (&mcpserver.Server{Name: "frage", Version: "1", Instructions: "Nachschlagen im Netz: Suche plus Zusammenfassung mit Quellen.",
+		Tools: []mcpserver.Tool{{
+			Name:        "frage",
+			Description: "Beantwortet eine Sachfrage mit einer Websuche (SearXNG) und fasst die Treffer mit Quellen zusammen.",
+			Schema:      map[string]any{"type": "object", "properties": map[string]any{"frage": map[string]any{"type": "string", "description": "die Frage, z. B. „was ist ein Kolibri?“"}}, "required": []string{"frage"}},
+			Call: func(ctx context.Context, args map[string]any) (string, error) {
+				a, err := c.Ask(ctx, mcpserver.Str(args, "frage"))
+				if err != nil {
+					return "", err
+				}
+				var b strings.Builder
+				b.WriteString(a.Answer)
+				for i, h := range a.Sources {
+					fmt.Fprintf(&b, "\n[%d] %s — %s", i+1, h.Title, h.URL)
+				}
+				return b.String(), nil
+			},
+		}},
+	}).Handler())
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Messages []struct {

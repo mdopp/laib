@@ -3,7 +3,7 @@
 Applies when you are about to require an approval, deny an agent a verb,
 or wonder how far the ops hand may go when a health check fails.
 
-- **Status:** Accepted, 2026-10-10
+- **Status:** Accepted, 2026-10-10; amended by ADR 0019 (2026-10-12): the grant stands, the Operator starts as a diagnostician and gets `write`/`exec`/`restart` per action type after the eval harness clears them.
 - **Deciders:** operator (mdopp): "Ich möchte einen Agenten, der wie ein
   Operator agiert, wie ein Familien-Admin."
 
@@ -44,6 +44,18 @@ and reading the result was impossible by construction.
    on; values, template-update and patch auto; new-service proposal (it
    adds surface); remove never. Public exposure of a route is class 3
    regardless of the dial.
+
+   *Amended 2026-10-11 (#34, #60 "calm before autonomy").* The defaults
+   `laib init` ships are `values: auto`; `template-update`, `patch` and
+   `new-service`: `proposal`. And the dial never sees the content: a
+   proposal is judged by what it changes (`internal/review`, docs/DESIGN.md
+   "The content decides"); anything the review marks — a script on the
+   box, a host unit, policy.yml, secrets, a public route, a token, a host
+   folder, privileges, a foreign image, … — is class `human`: a human
+   approves it or nobody does, and the reasons are shown. A hand may not
+   add a token for a hand above its own ceiling. Class 2 ("correct, inside
+   the envelope") therefore means: correct what exists; do not grow the
+   box's surface or its trust.
 
 ## Consequences
 

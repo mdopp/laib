@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""adguard pre-start (#36): the first AdGuardHome.yaml before the unit starts
+— the admin user (bcrypt), the web UI on 8083 (laib's health probe and the
+Caddy route), DNS on 53, the upstreams. Without it AdGuard serves only its
+setup wizard on :3000 and verify can never go green. Written once: AdGuard
+owns the file afterwards (settings change in its UI and through the API,
+post-deploy syncs the rewrites). schema_version is the current one; AdGuard
+migrates forward, never back, so IMAGE must not be older than the schema."""
+import os, sys
+
+import bcrypt
+
+E = os.environ
+conf_dir = os.path.join(E["LAIB_DATA_DIR"], "adguard", "conf")
+os.makedirs(conf_dir, exist_ok=True)
+conf = os.path.join(conf_dir, "AdGuardHome.yaml")
+if os.path.exists(conf):
+    print("AdGuardHome.yaml exists; AdGuard owns it"); sys.exit(0)
+user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
+upstreams = E.get("UPSTREAMS", "https://dns.quad9.net/dns-query").split()
+pwhash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt(10)).decode()
+y = ["http:", "  address: 0.0.0.0:8083", "  session_ttl: 720h", "users:", f"  - name: {user}", f"    password: {pwhash}",
+     "auth_attempts: 5", "block_auth_min: 15", "theme: auto",
+     "dns:", "  bind_hosts:", "    - 0.0.0.0", "  port: 53", "  upstream_dns:"] + [f"    - {u}" for u in upstreams] + \
+    ["  bootstrap_dns:", "    - 9.9.9.9", "    - 1.1.1.1", "  protection_enabled: true", "  cache_size: 4194304",
+     "filtering:", "  protection_enabled: true", "  filtering_enabled: true", "schema_version: 34", ""]
+tmp = conf + ".tmp"
+with open(tmp, "w") as f:
+    f.write("\n".join(y))
+os.chmod(tmp, 0o600)
+os.replace(tmp, conf)
+print(f"AdGuardHome.yaml written: web on 8083, dns on 53, {len(upstreams)} upstream(s), user {user}")

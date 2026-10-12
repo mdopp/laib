@@ -71,9 +71,9 @@ func text(res map[string]any) (string, bool) {
 func TestToolsRoundTrip(t *testing.T) {
 	ha, store := fakeHA(t)
 	defer ha.Close()
-	h := Server(Config{HAURL: ha.URL, Token: "tok"}, "test").Handler()
+	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir()}, "test").Handler()
 
-	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 6 {
+	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 8 {
 		t.Fatalf("tools: %v", res)
 	}
 	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "entitaeten", "arguments": map[string]any{"domain": "light"}}))
@@ -88,6 +88,9 @@ func TestToolsRoundTrip(t *testing.T) {
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_schreiben", "arguments": map[string]any{"yaml": y}}))
 	if isErr || !strings.Contains(out, "flur_licht_aus") {
 		t.Fatalf("schreiben: %q %v", out, isErr)
+	}
+	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr {
+		t.Fatalf("bestaetigen: %q", out)
 	}
 	cfg := store["flur_licht_aus"]
 	if cfg["id"] != "flur_licht_aus" || !strings.Contains(cfg["description"].(string), "laib:") || cfg["alias"] != "Flur Licht aus" {
@@ -107,8 +110,11 @@ func TestToolsRoundTrip(t *testing.T) {
 		t.Fatal("a path-like id was accepted")
 	}
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_loeschen", "arguments": map[string]any{"id": "flur_licht_aus"}}))
-	if isErr || store["flur_licht_aus"] != nil {
-		t.Fatalf("loeschen: %q %v", out, store)
+	if isErr || store["flur_licht_aus"] == nil {
+		t.Fatalf("loeschen must wait for the code: %q %v", out, store)
+	}
+	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("confirmed delete: %q %v", out, store)
 	}
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": false}}))
 	if isErr || !strings.Contains(out, "turn_off") {
@@ -131,4 +137,54 @@ func TestUnauthorizedHA(t *testing.T) {
 	if _, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automationen", "arguments": map[string]any{}})); !isErr {
 		t.Fatal("a 401 from HA must surface as a tool error")
 	}
+}
+
+// #48: writes and deletes execute only with the code the first call handed
+// out; a deleted automation is kept for restore.
+func TestWritesAndDeletesNeedConfirmation(t *testing.T) {
+	ha, store := fakeHA(t)
+	defer ha.Close()
+	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir()}, "test").Handler()
+	y := "alias: Flur Licht aus\ntriggers:\n  - trigger: time\n    at: \"23:00:00\"\nactions:\n  - action: light.turn_off\n    target:\n      entity_id: light.flur\n"
+	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_schreiben", "arguments": map[string]any{"yaml": y}}))
+	if isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("schreiben executed without confirmation: %q %v", out, store)
+	}
+	code := codeIn(out)
+	if code == "" {
+		t.Fatalf("no confirmation code handed out: %q", out)
+	}
+	if _, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": "0000"}})); !isErr {
+		t.Fatal("a wrong code was accepted")
+	}
+	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}}))
+	if isErr || store["flur_licht_aus"] == nil {
+		t.Fatalf("the confirmed write did not happen: %q", out)
+	}
+	if _, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}})); !isErr {
+		t.Fatal("a code worked twice")
+	}
+	out, _ = text(call(t, h, "tools/call", map[string]any{"name": "automation_loeschen", "arguments": map[string]any{"id": "flur_licht_aus"}}))
+	if store["flur_licht_aus"] == nil {
+		t.Fatalf("loeschen executed without confirmation: %q", out)
+	}
+	code = codeIn(out)
+	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}}))
+	if isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("the confirmed delete did not happen: %q", out)
+	}
+	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_wiederherstellen", "arguments": map[string]any{"id": "flur_licht_aus"}}))
+	if isErr || store["flur_licht_aus"] == nil || store["flur_licht_aus"]["alias"] != "Flur Licht aus" {
+		t.Fatalf("restore after delete: %q %v", out, store)
+	}
+}
+
+func codeIn(s string) string {
+	for _, f := range strings.Fields(s) {
+		f = strings.Trim(f, ".,:;()")
+		if len(f) == 4 && strings.Trim(f, "0123456789") == "" {
+			return f
+		}
+	}
+	return ""
 }

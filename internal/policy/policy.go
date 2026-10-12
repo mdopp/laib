@@ -31,10 +31,12 @@ func Allowed(p state.Policy, hand, tier string) bool {
 	return want >= 0 && have >= want
 }
 
-// NeedsHuman reports whether a tier always needs a human approval.
-// `destroy` always does (ADR 0006); others follow approvals in policy.yml.
-func NeedsHuman(p state.Policy, tier string) bool {
-	if tier == "destroy" {
+// NeedsHuman reports whether only a human may approve a proposal: `destroy`
+// always (ADR 0006), class `human` always (the content said so, #34), and
+// tiers whose approvals say `by: human` in policy.yml. The dial (Auto) is
+// laib's own delegation and is never consulted for these.
+func NeedsHuman(p state.Policy, tier, class string) bool {
+	if tier == "destroy" || class == "human" || class == "remove" {
 		return true
 	}
 	a, ok := p.Approvals[tier]
@@ -65,7 +67,15 @@ func Validate(p state.Policy) error {
 			return fmt.Errorf("policy.yml: unknown autonomy class %q", class)
 		}
 	}
+	if e := p.Envelope.Snapshot; e != "" && e != "required" && e != "optional" {
+		return fmt.Errorf("policy.yml: envelope.snapshot must be required or optional")
+	}
 	for name, h := range p.Hands {
+		for _, v := range h.Verbs {
+			if !KnownVerbs[v] {
+				return fmt.Errorf("policy.yml: hand %q lists unknown verb %q", name, v)
+			}
+		}
 		if Index(h.Ceiling) < 0 {
 			return fmt.Errorf("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
 		}
@@ -80,7 +90,10 @@ func Validate(p state.Policy) error {
 }
 
 // Auto reports whether the dial lets laib approve a proposal class itself.
-func Auto(p state.Policy, class string) bool { return p.Autonomy[class] == "auto" }
+// Never for human or remove, whatever the dial says.
+func Auto(p state.Policy, class string) bool {
+	return class != "human" && class != "remove" && p.Autonomy[class] == "auto"
+}
 
 // ConvergeOn reports whether the converge loop is enabled (default off).
 func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
@@ -88,3 +101,36 @@ func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
 // ConvergeBudget is how many converge applies per hour are allowed before
 // laib stops and asks a human: a flapping service is a bug, not a chore.
 const ConvergeBudget = 3
+
+// KnownVerbs is every verb of the CLI (cmd/laib's table), so policy.yml can
+// name them in a hand's verb list and be validated without importing it.
+var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true}
+
+// MayVerb reports whether a hand may use a verb at all: a hand with a verb
+// list is limited to it (the approver: approve, reject, inbox, status,
+// note), a hand without one may use anything its ceiling reaches (#48).
+func MayVerb(p state.Policy, hand, verb string) bool {
+	h, ok := p.Hands[hand]
+	if !ok {
+		return false
+	}
+	if len(h.Verbs) == 0 {
+		return true
+	}
+	for _, v := range h.Verbs {
+		if v == verb {
+			return true
+		}
+	}
+	return false
+}
+
+// IsHuman reports whether a hand's verdicts count as a human's: the human
+// on the shell, and a hand policy.yml marks `human: true` — the relay that
+// acts only on the admin's verified Signal number (#48).
+func IsHuman(p state.Policy, hand string) bool {
+	if hand == "human" {
+		return true
+	}
+	return p.Hands[hand].Human
+}

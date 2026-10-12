@@ -15,10 +15,14 @@ type Box struct {
 	Laib     Laib   `yaml:"laib"`
 	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
 	// over, #16): only these services may declare hostNetwork: true.
-	HostNetwork []string   `yaml:"hostNetwork"`
-	Notify      Notify     `yaml:"notify"`
-	Updates     Updates    `yaml:"updates"`
-	Registries  []Registry `yaml:"registries"`
+	HostNetwork []string `yaml:"hostNetwork"`
+	Notify      Notify   `yaml:"notify"`
+	// Watchdog is the outside check (#57): serve pings url every five
+	// minutes while readiness is not red; the outside turns silence into a
+	// push. Contact is whom the family calls when the box is down.
+	Watchdog   Watchdog   `yaml:"watchdog"`
+	Updates    Updates    `yaml:"updates"`
+	Registries []Registry `yaml:"registries"`
 	// Model is where the LLM is when this box has no model role of its own
 	// (a NUC without a GPU): a peer box's llama proxy or a cloud API. The
 	// builtins MODEL_URL and MODEL_KEY resolve from here or from the role.
@@ -28,6 +32,16 @@ type Box struct {
 	// Operator is the box's admin agent (ADR 0013): a user unit running
 	// laib-operator with the ops token from secrets.age.
 	Operator OperatorCfg `yaml:"operator"`
+	// Intake is where wishes and escalations become tickets (#56): a GitHub
+	// repo and the label a wish gets; the token is GITHUB_INTAKE_TOKEN in
+	// secrets.age. Empty = wishes are kept under <home>/wishes.
+	Intake Intake `yaml:"intake"`
+}
+
+// Intake: the ticket queue for wishes and escalations (#56).
+type Intake struct {
+	Repo  string `yaml:"repo"`  // owner/name
+	Label string `yaml:"label"` // the label a wish gets; default wunsch
 }
 
 // OperatorCfg configures laib-operator.
@@ -42,7 +56,7 @@ type OperatorCfg struct {
 type Model struct {
 	URL       string `yaml:"url"`       // e.g. http://192.168.1.20:11435/v1 or https://api.example/v1
 	KeySecret string `yaml:"keySecret"` // name in secrets.age; empty for a loopback proxy
-	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:8787/api/model-lease; empty = no lease
+	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:11435/api/model-lease (the proxy's port); empty = no lease
 }
 
 // Peer is another box running Laib.
@@ -71,6 +85,12 @@ type Notify struct {
 	URL string `yaml:"url"`
 }
 
+// Watchdog: the outside check and the family's contact (#57).
+type Watchdog struct {
+	URL     string `yaml:"url"`     // a healthchecks-style ping URL outside the box
+	Contact string `yaml:"contact"` // "Martin, 0170 …" — printed on the family card
+}
+
 // Laib is the box page and MCP listener itself (ADR 0012): where it listens,
 // and the host Caddy publishes it under for admins.
 type Laib struct {
@@ -78,6 +98,9 @@ type Laib struct {
 	Port   int    `yaml:"port"`   // default 5900
 	Listen string `yaml:"listen"` // default 127.0.0.1; "0.0.0.0" lets pods reach /mcp, the nftables drop keeps the LAN out
 	Group  string `yaml:"group"`  // Authelia group for the pages, default "admins"
+	// HooksImage is the container template hooks run in (#36): Python, bcrypt,
+	// curl, openssl. Default ghcr.io/mdopp/laib-hooks:latest.
+	HooksImage string `yaml:"hooksImage"`
 }
 
 // Roles names the service that plays each platform role.
@@ -117,12 +140,22 @@ type Policy struct {
 	// (a human decides). converge is "on" or "off" (the ten-minute loop).
 	// Classes: values, template-update, new-service, patch, remove.
 	Autonomy map[string]string `yaml:"autonomy"`
+	// Envelope: snapshot "required" (default) or "optional" — whether a
+	// class-2 action may go ahead without a pre-repair snapshot (#35).
+	Envelope Envelope `yaml:"envelope"`
+}
+
+// Envelope tunes the operator's envelope.
+type Envelope struct {
+	Snapshot string `yaml:"snapshot"`
 }
 
 // Hand is one agent identity.
 type Hand struct {
-	Ceiling string `yaml:"ceiling"`
-	TTL     string `yaml:"ttl"`
+	Ceiling string   `yaml:"ceiling"`
+	TTL     string   `yaml:"ttl"`
+	Verbs   []string `yaml:"verbs"` // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
+	Human   bool     `yaml:"human"` // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
 }
 
 // Approval says who may approve a tier.
@@ -144,6 +177,7 @@ type Contract struct {
 	GPU          bool        `yaml:"gpu"`
 	HostNetwork  bool        `yaml:"hostNetwork"`
 	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
+	Needs        []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
 	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
 	MigratedFrom string      `yaml:"migratedFrom"`
 }
@@ -164,6 +198,11 @@ type Route struct {
 	Group    string   `yaml:"group"`
 	Caddy    string   `yaml:"caddy"`
 	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages
+	// ProxySecret names a secret Caddy sends as the header `X-<Name>-Proxy`
+	// on the authenticated handler only, so the service trusts Remote-User
+	// solely behind the proxy (ADR 0012 §3; Laib's own page does the same).
+	ProxySecret string `yaml:"proxySecret"`
+	ProxyHeader string `yaml:"proxyHeader"` // the header's name, default X-<Service>-Proxy
 }
 
 // Secret is a declared secret; non-external ones are generated once.
@@ -185,11 +224,17 @@ type OIDC struct {
 type DataPath struct {
 	Path   string `yaml:"path"`
 	Backup *bool  `yaml:"backup"`
+	// Quiesce: the service is stopped while this path is snapshotted (a
+	// database copied live is not a backup, #40): stop, snapshot, start.
+	Quiesce bool `yaml:"quiesce"`
 }
 
 // Health is what apply verifies.
 type Health struct {
 	HTTP string `yaml:"http"`
+	// None says why there is no probe (MQTT speaks no HTTP …): the unit
+	// state is the check. Lint wants one of the two (#46).
+	None string `yaml:"none"`
 }
 
 // Port is a published host port; LAN=false renders an nftables drop.

@@ -149,3 +149,16 @@ func TestModelIsLocalRoleOrRemoteURL(t *testing.T) {
 		t.Fatal(st.ModelURL())
 	}
 }
+
+// #42 (5): the lease answers on the proxy's port, the same port everywhere.
+func TestModelLeaseIsOnTheProxyPort(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\ngpu: {present: true}\nroles: {sso: auth, model: auth}\n")
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ModelLease() != "http://127.0.0.1:9091/api/model-lease" {
+		t.Fatal(st.ModelLease())
+	}
+}

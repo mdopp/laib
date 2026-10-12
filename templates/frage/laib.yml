@@ -1,8 +1,9 @@
 name: frage
 template: {registry: builtin, name: frage, version: 1}
 provides: [frage]
-# "Was ist …": SearXNG + a model summary, as Assist's conversation agent and
-# a Bote tool (ADR 0015). Two containers in one pod sharing loopback.
+# "Was ist …": SearXNG + a model summary, as Assist's conversation agent
+# (/v1/chat/completions) and as the Bote's `frage` tool (/mcp, #54). Two
+# containers in one pod sharing loopback.
 routes: []
 secrets:
   - name: SEARX_SECRET

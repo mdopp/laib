@@ -8,11 +8,12 @@ provides: [music, video]
 # "phone" user whose library access is Musik only, and registers the
 # libraries Musik (/media/music) and, when the folders exist, Filme and
 # Serien.
+after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: media
     port: 8096
     exposure: public
-    auth: one_factor
+    auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP
     caddy: |
       # Jellyfin streams and websockets
       proxy_buffering off

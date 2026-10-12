@@ -44,3 +44,16 @@ client, memory, cron — are exactly what a text agent needs.
   reach the admin through the Bote.
 - ADR 0009 is superseded for the text case and stays for voice.
 - ADR 0015 §5 is corrected: Hermes has one job, the Bote.
+
+## Amendment 2026-10-11 (#48): approval by verified number is code, not prose
+
+Hermes holds no token that can approve. The `bote` hand reads, proposes,
+notes and escalates (its MCP entry is `trust: untrusted`, so proposing
+asks the person in the chat). "gib #N frei" / "lehne #N ab" are handled
+by the **relay** (`cmd/relay`, container `bote-relay` in the pod): it
+subscribes to signal-cli's event stream, acts only when the sender is
+`ADMIN_NUMBER`, looks the proposal up, decides through Laib with the
+`approver` hand — `human: true`, `verbs: [approve, reject, inbox, status,
+note]` — and answers with the consequence. Another number trying it gets a
+journal line. The Automat executes writes and deletes only with the code
+its first answer named, and keeps deleted automations for restore.

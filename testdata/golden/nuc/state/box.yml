@@ -15,7 +15,7 @@ gpu:
   present: false
 model:
   url: http://192.168.1.20:11435/v1
-  lease: http://192.168.1.20:8787/api/model-lease
+  lease: http://192.168.1.20:11435/api/model-lease
 operator:
   enabled: true
   reportAt: "06:30"

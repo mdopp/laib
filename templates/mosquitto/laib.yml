@@ -9,6 +9,6 @@ secrets:
 data:
   - path: ${DATA_DIR}/mosquitto/config
   - path: ${DATA_DIR}/mosquitto/data
-health: {}
+health: {none: "MQTT speaks no HTTP; the unit state is the check"}
 ports:
   - {port: 1883, lan: true}
