@@ -26,7 +26,15 @@ import (
 const resticPassword = "RESTIC_PASSWORD"
 
 func restic(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "restic", args...)
+	// inside podman's user namespace (rootless): the services' files belong
+	// to subuids of core (a database's pgdata, mode 0700) that core itself
+	// cannot read, and a restore must give them their owners back
+	// (vm-install run 38308352527). Without podman (a laptop) restic runs as is.
+	name, argv := "restic", args
+	if _, err := exec.LookPath("podman"); err == nil {
+		name, argv = "podman", append([]string{"unshare", "restic"}, args...)
+	}
+	cmd := exec.CommandContext(ctx, name, argv...)
 	cmd.Env = append(os.Environ(), "RESTIC_REPOSITORY="+st.Box.Backup.Repo, "RESTIC_PASSWORD="+pw)
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
