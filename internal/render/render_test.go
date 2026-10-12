@@ -122,3 +122,22 @@ func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
 		t.Fatalf("the default update time must not be the backup's 03:00:\n%s", out["systemd/podman-auto-update.timer.d/laib.conf"])
 	}
 }
+
+// #40: a monthly restore test runs from a timer rendered with the backup.
+func TestBackupCheckTimerIsRendered(t *testing.T) {
+	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Render(st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	timer, ok := out["systemd/laib-backup-check.timer"]
+	if !ok || !strings.Contains(timer, "OnCalendar=monthly") {
+		t.Fatalf("no monthly restore-test timer: %q", timer)
+	}
+	if !strings.Contains(out["systemd/laib-backup-check.service"], "laib backup check") {
+		t.Fatal("the check service must run laib backup check")
+	}
+}
