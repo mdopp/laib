@@ -85,8 +85,14 @@ func TestBackupQuiescesDeclaredPaths(t *testing.T) {
 	os.WriteFile(f, []byte(text), 0o644)
 	calls := resticRecorder(t, c)
 	c.calls = nil
+	var console bytes.Buffer
+	c.env.out = &console
 	if rc := cmdBackup(context.Background(), c.env, nil); rc != exitOK {
 		t.Fatalf("backup rc %d", rc)
+	}
+	// the human at the console sees that the database was stopped for the snapshot
+	if !strings.Contains(console.String(), "angehalten für den Snapshot: caddy") {
+		t.Fatalf("the output does not say what was stopped: %q", console.String())
 	}
 	all := append([]string{}, c.calls...)
 	all = append(all, *calls...)
