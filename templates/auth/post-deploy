@@ -9,6 +9,7 @@ import json, os, sys, time, urllib.request
 
 E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
+DOMAIN = E["LAIB_DOMAIN"]
 
 # seed LLDAP through its GraphQL API: groups, the operator's account
 def http(path, body=None, token=None):
@@ -53,4 +54,20 @@ member = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }",
 if "admins" not in {g["displayName"] for g in member}:
     gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": op, "g": groups["admins"]})
     print("operator added to admins")
+
+# the read-only account other services bind with (#55): radicale looks users up
+# through it — never as the LLDAP admin. lldap_strict_readonly is LLDAP's own
+# group for exactly that.
+if "lldap_strict_readonly" not in groups:
+    groups["lldap_strict_readonly"] = gql("mutation($n:String!){ createGroup(name:$n){ id } }", {"n": "lldap_strict_readonly"})["createGroup"]["id"]
+if "radicale" not in users:
+    gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
+        {"u": {"id": "radicale", "email": "radicale@" + DOMAIN, "displayName": "Radicale (Lesekonto)"}})
+    print("laib-exec: systemd-auth-lldap /app/lldap_set_password --base-url http://127.0.0.1:17170 --admin-username admin"
+          f" --admin-password {S('LLDAP_ADMIN_PASSWORD')} --username radicale --password {S('RADICALE_LDAP_PASSWORD')}")
+    print("read-only account created: radicale")
+rmember = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": "radicale"})["user"]["groups"]
+if "lldap_strict_readonly" not in {g["displayName"] for g in rmember}:
+    gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": "radicale", "g": groups["lldap_strict_readonly"]})
+    print("radicale added to lldap_strict_readonly")
 print("lldap seeded: groups admins, family; operator", op)

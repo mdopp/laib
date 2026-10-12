@@ -11,7 +11,9 @@ routes:
     port: 5232
     exposure: public
     auth: none
-secrets: []
+secrets:
+  - name: RADICALE_LDAP_PASSWORD      # the read-only LLDAP account, seeded by the auth template (#55)
+    external: true
 data:
   - path: ${DATA_DIR}/radicale/data
   - path: ${DATA_DIR}/radicale/config   # written by pre-start (#36)

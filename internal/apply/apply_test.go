@@ -210,11 +210,11 @@ func TestANonExecutableHookIsRed(t *testing.T) {
 // bound to it, and a single container's restart can stop the pod
 // (--exit-policy stop) under the others.
 func TestPodServiceRestartsThePodUnitOnly(t *testing.T) {
-	got := podRestartSet([]string{"auth-authelia.service", "auth-lldap.service", "auth-pod.service"})
+	got := PodRestartSet([]string{"auth-authelia.service", "auth-lldap.service", "auth-pod.service"})
 	if len(got) != 1 || got[0] != "auth-pod.service" {
 		t.Fatalf("%v", got)
 	}
-	if got := podRestartSet([]string{"whoami.service"}); len(got) != 1 || got[0] != "whoami.service" {
+	if got := PodRestartSet([]string{"whoami.service"}); len(got) != 1 || got[0] != "whoami.service" {
 		t.Fatalf("%v", got)
 	}
 }

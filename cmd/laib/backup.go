@@ -190,6 +190,15 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	entry.Result = "green"
 	journal.Append(env.paths.Journal, entry)
+	// Start what was stopped: the apply below restarts only what its plan
+	// changes, and a restore changes data, not rendered files (VM run 11 of
+	// #70 waited a minute for a unit nobody started). Units in a pod go
+	// through the pod unit, as apply does.
+	for _, unit := range apply.PodRestartSet(unitsOf(st, only)) {
+		if err := sysd.Restart(ctx, unit); err != nil {
+			return fail(fmt.Errorf("start %s after restore: %w", unit, err))
+		}
+	}
 	st, err = loadState(env)
 	if err != nil {
 		return fail(err)
