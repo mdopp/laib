@@ -14,7 +14,7 @@ Environment=LLDAP_HTTP_HOST=0.0.0.0
 Environment=LLDAP_LDAP_PORT=3890
 Environment=LLDAP_LDAP_HOST=0.0.0.0
 Volume=${DATA_DIR}/auth/lldap:/data:z
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always

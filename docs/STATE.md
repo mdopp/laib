@@ -51,7 +51,10 @@ updates:
 model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
-  lease: http://192.168.1.20:8787/api/model-lease
+  lease: http://192.168.1.20:11435/api/model-lease
+intake:                           # wishes and escalations become tickets (#56); token GITHUB_INTAKE_TOKEN in secrets.age
+  repo: mdopp/laib
+  label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator (ADR 0013); laib operator enable sets this
   enabled: true
   model: gemma-4-e4b
@@ -168,6 +171,15 @@ regenerated.
 
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
+
+### Routes that trust only the proxy
+
+`proxySecret: <NAME>` on a route makes Caddy send `X-<Service>-Proxy:
+<value>` (name overridable with `proxyHeader`) to the service's
+*authenticated* handler only; the bypass paths get nothing. The service
+trusts `Remote-User` only when the header matches (ADR 0012 §3). The
+secret is one of the service's own declared secrets; the loader refuses a
+route naming one the service does not declare.
 
 ### Secrets that may stay unset
 

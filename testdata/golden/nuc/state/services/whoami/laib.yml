@@ -7,6 +7,7 @@ routes:
     exposure: internal
     auth: one_factor
     bypass: [/napi/]       # token-only API next to the page (Haus)
+    proxySecret: WHOAMI_TOKEN   # the page trusts Remote-User only behind this header
     group: family
     caddy: |
       request_body {

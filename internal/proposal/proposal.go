@@ -19,23 +19,24 @@ import (
 
 // Proposal is one inbox entry, stored as inbox/<id>.json.
 type Proposal struct {
-	ID        int       `json:"id"`
-	Actor     string    `json:"actor"`
-	Reason    string    `json:"reason"`
-	Branch    string    `json:"branch"`
-	Tier      string    `json:"tier"`
-	Status    string    `json:"status"` // open | approved | rejected
-	Created   time.Time `json:"created"`
-	Decided   time.Time `json:"decided,omitempty"`
-	DecidedBy string    `json:"decidedBy,omitempty"`
-	Files     []string  `json:"files"`
-	Warnings  []string  `json:"warnings,omitempty"` // e.g. a second service for one purpose
-	Class     string    `json:"class"`              // what the dial is keyed by: values | new-service | template-update | patch | tree | human
-	Kind      string    `json:"kind,omitempty"`     // the edit's shape: tree | values | new-service | template-update | patch
-	Reasons   []string  `json:"reasons,omitempty"`  // why only a human may allow it (class human), plain German
-	Mints     []string  `json:"mints,omitempty"`    // hands the change mints Laib tokens for
-	Adds      []string  `json:"adds,omitempty"`     // services the change adds
-	Facts     []string  `json:"facts,omitempty"`    // plain facts for the decision card (#58)
+	ID          int       `json:"id"`
+	Actor       string    `json:"actor"`
+	Reason      string    `json:"reason"`
+	Branch      string    `json:"branch"`
+	Tier        string    `json:"tier"`
+	Status      string    `json:"status"` // open | approved | rejected | stale (#41: did not merge or did not validate)
+	Created     time.Time `json:"created"`
+	Decided     time.Time `json:"decided,omitempty"`
+	DecidedBy   string    `json:"decidedBy,omitempty"`
+	Files       []string  `json:"files"`
+	Warnings    []string  `json:"warnings,omitempty"`    // e.g. a second service for one purpose
+	Class       string    `json:"class"`                 // what the dial is keyed by: values | new-service | template-update | patch | tree | human
+	Kind        string    `json:"kind,omitempty"`        // the edit's shape: tree | values | new-service | template-update | patch
+	Reasons     []string  `json:"reasons,omitempty"`     // why only a human may allow it (class human), plain German
+	Mints       []string  `json:"mints,omitempty"`       // hands the change mints Laib tokens for
+	Adds        []string  `json:"adds,omitempty"`        // services the change adds
+	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
+	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 }
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
@@ -150,6 +151,17 @@ func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge)
 	if _, err := git(ctx, repo, "checkout", "-q", "main"); err != nil {
 		return nil, err
 	}
+	// the same change is already open (a timer proposing again, #50): reuse
+	// it, drop this branch — the inbox holds one proposal per change
+	if open, _ := List(inbox, true); len(open) > 0 {
+		mine := Diff(ctx, repo, p)
+		for _, o := range open {
+			if o.Branch != p.Branch && Diff(ctx, repo, o) == mine {
+				git(ctx, repo, "branch", "-q", "-D", p.Branch)
+				return o, nil
+			}
+		}
+	}
 	return p, save(inbox, p)
 }
 
@@ -165,19 +177,64 @@ func Diff(ctx context.Context, repo string, p *Proposal) string {
 
 // Approve merges the branch into main. The caller then runs apply.
 func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
+	return ApproveChecked(ctx, repo, inbox, p, by, nil)
+}
+
+// ApproveChecked merges in a temporary worktree (#41): a conflict never
+// reaches main (no markers, no half-merged state), the merged result is
+// validated by check (state loads, renders) before main fast-forwards to
+// it, and a proposal that fails either way is marked stale with the
+// reason — "veraltet — neu vorschlagen".
+func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by string, check func(dir string) error) error {
 	if p.Status != "open" {
 		return fmt.Errorf("proposal %d is %s", p.ID, p.Status)
 	}
 	// A hand never approves its own proposal — except the human: on the
 	// shell a human is the authority, and --add is how they install.
-	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" {
+	// … and the box itself (the template-sync timer, actor laib) is not a
+	// hand with a token: its proposals are approved by the box when the dial
+	// says so (#50), the policy check is the caller's.
+	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" && by != "laib" {
 		return ErrOwnProposal
 	}
 	if err := CommitDirty(ctx, repo, by); err != nil {
 		return err
 	}
-	if _, err := git(ctx, repo, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("approve #%d by %s: %s", p.ID, by, p.Reason), p.Branch); err != nil {
+	wt, err := os.MkdirTemp("", "laib-approve-*")
+	if err != nil {
 		return err
+	}
+	os.Remove(wt)
+	defer func() {
+		git(ctx, repo, "worktree", "remove", "--force", wt)
+		os.RemoveAll(wt)
+		git(ctx, repo, "worktree", "prune")
+	}()
+	if _, err := git(ctx, repo, "worktree", "add", "-q", "--detach", wt, "main"); err != nil {
+		return err
+	}
+	stale := func(reason string) error {
+		p.Status, p.StaleReason, p.Decided, p.DecidedBy = "stale", reason, time.Now().UTC(), by
+		save(inbox, p)
+		return fmt.Errorf("Vorschlag #%d ist veraltet — neu vorschlagen: %s", p.ID, reason)
+	}
+	if out, err := git(ctx, wt, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("approve #%d by %s: %s", p.ID, by, p.Reason), p.Branch); err != nil {
+		git(ctx, wt, "merge", "--abort")
+		files, _ := git(ctx, wt, "diff", "--name-only", "--diff-filter=U")
+		git(ctx, wt, "reset", "-q", "--hard")
+		return stale("Konflikt mit dem aktuellen State in " + strings.TrimSpace(strings.ReplaceAll(files+" "+out, "\n", " ")))
+	}
+	if check != nil {
+		if err := check(wt); err != nil {
+			return stale("das Ergebnis lädt nicht: " + err.Error())
+		}
+	}
+	sha, err := git(ctx, wt, "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	if out, err := git(ctx, repo, "merge", "-q", "--ff-only", strings.TrimSpace(sha)); err != nil {
+		return fmt.Errorf("main did not fast-forward to the merged result: %s", out)
 	}
 	git(ctx, repo, "branch", "-q", "-D", p.Branch)
 	p.Status, p.Decided, p.DecidedBy = "approved", time.Now().UTC(), by

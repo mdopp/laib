@@ -16,17 +16,20 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   # Claude Code reads it from the environment of the login shell.
   echo "export CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" > /etc/profile.d/claude.sh
 fi
+# Tokens live in this container's own tmpfs (/run/laib, Tmpfs= in the unit),
+# never on the shared /workspace volume: the dev container and the autoloop
+# each keep their own hand and their own GitHub token (#44).
+mkdir -p /run/laib && chmod 700 /run/laib && chown dev:dev /run/laib
 if [ -n "${LAIB_TOKEN:-}" ]; then
   # the token as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
-  mkdir -p /workspace/.laib && printf '%s' "$LAIB_TOKEN" > /workspace/.laib/token && chmod 600 /workspace/.laib/token && chown -R dev:dev /workspace/.laib
+  printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
   # Every session on this box gets Laib as an MCP server, as the hand the token names.
   su dev -c "claude mcp add --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer ${LAIB_TOKEN}' >/dev/null 2>&1 || true"
 fi
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
-  mkdir -p /workspace/.laib
-  printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /workspace/.laib/git-credentials
-  chmod 600 /workspace/.laib/git-credentials; chown -R dev:dev /workspace/.laib
-  su dev -c "git config --global credential.helper 'store --file /workspace/.laib/git-credentials'"
+  printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials
+  chmod 600 /run/laib/git-credentials; chown dev:dev /run/laib/git-credentials
+  su dev -c "git config --global credential.helper 'store --file /run/laib/git-credentials'"
 fi
 if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace

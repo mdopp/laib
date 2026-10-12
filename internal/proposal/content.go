@@ -248,7 +248,7 @@ func addService(wt string, a *AddService) error {
 			b = []byte(strings.Join(lines, "\n"))
 		}
 		mode := fs.FileMode(0o644)
-		if name == "post-deploy" {
+		if isHook(name) {
 			mode = 0o755
 		}
 		if err := os.WriteFile(filepath.Join(dst, name), b, mode); err != nil {
@@ -294,7 +294,7 @@ func updateService(wt string, u *UpdateService) error {
 			b = []byte(strings.Join(lines, "\n"))
 		}
 		mode := fs.FileMode(0o644)
-		if e.Name() == "post-deploy" {
+		if isHook(e.Name()) {
 			mode = 0o755
 		}
 		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, mode); err != nil {
@@ -390,3 +390,8 @@ func wireBox(wt, name string) error {
 	}
 	return writeYAML(filepath.Join(wt, "box.yml"), &doc)
 }
+
+// isHook: the template hooks apply runs (ADR 0004 amendment, #36). Both
+// phases are executable in the state repo — only post-deploy was, and a
+// pre-start copied 0644 was skipped in silence (PR #70's first VM run).
+func isHook(name string) bool { return name == "pre-start" || name == "post-deploy" }
