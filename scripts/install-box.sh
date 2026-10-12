@@ -5,6 +5,7 @@
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
 #       [--version vX.Y.Z] [--token <github token, while the repo is private>]
+#       [--dns-provider desec|cloudflare|…  (token: LAIB_DNS_TOKEN)] [--tls internal]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
 # While mdopp/laib is private, release assets need a GitHub token (fine-grained,
@@ -12,6 +13,7 @@
 # repo needs none.
 set -euo pipefail
 VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
+DNS_PROVIDER=""; DNS_TOKEN="${LAIB_DNS_TOKEN:-}"; TLS=""   # certificates (#45): DNS-01 via the provider's API, or Caddy's own CA
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="$2"; shift 2;;
@@ -22,6 +24,8 @@ while [ $# -gt 0 ]; do
     --model-lease) MODEL_LEASE="$2"; shift 2;;
     --gpu) GPU="--gpu"; shift;;
     --token) TOKEN="$2"; shift 2;;
+    --dns-provider) DNS_PROVIDER="$2"; shift 2;;
+    --tls) TLS="$2"; shift 2;;
     *) echo "unknown flag $1" >&2; exit 1;;
   esac
 done
@@ -142,7 +146,12 @@ systemctl --user daemon-reload
 loginctl enable-linger core >/dev/null 2>&1 || sudo loginctl enable-linger core
 
 if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
-  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} $GPU
+  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} ${DNS_PROVIDER:+--dns-provider "$DNS_PROVIDER"} ${TLS:+--tls "$TLS"} $GPU
+  if [ -n "$DNS_PROVIDER" ]; then
+    [ -n "$DNS_TOKEN" ] || { echo "--dns-provider $DNS_PROVIDER without a token: export LAIB_DNS_TOKEN" >&2; exit 1; }
+    printf '%s' "$DNS_TOKEN" | LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib secret set DNS_API_TOKEN >/dev/null
+    echo "DNS_API_TOKEN set for $DNS_PROVIDER (DNS-01 from the first laib add caddy)"
+  fi
 fi
 systemctl --user enable --now laib.service
 # enable --now does not restart a running service: an update would keep the old

@@ -70,6 +70,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Backup.Repo != "" {
 		out["systemd/laib-backup.service"] = backupService()
 		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
+		// the monthly restore test (#40): restic check on a sample plus one path restored and compared
+		out["systemd/laib-backup-check.service"] = "# Rendered by laib: the monthly restore test (laib backup check).\n[Unit]\nDescription=Laib backup check\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib backup check\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+		out["systemd/laib-backup-check.timer"] = "# Rendered by laib: once a month, a restore test.\n[Unit]\nDescription=Laib backup check timer\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Box.Operator.Enabled {
 		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
