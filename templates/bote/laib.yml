@@ -3,17 +3,18 @@ template: {registry: builtin, name: bote, version: 1}
 provides: [bote]
 # The Bote (ADR 0016): Hermes as stock, Signal gateway, the Laib MCP as the
 # hand `bote`, the Haus "Haushalt" MCP and Frage as tools. Two containers in
-# one pod: hermes, signal-cli's REST API and the Automat (HA automations,
-# #26), which share loopback.
+# one pod: hermes, signal-cli's daemon, the Automat (HA automations, #26)
+# and the approval relay (#48: code that sees the sender's number decides;
+# Hermes holds no token that can approve), which share loopback.
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes: []
 secrets:
   - name: BOTE_LAIB_TOKEN            # minted on `laib add bote` as the bote hand (propose, note, escalate)
     external: true
     mint: bote
-  - name: BOTE_HUMAN_TOKEN           # laib token mint human --note "signal <number>" (approvals as the admin, ADR 0016 §3); optional
+  - name: BOTE_APPROVER_TOKEN        # the relay's token (#48): minted on add as the approver hand — approve, reject, inbox, status, note, nothing else
     external: true
-    optional: true
+    mint: approver
   - name: BOTE_MODEL_KEY             # only for a cloud model
     external: true
   - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `haus` tool (README)
@@ -21,6 +22,7 @@ secrets:
 data:
   - path: ${DATA_DIR}/bote/hermes    # config.yaml, .env, memory, sessions
   - path: ${DATA_DIR}/bote/signal    # signal-cli's linked device
+  - path: ${DATA_DIR}/bote/automat   # automations deleted through the Automat, kept for restore
 health:
   http: http://127.0.0.1:8085/v1/about
 ports:

@@ -186,3 +186,42 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 		t.Fatalf("a refused proposal was kept: %+v", ps)
 	}
 }
+
+// #48: the approver hand (the Signal relay behind the admin's verified number)
+// counts as a human for a human-class proposal, and can do nothing else.
+func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
+	ctx := context.Background()
+	env, data := testBox(t)
+	ran := filepath.Join(data, "ran-on-the-host")
+	var hooks []string // hooks run in the hooks image since #36, never on the host
+	realHook := apply.RunHook
+	t.Cleanup(func() { apply.RunHook = realHook })
+	apply.RunHook = func(_ context.Context, h apply.HookSpec) (string, error) {
+		hooks = append(hooks, h.Image+" "+strings.Join(h.Command, " "))
+		return "", nil
+	}
+	st, err := loadState(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := "diff --git a/services/whoami/post-deploy b/services/whoami/post-deploy\nnew file mode 100755\n--- /dev/null\n+++ b/services/whoami/post-deploy\n@@ -0,0 +1,2 @@\n+#!/bin/sh\n+touch \"$LAIB_DATA_DIR/ran-on-the-host\"\n"
+	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]string{"args": `"whoami braucht ein Einrichtungs-Skript"`, "patch": patch}); code != exitOK {
+		t.Fatalf("propose: %d %s", code, out)
+	}
+	open, _ := proposal.List(inboxDir(env), true)
+	id := strconv.Itoa(open[0].ID)
+	for _, verb := range []string{"laib_exec", "laib_write", "laib_restore", "laib_propose"} {
+		if out, code := mcpCall(ctx, env, st, "approver", verb, map[string]string{"args": "whoami -- true"}); code == exitOK {
+			t.Fatalf("the approver could %s: %s", verb, out)
+		}
+	}
+	if out, code := mcpCall(ctx, env, st, "approver", "laib_approve", map[string]string{"args": id}); code != exitOK {
+		t.Fatalf("the approver's verdict was refused: %d %s", code, out)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("the script ran on the host: hooks run in the hooks image (#36)")
+	}
+	if len(hooks) != 1 || !strings.HasSuffix(hooks[0], "services/whoami/post-deploy") {
+		t.Fatalf("the approved script must run once, in the hooks image: %v", hooks)
+	}
+}

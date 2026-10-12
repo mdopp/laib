@@ -11,14 +11,22 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    and scan the QR code in Signal → Linked Devices on the phone that owns
    that number (a second SIM or a spare phone; the Bote should not share
    the admin's own number).
-2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`) is minted on `laib add bote`;
-   optional `laib token mint human --note "signal +49…"` → `laib secret set BOTE_HUMAN_TOKEN`.
-   The human token is used only through the `laib-admin` MCP entry, which
-   Hermes marks `untrusted`: every write asks, and the SOUL says it may be
-   used only on the admin's own message.
+2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`: read, propose, note, escalate)
+   and `BOTE_APPROVER_TOKEN` (hand `approver`: approve, reject, inbox,
+   status, note — nothing else) are minted on `laib add bote`. **Hermes
+   holds no token that can approve** (#48): "gib #17 frei" / "lehne #17 ab"
+   are read by the `bote-relay` container straight from signal-cli's event
+   stream, acted on only when the sender is `ADMIN_NUMBER`, answered with
+   the proposal's consequence. Any other number trying it gets a journal
+   line and no reply. The Automat's writes and deletes execute only with
+   the four-digit code its first answer names; deleted automations are
+   kept under `bote/automat/geloescht` for `automation_wiederherstellen`.
 3. Pairing: the first message from an unknown number yields a pairing code;
    approve with `laib exec bote -- hermes pairing approve signal <CODE>` or
-   list the number in `SIGNAL_ALLOWED_USERS`.
+   list the number in `SIGNAL_ALLOWED_USERS`. The relay and Hermes both
+   listen to signal-cli's daemon (`/api/v1/events`, which serves every
+   subscriber; Hermes also uses `/api/v1/rpc`) — the `bote-signal`
+   container must run `signal-cli daemon --http` (#54 checks the image).
 
 4. The house as a tool: in Home Assistant add the integration **Model
    Context Protocol Server** (Settings → Integrations; it exposes the Assist

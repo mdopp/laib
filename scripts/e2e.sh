@@ -227,11 +227,12 @@ HOOKDIR="$WORK/hooks"; mkdir -p "$HOOKDIR"
 ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_HUMAN_TOKEN=laib_human_y LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook"
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook"
+if grep -q "HUMAN_TOKEN\|laib-admin" "$HOOKDIR/bote/hermes/config.yaml" "$HOOKDIR/bote/hermes/.env"; then fail "hermes holds a token that can approve (#48)"; fi
 grep -q "SIGNAL_ACCOUNT=+491" "$HOOKDIR/bote/hermes/.env" || fail "bote .env"
 grep -q 'Authorization: "Bearer ${LAIB_TOKEN}"' "$HOOKDIR/bote/hermes/config.yaml" || fail "bote mcp header keeps the env reference"
 grep -q "base_url: http://127.0.0.1:5977/v1" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote model url"
-grep -q "trust: untrusted" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote admin entry must be untrusted"
+grep -q "trust: untrusted" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote's laib entry must be untrusted"
 grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin"
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"

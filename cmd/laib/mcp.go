@@ -114,7 +114,7 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 func mcpTools(st *state.State, hand string) []map[string]any {
 	var tools []map[string]any
 	for _, v := range verbs {
-		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) {
+		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) || !policy.MayVerb(st.Policy, hand, v.name) {
 			continue
 		}
 		tools = append(tools, map[string]any{
@@ -154,6 +154,9 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	}
 	if !policy.Allowed(st.Policy, hand, v.tier) {
 		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), exitRefused
+	}
+	if !policy.MayVerb(st.Policy, hand, verbName) {
+		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), exitRefused
 	}
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
