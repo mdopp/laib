@@ -10,7 +10,7 @@ export LAIB_GH_TOKEN=github_pat_…
 curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" \
   https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -H "Accept: application/vnd.github.raw" \
   | bash -s -- --domain <domain> --lan-ip <ip> \
-       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
+       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease
 ```
 
 Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
@@ -19,9 +19,11 @@ token and the API path go away and the plain raw URL works.
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points
-`--model-url` at a peer's llama proxy or at a cloud API (`https://…`,
-then `laib secret set MODEL_API_KEY` before the first apply). Operator,
-Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and `${MODEL_LEASE}`.
+`--model-url` at a peer's llama proxy or at a cloud API, then
+`laib secret set MODEL_API_KEY` before the first apply: the cloud API's
+key, or the peer box's own `MODEL_API_KEY` (its lease API refuses without
+it, #42). Operator, Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and
+`${MODEL_LEASE}`.
 
 What it does, in order:
 
@@ -73,7 +75,7 @@ SSH Public Key (Datei) [~/.ssh/id_ed25519.pub]:
 Konsolen-Passwort für core setzen? [j/N]: j
 Hat die Box eine GPU? [j/N]:
 URL eines entfernten Modells: http://192.168.178.100:11435/v1
-Lease-URL der entfernten llama: http://192.168.178.100:8787/api/model-lease
+Lease-URL der entfernten llama: http://192.168.178.100:11435/api/model-lease
 GitHub-Token (solange mdopp/laib privat ist): github_pat_…
 
 Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
@@ -120,16 +122,20 @@ What makes or breaks the first boot is settled before the stick is built:
 - **A LAN address**: reserve one in the Fritz!Box for the NUC's MAC (or take
   DHCP and look it up afterwards). It goes into `laib-stick` as the LAN
   address and into AdGuard's `*.<domain>` rewrite.
-- **The domain**: `dopp.cloud` is at Strato, which has no DNS API, and the
-  house's port 80 reaches the Kraftwerk, not the NUC. So the trial runs with
-  `tls: internal` (Caddy signs; trust its root on the laptop and the phones)
-  and the NUC's AdGuard as the laptop's DNS for the trial, or `/etc/hosts`
-  lines for `laib`, `auth`, `whoami` under the trial domain. (Later, for real
-  certificates without port 80: Strato can delegate a sub-zone by NS record
-  to deSEC or Cloudflare, both free; then `dns.provider` + `DNS_API_TOKEN`.)
+- **The domain and its certificates** (ADR 0007 amendment, #45):
+  `dopp.cloud` is at Strato, which has no DNS API, and the house's port 80
+  reaches the Kraftwerk, not the NUC — so the trial domain is a sub-zone
+  delegated to a provider with an API: at Strato, NS records for
+  `nuc.dopp.cloud` pointing at deSEC; at deSEC the zone `nuc.dopp.cloud` and
+  an API token. `laib-stick --domain nuc.dopp.cloud --dns-provider desec
+  --dns-token …` (or `LAIB_DNS_TOKEN`); Caddy then gets Let's Encrypt
+  certificates by DNS-01 and the phones trust them. The NUC's AdGuard (or
+  `/etc/hosts` lines) answers `*.nuc.dopp.cloud` with the NUC's LAN address.
+  `--tls internal` (Caddy's own CA) exists for a laptop-only trial: Android
+  apps and their widgets do not trust it.
 - **The model**: the Kraftwerk's model proxy answers on
   `http://192.168.178.100:11435/v1` and the lease on
-  `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
+  `http://192.168.178.100:11435/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
 - **The GitHub token**: repository `mdopp/laib`, permission *Contents:
   read*, and *Packages: read* for the three images `ghcr.io/mdopp/laib-caddy`,
@@ -168,16 +174,16 @@ LAN; a GitHub token while this repo is private.
 export LAIB_GH_TOKEN=github_pat_…
 curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh \
-  | bash -s -- --domain trial.example --lan-ip 192.168.178.30 \
-       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
+  | bash -s -- --domain nuc.dopp.cloud --lan-ip 192.168.178.30 --dns-provider desec \
+       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:11435/api/model-lease
+#    (LAIB_DNS_TOKEN exported before; the stick does all of this on first boot)
 laib=/var/opt/laib/laib
 
-# 2. certificates. dopp.cloud is at Strato (no DNS API) and the house's port 80
-#    goes to the Kraftwerk, so the NUC cannot pass HTTP-01 or DNS-01: let Caddy
-#    sign itself for the trial and trust its root on the laptop and the phones.
-echo 'tls: internal' >> /mnt/data/laib/state/box.yml
-#    (later, on the Kraftwerk: leave tls empty → HTTP-01 over port 80 like today;
-#     or delegate a sub-zone to a provider with an API and set dns.provider + DNS_API_TOKEN)
+# 2. certificates: the stick already set box.yml dns.provider and the secret
+#    DNS_API_TOKEN (--dns-provider/--dns-token, ADR 0007 amendment #45): Caddy
+#    does DNS-01 from the first `laib add caddy`. Nothing to do here. A box
+#    installed by hand: `laib init --dns-provider desec` + `laib secret set
+#    DNS_API_TOKEN`; a laptop-only trial: `laib init --tls internal`.
 
 # 3. the roles: proxy, sso + identity, dns, then a first app. `laib add` is
 #    propose + approve + apply as the human; a template that provides a

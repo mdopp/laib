@@ -28,8 +28,7 @@ var mcpMu sync.Mutex
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "write": true, "exec": true, "restart": true, "escalate": true,
-	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true,
-	"diag": true, // the Operator's first look (#43: the prompt asked for a tool MCP did not have)
+	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true,
 }
 
 type rpcRequest struct {

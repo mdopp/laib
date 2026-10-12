@@ -14,7 +14,8 @@ laib read <service> <path>           a file in the service's data paths, secrets
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib plan [service]                  render state → diff against the box (files + units)
@@ -37,11 +38,15 @@ laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
 Every verb has `--json`. The MCP tool list is generated from the same verb
-table, so the two cannot drift. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+table (`mcpVerbs` names which of them an agent may reach at all), and
+`scripts/drift.sh` in CI checks that every tool the Operator's prompt
+names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
-proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
-reboot, a public route) are not verbs at all for it, they are proposals.
+proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
+ceiling and a reboot is not a verb; a public route is a values change,
+which the dial may auto-apply — the "always a human's call" in
+`policy.yml`'s comment is a convention today, not enforced (#47).
 
 ## The Operator's typed surface (#53)
 
@@ -212,7 +217,7 @@ lock whose process is gone is taken over with a journal line.
 `laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
 (apply tier): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
-`restore` pauses the service it rewrites, the GPU lease pauses `llama`
+`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
 while a mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies
@@ -280,3 +285,15 @@ bundle is budgeted (head and newest journal lines). `laib operator
 enable` points `notify.url` at the operator's event endpoint unless the
 owner set one, so reds wake it; an operator enabled for three ticks
 without a single note is red („stumm“).
+
+### Hardware health (#59)
+
+`laib diag` asks `smartctl -H -A --json` about every member of the data
+array and the OS disk: reallocated or pending sectors, media errors and
+wear are yellow („die Platte altert“), a failed self-assessment is red
+(„Platte bald tauschen“), 55/65 °C are warm/hot; the kernel's thermal
+zones give the box's temperature (80 °C yellow, 90 °C red). Without
+smartmontools the probe says so once (`sudo rpm-ostree install
+smartmontools`; install-box.sh will layer it with git, restic and diff).
+The power-loss proofs (a cut during an apply, a backup, a resync) wait
+for Actions minutes and for #81.

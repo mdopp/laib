@@ -157,10 +157,10 @@ itself:
 
 | Class | Example | Default | "auto" means |
 |---|---|---|---|
-| values | a newer image tag, a changed port | proposal | laib merges, applies, and reverts the merge when verify is red |
-| template-update | the registry shipped a new version | proposal | the weekly sync proposes and laib applies, rollback on red |
+| values | a newer image tag, a changed port | auto (`laib init`) | laib merges, applies, and reverts the merge when verify is red |
+| template-update | the registry shipped a new version | auto | the weekly sync proposes and laib applies, rollback on red |
 | new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
-| patch | anything else an agent can express as a diff | proposal | same |
+| patch | anything else an agent can express as a diff | auto | same |
 | remove | delete a service | never auto | a human, always (ADR 0006) |
 
 A warning (a second service for one purpose) always goes to a human, dial

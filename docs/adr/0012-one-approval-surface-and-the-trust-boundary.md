@@ -3,7 +3,7 @@
 Applies when you add a button to a Solaris card, read `LAIB_ACTOR` for a
 permission decision, or expose a Laib page or listener anywhere.
 
-- **Status:** Accepted, 2026-10-09
+- **Status:** Accepted, 2026-10-09; confirmed by ADR 0019 (2026-10-12): the Box page, the Signal relay and Haus `/box` are one inbox, and no LLM holds a token that can approve (#68).
 
 ## Context
 

@@ -29,6 +29,11 @@ SH
 cat > "$WORK/bin/restic" <<'SH'
 #!/usr/bin/env sh
 echo "restic $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
+# a repo exists only after init (#40: backupPrep asks for the sheet's password when it does)
+case "$1" in
+  init) touch "${SYSTEMCTL_LOG%/*}/restic.initialized";;
+  cat) [ -f "${SYSTEMCTL_LOG%/*}/restic.initialized" ] || { echo "Fatal: repository does not exist"; exit 1; };;
+esac
 exit 0
 SH
 cat > "$WORK/bin/sudo" <<'SH'
