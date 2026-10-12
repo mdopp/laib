@@ -164,7 +164,8 @@ journal is green, the Bote writes "Läuft unter paperless.deinedomain, SSO
 ist drauf."
 
 **A red at three in the morning.** Auto-update pulls a new Immich;
-`diag --journal` finds the health red; the webhook wakes the Operator; it
+`diag --journal` finds the health red; the Operator's next tick (ten
+minutes; a webhook is planned, not wired) picks it up; it
 inspects, reads the log, sees a changed config key, writes the fix into
 the service's config (envelope: snapshot first), restarts, verify green,
 journal: what it did and why. The morning report says it in two lines.
