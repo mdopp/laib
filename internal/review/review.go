@@ -27,6 +27,9 @@ type Result struct {
 	Human []string // why only a human may allow the change, in plain German; empty = the dial decides
 	Mints []string // hands a newly declared secret mints a Laib token for
 	Added []string // services the change adds
+	Facts []string // plain facts for the decision card (#58): where a new service is reachable …
+
+	domain string // the box's domain, for the facts
 }
 
 type file struct {
@@ -183,6 +186,9 @@ func Dirs(base, changed string) Result {
 		return r
 	}
 	ast, err := state.Load(changed)
+	if err == nil {
+		r.domain = ast.Box.Domain
+	}
 	if err != nil {
 		say("%s", loadReason(err))
 		return r
@@ -322,6 +328,15 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 			if existed {
 				say("veröffentlicht eine neue Adresse für %s: %s", svc, rt.Host)
 			}
+			where := "nur im Heimnetz erreichbar"
+			if rt.Exposure == "public" {
+				where = "aus dem Internet erreichbar"
+			}
+			login := ""
+			if rt.Auth == "none" {
+				login = ", mit eigener Anmeldung"
+			}
+			r.Facts = append(r.Facts, fmt.Sprintf("%s ist unter %s.%s %s%s", svc, rt.Host, r.domain, where, login))
 			if rt.Exposure == "public" {
 				say("macht %s aus dem Internet erreichbar (%s)", svc, rt.Host)
 			}

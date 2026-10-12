@@ -217,6 +217,21 @@ Signal relay's token (#48) — it can decide and nothing else, and it acts
 only on the admin's verified number. Over MCP the tool list and every call
 honour the verb list.
 
+### The decision card (#58)
+
+Every open proposal is shown as the same card — on the Box page, in
+`laib inbox`, in the Bote's chat („zeig #17“) and in `laib inbox --json`
+(`card`): **what changes** in one sentence („Paperless wird installiert —
+unter paperless.<domain> nur im Heimnetz erreichbar“), **what it means for
+the family** (the review's reasons: aus dem Internet erreichbar, ohne
+Anmeldung, ein Laib-Schlüssel, ein Skript auf der Box …, or „nichts
+Sichtbares“), **whether it can be undone** („Zurücknehmen“: files back,
+data stays; a new service is stopped and removed, its data stays), **who
+proposed it and why** (quoted), and **the safe default**: for a risky
+class (human, a new service, a minted token) the first button is „Später“
+and the diff sits behind „Details“. The card is built mechanically from
+the classified change (`proposal.Card`), never by a model.
+
 ### `laib look <service> [--container c] -- <command>`
 
 A read-only command (cat, ls, grep, ps, df, stat, find, …) in one of the

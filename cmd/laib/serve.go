@@ -119,20 +119,41 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if len(open) == 0 {
 			b.WriteString("<p>Keine offenen Vorschläge.</p>")
 		}
+		domain := ""
+		if st, err := loadState(env); err == nil {
+			domain = st.Box.Domain
+		}
 		for _, p := range open {
-			fmt.Fprintf(&b, "<h2>Vorschlag #%d · von %s · Stufe: %s · braucht: andere Hand mit %s</h2><p>%s</p><pre>%s</pre>",
-				p.ID, html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(p.Reason), html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
-			if p.Class == "human" {
-				b.WriteString("<p class=rot>Nur ein Mensch kann freigeben:</p><ul>")
-				for _, r := range p.Reasons {
-					fmt.Fprintf(&b, "<li>%s</li>", html.EscapeString(r))
+			// the decision card (#58): consequence, reversibility, who and why,
+			// a safe default — the diff only behind Details
+			c := proposal.Card(p, domain)
+			fmt.Fprintf(&b, "<h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
+			b.WriteString("<ul>")
+			for _, i := range c.Impact {
+				cls := ""
+				if strings.HasPrefix(i, "Achtung") {
+					cls = " class=gelb"
 				}
-				b.WriteString("</ul>")
+				fmt.Fprintf(&b, "<li%s>%s</li>", cls, html.EscapeString(i))
+			}
+			b.WriteString("</ul>")
+			fmt.Fprintf(&b, "<p>%s</p><p>%s</p>", html.EscapeString(c.Reversible), html.EscapeString(c.Why))
+			if p.Class == "human" {
+				b.WriteString("<p class=rot>Nur ein Mensch kann freigeben.</p>")
 			}
 			for _, w := range p.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
-			fmt.Fprintf(&b, "<p>Snapshot vor Apply: ja · Rollback: laib rollback</p><form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form> <form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID, p.ID)
+			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form>", p.ID)
+			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID)
+			later := "<a href=\"/\"><button>Später</button></a>"
+			if c.Risky {
+				fmt.Fprintf(&b, "<p>%s %s %s</p>", later, approve, reject)
+			} else {
+				fmt.Fprintf(&b, "<p>%s %s %s</p>", approve, reject, later)
+			}
+			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
+				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
 		}
 		// what was approved lately can be taken back (#41)
 		if all, err := proposal.List(inboxDir(env), false); err == nil {

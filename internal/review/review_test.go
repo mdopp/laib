@@ -246,3 +246,16 @@ func TestReviewFailsClosed(t *testing.T) {
 		t.Fatal("a state that does not load was not marked for a human")
 	}
 }
+
+// #58: beside the human-only reasons, the review states plain facts for
+// the decision card — where a new service is reachable.
+func TestReviewStatesWhereANewServiceIsReachable(t *testing.T) {
+	base, changed := copyTree(t, golden), copyTree(t, golden)
+	write(t, changed, "services/paperless/laib.yml", "name: paperless\nroutes:\n  - host: paperless\n    port: 8000\n    exposure: internal\n    auth: one_factor\nsecrets: []\ndata: []\n", 0o644)
+	write(t, changed, "services/paperless/paperless.container", "[Container]\nImage=docker.io/library/busybox:1.36\n\n[Install]\nWantedBy=default.target\n", 0o644)
+	r := Dirs(base, changed)
+	joined := strings.Join(r.Facts, "\n")
+	if !strings.Contains(joined, "paperless.") || !strings.Contains(joined, "nur im Heimnetz") {
+		t.Fatalf("facts must say where the new service is reachable:\n%s", joined)
+	}
+}

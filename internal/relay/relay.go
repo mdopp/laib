@@ -54,6 +54,9 @@ func New(cfg Config, out Sender) *Relay {
 
 var verdict = regexp.MustCompile(`(?i)^\s*(gib|lehne)\s+#?(\d+)\s+(frei|ab)\s*[.!]?\s*$`)
 
+// show: "zeig #17" — the decision card, before the verdict (#58)
+var show = regexp.MustCompile(`(?i)^\s*zeig\s+#?(\d+)\s*[.!?]?\s*$`)
+
 // laib calls one Laib tool with the approver token.
 func (r *Relay) laib(ctx context.Context, verb, args string) (string, error) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
@@ -104,12 +107,43 @@ type proposal struct {
 	Class   string   `json:"class"`
 	Reasons []string `json:"reasons"`
 	Files   []string `json:"files"`
+	Card    struct {
+		Summary    string   `json:"summary"`
+		Impact     []string `json:"impact"`
+		Reversible string   `json:"reversible"`
+		Why        string   `json:"why"`
+		Primary    string   `json:"primary"`
+	} `json:"card"`
+}
+
+// cardText renders the decision card for a chat (#58).
+func cardText(p *proposal) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Vorschlag #%d: %s\n", p.ID, p.Card.Summary)
+	for _, i := range p.Card.Impact {
+		fmt.Fprintf(&b, "· %s\n", i)
+	}
+	fmt.Fprintf(&b, "%s\n%s\n", p.Card.Reversible, p.Card.Why)
+	if p.Card.Primary == "Später" {
+		fmt.Fprintf(&b, "Das kann warten — nichts tun ist sicher. Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)
+	} else {
+		fmt.Fprintf(&b, "Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)
+	}
+	return b.String()
 }
 
 // Handle looks at one message: not the admin → a journal line and nothing
 // else; not a verdict → nothing; a verdict → the proposal's consequence is
 // looked up, Laib decides, the admin gets the outcome.
 func (r *Relay) Handle(ctx context.Context, m Message) {
+	if sm := show.FindStringSubmatch(m.Text); sm != nil && m.From == r.cfg.Admin {
+		if p := r.open(ctx, sm[1]); p != nil {
+			r.out.Send(ctx, m.From, cardText(p))
+		} else {
+			r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s ist nicht offen.", sm[1]))
+		}
+		return
+	}
 	match := verdict.FindStringSubmatch(m.Text)
 	if match == nil {
 		return // plain chat is Hermes' business
@@ -120,23 +154,15 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 	}
 	id := match[2]
 	approve := strings.EqualFold(match[1], "gib")
-	var p *proposal
-	if text, err := r.laib(ctx, "inbox", ""); err == nil {
-		var ps []proposal
-		if i := strings.IndexByte(text, '['); i >= 0 {
-			json.Unmarshal([]byte(text[i:]), &ps)
-		}
-		for i := range ps {
-			if fmt.Sprint(ps[i].ID) == id {
-				p = &ps[i]
-			}
-		}
-	}
+	p := r.open(ctx, id)
 	if p == nil {
 		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s ist nicht offen — nichts getan. `laib inbox` zeigt die offenen.", id))
 		return
 	}
-	what := p.Reason
+	what := p.Card.Summary
+	if what == "" {
+		what = p.Reason
+	}
 	if len(p.Reasons) > 0 {
 		what += " — " + strings.Join(p.Reasons, "; ")
 	}
@@ -153,6 +179,24 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 	default:
 		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s abgelehnt: %s", id, what))
 	}
+}
+
+// open looks one open proposal up through laib's inbox.
+func (r *Relay) open(ctx context.Context, id string) *proposal {
+	text, err := r.laib(ctx, "inbox", "")
+	if err != nil {
+		return nil
+	}
+	var ps []proposal
+	if i := strings.IndexByte(text, '['); i >= 0 {
+		json.Unmarshal([]byte(text[i:]), &ps)
+	}
+	for i := range ps {
+		if fmt.Sprint(ps[i].ID) == id {
+			return &ps[i]
+		}
+	}
+	return nil
 }
 
 func tail(s string, n int) string {
