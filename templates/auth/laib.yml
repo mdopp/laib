@@ -25,6 +25,7 @@ secrets:
   - name: LLDAP_JWT_SECRET
   - name: LLDAP_ADMIN_PASSWORD
   - name: OPERATOR_PASSWORD           # the admin's own first password; change it in LLDAP afterwards
+  - name: RADICALE_LDAP_PASSWORD      # the read-only LDAP account radicale binds with (#55): seeded here, used there
 after: []
 data:
   - path: ${DATA_DIR}/auth/lldap

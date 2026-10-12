@@ -21,17 +21,26 @@ on:
 concurrency:
   group: vm-install-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+  contents: read
+  packages: write   # this commit's hooks image (#36)
 jobs:
   install:
     runs-on: ubuntu-latest
     timeout-minutes: 120  # install, mirror sync, two reinstalls and the disaster recovery take ~80 min on the runner
     env:
       SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
+      HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: this commit's hooks image, pushed so the box can pull it
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ github.token }}"
+          podman build -q -t "$HOOKS" -f hooks/Containerfile . && podman push -q "$HOOKS"
+          echo "pushed $HOOKS"
       - name: qemu + kvm
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
@@ -49,9 +58,9 @@ jobs:
           nohup python3 -m http.server 8000 --bind 127.0.0.1 --directory dist > http.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
           echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
+          ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
           # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --reinstall --out laib-vm-reinstall.iso
+          ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --reinstall --out laib-vm-reinstall.iso
           ls -la laib-vm.iso laib-vm-reinstall.iso
       - name: cross-check with coreos-installer, serial console for the log
         run: |
@@ -253,6 +262,9 @@ jobs:
                 sysctl -n net.ipv4.ip_unprivileged_port_start
                 # the stick's --tls internal reached box.yml through first boot and laib init (#45); no echo into box.yml here
                 grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
+                # hooks run in this commit'"'"'s image (#36): box.yml laib.hooksImage, before the first service with a hook
+                if grep -q "^laib:" /mnt/data/laib/state/box.yml; then sed -i "s|^laib:|laib:\n    hooksImage: ${{ env.HOOKS }}|" /mnt/data/laib/state/box.yml; else printf "laib:\n    hooksImage: %s\n" "${{ env.HOOKS }}" >> /mnt/data/laib/state/box.yml; fi
+                grep -n hooksImage /mnt/data/laib/state/box.yml
                 $L add caddy
                 $L status
                 podman ps
@@ -307,6 +319,42 @@ jobs:
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
+      - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
+                # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
+                command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
+                $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
+                grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
+                grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
+                grep -q "lldap seeded" /tmp/add-auth.txt || { echo "the hook output does not say LLDAP was seeded"; exit 1; }
+                test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
+                test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
+                systemctl --user is-active auth-authelia.service auth-lldap.service
+                $L add adguard | tee /tmp/add-adguard.txt
+                grep -q "^ok  adguard pre-start" /tmp/add-adguard.txt || { echo "adguard pre-start is not green"; exit 1; }
+                grep -q "rewrites in step" /tmp/add-adguard.txt || { echo "post-deploy did not sync the rewrites through the API"; exit 1; }
+                test -s /mnt/data/stacks/adguard/conf/AdGuardHome.yaml || { echo "pre-start did not write AdGuardHome.yaml"; exit 1; }
+                code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
+                # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
+                podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
+                grep -A2 "laib.vm.test" /tmp/dns.txt | grep -q "Address" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
+                $L add radicale BASE_DN=dc=vm,dc=test | tee /tmp/add-radicale.txt
+                grep -q "^ok  radicale pre-start" /tmp/add-radicale.txt || { echo "radicale pre-start is not green"; exit 1; }
+                test -s /mnt/data/stacks/radicale/config/config || { echo "pre-start did not write radicale'"'"'s config"; exit 1; }
+                $L status
+                podman ps --format "{{.Names}} {{.Status}}"
+                # the Authelia portal through Caddy, verified against the local root
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://auth.vm.test/api/health || true)
+                echo "https://auth.vm.test/api/health -> HTTP $code"; [ "$code" = 200 ]
+                # and a protected route is sent to the portal, not served
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
+                echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
@@ -440,4 +488,5 @@ jobs:
           echo "--- serial"; tail -c 20000 serial.log || true
           echo "--- build server"; tail -20 http.log || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; podman ps -a' || true
+          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; echo "--- authelia"; journalctl --user --no-pager -u auth-authelia | tail -30; echo "--- lldap"; journalctl --user --no-pager -u auth-lldap | tail -30; systemctl --user --no-pager status auth-pod.service auth-lldap.service auth-authelia.service | head -40; echo "--- adguard"; journalctl --user --no-pager -u adguard | tail -30; echo "--- radicale"; journalctl --user --no-pager -u radicale | tail -40; podman logs --tail 40 systemd-radicale 2>&1 | tail -40; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 2h | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true

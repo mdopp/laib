@@ -271,6 +271,13 @@ no longer carry `AutoUpdate=registry` — podman's rollback restores an
 image, not migrated data; their images change by proposal. Where
 auto-update stays, `podman-auto-update.service` takes a `laib backup`
 first and the default window is 04:30, never the backup's 03:00.
+### Hooks: `pre-start` and `post-deploy`
+
+Both run in the hooks image (ADR 0004 amendment), never on the host:
+`pre-start` before the units start, `post-deploy` after a green verify.
+Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
+`laib-exec: <container> <command…>` (run by Laib in the service's own
+container). `box.yml laib.hooksImage` names the image.
 
 ### The Operator and the MCP surface (#43)
 

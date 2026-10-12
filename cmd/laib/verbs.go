@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -358,7 +360,7 @@ func lintTemplate(dir string) int {
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Base(filepath.Clean(dir))
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /tmp/lint\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	dst := filepath.Join(tmp, "services", name)
 	os.MkdirAll(dst, 0o755)
@@ -402,8 +404,42 @@ func lintTemplate(dir string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return exitUsage
 	}
-	if _, err := render.Render(st, nil); err != nil {
+	out, err := render.Render(st, nil)
+	if err != nil {
 		return fail(err)
+	}
+	// the after: neighbours' declared data paths (their apply creates them)
+	// may be mounted too: the file share's folders in media, immich, paperless
+	var neighbours []string
+	for dep := range st.Services {
+		if dep == name {
+			continue
+		}
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Clean(dir)), dep, "laib.yml")); err == nil {
+			var c struct {
+				Data []state.DataPath `yaml:"data"`
+			}
+			if yaml.Unmarshal(b, &c) == nil {
+				for _, d := range c.Data {
+					neighbours = append(neighbours, d.Path)
+				}
+			}
+		}
+	}
+	if errs := lintMounts(st, name, out, neighbours); len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e)
+		}
+		return exitUsage
+	}
+	for _, phase := range []string{"pre-start", "post-deploy"} {
+		if b, err := os.ReadFile(filepath.Join(dir, phase)); err == nil {
+			first := strings.SplitN(string(b), "\n", 2)[0]
+			if !hookInterpreters[first] {
+				fmt.Fprintf(os.Stderr, "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
+				return exitUsage
+			}
+		}
 	}
 	// a health declaration (#46): an http probe, or a reason why there is none
 	if h := st.Services[name].Contract.Health; h.HTTP == "" && h.None == "" {
@@ -583,4 +619,49 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
+}
+
+// hookInterpreters is what ghcr.io/mdopp/laib-hooks provides (#36).
+var hookInterpreters = map[string]bool{"#!/usr/bin/env python3": true, "#!/usr/bin/env bash": true, "#!/bin/bash": true, "#!/bin/sh": true, "#!/usr/bin/env sh": true}
+
+// lintMounts: every Volume= source of the rendered units must be a declared
+// data path (or under one), a rendered file, a named volume or a tmpfs —
+// apply creates only declared paths, and podman refuses a missing bind
+// source (#36; the failure afc1115 fixed for declared paths).
+func lintMounts(st *state.State, name string, out render.Output, neighbours []string) []string {
+	svc := st.Services[name]
+	var allowed []string
+	for _, d := range svc.Contract.Data {
+		allowed = append(allowed, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
+	}
+	for _, p := range neighbours {
+		allowed = append(allowed, strings.ReplaceAll(p, "${DATA_DIR}", st.Box.DataDir))
+	}
+	var errs []string
+	for key, text := range out {
+		if !strings.HasPrefix(key, "quadlet/"+name+"/") {
+			continue
+		}
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "Volume=") {
+				continue
+			}
+			src, _, _ := strings.Cut(strings.TrimPrefix(line, "Volume="), ":")
+			if !strings.HasPrefix(src, "/") {
+				continue // a named volume
+			}
+			// rendered files, and what the host itself provides (devices, dbus, sysfs)
+			ok := strings.HasPrefix(src, "/mnt/data/laib/render/") || strings.HasPrefix(src, "/dev/") || strings.HasPrefix(src, "/run/") || strings.HasPrefix(src, "/sys/") || strings.HasPrefix(src, "/proc/")
+			for _, a := range allowed {
+				if src == a || strings.HasPrefix(src, strings.TrimSuffix(a, "/")+"/") {
+					ok = true
+				}
+			}
+			if !ok {
+				errs = append(errs, fmt.Sprintf("%s: %s mounts %s, which is not a declared data path (apply creates only declared paths; podman refuses a missing bind source)", key, line, src))
+			}
+		}
+	}
+	return errs
 }

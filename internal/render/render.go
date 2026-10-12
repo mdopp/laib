@@ -321,7 +321,20 @@ func autheliaAccess(st *state.State) string {
 
 func autheliaClients(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
-	b.WriteString("# Rendered by laib: one OIDC client per service that declares oidc.\nidentity_providers:\n  oidc:\n    clients:\n")
+	b.WriteString("# Rendered by laib: one OIDC client per service that declares oidc.\n")
+	any := false
+	for _, name := range st.ServiceNames() {
+		if st.Services[name].Contract.OIDC != nil {
+			any = true
+		}
+	}
+	if !any {
+		// Authelia refuses an oidc block without jwks and clients (#36): no
+		// block at all until the first service declares oidc
+		b.WriteString("# no service declares oidc yet: Authelia gets no OIDC block (it refuses an empty one)\n")
+		return b.String()
+	}
+	b.WriteString("identity_providers:\n  oidc:\n    clients:\n")
 	for _, name := range st.ServiceNames() {
 		o := st.Services[name].Contract.OIDC
 		if o == nil {
