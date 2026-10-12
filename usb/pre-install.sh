@@ -5,9 +5,11 @@ set -euo pipefail
 # (routers like FritzBox learn the hostname from DHCP and cache it)
 hostnamectl set-hostname "$SERVER_NAME" 2>/dev/null || hostname "$SERVER_NAME"
 
-# Find the smallest non-removable disk (that's not the live USB) for OS install.
-# The live USB is the device backing /run/media or the ISO boot.
-LIVE_DISK=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /run)" 2>/dev/null || echo "")
+# Find the smallest internal disk for the OS: never the live stick, never a USB
+# or removable disk (#32). /run is a tmpfs, so asking findmnt about /run never
+# named the stick; the live ISO is mounted at /run/media/iso, and USB is the
+# guard that holds either way.
+LIVE_DISK=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /run/media/iso 2>/dev/null)" 2>/dev/null || echo "")
 
 BEST=""
 BEST_SIZE=0
@@ -20,8 +22,9 @@ for dev in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
   # Skip live USB, zram and loop devices
   [[ "$name" == "$LIVE_DISK" ]] && continue
   [[ "$name" == zram* || "$name" == loop* ]] && continue
-  # Skip removable
+  # Skip removable and USB disks: the install stick, a backup drive, an SD reader
   [[ "$(cat /sys/block/${name}/removable 2>/dev/null)" == "1" ]] && continue
+  [[ "$(lsblk -dno TRAN "$dev" 2>/dev/null | tr -d ' ')" == "usb" ]] && continue
   size=$(blockdev --getsize64 "$dev" 2>/dev/null || echo 0)
   (( size == 0 )) && continue
   # Pick smallest
