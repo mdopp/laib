@@ -81,10 +81,15 @@ DEFAULT_TIME_CAP_S = 3600
 CLAIM_REF_PREFIX = "refs/autoloop/claim"
 BRANCH_PREFIX = "pi"
 
-# The provider id templates/pi-web/post-deploy.py writes into the Pi agent's
-# models.json. `--model <provider>/<id>` is how a run is pinned to one preset
-# of the router rather than to whatever that file happens to list first.
-PROVIDER_ID = "solaris-llama"
+# The provider id the pi extension registers (werkstatt/extensions/catalog.mjs,
+# defined there once; the test checks both agree). `--model <provider>/<id>`
+# pins a run to one preset of the router.
+PROVIDER_ID = os.environ.get("PI_PROVIDER_ID") or "laib-llama"
+
+# A transient failure — no clone, the preset refused (409), pi not startable —
+# keeps the label and is tried again on later passes; after this many
+# attempts the ticket goes to Claude with the protocol (#44).
+TRANSIENT_ATTEMPTS = 3
 
 # The preset this loop works in. It is a coding session, so it asks for the
 # coding preset — `/v1/models` is a catalogue of everything the router can
@@ -544,7 +549,9 @@ def run_pi(
         return summarise_events(out.splitlines()), True, ""
     except OSError as e:
         jlog("error", "pi-autoloop:pi", "pi could not be started", detail=str(e))
-        return summarise_events([]), True, ""
+        summary = summarise_events([])
+        summary["started"] = False  # transient: the image or the PATH, not the ticket (#44)
+        return summary, True, ""
 
 
 def run_gates(cwd: Path) -> list[dict]:
@@ -655,6 +662,26 @@ def write_protocol(directory: str, repo: str, issue: int, text: str) -> None:
         )
 
 
+def attempts_path(directory: str | Path, repo: str, issue: int | str) -> Path:
+    return protocol_path(directory, repo, issue).with_suffix(".attempts")
+
+
+def count_attempt(directory: str | Path, repo: str, issue: int | str) -> int:
+    """One more transient attempt for this ticket; returns the new count."""
+    path = attempts_path(directory, repo, issue)
+    try:
+        n = int(path.read_text(encoding="utf-8").strip() or "0")
+    except (OSError, ValueError):
+        n = 0
+    n += 1
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(n), encoding="utf-8")
+    except OSError:
+        pass
+    return n
+
+
 def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) -> None:
     number = int(issue["number"])
     started = time.monotonic()
@@ -665,9 +692,11 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
     pi: dict = summarise_events([])
     pr_url = ""
     note = ""
+    transient = False
 
     if not clone(repo, base, dest):
         note = "Klon fehlgeschlagen"
+        transient = True
     else:
         pi, capped, refused = run_pi(
             task_prompt(repo, issue), model, dest, cfg["time_cap_s"]
@@ -676,9 +705,12 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
             note = "Zeitlimit erreicht — Pi abgebrochen"
         if refused:
             note = refused
+            transient = True  # the mode was not to be had; next pass it may be
             jlog(
                 "warn", "pi-autoloop:pi", refused, repo=repo, issue=number, model=model
             )
+        if pi.get("started") is False:
+            transient = True  # pi could not be started at all
         gates = run_gates(dest)
         pushed = commit_and_push(dest, branch, commit_subject(issue), number)
         if not pushed:
@@ -731,14 +763,31 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
         repo, number, model, time.monotonic() - started, gates, pi, branch, pr_url, note
     )
     write_protocol(cfg["protocol_dir"], repo, number, protocol)
-    # The router (issue #8): pi had its one attempt; hand the ticket to the
+    tries = 1
+    if transient:
+        # a transient failure keeps the label: the ticket is taken again next
+        # pass, up to TRANSIENT_ATTEMPTS; only then it goes to Claude (#44)
+        tries = count_attempt(cfg["protocol_dir"], repo, number)
+        if tries < TRANSIENT_ATTEMPTS:
+            jlog(
+                "warn",
+                "pi-autoloop:retry",
+                "transient failure; the ticket keeps its label",
+                repo=repo,
+                issue=number,
+                attempt=tries,
+                of=TRANSIENT_ATTEMPTS,
+                note=note,
+            )
+            return
+    # The router (issue #8): pi had its attempt(s); hand the ticket to the
     # claude hand with the protocol attached, and take pi's label off so this
     # loop never retries it.
     http(
         f"{cfg['api']}/repos/{repo}/issues/{number}/comments",
         "POST",
         token,
-        {"body": "pi konnte das Ticket nicht abschließen; an Claude übergeben.\n\n```\n" + protocol + "```"},
+        {"body": f"pi konnte das Ticket nicht abschließen (Versuch {tries} von {TRANSIENT_ATTEMPTS}); an Claude übergeben.\n\n```\n" + protocol + "```"},
     )
     http(f"{cfg['api']}/repos/{repo}/issues/{number}/labels", "POST", token, {"labels": [cfg["escalate_label"]]})
     http(f"{cfg['api']}/repos/{repo}/issues/{number}/labels/{cfg['label']}", "DELETE", token)

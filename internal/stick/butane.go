@@ -28,7 +28,13 @@ type Box struct {
 	GPU        bool
 	GHToken    string
 	Source     string // base URL serving install-box.sh and the binaries of one build (the VM job); "" = the latest release
-	Reinstall  bool   // this stick may install over an installed box (the data array is kept); off by default (#33)
+	// certificates (#45): the DNS provider with an API for DNS-01 and its
+	// token (deSEC, Cloudflare, …); TLS "internal" = Caddy's own CA, a
+	// laptop-only trial — phones and their widgets need a real certificate
+	DNSProvider string
+	DNSToken    string
+	TLS         string
+	Reinstall   bool // this stick may install over an installed box (the data array is kept); off by default (#33)
 }
 
 var placeholder = regexp.MustCompile(`\$\{([A-Z_]+)\}`)
@@ -50,6 +56,7 @@ func (b Box) Vars() map[string]string {
 		"SSH_AUTHORIZED_KEY": b.SSHKey, "PASSWORD_HASH": b.PassHash, "HOSTNAME": b.Hostname,
 		"DOMAIN": b.Domain, "LAN_IP": b.LanIP, "MODEL_URL": b.ModelURL, "MODEL_LEASE": b.ModelLease,
 		"GPU": gpu, "GH_TOKEN": b.GHToken, "SOURCE": b.Source,
+		"DNS_PROVIDER": b.DNSProvider, "DNS_TOKEN": b.DNSToken, "TLS": b.TLS,
 	}
 }
 
