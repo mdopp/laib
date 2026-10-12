@@ -30,3 +30,15 @@ Laib has one box and no fleet: the gate is CI (`scripts/e2e.sh`, later the
 real-boot job #7), the safety net is per-service apply with a snapshot and
 `laib rollback`. A second channel would be a second thing to keep in sync for
 one consumer. If a second box ever exists, that box is the canary.
+
+## The outside watchdog (#57)
+
+Everything that can say "something is wrong" runs on the box. So the one
+thing outside is a watchdog: `box.yml watchdog.url` names a
+healthchecks-style ping URL; `laib serve` pings it every five minutes
+while readiness is not red, and the outside turns fifteen minutes of
+silence into a push to the admin's phone. Readiness shows „Wächter:
+zuletzt gemeldet 12:05“, diag is yellow without a URL. `laib family-card`
+prints the paper card for the family — what the box does, the three
+lights, "Stecker ziehen, 10 Sekunden, 5 Minuten warten, dann anrufen",
+never the stick — with `watchdog.contact` as the number to call.

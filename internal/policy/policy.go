@@ -67,6 +67,9 @@ func Validate(p state.Policy) error {
 			return fmt.Errorf("policy.yml: unknown autonomy class %q", class)
 		}
 	}
+	if e := p.Envelope.Snapshot; e != "" && e != "required" && e != "optional" {
+		return fmt.Errorf("policy.yml: envelope.snapshot must be required or optional")
+	}
 	for name, h := range p.Hands {
 		for _, v := range h.Verbs {
 			if !KnownVerbs[v] {

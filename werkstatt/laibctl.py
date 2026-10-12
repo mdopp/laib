@@ -11,7 +11,7 @@ pi_servicebay.py). The token is read from a 0600 file, never from argv.
 import json, os, sys, urllib.request
 
 URL = (os.environ.get("LAIB_MCP_URL") or "http://host.containers.internal:5900/mcp").rstrip("/")
-TOKEN_FILE = os.environ.get("LAIB_TOKEN_FILE") or "/workspace/.laib/token"
+TOKEN_FILE = os.environ.get("LAIB_TOKEN_FILE") or "/run/laib/token"   # this container's own tmpfs (#44)
 
 def token() -> str:
     try:

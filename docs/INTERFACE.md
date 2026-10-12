@@ -14,7 +14,8 @@ laib read <service> <path>           a file in the service's data paths, secrets
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib plan [service]                  render state → diff against the box (files + units)
@@ -37,11 +38,42 @@ laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
 Every verb has `--json`. The MCP tool list is generated from the same verb
-table, so the two cannot drift. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+table (`mcpVerbs` names which of them an agent may reach at all), and
+`scripts/drift.sh` in CI checks that every tool the Operator's prompt
+names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
-proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
-reboot, a public route) are not verbs at all for it, they are proposals.
+proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
+ceiling and a reboot is not a verb; a public route is a values change,
+which the dial may auto-apply — the "always a human's call" in
+`policy.yml`'s comment is a convention today, not enforced (#47).
+
+## The Operator's typed surface (#53)
+
+A small local model does not get the verb table with one free-text `args`
+per tool. `laib-operator` (default `OPERATOR_INTERFACE=typed`; `cli` gives a
+large model the verbs) offers a **menu per trigger** of task-shaped tools
+with typed parameters, and code turns a call into the CLI arguments laib's
+MCP takes — the model never writes quoting, flags or `--`:
+
+| Trigger | Menu |
+|---|---|
+| tick | `status`, `diagnose(service?)`, `note(kind, text)` |
+| event (a red) | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
+| report | `status`, `diagnose`, `journal(hours)`, `note` |
+
+`service` is an enum of the installed services (from `laib status`),
+`kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
+`key` a values.yml key. A tool is in the menu only if the hand has its
+verb (`ops` at ceiling `propose` sees no `restart`). `approve`, `reject`,
+`restore`, `rollback`, `converge`, `template`, `adopt`, `apply`, `remove`
+are in no menu. A call with a missing or invalid argument — an unknown
+service, a kind outside the enum, a key with a path in it, a tool outside
+the menu — is answered to the model and never reaches laib. Results are
+cut to 2 000 characters, the context bundle to 6 000. The eval runs both
+interfaces over the same incidents (`werkstatt/evals/incidents-typed.json`).
+Still open from #53: runbooks in code for the known failure classes, and
+schema-constrained decoding through llama-server.
 
 ## Readiness: `/ready`
 
@@ -199,3 +231,110 @@ proposed it and why** (quoted), and **the safe default**: for a risky
 class (human, a new service, a minted token) the first button is „Später“
 and the diff sits behind „Details“. The card is built mechanically from
 the classified change (`proposal.Card`), never by a model.
+
+### `laib look <service> [--container c] -- <command>`
+
+A read-only command (cat, ls, grep, ps, df, stat, find, …) in one of the
+service's own containers: no budget, no snapshot, journaled. `laib exec`
+is for changing something and stays budgeted. Neither reaches another
+service's container. `policy.yml envelope.snapshot: optional` lets a
+class-2 action go ahead without a pre-repair snapshot; the default refuses.
+
+### One lock, pauses, pending activation (#39)
+
+Everything that mutates the box — `apply`, `converge`, `restore`, `remove`,
+`approve`, `rollback` — holds the one lock (`<home>/apply.lock`, a flock the
+kernel releases when the process dies, with holder, pid and start inside)
+for its whole duration. A `converge` tick that finds the lock taken is
+skipped and journaled `übersprungen: gesperrt durch restore:human:core`; a
+lock whose process is gone is taken over with a journal line.
+`laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
+(apply tier): a paused service is left alone by converge and shows as
+`pausiert von … bis …` in `/ready` (`paused`), status and the box page;
+`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
+while a mode stands. Apply records the services whose activation it owes
+(`<home>/apply.pending`, `/ready` `pending`) before it writes files and
+clears it after verify; the next apply or converge restarts and verifies
+them even when the file diff is clean. Restart-only converge runs are
+journaled green with the units and count against the budget of three per
+hour.
+
+### Rollback by proposal, stale proposals, the manifest (#41)
+
+`laib rollback #17` takes a freed proposal back: the approve merge is
+reverted (`-m 1`) without touching `secrets.age` — services that stay keep
+the secrets their data was made with, services that leave the state lose
+theirs — and one apply follows. The Box page offers it as „Zurücknehmen“
+next to the last five freed proposals. `laib rollback <commit>` validates
+the argument (`git rev-parse --verify --end-of-options`) and reverts a
+merge commit with `-m 1`. An approve merges in a temporary worktree: a
+conflict never reaches `main`, the merged result must load and render, and
+a proposal that fails either way is `stale` with a reason („veraltet — neu
+vorschlagen“). Apply records every file it put on the box in
+`<home>/managed.json`; plan deletes — and for a unit stops and disables —
+whatever the manifest has but render no longer produces, so a removed
+service, a disabled operator or a removed llama does not keep running.
+`laib operator disable` also revokes the ops tokens.
+
+### Roles are verified, the Caddyfile validated, dependants protect a service (#50)
+
+A change to a role's output (the Caddyfile, Authelia's rules, AdGuard's
+rewrites) restarts the role's service and verifies it like any changed
+service; the rendered Caddyfile runs through `caddy validate` in the
+proxy's own image before anything is written, and a Caddyfile that does
+not validate refuses the whole apply. `laib remove <service>` refuses while
+another service names it in `after:` („… braucht … — erst dort
+entfernen“), before anything is stopped. The box's own proposals (the
+template-sync timer, actor `laib`) are approved by the box when the dial
+says auto; the same change proposed twice reuses the open proposal.
+
+### Templates on CoreOS: ports, health, needs, images (#46)
+
+The state refuses two services publishing the same host port, and
+`laib template lint` refuses a template that publishes a port a sibling
+template already uses (whoami and the bote pod both had 8080; the bote's
+signal-cli is on 8085 now). Every template declares health: an `http:`
+probe or `none: "<why>"` (MQTT speaks no HTTP). A template whose
+containers talk to laib's MCP declares `needs: [mcp]`; the state then
+insists on `box.yml laib.listen: 0.0.0.0` (ADR 0012 §4) instead of a
+container that silently cannot reach laib. Apply pulls the images of new
+or re-imaged containers before the units start, so the first start never
+includes the pull. Services with a database (immich, paperless,
+vaultwarden, Home Assistant, auth, radicale, audiobookshelf, media, beets)
+no longer carry `AutoUpdate=registry` — podman's rollback restores an
+image, not migrated data; their images change by proposal. Where
+auto-update stays, `podman-auto-update.service` takes a `laib backup`
+first and the default window is 04:30, never the backup's 03:00.
+### Hooks: `pre-start` and `post-deploy`
+
+Both run in the hooks image (ADR 0004 amendment), never on the host:
+`pre-start` before the units start, `post-deploy` after a green verify.
+Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
+`laib-exec: <container> <command…>` (run by Laib in the service's own
+container). `box.yml laib.hooksImage` names the image.
+
+### The Operator and the MCP surface (#43)
+
+`diag` is an MCP tool. A verb writes to the writer in its `cliEnv`; MCP
+collects a verb's output in a buffer (nothing another goroutine prints
+can land in a reply, no pipe can block) and `escalate` builds its bundle
+the same way. The Operator's system prompt is generated from the tool
+list the hand has; a reply that writes a tool call as text is asked once
+for a real call and then ends the session red with a note; a tool call
+whose arguments are not a JSON object is refused, never run; the context
+bundle is budgeted (head and newest journal lines). `laib operator
+enable` points `notify.url` at the operator's event endpoint unless the
+owner set one, so reds wake it; an operator enabled for three ticks
+without a single note is red („stumm“).
+
+### Hardware health (#59)
+
+`laib diag` asks `smartctl -H -A --json` about every member of the data
+array and the OS disk: reallocated or pending sectors, media errors and
+wear are yellow („die Platte altert“), a failed self-assessment is red
+(„Platte bald tauschen“), 55/65 °C are warm/hot; the kernel's thermal
+zones give the box's temperature (80 °C yellow, 90 °C red). Without
+smartmontools the probe says so once (`sudo rpm-ostree install
+smartmontools`; install-box.sh will layer it with git, restic and diff).
+The power-loss proofs (a cut during an apply, a backup, a resync) wait
+for Actions minutes and for #81.

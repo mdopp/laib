@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0019**. Each file's first paragraph after the title says *in which
+number: **0020**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -24,3 +24,4 @@ situation* it applies, so an agent can self-select.
 | [0016](0016-the-bote-hermes-as-stock.md) | The Bote: the agent you talk to on Signal, Hermes as stock, approval by verified number |
 | [0017](0017-data-lives-in-standard-backends.md) | Data lives in standard backends (Radicale, Markdown files, Paperless, HA); agents are clients through one Haus MCP source; the Bote remembers about you, never for you |
 | [0018](0018-two-boxes-are-a-role-federation-not-a-cluster.md) | Parked: two boxes would be a role federation, not a cluster; in use from it: a remote model URL for a box without a GPU |
+| [0019](0019-calm-before-autonomy-and-the-trust-kernel.md) | Calm before autonomy: the trial proves five enforced invariants, three visible guarantees, updates as proposals, an outside watchdog and plain-language decisions before the Operator gets mutating verbs |

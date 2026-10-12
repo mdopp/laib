@@ -158,13 +158,16 @@ are not the plan. The path is `docs/ZIELBILD.md`.
 
 **A wish on the road.** You write the Bote: "Paperless für die Familie,
 nur intern." It knows the template exists, proposes with `--add` as
-`bote`, and sends you the card. You answer "gib #17 frei"; your number is
+`bote`, and sends you the card. (A wish with no template behind it goes
+through `laib wish` instead: a GitHub issue with the `wunsch` label that a
+person cuts into a ticket, #56.) You answer "gib #17 frei"; your number is
 you; Laib merges, applies, verifies, the hook creates the admin user, the
 journal is green, the Bote writes "Läuft unter paperless.deinedomain, SSO
 ist drauf."
 
 **A red at three in the morning.** Auto-update pulls a new Immich;
-`diag --journal` finds the health red; the webhook wakes the Operator; it
+`diag --journal` finds the health red; the Operator's next tick (ten
+minutes; a webhook is planned, not wired) picks it up; it
 inspects, reads the log, sees a changed config key, writes the fix into
 the service's config (envelope: snapshot first), restarts, verify green,
 journal: what it did and why. The morning report says it in two lines.

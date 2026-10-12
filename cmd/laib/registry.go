@@ -102,7 +102,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	if env.json {
 		return emit(env, p)
 	}
-	fmt.Printf("Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
+	fmt.Fprintf(env.w(), "Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
 	return exitOK
 }
 
