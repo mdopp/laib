@@ -356,7 +356,7 @@ func lintTemplate(dir string) int {
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Base(filepath.Clean(dir))
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /tmp/lint\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\n"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /tmp/lint\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	dst := filepath.Join(tmp, "services", name)
 	os.MkdirAll(dst, 0o755)
@@ -402,6 +402,33 @@ func lintTemplate(dir string) int {
 	}
 	if _, err := render.Render(st, nil); err != nil {
 		return fail(err)
+	}
+	// a health declaration (#46): an http probe, or a reason why there is none
+	if h := st.Services[name].Contract.Health; h.HTTP == "" && h.None == "" {
+		fmt.Fprintf(os.Stderr, "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
+		return exitUsage
+	}
+	// a host port another template of the same registry publishes (#46: whoami and bote on 8080)
+	mine := map[string]bool{}
+	for _, content := range st.Services[name].Units {
+		for _, hp := range state.PublishedHostPorts(content) {
+			mine[hp] = true
+		}
+	}
+	siblings, _ := filepath.Glob(filepath.Join(filepath.Dir(filepath.Clean(dir)), "*", "*.container"))
+	pods, _ := filepath.Glob(filepath.Join(filepath.Dir(filepath.Clean(dir)), "*", "*.pod"))
+	for _, f := range append(siblings, pods...) {
+		other := filepath.Base(filepath.Dir(f))
+		if other == name {
+			continue
+		}
+		b, _ := os.ReadFile(f)
+		for _, hp := range state.PublishedHostPorts(string(b)) {
+			if mine[hp] {
+				fmt.Fprintf(os.Stderr, "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
+				return exitUsage
+			}
+		}
 	}
 	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
 	return exitOK

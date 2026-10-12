@@ -102,6 +102,27 @@ func mustLoad(t *testing.T) *state.State {
 	return st
 }
 
+// #46: podman auto-update takes a snapshot first and never runs at the
+// backup's hour by default.
+func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
+	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Box.Updates.Days = []string{"Sat", "Sun"}
+	st.Box.Updates.Time = ""
+	out, err := Render(st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out["systemd/podman-auto-update.service.d/laib.conf"], "ExecStartPre=/var/opt/laib/laib backup") {
+		t.Fatalf("no snapshot before the image update:\n%s", out["systemd/podman-auto-update.service.d/laib.conf"])
+	}
+	if !strings.Contains(out["systemd/podman-auto-update.timer.d/laib.conf"], " 04:30:00") {
+		t.Fatalf("the default update time must not be the backup's 03:00:\n%s", out["systemd/podman-auto-update.timer.d/laib.conf"])
+	}
+}
+
 // #40: a monthly restore test runs from a timer rendered with the backup.
 func TestBackupCheckTimerIsRendered(t *testing.T) {
 	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))

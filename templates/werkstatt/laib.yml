@@ -1,5 +1,6 @@
 name: werkstatt
 template: {registry: builtin, name: werkstatt, version: 1}
+needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes: []                       # dev.<domain> (the pi-web surface) comes with Haus; today: SSH + autoloop
 provides: [werkstatt]
 secrets:
@@ -14,6 +15,6 @@ secrets:
     external: true               # fine-grained GitHub PAT: Contents rw, Issues r, Pull requests rw
 data:
   - path: ${DATA_DIR}/werkstatt/workspace
-health: {}
+health: {none: "a dev box with no server to probe; the unit state is the check"}
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password

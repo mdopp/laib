@@ -10,7 +10,7 @@ Volume=${DATA_DIR}/audiobookshelf/metadata:/metadata:z
 Volume=${AUDIOBOOKS}:/audiobooks:ro,z
 Volume=${PODCASTS}:/podcasts:z
 AddHost=auth.${DOMAIN}:${LAN_IP}
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always

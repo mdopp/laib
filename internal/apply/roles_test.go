@@ -92,3 +92,19 @@ func TestABrokenCaddyfileIsRefusedBeforeWriting(t *testing.T) {
 		t.Fatalf("no validation run:\n%s", strings.Join(*calls, "\n"))
 	}
 }
+
+// #46: a unit's first start has 90 s and must not include the image pull —
+// apply pulls the images of new units before daemon-reload.
+func TestNewContainersArePulledBeforeTheStart(t *testing.T) {
+	st, paths, calls := roleBox(t)
+	key := "quadlet/whoami/whoami.container"
+	p := &plan.Plan{Services: []string{"whoami"}, Output: render.Output(map[string]string{key: "[Container]\nImage=docker.io/traefik/whoami:v1.11\n\n[Install]\nWantedBy=default.target\n"}), Changes: []plan.Change{{Path: key, Target: plan.Target(paths, key), Service: "whoami", Kind: "add"}}}
+	if _, err := Run(context.Background(), st, p, paths, map[string]string{}, "add whoami"); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(*calls, "\n")
+	pull, reload := strings.Index(joined, "podman pull -q docker.io/traefik/whoami:v1.11"), strings.Index(joined, "daemon-reload")
+	if pull < 0 || reload < 0 || pull > reload {
+		t.Fatalf("the image must be pulled before the unit starts:\n%s", joined)
+	}
+}

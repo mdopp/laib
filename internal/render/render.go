@@ -87,11 +87,11 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	}
 	// After every podman auto-update, diag writes red findings to the journal
 	// (and the webhook); the timer follows the update window when one is set.
-	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13): verify after an image update.\n[Service]\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13, #46): a snapshot before, a verify after an image update.\n[Service]\nExecStartPre=/var/opt/laib/laib backup\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 	if len(st.Box.Updates.Days) > 0 {
 		t := st.Box.Updates.Time
 		if t == "" {
-			t = "03:00"
+			t = "04:30" // never the backup's 03:00 (#46)
 		}
 		out["systemd/podman-auto-update.timer.d/laib.conf"] = "# Rendered by laib from box.yml updates.\n[Timer]\nOnCalendar=\nOnCalendar=" + strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + t + ":00\nRandomizedDelaySec=15m\n"
 	}

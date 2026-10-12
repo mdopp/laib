@@ -8,7 +8,7 @@ Environment=TZ=${TZ}
 Environment=RADICALE_CONFIG=/config/config
 Volume=${DATA_DIR}/radicale/data:/data:z
 Volume=${DATA_DIR}/radicale/config:/config:ro,z
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always
