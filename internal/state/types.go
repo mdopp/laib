@@ -46,7 +46,7 @@ type OperatorCfg struct {
 type Model struct {
 	URL       string `yaml:"url"`       // e.g. http://192.168.1.20:11435/v1 or https://api.example/v1
 	KeySecret string `yaml:"keySecret"` // name in secrets.age; empty for a loopback proxy
-	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:8787/api/model-lease; empty = no lease
+	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:11435/api/model-lease (the proxy's port); empty = no lease
 }
 
 // Peer is another box running Laib.

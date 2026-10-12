@@ -1,6 +1,7 @@
 IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda
 ROUTER_PORT: "11434"
 PORT: "11435"
+LEASE_TOKEN: !secret MODEL_API_KEY
 EMBED_PORT: "11436"
 MODEL_REPO: ggml-org/gemma-4-E4B-it-GGUF
 MODEL_FILE: gemma-4-E4B-it-Q4_0.gguf

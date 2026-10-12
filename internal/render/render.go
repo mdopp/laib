@@ -155,6 +155,11 @@ const ProxySecret = "LAIB_PROXY_SECRET"
 
 // SecretNames lists every secret a state declares, sorted. Laib's own proxy
 // secret is always declared when a proxy role exists.
+// ModelKeySecret is the model key's name in secrets.age: declared by the
+// model role's template on the GPU box, set by hand on a box that uses a
+// remote proxy (box.yml model.keySecret).
+const ModelKeySecret = "MODEL_API_KEY"
+
 func SecretNames(st *state.State) []state.Secret {
 	var out []state.Secret
 	if st.Box.Roles.Proxy != "" {
@@ -192,6 +197,10 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 	}
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
+	} else if st.Box.Roles.Model != "" {
+		// the local proxy's own key (the llama template declares it): the
+		// Bote, the Werkstatt and the Operator take the lease with it (#42)
+		vars["MODEL_KEY"] = secretValue(secrets, ModelKeySecret)
 	}
 	for k, v := range svc.Values {
 		if v.Secret != "" {

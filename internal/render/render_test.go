@@ -123,6 +123,28 @@ func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
 	}
 }
 
+// #42 (2): on the GPU box the builtin MODEL_KEY is the model role's own
+// key (secret MODEL_API_KEY, declared by the llama template), so the Bote,
+// the Werkstatt and the Operator can take the lease; a remote model keeps
+// box.yml keySecret.
+func TestModelKeyIsTheLocalRolesKey(t *testing.T) {
+	st := &state.State{Box: state.Box{Domain: "x.home", DataDir: "/d"}, Services: map[string]*state.Service{"llama": {Name: "llama"}}}
+	st.Box.Roles.Model = "llama"
+	vars, err := variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if vars["MODEL_KEY"] != "k-local" {
+		t.Fatalf("MODEL_KEY on the GPU box must be the role's key: %q", vars["MODEL_KEY"])
+	}
+	st.Box.Roles.Model = ""
+	st.Box.Model.URL, st.Box.Model.KeySecret = "http://10.0.0.20:11435/v1", "MODEL_API_KEY"
+	vars, _ = variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-remote"})
+	if vars["MODEL_KEY"] != "k-remote" {
+		t.Fatalf("remote: %q", vars["MODEL_KEY"])
+	}
+}
+
 // #40: a monthly restore test runs from a timer rendered with the backup.
 func TestBackupCheckTimerIsRendered(t *testing.T) {
 	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
