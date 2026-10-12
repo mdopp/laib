@@ -5,6 +5,7 @@ provides: [bote]
 # hand `bote`, the Haus "Haushalt" MCP and Frage as tools. Two containers in
 # one pod: hermes, signal-cli's REST API and the Automat (HA automations,
 # #26), which share loopback.
+needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes: []
 secrets:
   - name: BOTE_LAIB_TOKEN            # minted on `laib add bote` as the bote hand (propose, note, escalate)
@@ -21,8 +22,8 @@ data:
   - path: ${DATA_DIR}/bote/hermes    # config.yaml, .env, memory, sessions
   - path: ${DATA_DIR}/bote/signal    # signal-cli's linked device
 health:
-  http: http://127.0.0.1:8080/v1/about
+  http: http://127.0.0.1:8085/v1/about
 ports:
-  - {port: 8080, lan: false}         # signal-cli REST, loopback only
+  - {port: 8085, lan: false}         # signal-cli REST, loopback only (8080 is whoami, #46)
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server; Haus's Sprechen field uses it
   - {port: 8643, lan: false}         # Automat MCP, loopback only

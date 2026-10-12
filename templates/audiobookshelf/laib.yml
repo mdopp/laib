@@ -5,6 +5,7 @@ provides: [audiobooks, podcasts]
 # (RSS, auto-download, retention), keeps progress and chapters, has its own
 # apps. This replaces the hand-rolled sync_podcasts.py and takes audiobooks
 # out of Jellyfin (docs/SERVICES.md). OIDC through Authelia.
+after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: hoerbuecher
     port: 13378

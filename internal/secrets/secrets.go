@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"filippo.io/age"
@@ -92,21 +91,18 @@ func Save(path, keyPath string, m map[string]string) error {
 	if err != nil {
 		return err
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var plain bytes.Buffer
-	for _, k := range keys {
-		fmt.Fprintf(&plain, "%s: %q\n", k, m[k])
+	// yaml.Marshal sorts the keys and writes a value that is not UTF-8 as
+	// !!binary, so every byte comes back; Go's %q did not (\xff read back as ÿ).
+	plain, err := yaml.Marshal(m)
+	if err != nil {
+		return err
 	}
 	var enc bytes.Buffer
 	w, err := age.Encrypt(&enc, id.Recipient())
 	if err != nil {
 		return err
 	}
-	if _, err := w.Write(plain.Bytes()); err != nil {
+	if _, err := w.Write(plain); err != nil {
 		return err
 	}
 	if err := w.Close(); err != nil {
