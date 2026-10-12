@@ -329,3 +329,25 @@ func TestFirstBootResumesAndKeepsTheTokenOffArgv(t *testing.T) {
 		t.Fatal("first boot must fetch the installer of the release it installs, not main's")
 	}
 }
+
+// The trial gets real certificates (#45): the stick carries the DNS
+// provider and its token, first boot hands the provider to the installer
+// as a flag and the token through the environment (never argv); --tls
+// internal stays a flag for a laptop-only trial, never typed into box.yml.
+func TestDNSProviderReachesFirstBoot(t *testing.T) {
+	b := box()
+	b.DNSProvider, b.DNSToken, b.TLS = "desec", "desec-token-1", ""
+	ign, err := DestIgnition(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	for _, want := range []string{"LAIB_DNS_PROVIDER=desec\n", "LAIB_DNS_TOKEN=desec-token-1\n", "LAIB_TLS=\n", `--dns-provider "$LAIB_DNS_PROVIDER"`, `--tls "$LAIB_TLS"`} {
+		if !strings.Contains(files, want) {
+			t.Errorf("first boot lacks %q", want)
+		}
+	}
+	if strings.Contains(files, `"$LAIB_DNS_TOKEN"`) {
+		t.Error("the DNS token must reach the installer through the environment, not argv")
+	}
+}

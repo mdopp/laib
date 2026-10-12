@@ -17,6 +17,7 @@ oidc:
   scopes: [openid, email, profile, offline_access]
 data:
   - path: ${DATA_DIR}/vaultwarden/data
+    quiesce: true                 # a database: stopped while it is snapshotted (#40)
 health:
   http: http://127.0.0.1:8222/alive
 ports:

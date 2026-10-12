@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -249,6 +250,9 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
+		}
+		if args[0] == "cat" { // the golden repo is remote and not there yet
+			return "Fatal: repository does not exist", errors.New("exit status 1")
 		}
 		return "", nil
 	}

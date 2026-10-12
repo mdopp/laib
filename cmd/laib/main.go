@@ -87,6 +87,7 @@ func init() {
 		{"version", "read", "print the version", cmdVersion},
 		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
 		{"family-card", "read", "print the one-page card for the family: what the box does, what to do when it is down, whom to call", cmdFamilyCard},
+		{"recovery-sheet", "destroy", "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", cmdRecoverySheet},
 		{"pause", "apply", "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", cmdPause},
 		{"resume", "apply", "<service>: lift a pause", cmdResume},
 	}
