@@ -9,16 +9,15 @@ needs: [mcp]                     # talks to laib over host.containers.internal: 
 routes:
   - host: haus
     port: 8650
-    exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia anyway
+    exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
     auth: one_factor
     bypass: [/napi/]
+    proxySecret: HAUS_PROXY_SECRET # Caddy sends it as X-Haus-Proxy on the authenticated handler only (ADR 0012 §3)
 secrets:
-  - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the ops hand (reads, restarts)
+  - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the haus hand: status, inbox, journal, restart — nothing else
     external: true
-    mint: ops
-  - name: HAUS_HUMAN_TOKEN         # laib token mint human --note haus-admin → verdicts from the phone and the Box page
-    external: true
-    optional: true
+    mint: haus
+  - name: HAUS_PROXY_SECRET        # generated; without it no page request counts (haus#1)
 data:
   - path: ${DATA_DIR}/haus         # devices.json: the paired phones (hashed tokens)
 health:

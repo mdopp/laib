@@ -172,6 +172,15 @@ regenerated.
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
 
+### Routes that trust only the proxy
+
+`proxySecret: <NAME>` on a route makes Caddy send `X-<Service>-Proxy:
+<value>` (name overridable with `proxyHeader`) to the service's
+*authenticated* handler only; the bypass paths get nothing. The service
+trusts `Remote-User` only when the header matches (ADR 0012 §3). The
+secret is one of the service's own declared secrets; the loader refuses a
+route naming one the service does not declare.
+
 ### Secrets that may stay unset
 
 A contract secret with `external: true` must be in `secrets.age` before

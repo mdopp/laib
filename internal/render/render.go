@@ -287,7 +287,15 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 					b.WriteString(indent + line + "\n")
 				}
 			}
-			fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d\n", indent, r.Port)
+			if r.ProxySecret != "" {
+				name := r.ProxyHeader
+				if name == "" {
+					name = "X-" + strings.ToUpper(svc.Name[:1]) + svc.Name[1:] + "-Proxy"
+				}
+				fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d {\n%s\theader_up %s %q\n%s}\n", indent, r.Port, indent, name, secretValue(secrets, r.ProxySecret), indent)
+			} else {
+				fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d\n", indent, r.Port)
+			}
 			if r.Exposure == "internal" {
 				b.WriteString("\t}\n\trespond 403\n")
 			}
