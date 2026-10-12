@@ -7,7 +7,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 
 | Repo | What | State |
 |---|---|---|
-| `mdopp/laib` (private) | the control plane: kernel, stick, operator, lease, Frage, Automat, 23 templates, docs, ADRs, CI | 92 commits, release v0.3.5, ci/boot/vm-install green |
+| `mdopp/laib` (public since 2026-10-12) | the control plane: kernel, stick, operator, lease, Frage, Automat, 23 templates, docs, ADRs, CI | 92 commits, release v0.3.5, ci/boot/vm-install green |
 | `mdopp/haus` (private) | the family's surface: Box page, pairing, companion API for the Android widgets | 5 commits, ci green, image `ghcr.io/mdopp/haus` |
 | `mdopp/servicebay` | the predecessor, untouched, running on the Kraftwerk | reference only: `docs/COMPANION_APP.md`, `tools/sb/internal/build/assets/fedora-coreos.bu` (setup-raid) |
 | `mdopp/solarisbay`, `mdopp/solaris-android` | voice/portal today; to be deconstructed (#21) | untouched; the app's `data/SbApiClient.kt` pins the companion JSON shapes |
