@@ -195,6 +195,25 @@ jobs:
           # power cut: no flush, no shutdown; killing QEMU instead also throws away the
           # host-side qcow2 cache and corrupted the root filesystem, run 38163289190);
           # the next boot must finish the install
+          # #81 forensics: when the root does not come back, read the OS disk on the runner
+          cat > root-forensics.sh <<'SH'
+          #!/usr/bin/env bash
+          set -x
+          sudo kill "$(cat qemu.pid)" 2>/dev/null; sleep 5
+          sudo apt-get install -y -q xfsprogs >/dev/null 2>&1
+          sudo modprobe nbd max_part=16
+          sudo qemu-nbd --read-only -f qcow2 -c /dev/nbd0 disk.qcow2; sleep 3
+          sudo fdisk -l /dev/nbd0
+          sudo blkid /dev/nbd0p* || true
+          sudo xfs_repair -n /dev/nbd0p4 2>&1 | head -80
+          sudo xfs_db -r -c "sb 0" -c "print uuid dblocks agcount logstart logblocks features_incompat features_log_incompat" /dev/nbd0p4 2>&1 | head -20
+          sudo xfs_logprint -t /dev/nbd0p4 2>&1 | head -40
+          sudo mkdir -p /mnt/vroot; sudo dmesg -C
+          sudo mount -o ro,norecovery /dev/nbd0p4 /mnt/vroot && { echo "mounts with norecovery"; sudo ls /mnt/vroot /mnt/vroot/ostree/deploy/fedora-coreos/deploy 2>&1 | head; sudo umount /mnt/vroot; }
+          sudo mount -o ro /dev/nbd0p4 /mnt/vroot; echo "mount ro (with recovery): rc $?"; sudo dmesg | grep -iE "xfs|nbd0" | tail -40
+          sudo umount /mnt/vroot 2>/dev/null; sudo qemu-nbd -d /dev/nbd0
+          SH
+          chmod +x root-forensics.sh
           cat > reset.py <<'PY'
           import json, socket
           s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
@@ -204,7 +223,7 @@ jobs:
           killed=no
           for i in $(seq 1 900); do
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
-              python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
+              cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
             sleep 1
@@ -213,7 +232,10 @@ jobs:
           # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
-            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || echo "(no ssh)"; echo "--- serial"; tail -c 12000 serial.log; exit 1; }
+            if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
+              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -200; ./root-forensics.sh; exit 1
+            fi
+            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || echo "(no ssh)"; echo "--- serial (XFS, ostree, firstboot lines)"; grep -aE "XFS|xfs|ostree|growfs|firstboot|EXT4|Ignition|vda4|I/O error|blk_update" serial.log | tail -120; echo "--- serial tail"; tail -c 64000 serial.log | tail -150; ./root-forensics.sh; exit 1; }
             sleep 10
           done
           $SSH 'set -euo pipefail
@@ -269,8 +291,9 @@ jobs:
                 printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
                 $L add probe
                 sudo nft list table inet laib | grep -q 8080 || { echo "8080 is not in the ruleset"; exit 1; }
-                for i in $(seq 1 20); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
-                curl -fsS -o /dev/null http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
+                # any HTTP answer is an answer (busybox httpd says 404 for / without an index); only no connection fails
+                for i in $(seq 1 20); do curl -sS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+                curl -sS -o /dev/null -w "probe on loopback: HTTP %{http_code}\n" http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
           rc=$(probe); echo "probe with the ruleset: curl rc $rc"; [ "$rc" = 28 ] || { echo "a lan: false port answered through the NIC"; exit 1; }
           $SSH 'sudo nft delete table inet laib'
           rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
