@@ -34,11 +34,16 @@ echo "shim journal for $*"
 SH
 cat > "$WORK/bin/podman" <<'SH'
 #!/usr/bin/env sh
+# run: a hook in the hooks image (#36) — here it runs on this machine with the env file, same paths
 case "$1" in
   exec)
     [ -n "${SHIM_PODMAN_EXEC_FAIL:-}" ] && { echo "Error: container is not running (shim)" >&2; exit 125; }
     shift; c=$1; shift; echo "exec in $c: $*";;
   inspect) echo "running exit=0 image=shim";;
+  run) shift; envf=""; while [ $# -gt 0 ]; do case "$1" in --env-file) envf=$2; shift 2;; -v|-w|--network) shift 2;; --rm) shift;; ghcr.io/*) shift; break;; *) shift;; esac; done
+       # a hook (with an env file) runs here; anything else in a container (caddy validate, #50) just succeeds
+       [ -n "$envf" ] || { echo "podman run $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; exit 0; }
+       echo "podman run hook $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; set -a; . "$envf"; set +a; exec "$@";;
 esac
 exit 0
 SH
@@ -46,6 +51,11 @@ cat > "$WORK/bin/restic" <<'SH'
 #!/usr/bin/env sh
 echo "restic $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
 [ -n "${SHIM_RESTIC_FAIL:-}" ] && { echo "Fatal: unable to open repository (shim)" >&2; exit 1; }
+# a repo exists only after init (#40: backupPrep asks for the sheet's password when it does)
+case "$1" in
+  init) touch "${SYSTEMCTL_LOG%/*}/restic.initialized";;
+  cat) [ -f "${SYSTEMCTL_LOG%/*}/restic.initialized" ] || { echo "Fatal: repository does not exist"; exit 1; };;
+esac
 exit 0
 SH
 cat > "$WORK/bin/sudo" <<'SH'
@@ -75,7 +85,9 @@ LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null || fail "approve #1 exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "unit not written"
 grep -q "cf-token" "$LAIB_QUADLET/caddy/caddy.container" || fail "secret not rendered on the box"
 if grep -rq "cf-token" "$LAIB_HOME/state"; then fail "secret in state repo"; fi
-grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" && grep -q "restart auth-authelia.service" "$SYSTEMCTL_LOG" || fail "systemctl not driven"
+grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" && grep -q "restart auth-pod.service" "$SYSTEMCTL_LOG" || fail "systemctl not driven"
+# a pod's containers restart through the pod unit, never one by one (--exit-policy stop, #36)
+if grep -q "restart auth-authelia.service\|restart auth-lldap.service" "$SYSTEMCTL_LOG"; then fail "a pod container was restarted on its own"; fi
 grep -q "sudo nft -f" "$SYSTEMCTL_LOG" || fail "nftables not loaded"
 grep -q "X-Laib-Proxy" "$LAIB_HOME/render/caddy/Caddyfile" || fail "laib route missing"
 
@@ -146,11 +158,13 @@ LAIB_ACTOR=ops "$BIN" escalate whoami "budget spent, needs a look" | grep -q "es
 cat > "$WORK/bin/fake-model.py" <<'PY2'
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
-# a scripted model: inspect, restart, note, then stop
+# a scripted model on the typed surface (#53): inspect, a refused call
+# (a service that does not exist), restart, note, then stop
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"args":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"args":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"args":"--kind incident \"whoami war rot, Neustart, jetzt grün.\""})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"nas"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0
@@ -159,7 +173,14 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         global i
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n))
-        assert body["tools"], "no tools"
+        names = [t["function"]["name"] for t in body["tools"]]
+        # the incident menu for the ops hand: typed, small, without approve/apply/converge
+        assert "restart" in names and "note" in names and "diagnose" in names, names
+        assert not any(n.startswith("laib_") for n in names) and len(names) <= 8, names
+        svc = body["tools"][names.index("restart")]["function"]["parameters"]["properties"]["service"]
+        assert "caddy" in svc.get("enum", []), svc
+        if i == 2:  # the refused call came back as a tool message, not as an execution
+            last = body["messages"][-1]; assert last["role"] == "tool" and "nicht ausgef" in last["content"] and "nas" in last["content"], last
         m = SCRIPT[min(i, len(SCRIPT)-1)]; i += 1
         out = json.dumps({"choices":[{"message": m}]}).encode()
         self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
@@ -207,6 +228,32 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
+
+# --- 11b. a template with both hooks, added by the human (#36): pre-start runs in the hooks
+# image before the unit starts, post-deploy after; both executable in the state repo
+R="$LAIB_HOME/registries/e2e/templates/hooked"; mkdir -p "$R"
+cat > "$R/laib.yml" <<'YML'
+name: hooked
+template: {registry: e2e, name: hooked, version: 1}
+routes: []
+secrets: []
+data:
+  - path: ${DATA_DIR}/hooked/cfg
+YML
+printf 'IMAGE: docker.io/library/busybox:stable\n' > "$R/values.example.yml"
+printf '[Container]\nImage=${IMAGE}\nVolume=${DATA_DIR}/hooked/cfg:/cfg:z\n\n[Install]\nWantedBy=default.target\n' > "$R/hooked.container"
+printf '#!/bin/sh\necho "phase $LAIB_PHASE"\nmkdir -p "$LAIB_DATA_DIR/hooked/cfg" && echo written > "$LAIB_DATA_DIR/hooked/cfg/by-pre-start"\n' > "$R/pre-start"
+printf '#!/bin/sh\necho "phase $LAIB_PHASE"\ntest -f "$LAIB_DATA_DIR/hooked/cfg/by-pre-start" || exit 1\n' > "$R/post-deploy"
+chmod 644 "$R/pre-start" "$R/post-deploy"   # the registry copy may lack the bit; the state repo must have it
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" add hooked 2>&1)" || fail "add hooked: $OUT"
+grep -q "^ok  hooked pre-start" <<<"$OUT" || fail "pre-start not green: $OUT"
+grep -q "^ok  hooked post-deploy" <<<"$OUT" || fail "post-deploy not green: $OUT"
+test -f "$WORK/data/hooked/cfg/by-pre-start" || fail "pre-start did not write into the data path"
+[ -x "$LAIB_HOME/state/services/hooked/pre-start" ] || fail "pre-start is not executable in the state repo"
+# order: the pre-start hook ran before the unit was started
+pre=$(grep -n "podman run hook .*pre-start" "$SYSTEMCTL_LOG" | head -1 | cut -d: -f1); start=$(grep -n "restart hooked.service" "$SYSTEMCTL_LOG" | head -1 | cut -d: -f1)
+[ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "pre-start ($pre) did not run before the first start ($start)"
+LAIB_ACTOR=human:e2e "$BIN" remove hooked >/dev/null || fail "remove hooked"
 
 # --- 12. remove: units stopped, files gone, data kept, state without the service
 if LAIB_ACTOR=ops "$BIN" remove whoami >/dev/null 2>&1; then fail "ops removed a service"; fi

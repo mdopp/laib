@@ -107,8 +107,112 @@ func raidFindings(mdstat string, expectedMembers int) []Finding {
 	return out
 }
 
-// cmdDisk: status | add <device> (humans only: sudo, irreversible for the
-// device's content). add partitions the whole device, joins it to
+// spareInfo is what `laib disk add` learns about a device before it wipes it.
+type spareInfo struct {
+	Dev, Model, Tran string
+	Size             int64
+	Removable        bool
+	Partitions       int
+	Signatures       []string // wipefs -n: "ext4 backup", "gpt", "linux_raid_member nas:0"
+	Superblock       bool
+}
+
+var lsblkPair = regexp.MustCompile(`(\w+)="([^"]*)"`)
+
+// inspectSpare reads the device the human named, without changing it.
+func inspectSpare(ctx context.Context, dev string) (spareInfo, error) {
+	s := spareInfo{Dev: dev}
+	out, err := sysd.Run(ctx, "lsblk", "-dnbP", "-o", "TYPE,SIZE,RM,TRAN,MODEL", dev)
+	if err != nil {
+		return s, fmt.Errorf("lsblk %s: %v: %s", dev, err, out)
+	}
+	kv := map[string]string{}
+	for _, m := range lsblkPair.FindAllStringSubmatch(out, -1) {
+		kv[m[1]] = m[2]
+	}
+	if kv["TYPE"] != "disk" {
+		return s, fmt.Errorf("%s is a %q, not a whole disk", dev, kv["TYPE"])
+	}
+	s.Size, _ = strconv.ParseInt(kv["SIZE"], 10, 64)
+	s.Removable, s.Tran, s.Model = kv["RM"] == "1", kv["TRAN"], strings.TrimSpace(kv["MODEL"])
+	if out, err := sysd.Run(ctx, "lsblk", "-nr", "-o", "NAME", dev); err == nil {
+		if n := len(strings.Fields(out)); n > 1 {
+			s.Partitions = n - 1
+		}
+	}
+	out, err = sysd.Run(ctx, "sudo", "wipefs", "-n", "--noheadings", "-O", "TYPE,LABEL", dev)
+	if err != nil {
+		return s, fmt.Errorf("wipefs -n %s: %v: %s", dev, err, out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if line = strings.Join(strings.Fields(line), " "); line != "" {
+			s.Signatures = append(s.Signatures, line)
+		}
+	}
+	if _, err := sysd.Run(ctx, "sudo", "mdadm", "--examine", dev); err == nil {
+		s.Superblock = true
+	}
+	return s, nil
+}
+
+// refuse says why the device must not be wiped, or nil. minBytes is the size
+// of the disk that holds the array's current member: a smaller disk cannot
+// join, so it is refused even when the human confirms. Content (partitions,
+// signatures, a RAID superblock) and USB or removable disks need the human to
+// name the disk's model with --wipe (#32).
+func (s spareInfo) refuse(minBytes int64, wipe string) error {
+	if s.Size < minBytes {
+		return fmt.Errorf("%s is smaller than the array's disk (%d < %d bytes): it cannot join. Nothing was changed", s.Dev, s.Size, minBytes)
+	}
+	var why []string
+	if s.Tran == "usb" {
+		why = append(why, "it is a USB disk")
+	}
+	if s.Removable {
+		why = append(why, "it is removable")
+	}
+	if s.Partitions > 0 {
+		why = append(why, fmt.Sprintf("it has %d partition(s)", s.Partitions))
+	}
+	for _, sig := range s.Signatures {
+		why = append(why, "it carries "+sig)
+	}
+	if s.Superblock {
+		why = append(why, "it carries a RAID superblock")
+	}
+	if len(why) == 0 {
+		return nil
+	}
+	name := s.Model
+	if name == "" {
+		name = s.Dev
+	}
+	if wipe != "" && strings.EqualFold(strings.TrimSpace(wipe), name) {
+		return nil
+	}
+	return fmt.Errorf("%s (%s, %.1f GB) is not empty: %s. Nothing was changed. If everything on it may go: laib disk add %s --wipe %q",
+		s.Dev, name, float64(s.Size)/1e9, strings.Join(why, "; "), s.Dev, name)
+}
+
+// memberDiskBytes is the size of the whole disk that holds an array member
+// (vdb1 → vdb): the least a new mirror disk needs.
+func memberDiskBytes(ctx context.Context, member string) (int64, error) {
+	// -d: without it lsblk lists the member's children too (md127), one PKNAME per line
+	parent, err := sysd.Run(ctx, "lsblk", "-dno", "PKNAME", "/dev/"+member)
+	parent, _, _ = strings.Cut(strings.TrimSpace(parent), "\n")
+	if err != nil || parent == "" {
+		parent = member // the member is a whole disk
+	}
+	out, err := sysd.Run(ctx, "lsblk", "-dnbo", "SIZE", "/dev/"+strings.TrimSpace(parent))
+	if err != nil {
+		return 0, fmt.Errorf("lsblk %s: %v: %s", parent, err, out)
+	}
+	return strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+}
+
+// cmdDisk: status | add <device> [--wipe <model>] (humans only: sudo,
+// irreversible for the device's content). add inspects the device and refuses
+// what it would destroy (spareInfo.refuse), then partitions it, joins it to
 // /dev/md/data and records the new member count.
 func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 || args[0] == "status" {
@@ -121,26 +225,50 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 			return emit(env, map[string]any{"arrays": parseMdstat(string(b)), "device": dev, "members": members})
 		}
 		for _, a := range parseMdstat(string(b)) {
-			fmt.Printf("%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
+			fmt.Fprintf(env.w(), "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
 		}
 		if members == 0 {
-			fmt.Println("keine Datenplatte: /mnt/data liegt auf der OS-Platte")
+			fmt.Fprintln(env.w(), "keine Datenplatte: /mnt/data liegt auf der OS-Platte")
 		}
 		return 0
 	}
+	wipe := ""
+	if len(args) == 4 && args[2] == "--wipe" {
+		wipe = args[3]
+		args = args[:2]
+	}
 	if args[0] != "add" || len(args) != 2 {
-		return fail(errors.New("usage: laib disk status | add <device, e.g. /dev/sdb>"))
+		return fail(errors.New("usage: laib disk status | add <device, e.g. /dev/sdb> [--wipe <model, when the disk is not empty>]"))
 	}
 	if !strings.HasPrefix(env.actor, "human") {
 		return fail(errors.New("disk add: a human runs this (it wipes the device)"))
 	}
 	dev := args[1]
 	dataDev, members := markerMembers()
-	if dataDev == "" {
-		return fail(errors.New("no data RAID on this box (/etc/laib/data-disk missing)"))
+	if dataDev == "" || dataDev == "none" {
+		return fail(errors.New("no data RAID on this box (/etc/laib/data-disk)"))
 	}
 	if members >= 2 {
 		return fail(errors.New("the array already has two members"))
+	}
+	b, err := os.ReadFile("/proc/mdstat")
+	if err != nil {
+		return fail(err)
+	}
+	arrays := parseMdstat(string(b))
+	if len(arrays) == 0 || len(arrays[0].Members) == 0 {
+		return fail(errors.New("no active array in /proc/mdstat"))
+	}
+	minBytes, err := memberDiskBytes(ctx, arrays[0].Members[0])
+	if err != nil {
+		return fail(err)
+	}
+	spare, err := inspectSpare(ctx, dev)
+	if err != nil {
+		return fail(err)
+	}
+	if err := spare.refuse(minBytes, wipe); err != nil {
+		return fail(err)
 	}
 	steps := [][]string{
 		{"sudo", "wipefs", "-a", dev},
@@ -156,12 +284,30 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	if _, err := os.Stat(part); err != nil {
 		part = dev + "p1"
 	}
-	if out, err := sysd.Run(ctx, "sudo", "mdadm", "--manage", "/dev/md/data", "--add", part); err != nil {
+	// the recorded device, not /dev/md/data: after a reinstall under another
+	// hostname the array may carry a different name
+	if out, err := sysd.Run(ctx, "sudo", "mdadm", "--manage", dataDev, "--add", part); err != nil {
 		return fail(fmt.Errorf("mdadm --add: %v: %s", err, out))
 	}
-	if out, err := sysd.Run(ctx, "sudo", "sh", "-c", fmt.Sprintf("echo 'DEVICE=%s MEMBERS=2' > %s", dataDev, dataDiskMarker)); err != nil {
+	rec, err := os.ReadFile(dataDiskMarker)
+	if err != nil {
+		return fail(err)
+	}
+	if out, err := sysd.Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
 		return fail(fmt.Errorf("marker: %v: %s", err, out))
 	}
-	fmt.Printf("%s joined /dev/md/data; it syncs now — laib disk status shows the progress\n", part)
+	fmt.Fprintf(env.w(), "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
 	return 0
+}
+
+var membersField = regexp.MustCompile(`MEMBERS=\d+`)
+
+// withMembers sets the intended member count in the data-disk record and
+// keeps every other field (DEVICE, UUID): the boot script assembles by UUID.
+func withMembers(record string, n int) string {
+	line := strings.TrimSpace(record)
+	if membersField.MatchString(line) {
+		return membersField.ReplaceAllString(line, fmt.Sprintf("MEMBERS=%d", n))
+	}
+	return strings.TrimSpace(fmt.Sprintf("%s MEMBERS=%d", line, n))
 }

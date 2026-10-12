@@ -70,6 +70,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Backup.Repo != "" {
 		out["systemd/laib-backup.service"] = backupService()
 		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
+		// the monthly restore test (#40): restic check on a sample plus one path restored and compared
+		out["systemd/laib-backup-check.service"] = "# Rendered by laib: the monthly restore test (laib backup check).\n[Unit]\nDescription=Laib backup check\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib backup check\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+		out["systemd/laib-backup-check.timer"] = "# Rendered by laib: once a month, a restore test.\n[Unit]\nDescription=Laib backup check timer\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Box.Operator.Enabled {
 		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
@@ -84,11 +87,11 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	}
 	// After every podman auto-update, diag writes red findings to the journal
 	// (and the webhook); the timer follows the update window when one is set.
-	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13): verify after an image update.\n[Service]\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13, #46): a snapshot before, a verify after an image update.\n[Service]\nExecStartPre=/var/opt/laib/laib backup\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 	if len(st.Box.Updates.Days) > 0 {
 		t := st.Box.Updates.Time
 		if t == "" {
-			t = "03:00"
+			t = "04:30" // never the backup's 03:00 (#46)
 		}
 		out["systemd/podman-auto-update.timer.d/laib.conf"] = "# Rendered by laib from box.yml updates.\n[Timer]\nOnCalendar=\nOnCalendar=" + strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + t + ":00\nRandomizedDelaySec=15m\n"
 	}
@@ -152,6 +155,11 @@ const ProxySecret = "LAIB_PROXY_SECRET"
 
 // SecretNames lists every secret a state declares, sorted. Laib's own proxy
 // secret is always declared when a proxy role exists.
+// ModelKeySecret is the model key's name in secrets.age: declared by the
+// model role's template on the GPU box, set by hand on a box that uses a
+// remote proxy (box.yml model.keySecret).
+const ModelKeySecret = "MODEL_API_KEY"
+
 func SecretNames(st *state.State) []state.Secret {
 	var out []state.Secret
 	if st.Box.Roles.Proxy != "" {
@@ -189,6 +197,10 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 	}
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
+	} else if st.Box.Roles.Model != "" {
+		// the local proxy's own key (the llama template declares it): the
+		// Bote, the Werkstatt and the Operator take the lease with it (#42)
+		vars["MODEL_KEY"] = secretValue(secrets, ModelKeySecret)
 	}
 	for k, v := range svc.Values {
 		if v.Secret != "" {
@@ -309,7 +321,20 @@ func autheliaAccess(st *state.State) string {
 
 func autheliaClients(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
-	b.WriteString("# Rendered by laib: one OIDC client per service that declares oidc.\nidentity_providers:\n  oidc:\n    clients:\n")
+	b.WriteString("# Rendered by laib: one OIDC client per service that declares oidc.\n")
+	any := false
+	for _, name := range st.ServiceNames() {
+		if st.Services[name].Contract.OIDC != nil {
+			any = true
+		}
+	}
+	if !any {
+		// Authelia refuses an oidc block without jwks and clients (#36): no
+		// block at all until the first service declares oidc
+		b.WriteString("# no service declares oidc yet: Authelia gets no OIDC block (it refuses an empty one)\n")
+		return b.String()
+	}
+	b.WriteString("identity_providers:\n  oidc:\n    clients:\n")
 	for _, name := range st.ServiceNames() {
 		o := st.Services[name].Contract.OIDC
 		if o == nil {

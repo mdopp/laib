@@ -15,9 +15,11 @@
 #      consumes on the next boot — this is the bulletproof guarantee
 #      even if (1) somehow fails or the BIOS reverts NVRAM writes.
 #
-# After we reach the installed OS, disable-usb-boot.service then
-# permanently deactivates USB entries with `efibootmgr -A` so the
-# user can leave the USB plugged in without re-entering the loop.
+# After we reach the installed OS, laib-boot-order.service puts the
+# entry it booted from first and deactivates USB entries with
+# `efibootmgr -A` at every boot. Whatever the firmware does anyway,
+# the live system refuses to reinstall an installed box unless the
+# stick was built with --reinstall (pre-install.sh, #33).
 #
 # Verbose throughout — any failure visible in the live-ISO console.
 
@@ -28,19 +30,30 @@ echo "post-install: efibootmgr -v before:"
 efibootmgr -v || true
 echo "----"
 
-# Find the installed-OS boot entry. Match by EFI loader path first
-# (the most specific signal — entries like \EFI\fedora\shimx64.efi),
-# then fall back to entry-label patterns. Using ERE (-E) throughout
-# to avoid the BRE \(...\) escaping minefield the previous version
-# tripped over.
-ENTRY=$(efibootmgr -v | grep -i -m1 -E '\\EFI\\(fedora|coreos|boot)\\' | grep -oP 'Boot\K[0-9A-Fa-f]+' || true)
-if [[ -z "$ENTRY" ]]; then
-  ENTRY=$(efibootmgr | grep -i -m1 -E 'fedora|coreos|Linux Boot Manager' | grep -oP 'Boot\K[0-9A-Fa-f]+' || true)
+# The entry for the disk just installed, found by its EFI partition's PARTUUID
+# and created here when the firmware has none (#33): coreos-installer writes no
+# NVRAM entry, and the old path pattern also matched the removable-media path
+# \EFI\BOOT\ — the stick's own entry — and promoted it.
+if [[ ! -d /sys/firmware/efi ]]; then
+  echo "post-install: BIOS boot, nothing to do"
+  exit 0
 fi
-
+DEST=$(sed -n 's/^dest-device: *//p' /etc/coreos/installer.d/0050-dest-device.yaml 2>/dev/null || true)
+ESP=$(lsblk -nrpo NAME,LABEL "$DEST" 2>/dev/null | awk '$2=="EFI-SYSTEM" {print $1; exit}')
+if [[ -z "$DEST" || -z "$ESP" ]]; then
+  echo "post-install: WARNING — no EFI-SYSTEM partition on '$DEST'; BootOrder unchanged, pick the disk in the firmware's boot menu" >&2
+  exit 0
+fi
+PARTUUID=$(lsblk -no PARTUUID "$ESP")
+entry_of_esp() { efibootmgr -v | grep -i "$PARTUUID" | grep -oP '^Boot\K[0-9A-Fa-f]{4}' | head -1 || true; }
+ENTRY=$(entry_of_esp)
 if [[ -z "$ENTRY" ]]; then
-  echo "post-install: WARNING — no OS boot entry detected; nothing to promote." >&2
-  echo "post-install: BootOrder + BootNext unchanged. Operator will need to pick the SSD from the BIOS boot menu on first boot." >&2
+  PARTNUM=$(cat "/sys/class/block/$(basename "$ESP")/partition")
+  efibootmgr -q --create --disk "$DEST" --part "$PARTNUM" --label "Fedora CoreOS (Laib)" --loader '\EFI\fedora\shimx64.efi'
+  ENTRY=$(entry_of_esp)
+fi
+if [[ -z "$ENTRY" ]]; then
+  echo "post-install: WARNING — no boot entry for $ESP ($PARTUUID); pick the disk in the firmware's boot menu" >&2
   exit 0
 fi
 
@@ -83,8 +96,8 @@ fi
 # layer, BootNext wins for the next boot. The BIOS clears BootNext
 # automatically after consuming it, so this only redirects the single
 # critical first reboot — subsequent reboots fall through to BootOrder
-# (which we also set above; disable-usb-boot.service will permanently
-# demote USB once we're in installed FCoS).
+# (which we also set above; laib-boot-order.service puts the installed
+# entry first and switches USB entries off at every boot of the installed OS).
 echo "post-install: setting BootNext = $ENTRY (one-shot override for first reboot)"
 efibootmgr -n "$ENTRY" || echo "post-install: WARNING — efibootmgr -n exited non-zero" >&2
 
