@@ -122,6 +122,13 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		for _, p := range open {
 			fmt.Fprintf(&b, "<h2>Vorschlag #%d · von %s · Stufe: %s · braucht: andere Hand mit %s</h2><p>%s</p><pre>%s</pre>",
 				p.ID, html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(p.Reason), html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
+			if p.Class == "human" {
+				b.WriteString("<p class=rot>Nur ein Mensch kann freigeben:</p><ul>")
+				for _, r := range p.Reasons {
+					fmt.Fprintf(&b, "<li>%s</li>", html.EscapeString(r))
+				}
+				b.WriteString("</ul>")
+			}
 			for _, w := range p.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}

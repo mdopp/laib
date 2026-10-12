@@ -24,11 +24,11 @@ func setup(t *testing.T) (string, string) {
 func TestProposeApproveReject(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := setup(t)
-	if _, err := Create(ctx, repo, inbox, "ops", "nothing changed"); err == nil {
+	if _, err := Create(ctx, repo, inbox, "ops", "nothing changed", nil); err == nil {
 		t.Fatal("clean tree must not propose")
 	}
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
-	p, err := Create(ctx, repo, inbox, "ops", "rename domain")
+	p, err := Create(ctx, repo, inbox, "ops", "rename domain", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestProposeApproveReject(t *testing.T) {
 	}
 
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: z\n"), 0o644)
-	p2, _ := Create(ctx, repo, inbox, "pi", "another")
+	p2, _ := Create(ctx, repo, inbox, "pi", "another", nil)
 	if p2.ID != 2 {
 		t.Fatal(p2.ID)
 	}
@@ -83,12 +83,12 @@ func TestApproveRefusesAConflictAndLeavesMainClean(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := setup(t)
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
-	p1, err := Create(ctx, repo, inbox, "ops", "y")
+	p1, err := Create(ctx, repo, inbox, "ops", "y", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: z\n"), 0o644)
-	p2, err := Create(ctx, repo, inbox, "pi", "z")
+	p2, err := Create(ctx, repo, inbox, "pi", "z", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestApproveValidatesTheMergedResult(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := setup(t)
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
-	p, err := Create(ctx, repo, inbox, "ops", "y")
+	p, err := Create(ctx, repo, inbox, "ops", "y", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,12 +154,12 @@ func TestTheBoxApprovesItsOwnTemplateUpdateAndDoesNotDuplicateIt(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := setup(t)
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
-	p1, err := Create(ctx, repo, inbox, "laib", "template update")
+	p1, err := Create(ctx, repo, inbox, "laib", "template update", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
-	p2, err := Create(ctx, repo, inbox, "laib", "template update")
+	p2, err := Create(ctx, repo, inbox, "laib", "template update", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

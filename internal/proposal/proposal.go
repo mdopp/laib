@@ -30,7 +30,11 @@ type Proposal struct {
 	DecidedBy   string    `json:"decidedBy,omitempty"`
 	Files       []string  `json:"files"`
 	Warnings    []string  `json:"warnings,omitempty"`    // e.g. a second service for one purpose
-	Class       string    `json:"class"`                 // tree | values | new-service | template-update | patch
+	Class       string    `json:"class"`                 // what the dial is keyed by: values | new-service | template-update | patch | tree | human
+	Kind        string    `json:"kind,omitempty"`        // the edit's shape: tree | values | new-service | template-update | patch
+	Reasons     []string  `json:"reasons,omitempty"`     // why only a human may allow it (class human), plain German
+	Mints       []string  `json:"mints,omitempty"`       // hands the change mints Laib tokens for
+	Adds        []string  `json:"adds,omitempty"`        // services the change adds
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 }
 
@@ -91,8 +95,9 @@ func CommitDirty(ctx context.Context, repo, actor string) error {
 }
 
 // Create commits the working tree to proposal/<id> and returns to main with
-// a clean tree. The inbox entry lists the files the branch changes.
-func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, error) {
+// a clean tree. The inbox entry lists the files the branch changes. The
+// judge reads the dirty tree against a detached checkout of HEAD first.
+func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge) (*Proposal, error) {
 	if err := EnsureRepo(ctx, repo); err != nil {
 		return nil, err
 	}
@@ -107,7 +112,25 @@ func Create(ctx context.Context, repo, inbox, actor, reason string) (*Proposal, 
 	if err != nil {
 		return nil, err
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now(), Class: "tree"}
+	var verdict Verdict
+	if judge != nil {
+		head, err := os.MkdirTemp("", "laib-head")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(head)
+		if _, err := git(ctx, repo, "worktree", "add", "-q", "--detach", head, "HEAD"); err != nil {
+			return nil, err
+		}
+		verdict, err = judge(head, repo)
+		git(ctx, repo, "worktree", "remove", "--force", head)
+		git(ctx, repo, "worktree", "prune")
+		if err != nil {
+			return nil, err
+		}
+	}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now(),
+		Kind: "tree", Class: classOf("tree", verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		// Run trims the output, so the two status columns may be gone; the
 		// path is always the last field.

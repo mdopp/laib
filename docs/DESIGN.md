@@ -161,11 +161,27 @@ itself:
 | template-update | the registry shipped a new version | auto | the weekly sync proposes and laib applies, rollback on red |
 | new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
 | patch | anything else an agent can express as a diff | auto | same |
+| human | what the content review marks (below) | — | never auto, whatever the dial says |
 | remove | delete a service | never auto | a human, always (ADR 0006) |
 
-A warning (a second service for one purpose) always goes to a human, dial
-or not. Every auto decision is journaled as `laib approve` with the
-proposing hand named, so "who changed this?" has an answer.
+**The content decides, not the shape (#34).** Before the dial is asked,
+`internal/review` reads the change against main — files, contracts, the
+rendered units — and names, in plain German, what only a human may allow:
+a script that runs on the box (post-deploy, a host unit, an `Exec*` line in
+a container unit), `policy.yml`, `secrets.age`, `ignore.yml`, `box.yml`
+roles and friends, a public route or a weaker login, a path without login,
+hand-written Caddy, a token (`mint`) or an external secret, another
+service's secret, a host folder as a volume, a port opened to the LAN or
+to other machines, `Network=host`, podman arguments and other privileges,
+a program from a different image repository, a restriction taken away,
+data taken out of the backup, a removed service, a file Laib does not know,
+a symlink, a state that does not load. Such a proposal is class `human`:
+the inbox and `laib inbox` show the reasons, and an agent's `approve` is
+refused with them. A warning (a second service for one purpose) goes to a
+human too. A non-human hand may not add a token for a hand above its own
+ceiling at all: the proposal is refused, nothing is kept. Every auto
+decision is journaled as `laib approve` with the proposing hand named, so
+"who changed this?" has an answer.
 
 **The envelope fails closed (#35).** Every class-2 action (`write`, `exec`,
 `restart`) runs inside it: the budget (eight per service per hour) is read

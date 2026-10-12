@@ -170,8 +170,10 @@ member on purpose (#29).
 ### `laib inbox`
 
 Open proposals (`--all` for decided ones), as a table or `--json`; also an
-MCP tool (read tier), so the Bote and Haus can show the inbox. Deciding
-stays `laib approve` / `laib reject`.
+MCP tool (read tier), so the Bote and Haus can show the inbox. A proposal
+of class `human` lists why only a human may allow it (the content review,
+docs/DESIGN.md). Deciding stays `laib approve` / `laib reject`; an agent's
+approve of a human-class proposal is refused with the same reasons.
 
 ### Routes with `bypass:`
 
