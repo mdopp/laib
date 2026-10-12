@@ -14,7 +14,8 @@ laib read <service> <path>           a file in the service's data paths, secrets
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib plan [service]                  render state → diff against the box (files + units)
@@ -37,11 +38,42 @@ laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
 Every verb has `--json`. The MCP tool list is generated from the same verb
-table, so the two cannot drift. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+table (`mcpVerbs` names which of them an agent may reach at all), and
+`scripts/drift.sh` in CI checks that every tool the Operator's prompt
+names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
-proposals, `token`, `secret`, `serve`, `init`; and class-3 actions (remove,
-reboot, a public route) are not verbs at all for it, they are proposals.
+proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
+ceiling and a reboot is not a verb; a public route is a values change,
+which the dial may auto-apply — the "always a human's call" in
+`policy.yml`'s comment is a convention today, not enforced (#47).
+
+## The Operator's typed surface (#53)
+
+A small local model does not get the verb table with one free-text `args`
+per tool. `laib-operator` (default `OPERATOR_INTERFACE=typed`; `cli` gives a
+large model the verbs) offers a **menu per trigger** of task-shaped tools
+with typed parameters, and code turns a call into the CLI arguments laib's
+MCP takes — the model never writes quoting, flags or `--`:
+
+| Trigger | Menu |
+|---|---|
+| tick | `status`, `diagnose(service?)`, `note(kind, text)` |
+| event (a red) | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
+| report | `status`, `diagnose`, `journal(hours)`, `note` |
+
+`service` is an enum of the installed services (from `laib status`),
+`kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
+`key` a values.yml key. A tool is in the menu only if the hand has its
+verb (`ops` at ceiling `propose` sees no `restart`). `approve`, `reject`,
+`restore`, `rollback`, `converge`, `template`, `adopt`, `apply`, `remove`
+are in no menu. A call with a missing or invalid argument — an unknown
+service, a kind outside the enum, a key with a path in it, a tool outside
+the menu — is answered to the model and never reaches laib. Results are
+cut to 2 000 characters, the context bundle to 6 000. The eval runs both
+interfaces over the same incidents (`werkstatt/evals/incidents-typed.json`).
+Still open from #53: runbooks in code for the known failure classes, and
+schema-constrained decoding through llama-server.
 
 ## Readiness: `/ready`
 
@@ -185,7 +217,7 @@ lock whose process is gone is taken over with a journal line.
 `laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
 (apply tier): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
-`restore` pauses the service it rewrites, the GPU lease pauses `llama`
+`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
 while a mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies
@@ -246,3 +278,29 @@ Both run in the hooks image (ADR 0004 amendment), never on the host:
 Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
 `laib-exec: <container> <command…>` (run by Laib in the service's own
 container). `box.yml laib.hooksImage` names the image.
+
+### The Operator and the MCP surface (#43)
+
+`diag` is an MCP tool. A verb writes to the writer in its `cliEnv`; MCP
+collects a verb's output in a buffer (nothing another goroutine prints
+can land in a reply, no pipe can block) and `escalate` builds its bundle
+the same way. The Operator's system prompt is generated from the tool
+list the hand has; a reply that writes a tool call as text is asked once
+for a real call and then ends the session red with a note; a tool call
+whose arguments are not a JSON object is refused, never run; the context
+bundle is budgeted (head and newest journal lines). `laib operator
+enable` points `notify.url` at the operator's event endpoint unless the
+owner set one, so reds wake it; an operator enabled for three ticks
+without a single note is red („stumm“).
+
+### Hardware health (#59)
+
+`laib diag` asks `smartctl -H -A --json` about every member of the data
+array and the OS disk: reallocated or pending sectors, media errors and
+wear are yellow („die Platte altert“), a failed self-assessment is red
+(„Platte bald tauschen“), 55/65 °C are warm/hot; the kernel's thermal
+zones give the box's temperature (80 °C yellow, 90 °C red). Without
+smartmontools the probe says so once (`sudo rpm-ostree install
+smartmontools`; install-box.sh will layer it with git, restic and diff).
+The power-loss proofs (a cut during an apply, a backup, a resync) wait
+for Actions minutes and for #81.

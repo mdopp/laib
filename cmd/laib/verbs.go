@@ -58,6 +58,7 @@ type readiness struct {
 	Paused    []string `json:"paused,omitempty"`   // services converge leaves alone: "<svc> von <wer> bis <wann>" (#39)
 	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
 	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
+	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
 }
 
 type serviceStatus struct {
@@ -79,6 +80,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 		r.State, r.Lock = "eingeschränkt", holder
 	}
 	r.Firewall = firewallState(ctx, env)
+	r.Watchdog = watchdogState(env, st)
 	if r.Firewall == "fehlt" && r.Lock == "" {
 		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
@@ -148,21 +150,21 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
+	fmt.Fprintf(env.w(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
-		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
+		fmt.Fprintf(env.w(), "  gesperrt durch: %s\n", r.Lock)
 	}
 	for _, row := range rows {
-		fmt.Printf("  %-5s %-20s", row.State, row.Name)
+		fmt.Fprintf(env.w(), "  %-5s %-20s", row.State, row.Name)
 		for u, a := range row.Units {
 			if a != "active" {
-				fmt.Printf(" %s=%s", u, a)
+				fmt.Fprintf(env.w(), " %s=%s", u, a)
 			}
 		}
-		fmt.Println()
+		fmt.Fprintln(env.w())
 	}
 	if e, ok := journal.Last(env.paths.Journal); ok {
-		fmt.Printf("Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+		fmt.Fprintf(env.w(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 	}
 	return exitOK
 }
@@ -188,22 +190,22 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, p)
 	}
 	if p.Empty() {
-		fmt.Println("Keine Änderung: die Box entspricht dem State.")
+		fmt.Fprintln(env.w(), "Keine Änderung: die Box entspricht dem State.")
 	}
 	for _, c := range p.Changes {
-		fmt.Printf("%-6s %s\n", c.Kind, c.Target)
+		fmt.Fprintf(env.w(), "%-6s %s\n", c.Kind, c.Target)
 		if c.Diff != "" {
-			fmt.Println(c.Diff)
+			fmt.Fprintln(env.w(), c.Diff)
 		}
 	}
 	for _, u := range p.Unmanaged {
-		fmt.Printf("nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+		fmt.Fprintf(env.w(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
 	}
 	for _, c := range p.Conflicts {
-		fmt.Printf("KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
+		fmt.Fprintf(env.w(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
 	}
 	for _, w := range st.Warnings {
-		fmt.Printf("HINWEIS: %s\n", w)
+		fmt.Fprintf(env.w(), "HINWEIS: %s\n", w)
 	}
 	return exitOK
 }
@@ -251,7 +253,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 		return emit(env, es)
 	}
 	for _, e := range es {
-		fmt.Printf("%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
+		fmt.Fprintf(env.w(), "%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
 	}
 	return exitOK
 }
@@ -266,16 +268,16 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
 	}
-	fmt.Printf("# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
-	fmt.Println("## Services")
+	fmt.Fprintf(env.w(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
+	fmt.Fprintln(env.w(), "## Services")
 	for _, row := range rows {
-		fmt.Printf("- %s: %s\n", row.Name, row.State)
+		fmt.Fprintf(env.w(), "- %s: %s\n", row.Name, row.State)
 	}
-	fmt.Println("\n## Journal, letzte 24h")
+	fmt.Fprintln(env.w(), "\n## Journal, letzte 24h")
 	for _, e := range es {
-		fmt.Printf("- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
+		fmt.Fprintf(env.w(), "- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
 	}
-	fmt.Println("\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
+	fmt.Fprintln(env.w(), "\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
 	return exitOK
 }
 
@@ -298,14 +300,14 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
-		fmt.Println("installiert:")
+		fmt.Fprintln(env.w(), "installiert:")
 		for _, name := range st.ServiceNames() {
 			t := st.Services[name].Contract.Template
-			fmt.Printf("  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+			fmt.Fprintf(env.w(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
-		fmt.Println("verfügbar:")
+		fmt.Fprintln(env.w(), "verfügbar:")
 		for _, name := range sortedKeys(avail) {
-			fmt.Printf("  %-20s %s\n", name, strings.Join(avail[name], ", "))
+			fmt.Fprintf(env.w(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return exitOK
 	case "sync":
@@ -315,7 +317,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		lines, err := syncRegistries(ctx, env, st)
 		for _, l := range lines {
-			fmt.Println("registry:", l)
+			fmt.Fprintln(env.w(), "registry:", l)
 		}
 		if err != nil {
 			return fail(err)
@@ -496,7 +498,7 @@ func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	}
 	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
-	fmt.Printf("adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
+	fmt.Fprintf(env.w(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
 	return exitOK
 }
 
@@ -511,20 +513,21 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 		content = "units:\n"
 	}
 	if strings.Contains(content, "- "+args[0]+"\n") {
-		fmt.Println("already ignored:", args[0])
+		fmt.Fprintln(env.w(), "already ignored:", args[0])
 		return exitOK
 	}
 	content += "  - " + args[0] + "\n"
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		return fail(err)
 	}
-	fmt.Println("ignored:", args[0])
+	fmt.Fprintln(env.w(), "ignored:", args[0])
 	return exitOK
 }
 
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
 	modelURL, modelLease, gpu := "", "", false
+	dnsProvider, tlsMode := "", ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--gpu":
@@ -545,11 +548,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			modelURL = args[i+1]
 		case "--model-lease":
 			modelLease = args[i+1]
+		case "--dns-provider":
+			dnsProvider = args[i+1]
+		case "--tls":
+			tlsMode = args[i+1]
 		}
 		i++
 	}
 	if domain == "" {
-		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+	}
+	if tlsMode != "" && tlsMode != "internal" {
+		return fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
 	}
 	if !gpu && modelURL == "" {
 		fmt.Fprintln(os.Stderr, "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
@@ -573,16 +583,26 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	model := ""
 	if modelURL != "" {
 		model = fmt.Sprintf("model:                    # no GPU here: the LLM is remote (a peer's llama proxy or a cloud API)\n  url: %s\n", modelURL)
-		if strings.HasPrefix(modelURL, "https://") {
-			// A cloud API wants a key; a peer's LAN proxy does not.
-			model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply\n"
-		}
+		// A cloud API wants its key; a peer's proxy wants that box's model key
+		// (the lease API refuses without it, #42): laib secret set MODEL_API_KEY
+		// with the value the GPU box's `laib secret list` names.
+		model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply (cloud: the API key; a peer box: its MODEL_API_KEY)\n"
 		if modelLease != "" {
 			model += fmt.Sprintf("  lease: %s\n", modelLease)
 		}
 	}
+	// certificates (ADR 0007, #45): DNS-01 through the provider's API — the
+	// token is a secret (laib secret set DNS_API_TOKEN); tls: internal only
+	// for a trial nobody's phone has to trust
+	certs := ""
+	if dnsProvider != "" {
+		certs += fmt.Sprintf("# certificates: DNS-01 through the provider's API; the token is the secret DNS_API_TOKEN\ndns:\n  provider: %s\n  secretRef: DNS_API_TOKEN\n", dnsProvider)
+	}
+	if tlsMode != "" {
+		certs += fmt.Sprintf("# Caddy's own CA: a laptop-only trial; phones and their widgets need a real certificate (#45)\ntls: %s\n", tlsMode)
+	}
 	backup := fmt.Sprintf("backup:\n  repo: %s          # restic, on the data disk: protects against mistakes and bad updates from day one; a NAS or second repo protects against the disk\n  schedule: \"03:00\"\n", filepath.Join(filepath.Dir(dataDir), "backup", "restic"))
-	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
+	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
 		return fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; the admin's own token decides\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: auto\n  patch: auto\n  new-service: proposal   # adds surface: a human decides\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
@@ -597,7 +617,7 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
 		return fail(err)
 	}
-	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
+	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
 }
 

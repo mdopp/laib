@@ -39,42 +39,20 @@
  */
 
 import { stream, streamSimple } from "@earendil-works/pi-ai/compat";
+import { PROVIDER_ID, fromCatalog } from "./catalog.mjs";
 
-const PROVIDER_ID = "laib-llama";
 const PROVIDER_NAME = "Laib llama (model role)";
 const DEFAULT_GATE_URL = "http://host.containers.internal:11435/v1";
 
-// llama-server ships no authentication, so there is no key to hold — but Pi
-// hides a model whose provider has no auth configured at all, so the provider
-// carries a placeholder, exactly as upstream's own Ollama example does.
-const API_KEY = "llama";
+// The proxy and the lease take the model key as bearer (#42); MODEL_KEY is
+// the builtin laib renders into the unit. "llama" keeps pi from hiding a
+// provider without any auth when the box has no key.
+const API_KEY = process.env.MODEL_KEY || "llama";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
 function gateUrl() {
   return (process.env.MODEL_URL || DEFAULT_GATE_URL).replace(/\/+$/u, "");
-}
-
-function positive(value, fallback) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
-
-function toModel(entry) {
-  const pi = entry.pi;
-  const input = Array.isArray(pi.input) && pi.input.length > 0 ? pi.input : ["text"];
-  return {
-    id: entry.id,
-    name: typeof pi.name === "string" && pi.name ? pi.name : entry.id,
-    api: "openai-completions",
-    provider: PROVIDER_ID,
-    baseUrl: gateUrl(),
-    reasoning: pi.reasoning === true,
-    input,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: positive(pi.contextWindow, 32768),
-    maxTokens: positive(pi.maxTokens, 16384),
-    compat: typeof pi.compat === "object" && pi.compat !== null ? pi.compat : {},
-  };
 }
 
 async function fetchCatalog(signal) {
@@ -85,11 +63,8 @@ async function fetchCatalog(signal) {
   });
   if (!response.ok) throw new Error(`Model gate answered HTTP ${response.status}`);
   const payload = await response.json();
-  const data = payload && Array.isArray(payload.data) ? payload.data : undefined;
-  if (!data) throw new Error("Model gate answered no catalog");
-  return data
-    .filter((entry) => entry && typeof entry.id === "string" && typeof entry.pi === "object" && entry.pi !== null)
-    .map(toModel);
+  if (!(payload && Array.isArray(payload.data))) throw new Error("Model gate answered no catalog");
+  return fromCatalog(payload, gateUrl());
 }
 
 export default async function solarisLlamaExtension(pi) {

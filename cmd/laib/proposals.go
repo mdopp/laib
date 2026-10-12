@@ -170,22 +170,22 @@ func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Pla
 		emit(env, res)
 	} else {
 		for _, w := range res.Written {
-			fmt.Println("geschrieben:", w)
+			fmt.Fprintln(env.w(), "geschrieben:", w)
 		}
 		for _, u := range res.Restarted {
-			fmt.Println("neu gestartet:", u)
+			fmt.Fprintln(env.w(), "neu gestartet:", u)
 		}
 		for _, c := range res.Checks {
 			mark := "ok "
 			if !c.OK {
 				mark = "ROT"
 			}
-			fmt.Printf("%s %s %s %s\n", mark, c.Service, c.What, c.Detail)
+			fmt.Fprintf(env.w(), "%s %s %s %s\n", mark, c.Service, c.What, c.Detail)
 		}
 		if res.Green {
-			fmt.Printf("grün · %s\n", res.Commit)
+			fmt.Fprintf(env.w(), "grün · %s\n", res.Commit)
 		} else {
-			fmt.Printf("rot · %s · angewendet, aber verify ist rot\n", res.Commit)
+			fmt.Fprintf(env.w(), "rot · %s · angewendet, aber verify ist rot\n", res.Commit)
 		}
 	}
 	if !res.Green {
@@ -292,9 +292,9 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, p)
 	}
-	fmt.Printf("Vorschlag #%d angelegt (%s). Braucht Freigabe durch eine andere Hand mit Stufe apply.\n", p.ID, strings.Join(p.Files, ", "))
+	fmt.Fprintf(env.w(), "Vorschlag #%d angelegt (%s). Braucht Freigabe durch eine andere Hand mit Stufe apply.\n", p.ID, strings.Join(p.Files, ", "))
 	for _, w := range p.Warnings {
-		fmt.Println("HINWEIS:", w)
+		fmt.Fprintln(env.w(), "HINWEIS:", w)
 	}
 	return exitOK
 }
@@ -359,7 +359,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 			return fail(err)
 		}
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
-		fmt.Printf("Vorschlag #%d abgelehnt.\n", p.ID)
+		fmt.Fprintf(env.w(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return exitOK
 	}
 	unlock, code := takeLock(env, st, "approve")
@@ -455,7 +455,7 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	for _, w := range p.Warnings {
-		fmt.Println("HINWEIS:", w)
+		fmt.Fprintln(env.w(), "HINWEIS:", w)
 	}
 	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, env.actor, stateLoads); err != nil {
 		return fail(err)
@@ -487,11 +487,11 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 		return emit(env, ps)
 	}
 	if len(ps) == 0 {
-		fmt.Println("Inbox leer")
+		fmt.Fprintln(env.w(), "Inbox leer")
 		return 0
 	}
 	for _, p := range ps {
-		fmt.Printf("#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
+		fmt.Fprintf(env.w(), "#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
 	}
 	return 0
 }

@@ -316,7 +316,8 @@ func (st *State) ModelURL() string {
 // ModelLease is the lease endpoint, local or remote; empty when none.
 func (st *State) ModelLease() string {
 	if st.Box.Roles.Model != "" {
-		return "http://127.0.0.1:8787/api/model-lease"
+		// the lease is served by the proxy, on the proxy's port: one port everywhere (#42)
+		return strings.TrimSuffix(st.ModelURL(), "/v1") + "/api/model-lease"
 	}
 	return st.Box.Model.Lease
 }

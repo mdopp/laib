@@ -70,6 +70,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Backup.Repo != "" {
 		out["systemd/laib-backup.service"] = backupService()
 		out["systemd/laib-backup.timer"] = backupTimer(st.Box.Backup.Schedule)
+		// the monthly restore test (#40): restic check on a sample plus one path restored and compared
+		out["systemd/laib-backup-check.service"] = "# Rendered by laib: the monthly restore test (laib backup check).\n[Unit]\nDescription=Laib backup check\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib backup check\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+		out["systemd/laib-backup-check.timer"] = "# Rendered by laib: once a month, a restore test.\n[Unit]\nDescription=Laib backup check timer\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Box.Operator.Enabled {
 		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
@@ -152,6 +155,11 @@ const ProxySecret = "LAIB_PROXY_SECRET"
 
 // SecretNames lists every secret a state declares, sorted. Laib's own proxy
 // secret is always declared when a proxy role exists.
+// ModelKeySecret is the model key's name in secrets.age: declared by the
+// model role's template on the GPU box, set by hand on a box that uses a
+// remote proxy (box.yml model.keySecret).
+const ModelKeySecret = "MODEL_API_KEY"
+
 func SecretNames(st *state.State) []state.Secret {
 	var out []state.Secret
 	if st.Box.Roles.Proxy != "" {
@@ -189,6 +197,10 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 	}
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
+	} else if st.Box.Roles.Model != "" {
+		// the local proxy's own key (the llama template declares it): the
+		// Bote, the Werkstatt and the Operator take the lease with it (#42)
+		vars["MODEL_KEY"] = secretValue(secrets, ModelKeySecret)
 	}
 	for k, v := range svc.Values {
 		if v.Secret != "" {
