@@ -172,6 +172,9 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"paths": paths, "ms": entry.MS})
 	}
+	if len(quiesced) > 0 {
+		fmt.Fprintf(env.w(), "angehalten für den Snapshot: %s (wieder gestartet)\n", strings.Join(quiesced, ", "))
+	}
 	fmt.Fprintf(env.w(), "grün · %d Pfade · %s\n", len(paths), tail(out, 200))
 	return exitOK
 }
