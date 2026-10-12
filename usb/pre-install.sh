@@ -73,6 +73,26 @@ if [[ -n "$INSTALLED" && "${LAIB_REINSTALL:-}" != "1" ]]; then
 fi
 [[ -n "$INSTALLED" ]] && echo "pre-install: reinstalling over$INSTALLED (laib-stick --reinstall); the data array is kept"
 
+# An old Fedora CoreOS root on the OS disk is zeroed before the image is
+# written (#81). The image is smaller than the disk and its first boot grows
+# the new xfs root into the old one's blocks; that old metadata carries the
+# same meta_uuid (CoreOS restamps only the visible UUID) and a higher log
+# sequence, so the log recovery after a power cut reads it as "metadata ahead
+# of the log" and the root never mounts again. Only the OS disk's partition
+# labelled root, only when it is xfs; the data disks are never touched.
+# blkdiscard -z uses the disk's write-zeroes (fast on NVMe and SSD) and falls
+# back to writing zeros.
+OLD_ROOT=$(lsblk -nrpo NAME,PARTLABEL "$BEST" 2>/dev/null | awk '$2=="root"{print $1; exit}')
+if [[ -n "$OLD_ROOT" && "$(blkid -s TYPE -o value "$OLD_ROOT" 2>/dev/null)" == xfs ]]; then
+  MSG="laib: das alte System auf $OLD_ROOT wird genullt, damit das neue nach einem Stromausfall sicher startet (die Daten-Platten bleiben unberuehrt) ..."
+  echo "$MSG"; echo "$MSG" > /dev/console 2>/dev/null || true
+  if ! blkdiscard -f -z "$OLD_ROOT"; then
+    echo "pre-install: blkdiscard -z failed on $OLD_ROOT, writing zeros with dd" >&2
+    dd if=/dev/zero of="$OLD_ROOT" bs=4M oflag=direct conv=fsync status=progress 2>&1 | tail -1 || true
+  fi
+  echo "pre-install: old root $OLD_ROOT zeroed"
+fi
+
 # Write dest-device into installer.d so coreos-installer picks it up
 mkdir -p "$INSTALLER_D"
 cat > "$INSTALLER_D/0050-dest-device.yaml" <<DISKEOF
