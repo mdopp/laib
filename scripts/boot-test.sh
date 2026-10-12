@@ -68,14 +68,15 @@ curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: 
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
 "$BIN" logs whoami --since 10m | grep -qi "whoami" || { echo "FAIL: no journald lines"; exit 1; }
-# the operator against the real unit with a scripted model: inspect, restart, note
+# the operator against the real unit with a scripted model on the typed
+# surface (#53, the default): inspect, restart, note
 python3 - 18081 <<'PY2' &
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"args":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"args":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"args":"--kind incident \"whoami neu gestartet, grün.\""})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"whoami neu gestartet, grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0
