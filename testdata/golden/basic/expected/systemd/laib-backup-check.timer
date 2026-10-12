@@ -1,0 +1,11 @@
+# Rendered by laib: once a month, a restore test.
+[Unit]
+Description=Laib backup check timer
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

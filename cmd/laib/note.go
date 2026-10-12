@@ -34,6 +34,9 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		words = append(words, args[i])
 	}
 	text := strings.TrimSpace(strings.Join(words, " "))
+	if len(text) > 4000 {
+		text = text[:4000] + "…" // a note is a few sentences; the journal reader has a line limit (#35)
+	}
 	if text == "" {
 		return fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
 	}
@@ -63,7 +66,7 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, e)
 	}
-	fmt.Println("notiert:", kind)
+	fmt.Fprintln(env.w(), "notiert:", kind)
 	return exitOK
 }
 
@@ -95,7 +98,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"enabled": on, "model": st.Box.Operator.Model, "modelUrl": st.ModelURL()})
 		}
-		fmt.Printf("operator: enabled=%v model=%s url=%s\n", on, st.Box.Operator.Model, st.ModelURL())
+		fmt.Fprintf(env.w(), "operator: enabled=%v model=%s url=%s\n", on, st.Box.Operator.Model, st.ModelURL())
 		return exitOK
 	case "enable", "disable":
 		if proposal.Hand(env.actor) != "human" {
@@ -140,6 +143,25 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		if err := setBoxOperator(filepath.Join(env.paths.State, "box.yml"), enable, model, reportAt); err != nil {
 			return fail(err)
+		}
+		if enable {
+			// reds wake the operator (#43): the webhook points at its event endpoint unless the owner set another
+			if st.Box.Notify.URL == "" {
+				if err := setBoxNotifyURL(filepath.Join(env.paths.State, "box.yml"), "http://127.0.0.1:5901/event"); err != nil {
+					return fail(err)
+				}
+			}
+		}
+		if !enable {
+			// nothing keeps running with a valid token (#41): the ops tokens go
+			if store, err := token.Load(tokenPath(env)); err == nil {
+				for _, r := range store.List() {
+					if r.Hand == "ops" {
+						store.Revoke(r.ID)
+						journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "revoke " + r.ID + " (operator disabled)"})
+					}
+				}
+			}
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "operator", Result: "info", Detail: args[0]})
 		st, err = loadState(env)
@@ -189,6 +211,45 @@ func setBoxOperator(path string, enabled bool, model, reportAt string) error {
 	if reportAt != "" {
 		set("reportAt", reportAt)
 	}
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
+}
+
+// setBoxNotifyURL sets notify.url in box.yml, keeping the rest.
+func setBoxNotifyURL(path, url string) error {
+	var doc yaml.Node
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return err
+	}
+	root := doc.Content[0]
+	var n *yaml.Node
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "notify" {
+			n = root.Content[i+1]
+		}
+	}
+	if n == nil {
+		n = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "notify", Tag: "!!str"}, n)
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == "url" {
+			n.Content[i+1].Value, n.Content[i+1].Tag = url, ""
+			out, err := yaml.Marshal(&doc)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(path, out, 0o644)
+		}
+	}
+	n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "url", Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: url, Tag: "!!str"})
 	out, err := yaml.Marshal(&doc)
 	if err != nil {
 		return err

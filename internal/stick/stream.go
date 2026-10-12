@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// createFile opens the download target; swapped in tests to fail or lose data.
+var createFile = func(name string) (io.WriteCloser, error) { return os.Create(name) }
+
 // Artifact is the stream's metal ISO for x86_64.
 type Artifact struct {
 	Release  string
@@ -67,8 +70,14 @@ func Download(a Artifact, dir string, progress func(done, total int64)) (string,
 		return "", fmt.Errorf("download: %s", resp.Status)
 	}
 	tmp := dst + ".part"
-	f, err := os.Create(tmp)
+	f, err := createFile(tmp)
 	if err != nil {
+		return "", err
+	}
+	// every failure leaves nothing behind: a .part file is never mistaken for an ISO
+	discard := func(err error) (string, error) {
+		f.Close()
+		os.Remove(tmp)
 		return "", err
 	}
 	h := sha256.New()
@@ -78,7 +87,9 @@ func Download(a Artifact, dir string, progress func(done, total int64)) (string,
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
-			f.Write(buf[:n])
+			if _, werr := f.Write(buf[:n]); werr != nil {
+				return discard(fmt.Errorf("write %s: %w", tmp, werr))
+			}
 			h.Write(buf[:n])
 			done += int64(n)
 			if progress != nil && time.Since(last) > 500*time.Millisecond {
@@ -90,17 +101,24 @@ func Download(a Artifact, dir string, progress func(done, total int64)) (string,
 			break
 		}
 		if rerr != nil {
-			f.Close()
-			return "", rerr
+			return discard(rerr)
 		}
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("close %s: %w", tmp, err)
+	}
 	if progress != nil {
 		progress(done, resp.ContentLength)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != a.SHA256 {
 		os.Remove(tmp)
 		return "", fmt.Errorf("checksum mismatch: %s != %s", got, a.SHA256)
+	}
+	// what reached the disk, not only what came over the wire (#51)
+	if got, err := fileSHA256(tmp); err != nil || got != a.SHA256 {
+		os.Remove(tmp)
+		return "", fmt.Errorf("the file on disk does not match the download (%v): is the disk full?", err)
 	}
 	return dst, os.Rename(tmp, dst)
 }

@@ -9,11 +9,12 @@ Environment=PI_AUTOLOOP_ENABLED=${AUTOLOOP_ENABLED}
 Environment=PI_AUTOLOOP_REPOS=${AUTOLOOP_REPOS}
 Environment=PI_AUTOLOOP_LABEL=pi:ready
 Environment=PI_AUTOLOOP_ESCALATE_LABEL=needs-claude
-Environment=PI_WEB_GIT_TOKEN_FILE=/workspace/.laib/git-credentials
+Environment=PI_WEB_GIT_TOKEN_FILE=/run/laib/git-credentials
 Environment=MODEL_URL=${MODEL_URL}
 Environment=LAIB_TOKEN=${LAIB_PI_TOKEN}
-Environment=WERKSTATT_GIT_TOKEN=${GIT_TOKEN}
+Environment=WERKSTATT_GIT_TOKEN=${PI_GIT_TOKEN}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
+Tmpfs=/run/laib                 # pi's own tokens (#44)
 AutoUpdate=registry
 
 [Service]

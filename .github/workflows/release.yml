@@ -1,3 +1,10 @@
+# Releases come from here only (CLAUDE.md, ADR 0003): release-please cuts
+# the version on main, and the binaries are built after a green vm-install
+# of that very commit — a release never ships code no VM has run (#47).
+# Every asset carries build provenance (actions/attest-build-provenance):
+# `gh attestation verify laib-linux-amd64 -R mdopp/laib` on a laptop proves
+# which workflow built it from which commit. On the box install-box.sh
+# checks SHA256SUMS (CoreOS has no gh); the attestation covers SHA256SUMS too.
 name: release
 on:
   push:
@@ -11,6 +18,7 @@ jobs:
     outputs:
       released: ${{ steps.rp.outputs.release_created }}
       tag: ${{ steps.rp.outputs.tag_name }}
+      sha: ${{ steps.rp.outputs.sha }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
@@ -22,8 +30,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write      # dispatch vm-install for the release commit when no run exists
+      id-token: write     # provenance
+      attestations: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+      - name: wait for a green vm-install of this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          run_for_sha() { gh run list --workflow vm-install --commit "$sha" --json databaseId,status,conclusion --limit 1 -q '.[0] | "\(.databaseId) \(.status) \(.conclusion)"'; }
+          if [ -z "$(run_for_sha)" ]; then
+            echo "no vm-install run for $sha (the release commit changes only version files): dispatching one on $TAG"
+            gh workflow run vm-install --ref "$TAG"
+            sleep 30
+          fi
+          for i in $(seq 1 150); do
+            read -r id status conclusion <<<"$(run_for_sha)"
+            echo "vm-install $id: $status $conclusion"
+            if [ "$status" = completed ]; then
+              [ "$conclusion" = success ] && exit 0
+              echo "vm-install $id is $conclusion: no release for $sha"; exit 1
+            fi
+            sleep 60
+          done
+          echo "vm-install did not finish in time"; exit 1
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -36,6 +72,11 @@ jobs:
             CGO_ENABLED=0 GOOS=${t%-*} GOARCH=${t#*-} go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-stick-$t$ext ./cmd/laib-stick
           done
       - run: sha256sum laib-* > SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            laib-*
+            SHA256SUMS
       - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64 laib-lease-linux-amd64 laib-stick-* SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}

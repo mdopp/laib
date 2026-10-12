@@ -8,7 +8,11 @@ Environment=TZ=${TZ}
 Environment=RADICALE_CONFIG=/config/config
 Volume=${DATA_DIR}/radicale/data:/data:z
 Volume=${DATA_DIR}/radicale/config:/config:ro,z
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
+# the image runs as uid 2999 and must write /data: map the box's user onto it
+# (rootless, the host folder is core's — without this radicale dies on
+# Permission denied, VM run 38171174547)
+UserNS=keep-id:uid=2999,gid=2999
 
 [Service]
 Restart=always

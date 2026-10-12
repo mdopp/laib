@@ -26,6 +26,7 @@ type opFacts struct {
 	UnitActive bool
 	Answers    bool
 	LastNote   time.Time
+	EnabledAt  time.Time // the last `operator enable` in the journal
 	Tick       time.Duration
 	Now        time.Time
 }
@@ -42,6 +43,9 @@ func operatorState(f opFacts) (string, *Finding) {
 		return "fehlt", &Finding{Severity: "rot", Probe: "operator", Detail: "Operator ist aktiviert, aber laib-operator.service läuft nicht", Fix: "journalctl --user -u laib-operator; laib operator enable"}
 	case !f.Answers:
 		return "antwortet nicht", &Finding{Severity: "rot", Probe: "operator", Detail: "laib-operator.service läuft, aber der Operator antwortet nicht auf 127.0.0.1:5901", Fix: "journalctl --user -u laib-operator"}
+	case f.LastNote.IsZero() && !f.EnabledAt.IsZero() && f.Now.Sub(f.EnabledAt) > 3*f.Tick:
+		// enabled a while ago and never a note: the model does not answer or the loop is broken (#43)
+		return "stumm", &Finding{Severity: "rot", Probe: "operator", Detail: fmt.Sprintf("Operator seit %s aktiviert und noch keine einzige Notiz (Takt %s): Modell nicht erreichbar oder die Schleife läuft nicht", f.Now.Sub(f.EnabledAt).Round(time.Minute), f.Tick), Fix: "journalctl --user -u laib-operator; laib operator status"}
 	case f.LastNote.IsZero():
 		return "startet", nil // no note yet: right after enable; the next tick decides
 	case f.Now.Sub(f.LastNote) > 3*f.Tick:
@@ -70,6 +74,9 @@ func operatorFacts(ctx context.Context, env *cliEnv, st *state.State) opFacts {
 		for _, e := range es {
 			if e.Actor == "ops" && e.Verb == "note" && e.T.After(f.LastNote) {
 				f.LastNote = e.T
+			}
+			if e.Verb == "operator" && e.Detail == "enable" && e.T.After(f.EnabledAt) {
+				f.EnabledAt = e.T
 			}
 		}
 	}

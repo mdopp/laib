@@ -7,7 +7,7 @@ Pod=immich.pod
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/immich/model-cache:/cache:z
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always

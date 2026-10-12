@@ -55,6 +55,39 @@ func TestDestIgnitionWithPassword(t *testing.T) {
 	}
 }
 
+// The VM job must boot the commit under test, not the last release (#38):
+// --source puts a base URL into firstboot.env, and first boot fetches
+// install-box.sh and the binaries from there.
+func TestSourceReachesFirstBoot(t *testing.T) {
+	b := box()
+	b.Source = "http://10.0.2.2:8000"
+	ign, err := DestIgnition(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	for _, want := range []string{"LAIB_SOURCE=http://10.0.2.2:8000\n", `"$LAIB_SOURCE/install-box.sh"`, `--source "$LAIB_SOURCE"`} {
+		if !strings.Contains(files, want) {
+			t.Errorf("first boot lacks %q", want)
+		}
+	}
+}
+
+// Without --source a box installs the latest release, as before.
+func TestNoSourceInstallsTheRelease(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	if !strings.Contains(files, "LAIB_SOURCE=\n") {
+		t.Error("firstboot.env should carry an empty LAIB_SOURCE")
+	}
+	if !strings.Contains(files, "api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh") {
+		t.Error("without a source, first boot must fetch install-box.sh from the repo")
+	}
+}
+
 func TestSHA512CryptKnownVector(t *testing.T) {
 	// from the reference implementation's test suite
 	got := sha512CryptSalt("Hello world!", "saltstring")
@@ -64,9 +97,32 @@ func TestSHA512CryptKnownVector(t *testing.T) {
 	}
 }
 
+// A stick left in a USB-first machine boots the live system at every reboot;
+// it must not reinstall a box that is already installed (#33). Only a stick
+// built with --reinstall may, and the pre-install script knows which it is.
+func TestLiveIgnitionGuardsAnInstalledBox(t *testing.T) {
+	dest, _ := DestIgnition(box())
+	for _, tc := range []struct {
+		reinstall bool
+		want      string
+	}{{false, "export LAIB_REINSTALL=''"}, {true, "export LAIB_REINSTALL='1'"}} {
+		live, err := LiveIgnition(dest, "nuc", tc.reinstall)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := decodeDataURLs(t, live)
+		if !strings.Contains(files, tc.want) {
+			t.Errorf("reinstall=%v: pre-install lacks %q", tc.reinstall, tc.want)
+		}
+		if !strings.Contains(files, "Diese Box ist schon installiert") {
+			t.Error("pre-install has no guard against reinstalling an installed box")
+		}
+	}
+}
+
 func TestLiveIgnitionCarriesDestAndScripts(t *testing.T) {
 	dest, _ := DestIgnition(box())
-	live, err := LiveIgnition(dest, "nuc")
+	live, err := LiveIgnition(dest, "nuc", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,5 +296,58 @@ func TestDiskNumber(t *testing.T) {
 		if _, err := diskNumber(in); err == nil {
 			t.Errorf("diskNumber(%q) accepted", in)
 		}
+	}
+}
+
+// First boot is a resumable sequence (#37): its marker is written last, the
+// token reaches the installer through the environment (never argv, never
+// `ps`), and the env file is shredded in an EXIT trap — except on the
+// rpm-ostree reboot path, where the post-reboot run still needs it.
+func TestFirstBootResumesAndKeepsTheTokenOffArgv(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := unitFromIgnition(t, ign, "laib-firstboot.service")
+	if strings.Contains(unit, "ConditionPathExists=!/var/opt/laib/laib") {
+		t.Fatal("the installed binary is not the marker: it lands before init and enable; a reboot in between never resumes")
+	}
+	if !strings.Contains(unit, "ConditionPathExists=!/etc/laib/installed") || !strings.Contains(unit, "EnvironmentFile=/etc/laib/firstboot.env") {
+		t.Fatalf("marker and environment:\n%s", unit)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-firstboot.sh")
+	if strings.Contains(script, `--token "$LAIB_GH_TOKEN"`) || strings.Contains(script, ". /etc/laib/firstboot.env") {
+		t.Fatal("the token must not be passed on argv or sourced by the script")
+	}
+	if !strings.Contains(script, "trap") || !strings.Contains(script, "shred") {
+		t.Fatal("the env file must be shredded in an EXIT trap")
+	}
+	if !strings.Contains(script, "touch /etc/laib/installed") || strings.LastIndex(script, "touch /etc/laib/installed") < strings.Index(script, "bash /tmp/install-box.sh") {
+		t.Fatal("the marker must be written after the installer ran")
+	}
+	if !strings.Contains(script, "releases/latest") || !strings.Contains(script, "--version") {
+		t.Fatal("first boot must fetch the installer of the release it installs, not main's")
+	}
+}
+
+// The trial gets real certificates (#45): the stick carries the DNS
+// provider and its token, first boot hands the provider to the installer
+// as a flag and the token through the environment (never argv); --tls
+// internal stays a flag for a laptop-only trial, never typed into box.yml.
+func TestDNSProviderReachesFirstBoot(t *testing.T) {
+	b := box()
+	b.DNSProvider, b.DNSToken, b.TLS = "desec", "desec-token-1", ""
+	ign, err := DestIgnition(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := decodeDataURLs(t, ign)
+	for _, want := range []string{"LAIB_DNS_PROVIDER=desec\n", "LAIB_DNS_TOKEN=desec-token-1\n", "LAIB_TLS=\n", `--dns-provider "$LAIB_DNS_PROVIDER"`, `--tls "$LAIB_TLS"`} {
+		if !strings.Contains(files, want) {
+			t.Errorf("first boot lacks %q", want)
+		}
+	}
+	if strings.Contains(files, `"$LAIB_DNS_TOKEN"`) {
+		t.Error("the DNS token must reach the installer through the environment, not argv")
 	}
 }
