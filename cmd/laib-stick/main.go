@@ -41,6 +41,9 @@ func main() {
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
 	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token while mdopp/laib is private")
+	flag.StringVar(&b.DNSProvider, "dns-provider", "", "DNS provider with an API for DNS-01 certificates (desec, cloudflare, hetzner, …); the domain's zone must be there")
+	flag.StringVar(&b.DNSToken, "dns-token", os.Getenv("LAIB_DNS_TOKEN"), "the DNS provider's API token (becomes the secret DNS_API_TOKEN)")
+	flag.StringVar(&b.TLS, "tls", "", "\"internal\": Caddy's own CA instead of Let's Encrypt — a laptop-only trial, phones cannot trust it")
 	flag.StringVar(&b.Source, "source", "", "tests only: base URL serving install-box.sh and one build's binaries, instead of the latest release (the VM job)")
 	flag.StringVar(&streamName, "stream", "stable", "Fedora CoreOS stream")
 	flag.StringVar(&isoPath, "iso", "", "use this downloaded live ISO instead of fetching one")
@@ -105,6 +108,18 @@ func main() {
 		}
 	}
 	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
+	if b.TLS == "" {
+		b.DNSProvider = prompt(ask, "DNS-Anbieter mit API für echte Zertifikate (desec, cloudflare, hetzner, …; die Zone der Domain muss dort liegen; leer = Caddys eigene CA, nur für einen Laptop-Versuch)", b.DNSProvider, "", nil)
+		if b.DNSProvider != "" {
+			b.DNSToken = prompt(ask, "API-Token des DNS-Anbieters", b.DNSToken, "", nil)
+			if b.DNSToken == "" {
+				die("ohne Token kein DNS-01: --dns-token oder LAIB_DNS_TOKEN")
+			}
+		} else {
+			b.TLS = "internal"
+			fmt.Fprintln(os.Stderr, "Hinweis: ohne DNS-Anbieter signiert Caddy selbst (tls: internal); Handys und ihre Widgets vertrauen dem nicht (#45)")
+		}
+	}
 	if ask && !b.Reinstall {
 		b.Reinstall = yesno("Soll dieser Stick eine schon installierte Box neu aufsetzen? (Die Datenplatte bleibt. Ohne Ja tut ein vergessener Stick nichts.)", false)
 	}
@@ -169,7 +184,8 @@ func main() {
 	}
 	fmt.Println()
 	fmt.Println("\nStick geschrieben. Box vom Stick booten: sie installiert Fedora CoreOS auf die kleinste")
-	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`.")
+	fmt.Println("interne Platte, startet neu und holt sich Laib. Danach: ssh core@" + b.Hostname + " und `laib status`,")
+	fmt.Println("dann `laib recovery-sheet`: die eine Seite, die nach einem Plattenverlust alles zurückholt — ausdrucken.")
 }
 
 // probe tells whether a URL answers from this laptop: the box will sit on

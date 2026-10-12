@@ -206,6 +206,9 @@ type OIDC struct {
 type DataPath struct {
 	Path   string `yaml:"path"`
 	Backup *bool  `yaml:"backup"`
+	// Quiesce: the service is stopped while this path is snapshotted (a
+	// database copied live is not a backup, #40): stop, snapshot, start.
+	Quiesce bool `yaml:"quiesce"`
 }
 
 // Health is what apply verifies.
