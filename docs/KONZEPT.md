@@ -158,7 +158,9 @@ are not the plan. The path is `docs/ZIELBILD.md`.
 
 **A wish on the road.** You write the Bote: "Paperless für die Familie,
 nur intern." It knows the template exists, proposes with `--add` as
-`bote`, and sends you the card. You answer "gib #17 frei"; your number is
+`bote`, and sends you the card. (A wish with no template behind it goes
+through `laib wish` instead: a GitHub issue with the `wunsch` label that a
+person cuts into a ticket, #56.) You answer "gib #17 frei"; your number is
 you; Laib merges, applies, verifies, the hook creates the admin user, the
 journal is green, the Bote writes "Läuft unter paperless.deinedomain, SSO
 ist drauf."

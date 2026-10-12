@@ -405,10 +405,17 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
 		return fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: p})
-	if env.json {
-		return emit(env, map[string]string{"file": p})
+	// with an intake the bundle becomes a ticket something reads (#56)
+	detail := p
+	if url, ok, err := githubIssue(ctx, env, st, "Eskalation "+svc.Name+": "+tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+		detail = p + " (Intake rot: " + err.Error() + ")"
+	} else if ok {
+		detail = url + " (" + p + ")"
 	}
-	fmt.Println("eskaliert:", p)
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: detail})
+	if env.json {
+		return emit(env, map[string]string{"file": p, "issue": strings.TrimSuffix(strings.Split(detail, " (")[0], p)})
+	}
+	fmt.Println("eskaliert:", detail)
 	return exitOK
 }

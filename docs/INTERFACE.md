@@ -14,7 +14,8 @@ laib read <service> <path>           a file in the service's data paths, secrets
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib plan [service]                  render state → diff against the box (files + units)
