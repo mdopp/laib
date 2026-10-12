@@ -240,6 +240,26 @@ storage:
           mount_array "$md"
           echo "DEVICE=$md UUID=$uuid MEMBERS=1" > "$REC"
           log "done: $md, array $uuid, one member"
+    - path: /usr/local/bin/laib-boot-order.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          # Every boot on EFI (#33): the entry this box booted from goes first and USB
+          # entries are switched off, so a stick left in is not booted again. If the
+          # firmware boots it anyway, the live system refuses an installed box.
+          set -euo pipefail
+          command -v efibootmgr >/dev/null || { echo "laib-boot-order: no efibootmgr"; exit 0; }
+          cur=$(efibootmgr | sed -n 's/^BootCurrent: *//p')
+          [[ -n "$cur" ]] || { echo "laib-boot-order: no BootCurrent"; exit 0; }
+          order=$(efibootmgr | sed -n 's/^BootOrder: *//p')
+          rest=$(tr ',' '\n' <<<"$order" | grep -vix "$cur" | paste -sd, - || true)
+          efibootmgr -q -o "$cur${rest:+,$rest}"
+          for e in $(efibootmgr -v | grep -iE '^Boot[0-9a-f]{4}\*.*(usb|removable)' | grep -oiP '^Boot\K[0-9a-f]{4}' || true); do
+            [[ "${e,,}" == "${cur,,}" ]] && continue
+            efibootmgr -q -b "$e" -A && echo "laib-boot-order: USB entry Boot$e switched off"
+          done
+          echo "laib-boot-order: Boot$cur first"
     # rootless podman keeps its images on the data disk (ServiceBay #1494): the
     # Kraftwerk's images are big; without a data disk this is still the OS disk.
     - path: /var/home/core/.config/containers/storage.conf
@@ -312,6 +332,19 @@ systemd:
         ExecStart=/usr/local/bin/laib-data-disk.sh
         RemainAfterExit=yes
         StandardOutput=journal+console
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: laib-boot-order.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Laib: this disk first in the EFI boot order, USB entries off (#33)
+        ConditionPathExists=/sys/firmware/efi
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/laib-boot-order.sh
 
         [Install]
         WantedBy=multi-user.target

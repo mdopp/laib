@@ -36,6 +36,7 @@ func main() {
 	flag.StringVar(&sshKeyPath, "ssh-key", "", "public key file for the core user")
 	flag.StringVar(&password, "password", "", "console password for core (empty = none)")
 	flag.BoolVar(&b.GPU, "gpu", false, "the box has a GPU and runs llama itself")
+	flag.BoolVar(&b.Reinstall, "reinstall", false, "this stick may reinstall a box that is already installed (the data disk is kept); without it, a stick left in an installed box does nothing")
 	flag.BoolVar(&noGPU, "no-gpu", false, "no GPU: a remote model answers (--model-url)")
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
@@ -104,6 +105,9 @@ func main() {
 		}
 	}
 	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
+	if ask && !b.Reinstall {
+		b.Reinstall = yesno("Soll dieser Stick eine schon installierte Box neu aufsetzen? (Die Datenplatte bleibt. Ohne Ja tut ein vergessener Stick nichts.)", false)
+	}
 
 	dest, err := stick.DestIgnition(b)
 	if err != nil {
@@ -114,7 +118,7 @@ func main() {
 		fmt.Println()
 		return
 	}
-	live, err := stick.LiveIgnition(dest, b.Hostname)
+	live, err := stick.LiveIgnition(dest, b.Hostname, b.Reinstall)
 	if err != nil {
 		die(err.Error())
 	}
