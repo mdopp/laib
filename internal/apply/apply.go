@@ -60,12 +60,19 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
-			// forgets it, and a running container would keep running unmanaged
+			// forgets it, and a running container would keep running unmanaged;
+			// a host unit is disabled too, or it is back on the next boot (#41)
 			if unit := unitOfFile(c.Path); unit != "" {
 				sysd.Stop(ctx, unit)
+				if strings.HasPrefix(c.Path, "systemd/") {
+					sysd.Run(ctx, "systemctl", "--user", "disable", unit)
+				}
 			}
 			if err := os.Remove(c.Target); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return res, err
+			}
+			if strings.HasPrefix(c.Path, "quadlet/") {
+				os.Remove(filepath.Dir(c.Target)) // the folder, once empty
 			}
 			res.Written = append(res.Written, c.Target+" (removed)")
 			continue
@@ -74,6 +81,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			return res, err
 		}
 		res.Written = append(res.Written, c.Target)
+	}
+
+	// the manifest: what laib put on the box this time (#41)
+	var managed []string
+	for k := range p.Output {
+		managed = append(managed, plan.Target(paths, k))
+	}
+	if err := plan.WriteManifest(paths, managed); err != nil {
+		return res, fmt.Errorf("manifest: %w", err)
 	}
 
 	// The declared data paths exist before any unit starts: podman refuses a
@@ -152,7 +168,14 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	// Verify what changed; with no change, the scoped service or everything.
-	targets := p.Services
+	// A service the plan only deleted (a rollback, a remove) is gone from the
+	// state: nothing to verify, no hook to run (#41).
+	var targets []string
+	for _, name := range p.Services {
+		if _, ok := st.Services[name]; ok {
+			targets = append(targets, name)
+		}
+	}
 	if len(targets) == 0 {
 		if p.Only != "" {
 			targets = []string{p.Only}
@@ -168,7 +191,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			redByService[c.Service] = true
 		}
 	}
-	for _, name := range p.Services {
+	for _, name := range targets {
 		if redByService[name] {
 			continue
 		}

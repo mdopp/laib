@@ -192,3 +192,20 @@ clears it after verify; the next apply or converge restarts and verifies
 them even when the file diff is clean. Restart-only converge runs are
 journaled green with the units and count against the budget of three per
 hour.
+
+### Rollback by proposal, stale proposals, the manifest (#41)
+
+`laib rollback #17` takes a freed proposal back: the approve merge is
+reverted (`-m 1`) without touching `secrets.age` — services that stay keep
+the secrets their data was made with, services that leave the state lose
+theirs — and one apply follows. The Box page offers it as „Zurücknehmen“
+next to the last five freed proposals. `laib rollback <commit>` validates
+the argument (`git rev-parse --verify --end-of-options`) and reverts a
+merge commit with `-m 1`. An approve merges in a temporary worktree: a
+conflict never reaches `main`, the merged result must load and render, and
+a proposal that fails either way is `stale` with a reason („veraltet — neu
+vorschlagen“). Apply records every file it put on the box in
+`<home>/managed.json`; plan deletes — and for a unit stops and disables —
+whatever the manifest has but render no longer produces, so a removed
+service, a disabled operator or a removed llama does not keep running.
+`laib operator disable` also revokes the ops tokens.
