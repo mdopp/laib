@@ -257,8 +257,9 @@ jobs:
                 printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
                 $L add probe
                 sudo nft list table inet laib | grep -q 8080 || { echo "8080 is not in the ruleset"; exit 1; }
-                for i in $(seq 1 20); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
-                curl -fsS -o /dev/null http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
+                # any HTTP answer is an answer (busybox httpd says 404 for / without an index); only no connection fails
+                for i in $(seq 1 20); do curl -sS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+                curl -sS -o /dev/null -w "probe on loopback: HTTP %{http_code}\n" http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
           rc=$(probe); echo "probe with the ruleset: curl rc $rc"; [ "$rc" = 28 ] || { echo "a lan: false port answered through the NIC"; exit 1; }
           $SSH 'sudo nft delete table inet laib'
           rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
