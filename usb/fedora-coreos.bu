@@ -187,6 +187,7 @@ storage:
           LAIB_MODEL_LEASE=${MODEL_LEASE}
           LAIB_GPU=${GPU}
           LAIB_GH_TOKEN=${GH_TOKEN}
+          LAIB_SOURCE=${SOURCE}
     - path: /usr/local/bin/laib-firstboot.sh
       mode: 0755
       contents:
@@ -197,10 +198,16 @@ storage:
           set -a; . /etc/laib/firstboot.env; set +a
           [ -f /var/opt/laib/laib ] && exit 0
           for i in $(seq 1 60); do curl -fsS https://api.github.com >/dev/null 2>&1 && break; sleep 5; done
-          auth=(); [ -n "${LAIB_GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $LAIB_GH_TOKEN")
-          curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github.raw" \
-            https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -o /tmp/install-box.sh
           flags=(--domain "$LAIB_DOMAIN")
+          if [ -n "${LAIB_SOURCE:-}" ]; then
+            # one build served over HTTP (the VM job boots the commit under test, #38)
+            curl -fsSL "$LAIB_SOURCE/install-box.sh" -o /tmp/install-box.sh
+            flags+=(--source "$LAIB_SOURCE")
+          else
+            auth=(); [ -n "${LAIB_GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $LAIB_GH_TOKEN")
+            curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github.raw" \
+              https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -o /tmp/install-box.sh
+          fi
           [ -n "${LAIB_LAN_IP:-}" ] && flags+=(--lan-ip "$LAIB_LAN_IP")
           [ -n "${LAIB_MODEL_URL:-}" ] && flags+=(--model-url "$LAIB_MODEL_URL")
           [ -n "${LAIB_MODEL_LEASE:-}" ] && flags+=(--model-lease "$LAIB_MODEL_LEASE")

@@ -1,19 +1,32 @@
 # The first install, end to end, in a VM on the runner: laib-stick builds the
 # ISO, QEMU/KVM boots it, the live system installs Fedora CoreOS to a virtual
-# disk and reboots, the first boot fetches install-box.sh with the job's
-# token and runs `laib init`; then we SSH in and do a real `laib add`.
+# disk and reboots, and the first boot installs THIS commit: install-box.sh and
+# the binaries are served from the runner (QEMU's user net reaches it as
+# 10.0.2.2), so a change to `laib init`, the first-boot script or install-box.sh
+# is tested before it ships (#38). Then we SSH in and do real work on the box.
 # This is the closest thing to the NUC without the NUC. BIOS boot (the EFI
 # boot-order step is the NUC's job; post-install.sh tolerates no EFI).
+#
+# Every remote script runs under `set -euo pipefail`, and every probe is its own
+# command that can fail: a step that passes has checked what its name says.
 name: vm-install
 on:
   push:
     branches: [main]
     paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, templates/**, .github/workflows/vm-install.yml]
+  pull_request:
+    # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
+    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, .github/workflows/vm-install.yml]
   workflow_dispatch:
+concurrency:
+  group: vm-install-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   install:
     runs-on: ubuntu-latest
     timeout-minutes: 90   # install, mirror sync and a reinstall take ~60 min on the runner
+    env:
+      SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -23,14 +36,20 @@ jobs:
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
           test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
-      - name: the stick
+      - name: this commit's build, served to the box; the stick
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
           go build -o laib-stick ./cmd/laib-stick
-          # the box installs the latest release on first boot; the apply step
-          # below then swaps in this commit's binaries so every push is tested
-          for b in laib laib-operator laib-lease; do CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o bin-$b ./cmd/$b; done
-          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --out laib-vm.iso
+          # the release's asset names, plus VERSION, plus install-box.sh: what --source expects
+          mkdir -p dist
+          for b in laib laib-operator laib-lease; do CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o dist/$b-linux-amd64 ./cmd/$b; done
+          cp scripts/install-box.sh dist/install-box.sh
+          (cd dist && sha256sum laib-*-amd64 > SHA256SUMS && cat SHA256SUMS)
+          printf '%s' "${GITHUB_SHA::7}" > dist/VERSION
+          nohup python3 -m http.server 8000 --bind 127.0.0.1 --directory dist > http.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
+          echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
+          ./laib-stick --yes --hostname vm --domain vm.test --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --out laib-vm.iso
           ls -la laib-vm.iso
       - name: cross-check with coreos-installer, serial console for the log
         run: |
@@ -38,7 +57,7 @@ jobs:
           podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso ignition show laib-vm.iso > live.ign
           python3 -c "import json; d=json.load(open('live.ign')); print('units:', [u['name'] for u in d['systemd']['units']]); print('files:', [f['path'] for f in d['storage']['files']])"
           podman run --rm -v "$PWD:/data:z" -w /data $CI_IMG iso kargs modify -a console=ttyS0,115200n8 laib-vm.iso
-      - name: boot, install, reboot, first boot
+      - name: boot, install, reboot, first boot — of this commit
         run: |
           # three disks: the OS goes to the smallest (pre-install), the largest
           # becomes the data RAID1 with one member (laib-data-disk), the third
@@ -70,22 +89,24 @@ jobs:
             [ $i -eq 120 ] && { echo "laib never became ready"; exit 1; }
             sleep 10
           done
-          $SSH 'systemctl status laib-firstboot --no-pager; /var/opt/laib/laib version; /var/opt/laib/laib status; /var/opt/laib/laib plan; /var/opt/laib/laib diag; cat /etc/laib/firstboot.env 2>/dev/null && { echo "firstboot.env still on disk"; exit 1; } || true'
+          $SSH 'set -euo pipefail
+                systemctl status laib-firstboot --no-pager | head -5 || true
+                v=$(/var/opt/laib/laib version); echo "$v"
+                [ "$v" = "laib '"${GITHUB_SHA::7}"'" ] || { echo "first boot did not install this commit"; exit 1; }
+                if [ -e /etc/laib/firstboot.env ]; then echo "firstboot.env still on disk"; exit 1; fi
+                /var/opt/laib/laib status || true; /var/opt/laib/laib plan || true; /var/opt/laib/laib diag || true'
       - name: the data disk — RAID1 with one member on /mnt/data, then the mirror joins
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          # this commit's binaries replace the release's (installed on first boot), so laib disk / add / backup test main
-          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
-          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
-          $SSH 'set -e
+          $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -12
                 cat /proc/mdstat; cat /etc/laib/data-disk
-                findmnt -n -o SOURCE,FSTYPE /mnt/data | grep -q "md.* xfs" || { echo "/mnt/data is not the RAID"; exit 1; }
+                grep -q "md.* xfs" <<<"$(findmnt -n -o SOURCE,FSTYPE /mnt/data)" || { echo "/mnt/data is not the RAID"; exit 1; }
                 grep -q "\[U_\]" /proc/mdstat || { echo "array should be degraded by design"; exit 1; }
                 lsblk -ndo NAME,SIZE /dev/vda /dev/vdb /dev/vdc
                 echo "laib data disk marker $(date -u +%s)" | tee /mnt/data/laib/vm-marker
                 # the mirror: the untouched 9G disk (no partitions) joins through laib disk add, resync to [UU]
-                spare=""; for d in /dev/vd?; do [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ] && spare=$d; done
+                spare=""; for d in /dev/vd?; do if [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ]; then spare=$d; fi; done
                 echo "spare: $spare"; test -n "$spare"
                 export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 $L disk status
@@ -93,7 +114,7 @@ jobs:
                 for i in $(seq 1 120); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
                 $L disk status; $L diag || true
                 grep -q "\[UU\]" /proc/mdstat || { echo "mirror did not sync"; exit 1; }
-                cat /etc/laib/data-disk | grep -q MEMBERS=2
+                grep -q MEMBERS=2 /etc/laib/data-disk
                 sudo sync'
           df -h / | tail -1; ls -la *.qcow2
       - name: reinstall from the stick — the data disk survives
@@ -102,69 +123,89 @@ jobs:
           ./vm.sh once=d
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
-            if $SSH 'test -f /var/opt/laib/laib && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled and ready after $((i*10)) s"; break; fi
+            if $SSH 'systemctl is-active --quiet laib-firstboot.service && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled and ready after $((i*10)) s"; break; fi
             [ $i -eq 120 ] && { echo "laib never became ready after the reinstall"; exit 1; }
             sleep 10
           done
-          $SSH 'set -e; journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
-                findmnt -n -o SOURCE,FSTYPE /mnt/data | grep -q "md.* xfs" || { echo "/mnt/data is not the RAID after reinstall"; exit 1; }
-                test -f /mnt/data/laib/vm-marker && cat /mnt/data/laib/vm-marker || { echo "marker lost: the data disk was recreated"; exit 1; }
+          $SSH 'set -euo pipefail
+                journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
+                v=$(/var/opt/laib/laib version); echo "$v"
+                [ "$v" = "laib '"${GITHUB_SHA::7}"'" ] || { echo "the reinstall did not install this commit"; exit 1; }
+                grep -q "md.* xfs" <<<"$(findmnt -n -o SOURCE,FSTYPE /mnt/data)" || { echo "/mnt/data is not the RAID after reinstall"; exit 1; }
+                test -f /mnt/data/laib/vm-marker || { echo "marker lost: the data disk was recreated"; exit 1; }
+                cat /mnt/data/laib/vm-marker
                 grep -q "\[UU\]" /proc/mdstat || { echo "mirror not assembled after reinstall"; exit 1; }'
       - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          # the reinstall brought the release's binaries back: this commit's again
-          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 bin-laib bin-laib-operator bin-laib-lease core@127.0.0.1:/tmp/
-          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2; /var/opt/laib/laib version'
-          # the job token may read this repo's packages; a box uses a PAT with packages:read or public packages
-          $SSH "printf '%s' '${{ github.token }}' | podman login ghcr.io -u '${{ github.actor }}' --password-stdin && podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null && echo 'image pulled'"
-          $SSH 'export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                set -e
+          # pre-pull with the box's own login (install-box.sh logged in with the stick's token), so
+          # the 90 s unit start does not include the pull; no login from the runner here
+          $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 sysctl -n net.ipv4.ip_unprivileged_port_start
-                echo "tls: internal" >> /mnt/data/laib/state/box.yml
+                grep -q "^tls:" /mnt/data/laib/state/box.yml || echo "tls: internal" >> /mnt/data/laib/state/box.yml
                 $L add caddy
                 $L status
                 podman ps
-                for i in $(seq 1 30); do code=$(curl -sk --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ -n "$code" ] && [ "$code" != 000 ] && break; sleep 2; done
-                echo "https://laib.vm.test -> HTTP $code (Caddy, own CA)"
-                echo "$code" | grep -Eq "^(200|30[0-9]|40[13])$"
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
+                for i in $(seq 1 30); do [ -s "$root" ] && break; sleep 2; done
+                test -s "$root" || { echo "no local root CA at $root"; exit 1; }
+                # --cacert replaces only the bundle file; an empty --capath keeps the system roots out too
+                none=$(mktemp -d)
+                code=000
+                for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ "$code" = 200 ] && break; sleep 2; done
+                echo "https://laib.vm.test -> HTTP $code, certificate verified against the local Caddy root"
+                [ "$code" = 200 ]
                 $L journal --since 1h'
-      - name: backup and restore — restic against a real repo
+      - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -e; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                echo "backup:" >> /mnt/data/laib/state/box.yml; echo "  repo: /var/home/core/restic-repo" >> /mnt/data/laib/state/box.yml
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                # box.yml is rewritten by laib add (yaml.Marshal, four-space indent): read repo: inside backup: at any indent
+                repo=$(sed -n "/^backup:/,/^[^ #]/s/^ *repo: *\([^ #]*\).*/\1/p" /mnt/data/laib/state/box.yml)
+                echo "backup.repo from box.yml: $repo"; test -n "$repo"
                 echo "caddy marker before backup" > /mnt/data/stacks/caddy/data/vm-marker
                 $L backup
+                test -f "$repo/config" || { echo "no restic repo at $repo"; exit 1; }
                 rm /mnt/data/stacks/caddy/data/vm-marker
                 $L restore latest caddy
-                cat /mnt/data/stacks/caddy/data/vm-marker | grep -q "before backup"
-                $L journal --since 1h | grep -E "backup|restore"'
-      - name: update path — install-box.sh again, a pinned version, then latest
+                grep -q "before backup" /mnt/data/stacks/caddy/data/vm-marker
+                $L journal --since 1h > /tmp/journal.txt
+                grep -E "backup|restore" /tmp/journal.txt'
+      - name: update path — a pinned release, the latest release, then this commit again
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -e; export LAIB_GH_TOKEN="${{ github.token }}"
-                fetch() { curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh; }
-                fetch | bash -s -- --version v0.3.2 | tail -3
-                /var/opt/laib/laib version | grep -q v0.3.2
-                fetch | bash -s -- | tail -3
-                /var/opt/laib/laib version | grep -qv v0.3.2
-                curl -fsS http://127.0.0.1:5900/ready | grep -q bereit
+          $SSH 'set -euo pipefail; export LAIB_GH_TOKEN="${{ github.token }}" SRC="${{ env.SRC }}"
+                curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh   # this commit'"'"'s installer, against real releases
+                bash /tmp/install-box.sh --version v0.3.2 > /tmp/ib1.log 2>&1 || { tail -20 /tmp/ib1.log; exit 1; }
+                v=$(/var/opt/laib/laib version); echo "pinned: $v"; [ "$v" = "laib v0.3.2" ]
+                bash /tmp/install-box.sh > /tmp/ib2.log 2>&1 || { tail -20 /tmp/ib2.log; exit 1; }
+                v=$(/var/opt/laib/laib version); echo "latest: $v"
+                case "$v" in "laib v"*) ;; *) echo "latest is not a release version"; exit 1;; esac
+                [ "$v" != "laib v0.3.2" ]
+                bash /tmp/install-box.sh --source "$SRC" > /tmp/ib3.log 2>&1 || { tail -20 /tmp/ib3.log; exit 1; }
+                v=$(/var/opt/laib/laib version); echo "this commit: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]
+                curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json; cat /tmp/ready.json; echo
+                grep -q bereit /tmp/ready.json
                 systemctl --user is-active laib.service caddy.service'
       - name: remove — units stopped, files gone, data kept
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'for b in laib laib-operator laib-lease; do sudo install -m 0755 /tmp/bin-$b /var/opt/laib/$b; done; systemctl --user restart laib.service; sleep 2'
-          $SSH 'set -e; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 sed -i -E "s/proxy: caddy/proxy: \"\"/" /mnt/data/laib/state/box.yml; grep -n proxy /mnt/data/laib/state/box.yml   # caddy holds the proxy role; free it first
                 $L remove caddy
-                sleep 2; podman ps --format "{{.Names}}" | grep -q caddy && { echo "caddy still running"; exit 1; }
-                systemctl --user is-active caddy.service && exit 1 || true
-                test -f /mnt/data/stacks/caddy/data/vm-marker && echo "data kept"
+                sleep 2
+                if podman ps --format "{{.Names}}" | grep -q caddy; then echo "caddy still running"; exit 1; fi
+                if systemctl --user is-active --quiet caddy.service; then echo "caddy.service still active"; exit 1; fi
+                if [ -e ~/.config/containers/systemd/caddy ]; then echo "Quadlet files left in ~/.config/containers/systemd/caddy"; exit 1; fi
+                if [ -e /mnt/data/laib/state/services/caddy ]; then echo "caddy is still in the state"; exit 1; fi
+                test -f /mnt/data/stacks/caddy/data/vm-marker || { echo "the data was not kept"; exit 1; }
+                echo "units stopped, files gone, data kept"
                 $L status; $L diag || true'
       - name: logs
         if: always()
         run: |
           echo "--- serial"; tail -c 20000 serial.log || true
+          echo "--- build server"; tail -20 http.log || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true

@@ -40,6 +40,7 @@ func main() {
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
 	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token while mdopp/laib is private")
+	flag.StringVar(&b.Source, "source", "", "tests only: base URL serving install-box.sh and one build's binaries, instead of the latest release (the VM job)")
 	flag.StringVar(&streamName, "stream", "stable", "Fedora CoreOS stream")
 	flag.StringVar(&isoPath, "iso", "", "use this downloaded live ISO instead of fetching one")
 	flag.StringVar(&out, "out", "", "where to write the customised ISO (default laib-<hostname>.iso)")
