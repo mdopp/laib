@@ -73,3 +73,33 @@ func TestNoHitsIsAnHonestSentence(t *testing.T) {
 		t.Fatal("empty question accepted")
 	}
 }
+
+// #54 (1): Frage is a tool the Bote can call — the same answer as /ask,
+// served as MCP on /mcp so Hermes lists it like laib and automat.
+func TestFrageIsAnMCPTool(t *testing.T) {
+	s, m := fakes(t, []Hit{{Title: "1LIVE", URL: "https://www1.wdr.de/radio/1live/", Content: "1LIVE ist das junge Radio des WDR."}})
+	c := Config{SearxURL: s, ModelURL: m + "/v1", ModelName: "test"}
+	srv := httptest.NewServer(Handler(c))
+	defer srv.Close()
+	call := func(body string) map[string]any {
+		resp, err := http.Post(srv.URL+"/mcp", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		json.NewDecoder(resp.Body).Decode(&out)
+		return out
+	}
+	list := call(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	res, _ := list["result"].(map[string]any)
+	tools, _ := res["tools"].([]any)
+	if len(tools) != 1 || tools[0].(map[string]any)["name"] != "frage" {
+		t.Fatalf("one tool, frage: %v", list)
+	}
+	out := call(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"frage","arguments":{"frage":"was ist einslive"}}}`)
+	text, _ := json.Marshal(out["result"])
+	if !strings.Contains(string(text), "WDR") || !strings.Contains(string(text), "www1.wdr.de") {
+		t.Fatalf("the answer with its sources: %s", text)
+	}
+}

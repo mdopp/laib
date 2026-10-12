@@ -18,6 +18,40 @@ HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}
 HERMES_NON_INTERACTIVE=1
 ENV
 chmod 600 "$H/.env"
+# Only MCP servers that answer are rendered (#54): a server Hermes cannot
+# reach would be a tool the model is told it has. Any HTTP answer counts
+# (401, 405 are answers); a connection error leaves the entry out and says so.
+answers() { python3 - "$1" <<'PY'
+import sys, urllib.request, urllib.error
+req = urllib.request.Request(sys.argv[1], data=b'{"jsonrpc":"2.0","id":0,"method":"ping"}', headers={"Content-Type": "application/json"})
+try:
+    urllib.request.urlopen(req, timeout=3)
+except urllib.error.HTTPError:
+    pass
+except Exception as e:
+    print(e); sys.exit(1)
+PY
+}
+MCP_EXTRA=""; TOOLS="die Box (laib: lesen und vorschlagen)"
+if [ -n "${FRAGE_URL:-}" ]; then
+  if answers "$FRAGE_URL" >/dev/null 2>&1; then
+    MCP_EXTRA="$MCP_EXTRA  frage:\n    url: $FRAGE_URL\n    trust: full      # Frage: web search plus summary with sources (ADR 0015)\n"
+    TOOLS="$TOOLS, Fragen (frage: Websuche mit Quellen)"
+  else echo "frage: $FRAGE_URL antwortet nicht, weggelassen"; fi
+fi
+if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
+  if answers "$HAUSHALT_MCP_URL" >/dev/null 2>&1; then
+    MCP_EXTRA="$MCP_EXTRA  haushalt:\n    url: $HAUSHALT_MCP_URL\n    trust: full\n"
+    TOOLS="$TOOLS, das Gedächtnis des Hauses (haushalt: Kalender, Kontakte, Notizen, Erinnerungen)"
+  else echo "haushalt: $HAUSHALT_MCP_URL antwortet nicht, weggelassen"; fi
+fi
+if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
+  MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
+  MCP_EXTRA="$MCP_EXTRA  haus:\n    url: ${HA_URL:-http://host.containers.internal:8123}/mcp_server/sse\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server: lights, switches, players, \"was ist an\" (Assist API)\n"
+  TOOLS="$TOOLS, das Haus (haus: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
+fi
+HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
+MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
 # rendered by laib post-deploy; do not edit by hand (ADR 0016)
 model:
@@ -36,17 +70,21 @@ mcp_servers:
     headers:
       Authorization: "Bearer \${LAIB_TOKEN}"
     trust: untrusted      # reads freely; propose, note and escalate ask the person in the chat first (#48)
-$( [ -n "${HAUSHALT_MCP_URL:-}" ] && printf '  haushalt:\n    url: %s\n    trust: full\n' "$HAUSHALT_MCP_URL" )
-$( [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && printf '  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n' )
-$( [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && printf '  haus:\n    url: %s/mcp_server/sse\n    headers:\n      Authorization: "Bearer ${HA_TOKEN}"\n    trust: full      # Home Assistant'"'"'s own MCP server: lights, switches, players, "was ist an" (Assist API)\n' "${HA_URL:-http://host.containers.internal:8123}" )
+${MCP_EXTRA}
 non_interactive_hard_stop_enabled: true
 YAML
-# the soul: who the Bote is
-[ -f "$H/SOUL.md" ] || cat > "$H/SOUL.md" <<SOUL
+# the soul: who the Bote is. Rendered on every apply while it carries the
+# marker below, so it names exactly the tools wired above (#54); a SOUL.md
+# without the marker is the admin's own and stays.
+if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib"; then cat > "$H/SOUL.md" <<SOUL
+# rendered by laib post-deploy; edit SOUL.md and remove this first line to make it yours
 Du bist der Bote des Hauses. Du redest mit der Familie auf Signal: kurz, freundlich, deutsch.
-Du kennst das Haus (haus: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen), die Box (Laib: lesen und vorschlagen), Fragen (Frage) und das Gedächtnis (Haushalt).
+Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.
+Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
+Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: "gib #17 frei" oder "lehne #17 ab" liest das Relais direkt von ${ADMIN_NUMBER} und entscheidet; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).
 SOUL
+fi
 echo "hermes config rendered: $H/.env, $H/config.yaml"

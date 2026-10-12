@@ -7,10 +7,14 @@ the signal to build a lean Bote instead (ADR 0016 §2).
 
 ## Once, by hand
 
-1. Link the Bote's phone number: `laib exec bote --container systemd-bote-signal -- signal-cli link -n Bote`
-   and scan the QR code in Signal → Linked Devices on the phone that owns
-   that number (a second SIM or a spare phone; the Bote should not share
-   the admin's own number).
+1. Link the Bote's phone number: open the Box page (`laib.<domain>`) →
+   **Bote verbinden (QR)** and scan it in Signal → Gekoppelte Geräte on the
+   phone that owns that number (a second SIM or a spare phone; the Bote
+   should not share the admin's own number). The page fetches the QR from
+   signal-cli's REST API (`GET /v1/qrcodelink?device_name=Bote` on the
+   service's first declared port); from the box itself
+   `curl -o qr.png http://127.0.0.1:8080/v1/qrcodelink?device_name=Bote`
+   does the same (#54).
 2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`: read, propose, note, escalate)
    and `BOTE_APPROVER_TOKEN` (hand `approver`: approve, reject, inbox,
    status, note — nothing else) are minted on `laib add bote`. **Hermes
@@ -42,6 +46,33 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    every write asks you on Signal first. Same HA token as the `haus` tool.
    Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
    automation_loeschen, automation_schalten.
+
+## Tools: only what answers, and a budget (#54)
+
+The hook probes every MCP URL at apply time (any HTTP answer counts, a
+connection error does not) and renders only the servers that answered,
+printing the ones it left out (`frage: … antwortet nicht, weggelassen`).
+The SOUL is rendered from the same list, so the model is never told about
+a tool it does not have; remove the first line of `SOUL.md` to make the
+file yours and stop the hook from rewriting it.
+
+| Server | When | Tools |
+|---|---|---|
+| `laib` | always | 16 (hand `bote`: read, propose, note, escalate) |
+| `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
+| `haushalt` | `HAUSHALT_MCP_URL` set **and** answers — Haus does not serve it yet (ADR 0017), so leave it empty | — |
+| `automat` + `haus` | `BOTE_HA_TOKEN` set | 6 + Home Assistant's Assist tools (depends on the exposed domains) |
+
+A normal conversation without the HA token sees 17 tools; with it, 23 plus
+HA's. Hermes' `mcp_servers` has no per-server tool allowlist in the
+verified config (2026-10), so the HA set is bounded only by what you
+expose in Home Assistant (Settings → Voice assistants → Expose) — keep it
+to the domains the family touches. The SOUL tells the model to take
+`/model denken` for long multi-tool tasks (#53).
+
+**Memory:** nothing is configured. The SOUL says so in plain words — the
+Bote remembers nothing beyond a conversation and says so when asked to —
+and points to the Haushalt (calendar, notes) once Haus serves it.
 
 ## What is verified and what is not
 

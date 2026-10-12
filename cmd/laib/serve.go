@@ -106,8 +106,31 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if day, text := lastReport(env); day != "" {
 			fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(day), html.EscapeString(text))
 		}
-		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`)
+		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a>`)
+		if boteSignalBase(st) != "" {
+			b.WriteString(` · <a href="/bote/link">Bote verbinden (QR)</a>`)
+		}
+		b.WriteString(`</p>`)
 		page(w, "Status", b.String())
+	}))
+	// the Bote's link QR from signal-cli (#54): scan it in Signal → Gekoppelte Geräte
+	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
+		page(w, "Bote verbinden", `<h1>Bote verbinden</h1><p>Auf dem Telefon mit der Nummer des Boten: Signal → Einstellungen → Gekoppelte Geräte → Neues Gerät koppeln, dann diesen Code scannen. Der Code gilt einige Minuten; die Seite neu laden holt einen frischen.</p><p><img src="/bote/link.png" alt="QR zum Koppeln" width=320 height=320></p><p><a href="/">zurück</a></p>`)
+	}))
+	mux.HandleFunc("/bote/link.png", guard(func(w http.ResponseWriter, r *http.Request) {
+		st, err := loadState(env)
+		if err != nil || boteSignalBase(st) == "" {
+			http.Error(w, "kein Bote auf dieser Box", http.StatusNotFound)
+			return
+		}
+		png, err := signalLinkQR(r.Context(), boteSignalBase(st), "Bote")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(png)
 	}))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(inboxDir(env), true)

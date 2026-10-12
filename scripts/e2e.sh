@@ -235,6 +235,29 @@ grep -q "base_url: http://127.0.0.1:5977/v1" "$HOOKDIR/bote/hermes/config.yaml" 
 grep -q "trust: untrusted" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote's laib entry must be untrusted"
 grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin"
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
+# #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
+if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
+if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
+grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
+# a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
+python3 -c '
+import http.server, threading, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self): self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H); open(sys.argv[1], "w").write(str(s.server_port)); s.serve_forever()' "$WORK/frage.port" &
+FRAGE_PID=$!; sleep 0.5; FRAGE_PORT=$(cat "$WORK/frage.port")
+( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
+  SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  FRAGE_URL="http://127.0.0.1:$FRAGE_PORT/mcp" HAUSHALT_MCP_URL="http://127.0.0.1:1/mcp" ./post-deploy > "$WORK/bote-hook.out" ) || fail "bote hook with frage"
+kill $FRAGE_PID 2>/dev/null || true
+grep -q "frage:" "$HOOKDIR/bote/hermes/config.yaml" || fail "a Frage that answers is wired as an MCP server (#54)"
+grep -q "url: http://127.0.0.1:$FRAGE_PORT/mcp" "$HOOKDIR/bote/hermes/config.yaml" || fail "frage mcp url"
+if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Haushalt that does not answer must be left out (#54)"; fi
+grep -qi "haushalt.*antwortet nicht\|haushalt.*weggelassen" "$WORK/bote-hook.out" || fail "the hook names the server it left out"
+grep -q "Frage" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names Frage once it is wired"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
