@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/mdopp/laib/internal/apply"
 	"os"
 	"path/filepath"
 	"slices"
@@ -76,6 +77,14 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	ctx := context.Background()
 	env, data := testBox(t)
 	ran := filepath.Join(data, "ran-on-the-host")
+	// hooks run in the hooks image since #36, never on the host: record the runs
+	var hooks []string
+	realHook := apply.RunHook
+	t.Cleanup(func() { apply.RunHook = realHook })
+	apply.RunHook = func(_ context.Context, h apply.HookSpec) (string, error) {
+		hooks = append(hooks, h.Image+" "+strings.Join(h.Command, " "))
+		return "", nil
+	}
 	st, err := loadState(env)
 	if err != nil {
 		t.Fatal(err)
@@ -102,8 +111,8 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 			t.Fatalf("%s approving: exit %d, want %d and the reason: %s", hand, code, exitRefused, out)
 		}
 	}
-	if _, err := os.Stat(ran); err == nil {
-		t.Fatal("the script ran after a refused approval")
+	if _, err := os.Stat(ran); err == nil || len(hooks) != 0 {
+		t.Fatalf("the script ran after a refused approval: %v", hooks)
 	}
 	if p, _ := proposal.Get(inboxDir(env), open[0].ID); p.Status != "open" {
 		t.Fatalf("status %q after the refusals, want open", p.Status)
@@ -122,8 +131,11 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	if code := decide(ctx, &cliEnv{paths: env.paths, actor: "human:test"}, []string{id}, true); code != exitOK {
 		t.Fatalf("the human's approval: exit %d", code)
 	}
-	if _, err := os.Stat(ran); err != nil {
-		t.Fatal("the script the human approved did not run")
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("the script ran on the host: hooks run in the hooks image (#36)")
+	}
+	if len(hooks) != 1 || !strings.Contains(hooks[0], "laib-hooks") || !strings.HasSuffix(hooks[0], "services/whoami/post-deploy") {
+		t.Fatalf("the script the human approved must run once, in the hooks image: %v", hooks)
 	}
 }
 
