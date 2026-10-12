@@ -52,6 +52,14 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			h(w, r)
 		}
 	}
+	// boot-time convergence of the non-file state (#37): the ruleset
+	if loaded, err := ensureFirewall(ctx, env); err != nil {
+		fmt.Fprintln(os.Stderr, "laib serve: firewall:", err)
+	} else if loaded {
+		if st, err := loadState(env); err == nil {
+			record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpHandler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +178,25 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
 				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
 		}
+		// what was approved lately can be taken back (#41)
+		if all, err := proposal.List(inboxDir(env), false); err == nil {
+			n := 0
+			for _, p := range all {
+				if p.Status != "approved" || n >= 5 {
+					continue
+				}
+				if n == 0 {
+					b.WriteString("<h2>Zuletzt freigegeben</h2>")
+				}
+				n++
+				fmt.Fprintf(&b, "<p>#%d · %s · von %s · freigegeben von %s <form method=post action=/inbox/%d/rollback style=display:inline><button>Zurücknehmen</button></form></p>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), p.ID)
+			}
+			for _, p := range all {
+				if p.Status == "stale" {
+					fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+				}
+			}
+		}
 		b.WriteString("<p><a href=\"/\">Status</a> · <a href=\"/journal\">Journal</a></p>")
 		page(w, "Inbox", b.String())
 	}))
@@ -180,7 +207,12 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			actor = "human:web"
 		}
 		webEnv := &cliEnv{paths: env.paths, actor: actor}
-		code := decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+		var code int
+		if r.PathValue("decision") == "rollback" {
+			code = cmdRollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
+		} else {
+			code = decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+		}
 		if code != exitOK && code != exitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
 			return
@@ -207,6 +239,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

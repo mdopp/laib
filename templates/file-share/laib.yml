@@ -15,14 +15,24 @@ routes:
   - host: files
     port: 8088
     exposure: public
-    auth: one_factor
+    auth: none                     # File Browser logs in itself (#55); sync (Syncthing's GUI) stays behind Authelia
 secrets:
   - name: SAMBA_PASSWORD
 data:
   - path: ${DATA_DIR}/file-share/syncthing-config
   - path: ${DATA_DIR}/file-share/filebrowser
+  - path: ${DATA_DIR}/file-share/samba-private   # Samba's TDBs (the lint found it unmounted, #36)
+  - path: ${DATA_DIR}/file-share/data   # the share itself (the units mount it); backed up folder by folder below
+    backup: false
   - path: ${DATA_DIR}/file-share/data/notes
   - path: ${DATA_DIR}/file-share/data/documents
+  - path: ${DATA_DIR}/file-share/data/photos            # immich reads them (#36)
+  - path: ${DATA_DIR}/file-share/data/paperless-consume # paperless's inbox: transient
+    backup: false
+  - path: ${DATA_DIR}/file-share/data/audiobooks        # audiobookshelf; bulk
+    backup: false
+  - path: ${DATA_DIR}/file-share/data/podcasts          # audiobookshelf fetches them again
+    backup: false
   - path: ${DATA_DIR}/file-share/data/music
     backup: false                  # bulk: the mirror template's job, not the NAS repo
   - path: ${DATA_DIR}/file-share/data/movies

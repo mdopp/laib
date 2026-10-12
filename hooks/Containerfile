@@ -1,0 +1,7 @@
+# laib-hooks: where template hooks run (#36, ADR 0004 amended). Python with
+# the standard library, bcrypt for AdGuard's first user, bash, curl and
+# openssl — nothing of this lives on the host; Fedora CoreOS has no Python.
+FROM python:3.13-alpine
+RUN apk add --no-cache bash curl openssl ca-certificates && pip install --no-cache-dir bcrypt==4.3.0
+WORKDIR /laib/service
+ENTRYPOINT ["/bin/sh", "-c", "exec \"$@\"", "--"]

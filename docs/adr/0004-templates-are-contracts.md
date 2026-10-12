@@ -34,3 +34,21 @@ never reach the WLAN.
 - An agent builds a new service from upstream docs plus the lint output.
 - The irreducible part of a template is `laib.yml`; everything else is the
   upstream's own configuration, written as it is.
+
+## Amendment 2026-10-11 (#36): hooks run in an image, in two phases
+
+Fedora CoreOS has no Python, and a hook on the host is a shell on the
+host. Hooks therefore run in `ghcr.io/mdopp/laib-hooks` (Python with the
+standard library, bcrypt, bash, curl, openssl; `box.yml laib.hooksImage`
+overrides), on the host network, with the service folder and
+`/mnt/data/laib/render` read-only and the service's declared data paths
+read-write — all at their host paths, so a hook reads and writes exactly
+what it did before. Two phases: **`pre-start`** runs before the units
+start (configuration files, folders, keys — it may not assume the service
+is up; Authelia's `configuration.yml` and AdGuard's first `AdGuardHome.yaml`
+live here), **`post-deploy`** runs after a green verify and talks to the
+running service. A hook may print `laib-secret: NAME=value` and
+`laib-exec: <container> <command…>`; the latter Laib runs in one of the
+service's own containers — nothing else. `laib template lint` refuses a
+hook whose interpreter the image lacks and a `Volume=` source that is not a
+declared data path or a rendered file.

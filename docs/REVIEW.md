@@ -7,7 +7,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 
 | Repo | What | State |
 |---|---|---|
-| `mdopp/laib` (private) | the control plane: kernel, stick, operator, lease, Frage, Automat, 23 templates, docs, ADRs, CI | 92 commits, release v0.3.5, ci/boot/vm-install green |
+| `mdopp/laib` (private) | the control plane: kernel, stick, operator, lease, Frage, Automat, 22 templates, docs, ADRs, CI | release v0.3.5 (built by hand, #47); ci/boot green, vm-install green on the fix branches, not on HEAD |
 | `mdopp/haus` (private) | the family's surface: Box page, pairing, companion API for the Android widgets | 5 commits, ci green, image `ghcr.io/mdopp/haus` |
 | `mdopp/servicebay` | the predecessor, untouched, running on the Kraftwerk | reference only: `docs/COMPANION_APP.md`, `tools/sb/internal/build/assets/fedora-coreos.bu` (setup-raid) |
 | `mdopp/solarisbay`, `mdopp/solaris-android` | voice/portal today; to be deconstructed (#21) | untouched; the app's `data/SbApiClient.kt` pins the companion JSON shapes |
@@ -22,7 +22,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 | Frage | `cmd/frage`, `internal/frage` | SearXNG + summary, OpenAI-compatible ("was ist …") | unit tests; image built |
 | Automat | `cmd/automat`, `internal/automat`, `internal/mcpserver` | HA automations as MCP in the bote pod, writes behind the admin's confirmation | unit tests vs fake HA; image built |
 | Stick | `cmd/laib-stick`, `internal/stick`, `usb/` | cross-platform wizard: Butane in-process, ISO download + sha256, Ignition embed (coreos-installer format), dd / raw Windows write; first boot: data disk RAID1, firstboot → `install-box.sh` | VM: install, reboot, first boot, RAID, reinstall keeps data, caddy, backup/restore, update, remove |
-| Templates (23) | `templates/*` | laib.yml contract + Quadlet units + hooks: adguard, audiobookshelf, auth, beets, bote, caddy, esphome, file-share, frage, haus, home-assistant, immich, llama, media, mosquitto, music-assistant, paperless, radicale, stimme, vaultwarden, werkstatt, whoami (+ README) | lint + render; only caddy installed on the VM |
+| Templates (22) | `templates/*` | laib.yml contract + Quadlet units + hooks: adguard, audiobookshelf, auth, beets, bote, caddy, esphome, file-share, frage, haus, home-assistant, immich, llama, media, mosquitto, music-assistant, paperless, radicale, stimme, vaultwarden, werkstatt, whoami (+ README) | lint + render; only caddy installed on the VM |
 | Werkstatt | `werkstatt/` | dev image: pi + Claude Code, autoloop, laibctl | python unit tests; image built |
 | Docs | `docs/*.md`, `docs/adr/0001–0018` | KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, MIGRATION, DEKONSTRUKTION, BACKUP, INSTALL, OUTSIDE, SERVICES, C4 | — |
 
@@ -48,7 +48,7 @@ Sizes: kernel + tools 9.2k lines Go production, 1.8k tests (`scripts/loc.sh` cap
 
 - Never on hardware: UEFI boot order (`usb/post-install.sh`), the real NIC, phones trusting Caddy's root, Hermes on a box (`SIGNAL_HOME_CHANNEL` unverified), the Operator against a real model, GPU/CDI for llama.
 - Private ghcr images need `podman login` with a packages:read token (#30).
-- The GitHub token rides the stick in clear text and stays in podman's `auth.json`.
+- The GitHub token rides the stick in clear text and stays in `~/.config/containers/auth.json` (#37: deliberately, so private images pull after a reboot; revoke it after the trial).
 - `laib remove` scans only folders of services in the state; an unknown Quadlet folder is "unmanaged", never deleted.
 - Haus trusts `Remote-User` because only Caddy reaches its loopback port; no second proof.
 - Restore stops the service's units, restores per path, re-applies; the state repo restore (`--box`) was not exercised in the VM.

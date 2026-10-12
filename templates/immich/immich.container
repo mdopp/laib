@@ -17,7 +17,7 @@ Environment=IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:3003
 Volume=${DATA_DIR}/immich/upload:/usr/src/app/upload:z
 Volume=${PHOTOS_RO}:/mnt/photos:ro,z
 AddHost=auth.${DOMAIN}:${LAN_IP}
-AutoUpdate=registry
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
 Restart=always

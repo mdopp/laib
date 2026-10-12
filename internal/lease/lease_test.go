@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
@@ -33,18 +32,8 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
 		}
 	}))
 	t.Cleanup(router.Close)
-	cfg := Config{
-		Household: "gemma-4-e4b",
-		Presets:   []Preset{{Alias: "gemma-4-e4b"}, {Alias: "gemma-4-12b"}, {Alias: "qwen3.6-35b-a3b"}},
-		Modes: map[string]Mode{
-			"foundry":   {Presets: []string{"gemma-4-e4b", "gemma-4-12b"}},
-			"erweitert": {StopUnits: []string{"llama-embed.service", "wakeword-trainer.service"}, Voice: "cpu"},
-		},
-		Aliases:   map[string]string{"thinking": "erweitert", "coding": "erweitert"},
-		RouterURL: router.URL,
-		LeaseDir:  t.TempDir(),
-		AutoIdle:  time.Minute,
-	}
+	cfg := config42(t, router.URL)
+	cfg.Modes["erweitert"] = Mode{Stops: []string{"model/embed", "voice/wakeword-trainer"}, Voice: "cpu"}
 	s, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +43,10 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
 
 func post(t *testing.T, url string, body string) (int, map[string]any) {
 	t.Helper()
-	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer lease-secret")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +71,7 @@ func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 	if l == nil || l.Holder != AutoHolder || l.Mode != "erweitert" {
 		t.Fatalf("auto lease %+v", l)
 	}
-	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,wakeword-trainer.service") {
+	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
 		t.Fatalf("erweitert did not stop its units: %v", *sysd)
 	}
 	// a named holder takes foundry over from the automatic window
@@ -88,7 +80,7 @@ func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 		t.Fatalf("%d %v", code, out)
 	}
 	// units come back when leaving erweitert for foundry
-	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,wakeword-trainer.service") {
+	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service") {
 		t.Fatalf("leaving erweitert did not restart units: %v", *sysd)
 	}
 	// in foundry, the thinking preset is refused with the holder named
@@ -118,11 +110,13 @@ func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 	}
 	// release by the wrong holder is refused, by the right one works
 	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/model-lease", strings.NewReader(`{"holder":"bote"}`))
+	req.Header.Set("Authorization", "Bearer lease-secret")
 	resp, _ = http.DefaultClient.Do(req)
 	if resp.StatusCode != 409 {
 		t.Fatal("wrong holder released")
 	}
 	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/model-lease", strings.NewReader(`{"holder":"foundry-chronicle"}`))
+	req.Header.Set("Authorization", "Bearer lease-secret")
 	resp, _ = http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 || s.read() != nil {
 		t.Fatal("release failed")
@@ -139,7 +133,7 @@ func TestExclusiveStopsEverythingAndUnknownIsRefused(t *testing.T) {
 	if l := s.read(); l == nil || l.Mode != "exclusive" || len(l.Allowed) != 0 {
 		t.Fatalf("%+v", l)
 	}
-	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,wakeword-trainer.service") {
+	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
 		t.Fatal(*sysd)
 	}
 	code, _ = post(t, srv.URL+"/v1/chat/completions", `{"model":"gemma-4-e4b","messages":[]}`)
