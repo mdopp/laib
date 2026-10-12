@@ -5,17 +5,15 @@ service; after the install `laib plan` only *shows* what the box and the
 state differ in.
 
 ```
-# while the repo is private: a fine-grained GitHub token with Contents: read on mdopp/laib
-export LAIB_GH_TOKEN=github_pat_…
-curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" \
-  https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -H "Accept: application/vnd.github.raw" \
+curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
   | bash -s -- --domain <domain> --lan-ip <ip> \
        --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
 ```
 
 Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
-`SHA256SUMS`; the script verifies the sums. Once the repo is public the
-token and the API path go away and the plain raw URL works.
+`SHA256SUMS`; the script verifies the sums. The repo, its releases and
+the ghcr images are public: no GitHub token is needed (`--token` stays for a
+private fork or mirror).
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points
@@ -74,7 +72,6 @@ Konsolen-Passwort für core setzen? [j/N]: j
 Hat die Box eine GPU? [j/N]:
 URL eines entfernten Modells: http://192.168.178.100:11435/v1
 Lease-URL der entfernten llama: http://192.168.178.100:8787/api/model-lease
-GitHub-Token (solange mdopp/laib privat ist): github_pat_…
 
 Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
 ISO fertig: laib-nuc.iso — Ignition eingebettet
@@ -102,10 +99,9 @@ Boot the box from it: the live system installs CoreOS with the Ignition
 (user `core` with your key, the hostname, `/mnt/data`, DNS stub off for
 AdGuard, linger), promotes the SSD in the EFI boot order and reboots. On
 the first boot `laib-firstboot.service` runs `install-box.sh` with the
-flags you gave, then shreds the token from the disk. After that, continue
+flags you gave, then shreds its env file from the disk. After that, continue
 at step 2 below (`laib` is installed and `laib init` has run). The stick
-carries the GitHub token in clear text while the repo is private: keep
-the stick.
+carries the DNS token in clear text when you gave one: keep the stick.
 
 Not on the stick (yet): the NVIDIA driver layering and CDI setup
 ServiceBay's TUI baked for the GPU box — Phase 4 brings them over.
@@ -131,14 +127,11 @@ What makes or breaks the first boot is settled before the stick is built:
   `http://192.168.178.100:11435/v1` and the lease on
   `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
-- **The GitHub token**: repository `mdopp/laib`, permission *Contents:
-  read*, and *Packages: read* for the three images `ghcr.io/mdopp/laib-caddy`,
-  `laib-frage`, `laib-werkstatt` (private while the repo is; or make those
-  three packages public in their package settings, then no packages scope
-  is needed). The token is on the stick in clear text, shredded from the
-  NUC when the first boot finishes (a power cut in between resumes at the
-  next boot), and kept in `~/.config/containers/auth.json` for pulls;
-  revoke it after the trial.
+- **No GitHub token**: the repo, its releases and the images
+  (`ghcr.io/mdopp/laib-*`, `ghcr.io/mdopp/haus`) are public since
+  2026-10-12, so the stick carries no token and the box keeps no registry
+  login. (`laib-stick --token` still exists for a private fork or mirror;
+  then the token is shredded after the first boot and kept for pulls.)
 - **The SSH key**: the laptop's public key; the stick's console password is
   the fallback at the screen.
 - **A way back**: the NUC is wiped and reinstalled by the same stick at any
@@ -161,13 +154,11 @@ What you need before: Fedora CoreOS on the NUC with user `core` and SSH
 a domain for the trial (its DNS at a provider the Caddy image carries:
 Cloudflare, Hetzner, netcup, IONOS, INWX, deSEC, DuckDNS, Porkbun, OVH,
 Route53) with an API token; the GPU box's model proxy reachable on the
-LAN; a GitHub token while this repo is private.
+LAN.
 
 ```
 # 1. the binaries, the unit, the state repo
-export LAIB_GH_TOKEN=github_pat_…
-curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh \
+curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
   | bash -s -- --domain trial.example --lan-ip 192.168.178.30 \
        --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
 laib=/var/opt/laib/laib

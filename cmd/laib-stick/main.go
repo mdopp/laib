@@ -40,7 +40,7 @@ func main() {
 	flag.BoolVar(&noGPU, "no-gpu", false, "no GPU: a remote model answers (--model-url)")
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
-	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token while mdopp/laib is private")
+	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token, only for a private fork or mirror (mdopp/laib and its images are public)")
 	flag.StringVar(&b.Source, "source", "", "tests only: base URL serving install-box.sh and one build's binaries, instead of the latest release (the VM job)")
 	flag.StringVar(&streamName, "stream", "stable", "Fedora CoreOS stream")
 	flag.StringVar(&isoPath, "iso", "", "use this downloaded live ISO instead of fetching one")
@@ -104,7 +104,6 @@ func main() {
 			}
 		}
 	}
-	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
 	if ask && !b.Reinstall {
 		b.Reinstall = yesno("Soll dieser Stick eine schon installierte Box neu aufsetzen? (Die Datenplatte bleibt. Ohne Ja tut ein vergessener Stick nichts.)", false)
 	}

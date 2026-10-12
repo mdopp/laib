@@ -4,7 +4,7 @@
 #
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
-#       [--version vX.Y.Z] [--token <github token, while the repo is private>]
+#       [--version vX.Y.Z] [--token <github token, only for a private fork or mirror>]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
 # While mdopp/laib is private, release assets need a GitHub token (fine-grained,
