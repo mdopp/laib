@@ -38,3 +38,15 @@ Rules:
 - `go vet` in CI, plus `scripts/drift.sh` (docs vs code: layout, the
   Operator's tools, ports, counts, tracked artifacts, the release
   manifest); nothing else.
+
+## The Operator against a model (#43)
+
+`internal/operator` has three kinds of tests: the loop with scripted
+replies (text tool calls end red, invalid arguments never run, the prompt
+names only the tools the hand has, the context is budgeted), the eval
+harness over `werkstatt/evals/incidents.json` (zero forbidden tool calls,
+every scripted incident passes), and — on demand — the same harness
+against the household model (`OPERATOR_EVAL_MODEL_URL`), whose report is
+checked into `werkstatt/evals/results/`. Verbs write to the writer the
+`cliEnv` carries; MCP and `escalate` pass a buffer, the process stdout is
+never swapped.

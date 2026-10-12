@@ -164,7 +164,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"paths": paths, "ms": entry.MS})
 	}
-	fmt.Printf("grün · %d Pfade · %s\n", len(paths), tail(out, 200))
+	fmt.Fprintf(env.w(), "grün · %d Pfade · %s\n", len(paths), tail(out, 200))
 	return exitOK
 }
 
@@ -213,7 +213,7 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 	}
 	entry.Result, entry.Detail, entry.MS = "green", "restic check 5% ok; "+probe+" restored into a scratch dir and compared", time.Since(start).Milliseconds()
 	journal.Append(env.paths.Journal, entry)
-	fmt.Println("grün ·", entry.Detail)
+	fmt.Fprintln(env.w(), "grün ·", entry.Detail)
 	return exitOK
 }
 
@@ -284,7 +284,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
 		}
 		snapshot = snaps[0].ID[:8]
-		fmt.Printf("latest = %s\n", snapshot)
+		fmt.Fprintf(env.w(), "latest = %s\n", snapshot)
 	}
 	// the one lock from here to the final verify, and a pause so a converge
 	// that outlives a killed restore does not restart on half-written data (#39)
@@ -368,7 +368,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 				apply.Resume(env.paths, name)
 			}
 		}()
-		fmt.Printf("Box wiederhergestellt aus %s: State, Journal, %d Dienste; jetzt apply\n", snapshot, len(names))
+		fmt.Fprintf(env.w(), "Box wiederhergestellt aus %s: State, Journal, %d Dienste; jetzt apply\n", snapshot, len(names))
 	}
 	return applyHeld(ctx, env, st, only, "restore "+snapshot)
 }

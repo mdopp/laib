@@ -245,6 +245,20 @@ image, not migrated data; their images change by proposal. Where
 auto-update stays, `podman-auto-update.service` takes a `laib backup`
 first and the default window is 04:30, never the backup's 03:00.
 
+### The Operator and the MCP surface (#43)
+
+`diag` is an MCP tool. A verb writes to the writer in its `cliEnv`; MCP
+collects a verb's output in a buffer (nothing another goroutine prints
+can land in a reply, no pipe can block) and `escalate` builds its bundle
+the same way. The Operator's system prompt is generated from the tool
+list the hand has; a reply that writes a tool call as text is asked once
+for a real call and then ends the session red with a note; a tool call
+whose arguments are not a JSON object is refused, never run; the context
+bundle is budgeted (head and newest journal lines). `laib operator
+enable` points `notify.url` at the operator's event endpoint unless the
+owner set one, so reds wake it; an operator enabled for three ticks
+without a single note is red („stumm“).
+
 ### Hardware health (#59)
 
 `laib diag` asks `smartctl -H -A --json` about every member of the data

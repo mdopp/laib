@@ -104,7 +104,7 @@ func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
 	if len(svcs) == 0 {
 		svcs = []string{"noch keine Dienste"}
 	}
-	fmt.Printf(`<!doctype html><html lang="de"><meta charset="utf-8"><title>Die Box – Karte für die Familie</title>
+	fmt.Fprintf(env.w(), `<!doctype html><html lang="de"><meta charset="utf-8"><title>Die Box – Karte für die Familie</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;color:#1d1d1b}h1{font-size:1.5rem}h2{font-size:1.1rem;margin-top:1.4rem}li{margin:.3rem 0}.k{color:#6b665c}@media print{body{margin:0}}</style>
 <h1>Die Box im Haus – %s</h1>
 <p>Die Box ist der kleine Rechner, auf dem unsere Dinge laufen: %s.</p>

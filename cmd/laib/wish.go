@@ -105,13 +105,13 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]string{"file": p, "issue": ""})
 		}
-		fmt.Printf("aufgeschrieben: %s (kein Intake konfiguriert — box.yml intake.repo)\n", p)
+		fmt.Fprintf(env.w(), "aufgeschrieben: %s (kein Intake konfiguriert — box.yml intake.repo)\n", p)
 		return exitOK
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: first, Detail: url})
 	if env.json {
 		return emit(env, map[string]string{"issue": url})
 	}
-	fmt.Println("aufgenommen:", url)
+	fmt.Fprintln(env.w(), "aufgenommen:", url)
 	return exitOK
 }

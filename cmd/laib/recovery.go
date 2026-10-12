@@ -34,7 +34,7 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 		if st, err := loadState(env); err == nil {
 			record(env, st, journal.Entry{Actor: env.actor, Verb: "recovery-sheet", Result: "info", Detail: "als gesichert bestätigt (ausgedruckt oder im Passwortmanager)"})
 		}
-		fmt.Println("bestätigt: das Wiederherstellungsblatt ist gesichert; diag hört auf zu mahnen")
+		fmt.Fprintln(env.w(), "bestätigt: das Wiederherstellungsblatt ist gesichert; diag hört auf zu mahnen")
 		return exitOK
 	}
 	st, pw, err := backupPrep(env)
@@ -58,7 +58,7 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 	if repo == "" {
 		repo = "(kein backup.repo in box.yml — ohne Repo gibt es nichts wiederherzustellen)"
 	}
-	fmt.Printf(`══════════════════════════════════════════════════════════════════════
+	fmt.Fprintf(env.w(), `══════════════════════════════════════════════════════════════════════
   LAIB — WIEDERHERSTELLUNGSBLATT · %s · Stand %s
   Ausdrucken oder im Passwortmanager ablegen. Ohne dieses Blatt ist das
   Backup nach einem Plattenverlust nicht lesbar.

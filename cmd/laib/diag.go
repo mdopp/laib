@@ -66,14 +66,14 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, findings)
 	}
 	if len(findings) == 0 {
-		fmt.Println("Keine Befunde.")
+		fmt.Fprintln(env.w(), "Keine Befunde.")
 	}
 	for _, f := range findings {
-		fmt.Printf("%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
+		fmt.Fprintf(env.w(), "%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
 		if f.Fix != "" {
-			fmt.Printf("   → %s", f.Fix)
+			fmt.Fprintf(env.w(), "   → %s", f.Fix)
 		}
-		fmt.Println()
+		fmt.Fprintln(env.w())
 	}
 	return exitOK
 }

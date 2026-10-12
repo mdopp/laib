@@ -225,10 +225,10 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 			return emit(env, map[string]any{"arrays": parseMdstat(string(b)), "device": dev, "members": members})
 		}
 		for _, a := range parseMdstat(string(b)) {
-			fmt.Printf("%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
+			fmt.Fprintf(env.w(), "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
 		}
 		if members == 0 {
-			fmt.Println("keine Datenplatte: /mnt/data liegt auf der OS-Platte")
+			fmt.Fprintln(env.w(), "keine Datenplatte: /mnt/data liegt auf der OS-Platte")
 		}
 		return 0
 	}
@@ -296,7 +296,7 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	if out, err := sysd.Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
 		return fail(fmt.Errorf("marker: %v: %s", err, out))
 	}
-	fmt.Printf("%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
+	fmt.Fprintf(env.w(), "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
 	return 0
 }
 
