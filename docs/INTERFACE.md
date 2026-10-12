@@ -239,3 +239,15 @@ no longer carry `AutoUpdate=registry` — podman's rollback restores an
 image, not migrated data; their images change by proposal. Where
 auto-update stays, `podman-auto-update.service` takes a `laib backup`
 first and the default window is 04:30, never the backup's 03:00.
+
+### Hardware health (#59)
+
+`laib diag` asks `smartctl -H -A --json` about every member of the data
+array and the OS disk: reallocated or pending sectors, media errors and
+wear are yellow („die Platte altert“), a failed self-assessment is red
+(„Platte bald tauschen“), 55/65 °C are warm/hot; the kernel's thermal
+zones give the box's temperature (80 °C yellow, 90 °C red). Without
+smartmontools the probe says so once (`sudo rpm-ostree install
+smartmontools`; install-box.sh will layer it with git, restic and diff).
+The power-loss proofs (a cut during an apply, a backup, a resync) wait
+for Actions minutes and for #81.
