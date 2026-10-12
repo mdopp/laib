@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -225,21 +226,21 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, out)
 	}
-	fmt.Printf("# %s\n", svc.Name)
+	fmt.Fprintf(env.w(), "# %s\n", svc.Name)
 	for u, s := range units {
-		fmt.Printf("## unit %s\n%s\n", u, s)
+		fmt.Fprintf(env.w(), "## unit %s\n%s\n", u, s)
 	}
 	for c, s := range containers {
-		fmt.Printf("## container %s\n%s\n", c, s)
+		fmt.Fprintf(env.w(), "## container %s\n%s\n", c, s)
 	}
 	for p, s := range files {
-		fmt.Printf("## data %s\n%s\n", p, s)
+		fmt.Fprintf(env.w(), "## data %s\n%s\n", p, s)
 	}
 	if h, ok := out["health"]; ok {
-		fmt.Printf("## health\n%v\n", h)
+		fmt.Fprintf(env.w(), "## health\n%v\n", h)
 	}
 	for u, s := range logs {
-		fmt.Printf("## logs %s\n%s\n", u, s)
+		fmt.Fprintf(env.w(), "## logs %s\n%s\n", u, s)
 	}
 	return exitOK
 }
@@ -274,7 +275,7 @@ func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]string{"path": p, "content": text})
 	}
-	fmt.Print(text)
+	fmt.Fprint(env.w(), text)
 	return exitOK
 }
 
@@ -321,7 +322,7 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 		return fail(fmt.Errorf("%s: %w", p, err))
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})
-	fmt.Println("geschrieben:", p)
+	fmt.Fprintln(env.w(), "geschrieben:", p)
 	return exitOK
 }
 
@@ -380,7 +381,7 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
 	}
-	fmt.Println(out)
+	fmt.Fprintln(env.w(), out)
 	return code
 }
 
@@ -426,10 +427,10 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, map[string]any{"checks": checks, "green": green})
 	}
 	if green {
-		fmt.Println("grün:", svc.Name)
+		fmt.Fprintln(env.w(), "grün:", svc.Name)
 		return exitOK
 	}
-	fmt.Println("rot:", entry.Detail)
+	fmt.Fprintln(env.w(), "rot:", entry.Detail)
 	return exitRed
 }
 
@@ -453,14 +454,11 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	name := time.Now().UTC().Format("2006-01-02T15-04-05") + "-" + svc.Name + ".md"
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Eskalation %s · von %s\n\n%s\n\n## inspect\n\n", svc.Name, env.actor, strings.Join(args[1:], " "))
-	r, w, _ := os.Pipe()
-	saved := os.Stdout
-	os.Stdout = w
-	cmdInspect(ctx, env, []string{svc.Name})
-	w.Close()
-	os.Stdout = saved
-	ins, _ := io.ReadAll(r)
-	b.Write(ins)
+	// the bundle through a buffer (#43): a pipe nobody reads blocked here
+	// at 64 KiB while mcpMu was held, and every agent hung with it
+	var ins bytes.Buffer
+	cmdInspect(ctx, &cliEnv{paths: env.paths, actor: env.actor, mcp: env.mcp, out: &ins}, []string{svc.Name})
+	b.Write(ins.Bytes())
 	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
 	b.WriteString("\n## Journal 24h\n\n")
 	for _, e := range es {
@@ -472,11 +470,18 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
 		return fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: p})
-	if env.json {
-		return emit(env, map[string]string{"file": p})
+	// with an intake the bundle becomes a ticket something reads (#56)
+	detail := p
+	if url, ok, err := githubIssue(ctx, env, st, "Eskalation "+svc.Name+": "+tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+		detail = p + " (Intake rot: " + err.Error() + ")"
+	} else if ok {
+		detail = url + " (" + p + ")"
 	}
-	fmt.Println("eskaliert:", p)
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: detail})
+	if env.json {
+		return emit(env, map[string]string{"file": p, "issue": strings.TrimSuffix(strings.Split(detail, " (")[0], p)})
+	}
+	fmt.Fprintln(env.w(), "eskaliert:", detail)
 	return exitOK
 }
 

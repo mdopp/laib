@@ -1,9 +1,0 @@
-# Rendered by laib: the converge loop (docs/DESIGN.md Repair).
-[Unit]
-Description=Laib converge
-
-[Service]
-Type=oneshot
-ExecStart=/var/opt/laib/laib converge
-Environment=LAIB_HOME=/mnt/data/laib
-Environment=LAIB_ACTOR=laib

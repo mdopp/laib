@@ -115,3 +115,34 @@ func TestAddWiresRolesAndCarveOut(t *testing.T) {
 		t.Fatalf("box.yml not wired or the shell edit lost:\n%s", b)
 	}
 }
+
+// Both hook phases must land executable: only post-deploy did, and apply
+// skipped a 0644 pre-start in silence — Authelia started without its
+// configuration.yml on the first VM run of #70 (#36).
+func TestAddCopiesBothHooksExecutable(t *testing.T) {
+	ctx := context.Background()
+	repo, inbox := goldenRepo(t)
+	tpl := fstest.MapFS{
+		"laib.yml":           {Data: []byte("name: hooked\ntemplate: {registry: builtin, name: hooked, version: 1}\nroutes: []\nsecrets: []\ndata: []\n")},
+		"values.example.yml": {Data: []byte("IMAGE: x\n")},
+		"hooked.container":   {Data: []byte("[Container]\nImage=${IMAGE}\n")},
+		"pre-start":          {Data: []byte("#!/bin/sh\necho pre\n")},
+		"post-deploy":        {Data: []byte("#!/bin/sh\necho post\n")},
+	}
+	p, err := CreateFromEdit(ctx, repo, inbox, "human:test", "hooked", Edit{Add: &AddService{Name: "hooked", Template: tpl, Values: map[string]string{}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Approve(ctx, repo, inbox, p, "human:other"); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []string{"pre-start", "post-deploy"} {
+		info, err := os.Stat(filepath.Join(repo, "services", "hooked", h))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode()&0o111 == 0 {
+			t.Fatalf("%s is not executable (%v): apply would skip it", h, info.Mode())
+		}
+	}
+}

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Radicale's config: LDAP auth against LLDAP in the auth pod; rights: every
-# user owns their own collections. Rewritten on every apply (values may change).
+# pre-start (#36): Radicale's config before the unit starts. LDAP auth against LLDAP in the auth pod; rights: every
+# user owns their own collections; the bind account is LLDAP's read-only
+# `radicale` user, seeded by the auth template (#55). Rewritten on every apply.
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
 cat > "$C/config" <<CFG
-# rendered by laib post-deploy (templates/radicale)
+# rendered by laib pre-start (templates/radicale)
 [server]
 hosts = 0.0.0.0:5232
 [auth]
 type = ldap
 ldap_uri = ldap://host.containers.internal:3890
 ldap_base = ou=people,${BASE_DN}
-ldap_reader_dn = uid=admin,ou=people,${BASE_DN}
-ldap_secret = ${LLDAP_ADMIN_PASSWORD:-}
+ldap_reader_dn = uid=radicale,ou=people,${BASE_DN}
+ldap_secret = ${LAIB_SECRET_RADICALE_LDAP_PASSWORD}
 ldap_filter = (&(objectClass=person)(uid={0}))
 ldap_user_attribute = uid
 [rights]

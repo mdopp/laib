@@ -3,7 +3,7 @@
 Applies when you are about to require an approval, deny an agent a verb,
 or wonder how far the ops hand may go when a health check fails.
 
-- **Status:** Accepted, 2026-10-10
+- **Status:** Accepted, 2026-10-10; amended by ADR 0019 (2026-10-12): the grant stands, the Operator starts as a diagnostician and gets `write`/`exec`/`restart` per action type after the eval harness clears them.
 - **Deciders:** operator (mdopp): "Ich möchte einen Agenten, der wie ein
   Operator agiert, wie ein Familien-Admin."
 

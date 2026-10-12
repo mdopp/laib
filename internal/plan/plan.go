@@ -3,6 +3,7 @@ package plan
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -98,6 +99,34 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 			p.Services = append(p.Services, svc)
 		}
 	}
+	// Files the manifest owns that render no longer produces: delete (#41).
+	owned := map[string]bool{}
+	current := map[string]bool{}
+	for k := range out {
+		current[Target(paths, k)] = true
+	}
+	for _, target := range ReadManifest(paths) {
+		owned[target] = true
+		if current[target] {
+			continue
+		}
+		if _, err := os.Stat(target); err != nil {
+			continue
+		}
+		k := outPathOf(paths, target)
+		if k == "" {
+			continue
+		}
+		svc := ServiceOf(k)
+		if only != "" && svc != "" && svc != only {
+			continue
+		}
+		p.Changes = append(p.Changes, Change{Path: k, Target: target, Service: svc, Kind: "delete"})
+		if svc != "" && !seen[svc] {
+			seen[svc] = true
+			p.Services = append(p.Services, svc)
+		}
+	}
 	// Quadlet files on the box that the state no longer has: delete.
 	for _, name := range st.ServiceNames() {
 		if only != "" && name != only {
@@ -116,6 +145,21 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		}
 	}
 	p.Unmanaged = unmanaged(st, paths)
+	// a folder whose files the manifest owns is laib's, not unmanaged
+	var um []string
+	for _, name := range p.Unmanaged {
+		entries, _ := os.ReadDir(filepath.Join(paths.Quadlet, name))
+		mine := len(entries) > 0
+		for _, e := range entries {
+			if !owned[filepath.Join(paths.Quadlet, name, e.Name())] {
+				mine = false
+			}
+		}
+		if !mine {
+			um = append(um, name)
+		}
+	}
+	p.Unmanaged = um
 	p.Conflicts = unitConflicts(st, paths)
 	return p, nil
 }
@@ -193,4 +237,40 @@ func unified(ctx context.Context, label, a, b string) string {
 	os.WriteFile(pb, []byte(b), 0o600)
 	outb, _ := exec.CommandContext(ctx, "diff", "-u", "--label", "box/"+label, "--label", "state/"+label, pa, pb).Output()
 	return string(outb)
+}
+
+// The manifest (#41): every file apply rendered onto the box. What it has
+// but render no longer produces is deleted and, for a unit, stopped and
+// disabled — a host unit of a disabled operator, the lease unit of a
+// removed llama, the quadlet folder of a service a rollback took out.
+func manifestPath(paths boxfs.Paths) string { return filepath.Join(paths.Home, "managed.json") }
+
+func WriteManifest(paths boxfs.Paths, targets []string) error {
+	sorted := append([]string{}, targets...)
+	sort.Strings(sorted)
+	b, _ := json.MarshalIndent(sorted, "", "  ")
+	return os.WriteFile(manifestPath(paths), b, 0o644)
+}
+
+func ReadManifest(paths boxfs.Paths) []string {
+	b, err := os.ReadFile(manifestPath(paths))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	json.Unmarshal(b, &out)
+	return out
+}
+
+// outPathOf maps a target on the box back to its render.Output path.
+func outPathOf(paths boxfs.Paths, target string) string {
+	for prefix, dir := range map[string]string{"quadlet/": paths.Quadlet, "systemd/": paths.Systemd} {
+		if dir != "" && strings.HasPrefix(target, dir+"/") {
+			return prefix + strings.TrimPrefix(target, dir+"/")
+		}
+	}
+	if paths.Render != "" && strings.HasPrefix(target, paths.Render+"/") {
+		return strings.TrimPrefix(target, paths.Render+"/")
+	}
+	return ""
 }

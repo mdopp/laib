@@ -138,7 +138,9 @@ there. Laib does that in two halves, because the two need different
 guarantees.
 
 **Mechanical, always on.** `laib converge` runs every ten minutes and after
-boot (`autonomy.converge: on`): it re-applies files that drifted and
+boot (`autonomy.converge: on`), under the one lock every mutating verb
+holds (a tick beside a restore is skipped, #39), and it leaves paused
+services alone (`laib pause`): it re-applies files that drifted and
 restarts units that are not active, toward the state repo and never from
 the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per
@@ -155,10 +157,10 @@ itself:
 
 | Class | Example | Default | "auto" means |
 |---|---|---|---|
-| values | a newer image tag, a changed port | proposal | laib merges, applies, and reverts the merge when verify is red |
-| template-update | the registry shipped a new version | proposal | the weekly sync proposes and laib applies, rollback on red |
+| values | a newer image tag, a changed port | auto (`laib init`) | laib merges, applies, and reverts the merge when verify is red |
+| template-update | the registry shipped a new version | auto | the weekly sync proposes and laib applies, rollback on red |
 | new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
-| patch | anything else an agent can express as a diff | proposal | same |
+| patch | anything else an agent can express as a diff | auto | same |
 | remove | delete a service | never auto | a human, always (ADR 0006) |
 
 A warning (a second service for one purpose) always goes to a human, dial
