@@ -185,7 +185,7 @@ lock whose process is gone is taken over with a journal line.
 `laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
 (apply tier): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
-`restore` pauses the service it rewrites, the GPU lease pauses `llama`
+`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
 while a mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies

@@ -11,7 +11,10 @@ Environment=ROUTER_URL=http://127.0.0.1:${ROUTER_PORT}
 Environment=LISTEN=0.0.0.0:${PORT}
 Environment=LEASE_DIR=${DATA_DIR}/llama/lease
 Environment=PRESETS_FILE=%h/.config/containers/systemd/llama/presets.json
-Environment=VOICE_UNITS=whisper.service,tts.service
+# the model key: consumers send it as Bearer to the proxy and the lease API (#42)
+Environment=LEASE_TOKEN=${LEASE_TOKEN}
+Environment=LEASE_RENEW=10m
+Environment=LEASE_WARN_AFTER=20m
 Restart=always
 RestartSec=3
 

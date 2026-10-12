@@ -27,3 +27,36 @@ units reading `voice-device.env`, and the 1.3 s turn.
 Consumers: Solaris (`model_lease` becomes a client), the Werkstatt's pi, and
 foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
 `host.containers.internal:<PORT>` from isolated pods (ServiceBay ADR 0007).
+
+## The lease (#42)
+
+- **Modes name roles and containers, not unit names.** `presets.json`
+  `modes.<name>.stops` and `voiceUnits` are `role/container` refs
+  (`voice/whisper`, `model/embed`); the sidecar resolves them through
+  laib's state to `stimme-whisper.service`, `llama-embed.service` at
+  start and refuses to start on a ref nothing provides, naming the
+  service and the units it has. A renamed template fails loudly, not by
+  leaving a unit on the GPU.
+- **The API wants the model key.** `POST`/`DELETE /api/model-lease` take
+  `Authorization: Bearer <MODEL_KEY>` — the same key consumers already
+  send the proxy; 401 without it. On this box the key is the secret
+  `MODEL_API_KEY` the template declares (generated on the first apply,
+  builtin `${MODEL_KEY}`); a peer box sets the same value by hand
+  (`laib secret set MODEL_API_KEY`, `box.yml model.keySecret`). `GET` and
+  `/health` stay open. The proxy's `/v1` stays reachable from the LAN
+  (operator decision, solarisbay #1420).
+- **Narrowest mode.** Acquiring by preset takes the narrowest mode that
+  allows it (`gemma-4-12b` → foundry, not erweitert).
+- **Renew or lose the card.** The answer carries `renew_s` (10 min,
+  `LEASE_RENEW`) and `deadline` (the ttl asked for); `until` is one
+  interval away. A holder that stops renewing is released at `until`,
+  not after four hours. The automatic window keeps its idle timeout and
+  is renewed only by requests that need it — a household request never
+  keeps a foreign window alive.
+- **Starvation is visible.** Every service whose units the lease stops
+  carries the pause marker (`laib status`, `/ready`, the Box page) with
+  the reason in German: „Grafikkarte reserviert für bote („denken“):
+  Sprache läuft langsamer, bis 15:30“. A window older than
+  `LEASE_WARN_AFTER` (20 min) gets one yellow journal line.
+- **One port.** The lease answers on the proxy's port (`PORT`, 11435):
+  `http://<gpu-box>:11435/api/model-lease`.

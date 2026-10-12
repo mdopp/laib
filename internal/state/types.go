@@ -46,7 +46,7 @@ type OperatorCfg struct {
 type Model struct {
 	URL       string `yaml:"url"`       // e.g. http://192.168.1.20:11435/v1 or https://api.example/v1
 	KeySecret string `yaml:"keySecret"` // name in secrets.age; empty for a loopback proxy
-	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:8787/api/model-lease; empty = no lease
+	Lease     string `yaml:"lease"`     // e.g. http://192.168.1.20:11435/api/model-lease (the proxy's port); empty = no lease
 }
 
 // Peer is another box running Laib.
@@ -196,6 +196,9 @@ type OIDC struct {
 type DataPath struct {
 	Path   string `yaml:"path"`
 	Backup *bool  `yaml:"backup"`
+	// Quiesce: the service is stopped while this path is snapshotted (a
+	// database copied live is not a backup, #40): stop, snapshot, start.
+	Quiesce bool `yaml:"quiesce"`
 }
 
 // Health is what apply verifies.
