@@ -94,7 +94,12 @@ jobs:
           drives=()
           for d in ${DISKS:-disk.qcow2 data1.qcow2 data2.qcow2}; do
             f=qcow2; [[ $d == *.raw ]] && f=raw
-            drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap")
+            # the OS disk without QEMU's zero detection: detect-zeroes=unmap turns the guest's
+            # zero writes into qcow2 discards, and a hard reset in the middle of that left a
+            # root no real disk would (#81: the same cut was green in run 38308352527 without it,
+            # red with it, and a guest-side sync did not help). The data disks keep it (thin images).
+            if [ "$d" = disk.qcow2 ]; then drives+=(-drive "file=$d,if=virtio,format=$f")
+            else drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap"); fi
           done
           rm -f qmp.sock
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
