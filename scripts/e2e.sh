@@ -2,6 +2,12 @@
 # End-to-end run of the CLI against the golden state with shims for
 # systemctl, journalctl, podman, restic and sudo. No box needed; the real
 # boot job (scripts/boot-test.sh) covers Quadlet itself.
+#
+# The shims can be told to fail (#52), so the red paths run too:
+#   SHIM_FAIL_RESTART="a.service b.service"  systemctl restart of these exits 1
+#   SHIM_FAILED_UNITS="a.service"            is-active says "failed" for these
+#   SHIM_RESTIC_FAIL=1                       every restic call exits 1
+#   SHIM_PODMAN_EXEC_FAIL=1                  podman exec exits 125
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${LAIB_BIN:-$ROOT/laib}"
@@ -11,7 +17,15 @@ mkdir -p "$WORK/bin"
 cat > "$WORK/bin/systemctl" <<'SH'
 #!/usr/bin/env sh
 echo "$@" >> "${SYSTEMCTL_LOG:-/dev/null}"
-case "$*" in *is-active*) echo active;; esac
+for u in ${SHIM_FAIL_RESTART:-}; do
+  case "$*" in *" restart $u"*) echo "Job for $u failed (shim)" >&2; exit 1;; esac
+done
+case "$*" in *is-active*)
+  for u in ${SHIM_FAILED_UNITS:-}; do
+    case "$*" in *"$u"*) echo failed; exit 3;; esac
+  done
+  echo active;;
+esac
 exit 0
 SH
 cat > "$WORK/bin/journalctl" <<'SH'
@@ -22,7 +36,9 @@ cat > "$WORK/bin/podman" <<'SH'
 #!/usr/bin/env sh
 # run: a hook in the hooks image (#36) — here it runs on this machine with the env file, same paths
 case "$1" in
-  exec) shift; c=$1; shift; echo "exec in $c: $*";;
+  exec)
+    [ -n "${SHIM_PODMAN_EXEC_FAIL:-}" ] && { echo "Error: container is not running (shim)" >&2; exit 125; }
+    shift; c=$1; shift; echo "exec in $c: $*";;
   inspect) echo "running exit=0 image=shim";;
   run) shift; envf=""; while [ $# -gt 0 ]; do case "$1" in --env-file) envf=$2; shift 2;; -v|-w|--network) shift 2;; --rm) shift;; ghcr.io/*) shift; break;; *) shift;; esac; done
        # a hook (with an env file) runs here; anything else in a container (caddy validate, #50) just succeeds
@@ -34,6 +50,7 @@ SH
 cat > "$WORK/bin/restic" <<'SH'
 #!/usr/bin/env sh
 echo "restic $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
+[ -n "${SHIM_RESTIC_FAIL:-}" ] && { echo "Fatal: unable to open repository (shim)" >&2; exit 1; }
 # a repo exists only after init (#40: backupPrep asks for the sheet's password when it does)
 case "$1" in
   init) touch "${SYSTEMCTL_LOG%/*}/restic.initialized";;
@@ -251,4 +268,30 @@ test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "rollback did not bring 
 
 # --- 13. the journal holds the whole story
 j 'verbs=[e["verb"] for e in es]; assert all(v in verbs for v in ["apply","rollback","approve","converge","exec","write","restart","escalate","snapshot","note","operator"]), verbs'
+
+# --- 14. red paths (#52): a failure must end red, be journaled, and change nothing it should not
+code() { set +e; "$@" >"$WORK/red.out" 2>&1; local c=$?; set -e; echo "$c"; }
+last() { "$BIN" journal --json | python3 -c "import sys,json; es=[e for e in json.load(sys.stdin) if e['verb']=='$1' and e.get('service','')=='$2']; print(json.dumps(es[-1]) if es else '{}')"; }
+# a restart that fails
+C="$(SHIM_FAIL_RESTART="caddy.service" LAIB_ACTOR=human:e2e code "$BIN" restart caddy)"
+[ "$C" = 2 ] || fail "failed restart: exit $C, want 2 (red): $(cat "$WORK/red.out")"
+last restart caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red" and "caddy.service" in e.get("detail",""), e'
+# a unit that never comes up: converge restarts it, verify sees it failed, converge ends red
+C="$(SHIM_FAILED_UNITS="whoami.service" LAIB_ACTOR=laib code "$BIN" converge)"
+[ "$C" = 2 ] || fail "converge with a failed unit: exit $C, want 2 (red): $(cat "$WORK/red.out")"
+"$BIN" journal --json | python3 -c 'import sys,json; es=[e for e in json.load(sys.stdin) if e["verb"]=="converge"]; assert es and es[-1]["result"]=="red", es[-1:]'
+# a backup whose repository fails: non-zero, journaled red, no snapshot claimed
+C="$(SHIM_RESTIC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" backup)"
+[ "$C" != 0 ] || fail "backup with a failing restic exited 0"
+grep -q "snapshot .* saved" "$WORK/red.out" && fail "backup claims a snapshot although restic failed"
+"$BIN" journal --json | python3 -c 'import sys,json; es=[e for e in json.load(sys.stdin) if e["verb"]=="backup"]; assert es and es[-1]["result"]=="red", es[-1:]'
+# a restore whose safety snapshot fails: refused before any unit is stopped
+STOPS="$(grep -c "stop caddy.service" "$SYSTEMCTL_LOG" || true)"
+C="$(SHIM_RESTIC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" restore 0123abcd caddy)"
+[ "$C" != 0 ] || fail "restore without its pre-restore snapshot exited 0"
+[ "$(grep -c "stop caddy.service" "$SYSTEMCTL_LOG" || true)" = "$STOPS" ] || fail "restore stopped caddy although its safety snapshot failed"
+# an exec into a container that is not running
+C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true)"
+[ "$C" = 2 ] || fail "failed exec: exit $C, want 2 (red): $(cat "$WORK/red.out")"
+last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
