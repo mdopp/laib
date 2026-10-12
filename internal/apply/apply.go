@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
@@ -41,10 +42,16 @@ type Result struct {
 // ErrLocked means another apply holds the lock (state `eingeschränkt`).
 var ErrLocked = errors.New("apply is locked")
 
-// Lock takes the apply lock; the content names the holder for /ready.
+// Lock takes the apply lock; the content names the holder and its pid for
+// /ready. A lock whose process is gone (a kill mid-apply, a power cut
+// during the first boot, #37) is stale and taken over, not honoured for
+// ever.
 func Lock(paths boxfs.Paths, holder string) (func(), error) {
 	if err := os.MkdirAll(filepath.Dir(paths.Lock), 0o755); err != nil {
 		return nil, err
+	}
+	if LockHolder(paths) == "" {
+		os.Remove(paths.Lock) // absent or stale
 	}
 	f, err := os.OpenFile(paths.Lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -53,18 +60,35 @@ func Lock(paths boxfs.Paths, holder string) (func(), error) {
 		}
 		return nil, err
 	}
-	fmt.Fprint(f, holder)
+	fmt.Fprintf(f, "%s pid %d", holder, os.Getpid())
 	f.Close()
 	return func() { os.Remove(paths.Lock) }, nil
 }
 
-// LockHolder returns who holds the lock, or "".
+// LockHolder returns who holds the lock, or "" when there is none or the
+// holder's process is gone.
 func LockHolder(paths boxfs.Paths) string {
 	b, err := os.ReadFile(paths.Lock)
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(b))
+	h := strings.TrimSpace(string(b))
+	if _, after, ok := strings.Cut(h, " pid "); ok {
+		var pid int
+		if _, err := fmt.Sscan(after, &pid); err == nil && pid > 0 && !processAlive(pid) {
+			return ""
+		}
+	}
+	return h
+}
+
+func processAlive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = p.Signal(syscall.Signal(0))
+	return err == nil || errors.Is(err, os.ErrPermission)
 }
 
 // Run applies a computed plan. The snapshot is a Git commit of the state repo

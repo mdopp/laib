@@ -298,3 +298,34 @@ func TestDiskNumber(t *testing.T) {
 		}
 	}
 }
+
+// First boot is a resumable sequence (#37): its marker is written last, the
+// token reaches the installer through the environment (never argv, never
+// `ps`), and the env file is shredded in an EXIT trap — except on the
+// rpm-ostree reboot path, where the post-reboot run still needs it.
+func TestFirstBootResumesAndKeepsTheTokenOffArgv(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := unitFromIgnition(t, ign, "laib-firstboot.service")
+	if strings.Contains(unit, "ConditionPathExists=!/var/opt/laib/laib") {
+		t.Fatal("the installed binary is not the marker: it lands before init and enable; a reboot in between never resumes")
+	}
+	if !strings.Contains(unit, "ConditionPathExists=!/etc/laib/installed") || !strings.Contains(unit, "EnvironmentFile=/etc/laib/firstboot.env") {
+		t.Fatalf("marker and environment:\n%s", unit)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-firstboot.sh")
+	if strings.Contains(script, `--token "$LAIB_GH_TOKEN"`) || strings.Contains(script, ". /etc/laib/firstboot.env") {
+		t.Fatal("the token must not be passed on argv or sourced by the script")
+	}
+	if !strings.Contains(script, "trap") || !strings.Contains(script, "shred") {
+		t.Fatal("the env file must be shredded in an EXIT trap")
+	}
+	if !strings.Contains(script, "touch /etc/laib/installed") || strings.LastIndex(script, "touch /etc/laib/installed") < strings.Index(script, "bash /tmp/install-box.sh") {
+		t.Fatal("the marker must be written after the installer ran")
+	}
+	if !strings.Contains(script, "releases/latest") || !strings.Contains(script, "--version") {
+		t.Fatal("first boot must fetch the installer of the release it installs, not main's")
+	}
+}

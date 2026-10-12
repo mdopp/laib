@@ -52,6 +52,14 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			h(w, r)
 		}
 	}
+	// boot-time convergence of the non-file state (#37): the ruleset
+	if loaded, err := ensureFirewall(ctx, env); err != nil {
+		fmt.Fprintln(os.Stderr, "laib serve: firewall:", err)
+	} else if loaded {
+		if st, err := loadState(env); err == nil {
+			record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpHandler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {

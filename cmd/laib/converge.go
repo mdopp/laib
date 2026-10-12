@@ -50,6 +50,14 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 			}
 		}
 	}
+	fw, fwErr := ensureFirewall(ctx, env)
+	if fwErr != nil {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "firewall: " + fwErr.Error()})
+		return exitRed
+	}
+	if fw {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
+	}
 	if p.Empty() && len(inactive) == 0 {
 		if env.json {
 			return emit(env, map[string]any{"converged": true})

@@ -289,10 +289,18 @@ storage:
       contents:
         inline: |
           #!/usr/bin/env bash
-          # Runs once as core: fetch and run the installer with the flags from the stick.
+          # Runs as core until /etc/laib/installed exists (#37): fetch the installer of
+          # the release it installs and run it with the flags from the stick. The unit
+          # passes firstboot.env as environment (the token never on argv, never in ps).
+          # Every step is idempotent, so a power cut or a reboot in between resumes at
+          # the next boot; the marker is written last. The env file is shredded on exit
+          # — except when the installer rebooted into a layered tree (exit 75): the
+          # post-reboot run still needs it.
           set -euo pipefail
-          set -a; . /etc/laib/firstboot.env; set +a
-          [ -f /var/opt/laib/laib ] && exit 0
+          KEEP=0
+          finish() { [ "$KEEP" = 1 ] && return 0; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env; }
+          trap finish EXIT
+          [ -f /etc/laib/installed ] && exit 0
           for i in $(seq 1 60); do curl -fsS https://api.github.com >/dev/null 2>&1 && break; sleep 5; done
           flags=(--domain "$LAIB_DOMAIN")
           if [ -n "${LAIB_SOURCE:-}" ]; then
@@ -300,17 +308,22 @@ storage:
             curl -fsSL "$LAIB_SOURCE/install-box.sh" -o /tmp/install-box.sh
             flags+=(--source "$LAIB_SOURCE")
           else
+            # the installer of the release that gets installed, not main's of today
             auth=(); [ -n "${LAIB_GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $LAIB_GH_TOKEN")
+            tag=$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/mdopp/laib/releases/latest | tr -d '\n' | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+            [ -n "$tag" ] || { echo "laib-firstboot: no latest release (private repo without a token?)" >&2; exit 1; }
             curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github.raw" \
-              https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh -o /tmp/install-box.sh
+              "https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh?ref=$tag" -o /tmp/install-box.sh
+            flags+=(--version "$tag")
           fi
           [ -n "${LAIB_LAN_IP:-}" ] && flags+=(--lan-ip "$LAIB_LAN_IP")
           [ -n "${LAIB_MODEL_URL:-}" ] && flags+=(--model-url "$LAIB_MODEL_URL")
           [ -n "${LAIB_MODEL_LEASE:-}" ] && flags+=(--model-lease "$LAIB_MODEL_LEASE")
           [ "${LAIB_GPU:-}" = "1" ] && flags+=(--gpu)
-          [ -n "${LAIB_GH_TOKEN:-}" ] && flags+=(--token "$LAIB_GH_TOKEN")
-          bash /tmp/install-box.sh "${flags[@]}"
-          sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env
+          rc=0; bash /tmp/install-box.sh "${flags[@]}" || rc=$?   # LAIB_GH_TOKEN comes from the environment
+          if [ "$rc" = 75 ]; then KEEP=1; echo "laib-firstboot: rebooting into the layered tree; continues after"; exit 0; fi
+          [ "$rc" = 0 ] || exit "$rc"
+          sudo mkdir -p /etc/laib && sudo touch /etc/laib/installed
 systemd:
   units:
     - name: laib-data-disk.service
@@ -355,11 +368,13 @@ systemd:
         Description=Laib first boot: install the binaries and init the state repo
         After=network-online.target user@1000.service laib-data-disk.service
         Wants=network-online.target user@1000.service laib-data-disk.service
-        ConditionPathExists=!/var/opt/laib/laib
+        # the marker is written by the script as its last step (#37): a boot in between resumes
+        ConditionPathExists=!/etc/laib/installed
 
         [Service]
         Type=oneshot
         User=core
+        EnvironmentFile=/etc/laib/firstboot.env
         # install-box.sh talks to core's user systemd (systemctl --user): a system
         # unit running as core needs the user bus spelled out, linger starts it.
         Environment=XDG_RUNTIME_DIR=/run/user/1000

@@ -76,3 +76,11 @@ mkdir -p /etc/coreos/installer.d
 cat > /etc/coreos/installer.d/0050-dest-device.yaml <<DISKEOF
 dest-device: $BEST
 DISKEOF
+# In a VM (the CI job) the installed system also talks to the serial console:
+# a boot that never reaches SSH is otherwise invisible (#37, run 38160584395).
+if systemd-detect-virt --quiet 2>/dev/null; then
+  cat > /etc/coreos/installer.d/0060-vm-console.yaml <<KARGEOF
+append-karg: ["console=tty0", "console=ttyS0,115200n8"]
+KARGEOF
+  echo "pre-install: virtual machine — serial console karg appended"
+fi
