@@ -260,7 +260,7 @@ jobs:
           $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 sysctl -n net.ipv4.ip_unprivileged_port_start
-                # the stick's --tls internal reached box.yml through first boot and laib init (#45); no echo into box.yml here
+                # --tls internal from the stick reached box.yml through first boot and laib init (#45); no echo into box.yml here
                 grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
                 # hooks run in this commit'"'"'s image (#36): box.yml laib.hooksImage, before the first service with a hook
                 if grep -q "^laib:" /mnt/data/laib/state/box.yml; then sed -i "s|^laib:|laib:\n    hooksImage: ${{ env.HOOKS }}|" /mnt/data/laib/state/box.yml; else printf "laib:\n    hooksImage: %s\n" "${{ env.HOOKS }}" >> /mnt/data/laib/state/box.yml; fi
