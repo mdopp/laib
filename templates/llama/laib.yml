@@ -13,7 +13,8 @@ routes:
     port: 11435
     exposure: public
     auth: one_factor
-secrets: []
+secrets:
+  - name: MODEL_API_KEY            # the model key (builtin MODEL_KEY on this box): generated on the first apply; a peer box sets the same value by hand
 data:
   - path: ${DATA_DIR}/llama/models
     backup: false                # GGUF downloads; re-fetched by the hook, never backed up

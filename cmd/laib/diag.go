@@ -66,14 +66,14 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, findings)
 	}
 	if len(findings) == 0 {
-		fmt.Println("Keine Befunde.")
+		fmt.Fprintln(env.w(), "Keine Befunde.")
 	}
 	for _, f := range findings {
-		fmt.Printf("%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
+		fmt.Fprintf(env.w(), "%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
 		if f.Fix != "" {
-			fmt.Printf("   → %s", f.Fix)
+			fmt.Fprintf(env.w(), "   → %s", f.Fix)
 		}
-		fmt.Println()
+		fmt.Fprintln(env.w())
 	}
 	return exitOK
 }
@@ -137,12 +137,46 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 	if _, f := operatorState(operatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
-	// The backup target: none is yellow, one on the data disk itself is a nudge.
+	// Home Assistant's wiring (#55): with a token, the manual list becomes a checklist
+	out = append(out, haFindings(ctx, st, sec)...)
+	// The hardware (#59): disks by SMART, the box's temperature.
+	if only == "" {
+		out = append(out, hardwareFindings(ctx)...)
+	}
+	// The outside watchdog (#57): without it, a dead box tells nobody.
+	if st.Box.Watchdog.URL == "" {
+		out = append(out, Finding{Severity: "gelb", Probe: "watchdog", Detail: "kein Wächter außerhalb der Box (box.yml watchdog.url): wenn die Box ausfällt, erfährt es niemand", Fix: "einen healthchecks-artigen Ping-URL eintragen (eigener Dienst oder ein freier Anbieter); laib serve meldet sich alle fünf Minuten, Stille wird draußen zum Push"})
+	}
+	// The backup target: none is yellow, one on the data disk itself is a nudge
+	// for a week and red after it (#40) — a dead disk then takes the backup with it.
+	all, _ := journal.Read(env.paths.Journal, time.Time{})
+	var installed time.Time
+	var lastCheck time.Time
+	for _, e := range all {
+		if e.Verb == "init" && installed.IsZero() {
+			installed = e.T
+		}
+		if e.Verb == "backup" && e.Reason == "check" && e.Result == "green" && e.T.After(lastCheck) {
+			lastCheck = e.T
+		}
+	}
 	switch repo := st.Box.Backup.Repo; {
 	case repo == "":
 		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
 	case strings.HasPrefix(repo, "/") && strings.HasPrefix(repo, filepath.Dir(st.Box.DataDir)):
-		out = append(out, Finding{Severity: "info", Probe: "backup", Detail: "Backup liegt auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "zweites Repo auf NAS oder USB (backup.repo), oder ein Spiegel (laib disk add)"})
+		sev := "info"
+		if !installed.IsZero() && time.Since(installed) > 7*24*time.Hour {
+			sev = "rot"
+		}
+		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
+	}
+	if st.Box.Backup.Repo != "" {
+		if _, err := os.Stat(filepath.Join(env.paths.Home, "recovery-sheet.confirmed")); err != nil {
+			out = append(out, Finding{Severity: "gelb", Probe: "recovery", Detail: "das Wiederherstellungsblatt (age-Schlüssel, restic-Passwort) ist nicht als gesichert bestätigt: ohne es ist das Backup nach Plattenverlust unlesbar", Fix: "laib recovery-sheet  → ausdrucken, dann laib recovery-sheet --confirm"})
+		}
+		if lastCheck.IsZero() || time.Since(lastCheck) > 35*24*time.Hour {
+			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich"})
+		}
 	}
 	// The data RAID: one member by design is yellow, a lost member red.
 	if _, members := markerMembers(); members > 0 {

@@ -244,6 +244,16 @@ func (st *State) validate() []error {
 		case c.HostNetwork && !carveOut:
 			fail("services/%s: hostNetwork needs the service in box.yml hostNetwork (the closed carve-out list)", name)
 		}
+		for _, need := range c.Needs {
+			switch need {
+			case "mcp":
+				if st.Box.Laib.Listen == "127.0.0.1" {
+					fail("services/%s needs laib's MCP from a container: set box.yml laib.listen: 0.0.0.0 (the nftables drop keeps the LAN out, ADR 0012 §4)", name)
+				}
+			default:
+				fail("services/%s/laib.yml: needs %q is not a facility laib knows (mcp)", name, need)
+			}
+		}
 		for _, dep := range c.After {
 			if _, ok := st.Services[dep]; !ok {
 				fail("services/%s/laib.yml: after names %q, which is not under services/", name, dep)
@@ -258,6 +268,19 @@ func (st *State) validate() []error {
 					continue
 				}
 				fail("services/%s/%s: ${%s} has no value", name, file, v)
+			}
+		}
+	}
+	// one host port, one service (#46): two units publishing the same port
+	// never both start, and podman says so only at the second start
+	owner := map[string]string{}
+	for _, name := range st.ServiceNames() {
+		for _, content := range st.Services[name].Units {
+			for _, hp := range PublishedHostPorts(content) {
+				if prev, ok := owner[hp]; ok && prev != name {
+					fail("services/%s and services/%s both publish host port %s", prev, name, hp)
+				}
+				owner[hp] = name
 			}
 		}
 	}
@@ -318,7 +341,8 @@ func (st *State) ModelURL() string {
 // ModelLease is the lease endpoint, local or remote; empty when none.
 func (st *State) ModelLease() string {
 	if st.Box.Roles.Model != "" {
-		return "http://127.0.0.1:8787/api/model-lease"
+		// the lease is served by the proxy, on the proxy's port: one port everywhere (#42)
+		return strings.TrimSuffix(st.ModelURL(), "/v1") + "/api/model-lease"
 	}
 	return st.Box.Model.Lease
 }
@@ -451,4 +475,25 @@ func (st *State) purposeWarnings() []string {
 // generated on first apply like any declared secret.
 func OIDCSecretName(clientID string) string {
 	return "OIDC_" + strings.ToUpper(strings.ReplaceAll(clientID, "-", "_")) + "_SECRET"
+}
+
+// PublishedHostPorts lists the host ports a unit publishes (PublishPort=
+// [ip:]host:container[/proto]).
+func PublishedHostPorts(unit string) []string {
+	var out []string
+	for _, line := range strings.Split(unit, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "PublishPort=") {
+			continue
+		}
+		spec := strings.SplitN(strings.TrimPrefix(line, "PublishPort="), "/", 2)[0]
+		parts := strings.Split(spec, ":")
+		switch len(parts) {
+		case 2:
+			out = append(out, parts[0])
+		case 3:
+			out = append(out, parts[1])
+		}
+	}
+	return out
 }
