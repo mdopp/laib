@@ -284,6 +284,9 @@ storage:
           LAIB_GPU=${GPU}
           LAIB_GH_TOKEN=${GH_TOKEN}
           LAIB_SOURCE=${SOURCE}
+          LAIB_DNS_PROVIDER=${DNS_PROVIDER}
+          LAIB_DNS_TOKEN=${DNS_TOKEN}
+          LAIB_TLS=${TLS}
     - path: /usr/local/bin/laib-firstboot.sh
       mode: 0755
       contents:
@@ -320,7 +323,9 @@ storage:
           [ -n "${LAIB_MODEL_URL:-}" ] && flags+=(--model-url "$LAIB_MODEL_URL")
           [ -n "${LAIB_MODEL_LEASE:-}" ] && flags+=(--model-lease "$LAIB_MODEL_LEASE")
           [ "${LAIB_GPU:-}" = "1" ] && flags+=(--gpu)
-          rc=0; bash /tmp/install-box.sh "${flags[@]}" || rc=$?   # LAIB_GH_TOKEN comes from the environment
+          [ -n "${LAIB_DNS_PROVIDER:-}" ] && flags+=(--dns-provider "$LAIB_DNS_PROVIDER")
+          [ -n "${LAIB_TLS:-}" ] && flags+=(--tls "$LAIB_TLS")
+          rc=0; bash /tmp/install-box.sh "${flags[@]}" || rc=$?   # LAIB_GH_TOKEN and LAIB_DNS_TOKEN come from the environment
           if [ "$rc" = 75 ]; then KEEP=1; echo "laib-firstboot: rebooting into the layered tree; continues after"; exit 0; fi
           [ "$rc" = 0 ] || exit "$rc"
           sudo mkdir -p /etc/laib && sudo touch /etc/laib/installed

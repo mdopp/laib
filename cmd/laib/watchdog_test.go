@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,19 +11,6 @@ import (
 	"testing"
 	"time"
 )
-
-func captureStdout(t *testing.T, f func()) string {
-	t.Helper()
-	r, w, _ := os.Pipe()
-	old := os.Stdout
-	os.Stdout = w
-	f()
-	w.Close()
-	os.Stdout = old
-	var b bytes.Buffer
-	io.Copy(&b, r)
-	return b.String()
-}
 
 // #57 (1): while readiness is not red, serve pings the outside watchdog;
 // silence is the signal the outside turns into a push. Red boxes stay
