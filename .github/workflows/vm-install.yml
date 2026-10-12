@@ -94,7 +94,12 @@ jobs:
           drives=()
           for d in ${DISKS:-disk.qcow2 data1.qcow2 data2.qcow2}; do
             f=qcow2; [[ $d == *.raw ]] && f=raw
-            drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap")
+            # the OS disk without QEMU's zero detection: detect-zeroes=unmap turns the guest's
+            # zero writes into qcow2 discards, and a hard reset in the middle of that left a
+            # root no real disk would (#81: the same cut was green in run 38308352527 without it,
+            # red with it, and a guest-side sync did not help). The data disks keep it (thin images).
+            if [ "$d" = disk.qcow2 ]; then drives+=(-drive "file=$d,if=virtio,format=$f")
+            else drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap"); fi
           done
           rm -f qmp.sock
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
@@ -260,7 +265,7 @@ jobs:
           $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
                 sysctl -n net.ipv4.ip_unprivileged_port_start
-                # the stick's --tls internal reached box.yml through first boot and laib init (#45); no echo into box.yml here
+                # --tls internal from the stick reached box.yml through first boot and laib init (#45); no echo into box.yml here
                 grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
                 # hooks run in this commit'"'"'s image (#36): box.yml laib.hooksImage, before the first service with a hook
                 if grep -q "^laib:" /mnt/data/laib/state/box.yml; then sed -i "s|^laib:|laib:\n    hooksImage: ${{ env.HOOKS }}|" /mnt/data/laib/state/box.yml; else printf "laib:\n    hooksImage: %s\n" "${{ env.HOOKS }}" >> /mnt/data/laib/state/box.yml; fi
@@ -487,6 +492,6 @@ jobs:
         run: |
           echo "--- serial"; tail -c 20000 serial.log || true
           echo "--- build server"; tail -20 http.log || true
-          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; podman ps -a' || true
+          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- ignition files (#96: exec format error)"; for f in /usr/local/bin/laib-data-disk.sh /usr/local/bin/laib-firstboot.sh $(ls /etc/sysctl.d/* 2>/dev/null); do echo "$f"; sudo head -c 48 "$f" | od -c | head -3; sudo md5sum "$f"; done; systemctl status --no-pager systemd-sysctl 2>&1 | tail -6; for b in -3 -2 -1; do echo "boot $b data disk:"; journalctl --no-pager -b $b -u laib-data-disk 2>/dev/null | tail -2; done; sudo dmesg | grep -iE "xfs|vda4" | tail -10; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; podman ps -a' || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; echo "--- authelia"; journalctl --user --no-pager -u auth-authelia | tail -30; echo "--- lldap"; journalctl --user --no-pager -u auth-lldap | tail -30; systemctl --user --no-pager status auth-pod.service auth-lldap.service auth-authelia.service | head -40; echo "--- adguard"; journalctl --user --no-pager -u adguard | tail -30; echo "--- radicale"; journalctl --user --no-pager -u radicale | tail -40; podman logs --tail 40 systemd-radicale 2>&1 | tail -40; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 2h | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true

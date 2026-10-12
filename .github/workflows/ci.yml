@@ -35,4 +35,5 @@ jobs:
       - run: python3 -m unittest werkstatt/tests/test_autoloop.py werkstatt/tests/test_werkstatt44.py && python3 -m py_compile werkstatt/laibctl.py $(grep -l '^#!/usr/bin/env python3' templates/*/pre-start templates/*/post-deploy)
       - run: scripts/loc.sh
       - run: scripts/drift.sh
+      - run: scripts/workflow-syntax.sh
       - run: scripts/e2e.sh
