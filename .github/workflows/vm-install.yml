@@ -238,7 +238,14 @@ jobs:
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
             if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
-              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -200; ./root-forensics.sh; exit 1
+              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -200; ./root-forensics.sh
+              # the cut stays red (the last step fails the job), but the steps after it still run:
+              # reinstall once more without a cut, so a flaky cut does not hide every later proof
+              echo "POWERCUT_RED=1" >> "$GITHUB_ENV"
+              ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
+              for j in $(seq 1 90); do $SSH 'test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' >/dev/null 2>&1 && break; sleep 10; done
+              $SSH 'test -f /etc/laib/installed' || { echo "the reinstall without a cut did not finish either"; exit 1; }
+              echo "reinstalled without a cut; the power-cut proof stays red"; break
             fi
             [ $i -eq 120 ] && { echo "laib never became ready after the reinstall and the cut"; $SSH 'journalctl --no-pager -b -u laib-firstboot | tail -30; cat /mnt/data/laib/apply.lock' || echo "(no ssh)"; echo "--- serial (XFS, ostree, firstboot lines)"; grep -aE "XFS|xfs|ostree|growfs|firstboot|EXT4|Ignition|vda4|I/O error|blk_update" serial.log | tail -120; echo "--- serial tail"; tail -c 64000 serial.log | tail -150; ./root-forensics.sh; exit 1; }
             sleep 10
@@ -487,6 +494,11 @@ jobs:
                 $L secret list | grep -q RESTIC_PASSWORD
                 $L journal --since 1h | grep -E "restore|backup" | tail -8
                 echo "disaster recovery done with the sheet alone"'
+      - name: the power cut during the first boot was survived (#81)
+        if: always()
+        run: |
+          if [ "${POWERCUT_RED:-}" = 1 ]; then echo "the box did not come back by itself after the power cut in the first boot after a reinstall (#81) — the forensics are in the reinstall step"; exit 1; fi
+          echo "power cut survived (or not reached)"
       - name: logs
         if: always()
         run: |
