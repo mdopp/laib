@@ -173,3 +173,22 @@ the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
 tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
 diag` turns the last four into findings. An enabled operator that does
 nothing is never silent.
+
+### One lock, pauses, pending activation (#39)
+
+Everything that mutates the box — `apply`, `converge`, `restore`, `remove`,
+`approve`, `rollback` — holds the one lock (`<home>/apply.lock`, a flock the
+kernel releases when the process dies, with holder, pid and start inside)
+for its whole duration. A `converge` tick that finds the lock taken is
+skipped and journaled `übersprungen: gesperrt durch restore:human:core`; a
+lock whose process is gone is taken over with a journal line.
+`laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
+(apply tier): a paused service is left alone by converge and shows as
+`pausiert von … bis …` in `/ready` (`paused`), status and the box page;
+`restore` pauses the service it rewrites, the GPU lease pauses `llama`
+while a mode stands. Apply records the services whose activation it owes
+(`<home>/apply.pending`, `/ready` `pending`) before it writes files and
+clears it after verify; the next apply or converge restarts and verifies
+them even when the file diff is clean. Restart-only converge runs are
+journaled green with the units and count against the budget of three per
+hour.

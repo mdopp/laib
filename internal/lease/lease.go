@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/boxfs"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -70,6 +72,10 @@ type Lease struct {
 
 // AutoHolder names the window the proxy takes itself.
 const AutoHolder = "router"
+
+// PausedService is the laib service whose units a mode stops (the llama
+// template); the pause marker keeps converge off them while the lease stands.
+const PausedService = "llama"
 
 // Systemctl is the seam to `systemctl --user`; tests swap it.
 var Systemctl = func(ctx context.Context, verb string, units []string) error {
@@ -238,6 +244,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 		if err := s.write(l); err != nil {
 			return nil, err
 		}
+		apply.WritePause(boxfs.Default(), apply.Pause{Service: PausedService, By: "lease:" + holder, Until: l.Until.UTC(), Reason: "exclusive"})
 		Systemctl(ctx, "stop", s.exclusiveUnits())
 		l.Ready = true
 		return l, s.write(l)
@@ -246,8 +253,11 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 		return nil, err
 	}
 	if len(m.StopUnits) > 0 {
+		// the units are the lease holder's now (#39): converge must not start them again
+		apply.WritePause(boxfs.Default(), apply.Pause{Service: PausedService, By: "lease:" + holder, Until: l.Until.UTC(), Reason: "mode " + mode + ": " + strings.Join(m.StopUnits, ", ")})
 		Systemctl(ctx, "stop", m.StopUnits)
 	} else if len(left.StopUnits) > 0 {
+		apply.Resume(boxfs.Default(), PausedService)
 		Systemctl(ctx, "start", left.StopUnits)
 	}
 	if m.Voice == "cpu" {

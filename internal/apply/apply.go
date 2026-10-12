@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
@@ -39,58 +38,6 @@ type Result struct {
 	NewSecrets map[string]string `json:"-"` // emitted by post-deploy hooks; the caller stores them
 }
 
-// ErrLocked means another apply holds the lock (state `eingeschränkt`).
-var ErrLocked = errors.New("apply is locked")
-
-// Lock takes the apply lock; the content names the holder and its pid for
-// /ready. A lock whose process is gone (a kill mid-apply, a power cut
-// during the first boot, #37) is stale and taken over, not honoured for
-// ever.
-func Lock(paths boxfs.Paths, holder string) (func(), error) {
-	if err := os.MkdirAll(filepath.Dir(paths.Lock), 0o755); err != nil {
-		return nil, err
-	}
-	if LockHolder(paths) == "" {
-		os.Remove(paths.Lock) // absent or stale
-	}
-	f, err := os.OpenFile(paths.Lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil, ErrLocked
-		}
-		return nil, err
-	}
-	fmt.Fprintf(f, "%s pid %d", holder, os.Getpid())
-	f.Close()
-	return func() { os.Remove(paths.Lock) }, nil
-}
-
-// LockHolder returns who holds the lock, or "" when there is none or the
-// holder's process is gone.
-func LockHolder(paths boxfs.Paths) string {
-	b, err := os.ReadFile(paths.Lock)
-	if err != nil {
-		return ""
-	}
-	h := strings.TrimSpace(string(b))
-	if _, after, ok := strings.Cut(h, " pid "); ok {
-		var pid int
-		if _, err := fmt.Sscan(after, &pid); err == nil && pid > 0 && !processAlive(pid) {
-			return ""
-		}
-	}
-	return h
-}
-
-func processAlive(pid int) bool {
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = p.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, os.ErrPermission)
-}
-
 // Run applies a computed plan. The snapshot is a Git commit of the state repo
 // (the data-volume snapshot comes with backup, later); every written file is
 // written atomically.
@@ -104,6 +51,11 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		return res, fmt.Errorf("snapshot: %w", err)
 	}
 	res.Commit = commit
+	// activation owed from here until verify ran (#39): an apply killed in
+	// between is finished by the next apply or converge
+	if err := WritePending(paths, p.Services, reason); err != nil {
+		return res, fmt.Errorf("pending marker: %w", err)
+	}
 
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
@@ -230,6 +182,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Green = false
 		}
 	}
+	ClearPending(paths) // activated and verified
 	return res, nil
 }
 

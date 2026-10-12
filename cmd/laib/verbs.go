@@ -43,17 +43,19 @@ func loadState(env *cliEnv) (*state.State, error) {
 
 // readiness is the one state with three values (docs/DESIGN.md).
 type readiness struct {
-	State     string `json:"state"`
-	Services  int    `json:"services"`
-	Green     int    `json:"green"`
-	Yellow    int    `json:"yellow"`
-	Red       int    `json:"red"`
-	LastHeard string `json:"lastHeard"`
-	Lock      string `json:"lock,omitempty"`
-	Drift     int    `json:"drift"`              // files on the box that differ from the state
-	Operator  string `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
-	Firewall  string `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
-	Version   string `json:"version"`            // of the running laib: the update path checks it (#37)
+	State     string   `json:"state"`
+	Services  int      `json:"services"`
+	Green     int      `json:"green"`
+	Yellow    int      `json:"yellow"`
+	Red       int      `json:"red"`
+	LastHeard string   `json:"lastHeard"`
+	Lock      string   `json:"lock,omitempty"`
+	Drift     int      `json:"drift"`              // files on the box that differ from the state
+	Operator  string   `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	Firewall  string   `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
+	Paused    []string `json:"paused,omitempty"`   // services converge leaves alone: "<svc> von <wer> bis <wann>" (#39)
+	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
+	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
 }
 
 type serviceStatus struct {
@@ -83,6 +85,8 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 			r.Drift = len(p.Changes)
 		}
 	}
+	paused := apply.Paused(env.paths)
+	r.Pending = apply.Pending(env.paths)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		row := serviceStatus{Name: name, State: "grün", Units: map[string]string{}}
@@ -99,10 +103,15 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 				row.State = "rot"
 			}
 		}
+		if pz, ok := paused[name]; ok {
+			row.State = "pausiert"
+			row.Detail = fmt.Sprintf("von %s bis %s %s", pz.By, pz.Until.Local().Format("02.01. 15:04"), pz.Reason)
+			r.Paused = append(r.Paused, fmt.Sprintf("%s von %s bis %s", name, pz.By, pz.Until.Local().Format("02.01. 15:04")))
+		}
 		rows = append(rows, row)
 		r.Services++
 		switch row.State {
-		case "grün":
+		case "grün", "pausiert":
 			r.Green++
 		case "gelb":
 			r.Yellow++
