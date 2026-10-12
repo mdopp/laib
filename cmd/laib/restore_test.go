@@ -79,6 +79,7 @@ func newRbox(t *testing.T) *rbox {
 		sec = map[string]string{}
 	}
 	sec["DNS_API_TOKEN"] = "x"
+	sec["RESTIC_PASSWORD"] = "pw" // the repo exists after the first backup, and so does its password (#40)
 	secrets.Save(paths.Secrets, paths.Key, sec)
 	st, err := loadState(b.env)
 	if err != nil {
