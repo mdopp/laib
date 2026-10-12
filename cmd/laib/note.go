@@ -34,6 +34,9 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		words = append(words, args[i])
 	}
 	text := strings.TrimSpace(strings.Join(words, " "))
+	if len(text) > 4000 {
+		text = text[:4000] + "…" // a note is a few sentences; the journal reader has a line limit (#35)
+	}
 	if text == "" {
 		return fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
 	}

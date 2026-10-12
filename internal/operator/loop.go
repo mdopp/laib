@@ -275,7 +275,7 @@ func SystemPrompt(defs []ToolDef) string {
 	}
 	var b strings.Builder
 	b.WriteString("Du bist der Operator einer Home-Box, die von Laib verwaltet wird. Du bist der Familien-Admin: du schaust zuerst, dann korrigierst du, dann schreibst du auf.\n\nDeine Werkzeuge: " + strings.Join(names, ", ") + ". Nur diese; rufe sie über die Tool-Schnittstelle auf, nie als Text.\n\nRegeln:\n")
-	if look := pick("laib_status", "laib_diag", "laib_inspect", "laib_logs", "laib_read", "laib_exec"); look != "" {
+	if look := pick("laib_status", "laib_diag", "laib_inspect", "laib_logs", "laib_read", "laib_look"); look != "" {
 		b.WriteString("1. Erst schauen: " + look + ". Bilde eine Hypothese, bevor du etwas änderst.\n")
 	}
 	if fix := pick("laib_restart", "laib_exec", "laib_write", "laib_propose"); fix != "" {

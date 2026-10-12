@@ -140,6 +140,14 @@ type Policy struct {
 	// (a human decides). converge is "on" or "off" (the ten-minute loop).
 	// Classes: values, template-update, new-service, patch, remove.
 	Autonomy map[string]string `yaml:"autonomy"`
+	// Envelope: snapshot "required" (default) or "optional" — whether a
+	// class-2 action may go ahead without a pre-repair snapshot (#35).
+	Envelope Envelope `yaml:"envelope"`
+}
+
+// Envelope tunes the operator's envelope.
+type Envelope struct {
+	Snapshot string `yaml:"snapshot"`
 }
 
 // Hand is one agent identity.

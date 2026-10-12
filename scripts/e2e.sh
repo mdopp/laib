@@ -49,6 +49,8 @@ exit 0
 SH
 cat > "$WORK/bin/restic" <<'SH'
 #!/usr/bin/env sh
+# RESTIC_RC=1 makes it fail like a repo that is gone (#35: the envelope must refuse then)
+if [ "${RESTIC_RC:-0}" != 0 ]; then echo "restic FAIL $@" >> "${SYSTEMCTL_LOG:-/dev/null}"; exit "$RESTIC_RC"; fi
 echo "restic $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
 [ -n "${SHIM_RESTIC_FAIL:-}" ] && { echo "Fatal: unable to open repository (shim)" >&2; exit 1; }
 # a repo exists only after init (#40: backupPrep asks for the sheet's password when it does)
@@ -143,6 +145,12 @@ sed -i "s#^data: \[\]#data:\n  - path: $WORK/data/whoami/cfg#" "$LAIB_HOME/state
 LAIB_ACTOR=ops "$BIN" inspect whoami | grep -q "container systemd-whoami" || fail "inspect"
 LAIB_ACTOR=ops "$BIN" read whoami "$WORK/data/whoami/cfg/app.conf" | grep -q "key=value" || fail "read"
 if LAIB_ACTOR=ops "$BIN" read whoami /etc/passwd >/dev/null 2>&1; then fail "read escaped the jail"; fi
+# #35: the envelope fails closed — no snapshot, no write; looking costs no budget; exec stays in the service's own containers
+if echo "key=evil" | RESTIC_RC=1 LAIB_ACTOR=ops "$BIN" write whoami "$WORK/data/whoami/cfg/app.conf" >/dev/null 2>&1; then fail "write went ahead although the snapshot failed"; fi
+grep -q "key=value" "$WORK/data/whoami/cfg/app.conf" || fail "the refused write changed the file"
+if LAIB_ACTOR=ops "$BIN" exec whoami --container systemd-caddy -- true >/dev/null 2>&1; then fail "exec reached another service's container"; fi
+LAIB_ACTOR=ops "$BIN" look whoami -- cat /etc/hostname | grep -q "exec in systemd-whoami: cat /etc/hostname" || fail "look"
+if LAIB_ACTOR=ops "$BIN" look whoami -- rm -rf / >/dev/null 2>&1; then fail "look ran a command that changes things"; fi
 echo "key=new" | LAIB_ACTOR=ops "$BIN" write whoami "$WORK/data/whoami/cfg/app.conf" >/dev/null 2>&1 || fail "write exit $?"
 grep -q "key=new" "$WORK/data/whoami/cfg/app.conf" || fail "write content"
 LAIB_ACTOR=ops "$BIN" exec whoami -- cat /etc/hostname | grep -q "exec in systemd-whoami: cat /etc/hostname" || fail "exec"
