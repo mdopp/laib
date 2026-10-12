@@ -32,6 +32,15 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if !ok {
 		return fail(fmt.Errorf("unknown service %q", name))
 	}
+	// nobody may need it (#50): a dependant left behind makes the state
+	// unloadable, and the refusal comes before anything is stopped or deleted
+	for _, other := range st.ServiceNames() {
+		for _, dep := range st.Services[other].Contract.After {
+			if dep == name {
+				return fail(fmt.Errorf("%s braucht %s (after:) — erst dort entfernen", other, name))
+			}
+		}
+	}
 	for role, holder := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "identity": st.Box.Roles.Identity, "dns": st.Box.Roles.DNS, "model": st.Box.Roles.Model} {
 		if holder == name {
 			return fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))

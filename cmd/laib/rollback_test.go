@@ -125,3 +125,30 @@ func TestOperatorDisableStopsTheUnitAndRevokesTheToken(t *testing.T) {
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
+
+// #50 (2): removing a service another one names in after: is refused in
+// plain words, before anything is stopped or deleted.
+func TestRemoveRefusesWhenAnotherServiceDependsOnIt(t *testing.T) {
+	c := newCbox(t)
+	dir := filepath.Join(c.env.paths.Home, "registries", "t", "templates", "dep")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "laib.yml"), []byte("name: dep\ntemplate: {registry: t, name: dep, version: 1}\nafter: [whoami]\nroutes: []\nsecrets: []\ndata: []\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "values.example.yml"), []byte("IMAGE: docker.io/library/busybox:stable\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "dep.container"), []byte("[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n"), 0o644)
+	if rc := cmdAdd(context.Background(), c.env, []string{"dep"}); rc != exitOK {
+		t.Fatalf("add rc %d", rc)
+	}
+	c.calls = nil
+	if rc := cmdRemove(context.Background(), c.env, []string{"whoami"}); rc == exitOK {
+		t.Fatal("whoami removed although dep needs it")
+	}
+	if strings.Contains(strings.Join(c.calls, "\n"), "systemctl --user stop") {
+		t.Fatalf("something was stopped before the refusal:\n%s", strings.Join(c.calls, "\n"))
+	}
+	if _, err := os.Stat(filepath.Join(c.env.paths.State, "services", "whoami")); err != nil {
+		t.Fatal("whoami was deleted from the state")
+	}
+	if st, err := loadState(c.env); err != nil || st.Services["whoami"] == nil {
+		t.Fatalf("the state must still load with whoami: %v", err)
+	}
+}

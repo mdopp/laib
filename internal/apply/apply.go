@@ -57,6 +57,16 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		return res, fmt.Errorf("pending marker: %w", err)
 	}
 
+	// role outputs are validated before anything is written (#50): a
+	// Caddyfile a snippet broke never reaches the box
+	for _, c := range p.Changes {
+		if c.Kind == "delete" {
+			continue
+		}
+		if err := ValidateOutput(ctx, st, c.Path, p.Output[c.Path]); err != nil {
+			return res, err
+		}
+	}
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
@@ -167,12 +177,22 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Restarted = append(res.Restarted, unit)
 		}
 	}
-	// Verify what changed; with no change, the scoped service or everything.
-	// A service the plan only deleted (a rollback, a remove) is gone from the
-	// state: nothing to verify, no hook to run (#41).
+	// Verify what changed — and every role restarted for a changed output
+	// (#50: a Caddy restarted into a bad config was never looked at); with
+	// no change, the scoped service or everything. A service the plan only
+	// deleted (a rollback, a remove) is gone from the state: nothing to
+	// verify, no hook to run (#41).
 	var targets []string
+	seenTarget := map[string]bool{}
 	for _, name := range p.Services {
-		if _, ok := st.Services[name]; ok {
+		if _, ok := st.Services[name]; ok && !seenTarget[name] {
+			seenTarget[name] = true
+			targets = append(targets, name)
+		}
+	}
+	for _, name := range restartOrder {
+		if _, ok := st.Services[name]; ok && !seenTarget[name] {
+			seenTarget[name] = true
 			targets = append(targets, name)
 		}
 	}
@@ -385,4 +405,31 @@ func unitOfFile(path string) string {
 		return base
 	}
 	return ""
+}
+
+// ValidateOutput checks a rendered role output before it is written (#50).
+// The Caddyfile runs through `caddy validate` in the proxy's own image —
+// the config it will be fed, with the adapter it will use. Tests swap it.
+var ValidateOutput = func(ctx context.Context, st *state.State, key, content string) error {
+	if key != "caddy/Caddyfile" {
+		return nil
+	}
+	image := "ghcr.io/mdopp/laib-caddy:2"
+	if svc, ok := st.Services[st.Box.Roles.Proxy]; ok {
+		if v, ok := svc.Values["IMAGE"]; ok && v.Literal != "" {
+			image = v.Literal
+		}
+	}
+	tmp, err := os.CreateTemp("", "laib-caddyfile-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	tmp.WriteString(content)
+	tmp.Close()
+	out, err := sysd.Run(ctx, "podman", "run", "--rm", "-v", tmp.Name()+":/tmp/Caddyfile:ro,z", image, "caddy", "validate", "--config", "/tmp/Caddyfile", "--adapter", "caddyfile")
+	if err != nil {
+		return fmt.Errorf("the rendered Caddyfile does not validate (nothing written): %s", strings.TrimSpace(out))
+	}
+	return nil
 }
