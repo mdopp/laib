@@ -491,7 +491,7 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 	var env []string
 	env = append(env,
 		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
-		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render,
+		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
 		"MODEL_URL="+st.ModelURL(), "MODEL_LEASE="+st.ModelLease(), "MODEL_KEY="+modelKey,
 		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
 	for k, v := range svc.Values {

@@ -1,6 +1,8 @@
 package persona
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -296,5 +298,43 @@ func TestTheToolTakesTheLanguageAndDefaultsToGerman(t *testing.T) {
 	out, _ = srv.Tools[0].Call(nil, map[string]any{"eingabe": "What can you do?", "sitzung": "Bob", "sprache": "en"})
 	if !strings.Contains(out, "WOPR MAIN DIRECTORY") {
 		t.Fatalf("english when asked:\n%s", out)
+	}
+}
+
+// #127: Hermes shows the model the sender's Signal profile name, not the
+// number, so the engine resolves the name through signal-cli's contacts in
+// the pod. One match: that number's persona; none or two: the house's. A
+// session with another persona than the house's tells the model in a FIGUR
+// line who to be.
+func TestANameResolvesToItsNumbersPersona(t *testing.T) {
+	contacts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/contacts/+4911100000" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Write([]byte(`[{"number":"+4917012345678","uuid":"u-anna","name":"","profile_name":"Anna","profile":{"given_name":"Anna","lastname":"Muster"}},
+			{"number":"+4917000000001","uuid":"u-ben1","profile_name":"Ben"},{"number":"+4917000000002","uuid":"u-ben2","name":"Ben"}]`))
+	}))
+	defer contacts.Close()
+	c := joshua()
+	c.ByName = map[string]*state.Persona{"hal": hal()}
+	c.ByName["hal"].Files = map[string]string{"style.md": "Calm, polite, a little too calm.\n\nMore lines.\n"}
+	c.Chat = map[string]string{"+4917012345678": "hal", "+4917000000001": "hal"}
+	c.Resolve = SignalContacts(contacts.URL, "+4911100000", nil)
+	j := New(func() []string { return []string{"laib"} }, c)
+	if out := j.Talk("Anna", "en", "menu"); !strings.HasSuffix(out, "HAL>") {
+		t.Fatalf("Anna's profile name resolves to her number and its persona:\n%s", out)
+	}
+	if out := j.Talk("Anna", "en", "what's on?"); out != "WEITER: -\nPROMPT: HAL>\nFIGUR: HAL — Calm, polite, a little too calm." {
+		t.Fatalf("a chat persona's request names the figure for the model:\n%s", out)
+	}
+	if out := j.Talk("Ben", "en", "menu"); !strings.HasSuffix(out, "JOSHUA>") {
+		t.Fatalf("an ambiguous name gets the house persona:\n%s", out)
+	}
+	if out := j.Talk("Ben", "en", "what's on?"); strings.Contains(out, "FIGUR") {
+		t.Fatalf("the house persona needs no FIGUR line:\n%s", out)
+	}
+	if out := j.Talk("+4917000000001", "en", "menu"); !strings.HasSuffix(out, "HAL>") {
+		t.Fatalf("a number still works as is:\n%s", out)
 	}
 }

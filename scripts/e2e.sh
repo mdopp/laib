@@ -248,6 +248,19 @@ grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warning
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
 grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists the Bote's tools (#121, #133)"
+# #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
+mkdir -p "$WORK/render/persona/hal"
+printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"
+( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  LAIB_RENDER_DIR="$WORK/render" PERSONA=hal \
+  MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
+  SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
+grep -q "Du bist HAL, ruhig und höflich" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks as the house persona's style.md (#127)"
+if grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "another house persona still says Joshua (#127)"; fi
+for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "jede Nachricht zuerst an das Werkzeug persona" "FIGUR"; do
+  grep -q "$rule" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the rules are in every persona's SOUL: $rule (#127)"
+done
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
 python3 -c '
 import http.server, threading, sys

@@ -10,8 +10,11 @@ package persona
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -51,17 +54,81 @@ type session struct {
 // Cast is who speaks to whom: the house persona, and per Signal number another
 // one (box.yml chatPersonas, rendered to render/persona/chat.yml).
 type Cast struct {
-	House  *state.Persona
-	ByName map[string]*state.Persona
-	Chat   map[string]string // number → persona name
+	House   *state.Persona
+	ByName  map[string]*state.Persona
+	Chat    map[string]string         // number → persona name
+	Resolve func(label string) string // the session's label (a profile name) → its number; "" when unknown or ambiguous
 }
 
-// For is the persona of one session (its id is the person's number).
+// For is the persona of one session: its id is the number, or the name
+// Hermes shows the model, resolved to a number.
 func (c Cast) For(sid string) *state.Persona {
 	if p := c.ByName[c.Chat[sid]]; p != nil {
 		return p
 	}
+	if c.Resolve != nil {
+		if p := c.ByName[c.Chat[c.Resolve(sid)]]; p != nil {
+			return p
+		}
+	}
 	return c.House
+}
+
+// SignalContacts resolves a sender's label to their number through
+// signal-cli's contacts (#127): Hermes shows the model the profile name, not
+// the number. Exactly one contact must match; a persona is style only, so a
+// look-alike name costs a costume, never a right.
+func SignalContacts(base, account string, h *http.Client) func(string) string {
+	if h == nil {
+		h = &http.Client{Timeout: 5 * time.Second}
+	}
+	var mu sync.Mutex
+	var cached map[string][]string
+	var at time.Time
+	return func(label string) string {
+		mu.Lock()
+		defer mu.Unlock()
+		if cached == nil || time.Since(at) > 5*time.Minute {
+			cached, at = map[string][]string{}, time.Now()
+			resp, err := h.Get(base + "/v1/contacts/" + url.PathEscape(account))
+			if err == nil {
+				var list []struct {
+					Number, Uuid, Name string
+					ProfileName        string `json:"profile_name"`
+					GivenName          string `json:"given_name"`
+					Profile            struct {
+						GivenName string `json:"given_name"`
+						Lastname  string `json:"lastname"`
+					}
+					Nickname struct{ Name string }
+				}
+				json.NewDecoder(resp.Body).Decode(&list)
+				resp.Body.Close()
+				for _, c := range list {
+					for _, k := range []string{c.Number, c.Uuid, c.Name, c.ProfileName, c.GivenName, c.Nickname.Name, c.Profile.GivenName,
+						strings.TrimSpace(c.Profile.GivenName + " " + c.Profile.Lastname)} {
+						if k = strings.ToLower(strings.TrimSpace(k)); k != "" && !slices.Contains(cached[k], c.Number) {
+							cached[k] = append(cached[k], c.Number)
+						}
+					}
+				}
+			}
+		}
+		if n := cached[strings.ToLower(strings.TrimSpace(label))]; len(n) == 1 {
+			return n[0]
+		}
+		return ""
+	}
+}
+
+// figur tells the model who to be for a person whose persona is not the
+// house's (the SOUL is the house's): the name and the style's first paragraph.
+func (t *Terminal) figur(s *session) string {
+	if s.p == t.cast.House {
+		return ""
+	}
+	style := strings.TrimSpace(strings.SplitN(strings.TrimSpace(s.p.Files["style.md"]), "\n\n", 2)[0])
+	return "\nFIGUR: " + s.p.Display + " — " + strings.Join(strings.Fields(style), " ")
 }
 
 // LoadCast reads what laib rendered to render/persona: chat.yml names the
@@ -259,13 +326,13 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		case n >= 0:
 			return t.directory(s, w)
 		default:
-			return "WEITER: -\nPROMPT: " + prompt(s)
+			return "WEITER: -\nPROMPT: " + prompt(s) + t.figur(s)
 		}
 	}
 	if s.ctx == games {
 		return t.inGames(s, in)
 	}
-	return "WEITER: " + s.ctx + "\nPROMPT: " + prompt(s)
+	return "WEITER: " + s.ctx + "\nPROMPT: " + prompt(s) + t.figur(s)
 }
 
 // game is one message to a running game; done is false when the message is
@@ -320,7 +387,7 @@ func (t *Terminal) inGames(s *session, in string) string {
 	case has(in, "LIST", "GAMES", "SPIEL"):
 		return t.gamesList(s)
 	}
-	return "WEITER: -\nPROMPT: " + prompt(s)
+	return "WEITER: -\nPROMPT: " + prompt(s) + t.figur(s)
 }
 
 // gamesList is the games level: WOPR's shows the film's list.
@@ -592,7 +659,7 @@ func Server(t *Terminal, version string) *mcpserver.Server {
 				"Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und ruf noch einmal auf.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},
-				"sitzung": map[string]any{"type": "string", "description": "wer schreibt: die Signal-Nummer (+49…), sonst der Name; dieselbe Person, dieselbe Sitzung, und die Nummer wählt ihre Figur"},
+				"sitzung": map[string]any{"type": "string", "description": "wer schreibt, so wie du die Person siehst (Name oder Nummer); dieselbe Person, dieselbe Sitzung, und daraus wählt das Werkzeug ihre Figur"},
 				"sprache": map[string]any{"type": "string", "enum": []string{"de", "en"}, "description": "die Sprache der Person; ohne Angabe de"},
 			}},
 			Call: func(_ context.Context, args map[string]any) (string, error) {

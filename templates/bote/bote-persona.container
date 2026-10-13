@@ -9,6 +9,9 @@ Environment=PERSONA_DATA=/data
 # the house persona and the chat map (ADR 0020)
 Environment=PERSONA=${PERSONA}
 Environment=PERSONA_REV=${PERSONA_REV}
+# a Signal profile name resolves to its number through signal-cli's contacts in the pod (#127)
+Environment=SIGNAL_URL=http://127.0.0.1:8080
+Environment=SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT}
 Volume=/mnt/data/laib/render/persona:/personas:ro,z
 Volume=${DATA_DIR}/bote/persona:/data:Z
 AutoUpdate=registry
