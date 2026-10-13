@@ -217,11 +217,7 @@ func (s *Server) read() *Lease {
 func (s *Server) write(l *Lease) error {
 	os.MkdirAll(s.cfg.LeaseDir, 0o755)
 	b, _ := json.MarshalIndent(l, "", "  ")
-	tmp := s.leasePath() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.leasePath())
+	return boxfs.WriteAtomic(s.leasePath()+".tmp", s.leasePath(), b, 0o644)
 }
 
 func (s *Server) clear() { os.Remove(s.leasePath()) }

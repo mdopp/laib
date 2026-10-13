@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -297,11 +298,8 @@ func save(inbox string, p *Proposal) error {
 	if err != nil {
 		return err
 	}
-	tmp := filepath.Join(inbox, strconv.Itoa(p.ID)+".json.tmp")
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, strings.TrimSuffix(tmp, ".tmp"))
+	path := filepath.Join(inbox, strconv.Itoa(p.ID)+".json")
+	return boxfs.WriteAtomic(path+".tmp", path, b, 0o644)
 }
 
 func now() time.Time { return time.Now().UTC() }
