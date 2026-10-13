@@ -171,3 +171,17 @@ func TestUnrecognisedInputNamesTheValidCommands(t *testing.T) {
 		t.Fatalf("MITTE is 5:\n%s", out)
 	}
 }
+
+// A first message in free words opens the directory, not a list it happens
+// to contain ("Lass uns was SPIELEn"); "Joshua" mid-game brings it back too.
+func TestFreeWordsOpenTheDirectory(t *testing.T) {
+	j := term()
+	if out := j.Input("p", "Lass uns was spielen"); !strings.Contains(out, "WOPR MAIN DIRECTORY") {
+		t.Fatalf("free words first:\n%s", out)
+	}
+	j.Input("p", "play tic-tac-toe")
+	j.Input("p", "1")
+	if out := j.Input("p", "Joshua"); !strings.Contains(out, "WOPR MAIN DIRECTORY") {
+		t.Fatalf("Joshua mid-game:\n%s", out)
+	}
+}
