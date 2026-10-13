@@ -13,6 +13,6 @@ HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `haus` 
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_HA_TOKEN
 HA_TOKEN: {secret: BOTE_HA_TOKEN}
 RELAY_IMAGE: ghcr.io/mdopp/laib-relay:latest      # the approval relay (#48)
-JOSHUA_IMAGE: ghcr.io/mdopp/laib-joshua:latest    # WOPR from WarGames, the easter egg (#119)
+PERSONA_IMAGE: ghcr.io/mdopp/laib-persona:latest  # the persona engine (ADR 0020); today Joshua
 APPROVER_TOKEN: {secret: BOTE_APPROVER_TOKEN}
 LAIB_MCP_URL: http://host.containers.internal:5900/mcp

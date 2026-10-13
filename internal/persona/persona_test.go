@@ -1,4 +1,4 @@
-package joshua
+package persona
 
 import (
 	"strings"
@@ -125,8 +125,8 @@ func TestLogoffEndsTheSessionAndAnIdleOneExpires(t *testing.T) {
 
 func TestTheToolPassesTextThrough(t *testing.T) {
 	srv := Server(term(), "test")
-	if len(srv.Tools) != 1 || srv.Tools[0].Name != "joshua" {
-		t.Fatalf("one tool, joshua: %+v", srv.Tools)
+	if len(srv.Tools) != 1 || srv.Tools[0].Name != "persona" {
+		t.Fatalf("one tool, persona: %+v", srv.Tools)
 	}
 	out, err := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Shall we play a game?", "sitzung": "Anna", "sprache": "en"})
 	if err != nil || !strings.Contains(out, "SHALL WE PLAY A GAME?") {

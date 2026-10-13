@@ -1,8 +1,8 @@
-name: joshua-image
+name: persona-image
 on:
   push:
     branches: [main]
-    paths: ["cmd/joshua/**", "internal/joshua/**", "internal/mcpserver/**", "joshua/**", "go.mod", "go.sum"]
+    paths: ["cmd/persona/**", "internal/persona/**", "internal/mcpserver/**", "persona/**", "go.mod", "go.sum"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,6 +20,6 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: joshua/Containerfile
+          file: persona/Containerfile
           push: true
-          tags: ghcr.io/mdopp/laib-joshua:latest,ghcr.io/mdopp/laib-joshua:${{ github.sha }}
+          tags: ghcr.io/mdopp/laib-persona:latest,ghcr.io/mdopp/laib-persona:${{ github.sha }}

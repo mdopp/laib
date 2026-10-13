@@ -39,6 +39,7 @@ cmd/laib-operator/   the admin agent (ADR 0013), a host unit
 cmd/laib-lease/      the model role's policy proxy and GPU lease (ADR 0011)
 cmd/frage/           "was ist …": SearXNG + summary, OpenAI-compatible and MCP
 cmd/automat/         Home Assistant automations as an MCP tool in the bote pod
+cmd/persona/         the Bote's persona engine: directory, levels, gimmicks (ADR 0020)
 internal/state       load + validate the state repo
 internal/render      pure renderers: quadlet, caddy, authelia, adguard, nftables
 internal/plan        state → files → diff against the box
