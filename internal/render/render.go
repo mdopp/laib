@@ -60,6 +60,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			for file, content := range p.Files {
 				out["persona/"+pname+"/"+file] = content
 			}
+			out["persona/"+pname+"/persona.json"] = p.JSON()
 		}
 		out["persona/chat.yml"] = st.ChatMap()
 	}

@@ -3,6 +3,7 @@ package state
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -36,6 +37,17 @@ type Persona struct {
 }
 
 var nonID = regexp.MustCompile(`[^a-z0-9]+`)
+
+// JSON is the resolved persona for consumers without a YAML parser: Haus,
+// and the app through Haus (#129). Defaults filled in, files left out.
+func (p *Persona) JSON() string {
+	b, _ := json.Marshal(map[string]any{
+		"name": p.Name, "display": p.Display, "languages": p.Languages, "phrase": p.Wakeword.Phrase,
+		"wakeword": p.WakewordID(), "voice": p.Voice, "prompt": p.Prompt, "greeting": p.Greeting,
+		"colors": p.Colors, "gimmicks": p.Gimmicks,
+	})
+	return string(b) + "\n"
+}
 
 // WakewordID is the wake-word model's name: "Hey Joshua" → hey_joshua.
 func (p *Persona) WakewordID() string {
