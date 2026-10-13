@@ -122,17 +122,20 @@ What makes or breaks the first boot is settled before the stick is built:
 - **A LAN address**: reserve one in the Fritz!Box for the NUC's MAC (or take
   DHCP and look it up afterwards). It goes into `laib-stick` as the LAN
   address and into AdGuard's `*.<domain>` rewrite.
-- **The domain and its certificates** (ADR 0007 amendment, #45):
-  `dopp.cloud` is at Strato, which has no DNS API, and the house's port 80
-  reaches the Kraftwerk, not the NUC — so the trial domain is a sub-zone
-  delegated to a provider with an API: at Strato, NS records for
-  `nuc.dopp.cloud` pointing at deSEC; at deSEC the zone `nuc.dopp.cloud` and
-  an API token. `laib-stick --domain nuc.dopp.cloud --dns-provider desec
-  --dns-token …` (or `LAIB_DNS_TOKEN`); Caddy then gets Let's Encrypt
-  certificates by DNS-01 and the phones trust them. The NUC's AdGuard (or
-  `/etc/hosts` lines) answers `*.nuc.dopp.cloud` with the NUC's LAN address.
-  `--tls internal` (Caddy's own CA) exists for a laptop-only trial: Android
-  apps and their widgets do not trust it.
+- **The domain and its certificates** (ADR 0007 amendments, #45):
+  `dopp.cloud` is at Strato (no DNS API, no wildcards) and the house's port
+  80 reaches the Kraftwerk. So the NUC uses HTTP-01 through the Kraftwerk:
+  at Strato, one subdomain per NUC host as a CNAME to `dopp.cloud`
+  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `haus.nuc`, `dns.nuc`, `whoami.nuc`);
+  on the Kraftwerk's NPM, one proxy host per name, **HTTP only, no SSL**,
+  forwarding to the NUC's LAN address on port 80. `laib-stick --domain
+  nuc.dopp.cloud` without `--dns-provider` and without `--tls internal`;
+  Caddy then gets Let's Encrypt certificates and the phones trust them.
+  The NUC's AdGuard (or `/etc/hosts` lines) answers `*.nuc.dopp.cloud` with
+  the NUC's LAN address. A DNS provider with an API (`--dns-provider desec`
+  and the deSEC delegation, or INWX) remains the fallback. `--tls internal`
+  (Caddy's own CA) exists for a laptop-only trial: Android apps and their
+  widgets do not trust it.
 - **The model**: the Kraftwerk's model proxy answers on
   `http://192.168.178.100:11435/v1` and the lease on
   `http://192.168.178.100:11435/api/model-lease`; `laib-stick` probes both
@@ -174,16 +177,18 @@ LAN; a GitHub token while this repo is private.
 export LAIB_GH_TOKEN=github_pat_…
 curl -fsSL -H "Authorization: Bearer $LAIB_GH_TOKEN" -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/mdopp/laib/contents/scripts/install-box.sh \
-  | bash -s -- --domain nuc.dopp.cloud --lan-ip 192.168.178.30 --dns-provider desec \
+  | bash -s -- --domain nuc.dopp.cloud --lan-ip 192.168.178.30 \
        --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:11435/api/model-lease
-#    (LAIB_DNS_TOKEN exported before; the stick does all of this on first boot)
+#    (the stick does all of this on first boot)
 laib=/var/opt/laib/laib
 
-# 2. certificates: the stick already set box.yml dns.provider and the secret
-#    DNS_API_TOKEN (--dns-provider/--dns-token, ADR 0007 amendment #45): Caddy
-#    does DNS-01 from the first `laib add caddy`. Nothing to do here. A box
-#    installed by hand: `laib init --dns-provider desec` + `laib secret set
-#    DNS_API_TOKEN`; a laptop-only trial: `laib init --tls internal`.
+# 2. certificates (ADR 0007 amendment 2026-10-13, #45): HTTP-01 through the
+#    Kraftwerk. Before `laib add caddy`: each NUC host is a Strato CNAME to
+#    dopp.cloud, and the Kraftwerk's NPM has an HTTP-only proxy host (no SSL)
+#    per name forwarding to 192.168.178.30:80. Caddy then gets its certificates
+#    on the first `laib add caddy`. With a DNS provider instead:
+#    `--dns-provider desec` (+ LAIB_DNS_TOKEN); a laptop-only trial:
+#    `laib init --tls internal`.
 
 # 3. the roles: proxy, sso + identity, dns, then a first app. `laib add` is
 #    propose + approve + apply as the human; a template that provides a
