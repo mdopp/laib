@@ -366,13 +366,35 @@ systemd:
 
         [Install]
         WantedBy=multi-user.target
+    - name: laib-boot-flag.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Laib: the end of the first boot reaches the disk GRUB reads (#81)
+        # coreos-ignition-firstboot-complete deletes /boot/ignition.firstboot and
+        # nothing syncs it. GRUB reads ext4 without replaying the journal: a power
+        # cut before writeback (~30 s) boots a first boot again, Ignition re-runs
+        # and the box lands in emergency mode. A freeze writes the journal home.
+        ConditionKernelCommandLine=ignition.firstboot
+        After=coreos-ignition-firstboot-complete.service
+        RequiresMountsFor=/boot
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        # a private mount namespace: /boot is writable only in here, as in CoreOS's own unit
+        MountFlags=slave
+        ExecStart=/bin/sh -c 'mount -o remount,rw /boot && fsfreeze --freeze /boot && fsfreeze --unfreeze /boot'
+
+        [Install]
+        WantedBy=basic.target
     - name: laib-firstboot.service
       enabled: true
       contents: |
         [Unit]
         Description=Laib first boot: install the binaries and init the state repo
-        After=network-online.target user@1000.service laib-data-disk.service
-        Wants=network-online.target user@1000.service laib-data-disk.service
+        After=network-online.target user@1000.service laib-data-disk.service laib-boot-flag.service
+        Wants=network-online.target user@1000.service laib-data-disk.service laib-boot-flag.service
         # the marker is written by the script as its last step (#37): a boot in between resumes
         ConditionPathExists=!/etc/laib/installed
 
