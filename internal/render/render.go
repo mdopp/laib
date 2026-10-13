@@ -3,12 +3,14 @@
 package render
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -38,10 +40,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	out := Output{}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
-		vars, err := variables(st, svc, secrets)
-		if err != nil {
-			return nil, err
-		}
+		vars := variables(st, svc, secrets)
 		for file, content := range svc.Units {
 			switch strings.TrimPrefix(filepath.Ext(file), ".") {
 			case "service", "timer":
@@ -99,10 +98,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	// (and the webhook); the timer follows the update window when one is set.
 	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13, #46): a snapshot before, a verify after an image update.\n[Service]\nExecStartPre=/var/opt/laib/laib backup\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 	if len(st.Box.Updates.Days) > 0 {
-		t := st.Box.Updates.Time
-		if t == "" {
-			t = "04:30" // never the backup's 03:00 (#46)
-		}
+		t := cmp.Or(st.Box.Updates.Time, "04:30") // never the backup's 03:00 (#46)
 		out["systemd/podman-auto-update.timer.d/laib.conf"] = "# Rendered by laib from box.yml updates.\n[Timer]\nOnCalendar=\nOnCalendar=" + strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + t + ":00\nRandomizedDelaySec=15m\n"
 	}
 	return out, nil
@@ -135,9 +131,7 @@ func backupService() string {
 }
 
 func backupTimer(schedule string) string {
-	if schedule == "" {
-		schedule = "03:00"
-	}
+	schedule = cmp.Or(schedule, "03:00")
 	return "# Rendered by laib from box.yml backup.schedule.\n[Unit]\nDescription=Laib backup timer\n\n[Timer]\nOnCalendar=*-*-* " + schedule + ":00\nPersistent=true\nRandomizedDelaySec=10m\n\n[Install]\nWantedBy=timers.target\n"
 }
 
@@ -185,16 +179,14 @@ func SecretNames(st *state.State) []state.Secret {
 		svc := st.Services[name]
 		out = append(out, svc.Contract.Secrets...)
 		if svc.Contract.OIDC != nil {
-			out = append(out, state.Secret{Name: oidcSecretName(svc.Contract.OIDC.ClientID)})
+			out = append(out, state.Secret{Name: state.OIDCSecretName(svc.Contract.OIDC.ClientID)})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
-func oidcSecretName(clientID string) string { return state.OIDCSecretName(clientID) }
-
-func variables(st *state.State, svc *state.Service, secrets map[string]string) (map[string]string, error) {
+func variables(st *state.State, svc *state.Service, secrets map[string]string) map[string]string {
 	vars := map[string]string{
 		"DOMAIN":      st.Box.Domain,
 		"DATA_DIR":    st.Box.DataDir,
@@ -224,7 +216,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 		}
 		vars[k] = v.Literal
 	}
-	return vars, nil
+	return vars
 }
 
 // usesPersona: some service's unit names a PERSONA value.
@@ -359,13 +351,7 @@ func autheliaAccess(st *state.State) string {
 func autheliaClients(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
 	b.WriteString("# Rendered by laib: one OIDC client per service that declares oidc.\n")
-	any := false
-	for _, name := range st.ServiceNames() {
-		if st.Services[name].Contract.OIDC != nil {
-			any = true
-		}
-	}
-	if !any {
+	if !slices.ContainsFunc(st.ServiceNames(), func(name string) bool { return st.Services[name].Contract.OIDC != nil }) {
 		// Authelia refuses an oidc block without jwks and clients (#36): no
 		// block at all until the first service declares oidc
 		b.WriteString("# no service declares oidc yet: Authelia gets no OIDC block (it refuses an empty one)\n")
@@ -434,7 +420,7 @@ func nftables(st *state.State) string {
 // from the secret and client id so a re-render is byte-identical and `laib
 // plan` stays quiet (ADR 0001). The plain value stays with the service.
 func clientSecretHash(secrets map[string]string, clientID string) string {
-	name := oidcSecretName(clientID)
+	name := state.OIDCSecretName(clientID)
 	plain, ok := secrets[name]
 	if !ok || plain == "" {
 		return Placeholder(name)
@@ -460,18 +446,9 @@ func ab64(b []byte) string {
 const OperatorToken = "OPERATOR_TOKEN"
 
 func operatorUnit(st *state.State, secrets map[string]string) string {
-	model := st.Box.Operator.Model
-	if model == "" {
-		model = "gemma-4-e4b"
-	}
-	reportAt := st.Box.Operator.ReportAt
-	if reportAt == "" {
-		reportAt = "07:00"
-	}
-	tick := st.Box.Operator.Tick
-	if tick == "" {
-		tick = "10m"
-	}
+	model := cmp.Or(st.Box.Operator.Model, "gemma-4-e4b")
+	reportAt := cmp.Or(st.Box.Operator.ReportAt, "07:00")
+	tick := cmp.Or(st.Box.Operator.Tick, "10m")
 	key := ""
 	if st.Box.Model.KeySecret != "" {
 		key = secretValue(secrets, st.Box.Model.KeySecret)
