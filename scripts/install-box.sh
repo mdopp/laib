@@ -43,21 +43,38 @@ if [ -n "$SOURCE" ]; then
   get=(-H "Accept: application/octet-stream")   # the GitHub token never goes to a build server
   asset_url() { printf '%s/%s' "$SOURCE" "$1"; }
 else
-  if [ "$VERSION" = "latest" ]; then REL="$API/releases/latest"; else REL="$API/releases/tags/$VERSION"; fi
-  RELEASE_JSON="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  api() { curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$API/$1"; }
   # No python3 on Fedora CoreOS: pick the fields out of the JSON with sed. An
   # asset object starts with its API "url" and carries "name" before any nested
   # object, so url..name within one object is a match without a brace in between.
-  FLAT="$(printf '%s' "$RELEASE_JSON" | tr -d '\n')"
-  TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
-  [ -n "$TAG" ] || { echo "release JSON without tag_name" >&2; exit 1; }
-  get=("${auth[@]}" -H "Accept: application/octet-stream")
+  use_release() {
+    FLAT="$(printf '%s' "$1" | tr -d '\n')"
+    TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+    [ -n "$TAG" ]   # empty: the API call failed, or the JSON has no tag_name
+  }
   asset_url() {
     local u
     u="$(printf '%s' "$FLAT" | grep -o '"url": *"[^"]*/releases/assets/[0-9]*"[^{}]*"name": *"'"$1"'"' | head -1 | sed -n 's/^"url": *"\([^"]*\)".*/\1/p')"
     [ -n "$u" ] || { echo "release $TAG has no asset $1" >&2; return 1; }
     printf '%s' "$u"
   }
+  if [ "$VERSION" = "latest" ]; then REL="releases/latest"; else REL="releases/tags/$VERSION"; fi
+  use_release "$(api "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  # A release is published before its binaries: they are built once vm-install
+  # is green on it (#47), a VM run later. Until then "latest" means the newest
+  # release that has them (#99).
+  if [ "$VERSION" = "latest" ] && ! asset_url laib-linux-amd64 >/dev/null 2>&1; then
+    skipped="$TAG"
+    for t in $(api "releases?per_page=20" | tr -d '\n' | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/'); do
+      [ "$t" = "$skipped" ] && continue
+      use_release "$(api "releases/tags/$t")" || continue
+      printf '%s' "$FLAT" | grep -q '"draft": *false.*"prerelease": *false' || continue
+      asset_url laib-linux-amd64 >/dev/null 2>&1 && break
+    done
+    asset_url laib-linux-amd64 >/dev/null 2>&1 || { echo "no release has its binaries yet (newest: $skipped)" >&2; exit 1; }
+    echo "$skipped has no binaries yet (they follow its VM test); installing $TAG, the newest release that has them"
+  fi
+  get=("${auth[@]}" -H "Accept: application/octet-stream")
 fi
 
 # Fedora CoreOS ships without git, restic and diff; laib shells out to all

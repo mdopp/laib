@@ -44,7 +44,9 @@ jobs:
         run: |
           set -euo pipefail
           sha=$(git rev-parse HEAD)
-          run_for_sha() { gh run list --workflow vm-install --commit "$sha" --json databaseId,status,conclusion --limit 1 -q '.[0] | "\(.databaseId) \(.status) \(.conclusion)"'; }
+          # '.[]', not '.[0]': with no run, '.[0]' prints "null null null" and the
+          # dispatch below never happened — v0.4.0 waited 150 minutes for nothing (#99)
+          run_for_sha() { gh run list --workflow vm-install --commit "$sha" --json databaseId,status,conclusion --limit 1 -q '.[] | "\(.databaseId) \(.status) \(.conclusion)"'; }
           if [ -z "$(run_for_sha)" ]; then
             echo "no vm-install run for $sha (the release commit changes only version files): dispatching one on $TAG"
             gh workflow run vm-install --ref "$TAG"
