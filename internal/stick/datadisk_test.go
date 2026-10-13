@@ -194,3 +194,25 @@ func TestDataDiskUnitWaitsForItsOwnScriptNotForLocalFs(t *testing.T) {
 		t.Fatal("the mount unit the script writes orders itself after local-fs.target, which it is part of")
 	}
 }
+
+// #107: after a cut early in a reinstall's first boot laib-data-disk failed,
+// and laib-firstboot — which only wanted it — initialised the state repo in
+// /mnt/data on the OS disk and reported bereit (run 38355641379). The house's
+// data would have landed on the disk the next reinstall wipes. First boot
+// requires its data disk; the box without one exits 0 there (DEVICE=none).
+func TestFirstBootNeverRunsWithoutItsDataDisk(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := unitFromIgnition(t, ign, "laib-firstboot.service")
+	var requires bool
+	for _, line := range strings.Split(unit, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Requires=") && strings.Contains(line, "laib-data-disk.service") {
+			requires = true
+		}
+	}
+	if !requires {
+		t.Fatalf("laib-firstboot runs when the data disk failed (Wants=, not Requires=):\n%s", unit)
+	}
+}
