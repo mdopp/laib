@@ -108,17 +108,8 @@ func main() {
 			}
 		}
 	}
-	if b.TLS == "" {
-		b.DNSProvider = prompt(ask, "DNS-Anbieter mit API für echte Zertifikate (desec, cloudflare, hetzner, …; die Zone der Domain muss dort liegen; leer = Caddys eigene CA, nur für einen Laptop-Versuch)", b.DNSProvider, "", nil)
-		if b.DNSProvider != "" {
-			b.DNSToken = prompt(ask, "API-Token des DNS-Anbieters", b.DNSToken, "", nil)
-			if b.DNSToken == "" {
-				die("ohne Token kein DNS-01: --dns-token oder LAIB_DNS_TOKEN")
-			}
-		} else {
-			b.TLS = "internal"
-			fmt.Fprintln(os.Stderr, "Hinweis: ohne DNS-Anbieter signiert Caddy selbst (tls: internal); Handys und ihre Widgets vertrauen dem nicht (#45)")
-		}
+	if err := certificates(ask, &b); err != nil {
+		die(err.Error())
 	}
 	if ask && !b.Reinstall {
 		b.Reinstall = yesno("Soll dieser Stick eine schon installierte Box neu aufsetzen? (Die Datenplatte bleibt. Ohne Ja tut ein vergessener Stick nichts.)", false)
@@ -253,6 +244,47 @@ func prompt(ask bool, label, current, def string, check func(string) error) stri
 			}
 		}
 	}
+}
+
+// certificates decides how the box's Caddy gets its certificates (#45, #116).
+// Let's Encrypt over port 80 is the default (port 80 reaches the box directly
+// or is forwarded to it); a DNS provider with an API needs no port 80; Caddy's
+// own CA only when asked for, because phones and their widgets do not trust it.
+func certificates(ask bool, b *stick.Box) error {
+	if b.TLS != "" {
+		return nil
+	}
+	choice := "1"
+	if b.DNSProvider != "" {
+		choice = "2"
+	}
+	if ask && b.DNSProvider == "" {
+		fmt.Println("Zertifikate für die Dienste:")
+		fmt.Println("  1 = Let's Encrypt über Port 80 (Port 80 muss die Box erreichen, direkt oder weitergeleitet)")
+		fmt.Println("  2 = Let's Encrypt über einen DNS-Anbieter mit API (kein Port 80 nötig)")
+		fmt.Println("  3 = Caddys eigene Zertifikate (nur für einen Laptop-Versuch: Handys und ihre Widgets vertrauen ihnen nicht)")
+		choice = prompt(ask, "Auswahl", "", "1", func(v string) error {
+			if v != "1" && v != "2" && v != "3" {
+				return fmt.Errorf("1, 2 oder 3")
+			}
+			return nil
+		})
+	}
+	switch choice {
+	case "2":
+		b.DNSProvider = prompt(ask, "DNS-Anbieter (desec, cloudflare, hetzner, inwx, …; die Zone der Domain muss dort liegen)", b.DNSProvider, "", required)
+		b.DNSToken = prompt(ask, "API-Token des DNS-Anbieters", b.DNSToken, "", nil)
+		if b.DNSToken == "" {
+			return fmt.Errorf("ohne Token kein DNS-01: --dns-token oder LAIB_DNS_TOKEN")
+		}
+	case "3":
+		b.TLS = "internal"
+	default:
+		if !ask {
+			fmt.Fprintln(os.Stderr, "Zertifikate: Let's Encrypt über Port 80 — Port 80 muss die Box erreichen (direkt oder weitergeleitet); sonst --dns-provider oder --tls internal")
+		}
+	}
+	return nil
 }
 
 func required(v string) error {
