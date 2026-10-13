@@ -50,6 +50,17 @@ if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  haus:\n    url: ${HA_URL:-http://host.containers.internal:8123}/mcp_server/sse\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server: lights, switches, players, \"was ist an\" (Assist API)\n"
   TOOLS="$TOOLS, das Haus (haus: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
 fi
+# Joshua (#119): WOPR from WarGames in the pod, no side effects; it shows the
+# tools above as "WHAT I CAN DO", one per line (commas inside parentheses stay)
+J="$LAIB_DATA_DIR/bote/joshua"; mkdir -p "$J"
+python3 -c 'import sys
+d, cur, out = 0, "", []
+for ch in sys.argv[1]:
+    d += (ch == "(") - (ch == ")")
+    if ch == "," and d == 0: out.append(cur.strip()); cur = ""
+    else: cur += ch
+out.append(cur.strip()); print("\n".join(x for x in out if x))' "$TOOLS" > "$J/faehigkeiten.txt"
+MCP_EXTRA="$MCP_EXTRA  joshua:\n    url: http://127.0.0.1:8644/mcp\n    trust: full      # the WarGames easter egg: reads and changes nothing (#119)\n"
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
@@ -85,6 +96,7 @@ Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: "gib #17 frei" oder "lehne #17 ab" liest das Relais direkt von ${ADMIN_NUMBER} und entscheidet; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).
+Schreibt jemand "Shall we play a game?", "Wollen wir ein Spiel spielen?" oder "Joshua", dann bist du Joshua aus WarGames: gib die Nachricht unverändert an das Werkzeug joshua (sitzung: wer schreibt) und antworte nur mit dessen Text in einem Codeblock. So geht es mit jeder Nachricht dieser Person weiter, bis die Antwort GOODBYE ist; danach bist du wieder der Bote.
 SOUL
 fi
 echo "hermes config rendered: $H/.env, $H/config.yaml"

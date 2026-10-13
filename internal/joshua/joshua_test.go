@@ -7,7 +7,9 @@ import (
 )
 
 func term() *Terminal {
-	t := New(func() []string { return []string{"die Box (laib: lesen und vorschlagen)", "Fragen (frage: Websuche mit Quellen)"} })
+	t := New(func() []string {
+		return []string{"die Box (laib: lesen und vorschlagen)", "Fragen (frage: Websuche mit Quellen)"}
+	})
 	return t
 }
 
