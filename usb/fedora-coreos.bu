@@ -95,6 +95,9 @@ storage:
           MDSTAT=${LAIB_MDSTAT:-/proc/mdstat}
           REC=$ETC/laib/data-disk
           log() { echo "laib-data-disk: $*"; }
+          durable() {   # stdin -> $1, so a power cut leaves the old or the new file, never an empty one (#107)
+            cat > "$1.tmp"; sync "$1.tmp"; mv -f "$1.tmp" "$1"; sync "$(dirname "$1")"
+          }
           field() { sed -n "s/.*\b$1=\([^ ]*\).*/\1/p" "$REC"; }
           dirs() {   # what laib, podman and the day-one backup expect, owned by core
             chown core:core "$MP"
@@ -132,7 +135,7 @@ storage:
           }
           mount_array() {   # $1 = md device: mounted now, and by filesystem UUID on every boot
             local md=$1 fs; fs=$(blkid -s UUID -o value "$md")
-            cat > "$ETC/systemd/system/mnt-data.mount" <<UNIT
+            durable "$ETC/systemd/system/mnt-data.mount" <<UNIT
           [Unit]
           Description=Laib data disk (RAID1, filesystem $fs)
           After=laib-data-disk.service
@@ -148,7 +151,7 @@ storage:
           WantedBy=multi-user.target
           UNIT
             systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
-            { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } > "$ETC/mdadm.conf"
+            { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } | durable "$ETC/mdadm.conf"
             if ! findmnt -n "$MP" >/dev/null 2>&1; then
               mkdir -p "$MP"; chattr -i "$MP" 2>/dev/null || true
               mount -o noatime "$md" "$MP"
@@ -158,6 +161,13 @@ storage:
           active() { mdadm --detail "$1" | awk '/Active Devices/ {print $4}'; }
           mkdir -p "$ETC/laib"
 
+          # a record without DEVICE= is no record: a cut right after the first boot wrote
+          # it left the file empty (#107, before writes were durable). Adopt again below:
+          # that keeps Laib's array by its name and claims no disk that holds anything.
+          if [[ -f "$REC" ]] && ! grep -q "DEVICE=" "$REC"; then
+            log "$REC is empty (a power cut before it reached the disk): adopting the array again"
+            rm -f "$REC"
+          fi
           # --- every boot after the first: only the recorded array, never anything else
           if [[ -f "$REC" ]]; then
             dev=$(field DEVICE); uuid=$(field UUID); members=$(field MEMBERS)
@@ -169,7 +179,7 @@ storage:
             if [[ -z "$uuid" ]]; then   # a record from before #32: learn the UUID once
               [[ -e "$dev" ]] || mdadm --assemble --scan --run >/dev/null 2>&1 || true
               uuid=$(mdadm --detail --export "$dev" 2>/dev/null | sed -n 's/^MD_UUID=//p')
-              [[ -n "$uuid" ]] && echo "DEVICE=$dev UUID=$uuid MEMBERS=${members:-1}" > "$REC"
+              [[ -n "$uuid" ]] && echo "DEVICE=$dev UUID=$uuid MEMBERS=${members:-1}" | durable "$REC"
             fi
             md=$(assemble "$uuid") || true
             if [[ -z "$md" ]]; then
@@ -197,7 +207,7 @@ storage:
             if [[ -n "$md" && "$(blkid -s LABEL -o value "$md")" == data ]]; then
               log "Laib's array $uuid found on $dev: assembled as $md, the data stays"
               mount_array "$md"
-              echo "DEVICE=$md UUID=$uuid MEMBERS=$(active "$md")" > "$REC"
+              echo "DEVICE=$md UUID=$uuid MEMBERS=$(active "$md")" | durable "$REC"
               exit 0
             fi
           done
@@ -225,7 +235,7 @@ storage:
           done
           if [[ -z "$best" ]]; then
             mkdir -p "$MP"; dirs
-            echo "DEVICE=none MEMBERS=0" > "$REC"
+            echo "DEVICE=none MEMBERS=0" | durable "$REC"
             log "no empty internal disk: $MP stays on the OS disk ($osdisk); recorded, so a later disk is never claimed"
             exit 0
           fi
@@ -238,7 +248,7 @@ storage:
           md=$(readlink -f /dev/md/data)
           uuid=$(mdadm --detail --export "$md" | sed -n 's/^MD_UUID=//p')
           mount_array "$md"
-          echo "DEVICE=$md UUID=$uuid MEMBERS=1" > "$REC"
+          echo "DEVICE=$md UUID=$uuid MEMBERS=1" | durable "$REC"
           log "done: $md, array $uuid, one member"
     - path: /usr/local/bin/laib-boot-order.sh
       mode: 0755
