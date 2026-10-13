@@ -83,7 +83,9 @@ the character talks; style only, the rules are code) and `icon.svg`. Laib
 looks in the state repo first, then `registries/<reg>/personas/<name>`, then
 the built-ins (`personas/` in this repo: joshua). When a service uses a
 persona value, apply writes every persona in use and `chat.yml` (house and
-chat map) to `/mnt/data/laib/render/persona/`, which services mount read-only.
+chat map) to `/mnt/data/laib/render/persona/`, which services mount read-only;
+`persona.json` next to each package holds the resolved fields for readers
+without YAML (Haus).
 A style.md that talks about approvals or rules is a plan warning.
 
 ## policy.yml
