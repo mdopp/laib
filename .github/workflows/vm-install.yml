@@ -267,7 +267,7 @@ jobs:
                 echo "resumed: marker present, env file gone"
                 # exp #111: where did the resumed first boot spend its time
                 journalctl --no-pager --list-boots
-                for b in $(journalctl --list-boots --no-pager -q | awk '{print $1}' | tail -4); do echo "=== boot $b firstboot"; journalctl --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u laib-data-disk -u rpm-ostreed | tail -80; echo "=== boot $b blame"; systemd-analyze blame 2>/dev/null | head -5 || true; done
+                for b in -2 -1 0; do echo "=== boot $b"; journalctl --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u laib-data-disk -u rpm-ostreed -u zincati | grep -v "^-- " | tail -120; done
                 rpm-ostree status | head -30'
           $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
