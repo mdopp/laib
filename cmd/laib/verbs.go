@@ -236,8 +236,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	hand := strings.SplitN(env.actor, ":", 2)[0]
 	if !policy.Allowed(st.Policy, hand, "apply") {
-		fmt.Fprintf(os.Stderr, "laib: %s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"\n", env.actor, st.Policy.Hands[hand].Ceiling)
-		return exitRefused
+		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.actor, st.Policy.Hands[hand].Ceiling))
 	}
 	only, reason := "", ""
 	for i := 0; i < len(args); i++ {
@@ -677,11 +676,7 @@ var hookInterpreters = map[string]bool{"#!/usr/bin/env python3": true, "#!/usr/b
 // apply creates only declared paths, and podman refuses a missing bind
 // source (#36; the failure afc1115 fixed for declared paths).
 func lintMounts(st *state.State, name string, out render.Output, neighbours []string) []string {
-	svc := st.Services[name]
-	var allowed []string
-	for _, d := range svc.Contract.Data {
-		allowed = append(allowed, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-	}
+	allowed := dataPaths(st, st.Services[name])
 	for _, p := range neighbours {
 		allowed = append(allowed, strings.ReplaceAll(p, "${DATA_DIR}", st.Box.DataDir))
 	}

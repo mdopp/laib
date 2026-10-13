@@ -11,7 +11,6 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
-	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -83,18 +82,15 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
 	}
 	pending := apply.Pending(env.paths)
+	if len(pausedNames) > 0 {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
+	}
 	if p.Empty() && len(inactive) == 0 && len(pending) == 0 {
-		if len(pausedNames) > 0 {
-			record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
-		}
 		if env.json {
 			return emit(env, map[string]any{"converged": true, "paused": pausedNames})
 		}
 		fmt.Fprintln(env.w(), "konvergent: Box entspricht dem State, alle Units aktiv")
 		return exitOK
-	}
-	if len(pausedNames) > 0 {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
 	}
 	// Budget: three converge applies per hour; a service that needs more is
 	// flapping, and flapping is a bug for a human or the ops hand, not a loop.
@@ -121,13 +117,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	// Units that are down but whose files match get a restart through apply
 	// by marking their service as changed.
 	for _, name := range inactive {
-		found := false
-		for _, s := range p.Services {
-			if s == name {
-				found = true
-			}
-		}
-		if !found {
+		if !has(p.Services, name) {
 			p.Services = append(p.Services, name)
 		}
 	}
@@ -142,5 +132,3 @@ func has(args []string, flag string) bool {
 	}
 	return false
 }
-
-var _ = proposal.Hand
