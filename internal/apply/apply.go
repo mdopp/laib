@@ -155,6 +155,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	for _, c := range p.Changes {
+		if c.Path == "nftables/laib.nft" && c.Kind == "delete" {
+			// no port is dropped any more: the table goes too, or it keeps
+			// dropping until the next reboot (#102). Already gone is fine.
+			if out, err := sysd.Run(ctx, "sudo", "nft", "delete", "table", "inet", "laib"); err != nil && !strings.Contains(out, "No such file or directory") {
+				res.Checks = append(res.Checks, Check{Service: "laib", What: "nft delete table", OK: false, Detail: out})
+			} else {
+				res.Restarted = append(res.Restarted, "nftables")
+			}
+		}
 		if c.Path == "nftables/laib.nft" && c.Kind != "delete" {
 			// core has passwordless sudo on CoreOS; the ruleset is idempotent
 			// (its own table), so loading it twice is harmless.
