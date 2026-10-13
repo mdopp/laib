@@ -33,8 +33,12 @@ type session struct {
 	mode  mode
 	board [9]byte
 	side  string
+	ctx   string // "" = the directory, games, or one of the Bote's tools (#122)
+	lang  string // de or en
 	last  time.Time
 }
+
+const games = "games"
 
 // Terminal holds one session per person (the Bote passes who is writing).
 type Terminal struct {
@@ -57,16 +61,33 @@ var scenarios = []string{"U.S. FIRST STRIKE", "USSR FIRST STRIKE", "NATO / WARSA
 	"US USSR ESCALATION", "MIDDLE EAST WAR", "USSR CHINA ATTACK", "INDIA PAKISTAN WAR", "MEDITERRANEAN WAR",
 	"HONGKONG VARIANT", "SEATO DECAPITATING", "CUBAN PROVOCATION", "ATLANTIC HEAVY", "ICELAND MAXIMUM"}
 
-// labels name the Bote's tools in the directory; an unknown tool keeps its name.
-var labels = map[string]string{"laib": "BOX STATUS AND PROPOSALS", "frage": "WEB SEARCH WITH SOURCES",
-	"haus": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"}
+// words is the directory and the navigation in the person's language (#122);
+// the games keep the film's English lines.
+type words struct {
+	greet, dir, games, enter, play, connect, bye string
+	labels                                       map[string]string
+}
 
-const menuValid = "VALID: A NUMBER FROM THE DIRECTORY, LIST GAMES, PLAY TIC-TAC-TOE,\n       PLAY GLOBAL THERMONUCLEAR WAR, LOGOFF"
+var lang = map[string]words{
+	"de": {"WILLKOMMEN, PROFESSOR FALKEN.", "WOPR HAUPTVERZEICHNIS", "SPIELE", "NUMMER WÄHLEN, ODER EINFACH FRAGEN.",
+		"WOLLEN WIR EIN SPIEL SPIELEN?", "VERBINDE MIT %s ...", "AUF WIEDERSEHEN.",
+		map[string]string{"laib": "BOX-STATUS UND VORSCHLÄGE", "frage": "WEBSUCHE MIT QUELLEN",
+			"haus": "LICHT, SCHALTER, MUSIK", "automat": "AUTOMATIONEN", "haushalt": "KALENDER, KONTAKTE, NOTIZEN"}},
+	"en": {"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "GAMES", "ENTER SELECTION, OR JUST ASK.",
+		"SHALL WE PLAY A GAME?", "CONNECTING TO %s ...", "GOODBYE.",
+		map[string]string{"laib": "BOX STATUS AND PROPOSALS", "frage": "WEB SEARCH WITH SOURCES",
+			"haus": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"}},
+}
 
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
 
-// Input is one line typed at the terminal; the answer is what WOPR prints.
-func (t *Terminal) Input(sid, line string) string {
+// Input is Talk in the session's language (English for a new one).
+func (t *Terminal) Input(sid, line string) string { return t.Talk(sid, "", line) }
+
+// Talk is one message: a screen to show as is (its last line is the prompt),
+// or "WEITER: <tool>\nPROMPT: <prompt>" when it is a request for the Bote in
+// the current context ("-" at the top: any tool).
+func (t *Terminal) Talk(sid, language, line string) string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.now()
@@ -82,31 +103,87 @@ func (t *Terminal) Input(sid, line string) string {
 	in = strings.TrimRight(in, ".!?")
 	s, ok := t.sessions[sid]
 	if !ok {
-		s = &session{}
+		s = &session{lang: "en"}
 		t.sessions[sid] = s
 	}
+	if _, known := lang[language]; known {
+		s.lang = language
+	}
 	s.last = now
+	w := lang[s.lang]
 	if has(in, "LOGOFF", "LOG OFF", "BYE", "EXIT", "QUIT", "TSCHÜSS", "ENDE") {
 		delete(t.sessions, sid)
-		return "GOODBYE."
+		return w.bye
 	}
+	if has(in, "JOSHUA", "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP", "WAS KANNST DU", "WHAT CAN YOU DO",
+		"SHALL WE PLAY", "WOLLEN WIR EIN SPIEL", "HALLO", "HELLO") {
+		s.mode, s.ctx = modeMenu, ""
+		return t.directory(w)
+	}
+	back := len(in) < 16 && has(in, "ZURÜCK", "ZURUECK", "BACK")
+	if s.mode != modeMenu {
+		if back {
+			s.mode, s.ctx = modeMenu, games
+			return t.gamesList(s)
+		}
+		if out, done := t.game(s, in); done {
+			return out
+		}
+	}
+	if back {
+		s.ctx = ""
+		return t.directory(w)
+	}
+	tools := t.tools()
+	if s.ctx == "" {
+		n := -1
+		if v, err := strconv.Atoi(in); err == nil {
+			n = v
+		}
+		for i, k := range tools {
+			if in == strings.ToUpper(k) {
+				n = i + 1
+			}
+		}
+		switch {
+		case n >= 1 && n <= len(tools):
+			s.ctx = tools[n-1]
+			return fmt.Sprintf(w.connect, label(w, s.ctx)) + "\n\n" + prompt(s)
+		case n == len(tools)+1 || in == "SPIELE" || has(in, "SPIELEN", "SPIELE ", "GAMES", "PLAY ", "TIC-TAC", "TICTACTOE", "THERMONUCLEAR"):
+			s.ctx = games
+		case n >= 0:
+			return t.directory(w)
+		default:
+			return "WEITER: -\nPROMPT: " + prompt(s)
+		}
+	}
+	if s.ctx == games {
+		return t.inGames(s, in)
+	}
+	return "WEITER: " + s.ctx + "\nPROMPT: " + prompt(s)
+}
+
+// game is one message to a running game; done is false when the message is
+// for the games level (LIST GAMES, PLAY …) instead.
+func (t *Terminal) game(s *session, in string) (string, bool) {
 	switch s.mode {
 	case modePlayers:
-		return t.players(s, in)
+		return t.players(s, in), true
 	case modeTicTacToe:
 		if n := cell(in); n >= 0 {
-			return t.move(s, n)
+			return t.move(s, n), true
 		}
-		if !has(in, "LIST", "PLAY", "HELP", "JOSHUA", "HELLO", "HALLO") {
-			return "ILLEGAL MOVE.\nVALID: A FREE SQUARE 1-9, LIST GAMES, LOGOFF\n\n" + render(s.board)
+		if !has(in, "LIST", "PLAY") {
+			return "ILLEGAL MOVE.\nVALID: A FREE SQUARE 1-9, ZURÜCK, LOGOFF\n\n" + render(s.board), true
 		}
+		s.mode = modeMenu
 	case modeChess:
 		if has(in, "CHESS", "SCHACH", "YES", "JA") && !has(in, "LATER", "SPÄTER", "NO", "NEIN") {
 			s.mode = modeMenu
-			return "CHESS IS NOT AVAILABLE IN THIS INSTALLATION.\n\nSHALL WE PLAY A GAME?"
+			return "CHESS IS NOT AVAILABLE IN THIS INSTALLATION.\n\nSHALL WE PLAY A GAME?\n\n" + prompt(s), true
 		}
 		s.mode = modeSide
-		return "FINE.\n\nWHICH SIDE DO YOU WANT?\n\n  1. UNITED STATES\n  2. SOVIET UNION\n\nPLEASE CHOOSE ONE:"
+		return "FINE.\n\nWHICH SIDE DO YOU WANT?\n\n  1. UNITED STATES\n  2. SOVIET UNION\n\nPLEASE CHOOSE ONE:", true
 	case modeSide:
 		switch {
 		case in == "1" || has(in, "UNITED STATES", "USA", "AMERIKA"):
@@ -114,47 +191,46 @@ func (t *Terminal) Input(sid, line string) string {
 		case in == "2" || has(in, "SOVIET", "USSR", "UDSSR", "SOWJET"):
 			s.side = "SOVIET UNION"
 		default:
-			return "PLEASE CHOOSE ONE.\nVALID: 1 (UNITED STATES), 2 (SOVIET UNION), LOGOFF"
+			return "PLEASE CHOOSE ONE.\nVALID: 1 (UNITED STATES), 2 (SOVIET UNION), ZURÜCK", true
 		}
 		s.mode = modeTargets
-		return "AWAITING FIRST STRIKE COMMAND\n-----------------------------\n\nPLEASE LIST PRIMARY TARGETS BY\nCITY AND/OR COUNTY NAME:"
+		return "AWAITING FIRST STRIKE COMMAND\n-----------------------------\n\nPLEASE LIST PRIMARY TARGETS BY\nCITY AND/OR COUNTY NAME:", true
 	case modeTargets:
-		return t.war(s, in)
+		return t.war(s, in), true
 	}
-	s.mode = modeMenu
-	// a new session opens the directory unless it starts with a plain command
-	greet := has(in, "JOSHUA", "HELP", "HELLO", "HALLO", "SHALL WE PLAY", "SPIEL SPIELEN") ||
-		(!ok && in != "LIST GAMES" && !strings.HasPrefix(in, "PLAY ") && cell(in) < 0)
-	tools := t.tools()
-	n := -1
-	if v, err := strconv.Atoi(in); err == nil {
-		n = v
-	}
-	for i, k := range tools {
-		if in == strings.ToUpper(k) {
-			n = i + 1
-		}
-	}
+	return "", false
+}
+
+// inGames is the games level: the film's list and the two games it plays.
+func (t *Terminal) inGames(s *session, in string) string {
 	switch {
-	case greet:
-	case n >= 1 && n <= len(tools):
-		delete(t.sessions, sid)
-		k := tools[n-1]
-		return "CONNECTING TO " + label(k) + " ...\n\nHANDOVER: " + k
-	case n == len(tools)+1 || has(in, "LIST GAMES", "GAMES", "SPIELE"):
-		return strings.Join(films, "\n") + "\n\nGLOBAL THERMONUCLEAR WAR"
 	case has(in, "THERMONUCLEAR", "GTW", "KRIEG"):
 		s.mode = modeChess
 		return "WOULDN'T YOU PREFER A GOOD GAME OF CHESS?"
-	case has(in, "TIC", "TICTACTOE", "TTT"):
+	case has(in, "TIC", "TTT"):
 		s.mode = modePlayers
 		return "NUMBER OF PLAYERS? (0 OR 1)"
 	case strings.HasPrefix(in, "PLAY "):
-		return "GAME NOT AVAILABLE IN THIS INSTALLATION.\nTYPE \"LIST GAMES\"."
-	case ok:
-		return "COMMAND NOT RECOGNIZED.\n" + menuValid
+		return "GAME NOT AVAILABLE IN THIS INSTALLATION.\nVALID: LIST GAMES, PLAY TIC-TAC-TOE, PLAY GLOBAL THERMONUCLEAR WAR, ZURÜCK\n\n" + prompt(s)
+	case has(in, "LIST", "GAMES", "SPIEL"):
+		return t.gamesList(s)
 	}
-	return t.greeting()
+	return "WEITER: -\nPROMPT: " + prompt(s)
+}
+
+func (t *Terminal) gamesList(s *session) string {
+	return strings.Join(films, "\n") + "\n\nGLOBAL THERMONUCLEAR WAR\n\n" + prompt(s)
+}
+
+// prompt is where the person is: JOSHUA>, JOSHUA/HAUS>, JOSHUA/SPIELE>.
+func prompt(s *session) string {
+	switch s.ctx {
+	case "":
+		return "JOSHUA>"
+	case games:
+		return "JOSHUA/" + lang[s.lang].games + ">"
+	}
+	return "JOSHUA/" + strings.ToUpper(s.ctx) + ">"
 }
 
 func (t *Terminal) tools() []string {
@@ -164,21 +240,21 @@ func (t *Terminal) tools() []string {
 	return t.caps()
 }
 
-func label(k string) string {
-	if l, ok := labels[k]; ok {
+func label(w words, k string) string {
+	if l, ok := w.labels[k]; ok {
 		return l
 	}
 	return strings.ToUpper(k)
 }
 
-func (t *Terminal) greeting() string {
+func (t *Terminal) directory(w words) string {
 	var b strings.Builder
-	b.WriteString("GREETINGS PROFESSOR FALKEN.\n\nWOPR MAIN DIRECTORY\n-------------------\n")
+	b.WriteString(w.greet + "\n\n" + w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
 	tools := t.tools()
 	for i, k := range tools {
-		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(k), strings.ToUpper(k))
+		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(w, k), strings.ToUpper(k))
 	}
-	fmt.Fprintf(&b, "  %d  GAMES\n\nENTER SELECTION, \"LIST GAMES\" OR \"LOGOFF\".\n\nSHALL WE PLAY A GAME?", len(tools)+1)
+	fmt.Fprintf(&b, "  %d  %s\n\n%s\n\n%s\n\nJOSHUA>", len(tools)+1, w.games, w.enter, w.play)
 	return b.String()
 }
 
@@ -198,14 +274,14 @@ func (t *Terminal) players(s *session, in string) string {
 			}
 			fmt.Fprintf(&b, "GAME %d\n%s\nWINNER: %s\n\n", g+1, render(board), name(winner(board)))
 		}
-		return b.String() + lesson
+		return b.String() + lesson + "\n\n" + prompt(s)
 	}
-	return "NUMBER OF PLAYERS?\nVALID: 0 (I PLAY MYSELF), 1 (YOU AGAINST ME), LOGOFF"
+	return "NUMBER OF PLAYERS?\nVALID: 0 (I PLAY MYSELF), 1 (YOU AGAINST ME), ZURÜCK"
 }
 
 func (t *Terminal) move(s *session, n int) string {
 	if s.board[n] != ' ' {
-		return "ILLEGAL MOVE: SQUARE TAKEN.\nVALID: A FREE SQUARE 1-9, LIST GAMES, LOGOFF\n\n" + render(s.board)
+		return "ILLEGAL MOVE: SQUARE TAKEN.\nVALID: A FREE SQUARE 1-9, ZURÜCK, LOGOFF\n\n" + render(s.board)
 	}
 	s.board[n] = 'X'
 	if w := winner(s.board); w != 0 || full(s.board) {
@@ -220,7 +296,7 @@ func (t *Terminal) move(s *session, n int) string {
 
 func (t *Terminal) over(s *session) string {
 	s.mode = modeMenu
-	return render(s.board) + "\n\nWINNER: " + name(winner(s.board)) + "\n\nSHALL WE PLAY ANOTHER GAME?"
+	return render(s.board) + "\n\nWINNER: " + name(winner(s.board)) + "\n\nSHALL WE PLAY ANOTHER GAME?\n\n" + prompt(s)
 }
 
 func (t *Terminal) war(s *session, in string) string {
@@ -241,7 +317,7 @@ func (t *Terminal) war(s *session, in string) string {
 	for i, sc := range scenarios {
 		fmt.Fprintf(&b, "SCENARIO %2d  %-22s WINNER: NONE\n", i+1, sc)
 	}
-	return b.String() + "\n" + lesson
+	return b.String() + "\n" + lesson + "\n\n" + prompt(s)
 }
 
 // --- tic-tac-toe: minimax, preferring the centre, then corners, then edges
@@ -367,25 +443,32 @@ func (t *Terminal) clone(from, to string) *Terminal {
 	return c
 }
 
-// Server is the MCP tool the Bote calls: one terminal, text in, text out.
+// Server is the MCP tool the Bote calls with every message (#122): it knows
+// where the person is and answers with a screen or with WEITER.
 func Server(t *Terminal, version string) *mcpserver.Server {
 	return &mcpserver.Server{
 		Name:         "joshua",
 		Version:      version,
-		Instructions: "WOPR aus WarGames, ein Easter Egg. Nachrichten unverändert durchreichen, die Antwort wörtlich zeigen.",
+		Instructions: "Joshua, die Persona des Boten: Verzeichnis, Ebenen und Kontext. Jede Nachricht zuerst hierher.",
 		Tools: []mcpserver.Tool{{
 			Name: "joshua",
-			Description: "Joshua (WOPR aus dem Film WarGames), ein Spiel-Terminal: Tic-Tac-Toe und Global Thermonuclear War. " +
-				"Gib die Nachricht der Person als eingabe weiter und antworte nur mit dem zurückgegebenen Text, in einem Codeblock. " +
-				"Ist sie frei formuliert und kommt COMMAND NOT RECOGNIZED oder ILLEGAL MOVE zurück, übersetze sie in einen der Befehle hinter VALID: und rufe noch einmal auf. " +
-				"Jede weitere Nachricht dieser Person geht hierher, bis die Antwort GOODBYE ist. Endet die Antwort mit HANDOVER: <werkzeug>, " +
-				"ist Joshua beendet: zeig die CONNECTING-Zeile, frag die Person, was sie möchte, und hilf ihr mit diesem Werkzeug.",
+			Description: "Joshua (WOPR aus WarGames), die Oberfläche des Boten: ein Verzeichnis deiner Werkzeuge mit Ebenen, " +
+				"dazu Tic-Tac-Toe und Global Thermonuclear War. Ruf es mit JEDER Nachricht zuerst auf. " +
+				"Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. " +
+				"Kommt \"WEITER: <werkzeug>\" und \"PROMPT: <prompt>\" zurück, beantworte die Nachricht selbst, " +
+				"im Kontext nur mit diesem Werkzeug (bei \"-\" mit jedem), und beginne die Antwort mit der Prompt-Zeile. " +
+				"Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und ruf noch einmal auf.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},
 				"sitzung": map[string]any{"type": "string", "description": "wer schreibt (Name oder Nummer); dieselbe Person, dieselbe Sitzung"},
+				"sprache": map[string]any{"type": "string", "enum": []string{"de", "en"}, "description": "die Sprache der Person; ohne Angabe de"},
 			}},
 			Call: func(_ context.Context, args map[string]any) (string, error) {
-				return t.Input(mcpserver.Str(args, "sitzung"), mcpserver.Str(args, "eingabe")), nil
+				l := mcpserver.Str(args, "sprache")
+				if l == "" {
+					l = "de"
+				}
+				return t.Talk(mcpserver.Str(args, "sitzung"), l, mcpserver.Str(args, "eingabe")), nil
 			},
 		}},
 	}
