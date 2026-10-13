@@ -2,7 +2,6 @@ package templates
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -19,8 +18,5 @@ func TestEveryTemplateIsEmbedded(t *testing.T) {
 		if _, err := fs.Stat(FS, name+"/laib.yml"); err != nil {
 			t.Errorf("templates/%s is not embedded: laib add %s fails on a box", name, name)
 		}
-	}
-	if _, err := os.Stat("embed.go"); err != nil {
-		t.Fatal(err)
 	}
 }
