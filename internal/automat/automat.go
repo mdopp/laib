@@ -342,8 +342,11 @@ func Server(cfg Config, version string) *mcpserver.Server {
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
 				Call: func(ctx context.Context, a map[string]any) (string, error) {
 					id := str(a, "id")
-					if !idRe.MatchString(id) || c.cfg.Data == "" {
+					if !idRe.MatchString(id) {
 						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+					}
+					if c.cfg.Data == "" {
+						return "", fmt.Errorf("nichts Aufgehobenes für %s: kein Datenverzeichnis", id)
 					}
 					y, err := os.ReadFile(filepath.Join(c.cfg.Data, "geloescht", id+".yaml"))
 					if err != nil {
@@ -362,6 +365,9 @@ func Server(cfg Config, version string) *mcpserver.Server {
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}, "an": map[string]any{"type": "boolean"}}, "id", "an"),
 				Call: func(ctx context.Context, a map[string]any) (string, error) {
 					id := str(a, "id")
+					if !idRe.MatchString(id) {
+						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+					}
 					on, _ := a["an"].(bool)
 					svc := "turn_off"
 					if on {
