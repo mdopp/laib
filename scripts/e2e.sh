@@ -240,6 +240,14 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
 if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
 grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
+# #122: the Bote's persona is Joshua, every message goes to the joshua tool first, the rules stay,
+# and approvals, warnings and errors are plain words, not role-play
+grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
+grep -q "jede Nachricht zuerst an das Werkzeug joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to joshua first (#122)"
+grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warnings stay plain words (#122)"
+grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
+grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
+grep -qx "laib" "$HOOKDIR/bote/joshua/faehigkeiten.txt" || fail "joshua's directory lists the Bote's tools (#121)"
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
 python3 -c '
 import http.server, threading, sys
