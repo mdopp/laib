@@ -34,12 +34,17 @@ const RepairBudget = 8
 // containerName is Quadlet's default name for a .container unit.
 func containerName(unit string) string { return "systemd-" + strings.TrimSuffix(unit, ".service") }
 
-func serviceOf(st *state.State, name string) (*state.Service, error) {
+// loadSvc loads the state and the named service in it.
+func loadSvc(env *cliEnv, name string) (*state.State, *state.Service, error) {
+	st, err := loadState(env)
+	if err != nil {
+		return nil, nil, err
+	}
 	svc, ok := st.Services[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown service %q", name)
+		return nil, nil, fmt.Errorf("unknown service %q", name)
 	}
-	return svc, nil
+	return st, svc, nil
 }
 
 // dataPaths expands a service's declared data paths.
@@ -179,11 +184,7 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
 		return fail(errors.New("usage: laib inspect <service>"))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -249,11 +250,7 @@ func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
 		return fail(errors.New("usage: laib read <service> <path>"))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -283,11 +280,7 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
 		return fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -331,32 +324,14 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
 		return fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not exec")
 	}
-	container := ""
-	var cmd []string
-	for i := 1; i < len(args); i++ {
-		switch {
-		case args[i] == "--container" && i+1 < len(args):
-			container = args[i+1]
-			i++
-		case args[i] == "--":
-			cmd = args[i+1:]
-			i = len(args)
-		default:
-			cmd = args[i:]
-			i = len(args)
-		}
-	}
+	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
 		return fail(errors.New("no command after --"))
 	}
@@ -367,33 +342,23 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != exitOK {
 		return code
 	}
-	start := time.Now()
-	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
-	out = render.Redact(render.Output{"o": out}, sec)["o"]
-	entry := journal.Entry{Actor: env.actor, Verb: "exec", Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
-	code := exitOK
-	if err != nil {
-		entry.Result, code = "red", exitRed
-		entry.Detail = err.Error() + "\n" + tail(out, 1500)
-	}
+	out, entry, err := runIn(ctx, env, svc, "exec", container, cmd)
 	record(env, st, entry)
 	if env.json {
 		return emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
 	}
 	fmt.Fprintln(env.w(), out)
-	return code
+	if err != nil {
+		return exitRed
+	}
+	return exitOK
 }
 
 func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
 		return fail(errors.New("usage: laib restart <service>"))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -441,11 +406,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
 		return fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
 	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
+	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -504,27 +465,10 @@ func pickContainer(svc *state.Service, want string) (string, error) {
 	return "", fmt.Errorf("%s is not one of %s's containers (%s)", want, svc.Name, strings.Join(own, ", "))
 }
 
-// lookCommands are read-only programs `laib look` may run: looking is
-// unbounded (ADR 0013), changing is budgeted.
-var lookCommands = map[string]bool{"cat": true, "ls": true, "head": true, "tail": true, "grep": true, "ps": true, "df": true, "du": true, "env": true, "id": true, "stat": true, "find": true, "wc": true, "sort": true, "uniq": true, "date": true, "uptime": true, "hostname": true, "echo": true, "test": true, "readlink": true, "file": true, "ss": true, "ip": true, "nproc": true, "free": true, "true": true, "printenv": true, "md5sum": true, "sha256sum": true}
-
-// cmdLook runs a read-only command in one of the service's containers:
-// no budget, no snapshot, journaled.
-func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
-	if len(args) < 1 {
-		return fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
-	}
-	st, err := loadState(env)
-	if err != nil {
-		return fail(err)
-	}
-	svc, err := serviceOf(st, args[0])
-	if err != nil {
-		return fail(err)
-	}
-	container := ""
-	var cmd []string
-	for i := 1; i < len(args); i++ {
+// containerArgs parses `[--container <name>] [--] <cmd…>`, what exec and
+// look take after the service.
+func containerArgs(args []string) (container string, cmd []string) {
+	for i := 0; i < len(args); i++ {
 		switch {
 		case args[i] == "--container" && i+1 < len(args):
 			container = args[i+1]
@@ -537,6 +481,41 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 			i = len(args)
 		}
 	}
+	return container, cmd
+}
+
+// runIn runs cmd in one of the service's containers and returns its output,
+// secrets redacted, with the journal entry for it — red when cmd failed.
+// The caller books the entry: exec through record, so a red reaches the
+// webhook; look straight into the journal.
+func runIn(ctx context.Context, env *cliEnv, svc *state.Service, verb, container string, cmd []string) (string, journal.Entry, error) {
+	start := time.Now()
+	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
+	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
+	out = render.Redact(render.Output{"o": out}, sec)["o"]
+	entry := journal.Entry{Actor: env.actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
+	if err != nil {
+		entry.Result = "red"
+		entry.Detail = err.Error() + "\n" + tail(out, 1500)
+	}
+	return out, entry, err
+}
+
+// lookCommands are read-only programs `laib look` may run: looking is
+// unbounded (ADR 0013), changing is budgeted.
+var lookCommands = map[string]bool{"cat": true, "ls": true, "head": true, "tail": true, "grep": true, "ps": true, "df": true, "du": true, "env": true, "id": true, "stat": true, "find": true, "wc": true, "sort": true, "uniq": true, "date": true, "uptime": true, "hostname": true, "echo": true, "test": true, "readlink": true, "file": true, "ss": true, "ip": true, "nproc": true, "free": true, "true": true, "printenv": true, "md5sum": true, "sha256sum": true}
+
+// cmdLook runs a read-only command in one of the service's containers:
+// no budget, no snapshot, journaled.
+func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
+	if len(args) < 1 {
+		return fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
+	}
+	_, svc, err := loadSvc(env, args[0])
+	if err != nil {
+		return fail(err)
+	}
+	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
 		return fail(errors.New("no command after --"))
 	}
@@ -552,20 +531,14 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return exitRefusedMsg(env, err.Error())
 	}
-	start := time.Now()
-	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
-	out = render.Redact(render.Output{"o": out}, sec)["o"]
-	entry := journal.Entry{Actor: env.actor, Verb: "look", Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
-	code := exitOK
-	if err != nil {
-		entry.Result, code = "red", exitRed
-		entry.Detail = err.Error() + "\n" + tail(out, 1500)
-	}
+	out, entry, err := runIn(ctx, env, svc, "look", container, cmd)
 	journal.Append(env.paths.Journal, entry)
 	if env.json {
 		return emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
 	}
 	fmt.Println(out)
-	return code
+	if err != nil {
+		return exitRed
+	}
+	return exitOK
 }

@@ -49,8 +49,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(errors.New("usage: laib secret set <NAME>"))
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
-			fmt.Fprintf(os.Stderr, "laib: %s may not set secrets\n", env.actor)
-			return exitRefused
+			return exitRefusedMsg(env, env.actor+" may not set secrets")
 		}
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		val := strings.TrimRight(line, "\r\n")

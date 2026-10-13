@@ -48,15 +48,11 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	e := journal.Entry{Actor: env.actor, Verb: "note", Reason: kind, Result: "info", Detail: text}
-	if kind == "report" || kind == "incident" {
-		// reports and incidents reach the webhook like a red does
-		journal.Append(env.paths.Journal, e)
-		if st.Box.Notify.URL != "" {
-			go postEvent(env, st.Box.Notify.URL, e)
-			time.Sleep(50 * time.Millisecond)
-		}
-	} else {
-		journal.Append(env.paths.Journal, e)
+	journal.Append(env.paths.Journal, e)
+	// reports and incidents reach the webhook like a red does
+	if (kind == "report" || kind == "incident") && st.Box.Notify.URL != "" {
+		go postEvent(env, st.Box.Notify.URL, e)
+		time.Sleep(50 * time.Millisecond)
 	}
 	if kind == "report" {
 		dir := filepath.Join(env.paths.Home, "reports")
@@ -141,13 +137,13 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 				journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "mint " + rec.ID + " for ops (laib-operator)"})
 			}
 		}
-		if err := setBoxOperator(filepath.Join(env.paths.State, "box.yml"), enable, model, reportAt); err != nil {
+		if err := setBox(filepath.Join(env.paths.State, "box.yml"), "operator", "enabled", fmt.Sprint(enable), "model", model, "reportAt", reportAt); err != nil {
 			return fail(err)
 		}
 		if enable {
 			// reds wake the operator (#43): the webhook points at its event endpoint unless the owner set another
 			if st.Box.Notify.URL == "" {
-				if err := setBoxNotifyURL(filepath.Join(env.paths.State, "box.yml"), "http://127.0.0.1:5901/event"); err != nil {
+				if err := setBox(filepath.Join(env.paths.State, "box.yml"), "notify", "url", "http://127.0.0.1:5901/event"); err != nil {
 					return fail(err)
 				}
 			}
@@ -173,8 +169,10 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 	return fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
 }
 
-// setBoxOperator edits the operator block of box.yml, keeping the rest.
-func setBoxOperator(path string, enabled bool, model, reportAt string) error {
+// setBox sets keys of one top-level block of box.yml (operator, notify),
+// keeping the rest of the file and its comments. A missing block is
+// appended; an empty value leaves its key alone.
+func setBox(path, block string, kv ...string) error {
 	var doc yaml.Node
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -184,72 +182,30 @@ func setBoxOperator(path string, enabled bool, model, reportAt string) error {
 		return err
 	}
 	root := doc.Content[0]
-	var op *yaml.Node
+	var m *yaml.Node
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "operator" {
-			op = root.Content[i+1]
+		if root.Content[i].Value == block {
+			m = root.Content[i+1]
 		}
 	}
-	if op == nil {
-		op = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "operator", Tag: "!!str"}, op)
+	if m == nil {
+		m = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: block, Tag: "!!str"}, m)
 	}
 	set := func(k, v string) {
-		for i := 0; i+1 < len(op.Content); i += 2 {
-			if op.Content[i].Value == k {
-				op.Content[i+1].Value = v
-				op.Content[i+1].Tag = ""
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if m.Content[i].Value == k {
+				m.Content[i+1].Value, m.Content[i+1].Tag = v, ""
 				return
 			}
 		}
-		op.Content = append(op.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: k, Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: v})
+		m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: k, Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: v})
 	}
-	set("enabled", fmt.Sprint(enabled))
-	if model != "" {
-		set("model", model)
-	}
-	if reportAt != "" {
-		set("reportAt", reportAt)
-	}
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0o644)
-}
-
-// setBoxNotifyURL sets notify.url in box.yml, keeping the rest.
-func setBoxNotifyURL(path, url string) error {
-	var doc yaml.Node
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return err
-	}
-	root := doc.Content[0]
-	var n *yaml.Node
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "notify" {
-			n = root.Content[i+1]
+	for i := 0; i+1 < len(kv); i += 2 {
+		if kv[i+1] != "" {
+			set(kv[i], kv[i+1])
 		}
 	}
-	if n == nil {
-		n = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "notify", Tag: "!!str"}, n)
-	}
-	for i := 0; i+1 < len(n.Content); i += 2 {
-		if n.Content[i].Value == "url" {
-			n.Content[i+1].Value, n.Content[i+1].Tag = url, ""
-			out, err := yaml.Marshal(&doc)
-			if err != nil {
-				return err
-			}
-			return os.WriteFile(path, out, 0o644)
-		}
-	}
-	n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "url", Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: url, Tag: "!!str"})
 	out, err := yaml.Marshal(&doc)
 	if err != nil {
 		return err
