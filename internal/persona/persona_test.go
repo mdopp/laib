@@ -138,9 +138,9 @@ func TestTheToolPassesTextThrough(t *testing.T) {
 // shows where, and you stay there until ZURÜCK or MENÜ. Where you are is
 // this code; a request inside a context goes back to the Bote as WEITER.
 func TestLevelsWithContext(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage", "haus", "automat"} })
+	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} })
 	out := j.Talk("anna", "de", "Was kannst du?")
-	for _, want := range []string{"WOPR HAUPTVERZEICHNIS", "1  BOX-STATUS UND VORSCHLÄGE", "3  LICHT, SCHALTER, MUSIK", "5  SPIELE"} {
+	for _, want := range []string{"WOPR HAUPTVERZEICHNIS", "1  BOX-STATUS UND VORSCHLÄGE", "3  LICHT, SCHALTER, MUSIK", "(GERÄTE)", "5  SPIELE"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing:\n%s", want, out)
 		}
@@ -148,13 +148,16 @@ func TestLevelsWithContext(t *testing.T) {
 	if !strings.HasSuffix(out, "JOSHUA>") {
 		t.Fatalf("the prompt is the last line:\n%s", out)
 	}
-	if out := j.Talk("anna", "de", "3"); !strings.Contains(out, "VERBINDE MIT LICHT, SCHALTER, MUSIK") || !strings.HasSuffix(out, "JOSHUA/HAUS>") {
+	if strings.Contains(out, "(HA)") || strings.Contains(out, "(LAIB)") {
+		t.Fatalf("the family sees words, not tool names (ADR 0021):\n%s", out)
+	}
+	if out := j.Talk("anna", "de", "3"); !strings.Contains(out, "VERBINDE MIT LICHT, SCHALTER, MUSIK") || !strings.HasSuffix(out, "JOSHUA/GERÄTE>") {
 		t.Fatalf("entering a context:\n%s", out)
 	}
-	if out := j.Talk("anna", "de", "Mach das Licht im Wohnzimmer aus"); out != "WEITER: haus\nPROMPT: JOSHUA/HAUS>" {
+	if out := j.Talk("anna", "de", "Mach das Licht im Wohnzimmer aus"); out != "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>" {
 		t.Fatalf("a request in the context goes back to the Bote:\n%s", out)
 	}
-	if out := j.Talk("anna", "de", "und was läuft gerade?"); out != "WEITER: haus\nPROMPT: JOSHUA/HAUS>" {
+	if out := j.Talk("anna", "de", "und was läuft gerade?"); out != "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>" {
 		t.Fatalf("the context stays:\n%s", out)
 	}
 	if out := j.Talk("anna", "de", "zurück"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") || !strings.HasSuffix(out, "JOSHUA>") {
@@ -197,7 +200,7 @@ func TestTheDirectorySpeaksThePersonsLanguage(t *testing.T) {
 			t.Errorf("%q missing:\n%s", want, out)
 		}
 	}
-	if out := j.Talk("p", "en", "2"); !strings.Contains(out, "CONNECTING TO WEB SEARCH WITH SOURCES") || !strings.HasSuffix(out, "JOSHUA/FRAGE>") {
+	if out := j.Talk("p", "en", "2"); !strings.Contains(out, "CONNECTING TO WEB SEARCH WITH SOURCES") || !strings.HasSuffix(out, "JOSHUA/SEARCH>") {
 		t.Fatalf("english context:\n%s", out)
 	}
 }
