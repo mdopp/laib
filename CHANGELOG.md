@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3](https://github.com/mdopp/laib/compare/v0.4.2...v0.4.3) (2026-10-13)
+
+
+### Bug Fixes
+
+* **stick:** the data-disk record survives a power cut, and an empty one adopts again ([#107](https://github.com/mdopp/laib/issues/107)) ([1750ef6](https://github.com/mdopp/laib/commit/1750ef6f57238c0c79e2e7c92c4caf3ccde8fbcb))
+* **stick:** the data-disk record survives a power cut, and an empty one adopts again ([#107](https://github.com/mdopp/laib/issues/107)) ([0275082](https://github.com/mdopp/laib/commit/027508229e6278d4aa9f0648441fecd03c3af0bc))
+
 ## [0.4.2](https://github.com/mdopp/laib/compare/v0.4.1...v0.4.2) (2026-10-13)
 
 
