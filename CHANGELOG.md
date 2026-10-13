@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.2](https://github.com/mdopp/laib/compare/v0.4.1...v0.4.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* **firewall:** reloading the ruleset replaces the table; the last dropped port going removes it ([#102](https://github.com/mdopp/laib/issues/102)) ([ab5ed48](https://github.com/mdopp/laib/commit/ab5ed48922e9ca26d556690459ee4b40ec29c722))
+* **firewall:** reloading the ruleset replaces the table; the last dropped port going removes it ([#102](https://github.com/mdopp/laib/issues/102)) ([1fd154f](https://github.com/mdopp/laib/commit/1fd154f199cfc77a8acd94500b6a6a2e037c51a5))
+* **stick:** first boot requires its data disk ([#107](https://github.com/mdopp/laib/issues/107)) ([c0d701d](https://github.com/mdopp/laib/commit/c0d701d4bfe901f8c613cedfa1f97b63766afc42))
+* **stick:** first boot requires its data disk; the VM log keeps the data-disk journal ([#107](https://github.com/mdopp/laib/issues/107)) ([d97e1a0](https://github.com/mdopp/laib/commit/d97e1a0ef2a80d48f3fdac57aec94b939d9dab8c))
+* **stick:** the end of the first boot reaches the disk GRUB reads ([#81](https://github.com/mdopp/laib/issues/81)) ([caeae9f](https://github.com/mdopp/laib/commit/caeae9f9ec7097e7abb262fee840a36daa630acf))
+* **stick:** the end of the first boot reaches the disk GRUB reads ([#81](https://github.com/mdopp/laib/issues/81)) ([6b5df85](https://github.com/mdopp/laib/commit/6b5df85dd173887fc0e0b8287af19249e92f953f))
+
 ## [0.4.1](https://github.com/mdopp/laib/compare/v0.4.0...v0.4.1) (2026-10-13)
 
 
