@@ -99,3 +99,30 @@ func TestPodCommentsCountTheirContainers(t *testing.T) {
 		}
 	}
 }
+
+// #128: Stimme trains the house persona's wake word with Laib's own trainer;
+// no Solaris image, no Balthasar, and the microWakeWord model the Voice PE runs
+// lands apart from openWakeWord's custom models (two formats).
+func TestStimmeTrainsTheHousePersonasWakeWord(t *testing.T) {
+	dir := filepath.Join("..", "..", "templates", "stimme")
+	all := ""
+	files, _ := filepath.Glob(filepath.Join(dir, "*"))
+	for _, f := range files {
+		b, _ := os.ReadFile(f)
+		all += string(b)
+		for _, legacy := range []string{"solaris", "balthasar"} {
+			if strings.Contains(strings.ToLower(string(b)), legacy) {
+				t.Errorf("%s still names %s (ADR 0021)", f, legacy)
+			}
+		}
+	}
+	trainer, _ := os.ReadFile(filepath.Join(dir, "stimme-wakeword-trainer.container"))
+	for _, want := range []string{"WAKE_PHRASE=${PERSONA_PHRASE}", "WAKE_ID=${PERSONA_WAKEWORD}", "WAKE_LANGUAGES=${PERSONA_LANGUAGES}", "PERSONA_REV=${PERSONA_REV}", "${DATA_DIR}/stimme/micro:/out"} {
+		if !strings.Contains(string(trainer), want) {
+			t.Errorf("the trainer unit lacks %s", want)
+		}
+	}
+	if !strings.Contains(all, "ghcr.io/mdopp/laib-wakeword-trainer") {
+		t.Error("the trainer image is Laib's own")
+	}
+}
