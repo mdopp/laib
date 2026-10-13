@@ -8,6 +8,7 @@ package joshua
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,12 @@ var scenarios = []string{"U.S. FIRST STRIKE", "USSR FIRST STRIKE", "NATO / WARSA
 	"US USSR ESCALATION", "MIDDLE EAST WAR", "USSR CHINA ATTACK", "INDIA PAKISTAN WAR", "MEDITERRANEAN WAR",
 	"HONGKONG VARIANT", "SEATO DECAPITATING", "CUBAN PROVOCATION", "ATLANTIC HEAVY", "ICELAND MAXIMUM"}
 
+// labels name the Bote's tools in the directory; an unknown tool keeps its name.
+var labels = map[string]string{"laib": "BOX STATUS AND PROPOSALS", "frage": "WEB SEARCH WITH SOURCES",
+	"haus": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"}
+
+const menuValid = "VALID: A NUMBER FROM THE DIRECTORY, LIST GAMES, PLAY TIC-TAC-TOE,\n       PLAY GLOBAL THERMONUCLEAR WAR, LOGOFF"
+
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
 
 // Input is one line typed at the terminal; the answer is what WOPR prints.
@@ -90,8 +97,8 @@ func (t *Terminal) Input(sid, line string) string {
 		if n := cell(in); n >= 0 {
 			return t.move(s, n)
 		}
-		if !has(in, "LIST", "PLAY", "HELP") {
-			return "ILLEGAL MOVE. CHOOSE A FREE SQUARE (1-9).\n\n" + render(s.board)
+		if !has(in, "LIST", "PLAY", "HELP", "JOSHUA", "HELLO", "HALLO") {
+			return "ILLEGAL MOVE.\nVALID: A FREE SQUARE 1-9, LIST GAMES, LOGOFF\n\n" + render(s.board)
 		}
 	case modeChess:
 		if has(in, "CHESS", "SCHACH", "YES", "JA") && !has(in, "LATER", "SPÄTER", "NO", "NEIN") {
@@ -107,7 +114,7 @@ func (t *Terminal) Input(sid, line string) string {
 		case in == "2" || has(in, "SOVIET", "USSR", "UDSSR", "SOWJET"):
 			s.side = "SOVIET UNION"
 		default:
-			return "PLEASE CHOOSE ONE: 1 OR 2"
+			return "PLEASE CHOOSE ONE.\nVALID: 1 (UNITED STATES), 2 (SOVIET UNION), LOGOFF"
 		}
 		s.mode = modeTargets
 		return "AWAITING FIRST STRIKE COMMAND\n-----------------------------\n\nPLEASE LIST PRIMARY TARGETS BY\nCITY AND/OR COUNTY NAME:"
@@ -115,10 +122,26 @@ func (t *Terminal) Input(sid, line string) string {
 		return t.war(s, in)
 	}
 	s.mode = modeMenu
-	greet := has(in, "JOSHUA", "HELP", "HELLO", "HALLO", "SHALL WE PLAY", "SPIEL SPIELEN")
+	// a new session opens the directory unless it starts with a plain command
+	greet := has(in, "JOSHUA", "HELP", "HELLO", "HALLO", "SHALL WE PLAY", "SPIEL SPIELEN") ||
+		(!ok && in != "LIST GAMES" && !strings.HasPrefix(in, "PLAY ") && cell(in) < 0)
+	tools := t.tools()
+	n := -1
+	if v, err := strconv.Atoi(in); err == nil {
+		n = v
+	}
+	for i, k := range tools {
+		if in == strings.ToUpper(k) {
+			n = i + 1
+		}
+	}
 	switch {
 	case greet:
-	case has(in, "LIST GAMES", "GAMES", "SPIELE"):
+	case n >= 1 && n <= len(tools):
+		delete(t.sessions, sid)
+		k := tools[n-1]
+		return "CONNECTING TO " + label(k) + " ...\n\nHANDOVER: " + k
+	case n == len(tools)+1 || has(in, "LIST GAMES", "GAMES", "SPIELE"):
 		return strings.Join(films, "\n") + "\n\nGLOBAL THERMONUCLEAR WAR"
 	case has(in, "THERMONUCLEAR", "GTW", "KRIEG"):
 		s.mode = modeChess
@@ -129,20 +152,33 @@ func (t *Terminal) Input(sid, line string) string {
 	case strings.HasPrefix(in, "PLAY "):
 		return "GAME NOT AVAILABLE IN THIS INSTALLATION.\nTYPE \"LIST GAMES\"."
 	case ok:
-		return "COMMAND NOT RECOGNIZED.\nTYPE \"LIST GAMES\", \"PLAY <GAME>\" OR \"LOGOFF\"."
+		return "COMMAND NOT RECOGNIZED.\n" + menuValid
 	}
 	return t.greeting()
 }
 
+func (t *Terminal) tools() []string {
+	if t.caps == nil {
+		return nil
+	}
+	return t.caps()
+}
+
+func label(k string) string {
+	if l, ok := labels[k]; ok {
+		return l
+	}
+	return strings.ToUpper(k)
+}
+
 func (t *Terminal) greeting() string {
 	var b strings.Builder
-	b.WriteString("GREETINGS PROFESSOR FALKEN.\n\nWHAT I CAN DO:\n")
-	if t.caps != nil {
-		for _, c := range t.caps() {
-			b.WriteString("  " + strings.ToUpper(c) + "\n")
-		}
+	b.WriteString("GREETINGS PROFESSOR FALKEN.\n\nWOPR MAIN DIRECTORY\n-------------------\n")
+	tools := t.tools()
+	for i, k := range tools {
+		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(k), strings.ToUpper(k))
 	}
-	b.WriteString("  GAMES\n\nTYPE \"LIST GAMES\", \"PLAY <GAME>\" OR \"LOGOFF\".\n\nSHALL WE PLAY A GAME?")
+	fmt.Fprintf(&b, "  %d  GAMES\n\nENTER SELECTION, \"LIST GAMES\" OR \"LOGOFF\".\n\nSHALL WE PLAY A GAME?", len(tools)+1)
 	return b.String()
 }
 
@@ -164,12 +200,12 @@ func (t *Terminal) players(s *session, in string) string {
 		}
 		return b.String() + lesson
 	}
-	return "NUMBER OF PLAYERS? (0 OR 1)"
+	return "NUMBER OF PLAYERS?\nVALID: 0 (I PLAY MYSELF), 1 (YOU AGAINST ME), LOGOFF"
 }
 
 func (t *Terminal) move(s *session, n int) string {
 	if s.board[n] != ' ' {
-		return "ILLEGAL MOVE. CHOOSE A FREE SQUARE (1-9).\n\n" + render(s.board)
+		return "ILLEGAL MOVE: SQUARE TAKEN.\nVALID: A FREE SQUARE 1-9, LIST GAMES, LOGOFF\n\n" + render(s.board)
 	}
 	s.board[n] = 'X'
 	if w := winner(s.board); w != 0 || full(s.board) {
@@ -302,6 +338,9 @@ func render(b [9]byte) string {
 }
 
 func cell(in string) int {
+	if has(in, "MITTE", "CENTER", "CENTRE") {
+		return 4
+	}
 	if len(in) == 1 && in[0] >= '1' && in[0] <= '9' {
 		return int(in[0] - '1')
 	}
@@ -337,8 +376,10 @@ func Server(t *Terminal, version string) *mcpserver.Server {
 		Tools: []mcpserver.Tool{{
 			Name: "joshua",
 			Description: "Joshua (WOPR aus dem Film WarGames), ein Spiel-Terminal: Tic-Tac-Toe und Global Thermonuclear War. " +
-				"Gib die Nachricht der Person unverändert als eingabe weiter und antworte nur mit dem zurückgegebenen Text, in einem Codeblock. " +
-				"Jede weitere Nachricht dieser Person geht hierher, bis die Antwort GOODBYE ist.",
+				"Gib die Nachricht der Person als eingabe weiter und antworte nur mit dem zurückgegebenen Text, in einem Codeblock. " +
+				"Ist sie frei formuliert und kommt COMMAND NOT RECOGNIZED oder ILLEGAL MOVE zurück, übersetze sie in einen der Befehle hinter VALID: und rufe noch einmal auf. " +
+				"Jede weitere Nachricht dieser Person geht hierher, bis die Antwort GOODBYE ist. Endet die Antwort mit HANDOVER: <werkzeug>, " +
+				"ist Joshua beendet: zeig die CONNECTING-Zeile, frag die Person, was sie möchte, und hilf ihr mit diesem Werkzeug.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},
 				"sitzung": map[string]any{"type": "string", "description": "wer schreibt (Name oder Nummer); dieselbe Person, dieselbe Sitzung"},
