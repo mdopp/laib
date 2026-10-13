@@ -130,6 +130,10 @@ jobs:
                 [ "$v" = "laib '"${GITHUB_SHA::7}"'" ] || { echo "first boot did not install this commit"; exit 1; }
                 if [ -e /etc/laib/firstboot.env ]; then echo "firstboot.env still on disk"; exit 1; fi
                 test -f /etc/laib/installed || { echo "the first-boot marker is missing"; exit 1; }
+                # the end of the first boot is on disk where GRUB reads it (no journal replay, #81)
+                systemctl is-active --quiet laib-boot-flag.service || { echo "laib-boot-flag did not run"; systemctl status --no-pager laib-boot-flag.service; exit 1; }
+                if sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot; then echo "GRUB still sees ignition.firstboot: a power cut now re-runs Ignition (#81)"; exit 1; fi
+                echo "first boot over, on disk too"
                 test -s ~/.config/containers/auth.json || { echo "the registry login is not in ~/.config/containers/auth.json (#37)"; exit 1; }
                 journalctl --no-pager -b -u laib-firstboot | grep -q -- "--token" && { echo "the token was on argv"; exit 1; } || echo "token never on argv"
                 /var/opt/laib/laib status || true; /var/opt/laib/laib plan || true; /var/opt/laib/laib diag || true'
