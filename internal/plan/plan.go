@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -67,13 +69,16 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		return nil, err
 	}
 	p := &Plan{Output: out, Only: only}
-	keys := make([]string, 0, len(out))
-	for k := range out {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// add records a change and, once, the service it belongs to
 	seen := map[string]bool{}
-	for _, k := range keys {
+	add := func(c Change) {
+		p.Changes = append(p.Changes, c)
+		if c.Service != "" && !seen[c.Service] {
+			seen[c.Service] = true
+			p.Services = append(p.Services, c.Service)
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(out)) {
 		svc := ServiceOf(k)
 		if only != "" && svc != "" && svc != only {
 			continue
@@ -90,14 +95,10 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		if string(cur) == out[k] {
 			continue
 		}
-		p.Changes = append(p.Changes, Change{
+		add(Change{
 			Path: k, Target: target, Service: svc, Kind: kind,
 			Diff: unified(ctx, k, render.Redact(render.Output{"a": string(cur)}, secrets)["a"], render.Redact(render.Output{"b": out[k]}, secrets)["b"]),
 		})
-		if svc != "" && !seen[svc] {
-			seen[svc] = true
-			p.Services = append(p.Services, svc)
-		}
 	}
 	// Files the manifest owns that render no longer produces: delete (#41).
 	owned := map[string]bool{}
@@ -121,11 +122,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		if only != "" && svc != "" && svc != only {
 			continue
 		}
-		p.Changes = append(p.Changes, Change{Path: k, Target: target, Service: svc, Kind: "delete"})
-		if svc != "" && !seen[svc] {
-			seen[svc] = true
-			p.Services = append(p.Services, svc)
-		}
+		add(Change{Path: k, Target: target, Service: svc, Kind: "delete"})
 	}
 	// Quadlet files on the box that the state no longer has: delete.
 	for _, name := range st.ServiceNames() {
@@ -136,11 +133,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		for _, e := range entries {
 			k := "quadlet/" + name + "/" + e.Name()
 			if _, ok := out[k]; !ok && !e.IsDir() {
-				p.Changes = append(p.Changes, Change{Path: k, Target: Target(paths, k), Service: name, Kind: "delete"})
-				if !seen[name] {
-					seen[name] = true
-					p.Services = append(p.Services, name)
-				}
+				add(Change{Path: k, Target: Target(paths, k), Service: name, Kind: "delete"})
 			}
 		}
 	}
@@ -149,12 +142,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	var um []string
 	for _, name := range p.Unmanaged {
 		entries, _ := os.ReadDir(filepath.Join(paths.Quadlet, name))
-		mine := len(entries) > 0
-		for _, e := range entries {
-			if !owned[filepath.Join(paths.Quadlet, name, e.Name())] {
-				mine = false
-			}
-		}
+		mine := len(entries) > 0 && !slices.ContainsFunc(entries, func(e os.DirEntry) bool { return !owned[filepath.Join(paths.Quadlet, name, e.Name())] })
 		if !mine {
 			um = append(um, name)
 		}
