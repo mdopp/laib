@@ -26,3 +26,9 @@ second time a shape breaks.
   visible without a scanner.
 - The real box is a canary, not a gate; an agent can never strand it mid-verify
   because the verify is inside the script.
+
+## Amendment 2026-10-13 (#118): the cap is 16k
+
+The owner raised the cap by 1,000 lines to 16,000 so the Joshua easter egg
+(#119) fits into Laib beside the Bote. It is a raise, not a removal: the
+slimming pass (#112) stays open, and the next feature still has to fit.

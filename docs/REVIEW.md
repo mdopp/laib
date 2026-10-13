@@ -26,7 +26,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 | Werkstatt | `werkstatt/` | dev image: pi + Claude Code, autoloop, laibctl | python unit tests; image built |
 | Docs | `docs/*.md`, `docs/adr/0001–0018` | KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, MIGRATION, DEKONSTRUKTION, BACKUP, INSTALL, OUTSIDE, SERVICES, C4 | — |
 
-Sizes: kernel + tools 9.2k lines Go production, 1.8k tests (`scripts/loc.sh` caps 15k / tests ≤ prod); Haus 825 lines.
+Sizes: kernel + tools 9.2k lines Go production, 1.8k tests (`scripts/loc.sh` caps 15k, 16k since 2026-10-13 / tests ≤ prod); Haus 825 lines.
 
 ## CI (`.github/workflows`)
 
