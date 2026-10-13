@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -140,15 +139,5 @@ func Paused(paths boxfs.Paths) map[string]Pause {
 		}
 		out[p.Service] = p
 	}
-	return out
-}
-
-// PausedNames: sorted, for journal lines and /ready.
-func PausedNames(paths boxfs.Paths) []string {
-	var out []string
-	for n := range Paused(paths) {
-		out = append(out, n)
-	}
-	sort.Strings(out)
 	return out
 }

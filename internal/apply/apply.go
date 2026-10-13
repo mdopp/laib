@@ -3,12 +3,14 @@
 package apply
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -214,13 +216,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	// verify, no hook to run (#41).
 	var targets []string
 	seenTarget := map[string]bool{}
-	for _, name := range p.Services {
-		if _, ok := st.Services[name]; ok && !seenTarget[name] {
-			seenTarget[name] = true
-			targets = append(targets, name)
-		}
-	}
-	for _, name := range restartOrder {
+	for _, name := range slices.Concat(p.Services, restartOrder) {
 		if _, ok := st.Services[name]; ok && !seenTarget[name] {
 			seenTarget[name] = true
 			targets = append(targets, name)
@@ -249,12 +245,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Checks = append(res.Checks, c)
 		}
 	}
-	res.Green = true
-	for _, c := range res.Checks {
-		if !c.OK {
-			res.Green = false
-		}
-	}
+	res.Green = !slices.ContainsFunc(res.Checks, func(c Check) bool { return !c.OK })
 	ClearPending(paths) // activated and verified
 	return res, nil
 }
@@ -460,13 +451,11 @@ var RunHook = func(ctx context.Context, h HookSpec) (string, error) {
 	return sysd.Run(ctx, "podman", args...)
 }
 
-// hookPhases are the two moments a template may act (ADR 0004 amended, #36):
-// pre-start renders config and folders before the units start and may not
-// assume the service is up; post-deploy talks to the running service.
-var hookPhases = []string{"pre-start", "post-deploy"}
-
 // runHook runs services/<name>/<phase> if it exists and is executable, in
-// the hooks image, never on the host. The hook gets the builtins, every
+// the hooks image, never on the host. The phase is one of the two moments a
+// template may act (ADR 0004 amended, #36): pre-start renders config and
+// folders before the units start and may not assume the service is up;
+// post-deploy talks to the running service. The hook gets the builtins, every
 // value and LAIB_SECRET_<NAME> for the service's declared secrets in its
 // environment, the service folder read-only, the render folder read-only
 // and the service's data paths read-write at their host paths. It may
@@ -512,10 +501,7 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 	os.Chmod(envFile.Name(), 0o600)
 	envFile.WriteString(strings.Join(env, "\n") + "\n")
 	envFile.Close()
-	image := st.Box.Laib.HooksImage
-	if image == "" {
-		image = DefaultHooksImage
-	}
+	image := cmp.Or(st.Box.Laib.HooksImage, DefaultHooksImage)
 	mounts := []string{svc.Dir + ":ro", paths.Render + ":ro"}
 	for _, d := range svc.Contract.Data {
 		p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
@@ -554,10 +540,7 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 			kept = append(kept, line)
 		}
 	}
-	tail := strings.TrimSpace(strings.Join(kept, "\n"))
-	if len(tail) > 2000 {
-		tail = "…" + tail[len(tail)-2000:]
-	}
+	tail := tailOf(strings.Join(kept, "\n"), 2000)
 	if err != nil {
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error() + "\n" + tail}, true
 	}
