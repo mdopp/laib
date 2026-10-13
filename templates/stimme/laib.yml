@@ -16,8 +16,11 @@ data:
     backup: false                  # model cache
   - path: ${DATA_DIR}/stimme/piper
     backup: false
-  - path: ${DATA_DIR}/stimme/wakeword  # the trained models: keep
-  - path: ${DATA_DIR}/stimme/trainer
+  - path: ${DATA_DIR}/stimme/wakeword  # openWakeWord's custom models (streaming satellites): keep
+  - path: ${DATA_DIR}/stimme/micro     # the house persona's microWakeWord model for the Voice PE, with its status: keep
+  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional)
+  - path: ${DATA_DIR}/stimme/trainer   # sources, voices, negatives, checkpoints: gigabytes, rebuilt
+    backup: false
 health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}
 ports:
   - {port: 10300, lan: false}      # whisper

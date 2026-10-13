@@ -1,0 +1,24 @@
+# Stimme's wake-word trainer (laib #128): trains the house persona's phrase
+# into the on-device microWakeWord model the Voice PE runs. TensorFlow-GPU,
+# because microWakeWord is TensorFlow. Ported from solarisbay's trainer image.
+FROM docker.io/tensorflow/tensorflow:2.18.0-gpu
+
+# microWakeWord publishes no release tags: the commit is pinned, so a model on
+# a Voice PE is traceable to the framework that built it.
+ARG MICROWAKEWORD_REF=4665173cd35f1cff9a61e06fc427f124766c488e
+ARG PIPER_SAMPLE_GENERATOR_REF=v3.2.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends git wget unzip ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/kahrendt/microWakeWord /opt/microWakeWord \
+ && git -C /opt/microWakeWord checkout ${MICROWAKEWORD_REF} \
+ && git clone --depth 1 --branch ${PIPER_SAMPLE_GENERATOR_REF} https://github.com/rhasspy/piper-sample-generator /opt/piper-sample-generator
+# microWakeWord's own deps only; piper-sample-generator's ~3 GB torch stack is
+# installed onto the work volume at the first run (trainer.py provision).
+RUN pip install --no-cache-dir -e /opt/microWakeWord
+
+COPY stimme/trainer/train.py stimme/trainer/trainer.py /opt/
+LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
+# TF_FORCE_GPU_ALLOW_GROWTH: whisper and the model share the card; without it
+# TF takes all VRAM the moment a run starts.
+ENV PYTHONUNBUFFERED=1 WAKEWORD_WORK_DIR=/work WAKEWORD_OUT_DIR=/out TF_FORCE_GPU_ALLOW_GROWTH=true
+ENTRYPOINT ["python", "/opt/trainer.py"]

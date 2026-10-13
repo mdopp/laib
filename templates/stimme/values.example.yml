@@ -4,5 +4,5 @@ WHISPER_LANG: de
 PIPER_IMAGE: docker.io/rhasspy/wyoming-piper:latest
 OPENWAKEWORD_IMAGE: docker.io/rhasspy/wyoming-openwakeword:latest
 # the wake word and the Piper voice come from the house persona (box.yml persona, ADR 0020)
-TRAINER_IMAGE: ghcr.io/mdopp/solaris-wakeword-trainer:latest
+TRAINER_IMAGE: ghcr.io/mdopp/laib-wakeword-trainer:latest  # stimme/trainer in this repo (#128)
 VOICE_ENV: /mnt/data/stacks/llama/lease/voice-device.env  # written by laib-lease; a CPU box points at a file with WHISPER_DEVICE=cpu

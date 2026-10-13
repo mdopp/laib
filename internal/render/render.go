@@ -207,6 +207,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 	if p := st.HousePersona(); p != nil {
 		vars["PERSONA"], vars["PERSONA_DISPLAY"], vars["PERSONA_PHRASE"] = p.Name, p.Display, p.Wakeword.Phrase
 		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
+		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
 	}
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
