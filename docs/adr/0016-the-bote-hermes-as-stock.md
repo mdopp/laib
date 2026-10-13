@@ -57,3 +57,18 @@ subscribes to signal-cli's event stream, acts only when the sender is
 note]` — and answers with the consequence. Another number trying it gets a
 journal line. The Automat executes writes and deletes only with the code
 its first answer named, and keeps deleted automations for restore.
+
+## Amendment 2026-10-13 (#122): the Bote's persona is Joshua
+
+Owner decision: Joshua, the WOPR from WarGames that started as an easter egg
+(#119), is the persona of the whole Bote, in the person's language. The
+Bote's tools become a directory you stand in: every message goes to the
+`joshua` tool first, which knows where the person is (`JOSHUA>`,
+`JOSHUA/HAUS>`, `JOSHUA/SPIELE>`) and answers with a screen or with
+`WEITER: <tool>`, and then the Bote answers the request with that tool. Where
+the person is lives in code, not in the model. ZURÜCK goes one level up,
+MENÜ to the directory. The games keep the film's English.
+
+The guardrail from ADR 0019 §6 stays: approvals, warnings, errors and
+anything about safety are plain words with the consequence, no role-play.
+The relay's answers are code and unchanged.
