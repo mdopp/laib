@@ -67,13 +67,19 @@ the release, run it, answer the questions:
 ```
 ./laib-stick
 Name der Box [nuc]:
-Domain der Dienste: trial.example
+Domain der Dienste: nuc.dopp.cloud
 Feste LAN-Adresse (leer = DHCP): 192.168.178.30
 SSH Public Key (Datei) [~/.ssh/id_ed25519.pub]:
 Konsolen-Passwort für core setzen? [j/N]: j
 Hat die Box eine GPU? [j/N]:
 URL eines entfernten Modells: http://192.168.178.100:11435/v1
 Lease-URL der entfernten llama: http://192.168.178.100:11435/api/model-lease
+Zertifikate für die Dienste:
+  1 = Let's Encrypt über Port 80 (Port 80 muss die Box erreichen, direkt oder weitergeleitet)
+  2 = Let's Encrypt über einen DNS-Anbieter mit API (kein Port 80 nötig)
+  3 = Caddys eigene Zertifikate (nur für einen Laptop-Versuch: Handys und ihre Widgets vertrauen ihnen nicht)
+Auswahl [1]:
+Soll dieser Stick eine schon installierte Box neu aufsetzen? [j/N]:
 
 Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
 ISO fertig: laib-nuc.iso — Ignition eingebettet
