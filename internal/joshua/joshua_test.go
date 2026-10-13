@@ -30,8 +30,8 @@ func TestListGamesEndsWithGlobalThermonuclearWar(t *testing.T) {
 	if !strings.Contains(out, "FALKEN'S MAZE") || !strings.Contains(out, "TIC-TAC-TOE") {
 		t.Fatalf("the film's list:\n%s", out)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(out), "GLOBAL THERMONUCLEAR WAR") {
-		t.Fatalf("Global Thermonuclear War comes last:\n%s", out)
+	if !strings.Contains(out, "THEATERWIDE BIOTOXIC AND CHEMICAL WARFARE\nTIC-TAC-TOE\n\nGLOBAL THERMONUCLEAR WAR\n\nJOSHUA/GAMES>") {
+		t.Fatalf("Global Thermonuclear War comes last, then the prompt:\n%s", out)
 	}
 	if out := j.Input("p", "play chess"); !strings.Contains(out, "NOT AVAILABLE") {
 		t.Fatalf("only two games are playable:\n%s", out)
@@ -128,60 +128,88 @@ func TestTheToolPassesTextThrough(t *testing.T) {
 	if len(srv.Tools) != 1 || srv.Tools[0].Name != "joshua" {
 		t.Fatalf("one tool, joshua: %+v", srv.Tools)
 	}
-	out, err := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Shall we play a game?", "sitzung": "Anna"})
+	out, err := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Shall we play a game?", "sitzung": "Anna", "sprache": "en"})
 	if err != nil || !strings.Contains(out, "SHALL WE PLAY A GAME?") {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
 
-// The directory is the Bote's real tools; GAMES is the last entry.
-func TestTheDirectoryLeadsToGamesAndHandsAToolToTheBote(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage", "haus", "kalender-x"} })
-	out := j.Input("p", "Joshua")
-	if !strings.Contains(out, "4  KALENDER-X") || !strings.Contains(out, "5  GAMES") {
-		t.Fatalf("an unknown tool keeps its name; GAMES comes last:\n%s", out)
+// #122: Joshua is the Bote's persona. You are always somewhere, the prompt
+// shows where, and you stay there until ZURÜCK or MENÜ. Where you are is
+// this code; a request inside a context goes back to the Bote as WEITER.
+func TestLevelsWithContext(t *testing.T) {
+	j := New(func() []string { return []string{"laib", "frage", "haus", "automat"} })
+	out := j.Talk("anna", "de", "Was kannst du?")
+	for _, want := range []string{"WOPR HAUPTVERZEICHNIS", "1  BOX-STATUS UND VORSCHLÄGE", "3  LICHT, SCHALTER, MUSIK", "5  SPIELE"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
 	}
-	if out := j.Input("p", "5"); !strings.HasSuffix(strings.TrimSpace(out), "GLOBAL THERMONUCLEAR WAR") {
-		t.Fatalf("5 is GAMES:\n%s", out)
+	if !strings.HasSuffix(out, "JOSHUA>") {
+		t.Fatalf("the prompt is the last line:\n%s", out)
 	}
-	j.Input("p", "Joshua")
-	out = j.Input("p", "2")
-	if !strings.Contains(out, "CONNECTING TO WEB SEARCH WITH SOURCES") || !strings.HasSuffix(strings.TrimSpace(out), "HANDOVER: frage") {
-		t.Fatalf("choosing a tool hands it to the Bote:\n%s", out)
+	if out := j.Talk("anna", "de", "3"); !strings.Contains(out, "VERBINDE MIT LICHT, SCHALTER, MUSIK") || !strings.HasSuffix(out, "JOSHUA/HAUS>") {
+		t.Fatalf("entering a context:\n%s", out)
 	}
-	if _, ok := j.sessions["p"]; ok {
-		t.Fatal("Joshua is still running after the handover")
+	if out := j.Talk("anna", "de", "Mach das Licht im Wohnzimmer aus"); out != "WEITER: haus\nPROMPT: JOSHUA/HAUS>" {
+		t.Fatalf("a request in the context goes back to the Bote:\n%s", out)
 	}
-}
-
-// Free wording is the model's job; when Joshua does not understand, it says
-// which commands it takes, so the model can map the person's words and retry.
-func TestUnrecognisedInputNamesTheValidCommands(t *testing.T) {
-	j := term()
-	j.Input("p", "Joshua")
-	if out := j.Input("p", "was kannst du so?"); !strings.Contains(out, "VALID:") || !strings.Contains(out, "LIST GAMES") || !strings.Contains(out, "LOGOFF") {
-		t.Fatalf("the menu's commands:\n%s", out)
+	if out := j.Talk("anna", "de", "und was läuft gerade?"); out != "WEITER: haus\nPROMPT: JOSHUA/HAUS>" {
+		t.Fatalf("the context stays:\n%s", out)
 	}
-	j.Input("p", "play tic-tac-toe")
-	j.Input("p", "1")
-	if out := j.Input("p", "ich nehme die ecke"); !strings.Contains(out, "VALID:") || !strings.Contains(out, "1-9") {
-		t.Fatalf("the game's commands:\n%s", out)
+	if out := j.Talk("anna", "de", "zurück"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") || !strings.HasSuffix(out, "JOSHUA>") {
+		t.Fatalf("ZURÜCK goes up one level:\n%s", out)
 	}
-	if out := j.Input("p", "Mitte"); !strings.Contains(out, " X ") {
-		t.Fatalf("MITTE is 5:\n%s", out)
+	if out := j.Talk("anna", "de", "Wie wird das Wetter morgen?"); out != "WEITER: -\nPROMPT: JOSHUA>" {
+		t.Fatalf("a free question at the top goes to the Bote with any tool:\n%s", out)
+	}
+	if out := j.Talk("ben", "de", "Wie spät ist es?"); out != "WEITER: -\nPROMPT: JOSHUA>" {
+		t.Fatalf("a first message that is a question is answered, not a menu:\n%s", out)
 	}
 }
 
-// A first message in free words opens the directory, not a list it happens
-// to contain ("Lass uns was SPIELEn"); "Joshua" mid-game brings it back too.
-func TestFreeWordsOpenTheDirectory(t *testing.T) {
+func TestGamesAreALevelAndZurueckLeavesAGame(t *testing.T) {
 	j := term()
-	if out := j.Input("p", "Lass uns was spielen"); !strings.Contains(out, "WOPR MAIN DIRECTORY") {
-		t.Fatalf("free words first:\n%s", out)
+	if out := j.Talk("p", "de", "Lass uns was spielen"); !strings.Contains(out, "GLOBAL THERMONUCLEAR WAR") || !strings.HasSuffix(out, "JOSHUA/SPIELE>") {
+		t.Fatalf("free words about playing open the games level:\n%s", out)
 	}
-	j.Input("p", "play tic-tac-toe")
-	j.Input("p", "1")
-	if out := j.Input("p", "Joshua"); !strings.Contains(out, "WOPR MAIN DIRECTORY") {
-		t.Fatalf("Joshua mid-game:\n%s", out)
+	j.Talk("p", "de", "play tic-tac-toe")
+	j.Talk("p", "de", "1")
+	if out := j.Talk("p", "de", "ich nehme die ecke"); !strings.Contains(out, "VALID:") || !strings.Contains(out, "1-9") {
+		t.Fatalf("inside a game, words it does not take name the valid moves:\n%s", out)
+	}
+	if out := j.Talk("p", "de", "zurück"); !strings.HasSuffix(out, "JOSHUA/SPIELE>") {
+		t.Fatalf("ZURÜCK leaves the game for the games level:\n%s", out)
+	}
+	if out := j.Talk("p", "de", "menü"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
+		t.Fatalf("MENÜ goes to the top:\n%s", out)
+	}
+	if out := j.Talk("p", "de", "Joshua"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
+		t.Fatalf("JOSHUA shows the directory:\n%s", out)
+	}
+}
+
+func TestTheDirectorySpeaksThePersonsLanguage(t *testing.T) {
+	j := term()
+	out := j.Talk("p", "en", "What can you do?")
+	for _, want := range []string{"WOPR MAIN DIRECTORY", "1  BOX STATUS AND PROPOSALS", "3  GAMES", "JOSHUA>"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+	if out := j.Talk("p", "en", "2"); !strings.Contains(out, "CONNECTING TO WEB SEARCH WITH SOURCES") || !strings.HasSuffix(out, "JOSHUA/FRAGE>") {
+		t.Fatalf("english context:\n%s", out)
+	}
+}
+
+func TestTheToolTakesTheLanguageAndDefaultsToGerman(t *testing.T) {
+	srv := Server(term(), "test")
+	out, _ := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Was kannst du?", "sitzung": "Anna"})
+	if !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
+		t.Fatalf("german by default:\n%s", out)
+	}
+	out, _ = srv.Tools[0].Call(nil, map[string]any{"eingabe": "What can you do?", "sitzung": "Bob", "sprache": "en"})
+	if !strings.Contains(out, "WOPR MAIN DIRECTORY") {
+		t.Fatalf("english when asked:\n%s", out)
 	}
 }
