@@ -1,11 +1,14 @@
 package state
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -141,18 +144,10 @@ func (st *State) validate() []error {
 			fail("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
 		}
 	}
-	if st.Box.Laib.Host == "" {
-		st.Box.Laib.Host = "laib"
-	}
-	if st.Box.Laib.Port == 0 {
-		st.Box.Laib.Port = 5900
-	}
-	if st.Box.Laib.Listen == "" {
-		st.Box.Laib.Listen = "127.0.0.1"
-	}
-	if st.Box.Laib.Group == "" {
-		st.Box.Laib.Group = "admins"
-	}
+	st.Box.Laib.Host = cmp.Or(st.Box.Laib.Host, "laib")
+	st.Box.Laib.Port = cmp.Or(st.Box.Laib.Port, 5900)
+	st.Box.Laib.Listen = cmp.Or(st.Box.Laib.Listen, "127.0.0.1")
+	st.Box.Laib.Group = cmp.Or(st.Box.Laib.Group, "admins")
 	if st.Box.Roles.Model != "" && !st.Box.GPU.Present {
 		fail("box.yml: roles.model is set but gpu.present is false")
 	}
@@ -187,12 +182,7 @@ func (st *State) validate() []error {
 		if c.OIDC != nil && c.OIDC.ClientID != "" {
 			declared[OIDCSecretName(c.OIDC.ClientID)] = true // generated with the client, referenced by values
 		}
-		keys := make([]string, 0, len(svc.Values))
-		for k := range svc.Values {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range slices.Sorted(maps.Keys(svc.Values)) {
 			if ref := svc.Values[k].Secret; ref != "" && !declared[ref] {
 				fail("services/%s/values.yml: %s references undeclared secret %s", name, k, ref)
 			}
@@ -225,12 +215,7 @@ func (st *State) validate() []error {
 		if c.GPU && !st.Box.GPU.Present {
 			fail("services/%s/laib.yml: gpu: true but box.yml gpu.present is false", name)
 		}
-		carveOut := false
-		for _, h := range st.Box.HostNetwork {
-			if h == name {
-				carveOut = true
-			}
-		}
+		carveOut := slices.Contains(st.Box.HostNetwork, name)
 		unitHost := false
 		for _, content := range svc.Units {
 			if unitUsesHostNetwork(content) {
@@ -310,13 +295,7 @@ func proxySecretsDeclared(svc *Service) error {
 		if r.ProxySecret == "" {
 			continue
 		}
-		found := false
-		for _, s := range svc.Contract.Secrets {
-			if s.Name == r.ProxySecret {
-				found = true
-			}
-		}
-		if !found {
+		if !slices.ContainsFunc(svc.Contract.Secrets, func(s Secret) bool { return s.Name == r.ProxySecret }) {
 			return fmt.Errorf("services/%s: route %s names proxySecret %s, which the service does not declare under secrets", svc.Name, r.Host, r.ProxySecret)
 		}
 	}
@@ -349,14 +328,7 @@ func (st *State) ModelLease() string {
 	return st.Box.Model.Lease
 }
 
-func builtin(v string) bool {
-	for _, b := range Builtins {
-		if b == v {
-			return true
-		}
-	}
-	return false
-}
+func builtin(v string) bool { return slices.Contains(Builtins, v) }
 
 // ServiceNames returns the service names sorted, so every output is stable.
 func (st *State) ServiceNames() []string {
@@ -406,13 +378,7 @@ func (st *State) Order(names []string) []string {
 	}
 	sorted := append([]string(nil), names...)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		ri, rj := rank[sorted[i]], rank[sorted[j]]
-		if ri == 0 {
-			ri = 100
-		}
-		if rj == 0 {
-			rj = 100
-		}
+		ri, rj := cmp.Or(rank[sorted[i]], 100), cmp.Or(rank[sorted[j]], 100)
 		if ri != rj {
 			return ri < rj
 		}
@@ -459,13 +425,8 @@ func (st *State) purposeWarnings() []string {
 			by[p] = append(by[p], name)
 		}
 	}
-	keys := make([]string, 0, len(by))
-	for k := range by {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
 	var out []string
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(by)) {
 		if len(by[k]) > 1 {
 			out = append(out, fmt.Sprintf("Zweck %q wird von %d Diensten erfüllt: %s", k, len(by[k]), strings.Join(by[k], ", ")))
 		}

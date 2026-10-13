@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/mdopp/laib/personas"
@@ -71,7 +72,7 @@ func (p *Persona) Rev() string {
 // carries to be restarted on any persona change.
 func (st *State) PersonaRev() string {
 	h := sha256.New()
-	for _, name := range sortedPersonaNames(st.Personas) {
+	for _, name := range slices.Sorted(maps.Keys(st.Personas)) {
 		fmt.Fprintf(h, "%s=%s\n", name, st.Personas[name].Rev())
 	}
 	h.Write([]byte(st.ChatMap()))
@@ -81,14 +82,9 @@ func (st *State) PersonaRev() string {
 // ChatMap is render/persona/chat.yml: which Signal number talks to which
 // persona (the house persona for every number not listed).
 func (st *State) ChatMap() string {
-	numbers := make([]string, 0, len(st.Box.ChatPersonas))
-	for n := range st.Box.ChatPersonas {
-		numbers = append(numbers, n)
-	}
-	sort.Strings(numbers)
 	var b strings.Builder
 	b.WriteString("# Rendered by laib from box.yml (ADR 0020): the house persona, and a persona per Signal number.\nhouse: " + st.Box.Persona + "\nchat:\n")
-	for _, n := range numbers {
+	for _, n := range slices.Sorted(maps.Keys(st.Box.ChatPersonas)) {
 		fmt.Fprintf(&b, "  %q: %s\n", n, st.Box.ChatPersonas[n])
 	}
 	return b.String()
@@ -108,12 +104,7 @@ func (st *State) loadPersonas() []error {
 	}
 	st.Personas = map[string]*Persona{}
 	names := []string{st.Box.Persona}
-	numbers := make([]string, 0, len(st.Box.ChatPersonas))
-	for n := range st.Box.ChatPersonas {
-		numbers = append(numbers, n)
-	}
-	sort.Strings(numbers)
-	for _, n := range numbers {
+	for _, n := range slices.Sorted(maps.Keys(st.Box.ChatPersonas)) {
 		if !e164.MatchString(n) {
 			errs = append(errs, fmt.Errorf("box.yml chatPersonas: %q is not a phone number in E.164 (+49…)", n))
 		}
@@ -193,19 +184,10 @@ var ruleTalk = regexp.MustCompile(`(?i)freigabe|freigeben|genehmig|approv|token|
 
 func (st *State) personaWarnings() []string {
 	var out []string
-	for _, name := range sortedPersonaNames(st.Personas) {
+	for _, name := range slices.Sorted(maps.Keys(st.Personas)) {
 		if ruleTalk.MatchString(st.Personas[name].Files["style.md"]) {
 			out = append(out, fmt.Sprintf("persona %s: style.md talks about approvals or rules; a persona is style only, the rules are code and win (ADR 0020 §3)", name))
 		}
 	}
 	return out
-}
-
-func sortedPersonaNames(m map[string]*Persona) []string {
-	names := make([]string, 0, len(m))
-	for n := range m {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
 }
