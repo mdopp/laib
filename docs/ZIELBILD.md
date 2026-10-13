@@ -1,7 +1,9 @@
 # Laib — the target picture and the way there
 
-2026-10-10. The concept is `docs/KONZEPT.md`; this is the end state in
-one picture and the ordered path, with the NUC as the trial box.
+2026-10-10, phases reshaped 2026-10-13 after ADR 0019 (calm before
+autonomy), ADR 0020 (personas) and ADR 0021 (names). The concept is
+`docs/KONZEPT.md`; this is the end state in one picture and the ordered
+path, with the NUC as the trial box.
 
 ## The end state
 
@@ -22,51 +24,64 @@ is not the plan.)
 The NUC is the proving ground: nothing on the GPU box changes until the
 NUC runs the whole household side against the GPU box's model.
 
-### Phase 1 — Laib on the NUC (no GPU, remote model)
+### Phase 1 — calm: Laib on the NUC (no GPU, remote model)
 
-1. Fedora CoreOS on the NUC from the stick: `laib-stick --domain nuc.dopp.cloud --dns-provider desec --dns-token … --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease` (the sub-zone delegated to deSEC first, ADR 0007 amendment #45 — real certificates, so the phones in Phase 3 need no root CA).
-2. `laib propose --add caddy`, `--add authelia` (+ lldap), `--add adguard`, `--add whoami`; approve; `laib status` green; `laib.<domain>` behind Authelia.
-3. The two ADR 0015 checks are not needed here yet; this phase proves the kernel, Caddy with DNS-01, SSO, converge, backup to the NAS.
+ADR 0019 §1: the first phase is only what "alles läuft" depends on.
 
-Gate: a week of `laib converge` and `laib diag --journal` with nothing
-red that a human had to touch.
+1. Fedora CoreOS on the NUC from the stick: `laib-stick --domain nuc.dopp.cloud --dns-provider desec --dns-token … --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease` (the sub-zone delegated to deSEC first, ADR 0007 amendment #45: real certificates, so the phones in Phase 3 need no root CA). No GitHub token: the repo, the releases and the images are public (#94).
+2. `laib add caddy`, `auth` (Authelia + LLDAP), `adguard`, `whoami`; `laib status` green; `laib.<domain>` behind Authelia.
+3. Backup on the box and off it (the NAS), `laib recovery-sheet` printed, `laib family-card` on the fridge, the outside watchdog pinged (#57).
+4. `laib add haus`: the start page with the three guarantees ("Alles läuft · Letzte Sicherung · Letzte Änderung — Rückgängig", ADR 0019 §3), in the house persona (Joshua unless `box.yml persona:` says otherwise).
+5. The Operator as a diagnostician only: `diag`, `inspect`, `logs`, `note`, `escalate`, `propose` (ADR 0019 §1).
+
+Gate: one month of real use, with the VM's fault injection repeated on
+the hardware (reboot, power cut, reinstall from the stick, restore,
+update), and nothing red that a human had to touch.
 
 ### Phase 2 — the agents on the NUC
 
-4. Operator (`cmd/laib-operator`, issue #20) with `MODEL_URL` from
-   box.yml; break whoami on purpose, watch it inspect, restart, journal.
-5. Bote: Hermes as stock (ADR 0016), Signal gateway, Laib MCP as `bote`,
-   HA integration pointed at the GPU box's Home Assistant for now, Frage
-   as a tool; approval by verified number.
-6. Frage: SearXNG + summary; register as Assist's conversation agent on
+6. The Operator's `write`, `exec` and `restart`, granted per action type
+   once the eval (`werkstatt/evals`, #82) shows no wrong mutating action.
+7. The Bote: Hermes as stock (ADR 0016) on Signal, in the house persona,
+   with the tools `laib`, `ha` (the GPU box's Home Assistant for now),
+   `frage`, `automat`, `persona` (ADR 0021); approvals only through the
+   relay on the admin's verified number (ADR 0019 §2e). `chatPersonas`
+   gives a number its own persona.
+8. Frage: SearXNG + summary; registered as Assist's conversation agent on
    the GPU box's HA (check 2 of ADR 0015).
+9. The Werkstatt and its autoloop (ADR 0019: second phase, outside the
+   first gate).
 
 Gate: "was gibt's Neues" on Signal answers with the morning report; "gib
-#n frei" applies a proposal.
+#n frei" from the admin's number applies a proposal, and from any other
+number does not.
 
 ### Phase 3 — Haus on the NUC
 
-7. Lift and shift (DEKONSTRUKTION step 3): `/p/*`, `/napi`, pairing,
-   push, favorites, energy, HA aggregation into `mdopp/haus`; the Android
-   app pointed at the NUC's Haus; widgets work.
-8. The Haushalt MCP source (ADR 0017): calendar and contacts from
-   Radicale on the NUC, notes from the file share, documents from
-   Paperless, memory from the library.
-9. Pages one by one: Start, Räume, Energie, Medien, Notizen, Kalender, Box.
+10. Pair the phones through Haus (`/pair-device`, haus#6) against the
+    NUC; the app wears the persona (#130).
+11. Haus serves every `/napi` path the app uses (haus#10), so the Solaris
+    bridge goes and the widgets work without Solaris.
+12. The Haushalt MCP source (ADR 0017, haus#11): calendar and contacts
+    from Radicale on the NUC, notes from the file share, documents from
+    Paperless.
+13. The pages one by one (haus#12): Start, Räume, Energie, Medien,
+    Notizen, Kalender; the Sprechen field talks to the Bote.
 
 Gate: the family uses Haus and the widgets for a week without opening the
 old Solaris PWA.
 
 ### Phase 4 — the Kraftwerk gets Laib (docs/MIGRATION.md)
 
-10. Laib installed on the GPU box beside ServiceBay with `--gpu`;
+14. Laib installed on the GPU box beside ServiceBay with `--gpu`;
     ServiceBay's units ignored; Caddy beside NPM (step 2 of MIGRATION.md),
     then auth, adguard, llama as the model role (issue #18).
-11. The household services adopted one by one from ServiceBay: Radicale,
+15. The household services adopted one by one from ServiceBay: Radicale,
     Paperless, Vaultwarden, file share, Home Assistant, media, Immich,
     foundry-chronicle; each `laib plan`, `laib apply`, verify, old unit
-    off. Stimme with the GPU variants (Martin TTS).
-12. Operator, Bote, Frage and Haus move from the NUC to the Kraftwerk:
+    off. Stimme with the GPU variants; its trainer trains the house
+    persona's wake word on the GPU (ADR 0020, #128).
+16. Operator, Bote, Frage and Haus move from the NUC to the Kraftwerk:
     the same templates, `model.url` replaced by the local role, Haus's
     data restored from the NUC's restic repo.
 
@@ -75,27 +90,45 @@ Kraftwerk; the NUC is wiped.
 
 ### Phase 5 — voice and retire
 
-13. Assist sentences for timers and media (check 1 of ADR 0015), Music
-    Assistant with Jellyfin and radio, the wake word trained; Solaris the
-    agent off; its memory library in Haus; solarisbay reduced to templates
-    in the household registry; solaris-android renamed.
-14. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
+17. Assist sentences for timers and media (check 1 of ADR 0015), Music
+    Assistant with Jellyfin and radio; the Voice PE satellites flashed
+    once with the persona's microWakeWord model (by hand in ESPHome,
+    `templates/stimme/README.md`); Solaris the agent off; solarisbay
+    reduced to templates in the household registry. solaris-android keeps
+    its package id and repo name (an installed app's contract, ADR 0021);
+    it ships the new names next to the old ones.
+18. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
     as "what we have".
 
 ## What the trial proves, and what it does not
 
 Proves: the kernel on real hardware, DNS-01 and SSO, the Operator with a
-remote model, the Bote on Signal, Haus against a real family — all
+remote model, the Bote on Signal, Haus against a real family, all
 without touching the GPU box. Does not prove: the GPU role, the lease,
-media transcoding — those are Phase 4 on the Kraftwerk itself, which is
-why that box is migrated last and nothing on it changes before.
+media transcoding, the wake-word training. Those are Phase 4 on the
+Kraftwerk itself, which is why that box is migrated last and nothing on
+it changes before.
 
-## Stand 2026-10-11
+## Stand 2026-10-13
 
-Built and CI-proven without a box: the stick (`laib-stick`), the first
-install end to end in a KVM guest, the data disk as a one-member RAID1
-with `laib disk add` and a reinstall that keeps the data, Caddy with its
-own CA, backup and restore against a real restic repo, the Bote's config
-with the `ha` and `automat` tools, Haus as its own repo with the Box
-page, pairing and the companion API. Phase 1 (the NUC) is next and is the
-first real run; nothing on the Kraftwerk has changed.
+Built and proven in CI without a box (vm-install, a KVM guest on Fedora
+CoreOS, green on every release since v0.4.2):
+- the stick;
+- the first install of the commit under test;
+- the data disk as RAID1 chosen by identity;
+- a reinstall that keeps the data, and a stick left in that does nothing;
+- a power cut during the first boot;
+- reboot with the firewall and registry login intact;
+- hooks in the hooks image (auth, adguard, radicale);
+- backup and restore, and disaster recovery from the sheet alone;
+- the update path;
+- remove.
+
+Unit-tested and wired, not yet on hardware:
+- the trust kernel (ADR 0019 §2);
+- the Bote with persona, relay, `ha`, `automat` and `frage`;
+- Haus with the Box page, the guarantees, pairing, the companion keys and the persona;
+- Stimme's trainer.
+
+Phase 1 on the NUC is next and is the first real run; nothing on the
+Kraftwerk has changed.
