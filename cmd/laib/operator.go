@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -306,12 +307,7 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(fmt.Errorf("%s: %w", p, err))
 		}
 	}
-	tmp := rel + ".laib-tmp"
-	if err := root.WriteFile(tmp, content, 0o644); err != nil {
-		return fail(fmt.Errorf("%s: %w", p, err))
-	}
-	if err := root.Rename(tmp, rel); err != nil {
-		root.Remove(tmp)
+	if err := boxfs.WriteAtomicIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
 		return fail(fmt.Errorf("%s: %w", p, err))
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})
