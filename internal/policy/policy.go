@@ -3,6 +3,7 @@ package policy
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/mdopp/laib/internal/state"
 )
@@ -11,14 +12,7 @@ import (
 var Tiers = []string{"read", "propose", "apply", "destroy"}
 
 // Index returns the position of a tier, or -1.
-func Index(tier string) int {
-	for i, t := range Tiers {
-		if t == tier {
-			return i
-		}
-	}
-	return -1
-}
+func Index(tier string) int { return slices.Index(Tiers, tier) }
 
 // Allowed reports whether the hand's ceiling reaches the tier. An unknown
 // hand or tier is never allowed. "human" is a hand like any other.
@@ -114,23 +108,12 @@ func MayVerb(p state.Policy, hand, verb string) bool {
 	if !ok {
 		return false
 	}
-	if len(h.Verbs) == 0 {
-		return true
-	}
-	for _, v := range h.Verbs {
-		if v == verb {
-			return true
-		}
-	}
-	return false
+	return len(h.Verbs) == 0 || slices.Contains(h.Verbs, verb)
 }
 
 // IsHuman reports whether a hand's verdicts count as a human's: the human
 // on the shell, and a hand policy.yml marks `human: true` — the relay that
 // acts only on the admin's verified Signal number (#48).
 func IsHuman(p state.Policy, hand string) bool {
-	if hand == "human" {
-		return true
-	}
-	return p.Hands[hand].Human
+	return hand == "human" || p.Hands[hand].Human
 }

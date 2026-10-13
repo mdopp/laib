@@ -130,16 +130,13 @@ func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
 func TestModelKeyIsTheLocalRolesKey(t *testing.T) {
 	st := &state.State{Box: state.Box{Domain: "x.home", DataDir: "/d"}, Services: map[string]*state.Service{"llama": {Name: "llama"}}}
 	st.Box.Roles.Model = "llama"
-	vars, err := variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-local"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	vars := variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-local"})
 	if vars["MODEL_KEY"] != "k-local" {
 		t.Fatalf("MODEL_KEY on the GPU box must be the role's key: %q", vars["MODEL_KEY"])
 	}
 	st.Box.Roles.Model = ""
 	st.Box.Model.URL, st.Box.Model.KeySecret = "http://10.0.0.20:11435/v1", "MODEL_API_KEY"
-	vars, _ = variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-remote"})
+	vars = variables(st, st.Services["llama"], map[string]string{"MODEL_API_KEY": "k-remote"})
 	if vars["MODEL_KEY"] != "k-remote" {
 		t.Fatalf("remote: %q", vars["MODEL_KEY"])
 	}

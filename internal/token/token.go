@@ -13,6 +13,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 
@@ -82,19 +83,11 @@ func (s *Store) Mint(hand string, ttl time.Duration, note string) (string, Recor
 
 // Revoke removes a token by id.
 func (s *Store) Revoke(id string) error {
-	kept := s.Records[:0]
-	found := false
-	for _, r := range s.Records {
-		if r.ID == id {
-			found = true
-			continue
-		}
-		kept = append(kept, r)
-	}
-	if !found {
+	n := len(s.Records)
+	s.Records = slices.DeleteFunc(s.Records, func(r Record) bool { return r.ID == id })
+	if len(s.Records) == n {
 		return errors.New("no token with id " + id)
 	}
-	s.Records = kept
 	return s.save()
 }
 

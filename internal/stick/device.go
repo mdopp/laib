@@ -103,6 +103,9 @@ func parseLsblkDevice(out string) DeviceInfo {
 	return DeviceInfo{Model: strings.TrimSpace(kv["MODEL"]), Size: size, Bus: strings.ToLower(kv["TRAN"]), Removable: kv["RM"] == "1"}
 }
 
+// windowsBusTypes names the MSFT_Disk.BusType numbers laib tells apart.
+var windowsBusTypes = map[string]string{"7": "usb", "11": "sata", "12": "sd", "13": "mmc", "17": "nvme"}
+
 // parseWindowsDisk reads `Get-Disk -Number N | Select-Object FriendlyName,
 // Size, @{n='Bus';e={"$($_.BusType)"}}, IsBoot, IsSystem | ConvertTo-Json`:
 // one object, or an array of one. BusType may come as its name or its number.
@@ -131,17 +134,8 @@ func parseWindowsDisk(out string) (DeviceInfo, error) {
 	}
 	d := list[0]
 	bus := strings.ToLower(d.Bus)
-	switch bus { // MSFT_Disk.BusType numbers
-	case "7":
-		bus = "usb"
-	case "12":
-		bus = "sd"
-	case "13":
-		bus = "mmc"
-	case "11":
-		bus = "sata"
-	case "17":
-		bus = "nvme"
+	if name, ok := windowsBusTypes[bus]; ok {
+		bus = name
 	}
 	return DeviceInfo{Model: d.FriendlyName, Size: d.Size, Bus: bus, Removable: bus == "usb" || bus == "sd" || bus == "mmc", System: d.IsBoot || d.IsSystem}, nil
 }

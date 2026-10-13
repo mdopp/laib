@@ -28,7 +28,9 @@ found "operator tools" "$lacking"
 
 # 3. the docs' ports are the code's defaults
 lease_port=$(grep -oE 'port := [0-9]+' internal/state/load.go | head -1 | grep -oE '[0-9]+')
-laib_port=$(grep -oE 'Laib.Port = [0-9]+' internal/state/load.go | grep -oE '[0-9]+')
+laib_port=$(grep -oE 'Laib\.Port(, | = )[0-9]+' internal/state/load.go | grep -oE '[0-9]+$')
+# a default the grep cannot read is drift too: the check would compare against nothing
+found "port defaults readable" "$([ -n "$lease_port" ] && [ -n "$laib_port" ] || echo "lease '$lease_port', laib '$laib_port' in internal/state/load.go")"
 found "lease port (code: $lease_port)" "$(grep -rnE ':[0-9]+/api/model-lease' docs/*.md README.md | grep -vE ":$lease_port/api/model-lease" || true)"
 found "laib port (code: $laib_port)" "$(grep -rnE '127\.0\.0\.1:[0-9]+/mcp' docs/*.md README.md | grep -vE "127\.0\.0\.1:$laib_port/mcp" || true)"
 

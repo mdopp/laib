@@ -161,10 +161,7 @@ func WriteDevice(image, device string, progress func(done, total int64)) error {
 			break
 		}
 	}
-	if err := windows.FlushFileBuffers(disk); err != nil {
-		return err
-	}
-	return nil
+	return windows.FlushFileBuffers(disk)
 }
 
 // ListDevicesCommand is the shell command that lists physical disks.

@@ -1,6 +1,7 @@
 package stick
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -55,6 +56,48 @@ func TestParseWindowsDisk(t *testing.T) {
 	d, err = parseWindowsDisk(`[{"FriendlyName":"SanDisk Cruzer","Size":32015679488,"Bus":"7","IsBoot":false,"IsSystem":false}]`)
 	if err != nil || d.Bus != "usb" || d.System || !d.Removable {
 		t.Fatalf("numeric bus type 7 is USB: parsed %+v, %v", d, err)
+	}
+}
+
+// Every MSFT_Disk.BusType number the parser maps, plus names that pass
+// through, in both the single-object and the array shape: Removable follows
+// the mapped bus, System follows IsBoot or IsSystem.
+func TestParseWindowsDiskBusTypes(t *testing.T) {
+	cases := []struct {
+		bus, wantBus  string
+		boot, system  bool
+		wantRemovable bool
+		wantSystem    bool
+	}{
+		{"7", "usb", false, false, true, false},
+		{"11", "sata", false, true, false, true},
+		{"12", "sd", false, false, true, false},
+		{"13", "mmc", false, false, true, false},
+		{"17", "nvme", true, false, false, true},
+		{"USB", "usb", false, false, true, false},
+		{"SATA", "sata", false, false, false, false},
+		{"99", "99", false, false, false, false},
+	}
+	for _, c := range cases {
+		obj := fmt.Sprintf(`{"FriendlyName":"Disk %s","Size":1024,"Bus":%q,"IsBoot":%t,"IsSystem":%t}`, c.bus, c.bus, c.boot, c.system)
+		for _, in := range []string{obj, "  [" + obj + "]\n"} {
+			d, err := parseWindowsDisk(in)
+			if err != nil {
+				t.Fatalf("%s: %v", in, err)
+			}
+			want := DeviceInfo{Model: "Disk " + c.bus, Size: 1024, Bus: c.wantBus, Removable: c.wantRemovable, System: c.wantSystem}
+			if d != want {
+				t.Errorf("%s: parsed %+v, want %+v", in, d, want)
+			}
+		}
+	}
+	for _, in := range []string{"[]", "", "not json", "[{]"} {
+		if d, err := parseWindowsDisk(in); err == nil {
+			t.Errorf("%q: parsed %+v, want an error", in, d)
+		}
+	}
+	if _, err := parseWindowsDisk("[]"); err == nil || err.Error() != "Get-Disk returned nothing" {
+		t.Errorf("empty array: error %v", err)
 	}
 }
 
