@@ -12,6 +12,20 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
+// Input is Talk in the session's language (English for a new one).
+func (t *Terminal) Input(sid, line string) string { return t.Talk(sid, "", line) }
+
+// clone copies one session under another id; the tests walk every line of play with it.
+func (t *Terminal) clone(from, to string) *Terminal {
+	c := New(t.caps, t.cast)
+	c.now = t.now
+	if s, ok := t.sessions[from]; ok {
+		cp := *s
+		c.sessions[to] = &cp
+	}
+	return c
+}
+
 func joshua() Cast {
 	p, err := state.BuiltinPersona("joshua")
 	if err != nil {

@@ -175,11 +175,6 @@ func Diff(ctx context.Context, repo string, p *Proposal) string {
 	return out
 }
 
-// Approve merges the branch into main. The caller then runs apply.
-func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
-	return ApproveChecked(ctx, repo, inbox, p, by, nil)
-}
-
 // ApproveChecked merges in a temporary worktree (#41): a conflict never
 // reaches main (no markers, no half-merged state), the merged result is
 // validated by check (state loads, renders) before main fast-forwards to

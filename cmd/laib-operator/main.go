@@ -19,24 +19,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/operator"
 )
-
-func env(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
-}
 
 func main() {
 	once := flag.String("once", "", "run one session for this trigger kind (tick|report|event:<service>) and exit")
 	flag.Parse()
 
 	op := &operator.Operator{
-		MCP:  &operator.MCP{URL: env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
-		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "gemma-4-e4b")},
-		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
+		MCP:  &operator.MCP{URL: boxfs.Env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
+		LLM:  &operator.LLM{URL: strings.TrimRight(boxfs.Env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: boxfs.Env("MODEL_NAME", "gemma-4-e4b")},
+		Home: boxfs.Env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")
@@ -46,7 +40,7 @@ func main() {
 	// The typed surface (#53) is the default: a household model gets a menu
 	// per trigger with typed parameters; OPERATOR_INTERFACE=cli gives a large
 	// model the verb table. The menu's service enum comes from laib status.
-	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
+	op.Typed = boxfs.Env("OPERATOR_INTERFACE", "typed") != "cli"
 	if op.Typed {
 		if text, _, err := op.MCP.Call(ctx, "laib_status", map[string]string{"args": ""}); err == nil {
 			op.Services = operator.ServicesFromStatus(text)
@@ -119,19 +113,19 @@ func main() {
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"operator":"bereit"}`)
 	})
-	srv := &http.Server{Addr: env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: boxfs.Env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
 
-	tick, _ := time.ParseDuration(env("OPERATOR_TICK", "10m"))
+	tick, _ := time.ParseDuration(boxfs.Env("OPERATOR_TICK", "10m"))
 	if tick <= 0 {
 		tick = 10 * time.Minute
 	}
 	ticker := time.NewTicker(tick)
-	reportAt := env("OPERATOR_REPORT_AT", "07:00")
+	reportAt := boxfs.Env("OPERATOR_REPORT_AT", "07:00")
 	reportedDay := ""
 	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, tick, reportAt)
 	for {

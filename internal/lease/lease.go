@@ -25,12 +25,14 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -137,7 +139,7 @@ func (s *Server) resolve(refs []string) (map[string][]string, error) {
 		if container == service {
 			want = service + ".service"
 		}
-		if !contains(units, want) {
+		if !slices.Contains(units, want) {
 			return nil, fmt.Errorf("presets.json: %s has no unit %s (%s); it has %s", service, want, ref, strings.Join(units, ", "))
 		}
 		out[service] = append(out[service], want)
@@ -291,7 +293,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 			alias = want
 			mode = ""
 			for _, name := range s.sortedModes() {
-				if !contains(s.allowed(name), want) {
+				if !slices.Contains(s.allowed(name), want) {
 					continue
 				}
 				if mode == "" || len(s.allowed(name)) < len(s.allowed(mode)) {
@@ -375,12 +377,7 @@ func (s *Server) until(holder string, now, deadline time.Time) time.Time {
 }
 
 func (s *Server) pausedServices(by map[string][]string) []string {
-	var out []string
-	for svc := range by {
-		out = append(out, svc)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(by))
 }
 
 // pause writes the marker for every service whose units the lease stopped,
@@ -418,27 +415,12 @@ func (s *Server) allUnits() map[string][]string {
 }
 
 func (s *Server) sortedModes() []string {
-	var names []string
-	for n := range s.cfg.Modes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
+	return slices.Sorted(maps.Keys(s.cfg.Modes))
 }
 
+// exclusiveUnits is every mode's units, sorted, each once.
 func (s *Server) exclusiveUnits() []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, us := range s.units {
-		for _, u := range us {
-			if !seen[u] {
-				seen[u] = true
-				out = append(out, u)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
+	return slices.Compact(flatten(s.units))
 }
 
 // voiceDevice writes the device file the voice units read as an EnvironmentFile.
@@ -528,6 +510,12 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) leaseAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	// Reading the lease is open; taking or releasing it wants the model key.
+	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && !s.authorized(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "the lease API wants the model key: Authorization: Bearer <MODEL_KEY>"})
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		l := s.read()
@@ -538,11 +526,6 @@ func (s *Server) leaseAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(l)
 	case http.MethodPost:
-		if !s.authorized(r) {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "the lease API wants the model key: Authorization: Bearer <MODEL_KEY>"})
-			return
-		}
 		var in struct {
 			Model  string `json:"model"`
 			TTL    int    `json:"ttl_s"`
@@ -583,11 +566,6 @@ func (s *Server) leaseAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{"status": "ready", "alias": alias, "mode": l.Mode, "allowed": l.Allowed, "until": l.Until, "deadline": l.Deadline, "renew_s": int(s.cfg.Renew.Seconds())})
 	case http.MethodDelete:
-		if !s.authorized(r) {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "the lease API wants the model key: Authorization: Bearer <MODEL_KEY>"})
-			return
-		}
 		var in struct {
 			Holder string `json:"holder"`
 		}
@@ -647,7 +625,7 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 	json.Unmarshal(body, &req)
 	model := strings.TrimSpace(req.Model)
 	allowed, mode := s.Policy()
-	if model != "" && !contains(allowed, model) {
+	if model != "" && !slices.Contains(allowed, model) {
 		if !s.modeFollows(r.Context(), model) {
 			holder := ""
 			if l := s.read(); l != nil {
@@ -673,7 +651,7 @@ func (s *Server) modeFollows(ctx context.Context, want string) bool {
 		return false
 	}
 	if l := s.read(); l != nil {
-		return contains(l.Allowed, want)
+		return slices.Contains(l.Allowed, want)
 	}
 	auto, ok := s.autoMode()
 	if !ok {
@@ -746,20 +724,11 @@ func (s *Server) catalogue(w http.ResponseWriter, r *http.Request) {
 		for i, e := range data {
 			if m, ok := e.(map[string]any); ok {
 				id, _ := m["id"].(string)
-				m["allowed_in_mode"] = contains(allowed, id)
+				m["allowed_in_mode"] = slices.Contains(allowed, id)
 				data[i] = m
 			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(listing)
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

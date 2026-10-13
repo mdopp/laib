@@ -10,24 +10,18 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/relay"
 )
 
 var Version = "dev"
 
-func env(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
-}
-
 func main() {
 	cfg := relay.Config{
 		Admin:     os.Getenv("ADMIN_NUMBER"),
 		Account:   os.Getenv("SIGNAL_ACCOUNT"),
-		SignalURL: env("SIGNAL_HTTP_URL", "http://127.0.0.1:8080"),
-		LaibURL:   env("LAIB_MCP_URL", "http://host.containers.internal:5900/mcp"),
+		SignalURL: boxfs.Env("SIGNAL_HTTP_URL", "http://127.0.0.1:8080"),
+		LaibURL:   boxfs.Env("LAIB_MCP_URL", "http://host.containers.internal:5900/mcp"),
 		Token:     os.Getenv("LAIB_TOKEN"),
 	}
 	if cfg.Admin == "" || cfg.Account == "" || cfg.Token == "" {
