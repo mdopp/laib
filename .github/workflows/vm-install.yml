@@ -237,7 +237,8 @@ jobs:
           PY
           killed=no
           for i in $(seq 1 900); do
-            if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
+            # exp #81: cut as early as possible, the moment laib's first boot starts
+            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
               $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
@@ -263,7 +264,11 @@ jobs:
           done
           $SSH 'set -euo pipefail
                 if [ -e /etc/laib/firstboot.env ]; then echo "firstboot.env still on disk after the resumed first boot"; exit 1; fi
-                echo "resumed: marker present, env file gone"'
+                echo "resumed: marker present, env file gone"
+                # exp #111: where did the resumed first boot spend its time
+                journalctl --no-pager --list-boots
+                for b in $(journalctl --list-boots --no-pager -q | awk '{print $1}' | tail -4); do echo "=== boot $b firstboot"; journalctl --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u laib-data-disk -u rpm-ostreed | tail -80; echo "=== boot $b blame"; systemd-analyze blame 2>/dev/null | head -5 || true; done
+                rpm-ostree status | head -30'
           $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
                 v=$(/var/opt/laib/laib version); echo "$v"
