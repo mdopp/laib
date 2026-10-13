@@ -389,7 +389,12 @@ func nftables(st *state.State) string {
 	// Physical interfaces only: loopback, the pasta/bridge interfaces of
 	// pods (host.containers.internal) and VPN tunnels keep reaching these
 	// ports; the WLAN and the wired LAN do not.
+	// One nft transaction that replaces the table (#102): a table block on an
+	// existing table only adds to it, so a port leaving this list stayed
+	// dropped until a reboot. The bare declaration keeps the delete from
+	// failing on a boot where the table does not exist yet.
 	return "# Rendered by laib: ports declared lan: false are dropped on physical interfaces (en*, eth*, wl*).\n" +
+		"table inet laib\ndelete table inet laib\n" +
 		"table inet laib {\n\tchain input {\n\t\ttype filter hook input priority -10; policy accept;\n" +
 		"\t\tiifname { \"en*\", \"eth*\", \"wl*\" } tcp dport { " + strings.Join(ports, ", ") + " } drop\n\t}\n}\n"
 }

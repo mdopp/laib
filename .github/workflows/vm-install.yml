@@ -214,6 +214,12 @@ jobs:
           sudo qemu-nbd --read-only -f qcow2 -c /dev/nbd0 disk.qcow2; sleep 3
           sudo fdisk -l /dev/nbd0
           sudo blkid /dev/nbd0p* || true
+          echo "--- /boot after the cut as GRUB reads it (no journal replay)"
+          sudo debugfs -R "ls -l /" /dev/nbd0p3 2>&1 | head -20
+          sudo debugfs -R "cat /grub2/bootuuid.cfg" /dev/nbd0p3 2>&1 | head -5
+          sudo debugfs -R "ls -l /loader/entries" /dev/nbd0p3 2>&1 | head
+          sudo dumpe2fs -h /dev/nbd0p3 2>/dev/null | grep -iE "features|uuid|state"
+          sudo blkid /dev/nbd0p3 /dev/nbd0p4
           sudo xfs_repair -n /dev/nbd0p4 2>&1 | head -80
           sudo xfs_db -r -c "sb 0" -c "print uuid dblocks agcount logstart logblocks features_incompat features_log_incompat" /dev/nbd0p4 2>&1 | head -20
           sudo xfs_logprint -t /dev/nbd0p4 2>&1 | head -40
@@ -232,6 +238,7 @@ jobs:
           killed=no
           for i in $(seq 1 900); do
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
+              $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
@@ -242,7 +249,7 @@ jobs:
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
             if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
-              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -200; ./root-forensics.sh
+              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut, the start (firmware, GRUB, cmdline)"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | head -60; echo "--- serial after the cut, the end"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -120; ./root-forensics.sh
               # the cut stays red (the last step fails the job), but the steps after it still run:
               # reinstall once more without a cut, so a flaky cut does not hide every later proof
               echo "POWERCUT_RED=1" >> "$GITHUB_ENV"
@@ -307,11 +314,20 @@ jobs:
                 printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
                 $L add probe
-                sudo nft list table inet laib | grep -q 8080 || { echo "8080 is not in the ruleset"; exit 1; }
+                sudo nft list table inet laib > /tmp/nft.txt 2>&1 || true
+                grep -q 8080 /tmp/nft.txt || { echo "8080 is not in the ruleset"; cat /tmp/nft.txt; sudo nft list ruleset; exit 1; }
                 # any HTTP answer is an answer (busybox httpd says 404 for / without an index); only no connection fails
                 for i in $(seq 1 20); do curl -sS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
                 curl -sS -o /dev/null -w "probe on loopback: HTTP %{http_code}\n" http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
           rc=$(probe); echo "probe with the ruleset: curl rc $rc"; [ "$rc" = 28 ] || { echo "a lan: false port answered through the NIC"; exit 1; }
+          # the port leaves the drop list and is open at once, without a reboot; and closes again (#102)
+          lan() { $SSH "set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+                sed -i -E 's/lan: (true|false)/lan: $1/' /mnt/data/laib/state/services/probe/laib.yml
+                /var/opt/laib/laib apply --reason 'probe lan: $1 (#102)' | tail -3"; }
+          lan true
+          rc=$(probe); echo "probe after lan: true, no reboot: curl rc $rc"; [ "$rc" != 28 ] || { echo "a port that left the drop list is still dropped (#102)"; $SSH 'sudo nft list ruleset'; exit 1; }
+          lan false
+          rc=$(probe); echo "probe after lan: false again: curl rc $rc"; [ "$rc" = 28 ] || { echo "the port is not dropped again"; $SSH 'sudo nft list ruleset'; exit 1; }
           $SSH 'sudo nft delete table inet laib'
           rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
