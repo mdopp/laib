@@ -200,7 +200,11 @@ $laib status; $laib diag; $laib plan
 # https://laib.trial.example — the box page behind Authelia, login with your LLDAP account
 # https://whoami.trial.example — the first service
 
-# 5. the operator
+# 5. the operator: on the trial it diagnoses and proposes, it does not repair
+#    (owner decision 2026-10-13, ADR 0019): every restart or change waits for a
+#    tap in the inbox. Raised to apply per action type once the evals (#82) are clean.
+sed -i -E 's/^( *ops: *\{ *ceiling: *)apply/\1propose/' /mnt/data/laib/state/policy.yml
+grep -n "ops:" /mnt/data/laib/state/policy.yml   # ops: { ceiling: propose }
 $laib operator enable                        # mints the ops token, renders and starts laib-operator
 $laib journal --since 1h
 ```
