@@ -372,7 +372,10 @@ systemd:
         [Unit]
         Description=Laib first boot: install the binaries and init the state repo
         After=network-online.target user@1000.service laib-data-disk.service
-        Wants=network-online.target user@1000.service laib-data-disk.service
+        Wants=network-online.target user@1000.service
+        # never without the data disk: a failed one left the state repo on the OS disk (#107);
+        # a box without a second disk passes here too (DEVICE=none exits 0)
+        Requires=laib-data-disk.service
         # the marker is written by the script as its last step (#37): a boot in between resumes
         ConditionPathExists=!/etc/laib/installed
 
