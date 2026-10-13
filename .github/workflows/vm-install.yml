@@ -210,6 +210,12 @@ jobs:
           sudo qemu-nbd --read-only -f qcow2 -c /dev/nbd0 disk.qcow2; sleep 3
           sudo fdisk -l /dev/nbd0
           sudo blkid /dev/nbd0p* || true
+          echo "--- /boot after the cut as GRUB reads it (no journal replay)"
+          sudo debugfs -R "ls -l /" /dev/nbd0p3 2>&1 | head -20
+          sudo debugfs -R "cat /grub2/bootuuid.cfg" /dev/nbd0p3 2>&1 | head -5
+          sudo debugfs -R "ls -l /loader/entries" /dev/nbd0p3 2>&1 | head
+          sudo dumpe2fs -h /dev/nbd0p3 2>/dev/null | grep -iE "features|uuid|state"
+          sudo blkid /dev/nbd0p3 /dev/nbd0p4
           sudo xfs_repair -n /dev/nbd0p4 2>&1 | head -80
           sudo xfs_db -r -c "sb 0" -c "print uuid dblocks agcount logstart logblocks features_incompat features_log_incompat" /dev/nbd0p4 2>&1 | head -20
           sudo xfs_logprint -t /dev/nbd0p4 2>&1 | head -40
@@ -228,6 +234,7 @@ jobs:
           killed=no
           for i in $(seq 1 900); do
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
+              $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
@@ -238,7 +245,7 @@ jobs:
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
             if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
-              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -200; ./root-forensics.sh
+              echo "emergency mode after the cut (#81)"; echo "--- serial after the cut, the start (firmware, GRUB, cmdline)"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | head -60; echo "--- serial after the cut, the end"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -120; ./root-forensics.sh
               # the cut stays red (the last step fails the job), but the steps after it still run:
               # reinstall once more without a cut, so a flaky cut does not hide every later proof
               echo "POWERCUT_RED=1" >> "$GITHUB_ENV"
