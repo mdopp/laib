@@ -1,14 +1,96 @@
 package persona
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mdopp/laib/internal/state"
 )
 
+func joshua() Cast {
+	p, err := state.BuiltinPersona("joshua")
+	if err != nil {
+		panic(err)
+	}
+	return Cast{House: p}
+}
+
 func term() *Terminal {
-	t := New(func() []string { return []string{"laib", "frage"} })
+	t := New(func() []string { return []string{"laib", "frage"} }, joshua())
 	return t
+}
+
+func hal() *state.Persona {
+	return &state.Persona{Name: "hal", Display: "HAL", Prompt: "HAL", Languages: []string{"en"}, Greeting: map[string]string{"en": "Good afternoon."}}
+}
+
+// #126: the engine is generic; a persona without gimmicks has a plain
+// directory with its own name in the prompt, and no games.
+func TestASecondPersonaWithoutGimmicks(t *testing.T) {
+	j := New(func() []string { return []string{"laib", "frage"} }, Cast{House: hal()})
+	out := j.Talk("p", "en", "What can you do?")
+	for _, want := range []string{"GOOD AFTERNOON.", "DIRECTORY", "1  BOX STATUS AND PROPOSALS", "2  WEB SEARCH WITH SOURCES"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+	if !strings.HasSuffix(out, "HAL>") || strings.Contains(out, "WOPR") || strings.Contains(out, "GAMES") || strings.Contains(out, "FALKEN") {
+		t.Fatalf("HAL's directory has no WOPR and no games:\n%s", out)
+	}
+	if out := j.Talk("p", "en", "2"); !strings.HasSuffix(out, "HAL/SEARCH>") {
+		t.Fatalf("HAL's context prompt:\n%s", out)
+	}
+	j.Talk("p", "en", "back")
+	if out := j.Talk("p", "en", "play tic-tac-toe"); out != "WEITER: -\nPROMPT: HAL>" {
+		t.Fatalf("without the game gimmicks a game is a question for the Bote:\n%s", out)
+	}
+	if out := j.Talk("p", "en", "hal"); !strings.Contains(out, "DIRECTORY") {
+		t.Fatalf("the persona's name opens the directory:\n%s", out)
+	}
+}
+
+// #126, ADR 0020 §2: a Signal number listed in chatPersonas talks to its
+// persona; every other number to the house's.
+func TestAChatPersonaPerNumber(t *testing.T) {
+	c := joshua()
+	c.ByName = map[string]*state.Persona{"hal": hal()}
+	c.Chat = map[string]string{"+4917012345678": "hal"}
+	j := New(func() []string { return []string{"laib"} }, c)
+	if out := j.Talk("+4917012345678", "en", "menu"); !strings.HasSuffix(out, "HAL>") {
+		t.Fatalf("the listed number talks to HAL:\n%s", out)
+	}
+	if out := j.Talk("+4917099999999", "en", "menu"); !strings.HasSuffix(out, "JOSHUA>") || !strings.Contains(out, "WOPR") {
+		t.Fatalf("every other number talks to the house persona:\n%s", out)
+	}
+}
+
+// The container reads what laib rendered to render/persona: chat.yml names
+// the house persona and the chat map, each package sits next to it. Without
+// the mount it is the built-in Joshua.
+func TestLoadCastFromTheRenderedPackages(t *testing.T) {
+	dir := t.TempDir()
+	w := func(p, s string) {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o755)
+		os.WriteFile(filepath.Join(dir, p), []byte(s), 0o644)
+	}
+	w("chat.yml", "house: hal\nchat:\n  \"+4917012345678\": joshua\n")
+	w("hal/persona.yml", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\n")
+	w("hal/style.md", "Calm.\n")
+	w("hal/icon.svg", "<svg/>")
+	w("joshua/persona.yml", "name: joshua\ndisplay: Joshua\nlanguages: [de, en]\nprompt: JOSHUA\ngimmicks: [wopr-directory]\n")
+	w("joshua/style.md", "WOPR.\n")
+	w("joshua/icon.svg", "<svg/>")
+	c, err := LoadCast(dir)
+	if err != nil || c.House == nil || c.House.Name != "hal" || c.Chat["+4917012345678"] != "joshua" || c.ByName["joshua"] == nil {
+		t.Fatalf("cast from %s: %+v %v", dir, c, err)
+	}
+	c, err = LoadCast(filepath.Join(dir, "missing"))
+	if err != nil || c.House == nil || c.House.Name != "joshua" || c.House.Source != "builtin" {
+		t.Fatalf("without the mount the built-in Joshua: %+v %v", c, err)
+	}
 }
 
 // #119: the trigger opens WOPR's prompt: what the system can do, then games.
@@ -138,7 +220,7 @@ func TestTheToolPassesTextThrough(t *testing.T) {
 // shows where, and you stay there until ZURÜCK or MENÜ. Where you are is
 // this code; a request inside a context goes back to the Bote as WEITER.
 func TestLevelsWithContext(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} })
+	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, joshua())
 	out := j.Talk("anna", "de", "Was kannst du?")
 	for _, want := range []string{"WOPR HAUPTVERZEICHNIS", "1  BOX-STATUS UND VORSCHLÄGE", "3  LICHT, SCHALTER, MUSIK", "(GERÄTE)", "5  SPIELE"} {
 		if !strings.Contains(out, want) {
