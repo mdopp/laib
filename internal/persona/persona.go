@@ -1,20 +1,28 @@
 // Package persona is the Bote's persona engine (ADR 0020, ADR 0021): it knows
 // where each person stands — the directory of the Bote's tools, its levels and
-// context — and plays the persona's gimmicks. Its first and only persona today
-// is Joshua, WOPR from WarGames: tic-tac-toe (it never loses) and Global
-// Thermonuclear War (nobody wins). It reads nothing from the box and changes
-// nothing; the model only passes text through, where a person is is this code.
+// context — and speaks as the persona of that person (the house's, or the one
+// box.yml chatPersonas gives their number). The persona brings its name, its
+// greeting and its gimmicks: Joshua's are WOPR's directory, tic-tac-toe (it
+// never loses) and Global Thermonuclear War (nobody wins). It reads nothing
+// from the box and changes nothing; the model only passes text through, where
+// a person is is this code.
 package persona
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mdopp/laib/internal/mcpserver"
+	"github.com/mdopp/laib/internal/state"
+	"gopkg.in/yaml.v3"
 )
 
 const idle = 30 * time.Minute
@@ -37,6 +45,68 @@ type session struct {
 	ctx   string // "" = the directory, games, or one of the Bote's tools (#122)
 	lang  string // de or en
 	last  time.Time
+	p     *state.Persona // who speaks to this person
+}
+
+// Cast is who speaks to whom: the house persona, and per Signal number another
+// one (box.yml chatPersonas, rendered to render/persona/chat.yml).
+type Cast struct {
+	House  *state.Persona
+	ByName map[string]*state.Persona
+	Chat   map[string]string // number → persona name
+}
+
+// For is the persona of one session (its id is the person's number).
+func (c Cast) For(sid string) *state.Persona {
+	if p := c.ByName[c.Chat[sid]]; p != nil {
+		return p
+	}
+	return c.House
+}
+
+// LoadCast reads what laib rendered to render/persona: chat.yml names the
+// house persona and the chat map, each package sits next to it. Without the
+// mount it is the built-in Joshua.
+func LoadCast(dir string) (Cast, error) {
+	b, err := os.ReadFile(filepath.Join(dir, "chat.yml"))
+	if errors.Is(err, os.ErrNotExist) {
+		p, err := state.BuiltinPersona("joshua")
+		return Cast{House: p}, err
+	}
+	if err != nil {
+		return Cast{}, err
+	}
+	var m struct {
+		House string            `yaml:"house"`
+		Chat  map[string]string `yaml:"chat"`
+	}
+	if err := yaml.Unmarshal(b, &m); err != nil {
+		return Cast{}, fmt.Errorf("chat.yml: %w", err)
+	}
+	c := Cast{ByName: map[string]*state.Persona{}, Chat: m.Chat}
+	names := []string{m.House}
+	for _, n := range m.Chat {
+		names = append(names, n)
+	}
+	for _, n := range names {
+		if c.ByName[n] != nil {
+			continue
+		}
+		p, err := state.ReadPersona(os.DirFS(filepath.Join(dir, n)), n, "rendered")
+		if err != nil {
+			return Cast{}, err
+		}
+		c.ByName[n] = p
+	}
+	c.House = c.ByName[m.House]
+	return c, nil
+}
+
+func gimmick(p *state.Persona, g string) bool { return slices.Contains(p.Gimmicks, g) }
+
+// gamesOn: the persona brings at least one game, so there is a games level.
+func gamesOn(p *state.Persona) bool {
+	return gimmick(p, "tictactoe") || gimmick(p, "global-thermonuclear-war")
 }
 
 const games = "games"
@@ -47,11 +117,13 @@ type Terminal struct {
 	sessions map[string]*session
 	now      func() time.Time
 	caps     func() []string
+	cast     Cast
 }
 
-// New takes the Bote's tools, read on every greeting (post-deploy rewrites them).
-func New(caps func() []string) *Terminal {
-	return &Terminal{sessions: map[string]*session{}, now: time.Now, caps: caps}
+// New takes the Bote's tools, read on every greeting (post-deploy rewrites
+// them), and who speaks.
+func New(caps func() []string, cast Cast) *Terminal {
+	return &Terminal{sessions: map[string]*session{}, now: time.Now, caps: caps, cast: cast}
 }
 
 var films = []string{"FALKEN'S MAZE", "BLACK JACK", "GIN RUMMY", "HEARTS", "BRIDGE", "CHECKERS", "CHESS", "POKER",
@@ -63,7 +135,8 @@ var scenarios = []string{"U.S. FIRST STRIKE", "USSR FIRST STRIKE", "NATO / WARSA
 	"HONGKONG VARIANT", "SEATO DECAPITATING", "CUBAN PROVOCATION", "ATLANTIC HEAVY", "ICELAND MAXIMUM"}
 
 // words is the directory and the navigation in the person's language (#122);
-// the games keep the film's English lines.
+// the games keep the film's English lines. greet and play come from the
+// persona; the wopr-directory gimmick replaces greet, dir and play.
 type words struct {
 	greet, dir, games, enter, play, connect, bye string
 	labels                                       map[string]string
@@ -71,16 +144,44 @@ type words struct {
 }
 
 var lang = map[string]words{
-	"de": {"WILLKOMMEN, PROFESSOR FALKEN.", "WOPR HAUPTVERZEICHNIS", "SPIELE", "NUMMER WÄHLEN, ODER EINFACH FRAGEN.",
-		"WOLLEN WIR EIN SPIEL SPIELEN?", "VERBINDE MIT %s ...", "AUF WIEDERSEHEN.",
+	"de": {"", "VERZEICHNIS", "SPIELE", "NUMMER WÄHLEN, ODER EINFACH FRAGEN.",
+		"", "VERBINDE MIT %s ...", "AUF WIEDERSEHEN.",
 		map[string]string{"laib": "BOX-STATUS UND VORSCHLÄGE", "frage": "WEBSUCHE MIT QUELLEN",
 			"ha": "LICHT, SCHALTER, MUSIK", "automat": "AUTOMATIONEN", "haushalt": "KALENDER, KONTAKTE, NOTIZEN"},
 		map[string]string{"laib": "BOX", "frage": "FRAGE", "ha": "GERÄTE", "automat": "AUTOMATIK", "haushalt": "HAUSHALT"}},
-	"en": {"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "GAMES", "ENTER SELECTION, OR JUST ASK.",
-		"SHALL WE PLAY A GAME?", "CONNECTING TO %s ...", "GOODBYE.",
+	"en": {"", "DIRECTORY", "GAMES", "ENTER SELECTION, OR JUST ASK.",
+		"", "CONNECTING TO %s ...", "GOODBYE.",
 		map[string]string{"laib": "BOX STATUS AND PROPOSALS", "frage": "WEB SEARCH WITH SOURCES",
 			"ha": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"},
 		map[string]string{"laib": "BOX", "frage": "SEARCH", "ha": "DEVICES", "automat": "AUTOMATIONS", "haushalt": "HOUSEHOLD"}},
+}
+
+// wopr is Joshua's directory skin: greet, dir, play.
+var wopr = map[string][3]string{
+	"de": {"WILLKOMMEN, PROFESSOR FALKEN.", "WOPR HAUPTVERZEICHNIS", "WOLLEN WIR EIN SPIEL SPIELEN?"},
+	"en": {"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "SHALL WE PLAY A GAME?"},
+}
+
+// wordsFor is the session's language, dressed as its persona.
+func wordsFor(s *session) words {
+	w := lang[s.lang]
+	if skin, ok := wopr[s.lang]; ok && gimmick(s.p, "wopr-directory") {
+		w.greet, w.dir, w.play = skin[0], skin[1], skin[2]
+		return w
+	}
+	w.greet = strings.ToUpper(s.p.Greeting[s.lang])
+	return w
+}
+
+// named: the persona's own name, as a word of its own, opens the directory.
+func named(p *state.Persona, in string) bool {
+	for _, f := range strings.Fields(in) {
+		f = strings.Trim(f, ",.!?:;")
+		if f == strings.ToUpper(p.Prompt) || f == strings.ToUpper(p.Display) {
+			return true
+		}
+	}
+	return false
 }
 
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
@@ -107,22 +208,22 @@ func (t *Terminal) Talk(sid, language, line string) string {
 	in = strings.TrimRight(in, ".!?")
 	s, ok := t.sessions[sid]
 	if !ok {
-		s = &session{lang: "en"}
+		s = &session{lang: "en", p: t.cast.For(sid)}
 		t.sessions[sid] = s
 	}
 	if _, known := lang[language]; known {
 		s.lang = language
 	}
 	s.last = now
-	w := lang[s.lang]
+	w := wordsFor(s)
 	if has(in, "LOGOFF", "LOG OFF", "BYE", "EXIT", "QUIT", "TSCHÜSS", "ENDE") {
 		delete(t.sessions, sid)
 		return w.bye
 	}
-	if has(in, "JOSHUA", "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP", "WAS KANNST DU", "WHAT CAN YOU DO",
+	if named(s.p, in) || has(in, "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP", "WAS KANNST DU", "WHAT CAN YOU DO",
 		"SHALL WE PLAY", "WOLLEN WIR EIN SPIEL", "HALLO", "HELLO") {
 		s.mode, s.ctx = modeMenu, ""
-		return t.directory(w)
+		return t.directory(s, w)
 	}
 	back := len(in) < 16 && has(in, "ZURÜCK", "ZURUECK", "BACK")
 	if s.mode != modeMenu {
@@ -136,7 +237,7 @@ func (t *Terminal) Talk(sid, language, line string) string {
 	}
 	if back {
 		s.ctx = ""
-		return t.directory(w)
+		return t.directory(s, w)
 	}
 	tools := t.tools()
 	if s.ctx == "" {
@@ -153,10 +254,10 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		case n >= 1 && n <= len(tools):
 			s.ctx = tools[n-1]
 			return fmt.Sprintf(w.connect, label(w, s.ctx)) + "\n\n" + prompt(s)
-		case n == len(tools)+1 || in == "SPIELE" || has(in, "SPIELEN", "SPIELE ", "GAMES", "PLAY ", "TIC-TAC", "TICTACTOE", "THERMONUCLEAR"):
+		case gamesOn(s.p) && (n == len(tools)+1 || in == "SPIELE" || has(in, "SPIELEN", "SPIELE ", "GAMES", "PLAY ", "TIC-TAC", "TICTACTOE", "THERMONUCLEAR")):
 			s.ctx = games
 		case n >= 0:
-			return t.directory(w)
+			return t.directory(s, w)
 		default:
 			return "WEITER: -\nPROMPT: " + prompt(s)
 		}
@@ -208,10 +309,10 @@ func (t *Terminal) game(s *session, in string) (string, bool) {
 // inGames is the games level: the film's list and the two games it plays.
 func (t *Terminal) inGames(s *session, in string) string {
 	switch {
-	case has(in, "THERMONUCLEAR", "GTW", "KRIEG"):
+	case has(in, "THERMONUCLEAR", "GTW", "KRIEG") && gimmick(s.p, "global-thermonuclear-war"):
 		s.mode = modeChess
 		return "WOULDN'T YOU PREFER A GOOD GAME OF CHESS?"
-	case has(in, "TIC", "TTT"):
+	case has(in, "TIC", "TTT") && gimmick(s.p, "tictactoe"):
 		s.mode = modePlayers
 		return "NUMBER OF PLAYERS? (0 OR 1)"
 	case strings.HasPrefix(in, "PLAY "):
@@ -222,19 +323,30 @@ func (t *Terminal) inGames(s *session, in string) string {
 	return "WEITER: -\nPROMPT: " + prompt(s)
 }
 
+// gamesList is the games level: WOPR's shows the film's list.
 func (t *Terminal) gamesList(s *session) string {
-	return strings.Join(films, "\n") + "\n\nGLOBAL THERMONUCLEAR WAR\n\n" + prompt(s)
+	var list []string
+	if gimmick(s.p, "wopr-directory") {
+		list = append(list, films...)
+	} else if gimmick(s.p, "tictactoe") {
+		list = append(list, "TIC-TAC-TOE")
+	}
+	if gimmick(s.p, "global-thermonuclear-war") {
+		list = append(list, "", "GLOBAL THERMONUCLEAR WAR")
+	}
+	return strings.Join(list, "\n") + "\n\n" + prompt(s)
 }
 
-// prompt is where the person is: JOSHUA>, JOSHUA/GERÄTE>, JOSHUA/SPIELE>.
+// prompt is where the person is, in the persona's name: JOSHUA>,
+// JOSHUA/GERÄTE>, JOSHUA/SPIELE>.
 func prompt(s *session) string {
 	switch s.ctx {
 	case "":
-		return "JOSHUA>"
+		return s.p.Prompt + ">"
 	case games:
-		return "JOSHUA/" + lang[s.lang].games + ">"
+		return s.p.Prompt + "/" + lang[s.lang].games + ">"
 	}
-	return "JOSHUA/" + level(lang[s.lang], s.ctx) + ">"
+	return s.p.Prompt + "/" + level(lang[s.lang], s.ctx) + ">"
 }
 
 func level(w words, k string) string {
@@ -258,15 +370,24 @@ func label(w words, k string) string {
 	return strings.ToUpper(k)
 }
 
-func (t *Terminal) directory(w words) string {
+func (t *Terminal) directory(s *session, w words) string {
 	var b strings.Builder
-	b.WriteString(w.greet + "\n\n" + w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
+	if w.greet != "" {
+		b.WriteString(w.greet + "\n\n")
+	}
+	b.WriteString(w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
 	tools := t.tools()
 	for i, k := range tools {
 		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(w, k), level(w, k))
 	}
-	fmt.Fprintf(&b, "  %d  %s\n\n%s\n\n%s\n\nJOSHUA>", len(tools)+1, w.games, w.enter, w.play)
-	return b.String()
+	if gamesOn(s.p) {
+		fmt.Fprintf(&b, "  %d  %s\n", len(tools)+1, w.games)
+	}
+	b.WriteString("\n" + w.enter + "\n\n")
+	if w.play != "" {
+		b.WriteString(w.play + "\n\n")
+	}
+	return b.String() + prompt(s)
 }
 
 func (t *Terminal) players(s *session, in string) string {
@@ -445,7 +566,7 @@ func has(in string, words ...string) bool {
 
 // clone copies one session under another id; the tests walk every line of play with it.
 func (t *Terminal) clone(from, to string) *Terminal {
-	c := New(t.caps)
+	c := New(t.caps, t.cast)
 	c.now = t.now
 	if s, ok := t.sessions[from]; ok {
 		cp := *s
@@ -460,18 +581,18 @@ func Server(t *Terminal, version string) *mcpserver.Server {
 	return &mcpserver.Server{
 		Name:         "persona",
 		Version:      version,
-		Instructions: "Joshua, die Persona des Boten: Verzeichnis, Ebenen und Kontext. Jede Nachricht zuerst hierher.",
+		Instructions: "Die Persona des Boten: Verzeichnis, Ebenen und Kontext, in der Figur der Person. Jede Nachricht zuerst hierher.",
 		Tools: []mcpserver.Tool{{
 			Name: "persona",
-			Description: "Joshua (WOPR aus WarGames), die Oberfläche des Boten: ein Verzeichnis deiner Werkzeuge mit Ebenen, " +
-				"dazu Tic-Tac-Toe und Global Thermonuclear War. Ruf es mit JEDER Nachricht zuerst auf. " +
+			Description: "Die Oberfläche des Boten in der Figur der Person (meist Joshua, WOPR aus WarGames): ein Verzeichnis deiner Werkzeuge mit Ebenen, " +
+				"dazu die Gimmicks der Figur (bei Joshua Tic-Tac-Toe und Global Thermonuclear War). Ruf es mit JEDER Nachricht zuerst auf. " +
 				"Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. " +
 				"Kommt \"WEITER: <werkzeug>\" und \"PROMPT: <prompt>\" zurück, beantworte die Nachricht selbst, " +
 				"im Kontext nur mit diesem Werkzeug (bei \"-\" mit jedem), und beginne die Antwort mit der Prompt-Zeile. " +
 				"Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und ruf noch einmal auf.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},
-				"sitzung": map[string]any{"type": "string", "description": "wer schreibt (Name oder Nummer); dieselbe Person, dieselbe Sitzung"},
+				"sitzung": map[string]any{"type": "string", "description": "wer schreibt: die Signal-Nummer (+49…), sonst der Name; dieselbe Person, dieselbe Sitzung, und die Nummer wählt ihre Figur"},
 				"sprache": map[string]any{"type": "string", "enum": []string{"de", "en"}, "description": "die Sprache der Person; ohne Angabe de"},
 			}},
 			Call: func(_ context.Context, args map[string]any) (string, error) {

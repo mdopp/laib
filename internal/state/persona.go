@@ -129,24 +129,32 @@ func findPersona(stateDir, name string) (*Persona, error) {
 		return nil, fmt.Errorf("persona %q: not a name", name)
 	}
 	if dir := filepath.Join(stateDir, "personas", name); exists(dir) {
-		return readPersona(os.DirFS(dir), name, "state")
+		return ReadPersona(os.DirFS(dir), name, "state")
 	}
 	regs, _ := filepath.Glob(filepath.Join(filepath.Dir(stateDir), "registries", "*", "personas", name, "persona.yml"))
 	if len(regs) > 0 {
 		dir := filepath.Dir(regs[0])
-		return readPersona(os.DirFS(dir), name, "registry "+filepath.Base(filepath.Dir(filepath.Dir(dir))))
+		return ReadPersona(os.DirFS(dir), name, "registry "+filepath.Base(filepath.Dir(filepath.Dir(dir))))
 	}
-	if sub, err := fs.Sub(personas.FS, name); err == nil {
-		if _, err := fs.Stat(sub, "persona.yml"); err == nil {
-			return readPersona(sub, name, "builtin")
-		}
+	if p, err := BuiltinPersona(name); err == nil {
+		return p, nil
 	}
 	return nil, fmt.Errorf("persona %q: not in the state repo, a registry or built in", name)
 }
 
+// BuiltinPersona reads personas/<name> from the binary.
+func BuiltinPersona(name string) (*Persona, error) {
+	sub, err := fs.Sub(personas.FS, name)
+	if err != nil {
+		return nil, err
+	}
+	return ReadPersona(sub, name, "builtin")
+}
+
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-func readPersona(fsys fs.FS, name, source string) (*Persona, error) {
+// ReadPersona reads one package: persona.yml, style.md, icon.svg.
+func ReadPersona(fsys fs.FS, name, source string) (*Persona, error) {
 	p := &Persona{Files: map[string]string{}, Source: source}
 	for _, f := range []string{"persona.yml", "style.md", "icon.svg"} {
 		b, err := fs.ReadFile(fsys, f)
