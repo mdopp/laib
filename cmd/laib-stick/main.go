@@ -40,7 +40,7 @@ func main() {
 	flag.BoolVar(&noGPU, "no-gpu", false, "no GPU: a remote model answers (--model-url)")
 	flag.StringVar(&b.ModelURL, "model-url", "", "OpenAI-compatible URL of a remote model (box without GPU)")
 	flag.StringVar(&b.ModelLease, "model-lease", "", "lease URL of the remote llama (optional)")
-	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token while mdopp/laib is private")
+	flag.StringVar(&b.GHToken, "token", os.Getenv("LAIB_GH_TOKEN"), "GitHub token, only for a private fork or mirror (mdopp/laib and its images are public)")
 	flag.StringVar(&b.DNSProvider, "dns-provider", "", "DNS provider with an API for DNS-01 certificates (desec, cloudflare, hetzner, …); the domain's zone must be there")
 	flag.StringVar(&b.DNSToken, "dns-token", os.Getenv("LAIB_DNS_TOKEN"), "the DNS provider's API token (becomes the secret DNS_API_TOKEN)")
 	flag.StringVar(&b.TLS, "tls", "", "\"internal\": Caddy's own CA instead of Let's Encrypt — a laptop-only trial, phones cannot trust it")
@@ -108,7 +108,6 @@ func main() {
 			}
 		}
 	}
-	b.GHToken = prompt(ask, "GitHub-Token (nur solange mdopp/laib privat ist; leer = keins)", b.GHToken, "", nil)
 	if b.TLS == "" {
 		b.DNSProvider = prompt(ask, "DNS-Anbieter mit API für echte Zertifikate (desec, cloudflare, hetzner, …; die Zone der Domain muss dort liegen; leer = Caddys eigene CA, nur für einen Laptop-Versuch)", b.DNSProvider, "", nil)
 		if b.DNSProvider != "" {

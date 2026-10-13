@@ -4,13 +4,12 @@
 #
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
-#       [--version vX.Y.Z] [--token <github token, while the repo is private>]
+#       [--version vX.Y.Z] [--token <github token, only for a private fork or mirror>]
 #       [--dns-provider desec|cloudflare|…  (token: LAIB_DNS_TOKEN)] [--tls internal]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
-# While mdopp/laib is private, release assets need a GitHub token (fine-grained,
-# Contents: read on this repo): pass --token or export LAIB_GH_TOKEN. A public
-# repo needs none.
+# mdopp/laib, its releases and its images are public: no token. A private fork
+# or mirror passes --token (or LAIB_GH_TOKEN): Contents: read, Packages: read.
 set -euo pipefail
 VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
 DNS_PROVIDER=""; DNS_TOKEN="${LAIB_DNS_TOKEN:-}"; TLS=""   # certificates (#45): DNS-01 via the provider's API, or Caddy's own CA
@@ -105,9 +104,8 @@ fi
 mkdir -p ~/.config/containers/systemd ~/.config/systemd/user 2>/dev/null || true
 [ "$(stat -c %U ~/.config)" = core ] || sudo chown -R core:core ~/.config
 
-# Laib's own images (ghcr.io/mdopp/laib-caddy, -frage, -werkstatt) are private
-# while the repo is: log podman in with the token so Quadlet and auto-update can
-# pull. Needs a token with packages:read; otherwise make the packages public.
+# Laib's own images (ghcr.io/mdopp/laib-*) are public. A private fork's images
+# are not: with a token, podman logs in so Quadlet and auto-update can pull.
 # Without --authfile rootless podman writes ${XDG_RUNTIME_DIR}/containers/auth.json —
 # a tmpfs, gone at the first reboot, and with it every pull of a private image (#37).
 AUTHFILE="$HOME/.config/containers/auth.json"
