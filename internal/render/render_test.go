@@ -183,3 +183,24 @@ func TestNoOIDCClientsRendersNoIdentityProvidersBlock(t *testing.T) {
 		t.Fatalf("an empty oidc block:\n%s", out["authelia/laib-clients.yml"])
 	}
 }
+
+// #102: `nft -f` with a table block on an existing table adds to it. A port
+// that leaves the drop list (lan: true, or its service removed) stayed
+// dropped until the next reboot, and every load appended the rule again.
+// The file replaces the table in one transaction: declare it (so the
+// delete never fails on a fresh boot), delete it, then the block.
+func TestFirewallRulesetReplacesTheTableInsteadOfAddingToIt(t *testing.T) {
+	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Render(st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nft := out["nftables/laib.nft"]
+	decl, del, block := strings.Index(nft, "table inet laib\n"), strings.Index(nft, "delete table inet laib\n"), strings.Index(nft, "table inet laib {")
+	if decl < 0 || del < 0 || block < 0 || !(decl < del && del < block) {
+		t.Fatalf("the ruleset does not replace the table (want: table inet laib / delete table inet laib / table inet laib { … }):\n%s", nft)
+	}
+}
