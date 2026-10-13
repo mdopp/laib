@@ -53,3 +53,11 @@ is.
 - "Balthasar" retires when Stimme runs under Laib with "Hey Joshua".
 - Work items: #125 (format, registry, box.yml), #126 (engine), #127 (Bote),
   #128 (Stimme), #129 (Haus), #130 (app).
+
+## Amendment 2026-10-13 (#132): internal names follow ADR 0021
+
+"Internal names stay" is withdrawn for the engine: a mechanism is named for
+what it does, so the engine, its MCP tool, image and container are
+`persona`, and Joshua is the first persona's data (#133). The `haus` repo and
+address and the `bote` template keep their names; the Bote's Home Assistant
+tool is `ha`, so "Haus" means only the surface (#134).

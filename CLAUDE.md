@@ -26,6 +26,8 @@ them.
 - Quadlet output: `~/.config/containers/systemd/<service>/`.
 - Rendered proxy / sso / dns configs: `/mnt/data/laib/render/<role>/`.
 - The binary: `/var/opt/laib/laib`, unit `laib.service` (user `core`).
+- Names: check a new name against the glossary in `docs/adr/0021-names.md`;
+  one name means one thing.
 
 ## Working
 
