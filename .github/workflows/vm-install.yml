@@ -248,6 +248,8 @@ jobs:
           [ "$killed" = yes ] || { echo "the resume path was not exercised: no window between the binaries and the marker"; exit 1; }
           # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
+            # exp #111: the network as the resumed first boot sees it
+            if [ $i = 6 ] || [ $i = 18 ]; then $SSH 'set -x; uptime; ls -l /etc/resolv.conf; cat /etc/resolv.conf; resolvectl status | head -30; getent hosts api.github.com; ip -br addr; ip route; nmcli -t dev; systemctl is-active NetworkManager systemd-resolved NetworkManager-wait-online; journalctl -b --no-pager -u NetworkManager -u systemd-resolved | tail -40; rpm-ostree status | head -20' 2>&1 | sed "s/^/[net $i] /" || true; fi
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
             if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
               echo "emergency mode after the cut (#81)"; echo "--- serial after the cut, the start (firmware, GRUB, cmdline)"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | head -60; echo "--- serial after the cut, the end"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -120; ./root-forensics.sh
@@ -267,7 +269,7 @@ jobs:
                 echo "resumed: marker present, env file gone"
                 # exp #111: where did the resumed first boot spend its time
                 journalctl --no-pager --list-boots
-                for b in -2 -1 0; do echo "=== boot $b"; journalctl --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u laib-data-disk -u rpm-ostreed -u zincati | grep -v "^-- " | tail -120; done
+                for b in -2 -1 0; do echo "=== boot $b"; journalctl --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u laib-data-disk -u NetworkManager -u systemd-resolved | grep -v "^-- " | grep -v "rpm-ostree\[" | tail -100; done
                 rpm-ostree status | head -30'
           $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
