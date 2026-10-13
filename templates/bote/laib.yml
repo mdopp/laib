@@ -2,10 +2,11 @@ name: bote
 template: {registry: builtin, name: bote, version: 1}
 provides: [bote]
 # The Bote (ADR 0016): Hermes as stock, Signal gateway, the Laib MCP as the
-# hand `bote`, the Haus "Haushalt" MCP and Frage as tools. Two containers in
-# one pod: hermes, signal-cli's daemon, the Automat (HA automations, #26)
-# and the approval relay (#48: code that sees the sender's number decides;
-# Hermes holds no token that can approve), which share loopback.
+# hand `bote`, the Haus "Haushalt" MCP and Frage as tools. Five containers in
+# one pod: hermes, signal-cli's daemon, the Automat (HA automations, #26),
+# the approval relay (#48: code that sees the sender's number decides;
+# Hermes holds no token that can approve) and the persona engine (ADR 0020),
+# which share loopback.
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes: []
 secrets:

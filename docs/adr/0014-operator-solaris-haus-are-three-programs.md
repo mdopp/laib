@@ -3,7 +3,9 @@
 Applies when you are about to add a page to the agent, an agent to a page,
 or box administration to the household assistant.
 
-- **Status:** Accepted, 2026-10-10
+- **Status:** Accepted, 2026-10-10. §2 (Solaris as the household agent)
+  superseded by ADR 0015, which retired Solaris; the household's agent
+  you talk to is the Bote (ADR 0016). §1, §3 and §4 stand.
 - **Deciders:** operator (mdopp): "Der Laib Operator sollte nicht in
   Solaris leben."
 

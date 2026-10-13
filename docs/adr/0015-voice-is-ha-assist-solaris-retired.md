@@ -57,3 +57,11 @@ enough: nobody needs to be recognised.
   library, nothing talks to a turn loop.
 - The RTX card loses its biggest resident consumer; Frage and the
   Operator share the household preset.
+
+## Amendment 2026-10-13 (#135): Haus's Sprechen field goes to the Bote
+
+§3 said Frage's route also serves Haus's Sprechen field. ADR 0016 made the
+Bote the agent people talk to, in Signal and in the Sprechen field (Hermes'
+OpenAI-compatible API, port 8642 in the bote pod). Frage stays Assist's
+conversation agent for sentences no intent matched, and the Bote's `frage`
+tool.

@@ -19,8 +19,8 @@ situation* it applies, so an agent can self-select.
 | [0011](0011-model-server-is-a-laib-role.md) | The model server (llama-server, router, policy proxy, lease) is a Laib platform role, Solaris is a client |
 | [0012](0012-one-approval-surface-and-the-trust-boundary.md) | One approval surface (the box page); the host shell is the human; pages trust only the proxy's secret header |
 | [0013](0013-the-agent-is-the-operator.md) | The agent is the operator: observe unbounded, correct inside an automatic envelope, ask only for the irreversible |
-| [0014](0014-operator-solaris-haus-are-three-programs.md) | The Operator (box agent), Solaris (household agent) and Haus (pages, cards, companion API) are three programs |
-| [0015](0015-voice-is-ha-assist-solaris-retired.md) | Proposed: voice is HA Assist + Stimme + Frage; Solaris the agent is retired, its memory becomes a Haus library |
+| [0014](0014-operator-solaris-haus-are-three-programs.md) | The Operator (box agent), Solaris (household agent) and Haus (pages, cards, companion API) are three programs; the Solaris part superseded by 0015/0016 |
+| [0015](0015-voice-is-ha-assist-solaris-retired.md) | Proposed: voice is HA Assist + Stimme + Frage; Solaris the agent is retired, its memory becomes a Haus library; Haus's Sprechen field goes to the Bote (amended) |
 | [0016](0016-the-bote-hermes-as-stock.md) | The Bote: the agent you talk to on Signal, Hermes as stock, approval by verified number |
 | [0017](0017-data-lives-in-standard-backends.md) | Data lives in standard backends (Radicale, Markdown files, Paperless, HA); agents are clients through one Haus MCP source; the Bote remembers about you, never for you |
 | [0018](0018-two-boxes-are-a-role-federation-not-a-cluster.md) | Parked: two boxes would be a role federation, not a cluster; in use from it: a remote model URL for a box without a GPU |
