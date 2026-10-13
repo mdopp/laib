@@ -16,6 +16,8 @@ import (
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/mdopp/laib/internal/boxfs"
 )
 
 // Record is one minted token (the hash, never the value).
@@ -58,11 +60,7 @@ func (s *Store) save() error {
 	if err != nil {
 		return err
 	}
-	tmp := s.Path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.Path)
+	return boxfs.WriteAtomic(s.Path+".tmp", s.Path, b, 0o600)
 }
 
 // Mint creates a token for a hand. ttl 0 means no expiry. Returns the plain

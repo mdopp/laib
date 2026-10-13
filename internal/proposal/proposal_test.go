@@ -9,6 +9,11 @@ import (
 	"testing"
 )
 
+// Approve is ApproveChecked without a check of the merged state.
+func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
+	return ApproveChecked(ctx, repo, inbox, p, by, nil)
+}
+
 func setup(t *testing.T) (string, string) {
 	t.Helper()
 	home := t.TempDir()

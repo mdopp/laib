@@ -22,23 +22,24 @@ type Paths struct {
 
 // Default resolves the paths from LAIB_HOME, LAIB_STATE and LAIB_QUADLET.
 func Default() Paths {
-	home := env("LAIB_HOME", "/mnt/data/laib")
-	state := env("LAIB_STATE", filepath.Join(home, "state"))
+	home := Env("LAIB_HOME", "/mnt/data/laib")
+	state := Env("LAIB_STATE", filepath.Join(home, "state"))
 	userHome, _ := os.UserHomeDir()
 	return Paths{
 		Home:    home,
 		State:   state,
 		Journal: filepath.Join(home, "journal"),
 		Render:  filepath.Join(home, "render"),
-		Quadlet: env("LAIB_QUADLET", filepath.Join(userHome, ".config", "containers", "systemd")),
-		Systemd: env("LAIB_SYSTEMD", filepath.Join(userHome, ".config", "systemd", "user")),
+		Quadlet: Env("LAIB_QUADLET", filepath.Join(userHome, ".config", "containers", "systemd")),
+		Systemd: Env("LAIB_SYSTEMD", filepath.Join(userHome, ".config", "systemd", "user")),
 		Key:     filepath.Join(home, "age.key"),
 		Secrets: filepath.Join(state, "secrets.age"),
 		Lock:    filepath.Join(home, "apply.lock"),
 	}
 }
 
-func env(key, def string) string {
+// Env is os.Getenv with a default for an unset or empty variable.
+func Env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}

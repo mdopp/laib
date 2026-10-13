@@ -12,26 +12,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/persona"
 )
 
 var Version = "dev"
 
-func env(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
-}
-
 func main() {
-	caps := filepath.Join(env("PERSONA_DATA", "/data"), "faehigkeiten.txt") // the Bote's tools, written by post-deploy
-	cast, err := persona.LoadCast(env("PERSONAS_DIR", "/personas"))
+	caps := filepath.Join(boxfs.Env("PERSONA_DATA", "/data"), "faehigkeiten.txt") // the Bote's tools, written by post-deploy
+	cast, err := persona.LoadCast(boxfs.Env("PERSONAS_DIR", "/personas"))
 	if err != nil {
 		log.Fatalf("persona: %v", err)
 	}
 	if acct := os.Getenv("SIGNAL_ACCOUNT"); acct != "" && len(cast.Chat) > 0 {
-		cast.Resolve = persona.SignalContacts(env("SIGNAL_URL", "http://127.0.0.1:8080"), acct, nil) // signal-cli in the pod (#127)
+		cast.Resolve = persona.SignalContacts(boxfs.Env("SIGNAL_URL", "http://127.0.0.1:8080"), acct, nil) // signal-cli in the pod (#127)
 	}
 	t := persona.New(func() []string {
 		b, _ := os.ReadFile(caps)
@@ -43,7 +37,7 @@ func main() {
 		}
 		return out
 	}, cast)
-	addr := env("PERSONA_LISTEN", "127.0.0.1:8644")
+	addr := boxfs.Env("PERSONA_LISTEN", "127.0.0.1:8644")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", persona.Server(t, Version).Handler())
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })

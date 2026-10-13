@@ -205,8 +205,7 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
-		fmt.Fprintf(os.Stderr, "laib: %s may not propose\n", env.actor)
-		return exitRefused
+		return exitRefusedMsg(env, env.actor+" may not propose")
 	}
 	var edit proposal.Edit
 	var words []string
@@ -324,7 +323,7 @@ func judgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
-		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added}, nil
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts}, nil
 	}
 }
 
@@ -387,8 +386,7 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		return fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), p.Tier) {
-		fmt.Fprintf(os.Stderr, "laib: %s may not decide a %s-tier proposal\n", env.actor, p.Tier)
-		return exitRefused
+		return exitRefusedMsg(env, fmt.Sprintf("%s may not decide a %s-tier proposal", env.actor, p.Tier))
 	}
 	if approve && !policy.IsHuman(st.Policy, proposal.Hand(env.actor)) && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
 		why := strings.Join(p.Reasons, "; ")
@@ -518,13 +516,13 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	domain := ""
+	if st, err := loadState(env); err == nil {
+		domain = st.Box.Domain
+	}
 	if env.json {
 		if ps == nil {
 			ps = []*proposal.Proposal{}
-		}
-		domain := ""
-		if st, err := loadState(env); err == nil {
-			domain = st.Box.Domain
 		}
 		type withCard struct {
 			*proposal.Proposal
@@ -543,11 +541,6 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 	for _, p := range ps {
 		fmt.Fprintf(env.w(), "#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
 		if p.Status == "open" {
-			st, _ := loadState(env)
-			domain := ""
-			if st != nil {
-				domain = st.Box.Domain
-			}
 			c := proposal.Card(p, domain)
 			fmt.Fprintf(env.w(), "     %s\n", c.Summary)
 			for _, i := range c.Impact {

@@ -197,13 +197,8 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 	// one service with a backed-up path: the first in dependency order
 	var probe string
 	for _, name := range st.Order(st.ServiceNames()) {
-		for _, d := range st.Services[name].Contract.Data {
-			if d.Backup == nil || *d.Backup {
-				probe = strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
-				break
-			}
-		}
-		if probe != "" {
+		if ps := snapshotPaths(st, st.Services[name]); len(ps) > 0 && ps[0] != "" {
+			probe = ps[0]
 			break
 		}
 	}
@@ -271,11 +266,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		if !ok {
 			return fail(fmt.Errorf("unknown service %q", only))
 		}
-		for _, d := range svc.Contract.Data {
-			if d.Backup == nil || *d.Backup {
-				paths = append(paths, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-			}
-		}
+		paths = snapshotPaths(st, svc)
 		if len(paths) == 0 {
 			return fail(fmt.Errorf("%s declares no data paths to restore", only))
 		}
@@ -361,12 +352,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		names := st.Order(st.ServiceNames())
 		for _, name := range names {
-			var ps []string
-			for _, d := range st.Services[name].Contract.Data {
-				if d.Backup == nil || *d.Backup {
-					ps = append(ps, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-				}
-			}
+			ps := snapshotPaths(st, st.Services[name])
 			if len(ps) == 0 {
 				continue
 			}

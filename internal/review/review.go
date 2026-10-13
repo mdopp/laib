@@ -11,8 +11,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -114,19 +116,7 @@ func Dirs(base, changed string) Result {
 	}
 
 	// --- files: what may be touched at all
-	paths := map[string]bool{}
-	for p := range before {
-		paths[p] = true
-	}
-	for p := range after {
-		paths[p] = true
-	}
-	var sorted []string
-	for p := range paths {
-		sorted = append(sorted, p)
-	}
-	sort.Strings(sorted)
-	for _, p := range sorted {
+	for _, p := range keyUnion(before, after) {
 		b, inBase := before[p]
 		a, inAfter := after[p]
 		if inBase && inAfter && a.hash == b.hash && a.exec == b.exec {
@@ -237,7 +227,7 @@ func Dirs(base, changed string) Result {
 		svc := strings.Split(key, "/")[1]
 		added, removed := diffUnits(parseUnit(bout[key]), parseUnit(text))
 		_, existedUnit := bout[key]
-		r.units(svc, key, ast, added, removed, existedUnit, !contains(r.Added, svc))
+		r.units(svc, key, ast, added, removed, existedUnit, !slices.Contains(r.Added, svc))
 	}
 	// rendered platform files (Caddy, Authelia, AdGuard, nftables, host units)
 	// that changed without a reason above: not understood, so a human
@@ -278,22 +268,14 @@ func changedBoxKeys(basePath, changedPath string) []string {
 		return m
 	}
 	b, a := load(basePath), load(changedPath)
-	keys := map[string]bool{}
-	for k := range b {
-		keys[k] = true
-	}
-	for k := range a {
-		keys[k] = true
-	}
 	var out []string
-	for k := range keys {
+	for _, k := range keyUnion(b, a) {
 		bb, _ := yaml.Marshal(b[k])
 		ab, _ := yaml.Marshal(a[k])
 		if !bytes.Equal(bb, ab) {
 			out = append(out, k)
 		}
 	}
-	sort.Strings(out)
 	if len(out) == 0 {
 		out = append(out, "(unverändert im Inhalt, anders geschrieben)")
 	}
@@ -553,11 +535,9 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 	}
 }
 
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
+// keyUnion lists the keys of both maps, sorted, each once.
+func keyUnion[V any](a, b map[string]V) []string {
+	keys := slices.AppendSeq(slices.Collect(maps.Keys(a)), maps.Keys(b))
+	slices.Sort(keys)
+	return slices.Compact(keys)
 }

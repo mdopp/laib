@@ -14,32 +14,25 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-func env(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
-}
-
 func main() {
 	var cfg lease.Config
-	b, err := os.ReadFile(env("PRESETS_FILE", "/lease/presets.json"))
+	b, err := os.ReadFile(boxfs.Env("PRESETS_FILE", "/lease/presets.json"))
 	if err != nil {
 		log.Fatal("laib-lease: ", err)
 	}
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		log.Fatal("laib-lease: presets.json: ", err)
 	}
-	cfg.RouterURL = env("ROUTER_URL", "http://127.0.0.1:11434")
-	cfg.LeaseDir = env("LEASE_DIR", "/lease")
-	if d, err := time.ParseDuration(env("AUTO_IDLE", "30m")); err == nil {
+	cfg.RouterURL = boxfs.Env("ROUTER_URL", "http://127.0.0.1:11434")
+	cfg.LeaseDir = boxfs.Env("LEASE_DIR", "/lease")
+	if d, err := time.ParseDuration(boxfs.Env("AUTO_IDLE", "30m")); err == nil {
 		cfg.AutoIdle = d
 	}
 	cfg.Token = os.Getenv("LEASE_TOKEN")
-	if d, err := time.ParseDuration(env("LEASE_RENEW", "10m")); err == nil {
+	if d, err := time.ParseDuration(boxfs.Env("LEASE_RENEW", "10m")); err == nil {
 		cfg.Renew = d
 	}
-	if d, err := time.ParseDuration(env("LEASE_WARN_AFTER", "20m")); err == nil {
+	if d, err := time.ParseDuration(boxfs.Env("LEASE_WARN_AFTER", "20m")); err == nil {
 		cfg.WarnAfter = d
 	}
 	// modes name roles and containers; the units come from laib's state (#42)
@@ -62,7 +55,7 @@ func main() {
 	if err != nil {
 		log.Fatal("laib-lease: ", err)
 	}
-	addr := env("LISTEN", "0.0.0.0:11435")
+	addr := boxfs.Env("LISTEN", "0.0.0.0:11435")
 	log.Printf("laib-lease: %s → %s, household %s, modes %d", addr, cfg.RouterURL, cfg.Household, len(cfg.Modes))
 	srv := &http.Server{Addr: addr, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	log.Fatal(srv.ListenAndServe())

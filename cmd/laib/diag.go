@@ -200,5 +200,3 @@ func uniq(in []string) []string {
 	}
 	return out
 }
-
-var _ = os.Stat

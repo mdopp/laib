@@ -124,6 +124,18 @@ func (c *client) do(ctx context.Context, method, path string, body any) ([]byte,
 	return out, resp.StatusCode, nil
 }
 
+// ok is one call to Home Assistant that must answer 200.
+func (c *client) ok(ctx context.Context, method, path string, body any) error {
+	b, code, err := c.do(ctx, method, path, body)
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("home assistant: %d %s", code, string(b))
+	}
+	return nil
+}
+
 var idRe = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 
 // Slug turns a sentence into an automation id: "Flur Licht aus" → flur_licht_aus.
@@ -311,24 +323,16 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					}
 					switch p.Kind {
 					case "write":
-						b, code, err := c.do(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(p.ID), p.Config)
-						if err != nil {
+						if err := c.ok(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(p.ID), p.Config); err != nil {
 							return "", err
-						}
-						if code != 200 {
-							return "", fmt.Errorf("home assistant: %d %s", code, string(b))
 						}
 						return fmt.Sprintf("geschrieben: %s (%s) — automation.%s", p.Alias, p.ID, p.ID), nil
 					case "delete":
 						if err := c.trash(p.ID, p.Config); err != nil {
 							return "", fmt.Errorf("aufheben vor dem Löschen: %w", err)
 						}
-						b, code, err := c.do(ctx, "DELETE", "/api/config/automation/config/"+url.PathEscape(p.ID), nil)
-						if err != nil {
+						if err := c.ok(ctx, "DELETE", "/api/config/automation/config/"+url.PathEscape(p.ID), nil); err != nil {
 							return "", err
-						}
-						if code != 200 {
-							return "", fmt.Errorf("home assistant: %d %s", code, string(b))
 						}
 						return fmt.Sprintf("gelöscht: %s (%s); automation_wiederherstellen %s holt sie zurück", p.Alias, p.ID, p.ID), nil
 					}
@@ -349,12 +353,8 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					if err := yaml.Unmarshal(y, &cfg); err != nil {
 						return "", err
 					}
-					b, code, err := c.do(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(id), cfg)
-					if err != nil {
+					if err := c.ok(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(id), cfg); err != nil {
 						return "", err
-					}
-					if code != 200 {
-						return "", fmt.Errorf("home assistant: %d %s", code, string(b))
 					}
 					return "wiederhergestellt: " + id, nil
 				}},
@@ -367,12 +367,8 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					if on {
 						svc = "turn_on"
 					}
-					b, code, err := c.do(ctx, "POST", "/api/services/automation/"+svc, map[string]any{"entity_id": "automation." + id})
-					if err != nil {
+					if err := c.ok(ctx, "POST", "/api/services/automation/"+svc, map[string]any{"entity_id": "automation." + id}); err != nil {
 						return "", err
-					}
-					if code != 200 {
-						return "", fmt.Errorf("home assistant: %d %s", code, string(b))
 					}
 					return fmt.Sprintf("automation.%s: %s", id, svc), nil
 				}},

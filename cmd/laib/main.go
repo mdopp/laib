@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sort"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -44,8 +44,6 @@ func (e *cliEnv) w() io.Writer {
 	}
 	return os.Stdout
 }
-
-func (e *cliEnv) err() *os.File { return os.Stderr }
 
 func (e *cliEnv) stdin() io.Reader {
 	if e.in != nil {
@@ -139,17 +137,10 @@ func run(args []string) int {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "laib — the control plane for one home box\n\nVerbs (tier in brackets):")
-	names := make([]string, 0, len(verbs))
-	for _, v := range verbs {
-		names = append(names, v.name)
-	}
-	sort.Strings(names)
-	for _, n := range names {
-		for _, v := range verbs {
-			if v.name == n {
-				fmt.Fprintf(os.Stderr, "  %-10s [%s]  %s\n", v.name, v.tier, v.help)
-			}
-		}
+	sorted := slices.Clone(verbs)
+	slices.SortFunc(sorted, func(a, b verb) int { return strings.Compare(a.name, b.name) })
+	for _, v := range sorted {
+		fmt.Fprintf(os.Stderr, "  %-10s [%s]  %s\n", v.name, v.tier, v.help)
 	}
 	fmt.Fprintln(os.Stderr, "\nFlags: --json on every verb. Env: LAIB_HOME, LAIB_STATE, LAIB_QUADLET, LAIB_ACTOR.")
 }

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -175,11 +176,6 @@ func Diff(ctx context.Context, repo string, p *Proposal) string {
 	return out
 }
 
-// Approve merges the branch into main. The caller then runs apply.
-func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
-	return ApproveChecked(ctx, repo, inbox, p, by, nil)
-}
-
 // ApproveChecked merges in a temporary worktree (#41): a conflict never
 // reaches main (no markers, no half-merged state), the merged result is
 // validated by check (state loads, renders) before main fast-forwards to
@@ -302,11 +298,8 @@ func save(inbox string, p *Proposal) error {
 	if err != nil {
 		return err
 	}
-	tmp := filepath.Join(inbox, strconv.Itoa(p.ID)+".json.tmp")
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, strings.TrimSuffix(tmp, ".tmp"))
+	path := filepath.Join(inbox, strconv.Itoa(p.ID)+".json")
+	return boxfs.WriteAtomic(path+".tmp", path, b, 0o644)
 }
 
 func now() time.Time { return time.Now().UTC() }

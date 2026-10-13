@@ -253,9 +253,6 @@ func named(p *state.Persona, in string) bool {
 
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
 
-// Input is Talk in the session's language (English for a new one).
-func (t *Terminal) Input(sid, line string) string { return t.Talk(sid, "", line) }
-
 // Talk is one message: a screen to show as is (its last line is the prompt),
 // or "WEITER: <tool>\nPROMPT: <prompt>" when it is a request for the Bote in
 // the current context ("-" at the top: any tool).
@@ -320,7 +317,7 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		switch {
 		case n >= 1 && n <= len(tools):
 			s.ctx = tools[n-1]
-			return fmt.Sprintf(w.connect, label(w, s.ctx)) + "\n\n" + prompt(s)
+			return fmt.Sprintf(w.connect, word(w.labels, s.ctx)) + "\n\n" + prompt(s)
 		case gamesOn(s.p) && (n == len(tools)+1 || in == "SPIELE" || has(in, "SPIELEN", "SPIELE ", "GAMES", "PLAY ", "TIC-TAC", "TICTACTOE", "THERMONUCLEAR")):
 			s.ctx = games
 		case n >= 0:
@@ -413,11 +410,13 @@ func prompt(s *session) string {
 	case games:
 		return s.p.Prompt + "/" + lang[s.lang].games + ">"
 	}
-	return s.p.Prompt + "/" + level(lang[s.lang], s.ctx) + ">"
+	return s.p.Prompt + "/" + word(lang[s.lang].levels, s.ctx) + ">"
 }
 
-func level(w words, k string) string {
-	if l, ok := w.levels[k]; ok {
+// word is a tool's word from labels or levels, its name in capitals when
+// the language has none.
+func word(m map[string]string, k string) string {
+	if l, ok := m[k]; ok {
 		return l
 	}
 	return strings.ToUpper(k)
@@ -430,13 +429,6 @@ func (t *Terminal) tools() []string {
 	return t.caps()
 }
 
-func label(w words, k string) string {
-	if l, ok := w.labels[k]; ok {
-		return l
-	}
-	return strings.ToUpper(k)
-}
-
 func (t *Terminal) directory(s *session, w words) string {
 	var b strings.Builder
 	if w.greet != "" {
@@ -445,7 +437,7 @@ func (t *Terminal) directory(s *session, w words) string {
 	b.WriteString(w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
 	tools := t.tools()
 	for i, k := range tools {
-		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(w, k), level(w, k))
+		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, word(w.labels, k), word(w.levels, k))
 	}
 	if gamesOn(s.p) {
 		fmt.Fprintf(&b, "  %d  %s\n", len(tools)+1, w.games)
@@ -629,17 +621,6 @@ func has(in string, words ...string) bool {
 		}
 	}
 	return false
-}
-
-// clone copies one session under another id; the tests walk every line of play with it.
-func (t *Terminal) clone(from, to string) *Terminal {
-	c := New(t.caps, t.cast)
-	c.now = t.now
-	if s, ok := t.sessions[from]; ok {
-		cp := *s
-		c.sessions[to] = &cp
-	}
-	return c
 }
 
 // Server is the MCP tool the Bote calls with every message (#122): it knows

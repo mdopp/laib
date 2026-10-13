@@ -78,7 +78,7 @@ the Android widgets (which get the same JSON from `/napi`).
 | **Medien** (`/medien`) | Läuft gerade (Jellyfin, Radio), Weiterschauen, Radio-Presets | everyone |
 | **Notizen & Dokumente** (`/notizen`) | Suche, Zuletzt, Paperless-Eingang (Anzahl), Diktat | per person |
 | **Kalender** (`/kalender`) | Heute, Erinnerungen, Timer | per person |
-| **Box** (`/box`) | *Laib*: readiness line · *Inbox*: proposals with Freigeben/Ablehnen (delegates to Laib) · *Morgenbericht* · *Was läuft*: services grouped by purpose · *Operator*: was ich gerade tue · *Werkstatt*: offene Tickets · *Stimme*: Wakeword-Training starten | admins |
+| **Box** (`/box`) | *Laib*: readiness line · *Inbox*: proposals read-only with their card, and a link to Laib's inbox (Haus decides nothing, haus#1) · *Morgenbericht* · *Was läuft*: services grouped by purpose · *Operator*: was ich gerade tue · *Werkstatt*: offene Tickets · *Stimme*: the persona's wake word, trained or not (training follows the persona, #128) | admins |
 
 **Sprechen** is not a page: a microphone/text field on every page that
 talks to the Bote. The reply comes back as transient cards into the current page ("Bürolicht ist
@@ -125,10 +125,22 @@ Geräte, Mitteilungen; new: *Box* (readiness + inbox count for admins).
 6. **Stimme**, **Frage**, **music-assistant** and **searxng** as templates
    in the household registry; the speaker-identity gatekeeper is dropped;
    `solarisbay` is archived once Haus holds the memory library.
-7. Rename `solaris-android` to `haus-android`.
+7. ~~Rename `solaris-android` to `haus-android`.~~ Superseded by ADR 0021:
+   the package id, the scheme and the repo name are the installed app's
+   contract; the app ships the new names next to the old ones (#130).
 
 Each step leaves every surface working. Steps 1 and 2 are Laib work and
 start now; 3 to 7 are solarisbay and haus work with their own issues.
+
+**Stand 2026-10-13** (tracking: #21):
+- **Steps 1 and 2:** done. The Operator is `cmd/laib-operator`, and llama is a Laib role.
+- **Step 3:** half done.
+  - Haus has the Box page, pairing (`/pair-device`), the four companion keys and the persona.
+  - The other `/napi` paths still go through the Solaris bridge (haus#10).
+- **Step 4:** open (haus#12).
+- **Step 5:** waits on the two checks of ADR 0015 on the box. The Bote (ADR 0016), not Solaris, is the agent people talk to.
+- **Step 6:** done as built-in templates (the registry repo is postponed). The gatekeeper is dropped.
+- **Step 7:** superseded (above).
 
 ## Risks named
 

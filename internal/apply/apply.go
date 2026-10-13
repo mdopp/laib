@@ -317,11 +317,7 @@ func writeAtomic(target, content string) error {
 	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") {
 		mode = 0o600
 	}
-	tmp := target + ".laib-tmp"
-	if err := os.WriteFile(tmp, []byte(content), mode); err != nil {
-		return err
-	}
-	return os.Rename(tmp, target)
+	return boxfs.WriteAtomic(target+".laib-tmp", target, []byte(content), mode)
 }
 
 // snapshot commits the state repo so the applied state has a hash. A clean

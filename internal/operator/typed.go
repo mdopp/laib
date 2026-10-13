@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -133,7 +134,7 @@ func TypedDefs(tr Trigger, services []string, has map[string]bool) []ToolDef {
 	kind := menuKind(tr)
 	var out []ToolDef
 	for _, t := range typedTools {
-		if !has[t.mcp] || !contains(t.menus, kind) {
+		if !has[t.mcp] || !slices.Contains(t.menus, kind) {
 			continue
 		}
 		props := map[string]any{}
@@ -200,14 +201,14 @@ func Translate(name string, raw json.RawMessage, services []string) (string, map
 			if !ok {
 				return "", nil, fmt.Errorf("%s: %s muss ein String sein", name, p.name)
 			}
-			if len(p.enum) > 0 && !contains(p.enum, s) {
+			if len(p.enum) > 0 && !slices.Contains(p.enum, s) {
 				return "", nil, fmt.Errorf("%s: %s muss eines von %s sein, nicht %q", name, p.name, strings.Join(p.enum, ", "), s)
 			}
 			if p.name == "service" {
 				if !serviceName.MatchString(s) {
 					return "", nil, fmt.Errorf("%s: service %q ist kein Dienstname", name, s)
 				}
-				if len(services) > 0 && !contains(services, s) {
+				if len(services) > 0 && !slices.Contains(services, s) {
 					return "", nil, fmt.Errorf("%s: Dienst %q gibt es nicht; installiert: %s", name, s, strings.Join(services, ", "))
 				}
 			}
@@ -229,23 +230,4 @@ func Translate(name string, raw json.RawMessage, services []string) (string, map
 		}
 	}
 	return t.mcp, map[string]string{"args": t.cli(a)}, nil
-}
-
-// TypedNames lists the typed tools, for the drift check and the docs.
-func TypedNames() []string {
-	var out []string
-	for _, t := range typedTools {
-		out = append(out, t.name)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

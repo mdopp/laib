@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/policy"
-	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/token"
 )
@@ -224,5 +223,3 @@ func splitArgs(s string) []string {
 	}
 	return out
 }
-
-var _ = proposal.Hand
