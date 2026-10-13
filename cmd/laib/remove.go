@@ -23,14 +23,10 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if proposal.Hand(env.actor) != "human" {
 		return exitRefusedMsg(env, "only a human removes a service")
 	}
-	st, err := loadState(env)
+	name := args[0]
+	st, svc, err := loadSvc(env, name)
 	if err != nil {
 		return fail(err)
-	}
-	name := args[0]
-	svc, ok := st.Services[name]
-	if !ok {
-		return fail(fmt.Errorf("unknown service %q", name))
 	}
 	// nobody may need it (#50): a dependant left behind makes the state
 	// unloadable, and the refusal comes before anything is stopped or deleted
@@ -54,10 +50,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	for _, unit := range svc.UnitNames() {
 		sysd.Stop(ctx, unit)
 	}
-	var kept []string
-	for _, d := range svc.Contract.Data {
-		kept = append(kept, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-	}
+	kept := dataPaths(st, svc)
 	if err := os.RemoveAll(filepath.Join(env.paths.State, "services", name)); err != nil {
 		return fail(err)
 	}

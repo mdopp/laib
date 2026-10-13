@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/token"
 )
@@ -105,5 +104,3 @@ func exitRefusedMsg(env *cliEnv, msg string) int {
 	fmt.Fprintln(os.Stderr, "laib:", msg)
 	return exitRefused
 }
-
-var _ = policy.Allowed

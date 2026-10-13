@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -22,13 +22,9 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
 		return fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200]"))
 	}
-	st, err := loadState(env)
+	_, svc, err := loadSvc(env, args[0])
 	if err != nil {
 		return fail(err)
-	}
-	svc, ok := st.Services[args[0]]
-	if !ok {
-		return fail(fmt.Errorf("unknown service %q", args[0]))
 	}
 	since, lines := "1h", "200"
 	for i := 1; i+1 < len(args); i += 2 {
@@ -43,12 +39,7 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	out := map[string]string{}
 	for _, unit := range svc.UnitNames() {
 		text, _ := sysd.Run(ctx, "journalctl", "--user", "-u", unit, "--since", "-"+since, "-n", lines, "--no-pager", "-o", "short-iso")
-		for k, v := range sec {
-			if v != "" {
-				text = strings.ReplaceAll(text, v, "${secret:"+k+"}")
-			}
-		}
-		out[unit] = text
+		out[unit] = render.Redact(render.Output{"l": text}, sec)["l"]
 	}
 	if env.json {
 		return emit(env, out)
@@ -71,8 +62,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 		return fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
-		fmt.Fprintf(env.err(), "laib: %s may not rollback\n", env.actor)
-		return exitRefused
+		return exitRefusedMsg(env, env.actor+" may not rollback")
 	}
 	arg := "HEAD"
 	if len(args) > 0 {
@@ -178,5 +168,3 @@ func revertProposal(ctx context.Context, env *cliEnv, st *state.State, id int) (
 	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})
 	return subject, nil
 }
-
-var _ = time.Now
