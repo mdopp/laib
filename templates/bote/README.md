@@ -89,3 +89,13 @@ Home Assistant's `/mcp_server/sse` needs no bridge. Not yet verified:
 `SIGNAL_ACCOUNT`, `SIGNAL_ALLOWED_USERS`; the home channel for cron
 delivery may be set in-chat instead), and the whole thing on a box.
 Issue: the Bote on the NUC (#23, phase 2).
+
+## Joshua (#119)
+
+An easter egg: write "Shall we play a game?" (or "Wollen wir ein Spiel
+spielen?", or "Joshua") and the Bote becomes WOPR from WarGames. It shows
+what the Bote can do, then the film's list of games. Two of them are
+playable: tic-tac-toe (it never loses; `NUMBER OF PLAYERS: 0` plays itself)
+and Global Thermonuclear War, which nobody wins. `LOGOFF` ends it. The game
+is the `bote-joshua` container (`cmd/joshua`), an MCP tool with no side
+effects; the model only passes the text through.
