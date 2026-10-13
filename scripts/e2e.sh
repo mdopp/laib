@@ -238,7 +238,7 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 # #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
-if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
+if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:\|(ha:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
 grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
@@ -260,6 +260,7 @@ FRAGE_PID=$!; sleep 0.5; FRAGE_PORT=$(cat "$WORK/frage.port")
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_BOTE_HA_TOKEN=ha_y HA_URL=http://127.0.0.1:8123 \
   FRAGE_URL="http://127.0.0.1:$FRAGE_PORT/mcp" HAUSHALT_MCP_URL="http://127.0.0.1:1/mcp" ./post-deploy > "$WORK/bote-hook.out" ) || fail "bote hook with frage"
 kill $FRAGE_PID 2>/dev/null || true
 grep -q "frage:" "$HOOKDIR/bote/hermes/config.yaml" || fail "a Frage that answers is wired as an MCP server (#54)"
@@ -267,6 +268,11 @@ grep -q "url: http://127.0.0.1:$FRAGE_PORT/mcp" "$HOOKDIR/bote/hermes/config.yam
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Haushalt that does not answer must be left out (#54)"; fi
 grep -qi "haushalt.*antwortet nicht\|haushalt.*weggelassen" "$WORK/bote-hook.out" || fail "the hook names the server it left out"
 grep -q "Frage" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names Frage once it is wired"
+# #134: Home Assistant is the tool ha (ADR 0021); haus is the family's pages, never a Bote tool
+grep -q "^  ha:" "$HOOKDIR/bote/hermes/config.yaml" || fail "Home Assistant is wired as the Bote tool ha (#134)"
+grep -q "url: http://127.0.0.1:8123/mcp_server/sse" "$HOOKDIR/bote/hermes/config.yaml" || fail "the ha tool reaches Home Assistant (#134)"
+if grep -q "^  haus:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Bote tool is named haus (#134)"; fi
+grep -qx "ha" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists ha (#134)"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 

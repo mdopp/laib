@@ -67,17 +67,20 @@ var scenarios = []string{"U.S. FIRST STRIKE", "USSR FIRST STRIKE", "NATO / WARSA
 type words struct {
 	greet, dir, games, enter, play, connect, bye string
 	labels                                       map[string]string
+	levels                                       map[string]string // the level's word in the prompt, never the tool's name (ADR 0021)
 }
 
 var lang = map[string]words{
 	"de": {"WILLKOMMEN, PROFESSOR FALKEN.", "WOPR HAUPTVERZEICHNIS", "SPIELE", "NUMMER WÄHLEN, ODER EINFACH FRAGEN.",
 		"WOLLEN WIR EIN SPIEL SPIELEN?", "VERBINDE MIT %s ...", "AUF WIEDERSEHEN.",
 		map[string]string{"laib": "BOX-STATUS UND VORSCHLÄGE", "frage": "WEBSUCHE MIT QUELLEN",
-			"haus": "LICHT, SCHALTER, MUSIK", "automat": "AUTOMATIONEN", "haushalt": "KALENDER, KONTAKTE, NOTIZEN"}},
+			"ha": "LICHT, SCHALTER, MUSIK", "automat": "AUTOMATIONEN", "haushalt": "KALENDER, KONTAKTE, NOTIZEN"},
+		map[string]string{"laib": "BOX", "frage": "FRAGE", "ha": "GERÄTE", "automat": "AUTOMATIK", "haushalt": "HAUSHALT"}},
 	"en": {"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "GAMES", "ENTER SELECTION, OR JUST ASK.",
 		"SHALL WE PLAY A GAME?", "CONNECTING TO %s ...", "GOODBYE.",
 		map[string]string{"laib": "BOX STATUS AND PROPOSALS", "frage": "WEB SEARCH WITH SOURCES",
-			"haus": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"}},
+			"ha": "LIGHTS, SWITCHES, MUSIC", "automat": "AUTOMATIONS", "haushalt": "CALENDAR, CONTACTS, NOTES"},
+		map[string]string{"laib": "BOX", "frage": "SEARCH", "ha": "DEVICES", "automat": "AUTOMATIONS", "haushalt": "HOUSEHOLD"}},
 }
 
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
@@ -223,7 +226,7 @@ func (t *Terminal) gamesList(s *session) string {
 	return strings.Join(films, "\n") + "\n\nGLOBAL THERMONUCLEAR WAR\n\n" + prompt(s)
 }
 
-// prompt is where the person is: JOSHUA>, JOSHUA/HAUS>, JOSHUA/SPIELE>.
+// prompt is where the person is: JOSHUA>, JOSHUA/GERÄTE>, JOSHUA/SPIELE>.
 func prompt(s *session) string {
 	switch s.ctx {
 	case "":
@@ -231,7 +234,14 @@ func prompt(s *session) string {
 	case games:
 		return "JOSHUA/" + lang[s.lang].games + ">"
 	}
-	return "JOSHUA/" + strings.ToUpper(s.ctx) + ">"
+	return "JOSHUA/" + level(lang[s.lang], s.ctx) + ">"
+}
+
+func level(w words, k string) string {
+	if l, ok := w.levels[k]; ok {
+		return l
+	}
+	return strings.ToUpper(k)
 }
 
 func (t *Terminal) tools() []string {
@@ -253,7 +263,7 @@ func (t *Terminal) directory(w words) string {
 	b.WriteString(w.greet + "\n\n" + w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
 	tools := t.tools()
 	for i, k := range tools {
-		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(w, k), strings.ToUpper(k))
+		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, label(w, k), level(w, k))
 	}
 	fmt.Fprintf(&b, "  %d  %s\n\n%s\n\n%s\n\nJOSHUA>", len(tools)+1, w.games, w.enter, w.play)
 	return b.String()
