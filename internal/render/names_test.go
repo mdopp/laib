@@ -79,3 +79,23 @@ func TestBoteToolsAreNamedForTheSystemTheyReach(t *testing.T) {
 		t.Errorf("Home Assistant is the Bote tool `ha` (ADR 0021): %v", found)
 	}
 }
+
+// #135: a template that says how many containers its pod has is right. The
+// bote pod said "two" while it ran five.
+func TestPodCommentsCountTheirContainers(t *testing.T) {
+	words := map[string]int{"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+	count := regexp.MustCompile(`(?i)\b(two|three|four|five|six|seven) containers in one pod`)
+	ymls, _ := filepath.Glob(filepath.Join("..", "..", "templates", "*", "laib.yml"))
+	for _, y := range ymls {
+		b, _ := os.ReadFile(y)
+		text := regexp.MustCompile(`\s*\n\s*#\s*`).ReplaceAllString(string(b), " ") // a comment wraps
+		m := count.FindStringSubmatch(text)
+		if m == nil {
+			continue
+		}
+		units, _ := filepath.Glob(filepath.Join(filepath.Dir(y), "*.container"))
+		if want := words[strings.ToLower(m[1])]; want != len(units) {
+			t.Errorf("%s says %s containers in one pod, the template has %d", y, m[1], len(units))
+		}
+	}
+}
