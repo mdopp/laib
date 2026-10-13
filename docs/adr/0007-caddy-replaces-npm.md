@@ -51,3 +51,30 @@ Owner actions before the NUC: delegate `nuc.dopp.cloud` at Strato (NS
 records to deSEC's name servers), create the zone and an API token at
 deSEC, pass both to `laib-stick`. The one-box end state on the Kraftwerk
 keeps HTTP-01 over port 80 as today, or the same delegation.
+
+## Amendment 2026-10-13 (#45): HTTP-01 through the Kraftwerk instead of the deSEC delegation
+
+The owner chose no new DNS account for the trial. Strato accepts no wildcard
+records, but it does accept two-level subdomains (`laib.nuc.dopp.cloud`
+resolves publicly as a CNAME to `dopp.cloud`, checked 2026-10-13). So the
+NUC gets its certificates by **HTTP-01**: `box.yml` has no `dns.provider` and
+no `tls: internal`, and Caddy uses Let's Encrypt's default challenge.
+
+- **Public names:** one Strato subdomain per routed host, each a CNAME to
+  `dopp.cloud`. Phase 1: `laib.nuc`, `auth.nuc`, `ldap.nuc`, `haus.nuc`,
+  `dns.nuc`, `whoami.nuc`. A new service on the NUC needs one more.
+- **Port 80:** the house's port 80 reaches the Kraftwerk's NPM. For each
+  name there, NPM gets one proxy host that is **HTTP only (no SSL)** and
+  forwards to the NUC's port 80. A proxy host without SSL does not include
+  NPM's own `letsencrypt-acme-challenge.conf`, so the challenge reaches the
+  NUC's Caddy (the same shape `flut.dopp.cloud` has today). From outside the
+  NUC only shows its port 80 (the challenge or a redirect); HTTPS from
+  outside still ends at the Kraftwerk, which has no route for these names.
+- **Cost:** renewals (every ~60 days) need the Kraftwerk up and those proxy
+  hosts in place, so the trial depends on the Kraftwerk at this one point.
+  The proxy hosts and CNAMEs go when the trial ends.
+
+The deSEC delegation (2026-10-11) stays the fallback, as does a DNS provider
+with an API (INWX), which would also allow a wildcard certificate. When the
+Kraftwerk itself runs Laib, it does HTTP-01 on its own port 80 and this
+forwarding disappears.
