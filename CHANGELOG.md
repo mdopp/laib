@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/mdopp/laib/compare/v0.4.0...v0.4.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **release:** latest means the newest release with binaries; the gate dispatches vm-install again ([#99](https://github.com/mdopp/laib/issues/99)) ([622599f](https://github.com/mdopp/laib/commit/622599f95f643f47351db6aff226d145aa481927))
+* **release:** latest means the newest release with binaries; the gate dispatches vm-install again ([#99](https://github.com/mdopp/laib/issues/99)) ([e00b840](https://github.com/mdopp/laib/commit/e00b840500507a8dea6ecb96efb8dacc5b10e50b))
+
 ## [0.4.0](https://github.com/mdopp/laib/compare/v0.3.5...v0.4.0) (2026-10-12)
 
 
