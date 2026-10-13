@@ -7,9 +7,7 @@ import (
 )
 
 func term() *Terminal {
-	t := New(func() []string {
-		return []string{"die Box (laib: lesen und vorschlagen)", "Fragen (frage: Websuche mit Quellen)"}
-	})
+	t := New(func() []string { return []string{"laib", "frage"} })
 	return t
 }
 
@@ -17,7 +15,7 @@ func term() *Terminal {
 func TestTheTriggerOpensThePromptWithCapabilitiesAndGames(t *testing.T) {
 	for _, in := range []string{"Shall we play a game?", "Wollen wir ein Spiel spielen?", "Joshua"} {
 		out := term().Input("p", in)
-		for _, want := range []string{"GREETINGS PROFESSOR FALKEN.", "WHAT I CAN DO", "DIE BOX (LAIB: LESEN UND VORSCHLAGEN)", "FRAGEN (FRAGE: WEBSUCHE MIT QUELLEN)", "GAMES", "SHALL WE PLAY A GAME?"} {
+		for _, want := range []string{"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "1  BOX STATUS AND PROPOSALS", "2  WEB SEARCH WITH SOURCES", "3  GAMES", "ENTER SELECTION", "SHALL WE PLAY A GAME?"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("%q: %q missing:\n%s", in, want, out)
 			}
@@ -133,5 +131,43 @@ func TestTheToolPassesTextThrough(t *testing.T) {
 	out, err := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Shall we play a game?", "sitzung": "Anna"})
 	if err != nil || !strings.Contains(out, "SHALL WE PLAY A GAME?") {
 		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+// The directory is the Bote's real tools; GAMES is the last entry.
+func TestTheDirectoryLeadsToGamesAndHandsAToolToTheBote(t *testing.T) {
+	j := New(func() []string { return []string{"laib", "frage", "haus", "kalender-x"} })
+	out := j.Input("p", "Joshua")
+	if !strings.Contains(out, "4  KALENDER-X") || !strings.Contains(out, "5  GAMES") {
+		t.Fatalf("an unknown tool keeps its name; GAMES comes last:\n%s", out)
+	}
+	if out := j.Input("p", "5"); !strings.HasSuffix(strings.TrimSpace(out), "GLOBAL THERMONUCLEAR WAR") {
+		t.Fatalf("5 is GAMES:\n%s", out)
+	}
+	j.Input("p", "Joshua")
+	out = j.Input("p", "2")
+	if !strings.Contains(out, "CONNECTING TO WEB SEARCH WITH SOURCES") || !strings.HasSuffix(strings.TrimSpace(out), "HANDOVER: frage") {
+		t.Fatalf("choosing a tool hands it to the Bote:\n%s", out)
+	}
+	if _, ok := j.sessions["p"]; ok {
+		t.Fatal("Joshua is still running after the handover")
+	}
+}
+
+// Free wording is the model's job; when Joshua does not understand, it says
+// which commands it takes, so the model can map the person's words and retry.
+func TestUnrecognisedInputNamesTheValidCommands(t *testing.T) {
+	j := term()
+	j.Input("p", "Joshua")
+	if out := j.Input("p", "was kannst du so?"); !strings.Contains(out, "VALID:") || !strings.Contains(out, "LIST GAMES") || !strings.Contains(out, "LOGOFF") {
+		t.Fatalf("the menu's commands:\n%s", out)
+	}
+	j.Input("p", "play tic-tac-toe")
+	j.Input("p", "1")
+	if out := j.Input("p", "ich nehme die ecke"); !strings.Contains(out, "VALID:") || !strings.Contains(out, "1-9") {
+		t.Fatalf("the game's commands:\n%s", out)
+	}
+	if out := j.Input("p", "Mitte"); !strings.Contains(out, " X ") {
+		t.Fatalf("MITTE is 5:\n%s", out)
 	}
 }
