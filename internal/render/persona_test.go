@@ -47,6 +47,11 @@ func TestAPersonaChangeTouchesTheServicesThatUseIt(t *testing.T) {
 	if a["persona/hal/style.md"] != "Calm.\n" || a["persona/hal/icon.svg"] == "" || a["persona/joshua/persona.yml"] == "" {
 		t.Fatalf("the house and chat personas are rendered under persona/: %v", keys(a))
 	}
+	// #129: consumers without a YAML parser (Haus, the app through Haus) read
+	// the resolved fields as JSON next to the package
+	if j := a["persona/hal/persona.json"]; !strings.Contains(j, `"display":"HAL"`) || !strings.Contains(j, `"wakeword":"hello_hal"`) || !strings.Contains(j, `"prompt":"HAL"`) {
+		t.Fatalf("persona.json:\n%s", j)
+	}
 	if !strings.Contains(a["persona/chat.yml"], "\"+4917012345678\": joshua") {
 		t.Fatalf("the chat map is rendered:\n%s", a["persona/chat.yml"])
 	}
