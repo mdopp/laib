@@ -1,0 +1,12 @@
+[Unit]
+Description=Sprecher: speaks as ${PERSONA_DISPLAY}
+
+[Container]
+Image=${IMAGE}
+Environment=PERSONA=${PERSONA}
+Environment=PERSONA_REV=${PERSONA_REV}
+Exec=--wake ${PERSONA_WAKEWORD} --phrase "${PERSONA_PHRASE}" --voice ${PERSONA_VOICE}
+Volume=/mnt/data/laib/render/persona:/personas:ro,z
+
+[Install]
+WantedBy=default.target

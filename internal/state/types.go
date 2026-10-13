@@ -36,6 +36,12 @@ type Box struct {
 	// repo and the label a wish gets; the token is GITHUB_INTAKE_TOKEN in
 	// secrets.age. Empty = wishes are kept under <home>/wishes.
 	Intake Intake `yaml:"intake"`
+	// Persona is the house's (ADR 0020): the wake word, the speakers' voice,
+	// Haus's start page and the chat default. Joshua when unset.
+	Persona string `yaml:"persona"`
+	// ChatPersonas gives a Signal number (E.164) another persona for the
+	// chat only; a wake word belongs to the room, not the person.
+	ChatPersonas map[string]string `yaml:"chatPersonas"`
 }
 
 // Intake: the ticket queue for wishes and escalations (#56).
@@ -265,6 +271,7 @@ type State struct {
 	Box      Box
 	Policy   Policy
 	Services map[string]*Service
+	Personas map[string]*Persona // the house persona and every chat persona, by name
 	Ignore   []string
 	// Warnings are findings that do not stop a load but belong in a plan
 	// and in a proposal's text: today, two services serving one purpose.

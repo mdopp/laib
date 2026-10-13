@@ -54,6 +54,15 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			out["quadlet/"+name+"/"+file] = content
 		}
 	}
+	if usesPersona(st) {
+		// the packages a service mounts from /mnt/data/laib/render/persona (ADR 0020)
+		for pname, p := range st.Personas {
+			for file, content := range p.Files {
+				out["persona/"+pname+"/"+file] = content
+			}
+		}
+		out["persona/chat.yml"] = st.ChatMap()
+	}
 	if st.Box.Roles.Proxy != "" {
 		out["caddy/Caddyfile"] = caddyfile(st, secrets)
 	}
@@ -195,6 +204,10 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 		"MODEL_LEASE": st.ModelLease(),
 		"MODEL_KEY":   "",
 	}
+	if p := st.HousePersona(); p != nil {
+		vars["PERSONA"], vars["PERSONA_DISPLAY"], vars["PERSONA_PHRASE"] = p.Name, p.Display, p.Wakeword.Phrase
+		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
+	}
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
 	} else if st.Box.Roles.Model != "" {
@@ -210,6 +223,20 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) (
 		vars[k] = v.Literal
 	}
 	return vars, nil
+}
+
+// usesPersona: some service's unit names a PERSONA value.
+func usesPersona(st *state.State) bool {
+	for _, svc := range st.Services {
+		for _, content := range svc.Units {
+			for _, v := range state.Placeholders(content) {
+				if strings.HasPrefix(v, "PERSONA") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func secretValue(secrets map[string]string, name string) string {

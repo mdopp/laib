@@ -5,7 +5,9 @@ After=network-online.target
 [Container]
 Image=${OPENWAKEWORD_IMAGE}
 Network=host
-Exec=--uri tcp://127.0.0.1:10400 --custom-model-dir /custom --preload-model ${WAKEWORD}
+# the house persona's wake word (ADR 0020), trained into stimme/wakeword (#128)
+Environment=PERSONA_REV=${PERSONA_REV}
+Exec=--uri tcp://127.0.0.1:10400 --custom-model-dir /custom --preload-model ${PERSONA_WAKEWORD}
 Volume=${DATA_DIR}/stimme/wakeword:/custom:z
 AutoUpdate=registry
 

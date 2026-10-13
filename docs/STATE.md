@@ -62,11 +62,28 @@ operator:                         # laib-operator (ADR 0013); laib operator enab
   tick: 10m
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
+persona: joshua                   # the house persona (ADR 0020): wake word, voice, Haus, chat default; joshua when unset
+chatPersonas:                     # a Signal number (E.164) that talks to another persona in the chat
+  "+4917012345678": hal
 ```
 
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
-`model`.
+`model`. `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`,
+`${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}` and
+`${PERSONA_REV}` come from the house persona. A unit that carries
+`PERSONA_REV` is restarted on any persona change.
+
+## personas/<name>/ (optional)
+
+A persona package (ADR 0020): `persona.yml` (name, display, languages,
+wakeword.phrase, voice, prompt, greeting, colors, gimmicks), `style.md` (how
+the character talks; style only, the rules are code) and `icon.svg`. Laib
+looks in the state repo first, then `registries/<reg>/personas/<name>`, then
+the built-ins (`personas/` in this repo: joshua). When a service uses a
+persona value, apply writes every persona in use and `chat.yml` (house and
+chat map) to `/mnt/data/laib/render/persona/`, which services mount read-only.
+A style.md that talks about approvals or rules is a plan warning.
 
 ## policy.yml
 

@@ -26,7 +26,7 @@ is.
    gimmicks), `style.md` (how the character talks) and `icon.svg`.
 2. **One house persona, chat personas per person.** `box.yml persona:` is the
    house's: the wake word, the speakers' voice, the Haus start page and the
-   chat default. `chat_personas:` maps a Signal number to another persona for
+   chat default. `chatPersonas:` maps a Signal number to another persona for
    the chat only. A wake word belongs to the devices in a room, not to a
    person.
 3. **A persona is style, never rules.** The rules — no approvals by the Bote,

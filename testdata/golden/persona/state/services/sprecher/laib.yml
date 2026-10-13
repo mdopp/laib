@@ -1,0 +1,7 @@
+name: sprecher
+template: {registry: builtin, name: sprecher, version: 1}
+# a service that speaks as the house persona (ADR 0020)
+routes: []
+secrets: []
+data: []
+health: {none: "golden case"}

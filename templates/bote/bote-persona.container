@@ -6,6 +6,10 @@ Image=${PERSONA_IMAGE}
 Pod=bote.pod
 Environment=PERSONA_LISTEN=127.0.0.1:8644
 Environment=PERSONA_DATA=/data
+# the house persona and the chat map (ADR 0020)
+Environment=PERSONA=${PERSONA}
+Environment=PERSONA_REV=${PERSONA_REV}
+Volume=/mnt/data/laib/render/persona:/personas:ro,z
 Volume=${DATA_DIR}/bote/persona:/data:Z
 AutoUpdate=registry
 

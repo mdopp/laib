@@ -12,6 +12,10 @@ Environment=LAIB_PUBLIC_URL=https://laib.${DOMAIN}
 Environment=SOLARIS_URL=${SOLARIS_URL}
 Environment=HAUS_DATA=/data
 Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
+# the house persona: title, greeting, icon, colours (ADR 0020, #129)
+Environment=HAUS_PERSONA=${PERSONA}
+Environment=PERSONA_REV=${PERSONA_REV}
+Volume=/mnt/data/laib/render/persona:/persona:ro,z
 Volume=${DATA_DIR}/haus:/data:Z
 AutoUpdate=registry
 
