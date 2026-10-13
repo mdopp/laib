@@ -23,11 +23,11 @@ data:
   - path: ${DATA_DIR}/bote/hermes    # config.yaml, .env, memory, sessions
   - path: ${DATA_DIR}/bote/signal    # signal-cli's linked device
   - path: ${DATA_DIR}/bote/automat   # automations deleted through the Automat, kept for restore
-  - path: ${DATA_DIR}/bote/joshua    # Joshua's list of the Bote's tools, written by post-deploy (#119)
+  - path: ${DATA_DIR}/bote/persona   # the persona engine's list of the Bote's tools, written by post-deploy
 health:
   http: http://127.0.0.1:8085/v1/about
 ports:
   - {port: 8085, lan: false}         # signal-cli REST, loopback only (8080 is whoami, #46)
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server; Haus's Sprechen field uses it
   - {port: 8643, lan: false}         # Automat MCP, loopback only
-  - {port: 8644, lan: false}         # Joshua MCP (WOPR, the easter egg, #119), loopback only
+  - {port: 8644, lan: false}         # the persona engine's MCP (today Joshua), loopback only

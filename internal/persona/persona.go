@@ -1,9 +1,10 @@
-// Package joshua is an easter egg for the Bote (#119): WOPR from WarGames as
-// a small terminal. It lists what the Bote can do, then the film's games, and
-// plays two of them for real: tic-tac-toe (it never loses) and Global
+// Package persona is the Bote's persona engine (ADR 0020, ADR 0021): it knows
+// where each person stands — the directory of the Bote's tools, its levels and
+// context — and plays the persona's gimmicks. Its first and only persona today
+// is Joshua, WOPR from WarGames: tic-tac-toe (it never loses) and Global
 // Thermonuclear War (nobody wins). It reads nothing from the box and changes
-// nothing; the model only passes text through, the game is this code.
-package joshua
+// nothing; the model only passes text through, where a person is is this code.
+package persona
 
 import (
 	"context"
@@ -447,11 +448,11 @@ func (t *Terminal) clone(from, to string) *Terminal {
 // where the person is and answers with a screen or with WEITER.
 func Server(t *Terminal, version string) *mcpserver.Server {
 	return &mcpserver.Server{
-		Name:         "joshua",
+		Name:         "persona",
 		Version:      version,
 		Instructions: "Joshua, die Persona des Boten: Verzeichnis, Ebenen und Kontext. Jede Nachricht zuerst hierher.",
 		Tools: []mcpserver.Tool{{
-			Name: "joshua",
+			Name: "persona",
 			Description: "Joshua (WOPR aus WarGames), die Oberfläche des Boten: ein Verzeichnis deiner Werkzeuge mit Ebenen, " +
 				"dazu Tic-Tac-Toe und Global Thermonuclear War. Ruf es mit JEDER Nachricht zuerst auf. " +
 				"Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. " +
