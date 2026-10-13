@@ -138,7 +138,9 @@ there. Laib does that in two halves, because the two need different
 guarantees.
 
 **Mechanical, always on.** `laib converge` runs every ten minutes and after
-boot (`autonomy.converge: on`): it re-applies files that drifted and
+boot (`autonomy.converge: on`), under the one lock every mutating verb
+holds (a tick beside a restore is skipped, #39), and it leaves paused
+services alone (`laib pause`): it re-applies files that drifted and
 restarts units that are not active, toward the state repo and never from
 the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per
@@ -155,15 +157,43 @@ itself:
 
 | Class | Example | Default | "auto" means |
 |---|---|---|---|
-| values | a newer image tag, a changed port | proposal | laib merges, applies, and reverts the merge when verify is red |
-| template-update | the registry shipped a new version | proposal | the weekly sync proposes and laib applies, rollback on red |
+| values | a newer image tag, a changed port | auto (`laib init`) | laib merges, applies, and reverts the merge when verify is red |
+| template-update | the registry shipped a new version | auto | the weekly sync proposes and laib applies, rollback on red |
 | new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
-| patch | anything else an agent can express as a diff | proposal | same |
+| patch | anything else an agent can express as a diff | auto | same |
+| human | what the content review marks (below) | — | never auto, whatever the dial says |
 | remove | delete a service | never auto | a human, always (ADR 0006) |
 
-A warning (a second service for one purpose) always goes to a human, dial
-or not. Every auto decision is journaled as `laib approve` with the
-proposing hand named, so "who changed this?" has an answer.
+**The content decides, not the shape (#34).** Before the dial is asked,
+`internal/review` reads the change against main — files, contracts, the
+rendered units — and names, in plain German, what only a human may allow:
+a script that runs on the box (post-deploy, a host unit, an `Exec*` line in
+a container unit), `policy.yml`, `secrets.age`, `ignore.yml`, `box.yml`
+roles and friends, a public route or a weaker login, a path without login,
+hand-written Caddy, a token (`mint`) or an external secret, another
+service's secret, a host folder as a volume, a port opened to the LAN or
+to other machines, `Network=host`, podman arguments and other privileges,
+a program from a different image repository, a restriction taken away,
+data taken out of the backup, a removed service, a file Laib does not know,
+a symlink, a state that does not load. Such a proposal is class `human`:
+the inbox and `laib inbox` show the reasons, and an agent's `approve` is
+refused with them. A warning (a second service for one purpose) goes to a
+human too. A non-human hand may not add a token for a hand above its own
+ceiling at all: the proposal is refused, nothing is kept. Every auto
+decision is journaled as `laib approve` with the proposing hand named, so
+"who changed this?" has an answer.
+
+**The envelope fails closed (#35).** Every class-2 action (`write`, `exec`,
+`restart`) runs inside it: the budget (eight per service per hour) is read
+from the journal, and a journal that cannot be read refuses the action;
+the first action of an hour takes a restic snapshot of the service's
+backed-up data paths (`backup: false` paths are not snapshotted; pre-repair
+snapshots are kept seven days), and a missing backup target or a failed
+snapshot refuses the action — `policy.yml envelope.snapshot: optional` is
+the only way around it. `write` and `read` go through an `os.Root` opened
+on the service's data path, so no symlink and no `..` leaves it; `exec`
+runs only in the service's own containers; `look` runs a read-only command
+there without budget or snapshot, because looking is unbounded.
 
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
 on Solaris's own cadence; red lines also reach it through the webhook. Its

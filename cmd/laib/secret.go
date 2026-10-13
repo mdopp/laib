@@ -41,7 +41,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			return emit(env, names)
 		}
 		for _, n := range names {
-			fmt.Println(n)
+			fmt.Fprintln(env.w(), n)
 		}
 		return exitOK
 	case "set":
@@ -65,7 +65,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			return fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "secret", Result: "info", Detail: "set " + args[1]})
-		fmt.Println("gesetzt:", args[1])
+		fmt.Fprintln(env.w(), "gesetzt:", args[1])
 		return exitOK
 	case "rotate":
 		// #17: a new value, applied to every service that references it, so
@@ -116,7 +116,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 				touched = append(touched, svcName)
 			}
 		}
-		fmt.Printf("rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
+		fmt.Fprintf(env.w(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
 		code := exitOK
 		for _, svcName := range st.Order(touched) {
 			if c := runApply(ctx, env, st, svcName, "secret rotate "+name); c != exitOK {

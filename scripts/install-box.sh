@@ -5,13 +5,14 @@
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
 #       [--version vX.Y.Z] [--token <github token, only for a private fork or mirror>]
+#       [--dns-provider desec|cloudflare|…  (token: LAIB_DNS_TOKEN)] [--tls internal]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
-# While mdopp/laib is private, release assets need a GitHub token (fine-grained,
-# Contents: read on this repo): pass --token or export LAIB_GH_TOKEN. A public
-# repo needs none.
+# mdopp/laib, its releases and its images are public: no token. A private fork
+# or mirror passes --token (or LAIB_GH_TOKEN): Contents: read, Packages: read.
 set -euo pipefail
 VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
+DNS_PROVIDER=""; DNS_TOKEN="${LAIB_DNS_TOKEN:-}"; TLS=""   # certificates (#45): DNS-01 via the provider's API, or Caddy's own CA
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="$2"; shift 2;;
@@ -22,6 +23,8 @@ while [ $# -gt 0 ]; do
     --model-lease) MODEL_LEASE="$2"; shift 2;;
     --gpu) GPU="--gpu"; shift;;
     --token) TOKEN="$2"; shift 2;;
+    --dns-provider) DNS_PROVIDER="$2"; shift 2;;
+    --tls) TLS="$2"; shift 2;;
     *) echo "unknown flag $1" >&2; exit 1;;
   esac
 done
@@ -39,21 +42,38 @@ if [ -n "$SOURCE" ]; then
   get=(-H "Accept: application/octet-stream")   # the GitHub token never goes to a build server
   asset_url() { printf '%s/%s' "$SOURCE" "$1"; }
 else
-  if [ "$VERSION" = "latest" ]; then REL="$API/releases/latest"; else REL="$API/releases/tags/$VERSION"; fi
-  RELEASE_JSON="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  api() { curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "$API/$1"; }
   # No python3 on Fedora CoreOS: pick the fields out of the JSON with sed. An
   # asset object starts with its API "url" and carries "name" before any nested
   # object, so url..name within one object is a match without a brace in between.
-  FLAT="$(printf '%s' "$RELEASE_JSON" | tr -d '\n')"
-  TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
-  [ -n "$TAG" ] || { echo "release JSON without tag_name" >&2; exit 1; }
-  get=("${auth[@]}" -H "Accept: application/octet-stream")
+  use_release() {
+    FLAT="$(printf '%s' "$1" | tr -d '\n')"
+    TAG="$(printf '%s' "$FLAT" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+    [ -n "$TAG" ]   # empty: the API call failed, or the JSON has no tag_name
+  }
   asset_url() {
     local u
     u="$(printf '%s' "$FLAT" | grep -o '"url": *"[^"]*/releases/assets/[0-9]*"[^{}]*"name": *"'"$1"'"' | head -1 | sed -n 's/^"url": *"\([^"]*\)".*/\1/p')"
     [ -n "$u" ] || { echo "release $TAG has no asset $1" >&2; return 1; }
     printf '%s' "$u"
   }
+  if [ "$VERSION" = "latest" ]; then REL="releases/latest"; else REL="releases/tags/$VERSION"; fi
+  use_release "$(api "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  # A release is published before its binaries: they are built once vm-install
+  # is green on it (#47), a VM run later. Until then "latest" means the newest
+  # release that has them (#99).
+  if [ "$VERSION" = "latest" ] && ! asset_url laib-linux-amd64 >/dev/null 2>&1; then
+    skipped="$TAG"
+    for t in $(api "releases?per_page=20" | tr -d '\n' | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/'); do
+      [ "$t" = "$skipped" ] && continue
+      use_release "$(api "releases/tags/$t")" || continue
+      printf '%s' "$FLAT" | grep -q '"draft": *false.*"prerelease": *false' || continue
+      asset_url laib-linux-amd64 >/dev/null 2>&1 && break
+    done
+    asset_url laib-linux-amd64 >/dev/null 2>&1 || { echo "no release has its binaries yet (newest: $skipped)" >&2; exit 1; }
+    echo "$skipped has no binaries yet (they follow its VM test); installing $TAG, the newest release that has them"
+  fi
+  get=("${auth[@]}" -H "Accept: application/octet-stream")
 fi
 
 # Fedora CoreOS ships without git, restic and diff; laib shells out to all
@@ -84,9 +104,8 @@ fi
 mkdir -p ~/.config/containers/systemd ~/.config/systemd/user 2>/dev/null || true
 [ "$(stat -c %U ~/.config)" = core ] || sudo chown -R core:core ~/.config
 
-# Laib's own images (ghcr.io/mdopp/laib-caddy, -frage, -werkstatt) are private
-# while the repo is: log podman in with the token so Quadlet and auto-update can
-# pull. Needs a token with packages:read; otherwise make the packages public.
+# Laib's own images (ghcr.io/mdopp/laib-*) are public. A private fork's images
+# are not: with a token, podman logs in so Quadlet and auto-update can pull.
 # Without --authfile rootless podman writes ${XDG_RUNTIME_DIR}/containers/auth.json —
 # a tmpfs, gone at the first reboot, and with it every pull of a private image (#37).
 AUTHFILE="$HOME/.config/containers/auth.json"
@@ -142,7 +161,12 @@ systemctl --user daemon-reload
 loginctl enable-linger core >/dev/null 2>&1 || sudo loginctl enable-linger core
 
 if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
-  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} $GPU
+  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} ${DNS_PROVIDER:+--dns-provider "$DNS_PROVIDER"} ${TLS:+--tls "$TLS"} $GPU
+  if [ -n "$DNS_PROVIDER" ]; then
+    [ -n "$DNS_TOKEN" ] || { echo "--dns-provider $DNS_PROVIDER without a token: export LAIB_DNS_TOKEN" >&2; exit 1; }
+    printf '%s' "$DNS_TOKEN" | LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib secret set DNS_API_TOKEN >/dev/null
+    echo "DNS_API_TOKEN set for $DNS_PROVIDER (DNS-01 from the first laib add caddy)"
+  fi
 fi
 systemctl --user enable --now laib.service
 # enable --now does not restart a running service: an update would keep the old

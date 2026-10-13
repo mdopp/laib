@@ -7,7 +7,7 @@ state differ in.
 ```
 curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
   | bash -s -- --domain <domain> --lan-ip <ip> \
-       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:8787/api/model-lease
+       --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease
 ```
 
 Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
@@ -17,9 +17,11 @@ private fork or mirror).
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points
-`--model-url` at a peer's llama proxy or at a cloud API (`https://…`,
-then `laib secret set MODEL_API_KEY` before the first apply). Operator,
-Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and `${MODEL_LEASE}`.
+`--model-url` at a peer's llama proxy or at a cloud API, then
+`laib secret set MODEL_API_KEY` before the first apply: the cloud API's
+key, or the peer box's own `MODEL_API_KEY` (its lease API refuses without
+it, #42). Operator, Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and
+`${MODEL_LEASE}`.
 
 What it does, in order:
 
@@ -51,7 +53,7 @@ Then Caddy beside NPM (step 2). Nothing before that changes a service.
 
 ## Updating
 
-Re-run the install script with `--version vX.Y.Z` or without for latest.
+Re-run the install script with `--version vX.Y.Z` or without for latest. "Latest" is the newest release that has its binaries: they are built after the release's VM test, so for about an hour a fresh release is skipped, and the script says so.
 The running services are restarted (`try-restart` of laib, operator, lease) and the installer checks that `/ready` reports the new version; the previous binaries stay as `*.prev` for `laib self rollback`. State and journal are untouched. `SHA256SUMS` is required: an unverified build is refused.
 
 
@@ -71,7 +73,7 @@ SSH Public Key (Datei) [~/.ssh/id_ed25519.pub]:
 Konsolen-Passwort für core setzen? [j/N]: j
 Hat die Box eine GPU? [j/N]:
 URL eines entfernten Modells: http://192.168.178.100:11435/v1
-Lease-URL der entfernten llama: http://192.168.178.100:8787/api/model-lease
+Lease-URL der entfernten llama: http://192.168.178.100:11435/api/model-lease
 
 Lade Fedora CoreOS (stable) …  100%  (sha256 geprüft)
 ISO fertig: laib-nuc.iso — Ignition eingebettet
@@ -116,16 +118,23 @@ What makes or breaks the first boot is settled before the stick is built:
 - **A LAN address**: reserve one in the Fritz!Box for the NUC's MAC (or take
   DHCP and look it up afterwards). It goes into `laib-stick` as the LAN
   address and into AdGuard's `*.<domain>` rewrite.
-- **The domain**: `dopp.cloud` is at Strato, which has no DNS API, and the
-  house's port 80 reaches the Kraftwerk, not the NUC. So the trial runs with
-  `tls: internal` (Caddy signs; trust its root on the laptop and the phones)
-  and the NUC's AdGuard as the laptop's DNS for the trial, or `/etc/hosts`
-  lines for `laib`, `auth`, `whoami` under the trial domain. (Later, for real
-  certificates without port 80: Strato can delegate a sub-zone by NS record
-  to deSEC or Cloudflare, both free; then `dns.provider` + `DNS_API_TOKEN`.)
+- **The domain and its certificates** (ADR 0007 amendments, #45):
+  `dopp.cloud` is at Strato (no DNS API, no wildcards) and the house's port
+  80 reaches the Kraftwerk. So the NUC uses HTTP-01 through the Kraftwerk:
+  at Strato, one subdomain per NUC host as a CNAME to `dopp.cloud`
+  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `haus.nuc`, `dns.nuc`, `whoami.nuc`);
+  on the Kraftwerk's NPM, one proxy host per name, **HTTP only, no SSL**,
+  forwarding to the NUC's LAN address on port 80. `laib-stick --domain
+  nuc.dopp.cloud` without `--dns-provider` and without `--tls internal`;
+  Caddy then gets Let's Encrypt certificates and the phones trust them.
+  The NUC's AdGuard (or `/etc/hosts` lines) answers `*.nuc.dopp.cloud` with
+  the NUC's LAN address. A DNS provider with an API (`--dns-provider desec`
+  and the deSEC delegation, or INWX) remains the fallback. `--tls internal`
+  (Caddy's own CA) exists for a laptop-only trial: Android apps and their
+  widgets do not trust it.
 - **The model**: the Kraftwerk's model proxy answers on
   `http://192.168.178.100:11435/v1` and the lease on
-  `http://192.168.178.100:8787/api/model-lease`; `laib-stick` probes both
+  `http://192.168.178.100:11435/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
 - **No GitHub token**: the repo, its releases and the images
   (`ghcr.io/mdopp/laib-*`, `ghcr.io/mdopp/haus`) are public since
@@ -159,16 +168,18 @@ LAN.
 ```
 # 1. the binaries, the unit, the state repo
 curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box.sh \
-  | bash -s -- --domain trial.example --lan-ip 192.168.178.30 \
-       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:8787/api/model-lease
+  | bash -s -- --domain nuc.dopp.cloud --lan-ip 192.168.178.30 \
+       --model-url http://192.168.178.100:11435/v1 --model-lease http://192.168.178.100:11435/api/model-lease
+#    (the stick does all of this on first boot)
 laib=/var/opt/laib/laib
 
-# 2. certificates. dopp.cloud is at Strato (no DNS API) and the house's port 80
-#    goes to the Kraftwerk, so the NUC cannot pass HTTP-01 or DNS-01: let Caddy
-#    sign itself for the trial and trust its root on the laptop and the phones.
-echo 'tls: internal' >> /mnt/data/laib/state/box.yml
-#    (later, on the Kraftwerk: leave tls empty → HTTP-01 over port 80 like today;
-#     or delegate a sub-zone to a provider with an API and set dns.provider + DNS_API_TOKEN)
+# 2. certificates (ADR 0007 amendment 2026-10-13, #45): HTTP-01 through the
+#    Kraftwerk. Before `laib add caddy`: each NUC host is a Strato CNAME to
+#    dopp.cloud, and the Kraftwerk's NPM has an HTTP-only proxy host (no SSL)
+#    per name forwarding to 192.168.178.30:80. Caddy then gets its certificates
+#    on the first `laib add caddy`. With a DNS provider instead:
+#    `--dns-provider desec` (+ LAIB_DNS_TOKEN); a laptop-only trial:
+#    `laib init --tls internal`.
 
 # 3. the roles: proxy, sso + identity, dns, then a first app. `laib add` is
 #    propose + approve + apply as the human; a template that provides a
@@ -185,7 +196,11 @@ $laib status; $laib diag; $laib plan
 # https://laib.trial.example — the box page behind Authelia, login with your LLDAP account
 # https://whoami.trial.example — the first service
 
-# 5. the operator
+# 5. the operator: on the trial it diagnoses and proposes, it does not repair
+#    (owner decision 2026-10-13, ADR 0019): every restart or change waits for a
+#    tap in the inbox. Raised to apply per action type once the evals (#82) are clean.
+sed -i -E 's/^( *ops: *\{ *ceiling: *)apply/\1propose/' /mnt/data/laib/state/policy.yml
+grep -n "ops:" /mnt/data/laib/state/policy.yml   # ops: { ceiling: propose }
 $laib operator enable                        # mints the ops token, renders and starts laib-operator
 $laib journal --since 1h
 ```

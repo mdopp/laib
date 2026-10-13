@@ -194,3 +194,86 @@ func TestDataDiskUnitWaitsForItsOwnScriptNotForLocalFs(t *testing.T) {
 		t.Fatal("the mount unit the script writes orders itself after local-fs.target, which it is part of")
 	}
 }
+
+// #107: after a cut early in a reinstall's first boot laib-data-disk failed,
+// and laib-firstboot — which only wanted it — initialised the state repo in
+// /mnt/data on the OS disk and reported bereit (run 38355641379). The house's
+// data would have landed on the disk the next reinstall wipes. First boot
+// requires its data disk; the box without one exits 0 there (DEVICE=none).
+func TestFirstBootNeverRunsWithoutItsDataDisk(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := unitFromIgnition(t, ign, "laib-firstboot.service")
+	var requires bool
+	for _, line := range strings.Split(unit, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Requires=") && strings.Contains(line, "laib-data-disk.service") {
+			requires = true
+		}
+	}
+	if !requires {
+		t.Fatalf("laib-firstboot runs when the data disk failed (Wants=, not Requires=):\n%s", unit)
+	}
+}
+
+// #107: a cut seconds after the first boot adopted the array left
+// /etc/laib/data-disk and /etc/mdadm.conf at 0 bytes (xfs: the files were
+// created, their data never written). The next boot took the empty record
+// for a pre-#32 one, `uuid=$(mdadm --detail --export "")` failed under
+// set -e and the script died without a word (run 38361772867). An empty
+// record is no record: adopt Laib's array again, and write the record so
+// it survives a cut (fsync before it counts).
+func TestAnEmptyRecordAfterACutAdoptsTheArrayAgain(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
+	root := t.TempDir()
+	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
+	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
+		os.MkdirAll(d, 0o755)
+	}
+	rec := filepath.Join(etc, "laib/data-disk")
+	os.WriteFile(rec, nil, 0o644)
+	os.WriteFile(filepath.Join(etc, "mdadm.conf"), nil, 0o644)
+	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("clean\n"), 0o644)
+	log := filepath.Join(root, "shim.log")
+	shim(t, bin, "mdadm", `case "$*" in
+  "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
+  "--examine --export /dev/vdb1") printf 'MD_LEVEL=raid1\nMD_NAME=vm:data\nMD_UUID=aaaa:bbbb\n';;
+  "--detail /dev/md127") echo "     Active Devices : 2";;
+  *) exit 1;;
+esac`)
+	shim(t, bin, "lsblk", `case "$*" in
+  "/dev/vda4") exit 0;;
+  "-ndo PKNAME /dev/vda4") echo vda;;
+  "-nrpo NAME,TYPE") printf '/dev/vda disk\n/dev/vda4 part\n/dev/vdb disk\n/dev/vdb1 part\n/dev/md127 raid1\n';;
+esac`)
+	shim(t, bin, "findmnt", `case "$*" in "-n -o SOURCE /") echo /dev/vda4;; *) test -f "$LAIB_MP/.mounted";; esac`)
+	shim(t, bin, "blkid", `case "$*" in *LABEL*) echo data;; *) echo 1234-fs-uuid;; esac`)
+	shim(t, bin, "mount", `echo mounted > "$LAIB_MP/.mounted"`)
+	shim(t, bin, "readlink", `echo "${@: -1}"`)
+	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
+		shim(t, bin, n, "exit 0")
+	}
+	sh := filepath.Join(root, "laib-data-disk.sh")
+	os.WriteFile(sh, []byte(script), 0o755)
+	cmd := exec.Command("bash", sh)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
+	out, err := cmd.CombinedOutput()
+	logged, _ := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("the empty record killed the script: %v\n%s\nshims:\n%s", err, out, logged)
+	}
+	if _, err := os.Stat(filepath.Join(mp, ".mounted")); err != nil {
+		t.Fatalf("the array was not mounted:\n%s\n%s", out, logged)
+	}
+	if b, _ := os.ReadFile(rec); !strings.Contains(string(b), "UUID=aaaa:bbbb") {
+		t.Fatalf("the record was not written again: %q\n%s", b, out)
+	}
+	if !strings.Contains(string(logged), "sync "+rec) {
+		t.Fatalf("the record is not synced before it counts:\n%s", logged)
+	}
+}

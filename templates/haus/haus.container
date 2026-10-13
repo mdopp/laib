@@ -7,9 +7,9 @@ PublishPort=127.0.0.1:8650:8650
 Environment=HAUS_LISTEN=0.0.0.0:8650
 Environment=LAIB_URL=http://host.containers.internal:5900
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
-Environment=LAIB_HUMAN_TOKEN=${HUMAN_TOKEN}
+Environment=HAUS_PROXY_SECRET=${PROXY_SECRET}
+Environment=LAIB_PUBLIC_URL=https://laib.${DOMAIN}
 Environment=SOLARIS_URL=${SOLARIS_URL}
-Environment=HAUS_DEVICE_TOKENS=${DEVICE_TOKENS}
 Environment=HAUS_DATA=/data
 Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
 Volume=${DATA_DIR}/haus:/data:Z

@@ -7,6 +7,8 @@ Pod=bote.pod
 Environment=HA_URL=${HA_URL}
 Environment=HA_TOKEN=${HA_TOKEN}
 Environment=AUTOMAT_LISTEN=127.0.0.1:8643
+Environment=AUTOMAT_DATA=/data
+Volume=${DATA_DIR}/bote/automat:/data:Z
 AutoUpdate=registry
 
 [Service]

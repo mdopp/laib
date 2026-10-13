@@ -3,16 +3,13 @@
 package apply
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
@@ -39,58 +36,6 @@ type Result struct {
 	NewSecrets map[string]string `json:"-"` // emitted by post-deploy hooks; the caller stores them
 }
 
-// ErrLocked means another apply holds the lock (state `eingeschränkt`).
-var ErrLocked = errors.New("apply is locked")
-
-// Lock takes the apply lock; the content names the holder and its pid for
-// /ready. A lock whose process is gone (a kill mid-apply, a power cut
-// during the first boot, #37) is stale and taken over, not honoured for
-// ever.
-func Lock(paths boxfs.Paths, holder string) (func(), error) {
-	if err := os.MkdirAll(filepath.Dir(paths.Lock), 0o755); err != nil {
-		return nil, err
-	}
-	if LockHolder(paths) == "" {
-		os.Remove(paths.Lock) // absent or stale
-	}
-	f, err := os.OpenFile(paths.Lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil, ErrLocked
-		}
-		return nil, err
-	}
-	fmt.Fprintf(f, "%s pid %d", holder, os.Getpid())
-	f.Close()
-	return func() { os.Remove(paths.Lock) }, nil
-}
-
-// LockHolder returns who holds the lock, or "" when there is none or the
-// holder's process is gone.
-func LockHolder(paths boxfs.Paths) string {
-	b, err := os.ReadFile(paths.Lock)
-	if err != nil {
-		return ""
-	}
-	h := strings.TrimSpace(string(b))
-	if _, after, ok := strings.Cut(h, " pid "); ok {
-		var pid int
-		if _, err := fmt.Sscan(after, &pid); err == nil && pid > 0 && !processAlive(pid) {
-			return ""
-		}
-	}
-	return h
-}
-
-func processAlive(pid int) bool {
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = p.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, os.ErrPermission)
-}
-
 // Run applies a computed plan. The snapshot is a Git commit of the state repo
 // (the data-volume snapshot comes with backup, later); every written file is
 // written atomically.
@@ -104,16 +49,46 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		return res, fmt.Errorf("snapshot: %w", err)
 	}
 	res.Commit = commit
+	// activation owed from here until verify ran (#39): an apply killed in
+	// between is finished by the next apply or converge
+	if err := WritePending(paths, p.Services, reason); err != nil {
+		return res, fmt.Errorf("pending marker: %w", err)
+	}
 
+	// role outputs are validated before anything is written (#50): a
+	// Caddyfile a snippet broke never reaches the box
+	for _, c := range p.Changes {
+		if c.Kind == "delete" {
+			continue
+		}
+		if err := ValidateOutput(ctx, st, c.Path, p.Output[c.Path]); err != nil {
+			return res, err
+		}
+	}
+	previousImages := map[string]string{} // change path → Image= on the box before this apply
+	for _, c := range p.Changes {
+		if strings.HasSuffix(c.Path, ".container") {
+			if b, err := os.ReadFile(c.Target); err == nil {
+				previousImages[c.Path] = imageOf(string(b))
+			}
+		}
+	}
 	for _, c := range p.Changes {
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
-			// forgets it, and a running container would keep running unmanaged
+			// forgets it, and a running container would keep running unmanaged;
+			// a host unit is disabled too, or it is back on the next boot (#41)
 			if unit := unitOfFile(c.Path); unit != "" {
 				sysd.Stop(ctx, unit)
+				if strings.HasPrefix(c.Path, "systemd/") {
+					sysd.Run(ctx, "systemctl", "--user", "disable", unit)
+				}
 			}
 			if err := os.Remove(c.Target); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return res, err
+			}
+			if strings.HasPrefix(c.Path, "quadlet/") {
+				os.Remove(filepath.Dir(c.Target)) // the folder, once empty
 			}
 			res.Written = append(res.Written, c.Target+" (removed)")
 			continue
@@ -122,6 +97,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			return res, err
 		}
 		res.Written = append(res.Written, c.Target)
+	}
+
+	// the manifest: what laib put on the box this time (#41)
+	var managed []string
+	for k := range p.Output {
+		managed = append(managed, plan.Target(paths, k))
+	}
+	if err := plan.WriteManifest(paths, managed); err != nil {
+		return res, fmt.Errorf("manifest: %w", err)
 	}
 
 	// The declared data paths exist before any unit starts: podman refuses a
@@ -136,6 +120,21 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 
+	// pre-start hooks: config files and folders the units need, before anything starts
+	for _, name := range hookTargets(st, p) {
+		if svc, ok := st.Services[name]; ok {
+			if c, ok := runHook(ctx, st, svc, paths, "pre-start", secrets, res.NewSecrets); ok {
+				res.Checks = append(res.Checks, c)
+			}
+		}
+	}
+	// a unit's first start has 90 s and must not include the image pull (#46):
+	// the images of new or re-imaged containers are pulled now
+	for _, image := range imagesToPull(p, previousImages) {
+		if out, err := sysd.Run(ctx, "podman", "pull", "-q", image); err != nil {
+			res.Checks = append(res.Checks, Check{Service: "laib", What: "pull " + image, OK: false, Detail: strings.TrimSpace(out)})
+		}
+	}
 	if err := sysd.DaemonReload(ctx); err != nil {
 		return res, fmt.Errorf("daemon-reload: %w", err)
 	}
@@ -156,6 +155,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	for _, c := range p.Changes {
+		if c.Path == "nftables/laib.nft" && c.Kind == "delete" {
+			// no port is dropped any more: the table goes too, or it keeps
+			// dropping until the next reboot (#102). Already gone is fine.
+			if out, err := sysd.Run(ctx, "sudo", "nft", "delete", "table", "inet", "laib"); err != nil && !strings.Contains(out, "No such file or directory") {
+				res.Checks = append(res.Checks, Check{Service: "laib", What: "nft delete table", OK: false, Detail: out})
+			} else {
+				res.Restarted = append(res.Restarted, "nftables")
+			}
+		}
 		if c.Path == "nftables/laib.nft" && c.Kind != "delete" {
 			// core has passwordless sudo on CoreOS; the ruleset is idempotent
 			// (its own table), so loading it twice is harmless.
@@ -191,7 +199,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	}
 	restartOrder = st.Order(restartOrder)
 	for _, name := range restartOrder {
-		for _, unit := range st.Services[name].UnitNames() {
+		for _, unit := range PodRestartSet(st.Services[name].UnitNames()) {
 			if err := sysd.Restart(ctx, unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: name, What: "restart " + unit, OK: false, Detail: err.Error()})
 				continue
@@ -199,8 +207,25 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Restarted = append(res.Restarted, unit)
 		}
 	}
-	// Verify what changed; with no change, the scoped service or everything.
-	targets := p.Services
+	// Verify what changed — and every role restarted for a changed output
+	// (#50: a Caddy restarted into a bad config was never looked at); with
+	// no change, the scoped service or everything. A service the plan only
+	// deleted (a rollback, a remove) is gone from the state: nothing to
+	// verify, no hook to run (#41).
+	var targets []string
+	seenTarget := map[string]bool{}
+	for _, name := range p.Services {
+		if _, ok := st.Services[name]; ok && !seenTarget[name] {
+			seenTarget[name] = true
+			targets = append(targets, name)
+		}
+	}
+	for _, name := range restartOrder {
+		if _, ok := st.Services[name]; ok && !seenTarget[name] {
+			seenTarget[name] = true
+			targets = append(targets, name)
+		}
+	}
 	if len(targets) == 0 {
 		if p.Only != "" {
 			targets = []string{p.Only}
@@ -216,11 +241,11 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			redByService[c.Service] = true
 		}
 	}
-	for _, name := range p.Services {
+	for _, name := range targets {
 		if redByService[name] {
 			continue
 		}
-		if c, ok := postDeploy(ctx, st, st.Services[name], secrets, res.NewSecrets); ok {
+		if c, ok := runHook(ctx, st, st.Services[name], paths, "post-deploy", secrets, res.NewSecrets); ok {
 			res.Checks = append(res.Checks, c)
 		}
 	}
@@ -230,70 +255,8 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Green = false
 		}
 	}
+	ClearPending(paths) // activated and verified
 	return res, nil
-}
-
-// postDeploy runs services/<name>/post-deploy if it exists and is executable
-// (ADR 0004). It gets the builtins, every value and LAIB_SECRET_<NAME> for the
-// service's declared secrets in its environment, runs in the service folder,
-// and may print `laib-secret: NAME=value` lines to hand a credential it
-// created (an API token, say) back into secrets.age. Non-zero exit is red.
-func postDeploy(ctx context.Context, st *state.State, svc *state.Service, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
-	hook := filepath.Join(svc.Dir, "post-deploy")
-	info, err := os.Stat(hook)
-	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
-		return Check{}, false
-	}
-	modelKey := ""
-	if st.Box.Model.KeySecret != "" {
-		modelKey = secrets[st.Box.Model.KeySecret]
-	}
-	env := append(os.Environ(),
-		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
-		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP,
-		"MODEL_URL="+st.ModelURL(), "MODEL_LEASE="+st.ModelLease(), "MODEL_KEY="+modelKey,
-		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
-	for k, v := range svc.Values {
-		val := v.Literal
-		if v.Secret != "" {
-			val = secrets[v.Secret]
-		}
-		env = append(env, k+"="+val)
-	}
-	for _, sec := range svc.Contract.Secrets {
-		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
-	}
-	hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(hctx, hook)
-	cmd.Dir = svc.Dir
-	cmd.Env = env
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	err = cmd.Run()
-	var kept []string
-	for _, line := range strings.Split(out.String(), "\n") {
-		if strings.HasPrefix(line, "laib-secret: ") {
-			if k, v, ok := strings.Cut(strings.TrimPrefix(line, "laib-secret: "), "="); ok && k != "" {
-				newSecrets[k] = v
-			}
-			continue
-		}
-		kept = append(kept, line)
-	}
-	tail := strings.TrimSpace(strings.Join(kept, "\n"))
-	if len(tail) > 2000 {
-		tail = "…" + tail[len(tail)-2000:]
-	}
-	for k, v := range secrets {
-		if v != "" {
-			tail = strings.ReplaceAll(tail, v, "${secret:"+k+"}")
-		}
-	}
-	if err != nil {
-		return Check{Service: svc.Name, What: "post-deploy", OK: false, Detail: err.Error() + "\n" + tail}, true
-	}
-	return Check{Service: svc.Name, What: "post-deploy", OK: true, Detail: tail}, true
 }
 
 // Verify checks the named services (all when nil): unit active, health answers.
@@ -409,4 +372,252 @@ func unitOfFile(path string) string {
 		return base
 	}
 	return ""
+}
+
+// ValidateOutput checks a rendered role output before it is written (#50).
+// The Caddyfile runs through `caddy validate` in the proxy's own image —
+// the config it will be fed, with the adapter it will use. Tests swap it.
+var ValidateOutput = func(ctx context.Context, st *state.State, key, content string) error {
+	if key != "caddy/Caddyfile" {
+		return nil
+	}
+	image := "ghcr.io/mdopp/laib-caddy:2"
+	if svc, ok := st.Services[st.Box.Roles.Proxy]; ok {
+		if v, ok := svc.Values["IMAGE"]; ok && v.Literal != "" {
+			image = v.Literal
+		}
+	}
+	tmp, err := os.CreateTemp("", "laib-caddyfile-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	tmp.WriteString(content)
+	tmp.Close()
+	out, err := sysd.Run(ctx, "podman", "run", "--rm", "-v", tmp.Name()+":/tmp/Caddyfile:ro,z", image, "caddy", "validate", "--config", "/tmp/Caddyfile", "--adapter", "caddyfile")
+	if err != nil {
+		return fmt.Errorf("the rendered Caddyfile does not validate (nothing written): %s", strings.TrimSpace(out))
+	}
+	return nil
+}
+
+// imageOf returns the Image= of a container unit.
+func imageOf(unit string) string {
+	for _, line := range strings.Split(unit, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Image=") {
+			return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "Image="))
+		}
+	}
+	return ""
+}
+
+// imagesToPull: the images of added containers and of containers whose
+// Image= changed, each once.
+func imagesToPull(p *plan.Plan, previous map[string]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, c := range p.Changes {
+		if c.Kind == "delete" || !strings.HasSuffix(c.Path, ".container") {
+			continue
+		}
+		img := imageOf(p.Output[c.Path])
+		if img == "" || strings.Contains(img, "${") || seen[img] || (c.Kind == "change" && previous[c.Path] == img) {
+			continue
+		}
+		seen[img] = true
+		out = append(out, img)
+	}
+	return out
+}
+
+// DefaultHooksImage is where hooks run when box.yml names none.
+const DefaultHooksImage = "ghcr.io/mdopp/laib-hooks:latest"
+
+// HookSpec is one hook run: what to mount, the environment file, the command.
+type HookSpec struct {
+	Image   string
+	Mounts  []string // host paths mounted at the same path inside; suffix ":ro" for read-only
+	EnvFile string   // KEY=value lines, mode 0600, removed after the run
+	Dir     string   // working directory (the service folder)
+	Command []string // the hook, by its path inside the container (same as on the host)
+}
+
+// RunHook executes a hook spec and returns its combined output. The default
+// runs it in the hooks image with podman (host network, so the hook reaches
+// the service on 127.0.0.1 and the service's data paths at their host
+// paths). Swapped in tests.
+var RunHook = func(ctx context.Context, h HookSpec) (string, error) {
+	args := []string{"run", "--rm", "--network", "host", "--env-file", h.EnvFile, "-w", h.Dir}
+	for _, m := range h.Mounts {
+		src, opt := m, "z"
+		if strings.HasSuffix(m, ":ro") {
+			src, opt = strings.TrimSuffix(m, ":ro"), "ro,z"
+		}
+		args = append(args, "-v", src+":"+src+":"+opt)
+	}
+	args = append(args, h.Image)
+	args = append(args, h.Command...)
+	return sysd.Run(ctx, "podman", args...)
+}
+
+// hookPhases are the two moments a template may act (ADR 0004 amended, #36):
+// pre-start renders config and folders before the units start and may not
+// assume the service is up; post-deploy talks to the running service.
+var hookPhases = []string{"pre-start", "post-deploy"}
+
+// runHook runs services/<name>/<phase> if it exists and is executable, in
+// the hooks image, never on the host. The hook gets the builtins, every
+// value and LAIB_SECRET_<NAME> for the service's declared secrets in its
+// environment, the service folder read-only, the render folder read-only
+// and the service's data paths read-write at their host paths. It may
+// print `laib-secret: NAME=value` to hand a credential back into
+// secrets.age, and `laib-exec: <container> <cmd…>` to have Laib run a
+// command in one of the service's own containers (the one thing a hook
+// cannot do from inside its image). Non-zero exit is red.
+func runHook(ctx context.Context, st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
+	hook := filepath.Join(svc.Dir, phase)
+	info, err := os.Stat(hook)
+	if err != nil || info.IsDir() {
+		return Check{}, false
+	}
+	if info.Mode()&0o111 == 0 {
+		// present but not executable: a red check, never a silent skip (PR #70's first VM run)
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: "hook is not executable (chmod +x services/" + svc.Name + "/" + phase + ")"}, true
+	}
+	modelKey := ""
+	if st.Box.Model.KeySecret != "" {
+		modelKey = secrets[st.Box.Model.KeySecret]
+	}
+	var env []string
+	env = append(env,
+		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
+		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render,
+		"MODEL_URL="+st.ModelURL(), "MODEL_LEASE="+st.ModelLease(), "MODEL_KEY="+modelKey,
+		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
+	for k, v := range svc.Values {
+		val := v.Literal
+		if v.Secret != "" {
+			val = secrets[v.Secret]
+		}
+		env = append(env, k+"="+val)
+	}
+	for _, sec := range svc.Contract.Secrets {
+		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
+	}
+	envFile, err := os.CreateTemp(paths.Home, ".hook-env-*")
+	if err != nil {
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error()}, true
+	}
+	defer os.Remove(envFile.Name())
+	os.Chmod(envFile.Name(), 0o600)
+	envFile.WriteString(strings.Join(env, "\n") + "\n")
+	envFile.Close()
+	image := st.Box.Laib.HooksImage
+	if image == "" {
+		image = DefaultHooksImage
+	}
+	mounts := []string{svc.Dir + ":ro", paths.Render + ":ro"}
+	for _, d := range svc.Contract.Data {
+		p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+		os.MkdirAll(p, 0o755)
+		mounts = append(mounts, p)
+	}
+	hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	out, err := RunHook(hctx, HookSpec{Image: image, Mounts: mounts, EnvFile: envFile.Name(), Dir: svc.Dir, Command: []string{hook}})
+	var kept []string
+	own := map[string]bool{}
+	for _, u := range svc.UnitNames() {
+		if strings.HasSuffix(u, ".service") && !strings.HasSuffix(u, "-pod.service") {
+			own["systemd-"+strings.TrimSuffix(u, ".service")] = true
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "laib-secret: "):
+			if k, v, ok := strings.Cut(strings.TrimPrefix(line, "laib-secret: "), "="); ok && k != "" {
+				newSecrets[k] = v
+			}
+		case strings.HasPrefix(line, "laib-exec: "):
+			f := strings.Fields(strings.TrimPrefix(line, "laib-exec: "))
+			if len(f) < 2 || !own[f[0]] {
+				kept = append(kept, "laib-exec refused (not one of "+svc.Name+"'s containers): "+line)
+				err = errors.Join(err, fmt.Errorf("laib-exec refused: %s", line))
+				continue
+			}
+			o, e := sysd.Run(hctx, "podman", append([]string{"exec", f[0]}, f[1:]...)...)
+			kept = append(kept, "laib-exec "+f[0]+" "+f[1]+": "+tailOf(o, 200))
+			if e != nil {
+				err = errors.Join(err, fmt.Errorf("laib-exec %s: %w", f[1], e))
+			}
+		default:
+			kept = append(kept, line)
+		}
+	}
+	tail := strings.TrimSpace(strings.Join(kept, "\n"))
+	if len(tail) > 2000 {
+		tail = "…" + tail[len(tail)-2000:]
+	}
+	if err != nil {
+		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error() + "\n" + tail}, true
+	}
+	return Check{Service: svc.Name, What: phase, OK: true, Detail: tail}, true
+}
+
+func tailOf(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > n {
+		return "…" + s[len(s)-n:]
+	}
+	return s
+}
+
+// PodRestartSet: a service with a Quadlet pod restarts the pod unit only.
+// Its containers are BindsTo= the pod and Wants= by it, so they stop and
+// start with it; restarting them one by one on top is not harmless — the
+// pod runs with --exit-policy stop, and a container restart that is the
+// last one running stops the pod under the others (#70's VM runs: lldap's
+// restart stopped the auth pod, Authelia then failed its start limit).
+func PodRestartSet(units []string) []string {
+	var pods, rest []string
+	for _, u := range units {
+		if strings.HasSuffix(u, "-pod.service") {
+			pods = append(pods, u)
+		} else {
+			rest = append(rest, u)
+		}
+	}
+	if len(pods) > 0 {
+		return pods
+	}
+	return rest
+}
+
+// hookTargets: the services whose hooks run for this plan — those with a
+// change of their own, plus the role holders whose rendered files changed
+// (authelia/*.yml → sso, caddy/Caddyfile → proxy, adguard/rewrites.json →
+// dns): their config is written by their hook from those files.
+func hookTargets(st *state.State, p *plan.Plan) []string {
+	out := append([]string{}, p.Services...)
+	seen := map[string]bool{}
+	for _, n := range out {
+		seen[n] = true
+	}
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	for _, c := range p.Changes {
+		switch strings.SplitN(c.Path, "/", 2)[0] {
+		case "authelia":
+			add(st.Box.Roles.SSO)
+		case "caddy":
+			add(st.Box.Roles.Proxy)
+		case "adguard":
+			add(st.Box.Roles.DNS)
+		}
+	}
+	return out
 }

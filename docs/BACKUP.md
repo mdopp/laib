@@ -40,12 +40,36 @@ One tool, one declaration per service, one key.
   `box.yml backup.schedule`; the run is `laib backup`, which journals result,
   size and duration. A failed or partial run is a red journal line and a red
   line in `laib status`, not an email.
-- **Restore is two verbs.** `laib restore <when> [service]` restores the
-  declared paths of one service (after a snapshot of what is there), then
-  runs apply for it. `laib restore --box <when>` on a fresh box restores the
-  state repo first, then every service, in dependency order (roles first).
-- **Reinstall is the ordinary path.** Install Laib, put the `age` key and the
-  restic password in place, `laib restore --box latest`, `laib apply`. There
+- **Restore is two verbs.** `laib restore <when> <service>` replaces the
+  declared paths of one service (`--delete`: what the snapshot does not have
+  goes; a snapshot of what is there is taken first), then applies it.
+  `laib restore --box <when>` on a fresh box (#40) restores the state repo
+  and the journal first, then every service in dependency order with its
+  units stopped and its paths replaced, then one apply — all under the one
+  lock, each service paused for converge meanwhile.
+- **The recovery sheet.** `laib recovery-sheet` prints one page: the age
+  key, the restic repo, the restic password and the four steps. The key and
+  the password both live on the data disk and inside the encrypted repo, so
+  without that page an off-box repo is useless. `laib init` and the stick
+  say so; `laib diag` stays yellow until `laib recovery-sheet --confirm`.
+  Humans at the console only, never over MCP.
+- **The password is never invented twice.** `backupPrep` generates
+  `RESTIC_PASSWORD` only when the repo does not exist yet; an existing repo
+  without the password in `secrets.age` asks for the sheet's
+  (`RESTIC_PASSWORD=… laib restore --box latest`), which then lands in
+  `secrets.age`.
+- **Databases are not copied live.** A declared path with `quiesce: true`
+  (immich and paperless `pgdata`, vaultwarden `data`, Home Assistant's
+  config) has its service stopped for the snapshot: stop, snapshot, start,
+  under the lock and paused for converge. A nightly minute of downtime is
+  the price of a database that opens after a restore.
+- **The restore test.** `laib backup check` runs monthly from a timer:
+  `restic check --read-data-subset=5%`, then one service's path restored
+  into a scratch dir and compared. A green journal line is the proof; diag
+  is yellow after 35 days without one, and red a week after install while
+  the only repo sits on the data disk.
+- **Reinstall is the ordinary path.** Install Laib from the stick, put the
+  `age` key in place, `RESTIC_PASSWORD=… laib restore --box latest`. There
   is no special auto-restore code path; apply reads the restored state like
   any other.
 - **Bulk media** (ServiceBay ADR 0002's "large drive") is not a kernel
@@ -64,3 +88,14 @@ One tool, one declaration per service, one key.
 | SMB credentials in config.json | restic repo URL in `box.yml`, password in `secrets.age` |
 
 Issue #4 implements this.
+
+## Restic runs in podman's user namespace
+
+The services' files belong to the containers' users, which rootless podman
+maps onto subuids of `core` — a database's data directory (mode 0700) is
+not readable by `core` itself. `laib backup`, `restore` and `backup check`
+therefore run restic as `podman unshare restic …`: inside the namespace the
+files are readable, and a restore gives them their owners back. On a laptop
+without podman restic runs as is. (Found by vm-install's disaster-recovery
+scenario: without it the database was silently missing from every backup.)
+

@@ -2,6 +2,7 @@ name: beets
 template: {registry: builtin, name: beets, version: 1}
 provides: [music-tagging]
 # beets tags and sorts the music folder the file share holds. Admin tool.
+after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: beets
     port: 8337

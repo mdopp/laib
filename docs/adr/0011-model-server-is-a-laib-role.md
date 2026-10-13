@@ -41,3 +41,11 @@ platform.
 - The move is independent of the Solaris migration step and happens right
   after the auth and dns roles, because Werkstatt and Solaris both wait for it.
 - solarisbay shrinks by the template, the lease script and the proxy service.
+
+## Amendment 2026-10-11 (#42)
+
+The lease serves on the proxy's port (11435), not a port of its own; its
+`POST`/`DELETE` take the model key as bearer; modes in `presets.json` name
+`role/container` refs the sidecar resolves through laib's state; a holder
+renews every `renew_s` or loses the card; the pause marker covers every
+service whose units the lease stopped. See `templates/llama/README.md`.

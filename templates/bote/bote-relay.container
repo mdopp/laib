@@ -1,0 +1,19 @@
+[Unit]
+Description=Bote: approval relay — the admin's number decides, through Laib's approver token (#48)
+After=bote-signal.service
+
+[Container]
+Image=${RELAY_IMAGE}
+Pod=bote.pod
+Environment=SIGNAL_HTTP_URL=http://127.0.0.1:8080
+Environment=SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT}
+Environment=ADMIN_NUMBER=${ADMIN_NUMBER}
+Environment=LAIB_MCP_URL=${LAIB_MCP_URL}
+Environment=LAIB_TOKEN=${APPROVER_TOKEN}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,19 +43,40 @@ func loadState(env *cliEnv) (*state.State, error) {
 	return st, nil
 }
 
+// LastBackup: the last successful backup and how many places hold it.
+type LastBackup struct {
+	At    string `json:"at,omitempty"` // RFC3339
+	Repos int    `json:"repos"`        // places: the configured repo counts one; off-box is the owner's second repo
+	OK    bool   `json:"ok"`
+}
+
+// LastChange: the last applied proposal in plain words (the card's summary).
+type LastChange struct {
+	Proposal   int    `json:"proposal,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	At         string `json:"at,omitempty"`
+	Reversible bool   `json:"reversible"`
+}
+
 // readiness is the one state with three values (docs/DESIGN.md).
 type readiness struct {
-	State     string `json:"state"`
-	Services  int    `json:"services"`
-	Green     int    `json:"green"`
-	Yellow    int    `json:"yellow"`
-	Red       int    `json:"red"`
-	LastHeard string `json:"lastHeard"`
-	Lock      string `json:"lock,omitempty"`
-	Drift     int    `json:"drift"`              // files on the box that differ from the state
-	Operator  string `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
-	Firewall  string `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
-	Version   string `json:"version"`            // of the running laib: the update path checks it (#37)
+	State     string   `json:"state"`
+	Services  int      `json:"services"`
+	Green     int      `json:"green"`
+	Yellow    int      `json:"yellow"`
+	Red       int      `json:"red"`
+	LastHeard string   `json:"lastHeard"`
+	Lock      string   `json:"lock,omitempty"`
+	Drift     int      `json:"drift"`              // files on the box that differ from the state
+	Operator  string   `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	Firewall  string   `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
+	Paused    []string `json:"paused,omitempty"`   // services converge leaves alone: "<svc> von <wer> bis <wann>" (#39)
+	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
+	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
+	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
+	// the three guarantees Haus's start page shows the family (haus#2)
+	LastBackup LastBackup `json:"lastBackup"`
+	LastChange LastChange `json:"lastChange"`
 }
 
 type serviceStatus struct {
@@ -71,10 +94,12 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 	var rows []serviceStatus
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: Version}
 	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
+	r.LastBackup, r.LastChange = guarantees(env, st)
 	if holder := apply.LockHolder(env.paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
 	}
 	r.Firewall = firewallState(ctx, env)
+	r.Watchdog = watchdogState(env, st)
 	if r.Firewall == "fehlt" && r.Lock == "" {
 		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
@@ -83,6 +108,8 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 			r.Drift = len(p.Changes)
 		}
 	}
+	paused := apply.Paused(env.paths)
+	r.Pending = apply.Pending(env.paths)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		row := serviceStatus{Name: name, State: "grün", Units: map[string]string{}}
@@ -99,10 +126,15 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 				row.State = "rot"
 			}
 		}
+		if pz, ok := paused[name]; ok {
+			row.State = "pausiert"
+			row.Detail = fmt.Sprintf("von %s bis %s %s", pz.By, pz.Until.Local().Format("02.01. 15:04"), pz.Reason)
+			r.Paused = append(r.Paused, fmt.Sprintf("%s von %s bis %s", name, pz.By, pz.Until.Local().Format("02.01. 15:04")))
+		}
 		rows = append(rows, row)
 		r.Services++
 		switch row.State {
-		case "grün":
+		case "grün", "pausiert":
 			r.Green++
 		case "gelb":
 			r.Yellow++
@@ -137,21 +169,21 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Printf("Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
+	fmt.Fprintf(env.w(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
-		fmt.Printf("  gesperrt durch: %s\n", r.Lock)
+		fmt.Fprintf(env.w(), "  gesperrt durch: %s\n", r.Lock)
 	}
 	for _, row := range rows {
-		fmt.Printf("  %-5s %-20s", row.State, row.Name)
+		fmt.Fprintf(env.w(), "  %-5s %-20s", row.State, row.Name)
 		for u, a := range row.Units {
 			if a != "active" {
-				fmt.Printf(" %s=%s", u, a)
+				fmt.Fprintf(env.w(), " %s=%s", u, a)
 			}
 		}
-		fmt.Println()
+		fmt.Fprintln(env.w())
 	}
 	if e, ok := journal.Last(env.paths.Journal); ok {
-		fmt.Printf("Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+		fmt.Fprintf(env.w(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 	}
 	return exitOK
 }
@@ -177,22 +209,22 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 		return emit(env, p)
 	}
 	if p.Empty() {
-		fmt.Println("Keine Änderung: die Box entspricht dem State.")
+		fmt.Fprintln(env.w(), "Keine Änderung: die Box entspricht dem State.")
 	}
 	for _, c := range p.Changes {
-		fmt.Printf("%-6s %s\n", c.Kind, c.Target)
+		fmt.Fprintf(env.w(), "%-6s %s\n", c.Kind, c.Target)
 		if c.Diff != "" {
-			fmt.Println(c.Diff)
+			fmt.Fprintln(env.w(), c.Diff)
 		}
 	}
 	for _, u := range p.Unmanaged {
-		fmt.Printf("nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+		fmt.Fprintf(env.w(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
 	}
 	for _, c := range p.Conflicts {
-		fmt.Printf("KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
+		fmt.Fprintf(env.w(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
 	}
 	for _, w := range st.Warnings {
-		fmt.Printf("HINWEIS: %s\n", w)
+		fmt.Fprintf(env.w(), "HINWEIS: %s\n", w)
 	}
 	return exitOK
 }
@@ -240,7 +272,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 		return emit(env, es)
 	}
 	for _, e := range es {
-		fmt.Printf("%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
+		fmt.Fprintf(env.w(), "%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
 	}
 	return exitOK
 }
@@ -255,16 +287,16 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	if env.json {
 		return emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
 	}
-	fmt.Printf("# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
-	fmt.Println("## Services")
+	fmt.Fprintf(env.w(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
+	fmt.Fprintln(env.w(), "## Services")
 	for _, row := range rows {
-		fmt.Printf("- %s: %s\n", row.Name, row.State)
+		fmt.Fprintf(env.w(), "- %s: %s\n", row.Name, row.State)
 	}
-	fmt.Println("\n## Journal, letzte 24h")
+	fmt.Fprintln(env.w(), "\n## Journal, letzte 24h")
 	for _, e := range es {
-		fmt.Printf("- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
+		fmt.Fprintf(env.w(), "- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
 	}
-	fmt.Println("\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
+	fmt.Fprintln(env.w(), "\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
 	return exitOK
 }
 
@@ -287,14 +319,14 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if env.json {
 			return emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
-		fmt.Println("installiert:")
+		fmt.Fprintln(env.w(), "installiert:")
 		for _, name := range st.ServiceNames() {
 			t := st.Services[name].Contract.Template
-			fmt.Printf("  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+			fmt.Fprintf(env.w(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
-		fmt.Println("verfügbar:")
+		fmt.Fprintln(env.w(), "verfügbar:")
 		for _, name := range sortedKeys(avail) {
-			fmt.Printf("  %-20s %s\n", name, strings.Join(avail[name], ", "))
+			fmt.Fprintf(env.w(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return exitOK
 	case "sync":
@@ -304,7 +336,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		lines, err := syncRegistries(ctx, env, st)
 		for _, l := range lines {
-			fmt.Println("registry:", l)
+			fmt.Fprintln(env.w(), "registry:", l)
 		}
 		if err != nil {
 			return fail(err)
@@ -347,7 +379,7 @@ func lintTemplate(dir string) int {
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Base(filepath.Clean(dir))
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /tmp/lint\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\n"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	dst := filepath.Join(tmp, "services", name)
 	os.MkdirAll(dst, 0o755)
@@ -391,8 +423,69 @@ func lintTemplate(dir string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return exitUsage
 	}
-	if _, err := render.Render(st, nil); err != nil {
+	out, err := render.Render(st, nil)
+	if err != nil {
 		return fail(err)
+	}
+	// the after: neighbours' declared data paths (their apply creates them)
+	// may be mounted too: the file share's folders in media, immich, paperless
+	var neighbours []string
+	for dep := range st.Services {
+		if dep == name {
+			continue
+		}
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Clean(dir)), dep, "laib.yml")); err == nil {
+			var c struct {
+				Data []state.DataPath `yaml:"data"`
+			}
+			if yaml.Unmarshal(b, &c) == nil {
+				for _, d := range c.Data {
+					neighbours = append(neighbours, d.Path)
+				}
+			}
+		}
+	}
+	if errs := lintMounts(st, name, out, neighbours); len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e)
+		}
+		return exitUsage
+	}
+	for _, phase := range []string{"pre-start", "post-deploy"} {
+		if b, err := os.ReadFile(filepath.Join(dir, phase)); err == nil {
+			first := strings.SplitN(string(b), "\n", 2)[0]
+			if !hookInterpreters[first] {
+				fmt.Fprintf(os.Stderr, "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
+				return exitUsage
+			}
+		}
+	}
+	// a health declaration (#46): an http probe, or a reason why there is none
+	if h := st.Services[name].Contract.Health; h.HTTP == "" && h.None == "" {
+		fmt.Fprintf(os.Stderr, "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
+		return exitUsage
+	}
+	// a host port another template of the same registry publishes (#46: whoami and bote on 8080)
+	mine := map[string]bool{}
+	for _, content := range st.Services[name].Units {
+		for _, hp := range state.PublishedHostPorts(content) {
+			mine[hp] = true
+		}
+	}
+	siblings, _ := filepath.Glob(filepath.Join(filepath.Dir(filepath.Clean(dir)), "*", "*.container"))
+	pods, _ := filepath.Glob(filepath.Join(filepath.Dir(filepath.Clean(dir)), "*", "*.pod"))
+	for _, f := range append(siblings, pods...) {
+		other := filepath.Base(filepath.Dir(f))
+		if other == name {
+			continue
+		}
+		b, _ := os.ReadFile(f)
+		for _, hp := range state.PublishedHostPorts(string(b)) {
+			if mine[hp] {
+				fmt.Fprintf(os.Stderr, "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
+				return exitUsage
+			}
+		}
 	}
 	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
 	return exitOK
@@ -424,7 +517,7 @@ func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	}
 	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
-	fmt.Printf("adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
+	fmt.Fprintf(env.w(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
 	return exitOK
 }
 
@@ -439,20 +532,21 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 		content = "units:\n"
 	}
 	if strings.Contains(content, "- "+args[0]+"\n") {
-		fmt.Println("already ignored:", args[0])
+		fmt.Fprintln(env.w(), "already ignored:", args[0])
 		return exitOK
 	}
 	content += "  - " + args[0] + "\n"
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		return fail(err)
 	}
-	fmt.Println("ignored:", args[0])
+	fmt.Fprintln(env.w(), "ignored:", args[0])
 	return exitOK
 }
 
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	domain, dataDir, lanIP := "", "/mnt/data/stacks", ""
 	modelURL, modelLease, gpu := "", "", false
+	dnsProvider, tlsMode := "", ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--gpu":
@@ -473,11 +567,18 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 			modelURL = args[i+1]
 		case "--model-lease":
 			modelLease = args[i+1]
+		case "--dns-provider":
+			dnsProvider = args[i+1]
+		case "--tls":
+			tlsMode = args[i+1]
 		}
 		i++
 	}
 	if domain == "" {
-		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+	}
+	if tlsMode != "" && tlsMode != "internal" {
+		return fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
 	}
 	if !gpu && modelURL == "" {
 		fmt.Fprintln(os.Stderr, "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
@@ -501,19 +602,29 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	model := ""
 	if modelURL != "" {
 		model = fmt.Sprintf("model:                    # no GPU here: the LLM is remote (a peer's llama proxy or a cloud API)\n  url: %s\n", modelURL)
-		if strings.HasPrefix(modelURL, "https://") {
-			// A cloud API wants a key; a peer's LAN proxy does not.
-			model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply\n"
-		}
+		// A cloud API wants its key; a peer's proxy wants that box's model key
+		// (the lease API refuses without it, #42): laib secret set MODEL_API_KEY
+		// with the value the GPU box's `laib secret list` names.
+		model += "  keySecret: MODEL_API_KEY  # laib secret set MODEL_API_KEY before the first apply (cloud: the API key; a peer box: its MODEL_API_KEY)\n"
 		if modelLease != "" {
 			model += fmt.Sprintf("  lease: %s\n", modelLease)
 		}
 	}
+	// certificates (ADR 0007, #45): DNS-01 through the provider's API — the
+	// token is a secret (laib secret set DNS_API_TOKEN); tls: internal only
+	// for a trial nobody's phone has to trust
+	certs := ""
+	if dnsProvider != "" {
+		certs += fmt.Sprintf("# certificates: DNS-01 through the provider's API; the token is the secret DNS_API_TOKEN\ndns:\n  provider: %s\n  secretRef: DNS_API_TOKEN\n", dnsProvider)
+	}
+	if tlsMode != "" {
+		certs += fmt.Sprintf("# Caddy's own CA: a laptop-only trial; phones and their widgets need a real certificate (#45)\ntls: %s\n", tlsMode)
+	}
 	backup := fmt.Sprintf("backup:\n  repo: %s          # restic, on the data disk: protects against mistakes and bad updates from day one; a NAS or second repo protects against the disk\n  schedule: \"03:00\"\n", filepath.Join(filepath.Dir(dataDir), "backup", "restic"))
-	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s", domain, dataDir, lanIP, gpu, model)); err != nil {
+	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
 		return fail(err)
 	}
-	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; the admin's own token decides\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: auto\n  patch: auto\n  new-service: proposal   # adds surface: a human decides\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
+	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; never approves\n  approver: {ceiling: apply, human: true, verbs: [approve, reject, inbox, status, note]}   # the Signal relay (#48): acts only on the admin's verified number, can only decide\n  haus: {ceiling: apply, verbs: [status, inbox, journal, restart]}   # the family's pages (haus#1): looks, restarts, decides nothing\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: proposal\n  patch: proposal\n  new-service: proposal   # adds surface: a human decides\n  # whatever the dial says: a change the content review marks (a script on the box, a public route,\n  # policy.yml, a token, a host folder …) waits for a human (#34)\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
 		return fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
@@ -525,6 +636,80 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
 		return fail(err)
 	}
-	fmt.Printf("state repo: %s\nage recipient: %s\nage key: %s  ← print it and keep it outside the box\n", env.paths.State, recipient, env.paths.Key)
+	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK
+}
+
+// guarantees reads the last successful backup from the journal and the
+// last approved proposal from the inbox (haus#2).
+func guarantees(env *cliEnv, st *state.State) (LastBackup, LastChange) {
+	var lb LastBackup
+	if es, err := journal.Read(env.paths.Journal, time.Time{}); err == nil {
+		for _, e := range es {
+			if e.Verb == "backup" && e.Result == "green" && e.Reason == "" {
+				lb = LastBackup{At: e.T.UTC().Format(time.RFC3339), OK: true}
+			}
+		}
+	}
+	if st.Box.Backup.Repo != "" {
+		lb.Repos = 1
+	}
+	var lc LastChange
+	if ps, err := proposal.List(inboxDir(env), false); err == nil {
+		var last *proposal.Proposal
+		for _, p := range ps {
+			if p.Status == "approved" && (last == nil || p.Decided.After(last.Decided)) {
+				last = p
+			}
+		}
+		if last != nil {
+			lc = LastChange{Proposal: last.ID, Summary: proposal.Card(last, st.Box.Domain).Summary, At: last.Decided.UTC().Format(time.RFC3339), Reversible: true}
+		}
+	}
+	return lb, lc
+}
+
+// hookInterpreters is what ghcr.io/mdopp/laib-hooks provides (#36).
+var hookInterpreters = map[string]bool{"#!/usr/bin/env python3": true, "#!/usr/bin/env bash": true, "#!/bin/bash": true, "#!/bin/sh": true, "#!/usr/bin/env sh": true}
+
+// lintMounts: every Volume= source of the rendered units must be a declared
+// data path (or under one), a rendered file, a named volume or a tmpfs —
+// apply creates only declared paths, and podman refuses a missing bind
+// source (#36; the failure afc1115 fixed for declared paths).
+func lintMounts(st *state.State, name string, out render.Output, neighbours []string) []string {
+	svc := st.Services[name]
+	var allowed []string
+	for _, d := range svc.Contract.Data {
+		allowed = append(allowed, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
+	}
+	for _, p := range neighbours {
+		allowed = append(allowed, strings.ReplaceAll(p, "${DATA_DIR}", st.Box.DataDir))
+	}
+	var errs []string
+	for key, text := range out {
+		if !strings.HasPrefix(key, "quadlet/"+name+"/") {
+			continue
+		}
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "Volume=") {
+				continue
+			}
+			src, _, _ := strings.Cut(strings.TrimPrefix(line, "Volume="), ":")
+			if !strings.HasPrefix(src, "/") {
+				continue // a named volume
+			}
+			// rendered files, and what the host itself provides (devices, dbus, sysfs)
+			ok := strings.HasPrefix(src, "/mnt/data/laib/render/") || strings.HasPrefix(src, "/dev/") || strings.HasPrefix(src, "/run/") || strings.HasPrefix(src, "/sys/") || strings.HasPrefix(src, "/proc/")
+			for _, a := range allowed {
+				if src == a || strings.HasPrefix(src, strings.TrimSuffix(a, "/")+"/") {
+					ok = true
+				}
+			}
+			if !ok {
+				errs = append(errs, fmt.Sprintf("%s: %s mounts %s, which is not a declared data path (apply creates only declared paths; podman refuses a missing bind source)", key, line, src))
+			}
+		}
+	}
+	return errs
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
-	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 	"github.com/mdopp/laib/templates"
@@ -89,15 +88,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 		return fail(err)
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, "template update "+svcName,
-		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}},
-		func(dir string) error {
-			st, err := state.Load(dir)
-			if err != nil {
-				return err
-			}
-			_, err = render.Render(st, nil)
-			return err
-		})
+		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.actor))
 	if err != nil {
 		if strings.Contains(err.Error(), "nothing to propose") {
 			return exitUsage // up to date; the caller's loop skips it
@@ -105,13 +96,13 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 		return fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" {
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		return autoApprove(ctx, env, p)
 	}
 	if env.json {
 		return emit(env, p)
 	}
-	fmt.Printf("Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
+	fmt.Fprintf(env.w(), "Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
 	return exitOK
 }
 

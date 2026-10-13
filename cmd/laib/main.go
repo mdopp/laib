@@ -34,6 +34,15 @@ type cliEnv struct {
 	actor string
 	in    io.Reader // stdin for --patch; MCP passes the patch here
 	mcp   bool      // the call came over MCP: no file access, so propose needs content
+	out   io.Writer // where a verb writes (#43): nil = os.Stdout; MCP and escalate pass a buffer
+}
+
+// w is the verb's output: never the process stdout when a caller passed its own.
+func (e *cliEnv) w() io.Writer {
+	if e != nil && e.out != nil {
+		return e.out
+	}
+	return os.Stdout
 }
 
 func (e *cliEnv) err() *os.File { return os.Stderr }
@@ -58,10 +67,12 @@ func init() {
 		{"inspect", "read", "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", cmdInspect},
 		{"read", "read", "<service> <path>: a file in the service's data paths, secrets redacted", cmdRead},
 		{"write", "apply", "<service> <path> (stdin): a file in the service's data paths, inside the envelope", cmdWrite},
-		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the container, output journaled", cmdExec},
+		{"look", "read", "<service> [--container c] -- <cat|ls|grep|ps|…>: read-only, in the service's own container, unbudgeted", cmdLook},
+		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the service's own container, budgeted, snapshot first, output journaled", cmdExec},
 		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", cmdRestart},
 		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
 		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
+		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", cmdWish},
 		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
@@ -86,6 +97,10 @@ func init() {
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},
 		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
+		{"family-card", "read", "print the one-page card for the family: what the box does, what to do when it is down, whom to call", cmdFamilyCard},
+		{"recovery-sheet", "destroy", "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", cmdRecoverySheet},
+		{"pause", "apply", "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", cmdPause},
+		{"resume", "apply", "<service>: lift a pause", cmdResume},
 	}
 }
 
@@ -110,7 +125,7 @@ func run(args []string) int {
 		usage()
 		return 1
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP) // an SSH drop ends an apply cleanly, the flock goes with the process
 	defer stop()
 	for _, v := range verbs {
 		if v.name == rest[0] {
@@ -143,13 +158,13 @@ func cmdVersion(_ context.Context, env *cliEnv, _ []string) int {
 	if env.json {
 		return emit(env, map[string]string{"version": Version})
 	}
-	fmt.Println("laib", Version)
+	fmt.Fprintln(env.w(), "laib", Version)
 	return 0
 }
 
 // emit prints JSON and returns 0.
 func emit(env *cliEnv, v any) int {
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(env.w())
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
 		return fail(err)

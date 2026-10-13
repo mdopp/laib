@@ -33,7 +33,7 @@ func TestValidateRefusesEscalation(t *testing.T) {
 			t.Errorf("case %d accepted", i)
 		}
 	}
-	if NeedsHuman(state.Policy{}, "destroy") != true {
+	if NeedsHuman(state.Policy{}, "destroy", "tree") != true {
 		t.Fatal("destroy must always need a human")
 	}
 }
