@@ -102,3 +102,12 @@ Global Thermonuclear War, which nobody wins. Approvals, warnings and errors
 stay plain words. Where you are is the persona engine, the `bote-persona`
 container (`cmd/persona`, ADR 0020/0021), an MCP tool named `persona` with no
 side effects; every message goes there first.
+
+The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to
+`render/persona/<name>/`) plus the fixed rules: approvals, warnings and
+errors in plain words, no approvals by the Bote, the never-list. No persona
+changes those (ADR 0020 §3). A number in box.yml `chatPersonas` talks to its
+own persona: Hermes shows the model the sender's profile name, the persona
+engine resolves it to the number through signal-cli's contacts in the pod,
+and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
+the house persona. That is a costume, never a right.
