@@ -38,12 +38,12 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    long-lived access token for a user who may see the exposed entities
    (Profile → Security), then `laib secret set BOTE_HA_TOKEN`. Expose the
    entities the family may touch under Settings → Voice assistants →
-   Expose. Without the token the `haus` tool is simply absent.
+   Expose. Without the token the `ha` tool is simply absent.
 
 5. Automations by sentence: the `bote-automat` container (image
    `ghcr.io/mdopp/laib-automat`) serves HA's automation config API as MCP
    on loopback; Hermes gets it as `automat` with `trust: untrusted`, so
-   every write asks you on Signal first. Same HA token as the `haus` tool.
+   every write asks you on Signal first. Same HA token as the `ha` tool.
    Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
    automation_loeschen, automation_schalten.
 
@@ -61,7 +61,7 @@ file yours and stop the hook from rewriting it.
 | `laib` | always | 16 (hand `bote`: read, propose, note, escalate) |
 | `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
 | `haushalt` | `HAUSHALT_MCP_URL` set **and** answers — Haus does not serve it yet (ADR 0017), so leave it empty | — |
-| `automat` + `haus` | `BOTE_HA_TOKEN` set | 6 + Home Assistant's Assist tools (depends on the exposed domains) |
+| `automat` + `ha` | `BOTE_HA_TOKEN` set | 6 + Home Assistant's Assist tools (depends on the exposed domains) |
 
 A normal conversation without the HA token sees 17 tools; with it, 23 plus
 HA's. Hermes' `mcp_servers` has no per-server tool allowlist in the
@@ -95,7 +95,7 @@ Issue: the Bote on the NUC (#23, phase 2).
 The Bote's persona is Joshua, the WOPR from WarGames, in the person's
 language. "Was kannst du?" (or "Joshua", "Menü") shows the WOPR main
 directory: the Bote's real tools by number, then SPIELE. A number enters
-that context; the prompt shows where you are (`JOSHUA/HAUS>`), the Bote
+that context; the prompt shows where you are (`JOSHUA/GERÄTE>`; the family reads words, never tool names, ADR 0021), the Bote
 answers with that tool until ZURÜCK (one level up) or MENÜ. Under SPIELE:
 the film's list, tic-tac-toe (it never loses; 0 players plays itself) and
 Global Thermonuclear War, which nobody wins. Approvals, warnings and errors

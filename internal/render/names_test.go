@@ -60,3 +60,22 @@ func TestMechanismsAreNotNamedAfterAPersona(t *testing.T) {
 		}
 	}
 }
+
+// ADR 0021 rules 1 and 5: a Bote tool is named for the system it reaches. A
+// tool named like a template must reach that template; the Home Assistant
+// tool named `haus` reached HA while `haus` is the family's pages (#134).
+func TestBoteToolsAreNamedForTheSystemTheyReach(t *testing.T) {
+	root := filepath.Join("..", "..")
+	hook, _ := os.ReadFile(filepath.Join(root, "templates", "bote", "post-deploy"))
+	entry := regexp.MustCompile(`\s{2}([a-z]+):\\n\s+url: ([^\\]+)\\n`)
+	found := map[string]string{}
+	for _, m := range entry.FindAllStringSubmatch(string(hook), -1) {
+		found[m[1]] = m[2]
+		if _, err := os.Stat(filepath.Join(root, "templates", m[1], "laib.yml")); err == nil && !strings.Contains(strings.ToLower(m[2]), m[1]) {
+			t.Errorf("the Bote tool %q is named like the template %s but reaches %s (ADR 0021)", m[1], m[1], m[2])
+		}
+	}
+	if url, ok := found["ha"]; !ok || !strings.Contains(url, "HA_URL") {
+		t.Errorf("Home Assistant is the Bote tool `ha` (ADR 0021): %v", found)
+	}
+}

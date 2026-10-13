@@ -47,11 +47,11 @@ if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
 fi
 if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
-  MCP_EXTRA="$MCP_EXTRA  haus:\n    url: ${HA_URL:-http://host.containers.internal:8123}/mcp_server/sse\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server: lights, switches, players, \"was ist an\" (Assist API)\n"
-  TOOLS="$TOOLS, das Haus (haus: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
+  MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/mcp_server/sse\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server: lights, switches, players, \"was ist an\" (Assist API)\n"
+  TOOLS="$TOOLS, die Geräte (ha: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
 fi
 # The persona engine (ADR 0020; today Joshua, #122): its directory lists the
-# tools wired above, by name (laib, frage, haus, …). No side effects.
+# tools wired above, by name (laib, frage, ha, …). No side effects.
 J="$LAIB_DATA_DIR/bote/persona"; mkdir -p "$J"
 python3 -c 'import re, sys; print("\n".join(re.findall(r"[(;]\s*([a-z]+):", sys.argv[1])))' "$TOOLS" > "$J/faehigkeiten.txt"
 MCP_EXTRA="$MCP_EXTRA  persona:\n    url: http://127.0.0.1:8644/mcp\n    trust: full      # the persona engine: where each person stands; reads and changes nothing (ADR 0020)\n"

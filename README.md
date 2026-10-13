@@ -75,7 +75,7 @@ Nothing has run on a real box yet. What exists and how far it is proven:
 | The stick: `laib-stick`, first boot, data disk (RAID1, one member) | `cmd/laib-stick`, `usb/` | CI `vm-install`: KVM guest installs CoreOS, reboots, `laib` ready, mirror joins, reinstall keeps data |
 | First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
 | Operator (admin agent), lease, Frage | `cmd/laib-operator`, `cmd/laib-lease`, `cmd/frage` | e2e with a scripted model; never against a real model |
-| Bote (Hermes on Signal) with the `haus` and `automat` tools | `templates/bote`, `cmd/automat` | config rendered and checked against Hermes' example; automat unit-tested against a fake HA |
+| Bote (Hermes on Signal) with the `ha` and `automat` tools | `templates/bote`, `cmd/automat` | config rendered and checked against Hermes' example; automat unit-tested against a fake HA |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
 | 22 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 

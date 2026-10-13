@@ -96,6 +96,6 @@ Built and CI-proven without a box: the stick (`laib-stick`), the first
 install end to end in a KVM guest, the data disk as a one-member RAID1
 with `laib disk add` and a reinstall that keeps the data, Caddy with its
 own CA, backup and restore against a real restic repo, the Bote's config
-with the `haus` and `automat` tools, Haus as its own repo with the Box
+with the `ha` and `automat` tools, Haus as its own repo with the Box
 page, pairing and the companion API. Phase 1 (the NUC) is next and is the
 first real run; nothing on the Kraftwerk has changed.

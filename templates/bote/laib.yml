@@ -17,7 +17,7 @@ secrets:
     mint: approver
   - name: BOTE_MODEL_KEY             # only for a cloud model
     external: true
-  - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `haus` tool (README)
+  - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `ha` tool (README)
     external: true
 data:
   - path: ${DATA_DIR}/bote/hermes    # config.yaml, .env, memory, sessions

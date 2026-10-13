@@ -9,7 +9,7 @@ LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: ""                      # Haus's Haushalt MCP (calendar, contacts, notes, reminders): empty until Haus serves it (#54); a server that does not answer is left out anyway
 FRAGE_URL: http://host.containers.internal:8710/mcp         # Frage as an MCP tool (templates/frage serves /mcp); left out when it does not answer
-HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `haus` tool (only used when BOTE_HA_TOKEN is set)
+HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` tool (only used when BOTE_HA_TOKEN is set)
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_HA_TOKEN
 HA_TOKEN: {secret: BOTE_HA_TOKEN}
 RELAY_IMAGE: ghcr.io/mdopp/laib-relay:latest      # the approval relay (#48)
