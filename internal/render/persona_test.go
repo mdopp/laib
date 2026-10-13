@@ -22,7 +22,7 @@ func TestAPersonaChangeTouchesTheServicesThatUseIt(t *testing.T) {
 	w("policy.yml", "tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n")
 	c := "name: %s\ntemplate: {registry: builtin, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nhealth: {none: test}\n"
 	w("services/sprecher/laib.yml", strings.ReplaceAll(c, "%s", "sprecher"))
-	w("services/sprecher/sprecher.container", "[Container]\nImage=x\nEnvironment=PERSONA=${PERSONA} PERSONA_REV=${PERSONA_REV}\nExec=--wake ${PERSONA_WAKEWORD} --voice ${PERSONA_VOICE}\n")
+	w("services/sprecher/sprecher.container", "[Container]\nImage=x\nEnvironment=PERSONA=${PERSONA} PERSONA_REV=${PERSONA_REV}\nExec=--wake ${PERSONA_WAKEWORD} --voice ${PERSONA_VOICE} --lang ${PERSONA_LANGUAGES}\n")
 	w("services/stumm/laib.yml", strings.ReplaceAll(c, "%s", "stumm"))
 	w("services/stumm/stumm.container", "[Container]\nImage=y\n")
 	w("personas/hal/persona.yml", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\nvoice: en_US-lessac-medium\n")
@@ -41,7 +41,7 @@ func TestAPersonaChangeTouchesTheServicesThatUseIt(t *testing.T) {
 	}
 	a := render()
 	unit := a["quadlet/sprecher/sprecher.container"]
-	if !strings.Contains(unit, "PERSONA=hal ") || !strings.Contains(unit, "--wake hello_hal --voice en_US-lessac-medium") || strings.Contains(unit, "${PERSONA_REV}") {
+	if !strings.Contains(unit, "PERSONA=hal ") || !strings.Contains(unit, "--wake hello_hal --voice en_US-lessac-medium --lang en") || strings.Contains(unit, "${PERSONA_REV}") {
 		t.Fatalf("persona values in the unit:\n%s", unit)
 	}
 	if a["persona/hal/style.md"] != "Calm.\n" || a["persona/hal/icon.svg"] == "" || a["persona/joshua/persona.yml"] == "" {

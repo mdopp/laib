@@ -1,13 +1,20 @@
 [Unit]
-Description=Stimme: wake-word trainer (microWakeWord, GPU) — runs queued training jobs
+Description=Stimme: wake-word trainer (microWakeWord, GPU) — trains the house persona's phrase (#128)
 After=network-online.target
 
 [Container]
 Image=${TRAINER_IMAGE}
 Network=host
 Environment=TZ=${TZ}
+# the house persona's phrase; a persona change changes this unit and restarts it,
+# and the trainer trains when /out has no model for the phrase (stimme/trainer/trainer.py)
+Environment=WAKE_PHRASE=${PERSONA_PHRASE}
+Environment=WAKE_ID=${PERSONA_WAKEWORD}
+Environment=WAKE_LANGUAGES=${PERSONA_LANGUAGES}
+Environment=PERSONA_REV=${PERSONA_REV}
 Volume=${DATA_DIR}/stimme/trainer:/work:z
-Volume=${DATA_DIR}/stimme/wakeword:/out:z
+Volume=${DATA_DIR}/stimme/micro:/out:z
+Volume=${DATA_DIR}/stimme/recordings:/recordings:ro,z
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 AutoUpdate=registry

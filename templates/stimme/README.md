@@ -2,11 +2,26 @@
 
 Whisper on 10300, Piper on 10200, openWakeWord on 10400, all on the host
 network so Home Assistant adds them as Wyoming integrations at
-`127.0.0.1`. The wake word is the trainer's output under
-`stimme/wakeword/<name>.tflite`; Voice PE devices run it on-device once HA
-pushes it. Martin, the Kokoro GPU voice Solaris used through an OpenAI-API
-server, is not in the Assist path: Piper's `de_DE-thorsten-high` is. If
-Martin should speak the house, it needs a Wyoming bridge — a later issue.
+`127.0.0.1`. Piper speaks with the house persona's voice (`PERSONA_VOICE`,
+ADR 0020). Martin, the Kokoro GPU voice of the old stack, is not in the
+Assist path; it would need a Wyoming bridge.
+
+**The wake word** is the house persona's phrase (Joshua: "Hey Joshua"). The
+HA Voice PE wakes on the device with microWakeWord; openWakeWord here serves
+streaming satellites only. The trainer (`stimme/trainer` in this repo, image
+`laib-wakeword-trainer`) gets the phrase, its id and the persona's languages
+from the unit. When `stimme/micro/<id>.tflite` is missing it trains: Piper
+voices for every language (German first, English for an English name),
+plus the household's own WAVs under `stimme/recordings/<id>/` if any.
+`stimme/micro/<id>.status.json` says training, done or failed with the
+reason. A failed run is not retried until the persona changes or that file
+is deleted. A persona change restarts the unit (`PERSONA_REV`) and trains
+the new phrase. Hours of GPU time; the GPU lease stops the trainer while a
+mode needs the card.
+
+**On the Voice PE** (once, by hand, in ESPHome): copy `<id>.tflite` and
+`<id>.json` from `stimme/micro` next to the device's YAML, set
+`micro_wake_word: models: - model: <id>.json`, then Install.
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says

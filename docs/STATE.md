@@ -70,7 +70,8 @@ chatPersonas:                     # a Signal number (E.164) that talks to anothe
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
 `model`. `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`,
-`${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}` and
+`${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}`,
+`${PERSONA_LANGUAGES}` (`de,en`) and
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change.
 

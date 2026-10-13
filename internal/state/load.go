@@ -325,7 +325,7 @@ func proxySecretsDeclared(svc *Service) error {
 
 // Builtins are the placeholders every unit may use without a values.yml entry.
 var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_URL", "MODEL_KEY", "MODEL_LEASE",
-	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_REV"} // the house persona (ADR 0020)
+	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV"} // the house persona (ADR 0020)
 
 // ModelURL is where a service on this box finds the LLM: the local model
 // role's proxy, or box.yml model.url. Empty when there is neither.
