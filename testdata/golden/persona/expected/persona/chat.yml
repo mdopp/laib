@@ -1,0 +1,4 @@
+# Rendered by laib from box.yml (ADR 0020): the house persona, and a persona per Signal number.
+house: joshua
+chat:
+  "+4917012345678": hal

@@ -1,0 +1,5 @@
+name: hal
+display: HAL
+languages: [en]
+voice: en_US-lessac-medium
+greeting: {en: "Good afternoon."}

@@ -1,0 +1,8 @@
+domain: persona.home
+timezone: Europe/Berlin
+dataDir: /mnt/data
+roles: {}
+hostNetwork: []
+persona: joshua
+chatPersonas:
+  "+4917012345678": hal
