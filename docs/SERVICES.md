@@ -36,7 +36,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
 | usage-metrics (8095) | ? | **decide**: keep as a registry template or drop |
 | daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them |
-| foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | address change only |
+| foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | moves to Laib's lease contract when it moves (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
 
 ## New, not there today
 

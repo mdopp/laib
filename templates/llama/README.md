@@ -18,13 +18,13 @@ units reading `voice-device.env`, and the 1.3 s turn.
 | Pod YAML with `hostNetwork: true`, `nvidia.com/gpu` limit, GPU Quadlet fallback written by the hook | `llama.container` with `AddDevice=nvidia.com/gpu=all`; `hostNetwork: true` in laib.yml and the carve-out in `box.yml` |
 | `post-deploy.py download_model / ensure_preset_weights` | `post-deploy` hook: idempotent download of the preset files into `${DATA_DIR}/llama/models` |
 | `write_presets`, `render_presets` | `presets.yml` next to the units, rendered by the hook into the router's models directory |
-| `proxy_run`, `make_proxy_server`, `allowed_presets`, `canonical_mode` | `lease.py` served by `llama-lease.container`: the policy proxy on `PORT` |
-| `lease_acquire / lease_release / schedule_expiry`, the broker units and `gpu_lease_request.json` | the same `lease.py`: `POST/GET/DELETE /api/model-lease` with Laib's lease contract (ADR 0011, amendment 2026-10-14); no broker, consumers speak HTTP |
+| `proxy_run`, `make_proxy_server`, `allowed_presets`, `canonical_mode` | `laib-lease` run by `llama-lease.service`: the policy proxy on `PORT` |
+| `lease_acquire / lease_release / schedule_expiry`, the broker units and `gpu_lease_request.json` | the same `laib-lease`: `POST/GET/DELETE /api/model-lease` with Laib's lease contract (ADR 0011, amendment 2026-10-14); no broker, consumers speak HTTP |
 | `install_embed_unit` | `llama-embed.container` |
 | `register_http_check` against ServiceBay's API | `health:` in laib.yml |
-| `set_voice_device` (voice stack to CPU in heavy modes) | stays a Solaris client decision, triggered by the lease's `mode` field |
+| `set_voice_device` (voice stack to CPU in heavy modes) | the lease itself: a window with `voice: cpu` writes `voice-device.env` and restarts the voice units |
 
-Consumers: Solaris (`model_lease` becomes a client), the Werkstatt's pi, and
+Consumers: the Werkstatt's pi and
 foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
 `host.containers.internal:<PORT>` from isolated pods (ServiceBay ADR 0007).
 
@@ -57,7 +57,7 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   keeps a foreign window alive.
 - **Starvation is visible.** Every service whose units the lease stops
   carries the pause marker (`laib status`, `/ready`, the Box page) with
-  the reason in German: „Grafikkarte reserviert für bote („denken“):
+  the reason in German: „Grafikkarte reserviert für bote („qwen3.6-35b-a3b“):
   Sprache läuft langsamer, bis 15:30“. A window older than
   `LEASE_WARN_AFTER` (20 min) gets one yellow journal line.
 - **One port.** The lease answers on the proxy's port (`PORT`, 11435):

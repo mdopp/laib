@@ -50,7 +50,7 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    so no client is dropped (the #1724 failure class cannot occur).
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
    moves from solarisbay into Laib with the lease sidecar; Its consumers
-   (foundry-chronicle, pi-web) move to Laib's lease contract then (ADR 0011,
+   (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
    model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
    immich, media, home-assistant** in that order: small and stateless first,
@@ -58,11 +58,12 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    `laib apply <name>`, verify green, disable ServiceBay's unit.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template, same
    `/workspace` volume, so checkouts and sessions survive.
-6. **Solaris**: the `solaris` template moves; the `ops` profile gets its
-   token from `laib token mint ops`, the lease module becomes a client.
+6. **Solaris does not move** (it retires, ADR 0015). Its units stay
+   ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
+   they go off in Phase 5 (#160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
-   ServiceBay's assist catalog is imported into `docs/assists/` of this repo
-   by `laib migrate assists` (text only, secrets scanned).
+   ServiceBay's assist catalog: there is no import tool yet; what happens to
+   it is decided in #160.
 
 ## What does not move
 
@@ -70,7 +71,7 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
   starts empty on day one; the old audit log stays in the ServiceBay data dir
   for 30 days.
 - ServiceBay API tokens. All agents get new hand tokens.
-- The TUI, the portal, the companion app's `/napi` (Solaris owns the app, ServiceBay ADR 0011).
+- The TUI, the portal, the companion app's `/napi` (Haus owns it now; until haus#10 the rest goes through Haus's Solaris bridge).
 
 ## Rollback during the weekend
 
