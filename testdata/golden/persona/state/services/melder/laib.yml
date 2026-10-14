@@ -1,0 +1,6 @@
+name: melder
+template: {registry: builtin, name: melder, version: 1}
+routes: []
+secrets: []
+data: []
+health: {none: golden}
