@@ -410,6 +410,28 @@ systemd:
 
         [Install]
         WantedBy=basic.target
+    - name: laib-sysusers.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Laib: system users a power cut in the first boot may have lost (#111)
+        # systemd-sysusers runs only when /etc needs an update. A hard reset early in
+        # the first boot can lose what it wrote (/etc/passwd without systemd-resolve);
+        # systemd-resolved then fails at every start: no names, no install (#111).
+        # Running it again is idempotent: it only adds what is missing.
+        DefaultDependencies=no
+        After=local-fs.target systemd-sysusers.service
+        Before=sysinit.target systemd-resolved.service NetworkManager.service
+        ConditionPathExists=!/etc/laib/installed
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/usr/bin/systemd-sysusers
+        ExecStart=/usr/bin/sync -f /etc/passwd
+
+        [Install]
+        WantedBy=sysinit.target
     - name: laib-firstboot.service
       enabled: true
       contents: |
