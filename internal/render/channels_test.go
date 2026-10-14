@@ -14,6 +14,11 @@ import (
 // replaced, and the given people (#184).
 func boteBox(t *testing.T, people string, values map[string]string) (Output, error) {
 	t.Helper()
+	return boteBoxSecrets(t, people, values, map[string]string{"BOTE_APPROVER_TOKEN": "approver-tok", "BOTE_MATRIX_TOKEN": "matrix-tok", "BOTE_TELEGRAM_TOKEN": "tg-tok", "BOTE_HA_TOKEN": "ha-tok"})
+}
+
+func boteBoxSecrets(t *testing.T, people string, values, secrets map[string]string) (Output, error) {
+	t.Helper()
 	repo := t.TempDir()
 	dst := filepath.Join(repo, "services", "bote")
 	os.MkdirAll(dst, 0o755)
@@ -42,7 +47,7 @@ func boteBox(t *testing.T, people string, values map[string]string) (Output, err
 	if err != nil {
 		return nil, err
 	}
-	return Render(st, map[string]string{"BOTE_APPROVER_TOKEN": "approver-tok", "BOTE_MATRIX_TOKEN": "matrix-tok", "BOTE_HA_TOKEN": "ha-tok"})
+	return Render(st, secrets)
 }
 
 var (
@@ -68,7 +73,7 @@ func TestBoteChannelsAreAChoice(t *testing.T) {
 	signal := "quadlet/bote/bote-signal.container"
 	relay := "quadlet/bote/bote-relay.container"
 
-	out, err := boteBox(t, "", nil) // values.example.yml: Signal only
+	out, err := boteBox(t, "", map[string]string{"ADMIN_NUMBER": "+4915198765432"}) // values.example.yml: Signal only
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +85,8 @@ func TestBoteChannelsAreAChoice(t *testing.T) {
 		t.Fatalf("the relay's approver token is not rendered:\n%s", out[relay])
 	}
 
-	out, err = boteBox(t, "", merge(noSignal, matrixOn))
+	// the example's defaults: switching Signal off and Matrix on is enough (no stray ADMIN_NUMBER)
+	out, err = boteBox(t, "", merge(map[string]string{"SIGNAL_ACCOUNT": ""}, matrixOn))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +110,7 @@ func TestBoteChannelsAreAChoice(t *testing.T) {
 		t.Fatal("Telegram only: no relay, Telegram never approves")
 	}
 
-	out, err = boteBox(t, "", merge(matrixOn, telegramOn))
+	out, err = boteBox(t, "", merge(matrixOn, telegramOn, map[string]string{"ADMIN_NUMBER": "+4915198765432"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,5 +132,38 @@ func TestBotePeopleMatchItsChannels(t *testing.T) {
 	}
 	if _, err := boteBox(t, people, matrixOn); err != nil {
 		t.Fatalf("a matrix target on a Bote with Matrix: %v", err)
+	}
+}
+
+// #184 review: a channel combination the relay or the hook would refuse
+// fails plan, before any unit restarts: an approval identity without its
+// channel or room, and Matrix or Telegram without its token (plan knows
+// secrets; lint, without them, does not ask).
+func TestBoteRefusesBrokenChannelsAtPlan(t *testing.T) {
+	for what, c := range map[string]struct {
+		values map[string]string
+		want   string
+	}{
+		"ADMIN_NUMBER without Signal":   {merge(noSignal, matrixOn, map[string]string{"ADMIN_NUMBER": "+4915198765432"}), "SIGNAL_ACCOUNT"},
+		"ADMIN_MXID without Matrix":     {map[string]string{"ADMIN_MXID": "@admin:example.org", "ADMIN_ROOM": "!raum:example.org"}, "MATRIX_HOMESERVER"},
+		"ADMIN_MXID without ADMIN_ROOM": {merge(matrixOn, map[string]string{"ADMIN_ROOM": ""}), "ADMIN_ROOM"},
+	} {
+		if _, err := boteBox(t, "", c.values); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: plan must fail naming %s: %v", what, c.want, err)
+		}
+	}
+	for what, c := range map[string]struct {
+		values map[string]string
+		want   string
+	}{
+		"Matrix without its token":   {matrixOn, "BOTE_MATRIX_TOKEN"},
+		"Telegram without its token": {telegramOn, "BOTE_TELEGRAM_TOKEN"},
+	} {
+		if _, err := boteBoxSecrets(t, "", c.values, map[string]string{"BOTE_APPROVER_TOKEN": "a"}); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: plan must fail naming %s: %v", what, c.want, err)
+		}
+		if _, err := boteBoxSecrets(t, "", c.values, nil); err != nil {
+			t.Errorf("%s: without secrets (lint) the token is not asked: %v", what, err)
+		}
 	}
 }

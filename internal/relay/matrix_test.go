@@ -56,6 +56,8 @@ func TestMatrixApprovalOnlyFromTheAdminsMXIDInItsRoom(t *testing.T) {
 type hs struct {
 	mu        sync.Mutex
 	encrypted bool
+	srvAdmin  bool // the Bote's account is a homeserver admin (Synapse admin API answers)
+	noEnd     bool // pages without `end`: the same events again on every poll
 	members   []string
 	events    []string // returned once, after the head token
 	sent      []string
@@ -76,6 +78,13 @@ func newHS(t *testing.T) *hs {
 		switch {
 		case p == "/_matrix/client/v3/account/whoami":
 			io.WriteString(w, `{"user_id":"@bote:hs.test","device_id":"BOTE"}`)
+		case strings.HasPrefix(p, "/_synapse/admin/"):
+			if !h.srvAdmin {
+				w.WriteHeader(403)
+				io.WriteString(w, `{"errcode":"M_FORBIDDEN","error":"You are not a server admin"}`)
+				return
+			}
+			io.WriteString(w, `{"name":"@bote:hs.test","admin":true}`)
 		case !strings.HasPrefix(p, "/_matrix/client/v3/rooms/!raum:hs.test/"):
 			w.WriteHeader(403)
 			io.WriteString(w, `{"errcode":"M_FORBIDDEN"}`)
@@ -97,6 +106,8 @@ func newHS(t *testing.T) *hs {
 			switch {
 			case q.Get("dir") == "b":
 				io.WriteString(w, `{"chunk":[],"start":"s0","end":"s0"}`)
+			case q.Get("from") == "s0" && h.noEnd:
+				io.WriteString(w, `{"chunk":[`+strings.Join(h.events, ",")+`],"start":"s0"}`)
 			case q.Get("from") == "s0":
 				io.WriteString(w, `{"chunk":[`+strings.Join(h.events, ",")+`],"start":"s0","end":"s1"}`)
 			default:
@@ -115,8 +126,10 @@ func newHS(t *testing.T) *hs {
 }
 
 // #184, ADR 0016 §3: one homeserver is trusted, the Bote's own, and the
-// admin's MXID must live there; the room is unencrypted (the relay cannot
-// read Megolm) and holds only the admin and the Bote. Anything else refuses.
+// admin's MXID must live there and not be the Bote; the Bote's account is no
+// server admin; the room is a room id, unencrypted (the relay cannot read
+// Megolm) and holds exactly the admin and the Bote. Each rule refuses with
+// its own reason.
 func TestMatrixTrustsOneHomeserverAndAPrivateRoom(t *testing.T) {
 	h := newHS(t)
 	ctx := context.Background()
@@ -124,24 +137,28 @@ func TestMatrixTrustsOneHomeserverAndAPrivateRoom(t *testing.T) {
 	if err := x.Check(ctx, "@admin:hs.test"); err != nil {
 		t.Fatalf("the admin on the Bote's homeserver in a private unencrypted room: %v", err)
 	}
-	refused := func(what string, x *Matrix, admin string) {
+	refused := func(what string, x *Matrix, admin, reason string) {
 		t.Helper()
-		if err := x.Check(ctx, admin); err == nil {
-			t.Errorf("%s: not refused", what)
+		if err := x.Check(ctx, admin); err == nil || !strings.Contains(err.Error(), reason) {
+			t.Errorf("%s: want a refusal naming %q, got %v", what, reason, err)
 		}
 	}
-	refused("an admin on another homeserver", x, "@admin:other.test")
-	refused("a room alias instead of a room id", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "#raum:hs.test"}, "@admin:hs.test")
-	refused("a wrong token", &Matrix{URL: h.srv.URL, Token: "nope", Room: "!raum:hs.test"}, "@admin:hs.test")
-	refused("a room the Bote is not in", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!fremd:hs.test"}, "@admin:hs.test")
-	h.mu.Lock()
-	h.members = append(h.members, "@eve:hs.test")
-	h.mu.Unlock()
-	refused("a third member in the room", x, "@admin:hs.test")
-	h.mu.Lock()
-	h.members, h.encrypted = h.members[:2], true
-	h.mu.Unlock()
-	refused("an encrypted room", x, "@admin:hs.test")
+	set := func(f func()) { h.mu.Lock(); f(); h.mu.Unlock() }
+	refused("an admin on another homeserver", x, "@admin:other.test", "homeserver")
+	refused("the admin is the Bote", x, "@bote:hs.test", "the Bote itself")
+	refused("a room alias instead of a room id", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "#raum:hs.test"}, "@admin:hs.test", "room id")
+	refused("a wrong token", &Matrix{URL: h.srv.URL, Token: "nope", Room: "!raum:hs.test"}, "@admin:hs.test", "whoami")
+	refused("no token", &Matrix{URL: h.srv.URL, Room: "!raum:hs.test"}, "@admin:hs.test", "BOTE_MATRIX_TOKEN")
+	refused("an unset secret's placeholder (#185)", &Matrix{URL: h.srv.URL, Token: "${secret:BOTE_MATRIX_TOKEN}", Room: "!raum:hs.test"}, "@admin:hs.test", "BOTE_MATRIX_TOKEN")
+	refused("a room the Bote is not in", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!fremd:hs.test"}, "@admin:hs.test", "is the Bote in it")
+	set(func() { h.members = append(h.members, "@eve:hs.test") })
+	refused("a third member in the room", x, "@admin:hs.test", "@eve:hs.test")
+	set(func() { h.members = []string{"@bote:hs.test"} })
+	refused("the admin not in the room", x, "@admin:hs.test", "not in room")
+	set(func() { h.members, h.encrypted = []string{"@bote:hs.test", "@admin:hs.test"}, true })
+	refused("an encrypted room", x, "@admin:hs.test", "encrypted")
+	set(func() { h.encrypted, h.srvAdmin = false, true })
+	refused("a Bote account that is a server admin", x, "@admin:hs.test", "server admin")
 }
 
 func (h *hs) sentCount() int {
@@ -151,7 +168,7 @@ func (h *hs) sentCount() int {
 }
 
 func ev(sender, body string) string {
-	b, _ := json.Marshal(map[string]any{"type": "m.room.message", "sender": sender, "room_id": "!raum:hs.test", "event_id": "$" + body,
+	b, _ := json.Marshal(map[string]any{"type": "m.room.message", "sender": sender, "room_id": "!raum:hs.test", "event_id": "$" + sender + body,
 		"content": map[string]string{"msgtype": "m.text", "body": body}})
 	return string(b)
 }
@@ -199,7 +216,9 @@ func TestMatrixRelayStopsWhenTheRoomChanges(t *testing.T) {
 		h := newHS(t)
 		h.events = []string{change, ev("@admin:hs.test", "gib #17 frei")}
 		x := &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!raum:hs.test", Every: 10 * time.Millisecond}
-		x.Check(context.Background(), "@admin:hs.test")
+		if err := x.Check(context.Background(), "@admin:hs.test"); err != nil {
+			t.Fatal(err)
+		}
 		r := New(Config{AdminMXID: "@admin:hs.test", Room: "!raum:hs.test", LaibURL: lb.URL, Token: "approver-token"}, Senders{Matrix: x})
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		r.RunMatrix(ctx, x) // returns on the change
@@ -231,5 +250,120 @@ func TestParseMatrixEvent(t *testing.T) {
 		if m, ok := ParseMatrix([]byte(e)); ok {
 			t.Errorf("not a verdict: %s → %+v", e, m)
 		}
+	}
+}
+
+// #184 review: sender and identity edge cases. The compare is exact (a
+// homeserver folds nothing for us), Matrix never takes the Signal number,
+// and an empty admin never matches an empty sender.
+func TestOnlyExactIdentitiesDecide(t *testing.T) {
+	var calls []string
+	lb := fakeLaib(t, &calls)
+	defer lb.Close()
+	ctx := context.Background()
+	for what, c := range map[string]struct {
+		cfg Config
+		m   Message
+	}{
+		"A6 case":         {Config{AdminMXID: "@admin:hs.test", Room: "!raum:hs.test"}, Message{Platform: "matrix", From: "@Admin:hs.test", Room: "!raum:hs.test"}},
+		"A9 signal no.":   {Config{Admin: "+4915100000001", AdminMXID: "@admin:hs.test", Room: "!raum:hs.test"}, Message{Platform: "matrix", From: "+4915100000001", Room: "!raum:hs.test"}},
+		"A1 empty signal": {Config{AdminMXID: "@admin:hs.test", Room: "!raum:hs.test"}, Message{Platform: "signal"}},
+		"A3 empty matrix": {Config{Admin: "+4915100000001"}, Message{Platform: "matrix"}},
+	} {
+		c.cfg.LaibURL, c.cfg.Token = lb.URL, "approver-token"
+		c.m.Text = "gib #17 frei"
+		New(c.cfg, &sends{}).Handle(ctx, c.m)
+		if j := strings.Join(calls, "\n"); strings.Contains(j, "laib_approve") {
+			t.Fatalf("%s approved:\n%s", what, j)
+		}
+	}
+}
+
+// P3: only m.room.message is a message; another type with a text body is not.
+func TestParseMatrixOnlyMessages(t *testing.T) {
+	for _, typ := range []string{"m.reaction", "m.sticker", "m.room.message.feedback", "m.room.topic"} {
+		e := `{"type":"` + typ + `","sender":"@admin:hs.test","room_id":"!raum:hs.test","content":{"msgtype":"m.text","body":"gib #17 frei"}}`
+		if m, ok := ParseMatrix([]byte(e)); ok {
+			t.Errorf("%s is no verdict: %+v", typ, m)
+		}
+	}
+}
+
+// pollRelay runs the relay on h's room until it answered or 2 s passed.
+func pollRelay(t *testing.T, h *hs, calls *[]string, until func() bool) {
+	t.Helper()
+	lb := fakeLaib(t, calls)
+	t.Cleanup(lb.Close)
+	x := &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!raum:hs.test", Every: 10 * time.Millisecond}
+	if err := x.Check(context.Background(), "@admin:hs.test"); err != nil {
+		t.Fatal(err)
+	}
+	r := New(Config{AdminMXID: "@admin:hs.test", Room: "!raum:hs.test", LaibURL: lb.URL, Token: "approver-token"}, Senders{Matrix: x})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { r.RunMatrix(ctx, x); close(done) }()
+	for ctx.Err() == nil && !until() {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+}
+
+// R1: the Bote's own words never reach the relay's decision or the journal.
+func TestTheBotesOwnMessagesAreIgnored(t *testing.T) {
+	var calls []string
+	h := newHS(t)
+	h.events = []string{ev("@bote:hs.test", "gib #17 frei"), ev("@admin:hs.test", "zeig #17")}
+	pollRelay(t, h, &calls, func() bool { return h.sentCount() > 0 })
+	if j := strings.Join(calls, "\n"); strings.Contains(j, "laib_approve") || strings.Contains(j, "laib_note") {
+		t.Fatalf("the Bote's own message was handled:\n%s", j)
+	}
+}
+
+// #184 review: a page without `end` returns the same events again; an event
+// is handled once, by its event_id.
+func TestMatrixEventsAreHandledOnce(t *testing.T) {
+	var calls []string
+	h := newHS(t)
+	h.noEnd = true
+	h.events = []string{ev("@admin:hs.test", "gib #17 frei")}
+	pollRelay(t, h, &calls, func() bool { return false }) // the whole window: every poll replays the page
+	if n := strings.Count(strings.Join(calls, "\n"), "laib_approve"); n != 1 {
+		t.Fatalf("one event, %d approvals", n)
+	}
+}
+
+// B2: a Matrix check that fails (homeserver down, token revoked, room
+// changed) does not stop the relay: it journals why, keeps trying, and
+// Matrix approvals start once the check passes.
+func TestAFailedMatrixCheckKeepsTheRelay(t *testing.T) {
+	var calls []string
+	lb := fakeLaib(t, &calls)
+	defer lb.Close()
+	h := newHS(t)
+	h.encrypted = true
+	h.events = []string{ev("@admin:hs.test", "gib #17 frei")}
+	x := &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!raum:hs.test", Every: 10 * time.Millisecond, Retry: 20 * time.Millisecond}
+	r := New(Config{AdminMXID: "@admin:hs.test", Room: "!raum:hs.test", LaibURL: lb.URL, Token: "approver-token"}, Senders{Matrix: x})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { r.WatchMatrix(ctx, x, "@admin:hs.test"); close(done) }()
+	time.Sleep(100 * time.Millisecond) // several failed checks
+	h.mu.Lock()
+	h.encrypted = false
+	h.mu.Unlock()
+	for ctx.Err() == nil && h.sentCount() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	j := strings.Join(calls, "\n")
+	if strings.Count(j, "laib_note") != 1 || !strings.Contains(j, "encrypted") {
+		t.Fatalf("one journal line for the refused check, not one per retry:\n%s", j)
+	}
+	if !strings.Contains(j, "laib_approve 17") {
+		t.Fatalf("Matrix approvals start once the check passes:\n%s", j)
 	}
 }

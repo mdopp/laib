@@ -12,7 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${LAIB_BIN:-$ROOT/laib}"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'kill $(cat "$WORK"/*.pid 2>/dev/null) 2>/dev/null; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/systemctl" <<'SH'
 #!/usr/bin/env sh
@@ -471,4 +471,37 @@ C="$(SHIM_RESTIC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" restore 0123abcd caddy)
 C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true)"
 [ "$C" = 2 ] || fail "failed exec: exit $C, want 2 (red): $(cat "$WORK/red.out")"
 last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
+# --- 15. #184 (B1): a Bote switched from Signal to Matrix applies green with no hand edit: pre-start
+# renders the channel .env files before the units start, so neither Hermes nor the health check reads
+# the last Signal config. bote-notify serves the pod's health; a fake signal-cli answers while Signal is on.
+B="$LAIB_HOME/state/services/bote"; mkdir -p "$B"
+cp "$ROOT"/templates/bote/* "$B/" 2>/dev/null || true; mv "$B/values.example.yml" "$B/values.yml"; rm -f "$B/README.md"
+grep -q "^laib:" "$LAIB_HOME/state/box.yml" || printf 'laib: {listen: 0.0.0.0}\n' >> "$LAIB_HOME/state/box.yml"
+for s in BOTE_LAIB_TOKEN BOTE_APPROVER_TOKEN; do echo "tok_$s" | LAIB_ACTOR=human:e2e "$BIN" secret set "$s" >/dev/null; done
+python3 -c '
+import http.server
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self): self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()' & echo $! > "$WORK/signal.pid"
+NOTIFY_LISTEN=127.0.0.1:8645 NOTIFY_TOKEN=n NOTIFY_HERMES="$WORK/data/bote/notify" python3 "$ROOT/templates/bote/notify.py" >/dev/null & echo $! > "$WORK/notify.pid"
+sleep 0.5
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" apply bote --reason "e2e: Bote on Signal" 2>&1)" || fail "the Bote on Signal does not apply green: $OUT"
+grep -q "^SIGNAL_HTTP_URL=" "$WORK/data/bote/notify/.env" || fail "bote-notify has no Signal config while Signal is on"
+test -f "$LAIB_QUADLET/bote/bote-signal.container" || fail "no signal-cli unit while Signal is on"
+kill "$(cat "$WORK/signal.pid")"; rm "$WORK/signal.pid"   # the Signal side is gone
+sed -i -e 's|^SIGNAL_ACCOUNT:.*|SIGNAL_ACCOUNT: ""|' -e 's|^MATRIX_HOMESERVER:.*|MATRIX_HOMESERVER: https://hs.e2e.home|' \
+  -e 's|^ADMIN_MXID:.*|ADMIN_MXID: "@admin:e2e.home"|' -e 's|^ADMIN_ROOM:.*|ADMIN_ROOM: "!raum:e2e.home"|' "$B/values.yml"
+echo mx_tok | LAIB_ACTOR=human:e2e "$BIN" secret set BOTE_MATRIX_TOKEN >/dev/null
+"$BIN" plan > "$WORK/plan.out" 2>&1 || fail "plan with Matrix only: $(cat "$WORK/plan.out")"
+grep -q "bote-signal.container.*SIGNAL_ACCOUNT" "$WORK/plan.out" || fail "plan does not say why bote-signal is off: $(cat "$WORK/plan.out")"
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" apply bote --reason "e2e: Signal off, Matrix on" 2>&1)" || fail "the switch to Matrix is not green without a hand edit (B1): $OUT"
+if grep -q "^SIGNAL_" "$WORK/data/bote/notify/.env" "$WORK/data/bote/hermes/.env"; then fail "a Signal line survived the switch"; fi
+grep -qx "MATRIX_ACCESS_TOKEN=mx_tok" "$WORK/data/bote/hermes/.env" || fail "Hermes has no Matrix config after the switch"
+test -f "$LAIB_QUADLET/bote/bote-signal.container" && fail "the signal-cli unit stayed"
+grep -q "stop bote-signal.service" "$SYSTEMCTL_LOG" || fail "the signal-cli unit was not stopped"
+pre=$(grep -n "podman run hook .*bote/pre-start" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1); start=$(grep -n "restart bote-pod.service" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1)
+[ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "the Bote's pre-start ($pre) did not run before the pod started ($start)"
+kill "$(cat "$WORK/notify.pid")"; rm "$WORK/notify.pid"
+
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
