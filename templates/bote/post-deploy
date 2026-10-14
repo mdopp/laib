@@ -6,18 +6,43 @@ set -euo pipefail
 H="$LAIB_DATA_DIR/bote/hermes"
 mkdir -p "$H"
 MODEL_URL="${MODEL_URL:?MODEL_URL builtin missing}"
-cat > "$H/.env" <<ENV
-# rendered by laib post-deploy; do not edit by hand
-SIGNAL_HTTP_URL=http://127.0.0.1:8080
-SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT}
-SIGNAL_ALLOWED_USERS=${SIGNAL_ALLOWED_USERS}
-SIGNAL_HOME_CHANNEL=${ADMIN_NUMBER}
-LAIB_TOKEN=${LAIB_SECRET_BOTE_LAIB_TOKEN}
-MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}
-HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}
-HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}
-HERMES_NON_INTERACTIVE=1
-ENV
+# The channels (#184): each optional, at least one; an unset one writes no
+# line, so Hermes starts no adapter for it. Names from Hermes' own config
+# (gateway/config_env.py, plugins/platforms/*/plugin.yaml, 2026-10-14).
+SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" MATRIX_HOMESERVER="${MATRIX_HOMESERVER:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}"
+ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
+if [ -z "$SIGNAL_ACCOUNT$MATRIX_HOMESERVER$TELEGRAM_ALLOWED_USERS" ]; then echo "bote: kein Kanal (SIGNAL_ACCOUNT, MATRIX_HOMESERVER oder TELEGRAM_ALLOWED_USERS)" >&2; exit 1; fi
+if [ -n "$MATRIX_HOMESERVER" ] && [ -z "${LAIB_SECRET_BOTE_MATRIX_TOKEN:-}" ]; then echo "bote: Matrix ohne Token: laib secret set BOTE_MATRIX_TOKEN" >&2; exit 1; fi
+if [ -n "$TELEGRAM_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_TELEGRAM_TOKEN:-}" ]; then echo "bote: Telegram ohne Token: laib secret set BOTE_TELEGRAM_TOKEN" >&2; exit 1; fi
+if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NUMBER braucht Signal (SIGNAL_ACCOUNT)" >&2; exit 1; fi
+if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
+{
+  echo "# rendered by laib post-deploy; do not edit by hand"
+  if [ -n "$SIGNAL_ACCOUNT" ]; then
+    echo "SIGNAL_HTTP_URL=http://127.0.0.1:8080"
+    echo "SIGNAL_ACCOUNT=$SIGNAL_ACCOUNT"
+    echo "SIGNAL_ALLOWED_USERS=${SIGNAL_ALLOWED_USERS:-}"
+    [ -z "$ADMIN_NUMBER" ] || echo "SIGNAL_HOME_CHANNEL=$ADMIN_NUMBER"
+  fi
+  if [ -n "$MATRIX_HOMESERVER" ]; then
+    echo "MATRIX_HOMESERVER=$MATRIX_HOMESERVER"
+    echo "MATRIX_ACCESS_TOKEN=$LAIB_SECRET_BOTE_MATRIX_TOKEN"
+    [ -z "${MATRIX_ALLOWED_USERS:-}" ] || echo "MATRIX_ALLOWED_USERS=$MATRIX_ALLOWED_USERS"
+    # unencrypted rooms only (ADR 0016 §3): bote-notify's `hermes send` and the relay share the
+    # Bote's token, and a second process on an E2EE device would take its to-device keys
+    echo "MATRIX_E2EE_MODE=off"
+    [ -z "$ADMIN_ROOM" ] || echo "MATRIX_HOME_ROOM=$ADMIN_ROOM"
+  fi
+  if [ -n "$TELEGRAM_ALLOWED_USERS" ]; then
+    echo "TELEGRAM_BOT_TOKEN=$LAIB_SECRET_BOTE_TELEGRAM_TOKEN"
+    echo "TELEGRAM_ALLOWED_USERS=$TELEGRAM_ALLOWED_USERS"
+  fi
+  echo "LAIB_TOKEN=${LAIB_SECRET_BOTE_LAIB_TOKEN}"
+  echo "MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}"
+  echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
+  echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
+  echo "HERMES_NON_INTERACTIVE=1"
+} > "$H/.env"
 chmod 600 "$H/.env"
 # bote-notify (#177) gets the platform credentials only: no Bote token, no
 # model key, nothing else of HERMES_HOME (sessions, memory).
@@ -85,6 +110,13 @@ if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
   MITTEILUNG="
 Sagt jemand \"Sag mir Bescheid, wenn …\" (oder \"sag Mama Bescheid, wenn …\"), leg das mit automat als Automation an: der Auslöser ist das Ereignis, die Aktion ist rest_command.mitteilung mit data {an: <person>, text: <kurze Mitteilung>}. <person> ist, wer fragt, oder die genannte Person, und nur eine von: $PEOPLE. Ist unklar, wer gemeint ist, frag nach. Wie jede Automation: erst der Entwurf in Worten, geschrieben wird erst mit dem Code, den automat nennt."
 fi
+# Who approves (ADR 0016 §3, #184): the relay reads the admin's verified identities; Telegram never approves.
+WHO=""
+[ -z "$ADMIN_NUMBER" ] || WHO="von $ADMIN_NUMBER auf Signal"
+[ -z "$ADMIN_MXID" ] || WHO="${WHO:+$WHO und }von $ADMIN_MXID im Matrix-Raum $ADMIN_ROOM"
+if [ -n "$WHO" ]; then APPROVALS="\"gib #17 frei\" oder \"lehne #17 ab\" liest das Relais direkt, nur $WHO, und entscheidet"
+else APPROVALS="im Chat gibt es keine Freigaben, der Admin entscheidet auf der Box-Seite"; fi
+[ -z "$TELEGRAM_ALLOWED_USERS" ] || APPROVALS="$APPROVALS (über Telegram nie)"
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
@@ -144,7 +176,7 @@ Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas er
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
-Freigaben kannst du nicht erteilen und sollst es nicht versuchen: "gib #17 frei" oder "lehne #17 ab" liest das Relais direkt von ${ADMIN_NUMBER} und entscheidet; du erklärst nur, was im Vorschlag steht (laib inbox).
+Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).
 SOUL

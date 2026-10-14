@@ -118,6 +118,14 @@ func loadService(dir string) (*Service, error) {
 		}
 		svc.Units[f.Name()] = string(b)
 	}
+	for _, file := range slices.Sorted(maps.Keys(svc.Contract.When)) {
+		if _, ok := svc.Units[file]; !ok {
+			return nil, fmt.Errorf("services/%s/laib.yml: when names %s, which is not a unit of the service", svc.Name, file)
+		}
+		if !slices.ContainsFunc(svc.Contract.When[file], svc.Set) {
+			delete(svc.Units, file) // off: no unit, and its placeholders need no value (#184)
+		}
+	}
 	return svc, nil
 }
 

@@ -12,7 +12,7 @@ rate-limited; the log names the person, the platform, the exit code and a
 short prefix of the text, never the target, Hermes' output or the whole
 text.
 Stdlib only: it runs in the stock Hermes image (templates/bote)."""
-import hmac, json, os, shutil, subprocess, sys, threading, time
+import hmac, json, os, shutil, subprocess, sys, threading, time, urllib.request
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -98,6 +98,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
         self.wfile.write(b)
+
+    def do_GET(self):
+        """The pod's health (#184): bote-notify is in every Bote; with Signal
+        (SIGNAL_HTTP_URL in its .env) signal-cli must answer /v1/about too."""
+        if self.path != "/health":
+            return self.reply(404, {"fehler": "unbekannter Pfad"})
+        url = ""
+        try:
+            with open(os.path.join(self.server.cfg.hermes_src, ".env")) as f:
+                url = next((l.split("=", 1)[1].strip() for l in f if l.startswith("SIGNAL_HTTP_URL=")), "")
+        except OSError:
+            pass
+        if url:
+            try:
+                urllib.request.urlopen(url.rstrip("/") + "/v1/about", timeout=5).close()
+            except (OSError, ValueError):
+                return self.reply(503, {"fehler": "signal-cli antwortet nicht"})
+        return self.reply(200, {"ok": True})
 
     def do_POST(self):
         cfg = self.server.cfg

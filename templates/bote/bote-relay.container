@@ -1,5 +1,5 @@
 [Unit]
-Description=Bote: approval relay — the admin's number decides, through Laib's approver token (#48)
+Description=Bote: approval relay — the admin's number or Matrix ID decides, through Laib's approver token (#48, #184)
 After=bote-signal.service
 
 [Container]
@@ -8,6 +8,11 @@ Pod=bote.pod
 Environment=SIGNAL_HTTP_URL=http://127.0.0.1:8080
 Environment=SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT}
 Environment=ADMIN_NUMBER=${ADMIN_NUMBER}
+# Matrix (#184): the admin's ID decides only in its room, read with the Bote's token
+Environment=MATRIX_HOMESERVER=${MATRIX_HOMESERVER}
+Environment=MATRIX_ACCESS_TOKEN=${MATRIX_TOKEN}
+Environment=ADMIN_MXID=${ADMIN_MXID}
+Environment=ADMIN_ROOM=${ADMIN_ROOM}
 Environment=LAIB_MCP_URL=${LAIB_MCP_URL}
 Environment=LAIB_TOKEN=${APPROVER_TOKEN}
 AutoUpdate=registry
