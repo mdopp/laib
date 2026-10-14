@@ -4,3 +4,7 @@ routes: []
 secrets: []
 data: []
 health: {none: golden}
+when:                             # #184: a unit exists only while one of its values is set
+  melder-signal.container: [SIGNAL_ACCOUNT]
+  melder-sms.container: [SMS_ACCOUNT]
+channels: {signal: SIGNAL_ACCOUNT, telegram: TELEGRAM_ALLOWED_USERS, matrix: MATRIX_HOMESERVER}

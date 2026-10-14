@@ -1,0 +1,4 @@
+[Container]
+Image=${IMAGE}
+# off: SMS_ACCOUNT is empty (#184)
+Environment=ACCOUNT=${SMS_ACCOUNT}

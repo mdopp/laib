@@ -269,6 +269,32 @@ grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warning
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
 grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists the Bote's tools (#121, #133)"
+# #184: Signal, Matrix and Telegram are each optional; an unset channel leaves no entry in Hermes' .env
+if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Signal-only Bote has Matrix or Telegram entries (#184)"; fi
+bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
+  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= \
+  "$@" ./post-deploy > "$WORK/bote-ch.out" 2>&1 ); }
+bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home ADMIN_MXID=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
+  LAIB_SECRET_BOTE_MATRIX_TOKEN=mx_tok || fail "bote hook with Matrix only"
+for want in "MATRIX_HOMESERVER=https://hs.e2e.home" "MATRIX_ACCESS_TOKEN=mx_tok" "MATRIX_ALLOWED_USERS=@admin:e2e.home" "MATRIX_E2EE_MODE=off" "MATRIX_HOME_ROOM=!raum:e2e.home"; do
+  grep -qx "$want" "$HOOKDIR/bote/hermes/.env" || fail "a Matrix Bote's .env lacks $want (#184)"
+done
+if grep -q "^SIGNAL_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Matrix-only Bote has Signal or Telegram entries (#184)"; fi
+grep -qx "MATRIX_ACCESS_TOKEN=mx_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-notify gets the Matrix credentials (#184)"
+grep -q "@admin:e2e.home" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names the admin's Matrix ID as the one who approves (#184)"
+if grep -q "+49" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "a Matrix-only SOUL names a phone number (#184)"; fi
+bote_ch TELEGRAM_ALLOWED_USERS=123456 LAIB_SECRET_BOTE_TELEGRAM_TOKEN=tg_tok || fail "bote hook with Telegram only"
+grep -qx "TELEGRAM_BOT_TOKEN=tg_tok" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks its bot token (#184)"
+grep -qx "TELEGRAM_ALLOWED_USERS=123456" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks who may talk (#184)"
+if grep -q "^SIGNAL_\|^MATRIX_" "$HOOKDIR/bote/hermes/.env"; then fail "a Telegram-only Bote has Signal or Matrix entries (#184)"; fi
+grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the approval rule holds without an approval channel"
+grep -q "Box-Seite" "$HOOKDIR/bote/hermes/SOUL.md" || fail "without Signal or Matrix approvals the SOUL points at the Box page (#184)"
+if bote_ch MATRIX_HOMESERVER=https://hs.e2e.home; then fail "Matrix without BOTE_MATRIX_TOKEN must fail the hook (#184)"; fi
+grep -q "BOTE_MATRIX_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Matrix token (#184)"
+if bote_ch TELEGRAM_ALLOWED_USERS=123456; then fail "Telegram without BOTE_TELEGRAM_TOKEN must fail the hook (#184)"; fi
+if bote_ch; then fail "a Bote without any channel must fail the hook (#184)"; fi
 # #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
 mkdir -p "$WORK/render/persona/hal"
 printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"

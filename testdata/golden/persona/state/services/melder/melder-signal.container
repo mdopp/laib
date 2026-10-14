@@ -1,0 +1,4 @@
+[Container]
+Image=${IMAGE}
+# on while SIGNAL_ACCOUNT is set (#184)
+Environment=ACCOUNT=${SIGNAL_ACCOUNT}

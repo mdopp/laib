@@ -1,0 +1,4 @@
+[Container]
+Image=docker.io/library/python:3-alpine
+# on while SIGNAL_ACCOUNT is set (#184)
+Environment=ACCOUNT=+4917000000001

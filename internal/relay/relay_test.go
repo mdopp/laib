@@ -60,7 +60,7 @@ func TestOnlyTheAdminsNumberApproves(t *testing.T) {
 	ctx := context.Background()
 
 	// a family member says the magic words: nothing happens, the journal knows
-	r.Handle(ctx, Message{From: "+4915100000002", Text: "gib #17 frei"})
+	r.Handle(ctx, Message{Platform: "signal", From: "+4915100000002", Text: "gib #17 frei"})
 	joined := strings.Join(calls, "\n")
 	if strings.Contains(joined, "laib_approve") {
 		t.Fatalf("a non-admin number approved:\n%s", joined)
@@ -73,7 +73,7 @@ func TestOnlyTheAdminsNumberApproves(t *testing.T) {
 	}
 
 	// the admin: the consequence is shown, then approved through laib with the approver token
-	r.Handle(ctx, Message{From: "+4915100000001", Text: "gib #17 frei"})
+	r.Handle(ctx, Message{Platform: "signal", From: "+4915100000001", Text: "gib #17 frei"})
 	joined = strings.Join(calls, "\n")
 	if !strings.Contains(joined, "laib_approve 17 as approver-token") {
 		t.Fatalf("the admin's approval did not reach laib:\n%s", joined)
@@ -87,17 +87,17 @@ func TestOnlyTheAdminsNumberApproves(t *testing.T) {
 
 	// other text from the admin is not the relay's business
 	n := len(calls)
-	r.Handle(ctx, Message{From: "+4915100000001", Text: "wie wird das Wetter?"})
+	r.Handle(ctx, Message{Platform: "signal", From: "+4915100000001", Text: "wie wird das Wetter?"})
 	if len(calls) != n {
 		t.Fatalf("plain chat reached laib: %v", calls[n:])
 	}
 
 	// reject, and an unknown id
-	r.Handle(ctx, Message{From: "+4915100000001", Text: "lehne #17 ab"})
+	r.Handle(ctx, Message{Platform: "signal", From: "+4915100000001", Text: "lehne #17 ab"})
 	if !strings.Contains(strings.Join(calls, "\n"), "laib_reject 17 as approver-token") {
 		t.Fatal("reject did not reach laib")
 	}
-	r.Handle(ctx, Message{From: "+4915100000001", Text: "gib #99 frei"})
+	r.Handle(ctx, Message{Platform: "signal", From: "+4915100000001", Text: "gib #99 frei"})
 	if last := out.text[len(out.text)-1]; !strings.Contains(last, "#99") {
 		t.Fatalf("an unknown proposal is not explained: %q", last)
 	}
@@ -106,7 +106,7 @@ func TestOnlyTheAdminsNumberApproves(t *testing.T) {
 func TestParseSignalEvent(t *testing.T) {
 	ev := `{"jsonrpc":"2.0","method":"receive","params":{"envelope":{"source":"+4915100000001","sourceNumber":"+4915100000001","sourceName":"Martin","timestamp":1791700000000,"dataMessage":{"timestamp":1791700000000,"message":"gib #17 frei","expiresInSeconds":0}},"account":"+4915100000009"}}`
 	m, ok := ParseEvent([]byte(ev))
-	if !ok || m.From != "+4915100000001" || m.Text != "gib #17 frei" {
+	if !ok || m.Platform != "signal" || m.From != "+4915100000001" || m.Text != "gib #17 frei" {
 		t.Fatalf("parsed %+v %v", m, ok)
 	}
 	if _, ok := ParseEvent([]byte(`{"jsonrpc":"2.0","method":"receive","params":{"envelope":{"source":"+49","receiptMessage":{}}}}`)); ok {
