@@ -314,7 +314,19 @@ storage:
           finish() { [ "$KEEP" = 1 ] && return 0; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env; }
           trap finish EXIT
           [ -f /etc/laib/installed ] && exit 0
-          for i in $(seq 1 60); do curl -fsS https://api.github.com >/dev/null 2>&1 && break; sleep 5; done
+          # A power cut early in the first boot can leave systemd-resolved failed at
+          # start (the user systemd-resolve is unknown for a moment), and NetworkManager
+          # does not hand it the DNS servers again: no names at all, for good (#111).
+          if ! getent hosts api.github.com >/dev/null 2>&1; then
+            echo "laib-firstboot: no DNS; restarting systemd-resolved and NetworkManager (#111)"
+            sudo systemctl reset-failed systemd-resolved.service 2>/dev/null || true
+            sudo systemctl restart systemd-resolved.service NetworkManager.service || true
+          fi
+          for i in $(seq 1 60); do
+            curl -fsS https://api.github.com >/dev/null 2>&1 && break
+            [ $((i % 6)) = 0 ] && echo "laib-firstboot: waiting for the network ($((i * 5)) s): $(getent hosts api.github.com >/dev/null 2>&1 && echo "names resolve, GitHub does not answer" || echo "no DNS")"
+            sleep 5
+          done
           flags=(--domain "$LAIB_DOMAIN")
           if [ -n "${LAIB_SOURCE:-}" ]; then
             # one build served over HTTP (the VM job boots the commit under test, #38)
