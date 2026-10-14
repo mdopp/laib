@@ -28,9 +28,12 @@ client, memory, cron — are exactly what a text agent needs.
    threshold: when the Bote needs more than a few hundred lines of glue,
    it is rebuilt lean; the first sign of a workaround stack is the signal.
 3. **Approval by verified number.** A message from the admin's Signal
-   number is the admin. The Bote holds a `human` token bound to that
-   number and uses it only to approve or reject proposals on the admin's
-   word; it never approves on its own hand. Amends ADR 0012: two approval
+   number is the admin. The relay (not the Bote) holds the `approver`
+   token, a `human` hand that can only decide, and uses it only on the
+   admin's word; Hermes holds no token that can approve. *(Corrected
+   2026-10-14, #184: this said the Bote held a `human` token; since #48 it
+   is the relay's approver token, see the amendment of 2026-10-11.)*
+   Amends ADR 0012: two approval
    surfaces, the Box page and the verified Signal number. *(Amended
    2026-10-14, #184: the verified identity is the admin's Signal number or
    the admin's Matrix ID in one room; Telegram never approves. See the
@@ -86,7 +89,11 @@ and at least one is set. An unset channel leaves no container, no required
 value and no line in Hermes' `.env`. The template says this with two
 contract fields: `when:` (a unit exists only while one of its values is
 set) and `channels:` (where the Bote delivers; a person's target on any
-other platform fails plan).
+other platform fails plan). A third, `requires:`, makes plan refuse a
+combination the relay or the hook could not use: an admin identity without
+its channel or room, Matrix or Telegram without its token. The channel
+config is rendered before the units start (the `pre-start` hook), so a
+channel switched off is gone before Hermes starts and before verify asks.
 
 The relay decides on two identities and nothing else:
 
@@ -97,26 +104,46 @@ The relay decides on two identities and nothing else:
 What a Matrix approval rests on:
 
 - **The sender the homeserver asserts.** The relay reads the event's
-  `sender` and nothing the client wrote.
-- **One trusted homeserver: the Bote's own.** The relay refuses to start
-  when the admin's ID lives on another server. Federation would add a
-  second server that can assert senders.
-- **That homeserver is trusted completely.** Whoever runs it, or holds the
-  admin's Matrix login, can approve. On a public homeserver that is a third
-  party. This is weaker than Signal, where the server cannot forge a
-  sender. Run your own homeserver if you approve on Matrix.
+  `sender` and nothing the client wrote. The compare is exact.
+- **One trusted homeserver: the Bote's own.** The relay refuses Matrix
+  when the admin's ID lives on another server, or is the Bote's own ID.
+  Federation would add a second server that can assert senders.
+- **That homeserver is trusted completely.** Whoever runs it can approve.
+  So can every session of the admin's Matrix account, and anyone holding a
+  leaked access token of it: a token is a login, and any client logged in
+  as the admin is the admin. On a public homeserver the operator is a third
+  party. This is weaker than Signal, where the server cannot forge a sender
+  and a second device must be linked from the phone. Run your own
+  homeserver if you approve on Matrix, and log out sessions you do not use.
+- **The Bote's account is a plain user.** It may not be a homeserver admin
+  and may not use an application-service token: either can act as other
+  users, so the Bote could assert the admin. The relay asks Synapse's admin
+  API about its own account and refuses Matrix when it answers. An
+  appservice token cannot be told apart from the outside; the setup must
+  not use one.
 - **No encryption.** The room must be unencrypted and hold only the admin
   and the Bote. The relay cannot read Megolm. A second process on the
   Bote's encrypted device would also take that device's to-device keys.
   So the Bote's Matrix runs with `MATRIX_E2EE_MODE=off`: it reads and
   writes unencrypted rooms only, and the homeserver sees the text.
-- **Checked, not assumed.** At start the relay checks the homeserver, the
-  room's encryption and its members, and refuses if any is wrong. While it
-  runs, a room that turns encrypted or gains a member stops Matrix
-  approvals, with a journal line, until the relay restarts.
+- **Checked, not assumed.** Before reading the room the relay checks the
+  token, the homeserver, the room's encryption and its members, and
+  refuses Matrix if any is wrong. While it reads, a room that turns
+  encrypted or gains a member stops Matrix approvals, with a journal line,
+  and the check runs again.
+- **A refused Matrix never takes Signal down.** A failed check (homeserver
+  down at boot, token revoked, room changed) is one journal line per
+  reason; the relay keeps running, Signal approvals and the Box page go
+  on, and the check is tried again every minute until it passes.
 - **Read without `/sync`.** The relay polls the room with `/messages` using
-  the Bote's token and answers in the room. Edits and notices are not
-  verdicts.
+  the Bote's token and answers in the room. Each event is handled once, by
+  its id. Edits, notices and the Bote's own messages are not verdicts.
 
 Not done, on purpose: encrypted rooms, device or cross-signing
 verification, a second homeserver, approvals in any other room.
+
+Switching Signal off removes `bote-signal`, not its data. The linked
+device's keys stay in `${DATA_DIR}/bote/signal` and in the backups that
+hold it. To remove them: unlink the device on the phone (Signal → Linked
+devices), delete the folder, and let the backup retention age the old
+snapshots out (or `restic forget` them).

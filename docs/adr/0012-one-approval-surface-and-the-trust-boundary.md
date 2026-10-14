@@ -19,8 +19,11 @@ cannot reach a loopback listener at all for `/mcp`.
 1. **Approval surfaces: the box page and the admin's verified Signal number
    (amended by ADR 0016).** A card links to `laib.<domain>/inbox`; the
    decision is made there behind Authelia, or by the admin's own message
-   on Signal, where the Bote uses a `human` token bound to that number.
-   Laib never accepts an approval carried by an agent's own token.
+   on Signal, which the relay acts on with its `approver` token (a `human`
+   hand that can only decide). *(Corrected 2026-10-14, #184: this said the
+   Bote used a `human` token; since #48 the relay holds the approver token
+   and Hermes none that can approve.)* Laib never accepts an approval
+   carried by an agent's own token.
    *(Amended 2026-10-14, #184: the relay also accepts the admin's Matrix
    ID in one room; see below.)*
 2. **The host shell is the human.** Hands are enforced only for MCP bearer
@@ -52,4 +55,6 @@ The relay is still one approval surface; ADR 0019 calls a fourth one a
 design error. It now accepts two verified identities: the admin's Signal
 number, and the admin's Matrix ID in one unencrypted room on the Bote's
 own homeserver. What the Matrix identity rests on, and what it does not,
-is in ADR 0016's amendment of the same date. Telegram never approves.
+is in ADR 0016's amendment of the same date. Telegram never approves. A
+Matrix that fails its check is refused on its own; the relay, its Signal
+path and the Box page stay up.

@@ -18,18 +18,25 @@ and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
 | Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | never |
 
 `bote-signal` runs only with Signal, `bote-relay` only with `ADMIN_NUMBER`
-or `ADMIN_MXID`. A person in box.yml `people` with a target on a channel
-the Bote does not have fails `laib plan`. The hook refuses Matrix or
-Telegram without its token. The pod's health is bote-notify's
-`GET /health` on 8645, which with Signal also asks signal-cli's
-`/v1/about`. A person's Matrix target is best the room id of their room
+or `ADMIN_MXID` (both empty in the example: set yours to approve in the
+chat). `laib plan` refuses, before anything restarts: a person in box.yml
+`people` with a target on a channel the Bote does not have, `ADMIN_NUMBER`
+without Signal, `ADMIN_MXID` without Matrix or `ADMIN_ROOM`, and Matrix or
+Telegram without its token (laib.yml `requires:`); it prints each container
+it leaves off as `AUS:`. The `pre-start` hook writes Hermes' `.env` and
+bote-notify's copy before the containers start, so a channel switched off
+is gone before Hermes reads it; `post-deploy` renders the rest and runs
+`pre-start` again first. The pod's health is bote-notify's `GET /health`
+on 8645, which with Signal also asks signal-cli's `/v1/about`. A person's Matrix target is best the room id of their room
 with the Bote (`matrix:!…:server`): Hermes' sender hands a bare
 `@user:server` to the room API as it is, and whether that reaches the
 person is not verified.
 
-**Matrix**, once: give the Bote its own account on your homeserver and log
-it in once to get a token (a new device; do not take the token of an
-Element session):
+**Matrix**, once: give the Bote its own **plain user** account on your
+homeserver: not a server admin, and not an application-service token
+(either can act as other users, so the Bote could pose as you; the relay
+refuses an account Synapse's admin API answers for). Log it in once to get
+a token (a new device; do not take the token of an Element session):
 `curl -s -XPOST https://<homeserver>/_matrix/client/v3/login -d
 '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"<bote>"},"password":"…","initial_device_display_name":"Bote"}'`,
 then `laib secret set BOTE_MATRIX_TOKEN` with its `access_token`. The Bote
@@ -38,10 +45,17 @@ amendment 2026-10-14): create rooms with it with encryption off. For
 approvals, create one more unencrypted room with only you and the Bote,
 put its id (`!…:server`, Room settings → Advanced) into `ADMIN_ROOM` and
 your Matrix ID into `ADMIN_MXID`; your account must be on the same
-homeserver as the Bote's. The relay refuses to start otherwise, and stops
-Matrix approvals with a journal line when that room turns encrypted or
-someone else joins. Whoever runs that homeserver can approve as you: run
-your own if you approve on Matrix.
+homeserver as the Bote's. Otherwise the relay refuses Matrix with a
+journal line and keeps Signal running; it checks again every minute. It
+also stops Matrix approvals when that room turns encrypted or someone else
+joins. Whoever runs that homeserver, and every session or leaked token of
+your Matrix account, can approve as you: run your own homeserver if you
+approve on Matrix, and log out sessions you do not use.
+
+**Signal off** (`SIGNAL_ACCOUNT: ""`): `bote-signal` goes, its data does
+not. The linked device's keys stay in `${DATA_DIR}/bote/signal` and in the
+backups. Unlink the device on the phone (Signal → Linked devices), delete
+the folder, and let the backup retention age the old snapshots out.
 
 **Telegram**, once: create a bot with @BotFather, `laib secret set
 BOTE_TELEGRAM_TOKEN`, and list the numeric user ids that may talk to it in
