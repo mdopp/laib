@@ -12,7 +12,12 @@ v1 (issue #8): the autoloop runs as a second container of the same image
 `needs-claude` with the protocol attached, so the claude hand picks it up.
 A transient failure (no clone, the preset refused, pi not startable) keeps
 `pi:ready` and is tried again on later passes, three times, then it is
-handed over with "Versuch 3 von 3" (#44). `needs-claude` is consumed by a
+handed over with "Versuch 3 von 3" (#44). A run takes the GPU lease for
+the coding preset under the holder `werkstatt` (laib ADR 0011, the lease
+contract), renews it and gives it back at the end; while somebody else holds
+the card the ticket simply waits for the next pass, without counting an
+attempt (#162). Protocols and the attempt counter live on the workspace
+volume (`/workspace/autoloop/protocol`), so a restart keeps them. `needs-claude` is consumed by a
 person or a Claude Code session in the dev container
 (`gh issue list -l needs-claude`); nothing automatic reads it. `laib` is a
 shell command in the container (laibctl: the Laib MCP with the token from
