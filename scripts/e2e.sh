@@ -286,6 +286,31 @@ grep -q "^  ha:" "$HOOKDIR/bote/hermes/config.yaml" || fail "Home Assistant is w
 grep -q "url: http://127.0.0.1:8123/mcp_server/sse" "$HOOKDIR/bote/hermes/config.yaml" || fail "the ha tool reaches Home Assistant (#134)"
 if grep -q "^  haus:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Bote tool is named haus (#134)"; fi
 grep -qx "ha" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists ha (#134)"
+# #170: the Haushalt (haus#11) is wired with Haus's bearer; a Haushalt that refuses the token is left out and named
+python3 -c '
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        ok = self.headers.get("Authorization") == "Bearer hh_tok"
+        self.send_response(200 if ok else 401); self.end_headers(); self.wfile.write(b"{}")
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H); open(sys.argv[1], "w").write(str(s.server_port)); s.serve_forever()' "$WORK/hh.port" >/dev/null 2>&1 &
+HH_PID=$!; sleep 0.5; HH_PORT=$(cat "$WORK/hh.port")
+bote_hh() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
+  SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_HAUS_HAUSHALT_TOKEN="$1" HAUSHALT_MCP_URL="http://127.0.0.1:$HH_PORT/mcp/haushalt" ./post-deploy > "$WORK/bote-hh.out" ) || fail "bote hook with a haushalt"; }
+bote_hh hh_tok
+grep -q "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml" || fail "a Haushalt that accepts the token is wired (#170)"
+grep -A4 "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml" | grep -q 'Authorization: "Bearer ${HAUSHALT_TOKEN}"' || fail "the Haushalt entry sends Haus's bearer from .env (#170)"
+grep -q "^HAUSHALT_TOKEN=hh_tok$" "$HOOKDIR/bote/hermes/.env" || fail "the Haushalt token is in .env, not in config.yaml (#170)"
+if grep -q "hh_tok" "$HOOKDIR/bote/hermes/config.yaml"; then fail "the token itself landed in config.yaml (#170)"; fi
+grep -qi "Gedächtnis des Hauses" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names the Haushalt once it is wired (#170)"
+bote_hh wrong
+if grep -q "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Haushalt that refuses the token must be left out (#170)"; fi
+grep -qi "haushalt.*Token" "$WORK/bote-hh.out" || fail "the hook says the Haushalt refused the token (#170)"
+kill $HH_PID 2>/dev/null || true
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 

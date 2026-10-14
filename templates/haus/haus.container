@@ -3,7 +3,9 @@ Description=Haus: pages and the companion API (laib role: haus)
 
 [Container]
 Image=${HAUS_IMAGE}
-PublishPort=127.0.0.1:8650:8650
+# beyond loopback so the Bote's pod reaches /mcp/haushalt (ADR 0012 §4); ports lan: false keeps the LAN out,
+# and pages, /napi and /mcp each check their own secret (#170)
+PublishPort=8650:8650
 Environment=HAUS_LISTEN=0.0.0.0:8650
 Environment=LAIB_URL=http://host.containers.internal:5900
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
@@ -16,6 +18,14 @@ Environment=HAUS_HA_TOKEN=${HA_TOKEN}
 Environment=HAUS_ANDROID_FINGERPRINTS=${ANDROID_FINGERPRINTS}
 Environment=HAUS_ENERGY_FLOW=${ENERGY_FLOW}
 Environment=HAUS_ENERGY_TOTALS=${ENERGY_TOTALS}
+# the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder
+Environment=HAUS_HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
+Environment=HAUS_RADICALE_URL=${RADICALE_URL}
+Environment=HAUS_RADICALE_USER=${RADICALE_USER}
+Environment=HAUS_RADICALE_PASSWORD=${RADICALE_PASSWORD}
+Environment=HAUS_RADICALE_CALENDAR=${RADICALE_CALENDAR}
+Environment=HAUS_NOTES_DIR=/notes
+Environment=TZ=${TZ}
 Environment=HAUS_DATA=/data
 Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
 # the house persona: title, greeting, icon, colours (ADR 0020, #129)
@@ -23,6 +33,7 @@ Environment=HAUS_PERSONA=${PERSONA}
 Environment=PERSONA_REV=${PERSONA_REV}
 Volume=/mnt/data/laib/render/persona:/persona:ro,z
 Volume=${DATA_DIR}/haus:/data:Z
+Volume=${DATA_DIR}/file-share/data/notes:/notes:z
 AutoUpdate=registry
 
 [Service]

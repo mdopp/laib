@@ -18,11 +18,17 @@ secrets:
     external: true
     mint: haus
   - name: HAUS_PROXY_SECRET        # generated; without it no page request counts (haus#1)
+  - name: HAUS_HAUSHALT_TOKEN      # generated; the Bote's bearer for the Haushalt MCP (haus#11, #170)
+  - name: HAUS_RADICALE_PASSWORD   # the Radicale account Haus writes the household's calendar with; without it no calendar tools
+    external: true
+    optional: true
   - name: HAUS_HA_TOKEN            # Home Assistant long-lived token (haus#10): Haus serves the house paths itself; without it they stay on the Solaris bridge
     external: true
     optional: true
 data:
   - path: ${DATA_DIR}/haus         # devices.json: the paired phones (hashed tokens)
+  - path: ${DATA_DIR}/file-share/data/notes   # the household's notes (ADR 0017), mounted for the Haushalt; declared here so it exists without file-share
+    backup: false                             # backed up by file-share
 health:
   http: http://127.0.0.1:8650/healthz
 ports:
