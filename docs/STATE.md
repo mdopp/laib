@@ -216,7 +216,14 @@ apply that touches the service.
 ## values.yml
 
 Plain `KEY: value`. Secrets are referenced, never written here:
-`PAPERLESS_SECRET_KEY: !secret PAPERLESS_SECRET_KEY`.
+`PAPERLESS_SECRET_KEY: !secret PAPERLESS_SECRET_KEY`. A value is text or
+`!secret NAME`, nothing else: a mapping (`{secret: NAME}`), a list, a
+`!secret` without a name or another `!tag` fails the load with the file,
+line and key.
+
+Without secrets (`laib template lint`, a review) a secret renders as
+`${secret:NAME}`. Plan and apply render with the real values, and journal
+and diffs show each one redacted back to that placeholder.
 
 ## secrets.age
 
@@ -248,8 +255,11 @@ route naming one the service does not declare.
 
 A contract secret with `external: true` must be in `secrets.age` before
 `laib add`/`approve` renders the service; with `optional: true` as well it
-may be missing and the unit gets an empty value. Caddy's `DNS_API_TOKEN`
-is the case: needed only when `dns.provider` is set.
+may be missing. A missing one is an empty value everywhere: the unit keeps
+its line and gets `Environment=X=` (`${KEY}` inside a longer value becomes
+nothing), and a hook gets `LAIB_SECRET_<NAME>=` and the empty `KEY`. It is
+never the placeholder text. A consumer reads empty as absent. Caddy's
+`DNS_API_TOKEN` is the case: needed only when `dns.provider` is set.
 
 ### Backup target by default
 
