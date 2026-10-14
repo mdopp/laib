@@ -18,8 +18,10 @@ secrets:
     mint: approver
   - name: BOTE_MODEL_KEY             # only for a cloud model
     external: true
-  - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `ha` tool (README)
+    optional: true
+  - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `ha` tool (README); without it the tool is absent
     external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/bote/hermes    # config.yaml, .env, memory, sessions
   - path: ${DATA_DIR}/bote/signal    # signal-cli's linked device
