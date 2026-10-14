@@ -86,7 +86,10 @@ with a numeric chat id, `matrix:` with `@user:server` or `!room:server`,
 that carries `${PEOPLE_REV}` (the Bote's `bote-notify`) gets
 `/mnt/data/laib/render/people/people.json` (name → channels, mode 0600) to mount
 read-only and is restarted when a person or a channel changes. A message is
-addressed to a person by name, never to a free target.
+addressed to a person by name, never to a free target. When a service
+declares `channels` (below), every target must be on a platform one of them
+has set; a `matrix:` target on a box whose Bote has no Matrix fails plan,
+naming the value that would switch it on (#184).
 
 ## personas/<name>/ (optional)
 
@@ -157,7 +160,21 @@ ports:
 gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
 after: [authelia]                # restarted and verified before this one
+when:                            # a unit exists only while one of its values is set (#184)
+  paperless-mail.container: [MAIL_HOST]
+channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 ```
+
+`when` names a unit file and the values that switch it on. While none of
+them is a non-empty literal, the unit is gone from the load: not rendered,
+not verified, removed from the box like any unit the state no longer has,
+and its own placeholders need no value. A `!secret` value counts as unset,
+because plan does not know secrets. A name that is no unit of the service
+is an error.
+
+`channels` maps a `people` platform to the value that switches it on (the
+Bote: `signal`, `matrix`, `telegram`). A service that declares channels
+needs at least one of them set.
 
 This file is what used to be `variables.json` + the subdomain, secret, port
 and backup conventions spread over the ServiceBay codebase. It is the

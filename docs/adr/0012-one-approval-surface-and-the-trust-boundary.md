@@ -21,6 +21,8 @@ cannot reach a loopback listener at all for `/mcp`.
    decision is made there behind Authelia, or by the admin's own message
    on Signal, where the Bote uses a `human` token bound to that number.
    Laib never accepts an approval carried by an agent's own token.
+   *(Amended 2026-10-14, #184: the relay also accepts the admin's Matrix
+   ID in one room; see below.)*
 2. **The host shell is the human.** Hands are enforced only for MCP bearer
    tokens. `LAIB_ACTOR` on the CLI is attribution, not authorization: whoever
    runs the binary as `core` is a human. Therefore no agent gets a shell on
@@ -43,3 +45,11 @@ cannot reach a loopback listener at all for `/mcp`.
 - The Caddy route, the Authelia rule (`group:admins`), the nftables line and
   the proxy secret are rendered from `box.yml laib`, so a renamed host or
   port stays consistent.
+
+## Amendment 2026-10-14 (#184): the relay's second identity
+
+The relay is still one approval surface; ADR 0019 calls a fourth one a
+design error. It now accepts two verified identities: the admin's Signal
+number, and the admin's Matrix ID in one unencrypted room on the Bote's
+own homeserver. What the Matrix identity rests on, and what it does not,
+is in ADR 0016's amendment of the same date. Telegram never approves.

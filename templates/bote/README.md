@@ -1,13 +1,57 @@
 # bote — the agent you talk to (ADR 0016)
 
 Hermes **as stock** (`nousresearch/hermes-agent`), configured only through
-the post-deploy hook, plus signal-cli's REST API in the same pod. Nothing
-is forked. If this template ever needs more than configuration, that is
-the signal to build a lean Bote instead (ADR 0016 §2).
+the post-deploy hook, plus signal-cli's REST API in the same pod when the
+Bote has Signal. Nothing is forked. If this template ever needs more than
+configuration, that is the signal to build a lean Bote instead (ADR 0016 §2).
+
+## Channels: a choice (#184)
+
+Signal, Matrix and Telegram are each optional; at least one is set. A
+channel is on while its value is set, and an unset one leaves no container
+and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
+
+| Channel | On while | Secret | Who may talk | Approvals |
+|---|---|---|---|---|
+| Signal | `SIGNAL_ACCOUNT` (the Bote's number) | none (linked device, QR) | `SIGNAL_ALLOWED_USERS` | `ADMIN_NUMBER` |
+| Matrix | `MATRIX_HOMESERVER` | `BOTE_MATRIX_TOKEN` | `MATRIX_ALLOWED_USERS` | `ADMIN_MXID` in `ADMIN_ROOM` |
+| Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | never |
+
+`bote-signal` runs only with Signal, `bote-relay` only with `ADMIN_NUMBER`
+or `ADMIN_MXID`. A person in box.yml `people` with a target on a channel
+the Bote does not have fails `laib plan`. The hook refuses Matrix or
+Telegram without its token. The pod's health is bote-notify's
+`GET /health` on 8645, which with Signal also asks signal-cli's
+`/v1/about`. A person's Matrix target is best the room id of their room
+with the Bote (`matrix:!…:server`): Hermes' sender hands a bare
+`@user:server` to the room API as it is, and whether that reaches the
+person is not verified.
+
+**Matrix**, once: give the Bote its own account on your homeserver and log
+it in once to get a token (a new device; do not take the token of an
+Element session):
+`curl -s -XPOST https://<homeserver>/_matrix/client/v3/login -d
+'{"type":"m.login.password","identifier":{"type":"m.id.user","user":"<bote>"},"password":"…","initial_device_display_name":"Bote"}'`,
+then `laib secret set BOTE_MATRIX_TOKEN` with its `access_token`. The Bote
+speaks Matrix **unencrypted only** (`MATRIX_E2EE_MODE=off`, ADR 0016
+amendment 2026-10-14): create rooms with it with encryption off. For
+approvals, create one more unencrypted room with only you and the Bote,
+put its id (`!…:server`, Room settings → Advanced) into `ADMIN_ROOM` and
+your Matrix ID into `ADMIN_MXID`; your account must be on the same
+homeserver as the Bote's. The relay refuses to start otherwise, and stops
+Matrix approvals with a journal line when that room turns encrypted or
+someone else joins. Whoever runs that homeserver can approve as you: run
+your own if you approve on Matrix.
+
+**Telegram**, once: create a bot with @BotFather, `laib secret set
+BOTE_TELEGRAM_TOKEN`, and list the numeric user ids that may talk to it in
+`TELEGRAM_ALLOWED_USERS` (a bot is public; the list is what keeps others
+out). A person's Telegram target is their chat id with the bot, which
+exists once they wrote to it.
 
 ## Once, by hand
 
-1. Link the Bote's phone number: open the Box page (`laib.<domain>`) →
+1. Link the Bote's phone number (Signal only): open the Box page (`laib.<domain>`) →
    **Bote verbinden (QR)** and scan it in Signal → Gekoppelte Geräte on the
    phone that owns that number (a second SIM or a spare phone; the Bote
    should not share the admin's own number). The page fetches the QR from
@@ -20,9 +64,10 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    status, note — nothing else) are minted on `laib add bote`. **Hermes
    holds no token that can approve** (#48): "gib #17 frei" / "lehne #17 ab"
    are read by the `bote-relay` container straight from signal-cli's event
-   stream, acted on only when the sender is `ADMIN_NUMBER`, answered with
-   the proposal's consequence. Any other number trying it gets a journal
-   line and no reply. The Automat's writes and deletes execute only with
+   stream and from the admin's Matrix room, acted on only when the sender
+   is `ADMIN_NUMBER` on Signal or `ADMIN_MXID` in `ADMIN_ROOM` (#184),
+   answered with the proposal's consequence. Anyone else trying it gets a
+   journal line and no reply; Telegram never approves. The Automat's writes and deletes execute only with
    the four-digit code its first answer names; deleted automations are
    kept under `bote/automat/geloescht` for `automation_wiederherstellen`.
 3. Pairing: the first message from an unknown number yields a pairing code;
@@ -49,7 +94,7 @@ the signal to build a lean Bote instead (ADR 0016 §2).
 
 6. Messages to people (ADR 0022 §3, #177): declare the household in
    box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,
-   preferred first; docs/STATE.md). The `bote-notify` container runs this
+   preferred first, only on the Bote's channels; docs/STATE.md). The `bote-notify` container runs this
    template's `notify.py` (stdlib) in the stock Hermes image and serves
    `POST /mitteilung {"an": "mama", "text": "…"}` on `127.0.0.1:8645` with
    `Authorization: Bearer <BOTE_NOTIFY_TOKEN>` (generated on add). It looks
@@ -102,18 +147,27 @@ and points to the Haushalt (calendar, notes) once Haus serves it.
 
 ## What is verified and what is not
 
-Verified from the Hermes docs (2026-10): the image and its `/opt/data`
-volume, the Signal env keys (`SIGNAL_HTTP_URL`, `SIGNAL_ACCOUNT`,
-`SIGNAL_ALLOWED_USERS`, `SIGNAL_HOME_CHANNEL`), `mcp_servers` with `url`,
+Verified from the Hermes source (`NousResearch/hermes-agent` at
+`0e427d7`, 2026-10-14; #184): the channel env keys in
+`gateway/config_env.py` (`_ENV_STEPS`: `SIGNAL_HTTP_URL` + `SIGNAL_ACCOUNT`
+enable Signal, `SIGNAL_HOME_CHANNEL`; `MATRIX_ACCESS_TOKEN` +
+`MATRIX_HOMESERVER` enable Matrix, `MATRIX_E2EE_MODE`, `MATRIX_HOME_ROOM`;
+`TELEGRAM_BOT_TOKEN` enables Telegram) and the allowlists in
+`gateway/authz_mixin.py` / `gateway/pairing.py` (`<PLATFORM>_ALLOWED_USERS`),
+also listed in `plugins/platforms/{matrix,telegram}/plugin.yaml` and the
+Matrix adapter's docstring. Its Matrix extra (mautrix with E2EE) is baked
+into the image (`Dockerfile`). `hermes send` to Matrix outside the gateway
+connects its own adapter with the same token
+(`tools/send_message_senders.py`), which is one reason the Bote's Matrix
+stays unencrypted. From the Hermes docs (2026-10): the image and its
+`/opt/data` volume, `mcp_servers` with `url`,
 `headers` and `trust`, `${VAR}` references resolved from `.env`,
 `model.provider: custom` + `model.base_url` + `api_mode: chat_completions`,
 `model_aliases.<name>: {model, provider: custom, base_url}` (all from
 `cli-config.yaml.example`, 2026-10-10), `trust: full | untrusted` and the
 MCP client's Streamable-HTTP-then-SSE fallback (`tools/mcp_tool.py`), so
 Home Assistant's `/mcp_server/sse` needs no bridge. Not yet verified:
-`SIGNAL_HOME_CHANNEL` (the Signal adapter reads `SIGNAL_HTTP_URL`,
-`SIGNAL_ACCOUNT`, `SIGNAL_ALLOWED_USERS`; the home channel for cron
-delivery may be set in-chat instead), and the whole thing on a box.
+the whole thing on a box, Matrix and Telegram included.
 Issue: the Bote on the NUC (#23, phase 2).
 
 ## Joshua (#119, #122)

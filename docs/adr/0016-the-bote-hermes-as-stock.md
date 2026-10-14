@@ -31,7 +31,10 @@ client, memory, cron — are exactly what a text agent needs.
    number is the admin. The Bote holds a `human` token bound to that
    number and uses it only to approve or reject proposals on the admin's
    word; it never approves on its own hand. Amends ADR 0012: two approval
-   surfaces, the Box page and the verified Signal number.
+   surfaces, the Box page and the verified Signal number. *(Amended
+   2026-10-14, #184: the verified identity is the admin's Signal number or
+   the admin's Matrix ID in one room; Telegram never approves. See the
+   amendment below.)*
 4. **Models.** The Bote is not latency-critical and may request the
    `thinking` preset through the lease for hard questions; the household
    preset is its default. *(Amended 2026-10-14, #157: there is no
@@ -75,3 +78,45 @@ MENÜ to the directory. The games keep the film's English.
 The guardrail from ADR 0019 §6 stays: approvals, warnings, errors and
 anything about safety are plain words with the consequence, no role-play.
 The relay's answers are code and unchanged.
+
+## Amendment 2026-10-14 (#184): channels are a choice; approval by Signal number or Matrix ID
+
+Owner decision (option b): Signal, Matrix and Telegram are each optional,
+and at least one is set. An unset channel leaves no container, no required
+value and no line in Hermes' `.env`. The template says this with two
+contract fields: `when:` (a unit exists only while one of its values is
+set) and `channels:` (where the Bote delivers; a person's target on any
+other platform fails plan).
+
+The relay decides on two identities and nothing else:
+
+- **Signal:** `ADMIN_NUMBER`, as before.
+- **Matrix:** `ADMIN_MXID`, in the room `ADMIN_ROOM`.
+- **Telegram never approves.** It carries chat and messages only.
+
+What a Matrix approval rests on:
+
+- **The sender the homeserver asserts.** The relay reads the event's
+  `sender` and nothing the client wrote.
+- **One trusted homeserver: the Bote's own.** The relay refuses to start
+  when the admin's ID lives on another server. Federation would add a
+  second server that can assert senders.
+- **That homeserver is trusted completely.** Whoever runs it, or holds the
+  admin's Matrix login, can approve. On a public homeserver that is a third
+  party. This is weaker than Signal, where the server cannot forge a
+  sender. Run your own homeserver if you approve on Matrix.
+- **No encryption.** The room must be unencrypted and hold only the admin
+  and the Bote. The relay cannot read Megolm. A second process on the
+  Bote's encrypted device would also take that device's to-device keys.
+  So the Bote's Matrix runs with `MATRIX_E2EE_MODE=off`: it reads and
+  writes unencrypted rooms only, and the homeserver sees the text.
+- **Checked, not assumed.** At start the relay checks the homeserver, the
+  room's encryption and its members, and refuses if any is wrong. While it
+  runs, a room that turns encrypted or gains a member stops Matrix
+  approvals, with a journal line, until the relay restarts.
+- **Read without `/sync`.** The relay polls the room with `/messages` using
+  the Bote's token and answers in the room. Edits and notices are not
+  verdicts.
+
+Not done, on purpose: encrypted rooms, device or cross-signing
+verification, a second homeserver, approvals in any other room.
