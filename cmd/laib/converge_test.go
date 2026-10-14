@@ -155,7 +155,7 @@ func TestConvergeSkipsWhenSomeoneHoldsTheLock(t *testing.T) {
 }
 
 // #39 (3): a paused service is left alone — a human's stop, a restore in
-// progress, the lease's erweitert mode.
+// progress, the lease's full window.
 func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	c := newCbox(t)
 	c.down["whoami.service"] = true

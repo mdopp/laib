@@ -22,13 +22,19 @@ is not the plan.)
 ## The way there
 
 The NUC is the proving ground: nothing on the GPU box changes until the
-NUC runs the whole household side against the GPU box's model.
+NUC runs the whole household side against the GPU box's model. The one
+exception is the trial's certificates. The house's port 80 reaches the
+Kraftwerk, so its NPM gets one HTTP-only proxy host per NUC name, removed
+when the trial ends (ADR 0007, amendment 2026-10-13).
 
 ### Phase 1 — calm: Laib on the NUC (no GPU, remote model)
 
 ADR 0019 §1: the first phase is only what "alles läuft" depends on.
 
-1. Fedora CoreOS on the NUC from the stick: `laib-stick --domain nuc.dopp.cloud --dns-provider desec --dns-token … --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease` (the sub-zone delegated to deSEC first, ADR 0007 amendment #45: real certificates, so the phones in Phase 3 need no root CA). No GitHub token: the repo, the releases and the images are public (#94).
+1. Fedora CoreOS on the NUC from the stick: `laib-stick --domain nuc.dopp.cloud --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1`.
+   - Certificates come by HTTP-01 through the Kraftwerk (ADR 0007, amendment 2026-10-13): one Strato CNAME per NUC host and one HTTP-only proxy host per name on the Kraftwerk's NPM (#30). The certificates are real, so the phones in Phase 3 need no root CA. The fallback is the deSEC delegation with `--dns-provider desec`.
+   - No `--model-lease`: nothing on the NUC takes the GPU lease.
+   - No GitHub token: the repo, the releases and the images are public (#94).
 2. `laib add caddy`, `auth` (Authelia + LLDAP), `adguard`, `whoami`; `laib status` green; `laib.<domain>` behind Authelia.
 3. Backup on the box and off it (the NAS), `laib recovery-sheet` printed, `laib family-card` on the fridge, the outside watchdog pinged (#57).
 4. `laib add haus`: the start page with the three guarantees ("Alles läuft · Letzte Sicherung · Letzte Änderung — Rückgängig", ADR 0019 §3), in the house persona (Joshua unless `box.yml persona:` says otherwise).
@@ -66,7 +72,8 @@ number does not.
     from Radicale on the NUC, notes from the file share, documents from
     Paperless.
 13. The pages one by one (haus#12): Start, Räume, Energie, Medien,
-    Notizen, Kalender; the Sprechen field talks to the Bote.
+    Notizen, Kalender; the Sprechen field talks to the Bote. The memory
+    library moves out of Solaris into Haus (haus#13).
 
 Gate: the family uses Haus and the widgets for a week without opening the
 old Solaris PWA.
@@ -130,5 +137,6 @@ Unit-tested and wired, not yet on hardware:
 - Haus with the Box page, the guarantees, pairing, the companion keys and the persona;
 - Stimme's trainer.
 
-Phase 1 on the NUC is next and is the first real run; nothing on the
-Kraftwerk has changed.
+Phase 1 on the NUC is next and is the first real run (#23, owner actions
+in #30). Phases 4 and 5 are tracked in #160. Nothing on the Kraftwerk has
+changed yet.
