@@ -60,7 +60,7 @@ file yours and stop the hook from rewriting it.
 |---|---|---|
 | `laib` | always | 16 (hand `bote`: read, propose, note, escalate) |
 | `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
-| `haushalt` | `HAUSHALT_MCP_URL` set **and** answers — Haus does not serve it yet (ADR 0017), so leave it empty | — |
+| `haushalt` | Haus is installed (it generates `HAUS_HAUSHALT_TOKEN`) **and** answers with that token at `HAUSHALT_MCP_URL` (default: Haus on the host's port 8650, haus#11, #170) | calendar, reminders, notes |
 | `automat` + `ha` | `BOTE_HA_TOKEN` set | 6 + Home Assistant's Assist tools (depends on the exposed domains) |
 
 A normal conversation without the HA token sees 17 tools; with it, 23 plus

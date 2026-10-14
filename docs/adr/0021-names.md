@@ -79,8 +79,8 @@ which kind of name goes where.
 | Name | Where it still is | Ends when |
 |---|---|---|
 | Solaris | Haus's migration bridge: device-token check and `/napi` passthrough for phones paired with Solaris | every phone is paired through Haus and Haus serves every `/napi` path the app uses (haus#10) |
-| `sol_device_` | the device-token prefix the installed app checks before it stores a token; Haus mints it too | the app accepts a second prefix (solaris-android#174); then Haus mints the new one and keeps accepting the old |
-| `cloud.dopp.solaris://`, `/napi/servicebay/*`, the app's package id, the repo `solaris-android` | the contract with the installed Android app | the app ships the new names next to the old ones (solaris-android#174); the package id stays, since changing it means a new app |
+| `sol_device_` | the device-token prefix the installed app checks before it stores a token; Haus mints it too | the app accepts `haus_device_` too (solaris-android#174, merged 2026-10-14); Haus mints the new prefix once a release with it is on every family phone (haus#17) and keeps accepting the old |
+| `cloud.dopp.solaris://`, `/napi/servicebay/*`, the app's package id, the repo `solaris-android` | the contract with the installed Android app | the app knows `cloud.dopp.haus://` and `/napi/box/*` too (solaris-android#174, merged 2026-10-14); Haus switches to them after that release is on every family phone (haus#17); the package id and the repo name stay, since changing them means a new app |
 | ServiceBay | the predecessor, migrated once | `scripts/migrate-servicebay.py` is run on the last box |
 
 Ended (2026-10-13): `solaris-wakeword-trainer` and Balthasar. #128 built

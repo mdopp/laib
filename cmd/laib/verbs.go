@@ -126,6 +126,9 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 				row.State = "rot"
 			}
 		}
+		if p := st.HousePersona(); name == "stimme" && p != nil && row.Detail == "" {
+			row.Detail, _ = wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase)
+		}
 		if pz, ok := paused[name]; ok {
 			row.State = "pausiert"
 			row.Detail = fmt.Sprintf("von %s bis %s %s", pz.By, pz.Until.Local().Format("02.01. 15:04"), pz.Reason)
