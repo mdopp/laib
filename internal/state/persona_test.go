@@ -1,6 +1,9 @@
 package state
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,13 @@ func writePersona(t *testing.T, dir, name, yml, style string) {
 	os.WriteFile(filepath.Join(p, "persona.yml"), []byte(yml), 0o644)
 	os.WriteFile(filepath.Join(p, "style.md"), []byte(style), 0o644)
 	os.WriteFile(filepath.Join(p, "icon.svg"), []byte("<svg xmlns='http://www.w3.org/2000/svg'/>"), 0o644)
+	os.WriteFile(filepath.Join(p, "icon.png"), []byte(pngOf(192, 192)), 0o644)
+}
+
+func pngOf(w, h int) string {
+	var b bytes.Buffer
+	png.Encode(&b, image.NewNRGBA(image.Rect(0, 0, w, h)))
+	return b.String()
 }
 
 // #125, ADR 0020: a box without `persona:` is Joshua, the built-in persona.
@@ -29,7 +39,7 @@ func TestTheHousePersonaDefaultsToJoshua(t *testing.T) {
 	if p.Wakeword.Phrase != "Hey Joshua" || p.WakewordID() != "hey_joshua" || p.Voice == "" || p.Display != "Joshua" {
 		t.Fatalf("joshua's wake word and voice: %+v", p)
 	}
-	for _, f := range []string{"persona.yml", "style.md", "icon.svg"} {
+	for _, f := range []string{"persona.yml", "style.md", "icon.svg", "icon.png"} {
 		if p.Files[f] == "" {
 			t.Errorf("joshua has no %s", f)
 		}
@@ -72,6 +82,38 @@ func TestPersonaMistakesAreRefused(t *testing.T) {
 		if _, err := Load(repo); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%q: want an error naming %q, got %v", c.box, c.want, err)
 		}
+	}
+}
+
+// #191: a phone draws no SVG, so a package carries icon.png next to icon.svg:
+// a square PNG of at least 192 px. Joshua ships one; a new icon is a new rev.
+func TestAPersonaCarriesASquarePNGIcon(t *testing.T) {
+	j, err := BuiltinPersona("joshua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err := png.DecodeConfig(strings.NewReader(j.Files["icon.png"])); err != nil || c.Width != c.Height || c.Width < 192 {
+		t.Fatalf("joshua's icon.png: %+v %v", c, err)
+	}
+	load := func(icon string) (*State, error) {
+		repo := box46(t, "persona: hal\n")
+		writePersona(t, filepath.Join(repo, "personas"), "hal", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\n", "Calm.\n")
+		f := filepath.Join(repo, "personas", "hal", "icon.png")
+		os.Remove(f)
+		if icon != "" {
+			os.WriteFile(f, []byte(icon), 0o644)
+		}
+		return Load(repo)
+	}
+	for icon, want := range map[string]string{"": "icon.png missing", "<svg/>": "icon.png is not a PNG", pngOf(256, 192): "square of at least 192 px", pngOf(64, 64): "square of at least 192 px"} {
+		if _, err := load(icon); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("want an error naming %q, got %v", want, err)
+		}
+	}
+	a, errA := load(pngOf(192, 192))
+	b, errB := load(pngOf(256, 256))
+	if errA != nil || errB != nil || a.HousePersona().Rev() == b.HousePersona().Rev() {
+		t.Fatalf("a new icon.png must be a new persona rev: %v %v", errA, errB)
 	}
 }
 

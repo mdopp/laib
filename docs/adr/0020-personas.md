@@ -23,7 +23,8 @@ is.
 1. **A persona is a package**, shipped like a template: in Laib's builtin
    registry and in registry repos. It holds `persona.yml` (name, display,
    languages, wake-word phrase, Piper voice, greeting, prompt, colours,
-   gimmicks), `style.md` (how the character talks) and `icon.svg`.
+   gimmicks), `style.md` (how the character talks), `icon.svg` and
+   `icon.png` (amendment #191).
 2. **One house persona, chat personas per person.** `box.yml persona:` is the
    house's: the wake word, the speakers' voice, the Haus start page and the
    chat default. `chatPersonas:` maps a Signal number to another persona for
@@ -61,3 +62,18 @@ what it does, so the engine, its MCP tool, image and container are
 `persona`, and Joshua is the first persona's data (#133). The `haus` repo and
 address and the `bote` template keep their names; the Bote's Home Assistant
 tool is `ha`, so "Haus" means only the surface (#134).
+
+## Amendment 2026-10-14 (#191): the package carries the icon as PNG too
+
+A phone draws no SVG, and the app should not pull in an SVG library for one
+icon. So a package holds `icon.png` next to `icon.svg`: the same icon as a
+square PNG of at least 192 px, transparency kept. Laib refuses a package
+without one, counts it in the persona's rev, and renders it with the rest to
+`render/persona/<name>/icon.png`, which Haus serves as
+`/napi/persona/icon.png`.
+
+The author makes the PNG, not Laib: `scripts/persona-icon.sh <dir>` renders
+it from `icon.svg` at 512 px with resvg, and both files are committed.
+Laib's Go has no SVG rasteriser, and a family persona from the state repo
+or a registry reaches Laib at runtime, so a build step in Laib's CI could
+not cover it. The package is the unit; it carries what its consumers draw.

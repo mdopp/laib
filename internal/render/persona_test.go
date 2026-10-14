@@ -28,6 +28,11 @@ func TestAPersonaChangeTouchesTheServicesThatUseIt(t *testing.T) {
 	w("personas/hal/persona.yml", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\nvoice: en_US-lessac-medium\n")
 	w("personas/hal/style.md", "Calm.\n")
 	w("personas/hal/icon.svg", "<svg/>")
+	j, err := state.BuiltinPersona("joshua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w("personas/hal/icon.png", j.Files["icon.png"])
 	render := func() Output {
 		st, err := state.Load(repo)
 		if err != nil {
@@ -46,6 +51,10 @@ func TestAPersonaChangeTouchesTheServicesThatUseIt(t *testing.T) {
 	}
 	if a["persona/hal/style.md"] != "Calm.\n" || a["persona/hal/icon.svg"] == "" || a["persona/joshua/persona.yml"] == "" {
 		t.Fatalf("the house and chat personas are rendered under persona/: %v", keys(a))
+	}
+	// #191: the PNG a phone draws (Haus serves it as /napi/persona/icon.png), byte for byte
+	if icon := a["persona/hal/icon.png"]; icon == "" || icon != j.Files["icon.png"] || a["persona/joshua/icon.png"] != j.Files["icon.png"] {
+		t.Fatalf("icon.png is rendered next to icon.svg: %v", keys(a))
 	}
 	// #129: consumers without a YAML parser (Haus, the app through Haus) read
 	// the resolved fields as JSON next to the package
