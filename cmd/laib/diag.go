@@ -90,6 +90,11 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name})
 			}
 		}
+		if p := st.HousePersona(); name == "stimme" && p != nil {
+			if _, f := wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase); f != nil {
+				out = append(out, *f)
+			}
+		}
 		if h := svc.Contract.Health.HTTP; h != "" {
 			client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
