@@ -2,3 +2,8 @@ HAUS_IMAGE: ghcr.io/mdopp/haus:latest
 LAIB_TOKEN: {secret: HAUS_LAIB_TOKEN}
 PROXY_SECRET: {secret: HAUS_PROXY_SECRET}
 SOLARIS_URL: http://host.containers.internal:8787        # Solaris on the same box: validates device tokens, serves the portal paths; empty on the NUC
+HA_URL: http://host.containers.internal:8123             # Home Assistant; used only once HAUS_HA_TOKEN is set (laib secret set HAUS_HA_TOKEN)
+HA_TOKEN: {secret: HAUS_HA_TOKEN}
+ANDROID_FINGERPRINTS: ""                                 # the app's signing SHA256 fingerprints, comma-separated: /.well-known/assetlinks.json
+ENERGY_FLOW: ""                                          # pv=sensor.…,house=…,grid=…,battery=…; empty: Haus matches HA's friendly names
+ENERGY_TOTALS: ""                                        # label=sensor.…,…; empty: the friendly-name fallback

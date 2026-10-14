@@ -11,13 +11,16 @@ routes:
     port: 8650
     exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
     auth: one_factor
-    bypass: [/napi/]
+    bypass: [/napi/, /.well-known/]   # assetlinks.json: the app's TWA checks it without a login
     proxySecret: HAUS_PROXY_SECRET # Caddy sends it as X-Haus-Proxy on the authenticated handler only (ADR 0012 §3)
 secrets:
   - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the haus hand: status, inbox, journal, restart — nothing else
     external: true
     mint: haus
   - name: HAUS_PROXY_SECRET        # generated; without it no page request counts (haus#1)
+  - name: HAUS_HA_TOKEN            # Home Assistant long-lived token (haus#10): Haus serves the house paths itself; without it they stay on the Solaris bridge
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/haus         # devices.json: the paired phones (hashed tokens)
 health:
