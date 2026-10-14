@@ -1,17 +1,17 @@
 HAUS_IMAGE: ghcr.io/mdopp/haus:latest
-LAIB_TOKEN: {secret: HAUS_LAIB_TOKEN}
-PROXY_SECRET: {secret: HAUS_PROXY_SECRET}
+LAIB_TOKEN: !secret HAUS_LAIB_TOKEN
+PROXY_SECRET: !secret HAUS_PROXY_SECRET
 HA_URL: http://host.containers.internal:8123             # Home Assistant; used only once HAUS_HA_TOKEN is set (laib secret set HAUS_HA_TOKEN)
-HA_TOKEN: {secret: HAUS_HA_TOKEN}
+HA_TOKEN: !secret HAUS_HA_TOKEN
 ENERGY_FLOW: ""                                          # pv=sensor.…,house=…,grid=…,battery=…; empty: Haus matches HA's friendly names
 ENERGY_TOTALS: ""                                        # label=sensor.…,…; empty: the friendly-name fallback
 RADICALE_URL: http://host.containers.internal:5232     # the Haushalt's calendar (haus#11)
 RADICALE_USER: ""                                      # the account Haus writes with; empty: no calendar tools
-RADICALE_PASSWORD: {secret: HAUS_RADICALE_PASSWORD}
+RADICALE_PASSWORD: !secret HAUS_RADICALE_PASSWORD
 RADICALE_CALENDAR: ""                                  # the calendar written to; empty: "Haushalt" (created if missing)
-HAUSHALT_TOKEN: {secret: HAUS_HAUSHALT_TOKEN}
+HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
 RADICALE_ADDRESSBOOK: ""                               # the address book written to; empty: "Haushalt"
 PAPERLESS_URL: http://host.containers.internal:8000    # document search for the Haushalt (haus#11)
-PAPERLESS_TOKEN: {secret: HAUS_PAPERLESS_TOKEN}
+PAPERLESS_TOKEN: !secret HAUS_PAPERLESS_TOKEN
 PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN}      # where a found document opens
 WERKSTATT_REPOS: ""                                    # owner/name,… whose pi:ready and needs-claude tickets the Box page shows (haus#15); empty: no card

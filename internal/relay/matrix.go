@@ -90,8 +90,8 @@ func server(id string) string { _, s, _ := strings.Cut(id, ":"); return s }
 // room that is not a room id, that is encrypted (the relay cannot read
 // Megolm) or that holds anyone besides the admin and the Bote.
 func (x *Matrix) Check(ctx context.Context, admin string) error {
-	if x.Token == "" || strings.HasPrefix(x.Token, "${secret:") {
-		return fmt.Errorf("no Matrix token (laib secret set BOTE_MATRIX_TOKEN)") // #185: an unset secret renders as its placeholder
+	if x.Token == "" {
+		return fmt.Errorf("no Matrix token (laib secret set BOTE_MATRIX_TOKEN)") // an unset secret renders empty (#185)
 	}
 	var who struct {
 		UserID string `json:"user_id"`

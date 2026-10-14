@@ -95,17 +95,26 @@ func loadService(dir string) (*Service, error) {
 		}
 		if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
 			m := doc.Content[0]
+			var bad []error
 			for i := 0; i+1 < len(m.Content); i += 2 {
 				k, v := m.Content[i], m.Content[i+1]
-				if v.Tag == "!secret" {
+				// text or `!secret NAME`; anything else once loaded as a silent empty literal (#185)
+				tagged := strings.HasPrefix(v.Tag, "!") && !strings.HasPrefix(v.Tag, "!!")
+				switch {
+				case v.Kind != yaml.ScalarNode || tagged && v.Tag != "!secret" || v.Tag == "!secret" && strings.TrimSpace(v.Value) == "":
+					bad = append(bad, fmt.Errorf("services/%s/values.yml:%d: %s is neither text nor `!secret NAME`", svc.Name, v.Line, k.Value))
+				case v.Tag == "!secret":
 					svc.Values[k.Value] = Value{Secret: v.Value}
-				} else {
+				default:
 					lit := v.Value
 					if v.Tag == "!!null" || strings.TrimSpace(lit) == "" {
 						lit = "" // ~, null and blanks are unset, and render empty (#184)
 					}
 					svc.Values[k.Value] = Value{Literal: lit}
 				}
+			}
+			if len(bad) > 0 {
+				return nil, errors.Join(bad...)
 			}
 		}
 	}

@@ -162,3 +162,24 @@ func TestModelLeaseIsOnTheProxyPort(t *testing.T) {
 		t.Fatal(st.ModelLease())
 	}
 }
+
+// #185: a value is text or `!secret NAME`. Anything else is a load error
+// naming the file and the key, never a silent empty literal.
+func TestAValueThatIsNeitherTextNorSecretFailsTheLoad(t *testing.T) {
+	for _, tc := range []struct{ what, value string }{
+		{"a {secret: NAME} map", "{secret: S}"},
+		{"a block mapping", "\n  secret: S"},
+		{"a sequence", "[a, b]"},
+		{"a !secret without a name", "!secret"},
+		{"a !secret with a blank name", `!secret ""`},
+		{"a misspelt tag", "!secrets S"},
+	} {
+		dir := minimal(t)
+		write(t, dir, "services/auth/laib.yml", "name: auth\nsecrets: [{name: S}]\nroutes: [{host: auth, port: 9091, exposure: public, auth: none}]\n")
+		write(t, dir, "services/auth/values.yml", "A: literal\nBAD: "+tc.value+"\n")
+		_, err := Load(dir)
+		if err == nil || !strings.Contains(err.Error(), "services/auth/values.yml") || !strings.Contains(err.Error(), "BAD") {
+			t.Errorf("%s: want a load error naming services/auth/values.yml and BAD, got %v", tc.what, err)
+		}
+	}
+}

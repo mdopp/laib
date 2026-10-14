@@ -149,7 +149,6 @@ func TestMatrixTrustsOneHomeserverAndAPrivateRoom(t *testing.T) {
 	refused("a room alias instead of a room id", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "#raum:hs.test"}, "@admin:hs.test", "room id")
 	refused("a wrong token", &Matrix{URL: h.srv.URL, Token: "nope", Room: "!raum:hs.test"}, "@admin:hs.test", "whoami")
 	refused("no token", &Matrix{URL: h.srv.URL, Room: "!raum:hs.test"}, "@admin:hs.test", "BOTE_MATRIX_TOKEN")
-	refused("an unset secret's placeholder (#185)", &Matrix{URL: h.srv.URL, Token: "${secret:BOTE_MATRIX_TOKEN}", Room: "!raum:hs.test"}, "@admin:hs.test", "BOTE_MATRIX_TOKEN")
 	refused("a room the Bote is not in", &Matrix{URL: h.srv.URL, Token: "matrix-tok", Room: "!fremd:hs.test"}, "@admin:hs.test", "is the Bote in it")
 	set(func() { h.members = append(h.members, "@eve:hs.test") })
 	refused("a third member in the room", x, "@admin:hs.test", "@eve:hs.test")
