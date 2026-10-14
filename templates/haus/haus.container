@@ -11,11 +11,9 @@ Environment=LAIB_URL=http://host.containers.internal:5900
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=HAUS_PROXY_SECRET=${PROXY_SECRET}
 Environment=LAIB_PUBLIC_URL=https://laib.${DOMAIN}
-Environment=SOLARIS_URL=${SOLARIS_URL}
-# the house paths from Home Assistant (haus#10); without the token they stay on the bridge
+# the house paths from Home Assistant (haus#10); without the token Haus serves none of them
 Environment=HAUS_HA_URL=${HA_URL}
 Environment=HAUS_HA_TOKEN=${HA_TOKEN}
-Environment=HAUS_ANDROID_FINGERPRINTS=${ANDROID_FINGERPRINTS}
 Environment=HAUS_ENERGY_FLOW=${ENERGY_FLOW}
 Environment=HAUS_ENERGY_TOTALS=${ENERGY_TOTALS}
 # the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder
