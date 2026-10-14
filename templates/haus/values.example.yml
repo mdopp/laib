@@ -12,3 +12,7 @@ RADICALE_USER: ""                                      # the account Haus writes
 RADICALE_PASSWORD: {secret: HAUS_RADICALE_PASSWORD}
 RADICALE_CALENDAR: ""                                  # the calendar written to; empty: "Haushalt" (created if missing)
 HAUSHALT_TOKEN: {secret: HAUS_HAUSHALT_TOKEN}
+RADICALE_ADDRESSBOOK: ""                               # the address book written to; empty: "Haushalt"
+PAPERLESS_URL: http://host.containers.internal:8000    # document search for the Haushalt (haus#11)
+PAPERLESS_TOKEN: {secret: HAUS_PAPERLESS_TOKEN}
+PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN}      # where a found document opens
