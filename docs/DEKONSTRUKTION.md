@@ -25,6 +25,14 @@ plumbing for those two things plus the admin's own needs.
 
 ## The cut: six constructs, one job each
 
+*Superseded in part (2026-10-14).* The diagram and "Solaris becomes a brain
+with an API" below are the plan of 2026-10-10. Since then:
+- the Bote (Hermes, ADR 0016) is the agent people talk to;
+- Solaris retires (ADR 0015);
+- the memory moves into Haus (haus#13).
+
+The table is current.
+
 ```
 Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus-Android (widgets, TWA)
                  │                       │
@@ -40,9 +48,9 @@ Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus
 | **Laib Operator** | `mdopp/laib` (`cmd/laib-operator`, template `operator`) | the box's admin agent: watch, inspect, correct, escalate, morning report (ADR 0013) | the household, voice, a chat UI |
 | **Solaris** | retired (ADR 0015, proposed) | nothing; its memory moves into Haus as a library, its spoken intents into HA Assist, "was ist …" into Frage | — |
 | **Stimme** | templates in the household registry | openWakeWord, Whisper, Martin TTS, the wakeword trainer — the Wyoming set HA Assist speaks | identity: everyone is a guest |
-| **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and Haus's Sprechen backend | memory, tools, a loop |
-| **Haus** | new: `mdopp/haus` | the surface: pages and cards, companion API `/napi`, push, device tokens, favorites, energy, HA state aggregation, the "Sprechen" field that calls Solaris | an agent loop, memory, a model |
-| **Haus-Android** | `mdopp/solaris-android` → renamed | TWA of Haus, the native widgets, the tile | its own backend logic |
+| **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and the Bote's `frage` tool (the Sprechen field goes to the Bote, ADR 0015 amendment) | memory, tools, a loop |
+| **Haus** | new: `mdopp/haus` | the surface: pages and cards, companion API `/napi`, push, device tokens, favorites, energy, HA state aggregation, the "Sprechen" field that talks to the Bote, the memory library (haus#13) | an agent loop, a model |
+| **Haus-Android** | `mdopp/solaris-android` (name kept: the installed app's contract, ADR 0021) | TWA of Haus, the native widgets, the tile | its own backend logic |
 | **Bote** | Hermes as stock, template `bote` | the agent you talk to: Signal, the Sprechen field; house, box (read + propose), Frage, memory, approvals as the admin by verified number (ADR 0016) | the voice path, box repairs |
 | **Werkstatt** | `mdopp/laib` (`werkstatt/`) | pi, Claude Code, autoloop, tickets, transcripts | a chat for the family |
 
@@ -91,7 +99,8 @@ Geräte, Mitteilungen; new: *Box* (readiness + inbox count for admins).
 ## What disappears
 
 - The chat as primary surface: the `chats` tab, the session list UI.
-  Sessions stay in Solaris for memory; Haus shows them as *Verlauf*.
+  Sessions go with Solaris; the Bote keeps its own (Hermes), and Haus's
+  memory library (haus#13) is the one search.
 - Solaris's admin profile, `servicebay_admin` toolbox, `sb_*` modules,
   `/p/servicebay`, the model widget: the Operator and Laib's pages take
   over (about 2,000 lines).
@@ -127,7 +136,7 @@ Geräte, Mitteilungen; new: *Box* (readiness + inbox count for admins).
    `solarisbay` is archived once Haus holds the memory library.
 7. ~~Rename `solaris-android` to `haus-android`.~~ Superseded by ADR 0021:
    the package id, the scheme and the repo name are the installed app's
-   contract; the app ships the new names next to the old ones (#130).
+   contract; the app ships the new names next to the old ones (solaris-android#174).
 
 Each step leaves every surface working. Steps 1 and 2 are Laib work and
 start now; 3 to 7 are solarisbay and haus work with their own issues.
