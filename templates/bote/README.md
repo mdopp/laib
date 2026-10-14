@@ -55,12 +55,18 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    `Authorization: Bearer <BOTE_NOTIFY_TOKEN>` (generated on add). It looks
    the person up in `render/people/people.json`, refuses an unknown person
    (404, never a free target) and delivers with
-   `hermes send --to <channel> --file -`, the next channel when one fails.
-   Hermes reads a private copy of `.env` and `config.yaml` (mounted
-   read-only), so no gateway state is touched. Text is capped at 1000
-   characters, a request at 4 KB, five messages per person and twenty in
-   total per minute; `MEDIA:` is refused (Hermes would attach a file). The
-   log names the person, the platform and the first twelve characters. Home
+   `hermes send --to <channel> --file -`, the next channel when one fails
+   (20 s per channel, 50 s for all, under Home Assistant's 60 s). Hermes
+   reads a private 0600 copy of `bote/notify/.env`, which post-deploy writes
+   with the platform credentials only (`SIGNAL_*`, `TELEGRAM_*`, …): no Bote
+   token, no model key, nothing of the gateway's HERMES_HOME. Text is capped
+   at 1000 characters, a request at 4 KB, five messages per person and
+   twenty in total per minute; `MEDIA:` is refused (Hermes would attach a
+   file). The log names the person, the platform, the exit code and the
+   first twelve characters, never the target or Hermes' output.
+   `render/people/people.json` is 0600. Known limit: Hermes mirrors a sent
+   message into the private copy's sessions, not the gateway's, so when the
+   person answers, the Bote does not see what it sent. Home
    Assistant's template renders `rest_command.mitteilung` against it, and
    with the automat wired the SOUL turns "sag mir Bescheid, wenn …" into an
    automation with that action, through the automat's usual draft and

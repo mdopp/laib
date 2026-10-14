@@ -82,9 +82,9 @@ Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 channels a message to them goes out on, in order, as `hermes send` takes
 them: `signal:`, `sms:` and `whatsapp:` with an E.164 number, `telegram:`
 with a numeric chat id, `matrix:` with `@user:server` or `!room:server`,
-`discord:` and `slack:` with a channel id, `email:` with an address. A unit
+`discord:` and `slack:` with a channel id, `email:` with an address that has a domain (Hermes' own target shapes; no Matrix thread suffix). A unit
 that carries `${PEOPLE_REV}` (the Bote's `bote-notify`) gets
-`/mnt/data/laib/render/people/people.json` (name → channels) to mount
+`/mnt/data/laib/render/people/people.json` (name → channels, mode 0600) to mount
 read-only and is restarted when a person or a channel changes. A message is
 addressed to a person by name, never to a free target.
 
