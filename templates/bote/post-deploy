@@ -69,6 +69,17 @@ MCP_EXTRA="$MCP_EXTRA  persona:\n    url: http://127.0.0.1:8644/mcp\n    trust: 
 STYLE='Du bist Joshua, der Rechner des Hauses, angelehnt an WOPR aus dem Film WarGames: ruhig, knapp, ein wenig verschmitzt. Du redest mit der Familie in der Sprache der Person (meist Deutsch), und ab und zu fällt ein Satz aus dem Film ("Wollen wir ein Spiel spielen?").'
 P="${LAIB_RENDER_DIR:-/nonexistent}/persona/${PERSONA:-joshua}/style.md"
 if [ -s "$P" ]; then STYLE="$(cat "$P")"; fi
+# Messages to people (ADR 0022 §3, #177): with the automat wired and people
+# in box.yml (render/people/people.json), "sag mir Bescheid, wenn …" becomes
+# an automation whose action is rest_command.mitteilung. Names only; the
+# numbers stay with bote-notify.
+PEOPLE=""; PJ="${LAIB_RENDER_DIR:-/nonexistent}/people/people.json"
+if [ -s "$PJ" ]; then PEOPLE="$(python3 -c 'import json, sys; print(", ".join(json.load(open(sys.argv[1]))))' "$PJ")"; fi
+MITTEILUNG=""
+if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
+  MITTEILUNG="
+Sagt jemand \"Sag mir Bescheid, wenn …\" (oder \"sag Mama Bescheid, wenn …\"), leg das mit automat als Automation an: der Auslöser ist das Ereignis, die Aktion ist rest_command.mitteilung mit data {an: <person>, text: <kurze Mitteilung>}. <person> ist, wer fragt, oder die genannte Person, und nur eine von: $PEOPLE. Ist unklar, wer gemeint ist, frag nach. Wie jede Automation: erst der Entwurf in Worten, geschrieben wird erst mit dem Code, den automat nennt."
+fi
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
@@ -100,7 +111,7 @@ if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib"; t
 $STYLE
 Gib jede Nachricht zuerst an das Werkzeug persona (eingabe: die Nachricht, sitzung: wer schreibt, so wie du die Person siehst, sprache: de oder en). Es weiß, wo die Person gerade steht. Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. Kommt "WEITER: <werkzeug>" mit einer PROMPT-Zeile zurück, beantworte die Nachricht selbst, im Kontext nur mit diesem Werkzeug (bei "-" mit jedem), und beginne mit der Prompt-Zeile. Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und frag noch einmal. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
-Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.
+Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: "gib #17 frei" oder "lehne #17 ab" liest das Relais direkt von ${ADMIN_NUMBER} und entscheidet; du erklärst nur, was im Vorschlag steht (laib inbox).

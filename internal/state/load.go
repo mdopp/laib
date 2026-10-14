@@ -22,7 +22,7 @@ var unitExts = map[string]bool{".container": true, ".pod": true, ".volume": true
 
 // assetExts are files copied next to the units without substitution
 // (a presets.json the sidecar reads, a config a hook renders from).
-var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".conf": true}
+var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".conf": true, ".py": true} // .py: a small server a stock image runs (bote-notify)
 
 // Load reads and validates a state repo. All validation errors are joined so
 // an agent sees every problem at once.
@@ -60,6 +60,7 @@ func Load(dir string) (*State, error) {
 	}
 
 	errs = append(errs, st.loadPersonas()...)
+	errs = append(errs, st.validatePeople()...)
 	errs = append(errs, st.validate()...)
 	st.Warnings = append(st.purposeWarnings(), st.personaWarnings()...)
 	if len(errs) > 0 {
@@ -304,7 +305,8 @@ func proxySecretsDeclared(svc *Service) error {
 
 // Builtins are the placeholders every unit may use without a values.yml entry.
 var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_URL", "MODEL_KEY", "MODEL_LEASE",
-	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV"} // the house persona (ADR 0020)
+	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV", // the house persona (ADR 0020)
+	"PEOPLE_REV"} // box.yml people (ADR 0022 §3): a unit that carries it gets render/people/people.json
 
 // ModelURL is where a service on this box finds the LLM: the local model
 // role's proxy, or box.yml model.url. Empty when there is neither.

@@ -53,7 +53,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			out["quadlet/"+name+"/"+file] = content
 		}
 	}
-	if usesPersona(st) {
+	if uses(st, "PERSONA") {
 		// the packages a service mounts from /mnt/data/laib/render/persona (ADR 0020)
 		for pname, p := range st.Personas {
 			for file, content := range p.Files {
@@ -62,6 +62,10 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			out["persona/"+pname+"/persona.json"] = p.JSON()
 		}
 		out["persona/chat.yml"] = st.ChatMap()
+	}
+	if uses(st, "PEOPLE_REV") {
+		// box.yml people for bote-notify (ADR 0022 §3), mounted as a folder so a rewrite is seen
+		out["people/people.json"] = st.PeopleJSON()
 	}
 	if st.Box.Roles.Proxy != "" {
 		out["caddy/Caddyfile"] = caddyfile(st, secrets)
@@ -202,6 +206,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
 		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
 	}
+	vars["PEOPLE_REV"] = st.PeopleRev()
 	if st.Box.Model.KeySecret != "" {
 		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
 	} else if st.Box.Roles.Model != "" {
@@ -219,12 +224,12 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 	return vars
 }
 
-// usesPersona: some service's unit names a PERSONA value.
-func usesPersona(st *state.State) bool {
+// uses: some service's unit names a value starting with prefix (PERSONA…, PEOPLE_REV).
+func uses(st *state.State, prefix string) bool {
 	for _, svc := range st.Services {
 		for _, content := range svc.Units {
 			for _, v := range state.Placeholders(content) {
-				if strings.HasPrefix(v, "PERSONA") {
+				if strings.HasPrefix(v, prefix) {
 					return true
 				}
 			}
