@@ -295,7 +295,9 @@ jobs:
                 grep -q "md.* xfs" <<<"$(findmnt -n -o SOURCE,FSTYPE /mnt/data)" || { echo "/mnt/data is not the RAID after reinstall"; exit 1; }
                 test -f /mnt/data/laib/vm-marker || { echo "marker lost: the data disk was recreated"; exit 1; }
                 cat /mnt/data/laib/vm-marker
-                grep -q "\[UU\]" /proc/mdstat || { echo "mirror not assembled after reinstall"; exit 1; }
+                # a member that fell behind in the cuts is added back and resyncs (#172): give it a minute
+                for i in $(seq 1 30); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
+                grep -q "\[UU\]" /proc/mdstat || { echo "mirror not assembled after reinstall"; cat /proc/mdstat; journalctl --no-pager -b -u laib-data-disk | tail -10; exit 1; }
                 grep -q "UUID=" /etc/laib/data-disk || { echo "the reinstall did not record the array by UUID"; exit 1; }
                 [ "$(sudo blkid -s TYPE -o value "$(sudo blkid -L backup)")" = ext4 ] || { echo "the reinstall touched the foreign disk"; exit 1; }'
           . ./box.sh; marker
