@@ -47,6 +47,26 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
    automation_loeschen, automation_schalten.
 
+6. Messages to people (ADR 0022 §3, #177): declare the household in
+   box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,
+   preferred first; docs/STATE.md). The `bote-notify` container runs this
+   template's `notify.py` (stdlib) in the stock Hermes image and serves
+   `POST /mitteilung {"an": "mama", "text": "…"}` on `127.0.0.1:8645` with
+   `Authorization: Bearer <BOTE_NOTIFY_TOKEN>` (generated on add). It looks
+   the person up in `render/people/people.json`, refuses an unknown person
+   (404, never a free target) and delivers with
+   `hermes send --to <channel> --file -`, the next channel when one fails.
+   Hermes reads a private copy of `.env` and `config.yaml` (mounted
+   read-only), so no gateway state is touched. Text is capped at 1000
+   characters, a request at 4 KB, five messages per person and twenty in
+   total per minute; `MEDIA:` is refused (Hermes would attach a file). The
+   log names the person, the platform and the first twelve characters. Home
+   Assistant's template renders `rest_command.mitteilung` against it, and
+   with the automat wired the SOUL turns "sag mir Bescheid, wenn …" into an
+   automation with that action, through the automat's usual draft and
+   code. The Bote itself has no tool to message anyone: only an automation a
+   person confirmed does (Hermes' `send_message` is not a model tool).
+
 ## Tools: only what answers, and a budget (#54)
 
 The hook probes every MCP URL at apply time (any HTTP answer counts, a

@@ -65,6 +65,9 @@ peers:                            # the other boxes of the household
 persona: joshua                   # the house persona (ADR 0020): wake word, voice, Haus, chat default; joshua when unset
 chatPersonas:                     # a Signal number (E.164) that talks to another persona in the chat
   "+4917012345678": hal
+people:                           # the household's people and their chat channels, preferred first (ADR 0022 §3)
+  mama: ["signal:+4917012345678", "telegram:123456789"]
+  lena: ["matrix:@lena:example.org"]
 ```
 
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
@@ -74,6 +77,16 @@ Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${PERSONA_LANGUAGES}` (`de,en`) and
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change.
+
+`people` names each person once (lowercase, like a service name) with the
+channels a message to them goes out on, in order, as `hermes send` takes
+them: `signal:`, `sms:` and `whatsapp:` with an E.164 number, `telegram:`
+with a numeric chat id, `matrix:` with `@user:server` or `!room:server`,
+`discord:` and `slack:` with a channel id, `email:` with an address. A unit
+that carries `${PEOPLE_REV}` (the Bote's `bote-notify`) gets
+`/mnt/data/laib/render/people/people.json` (name → channels) to mount
+read-only and is restarted when a person or a channel changes. A message is
+addressed to a person by name, never to a free target.
 
 ## personas/<name>/ (optional)
 
