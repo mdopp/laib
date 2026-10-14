@@ -45,7 +45,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | Haus (pages, cards, `/napi`, the Haushalt MCP source) | new repo `mdopp/haus` (DEKONSTRUKTION step 3) |
 | searxng | inside the `frage` pod, built-in |
 | music-assistant | **port needed**, household registry |
-| signal-cli | inside the `bote` pod, built-in |
+| signal-cli | inside the `bote` pod while the Bote has Signal, built-in |
 | the household registry itself | new repo `mdopp/laib-templates`, `laib template lint` in CI |
 
 ## The count

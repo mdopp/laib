@@ -1,9 +1,10 @@
-// Package relay is the deterministic approval path from Signal (#48): code
-// that sees the sender's number decides, never the model. It listens to
-// signal-cli's daemon (the event stream Hermes listens to as well; the
-// daemon serves every subscriber), reacts only to the admin's number and
-// only to "gib #N frei" / "lehne #N ab", shows the proposal's consequence
-// back, and calls Laib with a token that can do nothing but decide.
+// Package relay is the deterministic approval path (#48, #184): code that
+// sees the sender decides, never the model. It listens to signal-cli's
+// daemon (the event stream Hermes listens to as well; the daemon serves
+// every subscriber) and reads the admin's one Matrix room, reacts only to
+// the admin's number or Matrix ID and only to "gib #N frei" / "lehne #N
+// ab", shows the proposal's consequence back, and calls Laib with a token
+// that can do nothing but decide. Telegram never decides (ADR 0016 §3).
 package relay
 
 import (
@@ -21,23 +22,60 @@ import (
 	"time"
 )
 
-// Config: the admin's number, Laib's MCP and the approver token.
+// Config: the admin's identities, Laib's MCP and the approver token.
 type Config struct {
-	Admin     string // E.164; only this number decides
+	Admin     string // E.164; on Signal only this number decides (empty: no Signal approvals)
+	AdminMXID string // on Matrix only this ID decides, in Room (empty: no Matrix approvals)
+	Room      string // the admin's one Matrix room, !id:server
 	LaibURL   string // http://host.containers.internal:5900/mcp
 	Token     string // the approver hand's token
 	SignalURL string // http://127.0.0.1:8080 — signal-cli daemon --http
 	Account   string // the Bote's own number
 }
 
-// Message is one incoming Signal message.
+// Message is one incoming message. Platform is "signal" or "matrix"; any
+// other, or none, never decides.
 type Message struct {
-	From, Text string
+	Platform, From, Room, Text string
 }
 
-// Sender sends a Signal message.
+// replyTo: a Matrix answer goes to the room, a Signal one to the number.
+func (m Message) replyTo() string {
+	if m.Platform == "matrix" {
+		return m.Room
+	}
+	return m.From
+}
+
+// Sender sends a message to a number or a room.
 type Sender interface {
 	Send(ctx context.Context, to, text string) error
+}
+
+// Senders routes an answer by its address: a room (!…) to Matrix, a number to Signal.
+type Senders struct{ Signal, Matrix Sender }
+
+// Send one message on the address's platform.
+func (s Senders) Send(ctx context.Context, to, text string) error {
+	out := s.Signal
+	if strings.HasPrefix(to, "!") {
+		out = s.Matrix
+	}
+	if out == nil {
+		return fmt.Errorf("no sender for %s", to)
+	}
+	return out.Send(ctx, to, text)
+}
+
+// admin: the sender is the admin on a platform that decides (ADR 0016 §3).
+func (r *Relay) admin(m Message) bool {
+	switch m.Platform {
+	case "signal":
+		return r.cfg.Admin != "" && m.From == r.cfg.Admin
+	case "matrix":
+		return r.cfg.AdminMXID != "" && m.From == r.cfg.AdminMXID && m.Room == r.cfg.Room
+	}
+	return false // Telegram and anything else never decide
 }
 
 // Relay handles messages.
@@ -136,11 +174,12 @@ func cardText(p *proposal) string {
 // else; not a verdict → nothing; a verdict → the proposal's consequence is
 // looked up, Laib decides, the admin gets the outcome.
 func (r *Relay) Handle(ctx context.Context, m Message) {
-	if sm := show.FindStringSubmatch(m.Text); sm != nil && m.From == r.cfg.Admin {
+	to := m.replyTo()
+	if sm := show.FindStringSubmatch(m.Text); sm != nil && r.admin(m) {
 		if p := r.open(ctx, sm[1]); p != nil {
-			r.out.Send(ctx, m.From, cardText(p))
+			r.out.Send(ctx, to, cardText(p))
 		} else {
-			r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s ist nicht offen.", sm[1]))
+			r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s ist nicht offen.", sm[1]))
 		}
 		return
 	}
@@ -148,15 +187,20 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 	if match == nil {
 		return // plain chat is Hermes' business
 	}
-	if m.From != r.cfg.Admin {
-		r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Freigabe von unbekannter Nummer ignoriert: %s schrieb '%s'\"", m.From, strings.ReplaceAll(match[0], "\"", "'")))
+	if !r.admin(m) {
+		who := "unbekannter Nummer"
+		if m.Platform != "signal" {
+			who = "fremdem Absender (" + strings.TrimSpace(m.Platform+" "+m.Room) + ")"
+		}
+		clean := func(s string) string { return strings.ReplaceAll(s, "\"", "'") }
+		r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Freigabe von %s ignoriert: %s schrieb '%s'\"", clean(who), clean(m.From), clean(match[0])))
 		return
 	}
 	id := match[2]
 	approve := strings.EqualFold(match[1], "gib")
 	p := r.open(ctx, id)
 	if p == nil {
-		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s ist nicht offen — nichts getan. `laib inbox` zeigt die offenen.", id))
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s ist nicht offen — nichts getan. `laib inbox` zeigt die offenen.", id))
 		return
 	}
 	what := p.Card.Summary
@@ -173,11 +217,11 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 	out, err := r.laib(ctx, verb, id)
 	switch {
 	case err != nil:
-		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s (%s): nicht %s — %v", id, what, map[bool]string{true: "freigegeben", false: "abgelehnt"}[approve], err))
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s (%s): nicht %s — %v", id, what, map[bool]string{true: "freigegeben", false: "abgelehnt"}[approve], err))
 	case approve:
-		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s freigegeben: %s\n%s", id, what, tail(out, 300)))
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s freigegeben: %s\n%s", id, what, tail(out, 300)))
 	default:
-		r.out.Send(ctx, m.From, fmt.Sprintf("Vorschlag #%s abgelehnt: %s", id, what))
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s abgelehnt: %s", id, what))
 	}
 }
 
@@ -234,7 +278,7 @@ func ParseEvent(data []byte) (Message, bool) {
 	if from == "" || text == "" {
 		return Message{}, false
 	}
-	return Message{From: from, Text: text}, true
+	return Message{Platform: "signal", From: from, Text: text}, true
 }
 
 // SignalSender sends through the daemon's JSON-RPC endpoint.

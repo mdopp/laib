@@ -1,6 +1,7 @@
 package state
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -31,6 +32,28 @@ var channelHint = map[string]string{"signal": "E.164 (+49…)", "sms": "E.164 (+
 
 func (st *State) validatePeople() []error {
 	var errs []error
+	// the channels some service delivers on (#184): with any declared, a
+	// person's target must be on one that is set
+	on, off := map[string]bool{}, map[string]string{}
+	declared := false
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		var vals []string
+		for _, platform := range slices.Sorted(maps.Keys(svc.Contract.Channels)) {
+			v := svc.Contract.Channels[platform]
+			declared, vals = true, append(vals, v)
+			if _, ok := channelRe[platform]; !ok {
+				errs = append(errs, fmt.Errorf("services/%s/laib.yml: channels: %q is not a platform people are reached on", name, platform))
+			} else if svc.Set(v) {
+				on[platform] = true
+			} else {
+				off[platform] = fmt.Sprintf("services/%s: %s is empty", name, v)
+			}
+		}
+		if len(vals) > 0 && !slices.ContainsFunc(vals, svc.Set) {
+			errs = append(errs, fmt.Errorf("services/%s: no channel is set (one of %s)", name, strings.Join(vals, ", ")))
+		}
+	}
 	for _, name := range slices.Sorted(maps.Keys(st.Box.People)) {
 		if !nameRe.MatchString(name) {
 			errs = append(errs, fmt.Errorf("box.yml people: %q is not a name (lowercase, like mama)", name))
@@ -48,6 +71,8 @@ func (st *State) validatePeople() []error {
 				errs = append(errs, fmt.Errorf("box.yml people.%s: %q has no target", name, ch))
 			case !re.MatchString(target):
 				errs = append(errs, fmt.Errorf("box.yml people.%s: %q: the target must be %s", name, ch, channelHint[platform]))
+			case declared && !on[platform]:
+				errs = append(errs, fmt.Errorf("box.yml people.%s: %q: no service delivers on %s (%s)", name, ch, platform, cmp.Or(off[platform], "none declares it")))
 			}
 		}
 	}

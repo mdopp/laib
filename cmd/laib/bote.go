@@ -40,12 +40,13 @@ func signalLinkQR(ctx context.Context, base, device string) ([]byte, error) {
 }
 
 // boteSignalBase is signal-cli's REST address on this box: the first port
-// the service providing `bote` declares (its laib.yml says so), on loopback.
+// the service providing `bote` declares (its laib.yml says so), on loopback;
+// empty while the Bote has no Signal (#184).
 func boteSignalBase(st *state.State) string {
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, p := range svc.Contract.Provides {
-			if p == "bote" && len(svc.Contract.Ports) > 0 {
+			if p == "bote" && len(svc.Contract.Ports) > 0 && svc.Set(svc.Contract.Channels["signal"]) {
 				return fmt.Sprintf("http://127.0.0.1:%d", svc.Contract.Ports[0].Port)
 			}
 		}

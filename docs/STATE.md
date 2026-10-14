@@ -86,7 +86,10 @@ with a numeric chat id, `matrix:` with `@user:server` or `!room:server`,
 that carries `${PEOPLE_REV}` (the Bote's `bote-notify`) gets
 `/mnt/data/laib/render/people/people.json` (name → channels, mode 0600) to mount
 read-only and is restarted when a person or a channel changes. A message is
-addressed to a person by name, never to a free target.
+addressed to a person by name, never to a free target. When a service
+declares `channels` (below), every target must be on a platform one of them
+has set; a `matrix:` target on a box whose Bote has no Matrix fails plan,
+naming the value that would switch it on (#184).
 
 ## personas/<name>/ (optional)
 
@@ -157,7 +160,34 @@ ports:
 gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
 after: [authelia]                # restarted and verified before this one
+when:                            # a unit exists only while one of its values is set (#184)
+  paperless-mail.container: [MAIL_HOST]
+requires:                        # a set value needs these set too (#184)
+  MAIL_HOST: [MAIL_PASSWORD]
+channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 ```
+
+`when` names a unit file and the values that switch it on. While none of
+them is set, the unit is gone from the load: not rendered, not verified,
+removed from the box like any unit the state no longer has, and its own
+placeholders need no value. `laib plan` prints each such unit as `AUS:`
+with the value it waits for. Errors: a name that is no unit of the
+service, a value `values.yml` does not have, and turning off a unit that a
+remaining one joins or requires (`Pod=`, `Requires=`, `BindsTo=`).
+
+A value is **set** when it is a non-empty literal. `""`, blanks, `~` and
+`null` are unset, and load (and render) as empty. `false` is text and
+counts as set; write `""` to switch something off. A `!secret` never counts
+as set, because a plain load does not know secrets.
+
+`requires` maps a value to the values it needs once it is set. A literal
+one that stays empty fails the load; a `!secret` one fails plan and apply,
+which know secrets, before anything is written. Both sides must be values
+of the service.
+
+`channels` maps a `people` platform to the value that switches it on (the
+Bote: `signal`, `matrix`, `telegram`). A service that declares channels
+needs at least one of them set.
 
 This file is what used to be `variables.json` + the subdomain, secret, port
 and backup conventions spread over the ServiceBay codebase. It is the

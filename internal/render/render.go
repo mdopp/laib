@@ -40,6 +40,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	out := Output{}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
+		if unmet := svc.Unmet(secrets); secrets != nil && len(unmet) > 0 {
+			return nil, fmt.Errorf("services/%s: %s", name, strings.Join(unmet, "; ")) // before anything is written (#184)
+		}
 		vars := variables(st, svc, secrets)
 		for file, content := range svc.Units {
 			switch strings.TrimPrefix(filepath.Ext(file), ".") {

@@ -174,5 +174,48 @@ class Notify(unittest.TestCase):
         self.assertNotIn("123", line)
 
 
+    def test_delivers_on_matrix_and_telegram_through_hermes_send(self):
+        # #184: every configured channel is a `hermes send` target, Matrix and Telegram as much as Signal
+        self.people.write_text(json.dumps({"lena": ["matrix:!lena:example.org", "telegram:789"]}))
+        (self.src / ".env").write_text("MATRIX_HOMESERVER=https://hs.example.org\nMATRIX_ACCESS_TOKEN=t\nMATRIX_E2EE_MODE=off\nTELEGRAM_BOT_TOKEN=b\n")
+        code, body = self.post({"an": "lena", "text": "hallo"})
+        self.assertEqual((code, body.get("kanal")), (200, "matrix"), body)
+        self.assertEqual(self.calls()[0]["argv"][:3], ["send", "--to", "matrix:!lena:example.org"])
+        self.assertIn("MATRIX_E2EE_MODE=off", self.calls()[0]["env"])
+        os.environ["FAKE_FAIL"] = "matrix:!lena:example.org"
+        code, body = self.post({"an": "lena", "text": "hallo"})
+        self.assertEqual((code, body.get("kanal")), (200, "telegram"), body)
+        self.assertEqual(self.calls()[-1]["argv"][:3], ["send", "--to", "telegram:789"])
+
+    def test_health_answers_and_asks_signal_cli_only_with_signal(self):
+        # #184: the pod's health is bote-notify, which every Bote has; with Signal it also asks signal-cli
+        import http.server
+
+        def health():
+            try:
+                with urllib.request.urlopen(self.url.replace("/mitteilung", "/health"), timeout=5) as r:
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+        (self.src / ".env").write_text("TELEGRAM_BOT_TOKEN=b\n")
+        self.assertEqual(health(), 200)
+        (self.src / ".env").write_text("SIGNAL_HTTP_URL=http://127.0.0.1:1\nSIGNAL_ACCOUNT=+491\n")
+        self.assertEqual(health(), 503)
+
+        class About(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+
+            def log_message(self, *a):
+                pass
+        about = http.server.HTTPServer(("127.0.0.1", 0), About)
+        threading.Thread(target=about.serve_forever, daemon=True).start()
+        try:
+            (self.src / ".env").write_text(f"SIGNAL_HTTP_URL=http://127.0.0.1:{about.server_port}\nSIGNAL_ACCOUNT=+491\n")
+            self.assertEqual(health(), 200)
+        finally:
+            about.shutdown(); about.server_close()
+        self.assertEqual(self.calls(), [])
+
 if __name__ == "__main__":
     unittest.main()

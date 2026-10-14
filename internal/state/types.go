@@ -1,6 +1,12 @@
 // Package state loads and validates the Laib state repo (docs/STATE.md).
 package state
 
+import (
+	"fmt"
+	"maps"
+	"slices"
+)
+
 // Box is box.yml.
 type Box struct {
 	Domain   string `yaml:"domain"`
@@ -176,20 +182,28 @@ type Approval struct {
 
 // Contract is services/<name>/laib.yml.
 type Contract struct {
-	Name         string      `yaml:"name"`
-	Template     TemplateRef `yaml:"template"`
-	Routes       []Route     `yaml:"routes"`
-	Secrets      []Secret    `yaml:"secrets"`
-	OIDC         *OIDC       `yaml:"oidc"`
-	Data         []DataPath  `yaml:"data"`
-	Health       Health      `yaml:"health"`
-	Ports        []Port      `yaml:"ports"`
-	GPU          bool        `yaml:"gpu"`
-	HostNetwork  bool        `yaml:"hostNetwork"`
-	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
-	Needs        []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
-	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
-	MigratedFrom string      `yaml:"migratedFrom"`
+	Name        string      `yaml:"name"`
+	Template    TemplateRef `yaml:"template"`
+	Routes      []Route     `yaml:"routes"`
+	Secrets     []Secret    `yaml:"secrets"`
+	OIDC        *OIDC       `yaml:"oidc"`
+	Data        []DataPath  `yaml:"data"`
+	Health      Health      `yaml:"health"`
+	Ports       []Port      `yaml:"ports"`
+	GPU         bool        `yaml:"gpu"`
+	HostNetwork bool        `yaml:"hostNetwork"`
+	After       []string    `yaml:"after"`    // services restarted and verified before this one (#12)
+	Needs       []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
+	Provides    []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
+	// When: a unit file exists only while one of the named values is set (#184).
+	When map[string][]string `yaml:"when"`
+	// Requires: a value that is set needs these set too (#184); a literal is
+	// checked at load, a !secret at plan, which knows secrets.
+	Requires map[string][]string `yaml:"requires"`
+	// Channels: the people platforms this service delivers on, each on while
+	// its value is set (ADR 0022 §3, #184).
+	Channels     map[string]string `yaml:"channels"`
+	MigratedFrom string            `yaml:"migratedFrom"`
 }
 
 // TemplateRef says where a service's files came from.
@@ -259,10 +273,35 @@ type Value struct {
 	Secret  string // set when the value was `!secret NAME`
 }
 
+// Set: the value is a non-empty literal. ~, null and blanks load as empty;
+// `false` is text and counts; a !secret never does, plan does not know it.
+func (svc *Service) Set(name string) bool { return svc.Values[name].Literal != "" }
+
+// Unmet lists what `requires` leaves open: with secrets nil the literal
+// values (load), with secrets the !secret ones (plan, render).
+func (svc *Service) Unmet(secrets map[string]string) []string {
+	var out []string
+	for _, v := range slices.Sorted(maps.Keys(svc.Contract.Requires)) {
+		if !svc.Set(v) {
+			continue
+		}
+		for _, w := range svc.Contract.Requires[v] {
+			switch ref := svc.Values[w].Secret; {
+			case secrets == nil && ref == "" && !svc.Set(w):
+				out = append(out, fmt.Sprintf("%s is set, so %s must be too", v, w))
+			case secrets != nil && ref != "" && secrets[ref] == "":
+				out = append(out, fmt.Sprintf("%s is set, so the secret %s must be too (laib secret set %s)", v, ref, ref))
+			}
+		}
+	}
+	return out
+}
+
 // Service is one services/<name>/ folder.
 type Service struct {
 	Name     string
 	Dir      string
+	off      []string // units `when` turned off, and why (#184)
 	Contract Contract
 	Values   map[string]Value
 	Units    map[string]string // file name -> template content with ${VAR}
@@ -280,4 +319,6 @@ type State struct {
 	// Warnings are findings that do not stop a load but belong in a plan
 	// and in a proposal's text: today, two services serving one purpose.
 	Warnings []string
+	// Off says which units `when` turned off and why; plan prints it (#184).
+	Off []string
 }

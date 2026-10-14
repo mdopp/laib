@@ -12,7 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${LAIB_BIN:-$ROOT/laib}"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'kill $(cat "$WORK"/*.pid 2>/dev/null) 2>/dev/null || true; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/systemctl" <<'SH'
 #!/usr/bin/env sh
@@ -269,6 +269,32 @@ grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warning
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
 grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists the Bote's tools (#121, #133)"
+# #184: Signal, Matrix and Telegram are each optional; an unset channel leaves no entry in Hermes' .env
+if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Signal-only Bote has Matrix or Telegram entries (#184)"; fi
+bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
+  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= \
+  "$@" ./post-deploy > "$WORK/bote-ch.out" 2>&1 ); }
+bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home ADMIN_MXID=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
+  LAIB_SECRET_BOTE_MATRIX_TOKEN=mx_tok || fail "bote hook with Matrix only"
+for want in "MATRIX_HOMESERVER=https://hs.e2e.home" "MATRIX_ACCESS_TOKEN=mx_tok" "MATRIX_ALLOWED_USERS=@admin:e2e.home" "MATRIX_E2EE_MODE=off" "MATRIX_HOME_ROOM=!raum:e2e.home"; do
+  grep -qx "$want" "$HOOKDIR/bote/hermes/.env" || fail "a Matrix Bote's .env lacks $want (#184)"
+done
+if grep -q "^SIGNAL_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Matrix-only Bote has Signal or Telegram entries (#184)"; fi
+grep -qx "MATRIX_ACCESS_TOKEN=mx_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-notify gets the Matrix credentials (#184)"
+grep -q "@admin:e2e.home" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names the admin's Matrix ID as the one who approves (#184)"
+if grep -q "+49" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "a Matrix-only SOUL names a phone number (#184)"; fi
+bote_ch TELEGRAM_ALLOWED_USERS=123456 LAIB_SECRET_BOTE_TELEGRAM_TOKEN=tg_tok || fail "bote hook with Telegram only"
+grep -qx "TELEGRAM_BOT_TOKEN=tg_tok" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks its bot token (#184)"
+grep -qx "TELEGRAM_ALLOWED_USERS=123456" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks who may talk (#184)"
+if grep -q "^SIGNAL_\|^MATRIX_" "$HOOKDIR/bote/hermes/.env"; then fail "a Telegram-only Bote has Signal or Matrix entries (#184)"; fi
+grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the approval rule holds without an approval channel"
+grep -q "Box-Seite" "$HOOKDIR/bote/hermes/SOUL.md" || fail "without Signal or Matrix approvals the SOUL points at the Box page (#184)"
+if bote_ch MATRIX_HOMESERVER=https://hs.e2e.home; then fail "Matrix without BOTE_MATRIX_TOKEN must fail the hook (#184)"; fi
+grep -q "BOTE_MATRIX_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Matrix token (#184)"
+if bote_ch TELEGRAM_ALLOWED_USERS=123456; then fail "Telegram without BOTE_TELEGRAM_TOKEN must fail the hook (#184)"; fi
+if bote_ch; then fail "a Bote without any channel must fail the hook (#184)"; fi
 # #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
 mkdir -p "$WORK/render/persona/hal"
 printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"
@@ -445,4 +471,37 @@ C="$(SHIM_RESTIC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" restore 0123abcd caddy)
 C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true)"
 [ "$C" = 2 ] || fail "failed exec: exit $C, want 2 (red): $(cat "$WORK/red.out")"
 last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
+# --- 15. #184 (B1): a Bote switched from Signal to Matrix applies green with no hand edit: pre-start
+# renders the channel .env files before the units start, so neither Hermes nor the health check reads
+# the last Signal config. bote-notify serves the pod's health; a fake signal-cli answers while Signal is on.
+B="$LAIB_HOME/state/services/bote"; mkdir -p "$B"
+cp "$ROOT"/templates/bote/* "$B/" 2>/dev/null || true; mv "$B/values.example.yml" "$B/values.yml"; rm -f "$B/README.md"
+grep -q "^laib:" "$LAIB_HOME/state/box.yml" || printf 'laib: {listen: 0.0.0.0}\n' >> "$LAIB_HOME/state/box.yml"
+for s in BOTE_LAIB_TOKEN BOTE_APPROVER_TOKEN; do echo "tok_$s" | LAIB_ACTOR=human:e2e "$BIN" secret set "$s" >/dev/null; done
+python3 -c '
+import http.server
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self): self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()' & echo $! > "$WORK/signal.pid"
+NOTIFY_LISTEN=127.0.0.1:8645 NOTIFY_TOKEN=n NOTIFY_HERMES="$WORK/data/bote/notify" python3 "$ROOT/templates/bote/notify.py" >/dev/null & echo $! > "$WORK/notify.pid"
+sleep 0.5
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" apply bote --reason "e2e: Bote on Signal" 2>&1)" || fail "the Bote on Signal does not apply green: $OUT"
+grep -q "^SIGNAL_HTTP_URL=" "$WORK/data/bote/notify/.env" || fail "bote-notify has no Signal config while Signal is on"
+test -f "$LAIB_QUADLET/bote/bote-signal.container" || fail "no signal-cli unit while Signal is on"
+kill "$(cat "$WORK/signal.pid")"; rm "$WORK/signal.pid"   # the Signal side is gone
+sed -i -e 's|^SIGNAL_ACCOUNT:.*|SIGNAL_ACCOUNT: ""|' -e 's|^MATRIX_HOMESERVER:.*|MATRIX_HOMESERVER: https://hs.e2e.home|' \
+  -e 's|^ADMIN_MXID:.*|ADMIN_MXID: "@admin:e2e.home"|' -e 's|^ADMIN_ROOM:.*|ADMIN_ROOM: "!raum:e2e.home"|' "$B/values.yml"
+echo mx_tok | LAIB_ACTOR=human:e2e "$BIN" secret set BOTE_MATRIX_TOKEN >/dev/null
+"$BIN" plan > "$WORK/plan.out" 2>&1 || fail "plan with Matrix only: $(cat "$WORK/plan.out")"
+grep -q "bote-signal.container.*SIGNAL_ACCOUNT" "$WORK/plan.out" || fail "plan does not say why bote-signal is off: $(cat "$WORK/plan.out")"
+OUT="$(LAIB_ACTOR=human:e2e "$BIN" apply bote --reason "e2e: Signal off, Matrix on" 2>&1)" || fail "the switch to Matrix is not green without a hand edit (B1): $OUT"
+if grep -q "^SIGNAL_" "$WORK/data/bote/notify/.env" "$WORK/data/bote/hermes/.env"; then fail "a Signal line survived the switch"; fi
+grep -qx "MATRIX_ACCESS_TOKEN=mx_tok" "$WORK/data/bote/hermes/.env" || fail "Hermes has no Matrix config after the switch"
+test -f "$LAIB_QUADLET/bote/bote-signal.container" && fail "the signal-cli unit stayed"
+grep -q "stop bote-signal.service" "$SYSTEMCTL_LOG" || fail "the signal-cli unit was not stopped"
+pre=$(grep -n "podman run hook .*bote/pre-start" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1); start=$(grep -n "restart bote-pod.service" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1)
+[ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "the Bote's pre-start ($pre) did not run before the pod started ($start)"
+kill "$(cat "$WORK/notify.pid")"; rm "$WORK/notify.pid"
+
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
