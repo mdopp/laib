@@ -33,7 +33,7 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
 	}))
 	t.Cleanup(router.Close)
 	cfg := config42(t, router.URL)
-	cfg.Modes["erweitert"] = Mode{Stops: []string{"model/embed", "voice/wakeword-trainer"}, Voice: "cpu"}
+	cfg.Modes["full"] = Mode{Stops: []string{"model/embed", "voice/wakeword-trainer"}, Voice: "cpu"}
 	s, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func post(t *testing.T, url string, body string) (int, map[string]any) {
 func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 	s, srv, sysd := testServer(t)
 	defer srv.Close()
-	// household: the household preset passes, a foreign preset takes erweitert itself
+	// household: the household preset passes, a foreign preset takes full itself
 	if code, _ := post(t, srv.URL+"/v1/chat/completions", `{"model":"gemma-4-e4b","messages":[]}`); code != 200 {
 		t.Fatal("household preset refused", code)
 	}
@@ -68,36 +68,36 @@ func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 		t.Fatalf("mode did not follow: %d %v", code, out)
 	}
 	l := s.read()
-	if l == nil || l.Holder != AutoHolder || l.Mode != "erweitert" {
+	if l == nil || l.Holder != AutoHolder || l.Mode != "full" {
 		t.Fatalf("auto lease %+v", l)
 	}
 	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatalf("erweitert did not stop its units: %v", *sysd)
+		t.Fatalf("full did not stop its units: %v", *sysd)
 	}
-	// a named holder takes foundry over from the automatic window
-	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"foundry","ttl_s":60,"holder":"foundry-chronicle"}`)
-	if code != 200 || out["status"] != "ready" || out["mode"] != "foundry" {
+	// a named holder takes shared over from the automatic window
+	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"shared","ttl_s":60,"holder":"foundry-chronicle"}`)
+	if code != 200 || out["state"] != "ready" || out["model"] != "shared" {
 		t.Fatalf("%d %v", code, out)
 	}
-	// units come back when leaving erweitert for foundry
+	// units come back when leaving full for shared
 	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatalf("leaving erweitert did not restart units: %v", *sysd)
+		t.Fatalf("leaving full did not restart units: %v", *sysd)
 	}
-	// in foundry, the thinking preset is refused with the holder named
+	// in shared, the large preset is refused with the holder named
 	code, out = post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`)
 	if code != 409 || !strings.Contains(out["error"].(map[string]any)["message"].(string), "foundry-chronicle") {
 		t.Fatalf("%d %v", code, out)
 	}
 	// another holder is held off
-	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"thinking","ttl_s":60,"holder":"bote"}`)
-	if code != 409 || out["status"] != "held" || out["holder"] != "foundry-chronicle" {
+	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"full","ttl_s":60,"holder":"bote"}`)
+	if code != 409 || out["reason"] != "held" || out["holder"] != "foundry-chronicle" {
 		t.Fatalf("%d %v", code, out)
 	}
 	// the catalogue lists everything, marked
 	resp, _ := http.Get(srv.URL + "/v1/models")
 	var listing map[string]any
 	json.NewDecoder(resp.Body).Decode(&listing)
-	if listing["mode"] != "foundry" {
+	if listing["mode"] != "shared" {
 		t.Fatal(listing)
 	}
 	marks := map[string]bool{}
@@ -126,7 +126,7 @@ func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
 func TestExclusiveStopsEverythingAndUnknownIsRefused(t *testing.T) {
 	s, srv, sysd := testServer(t)
 	defer srv.Close()
-	code, out := post(t, srv.URL+"/api/model-lease", `{"holder":"maintenance","ttl_s":30}`)
+	code, out := post(t, srv.URL+"/api/model-lease", `{"model":"exclusive","holder":"maintenance","ttl_s":30}`)
 	if code != 202 && code != 200 {
 		t.Fatalf("%d %v", code, out)
 	}
@@ -142,7 +142,7 @@ func TestExclusiveStopsEverythingAndUnknownIsRefused(t *testing.T) {
 	}
 	s.Release(context.Background(), "")
 	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"nope","holder":"x"}`)
-	if code != 400 || !strings.Contains(out["error"].(string), "unknown") {
+	if code != 400 || out["reason"] != "invalid_model" || !strings.Contains(out["message"].(string), "unknown") {
 		t.Fatalf("%d %v", code, out)
 	}
 }

@@ -68,10 +68,9 @@ func config42(t *testing.T, router string) Config {
 		Household: "gemma-4-e4b",
 		Presets:   []Preset{{Alias: "gemma-4-e4b"}, {Alias: "gemma-4-12b"}, {Alias: "qwen3.6-35b-a3b"}},
 		Modes: map[string]Mode{
-			"foundry":   {Presets: []string{"gemma-4-e4b", "gemma-4-12b"}},
-			"erweitert": {Stops: []string{"voice/whisper", "voice/wakeword-trainer", "model/embed"}, Voice: "cpu"},
+			"shared": {Presets: []string{"gemma-4-e4b", "gemma-4-12b"}},
+			"full":   {Stops: []string{"voice/whisper", "voice/wakeword-trainer", "model/embed"}, Voice: "cpu"},
 		},
-		Aliases:    map[string]string{"thinking": "erweitert", "coding": "erweitert"},
 		VoiceUnits: []string{"voice/whisper", "voice/piper"},
 		Units:      realUnits(t),
 		RouterURL:  router,
@@ -137,22 +136,22 @@ func post42(t *testing.T, url, token, body string) (int, map[string]any) {
 // is refused when the lease starts, not discovered on the GPU box.
 func TestModesResolveThroughTheRealTemplates(t *testing.T) {
 	s, _, calls, _ := server42(t)
-	if _, err := s.Acquire(context.Background(), "bote", "thinking", time.Hour); err != nil {
+	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(*calls, "\n")
 	if !strings.Contains(joined, "stop llama-embed.service,stimme-wakeword-trainer.service,stimme-whisper.service") {
-		t.Fatalf("erweitert must stop the real units: %v", *calls)
+		t.Fatalf("full must stop the real units: %v", *calls)
 	}
 	if !strings.Contains(joined, "restart stimme-piper.service,stimme-whisper.service") {
 		t.Fatalf("the voice units are the real ones: %v", *calls)
 	}
 	cfg := config42(t, "http://127.0.0.1:1")
-	cfg.Modes["erweitert"] = Mode{Stops: []string{"voice/whisper-batch"}}
+	cfg.Modes["full"] = Mode{Stops: []string{"voice/whisper-batch"}}
 	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "whisper-batch") || !strings.Contains(err.Error(), "stimme") {
 		t.Fatalf("a unit that does not exist must be refused at start, naming the service: %v", err)
 	}
-	cfg.Modes["erweitert"] = Mode{Stops: []string{"stt/whisper"}}
+	cfg.Modes["full"] = Mode{Stops: []string{"stt/whisper"}}
 	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "stt") {
 		t.Fatalf("a role nobody provides must be refused at start: %v", err)
 	}
@@ -161,17 +160,17 @@ func TestModesResolveThroughTheRealTemplates(t *testing.T) {
 // #42 (2): the lease API needs the token; GET and /health stay open.
 func TestLeaseAPIRequiresTheToken(t *testing.T) {
 	s, srv, _, cfg := server42(t)
-	if code, _ := post42(t, srv.URL+"/api/model-lease", "", `{"model":"foundry","holder":"x"}`); code != 401 {
+	if code, _ := post42(t, srv.URL+"/api/model-lease", "", `{"model":"shared","holder":"x"}`); code != 401 {
 		t.Fatalf("unauthenticated acquire: %d", code)
 	}
-	if code, _ := post42(t, srv.URL+"/api/model-lease", "wrong", `{"model":"foundry","holder":"x"}`); code != 401 {
+	if code, _ := post42(t, srv.URL+"/api/model-lease", "wrong", `{"model":"shared","holder":"x"}`); code != 401 {
 		t.Fatalf("wrong token: %d", code)
 	}
 	if s.read() != nil {
 		t.Fatal("a refused acquire must not write a lease")
 	}
-	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"foundry","holder":"x","ttl_s":60}`)
-	if code != 200 || out["status"] != "ready" {
+	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"shared","holder":"x","ttl_s":60}`)
+	if code != 200 || out["state"] != "ready" {
 		t.Fatalf("%d %v", code, out)
 	}
 	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/model-lease", strings.NewReader(`{"holder":"x"}`))
@@ -201,16 +200,16 @@ func TestLeaseAPIRequiresTheToken(t *testing.T) {
 func TestAcquireByPresetTakesTheNarrowestMode(t *testing.T) {
 	s, _, calls, _ := server42(t)
 	l, err := s.Acquire(context.Background(), "chronicle", "gemma-4-12b", time.Hour)
-	if err != nil || l.Mode != "foundry" {
-		t.Fatalf("gemma-4-12b is allowed in foundry (2 presets) and erweitert (all): %+v %v", l, err)
+	if err != nil || l.Mode != "shared" {
+		t.Fatalf("gemma-4-12b is allowed in shared (2 presets) and full (all): %+v %v", l, err)
 	}
 	if strings.Contains(strings.Join(*calls, "\n"), "stop ") {
-		t.Fatalf("foundry stops nothing: %v", *calls)
+		t.Fatalf("shared stops nothing: %v", *calls)
 	}
 	s.Release(context.Background(), "chronicle")
 	l, err = s.Acquire(context.Background(), "bote", "qwen3.6-35b-a3b", time.Hour)
-	if err != nil || l.Mode != "erweitert" {
-		t.Fatalf("only erweitert allows qwen: %+v %v", l, err)
+	if err != nil || l.Mode != "full" {
+		t.Fatalf("only full allows qwen: %+v %v", l, err)
 	}
 }
 
@@ -244,11 +243,11 @@ func TestHouseholdRequestsDoNotRenewTheForeignWindow(t *testing.T) {
 func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 	s, srv, calls, cfg := server42(t)
 	s.cfg.Renew = time.Second
-	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"thinking","holder":"bote","ttl_s":14400}`)
+	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"full","holder":"bote","ttl_s":14400}`)
 	if code != 200 {
 		t.Fatalf("%d %v", code, out)
 	}
-	if rs, _ := out["renew_s"].(float64); rs != 1 {
+	if rs, _ := out["renew_after"].(float64); rs != 1 {
 		t.Fatalf("the answer must say when to renew: %v", out)
 	}
 	l := s.read()
@@ -260,7 +259,7 @@ func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 	}
 	// renewing moves until, not the deadline
 	time.Sleep(50 * time.Millisecond)
-	post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"thinking","holder":"bote","ttl_s":14400}`)
+	post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"full","holder":"bote","ttl_s":14400}`)
 	if l2 := s.read(); !l2.Until.After(l.Until) || !l2.Deadline.Equal(l.Deadline) {
 		t.Fatalf("renewal: %v→%v, deadline %v→%v", l.Until, l2.Until, l.Deadline, l2.Deadline)
 	}
@@ -279,7 +278,7 @@ func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 // window older than WarnAfter gets one yellow journal line.
 func TestALongForeignLeaseIsVisible(t *testing.T) {
 	s, _, _, cfg := server42(t)
-	if _, err := s.Acquire(context.Background(), "bote", "thinking", time.Hour); err != nil {
+	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	paused := apply.Paused(cfg.Paths)

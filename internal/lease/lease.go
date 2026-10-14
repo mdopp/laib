@@ -4,18 +4,20 @@
 // `acquire` and `release` verbs; the file-based broker and the systemd
 // expiry unit are gone because this process is always there.
 //
-// Contract (mdopp/foundry-chronicle#321): POST /api/model-lease
-// {"model": "<mode or preset>", "ttl_s": 900, "holder": "name"} answers
-// 200 ready, 202 preparing (retry_after) or 409 held; GET shows the lease;
-// DELETE {"holder": …} releases that holder's lease, a bodyless DELETE
-// releases unconditionally. Every /v1 request names a model; outside the
-// standing mode it is refused with 409, except that from the household
-// (no lease) the proxy takes the `erweitert` window itself for a preset
-// the router serves (mode follows the request, idle timeout).
+// The lease API speaks the lease contract (ADR 0011, amendment
+// 2026-10-14; #157): POST /api/model-lease {"model", "ttl_s", "holder"}
+// with the model key answers 200 ready, 202 preparing or 409 held; GET
+// shows the window; DELETE {"holder"} gives it back. `model` is a preset
+// (the lease takes the narrowest window that allows it) or a window name.
+// Every /v1 request names a model; outside the standing window it is
+// refused with 409, except that from the household (no lease) the proxy
+// takes the window that allows every preset itself (mode follows the
+// request, idle timeout).
 package lease
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -32,6 +34,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -54,14 +57,14 @@ type Mode struct {
 	// leave a unit running on the GPU.
 	Stops []string `json:"stops"`
 	Voice string   `json:"voice"` // gpu | cpu → voice-device.env
+	Label string   `json:"label"` // what the family reads in the pause reason
 }
 
 // Config is presets.json plus the environment.
 type Config struct {
-	Household string            `json:"household"` // the household preset alias
-	Presets   []Preset          `json:"presets"`
-	Modes     map[string]Mode   `json:"modes"`
-	Aliases   map[string]string `json:"aliases"` // thinking → erweitert, coding → erweitert
+	Household string          `json:"household"` // the household preset alias
+	Presets   []Preset        `json:"presets"`
+	Modes     map[string]Mode `json:"modes"`
 	// VoiceUnits are the role/container refs that read voice-device.env
 	// (voice/whisper, voice/piper); restarted when the device changes.
 	VoiceUnits []string `json:"voiceUnits"`
@@ -87,12 +90,32 @@ type Lease struct {
 	Until    time.Time `json:"until"`    // the next renewal is due before this (#42)
 	Deadline time.Time `json:"deadline"` // the ttl the holder asked for: never past this
 	Ready    bool      `json:"ready"`
-	Paused   []string  `json:"paused,omitempty"` // services whose units the lease stopped
-	Warned   bool      `json:"warned,omitempty"` // the yellow journal line is written
+	// LastRenewed and RenewAfter are the heartbeat the contract reports:
+	// the holder posts again every RenewAfter seconds.
+	LastRenewed time.Time `json:"last_renewed"`
+	RenewAfter  int       `json:"renew_after"`
+	Paused      []string  `json:"paused,omitempty"` // services whose units the lease stopped
+	Warned      bool      `json:"warned,omitempty"` // the yellow journal line is written
 }
 
 // AutoHolder names the window the proxy takes itself.
 const AutoHolder = "router"
+
+// Exclusive is the window that takes the whole card: every window's units
+// stop and no preset answers. It is asked for by name, never implied.
+const Exclusive = "exclusive"
+
+// The contract's bounds (ADR 0011, amendment 2026-10-14).
+const (
+	ttlMin, ttlMax, ttlDefault = 300, 86400, 14400 // seconds
+	retryAfter                 = 30                // seconds a preparing caller waits before it asks GET
+)
+
+// holderRe is a service's name, never a session, round or person.
+var holderRe = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
+
+// ErrUnknownModel: neither a window nor a preset the router serves.
+var ErrUnknownModel = errors.New("unknown model")
 
 // Systemctl is the seam to `systemctl --user`; tests swap it.
 var Systemctl = func(ctx context.Context, verb string, units []string) error {
@@ -113,6 +136,7 @@ type Server struct {
 	lastRen time.Time
 	proxy   *httputil.ReverseProxy
 	client  *http.Client
+	warmed  sync.Map                       // preset → answered once: GET does not ask the router again
 	units   map[string][]string            // mode → resolved unit names, sorted
 	byMode  map[string]map[string][]string // mode → service → its units
 	voice   []string                       // resolved voice units
@@ -222,15 +246,6 @@ func (s *Server) write(l *Lease) error {
 
 func (s *Server) clear() { os.Remove(s.leasePath()) }
 
-// canonical maps thinking/coding onto erweitert; unknown names stay.
-func (s *Server) canonical(name string) string {
-	name = strings.TrimSpace(name)
-	if m, ok := s.cfg.Aliases[name]; ok {
-		return m
-	}
-	return name
-}
-
 func (s *Server) knownPreset(alias string) bool {
 	for _, p := range s.cfg.Presets {
 		if p.Alias == alias {
@@ -282,34 +297,34 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	}
 	// a preset name implies the narrowest mode that allows it (#42): the
 	// Bote's thinking model must not open the widest window by accident
-	mode := s.canonical(want)
+	mode := strings.TrimSpace(want)
 	alias := ""
-	if _, isMode := s.cfg.Modes[mode]; !isMode {
-		if s.knownPreset(want) {
-			alias = want
-			mode = ""
-			for _, name := range s.sortedModes() {
-				if !slices.Contains(s.allowed(name), want) {
-					continue
-				}
-				if mode == "" || len(s.allowed(name)) < len(s.allowed(mode)) {
-					mode = name
-				}
+	if _, isMode := s.cfg.Modes[mode]; !isMode && mode != Exclusive {
+		if !s.knownPreset(want) {
+			return nil, fmt.Errorf("%w %q: a preset (%s) or a window (%s, %s)", ErrUnknownModel, want, strings.Join(s.allPresets(), ", "), strings.Join(s.sortedModes(), ", "), Exclusive)
+		}
+		alias = want
+		mode = ""
+		for _, name := range s.sortedModes() {
+			if !slices.Contains(s.allowed(name), want) {
+				continue
 			}
-			if mode == "" {
-				return nil, fmt.Errorf("no mode allows preset %q", want)
+			if mode == "" || len(s.allowed(name)) < len(s.allowed(mode)) {
+				mode = name
 			}
-		} else if want != "" {
-			return nil, fmt.Errorf("unknown mode or preset %q; known modes: %s", want, strings.Join(s.sortedModes(), ", "))
+		}
+		if mode == "" {
+			return nil, fmt.Errorf("%w: no window allows preset %q", ErrUnknownModel, want)
 		}
 	}
 	now := time.Now()
-	if cur != nil && s.canonical(cur.Mode) == mode && cur.Ready {
+	if cur != nil && cur.Mode == mode && cur.Ready {
 		// a renewal: until moves one interval, the deadline stands (#42)
 		if cur.Holder != holder || cur.Deadline.IsZero() || holder == AutoHolder {
 			cur.Deadline = now.Add(ttl) // the automatic window is an idle timeout
 		}
 		cur.Holder, cur.Until = holder, s.until(holder, now, cur.Deadline)
+		cur.LastRenewed, cur.RenewAfter = now, s.renewAfter(ttl)
 		if alias != "" {
 			cur.Alias = alias
 		}
@@ -319,14 +334,14 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	left := Mode{}
 	leftUnits := map[string][]string{}
 	if cur != nil {
-		left = s.cfg.Modes[s.canonical(cur.Mode)]
-		leftUnits = s.byMode[s.canonical(cur.Mode)]
+		left = s.cfg.Modes[cur.Mode]
+		leftUnits = s.byMode[cur.Mode]
 	}
 	m := s.cfg.Modes[mode]
-	l := &Lease{Holder: holder, Mode: mode, Alias: alias, Allowed: s.allowed(mode), Since: now, Deadline: now.Add(ttl)}
+	l := &Lease{Holder: holder, Mode: mode, Alias: alias, Allowed: s.allowed(mode), Since: now, Deadline: now.Add(ttl), LastRenewed: now, RenewAfter: s.renewAfter(ttl)}
 	l.Until = s.until(holder, now, l.Deadline)
-	if mode == "" { // exclusive: everything stops, nothing answers
-		l.Mode, l.Allowed = "exclusive", []string{}
+	if mode == Exclusive { // everything stops, nothing answers
+		l.Allowed = []string{}
 		if err := s.write(l); err != nil {
 			return nil, err
 		}
@@ -359,6 +374,12 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	return l, s.write(l)
 }
 
+// renewAfter is when a holder posts again: a third of its ttl, and at
+// most half the grace (Renew), so one missed renewal never loses the card.
+func (s *Server) renewAfter(ttl time.Duration) int {
+	return int(max(min(ttl/3, s.cfg.Renew/2), time.Second).Seconds())
+}
+
 // until is the next renewal deadline: one interval away, never past the
 // holder's deadline. The automatic window renews itself per request and
 // keeps its idle timeout.
@@ -387,14 +408,11 @@ func (s *Server) pause(l *Lease) {
 // reason says in plain German who has the card and what that costs.
 func (s *Server) reason(l *Lease) string {
 	what := "exklusiv"
-	if l.Mode != "exclusive" {
-		what = "„" + l.Mode + "“"
-		if l.Alias != "" {
-			what = "„" + l.Alias + "“"
-		}
+	if l.Mode != Exclusive {
+		what = "„" + cmp.Or(l.Alias, s.cfg.Modes[l.Mode].Label, l.Mode) + "“"
 	}
 	cost := "diese Dienste stehen"
-	if s.cfg.Modes[s.canonical(l.Mode)].Voice == "cpu" || l.Mode == "exclusive" {
+	if s.cfg.Modes[l.Mode].Voice == "cpu" || l.Mode == Exclusive {
 		cost = "Sprache läuft langsamer"
 	}
 	return fmt.Sprintf("Grafikkarte reserviert für %s (%s): %s, bis %s", l.Holder, what, cost, l.Deadline.Local().Format("15:04"))
@@ -444,10 +462,10 @@ func (s *Server) Release(ctx context.Context, holder string) error {
 	for _, svc := range cur.Paused {
 		apply.Resume(s.cfg.Paths, svc)
 	}
-	if cur.Mode == "exclusive" {
+	if cur.Mode == Exclusive {
 		Systemctl(ctx, "start", s.exclusiveUnits())
-	} else if m, ok := s.cfg.Modes[s.canonical(cur.Mode)]; ok {
-		if us := s.units[s.canonical(cur.Mode)]; len(us) > 0 {
+	} else if m, ok := s.cfg.Modes[cur.Mode]; ok {
+		if us := s.units[cur.Mode]; len(us) > 0 {
 			Systemctl(ctx, "start", us)
 		}
 		if m.Voice == "cpu" {
@@ -477,7 +495,7 @@ func (s *Server) expireOnce(ctx context.Context) {
 		s.Release(ctx, "")
 		return
 	}
-	costs := len(s.units[s.canonical(l.Mode)]) > 0 || s.cfg.Modes[s.canonical(l.Mode)].Voice == "cpu" || l.Mode == "exclusive"
+	costs := len(s.units[l.Mode]) > 0 || s.cfg.Modes[l.Mode].Voice == "cpu" || l.Mode == Exclusive
 	if !costs || l.Warned || time.Since(l.Since) < s.cfg.WarnAfter {
 		return
 	}
@@ -506,75 +524,166 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) leaseAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	// Reading the lease is open; taking or releasing it wants the model key.
+	reply := func(code int, v map[string]any) {
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(v)
+	}
+	refuse := func(code int, reason string, more map[string]any) {
+		v := map[string]any{"ok": false, "reason": reason}
+		maps.Copy(v, more)
+		reply(code, v)
+	}
+	// Reading the lease is open; taking or giving back the card wants the model key (#42).
 	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && !s.authorized(r) {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "the lease API wants the model key: Authorization: Bearer <MODEL_KEY>"})
+		refuse(http.StatusUnauthorized, "unauthorized", map[string]any{"message": "the lease API wants the model key: Authorization: Bearer <MODEL_KEY>"})
 		return
 	}
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	switch r.Method {
 	case http.MethodGet:
-		l := s.read()
-		if l == nil {
-			allowed, mode := s.Policy()
-			json.NewEncoder(w).Encode(map[string]any{"holder": "", "mode": mode, "allowed": allowed, "alias": s.cfg.Household})
+		reply(http.StatusOK, s.status(r.Context()))
+	case http.MethodPost:
+		model, ttl, holder, reason := parsePayload(body)
+		if reason != "" {
+			refuse(http.StatusBadRequest, reason, nil)
 			return
 		}
-		json.NewEncoder(w).Encode(l)
-	case http.MethodPost:
-		var in struct {
-			Model  string `json:"model"`
-			TTL    int    `json:"ttl_s"`
-			Holder string `json:"holder"`
-		}
-		json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in)
-		if in.Holder == "" {
-			in.Holder = "anonymous"
-		}
-		ttl := time.Duration(in.TTL) * time.Second
-		if ttl <= 0 {
-			ttl = 4 * time.Hour
-		}
-		l, err := s.Acquire(r.Context(), in.Holder, in.Model, ttl)
+		l, err := s.Acquire(r.Context(), holder, model, ttl)
 		if errors.Is(err, ErrHeld) {
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"status": "held", "holder": l.Holder, "mode": l.Mode, "allowed": l.Allowed, "until": l.Until})
+			refuse(http.StatusConflict, "held", map[string]any{"holder": l.Holder, "expires_at": epoch(l.Deadline), "mode": l.Mode, "allowed": l.Allowed})
+			return
+		}
+		if errors.Is(err, ErrUnknownModel) {
+			refuse(http.StatusBadRequest, "invalid_model", map[string]any{"message": err.Error()})
 			return
 		}
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			refuse(http.StatusInternalServerError, "internal", map[string]any{"message": err.Error()})
 			return
 		}
-		alias := l.Alias
-		if alias == "" && len(l.Allowed) > 0 {
-			alias = l.Allowed[0]
-		}
-		if alias == "" {
-			// exclusive: nothing answers; ready means "the card is yours"
-			json.NewEncoder(w).Encode(map[string]any{"status": "ready", "alias": "", "mode": l.Mode, "allowed": l.Allowed, "until": l.Until, "deadline": l.Deadline, "renew_s": int(s.cfg.Renew.Seconds())})
+		alias := s.answering(l)
+		if alias != "" && !s.warm(r.Context(), alias) {
+			// not a failure: the weights are loading; the caller asks GET, it does not post again
+			reply(http.StatusAccepted, map[string]any{"ok": true, "state": "preparing", "model": l.Mode, "alias": alias, "retry_after": retryAfter, "expires_at": nil})
 			return
 		}
-		if !s.warm(r.Context(), alias) {
-			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]any{"status": "preparing", "retry_after": 10, "alias": alias, "mode": l.Mode, "allowed": l.Allowed, "renew_s": int(s.cfg.Renew.Seconds())})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]any{"status": "ready", "alias": alias, "mode": l.Mode, "allowed": l.Allowed, "until": l.Until, "deadline": l.Deadline, "renew_s": int(s.cfg.Renew.Seconds())})
+		reply(http.StatusOK, map[string]any{"ok": true, "state": "ready", "model": l.Mode, "alias": alias, "expires_at": epoch(l.Deadline), "renew_after": l.RenewAfter, "allowed": l.Allowed})
 	case http.MethodDelete:
-		var in struct {
-			Holder string `json:"holder"`
-		}
-		json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in)
-		if err := s.Release(r.Context(), in.Holder); err != nil {
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		holder, reason := parseRelease(body)
+		if reason != "" {
+			refuse(http.StatusBadRequest, reason, nil)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "released"})
+		if cur := s.read(); cur != nil && holder != "" && cur.Holder != holder {
+			refuse(http.StatusConflict, "held", map[string]any{"holder": cur.Holder, "expires_at": epoch(cur.Deadline)})
+			return
+		}
+		// a bodyless DELETE stays the admin's way out of a window nobody renews
+		if err := s.Release(r.Context(), holder); err != nil {
+			refuse(http.StatusConflict, "held", map[string]any{"message": err.Error()})
+			return
+		}
+		reply(http.StatusOK, map[string]any{"ok": true, "state": "released"})
 	default:
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 	}
+}
+
+// status is what GET answers: the window's state, who holds it, until
+// when, and the heartbeat. Laib adds mode and allowed for the proxy's
+// clients; a consumer that reads only the contract's fields sees the same.
+func (s *Server) status(ctx context.Context) map[string]any {
+	out := map[string]any{"state": "none", "model": "", "alias": s.cfg.Household, "expires_at": nil, "holder": "",
+		"last_renewed_at": nil, "renew_after": nil, "retry_after": retryAfter}
+	l := s.read()
+	if l == nil {
+		out["allowed"], out["mode"] = s.Policy()
+		return out
+	}
+	alias := s.answering(l)
+	out["model"], out["alias"], out["holder"], out["mode"], out["allowed"] = l.Mode, alias, l.Holder, l.Mode, l.Allowed
+	out["last_renewed_at"], out["renew_after"] = epoch(l.LastRenewed), l.RenewAfter
+	if !l.Ready || (alias != "" && !s.warm(ctx, alias)) {
+		out["state"] = "preparing"
+		return out
+	}
+	out["state"], out["expires_at"] = "ready", epoch(l.Deadline)
+	return out
+}
+
+// answering is the preset that answers in a window: the one asked for,
+// else the first the window allows; none in the exclusive window.
+func (s *Server) answering(l *Lease) string {
+	if l.Alias != "" {
+		return l.Alias
+	}
+	if len(l.Allowed) > 0 {
+		return l.Allowed[0]
+	}
+	return ""
+}
+
+// epoch is a contract time: Unix seconds, or null for none.
+func epoch(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.Unix()
+}
+
+// parsePayload reads {model, ttl_s, holder}, a closed set: an unknown
+// field is refused, so a session or round id cannot creep in later. Every
+// window has a named holder; the ttl is clamped.
+func parsePayload(body []byte) (model string, ttl time.Duration, holder, reason string) {
+	var raw map[string]json.RawMessage
+	if !json.Valid(body) {
+		return "", 0, "", "invalid_json"
+	}
+	if json.Unmarshal(body, &raw) != nil || raw == nil {
+		return "", 0, "", "invalid_payload"
+	}
+	for k := range raw {
+		if k != "model" && k != "ttl_s" && k != "holder" {
+			return "", 0, "", "unexpected_field"
+		}
+	}
+	if json.Unmarshal(raw["model"], &model) != nil || strings.TrimSpace(model) == "" {
+		return "", 0, "", "invalid_model"
+	}
+	model = strings.TrimSpace(model)
+	secs := ttlDefault
+	if v, ok := raw["ttl_s"]; ok {
+		if json.Unmarshal(v, &secs) != nil || secs <= 0 {
+			return "", 0, "", "invalid_ttl"
+		}
+	}
+	if json.Unmarshal(raw["holder"], &holder) != nil || !holderRe.MatchString(holder) {
+		return "", 0, "", "invalid_holder"
+	}
+	return model, time.Duration(min(max(secs, ttlMin), ttlMax)) * time.Second, holder, ""
+}
+
+// parseRelease reads DELETE's optional {holder}; empty is the bodyless call.
+func parseRelease(body []byte) (holder, reason string) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return "", ""
+	}
+	var raw map[string]json.RawMessage
+	if !json.Valid(body) {
+		return "", "invalid_json"
+	}
+	if json.Unmarshal(body, &raw) != nil || raw == nil {
+		return "", "invalid_payload"
+	}
+	for k := range raw {
+		if k != "holder" {
+			return "", "unexpected_field"
+		}
+	}
+	if json.Unmarshal(raw["holder"], &holder) != nil || !holderRe.MatchString(holder) {
+		return "", "invalid_holder"
+	}
+	return holder, ""
 }
 
 // authorized: the bearer is the model key (the same one consumers send
@@ -591,6 +700,9 @@ func (s *Server) authorized(r *http.Request) bool {
 // warm asks the router for one token from the preset; false when it does
 // not answer within a few seconds (the weights are still loading).
 func (s *Server) warm(ctx context.Context, alias string) bool {
+	if _, ok := s.warmed.Load(alias); ok {
+		return true
+	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	body, _ := json.Marshal(map[string]any{"model": alias, "max_tokens": 1, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
@@ -601,7 +713,11 @@ func (s *Server) warm(ctx context.Context, alias string) bool {
 		return false
 	}
 	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	s.warmed.Store(alias, true)
+	return true
 }
 
 func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
@@ -640,7 +756,7 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // modeFollows: from the household, a request for a preset the router
-// serves takes the erweitert window itself; a window a named holder has
+// serves takes the window that allows every preset itself; a window a named holder has
 // stands.
 func (s *Server) modeFollows(ctx context.Context, want string) bool {
 	if !s.knownPreset(want) {
