@@ -11,7 +11,7 @@ routes:
     port: 8650
     exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
     auth: one_factor
-    bypass: [/napi/, /.well-known/]   # assetlinks.json: the app's TWA checks it without a login
+    bypass: [/napi/]
     proxySecret: HAUS_PROXY_SECRET # Caddy sends it as X-Haus-Proxy on the authenticated handler only (ADR 0012 §3)
 secrets:
   - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the haus hand: status, inbox, journal, restart — nothing else
@@ -25,7 +25,7 @@ secrets:
   - name: HAUS_PAPERLESS_TOKEN     # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search
     external: true
     optional: true
-  - name: HAUS_HA_TOKEN            # Home Assistant long-lived token (haus#10): Haus serves the house paths itself; without it they stay on the Solaris bridge
+  - name: HAUS_HA_TOKEN            # Home Assistant long-lived token (haus#10): Haus serves the house paths from Home Assistant; without it there are none
     external: true
     optional: true
 data:

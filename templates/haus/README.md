@@ -1,18 +1,17 @@
 # haus — the surface (ADR 0014)
 
-`ghcr.io/mdopp/haus`, source `mdopp/haus`. The Box page and the app's box
-keys (`/napi/servicebay/*`, the app's legacy path, ADR 0021) come from Laib.
-While `SOLARIS_URL` is set, the migration bridge passes every other `/napi/*`
-path to Solaris and accepts phones paired there (until haus#10). Port 8650 is
-published beyond loopback for the Bote's pod (below); the LAN reaches it only through Caddy.
+`ghcr.io/mdopp/haus`, source `mdopp/haus`. The family's pages and `/napi`,
+the API of the Haus app (`mdopp/haus-android`, a widget client, ADR 0022):
+the Box keys under `/napi/box/*` come from Laib. Nothing of the Solaris app
+is carried. Port 8650 is published beyond loopback for the Bote's pod
+(below); the LAN reaches it only through Caddy.
 
 With `laib secret set HAUS_HA_TOKEN` (a Home Assistant long-lived token),
 Haus serves the house paths itself from Home Assistant: `ha/call` with the
 companion contract's safety rules, `portal/{state,energy,entity-history,active}`
-(haus#10). Events and watch stay on the bridge while it is configured, so
-notices keep arriving. `ANDROID_FINGERPRINTS` fills
-`/.well-known/assetlinks.json` (public, through Caddy's bypass), and
-`ENERGY_FLOW`/`ENERGY_TOTALS` name the energy sensors by entity id.
+and the live stream that keeps the app's widgets current while the screen
+is on (ADR 0022). `ENERGY_FLOW`/`ENERGY_TOTALS` name the energy sensors by
+entity id.
 
 The Haushalt (haus#11): Haus serves `/mcp/haushalt` to the Bote, with the
 generated `HAUS_HAUSHALT_TOKEN` as its bearer (ADR 0017). The Bote reaches it
