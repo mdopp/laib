@@ -34,7 +34,10 @@ client, memory, cron — are exactly what a text agent needs.
    surfaces, the Box page and the verified Signal number.
 4. **Models.** The Bote is not latency-critical and may request the
    `thinking` preset through the lease for hard questions; the household
-   preset is its default.
+   preset is its default. *(Amended 2026-10-14, #157: there is no
+   `thinking` preset or window anymore. The Bote asks the lease for the
+   preset itself, `qwen3.6-35b-a3b`, and the lease picks the window;
+   ADR 0011 holds the contract.)*
 5. Family members may each get the Bote on their own number with their
    own memory namespace; the house yes, the box no. Default: the admin.
 

@@ -97,7 +97,7 @@ command.
   the Haus MCP source "Haushalt" (calendar, contacts, notes, documents,
   memory) and Frage as tools; reminders are calendar entries, not cron. Because nothing
   here is latency-critical, the Bote may ask the lease for the
-  `thinking` preset (qwen3.6-35b-a3b, 131k context, MTP drafter) for a
+  large preset (qwen3.6-35b-a3b, 131k context, MTP drafter) for a
   hard question and fall back to the household preset when the card is
   busy.
 - **Claude:** through the Werkstatt as `claude`; receives escalations
