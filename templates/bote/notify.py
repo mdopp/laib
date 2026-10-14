@@ -172,7 +172,8 @@ def server(cfg, addr):
 
 def main():
     host, _, port = os.environ.get("NOTIFY_LISTEN", "0.0.0.0:8645").rpartition(":")
-    cfg = Config(token=os.environ.get("NOTIFY_TOKEN", ""), log=lambda m: print(m, flush=True))
+    cfg = Config(token=os.environ.get("NOTIFY_TOKEN", ""), hermes_src=os.environ.get("NOTIFY_HERMES", "/hermes"),
+                 log=lambda m: print(m, flush=True))
     if not cfg.token:
         print("bote-notify: NOTIFY_TOKEN ist leer, jede Mitteilung wird abgelehnt", file=sys.stderr, flush=True)
     print(f"bote-notify: {host}:{port}", flush=True)

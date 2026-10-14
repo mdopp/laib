@@ -229,6 +229,9 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 	for _, w := range st.Warnings {
 		fmt.Fprintf(env.w(), "HINWEIS: %s\n", w)
 	}
+	for _, o := range st.Off {
+		fmt.Fprintf(env.w(), "AUS: %s\n", o)
+	}
 	return exitOK
 }
 

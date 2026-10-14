@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Renders the Bote's channel config before the units start (#184): Hermes'
+# .env and bote-notify's copy of the platform lines. Hermes reads it on start
+# and bote-notify's /health on every probe, so a channel switched off is gone
+# before verify asks. post-deploy runs it again (it renders the rest).
+set -euo pipefail
+H="$LAIB_DATA_DIR/bote/hermes"
+mkdir -p "$H"
+# The channels (#184): each optional, at least one; an unset one writes no
+# line, so Hermes starts no adapter for it. Names from Hermes' own config
+# (gateway/config_env.py, plugins/platforms/*/plugin.yaml, 2026-10-14).
+SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" MATRIX_HOMESERVER="${MATRIX_HOMESERVER:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}"
+ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
+if [ -z "$SIGNAL_ACCOUNT$MATRIX_HOMESERVER$TELEGRAM_ALLOWED_USERS" ]; then echo "bote: kein Kanal (SIGNAL_ACCOUNT, MATRIX_HOMESERVER oder TELEGRAM_ALLOWED_USERS)" >&2; exit 1; fi
+if [ -n "$MATRIX_HOMESERVER" ] && [ -z "${LAIB_SECRET_BOTE_MATRIX_TOKEN:-}" ]; then echo "bote: Matrix ohne Token: laib secret set BOTE_MATRIX_TOKEN" >&2; exit 1; fi
+if [ -n "$TELEGRAM_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_TELEGRAM_TOKEN:-}" ]; then echo "bote: Telegram ohne Token: laib secret set BOTE_TELEGRAM_TOKEN" >&2; exit 1; fi
+if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NUMBER braucht Signal (SIGNAL_ACCOUNT)" >&2; exit 1; fi
+if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
+{
+  echo "# rendered by laib pre-start; do not edit by hand"
+  if [ -n "$SIGNAL_ACCOUNT" ]; then
+    echo "SIGNAL_HTTP_URL=http://127.0.0.1:8080"
+    echo "SIGNAL_ACCOUNT=$SIGNAL_ACCOUNT"
+    echo "SIGNAL_ALLOWED_USERS=${SIGNAL_ALLOWED_USERS:-}"
+    [ -z "$ADMIN_NUMBER" ] || echo "SIGNAL_HOME_CHANNEL=$ADMIN_NUMBER"
+  fi
+  if [ -n "$MATRIX_HOMESERVER" ]; then
+    echo "MATRIX_HOMESERVER=$MATRIX_HOMESERVER"
+    echo "MATRIX_ACCESS_TOKEN=$LAIB_SECRET_BOTE_MATRIX_TOKEN"
+    [ -z "${MATRIX_ALLOWED_USERS:-}" ] || echo "MATRIX_ALLOWED_USERS=$MATRIX_ALLOWED_USERS"
+    # unencrypted rooms only (ADR 0016 §3): bote-notify's `hermes send` and the relay share the
+    # Bote's token, and a second process on an E2EE device would take its to-device keys
+    echo "MATRIX_E2EE_MODE=off"
+    [ -z "$ADMIN_ROOM" ] || echo "MATRIX_HOME_ROOM=$ADMIN_ROOM"
+  fi
+  if [ -n "$TELEGRAM_ALLOWED_USERS" ]; then
+    echo "TELEGRAM_BOT_TOKEN=$LAIB_SECRET_BOTE_TELEGRAM_TOKEN"
+    echo "TELEGRAM_ALLOWED_USERS=$TELEGRAM_ALLOWED_USERS"
+  fi
+  echo "LAIB_TOKEN=${LAIB_SECRET_BOTE_LAIB_TOKEN}"
+  echo "MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}"
+  echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
+  echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
+  echo "HERMES_NON_INTERACTIVE=1"
+} > "$H/.env"
+chmod 600 "$H/.env"
+# bote-notify (#177) gets the platform credentials only: no Bote token, no
+# model key, nothing else of HERMES_HOME (sessions, memory).
+N="$LAIB_DATA_DIR/bote/notify"; mkdir -p "$N"
+( umask 077; grep -E '^(SIGNAL|TELEGRAM|MATRIX|DISCORD|SLACK|WHATSAPP|EMAIL|SMS|TWILIO)_|^HERMES_NON_INTERACTIVE=' "$H/.env" > "$N/.env" || true )
+chmod 600 "$N/.env"

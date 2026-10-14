@@ -6,42 +6,53 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/relay"
 )
 
 var Version = "dev"
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	if err := run(ctx, os.Getenv); err != nil {
+		log.Fatal("relay: ", err)
+	}
+}
+
+// run serves until the context ends. Matrix never takes Signal down: a
+// failed Matrix check is journaled and retried while Signal goes on (#184).
+func run(ctx context.Context, getenv func(string) string) error {
+	env := func(k, def string) string {
+		if v := getenv(k); v != "" {
+			return v
+		}
+		return def
+	}
 	cfg := relay.Config{
-		Admin:     os.Getenv("ADMIN_NUMBER"),
-		AdminMXID: os.Getenv("ADMIN_MXID"),
-		Room:      os.Getenv("ADMIN_ROOM"),
-		Account:   os.Getenv("SIGNAL_ACCOUNT"),
-		SignalURL: boxfs.Env("SIGNAL_HTTP_URL", "http://127.0.0.1:8080"),
-		LaibURL:   boxfs.Env("LAIB_MCP_URL", "http://host.containers.internal:5900/mcp"),
-		Token:     os.Getenv("LAIB_TOKEN"),
+		Admin:     getenv("ADMIN_NUMBER"),
+		AdminMXID: getenv("ADMIN_MXID"),
+		Room:      getenv("ADMIN_ROOM"),
+		Account:   getenv("SIGNAL_ACCOUNT"),
+		SignalURL: env("SIGNAL_HTTP_URL", "http://127.0.0.1:8080"),
+		LaibURL:   env("LAIB_MCP_URL", "http://host.containers.internal:5900/mcp"),
+		Token:     getenv("LAIB_TOKEN"),
 	}
 	switch {
 	case cfg.Token == "" || cfg.Admin == "" && cfg.AdminMXID == "":
-		log.Fatal("relay: LAIB_TOKEN and ADMIN_NUMBER or ADMIN_MXID are required")
+		return errors.New("LAIB_TOKEN and ADMIN_NUMBER or ADMIN_MXID are required")
 	case cfg.Admin != "" && cfg.Account == "":
-		log.Fatal("relay: ADMIN_NUMBER needs SIGNAL_ACCOUNT (the Bote on Signal)")
+		return errors.New("ADMIN_NUMBER needs SIGNAL_ACCOUNT (the Bote on Signal)")
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
 	out := relay.Senders{}
 	var mx *relay.Matrix
 	if cfg.AdminMXID != "" {
-		mx = &relay.Matrix{URL: os.Getenv("MATRIX_HOMESERVER"), Token: os.Getenv("MATRIX_ACCESS_TOKEN"), Room: cfg.Room}
-		if err := mx.Check(ctx, cfg.AdminMXID); err != nil {
-			log.Fatalf("relay: Matrix approvals refused (ADR 0016 §3): %v", err)
-		}
+		mx = &relay.Matrix{URL: getenv("MATRIX_HOMESERVER"), Token: getenv("MATRIX_ACCESS_TOKEN"), Room: cfg.Room}
 		out.Matrix = mx
 	}
 	if cfg.Admin != "" {
@@ -50,10 +61,11 @@ func main() {
 	r := relay.New(cfg, out)
 	log.Printf("relay %s: signal admin %q, matrix admin %q in %q, laib %s", Version, cfg.Admin, cfg.AdminMXID, cfg.Room, cfg.LaibURL)
 	if mx != nil {
-		go r.RunMatrix(ctx, mx)
+		go r.WatchMatrix(ctx, mx, cfg.AdminMXID)
 	}
 	if cfg.Admin != "" {
 		go r.Run(ctx)
 	}
 	<-ctx.Done()
+	return nil
 }

@@ -58,6 +58,9 @@ func Load(dir string) (*State, error) {
 		}
 		st.Services[svc.Name] = svc
 	}
+	for _, name := range st.ServiceNames() {
+		st.Off = append(st.Off, st.Services[name].off...)
+	}
 
 	errs = append(errs, st.loadPersonas()...)
 	errs = append(errs, st.validatePeople()...)
@@ -97,7 +100,11 @@ func loadService(dir string) (*Service, error) {
 				if v.Tag == "!secret" {
 					svc.Values[k.Value] = Value{Secret: v.Value}
 				} else {
-					svc.Values[k.Value] = Value{Literal: v.Value}
+					lit := v.Value
+					if v.Tag == "!!null" || strings.TrimSpace(lit) == "" {
+						lit = "" // ~, null and blanks are unset, and render empty (#184)
+					}
+					svc.Values[k.Value] = Value{Literal: lit}
 				}
 			}
 		}
@@ -118,15 +125,51 @@ func loadService(dir string) (*Service, error) {
 		}
 		svc.Units[f.Name()] = string(b)
 	}
-	for _, file := range slices.Sorted(maps.Keys(svc.Contract.When)) {
-		if _, ok := svc.Units[file]; !ok {
-			return nil, fmt.Errorf("services/%s/laib.yml: when names %s, which is not a unit of the service", svc.Name, file)
-		}
-		if !slices.ContainsFunc(svc.Contract.When[file], svc.Set) {
-			delete(svc.Units, file) // off: no unit, and its placeholders need no value (#184)
-		}
+	if err := svc.applyWhen(); err != nil {
+		return nil, err
 	}
 	return svc, nil
+}
+
+var needsRe = regexp.MustCompile(`(?m)^\s*(Pod|Requires|BindsTo)\s*=(.*)$`)
+
+// applyWhen drops the units `when` turns off (#184): no unit, and its
+// placeholders need no value. A name that is no unit or no value is an
+// error, and so is dropping a unit a remaining one joins or requires.
+func (svc *Service) applyWhen() error {
+	var errs []error
+	off := map[string]bool{}
+	for _, file := range slices.Sorted(maps.Keys(svc.Contract.When)) {
+		vals := svc.Contract.When[file]
+		if _, ok := svc.Units[file]; !ok {
+			errs = append(errs, fmt.Errorf("services/%s/laib.yml: when names %s, which is not a unit of the service", svc.Name, file))
+			continue
+		}
+		for _, v := range vals {
+			if _, ok := svc.Values[v]; !ok {
+				errs = append(errs, fmt.Errorf("services/%s/laib.yml: when %s names %s, which values.yml does not have", svc.Name, file, v))
+			}
+		}
+		if !slices.ContainsFunc(vals, svc.Set) {
+			off[file] = true
+			svc.off = append(svc.off, fmt.Sprintf("services/%s/%s: aus, solange %s nicht gesetzt ist", svc.Name, file, strings.Join(vals, " oder ")))
+		}
+	}
+	for file := range off {
+		delete(svc.Units, file)
+	}
+	for _, file := range slices.Sorted(maps.Keys(svc.Units)) {
+		for _, m := range needsRe.FindAllStringSubmatch(svc.Units[file], -1) {
+			for _, need := range strings.Fields(m[2]) {
+				for gone := range off {
+					if need == gone || need == unitName(gone) {
+						errs = append(errs, fmt.Errorf("services/%s/%s: %s=%s, which when turns off", svc.Name, file, m[1], need))
+					}
+				}
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (st *State) validate() []error {
@@ -217,6 +260,16 @@ func (st *State) validate() []error {
 			if r.Auth != "none" && st.Box.Roles.SSO == "" {
 				fail("services/%s/laib.yml: route %s wants auth but box.yml has no roles.sso", name, r.Host)
 			}
+		}
+		for _, v := range slices.Sorted(maps.Keys(c.Requires)) {
+			for _, w := range append([]string{v}, c.Requires[v]...) {
+				if _, ok := svc.Values[w]; !ok {
+					fail("services/%s/laib.yml: requires names %s, which values.yml does not have", name, w)
+				}
+			}
+		}
+		for _, u := range svc.Unmet(nil) {
+			fail("services/%s: %s", name, u)
 		}
 		if c.OIDC != nil && c.OIDC.ClientID == "" {
 			fail("services/%s/laib.yml: oidc.clientId is required", name)
@@ -356,18 +409,25 @@ func (st *State) ServiceNames() []string {
 func (svc *Service) UnitNames() []string {
 	var out []string
 	for file := range svc.Units {
-		base := strings.TrimSuffix(file, filepath.Ext(file))
-		switch filepath.Ext(file) {
-		case ".container", ".kube":
-			out = append(out, base+".service")
-		case ".pod":
-			out = append(out, base+"-pod.service")
-		case ".service":
-			out = append(out, file) // a plain user unit, e.g. llama-lease.service
+		if u := unitName(file); u != "" {
+			out = append(out, u)
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+func unitName(file string) string {
+	base := strings.TrimSuffix(file, filepath.Ext(file))
+	switch filepath.Ext(file) {
+	case ".container", ".kube":
+		return base + ".service"
+	case ".pod":
+		return base + "-pod.service"
+	case ".service":
+		return file // a plain user unit, e.g. llama-lease.service
+	}
+	return ""
 }
 
 var hostNetRe = regexp.MustCompile(`(?m)^\s*Network\s*=\s*host\s*$`)

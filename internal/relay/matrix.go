@@ -22,11 +22,33 @@ import (
 type Matrix struct {
 	URL, Token, Room string
 	Every            time.Duration // poll interval, default 3 s
+	Retry            time.Duration // a failed Check is tried again after this, default 1 min
 	H                *http.Client
-	self, admin      string // set by Check
+	self, admin      string          // set by Check
+	seen             map[string]bool // handled event ids, bounded by order
+	order            []string
 }
 
-func (x *Matrix) room() string { return "/rooms/" + url.PathEscape(x.Room) }
+const cs = "/_matrix/client/v3"
+
+func (x *Matrix) room() string { return cs + "/rooms/" + url.PathEscape(x.Room) }
+
+// handled remembers an event id; true when it was handled already. A page
+// without `end` repeats its events; the last 1000 ids are kept.
+func (x *Matrix) handled(id string) bool {
+	if id == "" || x.seen[id] {
+		return id != ""
+	}
+	if x.seen == nil {
+		x.seen = map[string]bool{}
+	}
+	x.seen[id], x.order = true, append(x.order, id)
+	if len(x.order) > 1000 {
+		delete(x.seen, x.order[0])
+		x.order = x.order[1:]
+	}
+	return false
+}
 
 // call does one client-server request; out is filled on a 200.
 func (x *Matrix) call(ctx context.Context, method, path string, body, out any) (int, error) {
@@ -35,7 +57,7 @@ func (x *Matrix) call(ctx context.Context, method, path string, body, out any) (
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(x.URL, "/")+"/_matrix/client/v3"+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(x.URL, "/")+path, rd)
 	if err != nil {
 		return 0, err
 	}
@@ -62,20 +84,30 @@ func failed(what string, code int, err error) error {
 
 func server(id string) string { _, s, _ := strings.Cut(id, ":"); return s }
 
-// Check refuses what the relay cannot verify: an admin on another
-// homeserver than the Bote's (one homeserver is trusted), a room that is not
-// a room id, that is encrypted (the relay cannot read Megolm) or that holds
-// anyone besides the admin and the Bote.
+// Check refuses what the relay cannot verify: no token, an admin on another
+// homeserver than the Bote's (one homeserver is trusted) or the Bote itself,
+// a Bote account that is a server admin (Synapse's admin API answers it), a
+// room that is not a room id, that is encrypted (the relay cannot read
+// Megolm) or that holds anyone besides the admin and the Bote.
 func (x *Matrix) Check(ctx context.Context, admin string) error {
+	if x.Token == "" || strings.HasPrefix(x.Token, "${secret:") {
+		return fmt.Errorf("no Matrix token (laib secret set BOTE_MATRIX_TOKEN)") // #185: an unset secret renders as its placeholder
+	}
 	var who struct {
 		UserID string `json:"user_id"`
 	}
-	if code, err := x.call(ctx, "GET", "/account/whoami", nil, &who); err != nil || code != 200 {
+	if code, err := x.call(ctx, "GET", cs+"/account/whoami", nil, &who); err != nil || code != 200 {
 		return failed("whoami", code, err)
 	}
 	x.self, x.admin = who.UserID, admin
 	if server(admin) == "" || server(admin) != server(who.UserID) {
 		return fmt.Errorf("%s is not on the Bote's homeserver %s, the one homeserver the relay trusts", admin, server(who.UserID))
+	}
+	if admin == who.UserID {
+		return fmt.Errorf("ADMIN_MXID %s is the Bote itself", admin)
+	}
+	if code, err := x.call(ctx, "GET", "/_synapse/admin/v2/users/"+url.PathEscape(who.UserID), nil, nil); err == nil && code == 200 {
+		return fmt.Errorf("the Bote's account %s is a server admin: it could act as anyone on the homeserver", who.UserID)
 	}
 	if !strings.HasPrefix(x.Room, "!") {
 		return fmt.Errorf("ADMIN_ROOM %q is not a room id (!id:server)", x.Room)
@@ -108,7 +140,7 @@ func (x *Matrix) Check(ctx context.Context, admin string) error {
 // Send one plain message to a room, as the Bote.
 func (x *Matrix) Send(ctx context.Context, room, text string) error {
 	txn := fmt.Sprint("relay", time.Now().UnixNano())
-	code, err := x.call(ctx, "PUT", "/rooms/"+url.PathEscape(room)+"/send/m.room.message/"+txn, map[string]string{"msgtype": "m.text", "body": text}, nil)
+	code, err := x.call(ctx, "PUT", cs+"/rooms/"+url.PathEscape(room)+"/send/m.room.message/"+txn, map[string]string{"msgtype": "m.text", "body": text}, nil)
 	if err != nil || code != 200 {
 		return failed("matrix send", code, err)
 	}
@@ -184,6 +216,12 @@ func (r *Relay) RunMatrix(ctx context.Context, x *Matrix) {
 			from = page.Start
 		default:
 			for _, raw := range page.Chunk {
+				var ev struct {
+					ID string `json:"event_id"`
+				}
+				if json.Unmarshal(raw, &ev); x.handled(ev.ID) {
+					continue // a page without `end` repeats its events
+				}
 				if why := x.changed(raw); why != "" {
 					log.Printf("relay: matrix: %s; Matrix approvals stop", why)
 					r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Matrix-Freigaben gestoppt: %s. Erst ein Neustart des Relais prüft den Raum wieder (ADR 0016).\"", strings.ReplaceAll(why, "\"", "'")))
@@ -199,5 +237,30 @@ func (r *Relay) RunMatrix(ctx context.Context, x *Matrix) {
 		case <-ctx.Done():
 		case <-time.After(every):
 		}
+	}
+}
+
+// WatchMatrix keeps Matrix approvals going without ever taking the relay
+// down (#184): a failed Check (homeserver down, token revoked, room changed)
+// is journaled once per reason and tried again; once it passes, the room is
+// read until it changes, then checked again.
+func (r *Relay) WatchMatrix(ctx context.Context, x *Matrix, admin string) {
+	last := ""
+	for ctx.Err() == nil {
+		if err := x.Check(ctx, admin); err != nil {
+			if err.Error() != last && ctx.Err() == nil {
+				last = err.Error()
+				log.Printf("relay: Matrix approvals off: %v", err)
+				r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Matrix-Freigaben aus: %s. Signal und die Box-Seite gehen weiter.\"", strings.ReplaceAll(last, "\"", "'")))
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(cmp.Or(x.Retry, time.Minute)):
+			}
+			continue
+		}
+		last = ""
+		log.Printf("relay: Matrix approvals on: %s in %s", admin, x.Room)
+		r.RunMatrix(ctx, x)
 	}
 }

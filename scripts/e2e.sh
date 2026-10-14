@@ -12,7 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${LAIB_BIN:-$ROOT/laib}"
 WORK="$(mktemp -d)"
-trap 'kill $(cat "$WORK"/*.pid 2>/dev/null) 2>/dev/null; rm -rf "$WORK"' EXIT
+trap 'kill $(cat "$WORK"/*.pid 2>/dev/null) 2>/dev/null || true; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/systemctl" <<'SH'
 #!/usr/bin/env sh

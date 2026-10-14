@@ -38,6 +38,11 @@ secrets:
 when:                                # a container exists only while one of its values is set (#184)
   bote-signal.container: [SIGNAL_ACCOUNT]
   bote-relay.container: [ADMIN_NUMBER, ADMIN_MXID]   # Telegram never approves
+requires:                            # a set value needs these set too: literals at load, secrets at plan (#184)
+  ADMIN_NUMBER: [SIGNAL_ACCOUNT]
+  ADMIN_MXID: [MATRIX_HOMESERVER, ADMIN_ROOM]
+  MATRIX_HOMESERVER: [MATRIX_TOKEN]
+  TELEGRAM_ALLOWED_USERS: [TELEGRAM_TOKEN]
 channels:                            # where the Bote talks and bote-notify delivers, each on while its value is set (#184)
   signal: SIGNAL_ACCOUNT
   matrix: MATRIX_HOMESERVER
