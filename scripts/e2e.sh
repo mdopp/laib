@@ -348,6 +348,13 @@ grep -q "an: <person>" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the action's data
 grep -q "mama, papa" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL lists the people by name (#177)"
 if grep -q "+4917012345678\|telegram:123\|456" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL carries a person's number or chat id (#177)"; fi
 grep -q "Code" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the mitteilung rule keeps the automat's confirmation (#177)"
+# bote-notify gets the platform credentials only, never the Bote's tokens, and none of HERMES_HOME (#177 review)
+N="$HOOKDIR/bote/notify/.env"
+grep -q "^SIGNAL_ACCOUNT=+491$" "$N" || fail "bote-notify's .env carries the Signal credentials (#177)"
+if grep -q "LAIB_TOKEN\|HA_TOKEN\|HAUSHALT_TOKEN\|MODEL_API_KEY\|laib_bote_x\|ha_y" "$N"; then fail "bote-notify's .env carries a Bote secret (#177)"; fi
+[ "$(stat -c %a "$N")" = 600 ] || fail "bote-notify's .env is not 0600 (#177)"
+grep -q "bote/notify:/hermes:ro" "$ROOT/templates/bote/bote-notify.container" || fail "bote-notify mounts its own credentials (#177)"
+if grep -q "bote/hermes:" "$ROOT/templates/bote/bote-notify.container"; then fail "bote-notify mounts the Bote's whole HERMES_HOME (#177)"; fi
 bote_people ""
 if grep -q "mitteilung" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "without the automat the SOUL promises messages it cannot set up (#177)"; fi
 # Home Assistant's rest_command.mitteilung points at bote-notify with the bearer from its own environment
@@ -361,7 +368,7 @@ printf 'default_config:\n\nautomation: !include automations.yaml\n' > "$HA_CFG/c
 ha_hook; ha_hook
 P="$HA_CFG/packages/laib_mitteilung.yaml"
 grep -q "^  mitteilung:" "$P" || fail "rest_command.mitteilung is rendered (#177)"
-grep -q "url: http://127.0.0.1:8645/mitteilung" "$P" || fail "rest_command.mitteilung reaches bote-notify on loopback (#177)"
+grep -q 'url: "http://127.0.0.1:8645/mitteilung"' "$P" || fail "rest_command.mitteilung reaches bote-notify on loopback (#177)"
 grep -q "Authorization: !env_var BOTE_NOTIFY_AUTH" "$P" || fail "the bearer comes from HA's environment, not the file (#177)"
 grep -q '"an": {{ an | tojson }}' "$P" || fail "the payload carries an and text (#177)"
 [ "$(grep -c "packages: !include_dir_named packages" "$HA_CFG/configuration.yaml")" = 1 ] || fail "the packages include is added exactly once (#177)"

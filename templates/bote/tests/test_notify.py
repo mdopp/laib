@@ -8,12 +8,19 @@ HERE = Path(__file__).resolve().parent.parent          # templates/bote/
 spec = importlib.util.spec_from_file_location("notify", HERE / "notify.py")
 notify = importlib.util.module_from_spec(spec); spec.loader.exec_module(notify)
 
-FAKE = """import json, os, sys
+FAKE = """import json, os, sys, time
 to = sys.argv[sys.argv.index("--to") + 1]
 text = sys.stdin.read()
+home = os.environ.get("HERMES_HOME", "")
+env = open(os.path.join(home, ".env")).read() if home and os.path.exists(os.path.join(home, ".env")) else None
 with open(os.environ["FAKE_LOG"], "a") as f:
-    f.write(json.dumps({"argv": sys.argv[1:], "to": to, "text": text, "home": os.environ.get("HERMES_HOME", "")}) + "\\n")
-sys.exit(1 if to in os.environ.get("FAKE_FAIL", "").split(",") else 0)
+    f.write(json.dumps({"argv": sys.argv[1:], "to": to, "text": text, "home": home, "env": env,
+                        "token": "NOTIFY_TOKEN" in os.environ}) + "\\n")
+if to in os.environ.get("FAKE_SLEEP", "").split(","):
+    time.sleep(5)
+if to in os.environ.get("FAKE_FAIL", "").split(","):
+    print(f"hermes send: delivery to {to} failed", file=sys.stderr)  # Hermes names the target
+    sys.exit(1)
 """
 
 
@@ -28,12 +35,14 @@ class Notify(unittest.TestCase):
         (self.src / "config.yaml").write_text("model: {}\n")
         (self.src / "SOUL.md").write_text("not needed for sending\n")
         os.environ["FAKE_LOG"] = str(self.tmp / "calls.jsonl")
-        os.environ.pop("FAKE_FAIL", None)
+        os.environ.pop("FAKE_FAIL", None); os.environ.pop("FAKE_SLEEP", None)
+        os.environ["NOTIFY_TOKEN"] = "s3cret"   # as in the container; never handed to Hermes
         self.lines = []
         self.cfg = notify.Config(token="s3cret", people=str(self.people),
                                  send=[sys.executable, str(self.tmp / "fake.py"), "send"],
                                  hermes_src=str(self.src), hermes_home=str(self.tmp / "home"),
                                  max_text=40, max_body=512, per_person=3, total=5,
+                                 channel_timeout=1, deadline=3,
                                  log=self.lines.append)
         self.srv = notify.server(self.cfg, ("127.0.0.1", 0))
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
@@ -96,8 +105,33 @@ class Notify(unittest.TestCase):
         home = Path(self.calls()[0]["home"])
         self.assertEqual(home, self.tmp / "home")
         self.assertEqual((home / ".env").read_text(), "SIGNAL_ACCOUNT=+491\n")
+        self.assertEqual((home / ".env").stat().st_mode & 0o777, 0o600)
         self.assertTrue((home / "config.yaml").exists())
         self.assertFalse((home / "SOUL.md").exists())
+        self.assertFalse(self.calls()[0]["token"], "the bearer reached Hermes' environment")
+
+    def test_parallel_sends_never_see_a_half_written_config(self):
+        self.srv.cfg.per_person = self.srv.cfg.total = 100
+        (self.src / ".env").write_text("SIGNAL_ACCOUNT=+491\n" * 2000)
+        threads = [threading.Thread(target=self.post, args=({"an": "papa", "text": "x"},)) for _ in range(12)]
+        [t.start() for t in threads]; [t.join() for t in threads]
+        envs = [c["env"] for c in self.calls()]
+        self.assertEqual(len(envs), 12)
+        self.assertTrue(all(e == "SIGNAL_ACCOUNT=+491\n" * 2000 for e in envs), "a send saw a truncated .env")
+
+    def test_a_hanging_channel_times_out_and_the_next_is_tried(self):
+        os.environ["FAKE_SLEEP"] = "signal:+4917012345678"
+        code, body = self.post({"an": "mama", "text": "hallo"})
+        self.assertEqual((code, body.get("kanal")), (200, "telegram"))
+        self.assertEqual(notify.Handler.timeout, 10)  # a client that sends nothing is dropped
+
+    def test_one_deadline_for_all_channels(self):
+        import time
+        os.environ["FAKE_SLEEP"] = "signal:+4917012345678,telegram:123"
+        self.srv.cfg.channel_timeout, self.srv.cfg.deadline = 2, 2.5
+        t = time.monotonic()
+        self.assertEqual(self.post({"an": "mama", "text": "hallo"})[0], 502)
+        self.assertLess(time.monotonic() - t, 4)
 
     def test_caps_and_refusals(self):
         self.assertEqual(self.post(None, raw=b"x" * 600)[0], 413)
@@ -107,6 +141,9 @@ class Notify(unittest.TestCase):
         self.assertEqual(self.post({"an": "mama", "text": 5})[0], 400)
         # Hermes would attach a local file named after MEDIA: (send_message_tool)
         self.assertEqual(self.post({"an": "mama", "text": "sieh MEDIA:/opt/data/.env"})[0], 400)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.post({"an": "papa", "text": "Social media: neu"})[0], 200)  # Hermes' marker is MEDIA:, case-sensitive
+        (self.tmp / "calls.jsonl").unlink()
         self.assertEqual(self.post({"an": "mama", "text": "x"}, path="/anderes")[0], 404)
         self.assertEqual(self.calls(), [])
         code, _ = self.post({"an": "mama", "text": "a" * 100})
@@ -126,6 +163,15 @@ class Notify(unittest.TestCase):
         self.assertIn("kanal=signal", line)
         self.assertNotIn("ausräumen", line)
         self.assertNotIn("+4917012345678", line)
+
+    def test_a_failed_channel_is_logged_without_its_target(self):
+        os.environ["FAKE_FAIL"] = "signal:+4917012345678"
+        self.post({"an": "mama", "text": "hallo"})
+        line = "\n".join(self.lines)
+        self.assertIn("signal", line)
+        self.assertIn("rc=1", line)
+        self.assertNotIn("+4917012345678", line)
+        self.assertNotIn("123", line)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ func TestPeopleAreValidated(t *testing.T) {
 		{"people: {mama: [\"telegram:\"]}\n", "target"},
 		{"people: {mama: [\"telegram:@mama\"]}\n", "chat id"},
 		{"people: {mama: [\"matrix:mama\"]}\n", "matrix"},
+		{"people: {mama: [\"matrix:!raum:example.org:$event\"]}\n", "matrix"}, // a thread, which Hermes reads as <room>:$<event>
+		{"people: {mama: [\"email:mama@localhost\"]}\n", "address"},          // Hermes wants a TLD
 		{"people: {mama: []}\n", "no channel"},
 		{"people: {Mama Müller: [\"telegram:1\"]}\n", "name"},
 	} {
