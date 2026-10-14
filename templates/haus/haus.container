@@ -31,6 +31,8 @@ Environment=HAUS_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
 # the Box page's Werkstatt card (haus#15)
 Environment=HAUS_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 Environment=HAUS_NOTES_DIR=/notes
+# the app's camera uploads, straight into Paperless's inbox (haus#10)
+Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
 Environment=HAUS_DATA=/data
 Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
@@ -40,6 +42,7 @@ Environment=PERSONA_REV=${PERSONA_REV}
 Volume=/mnt/data/laib/render/persona:/persona:ro,z
 Volume=${DATA_DIR}/haus:/data:Z
 Volume=${DATA_DIR}/file-share/data/notes:/notes:z
+Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload:z
 AutoUpdate=registry
 
 [Service]
