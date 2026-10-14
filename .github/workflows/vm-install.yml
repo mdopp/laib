@@ -252,7 +252,7 @@ jobs:
             if [ "$stalled" = no ] && [ $(( $(date +%s) - t0 )) -gt 240 ]; then
               stalled=yes; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
               echo "240 s after the early cut the resumed first boot has no binaries yet (#111); its journal so far:"
-              $SSH 'journalctl --no-pager --list-boots | tail -4; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u laib-sysusers -u systemd-resolved | tail -40; systemctl status laib-firstboot laib-sysusers --no-pager -l | head -30; getent passwd core systemd-resolve; sudo ls -la /etc/laib; journalctl --no-pager -b -p warning -o short-monotonic | tail -40' 2>&1 || echo "(no ssh: rebooting)"
+              $SSH 'journalctl --no-pager --list-boots | tail -4; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40; systemctl status laib-firstboot systemd-resolved systemd-resolved-varlink.socket --no-pager -l | head -40; getent hosts api.github.com; getent passwd core systemd-resolve; sudo ls -la /etc/laib; journalctl --no-pager -b -p warning -o short-monotonic | tail -40' 2>&1 || echo "(no ssh: rebooting)"
             fi
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
               took=$(( $(date +%s) - t0 ))

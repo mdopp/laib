@@ -314,13 +314,16 @@ storage:
           finish() { [ "$KEEP" = 1 ] && return 0; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env; }
           trap finish EXIT
           [ -f /etc/laib/installed ] && exit 0
-          # A power cut early in the first boot can leave systemd-resolved failed at
-          # start (the user systemd-resolve is unknown for a moment), and NetworkManager
-          # does not hand it the DNS servers again: no names at all, for good (#111).
+          # A power cut early in the first boot can lose what systemd-sysusers wrote
+          # (/etc/passwd without systemd-resolve). systemd-resolved then fails at every
+          # start, its sockets hit the start limit with it, and no name resolves, for
+          # good (#111). Restore the users (idempotent), then the service, its sockets
+          # and NetworkManager, which hands it the DNS servers again.
           if ! getent hosts api.github.com >/dev/null 2>&1; then
-            echo "laib-firstboot: no DNS; restarting systemd-resolved and NetworkManager (#111)"
-            sudo systemctl reset-failed systemd-resolved.service 2>/dev/null || true
-            sudo systemctl restart systemd-resolved.service NetworkManager.service || true
+            echo "laib-firstboot: no DNS; restoring system users, restarting systemd-resolved and NetworkManager (#111)"
+            sudo systemd-sysusers 2>&1 | sed 's/^/laib-firstboot: sysusers: /' || true
+            sudo systemctl reset-failed systemd-resolved.service systemd-resolved-varlink.socket systemd-resolved-monitor.socket 2>/dev/null || true
+            sudo systemctl restart systemd-resolved-varlink.socket systemd-resolved-monitor.socket systemd-resolved.service NetworkManager.service || true
           fi
           for i in $(seq 1 60); do
             curl -fsS https://api.github.com >/dev/null 2>&1 && break
@@ -410,28 +413,6 @@ systemd:
 
         [Install]
         WantedBy=basic.target
-    - name: laib-sysusers.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=Laib: system users a power cut in the first boot may have lost (#111)
-        # systemd-sysusers runs only when /etc needs an update. A hard reset early in
-        # the first boot can lose what it wrote (/etc/passwd without systemd-resolve);
-        # systemd-resolved then fails at every start: no names, no install (#111).
-        # Running it again is idempotent: it only adds what is missing.
-        DefaultDependencies=no
-        After=local-fs.target systemd-sysusers.service
-        Before=sysinit.target systemd-resolved.service NetworkManager.service
-        ConditionPathExists=!/etc/laib/installed
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        ExecStart=/usr/bin/systemd-sysusers
-        ExecStart=/usr/bin/sync -f /etc/passwd
-
-        [Install]
-        WantedBy=sysinit.target
     - name: laib-firstboot.service
       enabled: true
       contents: |
