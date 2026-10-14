@@ -231,6 +231,9 @@ HOOKDIR="$WORK/hooks"; mkdir -p "$HOOKDIR"
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook"
 if grep -q "HUMAN_TOKEN\|laib-admin" "$HOOKDIR/bote/hermes/config.yaml" "$HOOKDIR/bote/hermes/.env"; then fail "hermes holds a token that can approve (#48)"; fi
 grep -q "SIGNAL_ACCOUNT=+491" "$HOOKDIR/bote/hermes/.env" || fail "bote .env"
+# #178: inside the pod signal-cli listens on 8080; 8085 is only the host's side of PublishPort
+grep -q "^SIGNAL_HTTP_URL=http://127.0.0.1:8080$" "$HOOKDIR/bote/hermes/.env" || fail "Hermes reaches signal-cli inside the pod on 8080, not the host port (#178)"
+if grep -l "127.0.0.1:8085" "$ROOT"/templates/bote/*.container >/dev/null 2>&1; then fail "a container in the bote pod uses the host port 8085 (#178)"; fi
 grep -q 'Authorization: "Bearer ${LAIB_TOKEN}"' "$HOOKDIR/bote/hermes/config.yaml" || fail "bote mcp header keeps the env reference"
 grep -q "base_url: http://127.0.0.1:5977/v1" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote model url"
 grep -q "trust: untrusted" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote's laib entry must be untrusted"
