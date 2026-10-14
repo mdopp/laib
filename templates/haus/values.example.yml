@@ -16,3 +16,4 @@ RADICALE_ADDRESSBOOK: ""                               # the address book writte
 PAPERLESS_URL: http://host.containers.internal:8000    # document search for the Haushalt (haus#11)
 PAPERLESS_TOKEN: {secret: HAUS_PAPERLESS_TOKEN}
 PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN}      # where a found document opens
+WERKSTATT_REPOS: ""                                    # owner/name,… whose pi:ready and needs-claude tickets the Box page shows (haus#15); empty: no card
