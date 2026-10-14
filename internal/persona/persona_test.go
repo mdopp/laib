@@ -96,9 +96,12 @@ func TestLoadCastFromTheRenderedPackages(t *testing.T) {
 	w("hal/persona.yml", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\n")
 	w("hal/style.md", "Calm.\n")
 	w("hal/icon.svg", "<svg/>")
+	j, _ := state.BuiltinPersona("joshua")
+	w("hal/icon.png", j.Files["icon.png"])
 	w("joshua/persona.yml", "name: joshua\ndisplay: Joshua\nlanguages: [de, en]\nprompt: JOSHUA\ngimmicks: [wopr-directory]\n")
 	w("joshua/style.md", "WOPR.\n")
 	w("joshua/icon.svg", "<svg/>")
+	w("joshua/icon.png", j.Files["icon.png"])
 	c, err := LoadCast(dir)
 	if err != nil || c.House == nil || c.House.Name != "hal" || c.Chat["+4917012345678"] != "joshua" || c.ByName["joshua"] == nil {
 		t.Fatalf("cast from %s: %+v %v", dir, c, err)
