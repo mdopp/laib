@@ -8,7 +8,7 @@ mkdir -p "$H"
 MODEL_URL="${MODEL_URL:?MODEL_URL builtin missing}"
 cat > "$H/.env" <<ENV
 # rendered by laib post-deploy; do not edit by hand
-SIGNAL_HTTP_URL=http://127.0.0.1:8085
+SIGNAL_HTTP_URL=http://127.0.0.1:8080
 SIGNAL_ACCOUNT=${SIGNAL_ACCOUNT}
 SIGNAL_ALLOWED_USERS=${SIGNAL_ALLOWED_USERS}
 SIGNAL_HOME_CHANNEL=${ADMIN_NUMBER}
