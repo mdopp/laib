@@ -32,6 +32,8 @@ data:
   - path: ${DATA_DIR}/haus         # devices.json: the paired phones (hashed tokens)
   - path: ${DATA_DIR}/file-share/data/notes   # the household's notes (ADR 0017), mounted for the Haushalt; declared here so it exists without file-share
     backup: false                             # backed up by file-share
+  - path: ${DATA_DIR}/file-share/data/paperless-consume   # the app's camera uploads land here for Paperless (haus#10); transient
+    backup: false
 health:
   http: http://127.0.0.1:8650/healthz
 ports:
