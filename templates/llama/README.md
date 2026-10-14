@@ -19,7 +19,7 @@ units reading `voice-device.env`, and the 1.3 s turn.
 | `post-deploy.py download_model / ensure_preset_weights` | `post-deploy` hook: idempotent download of the preset files into `${DATA_DIR}/llama/models` |
 | `write_presets`, `render_presets` | `presets.yml` next to the units, rendered by the hook into the router's models directory |
 | `proxy_run`, `make_proxy_server`, `allowed_presets`, `canonical_mode` | `lease.py` served by `llama-lease.container`: the policy proxy on `PORT` |
-| `lease_acquire / lease_release / schedule_expiry`, the broker units and `gpu_lease_request.json` | the same `lease.py`: `POST/GET/DELETE /api/model-lease` with the foundry-chronicle #321 contract; no broker, consumers speak HTTP |
+| `lease_acquire / lease_release / schedule_expiry`, the broker units and `gpu_lease_request.json` | the same `lease.py`: `POST/GET/DELETE /api/model-lease` with the lease contract (ADR 0011, amendment 2026-10-14); no broker, consumers speak HTTP |
 | `install_embed_unit` | `llama-embed.container` |
 | `register_http_check` against ServiceBay's API | `health:` in laib.yml |
 | `set_voice_device` (voice stack to CPU in heavy modes) | stays a Solaris client decision, triggered by the lease's `mode` field |
@@ -46,11 +46,13 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   `/health` stay open. The proxy's `/v1` stays reachable from the LAN
   (operator decision, solarisbay #1420).
 - **Narrowest mode.** Acquiring by preset takes the narrowest mode that
-  allows it (`gemma-4-12b` → foundry, not erweitert).
-- **Renew or lose the card.** The answer carries `renew_s` (10 min,
-  `LEASE_RENEW`) and `deadline` (the ttl asked for); `until` is one
-  interval away. A holder that stops renewing is released at `until`,
-  not after four hours. The automatic window keeps its idle timeout and
+  allows it (`gemma-4-12b` → `shared`, not `full`). Consumers ask by
+  preset; the windows are named for what they do to the card, and
+  `foundry`, `erweitert`, `thinking`, `coding` are legacy names (ADR 0021).
+- **Renew or lose the card.** The answer carries `renew_after` (a third
+  of the ttl, at most half of `LEASE_RENEW`, 10 min) and `expires_at` (the
+  ttl asked for). A holder that misses two renewals is released, not after
+  four hours. The automatic window keeps its idle timeout and
   is renewed only by requests that need it — a household request never
   keeps a foreign window alive.
 - **Starvation is visible.** Every service whose units the lease stops

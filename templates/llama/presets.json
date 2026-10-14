@@ -7,9 +7,9 @@
     {"alias": "qwen3.8-27b", "label": "Qwen 3.8 27B", "repo": "unsloth/Qwen3.8-27B-GGUF", "file": "Qwen3.8-27B-UD-IQ3_XXS.gguf", "draftRepo": "ggml-org/Qwen3.8-27B-GGUF", "draft": "mtp-Qwen3.8-27B-Q4_0.gguf", "ctx": 81920, "draftMax": 8, "cacheK": "q8_0", "cacheV": "q4_0", "ubatch": 256}
   ],
   "modes": {
-    "foundry":   {"presets": ["gemma-4-e4b", "gemma-4-12b"]},
-    "erweitert": {"presets": [], "stops": ["model/embed", "voice/whisper", "voice/wakeword-trainer"], "voice": "cpu"}
+    "shared": {"label": "geteilt", "presets": ["gemma-4-e4b", "gemma-4-12b"]},
+    "full":   {"label": "alle Modelle", "presets": [], "stops": ["model/embed", "voice/whisper", "voice/wakeword-trainer"], "voice": "cpu"}
   },
   "voiceUnits": ["voice/whisper", "voice/piper"],
-  "aliases": {"thinking": "erweitert", "coding": "erweitert"}
+  "aliases": {"foundry": "shared", "erweitert": "full", "thinking": "full", "coding": "full"}
 }

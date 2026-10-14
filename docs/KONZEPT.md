@@ -140,9 +140,12 @@ holds the card (ADR 0011):
 | Preset | Used by | Why |
 |---|---|---|
 | household (gemma-4-e4b, MTP, 32k) | Operator, Frage, Bote by default | fast, always resident |
-| thinking (qwen3.6-35b-a3b, MTP, 131k) | Bote for hard questions, long documents | text waits happily two seconds |
-| coding (qwen3.8-27b) | Werkstatt (pi) | the window is a timer; the Bote can propose to move it ("heute Filmabend") |
-| foundry (gemma-4-12b) | foundry-chronicle | unchanged |
+| qwen3.6-35b-a3b (MTP, 131k), window `full` | Bote for hard questions, long documents | text waits happily two seconds |
+| qwen3.8-27b, window `full` | Werkstatt (pi) | the window is a timer; the Bote can propose to move it ("heute Filmabend") |
+| gemma-4-12b, window `shared` | foundry-chronicle | fits beside the voice stack |
+
+Consumers ask the lease for a preset; the windows are named for what they
+do to the card (ADR 0011, amendment 2026-10-14).
 
 Voice has no LLM in its path; the card is free for the agents.
 

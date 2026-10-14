@@ -86,6 +86,9 @@ Rejected from the review, with the reason:
   for different models today; what the review really found — stale unit
   names, no auth, the widest window by accident, silent starvation — is
   fixed (#84) without removing modes. Revisit when Solaris is gone.
+  *Revisited 2026-10-14 (#157):* the windows stay. They are named for
+  what they do to the card (`shared`, `full`, `exclusive`), and consumers
+  ask for a preset (ADR 0011, amendment 2026-10-14).
 - *Fewer ADRs.* The count is not the problem; unenforced ones are. The
   drift check (#87) and the trust-kernel tests are the enforcement; ADRs
   that describe more than the code does are amended, not deleted.
