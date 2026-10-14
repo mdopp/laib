@@ -3,8 +3,16 @@
 `ghcr.io/mdopp/haus`, source `mdopp/haus`. The Box page and the app's box
 keys (`/napi/servicebay/*`, the app's legacy path, ADR 0021) come from Laib.
 While `SOLARIS_URL` is set, the migration bridge passes every other `/napi/*`
-path to Solaris and accepts phones paired there (haus#5). Port 8650 is
+path to Solaris and accepts phones paired there (until haus#10). Port 8650 is
 published on the host's loopback only; Caddy is the only way in.
+
+With `laib secret set HAUS_HA_TOKEN` (a Home Assistant long-lived token),
+Haus serves the house paths itself from Home Assistant: `ha/call` with the
+companion contract's safety rules, `portal/{state,energy,entity-history,active}`
+(haus#10). Events and watch stay on the bridge while it is configured, so
+notices keep arriving. `ANDROID_FINGERPRINTS` fills
+`/.well-known/assetlinks.json` (public, through Caddy's bypass), and
+`ENERGY_FLOW`/`ENERGY_TOTALS` name the energy sensors by entity id.
 
 1. `laib add haus` mints `HAUS_LAIB_TOKEN` (hand `haus`: status, inbox,
    journal, restart) and generates `HAUS_PROXY_SECRET`, which Caddy sends

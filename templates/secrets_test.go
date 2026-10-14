@@ -13,6 +13,7 @@ import (
 func TestSecretsTheServiceWorksWithoutAreOptional(t *testing.T) {
 	for svc, names := range map[string][]string{
 		"bote": {"BOTE_MODEL_KEY", "BOTE_HA_TOKEN"}, // a cloud model only; without HA the ha tool is absent (README)
+		"haus": {"HAUS_HA_TOKEN"},                   // without it the house paths stay on the Solaris bridge (haus#10)
 	} {
 		b, err := os.ReadFile(filepath.Join(svc, "laib.yml"))
 		if err != nil {
