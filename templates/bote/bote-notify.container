@@ -11,11 +11,14 @@ Environment=NOTIFY_LISTEN=0.0.0.0:8645
 Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
 # a person or channel changed in box.yml people: restart (render/people/people.json)
 Environment=PEOPLE_REV=${PEOPLE_REV}
-# hermes send runs as this container's user against a private copy of the config, not the gateway's
+# Container root, which rootless podman maps to the box's unprivileged user: people.json and
+# the notify .env are 0600 and belong to that user, and a pod cannot take UserNS=keep-id to
+# map it to Hermes' uid 10000. So hermes send must not drop to 10000 (its docker-exec shim).
 Environment=HERMES_DOCKER_EXEC_AS_ROOT=1
 Volume=./notify.py:/app/notify.py:ro,z
 Volume=/mnt/data/laib/render/people:/people:ro,z
-Volume=${DATA_DIR}/bote/hermes:/hermes:ro,z
+# the platform credentials only, written by post-deploy; never the Bote's HERMES_HOME
+Volume=${DATA_DIR}/bote/notify:/hermes:ro,z
 AutoUpdate=registry
 
 [Service]

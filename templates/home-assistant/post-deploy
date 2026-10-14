@@ -12,7 +12,7 @@ cat > "$C/packages/laib_mitteilung.yaml" <<YAML
 # rendered by laib post-deploy (templates/home-assistant, #177); do not edit by hand
 rest_command:
   mitteilung:
-    url: ${BOTE_NOTIFY_URL:-http://127.0.0.1:8645/mitteilung}
+    url: "${BOTE_NOTIFY_URL:-http://127.0.0.1:8645/mitteilung}"
     method: post
     content_type: application/json
     headers:

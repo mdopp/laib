@@ -19,6 +19,11 @@ HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}
 HERMES_NON_INTERACTIVE=1
 ENV
 chmod 600 "$H/.env"
+# bote-notify (#177) gets the platform credentials only: no Bote token, no
+# model key, nothing else of HERMES_HOME (sessions, memory).
+N="$LAIB_DATA_DIR/bote/notify"; mkdir -p "$N"
+( umask 077; grep -E '^(SIGNAL|TELEGRAM|MATRIX|DISCORD|SLACK|WHATSAPP|EMAIL|SMS|TWILIO)_|^HERMES_NON_INTERACTIVE=' "$H/.env" > "$N/.env" || true )
+chmod 600 "$N/.env"
 # Only MCP servers that answer are rendered (#54): a server Hermes cannot
 # reach would be a tool the model is told it has. Any HTTP answer counts
 # (401, 405 are answers); a connection error leaves the entry out and says so.
