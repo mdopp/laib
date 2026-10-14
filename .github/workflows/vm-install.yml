@@ -235,9 +235,28 @@ jobs:
           f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
           f.write(json.dumps({"execute": "system_reset"}) + "\n"); f.flush(); print(f.readline().strip())
           PY
+          # #111: first a cut the moment the first boot starts. The resumed boot must
+          # get on with it: no five-minute stall on DNS, no extra reboot. Its binaries
+          # land within 240 s of the cut (they took 300-400 s before #111), and then
+          # the cut below hits the resumed boot in its own window.
+          early=no
+          for i in $(seq 1 900); do
+            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
+              python3 reset.py; early=yes; t0=$(date +%s); echo "early power cut (hard reset) $i s into the first boot, as it starts (#111)"; break
+            fi
+            sleep 1
+          done
+          [ "$early" = yes ] || { echo "the early cut was not reached: laib-firstboot never ran"; exit 1; }
           killed=no
           for i in $(seq 1 900); do
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
+              took=$(( $(date +%s) - t0 ))
+              echo "after the early cut, the resumed first boot had its binaries in $took s"
+              if [ "$took" -gt 240 ]; then
+                echo "too slow after an early cut (#111): the resumed first boot stalled"
+                $SSH 'journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40' || true
+                echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
+              fi
               $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
@@ -518,6 +537,7 @@ jobs:
         if: always()
         run: |
           if [ "${POWERCUT_RED:-}" = 1 ]; then echo "the box did not come back by itself after the power cut in the first boot after a reinstall (#81) — the forensics are in the reinstall step"; exit 1; fi
+          if [ "${EARLYCUT_RED:-}" = 1 ]; then echo "after a power cut as the first boot starts, the resumed boot took over 240 s to land its binaries (#111) — the journal is in the reinstall step"; exit 1; fi
           echo "power cut survived (or not reached)"
       - name: logs
         if: always()
