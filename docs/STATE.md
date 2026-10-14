@@ -95,7 +95,9 @@ naming the value that would switch it on (#184).
 
 A persona package (ADR 0020): `persona.yml` (name, display, languages,
 wakeword.phrase, voice, prompt, greeting, colors, gimmicks), `style.md` (how
-the character talks; style only, the rules are code) and `icon.svg`. Laib
+the character talks; style only, the rules are code), `icon.svg`, and
+`icon.png`, the same icon as a square PNG of at least 192 px for phones, which
+draw no SVG (`scripts/persona-icon.sh` makes it from the SVG). Laib
 looks in the state repo first, then `registries/<reg>/personas/<name>`, then
 the built-ins (`personas/` in this repo: joshua). When a service uses a
 persona value, apply writes every persona in use and `chat.yml` (house and

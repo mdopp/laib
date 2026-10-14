@@ -4,7 +4,7 @@ Description=Sprecher: speaks as Joshua
 [Container]
 Image=docker.io/library/busybox:1.36
 Environment=PERSONA=joshua
-Environment=PERSONA_REV=9a19dfa725c2
+Environment=PERSONA_REV=5f66c5fd013c
 Exec=--wake hey_joshua --phrase "Hey Joshua" --voice de_DE-thorsten-high
 Volume=/mnt/data/laib/render/persona:/personas:ro,z
 

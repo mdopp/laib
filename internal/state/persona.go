@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"io/fs"
 	"maps"
 	"os"
@@ -18,7 +19,8 @@ import (
 )
 
 // Persona is personas/<name>/persona.yml (ADR 0020): who the house is — name,
-// wake word, voice, greeting, colours, gimmicks — plus style.md and icon.svg.
+// wake word, voice, greeting, colours, gimmicks — plus style.md, icon.svg and
+// icon.png (the same icon for phones, which draw no SVG; scripts/persona-icon.sh).
 // Style only: the rules are code and win over anything style.md says.
 type Persona struct {
 	Name      string   `yaml:"name"`
@@ -33,7 +35,7 @@ type Persona struct {
 	Greeting map[string]string `yaml:"greeting"`
 	Colors   map[string]string `yaml:"colors"`
 	Gimmicks []string          `yaml:"gimmicks"`
-	Files    map[string]string `yaml:"-"` // persona.yml, style.md, icon.svg as read
+	Files    map[string]string `yaml:"-"` // packageFiles as read
 	Source   string            `yaml:"-"` // state, registry <name>, builtin
 }
 
@@ -62,7 +64,7 @@ func (p *Persona) WakewordID() string {
 // restarted when the persona changes (a persona change is a plan, ADR 0020).
 func (p *Persona) Rev() string {
 	h := sha256.New()
-	for _, f := range []string{"persona.yml", "style.md", "icon.svg"} {
+	for _, f := range packageFiles {
 		fmt.Fprintf(h, "%s\x00%s\x00", f, p.Files[f])
 	}
 	return hex.EncodeToString(h.Sum(nil))[:12]
@@ -156,15 +158,25 @@ func BuiltinPersona(name string) (*Persona, error) {
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// ReadPersona reads one package: persona.yml, style.md, icon.svg.
+var packageFiles = []string{"persona.yml", "style.md", "icon.svg", "icon.png"}
+
+// ReadPersona reads one package: packageFiles, icon.png a square PNG of at
+// least 192 px (a launcher icon, #191).
 func ReadPersona(fsys fs.FS, name, source string) (*Persona, error) {
 	p := &Persona{Files: map[string]string{}, Source: source}
-	for _, f := range []string{"persona.yml", "style.md", "icon.svg"} {
+	for _, f := range packageFiles {
 		b, err := fs.ReadFile(fsys, f)
 		if err != nil {
 			return nil, fmt.Errorf("persona %q (%s): %s missing", name, source, f)
 		}
 		p.Files[f] = string(b)
+	}
+	c, err := png.DecodeConfig(strings.NewReader(p.Files["icon.png"]))
+	if err != nil {
+		return nil, fmt.Errorf("persona %q (%s): icon.png is not a PNG; make it from icon.svg with scripts/persona-icon.sh", name, source)
+	}
+	if c.Width != c.Height || c.Width < 192 {
+		return nil, fmt.Errorf("persona %q (%s): icon.png must be a square of at least 192 px, is %dx%d", name, source, c.Width, c.Height)
 	}
 	if err := yaml.Unmarshal([]byte(p.Files["persona.yml"]), p); err != nil {
 		return nil, fmt.Errorf("persona %q: persona.yml: %w", name, err)
