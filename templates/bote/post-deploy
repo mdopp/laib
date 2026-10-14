@@ -90,6 +90,31 @@ mcp_servers:
       Authorization: "Bearer \${LAIB_TOKEN}"
     trust: untrusted      # reads freely; propose, note and escalate ask the person in the chat first (#48)
 ${MCP_EXTRA}
+# the model acts only through the MCP tools above (#181): every Hermes platform gets the
+# same safe list, so no terminal, code, files, browser, delegation, cron or skills; Hermes
+# adds the enabled MCP servers to an explicit list
+platform_toolsets:
+  cli: [todo, memory, session_search, clarify]
+  telegram: [todo, memory, session_search, clarify]
+  discord: [todo, memory, session_search, clarify]
+  slack: [todo, memory, session_search, clarify]
+  whatsapp: [todo, memory, session_search, clarify]
+  whatsapp_cloud: [todo, memory, session_search, clarify]
+  signal: [todo, memory, session_search, clarify]
+  bluebubbles: [todo, memory, session_search, clarify]
+  email: [todo, memory, session_search, clarify]
+  mattermost: [todo, memory, session_search, clarify]
+  matrix: [todo, memory, session_search, clarify]
+  dingtalk: [todo, memory, session_search, clarify]
+  feishu: [todo, memory, session_search, clarify]
+  wecom: [todo, memory, session_search, clarify]
+  wecom_callback: [todo, memory, session_search, clarify]
+  weixin: [todo, memory, session_search, clarify]
+  qqbot: [todo, memory, session_search, clarify]
+  yuanbao: [todo, memory, session_search, clarify]
+  webhook: [todo, memory, session_search, clarify]
+  api_server: [todo, memory, session_search, clarify]
+  cron: [todo, memory, session_search, clarify]
 non_interactive_hard_stop_enabled: true
 YAML
 # the soul: who the Bote is. Rendered on every apply while it carries the
