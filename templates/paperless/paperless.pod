@@ -1,3 +1,5 @@
 [Pod]
 PodName=paperless
-PublishPort=127.0.0.1:8000:8000
+# beyond loopback so Haus's Haushalt reaches the API from its container (haus#11, ADR 0012 §4);
+# ports lan: false keeps the LAN out, and the API wants a token
+PublishPort=8000:8000

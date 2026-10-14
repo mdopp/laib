@@ -22,6 +22,9 @@ secrets:
   - name: HAUS_RADICALE_PASSWORD   # the Radicale account Haus writes the household's calendar with; without it no calendar tools
     external: true
     optional: true
+  - name: HAUS_PAPERLESS_TOKEN     # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search
+    external: true
+    optional: true
   - name: HAUS_HA_TOKEN            # Home Assistant long-lived token (haus#10): Haus serves the house paths itself; without it they stay on the Solaris bridge
     external: true
     optional: true
