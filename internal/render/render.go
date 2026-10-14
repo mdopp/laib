@@ -30,12 +30,12 @@ import (
 type Output map[string]string
 
 // Placeholder is what a secret renders as when no secret values are given
-// (plan mode) and what Redact turns a real value back into.
+// (lint, review) and what Redact turns a real value back into.
 func Placeholder(name string) string { return "${secret:" + name + "}" }
 
 // Render produces every file. secrets may be nil: then secret references
-// render as placeholders, which is what `laib plan` shows and what the repo's
-// rendered/ copy stores. Apply passes the real values.
+// render as placeholders, which is what `laib template lint` and a review
+// see. Plan and apply pass the real values; an unset one renders empty.
 func Render(st *state.State, secrets map[string]string) (Output, error) {
 	out := Output{}
 	for _, name := range st.ServiceNames() {
@@ -241,11 +241,14 @@ func uses(st *state.State, prefix string) bool {
 	return false
 }
 
+// secretValue: the placeholder only while no secrets are given (plan,
+// lint); with them an unset secret is an empty value, never the
+// placeholder text (#185), as in a hook's LAIB_SECRET_<NAME>.
 func secretValue(secrets map[string]string, name string) string {
-	if v, ok := secrets[name]; ok && v != "" {
-		return v
+	if secrets == nil {
+		return Placeholder(name)
 	}
-	return Placeholder(name)
+	return secrets[name]
 }
 
 func substitute(content string, vars map[string]string) string {
@@ -429,9 +432,9 @@ func nftables(st *state.State) string {
 // plan` stays quiet (ADR 0001). The plain value stays with the service.
 func clientSecretHash(secrets map[string]string, clientID string) string {
 	name := state.OIDCSecretName(clientID)
-	plain, ok := secrets[name]
-	if !ok || plain == "" {
-		return Placeholder(name)
+	plain := secrets[name]
+	if plain == "" {
+		return secretValue(secrets, name)
 	}
 	return PBKDF2SHA512(plain, clientID)
 }
