@@ -3,3 +3,5 @@ ZWAVE_IMAGE: ghcr.io/zwave-js/zwave-js-ui:latest
 MATTER_IMAGE: ghcr.io/home-assistant-libs/python-matter-server:stable
 ZWAVE_DEVICE: /dev/ttyACM0
 ZWAVE_SECRET: !secret ZWAVE_SESSION_SECRET
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN          # the Bote's bote-notify (#177); empty without the Bote
+BOTE_NOTIFY_URL: http://127.0.0.1:8645/mitteilung  # rest_command.mitteilung: HA is on the host network, the bote pod publishes on loopback

@@ -1,0 +1,28 @@
+[Unit]
+Description=Bote: notify — a message for a person on their chat channel, sent with Hermes' own sender (ADR 0022 §3)
+
+[Container]
+# the stock Hermes image, so `hermes send` and its per-platform senders are there (ADR 0016: no fork)
+Image=${HERMES_IMAGE}
+Pod=bote.pod
+Entrypoint=/usr/bin/python3
+Exec=/app/notify.py
+Environment=NOTIFY_LISTEN=0.0.0.0:8645
+Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+# a person or channel changed in box.yml people: restart (render/people/people.json)
+Environment=PEOPLE_REV=${PEOPLE_REV}
+# Container root, which rootless podman maps to the box's unprivileged user: people.json and
+# the notify .env are 0600 and belong to that user, and a pod cannot take UserNS=keep-id to
+# map it to Hermes' uid 10000. So hermes send must not drop to 10000 (its docker-exec shim).
+Environment=HERMES_DOCKER_EXEC_AS_ROOT=1
+Volume=./notify.py:/app/notify.py:ro,z
+Volume=/mnt/data/laib/render/people:/people:ro,z
+# the platform credentials only, written by post-deploy; never the Bote's HERMES_HOME
+Volume=${DATA_DIR}/bote/notify:/hermes:ro,z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

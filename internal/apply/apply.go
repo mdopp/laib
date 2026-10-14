@@ -312,9 +312,10 @@ func writeAtomic(target, content string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	// Unit files carry rendered secrets (Environment=…); keep them private.
+	// Unit files carry rendered secrets (Environment=…), people.json the
+	// household's numbers (#177); keep them private.
 	mode := os.FileMode(0o644)
-	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") {
+	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") {
 		mode = 0o600
 	}
 	return boxfs.WriteAtomic(target+".laib-tmp", target, []byte(content), mode)

@@ -1,0 +1,6 @@
+[Container]
+Image=${IMAGE}
+# restarted when a person or a channel changes (#177)
+Environment=PEOPLE_REV=${PEOPLE_REV}
+Volume=/mnt/data/laib/render/people:/people:ro,z
+Volume=./melder.py:/app/melder.py:ro,z

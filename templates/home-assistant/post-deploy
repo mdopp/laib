@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# post-deploy (#177, ADR 0022 §3): rest_command.mitteilung, so an automation's
+# action can be a message to a person, delivered by the Bote's bote-notify.
+# Home Assistant is on the host network and reaches it on loopback. The
+# bearer is BOTE_NOTIFY_AUTH in HA's environment (the unit renders it from
+# BOTE_NOTIFY_TOKEN), never in this file. Idempotent; the admin's own
+# configuration.yaml is only ever appended to, once.
+set -euo pipefail
+C="$LAIB_DATA_DIR/home-assistant/homeassistant"
+mkdir -p "$C/packages"
+cat > "$C/packages/laib_mitteilung.yaml" <<YAML
+# rendered by laib post-deploy (templates/home-assistant, #177); do not edit by hand
+rest_command:
+  mitteilung:
+    url: "${BOTE_NOTIFY_URL:-http://127.0.0.1:8645/mitteilung}"
+    method: post
+    content_type: application/json
+    headers:
+      Authorization: !env_var BOTE_NOTIFY_AUTH
+    payload: '{"an": {{ an | tojson }}, "text": {{ text | tojson }}}'
+    timeout: 60
+YAML
+Y="$C/configuration.yaml"
+INCLUDE="packages: !include_dir_named packages"
+if [ ! -f "$Y" ]; then
+  echo "configuration.yaml fehlt noch (Home Assistant legt sie beim ersten Start an): rest_command.mitteilung kommt mit dem nächsten laib apply"
+elif grep -q "^ *$INCLUDE" "$Y"; then
+  echo "rest_command.mitteilung: packages/laib_mitteilung.yaml"
+elif grep -q "^homeassistant:" "$Y" || grep -q "^ *packages:" "$Y"; then
+  echo "configuration.yaml hat schon homeassistant: oder packages: — bitte von Hand unter homeassistant: ergänzen: '  $INCLUDE', sonst fehlt rest_command.mitteilung"
+else
+  printf '\n# added by laib (templates/home-assistant, #177): rest_command.mitteilung\nhomeassistant:\n  %s\n' "$INCLUDE" >> "$Y"
+  echo "packages-Include ergänzt: rest_command.mitteilung gilt nach dem nächsten Neustart (laib restart home-assistant)"
+fi

@@ -42,6 +42,10 @@ type Box struct {
 	// ChatPersonas gives a Signal number (E.164) another persona for the
 	// chat only; a wake word belongs to the room, not the person.
 	ChatPersonas map[string]string `yaml:"chatPersonas"`
+	// People are the household's people and their chat channels (ADR 0022
+	// §3), preferred first: "signal:+49…", "telegram:<chat id>". A message
+	// for a person goes out on these through the Bote, never to a free target.
+	People map[string][]string `yaml:"people"`
 }
 
 // Intake: the ticket queue for wishes and escalations (#56).

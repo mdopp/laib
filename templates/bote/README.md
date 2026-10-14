@@ -47,6 +47,32 @@ the signal to build a lean Bote instead (ADR 0016 §2).
    Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
    automation_loeschen, automation_schalten.
 
+6. Messages to people (ADR 0022 §3, #177): declare the household in
+   box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,
+   preferred first; docs/STATE.md). The `bote-notify` container runs this
+   template's `notify.py` (stdlib) in the stock Hermes image and serves
+   `POST /mitteilung {"an": "mama", "text": "…"}` on `127.0.0.1:8645` with
+   `Authorization: Bearer <BOTE_NOTIFY_TOKEN>` (generated on add). It looks
+   the person up in `render/people/people.json`, refuses an unknown person
+   (404, never a free target) and delivers with
+   `hermes send --to <channel> --file -`, the next channel when one fails
+   (20 s per channel, 50 s for all, under Home Assistant's 60 s). Hermes
+   reads a private 0600 copy of `bote/notify/.env`, which post-deploy writes
+   with the platform credentials only (`SIGNAL_*`, `TELEGRAM_*`, …): no Bote
+   token, no model key, nothing of the gateway's HERMES_HOME. Text is capped
+   at 1000 characters, a request at 4 KB, five messages per person and
+   twenty in total per minute; `MEDIA:` is refused (Hermes would attach a
+   file). The log names the person, the platform, the exit code and the
+   first twelve characters, never the target or Hermes' output.
+   `render/people/people.json` is 0600. Known limit: Hermes mirrors a sent
+   message into the private copy's sessions, not the gateway's, so when the
+   person answers, the Bote does not see what it sent. Home
+   Assistant's template renders `rest_command.mitteilung` against it, and
+   with the automat wired the SOUL turns "sag mir Bescheid, wenn …" into an
+   automation with that action, through the automat's usual draft and
+   code. The Bote itself has no tool to message anyone: only an automation a
+   person confirmed does (Hermes' `send_message` is not a model tool).
+
 ## Tools: only what answers, and a budget (#54)
 
 The hook probes every MCP URL at apply time (any HTTP answer counts, a

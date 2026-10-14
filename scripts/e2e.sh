@@ -332,6 +332,51 @@ bote_hh wrong
 if grep -q "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Haushalt that refuses the token must be left out (#170)"; fi
 grep -qi "haushalt.*Token" "$WORK/bote-hh.out" || fail "the hook says the Haushalt refused the token (#170)"
 kill $HH_PID 2>/dev/null || true
+# #177, ADR 0022 §3: "sag mir Bescheid, wenn …" becomes an automation whose action is
+# rest_command.mitteilung; the SOUL names the people by name only, and only with the automat wired
+mkdir -p "$WORK/render/people"
+printf '{"mama":["signal:+4917012345678","telegram:123"],"papa":["telegram:456"]}\n' > "$WORK/render/people/people.json"
+bote_people() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
+  LAIB_RENDER_DIR="$WORK/render" MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
+  SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_BOTE_HA_TOKEN="$1" HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with people"; }
+bote_people ha_y
+grep -q "Sag mir Bescheid, wenn" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL turns 'sag mir Bescheid' into an automation (#177)"
+grep -q "rest_command.mitteilung" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the automation's action is rest_command.mitteilung (#177)"
+grep -q "an: <person>" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the action's data names the person (#177)"
+grep -q "mama, papa" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL lists the people by name (#177)"
+if grep -q "+4917012345678\|telegram:123\|456" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL carries a person's number or chat id (#177)"; fi
+grep -q "Code" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the mitteilung rule keeps the automat's confirmation (#177)"
+# bote-notify gets the platform credentials only, never the Bote's tokens, and none of HERMES_HOME (#177 review)
+N="$HOOKDIR/bote/notify/.env"
+grep -q "^SIGNAL_ACCOUNT=+491$" "$N" || fail "bote-notify's .env carries the Signal credentials (#177)"
+if grep -q "LAIB_TOKEN\|HA_TOKEN\|HAUSHALT_TOKEN\|MODEL_API_KEY\|laib_bote_x\|ha_y" "$N"; then fail "bote-notify's .env carries a Bote secret (#177)"; fi
+[ "$(stat -c %a "$N")" = 600 ] || fail "bote-notify's .env is not 0600 (#177)"
+grep -q "bote/notify:/hermes:ro" "$ROOT/templates/bote/bote-notify.container" || fail "bote-notify mounts its own credentials (#177)"
+if grep -q "bote/hermes:" "$ROOT/templates/bote/bote-notify.container"; then fail "bote-notify mounts the Bote's whole HERMES_HOME (#177)"; fi
+bote_people ""
+if grep -q "mitteilung" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "without the automat the SOUL promises messages it cannot set up (#177)"; fi
+# Home Assistant's rest_command.mitteilung points at bote-notify with the bearer from its own environment
+HA_CFG="$HOOKDIR/home-assistant/homeassistant"; mkdir -p "$HA_CFG"
+ha_hook() { ( cd "$ROOT/templates/home-assistant" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=home-assistant \
+  BOTE_NOTIFY_URL=http://127.0.0.1:8645/mitteilung ./post-deploy > "$WORK/ha-hook.out" ) || fail "home-assistant hook"; }
+ha_hook
+grep -qi "configuration.yaml" "$WORK/ha-hook.out" || fail "the HA hook says configuration.yaml is not there yet (#177)"
+[ ! -e "$HA_CFG/configuration.yaml" ] || fail "the HA hook wrote configuration.yaml before Home Assistant did (#177)"
+printf 'default_config:\n\nautomation: !include automations.yaml\n' > "$HA_CFG/configuration.yaml"
+ha_hook; ha_hook
+P="$HA_CFG/packages/laib_mitteilung.yaml"
+grep -q "^  mitteilung:" "$P" || fail "rest_command.mitteilung is rendered (#177)"
+grep -q 'url: "http://127.0.0.1:8645/mitteilung"' "$P" || fail "rest_command.mitteilung reaches bote-notify on loopback (#177)"
+grep -q "Authorization: !env_var BOTE_NOTIFY_AUTH" "$P" || fail "the bearer comes from HA's environment, not the file (#177)"
+grep -q '"an": {{ an | tojson }}' "$P" || fail "the payload carries an and text (#177)"
+[ "$(grep -c "packages: !include_dir_named packages" "$HA_CFG/configuration.yaml")" = 1 ] || fail "the packages include is added exactly once (#177)"
+grep -q "automation: !include automations.yaml" "$HA_CFG/configuration.yaml" || fail "the HA hook changed the admin's configuration.yaml (#177)"
+printf 'homeassistant:\n  name: Haus\n' > "$HA_CFG/configuration.yaml"
+ha_hook
+if grep -q "packages:" "$HA_CFG/configuration.yaml"; then fail "a second homeassistant: key was appended (#177)"; fi
+grep -qi "packages" "$WORK/ha-hook.out" || fail "the HA hook says how to add the packages include by hand (#177)"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
