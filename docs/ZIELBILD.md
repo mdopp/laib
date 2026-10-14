@@ -64,10 +64,13 @@ number does not.
 
 ### Phase 3 — Haus on the NUC
 
-10. Pair the phones through Haus (`/pair-device`, haus#6) against the
-    NUC; the app wears the persona (#130).
-11. Haus serves every `/napi` path the app uses (haus#10), so the Solaris
-    bridge goes and the widgets work without Solaris.
+10. The new Haus app, a widget client (ADR 0022), paired with the NUC's
+    Haus; its widgets stay current through the live stream while the
+    screen is on. Haus carries nothing of the Solaris app: no bridge, no
+    old names.
+11. Messages to people (ADR 0022): an automation made by voice with the
+    Bote's `automat` tool sends "Waschmaschine fertig" to a person's chat
+    channel, through the Bote.
 12. The Haushalt MCP source (ADR 0017, haus#11): calendar and contacts
     from Radicale on the NUC, notes from the file share, documents from
     Paperless.
@@ -101,9 +104,8 @@ Kraftwerk; the NUC is wiped.
     Assistant with Jellyfin and radio; the Voice PE satellites flashed
     once with the persona's microWakeWord model (by hand in ESPHome,
     `templates/stimme/README.md`); Solaris the agent off; solarisbay
-    reduced to templates in the household registry. solaris-android keeps
-    its package id and repo name (an installed app's contract, ADR 0021);
-    it ships the new names next to the old ones.
+    archived. The Solaris app is gone; the new Haus app replaced it in
+    Phase 3 (ADR 0022).
 18. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
     as "what we have".
 

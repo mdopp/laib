@@ -50,7 +50,7 @@ Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus
 | **Stimme** | templates in the household registry | openWakeWord, Whisper, Martin TTS, the wakeword trainer — the Wyoming set HA Assist speaks | identity: everyone is a guest |
 | **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and the Bote's `frage` tool (the Sprechen field goes to the Bote, ADR 0015 amendment) | memory, tools, a loop |
 | **Haus** | new: `mdopp/haus` | the surface: pages and cards, companion API `/napi`, push, device tokens, favorites, energy, HA state aggregation, the "Sprechen" field that talks to the Bote, the memory library (haus#13) | an agent loop, a model |
-| **Haus-Android** | `mdopp/solaris-android` (name kept: the installed app's contract, ADR 0021) | TWA of Haus, the native widgets, the tile | its own backend logic |
+| **Haus app** | new (ADR 0022), successor of `mdopp/solaris-android` | the home-screen widgets and pairing; a live stream for states while the screen is on | a shell around web pages, notices, approvals, its own backend logic |
 | **Bote** | Hermes as stock, template `bote` | the agent you talk to: Signal, the Sprechen field; house, box (read + propose), Frage, memory, approvals as the admin by verified number (ADR 0016) | the voice path, box repairs |
 | **Werkstatt** | `mdopp/laib` (`werkstatt/`) | pi, Claude Code, autoloop, tickets, transcripts | a chat for the family |
 
@@ -134,9 +134,9 @@ Geräte, Mitteilungen; new: *Box* (readiness + inbox count for admins).
 6. **Stimme**, **Frage**, **music-assistant** and **searxng** as templates
    in the household registry; the speaker-identity gatekeeper is dropped;
    `solarisbay` is archived once Haus holds the memory library.
-7. ~~Rename `solaris-android` to `haus-android`.~~ Superseded by ADR 0021:
-   the package id, the scheme and the repo name are the installed app's
-   contract; the app ships the new names next to the old ones (solaris-android#174).
+7. ~~Rename `solaris-android` to `haus-android`.~~ Superseded by ADR 0022:
+   a new widget-only app with its own names; nothing of the old one is
+   carried. Messages to people go through their chat channel.
 
 Each step leaves every surface working. Steps 1 and 2 are Laib work and
 start now; 3 to 7 are solarisbay and haus work with their own issues.
@@ -145,7 +145,7 @@ start now; 3 to 7 are solarisbay and haus work with their own issues.
 - **Steps 1 and 2:** done. The Operator is `cmd/laib-operator`, and llama is a Laib role.
 - **Step 3:** half done.
   - Haus has the Box page, pairing (`/pair-device`), the four companion keys and the persona.
-  - The other `/napi` paths still go through the Solaris bridge (haus#10).
+  - The house paths, tool rows, camera and upload come from Haus (haus#18, haus#25). The bridge and the old names go by ADR 0022.
 - **Step 4:** open (haus#12).
 - **Step 5:** waits on the two checks of ADR 0015 on the box. The Bote (ADR 0016), not Solaris, is the agent people talk to.
 - **Step 6:** done as built-in templates (the registry repo is postponed). The gatekeeper is dropped.
