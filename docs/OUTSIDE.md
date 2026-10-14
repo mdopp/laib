@@ -10,8 +10,9 @@ not open the router. ServiceBay talked to the Fritz!Box (gateway poller,
 port-forward edges in the network map); Laib does not know the router exists.
 
 - Once per box: forward TCP 80 and 443 on the router to the box's LAN IP
-  (`box.yml lanIp`). Certificates use DNS-01 (ADR 0007), so 80 is only
-  needed for HTTP-01 fallbacks and redirects.
+  (`box.yml lanIp`). Certificates use HTTP-01 (ADR 0007, amendment
+  2026-10-13), so port 80 must reach the box; a DNS provider with an API
+  (DNS-01) is the fallback.
 - Anything else (a game server port, a VPN) is a manual rule or a script
   beside Laib that reads `laib status --json` and talks TR-064. It is not a
   kernel concern and never a probe.

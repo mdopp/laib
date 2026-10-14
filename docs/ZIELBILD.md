@@ -109,7 +109,7 @@ Kraftwerk; the NUC is wiped.
 
 ## What the trial proves, and what it does not
 
-Proves: the kernel on real hardware, DNS-01 and SSO, the Operator with a
+Proves: the kernel on real hardware, real certificates (HTTP-01) and SSO, the Operator with a
 remote model, the Bote on Signal, Haus against a real family, all
 without touching the GPU box. Does not prove: the GPU role, the lease,
 media transcoding, the wake-word training. Those are Phase 4 on the
