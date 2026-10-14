@@ -237,6 +237,24 @@ if grep -l "127.0.0.1:8085" "$ROOT"/templates/bote/*.container >/dev/null 2>&1; 
 grep -q 'Authorization: "Bearer ${LAIB_TOKEN}"' "$HOOKDIR/bote/hermes/config.yaml" || fail "bote mcp header keeps the env reference"
 grep -q "base_url: http://127.0.0.1:5977/v1" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote model url"
 grep -q "trust: untrusted" "$HOOKDIR/bote/hermes/config.yaml" || fail "bote's laib entry must be untrusted"
+# #181: no platform gives the model a terminal, code, files, a browser, delegation, cron or skills;
+# every Hermes platform carries the same safe allowlist, so the Bote acts only through its MCP tools
+python3 - "$HOOKDIR/bote/hermes/config.yaml" <<'PY' || fail "the Bote's platforms must carry only the safe toolsets (#181)"
+import re, sys
+text = open(sys.argv[1]).read()
+m = re.search(r"^platform_toolsets:\n((?:  .*\n)+)", text, re.M)
+assert m, "no platform_toolsets"
+rows = dict(re.findall(r"^  ([a-z_]+): \[(.*)\]$", m.group(1), re.M))
+want = {"cli", "telegram", "discord", "slack", "whatsapp", "whatsapp_cloud", "signal", "bluebubbles", "email",
+        "mattermost", "matrix", "dingtalk", "feishu", "wecom", "wecom_callback", "weixin", "qqbot", "yuanbao",
+        "webhook", "api_server", "cron"}
+assert want <= set(rows), sorted(want - set(rows))
+bad = {"terminal", "code_execution", "file", "browser", "delegation", "cronjob", "skills", "web", "search",
+       "debugging", "computer_use", "hermes-signal", "hermes-api-server"}
+for k, v in rows.items():
+    names = {x.strip() for x in v.split(",") if x.strip()}
+    assert names and not (names & bad), (k, names & bad)
+PY
 grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin"
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 # #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
