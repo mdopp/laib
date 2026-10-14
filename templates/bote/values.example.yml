@@ -7,7 +7,7 @@ MODEL_NAME: gemma-4-e4b
 THINKING_MODEL: qwen3.6-35b-a3b
 LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
-HAUSHALT_MCP_URL: ""                      # Haus's Haushalt MCP (calendar, contacts, notes, reminders): empty until Haus serves it (#54); a server that does not answer is left out anyway
+HAUSHALT_MCP_URL: http://host.containers.internal:8650/mcp/haushalt   # Haus's Haushalt (haus#11): calendar, notes, reminders; left out until Haus answers with the token (#170)
 FRAGE_URL: http://host.containers.internal:8710/mcp         # Frage as an MCP tool (templates/frage serves /mcp); left out when it does not answer
 HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` tool (only used when BOTE_HA_TOKEN is set)
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_HA_TOKEN
