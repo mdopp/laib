@@ -49,10 +49,10 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    from every `services/*/laib.yml`, which at this point is the full list,
    so no client is dropped (the #1724 failure class cannot occur).
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
-   moves from solarisbay into Laib with the lease sidecar; Solaris and
-   foundry-chronicle get the new lease in their values (foundry-chronicle:
-   `CHRONICLE_LEASE_URL`, `CHRONICLE_LEASE_MODEL=gemma-4-12b`,
-   `CHRONICLE_LEASE_KEY` = the model key; ADR 0011, amendment 2026-10-14). Then **vaultwarden, radicale, mosquitto, file-share, beets,
+   moves from solarisbay into Laib with the lease sidecar; Its consumers
+   (foundry-chronicle, pi-web) move to Laib's lease contract then (ADR 0011,
+   amendment 2026-10-14): a preset instead of a window name, a holder, the
+   model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
    immich, media, home-assistant** in that order: small and stateless first,
    the ones with migrations last. Each one: `laib plan <name>`, read the diff,
    `laib apply <name>`, verify green, disable ServiceBay's unit.

@@ -14,10 +14,9 @@ import (
 	"time"
 )
 
-// #157: the lease contract (ADR 0011, amendment 2026-10-14) — the shape
-// foundry-chronicle and pi-web speak today, plus Laib's model key. These
-// tests read the shipped presets.json, so a window renamed back after a
-// consumer fails here.
+// #157: the lease contract (ADR 0011, amendment 2026-10-14). These tests
+// read the shipped presets.json, so a window named after a consumer, or an
+// old name kept for one, fails here.
 
 func shippedConfig(t *testing.T, router string) Config {
 	t.Helper()
@@ -89,11 +88,6 @@ func TestTheWindowsAreNamedForWhatTheyDoToTheCard(t *testing.T) {
 	if strings.Join(modes, " ") != "full shared" {
 		t.Fatalf("windows %v, want full and shared (exclusive is built in)", modes)
 	}
-	for old, want := range map[string]string{"foundry": "shared", "erweitert": "full", "thinking": "full", "coding": "full"} {
-		if cfg.Aliases[old] != want {
-			t.Errorf("the legacy name %s must still mean %s until its consumers ask by preset (ADR 0021): %v", old, want, cfg.Aliases)
-		}
-	}
 	if !slices.Contains(cfg.Modes["shared"].Presets, "gemma-4-12b") || len(cfg.Modes["shared"].Stops) > 0 {
 		t.Fatalf("shared is the 12B beside the voice stack, nothing stops: %+v", cfg.Modes["shared"])
 	}
@@ -117,6 +111,9 @@ func TestTheLeaseContract(t *testing.T) {
 		`{"model":"gemma-4-12b","ttl_s":"900"}`:      "invalid_ttl",
 		`{"model":"gemma-4-12b","ttl_s":0}`:          "invalid_ttl",
 		`{"model":"gemma-4-12b","holder":"Runde 7"}`: "invalid_holder",
+		`{"model":"gemma-4-12b"}`:                    "invalid_holder",
+		`{"model":"foundry","holder":"chronicle"}`:   "invalid_model",
+		`{"model":"thinking","holder":"bote"}`:       "invalid_model",
 	} {
 		if code, out := call(t, "POST", api, "lease-secret", body); code != 400 || out["ok"] != false || out["reason"] != reason {
 			t.Errorf("%s: %d %v, want 400 %s", body, code, out, reason)
@@ -149,9 +146,9 @@ func TestTheLeaseContract(t *testing.T) {
 	}
 	has(t, "held GET", out, "expires_at", "last_renewed_at", "renew_after", "retry_after")
 
-	// a legacy window name is the same window: the holder renews it
-	if code, out = call(t, "POST", api, "lease-secret", `{"model":"foundry","ttl_s":900,"holder":"chronicle"}`); code != 200 || out["state"] != "ready" || out["model"] != "shared" {
-		t.Fatalf("legacy renewal: %d %v", code, out)
+	// the same POST renews
+	if code, out = call(t, "POST", api, "lease-secret", `{"model":"gemma-4-12b","ttl_s":900,"holder":"chronicle"}`); code != 200 || out["state"] != "ready" || out["model"] != "shared" {
+		t.Fatalf("renewal: %d %v", code, out)
 	}
 
 	// somebody else: refused with who holds it, until when, and what is allowed

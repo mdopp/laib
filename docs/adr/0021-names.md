@@ -81,7 +81,6 @@ which kind of name goes where.
 | Solaris | Haus's migration bridge: device-token check and `/napi` passthrough for phones paired with Solaris | every phone is paired through Haus and Haus serves every `/napi` path the app uses (haus#10) |
 | `sol_device_` | the device-token prefix the installed app checks before it stores a token; Haus mints it too | the app accepts a second prefix (solaris-android#174); then Haus mints the new one and keeps accepting the old |
 | `cloud.dopp.solaris://`, `/napi/servicebay/*`, the app's package id, the repo `solaris-android` | the contract with the installed Android app | the app ships the new names next to the old ones (solaris-android#174); the package id stays, since changing it means a new app |
-| `foundry`, `erweitert`, `thinking`, `coding` | the lease's legacy window names, accepted as aliases of `shared` and `full` (`templates/llama/presets.json`) | foundry-chronicle asks by preset (`CHRONICLE_LEASE_MODEL`), pi-web too, and the Solaris lease is off (ADR 0011, amendment 2026-10-14) |
 | ServiceBay | the predecessor, migrated once | `scripts/migrate-servicebay.py` is run on the last box |
 
 Ended (2026-10-13): `solaris-wakeword-trainer` and Balthasar. #128 built

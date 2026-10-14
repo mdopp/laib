@@ -71,7 +71,6 @@ func config42(t *testing.T, router string) Config {
 			"shared": {Presets: []string{"gemma-4-e4b", "gemma-4-12b"}},
 			"full":   {Stops: []string{"voice/whisper", "voice/wakeword-trainer", "model/embed"}, Voice: "cpu"},
 		},
-		Aliases:    map[string]string{"foundry": "shared", "erweitert": "full", "thinking": "full", "coding": "full"},
 		VoiceUnits: []string{"voice/whisper", "voice/piper"},
 		Units:      realUnits(t),
 		RouterURL:  router,

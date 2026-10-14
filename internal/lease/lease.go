@@ -62,10 +62,9 @@ type Mode struct {
 
 // Config is presets.json plus the environment.
 type Config struct {
-	Household string            `json:"household"` // the household preset alias
-	Presets   []Preset          `json:"presets"`
-	Modes     map[string]Mode   `json:"modes"`
-	Aliases   map[string]string `json:"aliases"` // legacy window names (ADR 0021): foundry → shared, …
+	Household string          `json:"household"` // the household preset alias
+	Presets   []Preset        `json:"presets"`
+	Modes     map[string]Mode `json:"modes"`
 	// VoiceUnits are the role/container refs that read voice-device.env
 	// (voice/whisper, voice/piper); restarted when the device changes.
 	VoiceUnits []string `json:"voiceUnits"`
@@ -106,8 +105,7 @@ const AutoHolder = "router"
 // stop and no preset answers. It is asked for by name, never implied.
 const Exclusive = "exclusive"
 
-// The contract's bounds: what the Solaris lease answered, so a consumer
-// moving from it sees no difference.
+// The contract's bounds (ADR 0011, amendment 2026-10-14).
 const (
 	ttlMin, ttlMax, ttlDefault = 300, 86400, 14400 // seconds
 	retryAfter                 = 30                // seconds a preparing caller waits before it asks GET
@@ -248,15 +246,6 @@ func (s *Server) write(l *Lease) error {
 
 func (s *Server) clear() { os.Remove(s.leasePath()) }
 
-// canonical maps thinking/coding onto erweitert; unknown names stay.
-func (s *Server) canonical(name string) string {
-	name = strings.TrimSpace(name)
-	if m, ok := s.cfg.Aliases[name]; ok {
-		return m
-	}
-	return name
-}
-
 func (s *Server) knownPreset(alias string) bool {
 	for _, p := range s.cfg.Presets {
 		if p.Alias == alias {
@@ -308,7 +297,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	}
 	// a preset name implies the narrowest mode that allows it (#42): the
 	// Bote's thinking model must not open the widest window by accident
-	mode := s.canonical(want)
+	mode := strings.TrimSpace(want)
 	alias := ""
 	if _, isMode := s.cfg.Modes[mode]; !isMode && mode != Exclusive {
 		if !s.knownPreset(want) {
@@ -329,7 +318,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 		}
 	}
 	now := time.Now()
-	if cur != nil && s.canonical(cur.Mode) == mode && cur.Ready {
+	if cur != nil && cur.Mode == mode && cur.Ready {
 		// a renewal: until moves one interval, the deadline stands (#42)
 		if cur.Holder != holder || cur.Deadline.IsZero() || holder == AutoHolder {
 			cur.Deadline = now.Add(ttl) // the automatic window is an idle timeout
@@ -345,8 +334,8 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	left := Mode{}
 	leftUnits := map[string][]string{}
 	if cur != nil {
-		left = s.cfg.Modes[s.canonical(cur.Mode)]
-		leftUnits = s.byMode[s.canonical(cur.Mode)]
+		left = s.cfg.Modes[cur.Mode]
+		leftUnits = s.byMode[cur.Mode]
 	}
 	m := s.cfg.Modes[mode]
 	l := &Lease{Holder: holder, Mode: mode, Alias: alias, Allowed: s.allowed(mode), Since: now, Deadline: now.Add(ttl), LastRenewed: now, RenewAfter: s.renewAfter(ttl)}
@@ -423,7 +412,7 @@ func (s *Server) reason(l *Lease) string {
 		what = "„" + cmp.Or(l.Alias, s.cfg.Modes[l.Mode].Label, l.Mode) + "“"
 	}
 	cost := "diese Dienste stehen"
-	if s.cfg.Modes[s.canonical(l.Mode)].Voice == "cpu" || l.Mode == Exclusive {
+	if s.cfg.Modes[l.Mode].Voice == "cpu" || l.Mode == Exclusive {
 		cost = "Sprache läuft langsamer"
 	}
 	return fmt.Sprintf("Grafikkarte reserviert für %s (%s): %s, bis %s", l.Holder, what, cost, l.Deadline.Local().Format("15:04"))
@@ -475,8 +464,8 @@ func (s *Server) Release(ctx context.Context, holder string) error {
 	}
 	if cur.Mode == Exclusive {
 		Systemctl(ctx, "start", s.exclusiveUnits())
-	} else if m, ok := s.cfg.Modes[s.canonical(cur.Mode)]; ok {
-		if us := s.units[s.canonical(cur.Mode)]; len(us) > 0 {
+	} else if m, ok := s.cfg.Modes[cur.Mode]; ok {
+		if us := s.units[cur.Mode]; len(us) > 0 {
 			Systemctl(ctx, "start", us)
 		}
 		if m.Voice == "cpu" {
@@ -506,7 +495,7 @@ func (s *Server) expireOnce(ctx context.Context) {
 		s.Release(ctx, "")
 		return
 	}
-	costs := len(s.units[s.canonical(l.Mode)]) > 0 || s.cfg.Modes[s.canonical(l.Mode)].Voice == "cpu" || l.Mode == Exclusive
+	costs := len(s.units[l.Mode]) > 0 || s.cfg.Modes[l.Mode].Voice == "cpu" || l.Mode == Exclusive
 	if !costs || l.Warned || time.Since(l.Since) < s.cfg.WarnAfter {
 		return
 	}
@@ -643,8 +632,8 @@ func epoch(t time.Time) any {
 }
 
 // parsePayload reads {model, ttl_s, holder}, a closed set: an unknown
-// field is refused, so a session or round id cannot creep in later. The
-// holder defaults to the model asked for; the ttl is clamped.
+// field is refused, so a session or round id cannot creep in later. Every
+// window has a named holder; the ttl is clamped.
 func parsePayload(body []byte) (model string, ttl time.Duration, holder, reason string) {
 	var raw map[string]json.RawMessage
 	if !json.Valid(body) {
@@ -668,11 +657,8 @@ func parsePayload(body []byte) (model string, ttl time.Duration, holder, reason 
 			return "", 0, "", "invalid_ttl"
 		}
 	}
-	holder = model
-	if v, ok := raw["holder"]; ok {
-		if json.Unmarshal(v, &holder) != nil || !holderRe.MatchString(holder) {
-			return "", 0, "", "invalid_holder"
-		}
+	if json.Unmarshal(raw["holder"], &holder) != nil || !holderRe.MatchString(holder) {
+		return "", 0, "", "invalid_holder"
 	}
 	return model, time.Duration(min(max(secs, ttlMin), ttlMax)) * time.Second, holder, ""
 }
@@ -770,7 +756,7 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // modeFollows: from the household, a request for a preset the router
-// serves takes the erweitert window itself; a window a named holder has
+// serves takes the window that allows every preset itself; a window a named holder has
 // stands.
 func (s *Server) modeFollows(ctx context.Context, want string) bool {
 	if !s.knownPreset(want) {
