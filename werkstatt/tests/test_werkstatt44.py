@@ -50,7 +50,7 @@ class TokensPerContainer(unittest.TestCase):
             text = (ROOT / "templates" / "werkstatt" / unit).read_text()
             self.assertRegex(text, r"(?m)^Tmpfs=/run/laib", unit + " needs its own tmpfs for the tokens")
         auto = (ROOT / "templates" / "werkstatt" / "werkstatt-autoloop.container").read_text()
-        self.assertIn("PI_WEB_GIT_TOKEN_FILE=/run/laib/git-credentials", auto)
+        self.assertIn("WERKSTATT_GIT_TOKEN_FILE=/run/laib/git-credentials", auto)
         self.assertIn("WERKSTATT_GIT_TOKEN=${PI_GIT_TOKEN}", auto, "pi pushes with its own, narrower GitHub token")
         contract = (ROOT / "templates" / "werkstatt" / "laib.yml").read_text()
         self.assertIn("WERKSTATT_PI_GIT_TOKEN", contract)

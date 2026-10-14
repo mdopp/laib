@@ -44,5 +44,107 @@ class Escalation(unittest.TestCase):
         self.assertIn("labels/{cfg['label']}\", \"DELETE\"", src)
 
 
+class LeaseContract(unittest.TestCase):
+    """#162: a run takes the GPU lease (laib ADR 0011, amendment 2026-10-14)
+    under its own holder, renews it, and gives it back."""
+
+    def cfg(self, **env):
+        return al.config_from_env({"MODEL_LEASE": "http://10.0.0.20:11435/api/model-lease", "MODEL_KEY": "k", **env})
+
+    def test_config_reads_the_lease_and_the_key(self):
+        cfg = self.cfg()
+        self.assertEqual(cfg["lease_url"], "http://10.0.0.20:11435/api/model-lease")
+        self.assertEqual(cfg["model_key"], "k")
+        self.assertEqual(al.config_from_env({})["lease_url"], "")
+
+    def test_take_asks_for_the_preset_under_the_werkstatt_holder(self):
+        calls = []
+        def http(url, method, token="", body=None):
+            calls.append((url, method, token, body))
+            return 200, {"ok": True, "state": "ready", "model": "full", "renew_after": 600}
+        note, renew = al.take_lease(self.cfg(), al.CODING_PRESET, 3600, http, sleep=lambda s: None)
+        self.assertEqual((note, renew), ("", 600))
+        url, method, token, body = calls[0]
+        self.assertEqual((url, method, token), ("http://10.0.0.20:11435/api/model-lease", "POST", "k"))
+        self.assertEqual(body, {"model": al.CODING_PRESET, "ttl_s": 3600, "holder": "werkstatt"})
+
+    def test_preparing_waits_for_ready_by_get_never_a_second_post(self):
+        answers = [(202, {"ok": True, "state": "preparing", "retry_after": 30}),
+                   (200, {"state": "preparing", "retry_after": 30}),
+                   (200, {"state": "ready", "renew_after": 300})]
+        calls, slept = [], []
+        def http(url, method, token="", body=None):
+            calls.append(method)
+            return answers.pop(0)
+        note, renew = al.take_lease(self.cfg(), al.CODING_PRESET, 3600, http, sleep=slept.append)
+        self.assertEqual((note, renew), ("", 300))
+        self.assertEqual(calls, ["POST", "GET", "GET"])
+        self.assertEqual(slept, [30, 30])
+
+    def test_held_is_a_plain_note_and_no_run(self):
+        def http(url, method, token="", body=None):
+            return 409, {"ok": False, "reason": "held", "holder": "foundry-chronicle", "expires_at": 1792000000}
+        note, renew = al.take_lease(self.cfg(), al.CODING_PRESET, 3600, http, sleep=lambda s: None)
+        self.assertIn("foundry-chronicle", note)
+        self.assertIn("Grafikkarte", note)
+        self.assertEqual(renew, 0)
+
+    def test_without_a_lease_url_nothing_is_asked(self):
+        def http(url, method, token="", body=None):
+            raise AssertionError("no lease configured, no call")
+        self.assertEqual(al.take_lease(al.config_from_env({}), al.CODING_PRESET, 3600, http, sleep=lambda s: None), ("", 0))
+
+    def test_a_failed_lease_never_stops_the_work(self):
+        def http(url, method, token="", body=None):
+            return 0, {"message": "connection refused"}
+        self.assertEqual(al.take_lease(self.cfg(), al.CODING_PRESET, 3600, http, sleep=lambda s: None), ("", 0))
+
+    def test_renewing_posts_again_and_releases_at_the_end(self):
+        import time as _t
+        calls = []
+        def http(url, method, token="", body=None):
+            calls.append((method, body))
+            return 200, {"state": "ready"}
+        with al.renewing(self.cfg(), al.CODING_PRESET, 3600, 0.05, http):
+            _t.sleep(0.2)
+        posts = [c for c in calls if c[0] == "POST"]
+        self.assertGreaterEqual(len(posts), 2, calls)
+        self.assertEqual(calls[-1], ("DELETE", {"holder": "werkstatt"}))
+
+    def test_on_start_an_own_window_is_given_back(self):
+        calls = []
+        def http(url, method, token="", body=None):
+            calls.append(method)
+            return 200, {"state": "ready", "holder": "werkstatt"}
+        al.release_own_lease(self.cfg(), http)
+        self.assertEqual(calls, ["GET", "DELETE"])
+        calls.clear()
+        def other(url, method, token="", body=None):
+            calls.append(method)
+            return 200, {"state": "ready", "holder": "bote"}
+        al.release_own_lease(self.cfg(), other)
+        self.assertEqual(calls, ["GET"])
+
+
+class NoPiWebLeftovers(unittest.TestCase):
+    """#162: the Werkstatt is one noun (laib ADR 0021); pi-web is gone."""
+
+    def test_no_pi_web_names_or_dead_gate(self):
+        src = (HERE / "autoloop.py").read_text()
+        self.assertNotIn("MODEL_GATE_PORT", src)
+        self.assertNotIn("PI_WEB", src)
+        self.assertNotIn("pi-web", src)
+        unit = (HERE.parent / "templates" / "werkstatt" / "werkstatt-autoloop.container").read_text()
+        self.assertNotIn("PI_WEB", unit)
+        for var in ("MODEL_LEASE=${MODEL_LEASE}", "MODEL_KEY=${MODEL_KEY}", "WERKSTATT_GIT_TOKEN_FILE="):
+            self.assertIn(var, unit)
+
+    def test_protocols_and_attempts_survive_a_restart(self):
+        # the attempt counter lives in the protocol dir; it must be on the workspace volume
+        cfg = al.config_from_env({})
+        self.assertTrue(cfg["protocol_dir"].startswith("/workspace/"), cfg["protocol_dir"])
+        self.assertEqual(cfg["store"], "/run/laib/git-credentials")
+
+
 if __name__ == "__main__":
     unittest.main()

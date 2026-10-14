@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`werkstatt-autoloop` — pi works labelled tickets from inside the Werkstatt (docs/DESIGN.md).
 
-Ported from solarisbay's pi-web/pi_autoloop.py (#1398 B) with one addition,
+Ported from solarisbay's autoloop (solarisbay#1398 B) with one addition,
 the router (issue #8): a ticket pi could not finish gets the label named by
 PI_AUTOLOOP_ESCALATE_LABEL (`needs-claude`), so the claude hand picks it up;
 pi never tries the same ticket twice. The model comes from MODEL_URL (the
@@ -37,18 +37,18 @@ Four things carry the design:
     opens a draft rather than nothing, because a protocol nobody can find is the
     same as no protocol.
 
-  IT ASKS FOR THE MODE THE SAME WAY A SESSION DOES. llama-server is a router
-    (#1416) and the mode — the presets a client may ask for — is a lease. Since
-    #1435 a client here may take it: the loop talks to the pod's own model gate
-    (`pi-web-model-gate`, 127.0.0.1:11437), which asks the box for the mode the
-    coding preset needs and gives it back when the pod goes idle. This file
-    holds no lease logic of its own; a second implementation of the same
-    protocol is exactly what drifts. Where the mode cannot be had — somebody
-    else holds it — the gate answers 409 and the loop says so in plain German
-    and takes the ticket again next pass.
+  IT TAKES THE CARD FOR ITS RUN. A coding run wants a preset the household
+    window does not allow, for up to an hour. So it takes the GPU lease under
+    its own holder (`werkstatt`), the way laib's lease contract asks of every
+    long-running consumer (laib ADR 0011, amendment 2026-10-14): POST the
+    preset, renew every `renew_after`, DELETE at the end, and on start give
+    back a window an earlier run left behind. A window somebody else holds is
+    a plain note and no run: the ticket keeps its label and no attempt is
+    counted. A lease that cannot be had for other reasons never stops the
+    work; the proxy then takes the window itself, as for any request.
 
-The GitHub token is the one the pod already has: `PI_WEB_GIT_TOKEN`, which the
-`pi-web-git-credentials` init container wrote to a 0600 credential store. Git
+The GitHub token is the Werkstatt's (`WERKSTATT_GIT_TOKEN`), which the
+entrypoint writes to a 0600 credential store on a tmpfs. Git
 picks it up through the credential helper and this file reads the same store for
 its REST calls, so the token reaches neither this process's argv nor Pi's
 environment. It needs Issues *read*, Pull requests *write* and Contents *write*
@@ -63,14 +63,16 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-DEFAULT_CREDENTIAL_STORE = "/data/pi-web/git-credentials"
-DEFAULT_PROTOCOL_DIR = "/data/pi-web/autoloop"
+DEFAULT_CREDENTIAL_STORE = "/run/laib/git-credentials"
+# on the workspace volume: the attempt counter lives here and must survive a restart
+DEFAULT_PROTOCOL_DIR = "/workspace/autoloop/protocol"
 DEFAULT_WORKROOT = "/workspace/autoloop"
 DEFAULT_API = "https://api.github.com"
 DEFAULT_LABEL = "pi:ready"
@@ -96,12 +98,10 @@ TRANSIENT_ATTEMPTS = 3
 # serve since #1416 and no longer says which model is loaded.
 CODING_PRESET = "qwen3.8-27b"
 
-# The model gate on the pod's own loopback (#1435). Every container of this pod
-# shares one network namespace, so this is the `model-gate` container beside
-# this one — the same door the sessions use, which is what keeps the mode
-# request in one place. Pinned to the port templates/pi-web/post-deploy.py
-# writes into models.json.
-MODEL_GATE_PORT = 11437
+# The lease holder: the service's own name, never a ticket or a person.
+LEASE_HOLDER = "werkstatt"
+# How long a preparing window is waited for before the run goes ahead without it.
+LEASE_WAIT_S = 1800
 
 COMMIT_NAME = "Pi Autoloop"
 COMMIT_EMAIL = "pi-autoloop@users.noreply.github.com"
@@ -137,12 +137,15 @@ def config_from_env(environ=os.environ) -> dict:
         "interval_s": _int("PI_AUTOLOOP_INTERVAL_S", DEFAULT_INTERVAL_S),
         "time_cap_s": _int("PI_AUTOLOOP_TIME_CAP_S", DEFAULT_TIME_CAP_S),
         "api": (environ.get("PI_AUTOLOOP_API_URL") or DEFAULT_API).rstrip("/"),
-        "store": environ.get("PI_WEB_GIT_TOKEN_FILE") or DEFAULT_CREDENTIAL_STORE,
+        "store": environ.get("WERKSTATT_GIT_TOKEN_FILE") or DEFAULT_CREDENTIAL_STORE,
         "protocol_dir": environ.get("PI_AUTOLOOP_PROTOCOL_DIR") or DEFAULT_PROTOCOL_DIR,
         "workroot": environ.get("PI_AUTOLOOP_WORKROOT") or DEFAULT_WORKROOT,
         # the llama role's policy proxy (ADR 0011): its /v1/models marks
         # allowed_in_mode; preset_to_use picks the coding preset when offered
         "models_url": (environ.get("MODEL_URL") or "http://host.containers.internal:11435/v1").rstrip("/") + "/models",
+        # the GPU lease and its key (laib builtins ${MODEL_LEASE}, ${MODEL_KEY}); empty = no lease
+        "lease_url": (environ.get("MODEL_LEASE") or "").strip(),
+        "model_key": (environ.get("MODEL_KEY") or "").strip(),
     }
 
 
@@ -452,6 +455,76 @@ def preset_to_use(url: str, http) -> str:
     return ids[0] if ids else ""
 
 
+def take_lease(cfg: dict, preset: str, ttl_s: int, http, sleep=time.sleep) -> tuple[str, int]:
+    """`(note, renew_after)`: take the card for this run.
+
+    A note means somebody else holds the window: no run this pass. An empty
+    note with renew_after 0 means no lease (none configured, or it failed for
+    another reason); the run goes ahead and the proxy takes the window itself.
+    """
+    url = cfg.get("lease_url", "")
+    if not url or not preset:
+        return "", 0
+    status, body = http(url, "POST", cfg.get("model_key", ""), {"model": preset, "ttl_s": ttl_s, "holder": LEASE_HOLDER})
+    body = body if isinstance(body, dict) else {}
+    if status == 409:
+        until = body.get("expires_at")
+        when = time.strftime(" bis %H:%M", time.localtime(until)) if isinstance(until, (int, float)) else ""
+        return f"Grafikkarte belegt von {body.get('holder') or 'jemand anderem'}{when}; das Ticket bleibt für den nächsten Durchlauf", 0
+    if status == 202:
+        waited = 0.0
+        while waited < LEASE_WAIT_S:
+            pause = body.get("retry_after") if isinstance(body.get("retry_after"), (int, float)) else 30
+            sleep(pause)
+            waited += pause
+            status, body = http(url, "GET")
+            body = body if isinstance(body, dict) else {}
+            if status != 200:
+                return "", 0
+            if body.get("state") == "ready":
+                return "", int(body.get("renew_after") or 0)
+        return "", 0
+    if status == 200 and body.get("state") == "ready":
+        return "", int(body.get("renew_after") or 0)
+    jlog("warn", "pi-autoloop:lease", "no lease; the proxy takes the window itself", status=status, reason=body.get("reason") or body.get("message"))
+    return "", 0
+
+
+class renewing:
+    """Renew the run's lease every renew_after seconds; give it back at the end."""
+
+    def __init__(self, cfg: dict, preset: str, ttl_s: int, renew_after: float, http):
+        self.cfg, self.preset, self.ttl_s, self.renew_after, self.http = cfg, preset, ttl_s, renew_after, http
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+
+    def _loop(self) -> None:
+        while not self.stop.wait(self.renew_after):
+            self.http(self.cfg["lease_url"], "POST", self.cfg.get("model_key", ""),
+                      {"model": self.preset, "ttl_s": self.ttl_s, "holder": LEASE_HOLDER})
+
+    def __enter__(self):
+        if self.renew_after > 0:
+            self.thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.stop.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=5)
+        if self.cfg.get("lease_url"):
+            self.http(self.cfg["lease_url"], "DELETE", self.cfg.get("model_key", ""), {"holder": LEASE_HOLDER})
+
+
+def release_own_lease(cfg: dict, http) -> None:
+    """On start: a window an earlier run of this loop left behind is given back."""
+    if not cfg.get("lease_url"):
+        return
+    status, body = http(cfg["lease_url"], "GET")
+    if status == 200 and isinstance(body, dict) and body.get("holder") == LEASE_HOLDER and body.get("state") == "ready":
+        http(cfg["lease_url"], "DELETE", cfg.get("model_key", ""), {"holder": LEASE_HOLDER})
+
+
 def refusal_note(lines: list[str], preset: str) -> str:
     """A sentence for the protocol when the run died on a refused preset.
 
@@ -589,7 +662,7 @@ def commit_and_push(cwd: Path, branch: str, subject: str, issue: int) -> bool:
     git(["add", "-A"], cwd)
     if git(["diff", "--cached", "--quiet"], cwd).returncode == 0:
         return False
-    message = f"{subject}\n\nRefs #{issue}\n\nWorked by Pi in the pi-web pod.\n"
+    message = f"{subject}\n\nRefs #{issue}\n\nWorked by Pi in the Werkstatt.\n"
     res = git(
         [
             "-c",
@@ -624,7 +697,7 @@ def open_pull_request(
     http,
 ) -> tuple[int, str]:
     body = (
-        f"Bearbeitet von Pi im pi-web-Pod auf der Box.\n\n"
+        f"Bearbeitet von Pi in der Werkstatt auf der Box.\n\n"
         f"Refs #{issue}\n\n"
         "Der Loop führt nichts zusammen — Zusammenführen entscheidet ein Mensch "
         "oder die Claude-Seite. Das Protokoll steht als Kommentar an diesem PR.\n"
@@ -688,6 +761,12 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
     dest = Path(cfg["workroot"]) / repo / str(number)
     branch = branch_name(number, str(issue.get("title", "")))
     model = preset_to_use(cfg["models_url"], http)
+    ttl_s = cfg["time_cap_s"] + 600
+    held, renew_after = take_lease(cfg, model, ttl_s, http)
+    if held:
+        # somebody else has the card: no run, no attempt counted, the label stays
+        jlog("info", "pi-autoloop:lease", held, repo=repo, issue=number, model=model)
+        return
     gates: list[dict] = []
     pi: dict = summarise_events([])
     pr_url = ""
@@ -698,9 +777,10 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
         note = "Klon fehlgeschlagen"
         transient = True
     else:
-        pi, capped, refused = run_pi(
-            task_prompt(repo, issue), model, dest, cfg["time_cap_s"]
-        )
+        with renewing(cfg, model, ttl_s, renew_after, http) if renew_after else _no_lease():
+            pi, capped, refused = run_pi(
+                task_prompt(repo, issue), model, dest, cfg["time_cap_s"]
+            )
         if capped:
             note = "Zeitlimit erreicht — Pi abgebrochen"
         if refused:
@@ -802,6 +882,14 @@ def work_ticket(cfg: dict, repo: str, issue: dict, token: str, base: str, http) 
     )
 
 
+class _no_lease:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        return None
+
+
 def tick(cfg: dict, token: str, http=http_json) -> int:
     """One pass over the configured repositories. Returns the tickets worked."""
     worked = 0
@@ -829,6 +917,7 @@ def tick(cfg: dict, token: str, http=http_json) -> int:
 
 def main() -> int:
     cfg = config_from_env()
+    release_own_lease(cfg, http_json)
     while True:
         if not cfg["enabled"]:
             jlog(
@@ -847,7 +936,7 @@ def main() -> int:
             jlog(
                 "warn",
                 "pi-autoloop",
-                "no git credential for github.com; set PI_WEB_GIT_TOKEN",
+                "no git credential for github.com; set the template value PI_GIT_TOKEN",
                 store=cfg["store"],
             )
         else:
