@@ -86,7 +86,12 @@ if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
   echo "layering$need (rpm-ostree, live)"
   # shellcheck disable=SC2086
   if ! sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; then
-    echo "live apply refused; rebooting into the layered tree, the first-boot unit continues" >&2
+    # say what failed: a box without DNS is not a refused live apply (#111)
+    if ! getent hosts mirrors.fedoraproject.org >/dev/null 2>&1; then
+      echo "layering failed: no DNS (mirrors.fedoraproject.org does not resolve); rebooting to try again, the first-boot unit continues" >&2
+    else
+      echo "live apply refused; rebooting into the layered tree, the first-boot unit continues" >&2
+    fi
     sudo systemctl reboot; exit 75   # EX_TEMPFAIL: the caller keeps what the next run needs
   fi
 fi

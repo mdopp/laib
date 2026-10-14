@@ -235,16 +235,40 @@ jobs:
           f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
           f.write(json.dumps({"execute": "system_reset"}) + "\n"); f.flush(); print(f.readline().strip())
           PY
-          killed=no
+          # #111: first a cut the moment the first boot starts. The resumed boot must
+          # get on with it: no five-minute stall on DNS, no extra reboot. Its binaries
+          # land within 240 s of the cut (they took 300-400 s before #111), and then
+          # the cut below hits the resumed boot in its own window.
+          early=no
           for i in $(seq 1 900); do
+            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
+              python3 reset.py; early=yes; t0=$(date +%s); echo "early power cut (hard reset) $i s into the first boot, as it starts (#111)"; break
+            fi
+            sleep 1
+          done
+          [ "$early" = yes ] || { echo "the early cut was not reached: laib-firstboot never ran"; exit 1; }
+          killed=no; stalled=no
+          for i in $(seq 1 900); do
+            if [ "$stalled" = no ] && [ $(( $(date +%s) - t0 )) -gt 240 ]; then
+              stalled=yes; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
+              echo "240 s after the early cut the resumed first boot has no binaries yet (#111); its journal so far:"
+              $SSH 'journalctl --no-pager --list-boots | tail -4; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40; systemctl status laib-firstboot systemd-resolved systemd-resolved-varlink.socket --no-pager -l | head -40; getent hosts api.github.com; getent passwd core systemd-resolve; sudo ls -la /etc/laib; journalctl --no-pager -b -p warning -o short-monotonic | tail -40' 2>&1 || echo "(no ssh: rebooting)"
+            fi
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
+              took=$(( $(date +%s) - t0 ))
+              echo "after the early cut, the resumed first boot had its binaries in $took s"
+              if [ "$took" -gt 240 ]; then
+                echo "too slow after an early cut (#111): the resumed first boot stalled"
+                $SSH 'journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40' || true
+                echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
+              fi
               $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
             sleep 1
           done
-          [ "$killed" = yes ] || { echo "the resume path was not exercised: no window between the binaries and the marker"; exit 1; }
+          [ "$killed" = yes ] || { echo "the resume path was not exercised: no window between the binaries and the marker within 900 s of the early cut"; [ "$stalled" = yes ] && echo "the resumed first boot stalled after the early cut (#111)"; $SSH 'journalctl --no-pager --list-boots | tail -5; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -60' 2>&1 || true; exit 1; }
           # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
@@ -271,7 +295,9 @@ jobs:
                 grep -q "md.* xfs" <<<"$(findmnt -n -o SOURCE,FSTYPE /mnt/data)" || { echo "/mnt/data is not the RAID after reinstall"; exit 1; }
                 test -f /mnt/data/laib/vm-marker || { echo "marker lost: the data disk was recreated"; exit 1; }
                 cat /mnt/data/laib/vm-marker
-                grep -q "\[UU\]" /proc/mdstat || { echo "mirror not assembled after reinstall"; exit 1; }
+                # a member that fell behind in the cuts is added back and resyncs (#172): give it a minute
+                for i in $(seq 1 30); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
+                grep -q "\[UU\]" /proc/mdstat || { echo "mirror not assembled after reinstall"; cat /proc/mdstat; journalctl --no-pager -b -u laib-data-disk | tail -10; exit 1; }
                 grep -q "UUID=" /etc/laib/data-disk || { echo "the reinstall did not record the array by UUID"; exit 1; }
                 [ "$(sudo blkid -s TYPE -o value "$(sudo blkid -L backup)")" = ext4 ] || { echo "the reinstall touched the foreign disk"; exit 1; }'
           . ./box.sh; marker
@@ -518,6 +544,7 @@ jobs:
         if: always()
         run: |
           if [ "${POWERCUT_RED:-}" = 1 ]; then echo "the box did not come back by itself after the power cut in the first boot after a reinstall (#81) — the forensics are in the reinstall step"; exit 1; fi
+          if [ "${EARLYCUT_RED:-}" = 1 ]; then echo "after a power cut as the first boot starts, the resumed boot took over 240 s to land its binaries (#111) — the journal is in the reinstall step"; exit 1; fi
           echo "power cut survived (or not reached)"
       - name: logs
         if: always()

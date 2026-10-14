@@ -159,6 +159,16 @@ storage:
             dirs
           }
           active() { mdadm --detail "$1" | awk '/Active Devices/ {print $4}'; }
+          readd() {   # $1 = md device, $2 = array UUID: a member of our own array that fell behind in a
+            local p     # power cut is left out by assembly, and the box runs on one disk unseen (#172).
+            for p in $(lsblk -nrpo NAME,TYPE | awk '$2 == "part" {print $1}'); do   # only our array's UUID
+              [[ "$(mdadm --examine --export "$p" 2>/dev/null | sed -n 's/^MD_UUID=//p')" == "$2" ]] || continue
+              mdadm --detail "$1" | grep -q " $p\$" && continue
+              log "$p belongs to $1 but fell behind (a power cut?): adding it back, the mirror resyncs"
+              mdadm --manage "$1" --re-add "$p" >/dev/null 2>&1 || mdadm --manage "$1" --add "$p" >/dev/null 2>&1 \
+                || log "$p could not be added back: laib disk status"
+            done
+          }
           mkdir -p "$ETC/laib"
 
           # a record without DEVICE= is no record: a cut right after the first boot wrote
@@ -189,6 +199,7 @@ storage:
               exit 1
             fi
             mount_array "$md"
+            [[ "$(active "$md")" -lt "${members:-1}" ]] && readd "$md" "$uuid"
             log "$md assembled, $(active "$md") of ${members:-?} member(s) active"
             exit 0
           fi
@@ -243,7 +254,7 @@ storage:
           sgdisk -Z -n 1:0:0 -t 1:fd00 -c 1:laib-data "$best"
           udevadm settle
           part="${best}1"; [[ -e "$part" ]] || part="${best}p1"
-          mdadm --create /dev/md/data --level=1 --raid-devices=2 --metadata=1.2 --run "$part" missing
+          mdadm --create /dev/md/data --level=1 --raid-devices=2 --metadata=1.2 --bitmap=internal --run "$part" missing
           mkfs.xfs -q -L data /dev/md/data
           md=$(readlink -f /dev/md/data)
           uuid=$(mdadm --detail --export "$md" | sed -n 's/^MD_UUID=//p')
@@ -314,7 +325,28 @@ storage:
           finish() { [ "$KEEP" = 1 ] && return 0; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env; }
           trap finish EXIT
           [ -f /etc/laib/installed ] && exit 0
-          for i in $(seq 1 60); do curl -fsS https://api.github.com >/dev/null 2>&1 && break; sleep 5; done
+          # A power cut early in the first boot can leave /etc half written: system
+          # users and groups missing (systemd-resolve among them), the resolver
+          # failed, no name resolves, for good (#111). Repairing it piece by piece
+          # did not hold (runs 38532148406, 38534809588); a clean reboot does: the
+          # next boot rebuilds what the cut lost. So: no DNS after 30 s, sync and
+          # reboot, at most twice (the count is in /etc/laib, the env file stays).
+          for i in $(seq 1 6); do getent hosts api.github.com >/dev/null 2>&1 && break; sleep 5; done
+          if ! getent hosts api.github.com >/dev/null 2>&1; then
+            n=$(cat /etc/laib/firstboot-dns-reboots 2>/dev/null || echo 0)
+            if [ "$n" -lt 2 ]; then
+              echo "laib-firstboot: no DNS after 30 s; rebooting (attempt $((n + 1)) of 2): a power cut early in the first boot left /etc half written, a clean boot rebuilds it (#111)"
+              sudo mkdir -p /etc/laib && echo $((n + 1)) | sudo tee /etc/laib/firstboot-dns-reboots >/dev/null
+              sudo sync
+              KEEP=1; sudo systemctl reboot; exit 0
+            fi
+            echo "laib-firstboot: still no DNS after two reboots; waiting for the network"
+          fi
+          for i in $(seq 1 60); do
+            curl -fsS https://api.github.com >/dev/null 2>&1 && break
+            [ $((i % 6)) = 0 ] && echo "laib-firstboot: waiting for the network ($((i * 5)) s): $(getent hosts api.github.com >/dev/null 2>&1 && echo "names resolve, GitHub does not answer" || echo "no DNS")"
+            sleep 5
+          done
           flags=(--domain "$LAIB_DOMAIN")
           if [ -n "${LAIB_SOURCE:-}" ]; then
             # one build served over HTTP (the VM job boots the commit under test, #38)
