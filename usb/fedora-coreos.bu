@@ -316,13 +316,15 @@ storage:
           # Runs as core until /etc/laib/installed exists (#37): fetch the installer of
           # the release it installs and run it with the flags from the stick. The unit
           # passes firstboot.env as environment (the token never on argv, never in ps).
-          # Every step is idempotent, so a power cut or a reboot in between resumes at
-          # the next boot; the marker is written last. The env file is shredded on exit
-          # — except when the installer rebooted into a layered tree (exit 75): the
-          # post-reboot run still needs it.
+          # Every step is idempotent, so a power cut, a reboot or an error in between
+          # resumes at the next boot; the marker is written last. The env file is
+          # shredded only once the marker is on disk: a reboot's SIGTERM runs this trap
+          # too, and a boot without the env file can never resume (#202).
           set -euo pipefail
-          KEEP=0
-          finish() { [ "$KEEP" = 1 ] && return 0; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env; }
+          finish() {
+            [ -f /etc/laib/installed ] || return 0
+            sudo sync; sudo shred -u /etc/laib/firstboot.env 2>/dev/null || sudo rm -f /etc/laib/firstboot.env
+          }
           trap finish EXIT
           [ -f /etc/laib/installed ] && exit 0
           # A power cut early in the first boot can leave /etc half written: system
@@ -338,7 +340,7 @@ storage:
               echo "laib-firstboot: no DNS after 30 s; rebooting (attempt $((n + 1)) of 2): a power cut early in the first boot left /etc half written, a clean boot rebuilds it (#111)"
               sudo mkdir -p /etc/laib && echo $((n + 1)) | sudo tee /etc/laib/firstboot-dns-reboots >/dev/null
               sudo sync
-              KEEP=1; sudo systemctl reboot; exit 0
+              sudo systemctl reboot; exit 0
             fi
             echo "laib-firstboot: still no DNS after two reboots; waiting for the network"
           fi
@@ -368,7 +370,7 @@ storage:
           [ -n "${LAIB_DNS_PROVIDER:-}" ] && flags+=(--dns-provider "$LAIB_DNS_PROVIDER")
           [ -n "${LAIB_TLS:-}" ] && flags+=(--tls "$LAIB_TLS")
           rc=0; bash /tmp/install-box.sh "${flags[@]}" || rc=$?   # LAIB_GH_TOKEN and LAIB_DNS_TOKEN come from the environment
-          if [ "$rc" = 75 ]; then KEEP=1; echo "laib-firstboot: rebooting into the layered tree; continues after"; exit 0; fi
+          if [ "$rc" = 75 ]; then echo "laib-firstboot: rebooting into the layered tree; continues after"; exit 0; fi
           [ "$rc" = 0 ] || exit "$rc"
           sudo mkdir -p /etc/laib && sudo touch /etc/laib/installed
 systemd:
