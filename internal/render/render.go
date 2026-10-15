@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -195,28 +196,19 @@ func SecretNames(st *state.State) []state.Secret {
 
 func variables(st *state.State, svc *state.Service, secrets map[string]string) map[string]string {
 	vars := map[string]string{
-		"DOMAIN":      st.Box.Domain,
-		"DATA_DIR":    st.Box.DataDir,
-		"TZ":          st.Box.Timezone,
-		"SERVICE":     svc.Name,
-		"LAN_IP":      st.Box.LanIP,
-		"MODEL_URL":   inContainer(st.ModelURL()),
-		"MODEL_LEASE": inContainer(st.ModelLease()),
-		"MODEL_KEY":   "",
+		"DOMAIN":   st.Box.Domain,
+		"DATA_DIR": st.Box.DataDir,
+		"TZ":       st.Box.Timezone,
+		"SERVICE":  svc.Name,
+		"LAN_IP":   st.Box.LanIP,
 	}
+	maps.Copy(vars, ModelVars(st, secrets))
 	if p := st.HousePersona(); p != nil {
 		vars["PERSONA"], vars["PERSONA_DISPLAY"], vars["PERSONA_PHRASE"] = p.Name, p.Display, p.Wakeword.Phrase
 		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
 		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
 	}
 	vars["PEOPLE_REV"] = st.PeopleRev()
-	if st.Box.Model.KeySecret != "" {
-		vars["MODEL_KEY"] = secretValue(secrets, st.Box.Model.KeySecret)
-	} else if st.Box.Roles.Model != "" {
-		// the local proxy's own key (the llama template declares it): the
-		// Bote, the Werkstatt and the Operator take the lease with it (#42)
-		vars["MODEL_KEY"] = secretValue(secrets, ModelKeySecret)
-	}
 	for k, v := range svc.Values {
 		if v.Secret != "" {
 			vars[k] = secretValue(secrets, v.Secret)
@@ -227,12 +219,23 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 	return vars
 }
 
-// inContainer: the model builtins are read in containers, whose 127.0.0.1 is
-// their own; the host's ports (the model role's proxy and lease) are
-// host.containers.internal there (ADR 0007, #198). No template's host
-// .service reads them.
-func inContainer(url string) string {
-	return strings.Replace(url, "://127.0.0.1:", "://host.containers.internal:", 1)
+// ModelVars are the builtins MODEL_URL, MODEL_LEASE and MODEL_KEY as units
+// and hooks get them. Both read them in a container, whose 127.0.0.1 is its
+// own: the model role's proxy and lease are host.containers.internal there
+// (ADR 0007, #198, #200); no template's host .service reads them. The key
+// is box.yml's, or the local proxy's own (the llama template declares it):
+// the Bote, the Werkstatt and the Operator take the lease with it (#42).
+func ModelVars(st *state.State, secrets map[string]string) map[string]string {
+	inContainer := func(url string) string {
+		return strings.Replace(url, "://127.0.0.1:", "://host.containers.internal:", 1)
+	}
+	key := ""
+	if st.Box.Model.KeySecret != "" {
+		key = secretValue(secrets, st.Box.Model.KeySecret)
+	} else if st.Box.Roles.Model != "" {
+		key = secretValue(secrets, ModelKeySecret)
+	}
+	return map[string]string{"MODEL_URL": inContainer(st.ModelURL()), "MODEL_LEASE": inContainer(st.ModelLease()), "MODEL_KEY": key}
 }
 
 // uses: some service's unit names a value starting with prefix (PERSONA…, PEOPLE_REV).
