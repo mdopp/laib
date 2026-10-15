@@ -7,9 +7,9 @@ import (
 
 // #177, ADR 0022 §3: people and their chat channels are declared once in
 // box.yml, preferred channel first; a channel is a known platform and a
-// target of that platform's shape.
+// target of that platform's shape. A Matrix target is a room (#189).
 func TestPeopleAreValidated(t *testing.T) {
-	st, err := Load(box46(t, "people:\n  mama: [\"signal:+4917012345678\", \"telegram:123456\"]\n  lena: [\"matrix:@lena:example.org\"]\n"))
+	st, err := Load(box46(t, "people:\n  mama: [\"signal:+4917012345678\", \"telegram:123456\"]\n  lena: [\"matrix:!lena:example.org\"]\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,8 +23,9 @@ func TestPeopleAreValidated(t *testing.T) {
 		{"people: {mama: [\"telegram:\"]}\n", "target"},
 		{"people: {mama: [\"telegram:@mama\"]}\n", "chat id"},
 		{"people: {mama: [\"matrix:mama\"]}\n", "matrix"},
-		{"people: {mama: [\"matrix:!raum:example.org:$event\"]}\n", "matrix"}, // a thread, which Hermes reads as <room>:$<event>
-		{"people: {mama: [\"email:mama@localhost\"]}\n", "address"},           // Hermes wants a TLD
+		{"people: {mama: [\"matrix:!raum:example.org:$event\"]}\n", "matrix"},              // a thread, which Hermes reads as <room>:$<event>
+		{"people: {mama: [\"matrix:@mama:example.org\"]}\n", "room id of the direct chat"}, // #189: Hermes posts into a room, RoomID(chat_id)
+		{"people: {mama: [\"email:mama@localhost\"]}\n", "address"},                        // Hermes wants a TLD
 		{"people: {mama: []}\n", "no channel"},
 		{"people: {Mama Müller: [\"telegram:1\"]}\n", "name"},
 	} {
