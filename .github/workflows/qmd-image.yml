@@ -34,3 +34,22 @@ jobs:
           img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
           docker run --rm -e XDG_CACHE_HOME=/tmp/c --entrypoint sh "$img" -c 'test "$(ls /opt/qmd/node_modules/@node-llama-cpp)" = linux-x64 && qmd --version && qmd status'
           docker image inspect "$img" --format 'size {{.Size}}'
+      - name: the Vermittler answers /query with each hit's cosine, the one qmd's own vector search reports
+        run: |
+          img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
+          d=$RUNNER_TEMP/qmd; mkdir -p "$d/notes" "$d/cache"
+          note() { printf '# %s\n\n%s\n' "$2" "$3" > "$d/notes/$1.md"; }
+          note babysitter Babysitter "Anna passt abends auf die Kinder auf, 12 EUR die Stunde, ab 23 Uhr bringt Tom sie heim."
+          note heizung Heizung "Die Gastherme wird jeden Herbst gewartet, Firma Wärme Müller, Wartungsvertrag 189 EUR im Jahr."
+          note muell Müllabfuhr "Biotonne dienstags, Restmüll jeden zweiten Freitag, Gelber Sack am Monatsende."
+          note auto Auto "TÜV im März fällig, Winterreifen lagern beim Reifenhändler, Kfz-Versicherung bei der HUK."
+          note wlan WLAN "Das Gästenetz heißt Gartenhaus, das Passwort steht auf der Karte am Kühlschrank."
+          docker run -d --name qmd -v "$d/notes:/notes:ro" -v "$PWD/templates/haus/qmd.json:/etc/qmd/index.yml:ro" -v "$d/cache:/cache" "$img"
+          trap 'docker logs qmd' EXIT
+          for i in $(seq 30); do docker exec qmd qmd-health && break; sleep 1; done
+          # the refresh beside it, as the timer runs it; the first embed downloads embeddinggemma
+          docker exec qmd qmd update
+          docker exec qmd qmd embed
+          docker cp qmd/vermittler-check.mjs qmd:/opt/qmd/
+          docker exec qmd node /opt/qmd/vermittler-check.mjs "Wer passt abends auf die Kinder auf?" "Wann wird die Heizung gewartet?" "EUR" "xqzv blorf quantenchromodynamik"
+          docker exec qmd qmd-health

@@ -5,8 +5,9 @@ Description=Haus: the memory library's search, qmd on the CPU (laib role: haus)
 # qmd as released, the tag is its version (qmd/Containerfile); its own embeddinggemma-300M on the CPU (haus#13)
 Image=${QMD_IMAGE}
 Pod=haus.pod
-# loopback only: qmd's HTTP has no auth; Haus reaches it at 127.0.0.1 inside the pod (ADR 0007)
-Exec=mcp --http --host 127.0.0.1 --port 8181
+# the Vermittler (#198): qmd's /query on its SDK, typed searches without rerank, each hit's cosine as vec.
+# 127.0.0.1:8181 only, it has no auth; Haus reaches it inside the pod (ADR 0007)
+Entrypoint=qmd-vermittler
 # index.yml: the notes collection and models.embed pinned (it overrides QMD_EMBED_MODEL)
 Volume=./qmd.json:/etc/qmd/index.yml:ro,z
 # the index and the model, downloaded once by the first embed; a cache, not backed up

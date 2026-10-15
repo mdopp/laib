@@ -24,12 +24,24 @@ Calendar and reminders need a Radicale account: set `RADICALE_USER` and
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`
-(`qmd/`), CPU only. It listens on the pod's loopback only — its HTTP has
-no auth — and Haus reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181` (qmd
-answers only a loopback Host, so `host.containers.internal` would not do),
-collection `HAUS_QMD_COLLECTION=notizen`,
-always with typed searches (`lex` + `vec`) and `rerank: false`; a plain
-query pulls in a 1.7B model and the reranker. `qmd.json` is its
+(`qmd/`), CPU only. It serves the Vermittler (#198, `qmd/vermittler.mjs`)
+instead of qmd's own server: qmd's 2.8.3 `/query` scores only by rank,
+so a nonsense query's top hit scores 1, and Haus could not cut weak
+hits. The Vermittler runs the same search on qmd's SDK:
+- `POST /query` takes qmd's body (`searches` of type `lex`/`vec`,
+  `limit`, `collections`), always without rerank; a plain or expanded
+  query, `rerank: true` or any other field is refused with 400. It
+  answers qmd's shape plus `vec`, the hit's cosine similarity (0 when
+  the hit is outside the vector top list).
+- `GET /status` lists each collection's documents and how many are
+  embedded; `GET /health` answers while the index is open.
+- Only the embed model loads. It goes when qmd returns the cosine itself
+  (tobi/qmd#697).
+
+It listens on the pod's loopback only — it has no auth — and Haus
+reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181` (like qmd it answers
+only a loopback Host, 403 otherwise, so `host.containers.internal` would
+not do), collection `HAUS_QMD_COLLECTION=notizen`. `qmd.json` is its
 `index.yml`: the collection `notizen` over the notes folder, and
 `models.embed` pinned to embeddinggemma-300M (it overrides
 `QMD_EMBED_MODEL`). qmd watches no files: `haus-qmd-refresh.timer` runs
@@ -43,6 +55,13 @@ lies beside `${DATA_DIR}/haus`, not in it: Haus relabels its own folder
 is restarted when it stops answering. Serving takes about 700 MB; a
 refresh with new notes about 1 GB more for a moment. embeddinggemma comes
 under the Gemma Terms of Use, which fit a family's own use.
+
+The house model (#198): with a model on the box (the `model` role, or
+`box.yml model.url`) Haus gets `HAUS_LLM_URL` (the proxy's OpenAI base
+as the pod reaches it, `${MODEL_URL}`), `HAUS_LLM_MODEL=gemma-4-e4b` and
+the model key as `HAUS_LLM_KEY`, and lets the model tidy the library's
+hits, never blocking. Without a model URL and key are empty and the
+judge is off.
 
 1. `laib add haus` mints `HAUS_LAIB_TOKEN` (hand `haus`: status, inbox,
    journal, restart) and generates `HAUS_PROXY_SECRET`, which Caddy sends

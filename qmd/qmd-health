@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The library answers (#195): a word search through qmd's REST endpoint —
-// the index opens and a search runs. Lex only and no rerank, so the probe
+// The library answers (#195): a word search through the Vermittler's
+// /query (#198) — the index opens and a search runs. Lex only and no rerank, so the probe
 // loads no model.
 const port = process.env.QMD_PORT || "8181";
 fetch(`http://127.0.0.1:${port}/query`, {
