@@ -167,3 +167,27 @@ func TestBoteRefusesBrokenChannelsAtPlan(t *testing.T) {
 		}
 	}
 }
+
+// #190: without Signal nothing about signal-cli's 8085 is published or
+// declared: no PublishPort in the pod, no nftables line. With Signal it
+// stays, on loopback.
+func TestBoteWithoutSignalHasNoPort8085(t *testing.T) {
+	pod, nft := "quadlet/bote/bote.pod", "nftables/laib.nft"
+	out, err := boteBox(t, "", merge(noSignal, matrixOn))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out[pod], "8085") || strings.Contains(out[nft], "8085") {
+		t.Fatalf("no Signal: 8085 is published or declared:\n%s\n%s", out[pod], out[nft])
+	}
+	if !strings.Contains(out[pod], "PublishPort=127.0.0.1:8645:8645\n") || !strings.Contains(out[nft], "8645") {
+		t.Fatalf("no Signal: bote-notify's port stays:\n%s\n%s", out[pod], out[nft])
+	}
+	out, err = boteBox(t, "", nil) // values.example.yml: Signal only
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out[pod], "PublishPort=127.0.0.1:8085:8080\n") || !strings.Contains(out[nft], "8085") {
+		t.Fatalf("Signal: 8085 stays, on loopback:\n%s\n%s", out[pod], out[nft])
+	}
+}
