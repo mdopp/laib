@@ -317,6 +317,7 @@ jobs:
                 if [ -e /etc/laib/firstboot.env ]; then echo "firstboot.env still on disk after the resumed first boot"; exit 1; fi
                 echo "resumed: marker present, env file gone"'
           echo "=== DIAG green path: every boot since the reinstall"
+          $SSH 'journalctl --no-pager -o short-monotonic -u laib-firstboot -u rpm-ostreed | grep -E "PKI file|Document is empty|clearing rpm-ostree|layering|refused|rebooting|Successfully updated|-- Boot|Txn UpdateDeployment"' || true
           $SSH 'journalctl --no-pager --list-boots | tail -8; for b in $(journalctl --no-pager --list-boots -q | tail -6 | awk "{print \$1}"); do echo "=== boot $b"; journalctl --no-pager -b $b -o short-monotonic -u laib-firstboot -u rpm-ostreed | grep -v "IN DS" | tail -45; done' || true
           $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
