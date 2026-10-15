@@ -344,9 +344,12 @@ storage:
             fi
             echo "laib-firstboot: still no DNS after two reboots; waiting for the network"
           fi
+          # wait for what the install comes from: its build server, or GitHub for a release (#208);
+          # the line names curl's error, so a wait says why (a refused rate limit, no route, …)
+          probe=https://api.github.com; [ -n "${LAIB_SOURCE:-}" ] && probe="$LAIB_SOURCE/VERSION"
           for i in $(seq 1 60); do
-            curl -fsS https://api.github.com >/dev/null 2>&1 && break
-            [ $((i % 6)) = 0 ] && echo "laib-firstboot: waiting for the network ($((i * 5)) s): $(getent hosts api.github.com >/dev/null 2>&1 && echo "names resolve, GitHub does not answer" || echo "no DNS")"
+            err=$(curl -fsS -o /dev/null "$probe" 2>&1) && break
+            [ $((i % 6)) = 0 ] && echo "laib-firstboot: waiting for $probe ($((i * 5)) s): $(getent hosts api.github.com >/dev/null 2>&1 && echo "names resolve" || echo "no DNS"); ${err:-no answer}"
             sleep 5
           done
           flags=(--domain "$LAIB_DOMAIN")
