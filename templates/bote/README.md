@@ -27,10 +27,10 @@ it leaves off as `AUS:`. The `pre-start` hook writes Hermes' `.env` and
 bote-notify's copy before the containers start, so a channel switched off
 is gone before Hermes reads it; `post-deploy` renders the rest and runs
 `pre-start` again first. The pod's health is bote-notify's `GET /health`
-on 8645, which with Signal also asks signal-cli's `/v1/about`. A person's Matrix target is best the room id of their room
-with the Bote (`matrix:!…:server`): Hermes' sender hands a bare
-`@user:server` to the room API as it is, and whether that reaches the
-person is not verified.
+on 8645, which with Signal also asks signal-cli's `/v1/about`. A person's Matrix target is the room id of
+their direct chat with the Bote (`matrix:!…:server`; Element: Room settings
+→ Advanced → Internal room ID). Hermes' sender posts into a room and opens
+no direct chat for a user id, so the state refuses `@user:server` (#189).
 
 **Matrix**, once: give the Bote its own **plain user** account on your
 homeserver: not a server admin, and not an application-service token
