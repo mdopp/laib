@@ -144,7 +144,8 @@ var needsRe = regexp.MustCompile(`(?m)^\s*(Pod|Requires|BindsTo)\s*=(.*)$`)
 
 // applyWhen drops the units `when` turns off (#184): no unit, and its
 // placeholders need no value. A name that is no unit or no value is an
-// error, and so is dropping a unit a remaining one joins or requires.
+// error, and so is dropping a unit a remaining one joins or requires. A
+// port's own `when` (#190) drops its declaration and its PublishPort lines.
 func (svc *Service) applyWhen() error {
 	var errs []error
 	off := map[string]bool{}
@@ -167,6 +168,27 @@ func (svc *Service) applyWhen() error {
 	for file := range off {
 		delete(svc.Units, file)
 	}
+	// a port with `when` (#190): off, it is neither declared nor published
+	ports := svc.Contract.Ports[:0]
+	for _, p := range svc.Contract.Ports {
+		for _, v := range p.When {
+			if _, ok := svc.Values[v]; !ok {
+				errs = append(errs, fmt.Errorf("services/%s/laib.yml: port %d when names %s, which values.yml does not have", svc.Name, p.Port, v))
+			}
+		}
+		if len(p.When) == 0 || slices.ContainsFunc(p.When, svc.Set) {
+			ports = append(ports, p)
+			continue
+		}
+		svc.off = append(svc.off, fmt.Sprintf("services/%s/laib.yml: Port %d aus, solange %s nicht gesetzt ist", svc.Name, p.Port, strings.Join(p.When, " oder ")))
+		for file, content := range svc.Units {
+			lines := strings.SplitAfter(content, "\n")
+			svc.Units[file] = strings.Join(slices.DeleteFunc(lines, func(l string) bool {
+				return slices.Contains(PublishedHostPorts(l), fmt.Sprint(p.Port))
+			}), "")
+		}
+	}
+	svc.Contract.Ports = ports
 	for _, file := range slices.Sorted(maps.Keys(svc.Units)) {
 		for _, m := range needsRe.FindAllStringSubmatch(svc.Units[file], -1) {
 			for _, need := range strings.Fields(m[2]) {

@@ -263,8 +263,9 @@ type Health struct {
 
 // Port is a published host port; LAN=false renders an nftables drop.
 type Port struct {
-	Port int  `yaml:"port"`
-	LAN  bool `yaml:"lan"`
+	Port int      `yaml:"port"`
+	LAN  bool     `yaml:"lan"`
+	When []string `yaml:"when"` // the port exists only while one of these values is set (#190), like a unit under Contract.When
 }
 
 // Value is one entry of values.yml: a literal or a secret reference.
