@@ -108,6 +108,10 @@ jobs:
             -nic user,model=virtio,hostfwd=tcp::2222-:22,hostfwd=tcp::18080-:8080
           EOF
           # a clean power-off (QEMU gone), and waiting for laib after a boot
+          # every remote script runs laib as $L = lw: a verb that meets the apply lock (exit 4,
+          # docs/INTERFACE.md) tries again for up to 3 min; any other exit code fails as before.
+          # The box's converge timer fires 2 min after each boot, while a step may be at its
+          # first mutating verb (#211).
           cat > box.sh <<'EOF'
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           off() { local p; p=$(cat qemu.pid 2>/dev/null) || return 0; $SSH 'sudo systemctl poweroff' || true
@@ -150,7 +154,7 @@ jobs:
                 # the mirror: the untouched 9G disk (no partitions) joins through laib disk add, resync to [UU]
                 spare=""; for d in /dev/vd?; do if [ "$(lsblk -nro NAME "$d" | wc -l)" = 1 ]; then spare=$d; fi; done
                 echo "spare: $spare"; test -n "$spare"
-                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 $L disk status
                 $L disk add "$spare"
                 for i in $(seq 1 120); do grep -q "\[UU\]" /proc/mdstat && break; sleep 2; done
@@ -307,7 +311,7 @@ jobs:
           # pre-pull with the box's own login (install-box.sh logged in with the stick's token), so
           # the 90 s unit start does not include the pull; no login from the runner here
           $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sysctl -n net.ipv4.ip_unprivileged_port_start
                 # --tls internal from the stick reached box.yml through first boot and laib init (#45); no echo into box.yml here
                 grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
@@ -334,7 +338,7 @@ jobs:
             local rc=0; curl -s -m 6 -o /dev/null http://127.0.0.1:18080/ || rc=$?; echo "$rc"; }
           # a service that really listens on 0.0.0.0:8080 and declares the port lan: false (whoami needs
           # the sso role for its route; busybox httpd needs nothing): from a registry on the box
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 R=/mnt/data/laib/registries/vm/templates/probe; mkdir -p "$R"
                 printf "name: probe\ntemplate: {registry: vm, name: probe, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports:\n  - {port: 8080, lan: false}\n" > "$R/laib.yml"
                 printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
@@ -356,7 +360,7 @@ jobs:
           rc=$(probe); echo "probe after lan: false again: curl rc $rc"; [ "$rc" = 28 ] || { echo "the port is not dropped again"; $SSH 'sudo nft list ruleset'; exit 1; }
           $SSH 'sudo nft delete table inet laib'
           rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
                 grep -q "\"firewall\":\"fehlt\"" /tmp/ready.json || { echo "/ready does not say the firewall is missing"; exit 1; }
                 $L converge --force || true
@@ -364,7 +368,7 @@ jobs:
                 $L journal --since 10m | grep -q "firewall" || { echo "no journal line for the reload"; exit 1; }'
           rc=$(probe); echo "probe after converge: curl rc $rc"; [ "$rc" = 28 ]
           off; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c; ready
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sudo nft list table inet laib | grep -q 8080 || { echo "the ruleset is gone after the reboot"; exit 1; }
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
                 grep -q "\"firewall\":\"geladen\"" /tmp/ready.json
@@ -380,7 +384,7 @@ jobs:
       - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
                 for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
@@ -416,7 +420,7 @@ jobs:
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 # box.yml is rewritten by laib add (yaml.Marshal, four-space indent): read repo: inside backup: at any indent
                 repo=$(sed -n "/^backup:/,/^[^ #]/s/^ *repo: *\([^ #]*\).*/\1/p" /mnt/data/laib/state/box.yml)
                 echo "backup.repo from box.yml: $repo"; test -n "$repo"
@@ -448,7 +452,7 @@ jobs:
                 test -f /var/opt/laib/laib.prev || { echo "no previous binary kept for laib self rollback"; exit 1; }
                 systemctl --user is-active laib.service caddy.service
                 # and back: self rollback restores the previous release and restarts
-                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 $L self rollback
                 for i in $(seq 1 20); do curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json 2>/dev/null && break; sleep 1; done
                 cat /tmp/ready.json; echo
@@ -458,7 +462,7 @@ jobs:
       - name: remove — units stopped, files gone, data kept
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sed -i -E "s/proxy: caddy/proxy: \"\"/" /mnt/data/laib/state/box.yml; grep -n proxy /mnt/data/laib/state/box.yml   # caddy holds the proxy role; free it first
                 $L remove caddy
                 sleep 2
@@ -490,7 +494,7 @@ jobs:
           . ./box.sh
           # the foreign ext4 disk (label backup) is the off-box repo; a database service from a
           # registry (postgres, quiesce: true) carries a row that must survive
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sudo mkdir -p /mnt/backup && sudo mount -L backup /mnt/backup && sudo chown core:core /mnt/backup
                 sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml; grep -n "repo:" /mnt/data/laib/state/box.yml
                 R=/mnt/data/laib/registries/vm/templates/pgtest; mkdir -p "$R"
@@ -523,7 +527,7 @@ jobs:
             sleep 10
           done
           scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 sheet-age.key sheet-restic.pw core@127.0.0.1:/tmp/
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 test -f /mnt/data/laib/vm-marker && { echo "the old data disk is still there"; exit 1; } || echo "fresh data disk, as intended"
                 # step 2 of the sheet: the key, the repo reachable, box.yml pointing at it
                 install -m 0600 /tmp/sheet-age.key /mnt/data/laib/age.key
