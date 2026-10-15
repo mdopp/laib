@@ -34,6 +34,13 @@ def gql(query, variables=None):
         raise RuntimeError(res["errors"])
     return res["data"]
 
+# laib splits the line on whitespace; "--opt=value" keeps a generated secret that starts
+# with "-" (base64url: one in 64) a value, where "--opt value" made lldap read it as an
+# option and left the account without a password (#209)
+def set_password(user, password):
+    print("laib-exec: systemd-auth-lldap /app/lldap_set_password --base-url=http://127.0.0.1:17170 --admin-username=admin"
+          f" --admin-password={S('LLDAP_ADMIN_PASSWORD')} --username={user} --password={password}")
+
 groups = {g["displayName"]: g["id"] for g in gql("{ groups { id displayName } }")["groups"]}
 for name in ("admins", "family"):
     if name not in groups:
@@ -48,8 +55,7 @@ if op not in users:
     # the password: LLDAP's GraphQL has no password mutation; its own tool in
     # the container does it. laib runs the line below in the pod's lldap
     # container (the hooks image has no podman; ADR 0004 amendment #36).
-    print("laib-exec: systemd-auth-lldap /app/lldap_set_password --base-url http://127.0.0.1:17170 --admin-username admin"
-          f" --admin-password {S('LLDAP_ADMIN_PASSWORD')} --username {op} --password {S('OPERATOR_PASSWORD')}")
+    set_password(op, S("OPERATOR_PASSWORD"))
 member = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": op})["user"]["groups"]
 if "admins" not in {g["displayName"] for g in member}:
     gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": op, "g": groups["admins"]})
@@ -63,9 +69,10 @@ if "lldap_strict_readonly" not in groups:
 if "radicale" not in users:
     gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
         {"u": {"id": "radicale", "email": "radicale@" + DOMAIN, "displayName": "Radicale (Lesekonto)"}})
-    print("laib-exec: systemd-auth-lldap /app/lldap_set_password --base-url http://127.0.0.1:17170 --admin-username admin"
-          f" --admin-password {S('LLDAP_ADMIN_PASSWORD')} --username radicale --password {S('RADICALE_LDAP_PASSWORD')}")
     print("read-only account created: radicale")
+# a service secret, not a person's password: set on every run, so a set that failed once
+# does not leave radicale without one for good (#209)
+set_password("radicale", S("RADICALE_LDAP_PASSWORD"))
 rmember = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": "radicale"})["user"]["groups"]
 if "lldap_strict_readonly" not in {g["displayName"] for g in rmember}:
     gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": "radicale", "g": groups["lldap_strict_readonly"]})
