@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // The image check (#198), run inside a laib-qmd container next to its
 // Vermittler, after `qmd update && qmd embed`: node vermittler-check.mjs
-// <query>… . Each query must answer qmd's /query shape plus `vec`, and
-// `vec` must be the cosine qmd's own vector search reports for that note
-// (0 for a hit outside its top list). Then the refusals and the Host check.
+// <query>… , with qmd's own server beside it at $QMD_REF_URL. Each query
+// must answer exactly what qmd's /query answers — every field, `file`
+// percent-encoded as qmd's encodeQmdPath does — plus `vec`, the cosine
+// qmd's own vector search reports for that note (0 for a hit outside its
+// top list). Then the refusals and the Host check.
 import http from "node:http";
 import { createStore } from "@tobilu/qmd";
 
@@ -13,8 +15,10 @@ const { getConfigDir } = await import(new URL("./collections.js", sdk));
 const base = `http://127.0.0.1:${process.env.QMD_PORT || 8181}`;
 const failed = [];
 const check = (cond, msg) => { if (!cond) failed.push(msg); };
-const post = (body) =>
-  fetch(`${base}/query`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const post = (body, url = base) =>
+  fetch(`${url}/query`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const qmd = process.env.QMD_REF_URL;
+if (!qmd) throw new Error("QMD_REF_URL (qmd mcp --http beside the Vermittler) is required");
 
 check((await fetch(`${base}/health`)).status === 200, "/health is not 200");
 const status = await (await fetch(`${base}/status`)).json();
@@ -26,10 +30,15 @@ const store = await createStore({ dbPath: getDefaultDbPath(), configPath: `${get
 const collection = (await store.getDefaultCollectionNames())[0];
 const shape = "docid,file,title,score,context,line,snippet,vec";
 let compared = 0;
+const files = [];
 for (const q of process.argv.slice(2)) {
-  const res = await post({ searches: [{ type: "lex", query: q }, { type: "vec", query: q }], limit: 50 });
+  const body = { searches: [{ type: "lex", query: q }, { type: "vec", query: q }], limit: 50, rerank: false };
+  const res = await post(body);
   const { results } = await res.json();
   check(res.status === 200 && results?.length > 0, `${q}: no results (${res.status})`);
+  const own = (await (await post(body, qmd)).json()).results;
+  const strip = (rs) => JSON.stringify((rs ?? []).map(({ vec, ...r }) => r));
+  check(strip(results) === strip(own), `${q}: not what qmd's /query answers:\n  vermittler ${strip(results)}\n  qmd        ${strip(own)}`);
   // the reference: qmd's vector search over the same collection, the same top list of 20
   const ref = new Map((await store.searchVector(q, { limit: 20, collection }))
     .map((r) => [`qmd://${r.displayPath.split("/").map(encodeURIComponent).join("/")}`, r.score]));
@@ -38,11 +47,14 @@ for (const q of process.argv.slice(2)) {
     const want = ref.has(r.file) ? Math.round(ref.get(r.file) * 1000) / 1000 : 0;
     check(typeof r.vec === "number" && Math.abs(r.vec - want) < 0.0015, `${q}: ${r.file} vec ${r.vec}, qmd's vector search says ${want}`);
     compared++;
+    files.push(r.file);
   }
   console.log(`${q}: ${(results ?? []).slice(0, 3).map((r) => `${r.file} vec ${r.vec}`).join(", ")}`);
 }
 await store.close();
 check(compared > 0, "no hit compared");
+// the notes must have exercised qmd's encoding: an umlaut and an & in a file name
+check(files.some((f) => f.includes("%C3")) && files.some((f) => f.includes("%26")), `no hit with an umlaut and an & in its name: ${[...new Set(files)]}`);
 
 const lex = [{ type: "lex", query: "haus" }];
 for (const [body, why] of [

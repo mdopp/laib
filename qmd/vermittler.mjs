@@ -48,7 +48,7 @@ async function query(p) {
     const v = r.explain?.vectorScores ?? [];
     return { // qmd's /query shape (mcp/server.js) …
       docid: `#${r.docid}`,
-      file: `qmd://${r.displayPath.split("/").map(encodeURIComponent).join("/")}`,
+      file: `qmd://${r.displayPath.split("/").map(encodeURIComponent).join("/")}`, // qmd's encodeQmdPath, which the SDK does not export
       title: r.title,
       score: Math.round(r.score * 100) / 100,
       context: r.context,

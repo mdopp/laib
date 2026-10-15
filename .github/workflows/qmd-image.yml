@@ -34,7 +34,7 @@ jobs:
           img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
           docker run --rm -e XDG_CACHE_HOME=/tmp/c --entrypoint sh "$img" -c 'test "$(ls /opt/qmd/node_modules/@node-llama-cpp)" = linux-x64 && qmd --version && qmd status'
           docker image inspect "$img" --format 'size {{.Size}}'
-      - name: the Vermittler answers /query with each hit's cosine, the one qmd's own vector search reports
+      - name: the Vermittler answers what qmd's /query answers, plus each hit's cosine from qmd's own vector search
         run: |
           img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
           d=$RUNNER_TEMP/qmd; mkdir -p "$d/notes" "$d/cache"
@@ -44,12 +44,18 @@ jobs:
           note muell Müllabfuhr "Biotonne dienstags, Restmüll jeden zweiten Freitag, Gelber Sack am Monatsende."
           note auto Auto "TÜV im März fällig, Winterreifen lagern beim Reifenhändler, Kfz-Versicherung bei der HUK."
           note wlan WLAN "Das Gästenetz heißt Gartenhaus, das Passwort steht auf der Karte am Kühlschrank."
+          note "Größen Kinder" "Größenliste Kinder" "Max trägt Größe 128, Schuhgröße 31; Lena Größe 104."
+          note "schlüssel & keller" "Schlüssel und Keller" "Der Kellerschlüssel hängt am Brett im Flur, der Ersatzschlüssel liegt bei den Nachbarn."
           docker run -d --name qmd -v "$d/notes:/notes:ro" -v "$PWD/templates/haus/qmd.json:/etc/qmd/index.yml:ro" -v "$d/cache:/cache" "$img"
           trap 'docker logs qmd' EXIT
           for i in $(seq 30); do docker exec qmd qmd-health && break; sleep 1; done
           # the refresh beside it, as the timer runs it; the first embed downloads embeddinggemma
           docker exec qmd qmd update
           docker exec qmd qmd embed
+          # qmd's own server on the same index, the reference for every field but vec
+          docker exec -d qmd qmd mcp --http --host 127.0.0.1 --port 8182
+          for i in $(seq 30); do docker exec qmd node -e 'fetch("http://127.0.0.1:8182/health").then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))' && break; sleep 1; done
           docker cp qmd/vermittler-check.mjs qmd:/opt/qmd/
-          docker exec qmd node /opt/qmd/vermittler-check.mjs "Wer passt abends auf die Kinder auf?" "Wann wird die Heizung gewartet?" "EUR" "xqzv blorf quantenchromodynamik"
+          docker exec -e QMD_REF_URL=http://127.0.0.1:8182 qmd node /opt/qmd/vermittler-check.mjs \
+            "Wer passt abends auf die Kinder auf?" "Wann wird die Heizung gewartet?" "EUR" "Größen Kinder" "Schlüssel Keller" "xqzv blorf quantenchromodynamik"
           docker exec qmd qmd-health
