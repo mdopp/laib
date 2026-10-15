@@ -87,3 +87,88 @@ func TestLatestWithBinariesIsTakenAsIs(t *testing.T) {
 		t.Errorf("listed all releases although latest has its binaries:\n%s", log)
 	}
 }
+
+// runLayering runs install-box.sh --source against an rpm-ostree shim (body
+// rpmOstree) until the layering is over: what is under test is which
+// rpm-ostree calls it makes, whether it reboots, and its exit code. etc is
+// LAIB_ETC, shared between runs that stand for consecutive boots.
+func runLayering(t *testing.T, etc, rpmOstree string) (log, out string, rc int) {
+	t.Helper()
+	if _, err := exec.LookPath("restic"); err == nil {
+		t.Skip("restic is installed here: install-box.sh would not layer it")
+	}
+	root := t.TempDir()
+	bin, home, fx := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(etc, "fx")
+	for _, d := range []string{bin, home, fx, filepath.Join(etc, "laib")} {
+		os.MkdirAll(d, 0o755)
+	}
+	logf := filepath.Join(root, "shim.log")
+	shim(t, bin, "id", "echo core")
+	shim(t, bin, "sudo", `exec "$@"`)
+	shim(t, bin, "getent", "exit 0")
+	shim(t, bin, "sync", "exit 0")
+	shim(t, bin, "systemctl", "exit 0")
+	shim(t, bin, "sysctl", "echo 0")
+	shim(t, bin, "rpm-ostree", rpmOstree)
+	shim(t, bin, "curl", `case "${@: -1}" in */VERSION) echo abc1234;; *) exit 22;; esac`)
+	cmd := exec.Command("bash", filepath.Join("..", "..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "BIN="+bin, "HOME="+home, "LAIB_ETC="+etc, "LAIB_GH_TOKEN=")
+	b, err := cmd.CombinedOutput()
+	if ee, ok := err.(*exec.ExitError); ok {
+		rc = ee.ExitCode()
+	}
+	l, _ := os.ReadFile(logf)
+	return string(l), string(b), rc
+}
+
+// #206: a power cut during the first `rpm-ostree install` leaves zero-length
+// files in its metadata cache (a metalink, a repo's GPG key), and every later
+// run fails on them: "PKI file /var/cache/rpm-ostree/repomd/…/RPM-GPG-KEY-…
+// contains no valid public key" (vm-install 38732387270, 38732400495). A
+// reboot heals nothing; the box rebooted every 23 s, forever. The cache is
+// cleared and the layering tried again in the same boot.
+func TestLayeringHealsAnEmptiedCacheWithoutAReboot(t *testing.T) {
+	etc := t.TempDir()
+	os.MkdirAll(filepath.Join(etc, "laib"), 0o755)
+	os.WriteFile(filepath.Join(etc, "laib", "layer-reboots"), []byte("1\n"), 0o644)
+	log, out, _ := runLayering(t, etc, `case "$1" in
+  cleanup) touch "$FX/cleaned";;
+  install) [ -f "$FX/cleaned" ] || { echo "error: PKI file /var/cache/rpm-ostree/repomd/x/RPM-GPG-KEY-fedora-44-x86_64 contains no valid public key" >&2; exit 1; }
+           printf '#!/bin/sh\n' > "$BIN/restic"; chmod +x "$BIN/restic";;
+esac`)
+	if !strings.Contains(log, "rpm-ostree cleanup --repomd") {
+		t.Fatalf("the emptied metadata cache was never cleared\nshims:\n%s\noutput:\n%s", log, out)
+	}
+	if strings.Count(log, "\nrpm-ostree install") != 2 { // the sudo shim logs each call twice
+		t.Fatalf("the layering must be tried once more after the cache is cleared\nshims:\n%s", log)
+	}
+	if strings.Contains(log, "systemctl reboot") {
+		t.Fatalf("rebooted although the layering succeeded after clearing the cache\nshims:\n%s\noutput:\n%s", log, out)
+	}
+	if _, err := os.Stat(filepath.Join(etc, "laib", "layer-reboots")); err == nil {
+		t.Error("the reboot count survives a layering that succeeded: the next failure gets fewer reboots")
+	}
+}
+
+// #206: a layering failure no reboot fixes must not become a reboot loop.
+// Two reboots into the layered tree (counted on disk, like the DNS reboots of
+// #111), then install-box.sh fails and the box stays up and reachable.
+func TestLayeringRebootsAtMostTwice(t *testing.T) {
+	etc := t.TempDir()
+	always := `case "$1" in install) echo "error: no luck" >&2; exit 1;; esac`
+	for boot := 1; boot <= 3; boot++ {
+		log, out, rc := runLayering(t, etc, always)
+		rebooted := strings.Contains(log, "systemctl reboot")
+		if boot <= 2 && (rc != 75 || !rebooted) {
+			t.Fatalf("boot %d: want a reboot into the layered tree (exit 75), got rc %d\nshims:\n%s\noutput:\n%s", boot, rc, log, out)
+		}
+		if boot == 3 {
+			if rebooted || rc == 75 || rc == 0 {
+				t.Fatalf("boot 3: after two reboots the layering must fail without another reboot, got rc %d\nshims:\n%s\noutput:\n%s", rc, log, out)
+			}
+			if !strings.Contains(out, "rpm-ostree") {
+				t.Errorf("boot 3: the failure should name rpm-ostree:\n%s", out)
+			}
+		}
+	}
+}
