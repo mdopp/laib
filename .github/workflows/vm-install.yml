@@ -239,10 +239,19 @@ jobs:
           # get on with it: no five-minute stall on DNS, no extra reboot. Its binaries
           # land within 240 s of the cut (they took 300-400 s before #111), and then
           # the cut below hits the resumed boot in its own window.
-          early=no
+          # #206: the cut waits, at most 30 s after laib-firstboot started, until rpm-ostree has
+          # copied a repo's GPG key into its metadata cache. A cut in that window leaves empty
+          # files there, and the resumed boot has to heal them; a cut that missed it (the poll
+          # lagging) proved that only one run in three.
+          early=no; act=""
           for i in $(seq 1 900); do
-            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
-              python3 reset.py; early=yes; t0=$(date +%s); echo "early power cut (hard reset) $i s into the first boot, as it starts (#111)"; break
+            if [ -z "$act" ] && [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then act=$(date +%s); fi
+            if [ -n "$act" ]; then
+              incache=no; $SSH 'sudo sh -c "ls /var/cache/rpm-ostree/repomd/*/RPM-GPG-KEY-*"' >/dev/null 2>&1 && incache=yes
+              if [ "$incache" = yes ] || [ $(( $(date +%s) - act )) -ge 30 ]; then
+                python3 reset.py; early=yes; t0=$(date +%s)
+                echo "early power cut (hard reset) $i s into the first boot, $(( t0 - act )) s after laib-firstboot started; rpm-ostree's cache being written: $incache (#111, #206)"; break
+              fi
             fi
             sleep 1
           done
