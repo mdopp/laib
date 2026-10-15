@@ -37,14 +37,15 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
 	out := map[string]string{}
-	for _, unit := range svc.UnitNames() {
+	units := append(svc.UnitNames(), svc.Oneshots()...) // a timer's failed run is read here (#195)
+	for _, unit := range units {
 		text, _ := sysd.Run(ctx, "journalctl", "--user", "-u", unit, "--since", "-"+since, "-n", lines, "--no-pager", "-o", "short-iso")
 		out[unit] = render.Redact(render.Output{"l": text}, sec)["l"]
 	}
 	if env.json {
 		return emit(env, out)
 	}
-	for _, unit := range svc.UnitNames() {
+	for _, unit := range units {
 		fmt.Fprintf(env.w(), "── %s ──\n%s\n", unit, out[unit])
 	}
 	return exitOK
