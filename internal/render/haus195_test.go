@@ -34,7 +34,7 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	if strings.Contains(pod, "8181") {
 		t.Errorf("the pod publishes qmd's port; it has no auth and stays on loopback:\n%s", pod)
 	}
-	haus := has("quadlet/haus/haus.container", "Pod=haus.pod", "Environment=HAUS_LIBRARY_URL=http://127.0.0.1:8181")
+	haus := has("quadlet/haus/haus.container", "Pod=haus.pod", "Environment=HAUS_QMD_URL=http://127.0.0.1:8181")
 	if strings.Contains(haus, "PublishPort") {
 		t.Errorf("haus.container publishes a port itself; in a pod the pod does:\n%s", haus)
 	}
@@ -42,7 +42,7 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 		"Pod=haus.pod",
 		"Exec=mcp --http --host 127.0.0.1 --port 8181",
 		"Volume=./qmd.json:/etc/qmd/index.yml:ro",
-		"Volume=/d/haus/qmd:/cache:Z",
+		"Volume=/d/haus-qmd:/cache:Z",
 		"Volume=/d/file-share/data/notes:/notes:ro",
 		"HealthCmd=qmd-health", "Notify=healthy", "HealthOnFailure=kill")
 	for _, bad := range []string{"PublishPort", "AddDevice", "0.0.0.0", "Network=host"} {
@@ -61,8 +61,8 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	if err := json.Unmarshal([]byte(has("quadlet/haus/qmd.json")), &cfg); err != nil {
 		t.Fatalf("qmd.json: %v", err)
 	}
-	if c, ok := cfg.Collections["notes"]; !ok || c.Path != "/notes" || c.Pattern != "**/*.md" {
-		t.Errorf("the notes collection is not the mounted notes folder: %+v", cfg.Collections)
+	if c, ok := cfg.Collections["notizen"]; !ok || c.Path != "/notes" || c.Pattern != "**/*.md" {
+		t.Errorf("the notizen collection (Haus's default HAUS_QMD_COLLECTION) is not the mounted notes folder: %+v", cfg.Collections)
 	}
 	if cfg.Models["embed"] != "hf:ggml-org/embeddinggemma-300M-GGUF/embeddinggemma-300M-Q8_0.gguf" {
 		t.Errorf("models.embed is not pinned to embeddinggemma-300M: %q", cfg.Models["embed"])
@@ -97,12 +97,12 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	// the library's data is a declared data path of haus, kept out of the backup (a cache)
 	var declared bool
 	for _, d := range st.Services["haus"].Contract.Data {
-		if d.Path == "${DATA_DIR}/haus/qmd" && d.Backup != nil && !*d.Backup {
+		if d.Path == "${DATA_DIR}/haus-qmd" && d.Backup != nil && !*d.Backup {
 			declared = true
 		}
 	}
 	if !declared {
-		t.Error("${DATA_DIR}/haus/qmd is not a declared data path with backup: false")
+		t.Error("${DATA_DIR}/haus-qmd is not a declared data path with backup: false")
 	}
 	if got := strings.Join(st.Services["haus"].UnitNames(), ","); got != "haus-pod.service,haus-qmd-refresh.timer,haus-qmd.service,haus.service" {
 		t.Errorf("haus's units are %s: the timer is one, its oneshot is not", got)

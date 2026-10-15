@@ -1,0 +1,8 @@
+{
+  "name": "laib-qmd",
+  "private": true,
+  "description": "qmd as released, for Haus's memory library (laib #195); package-lock.json pins every dependency",
+  "dependencies": {
+    "@tobilu/qmd": "2.8.3"
+  }
+}

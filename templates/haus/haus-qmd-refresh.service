@@ -1,0 +1,12 @@
+# The memory library's refresh (#195): qmd watches no files, so its timer
+# runs this. Each step that fails fails the unit, and `laib status` shows
+# haus red until a run succeeds. Never `qmd pull` here: offline it deletes
+# the cached models (haus#13). The first run downloads the embed model.
+[Unit]
+Description=Haus: refresh the memory library (qmd update, qmd embed)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec systemd-haus-qmd qmd update
+ExecStart=/usr/bin/podman exec systemd-haus-qmd qmd embed
+TimeoutStartSec=1h

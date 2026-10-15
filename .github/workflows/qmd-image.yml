@@ -1,0 +1,36 @@
+name: qmd-image
+# laib-qmd (#195): qmd as released for Haus's memory library. The tag is
+# qmd's version from qmd/package.json; a pull request pushes its sha only.
+on:
+  push:
+    branches: [main]
+    paths: ["qmd/**", ".github/workflows/qmd-image.yml"]
+  pull_request:
+    paths: ["qmd/**", ".github/workflows/qmd-image.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: echo "qmd=$(jq -r '.dependencies["@tobilu/qmd"]' qmd/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: qmd/Containerfile
+          push: true
+          tags: ${{ github.event_name != 'pull_request' && format('ghcr.io/mdopp/laib-qmd:{0},ghcr.io/mdopp/laib-qmd:latest,', steps.v.outputs.qmd) || '' }}ghcr.io/mdopp/laib-qmd:${{ github.sha }}
+      - name: the image runs qmd on the CPU build only
+        run: |
+          img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
+          docker run --rm --entrypoint sh "$img" -c 'test "$(ls /opt/qmd/node_modules/@node-llama-cpp)" = linux-x64 && qmd --version'
+          docker image inspect "$img" --format 'size {{.Size}}'

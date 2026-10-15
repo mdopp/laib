@@ -1,0 +1,6 @@
+[Pod]
+PodName=haus
+# beyond loopback so the Bote's pod reaches /mcp/haushalt (ADR 0012 §4); ports lan: false keeps the LAN out,
+# and pages, /napi and /mcp each check their own secret (#170). qmd's port is not published: the
+# library has no auth and stays on the pod's loopback (#195)
+PublishPort=8650:8650

@@ -1,0 +1,26 @@
+# laib-qmd: qmd (tobi/qmd, MIT) as released, the search of Haus's memory
+# library (#195, haus#13). package-lock.json pins every dependency; the
+# image tag is qmd's version. CPU only: of node-llama-cpp's prebuilt
+# backends only linux-x64 stays — no CUDA, Vulkan or ARM builds (~640 MB),
+# and no llama.cpp source to build from. The embed model is not in the
+# image: the first `qmd embed` downloads it into the mounted cache.
+FROM docker.io/library/node:22-bookworm-slim AS build
+WORKDIR /opt/qmd
+COPY qmd/package.json qmd/package-lock.json ./
+ENV NODE_LLAMA_CPP_SKIP_DOWNLOAD=true
+RUN npm ci --omit=dev --omit=peer --no-audit --no-fund \
+ && find node_modules/@node-llama-cpp -mindepth 1 -maxdepth 1 ! -name linux-x64 -exec rm -rf {} + \
+ && rm -rf node_modules/node-llama-cpp/llama/gitRelease.bundle \
+ && test -d node_modules/@node-llama-cpp/linux-x64/bins/linux-x64
+
+FROM docker.io/library/node:22-bookworm-slim
+LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
+COPY --from=build /opt/qmd /opt/qmd
+COPY qmd/qmd-health /usr/local/bin/
+# the index and the model live in /cache (a volume), index.yml in /etc/qmd;
+# QMD_FORCE_CPU: no GPU probing, the CPU build only
+ENV PATH=/opt/qmd/node_modules/.bin:$PATH \
+    XDG_CACHE_HOME=/cache QMD_CONFIG_DIR=/etc/qmd \
+    QMD_FORCE_CPU=1 NODE_LLAMA_CPP_SKIP_DOWNLOAD=true NO_COLOR=1
+ENTRYPOINT ["qmd"]
+CMD ["mcp", "--http", "--host", "127.0.0.1", "--port", "8181"]

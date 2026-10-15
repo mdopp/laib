@@ -21,6 +21,27 @@ keeps the LAN out, and pages, `/napi` and `/mcp` each check their own secret
 Calendar and reminders need a Radicale account: set `RADICALE_USER` and
 `laib secret set HAUS_RADICALE_PASSWORD`; without it those tools are absent.
 
+The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
+released, in the haus pod beside Haus (`haus-qmd`), searching the notes
+by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`
+(`qmd/`), CPU only. It listens on the pod's loopback only — its HTTP has
+no auth — and Haus reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181`,
+always with typed searches (`lex` + `vec`) and `rerank: false`; a plain
+query pulls in a 1.7B model and the reranker. `qmd.json` is its
+`index.yml`: the collection `notizen` over the notes folder, and
+`models.embed` pinned to embeddinggemma-300M (it overrides
+`QMD_EMBED_MODEL`). qmd watches no files: `haus-qmd-refresh.timer` runs
+`qmd update` and `qmd embed` every quarter hour; a failed step fails
+`haus-qmd-refresh.service` and `laib status` shows haus red until a run
+succeeds. The first run downloads the model (~330 MB) into
+`${DATA_DIR}/haus-qmd`; nothing ever runs `qmd pull`, which deletes the
+cached models when offline. That folder is a cache, not backed up, and
+lies beside `${DATA_DIR}/haus`, not in it: Haus relabels its own folder
+(`:Z`) on every start. `haus-qmd` is active only once it answers a word search, and
+is restarted when it stops answering. Serving takes about 700 MB; a
+refresh with new notes about 1 GB more for a moment. embeddinggemma comes
+under the Gemma Terms of Use, which fit a family's own use.
+
 1. `laib add haus` mints `HAUS_LAIB_TOKEN` (hand `haus`: status, inbox,
    journal, restart) and generates `HAUS_PROXY_SECRET`, which Caddy sends
    as `X-Haus-Proxy` to the pages — nothing else reaches them (haus#1).
