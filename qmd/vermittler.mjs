@@ -20,6 +20,23 @@ const store = await createStore({ dbPath: getDefaultDbPath(), configPath: `${get
 const db = store.internal.db;
 const guard = resolveOriginGuard({ host: HOST }); // qmd's own Host/Origin check for a loopback bind
 
+// The embed model loads at the first vec search (~3 s on the CPU) and qmd
+// drops it after 5 idle minutes; Haus waits 2.5 s. So it stays loaded, and
+// is loaded before /health answers. Until the first embed (which downloads
+// it) there are no vectors and no search loads it.
+store.internal.llm.inactivityTimeoutMs = 0;
+let warm = null;
+function warmed() {
+  if (!warm && db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vectors_vec'").get()) {
+    const t = Date.now();
+    warm = store.search({ queries: [{ type: "vec", query: "Haus" }], limit: 1, rerank: false })
+      .then(() => console.error(`vermittler: embed model loaded in ${Date.now() - t} ms`), (e) => console.error(`vermittler: warm-up: ${e.message}`));
+  }
+  // a model that cannot load (not cached, offline) must not keep the library down
+  return warm && Promise.race([warm, new Promise((r) => setTimeout(r, 60000).unref())]);
+}
+await warmed();
+
 class Refused extends Error {}
 const refuse = (msg) => { throw new Refused(msg); };
 
@@ -84,6 +101,7 @@ http.createServer(async (req, res) => {
     if (!verdict.ok) return send(res, 403, { error: `Forbidden: ${verdict.reason}` });
     const path = (req.url || "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
+      await warmed(); // also right after the first embed
       db.prepare("SELECT 1").get(); // the store is open
       return send(res, 200, { status: "ok" });
     }

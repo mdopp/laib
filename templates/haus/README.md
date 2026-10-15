@@ -35,8 +35,11 @@ hits. The Vermittler runs the same search on qmd's SDK:
   the hit is outside the vector top list).
 - `GET /status` lists each collection's documents and how many are
   embedded; `GET /health` answers while the index is open.
-- Only the embed model loads. It goes when qmd returns the cosine itself
-  (tobi/qmd#697).
+- Only the embed model loads, and it stays loaded: loading takes about
+  3 s on the CPU, more than Haus waits. `/health`, and so the HealthCmd
+  and `Notify=healthy`, answer only once it is loaded; before the first
+  embed there is nothing to load.
+- It goes when qmd returns the cosine itself (tobi/qmd#697).
 
 It listens on the pod's loopback only — it has no auth — and Haus
 reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181` (like qmd it answers
