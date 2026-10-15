@@ -1,5 +1,6 @@
 [Unit]
 Description=Bote: Hermes gateway (stock image, config from the post-deploy hook)
+# without Signal there is no bote-signal unit, and systemd ignores ordering on a missing one (#190)
 After=bote-signal.service
 
 [Container]

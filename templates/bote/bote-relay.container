@@ -1,5 +1,6 @@
 [Unit]
 Description=Bote: approval relay — the admin's number or Matrix ID decides, through Laib's approver token (#48, #184)
+# without Signal there is no bote-signal unit, and systemd ignores ordering on a missing one (#190)
 After=bote-signal.service
 
 [Container]

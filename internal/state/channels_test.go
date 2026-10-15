@@ -180,3 +180,15 @@ func TestRequiresBetweenValues(t *testing.T) {
 		t.Fatalf("an unknown value under requires must be refused: %v", err)
 	}
 }
+
+// #190: a port's `when` that names no value of the service is a typo, not
+// a port that is silently always off.
+func TestPortWhenNamesAValue(t *testing.T) {
+	repo := box46(t, "")
+	writeSvc(t, repo, "p", "name: p\ntemplate: {registry: builtin, name: p, version: 1}\nhealth: {none: test}\nports: [{port: 8085, when: [SIGNAL_ACOUNT]}]\n",
+		map[string]string{"p.container": "[Container]\nImage=${IMAGE}\nPublishPort=127.0.0.1:8085:8080\n"})
+	os.WriteFile(filepath.Join(repo, "services", "p", "values.yml"), []byte("IMAGE: img\n"), 0o644)
+	if _, err := Load(repo); err == nil || !strings.Contains(err.Error(), "SIGNAL_ACOUNT") {
+		t.Fatalf("an unknown value under a port's when must be refused: %v", err)
+	}
+}
