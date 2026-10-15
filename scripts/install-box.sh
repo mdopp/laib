@@ -80,21 +80,40 @@ fi
 # three (state repo, backups, plan diffs). Layer them live, once. If the live
 # apply is refused (a pending deployment), reboot into the layered tree: the
 # first-boot unit re-runs this script, it is idempotent.
+# A power cut during an earlier run can leave rpm-ostree's metadata cache with
+# empty files (a metalink, a repo's GPG key), and rpm-ostree fails on them on
+# every run after: a reboot heals nothing (#206). So a failure clears the cache
+# and tries once more, and the reboots are counted: two, then a plain failure.
+REBOOTS="${LAIB_ETC:-/etc}/laib/layer-reboots"   # LAIB_ETC: the test harness only
 need=""
 for t in git:git restic:restic diff:diffutils; do command -v "${t%%:*}" >/dev/null 2>&1 || need="$need ${t##*:}"; done
 if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
   echo "layering$need (rpm-ostree, live)"
   # shellcheck disable=SC2086
-  if ! sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; then
+  layer() { sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; }
+  layered=0; layer && layered=1
+  if [ "$layered" = 0 ]; then
+    echo "layering failed; clearing rpm-ostree's metadata cache and trying once more (#206)" >&2
+    sudo rpm-ostree cleanup --repomd >/dev/null 2>&1 || true
+    layer && layered=1
+  fi
+  if [ "$layered" = 0 ]; then
+    n=$(cat "$REBOOTS" 2>/dev/null || echo 0)
+    if [ "$n" -ge 2 ]; then
+      echo "layering$need failed again after $n reboots: not rebooting again (rpm-ostree's error is above; journalctl -u rpm-ostreed)" >&2
+      exit 1
+    fi
     # say what failed: a box without DNS is not a refused live apply (#111)
     if ! getent hosts mirrors.fedoraproject.org >/dev/null 2>&1; then
-      echo "layering failed: no DNS (mirrors.fedoraproject.org does not resolve); rebooting to try again, the first-boot unit continues" >&2
+      echo "layering failed: no DNS (mirrors.fedoraproject.org does not resolve); rebooting to try again ($((n + 1)) of 2), the first-boot unit continues" >&2
     else
-      echo "live apply refused; rebooting into the layered tree, the first-boot unit continues" >&2
+      echo "live apply refused; rebooting into the layered tree ($((n + 1)) of 2), the first-boot unit continues" >&2
     fi
+    sudo mkdir -p "$(dirname "$REBOOTS")" && echo $((n + 1)) | sudo tee "$REBOOTS" >/dev/null && sudo sync
     sudo systemctl reboot; exit 75   # EX_TEMPFAIL: the caller keeps what the next run needs
   fi
 fi
+sudo rm -f "$REBOOTS"
 for t in git restic diff; do command -v "$t" >/dev/null 2>&1 || { echo "$t still missing" >&2; exit 1; }; done
 
 # Rootless Caddy (80/443) and AdGuard (53): low ports for unprivileged users.
