@@ -1,0 +1,8 @@
+[Unit]
+Description=Haus: refresh the memory library every quarter hour
+
+[Timer]
+OnCalendar=*:0/15
+
+[Install]
+WantedBy=timers.target

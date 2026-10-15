@@ -90,6 +90,11 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name})
 			}
 		}
+		for _, u := range svc.Oneshots() {
+			if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
+				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name})
+			}
+		}
 		if p := st.HousePersona(); name == "stimme" && p != nil {
 			if _, f := wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase); f != nil {
 				out = append(out, *f)

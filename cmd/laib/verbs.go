@@ -126,6 +126,11 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 				row.State = "rot"
 			}
 		}
+		for _, u := range svc.Oneshots() {
+			if a := sysd.Active(ctx, u); a == "failed" { // a timer's run failed (#195)
+				row.Units[u], row.State = a, "rot"
+			}
+		}
 		if p := st.HousePersona(); name == "stimme" && p != nil && row.Detail == "" {
 			row.Detail, _ = wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase)
 		}

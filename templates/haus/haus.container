@@ -3,9 +3,8 @@ Description=Haus: pages and the companion API (laib role: haus)
 
 [Container]
 Image=${HAUS_IMAGE}
-# beyond loopback so the Bote's pod reaches /mcp/haushalt (ADR 0012 §4); ports lan: false keeps the LAN out,
-# and pages, /napi and /mcp each check their own secret (#170)
-PublishPort=8650:8650
+# the pod publishes 8650 (haus.pod)
+Pod=haus.pod
 Environment=HAUS_LISTEN=0.0.0.0:8650
 Environment=LAIB_URL=http://host.containers.internal:5900
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
@@ -29,6 +28,10 @@ Environment=HAUS_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
 # the Box page's Werkstatt card (haus#15)
 Environment=HAUS_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 Environment=HAUS_NOTES_DIR=/notes
+# the memory library (haus#13): qmd on the pod's loopback (haus-qmd.container); qmd answers only a
+# loopback Host. Its collection is qmd.json's "notizen" over the same folder as HAUS_NOTES_DIR
+Environment=HAUS_QMD_URL=http://127.0.0.1:8181
+Environment=HAUS_QMD_COLLECTION=notizen
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}

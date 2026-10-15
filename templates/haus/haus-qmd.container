@@ -1,0 +1,27 @@
+[Unit]
+Description=Haus: the memory library's search, qmd on the CPU (laib role: haus)
+
+[Container]
+# qmd as released, the tag is its version (qmd/Containerfile); its own embeddinggemma-300M on the CPU (haus#13)
+Image=${QMD_IMAGE}
+Pod=haus.pod
+# loopback only: qmd's HTTP has no auth; Haus reaches it at 127.0.0.1 inside the pod (ADR 0007)
+Exec=mcp --http --host 127.0.0.1 --port 8181
+# index.yml: the notes collection and models.embed pinned (it overrides QMD_EMBED_MODEL)
+Volume=./qmd.json:/etc/qmd/index.yml:ro,z
+# the index and the model, downloaded once by the first embed; a cache, not backed up
+Volume=${DATA_DIR}/haus-qmd:/cache:Z
+Volume=${DATA_DIR}/file-share/data/notes:/notes:ro,z
+Environment=TZ=${TZ}
+# active only once the library answers a search; one that stops answering is killed and restarted
+HealthCmd=qmd-health
+HealthInterval=30s
+HealthOnFailure=kill
+Notify=healthy
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

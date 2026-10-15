@@ -436,16 +436,35 @@ func (st *State) ServiceNames() []string {
 
 // UnitNames returns the systemd unit names a service's Quadlet files produce.
 // Quadlet names a `.container` file `x.container` as `x.service` and a `.pod`
-// file `x.pod` as `x-pod.service`.
+// file `x.pod` as `x-pod.service`. A timer is a unit; the oneshot it fires
+// is not (Oneshots).
 func (svc *Service) UnitNames() []string {
 	var out []string
-	for file := range svc.Units {
-		if u := unitName(file); u != "" {
+	for file, content := range svc.Units {
+		if u := unitName(file); u != "" && !oneshot(file, content) {
 			out = append(out, u)
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Oneshots returns the services a template's timer fires (#195): a .service
+// without [Install], as apply treats it. They are inactive between runs, so
+// nothing starts or waits for them; only a failed run counts.
+func (svc *Service) Oneshots() []string {
+	var out []string
+	for file, content := range svc.Units {
+		if oneshot(file, content) {
+			out = append(out, file)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func oneshot(file, content string) bool {
+	return filepath.Ext(file) == ".service" && !strings.Contains(content, "[Install]")
 }
 
 func unitName(file string) string {
@@ -455,8 +474,8 @@ func unitName(file string) string {
 		return base + ".service"
 	case ".pod":
 		return base + "-pod.service"
-	case ".service":
-		return file // a plain user unit, e.g. llama-lease.service
+	case ".service", ".timer":
+		return file // a plain user unit, e.g. llama-lease.service, or a timer
 	}
 	return ""
 }
