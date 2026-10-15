@@ -67,7 +67,7 @@ chatPersonas:                     # a Signal number (E.164) that talks to anothe
   "+4917012345678": hal
 people:                           # the household's people and their chat channels, preferred first (ADR 0022 §3)
   mama: ["signal:+4917012345678", "telegram:123456789"]
-  lena: ["matrix:@lena:example.org"]
+  lena: ["matrix:!AbCdEf:example.org"]   # a room: the direct chat with the Bote
 ```
 
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
@@ -81,7 +81,9 @@ Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `people` names each person once (lowercase, like a service name) with the
 channels a message to them goes out on, in order, as `hermes send` takes
 them: `signal:`, `sms:` and `whatsapp:` with an E.164 number, `telegram:`
-with a numeric chat id, `matrix:` with `@user:server` or `!room:server`,
+with a numeric chat id, `matrix:` with a room id `!room:server` (the
+direct chat with the Bote; Hermes posts into a room, so a user id
+`@user:server` is refused, #189),
 `discord:` and `slack:` with a channel id, `email:` with an address that has a domain (Hermes' own target shapes; no Matrix thread suffix). A unit
 that carries `${PEOPLE_REV}` (the Bote's `bote-notify`) gets
 `/mnt/data/laib/render/people/people.json` (name → channels, mode 0600) to mount

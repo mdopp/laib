@@ -20,14 +20,14 @@ var channelRe = map[string]*regexp.Regexp{
 	"sms":      e164,
 	"whatsapp": e164,
 	"telegram": regexp.MustCompile(`^-?[0-9]+$`),
-	"matrix":   regexp.MustCompile(`^[@!][^:\s]+:[^\s$]+$`), // no <room>:$<event>, which Hermes reads as a thread
+	"matrix":   regexp.MustCompile(`^![^:\s]+:[^\s$]+$`), // a room (#189): Hermes posts with RoomID(chat_id); no <room>:$<event>, which it reads as a thread
 	"discord":  regexp.MustCompile(`^[0-9]+$`),
 	"slack":    regexp.MustCompile(`^[A-Z0-9]+$`),
 	"email":    regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`), // Hermes' _EMAIL_TARGET_RE
 }
 
 var channelHint = map[string]string{"signal": "E.164 (+49…)", "sms": "E.164 (+49…)", "whatsapp": "E.164 (+49…)",
-	"telegram": "a numeric chat id", "matrix": "a matrix id (@user:server or !room:server)", "discord": "a numeric channel id",
+	"telegram": "a numeric chat id", "matrix": "a room, not a user (Hermes posts into a room): the room id of the direct chat with the Bote, !…:server (Element: Room settings → Advanced → Internal room ID)", "discord": "a numeric channel id",
 	"slack": "a channel id (C0123…)", "email": "an address with a domain (name@example.org)"}
 
 func (st *State) validatePeople() []error {

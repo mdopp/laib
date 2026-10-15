@@ -89,7 +89,10 @@ its stdio MCP server, both of which use Hermes' own per-platform senders.
    - People create those automations by voice or chat with the Bote's
      `automat` tool (draft, plain-words summary, a confirmation code, then
      Home Assistant).
-   - People and their channels are declared once, in `box.yml`.
+   - People and their channels are declared once, in `box.yml`. A Matrix
+     target is a room, the person's direct chat with the Bote (`!…:server`):
+     Hermes' sender posts into a room and opens no direct chat for a user
+     id (#189).
 
 4. **Nothing old is carried (ADR 0010, sharpened).** These go, with no
    end condition and no compatibility period:
