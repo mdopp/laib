@@ -1,14 +1,26 @@
-"""#209: auth's post-deploy sets LLDAP passwords through `laib-exec:` lines
-that run /app/lldap_set_password. Laib generates secrets as base64url, so one
-in 64 starts with "-", and `--password -6…` is read by lldap's parser as an
-unknown option: the set fails and the account stays without a password. The
-hook runs here against a fake LLDAP on 127.0.0.1:17170 (its GraphQL API)."""
-import json, os, socket, subprocess, sys, threading, unittest
+"""auth's post-deploy seeds LLDAP through its GraphQL API (127.0.0.1:17170)
+and sets the passwords LLDAP's GraphQL cannot set.
+
+#214: no password on any process's argv. `ps` and /proc/<pid>/cmdline show
+every argv on the box to every local user. A `laib-exec:` line becomes
+`podman exec <container> <words…>` (internal/apply/apply.go), and the
+command it runs inside the container shows on the host as well. So the
+passwords travel from the hook's own process to LLDAP's socket. That
+socket here is a fake LDAP server on 127.0.0.1:3890, which records what
+arrives.
+
+#209: generated secrets are base64url, so one in 64 starts with "-"; such a
+password is still set as it is."""
+import json, os, socketserver, subprocess, sys, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": []}
+BASE_DN = "dc=vm,dc=test"
+SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw"}
+ADMIN_DN = "uid=admin,ou=people," + BASE_DN
+LDAP = {"pw": {}, "set": [], "binds": []}   # dn → password; dns whose password was set; (dn, ok) per bind
 
 
 class FakeLLDAP(BaseHTTPRequestHandler):
@@ -43,7 +55,58 @@ class FakeLLDAP(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw"}
+def tlv(b, i):
+    """one BER element at b[i:]: its tag, its content, the index after it"""
+    tag, n, i = b[i], b[i + 1], i + 2
+    if n & 0x80:
+        k = n & 0x7F
+        n, i = int.from_bytes(b[i:i + k], "big"), i + k
+    return tag, b[i:i + n], i + n
+
+
+def ber(tag, body):
+    n = len(body)
+    k = (n.bit_length() + 7) // 8
+    return bytes([tag]) + (bytes([n]) if n < 128 else bytes([0x80 | k]) + n.to_bytes(k, "big")) + body
+
+
+class FakeLDAP(socketserver.BaseRequestHandler):
+    """simple bind and the RFC 3062 password modify, as LLDAP answers them"""
+    def handle(self):
+        f, who = self.request.makefile("rb"), None
+        while True:
+            head = f.read(2)
+            if len(head) < 2:
+                return
+            n = head[1]
+            if n & 0x80:
+                n = int.from_bytes(f.read(n & 0x7F), "big")
+            msg = f.read(n)
+            _, mid, i = tlv(msg, 0)
+            op, val, _ = tlv(msg, i)
+            if op == 0x60:   # BindRequest: version, name, simple
+                _, _, j = tlv(val, 0)
+                _, dn, j = tlv(val, j)
+                _, pw, _ = tlv(val, j)
+                ok = LDAP["pw"].get(dn.decode()) == pw.decode()
+                who = dn.decode() if ok else None
+                LDAP["binds"].append((dn.decode(), ok))
+                code, rop = (0 if ok else 49), 0x61
+            elif op == 0x77:  # ExtendedRequest: requestName [0], requestValue [1]
+                _, name, j = tlv(val, 0)
+                _, value, _ = tlv(val, j)
+                _, seq, _ = tlv(value, 0)
+                fields, k = {}, 0
+                while k < len(seq):
+                    t, v, k = tlv(seq, k)
+                    fields[t] = v.decode()
+                code, rop = 50, 0x78   # insufficientAccessRights
+                if name == b"1.3.6.1.4.1.4203.1.11.1" and who == ADMIN_DN and 0x80 in fields and 0x82 in fields:
+                    LDAP["pw"][fields[0x80]], code = fields[0x82], 0
+                    LDAP["set"].append(fields[0x80])
+            else:             # UnbindRequest, or anything else: the connection ends
+                return
+            self.request.sendall(ber(0x30, ber(0x02, mid) + ber(rop, ber(0x0A, bytes([code])) + ber(0x04, b"") + ber(0x04, b""))))
 
 
 class PostDeploy(unittest.TestCase):
@@ -53,43 +116,50 @@ class PostDeploy(unittest.TestCase):
             cls.srv = HTTPServer(("127.0.0.1", 17170), FakeLLDAP)
         except OSError:
             raise unittest.SkipTest("127.0.0.1:17170 is taken")
-        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        try:
+            socketserver.ThreadingTCPServer.allow_reuse_address = True
+            cls.ldap = socketserver.ThreadingTCPServer(("127.0.0.1", 3890), FakeLDAP)
+        except OSError:
+            cls.srv.server_close()
+            raise unittest.SkipTest("127.0.0.1:3890 is taken")
+        for s in (cls.srv, cls.ldap):
+            threading.Thread(target=s.serve_forever, daemon=True).start()
 
     @classmethod
     def tearDownClass(cls):
-        cls.srv.shutdown()
+        for s in (cls.srv, cls.ldap):
+            s.shutdown()
+            s.server_close()
 
-    def run_hook(self):
-        env = dict(os.environ, LAIB_DOMAIN="vm.test", OPERATOR_USER="core", OPERATOR_EMAIL="core@vm.test",
+    def run_hook(self, users, groups):
+        STATE["users"], STATE["groups"] = users, groups
+        LDAP["pw"], LDAP["set"], LDAP["binds"] = {ADMIN_DN: SECRETS["LLDAP_ADMIN_PASSWORD"]}, [], []
+        env = dict(os.environ, LAIB_DOMAIN="vm.test", BASE_DN=BASE_DN, OPERATOR_USER="core", OPERATOR_EMAIL="core@vm.test",
                    **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
         p = subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
-        self.assertEqual(p.returncode, 0, p.stderr)
-        return [l[len("laib-exec: "):] for l in p.stdout.splitlines() if l.startswith("laib-exec: ")]
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        # what laib runs for the hook: `podman exec <container> <words…>` per laib-exec line
+        argvs = [["podman", "exec"] + l[len("laib-exec: "):].split() for l in p.stdout.splitlines() if l.startswith("laib-exec: ")]
+        for argv in argvs:
+            for name, s in SECRETS.items():
+                self.assertFalse(any(s in w for w in argv), f"{name} is on a process's argv, where ps shows it: {argv}")
+        return p.stdout
 
-    def assert_no_value_reads_as_option(self, line):
-        # laib splits the line on whitespace (internal/apply/apply.go); clap reads a
-        # word that starts with "-" as an option unless it is "--name=value"
-        for word in line.split()[2:]:
-            if word.startswith("-"):
-                self.assertRegex(word, r"^--[a-z][a-z-]*(=.*)?$", f"{word!r} would be read as an option: {line}")
-        for s in SECRETS.values():
-            self.assertNotIn(" " + s, " " + line, f"the password {s!r} stands alone on argv: {line}")
-
-    def test_passwords_starting_with_a_dash_stay_values(self):
-        STATE["users"], STATE["groups"] = [], []
-        lines = self.run_hook()
-        self.assertEqual(len(lines), 2, lines)   # the operator's and radicale's password
-        for l in lines:
-            self.assert_no_value_reads_as_option(l)
+    def test_passwords_reach_lldap_and_no_argv(self):
+        self.run_hook([], [])
+        self.assertEqual(LDAP["pw"].get("uid=core,ou=people," + BASE_DN), SECRETS["OPERATOR_PASSWORD"], LDAP)
+        self.assertEqual(LDAP["pw"].get("uid=radicale,ou=people," + BASE_DN), SECRETS["RADICALE_LDAP_PASSWORD"], LDAP)
+        # and each account binds with it afterwards: a set that did not take is red, not "seeded"
+        for uid in ("core", "radicale"):
+            self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
 
     def test_radicales_password_is_set_again_when_the_account_exists(self):
         # a set that failed once (the account exists, the password does not) is not final:
         # radicale's password is a service secret, so every run sets it again
-        STATE["users"], STATE["groups"] = ["core", "radicale"], ["admins", "family", "lldap_strict_readonly"]
-        lines = self.run_hook()
-        self.assertTrue(any("--username=radicale" in l or "--username radicale" in l for l in lines), lines)
-        self.assertFalse(any("core" in l.split() or "--username=core" in l for l in lines),
-                         f"the operator's own password must not be reset once the account exists: {lines}")
+        self.run_hook(["core", "radicale"], ["admins", "family", "lldap_strict_readonly"])
+        self.assertIn("uid=radicale,ou=people," + BASE_DN, LDAP["set"], LDAP)
+        self.assertNotIn("uid=core,ou=people," + BASE_DN, LDAP["set"],
+                         "the operator's own password must not be reset once the account exists")
 
 
 if __name__ == "__main__":
