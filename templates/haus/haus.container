@@ -32,6 +32,12 @@ Environment=HAUS_NOTES_DIR=/notes
 # loopback Host. Its collection is qmd.json's "notizen" over the same folder as HAUS_NOTES_DIR
 Environment=HAUS_QMD_URL=http://127.0.0.1:8181
 Environment=HAUS_QMD_COLLECTION=notizen
+# the house model tidies the library's hits (#198), never blocking: the model role's proxy as this pod
+# reaches it (host.containers.internal) and its key. Without a model on the box URL and key render
+# empty and Haus's judge is off
+Environment=HAUS_LLM_URL=${MODEL_URL}
+Environment=HAUS_LLM_MODEL=gemma-4-e4b
+Environment=HAUS_LLM_KEY=${MODEL_KEY}
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}

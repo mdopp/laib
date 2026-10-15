@@ -200,8 +200,8 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		"TZ":          st.Box.Timezone,
 		"SERVICE":     svc.Name,
 		"LAN_IP":      st.Box.LanIP,
-		"MODEL_URL":   st.ModelURL(),
-		"MODEL_LEASE": st.ModelLease(),
+		"MODEL_URL":   inContainer(st.ModelURL()),
+		"MODEL_LEASE": inContainer(st.ModelLease()),
 		"MODEL_KEY":   "",
 	}
 	if p := st.HousePersona(); p != nil {
@@ -225,6 +225,14 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		vars[k] = v.Literal
 	}
 	return vars
+}
+
+// inContainer: the model builtins are read in containers, whose 127.0.0.1 is
+// their own; the host's ports (the model role's proxy and lease) are
+// host.containers.internal there (ADR 0007, #198). No template's host
+// .service reads them.
+func inContainer(url string) string {
+	return strings.Replace(url, "://127.0.0.1:", "://host.containers.internal:", 1)
 }
 
 // uses: some service's unit names a value starting with prefix (PERSONA…, PEOPLE_REV).

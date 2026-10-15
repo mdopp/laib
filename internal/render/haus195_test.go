@@ -41,7 +41,6 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	}
 	qmd := has("quadlet/haus/haus-qmd.container",
 		"Pod=haus.pod",
-		"Exec=mcp --http --host 127.0.0.1 --port 8181",
 		"Volume=./qmd.json:/etc/qmd/index.yml:ro",
 		"Volume=/d/haus-qmd:/cache:Z",
 		"Volume=/d/file-share/data/notes:/notes:ro",

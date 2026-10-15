@@ -70,6 +70,7 @@ which kind of name goes where.
 | Haus | the family's surface: pages, cards, `/napi`, the app's server | repo `mdopp/haus`, `templates/haus`, `haus.<domain>` |
 | Haushalt | the household's data: calendar, contacts, notes, reminders | Haus's MCP source (ADR 0017), Bote tool `haushalt` |
 | memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `haus-qmd` in the haus pod (#195) |
+| Vermittler | serves the memory library: qmd's `/query` on qmd's SDK, plus each hit's cosine (`vec`), until qmd returns it itself | `qmd/vermittler.mjs`, container `haus-qmd` (#198) |
 | ha | Home Assistant as a Bote tool: lights, switches, players | Bote tool `ha` |
 | Stimme | the voice set Home Assistant Assist speaks: wake word, Whisper, Piper, trainer | `templates/stimme` (ADR 0015) |
 | Frage | "was ist …": search plus summary | `cmd/frage`, `templates/frage` |

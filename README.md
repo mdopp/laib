@@ -60,7 +60,7 @@ internal/sysd        the systemctl seam
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop
-qmd/                 the memory library's image: qmd as released, CPU only (#195)
+qmd/                 the memory library's image: qmd as released, CPU only (#195), served by the Vermittler (#198)
 scripts/             install-box.sh, e2e.sh, loc.sh, drift.sh, persona-icon.sh
 docs/                KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, INSTALL, BACKUP, adr/
 testdata/golden      renderer golden files

@@ -1,18 +1,23 @@
 #!/usr/bin/env node
-// The library answers (#195): a word search through qmd's REST endpoint —
-// the index opens and a search runs. Lex only and no rerank, so the probe
-// loads no model.
-const port = process.env.QMD_PORT || "8181";
-fetch(`http://127.0.0.1:${port}/query`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ searches: [{ type: "lex", query: "haus" }], limit: 1, rerank: false }),
-  signal: AbortSignal.timeout(5000),
-})
-  .then(async (r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    await r.json();
-  })
+// The library answers (#195): the Vermittler's /health (#198), which
+// answers once the embed model is loaded — also right after the first
+// embed — then a word search through its /query: the index opens and a
+// search runs. Lex only and no rerank.
+const base = `http://127.0.0.1:${process.env.QMD_PORT || "8181"}`;
+const signal = AbortSignal.timeout(25000); // a first load takes a few seconds on the CPU
+const ok = async (r) => {
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return r.json();
+};
+fetch(`${base}/health`, { signal })
+  .then(ok)
+  .then(() => fetch(`${base}/query`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ searches: [{ type: "lex", query: "haus" }], limit: 1, rerank: false }),
+    signal,
+  }))
+  .then(ok)
   .catch((e) => {
     console.error(`qmd does not answer: ${e.message}`);
     process.exit(1);
