@@ -268,7 +268,7 @@ jobs:
           # the cut below hits the resumed boot in its own window.
           early=no
           for i in $(seq 1 900); do
-            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
+            if $SSH 'sudo test -e /var/cache/rpm-ostree/repomd/fedora-cisco-openh264-44-x86_64/RPM-GPG-KEY-fedora-44-x86_64' 2>/dev/null; then
               python3 reset.py; early=yes; t0=$(date +%s); echo "early power cut (hard reset) $i s into the first boot, as it starts (#111)"; break
             fi
             sleep 1
