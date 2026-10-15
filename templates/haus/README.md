@@ -25,7 +25,9 @@ The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`
 (`qmd/`), CPU only. It listens on the pod's loopback only — its HTTP has
-no auth — and Haus reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181`,
+no auth — and Haus reaches it at `HAUS_QMD_URL=http://127.0.0.1:8181` (qmd
+answers only a loopback Host, so `host.containers.internal` would not do),
+collection `HAUS_QMD_COLLECTION=notizen`,
 always with typed searches (`lex` + `vec`) and `rerank: false`; a plain
 query pulls in a 1.7B model and the reranker. `qmd.json` is its
 `index.yml`: the collection `notizen` over the notes folder, and

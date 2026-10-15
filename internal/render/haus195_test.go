@@ -34,7 +34,8 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	if strings.Contains(pod, "8181") {
 		t.Errorf("the pod publishes qmd's port; it has no auth and stays on loopback:\n%s", pod)
 	}
-	haus := has("quadlet/haus/haus.container", "Pod=haus.pod", "Environment=HAUS_QMD_URL=http://127.0.0.1:8181")
+	haus := has("quadlet/haus/haus.container", "Pod=haus.pod", "Environment=HAUS_QMD_URL=http://127.0.0.1:8181", "Environment=HAUS_QMD_COLLECTION=notizen", "Environment=HAUS_NOTES_DIR=/notes",
+		"Volume=/d/file-share/data/notes:/notes:")
 	if strings.Contains(haus, "PublishPort") {
 		t.Errorf("haus.container publishes a port itself; in a pod the pod does:\n%s", haus)
 	}

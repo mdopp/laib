@@ -28,8 +28,10 @@ Environment=HAUS_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
 # the Box page's Werkstatt card (haus#15)
 Environment=HAUS_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 Environment=HAUS_NOTES_DIR=/notes
-# the memory library (haus#13): qmd on the pod's loopback (haus-qmd.container), its collection "notizen"
+# the memory library (haus#13): qmd on the pod's loopback (haus-qmd.container); qmd answers only a
+# loopback Host. Its collection is qmd.json's "notizen" over the same folder as HAUS_NOTES_DIR
 Environment=HAUS_QMD_URL=http://127.0.0.1:8181
+Environment=HAUS_QMD_COLLECTION=notizen
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
