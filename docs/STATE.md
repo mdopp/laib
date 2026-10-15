@@ -179,7 +179,7 @@ service, a value `values.yml` does not have, and turning off a unit that a
 remaining one joins or requires (`Pod=`, `Requires=`, `BindsTo=`).
 
 A port takes `when` too. While none of its values is set, the port is
-neither declared (no nftables line, no `laib status` entry) nor published:
+neither declared (no nftables line) nor published:
 every `PublishPort=` line of the service on that host port is dropped, so a
 pod need not publish a port for a container that is off.
 
