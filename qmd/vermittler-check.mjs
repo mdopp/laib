@@ -5,7 +5,9 @@
 // must answer exactly what qmd's /query answers — every field, `file`
 // percent-encoded as qmd's encodeQmdPath does — plus `vec`, the cosine
 // qmd's own vector search reports for that note (0 for a hit outside its
-// top list). Then the refusals and the Host check.
+// top list). Then the refusals and the Host check. Run it on a Vermittler
+// just started with an embedded index: the first search after /health
+// turns 200 must not wait for the embed model (Haus's budget is 2.5 s).
 import http from "node:http";
 import { createStore } from "@tobilu/qmd";
 
@@ -20,7 +22,20 @@ const post = (body, url = base) =>
 const qmd = process.env.QMD_REF_URL;
 if (!qmd) throw new Error("QMD_REF_URL (qmd mcp --http beside the Vermittler) is required");
 
-check((await fetch(`${base}/health`)).status === 200, "/health is not 200");
+for (let i = 0; ; i++) {
+  const up = await fetch(`${base}/health`).then((r) => r.status === 200, () => false);
+  if (up) break;
+  if (i > 240) throw new Error("/health did not turn 200 within 2 minutes");
+  await new Promise((r) => setTimeout(r, 500));
+}
+{
+  const q = process.argv[2], t = performance.now();
+  const r = await post({ searches: [{ type: "lex", query: q }, { type: "vec", query: q }], limit: 10 });
+  await r.json();
+  const ms = Math.round(performance.now() - t);
+  check(r.status === 200 && ms < 500, `the first search after /health took ${ms} ms (${r.status}), not under 500: the embed model was not loaded`);
+  console.log(`first search after /health: ${ms} ms`);
+}
 const status = await (await fetch(`${base}/status`)).json();
 check(status.collections?.length > 0 && status.collections.every((c) => c.documents > 0 && c.embedded === c.documents),
   `/status does not show every note embedded: ${JSON.stringify(status)}`);
