@@ -229,6 +229,33 @@ jobs:
           sudo umount /mnt/vroot 2>/dev/null; sudo qemu-nbd -d /dev/nbd0
           SH
           chmod +x root-forensics.sh
+          cat > loop-diag.sh <<'SH'
+          #!/usr/bin/env bash
+          set -x
+          sudo kill "$(cat qemu.pid)" 2>/dev/null; sleep 5
+          sudo modprobe nbd max_part=16
+          sudo qemu-nbd --read-only -f qcow2 -c /dev/nbd0 disk.qcow2; sleep 3
+          sudo mkdir -p /mnt/vroot
+          sudo mount -o ro,norecovery /dev/nbd0p4 /mnt/vroot || exit 0
+          D=/mnt/vroot/ostree/deploy/fedora-coreos
+          sudo ls -la $D/deploy /mnt/vroot/ostree/repo/tmp 2>&1 | head -30
+          J=$(sudo find $D/var/log/journal -maxdepth 1 -mindepth 1 -type d | head -1)
+          sudo journalctl -D "$J" --no-pager --list-boots | tail -12
+          for b in $(sudo journalctl -D "$J" --no-pager --list-boots | tail -8 | awk '{print $2}'); do
+            echo "=== boot $b"
+            sudo journalctl -D "$J" --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u rpm-ostreed -u systemd-sysusers -u systemd-resolved | grep -v "IN DS\|Trust Anchors\|trust anchors" | tail -60
+            sudo journalctl -D "$J" --no-pager -b "$b" -o short-monotonic -p warning | grep -v "IN DS" | tail -25
+          done
+          echo "=== the boot right after the early cut"
+          for b in $(sudo journalctl -D "$J" --no-pager --list-boots | awk 'NR>1 {print $2}' | tail -n +2 | head -3); do
+            echo "=== boot $b"
+            sudo journalctl -D "$J" --no-pager -b "$b" -o short-monotonic -u laib-firstboot -u rpm-ostreed | tail -60
+          done
+          for e in $D/deploy/*.0/etc; do sudo wc -l $e/passwd $e/group $e/shadow $e/gshadow; sudo ls -la $e/laib; done
+          sudo ls -la $D/var/cache/rpm-ostree $D/var/cache/rpm-ostree/* 2>&1 | head -30
+          sudo umount /mnt/vroot; sudo qemu-nbd -d /dev/nbd0
+          SH
+          chmod +x loop-diag.sh
           cat > reset.py <<'PY'
           import json, socket
           s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
@@ -253,6 +280,7 @@ jobs:
               stalled=yes; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
               echo "240 s after the early cut the resumed first boot has no binaries yet (#111); its journal so far:"
               $SSH 'journalctl --no-pager --list-boots | tail -4; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40; systemctl status laib-firstboot systemd-resolved systemd-resolved-varlink.socket --no-pager -l | head -40; getent hosts api.github.com; getent passwd core systemd-resolve; sudo ls -la /etc/laib; journalctl --no-pager -b -p warning -o short-monotonic | tail -40' 2>&1 || echo "(no ssh: rebooting)"
+              sleep 120; ./loop-diag.sh; exit 1
             fi
             if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
               took=$(( $(date +%s) - t0 ))
@@ -288,6 +316,8 @@ jobs:
           $SSH 'set -euo pipefail
                 if [ -e /etc/laib/firstboot.env ]; then echo "firstboot.env still on disk after the resumed first boot"; exit 1; fi
                 echo "resumed: marker present, env file gone"'
+          echo "=== DIAG green path: every boot since the reinstall"
+          $SSH 'journalctl --no-pager --list-boots | tail -8; for b in $(journalctl --no-pager --list-boots -q | tail -6 | awk "{print \$1}"); do echo "=== boot $b"; journalctl --no-pager -b $b -o short-monotonic -u laib-firstboot -u rpm-ostreed | grep -v "IN DS" | tail -45; done' || true
           $SSH 'set -euo pipefail
                 journalctl --no-pager -b -u laib-data-disk | tail -6; cat /proc/mdstat
                 v=$(/var/opt/laib/laib version); echo "$v"
@@ -301,245 +331,6 @@ jobs:
                 grep -q "UUID=" /etc/laib/data-disk || { echo "the reinstall did not record the array by UUID"; exit 1; }
                 [ "$(sudo blkid -s TYPE -o value "$(sudo blkid -L backup)")" = ext4 ] || { echo "the reinstall touched the foreign disk"; exit 1; }'
           . ./box.sh; marker
-      - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
-        run: |
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          # pre-pull with the box's own login (install-box.sh logged in with the stick's token), so
-          # the 90 s unit start does not include the pull; no login from the runner here
-          $SSH 'set -euo pipefail; podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null; echo "image pulled with the box'"'"'s own credentials"'
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                sysctl -n net.ipv4.ip_unprivileged_port_start
-                # --tls internal from the stick reached box.yml through first boot and laib init (#45); no echo into box.yml here
-                grep -q "^tls: internal" /mnt/data/laib/state/box.yml || { echo "tls: internal did not reach box.yml from the stick"; exit 1; }
-                # hooks run in this commit'"'"'s image (#36): box.yml laib.hooksImage, before the first service with a hook
-                if grep -q "^laib:" /mnt/data/laib/state/box.yml; then sed -i "s|^laib:|laib:\n    hooksImage: ${{ env.HOOKS }}|" /mnt/data/laib/state/box.yml; else printf "laib:\n    hooksImage: %s\n" "${{ env.HOOKS }}" >> /mnt/data/laib/state/box.yml; fi
-                grep -n hooksImage /mnt/data/laib/state/box.yml
-                $L add caddy
-                $L status
-                podman ps
-                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
-                for i in $(seq 1 30); do [ -s "$root" ] && break; sleep 2; done
-                test -s "$root" || { echo "no local root CA at $root"; exit 1; }
-                # --cacert replaces only the bundle file; an empty --capath keeps the system roots out too
-                none=$(mktemp -d)
-                code=000
-                for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ "$code" = 200 ] && break; sleep 2; done
-                echo "https://laib.vm.test -> HTTP $code, certificate verified against the local Caddy root"
-                [ "$code" = 200 ]
-                $L journal --since 1h'
-      - name: reboot — the firewall is back in the kernel, the registry login survives, services come up (#37)
-        run: |
-          . ./box.sh
-          probe() { # 18080 → the box's 8080, declared lan: false by the probe service: dropped on the NIC = timeout; no rule = answered
-            local rc=0; curl -s -m 6 -o /dev/null http://127.0.0.1:18080/ || rc=$?; echo "$rc"; }
-          # a service that really listens on 0.0.0.0:8080 and declares the port lan: false (whoami needs
-          # the sso role for its route; busybox httpd needs nothing): from a registry on the box
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                R=/mnt/data/laib/registries/vm/templates/probe; mkdir -p "$R"
-                printf "name: probe\ntemplate: {registry: vm, name: probe, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports:\n  - {port: 8080, lan: false}\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
-                printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
-                $L add probe
-                sudo nft list table inet laib > /tmp/nft.txt 2>&1 || true
-                grep -q 8080 /tmp/nft.txt || { echo "8080 is not in the ruleset"; cat /tmp/nft.txt; sudo nft list ruleset; exit 1; }
-                # any HTTP answer is an answer (busybox httpd says 404 for / without an index); only no connection fails
-                for i in $(seq 1 20); do curl -sS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
-                curl -sS -o /dev/null -w "probe on loopback: HTTP %{http_code}\n" http://127.0.0.1:8080/ || { echo "the probe service does not answer on loopback"; exit 1; }'
-          rc=$(probe); echo "probe with the ruleset: curl rc $rc"; [ "$rc" = 28 ] || { echo "a lan: false port answered through the NIC"; exit 1; }
-          # the port leaves the drop list and is open at once, without a reboot; and closes again (#102)
-          lan() { $SSH "set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
-                sed -i -E 's/lan: (true|false)/lan: $1/' /mnt/data/laib/state/services/probe/laib.yml
-                /var/opt/laib/laib apply --reason 'probe lan: $1 (#102)' | tail -3"; }
-          lan true
-          rc=$(probe); echo "probe after lan: true, no reboot: curl rc $rc"; [ "$rc" != 28 ] || { echo "a port that left the drop list is still dropped (#102)"; $SSH 'sudo nft list ruleset'; exit 1; }
-          lan false
-          rc=$(probe); echo "probe after lan: false again: curl rc $rc"; [ "$rc" = 28 ] || { echo "the port is not dropped again"; $SSH 'sudo nft list ruleset'; exit 1; }
-          $SSH 'sudo nft delete table inet laib'
-          rc=$(probe); echo "probe without the ruleset: curl rc $rc"; [ "$rc" != 28 ] || { echo "the probe cannot tell the ruleset apart"; exit 1; }
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
-                grep -q "\"firewall\":\"fehlt\"" /tmp/ready.json || { echo "/ready does not say the firewall is missing"; exit 1; }
-                $L converge --force || true
-                sudo nft list table inet laib >/dev/null || { echo "converge did not load the ruleset"; exit 1; }
-                $L journal --since 10m | grep -q "firewall" || { echo "no journal line for the reload"; exit 1; }'
-          rc=$(probe); echo "probe after converge: curl rc $rc"; [ "$rc" = 28 ]
-          off; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c; ready
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                sudo nft list table inet laib | grep -q 8080 || { echo "the ruleset is gone after the reboot"; exit 1; }
-                curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
-                grep -q "\"firewall\":\"geladen\"" /tmp/ready.json
-                grep -q "\"state\":\"bereit\"" /tmp/ready.json || { echo "not bereit after the reboot"; exit 1; }
-                systemctl --user is-active caddy.service probe.service
-                podman image rm -f ghcr.io/mdopp/laib-caddy:2 >/dev/null 2>&1 || true
-                podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null || { echo "a private image cannot be pulled after the reboot: the login did not survive"; exit 1; }
-                echo "private image pulled after the reboot with the kept login"
-                echo "services up after the reboot"'
-          rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
-
-      - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
-        run: |
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
-                # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
-                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
-                command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
-                $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
-                grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
-                grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
-                grep -q "lldap seeded" /tmp/add-auth.txt || { echo "the hook output does not say LLDAP was seeded"; exit 1; }
-                test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
-                test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
-                systemctl --user is-active auth-authelia.service auth-lldap.service
-                $L add adguard | tee /tmp/add-adguard.txt
-                grep -q "^ok  adguard pre-start" /tmp/add-adguard.txt || { echo "adguard pre-start is not green"; exit 1; }
-                grep -q "rewrites in step" /tmp/add-adguard.txt || { echo "post-deploy did not sync the rewrites through the API"; exit 1; }
-                test -s /mnt/data/stacks/adguard/conf/AdGuardHome.yaml || { echo "pre-start did not write AdGuardHome.yaml"; exit 1; }
-                code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
-                # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
-                podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
-                grep -A2 "laib.vm.test" /tmp/dns.txt | grep -q "Address" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
-                $L add radicale BASE_DN=dc=vm,dc=test | tee /tmp/add-radicale.txt
-                grep -q "^ok  radicale pre-start" /tmp/add-radicale.txt || { echo "radicale pre-start is not green"; exit 1; }
-                test -s /mnt/data/stacks/radicale/config/config || { echo "pre-start did not write radicale'"'"'s config"; exit 1; }
-                $L status
-                podman ps --format "{{.Names}} {{.Status}}"
-                # the Authelia portal through Caddy, verified against the local root
-                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
-                code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://auth.vm.test/api/health || true)
-                echo "https://auth.vm.test/api/health -> HTTP $code"; [ "$code" = 200 ]
-                # and a protected route is sent to the portal, not served
-                code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
-                echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
-                $L diag || true'
-      - name: backup and restore — restic in the day-one repo laib init wrote
-        run: |
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                # box.yml is rewritten by laib add (yaml.Marshal, four-space indent): read repo: inside backup: at any indent
-                repo=$(sed -n "/^backup:/,/^[^ #]/s/^ *repo: *\([^ #]*\).*/\1/p" /mnt/data/laib/state/box.yml)
-                echo "backup.repo from box.yml: $repo"; test -n "$repo"
-                echo "caddy marker before backup" > /mnt/data/stacks/caddy/data/vm-marker
-                $L backup
-                test -f "$repo/config" || { echo "no restic repo at $repo"; exit 1; }
-                rm /mnt/data/stacks/caddy/data/vm-marker
-                $L restore latest caddy
-                grep -q "before backup" /mnt/data/stacks/caddy/data/vm-marker
-                $L journal --since 1h > /tmp/journal.txt
-                grep -E "backup|restore" /tmp/journal.txt'
-      - name: update path — a pinned release, the latest release, then this commit again
-        run: |
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_GH_TOKEN="${{ github.token }}" SRC="${{ env.SRC }}"
-                curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh   # this commit'"'"'s installer, against real releases
-                bash /tmp/install-box.sh --version v0.3.2 > /tmp/ib1.log 2>&1 || { tail -20 /tmp/ib1.log; exit 1; }
-                v=$(/var/opt/laib/laib version); echo "pinned: $v"; [ "$v" = "laib v0.3.2" ]
-                bash /tmp/install-box.sh > /tmp/ib2.log 2>&1 || { tail -20 /tmp/ib2.log; exit 1; }
-                v=$(/var/opt/laib/laib version); echo "latest: $v"
-                case "$v" in "laib v"*) ;; *) echo "latest is not a release version"; exit 1;; esac
-                [ "$v" != "laib v0.3.2" ]
-                bash /tmp/install-box.sh --source "$SRC" > /tmp/ib3.log 2>&1 || { tail -20 /tmp/ib3.log; exit 1; }
-                v=$(/var/opt/laib/laib version); echo "this commit: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]
-                curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json; cat /tmp/ready.json; echo
-                grep -q bereit /tmp/ready.json
-                # the RUNNING service is the new version (enable --now never restarted it, #37)
-                grep -q "\"version\":\"'"${GITHUB_SHA::7}"'\"" /tmp/ready.json || { echo "the running laib is not this commit"; exit 1; }
-                test -f /var/opt/laib/laib.prev || { echo "no previous binary kept for laib self rollback"; exit 1; }
-                systemctl --user is-active laib.service caddy.service
-                # and back: self rollback restores the previous release and restarts
-                export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                $L self rollback
-                for i in $(seq 1 20); do curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json 2>/dev/null && break; sleep 1; done
-                cat /tmp/ready.json; echo
-                prev=$(/var/opt/laib/laib version); echo "rolled back to: $prev"; [ "$prev" != "laib '"${GITHUB_SHA::7}"'" ]
-                bash /tmp/install-box.sh --source "$SRC" > /tmp/ib4.log 2>&1 || { tail -20 /tmp/ib4.log; exit 1; }
-                v=$(/var/opt/laib/laib version); echo "forward again: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]'
-      - name: remove — units stopped, files gone, data kept
-        run: |
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                sed -i -E "s/proxy: caddy/proxy: \"\"/" /mnt/data/laib/state/box.yml; grep -n proxy /mnt/data/laib/state/box.yml   # caddy holds the proxy role; free it first
-                $L remove caddy
-                sleep 2
-                if podman ps --format "{{.Names}}" | grep -q caddy; then echo "caddy still running"; exit 1; fi
-                if systemctl --user is-active --quiet caddy.service; then echo "caddy.service still active"; exit 1; fi
-                if [ -e ~/.config/containers/systemd/caddy ]; then echo "Quadlet files left in ~/.config/containers/systemd/caddy"; exit 1; fi
-                if [ -e /mnt/data/laib/state/services/caddy ]; then echo "caddy is still in the state"; exit 1; fi
-                test -f /mnt/data/stacks/caddy/data/vm-marker || { echo "the data was not kept"; exit 1; }
-                echo "units stopped, files gone, data kept"
-                $L status; $L diag || true'
-      - name: a lost mirror member is red, not "by design" — boot without one data disk
-        run: |
-          . ./box.sh
-          off
-          # data2 is gone; the device names shift (the foreign disk is vdc now): assembly goes by UUID
-          DISKS="disk.qcow2 data1.qcow2 foreign.raw" ./vm.sh order=c
-          ready
-          $SSH 'set -euo pipefail
-                cat /proc/mdstat; cat /etc/laib/data-disk
-                grep -qE "\[(U_|_U)\]" /proc/mdstat || { echo "the array should run degraded now"; exit 1; }
-                grep -q "md.* xfs" <<<"$(findmnt -n -o SOURCE,FSTYPE /mnt/data)" || { echo "the degraded array is not mounted"; exit 1; }
-                grep -q MEMBERS=2 /etc/laib/data-disk || { echo "the record forgot the mirror"; exit 1; }
-                test -f /mnt/data/laib/vm-marker || { echo "the data is not there"; exit 1; }
-                d=$(LAIB_HOME=/mnt/data/laib /var/opt/laib/laib diag 2>&1 || true); echo "$d"
-                grep -qE "^rot +raid " <<<"$d" || { echo "diag does not say the mirror is gone"; exit 1; }'
-          marker
-      - name: disaster recovery — backup to a second disk, data disks gone, reinstall, restore --box with only the sheet (#40)
-        run: |
-          . ./box.sh
-          # the foreign ext4 disk (label backup) is the off-box repo; a database service from a
-          # registry (postgres, quiesce: true) carries a row that must survive
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                sudo mkdir -p /mnt/backup && sudo mount -L backup /mnt/backup && sudo chown core:core /mnt/backup
-                sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml; grep -n "repo:" /mnt/data/laib/state/box.yml
-                R=/mnt/data/laib/registries/vm/templates/pgtest; mkdir -p "$R"
-                printf "name: pgtest\ntemplate: {registry: vm, name: pgtest, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: \${DATA_DIR}/pgtest/pgdata\n    quiesce: true\nports: []\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
-                printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
-                podman pull -q docker.io/library/postgres:16-alpine >/dev/null
-                $L add caddy; $L add pgtest
-                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
-                podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"
-                echo "caddy marker for the recovery" > /mnt/data/stacks/caddy/data/vm-marker
-                $L backup | tee /tmp/backup.txt
-                grep -q "angehalten für den Snapshot: pgtest" /tmp/backup.txt || { echo "the database was not quiesced for the snapshot"; exit 1; }
-                systemctl --user is-active pgtest.service || { echo "pgtest not started again after the snapshot"; exit 1; }
-                $L backup check | tee /tmp/check.txt; grep -q "grün" /tmp/check.txt
-                $L recovery-sheet > /tmp/sheet.txt; sed -n "s/^  \(AGE-SECRET-KEY-.*\)$/\1/p" /tmp/sheet.txt > /tmp/age.key; sed -n "s/^restic-Passwort: *//p" /tmp/sheet.txt > /tmp/restic.pw
-                test -s /tmp/age.key && test -s /tmp/restic.pw || { echo "the sheet lacks the key or the password"; cat /tmp/sheet.txt; exit 1; }
-                $L recovery-sheet --confirm
-                $L diag || true
-                sudo umount /mnt/backup'
-          # the sheet, as the human would have it on paper
-          $SSH 'cat /tmp/age.key' > sheet-age.key; $SSH 'cat /tmp/restic.pw' > sheet-restic.pw
-          off
-          # the data disks are gone: two new, empty ones; the OS disk and the backup disk stay
-          qemu-img create -q -f qcow2 data1.qcow2 9G; qemu-img create -q -f qcow2 data2.qcow2 9G
-          ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
-          for i in $(seq 1 120); do
-            if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled on fresh data disks after $((i*10)) s"; break; fi
-            [ $i -eq 120 ] && { echo "laib never became ready after the reinstall"; exit 1; }
-            sleep 10
-          done
-          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 sheet-age.key sheet-restic.pw core@127.0.0.1:/tmp/
-          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=/var/opt/laib/laib
-                test -f /mnt/data/laib/vm-marker && { echo "the old data disk is still there"; exit 1; } || echo "fresh data disk, as intended"
-                # step 2 of the sheet: the key, the repo reachable, box.yml pointing at it
-                install -m 0600 /tmp/sheet-age.key /mnt/data/laib/age.key
-                sudo mkdir -p /mnt/backup && sudo mount -L backup /mnt/backup
-                sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml
-                # step 3
-                RESTIC_PASSWORD="$(cat /tmp/sheet-restic.pw)" $L restore --box latest | tee /tmp/restore.txt
-                # step 4
-                $L status | tee /tmp/status.txt
-                grep -q "before\|for the recovery" /mnt/data/stacks/caddy/data/vm-marker || { echo "caddy data not back"; exit 1; }
-                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
-                v=$(podman exec systemd-pgtest psql -U postgres -tAc "select x from t"); echo "row after recovery: $v"; [ "$v" = 42 ]
-                curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo; grep -q "\"state\":\"bereit\"" /tmp/ready.json
-                $L secret list | grep -q RESTIC_PASSWORD
-                $L journal --since 1h | grep -E "restore|backup" | tail -8
-                echo "disaster recovery done with the sheet alone"'
       - name: the power cut during the first boot was survived (#81)
         if: always()
         run: |
