@@ -72,9 +72,9 @@ people:                           # the household's people and their chat channe
 
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
-`model`. In a unit they are read inside a container, so the model
-role's `127.0.0.1` renders as `host.containers.internal` (ADR 0007,
-#198); a hook still gets `127.0.0.1`. `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`,
+`model`. Units and hooks both read them inside a container, so the
+model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
+#198, #200), and both get the same `${MODEL_KEY}`. `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`,
 `${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}`,
 `${PERSONA_LANGUAGES}` (`de,en`) and
 `${PERSONA_REV}` come from the house persona. A unit that carries

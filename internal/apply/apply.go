@@ -16,6 +16,7 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -470,15 +471,12 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 		// present but not executable: a red check, never a silent skip (PR #70's first VM run)
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: "hook is not executable (chmod +x services/" + svc.Name + "/" + phase + ")"}, true
 	}
-	modelKey := ""
-	if st.Box.Model.KeySecret != "" {
-		modelKey = secrets[st.Box.Model.KeySecret]
-	}
+	model := render.ModelVars(st, secrets) // as a unit gets them (#200)
 	var env []string
 	env = append(env,
 		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
 		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
-		"MODEL_URL="+st.ModelURL(), "MODEL_LEASE="+st.ModelLease(), "MODEL_KEY="+modelKey,
+		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
 		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
 	for k, v := range svc.Values {
 		val := v.Literal
