@@ -7,8 +7,10 @@
 FROM docker.io/library/node:22-bookworm-slim AS build
 WORKDIR /opt/qmd
 COPY qmd/package.json qmd/package-lock.json ./
-ENV NODE_LLAMA_CPP_SKIP_DOWNLOAD=true
-RUN npm ci --omit=dev --omit=peer --no-audit --no-fund \
+# no install scripts: every native part ships prebuilt (better-sqlite3's
+# prebuilds/, node-llama-cpp's backends, the grammars as wasm); without
+# them npm would node-gyp better-sqlite3 from source
+RUN npm ci --omit=dev --omit=peer --ignore-scripts --no-audit --no-fund \
  && find node_modules/@node-llama-cpp -mindepth 1 -maxdepth 1 ! -name linux-x64 -exec rm -rf {} + \
  && rm -rf node_modules/node-llama-cpp/llama/gitRelease.bundle \
  && test -d node_modules/@node-llama-cpp/linux-x64/bins/linux-x64

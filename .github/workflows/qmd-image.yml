@@ -29,8 +29,8 @@ jobs:
           file: qmd/Containerfile
           push: true
           tags: ${{ github.event_name != 'pull_request' && format('ghcr.io/mdopp/laib-qmd:{0},ghcr.io/mdopp/laib-qmd:latest,', steps.v.outputs.qmd) || '' }}ghcr.io/mdopp/laib-qmd:${{ github.sha }}
-      - name: the image runs qmd on the CPU build only
+      - name: the image runs qmd on the CPU build only, its index opens
         run: |
           img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}
-          docker run --rm --entrypoint sh "$img" -c 'test "$(ls /opt/qmd/node_modules/@node-llama-cpp)" = linux-x64 && qmd --version'
+          docker run --rm -e XDG_CACHE_HOME=/tmp/c --entrypoint sh "$img" -c 'test "$(ls /opt/qmd/node_modules/@node-llama-cpp)" = linux-x64 && qmd --version && qmd status'
           docker image inspect "$img" --format 'size {{.Size}}'
