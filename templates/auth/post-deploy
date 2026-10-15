@@ -2,10 +2,11 @@
 """auth post-deploy (#36): LLDAP seeded with the groups admins and family and
 the operator's account, through its GraphQL API on the host network (the
 pod is up and verified green). Idempotent: seeding skips what exists. The
-operator's password is set with LLDAP's own tool inside the pod, which laib
-runs for us (`laib-exec:`) — this hook has no podman. configuration.yml
-and the OIDC key are pre-start's."""
-import json, os, sys, time, urllib.request
+passwords, which LLDAP's GraphQL cannot set, go over its LDAP port as the
+password modify operation (RFC 3062), from this process to LLDAP's socket:
+never on a command line, where ps shows them to every user on the box
+(#214). configuration.yml and the OIDC key are pre-start's."""
+import json, os, socket, sys, time, urllib.request
 
 E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
@@ -34,12 +35,45 @@ def gql(query, variables=None):
         raise RuntimeError(res["errors"])
     return res["data"]
 
-# laib splits the line on whitespace; "--opt=value" keeps a generated secret that starts
-# with "-" (base64url: one in 64) a value, where "--opt value" made lldap read it as an
-# option and left the account without a password (#209)
+# LDAP, as much of it as a bind and a password modify need: BER, definite lengths
+def ber(tag, body):
+    n = len(body)
+    k = (n.bit_length() + 7) // 8
+    return bytes([tag]) + (bytes([n]) if n < 128 else bytes([0x80 | k]) + n.to_bytes(k, "big")) + body
+
+def tlv(b, i):
+    tag, n, i = b[i], b[i + 1], i + 2
+    if n & 0x80:
+        n, i = int.from_bytes(b[i:i + (n & 0x7F)], "big"), i + (n & 0x7F)
+    return tag, b[i:i + n], i + n
+
+def ldap(dn, password, op=None):
+    """binds as dn, then sends op; the first result code that is not success, with its message, or None"""
+    with socket.create_connection(("127.0.0.1", 3890), timeout=10) as s:
+        f = s.makefile("rb")
+        bind = ber(0x60, ber(0x02, b"\x03") + ber(0x04, dn.encode()) + ber(0x80, password.encode()))
+        for mid, req in enumerate([bind] + ([op] if op else []), 1):
+            s.sendall(ber(0x30, ber(0x02, bytes([mid])) + req))
+            head = f.read(2)
+            n = int.from_bytes(f.read(head[1] & 0x7F), "big") if head[1] & 0x80 else head[1]
+            msg = f.read(n)
+            _, res, _ = tlv(msg, tlv(msg, 0)[2])
+            _, code, i = tlv(res, 0)
+            if code != b"\x00":
+                return f"result {int.from_bytes(code, 'big')} {tlv(res, tlv(res, i)[2])[1].decode(errors='replace')}"
+        s.sendall(ber(0x30, ber(0x02, bytes([mid + 1])) + b"\x42\x00"))  # unbind
+    return None
+
+dn = lambda uid: f"uid={uid},ou=people,{E['BASE_DN']}"
+
+# set as the admin, then a bind with it: a set that did not take is red here,
+# not a radicale that cannot log in later
 def set_password(user, password):
-    print("laib-exec: systemd-auth-lldap /app/lldap_set_password --base-url=http://127.0.0.1:17170 --admin-username=admin"
-          f" --admin-password={S('LLDAP_ADMIN_PASSWORD')} --username={user} --password={password}")
+    modify = ber(0x77, ber(0x80, b"1.3.6.1.4.1.4203.1.11.1") + ber(0x81, ber(0x30, ber(0x80, dn(user).encode()) + ber(0x82, password.encode()))))
+    for what, args in (("set", (dn("admin"), S("LLDAP_ADMIN_PASSWORD"), modify)), ("bind with it", (dn(user), password))):
+        if e := ldap(*args):
+            print(f"LLDAP: {user}'s password: {what}: {e}", file=sys.stderr); sys.exit(1)
+    print("password set:", user)
 
 groups = {g["displayName"]: g["id"] for g in gql("{ groups { id displayName } }")["groups"]}
 for name in ("admins", "family"):
@@ -52,9 +86,6 @@ if op not in users:
     gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
         {"u": {"id": op, "email": E["OPERATOR_EMAIL"], "displayName": E.get("OPERATOR_DISPLAY", op)}})
     print("operator account created:", op)
-    # the password: LLDAP's GraphQL has no password mutation; its own tool in
-    # the container does it. laib runs the line below in the pod's lldap
-    # container (the hooks image has no podman; ADR 0004 amendment #36).
     set_password(op, S("OPERATOR_PASSWORD"))
 member = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": op})["user"]["groups"]
 if "admins" not in {g["displayName"] for g in member}:
