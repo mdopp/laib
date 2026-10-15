@@ -85,3 +85,19 @@ func TestFirstBootShredsItsEnvOnceInstalled(t *testing.T) {
 		t.Fatalf("firstboot.env (the token) is still on disk after the install finished\n%s", out)
 	}
 }
+
+// #208: the first boot waited up to 300 s for api.github.com before an
+// install from --source, which needs nothing from GitHub; when GitHub did not
+// answer the runner, vm-install's resumed boot blew its 240 s budget (run
+// 38740629814). It waits for what it installs from.
+func TestFirstBootFromASourceWaitsForTheSourceNotForGitHub(t *testing.T) {
+	_, log, out := runFirstBoot(t, "exit 0\n")
+	for _, l := range strings.Split(log, "\n") {
+		if strings.HasPrefix(l, "curl ") && strings.Contains(l, "api.github.com") {
+			t.Fatalf("an install from --source asked GitHub: %s\nshims:\n%s\noutput:\n%s", l, log, out)
+		}
+	}
+	if !strings.Contains(log, "http://src.test/VERSION") {
+		t.Fatalf("the first boot never checked that its source answers\nshims:\n%s", log)
+	}
+}
