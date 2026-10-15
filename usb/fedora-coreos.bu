@@ -133,24 +133,15 @@ storage:
             done
             echo "$md"
           }
-          mount_array() {   # $1 = md device: mounted now, and by filesystem UUID on every boot
-            local md=$1 fs; fs=$(blkid -s UUID -o value "$md")
-            durable "$ETC/systemd/system/mnt-data.mount" <<UNIT
-          [Unit]
-          Description=Laib data disk (RAID1, filesystem $fs)
-          After=laib-data-disk.service
-          Requires=laib-data-disk.service
-
-          [Mount]
-          What=/dev/disk/by-uuid/$fs
-          Where=$MP
-          Type=xfs
-          Options=noatime
-
-          [Install]
-          WantedBy=multi-user.target
-          UNIT
-            systemctl daemon-reload; systemctl enable mnt-data.mount >/dev/null 2>&1 || true
+          mount_array() {   # $1 = md device: mounted now; every boot runs this script and mounts it again
+            local md=$1
+            # no mount unit: /mnt is a symlink on CoreOS and systemd refused Where=/mnt/data on
+            # every boot, a failed unit on every box (#203). An installed box loses the old one.
+            if [[ -e "$ETC/systemd/system/mnt-data.mount" ]]; then
+              systemctl disable mnt-data.mount >/dev/null 2>&1 || true
+              rm -f "$ETC/systemd/system/mnt-data.mount" "$ETC/systemd/system/multi-user.target.wants/mnt-data.mount"
+              systemctl daemon-reload || true
+            fi
             { echo "# laib-data-disk: the recorded array"; mdadm --detail --scan | sort -u; } | durable "$ETC/mdadm.conf"
             if ! findmnt -n "$MP" >/dev/null 2>&1; then
               mkdir -p "$MP"; chattr -i "$MP" 2>/dev/null || true
@@ -385,9 +376,9 @@ systemd:
         Description=Laib data disk: assemble or create the RAID1 and mount /mnt/data
         DefaultDependencies=no
         # the script is in /usr/local/bin = /var/usrlocal, a mount of its own on CoreOS: wait
-        # for that mount, not for local-fs.target — mnt-data.mount (written below) is part of
-        # local-fs.target, and After= that target was an ordering cycle systemd broke by
-        # dropping the target, sometimes spawning this before /var was there (203/EXEC)
+        # for that mount, not for local-fs.target — After= that target was an ordering cycle
+        # (with the mount unit this script once wrote, #203) that systemd broke by dropping
+        # the target, sometimes spawning this before /var was there (203/EXEC)
         RequiresMountsFor=/var/usrlocal/bin
         After=systemd-udevd.service systemd-udev-trigger.service
         Before=user@1000.service laib-firstboot.service multi-user.target

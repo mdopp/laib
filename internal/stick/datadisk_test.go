@@ -277,3 +277,73 @@ esac`)
 		t.Fatalf("the record is not synced before it counts:\n%s", logged)
 	}
 }
+
+// #203: on Fedora CoreOS /mnt is a symlink to var/mnt. The mount unit the
+// script wrote said Where=/mnt/data, and systemd refuses it on every boot
+// ("Mount path /mnt/data is not canonical (contains a symlink)"): a failed
+// unit and a degraded system on every box, while the script's own mount did
+// the work. No unit the script leaves may name a path behind a symlink, and
+// the old mnt-data.mount of an installed box is gone after its next boot.
+func TestDataDiskLeavesNoMountUnitSystemdRefuses(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
+	root := t.TempDir()
+	bin, etc, sys := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys")
+	units := filepath.Join(etc, "systemd/system")
+	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(units, "multi-user.target.wants"), filepath.Join(sys, "block/md127/md"), filepath.Join(root, "var/mnt/data")} {
+		os.MkdirAll(d, 0o755)
+	}
+	os.Symlink("var/mnt", filepath.Join(root, "mnt")) // CoreOS: /mnt -> var/mnt
+	mp := filepath.Join(root, "mnt", "data")
+	os.WriteFile(filepath.Join(etc, "laib/data-disk"), []byte("DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n"), 0o644)
+	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("clean\n"), 0o644)
+	old := filepath.Join(units, "mnt-data.mount")
+	os.WriteFile(old, []byte("[Mount]\nWhere=/mnt/data\n"), 0o644)
+	os.Symlink(old, filepath.Join(units, "multi-user.target.wants", "mnt-data.mount"))
+	log := filepath.Join(root, "shim.log")
+	shim(t, bin, "mdadm", `case "$*" in
+  "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
+  "--detail /dev/md127") echo "     Active Devices : 2";;
+  *) exit 1;;
+esac`)
+	shim(t, bin, "blkid", `echo 1234-fs-uuid`)
+	shim(t, bin, "mount", `echo mounted > "$LAIB_MP/.mounted"`)
+	shim(t, bin, "findmnt", `test -f "$LAIB_MP/.mounted"`)
+	shim(t, bin, "readlink", `echo "${@: -1}"`)
+	shim(t, bin, "systemctl", `case "$*" in "disable mnt-data.mount") rm -f "$LAIB_ETC/systemd/system/multi-user.target.wants/mnt-data.mount";; esac; exit 0`)
+	for _, n := range []string{"chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
+		shim(t, bin, n, "exit 0")
+	}
+	sh := filepath.Join(root, "laib-data-disk.sh")
+	os.WriteFile(sh, []byte(script), 0o755)
+	cmd := exec.Command("bash", sh)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
+	out, err := cmd.CombinedOutput()
+	logged, _ := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
+	}
+	if _, err := os.Stat(filepath.Join(mp, ".mounted")); err != nil {
+		t.Fatalf("the array was not mounted:\n%s\n%s", out, logged)
+	}
+	matches, _ := filepath.Glob(filepath.Join(units, "*.mount"))
+	for _, m := range matches {
+		b, _ := os.ReadFile(m)
+		for _, l := range strings.Split(string(b), "\n") {
+			if w, ok := strings.CutPrefix(l, "Where="); ok {
+				if real, _ := filepath.EvalSymlinks(w); real != w {
+					t.Errorf("%s: Where=%s is behind a symlink (%s): systemd refuses it on every boot", filepath.Base(m), w, real)
+				}
+			}
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(units, "multi-user.target.wants", "mnt-data.mount")); err == nil {
+		t.Error("the old mnt-data.mount is still enabled")
+	}
+	if b, err := os.ReadFile(old); err == nil && strings.Contains(string(b), "Where=/mnt/data") {
+		t.Error("the old mnt-data.mount (Where=/mnt/data) is still there")
+	}
+}
