@@ -161,6 +161,7 @@ health:
   http: http://127.0.0.1:8000/api/      # verify after apply
 ports:
   - { port: 8000, lan: false }          # nftables drop on physical interfaces
+  - { port: 8025, lan: false, when: [MAIL_HOST] }   # only while MAIL_HOST is set (#190)
 gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
 after: [authelia]                # restarted and verified before this one
@@ -178,6 +179,11 @@ placeholders need no value. `laib plan` prints each such unit as `AUS:`
 with the value it waits for. Errors: a name that is no unit of the
 service, a value `values.yml` does not have, and turning off a unit that a
 remaining one joins or requires (`Pod=`, `Requires=`, `BindsTo=`).
+
+A port takes `when` too. While none of its values is set, the port is
+neither declared (no nftables line) nor published:
+every `PublishPort=` line of the service on that host port is dropped, so a
+pod need not publish a port for a container that is off.
 
 A value is **set** when it is a non-empty literal. `""`, blanks, `~` and
 `null` are unset, and load (and render) as empty. `false` is text and

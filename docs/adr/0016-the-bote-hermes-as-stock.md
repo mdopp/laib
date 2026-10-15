@@ -94,6 +94,8 @@ combination the relay or the hook could not use: an admin identity without
 its channel or room, Matrix or Telegram without its token. The channel
 config is rendered before the units start (the `pre-start` hook), so a
 channel switched off is gone before Hermes starts and before verify asks.
+A port takes `when` as well (#190): without Signal, signal-cli's 8085 is
+neither published by the pod nor declared.
 
 The relay decides on two identities and nothing else:
 

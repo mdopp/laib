@@ -52,7 +52,8 @@ joins. Whoever runs that homeserver, and every session or leaked token of
 your Matrix account, can approve as you: run your own homeserver if you
 approve on Matrix, and log out sessions you do not use.
 
-**Signal off** (`SIGNAL_ACCOUNT: ""`): `bote-signal` goes, its data does
+**Signal off** (`SIGNAL_ACCOUNT: ""`): `bote-signal` goes, and with it
+signal-cli's port 8085 (neither published nor declared, #190); its data does
 not. The linked device's keys stay in `${DATA_DIR}/bote/signal` and in the
 backups. Unlink the device on the phone (Signal → Linked devices), delete
 the folder, and let the backup retention age the old snapshots out.
