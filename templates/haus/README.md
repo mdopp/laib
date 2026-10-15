@@ -59,6 +59,20 @@ is restarted when it stops answering. Serving takes about 700 MB; a
 refresh with new notes about 1 GB more for a moment. embeddinggemma comes
 under the Gemma Terms of Use, which fit a family's own use.
 
+Documents (#219): the library indexes Paperless's documents too. Haus
+mirrors what its Paperless user sees (the OCR text Paperless already
+has) into `${DATA_DIR}/haus-dokumente`, one `<id>.md` per document
+(title, date, sender, tags, then the text): `haus export-documents`, the
+refresh's first step, in Haus's container. A document changed in
+Paperless is written again, one deleted there is deleted here; Paperless
+not answering leaves the folder as it was and does not fail the refresh.
+qmd indexes the folder read-only as the collection `dokumente`
+(`HAUS_QMD_DOCUMENTS`); Haus checks each hit against Paperless and links
+it to `haus.<domain>/dokumente/<id>`. Without `HAUS_PAPERLESS_TOKEN` the
+export does nothing and the library is the notes. The folder is a cache
+(Paperless is the documents' home), not backed up, and beside
+`${DATA_DIR}/haus` and `haus-qmd`, mounted `:z` since both containers use it.
+
 The house model (#198): with a model on the box (the `model` role, or
 `box.yml model.url`) Haus gets `HAUS_LLM_URL` (the proxy's OpenAI base
 as the pod reaches it, `${MODEL_URL}`), `HAUS_LLM_MODEL=gemma-4-e4b` and

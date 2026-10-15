@@ -2,11 +2,15 @@
 # runs this. Each step that fails fails the unit, and `laib status` shows
 # haus red until a run succeeds. Never `qmd pull` here: offline it deletes
 # the cached models (haus#13). The first run downloads the embed model.
+# First Haus mirrors Paperless's documents into the folder qmd indexes (#219):
+# Paperless in trouble leaves the folder as it was and is no failure here,
+# so the notes are refreshed all the same; only a folder Haus cannot write is.
 [Unit]
-Description=Haus: refresh the memory library (qmd update, qmd embed)
+Description=Haus: refresh the memory library (export the documents, qmd update, qmd embed)
 
 [Service]
 Type=oneshot
+ExecStart=/usr/bin/podman exec systemd-haus /haus export-documents
 ExecStart=/usr/bin/podman exec systemd-haus-qmd qmd update
 ExecStart=/usr/bin/podman exec systemd-haus-qmd qmd embed
 TimeoutStartSec=1h
