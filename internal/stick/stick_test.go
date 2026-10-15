@@ -301,8 +301,8 @@ func TestDiskNumber(t *testing.T) {
 
 // First boot is a resumable sequence (#37): its marker is written last, the
 // token reaches the installer through the environment (never argv, never
-// `ps`), and the env file is shredded in an EXIT trap — except on the
-// rpm-ostree reboot path, where the post-reboot run still needs it.
+// `ps`), and the env file is shredded in an EXIT trap once the marker is
+// written — never before: the next boot still needs it (#202).
 func TestFirstBootResumesAndKeepsTheTokenOffArgv(t *testing.T) {
 	ign, err := DestIgnition(box())
 	if err != nil {
