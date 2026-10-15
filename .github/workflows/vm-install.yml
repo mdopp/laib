@@ -373,7 +373,8 @@ jobs:
                 podman image rm -f ghcr.io/mdopp/laib-caddy:2 >/dev/null 2>&1 || true
                 podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null || { echo "a private image cannot be pulled after the reboot: the login did not survive"; exit 1; }
                 echo "private image pulled after the reboot with the kept login"
-                echo "services up after the reboot"'
+                if systemctl --failed --no-legend --type=mount | grep -q .; then echo "a mount unit failed at boot (#203)"; systemctl --failed --type=mount --no-pager; exit 1; fi
+                echo "services up after the reboot, no failed mount"'
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
