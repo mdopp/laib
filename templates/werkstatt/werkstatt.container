@@ -12,6 +12,11 @@ Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=LAIB_MCP_URL=http://host.containers.internal:5900/mcp
 Environment=MODEL_URL=${MODEL_URL}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
+# dev's home (#241): ~/.claude, ~/.claude.json, dotfiles, history; ~/.cache
+# (npm, go, pip) is its own data path, not backed up; sshd's host keys, made once.
+Volume=${DATA_DIR}/werkstatt/home:/home/dev:z
+Volume=${DATA_DIR}/werkstatt/cache:/home/dev/.cache:z
+Volume=${DATA_DIR}/werkstatt/ssh-host-keys:/etc/ssh/keys:z
 Tmpfs=/run/laib                 # this container's tokens, not the shared volume (#44)
 AutoUpdate=registry
 
