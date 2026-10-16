@@ -311,7 +311,10 @@ Both run in the hooks image (ADR 0004 amendment), never on the host:
 `pre-start` before the units start, `post-deploy` after a green verify.
 Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
 `laib-exec: <container> <command…>` (run by Laib in the service's own
-container). `box.yml laib.hooksImage` names the image.
+container). A `laib-exec` line that carries a secret is refused: ps shows
+every argv on the box to every user (#214), so a secret travels on stdin,
+in a file only its reader can read, or over the service's own socket.
+`box.yml laib.hooksImage` names the image.
 
 ### The Operator and the MCP surface (#43)
 
