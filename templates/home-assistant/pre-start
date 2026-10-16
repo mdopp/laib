@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""home-assistant pre-start: the configuration Home Assistant reads at start,
+written before it starts, on every apply. Idempotent; the admin's own
+configuration.yaml is only ever added to, with one exception below.
+
+1. The family's Authelia login (#253; owner decision in #229). The custom
+   component christiaangoossens/hass-oidc-auth, from the tag archive pinned by
+   AUTH_OIDC_ARCHIVE and AUTH_OIDC_SHA256 (an update is a values change),
+   installed under custom_components/auth_oidc; and packages/laib_auth_oidc.yaml,
+   a file Laib owns whole. The client secret is not in it: the unit hands it
+   to Home Assistant as AUTH_OIDC_SECRET (a podman secret), so a rotation
+   restarts Home Assistant with the new one. Home Assistant's own login stays.
+   On a box from ServiceBay, its top-level auth_oidc: block leaves
+   configuration.yaml: two blocks are a duplicate key, and Home Assistant
+   would keep ServiceBay's, with ServiceBay's secret. Same client id, same
+   Authelia: the users it linked stay linked (.storage is not touched).
+2. rest_command.mitteilung (#177, ADR 0022 §3): an automation's message to a
+   person, delivered by the Bote's bote-notify on 127.0.0.1:8645 with the
+   bearer from BOTE_NOTIFY_AUTH in Home Assistant's environment.
+3. The packages include both need, in configuration.yaml; a fresh box gets
+   Home Assistant's default configuration with it, so the first start has
+   both."""
+import hashlib, io, os, re, shutil, sys, tarfile, urllib.request
+
+E = os.environ
+C = os.path.join(E["LAIB_DATA_DIR"], "home-assistant", "homeassistant")
+DOMAIN = E["LAIB_DOMAIN"]
+INCLUDE = "packages: !include_dir_named packages"
+
+
+def write(path, text):
+    """only when it differs, so a second run changes nothing"""
+    path = os.path.join(C, path)
+    if os.path.exists(path) and open(path).read() == text:
+        return False
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+    return True
+
+
+def red(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+# 1a. the component, from the pinned archive
+comp = os.path.join(C, "custom_components", "auth_oidc")
+stamp = os.path.join(comp, ".laib-archive")
+want = E["AUTH_OIDC_SHA256"].lower()
+if not (os.path.exists(stamp) and open(stamp).read().strip() == want):
+    with urllib.request.urlopen(E["AUTH_OIDC_ARCHIVE"], timeout=120) as r:
+        blob = r.read()
+    if hashlib.sha256(blob).hexdigest() != want:
+        red(f"auth_oidc: the archive {E['AUTH_OIDC_ARCHIVE']} is not the pinned one (SHA-256 differs): nothing installed")
+    new = comp + ".new"
+    shutil.rmtree(new, ignore_errors=True)
+    with tarfile.open(fileobj=io.BytesIO(blob)) as tf:
+        for m in tf.getmembers():
+            parts = m.name.split("/", 3)
+            rel = os.path.normpath(parts[3]) if len(parts) == 4 and parts[1:3] == ["custom_components", "auth_oidc"] else ""
+            if m.isfile() and rel and not rel.startswith(("..", "/")):  # files only: no links, nothing outside
+                os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+                with open(os.path.join(new, rel), "wb") as f:
+                    f.write(tf.extractfile(m).read())
+    if not os.path.exists(os.path.join(new, "manifest.json")):
+        red("auth_oidc: the archive holds no custom_components/auth_oidc/manifest.json")
+    with open(os.path.join(new, ".laib-archive"), "w") as f:
+        f.write(want + "\n")
+    shutil.rmtree(comp + ".old", ignore_errors=True)
+    if os.path.exists(comp):
+        os.rename(comp, comp + ".old")
+    os.rename(new, comp)
+    shutil.rmtree(comp + ".old", ignore_errors=True)
+    print("auth_oidc installed from", E["AUTH_OIDC_ARCHIVE"])
+
+# 1b. the block, as a package Laib owns
+write("packages/laib_auth_oidc.yaml", f"""# rendered by laib pre-start (templates/home-assistant, #253); do not edit by hand
+auth_oidc:
+  client_id: homeassistant
+  client_secret: !env_var AUTH_OIDC_SECRET
+  discovery_url: https://auth.{DOMAIN}/.well-known/openid-configuration
+  display_name: Familienkonto                 # the button reads "Login with Familienkonto"
+  features:
+    automatic_user_linking: true      # an existing Home Assistant user with the LLDAP name is that person
+    automatic_person_creation: true
+  roles:
+    admin: admins
+    user: family
+""")
+
+# 2. rest_command.mitteilung
+write("packages/laib_mitteilung.yaml", f"""# rendered by laib pre-start (templates/home-assistant, #177); do not edit by hand
+rest_command:
+  mitteilung:
+    url: "{E.get("BOTE_NOTIFY_URL") or "http://127.0.0.1:8645/mitteilung"}"
+    method: post
+    content_type: application/json
+    headers:
+      Authorization: !env_var BOTE_NOTIFY_AUTH
+    payload: '{{"an": {{{{ an | tojson }}}}, "text": {{{{ text | tojson }}}}}}'
+    timeout: 60
+""")
+
+# 3. configuration.yaml
+Y = os.path.join(C, "configuration.yaml")
+if not os.path.exists(Y):
+    for f, empty in (("automations.yaml", "[]\n"), ("scripts.yaml", ""), ("scenes.yaml", "")):
+        if not os.path.exists(os.path.join(C, f)):
+            write(f, empty)
+    write("configuration.yaml", f"""# written by laib pre-start (templates/home-assistant) because there was none: yours from here on
+default_config:
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+homeassistant:
+  {INCLUDE}
+""")
+    print("configuration.yaml written: Home Assistant's defaults and the packages include")
+text = open(Y).read()
+lines = text.splitlines(keepends=True)
+# ServiceBay's block: the top-level key and everything indented (or blank) under it
+start = next((i for i, l in enumerate(lines) if re.match(r"auth_oidc:\s*(#.*)?$", l)), None)
+if start is not None:
+    end = start + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
+        end += 1
+    while end > start + 1 and not lines[end - 1].strip():
+        end -= 1  # the blank lines before the next key stay
+    lines[start:end] = ["# auth_oidc: moved to packages/laib_auth_oidc.yaml by laib (#253)\n"]
+    print("ServiceBay's auth_oidc block left configuration.yaml for packages/laib_auth_oidc.yaml")
+text = "".join(lines)
+if re.search(r"(?m)^\s+" + re.escape(INCLUDE) + r"\s*$", text):
+    pass
+elif re.search(r"(?m)^\s*packages:", text):
+    red("configuration.yaml loads packages from elsewhere: add '" + INCLUDE + "' for laib's packages (the family login and "
+        "rest_command.mitteilung are in them)")
+elif m := re.search(r"(?m)^homeassistant:[ \t]*(#.*)?\n", text):
+    nxt = re.search(r"(?m)^([ \t]+)\S", text[m.end():])
+    indent = nxt.group(1) if nxt and nxt.start() == 0 else "  "
+    text = text[:m.end()] + indent + INCLUDE + "\n" + text[m.end():]
+elif re.search(r"(?m)^homeassistant:", text):
+    red("configuration.yaml's homeassistant: is not a plain block: add '" + INCLUDE + "' under it by hand")
+else:
+    text = text.rstrip("\n") + "\n\n# added by laib (templates/home-assistant): its packages\nhomeassistant:\n  " + INCLUDE + "\n"
+if write("configuration.yaml", text):
+    print("configuration.yaml: laib's packages included")
+print("home-assistant: family login (auth_oidc via Authelia) and rest_command.mitteilung in place")

@@ -25,6 +25,10 @@ secrets:
   - name: HA_TOKEN                   # optional: a long-lived HA token lets laib diag check the integrations (#55)
     external: true
     optional: true
+oidc:                                # the family's login through Authelia (auth_oidc, #253); HA's own login stays
+  clientId: homeassistant            # ServiceBay's client id: on a migrated box the linked users stay linked
+  redirectUris: ["https://home.${DOMAIN}/auth/oidc/callback"]
+  tokenEndpointAuthMethod: client_secret_post   # auth_oidc posts its secret in the form body
 data:
   - path: ${DATA_DIR}/home-assistant/homeassistant
     quiesce: true                 # a database: stopped while it is snapshotted (#40)

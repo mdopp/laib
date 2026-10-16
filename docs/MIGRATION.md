@@ -175,11 +175,12 @@ applies:
 - **Samba's per-user accounts.** ServiceBay synced LLDAP users into Samba;
   the built-in has the one `SHARE_USER`. Default: devices mount with that
   account; the personal ones are gone after the first restart.
-- **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`).
-  The built-in declares no `oidc:`, so Authelia no longer knows the client.
-  Default: the login button fails, and users log in with their Home
-  Assistant password. A user who only ever used Authelia needs one set
-  before the move.
+- **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`):
+  decided, kept (#229, #253). The built-in declares the same client;
+  pre-start installs the same pinned component and moves ServiceBay's
+  top-level `auth_oidc:` block out of `configuration.yaml` into
+  `packages/laib_auth_oidc.yaml`, with Laib's secret. The users it linked
+  stay linked. Nothing to carry.
 - **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
   `/workspace`; the Werkstatt keeps its home in the image. Default: sessions
   start fresh, and the host key changes once (the app asks to trust it again).
