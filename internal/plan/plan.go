@@ -216,7 +216,7 @@ func boxSecrets(ctx context.Context) (map[string]string, error) {
 var (
 	yamlRe     = regexp.MustCompile(`(?m)^Yaml=(.+)$`)
 	hostPortRe = regexp.MustCompile(`(?m)(?:^PublishPort=(?:\[[0-9a-fA-F:.]*\]:|[0-9.]+:)?(\d+):|hostPort:\s*["']?(\d+))`)
-	hostNetRe  = regexp.MustCompile(`(?m)(?:hostNetwork:\s*true|^Network=host)`)
+	hostNetRe  = regexp.MustCompile(`(?m)^(?:\s*hostNetwork:\s*true|Network=host)`)
 	ctrPortRe  = regexp.MustCompile(`containerPort:\s*["']?(\d+)()`)
 	hostPathRe = regexp.MustCompile(`(?m)(?:^Volume=|^Mount=.*\b(?:source|src)=|hostPath:\s*\n\s*(?:type:.*\n\s*)?path:\s*["']?)(/[^\s:,"'#]*)`)
 )
