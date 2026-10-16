@@ -454,7 +454,9 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 
 func autheliaAccess(st *state.State) string {
 	var b strings.Builder
-	b.WriteString("# Rendered by laib: one rule per route. The apex deny and the wildcard\n# default live in the auth service's own config.\naccess_control:\n  rules:\n")
+	// Every rule Authelia has (#249): a list from a later config file replaces
+	// an earlier one instead of joining it, so the auth hook's config has none.
+	b.WriteString("# Rendered by laib: every access rule. Anything unlisted, the bare apex\n# included, is denied.\naccess_control:\n  default_policy: deny\n  rules:\n")
 	fmt.Fprintf(&b, "    - domain: %s\n      policy: one_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
@@ -466,8 +468,14 @@ func autheliaAccess(st *state.State) string {
 				fmt.Fprintf(&b, "    - domain: %s\n      policy: bypass\n      resources: [\"^%s.*$\"]\n", fqdn(st, r.Host), strings.TrimSuffix(p, "/")+"/")
 			}
 			fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", fqdn(st, r.Host), policy)
-			if r.Group != "" {
-				fmt.Fprintf(&b, "      subject: \"group:%s\"\n", r.Group)
+			// family and admins, never just any LLDAP account (radicale's bind
+			// account is one); admins reach what the family reaches
+			subject := `["group:` + cmp.Or(r.Group, "family") + `", "group:admins"]`
+			if r.Group == "admins" {
+				subject = `"group:admins"`
+			}
+			if policy != "bypass" {
+				b.WriteString("      subject: " + subject + "\n")
 			}
 		}
 	}

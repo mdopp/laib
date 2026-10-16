@@ -433,6 +433,12 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there
+                pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
+                for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins one_factor" "caldav - bypass"; do
+                  set -- $c; g=$2; [ "$g" = - ] && g=; got=$(pol "$1" "$g"); echo "authelia: $1 as ${g:-anonymous} -> $got"
+                  [ "$got" = "$3" ] || { echo "Authelia applies ${got:-nothing} to $1 for ${g:-anonymous}, want $3 (#249)"; exit 1; }
+                done
                 $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
