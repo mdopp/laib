@@ -14,8 +14,8 @@ import (
 func TestFamilyAppsRouteWithTheirOwnLogin(t *testing.T) {
 	for _, tc := range []struct{ tpl, host, want string }{
 		{"media", "media", "auth: none"},
-		{"paperless", "paperless", "auth: none"},
-		{"file-share", "files", "auth: one_factor"}, // back behind Authelia, File Browser in proxy auth (#231)
+		{"paperless", "paperless", "auth: one_factor"}, // forward-auth with Remote-User, as ServiceBay (#231)
+		{"file-share", "files", "auth: one_factor"},    // back behind Authelia, File Browser in proxy auth (#231)
 		{"file-share", "sync", "auth: one_factor"},
 	} {
 		b, _ := os.ReadFile(filepath.Join("..", "..", "templates", tc.tpl, "laib.yml"))
