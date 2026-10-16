@@ -14,16 +14,19 @@ ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMI
 # reach would be a tool the model is told it has. Any HTTP answer counts
 # (401, 405 are answers); a connection error leaves the entry out and says so.
 # With a bearer (the Haushalt, #170) a 401 or 403 is a refusal: left out too.
+# The bearer is named, not passed: python3 reads it from its environment, so
+# it is on no argv, where ps shows it to every user on the box (#214).
 answers() { python3 - "$1" "${2:-}" <<'PY'
-import sys, urllib.request, urllib.error
+import os, sys, urllib.request, urllib.error
 headers = {"Content-Type": "application/json"}
-if sys.argv[2]:
-    headers["Authorization"] = "Bearer " + sys.argv[2]
+bearer = os.environ.get(sys.argv[2], "") if sys.argv[2] else ""
+if bearer:
+    headers["Authorization"] = "Bearer " + bearer
 req = urllib.request.Request(sys.argv[1], data=b'{"jsonrpc":"2.0","id":0,"method":"ping"}', headers=headers)
 try:
     urllib.request.urlopen(req, timeout=3)
 except urllib.error.HTTPError as e:
-    if sys.argv[2] and e.code in (401, 403):
+    if bearer and e.code in (401, 403):
         print("lehnt den Token ab"); sys.exit(2)
 except Exception as e:
     print(e); sys.exit(1)
@@ -39,7 +42,7 @@ fi
 if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
   # Haus's Haushalt (haus#11) wants Haus's bearer; the token stays in .env (#170)
   if [ -z "${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}" ]; then echo "haushalt: kein Token (HAUS_HAUSHALT_TOKEN: erst laib add haus), weggelassen"
-  elif why=$(answers "$HAUSHALT_MCP_URL" "$LAIB_SECRET_HAUS_HAUSHALT_TOKEN" 2>&1); then
+  elif why=$(answers "$HAUSHALT_MCP_URL" LAIB_SECRET_HAUS_HAUSHALT_TOKEN 2>&1); then
     MCP_EXTRA="$MCP_EXTRA  haushalt:\n    url: $HAUSHALT_MCP_URL\n    headers:\n      Authorization: \"Bearer \${HAUSHALT_TOKEN}\"\n    trust: full\n"
     TOOLS="$TOOLS, das Gedächtnis des Hauses (haushalt: Kalender, Notizen, Erinnerungen)"
   else echo "haushalt: $HAUSHALT_MCP_URL ${why:-antwortet nicht} (Token), weggelassen"; fi
