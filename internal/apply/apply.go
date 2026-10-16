@@ -521,6 +521,12 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 			}
 		case strings.HasPrefix(line, "laib-exec: "):
 			f := strings.Fields(strings.TrimPrefix(line, "laib-exec: "))
+			red := render.Redact(render.Redact(render.Output{"l": line}, secrets), newSecrets)["l"]
+			if red != line { // podman's argv shows in ps to every user on the box (#214)
+				kept = append(kept, "laib-exec refused (a secret on argv: hand it over on stdin or in a file): "+red)
+				err = errors.Join(err, fmt.Errorf("laib-exec refused: a secret on argv: %s", red))
+				continue
+			}
 			if len(f) < 2 || !own[f[0]] {
 				kept = append(kept, "laib-exec refused (not one of "+svc.Name+"'s containers): "+line)
 				err = errors.Join(err, fmt.Errorf("laib-exec refused: %s", line))

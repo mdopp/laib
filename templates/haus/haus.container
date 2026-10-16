@@ -32,12 +32,20 @@ Environment=HAUS_NOTES_DIR=/notes
 # loopback Host. Its collection is qmd.json's "notizen" over the same folder as HAUS_NOTES_DIR
 Environment=HAUS_QMD_URL=http://127.0.0.1:8181
 Environment=HAUS_QMD_COLLECTION=notizen
+# Paperless's documents in the library (#219): `haus export-documents` (the refresh's first step) mirrors their OCR
+# text into HAUS_DOCUMENTS_DIR, qmd.json's collection "dokumente" indexes it. Without Paperless Haus leaves them out
+Environment=HAUS_QMD_DOCUMENTS=dokumente
+Environment=HAUS_DOCUMENTS_DIR=/dokumente
 # the house model tidies the library's hits (#198), never blocking: the model role's proxy as this pod
 # reaches it (host.containers.internal) and its key. Without a model on the box URL and key render
 # empty and Haus's judge is off
 Environment=HAUS_LLM_URL=${MODEL_URL}
 Environment=HAUS_LLM_MODEL=gemma-4-e4b
 Environment=HAUS_LLM_KEY=${MODEL_KEY}
+# the Sprechen field (haus#12, #215): the Bote's OpenAI-compatible API as this pod reaches it, and its key;
+# without the Bote the key renders empty and Haus shows no field
+Environment=HAUS_BOTE_URL=${BOTE_URL}
+Environment=HAUS_BOTE_KEY=${BOTE_KEY}
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
@@ -50,6 +58,7 @@ Volume=/mnt/data/laib/render/persona:/persona:ro,z
 Volume=${DATA_DIR}/haus:/data:Z
 Volume=${DATA_DIR}/file-share/data/notes:/notes:z
 Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload:z
+Volume=${DATA_DIR}/haus-dokumente:/dokumente:z
 AutoUpdate=registry
 
 [Service]

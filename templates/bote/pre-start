@@ -42,6 +42,12 @@ if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]
   echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
   echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
   echo "HERMES_NON_INTERACTIVE=1"
+  # Hermes' API server, for Haus's Sprechen field (#215): on only with a key (gateway/config_env.py
+  # _api_server; apply generates BOTE_API_KEY), on the pod's interfaces so the published 8642 reaches it
+  if [ -n "${LAIB_SECRET_BOTE_API_KEY:-}" ]; then
+    echo "API_SERVER_KEY=$LAIB_SECRET_BOTE_API_KEY"
+    echo "API_SERVER_HOST=0.0.0.0"
+  fi
 } > "$H/.env"
 chmod 600 "$H/.env"
 # bote-notify (#177) gets the platform credentials only: no Bote token, no

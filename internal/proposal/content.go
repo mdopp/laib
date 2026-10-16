@@ -19,7 +19,7 @@ type Edit struct {
 	Patch  string            // unified diff against the repo root
 	Set    map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
 	Add    *AddService
-	Update *UpdateService // replace a service's template files, keep values.yml (#14)
+	Update *UpdateService // replace a service's template files, keep values.yml and add the new keys (#14, #215)
 }
 
 // UpdateService refreshes services/<name> from a newer template folder.
@@ -265,7 +265,8 @@ func addService(wt string, a *AddService) error {
 
 // updateService copies every template file except values.example.yml over
 // services/<name>, removes unit files the new template no longer ships, and
-// keeps values.yml. The contract's name line follows the service name.
+// keeps values.yml, adding the example's new keys (newValues). The
+// contract's name line follows the service name.
 func updateService(wt string, u *UpdateService) error {
 	dst := filepath.Join(wt, "services", u.Name)
 	if _, err := os.Stat(filepath.Join(dst, "laib.yml")); err != nil {
@@ -302,6 +303,11 @@ func updateService(wt string, u *UpdateService) error {
 		}
 		shipped[e.Name()] = true
 	}
+	if ex, err := fs.ReadFile(u.Template, "values.example.yml"); err == nil {
+		if err := newValues(filepath.Join(dst, "values.yml"), ex); err != nil {
+			return err
+		}
+	}
 	old, _ := os.ReadDir(dst)
 	for _, e := range old {
 		if e.IsDir() || e.Name() == "values.yml" || e.Name() == "laib.yml" || shipped[e.Name()] {
@@ -312,6 +318,47 @@ func updateService(wt string, u *UpdateService) error {
 		}
 	}
 	return nil
+}
+
+// newValues appends to values.yml each key the template's example has and
+// values.yml lacks, as the example's line writes it (#215): a template
+// update never leaves a new placeholder without a value, and what the
+// operator set stays as it is, byte for byte.
+func newValues(path string, example []byte) error {
+	have, _ := os.ReadFile(path)
+	var cur, ex yaml.Node
+	if err := yaml.Unmarshal(have, &cur); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if err := yaml.Unmarshal(example, &ex); err != nil {
+		return fmt.Errorf("the template's values.example.yml: %w", err)
+	}
+	if len(ex.Content) == 0 {
+		return nil
+	}
+	known := map[string]bool{}
+	if len(cur.Content) > 0 {
+		for i := 0; i < len(cur.Content[0].Content); i += 2 {
+			known[cur.Content[0].Content[i].Value] = true
+		}
+	}
+	lines, m := strings.Split(string(example), "\n"), ex.Content[0]
+	var add []byte
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if k, v := m.Content[i], m.Content[i+1]; !known[k.Value] {
+			if v.Line != k.Line || v.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+				return fmt.Errorf("the template's values.example.yml: %s is not one line", k.Value)
+			}
+			add = append(add, lines[k.Line-1]+"\n"...)
+		}
+	}
+	if len(add) == 0 {
+		return nil
+	}
+	if len(have) > 0 && have[len(have)-1] != '\n' {
+		have = append(have, '\n')
+	}
+	return os.WriteFile(path, append(have, add...), 0o644)
 }
 
 // wireBox: a template that provides a platform role (proxy, sso, identity,

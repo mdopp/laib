@@ -49,6 +49,7 @@ is up; Authelia's `configuration.yml` and AdGuard's first `AdGuardHome.yaml`
 live here), **`post-deploy`** runs after a green verify and talks to the
 running service. A hook may print `laib-secret: NAME=value` and
 `laib-exec: <container> <command…>`; the latter Laib runs in one of the
-service's own containers — nothing else. `laib template lint` refuses a
+service's own containers — nothing else, and never with a secret on its
+argv (#214). `laib template lint` refuses a
 hook whose interpreter the image lacks and a `Volume=` source that is not a
 declared data path or a rendered file.
