@@ -4,7 +4,8 @@ Description=Werkstatt — the one place where agents build (Claude Code, pi, rep
 [Container]
 Image=${IMAGE}
 PublishPort=${SSH_PORT}:22
-Environment=WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}
+# quoted: Quadlet splits Environment= on whitespace, and a public key has two spaces
+Environment="WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}"
 Environment=WERKSTATT_SSH_PASSWORD=${SSH_PASSWORD}
 Environment=CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_TOKEN}
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
