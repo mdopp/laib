@@ -198,7 +198,8 @@ def servicebay_install(f, items):
     if not tok:
         raise RuntimeError(f"ServiceBay token: HTTP {st} {b[:200]!r}")
     bearer = {"Authorization": "Bearer " + tok}
-    wait("ServiceBay's agent", lambda: b'"isConnected":true' in req("GET", base + "/api/system/health", headers=bearer)[1], tries=90, pause=2)
+    # the agent is connected when ServiceBay sees the box's containers through it
+    wait("ServiceBay's agent", lambda: b'servicebay' in req("GET", base + "/api/containers", headers=bearer)[1], tries=90, pause=2)
     for name in items:
         src, _, tmpl = name.rpartition("/")
         body = {"template": tmpl, "variables": f.get("vars", {}).get(tmpl, {})}
