@@ -47,7 +47,8 @@ func boteBoxSecrets(t *testing.T, people string, values, secrets map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	return Render(st, secrets)
+	out, err := Render(st, secrets)
+	return asContainerSees(st, secrets, out), err
 }
 
 var (

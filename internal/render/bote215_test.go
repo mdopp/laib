@@ -25,7 +25,9 @@ func TestHausReachesTheBote(t *testing.T) {
 		}
 		return m[1], true
 	}
-	out, err := Render(st, map[string]string{"BOTE_API_KEY": "k-bote-api"})
+	sec := map[string]string{"BOTE_API_KEY": "k-bote-api"}
+	out, err := Render(st, sec)
+	out = asContainerSees(st, sec, out)
 	if err != nil {
 		t.Fatal(err)
 	}
