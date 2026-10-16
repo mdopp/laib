@@ -376,6 +376,25 @@ jobs:
                 sudo nft list table inet laib >/dev/null || { echo "converge did not load the ruleset"; exit 1; }
                 $L journal --since 10m | grep -q "firewall" || { echo "no journal line for the reload"; exit 1; }'
           rc=$(probe); echo "probe after converge: curl rc $rc"; [ "$rc" = 28 ]
+          # #257: a container's output is in journald under its service's unit, laib logs shows it, and the
+          # journal is the box's own deliberate one (persistent, size and age capped); the line is computed
+          # by the container (tr), so the unit's argv never matches it
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/logmark; mkdir -p "$R"
+                printf "name: logmark\ntemplate: {registry: vm, name: logmark, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n" > "$R/laib.yml"
+                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nExec=sh -c \"echo laib-log-marker_${{ github.run_id }} | tr _ -; exec sleep 1000000\"\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/logmark.container"
+                $L add logmark
+                M=laib-log-marker-${{ github.run_id }}
+                for i in $(seq 1 20); do $L logs logmark --since 10m > /tmp/logs.txt; grep -q "$M" /tmp/logs.txt && break; sleep 1; done
+                cat /tmp/logs.txt; grep -q "$M" /tmp/logs.txt || { echo "laib logs does not show the container output (#257)"; podman logs systemd-logmark || true; journalctl --user --no-pager -n 30 -o verbose | grep -E "MESSAGE=|_SYSTEMD_USER_UNIT|CONTAINER_NAME" | tail -30; exit 1; }
+                echo "log driver: $(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)"
+                [ "$(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)" = journald ] || { echo "the container does not log to journald (#257)"; exit 1; }
+                podman logs systemd-logmark 2>&1 | grep "$M" >/dev/null || { echo "podman logs does not show the container output"; exit 1; }
+                systemd-analyze cat-config systemd/journald.conf | grep -vE "^\s*(#|$)" | tee /tmp/journald.txt
+                last() { sed -n "s/^$1=//p" /tmp/journald.txt | tail -1; }
+                [ "$(last Storage)" = persistent ] && [ "$(last SystemMaxUse)" = 4G ] && [ "$(last MaxRetentionSec)" = 4week ] && [ "$(last MaxFileSec)" = 1week ] || { echo "journald is not on the box'"'"'s limits (#257)"; exit 1; }
+                journalctl --no-pager -b -u systemd-journald | grep -E "System Journal|Runtime Journal" | tail -2 || true; journalctl --disk-usage'
           off; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c; ready
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sudo nft list table inet laib | grep -q 8080 || { echo "the ruleset is gone after the reboot"; exit 1; }
@@ -389,6 +408,12 @@ jobs:
                 if systemctl --failed --no-legend --type=mount | grep -q .; then echo "a mount unit failed at boot (#203)"; systemctl --failed --type=mount --no-pager; exit 1; fi
                 echo "services up after the reboot, no failed mount"'
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
+          # #257: the marker of the boot before is still there: the journal is on disk, not in /run
+          $SSH 'set -euo pipefail; M=laib-log-marker-${{ github.run_id }}
+                journalctl --user --no-pager -b -1 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "the container output of the previous boot is gone: the journal is not persistent (#257)"; journalctl --list-boots --no-pager | tail -3; exit 1; }
+                journalctl --user --no-pager -b 0 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "after the reboot the container output is not in journald (#257)"; exit 1; }
+                echo "container output in journald under logmark.service, kept across the reboot"
+                LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib remove logmark >/dev/null'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
       - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
