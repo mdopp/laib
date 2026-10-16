@@ -143,9 +143,9 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	if len(restores) < 3 || !strings.Contains(restores[0], c.env.paths.State) {
 		t.Fatalf("state first, then the services: %v", restores)
 	}
-	// every service with data (auth: three paths, caddy: one; whoami declares none)
+	// every service with data (auth: three paths, caddy: one, usage-metrics: one; whoami declares none)
 	order := strings.Join(restores[2:], "\n")
-	if strings.Count(order, "restic restore") != 4 || !strings.Contains(order, "/auth/lldap") || !strings.Contains(order, "/caddy/data") {
+	if strings.Count(order, "restic restore") != 5 || !strings.Contains(order, "/auth/lldap") || !strings.Contains(order, "/caddy/data") || !strings.Contains(order, "/usage-metrics") {
 		t.Fatalf("every declared path of every service, each with --delete: %v", restores)
 	}
 	joined := strings.Join(c.calls, "\n")

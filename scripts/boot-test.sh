@@ -2,7 +2,8 @@
 # Real-boot test (issue #7): no shims. Needs a user systemd with Podman's
 # Quadlet generator (podman >= 4.4), e.g. the ubuntu-24.04 GitHub runner or
 # any box. Applies the whoami template for real, waits for the container's
-# health, checks status, then removes the unit again.
+# health, checks status, adds usage-metrics as it ships (#238), then removes
+# the units again.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${LAIB_BIN:-$ROOT/laib}"
@@ -12,8 +13,10 @@ export LAIB_QUADLET="${LAIB_QUADLET:-$HOME/.config/containers/systemd}"
 export LAIB_SYSTEMD="${LAIB_SYSTEMD:-$HOME/.config/systemd/user}"
 cleanup() {
   systemctl --user stop whoami.service 2>/dev/null || true
+  systemctl --user stop usage-metrics.service 2>/dev/null || true
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
-  rm -rf "$LAIB_QUADLET/whoami" "$WORK"
+  podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$WORK"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -78,6 +81,25 @@ tokenOK() {
 TOK="$(tokenOK "")"
 LAIB_ACTOR=human:boot "$BIN" secret rotate WHOAMI_TOKEN >/dev/null || { echo "FAIL: rotate exit $?"; exit 1; }
 tokenOK "$TOK" >/dev/null
+# #238: a stateful template as it ships (embedded, laib add): the counter API
+# counts only with its generated token, reads the count back, and keeps it
+# across a restart, because the SQLite file lives in the declared data path
+LAIB_ACTOR=human:boot "$BIN" add usage-metrics "boot test" > add-um.out || { echo "add usage-metrics exit $?"; cat add-um.out; journalctl --user -u usage-metrics.service --no-pager | tail -20; exit 1; }
+UM=http://127.0.0.1:8094
+UMTOK="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN)"
+[ -n "$UMTOK" ] || { echo "FAIL: no podman secret for USAGE_METRICS_TOKEN"; exit 1; }
+printf 'Authorization: Bearer %s\n' "$UMTOK" > "$WORK/um.auth"
+DAY="$(date -u +%F)"
+umCode() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+for h in "X-None: 1" "Authorization: Bearer wrong"; do
+  [ "$(umCode -X POST -H "$h" -H 'Content-Type: application/json' -d "{\"app\":\"boot\",\"event\":\"refused\",\"day\":\"$DAY\",\"count\":5}" "$UM/ingest")" = 401 ] || { echo "FAIL: /ingest without the token is not refused ($h)"; exit 1; }
+  [ "$(umCode -H "$h" "$UM/summary")" = 401 ] || { echo "FAIL: /summary without the token is not refused ($h)"; exit 1; }
+done
+curl -fsS -X POST -H @"$WORK/um.auth" -H 'Content-Type: application/json' -d "{\"app\":\"boot\",\"event\":\"test\",\"day\":\"$DAY\",\"count\":2}" "$UM/ingest" | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["total"]==2, r'
+systemctl --user restart usage-metrics.service
+for _ in $(seq 1 30); do curl -fsS "$UM/healthz" >/dev/null 2>&1 && break; sleep 1; done
+curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c 'import sys,json; s=json.load(sys.stdin); assert s["total"]==2 and s["apps"]==[{"app":"boot","total":2,"events":[{"event":"test","count":2}]}], s'
+test -s "$WORK/data/usage-metrics/usage-metrics.db" || { echo "FAIL: the counters are not in the declared data path"; exit 1; }
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
 "$BIN" logs whoami --since 10m | grep -qi "whoami" || { echo "FAIL: no journald lines"; exit 1; }
@@ -112,4 +134,4 @@ kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
 curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="restart" and e["actor"]=="ops" for e in es) and any(e["verb"]=="note" for e in es), [e["verb"] for e in es]'
-echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real"
+echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart"
