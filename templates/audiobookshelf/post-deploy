@@ -35,7 +35,10 @@ def req(method, path, body=None, token=None):
     r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
     with urllib.request.urlopen(r, timeout=20) as resp:
         data = resp.read()
-        return json.loads(data) if data else None
+        try:
+            return json.loads(data) if data else None
+        except ValueError:
+            return data.decode(errors="replace")  # /init answers "OK", text
 
 for _ in range(60):
     try:
