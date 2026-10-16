@@ -23,7 +23,9 @@ person or a Claude Code session in the dev container
 shell command in the container (laibctl: the Laib MCP with the token from
 `/run/laib/token`), `podlet` turns a compose file into Quadlet units, and
 the pi extension `laib-llama` keeps pi's model list in step with the
-lease: `extensions/catalog.mjs` turns the lease's `/v1/models` (id,
+lease. The image's `pi` is a small wrapper that loads it on every run, the
+autoloop's and a person's over SSH (#261; npm's own binary is
+`pi-upstream`, and pi's subcommands pass through untouched): `extensions/catalog.mjs` turns the lease's `/v1/models` (id,
 `allowed_in_mode`, no `pi` object) into pi models and defines the provider
 id once; the autoloop pins `laib-llama/<preset>` and a test checks both
 agree and lists the lease's real catalogue through the extension.
