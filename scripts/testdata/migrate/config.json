@@ -1,0 +1,167 @@
+{
+ "templateSettings": {
+  "DATA_DIR": "/mnt/data/stacks"
+ },
+ "reverseProxy": {
+  "publicDomain": "example.home",
+  "lanIp": "192.0.2.10",
+  "hosts": [
+   {
+    "domain": "auth.example.home",
+    "service": "auth",
+    "forwardPort": 9091,
+    "exposure": "public"
+   },
+   {
+    "domain": "ldap.example.home",
+    "service": "auth",
+    "forwardPort": 17170,
+    "exposure": "internal"
+   },
+   {
+    "domain": "home.example.home",
+    "service": "home-assistant",
+    "forwardPort": 8123,
+    "exposure": "public"
+   },
+   {
+    "domain": "zwave.example.home",
+    "service": "home-assistant",
+    "forwardPort": 8091,
+    "exposure": "internal"
+   },
+   {
+    "domain": "vault.example.home",
+    "service": "vaultwarden",
+    "forwardPort": 8222,
+    "exposure": "public"
+   },
+   {
+    "domain": "photos.example.home",
+    "service": "immich",
+    "forwardPort": 2283,
+    "exposure": "public"
+   },
+   {
+    "domain": "files.example.home",
+    "service": "file-share",
+    "forwardPort": 8088,
+    "exposure": "public"
+   },
+   {
+    "domain": "claude.example.home",
+    "service": "claude-dev",
+    "forwardPort": 8790,
+    "exposure": "public"
+   },
+   {
+    "domain": "pi.example.home",
+    "service": "pi-web",
+    "forwardPort": 8504,
+    "exposure": "internal"
+   },
+   {
+    "domain": "asteroids.example.home",
+    "service": "flutstunde",
+    "forwardPort": 8092,
+    "exposure": "public"
+   },
+   {
+    "domain": "flut.example.home",
+    "service": "flutstunde",
+    "forwardPort": 8090,
+    "exposure": "public"
+   },
+   {
+    "domain": "example.home",
+    "service": "servicebay-portal",
+    "forwardPort": 5888,
+    "exposure": "public"
+   },
+   {
+    "domain": "ws-test.example.home",
+    "service": "ws-test",
+    "forwardPort": 19999,
+    "exposure": "internal"
+   }
+  ]
+ },
+ "installedTemplates": {
+  "auth": {
+   "schemaVersion": 1
+  },
+  "home-assistant": {
+   "schemaVersion": 1
+  },
+  "vaultwarden": {
+   "schemaVersion": 1
+  },
+  "immich": {
+   "schemaVersion": 1
+  },
+  "file-share": {
+   "schemaVersion": 1
+  },
+  "claude-dev": {
+   "schemaVersion": 1
+  },
+  "pi-web": {
+   "schemaVersion": 1
+  },
+  "flutstunde": {
+   "schemaVersion": 1
+  }
+ },
+ "installedSecrets": "__REDACTED__ (9 entries)",
+ "installedVariables": [
+  {
+   "varName": "ZWAVE_DEVICE",
+   "value": "/dev/ttyACM9"
+  },
+  {
+   "varName": "HOST_GATEWAY_IP",
+   "value": "169.254.1.2"
+  },
+  {
+   "varName": "LLDAP_LDAP_PORT",
+   "value": "{{LLDAP_PORT_OVERRIDE}}",
+   "service": "auth"
+  },
+  {
+   "varName": "FLUTSTUNDE_PORT",
+   "value": "8092",
+   "service": "flutstunde"
+  },
+  {
+   "varName": "FLUTSTUNDE_SUBDOMAIN",
+   "value": "asteroids",
+   "service": "flutstunde"
+  },
+  {
+   "varName": "CLAUDE_DEV_CONFIG_PORT",
+   "value": "8790",
+   "service": "claude-dev"
+  },
+  {
+   "varName": "CLAUDE_DEV_PI_PORT",
+   "value": "8791",
+   "service": "claude-dev"
+  },
+  {
+   "varName": "PI_WEB_PORT",
+   "value": "8504",
+   "service": "pi-web"
+  },
+  {
+   "varName": "DB_PASSWORD",
+   "value": "",
+   "service": "immich",
+   "kind": "secret"
+  },
+  {
+   "varName": "STALE_SPIKE_PORT",
+   "value": "8710",
+   "service": "spike"
+  }
+ ]
+}
