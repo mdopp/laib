@@ -11,6 +11,12 @@ import json, os, socket, sys, time, urllib.request
 E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
 DOMAIN = E["LAIB_DOMAIN"]
+op = E["OPERATOR_USER"]
+# checked before anything is created: an empty password binds anonymously, which
+# proves nothing, and a name with DN specials ("," "+" ...) is another entry's DN
+if not op or set(op) & set(',+"\\<>;=') or op[0] in "# " or op[-1] == " " or \
+        not all(S(n) for n in ("LLDAP_ADMIN_PASSWORD", "OPERATOR_PASSWORD", "RADICALE_LDAP_PASSWORD")):
+    print(f"OPERATOR_USER {op!r} is not a name LDAP can address, or a password is empty: nothing seeded", file=sys.stderr); sys.exit(1)
 
 # seed LLDAP through its GraphQL API: groups, the operator's account
 def http(path, body=None, token=None):
@@ -81,7 +87,6 @@ for name in ("admins", "family"):
         groups[name] = gql("mutation($n:String!){ createGroup(name:$n){ id } }", {"n": name})["createGroup"]["id"]
         print("group created:", name)
 users = {u["id"] for u in gql("{ users { id } }")["users"]}
-op = E["OPERATOR_USER"]
 if op not in users:
     gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
         {"u": {"id": op, "email": E["OPERATOR_EMAIL"], "displayName": E.get("OPERATOR_DISPLAY", op)}})
