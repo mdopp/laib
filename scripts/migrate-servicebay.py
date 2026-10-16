@@ -34,6 +34,32 @@ CARRY = {
 }
 
 
+# Values the box set under ServiceBay's name that Laib's built-in takes under
+# its own, for the `laib add` line (#229). A blank LLDAP_BASE_DN is the one
+# ServiceBay derived from the domain.
+VALUES = {
+    "auth": {"LLDAP_BASE_DN": "BASE_DN"},
+    "radicale": {"LLDAP_BASE_DN": "BASE_DN"},
+    "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
+    "file-share": {"SHARE_USER": "SHARE_USER"},
+}
+PIN = "$(podman image inspect --format '{{index .RepoDigests 0}}' %s)"
+
+
+def builtin_values(builtins, name):
+    """values.example.yml's literals, and the image variables Laib updates itself (AutoUpdate=)."""
+    d = os.path.join(builtins, name)
+    vals = dict(re.findall(r"(?m)^([A-Z0-9_]+):\s*([^\s#!][^\s#]*)", open(os.path.join(d, "values.example.yml")).read()))
+    auto = set()
+    for f in os.listdir(d):
+        if f.endswith(".container"):
+            t = open(os.path.join(d, f)).read()
+            m = re.search(r"(?m)^Image=\$\{([A-Z0-9_]+)\}", t)
+            if m and re.search(r"(?m)^AutoUpdate=", t):
+                auto.add(m.group(1))
+    return vals, auto
+
+
 def find(template_dirs, name, filename):
     for d in template_dirs:
         p = os.path.join(d, name, filename)
@@ -76,7 +102,7 @@ def main():
     domain = rp.get("publicDomain", "")
     data_dir = cfg.get("templateSettings", {}).get("DATA_DIR", "/mnt/data/stacks").rstrip("/")
     installed = cfg.get("installedTemplates", {})
-    unmapped, carry = [], []
+    unmapped, carry, adds = [], [], []
 
     hosts_by_service = {}
     for h in rp.get("hosts", []):
@@ -166,11 +192,27 @@ def main():
             mine = re.findall(r"-\s*path:\s*(\S+)", open(os.path.join(a.builtins, name, "laib.yml")).read())
             for p in dict.fromkeys(data):
                 if p not in mine:
-                    unmapped.append(f"{name}: the box keeps data in {p}; the built-in does not mount it (move it or set the path)")
+                    unmapped.append(f"{name}: the box keeps data in {p}; the built-in does not mount it (scripts/move-servicebay-data.sh {name} copies what has a place in Laib's layout, docs/MIGRATION.md #229)")
         for sb, laib in CARRY.get(name, {}).items():
             if sb in decl:
                 carry.append(f"laib secret set {laib}   # ServiceBay: {sb} ({name})")
 
+        if builtin:   # the laib add line: the box's values, and a database's image pinned to what the box runs (#229)
+            bvals, auto = builtin_values(a.builtins, name)
+            add = []
+            for sb, key in VALUES.get(name, {}).items():
+                v = str(values.get(sb) or decl.get(sb, {}).get("default") or "")
+                if sb == "LLDAP_BASE_DN" and not v:
+                    v = ",".join("dc=" + p for p in domain.split("."))
+                if v and v != bvals.get(key):
+                    add.append(f"{key}={v}")
+            for img in re.findall(r"(?m)^\s*image:\s*(\S+)", open(tpath).read()) if tpath else []:
+                img = re.sub(r"\{\{\s*([A-Z0-9_]+)\s*\}\}", lambda m: str(resolved.get(m.group(1), m.group(0))), img)
+                repo, _, tag = img.rpartition(":")
+                for key, v in sorted(bvals.items()):
+                    if key not in auto and v.rpartition(":")[0] == repo and v.rpartition(":")[2] != tag:
+                        add.append(f"{key}={PIN % img}")
+            adds.append(" ".join([f"laib add {name}"] + add))
         head = f"# Laib has a built-in: `laib add {name}`, then compare with this draft.\n" if builtin else ""
         tmpl = f"{{registry: builtin, name: {name}}}" if builtin else f"{{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}"
         laib = [f"{head}name: {name}", f"template: {tmpl}", "migratedFrom: servicebay", "routes:" if routes else "routes: []"]
@@ -206,6 +248,11 @@ def main():
         print("\ncarry over before the first apply (the data was made with these; value on stdin):")
         for c in carry:
             print("  " + c)
+    if adds:
+        print("\nlaib add, once ServiceBay's unit is out and the data moved (scripts/move-servicebay-data.sh);")
+        print("the box's values, and each database's image pinned to the digest the box runs until a deliberate update:")
+        for l in adds:
+            print("  " + l)
     if unmapped:
         print("\nunmapped:")
         for u in unmapped:
