@@ -62,9 +62,16 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
    model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
-   immich, media, home-assistant** in that order: small and stateless first,
+   immich, media, home-assistant, chronik** in that order: small and stateless first,
    the ones with migrations last. Each one: `laib plan <name>`, read the diff,
    `laib apply <name>`, verify green, disable ServiceBay's unit.
+   **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
+   (`laib template sync`) and needs `llama` for the lease and `stimme` for
+   Piper. Its data moves once, before `laib add chronik` and with ServiceBay's
+   unit stopped (one Discord token, one bot): `${DATA_DIR}/daggerheart` →
+   `chronik/data`, `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never
+   moved; the commands are in foundry-chronicle's `templates/chronik/README.md`.
+   The Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template, same
    `/workspace` volume, so checkouts and sessions survive.
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
