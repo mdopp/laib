@@ -22,16 +22,14 @@ SECRET_TYPES = {"secret", "bcrypt", "rsa-private"}   # ServiceBay's own set (ins
 FORWARD_AUTH = "__authelia_forward_auth__"
 
 # Secrets whose value the existing data was made with: a new value locks the
-# app out of its own database or config (#228). ServiceBay name → Laib name.
-CARRY = {
-    "auth": {"LLDAP_ADMIN_PASSWORD": "LLDAP_ADMIN_PASSWORD", "AUTHELIA_STORAGE_ENCRYPTION_KEY": "AUTHELIA_STORAGE_KEY"},
-    "immich": {"DB_PASSWORD": "IMMICH_DB_PASSWORD"},
-    "paperless": {"PAPERLESS_DB_PASSWORD": "PAPERLESS_DB_PASSWORD"},
-    "mosquitto": {"MQTT_PASSWORD": "MQTT_PASSWORD"},
-    "media": {"JELLYFIN_ADMIN_PASSWORD": "JELLYFIN_ADMIN_PASSWORD"},
-    "adguard": {"ADGUARD_ADMIN_PASSWORD": "ADGUARD_ADMIN_PASSWORD"},
-    "file-share": {"SHARE_PASSWORD": "SAMBA_PASSWORD"},
-}
+# app out of its own database or config (#228). ServiceBay name → Laib name,
+# per service; the one table is carry-servicebay-secrets.sh's, which sets them.
+CARRY_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "carry-servicebay-secrets.sh")
+CARRY = {}
+for _line in open(CARRY_SCRIPT).read().split("TABLE='", 1)[1].split("'", 1)[0].splitlines():
+    if len(_line.split()) == 3:
+        _svc, _sb, _laib = _line.split()
+        CARRY.setdefault(_svc, {})[_sb] = _laib
 
 
 def find(template_dirs, name, filename):
@@ -169,7 +167,7 @@ def main():
                     unmapped.append(f"{name}: the box keeps data in {p}; the built-in does not mount it (move it or set the path)")
         for sb, laib in CARRY.get(name, {}).items():
             if sb in decl:
-                carry.append(f"laib secret set {laib}   # ServiceBay: {sb} ({name})")
+                carry.append((name, f"laib secret set {laib}   # ServiceBay: {sb} ({name})"))
 
         head = f"# Laib has a built-in: `laib add {name}`, then compare with this draft.\n" if builtin else ""
         tmpl = f"{{registry: builtin, name: {name}}}" if builtin else f"{{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}"
@@ -203,8 +201,9 @@ def main():
             open(os.path.join(d, "laib.yml"), "w").write(laib)
             open(os.path.join(d, "values.yml"), "w").write(vals)
     if carry:
-        print("\ncarry over before the first apply (the data was made with these; value on stdin):")
-        for c in carry:
+        print("\ncarry over before the first apply (the data was made with these), on the box as core while")
+        print("ServiceBay still runs: scripts/carry-servicebay-secrets.sh " + " ".join(dict.fromkeys(n for n, _ in carry)))
+        for _, c in carry:
             print("  " + c)
     if unmapped:
         print("\nunmapped:")
