@@ -1,0 +1,19 @@
+{
+ "VAULTWARDEN_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "vault",
+  "exposure": "public",
+  "proxyPort": "VAULTWARDEN_PORT",
+  "proxyConfig": {
+   "ssl_forced": true
+  },
+  "audience": "family"
+ },
+ "VAULTWARDEN_PORT": {
+  "type": "text",
+  "default": "8222"
+ },
+ "VAULTWARDEN_SSO_SECRET": {
+  "type": "secret"
+ }
+}
