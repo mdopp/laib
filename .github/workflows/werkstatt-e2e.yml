@@ -19,7 +19,8 @@ jobs:
       - run: podman --version
       - run: scripts/werkstatt-model.sh
   app:
-    runs-on: ubuntu-24.04
+    # podman 5 as on Fedora CoreOS: the auth template is a Quadlet .pod, which 24.04's podman 4.9 does not know
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
