@@ -41,6 +41,14 @@ case "$1" in
     [ -n "${SHIM_PODMAN_EXEC_FAIL:-}" ] && { echo "Error: container is not running (shim)" >&2; exit 125; }
     shift; c=$1; shift; echo "exec in $c: $*";;
   inspect) echo "running exit=0 image=shim";;
+  secret) # the box's podman secrets (#224), one file each; a value comes on stdin only
+    echo "podman $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; d="${SYSTEMCTL_LOG%/*}/podsec"; mkdir -p "$d"
+    case "$2" in
+      create) for a; do n=$p; p=$a; done; cat > "$d/$n";;
+      ls) ls "$d";;
+      inspect) shift 5; for n; do printf '%s "%s"\n' "$n" "$(cat "$d/$n")"; done;;
+      rm) rm "$d/$3";;
+    esac;;
   run) shift; envf=""; while [ $# -gt 0 ]; do case "$1" in --env-file) envf=$2; shift 2;; -v|-w|--network) shift 2;; --rm) shift;; ghcr.io/*) shift; break;; *) shift;; esac; done
        # a hook (with an env file) runs here; anything else in a container (caddy validate, #50) just succeeds
        [ -n "$envf" ] || { echo "podman run $*" >> "${SYSTEMCTL_LOG:-/dev/null}"; exit 0; }
@@ -86,7 +94,8 @@ LAIB_ACTOR=ops "$BIN" propose "e2e: three services" >/dev/null
 if LAIB_ACTOR=ops "$BIN" approve 1 >/dev/null 2>&1; then fail "ops approved its own proposal"; fi
 LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null || fail "approve #1 exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "unit not written"
-grep -q "cf-token" "$LAIB_QUADLET/caddy/caddy.container" || fail "secret not rendered on the box"
+grep -qx "cf-token" "$WORK/podsec/laib.caddy.caddy.LAIB_DNS_TOKEN" || fail "secret not on the box as a podman secret"
+if grep -rq "cf-token" "$LAIB_QUADLET"; then fail "a secret value in a Quadlet unit, which puts it on podman run's argv (#224)"; fi
 if grep -rq "cf-token" "$LAIB_HOME/state"; then fail "secret in state repo"; fi
 grep -q "daemon-reload" "$SYSTEMCTL_LOG" && grep -q "restart whoami.service" "$SYSTEMCTL_LOG" && grep -q "restart auth-pod.service" "$SYSTEMCTL_LOG" || fail "systemctl not driven"
 # a pod's containers restart through the pod unit, never one by one (--exit-policy stop, #36)
@@ -117,10 +126,12 @@ OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io
 echo "$OUT" | grep -q "already published" || fail "duplicate host not refused: $OUT"
 
 # --- 6. secret rotation
-OLD="$(grep -o 'TOKEN=[^ ]*' "$LAIB_QUADLET/whoami/whoami.container")"
+OLD="$(cat "$WORK/podsec/laib.whoami.whoami.TOKEN")"; N=$(wc -l < "$SYSTEMCTL_LOG")
 LAIB_ACTOR=human:e2e "$BIN" secret rotate WHOAMI_TOKEN >/dev/null || fail "rotate exit $?"
-NEW="$(grep -o 'TOKEN=[^ ]*' "$LAIB_QUADLET/whoami/whoami.container")"
-[ "$OLD" != "$NEW" ] || fail "rotate changed nothing"
+NEW="$(cat "$WORK/podsec/laib.whoami.whoami.TOKEN")"
+[ -n "$OLD" ] && [ "$OLD" != "$NEW" ] || fail "rotate changed nothing"
+tail -n +"$N" "$SYSTEMCTL_LOG" | grep -q "restart whoami.service" || fail "a rotated secret did not restart its unit"
+if grep -qF -e "$OLD" -e "$NEW" -e cf-token "$SYSTEMCTL_LOG"; then fail "a secret value on an argv (#224)"; fi
 if LAIB_ACTOR=ops "$BIN" secret rotate WHOAMI_TOKEN >/dev/null 2>&1; then fail "ops rotated"; fi
 
 # --- 7. template update: a proposal (#3); the template brings its health URL back,

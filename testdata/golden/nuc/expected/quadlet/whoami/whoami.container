@@ -5,7 +5,7 @@ Description=whoami — the smallest service with a route, SSO and a secret
 Image=docker.io/traefik/whoami:v1.10
 PublishPort=127.0.0.1:8080:80
 Environment=WHOAMI_NAME=whoami.nuc.home
-Environment=TOKEN=${secret:WHOAMI_TOKEN}
+Secret=laib.whoami.whoami.TOKEN,type=env,target=TOKEN
 AutoUpdate=registry
 
 [Service]
