@@ -199,7 +199,15 @@ def servicebay_install(f, items):
         raise RuntimeError(f"ServiceBay token: HTTP {st} {b[:200]!r}")
     bearer = {"Authorization": "Bearer " + tok}
     # the agent is connected when ServiceBay sees the box's containers through it
-    wait("ServiceBay's agent", lambda: b'servicebay' in req("GET", base + "/api/containers", headers=bearer)[1], tries=90, pause=2)
+    last = []
+    def agent():
+        last[:] = req("GET", base + "/api/containers", headers=bearer)[:2]
+        return b'servicebay' in last[1]
+    try:
+        wait("ServiceBay's agent", agent, tries=90, pause=2)
+    except RuntimeError:
+        print(f"GET /api/containers: HTTP {last[0]} {last[1][:400]!r}", file=sys.stderr)
+        raise
     for name in items:
         src, _, tmpl = name.rpartition("/")
         body = {"template": tmpl, "variables": f.get("vars", {}).get(tmpl, {})}
