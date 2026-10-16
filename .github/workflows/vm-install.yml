@@ -445,7 +445,9 @@ jobs:
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -H "Remote-User: admin" -X POST -o /dev/null -w "%{http_code}" https://files.vm.test/api/login || true)
                 echo "POST https://files.vm.test/api/login with a forged Remote-User, no session -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 303 ] || [ "$code" = 401 ]
                 # #230: a root-owned entry in the share (a disk import) stops no unit that mounts it
-                S=/mnt/data/stacks/file-share/data/music; sudo install -d -o root -g root "$S/import"; sudo touch "$S/import/root.flac"; stat -c "%U:%G %n" "$S/import/root.flac"
+                # a disk import brings its own label too; one equal to the share'"'"'s would let podman skip the file
+                S=/mnt/data/stacks/file-share/data/music; sudo install -d -o root -g root "$S/import"; sudo touch "$S/import/root.flac"; sudo chcon -t user_tmp_t "$S/import" "$S/import/root.flac"
+                getenforce; ls -dZn "$S" "$S/import" "$S/import/root.flac"
                 rc=0; podman run --rm -v "$S:/m:z" docker.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
                 echo "control, :z on the share -> rc $rc: $(tail -1 /tmp/relabel.txt)"; [ "$rc" != 0 ] || { echo "the VM does not reproduce the relabel failure; this step proves nothing"; exit 1; }
                 podman run --rm --security-opt label=disable -v "$S:/m" docker.io/library/busybox:stable ls /m/import; echo "labelling off, no :z -> starts"
