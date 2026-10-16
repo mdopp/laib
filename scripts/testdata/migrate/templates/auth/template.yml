@@ -6,8 +6,10 @@ metadata:
     servicebay.schema-version: "1"
 spec:
   containers:
-  - name: auth
-    image: example.invalid/app:1
+  - name: lldap
+    image: docker.io/lldap/lldap:latest
+  - name: authelia
+    image: docker.io/authelia/authelia:4
   volumes:
   - name: v0
     hostPath:

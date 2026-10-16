@@ -92,18 +92,97 @@ file moves out.
       ```
       For `llama`, `llama-embed.service` is stopped and `llama-embed.container`
       moved out with it.
-   b. Carry its secrets over (#228) and move its data into Laib's layout
+   b. Carry its secrets over (#228) and, where "Data that moves into
+      Laib's layout" lists it, `scripts/move-servicebay-data.sh <name>`
       (#229).
-   c. `laib add <name>` (it applies). `laib plan` shows no `KONFLIKT`, the
-      apply ends green, the app shows the old data.
-5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template, same
-   `/workspace` volume, so checkouts and sessions survive.
+   c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
+      (the box's values, a database's image pinned; it applies). `laib plan`
+      shows no `KONFLIKT`, the apply ends green, the app shows the old data.
+5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template; their git
+   checkouts are copied into the Werkstatt's workspace (below). Their
+   sessions and SSH host keys are an open decision (below).
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
    they go off in Phase 5 (#160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    ServiceBay's assist catalog: there is no import tool yet; what happens to
    it is decided in #160.
+
+## Data that moves into Laib's layout (#229)
+
+The built-ins keep their own layout. They do not learn ServiceBay's paths;
+the data moves into theirs once, per service, after ServiceBay's unit is out
+(step 4) and before `laib add`:
+
+```sh
+scripts/move-servicebay-data.sh --dry-run <service>   # what it would do
+scripts/move-servicebay-data.sh <service>             # on the box, as core
+```
+
+It **copies** and never moves. ServiceBay's paths stay as they were, so
+handing a service back is re-enabling its unit, and they go with ServiceBay's
+data dir after 30 days. Two files are edited in place, and their ServiceBay
+version is kept beside them as `<file>.servicebay`; a rollback puts those
+back. It refuses a service whose ServiceBay file is still in the Quadlet
+root, whose ServiceBay unit still runs (the wrapper reads the running units
+from `systemctl --user`; a live database copied is no copy), whose target
+already holds data, or whose copy does not fit with 1 GiB to spare, before
+writing anything of it. Each target is copied into `<target>.partial`, synced
+and renamed, so a copy cut off by a power cut or an error is never where the
+built-in starts on it; the next run clears the `.partial` and copies again. A
+second run of a finished service is refused: its targets hold data.
+Ownership is kept as the container uids have it (the copy runs as root in the
+laib-hooks image); SELinux labels are set by the built-in's `:z` on its first
+start; sockets and FIFOs are left out, hardlinks become copies.
+
+| Service | ServiceBay on the box | Laib | Step |
+|---|---|---|---|
+| vaultwarden | `vaultwarden/` (db.sqlite3, rsa_key.pem in it) | `vaultwarden/data` | copied |
+| home-assistant | `home-assistant/matter-server` | `home-assistant/matter` | copied: the Matter fabric survives |
+| home-assistant | Z-Wave JS server on 3001 through `sb-external-settings.json` (3000 was NPM's) | zwave-js-ui's own `settings.json`, its default 3000 | edited; Home Assistant's Z-Wave JS entry (`.storage/core.config_entries`) follows to `:3000` |
+| file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
+| file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
+| werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
+
+Everything else the built-ins mount sits at ServiceBay's paths already (auth,
+adguard, the Home Assistant config and the Z-Wave store, immich upload and
+pgdata, paperless, radicale, media, mosquitto, beets, esphome, llama) and is
+adopted in place.
+
+**Values and images.** `scripts/migrate-servicebay.py` prints one
+`laib add <name> …` line per built-in. It carries the box's values under
+Laib's names: `BASE_DN` from `LLDAP_BASE_DN` (ServiceBay derived a blank one
+from the domain), `MQTT_USER` from `MQTT_USERNAME` (the box's is `mqtt`), and
+`SHARE_USER`. **The migration never downgrades a database.** If the box runs
+another tag than the built-in's default for a container Laib does not update
+itself (the ones that keep a database), the line pins the digest the box
+runs: `LLDAP_IMAGE=$(podman image inspect --format '{{index .RepoDigests 0}}'
+docker.io/lldap/lldap:latest) && laib add auth … LLDAP_IMAGE=$LLDAP_IMAGE`, so
+an image the box no longer has, or one without a registry digest, stops the
+line instead of adding the service with a blank image. This covers LLDAP `:latest` against
+`:stable`, Paperless `:beta` against `:latest` and Authelia `:latest` against
+`:4`. Moving to the built-in's tag later is a deliberate update, a values
+change with its snapshot.
+
+**Open, the operator's decision (#229).** Until it is made, the default
+applies:
+
+- **Immich's external libraries.** The box mounts all of `file-share/data`
+  at `/mnt/photos`, and the libraries are `/mnt/photos/<user>/photos` and
+  `/mnt/photos/photos`. The built-in mounts `PHOTOS_RO`, by default
+  `file-share/data/photos`, there. Default: those library paths no longer
+  exist and Immich marks their assets offline.
+- **Samba's per-user accounts.** ServiceBay synced LLDAP users into Samba;
+  the built-in has the one `SHARE_USER`. Default: devices mount with that
+  account; the personal ones are gone after the first restart.
+- **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`).
+  The built-in declares no `oidc:`, so Authelia no longer knows the client.
+  Default: the login button fails, and users log in with their Home
+  Assistant password. A user who only ever used Authelia needs one set
+  before the move.
+- **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
+  `/workspace`; the Werkstatt keeps its home in the image. Default: sessions
+  start fresh, and the host key changes once (the app asks to trust it again).
 
 ## What does not move
 
@@ -161,6 +240,9 @@ default is `homeassistant`, so `laib add mosquitto MQTT_USER=mqtt`.
 Every `laib apply` snapshots first. Handing a service back to ServiceBay is
 `laib remove <name>`, then its files back from `~/servicebay-units/` into the
 Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
-<name>.service`; NPM comes back the same way until step 7. After step 7,
+<name>.service`. ServiceBay's data paths were only copied from, so they are as
+it left them; for home-assistant, first put the two `<file>.servicebay` files
+back (zwave-js `settings.json`, `.storage/core.config_entries`). NPM comes back
+the same way until step 7. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
