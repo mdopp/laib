@@ -128,6 +128,11 @@
    "service": "auth"
   },
   {
+   "varName": "LLDAP_BASE_DN",
+   "value": "dc=box,dc=test",
+   "service": "auth"
+  },
+  {
    "varName": "FLUTSTUNDE_PORT",
    "value": "8092",
    "service": "flutstunde"

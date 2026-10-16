@@ -9,8 +9,8 @@ metadata:
         - samba-private
 spec:
   containers:
-  - name: file-share
-    image: example.invalid/app:1
+  - name: samba
+    image: docker.io/servercontainers/samba:smbd-only
   volumes:
   - name: v0
     hostPath:
