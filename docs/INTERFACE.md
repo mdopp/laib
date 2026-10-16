@@ -7,7 +7,7 @@ the Solaris cards are views on it.
 
 ```
 laib status [service] [--watch]      one line per service; first line is the readiness state
-laib logs <service> [--since 1h]     journald + container logs, secrets redacted
+laib logs <service> [--since 1h]     journald of every unit, the containers' output in it (podman log driver journald), secrets redacted
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
