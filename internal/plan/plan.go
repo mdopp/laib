@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -32,7 +33,7 @@ type Change struct {
 type Plan struct {
 	Changes   []Change      `json:"changes"`
 	Unmanaged []string      `json:"unmanaged"`
-	Conflicts []string      `json:"conflicts,omitempty"` // unit names another generator source would also produce
+	Conflicts []string      `json:"conflicts,omitempty"` // foreign units that run one of the services too (#227)
 	Services  []string      `json:"services"`            // services with at least one change
 	Only      string        `json:"only,omitempty"`
 	Output    render.Output `json:"-"`
@@ -152,31 +153,62 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	return p, nil
 }
 
+// A foreign unit's Pod YAML, host ports (PublishPort=[ip:]host:ctr, a Pod
+// YAML's hostPort) and host paths (Volume=src:…, a hostPath's path).
+var (
+	yamlRe     = regexp.MustCompile(`(?m)^Yaml=(.+)$`)
+	hostPortRe = regexp.MustCompile(`(?m)(?:^PublishPort=(?:[0-9.]+:)?(\d+):|hostPort:\s*(\d+))`)
+	hostPathRe = regexp.MustCompile(`(?m)(?:^Volume=|^\s*path:\s*)(/[^\s:#]*)`)
+)
+
 // unitConflicts finds Quadlet files in the directory root (ServiceBay's
-// <name>.kube, a hand-rolled <name>.container) that would generate the same
-// unit name as one of this state's services. Quadlet derives the unit name
-// from the file name, not the folder, so both sources cannot coexist: the
-// old file must go before apply (docs/MIGRATION.md, one owner per service).
+// <name>.kube with its Yaml=, a hand-rolled <name>.container) that would run
+// beside one of this state's services (#227): the same base name (auth.kube
+// is Laib's auth whatever units Laib generates for it), the same unit name, a
+// host port the service publishes, or one of its backed-up data paths (the
+// backup:false shared tree is shared on purpose, ADR 0017). Two control
+// planes on one service cannot coexist: the old unit is stopped and its file
+// moved out before apply (docs/MIGRATION.md, one owner per service).
 func unitConflicts(st *state.State, paths boxfs.Paths) []string {
 	entries, _ := os.ReadDir(paths.Quadlet)
-	rootUnits := map[string]string{}
+	var out []string
 	for _, e := range entries {
-		if e.IsDir() {
+		file, ext := e.Name(), filepath.Ext(e.Name())
+		base := strings.TrimSuffix(file, ext)
+		unit := map[string]string{".container": base + ".service", ".kube": base + ".service", ".pod": base + "-pod.service"}[ext]
+		if e.IsDir() || unit == "" {
 			continue
 		}
-		base := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
-		switch filepath.Ext(e.Name()) {
-		case ".container", ".kube":
-			rootUnits[base+".service"] = e.Name()
-		case ".pod":
-			rootUnits[base+"-pod.service"] = e.Name()
+		b, _ := os.ReadFile(filepath.Join(paths.Quadlet, file))
+		text := string(b)
+		if m := yamlRe.FindStringSubmatch(text); m != nil {
+			y := strings.TrimSpace(m[1])
+			if !filepath.IsAbs(y) {
+				y = filepath.Join(paths.Quadlet, y)
+			}
+			b, _ = os.ReadFile(y)
+			text += string(b)
 		}
-	}
-	var out []string
-	for _, name := range st.ServiceNames() {
-		for _, u := range st.Services[name].UnitNames() {
-			if file, ok := rootUnits[u]; ok {
-				out = append(out, fmt.Sprintf("%s: %s would also be generated from %s", name, u, file))
+		for _, name := range st.ServiceNames() {
+			c := st.Services[name].Contract
+			var why []string
+			if base == name || slices.Contains(st.Services[name].UnitNames(), unit) {
+				why = append(why, unit)
+			}
+			for _, m := range hostPortRe.FindAllStringSubmatch(text, -1) {
+				if slices.ContainsFunc(c.Ports, func(p state.Port) bool { return fmt.Sprint(p.Port) == m[1]+m[2] }) {
+					why = append(why, "host port "+m[1]+m[2])
+				}
+			}
+			for _, m := range hostPathRe.FindAllStringSubmatch(text, -1) {
+				if slices.ContainsFunc(c.Data, func(d state.DataPath) bool {
+					return (d.Backup == nil || *d.Backup) && strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir) == strings.TrimRight(m[1], "/")
+				}) {
+					why = append(why, "data "+m[1])
+				}
+			}
+			if why != nil {
+				out = append(out, fmt.Sprintf("%s: %s runs it too (%s)", name, file, strings.Join(why, ", ")))
 			}
 		}
 	}
