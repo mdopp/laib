@@ -10,7 +10,7 @@ import (
 // #46: a service with a database never auto-updates — podman's rollback
 // restores the image, not the migrated data. Stateless services may.
 func TestStatefulTemplatesDoNotAutoUpdate(t *testing.T) {
-	stateful := []string{"immich", "paperless", "vaultwarden", "home-assistant", "auth", "radicale", "audiobookshelf", "media", "beets"}
+	stateful := []string{"immich", "paperless", "vaultwarden", "home-assistant", "auth", "radicale", "audiobookshelf", "media", "beets", "usage-metrics"}
 	for _, name := range stateful {
 		units, _ := filepath.Glob(filepath.Join("..", "..", "templates", name, "*.container"))
 		if len(units) == 0 {
