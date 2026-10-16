@@ -205,7 +205,7 @@ for admins only, and an intake repo may be public) are code, not prompt.
   ten-minute watch) without switching the Operator off, and the new weekly
   skill only proposes.
 - **What it costs:** one more concept and one more file kind; a second
-  narrowing (the header) on top of the ceiling; about 250 kernel lines for
+  narrowing (the header) on top of the ceiling; about 400 kernel lines for
   the registry, the switch and the wish proposal.
 
 ### Rejected
