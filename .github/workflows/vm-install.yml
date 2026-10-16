@@ -399,9 +399,21 @@ jobs:
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
                 for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
+                # #245: a box from ServiceBay. Its Authelia file, with the client of an app not in Laib yet and its
+                # signing key, sits where auth pre-start writes Laib config
+                sb=/mnt/data/stacks/auth/authelia-config; mkdir -p "$sb"
+                podman run --rm "${{ env.HOOKS }}" openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > /tmp/sb-key.pem
+                { printf "identity_providers:\n  oidc:\n    hmac_secret: sb-vm-hmac\n    jwks:\n      - key_id: main\n        algorithm: RS256\n        use: sig\n        key: |\n"
+                  sed "s/^/          /" /tmp/sb-key.pem
+                  printf "    clients:\n      - client_id: sbvm\n        client_name: ServiceBay app\n        client_secret: \"\$plaintext\$sb-vm-secret\"\n        public: false\n        authorization_policy: one_factor\n        redirect_uris:\n          - https://sbvm.vm.test/callback\n        scopes: [openid, profile, email]\n"
+                } > "$sb/configuration.yml"
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
                 grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
+                test -s "$sb/servicebay-clients.yml" || { echo "the ServiceBay clients were not kept (#245)"; exit 1; }
+                cmp -s /tmp/sb-key.pem "$sb/oidc.pem" || { echo "the ServiceBay signing key was not kept (#245)"; exit 1; }
+                grep -q "client_id: sbvm" "$sb/oidc-clients.yml" || { echo "the kept client is not registered (#245)"; exit 1; }
+                grep -q "still ServiceBay.*sbvm" /tmp/add-auth.txt || { echo "the apply does not say which clients are still ServiceBay (#245)"; exit 1; }
                 grep -q "lldap seeded" /tmp/add-auth.txt || { echo "the hook output does not say LLDAP was seeded"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
@@ -433,6 +445,10 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #245: the kept client is live in Authelia: an authorization request for it goes to the login, with a flow
+                loc=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{redirect_url}" "https://auth.vm.test/api/oidc/authorization?client_id=sbvm&response_type=code&redirect_uri=https://sbvm.vm.test/callback&scope=openid&state=vm245state" || true)
+                echo "authorization for the kept ServiceBay client -> $loc"
+                case "$loc" in https://auth.vm.test/*flow_id=*) ;; *) echo "Authelia does not know the kept ServiceBay client (#245)"; exit 1;; esac
                 $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |

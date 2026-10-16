@@ -71,9 +71,20 @@ file moves out.
    Authelia's config is still ServiceBay's at this point and stays compatible
    because the rules are Authelia's, not the proxy's (ServiceBay ADR 0005, 0006).
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
-   `auth.kube` out first, then `laib add auth`. OIDC clients are rendered
-   from every `services/*/laib.yml`, which at this point is the full list,
-   so no client is dropped (the #1724 failure class cannot occur).
+   `auth.kube` out first, then `laib add auth`. Only the services already
+   in Laib's state have Laib clients at this point, so the apps still on
+   ServiceBay keep theirs another way (#245): auth's pre-start finds
+   ServiceBay's `authelia-config/configuration.yml`, the file it is about to
+   overwrite, keeps its `clients:` once in `servicebay-clients.yml` and its
+   signing key as `oidc.pem`, and registers each kept client, verbatim with
+   ServiceBay's secret, until a Laib service declares the same client id.
+   Then that service's client is Laib's: same id, Laib's secret, which the
+   service's own unit or hook hands to the app (Vaultwarden's environment,
+   Immich's settings, Home Assistant's `auth_oidc`). The apply prints which
+   clients are still ServiceBay's. The signing key stays, so the JWKS and
+   every token an app holds stay valid. From here on, a client ServiceBay
+   registers itself is ignored (Authelia reads the clients from
+   `oidc-clients.yml`): install no new SSO app through ServiceBay.
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
@@ -105,6 +116,8 @@ file moves out.
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
    they go off in Phase 5 (#160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
+   Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own
+   `servicebay` client and any app that never moved), then `laib apply auth`.
    ServiceBay's assist catalog: there is no import tool yet; what happens to
    it is decided in #160.
 

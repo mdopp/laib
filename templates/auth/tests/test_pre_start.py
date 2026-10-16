@@ -8,7 +8,7 @@ the JWKS and the tokens the apps hold stay valid.
 Authelia replaces a list from a later config file instead of merging it
 (koanf's Merge), so Laib's clients and the carried ones are one list, in one
 file pre-start writes (oidc-clients.yml)."""
-import os, re, subprocess, tempfile, unittest
+import os, re, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "pre-start"
@@ -83,7 +83,7 @@ class PreStart(unittest.TestCase):
 
     def run_hook(self, *laib_ids):
         (self.render / "authelia" / "laib-clients.yml").write_text(laib_clients(*laib_ids))
-        p = subprocess.run([str(HOOK)], env=self.env, capture_output=True, text=True, timeout=120)
+        p = subprocess.run([sys.executable, str(HOOK)], env=self.env, capture_output=True, text=True, timeout=120)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         return p, (self.cfg / "oidc-clients.yml").read_text(), (self.cfg / "configuration.yml").read_text()
 
