@@ -261,7 +261,8 @@ def main():
     idb = call("GET", b + "/system/status", key=kb)["myID"]
     call("POST", a + "/config/devices", {"deviceID": idb, "name": "phone", "addresses": ["tcp://127.0.0.1:22101"]}, key=ka)
     call("POST", b + "/config/devices", {"deviceID": ida, "name": "box", "addresses": ["tcp://127.0.0.1:22100"]}, key=kb)
-    folders = {"alice-cam": ("alice/photos/Camera", 3), "fotos": ("photos", 3)}
+    folders = {fid: (rel, sum(len(fs) for _, _, fs in os.walk(os.path.join(FS, rel))))
+               for fid, rel in (("alice-cam", "alice/photos/Camera"), ("fotos", "photos"))}
     for fid, (rel, _) in folders.items():
         common = {"id": fid, "label": fid, "type": "sendreceive", "fsWatcherEnabled": False, "rescanIntervalS": 3600,
                   "devices": [{"deviceID": ida}, {"deviceID": idb}]}
