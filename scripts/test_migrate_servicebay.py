@@ -118,6 +118,16 @@ class Migrate(unittest.TestCase):
         self.assertIn("laib secret set LLDAP_ADMIN_PASSWORD", self.stdout)
         self.assertNotIn("laib secret set PAPERLESS", self.stdout)    # paperless is not installed here
 
+    def test_add_line_pins_db_bearing_images_and_carries_values(self):
+        # #229: a DB-bearing container (no AutoUpdate in the built-in) whose box tag
+        # differs is pinned to the digest the box runs; the same tag is not, nor
+        # one Laib updates itself; the box's base DN goes under Laib's name
+        line = next((l for l in self.stdout.splitlines() if l.strip().startswith("laib add auth ")), "")
+        self.assertIn("LLDAP_IMAGE=$(podman image inspect --format '{{index .RepoDigests 0}}' docker.io/lldap/lldap:latest)", line)
+        self.assertIn("BASE_DN=dc=box,dc=test", line)
+        self.assertNotIn("AUTHELIA_IMAGE", line)
+        self.assertNotIn("SAMBA_IMAGE", self.stdout)
+
     def test_no_secret_value_is_written(self):
         for d in self.out.iterdir():
             for f in d.iterdir():
