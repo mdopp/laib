@@ -192,12 +192,8 @@ def servicebay_install(f, items):
     cookie = "; ".join(c.split(";")[0] for c in (h.get_all("Set-Cookie") or []))
     if st not in (200, 204) or "session=" not in cookie:
         raise RuntimeError(f"ServiceBay login: HTTP {st}")
-    st, b, _ = req("POST", base + "/api/system/api-tokens", {"name": "generalprobe", "scopes": ["read", "lifecycle", "mutate"],
-                   "expiresAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 86400))}, headers={"Origin": base, "Cookie": cookie})
-    tok = (js(b) or {}).get("secret")
-    if not tok:
-        raise RuntimeError(f"ServiceBay token: HTTP {st} {b[:200]!r}")
-    bearer = {"Authorization": "Bearer " + tok}
+    # the operator's browser session: a cookie, and the Origin ServiceBay's CSRF gate wants
+    bearer = {"Cookie": cookie, "Origin": base}
     # the agent is connected when ServiceBay sees the box's containers through it
     last = []
     def agent():
