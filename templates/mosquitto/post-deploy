@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# mosquitto.conf and the password file (hashed with the image's own mosquitto_passwd).
+# post-deploy (#221): the password file, hashed by the image's own
+# mosquitto_passwd inside the running broker. This hook has no podman: laib
+# runs the laib-exec lines below in the broker's container, in order, after
+# the hook exits. The password travels in the 0600 file, never on their argv,
+# where ps shows it to every user on the box (#214). The file is written in
+# plain text on every run, so -U never hashes a hash; SIGHUP to the broker
+# (PID 1) reloads it.
 set -euo pipefail
-C="$LAIB_DATA_DIR/mosquitto/config"; mkdir -p "$C" "$LAIB_DATA_DIR/mosquitto/data"
-cat > "$C/mosquitto.conf" <<CFG
-# rendered by laib post-deploy (templates/mosquitto)
-listener 1883
-allow_anonymous false
-password_file /mosquitto/config/passwd
-persistence true
-persistence_location /mosquitto/data/
-log_dest stdout
-CFG
-printf '%s:%s\n' "$MQTT_USER" "$LAIB_SECRET_MQTT_PASSWORD" > "$C/passwd.plain"
-podman run --rm -v "$C:/cfg:z" "${IMAGE:-docker.io/library/eclipse-mosquitto:2}" sh -c "cp /cfg/passwd.plain /cfg/passwd && mosquitto_passwd -U /cfg/passwd" >/dev/null
-rm -f "$C/passwd.plain"; chmod 600 "$C/passwd"
-echo "mosquitto config and passwd rendered for $MQTT_USER"
+C="$LAIB_DATA_DIR/mosquitto/config"
+(umask 077; printf '%s:%s\n' "$MQTT_USER" "$LAIB_SECRET_MQTT_PASSWORD" > "$C/passwd")
+chmod 600 "$C/passwd"
+echo "laib-exec: systemd-mosquitto mosquitto_passwd -U /mosquitto/config/passwd"
+echo "laib-exec: systemd-mosquitto chown mosquitto:mosquitto /mosquitto/config/passwd"
+echo "laib-exec: systemd-mosquitto kill -HUP 1"
+echo "mosquitto passwd written for $MQTT_USER; the broker hashes and reloads it"

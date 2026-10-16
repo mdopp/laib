@@ -1,7 +1,8 @@
 name: mosquitto
 template: {registry: builtin, name: mosquitto, version: 1}
 provides: [mqtt]
-# MQTT broker for devices and Home Assistant. Password file from the hook.
+# MQTT broker for devices and Home Assistant. mosquitto.conf from pre-start,
+# the password file from post-deploy, hashed in the broker (#221).
 # 1883 is open to the LAN on purpose: devices on Wi-Fi publish into it.
 routes: []
 secrets:
