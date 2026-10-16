@@ -17,11 +17,19 @@ things cannot be shared:
    data as Laib's `auth/` units, whatever those are called. `laib plan`
    reports `KONFLIKT` for every file in the Quadlet root that would run a
    service of the state beside Laib: the same name or unit name, a host port
-   the service publishes, or one of its backed-up data paths (a `.kube` is
-   read with its `Yaml=`; the `backup: false` shared tree is shared on
-   purpose). While one is reported, every `laib apply` refuses, so
-   ServiceBay's unit is stopped and its files moved out **before** the
-   service goes into the state (step 4).
+   the service publishes (`PublishPort=`, `hostPort:`, a host-network pod's
+   `containerPort:`), or a host path at, inside or above one of its
+   backed-up data paths (`Volume=`, `Mount=`, a `hostPath`; a `.kube` is
+   read with its `Yaml=`). What lies at or below a `backup: false` path is
+   shared on purpose: the shared tree `file-share/data` with its folders,
+   which Immich, Jellyfin, Beets and Solaris read and write. While one is
+   reported, every `laib apply` refuses before it generates a secret or
+   writes a file, so ServiceBay's unit is stopped and its files moved out
+   **before** the service goes into the state (step 4). A `laib add` that
+   refuses has already put the service into the state: move the file out,
+   then `laib apply`. Not seen: a host-network `.container` declares no
+   ports, so ServiceBay's `llama-embed.container` (11436, Laib's llama's
+   embeddings port) is caught by nothing; it goes out with `llama` (step 4).
 2. **Ports 80/443.** Caddy starts on alternative ports beside NPM (step 2).
 3. **Whole-file configs.** Authelia, AdGuard rewrites and the SSH port 2222
    (claude-dev vs Werkstatt) move as a whole, never half.
@@ -82,6 +90,8 @@ file moves out.
       mv ~/.config/containers/systemd/<name>.kube ~/.config/containers/systemd/<name>.yml ~/servicebay-units/   # or <name>.container
       systemctl --user daemon-reload
       ```
+      For `llama`, `llama-embed.service` is stopped and `llama-embed.container`
+      moved out with it.
    b. Carry its secrets over (#228) and, where "Data that moves into
       Laib's layout" lists it, `scripts/move-servicebay-data.sh <name>`
       (#229).

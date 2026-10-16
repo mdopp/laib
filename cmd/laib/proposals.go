@@ -64,8 +64,10 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 		return fail(err)
 	}
 	changed := false
+	// a refused apply (#227) generates and mints nothing: the plan below refuses
+	conflict := len(plan.Conflicts(st, env.paths)) > 0
 	for _, s := range render.SecretNames(st) {
-		if _, ok := sec[s.Name]; ok {
+		if _, ok := sec[s.Name]; ok || conflict {
 			continue
 		}
 		if s.External {
