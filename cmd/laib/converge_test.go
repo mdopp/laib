@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,12 +46,26 @@ func newCbox(t *testing.T) *cbox {
 	c := &cbox{env: &cliEnv{paths: paths, actor: "human:test"}, down: map[string]bool{}}
 	real := sysd.Run
 	t.Cleanup(func() { sysd.Run = real })
-	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+	podSecrets := map[string]string{} // the box's podman secrets (#224)
+	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		line := name + " " + strings.Join(args, " ")
 		c.calls = append(c.calls, line)
 		switch {
 		case name == "git":
 			return runGitCmd(t, args...)
+		case strings.HasPrefix(line, "podman secret create"):
+			podSecrets[args[len(args)-2]] = sysd.Stdin(ctx) // create [--replace] <name> -
+		case strings.HasPrefix(line, "podman secret rm"):
+			delete(podSecrets, args[2])
+		case strings.HasPrefix(line, "podman secret ls"):
+			return strings.Join(slices.Sorted(maps.Keys(podSecrets)), "\n"), nil
+		case strings.HasPrefix(line, "podman secret inspect"):
+			var out []string
+			for _, n := range args[5:] {
+				v, _ := json.Marshal(podSecrets[n])
+				out = append(out, n+" "+string(v))
+			}
+			return strings.Join(out, "\n"), nil
 		case strings.Contains(line, "is-active"):
 			if c.down[args[len(args)-1]] {
 				return "inactive", nil

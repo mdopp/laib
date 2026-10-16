@@ -107,7 +107,14 @@ func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
 			t.Fatal(err)
 		}
 		unit := out["quadlet/haus/haus.container"]
-		for _, want := range []string{"\nEnvironment=HAUS_BOTE_URL=http://host.containers.internal:8642/v1\n", "\nEnvironment=HAUS_BOTE_KEY=" + c.key + "\n"} {
+		key := "\nEnvironment=HAUS_BOTE_KEY=\n"
+		if c.key != "" { // a podman secret since #224
+			key = "\nSecret=laib.haus.haus.HAUS_BOTE_KEY,type=env,target=HAUS_BOTE_KEY\n"
+			if v := render.PodmanSecrets(st, c.secrets)["laib.haus.haus.HAUS_BOTE_KEY"]; v != c.key {
+				t.Errorf("the HAUS_BOTE_KEY secret holds %q, want %q", v, c.key)
+			}
+		}
+		for _, want := range []string{"\nEnvironment=HAUS_BOTE_URL=http://host.containers.internal:8642/v1\n", key} {
 			if !strings.Contains(unit, want) {
 				t.Errorf("haus.container lacks %q:\n%s", strings.TrimSpace(want), unit)
 			}

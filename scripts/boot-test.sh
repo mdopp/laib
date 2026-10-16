@@ -12,6 +12,7 @@ export LAIB_QUADLET="${LAIB_QUADLET:-$HOME/.config/containers/systemd}"
 export LAIB_SYSTEMD="${LAIB_SYSTEMD:-$HOME/.config/systemd/user}"
 cleanup() {
   systemctl --user stop whoami.service 2>/dev/null || true
+  podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   rm -rf "$LAIB_QUADLET/whoami" "$WORK"
   systemctl --user daemon-reload 2>/dev/null || true
 }
@@ -65,6 +66,18 @@ UNIT
 "$BIN" plan > plan.out; head -5 plan.out   # no pipe: head closing early made plan die of SIGPIPE under pipefail (exit 141)
 LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test" || { echo "apply exit $?"; journalctl --user -u whoami.service --no-pager | tail -20; exit 1; }
 curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: whoami does not answer with its name"; exit 1; }
+# #224: the token is a podman secret: in the container's environment (whoami's ?env=true), in no unit
+# file, on no podman run argv; a rotation replaces it and restarts the container with the new value
+tokenOK() {
+  local tok; tok="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.whoami.whoami.TOKEN)"
+  [ -n "$tok" ] && [ "$tok" != "$1" ] || { echo "FAIL: no podman secret for TOKEN, or the old value" >&2; exit 1; }
+  curl -fsS "http://127.0.0.1:18080/?env=true" | grep -qF "TOKEN=$tok" || { echo "FAIL: the container's TOKEN is not the podman secret" >&2; exit 1; }
+  if grep -rqF -- "$tok" "$LAIB_QUADLET/whoami" || podman inspect systemd-whoami --format "{{.Config.CreateCommand}}" | grep -qF -- "$tok"; then echo "FAIL: the token is in the unit or on podman run's argv" >&2; exit 1; fi
+  echo "$tok"
+}
+TOK="$(tokenOK "")"
+LAIB_ACTOR=human:boot "$BIN" secret rotate WHOAMI_TOKEN >/dev/null || { echo "FAIL: rotate exit $?"; exit 1; }
+tokenOK "$TOK" >/dev/null
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
 "$BIN" logs whoami --since 10m | grep -qi "whoami" || { echo "FAIL: no journald lines"; exit 1; }

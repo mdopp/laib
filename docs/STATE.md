@@ -279,6 +279,30 @@ nothing), and a hook gets `LAIB_SECRET_<NAME>=` and the empty `KEY`. It is
 never the placeholder text. A consumer reads empty as absent. Caddy's
 `DNS_API_TOKEN` is the case: needed only when `dns.provider` is set.
 
+### Secrets reach containers as podman secrets (#224)
+
+Quadlet turns every `Environment=` line into `podman run --env`, and `ps`
+shows that argv to every user on the box. So an `Environment=` line of a
+`.container` that names a secret-backed value (a `!secret`, or the builtin
+`MODEL_KEY`) renders as `Secret=laib.<service>.<container>.<KEY>,type=env,target=<KEY>`;
+the container's environment is the same. Plan compares each such podman
+secret with the box (`podman secret inspect --showsecret`): a missing one
+or another value is a change of its service, apply hands the value to
+`podman secret create` (`--replace` for a new value) on stdin before the units start and
+restarts the service; a `laib.*` secret nothing names any more is removed
+after its unit stopped. An apply cut off in between is finished by the next
+plan (the value still differs) or the pending marker. An empty value stays
+`Environment=KEY=`: podman refuses an empty secret. Host units (`.service`)
+keep `Environment=`: systemd sets it without an argv, in a 0600 file.
+A key built from a value (`ACCOUNT_${SHARE_USER}`) can hold what podman
+refuses in a name, or a dot that would make two lines one name: such a line
+gets `laib.<service>.<hash of container and key>` instead. A secret line
+holds one assignment, read as systemd reads it (blanks around `=`, quotes
+dropped); two assignments, or a key with a comma, quote or blank (podman
+cannot target it), fail the render. With no secret values at all (lint, a
+missing `secrets.age`) plan compares no podman secrets, so it never removes
+their last copy.
+
 ### Backup target by default
 
 `laib init` writes `backup.repo` as a restic repo on the data disk

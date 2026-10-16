@@ -406,6 +406,13 @@ jobs:
                 test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
                 systemctl --user is-active auth-authelia.service auth-lldap.service
+                # #224: LLDAP's JWT secret is a podman secret — in the container's environment, the same
+                # value plan reads back, and on no podman run argv nor in any unit file
+                jwt=$(podman exec systemd-auth-lldap sh -c "printf %s \"\$LLDAP_JWT_SECRET\""); [ -n "$jwt" ] || { echo "LLDAP has no LLDAP_JWT_SECRET"; exit 1; }
+                [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-lldap.LLDAP_JWT_SECRET)" = "$jwt" ] || { echo "the podman secret and the container disagree"; exit 1; }
+                if podman inspect systemd-auth-lldap --format "{{.Config.CreateCommand}}" | grep -qF -- "$jwt"; then echo "LLDAP_JWT_SECRET is on podman run argv (#224)"; exit 1; fi
+                if grep -rqF -- "$jwt" ~/.config/containers/systemd/; then echo "a unit file carries LLDAP_JWT_SECRET (#224)"; exit 1; fi
+                echo "LLDAP_JWT_SECRET reaches LLDAP as a podman secret, off argv"
                 $L add adguard | tee /tmp/add-adguard.txt
                 grep -q "^ok  adguard pre-start" /tmp/add-adguard.txt || { echo "adguard pre-start is not green"; exit 1; }
                 grep -q "rewrites in step" /tmp/add-adguard.txt || { echo "post-deploy did not sync the rewrites through the API"; exit 1; }
