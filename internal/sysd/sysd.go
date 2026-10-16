@@ -10,9 +10,22 @@ import (
 
 // Run executes a command and returns its combined output. Swapped in tests.
 var Run = func(ctx context.Context, name string, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = strings.NewReader(Stdin(ctx))
+	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
+
+type stdinKey struct{}
+
+// WithStdin makes Run hand in to the command on stdin: how a secret reaches
+// a process, since argv shows in ps to every user on the box (#224).
+func WithStdin(ctx context.Context, in string) context.Context {
+	return context.WithValue(ctx, stdinKey{}, in)
+}
+
+// Stdin is what WithStdin put on ctx, for a Run that tests swap in.
+func Stdin(ctx context.Context) string { in, _ := ctx.Value(stdinKey{}).(string); return in }
 
 // Active returns `systemctl --user is-active <unit>`: active, inactive, failed, activating, …
 func Active(ctx context.Context, unit string) string {

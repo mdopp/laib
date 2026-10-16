@@ -7,8 +7,8 @@ Image=${SAMBA_IMAGE}
 Network=host
 Environment=TZ=${TZ}
 Environment=ACCOUNT_${SHARE_USER}=${SHARE_PW}
-Environment=SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read only=no; valid users=${SHARE_USER}
-Environment=SAMBA_GLOBAL_STANZA=server min protocol = SMB2
+Environment="SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read only=no; valid users=${SHARE_USER}"
+Environment="SAMBA_GLOBAL_STANZA=server min protocol = SMB2"
 # the shared file-share tree: never relabelled (:z walks it on every start and
 # fails on an entry core does not own, #230); labelling off for this container
 SecurityLabelDisable=true

@@ -34,7 +34,9 @@ func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 	// with it: the proxy as the haus pod reaches it — the host's port over
 	// host.containers.internal, never the pod's own 127.0.0.1 (ADR 0007)
 	st.Box.Roles.Model = "llama"
-	out, err = Render(st, map[string]string{"MODEL_API_KEY": "k-model"})
+	sec := map[string]string{"MODEL_API_KEY": "k-model"}
+	out, err = Render(st, sec)
+	out = asContainerSees(st, sec, out)
 	if err != nil {
 		t.Fatal(err)
 	}
