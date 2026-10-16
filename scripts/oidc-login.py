@@ -6,9 +6,9 @@ Authelia's token endpoint. Test tooling for vm-install (#254), never the
 box's: it proves the app's OIDC settings, Authelia's client and the path
 between the app and auth.<domain> together.
 
-Usage: oidc-login.py <app> <app base url>   (app: immich)
+Usage: oidc-login.py <app> <app base url>   (app: immich, audiobookshelf)
 Env:   OIDC_USER, OIDC_PASSWORD, OIDC_CA (the CA file Caddy's certs chain to),
-       OIDC_EMAIL (what the app must say it logged in)."""
+       OIDC_EMAIL (what Immich must say it logged in)."""
 import http.cookiejar, json, os, ssl, sys, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
@@ -93,4 +93,18 @@ def immich(base):
     print(f"immich: code exchanged, logged in as {body['userEmail']}")
 
 
-{"immich": immich}[sys.argv[1]](sys.argv[2].rstrip("/"))
+def audiobookshelf(base):
+    code, _, loc = req("GET", base + "/auth/openid?callback=/login")
+    if not loc or not loc.startswith("https://auth."):
+        fail(f"audiobookshelf /auth/openid: HTTP {code}, to {loc} (OIDC not configured?)")
+    print("audiobookshelf: sends the browser to", loc.split("?")[0])
+    back = authelia(loc, "audiobookshelf")
+    if "code=" not in back:
+        fail(f"Authelia sent us back without a code: {back}")
+    code, _, loc = req("GET", back)  # ABS exchanges the code at Authelia's token endpoint
+    if not loc or "accessToken=" not in loc:
+        fail(f"audiobookshelf /auth/openid/callback (the code exchange): HTTP {code}, to {loc}")
+    print("audiobookshelf: code exchanged, logged in")
+
+
+{"immich": immich, "audiobookshelf": audiobookshelf}[sys.argv[1]](sys.argv[2].rstrip("/"))

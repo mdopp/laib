@@ -487,6 +487,38 @@ jobs:
                 rm -rf "$R" /mnt/data/stacks/immich /mnt/data/stacks/immich-photos
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
+      - name: audiobookshelf — a family member's OIDC login end to end, and after a rotation (#255)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, Caddy's local CA trusted by Node (the NUC has a public cert)
+          $SSH 'rm -rf /tmp/abs && mkdir -p /tmp/abs'
+          tar -C templates/audiobookshelf -cf - --exclude tests . | $SSH 'tar -C /tmp/abs -xf -'
+          $SSH 'cat > /tmp/oidc-login.py' < scripts/oidc-login.py
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
+                R=/mnt/data/laib/registries/vm/templates/audiobookshelf; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/abs "$R"
+                sed -i "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                sed -i "s|^PublishPort=13378:80|PublishPort=13378:80\nEnvironment=NODE_EXTRA_CA_CERTS=/laib-ca.crt\nVolume=$root:/laib-ca.crt:ro,z|" "$R/audiobookshelf.container"
+                grep -q "^AddHost=auth.\${DOMAIN}:host-gateway" "$R/audiobookshelf.container" || { echo "ABS does not map auth to the host gateway"; exit 1; }
+                podman pull -q ghcr.io/advplyr/audiobookshelf:latest >/dev/null; echo "audiobookshelf image pre-pulled"
+                mkdir -p /mnt/data/stacks/abs-media/audiobooks /mnt/data/stacks/abs-media/podcasts
+                $L add audiobookshelf AUDIOBOOKS=/mnt/data/stacks/abs-media/audiobooks PODCASTS=/mnt/data/stacks/abs-media/podcasts | tee /tmp/add-abs.txt
+                grep -q "^ok  audiobookshelf post-deploy" /tmp/add-abs.txt || { echo "audiobookshelf post-deploy is not green"; exit 1; }
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/add-abs.txt || { echo "post-deploy did not set the family login"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                login() { podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host hoerbuecher.vm.test:127.0.0.1 \
+                  -e OIDC_USER=core -e OIDC_PASSWORD=vm-operator-pw-254 -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
+                  "${{ env.HOOKS }}" python3 /oidc-login.py audiobookshelf https://hoerbuecher.vm.test; }
+                login
+                # the drift that retired ABS on ServiceBay: a new secret reaches Authelia and the client ABS caches, in one apply
+                $L secret rotate OIDC_AUDIOBOOKSHELF_SECRET | tee /tmp/rotate-abs.txt
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/rotate-abs.txt || { echo "the rotation did not reach ABS"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                login
+                $L remove audiobookshelf >/dev/null
+                rm -rf "$R" /mnt/data/stacks/audiobookshelf /mnt/data/stacks/abs-media
+                podman image rm -f ghcr.io/advplyr/audiobookshelf:latest >/dev/null || true
+                echo "audiobookshelf: a family member logged in through Authelia, before and after a rotation"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"

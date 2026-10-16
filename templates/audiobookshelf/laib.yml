@@ -14,7 +14,7 @@ routes:
 secrets:
   - name: ABS_ROOT_PASSWORD
 oidc:
-  clientId: audiobookshelf
+  clientId: audiobookshelf           # post-deploy writes the secret into ABS's settings on every apply (#255)
   redirectUris: ["https://hoerbuecher.${DOMAIN}/auth/openid/callback", "https://hoerbuecher.${DOMAIN}/auth/openid/mobile-redirect"]
 data:
   - path: ${DATA_DIR}/audiobookshelf/config
