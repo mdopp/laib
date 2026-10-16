@@ -78,9 +78,10 @@ func TestNoAuthRoutesFrontNoHeaderTrust(t *testing.T) {
 		}
 	}
 	// files and paperless sit behind Authelia and take the user from it, as
-	// in ServiceBay: one family login, no second password
+	// in ServiceBay: one family login, no second password; one LLDAP account
+	// is File Browser's admin from the start, as ServiceBay's post-deploy did
 	for unit, wants := range map[string][]string{
-		"file-share/file-share-filebrowser.container": {"--auth.method=proxy", "--auth.header=Remote-User"},
+		"file-share/file-share-filebrowser.container": {"--auth.method=proxy", "--auth.header=Remote-User", "users update ${FILEBROWSER_ADMIN_USER} --perm.admin"},
 		"paperless/paperless.container":               {"PAPERLESS_ENABLE_HTTP_REMOTE_USER=true", "PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_REMOTE_USER"},
 	} {
 		b, _ := os.ReadFile("../../templates/" + unit)
