@@ -4,12 +4,13 @@
 #
 #   curl … install-box.sh | bash -s -- --domain example.home [--lan-ip <ip>] \
 #       [--gpu | --model-url http://<gpu-box>:11435/v1 [--model-lease <url>]] \
-#       [--version vX.Y.Z] [--token <github token, only for a private fork or mirror>]
+#       [--version vX.Y.Z]
 #       [--dns-provider desec|cloudflare|…  (token: LAIB_DNS_TOKEN)] [--tls internal]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
 #
 # mdopp/laib, its releases and its images are public: no token. A private fork
-# or mirror passes --token (or LAIB_GH_TOKEN): Contents: read, Packages: read.
+# or mirror exports LAIB_GH_TOKEN (Contents: read, Packages: read); never as a
+# flag: ps shows every argv on the box to every local user (#217).
 set -euo pipefail
 VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
 DNS_PROVIDER=""; DNS_TOKEN="${LAIB_DNS_TOKEN:-}"; TLS=""   # certificates (#45): DNS-01 via the provider's API, or Caddy's own CA
@@ -22,7 +23,7 @@ while [ $# -gt 0 ]; do
     --model-url) MODEL_URL="$2"; shift 2;;
     --model-lease) MODEL_LEASE="$2"; shift 2;;
     --gpu) GPU="--gpu"; shift;;
-    --token) TOKEN="$2"; shift 2;;
+    --token) echo "--token puts the token on argv, where ps shows it (#217): export LAIB_GH_TOKEN instead" >&2; exit 1;;
     --dns-provider) DNS_PROVIDER="$2"; shift 2;;
     --tls) TLS="$2"; shift 2;;
     *) echo "unknown flag $1" >&2; exit 1;;
@@ -34,8 +35,13 @@ API="https://api.github.com/repos/$REPO"
 
 # Resolve what to install: a release (its tag and the API url of every asset),
 # or one build served at --source under the release's asset names plus VERSION.
+TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
+# The token reaches curl as a header file only core can read, never on its argv (#217).
 auth=()
-[ -n "$TOKEN" ] && auth=(-H "Authorization: Bearer $TOKEN")
+if [ -n "$TOKEN" ]; then
+  (umask 077; printf 'Authorization: Bearer %s\n' "$TOKEN" > "$TMPD/auth")
+  auth=(-H "@$TMPD/auth")
+fi
 if [ -n "$SOURCE" ]; then
   TAG="$(curl -fsSL "$SOURCE/VERSION")" || { echo "cannot read $SOURCE/VERSION" >&2; exit 1; }
   [ -n "$TAG" ] || { echo "$SOURCE/VERSION is empty" >&2; exit 1; }
@@ -58,7 +64,7 @@ else
     printf '%s' "$u"
   }
   if [ "$VERSION" = "latest" ]; then REL="releases/latest"; else REL="releases/tags/$VERSION"; fi
-  use_release "$(api "$REL")" || { echo "cannot read release $VERSION (private repo? pass --token)" >&2; exit 1; }
+  use_release "$(api "$REL")" || { echo "cannot read release $VERSION (private repo? export LAIB_GH_TOKEN)" >&2; exit 1; }
   # A release is published before its binaries: they are built once vm-install
   # is green on it (#47), a VM run later. Until then "latest" means the newest
   # release that has them (#99).
@@ -144,7 +150,6 @@ if [ -n "$TOKEN" ]; then
 fi
 
 sudo mkdir -p /var/opt/laib
-TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 for BIN in laib laib-operator laib-lease; do
   curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
