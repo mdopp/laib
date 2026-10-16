@@ -17,6 +17,11 @@ Environment=PAPERLESS_CSRF_TRUSTED_ORIGINS=https://paperless.${DOMAIN}
 Environment=PAPERLESS_SECRET_KEY=${SECRET_KEY}
 Environment=PAPERLESS_OCR_LANGUAGE=${OCR_LANGUAGE}
 Environment=PAPERLESS_OCR_MODE=auto
+# one family login, as in ServiceBay (solarisbay templates/paperless): Authelia's
+# forward-auth in front, Paperless takes and auto-provisions its Remote-User.
+# Caddy strips a client's own Remote-* first (#231); the API still wants a token.
+Environment=PAPERLESS_ENABLE_HTTP_REMOTE_USER=true
+Environment=PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_REMOTE_USER
 Environment=PAPERLESS_ADMIN_USER=${ADMIN_USER}
 Environment=PAPERLESS_ADMIN_PASSWORD=${ADMIN_PW}
 Environment=USERMAP_UID=1000
