@@ -25,7 +25,7 @@ func TestTemplateUpdateBringsNewValues(t *testing.T) {
 	os.MkdirAll(dst, 0o755)
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte("name: echo\ntemplate: {registry: builtin, name: echo, version: 1}\nroutes: []\nsecrets: []\ndata: []\n"), 0o644)
 	os.WriteFile(filepath.Join(dst, "echo.container"), []byte("[Container]\nImage=${IMAGE}\nEnvironment=OLD=${OLD}\n"), 0o644)
-	os.WriteFile(filepath.Join(dst, "values.yml"), []byte("IMAGE: docker.io/echo:2 # pinned by hand\nOLD: mine\n"), 0o644)
+	os.WriteFile(filepath.Join(dst, "values.yml"), []byte("IMAGE: docker.io/echo:2 # pinned by hand\nOLD: mine"), 0o644)
 	git(ctx, repo, "add", "-A")
 	git(ctx, repo, "commit", "-q", "-m", "echo, installed")
 	tpl := fstest.MapFS{
@@ -111,6 +111,35 @@ func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
 			if !strings.Contains(unit, want) {
 				t.Errorf("haus.container lacks %q:\n%s", strings.TrimSpace(want), unit)
 			}
+		}
+	}
+}
+
+// newValues at its edges: an empty example adds nothing, a values.yml that
+// does not end its line still gets whole lines, an empty values.yml gets
+// every key, and a new value that is not one line is refused by name
+// rather than half copied.
+func TestNewValuesEdges(t *testing.T) {
+	for _, c := range []struct{ have, example, want, err string }{
+		{"A: 1\n", "", "A: 1\n", ""},
+		{"A: 1", "A: 2\nB: 3 # b\n", "A: 1\nB: 3 # b\n", ""},
+		{"A: 1", "A: 2\n", "A: 1", ""},           // nothing new: not a byte changed
+		{"A: B\n", "B: 2\n", "A: B\nB: 2\n", ""}, // a value is not a key
+		{"", "A: 2\nB: !secret S\n", "A: 2\nB: !secret S\n", ""},
+		{"A: 1\n", "A: 2\nB: |\n  x\n", "", "B is not one line"},
+		{"A: 1\n", "A: 2\nB:\n  x\n", "", "B is not one line"},
+		{"A: [1\n", "B: 2\n", "", "values.yml"},
+		{"A: 1\n", "B: [2\n", "", "values.example.yml"},
+	} {
+		path := filepath.Join(t.TempDir(), "values.yml")
+		os.WriteFile(path, []byte(c.have), 0o644)
+		err := newValues(path, []byte(c.example))
+		got, _ := os.ReadFile(path)
+		switch {
+		case c.err != "" && (err == nil || !strings.Contains(err.Error(), c.err)):
+			t.Errorf("%q + %q: err %v, want %q", c.have, c.example, err, c.err)
+		case c.err == "" && (err != nil || string(got) != c.want):
+			t.Errorf("%q + %q → %q, %v; want %q", c.have, c.example, got, err, c.want)
 		}
 	}
 }
