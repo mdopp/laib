@@ -133,6 +133,30 @@ exists once they wrote to it.
    code. The Bote itself has no tool to message anyone: only an automation a
    person confirmed does (Hermes' `send_message` is not a model tool).
 
+## Haus's Sprechen field: Hermes' API server (#215)
+
+Haus's pages have a Sprechen field (haus#12): a sentence typed there goes
+to the Bote as the logged-in person, and the reply comes back on the page.
+Haus calls Hermes' OpenAI-compatible API server, `POST /v1/chat/completions`
+on 8642. `pre-start` turns it on with `API_SERVER_KEY` (the secret
+`BOTE_API_KEY`, generated on add; Hermes starts no API server without a key
+of at least 16 characters) and `API_SERVER_HOST=0.0.0.0`. The pod publishes
+8642 beyond loopback, so the haus pod reaches it at
+`host.containers.internal:8642` (ADR 0007, 0012 §4). `lan: false` keeps the
+LAN out, and without the key nothing answers. bote-notify's copy of the
+`.env` does not carry the key. Haus gets the same secret as `HAUS_BOTE_KEY`
+(templates/haus).
+
+Who is speaking: Hermes' API server has no per-person field and ignores
+OpenAI's `user`. So Haus names the person (Authelia's `Remote-Name` and
+`Remote-User`) in a system line, which Hermes adds on top of the SOUL for
+that turn. It also sends `X-Hermes-Session-Key: haus:<login>`, Hermes'
+per-person memory scope (`gateway/platforms/api_server*.py`, 2026-10-15).
+The API server's tools are `platform_toolsets.api_server` (the same safe
+list as every platform) plus the MCP servers. Hermes logs a warning at
+start that the API server is network-accessible. That is expected here:
+the port is off the LAN and needs the key.
+
 ## Tools: only what answers, and a budget (#54)
 
 The hook probes every MCP URL at apply time (any HTTP answer counts, a

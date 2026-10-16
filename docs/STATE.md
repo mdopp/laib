@@ -233,6 +233,12 @@ Plain `KEY: value`. Secrets are referenced, never written here:
 `!secret` without a name or another `!tag` fails the load with the file,
 line and key.
 
+`laib add` writes values.yml from the template's `values.example.yml`. A
+template update keeps it and appends each key the new example has and
+values.yml lacks, as the example's line writes it (#215); a value already
+there is never changed. So a template that brings a new placeholder never
+leaves an install with `${KEY} has no value`. A new key must be one line.
+
 Without secrets (`laib template lint`, a review) a secret renders as
 `${secret:NAME}`. Plan and apply render with the real values, and journal
 and diffs show each one redacted back to that placeholder.
