@@ -38,6 +38,10 @@ Environment=HAUS_QMD_COLLECTION=notizen
 Environment=HAUS_LLM_URL=${MODEL_URL}
 Environment=HAUS_LLM_MODEL=gemma-4-e4b
 Environment=HAUS_LLM_KEY=${MODEL_KEY}
+# the Sprechen field (haus#12, #215): the Bote's OpenAI-compatible API as this pod reaches it, and its key;
+# without the Bote the key renders empty and Haus shows no field
+Environment=HAUS_BOTE_URL=${BOTE_URL}
+Environment=HAUS_BOTE_KEY=${BOTE_KEY}
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
