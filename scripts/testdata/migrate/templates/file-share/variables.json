@@ -1,0 +1,20 @@
+{
+ "FILEBROWSER_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "files",
+  "exposure": "public",
+  "proxyPort": "FILEBROWSER_PORT",
+  "proxyConfig": {
+   "ssl_forced": true,
+   "advanced_config": "__authelia_forward_auth__"
+  },
+  "audience": "family"
+ },
+ "FILEBROWSER_PORT": {
+  "type": "text",
+  "default": "8088"
+ },
+ "SHARE_PASSWORD": {
+  "type": "secret"
+ }
+}
