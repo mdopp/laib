@@ -484,7 +484,7 @@ jobs:
                   -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
                   "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
                 $L remove immich >/dev/null
-                rm -rf "$R" /mnt/data/stacks/immich /mnt/data/stacks/immich-photos
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
       - name: audiobookshelf — a family member's OIDC login end to end, and after a rotation (#255)
