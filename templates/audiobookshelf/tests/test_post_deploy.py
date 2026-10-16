@@ -63,7 +63,11 @@ class FakeABS(BaseHTTPRequestHandler):
         b = self.body()
         if self.path == "/init":
             ABS["init"] = True
-            return self.reply(200)
+            self.send_response(200)                      # real ABS answers "OK", text, not JSON (vm-install run 38897720430)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            return self.wfile.write(b"OK")
         if self.path == "/login":
             if (b.get("username"), b.get("password")) != ("root", ROOT):
                 return self.reply(401)
