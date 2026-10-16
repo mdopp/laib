@@ -181,8 +181,11 @@ applies:
   Assistant password. A user who only ever used Authelia needs one set
   before the move.
 - **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
-  `/workspace`; the Werkstatt keeps its home in the image. Default: sessions
-  start fresh, and the host key changes once (the app asks to trust it again).
+  claude-dev's `/workspace` (its home; host keys in `.ssh/host_keys`); the
+  Werkstatt keeps its home in `werkstatt/home` and its host keys in
+  `werkstatt/ssh-host-keys` (#241). Copying claude-dev's into them is not
+  in `move-servicebay-data.py` yet. Until it is: sessions start fresh, and
+  the host key changes once (the app asks to trust it again).
 
 ## What does not move
 
