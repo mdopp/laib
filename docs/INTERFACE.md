@@ -288,6 +288,16 @@ entfernen“), before anything is stopped. The box's own proposals (the
 template-sync timer, actor `laib`) are approved by the box when the dial
 says auto; the same change proposed twice reuses the open proposal.
 
+### The shared file-share tree is never relabelled (#230)
+
+`laib template lint` refuses a unit that mounts `${DATA_DIR}/file-share/data`
+or a path under it (also through a values entry) with `:z`/`:Z` or without
+`SecurityLabelDisable=true`. `:z` makes podman relabel the whole
+multi-writer tree on every start; the rootless `lsetxattr` fails on any
+entry `core` does not own (a root-owned file from a disk import), and the
+container exits 125 in a crash loop (ServiceBay #1731, #1923). The
+service's own data folders keep `:z`; with labelling off it is a no-op.
+
 ### Templates on CoreOS: ports, health, needs, images (#46)
 
 The state refuses two services publishing the same host port, and

@@ -9,7 +9,10 @@ Environment=PUID=0
 Environment=PGID=0
 Environment=BEETSDIR=/config
 Volume=${DATA_DIR}/beets/config:/config:z
-Volume=${MUSIC}:/music:z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${MUSIC}:/music
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
