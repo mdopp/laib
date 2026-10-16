@@ -87,9 +87,9 @@ def until(pred, what, timeout=300, every=2):
     sys.exit(f"FAIL: {what} not within {timeout}s (last: {last})")
 
 
-def check(cond, what):
+def check(cond, what, detail=None):
     if not cond:
-        sys.exit(f"FAIL: {what}")
+        sys.exit(f"FAIL: {what}" + (f"\n  {json.dumps(detail, indent=1, default=str)[:4000]}" if detail is not None else ""))
     print(f"ok  {what}")
 
 
@@ -304,12 +304,12 @@ def main():
     idle(admin)
     albums = {"alice": holiday, "admin": family}
     before = state(tokens, libs, albums)
-    a = before["assets"]
-    check(a[aid["a1"]]["favourite"] and a[aid["s3"]]["favourite"], "two favourites")
-    check(a[aid["a2"]]["description"] == "Oma am Strand" and a[aid["a4"]]["description"] == "vom Sidecar", "two descriptions, one from the sidecar")
-    check(a[aid["a2"]]["people"] == ["Oma"], "a named person")
-    check(a[aid["a3"]]["edits"] == [("rotate", '{"angle": 90}')], "an edit")
-    check(len(before["albums"][holiday]) == 3 and len(before["albums"][family]) == 2, "two albums")
+    ba = before["assets"]
+    check(ba[aid["a1"]]["favourite"] and ba[aid["s3"]]["favourite"], "two favourites", ba)
+    check(ba[aid["a2"]]["description"] == "Oma am Strand" and ba[aid["a4"]]["description"] == "vom Sidecar", "two descriptions, one from the sidecar", ba)
+    check(ba[aid["a2"]]["people"] == ["Oma"], "a named person", ba)
+    check(ba[aid["a3"]]["edits"] == [("rotate", '{"angle": 90}')], "an edit", ba)
+    check(len(before["albums"][holiday]) == 3 and len(before["albums"][family]) == 2, "two albums", before["albums"])
     check(psql("mt-sb-immich", f"""select count(*) from asset_file where type = 'sidecar' and path = '/mnt/photos/alice/photos/a4.jpg.xmp'""") == "1",
           "the sidecar is an asset file on ServiceBay's path")
 
@@ -351,13 +351,13 @@ def main():
         p = v["path"]
         want[i] = dict(v, path="/mnt/photos/shared/" + p[len("/mnt/photos/photos/"):] if p.startswith("/mnt/photos/photos/") else "/mnt/photos/alice/" + p[len("/mnt/photos/alice/photos/"):])
     after = state(tokens, libs, albums)
-    check(after["assets"] == want, "the same asset IDs at the new paths, favourites, descriptions, people and edits intact")
+    check(after["assets"] == want, "the same asset IDs at the new paths, favourites, descriptions, people and edits intact", {"want": want, "got": after["assets"]})
     check(after["albums"] == before["albums"], "the albums hold the same assets")
     check(psql("mt-laib-immich", "select count(*) from asset_file where type = 'sidecar' and path = '/mnt/photos/alice/a4.jpg.xmp'") == "1", "the sidecar's path moved too")
     for lib in (shared, mine):
         scan(admin, lib)
     again = state(tokens, libs, albums)
-    check(again == after, "a rescan of both libraries adds nothing, offlines nothing, trashes nothing")
+    check(again == after, "a rescan of both libraries adds nothing, offlines nothing, trashes nothing", again)
     check(psql("mt-laib-immich", f"""select count(*), count(*) filter (where "isOffline" or "deletedAt" is not null) from asset where "libraryId" in ('{shared}', '{mine}')""") == "7|0",
           "the database holds 7 assets, none offline or deleted")
 
