@@ -55,14 +55,8 @@ func TestHausLibraryIndexesTheDocuments(t *testing.T) {
 		t.Errorf("the notes' collection moved: %+v", cfg.Collections)
 	}
 	// the refresh: the export first, in Haus's container, then qmd reads both folders
-	svc := has("systemd/haus-qmd-refresh.service")
-	var steps []string
-	for _, m := range regexp.MustCompile(`(?m)^ExecStart=(.*)$`).FindAllStringSubmatch(svc, -1) {
-		steps = append(steps, m[1])
-	}
-	if len(steps) == 0 || steps[0] != "/usr/bin/podman exec systemd-haus /haus export-documents" {
-		t.Errorf("the refresh does not export the documents first: %q", steps)
-	}
+	// (TestHausDocumentsExportNeverStopsTheNotes)
+	has("systemd/haus-qmd-refresh.service", "After=haus-documents-export.service\n")
 	// a declared data path, not backed up (Paperless is the documents' home), beside haus and haus-qmd
 	var declared bool
 	for _, d := range st.Services["haus"].Contract.Data {
@@ -72,5 +66,68 @@ func TestHausLibraryIndexesTheDocuments(t *testing.T) {
 	}
 	if !declared {
 		t.Error("${DATA_DIR}/haus-dokumente is not a declared data path with backup: false")
+	}
+}
+
+// #219: the export must never stop the notes' refresh. It is a oneshot of
+// its own that the refresh wants and runs after, whatever its outcome:
+// Wants=, never Requires=. That matters most while the box still runs a
+// Haus image older than export-documents — after laib applies this and
+// before podman auto-update pulls the new image, or if laib is applied
+// first. Such a Haus ignores the argument and would start a second
+// server; LAIB_TOKEN emptied stops it at once (it requires the token),
+// so it fails fast, alone, and red (laib status reads oneshots), and the
+// notes are refreshed all the same. A folder Haus cannot write is red the
+// same way, and is no reason to stop the notes either.
+func TestHausDocumentsExportNeverStopsTheNotes(t *testing.T) {
+	st := shippedBox(t)
+	out, err := Render(st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execs := func(unit string) []string {
+		var steps []string
+		for _, m := range regexp.MustCompile(`(?m)^ExecStart\w*=(.*)$`).FindAllStringSubmatch(unit, -1) {
+			steps = append(steps, m[1])
+		}
+		return steps
+	}
+	refresh, ok := out["systemd/haus-qmd-refresh.service"]
+	if !ok {
+		t.Fatal("no refresh")
+	}
+	for _, s := range execs(refresh) {
+		if strings.Contains(s, "export-documents") {
+			t.Errorf("the export is a step of the refresh: one that fails stops update and embed: %s", s)
+		}
+	}
+	for _, w := range []string{"Wants=haus-documents-export.service\n", "After=haus-documents-export.service\n"} {
+		if !strings.Contains(refresh, w) {
+			t.Errorf("the refresh lacks %q:\n%s", w, refresh)
+		}
+	}
+	if regexp.MustCompile(`(?m)^(Requires|Requisite|BindsTo|PartOf|Upholds)=.*haus-documents-export`).MatchString(refresh) {
+		t.Errorf("the refresh depends on the export succeeding:\n%s", refresh)
+	}
+	export, ok := out["systemd/haus-documents-export.service"]
+	if !ok {
+		t.Fatal("systemd/haus-documents-export.service is not rendered")
+	}
+	if got := execs(export); len(got) != 1 || got[0] != "/usr/bin/podman exec -e LAIB_TOKEN= systemd-haus /haus export-documents" {
+		t.Errorf("the export runs %q, want the one step with LAIB_TOKEN emptied", got)
+	}
+	for _, w := range []string{"Type=oneshot\n", "TimeoutStartSec="} {
+		if !strings.Contains(export, w) {
+			t.Errorf("the export lacks %q:\n%s", w, export)
+		}
+	}
+	if strings.Contains(export, "[Install]") {
+		t.Errorf("the export runs only when the refresh wants it:\n%s", export)
+	}
+	// nothing backed up covers the documents' folder: no declared path is it or holds it
+	for _, p := range BackupPaths(st, "/s", "/j") {
+		if p == "/d/haus-dokumente" || strings.HasPrefix("/d/haus-dokumente", strings.TrimSuffix(p, "/")+"/") {
+			t.Errorf("the backup takes %s, which holds the documents' cache", p)
+		}
 	}
 }

@@ -80,11 +80,10 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	for _, m := range regexp.MustCompile(`(?m)^ExecStart=(.*)$`).FindAllStringSubmatch(svc, -1) {
 		steps = append(steps, m[1])
 	}
-	// #219: Haus's export of the documents first, then qmd reads the folders
-	want := []string{"/usr/bin/podman exec systemd-haus /haus export-documents",
-		"/usr/bin/podman exec systemd-haus-qmd qmd update", "/usr/bin/podman exec systemd-haus-qmd qmd embed"}
+	// #219: the documents' export is a unit of its own the refresh runs after (haus219_test.go)
+	want := []string{"/usr/bin/podman exec systemd-haus-qmd qmd update", "/usr/bin/podman exec systemd-haus-qmd qmd embed"}
 	if strings.Join(steps, "\n") != strings.Join(want, "\n") {
-		t.Errorf("the refresh runs %q, want the export, update, then embed, each failing the unit:\n%s", steps, svc)
+		t.Errorf("the refresh runs %q, want update then embed, each failing the unit:\n%s", steps, svc)
 	}
 	for p, c := range out {
 		if !strings.Contains(p, "haus") {
@@ -109,7 +108,7 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	if got := strings.Join(st.Services["haus"].UnitNames(), ","); got != "haus-pod.service,haus-qmd-refresh.timer,haus-qmd.service,haus.service" {
 		t.Errorf("haus's units are %s: the timer is one, its oneshot is not", got)
 	}
-	if got := strings.Join(st.Services["haus"].Oneshots(), ","); got != "haus-qmd-refresh.service" {
+	if got := strings.Join(st.Services["haus"].Oneshots(), ","); got != "haus-documents-export.service,haus-qmd-refresh.service" {
 		t.Errorf("haus's oneshots are %q", got)
 	}
 }
