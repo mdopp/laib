@@ -60,6 +60,41 @@ class TokensPerContainer(unittest.TestCase):
         res = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual([l for l in res.stdout.splitlines() if l.endswith(".pyc")], [])
 
+    def test_laibs_token_is_on_no_processs_argv(self):
+        # #217: the container's processes show in the host's ps, argv and all.
+        # entrypoint.sh runs with its absolute paths moved into a temp root and
+        # su, claude, chown, git and python3 as fakes that record their argv.
+        tok = "lb_argv217secret"
+        with tempfile.TemporaryDirectory() as root:
+            r, bin_, log = Path(root), Path(root) / "bin", Path(root) / "argv.log"
+            bin_.mkdir()
+            for name, body in {"su": 'shift 2; exec bash -c "$1"', "claude": "", "chown": "", "git": "", "python3": ""}.items():
+                (bin_ / name).write_text(f'#!/bin/bash\nprintf "%s\\n" "{name} $*" >> "$ARGV_LOG"\n{body}\n')
+                (bin_ / name).chmod(0o755)
+            script = (HERE / "entrypoint.sh").read_text()
+            for p in ("/home/dev", "/run/laib", "/etc/profile.d"):
+                script = script.replace(p, root + p)
+            (r / "etc" / "profile.d").mkdir(parents=True)
+            (r / "entrypoint.sh").write_text(script)
+            env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", ARGV_LOG=str(log), LAIB_TOKEN=tok,
+                       LAIB_MCP_URL="http://host.containers.internal:5900/mcp", WERKSTATT_ROLE="autoloop")
+            env.pop("WERKSTATT_GIT_TOKEN", None)
+            p = subprocess.run(["bash", str(r / "entrypoint.sh")], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            argv = log.read_text()
+            self.assertNotIn(tok, argv, "LAIB_TOKEN is on a process's argv, where ps shows it")
+            add = [l for l in argv.splitlines() if l.startswith("claude mcp add")]
+            self.assertEqual(len(add), 1, argv)
+            # every session of dev, wherever it starts: user scope; the header names the token
+            self.assertRegex(add[0], r" (-s|--scope) user ")
+            self.assertIn("--header Authorization: Bearer ${LAIB_TOKEN}", add[0])
+            # and a login shell of dev has it, read from the 0600 file
+            got = subprocess.run(["bash", "-c", f'for f in {root}/etc/profile.d/*.sh; do . "$f"; done; printf %s "$LAIB_TOKEN"'],
+                                 env={"PATH": os.environ["PATH"]}, capture_output=True, text=True)
+            self.assertEqual(got.stdout, tok, got.stderr)
+            for f in (r / "etc" / "profile.d").iterdir():
+                self.assertNotIn(tok, f.read_text(), f"{f.name} is world-readable and carries the token")
+
 
 class FakeGitHub:
     """Collects every REST call; answers like GitHub for what work_ticket uses."""

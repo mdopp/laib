@@ -10,9 +10,10 @@ import (
 
 // runFirstBoot runs the real laib-firstboot.sh from the Ignition, with its
 // /etc/laib and /tmp moved into a temp dir and sudo, curl, getent, shred and
-// systemctl shimmed. installer is the body of the install-box.sh it fetches.
+// systemctl shimmed. installer is the body of the install-box.sh it fetches;
+// env overrides the unit's environment (LAIB_SOURCE= for a release install).
 // It returns the temp root, the shim log and the script's output.
-func runFirstBoot(t *testing.T, installer string) (root, log, out string) {
+func runFirstBoot(t *testing.T, installer string, env ...string) (root, log, out string) {
 	t.Helper()
 	ign, err := DestIgnition(box())
 	if err != nil {
@@ -35,10 +36,17 @@ func runFirstBoot(t *testing.T, installer string) (root, log, out string) {
 	shim(t, bin, "getent", "exit 0")
 	shim(t, bin, "systemctl", "exit 0")
 	shim(t, bin, "shred", `for a in "$@"; do [ -f "$a" ] && rm -f "$a"; done; exit 0`)
-	shim(t, bin, "curl", `while [ $# -gt 0 ]; do [ "$1" = -o ] && { cp "$FX/install-box.sh" "$2"; exit 0; }; shift; done; exit 0`)
+	shim(t, bin, "curl", `while [ $# -gt 0 ]; do
+  [ "$1" = -H ] && [ "${2:0:1}" = @ ] && [ -n "$LAIB_GH_TOKEN" ] && grep -qxF "Authorization: Bearer $LAIB_GH_TOKEN" "${2:1}" &&
+    echo "curl: the bearer from a file of mode $(stat -c %a "${2:1}")" >> "$SHIM_LOG"
+  [ "$1" = -o ] && { cp "$FX/install-box.sh" "$2"; exit 0; }
+  shift
+done
+echo '{"tag_name": "v9.9.9"}'`)
 	cmd := exec.Command("bash", sp)
 	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx,
 		"LAIB_DOMAIN=vm.test", "LAIB_SOURCE=http://src.test")
+	cmd.Env = append(cmd.Env, env...)
 	b, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(logf)
 	return root, string(l), string(b)

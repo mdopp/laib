@@ -13,6 +13,8 @@ Volume=./qmd.json:/etc/qmd/index.yml:ro,z
 # the index and the model, downloaded once by the first embed; a cache, not backed up
 Volume=${DATA_DIR}/haus-qmd:/cache:Z
 Volume=${DATA_DIR}/file-share/data/notes:/notes:ro,z
+# Paperless's documents as Haus mirrors them, one <id>.md each (#219, haus#13); the collection "dokumente"
+Volume=${DATA_DIR}/haus-dokumente:/dokumente:ro,z
 Environment=TZ=${TZ}
 # active only once the library answers a search; one that stops answering is killed and restarted
 HealthCmd=qmd-health

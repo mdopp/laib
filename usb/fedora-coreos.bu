@@ -350,7 +350,12 @@ storage:
             flags+=(--source "$LAIB_SOURCE")
           else
             # the installer of the release that gets installed, not main's of today
-            auth=(); [ -n "${LAIB_GH_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $LAIB_GH_TOKEN")
+            # the token as a header file only core can read, never on curl's argv (#217)
+            auth=()
+            if [ -n "${LAIB_GH_TOKEN:-}" ]; then
+              hdr=$(mktemp); trap 'rm -f "$hdr"; finish' EXIT
+              printf 'Authorization: Bearer %s\n' "$LAIB_GH_TOKEN" > "$hdr"; auth=(-H "@$hdr")
+            fi
             tag=$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/mdopp/laib/releases/latest | tr -d '\n' | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
             [ -n "$tag" ] || { echo "laib-firstboot: no latest release (private repo without a token?)" >&2; exit 1; }
             curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github.raw" \
