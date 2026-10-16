@@ -7,11 +7,14 @@ pi_servicebay.py). The token is read from a 0600 file, never from argv.
   laib status [args…]       call laib_status with the arguments as one string
   laib propose --set services/x/values.yml:K=V "grund"
   laib write media /path < file     (stdin becomes the content)
+  laib template lint <dir>  runs here, with the release's laib binary
 """
 import json, os, sys, urllib.request
 
 URL = (os.environ.get("LAIB_MCP_URL") or "http://host.containers.internal:5900/mcp").rstrip("/")
 TOKEN_FILE = os.environ.get("LAIB_TOKEN_FILE") or "/run/laib/token"   # this container's own tmpfs (#44)
+# the kernel binary of the latest release, for what needs no box (#262)
+LOCAL_BIN = os.environ.get("LAIB_LOCAL_BIN") or "/opt/werkstatt/laib/laib"
 
 def token() -> str:
     try:
@@ -32,6 +35,10 @@ def rpc(method: str, params: dict):
     return env["result"]
 
 def main(argv: list[str]) -> int:
+    if argv[:2] == ["template", "lint"]:
+        # the contract check is pure and runs here, on the Werkstatt's own
+        # files: over MCP the box would look for this path on its disk (#262)
+        os.execv(LOCAL_BIN, [LOCAL_BIN, *argv])
     rpc("initialize", {})
     if not argv:
         for t in rpc("tools/list", {})["tools"]:

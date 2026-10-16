@@ -1,0 +1,26 @@
+# A Werkstatt app (laib-app new; guide: /opt/werkstatt/guide/apps.md).
+name: __NAME__
+template: {registry: __REGISTRY__, name: __NAME__, version: 1}
+# what it is for; a second service for one purpose is a HINWEIS
+provides: [__NAME__]
+routes:
+  # __NAME__.<domain>: one Strato CNAME (ADR 0007), the owner creates it.
+  # internal = the home network only; public is the owner's decision.
+  # Authelia does the login (the app has none) for the LLDAP group; Caddy
+  # then sends X-__Name__-Proxy, so the app may trust Remote-User.
+  - host: __NAME__
+    port: __PORT__
+    exposure: __EXPOSURE__
+    auth: __AUTH__
+    group: __GROUP__
+    proxySecret: __SECRET__
+secrets:
+  # generated on the box on first apply, never in the repo
+  - name: __SECRET__
+# a folder the app writes: - path: ${DATA_DIR}/__NAME__ (and a Volume= for exactly that)
+data: []
+health:
+  http: http://127.0.0.1:__PORT__/healthz
+ports:
+  # only Caddy reaches it, never the WLAN
+  - {port: __PORT__, lan: false}

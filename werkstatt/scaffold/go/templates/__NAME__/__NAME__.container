@@ -1,0 +1,14 @@
+[Unit]
+Description=__NAME__ (a Werkstatt app)
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:__PORT__:8080
+Environment=PROXY_SECRET=${PROXY_SECRET}
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
