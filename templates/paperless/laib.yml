@@ -1,8 +1,8 @@
 name: paperless
 template: {registry: builtin, name: paperless, version: 1}
 provides: [documents]
-# Paperless-ngx: documents with OCR. Logins come from Authelia's forward
-# auth (Remote-User), so the family uses it without a second password; the
+# Paperless-ngx: documents with OCR. Paperless logs in itself, with its own
+# accounts: its route skips Authelia, so it trusts no Remote-User (#231); the
 # consume folder is the file share's paperless-consume, so a scan dropped
 # there is filed. Postgres and Redis in the pod.
 after: [auth, file-share]      # the share's folders are mounted here (#36)

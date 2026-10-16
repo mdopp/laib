@@ -426,6 +426,17 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #231: files sits behind Authelia and File Browser takes the user only from Remote-User
+                for img in docker.io/filebrowser/filebrowser:latest docker.io/syncthing/syncthing:latest docker.io/servercontainers/samba:latest; do podman pull -q "$img" >/dev/null; done
+                $L add file-share
+                code=000; for i in $(seq 1 30); do code=$(curl -s -o /dev/null -X POST -H "Remote-User: vmtest" -w "%{http_code}" http://127.0.0.1:8088/api/login || true); [ "$code" = 200 ] && break; sleep 2; done
+                echo "File Browser login with Remote-User on loopback -> HTTP $code"; [ "$code" = 200 ]
+                code=$(curl -s -o /dev/null -X POST -w "%{http_code}" http://127.0.0.1:8088/api/login || true)
+                echo "File Browser login without Remote-User -> HTTP $code (proxy auth: no header, no user)"; [ "$code" != 200 ]
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -H "Remote-User: admin" -o /dev/null -w "%{http_code}" https://files.vm.test/ || true)
+                echo "https://files.vm.test/ with a forged Remote-User, no session -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -H "Remote-User: admin" -X POST -o /dev/null -w "%{http_code}" https://files.vm.test/api/login || true)
+                echo "POST https://files.vm.test/api/login with a forged Remote-User, no session -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 303 ] || [ "$code" = 401 ]
                 $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |

@@ -282,10 +282,15 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
+const stripRemote = "\trequest_header -Remote-*\n"
+
 func caddyfile(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
 	b.WriteString("# Rendered by laib. Do not edit; change services/*/laib.yml and run laib apply.\n")
 	b.WriteString("{\n\temail admin@" + st.Box.Domain + "\n")
+	// before forward_auth, which runs first by default: every site strips the
+	// client's Remote-* and only Authelia's copy reaches an app (#231)
+	b.WriteString("\torder request_header first\n")
 	if st.Box.DNS.Provider != "" {
 		fmt.Fprintf(&b, "\tacme_dns %s {env.LAIB_DNS_TOKEN}\n", st.Box.DNS.Provider)
 	}
@@ -299,7 +304,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	if st.Box.Roles.Proxy != "" {
 		// Laib's own page: LAN only, Authelia, and a proxy secret so the pages
 		// trust Remote-User only when it arrived through Caddy (ADR 0012).
-		fmt.Fprintf(&b, "%s {\n\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host))
+		fmt.Fprintf(&b, "%s {\n%s\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host), stripRemote)
 		if st.Box.Roles.SSO != "" {
 			b.WriteString("\t\timport authelia\n")
 		}
@@ -308,7 +313,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, r := range svc.Contract.Routes {
-			fmt.Fprintf(&b, "%s {\n", fqdn(st, r.Host))
+			fmt.Fprintf(&b, "%s {\n%s", fqdn(st, r.Host), stripRemote)
 			indent := "\t"
 			if r.Exposure == "internal" {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")

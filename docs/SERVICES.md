@@ -26,7 +26,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moves with it |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); Music Assistant drives the speakers for Assist |
 | immich (4 containers, ML) | `immich` | built-in |
-| paperless (3 containers) | `paperless` | built-in with forward-auth logins |
+| paperless (3 containers) | `paperless` | built-in with its own logins (no Remote-User trust, #231) |
 | radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
 | vaultwarden | `vaultwarden` | built-in with Authelia OIDC |
 | file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share` | built-in on the host network; notes, documents, music, photos live here |
