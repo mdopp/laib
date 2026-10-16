@@ -198,6 +198,7 @@ def servicebay_install(f, items):
     if not tok:
         raise RuntimeError(f"ServiceBay token: HTTP {st} {b[:200]!r}")
     bearer = {"Authorization": "Bearer " + tok}
+    wait("ServiceBay's agent", lambda: b'"isConnected":true' in req("GET", base + "/api/system/health", headers=bearer)[1], tries=90, pause=2)
     for name in items:
         src, _, tmpl = name.rpartition("/")
         body = {"template": tmpl, "variables": f.get("vars", {}).get(tmpl, {})}
@@ -466,16 +467,21 @@ def seed_mqtt(f, s):
     print("MQTT: a retained message on generalprobe/wohnzimmer/licht")
 
 
-def smb(user, password, cmd):
-    return sh("podman", "run", "--rm", "--network", "host", "--entrypoint", "smbclient", "docker.io/servercontainers/samba:latest",
+SMBCLIENT = "localhost/generalprobe-smbclient"
+
+
+def smb(user, password, cmd, vol=()):
+    """smbclient against the box's share, from a client container (CoreOS has none)"""
+    if sh("podman", "image", "exists", SMBCLIENT, check=False).returncode:
+        sh("podman", "build", "-q", "-t", SMBCLIENT, "-", inp=b"FROM docker.io/library/alpine:3.20\nRUN apk add --no-cache samba-client\n")
+    return sh("podman", "run", "--rm", "--network", "host", *vol, SMBCLIENT, "smbclient",
               "//127.0.0.1/data", "-U", f"{user}%{password}", "-m", "SMB3", "-c", cmd, check=False)
 
 
 def seed_share(f, s, bearer):
     src = "/var/tmp/generalprobe/einkaufsliste.txt"
     open(src, "w").write("Milch, Brot, Generalprobe\n")
-    r = sh("podman", "run", "--rm", "--network", "host", "-v", "/var/tmp/generalprobe:/gp:z", "--entrypoint", "smbclient", "docker.io/servercontainers/samba:latest",
-           "//127.0.0.1/data", "-U", f"{f['share_user']}%{f['share_password']}", "-m", "SMB3", "-c", "put /gp/einkaufsliste.txt einkaufsliste.txt", check=False)
+    r = smb(f["share_user"], f["share_password"], "put /gp/einkaufsliste.txt einkaufsliste.txt", vol=("-v", "/var/tmp/generalprobe:/gp:z"))
     if r.returncode:
         raise RuntimeError(f"Samba put as {f['share_user']}: {(r.stdout + r.stderr).decode()[-300:]}")
     # the family's own logins: ServiceBay syncs LLDAP users into Samba; anna's

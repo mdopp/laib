@@ -15,7 +15,7 @@ read -r PASS
 D=/mnt/data/servicebay
 [ "$(stat -c %U /var/mnt/data)" = core ] || sudo chown core:core /var/mnt/data
 sudo chcon -R -t container_file_t /var/mnt/data/containers   # setup-raid.sh does the same
-command -v python3 >/dev/null || sudo rpm-ostree install --apply-live --allow-inactive -q python3
+command -v python3 >/dev/null || sudo rpm-ostree install --apply-live --allow-inactive python3
 python3 --version
 
 umask 077
@@ -87,6 +87,4 @@ systemctl --user start servicebay.service
 for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:5888/login 2>/dev/null && break; sleep 2; done
 curl -fsS -o /dev/null http://127.0.0.1:5888/login || { echo "ServiceBay does not answer on 5888"; podman logs --tail 60 servicebay; exit 1; }
 echo "ServiceBay answers on 5888"
-for i in $(seq 1 90); do curl -fsS http://127.0.0.1:5888/api/system/health 2>/dev/null | grep -q '"isConnected":true' && break; sleep 2; done
-curl -fsS http://127.0.0.1:5888/api/system/health | grep -q '"isConnected":true' || { echo "ServiceBay's agent never connected"; curl -sS http://127.0.0.1:5888/api/system/health; podman logs --tail 60 servicebay; exit 1; }
-echo "ServiceBay's agent is connected"
+# the agent connecting is household.py install's first wait (/api/system/health wants a login)

@@ -62,8 +62,9 @@ step_install() {
   rm -rf ~/servicebay-templates; mkdir -p ~/servicebay-templates
   podman cp servicebay:/app/templates ~/servicebay-templates/servicebay
   podman cp servicebay:/app/.servicebay/registries ~/servicebay-templates/registries
-  T=~/servicebay-templates/servicebay$(for r in ~/servicebay-templates/registries/*/templates; do printf ',%s' "$r"; done)
-  python3 scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json --templates "$T" --out "$OUT" | tee "$OUT.txt"
+  python3 scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json \
+    --templates ~/servicebay-templates/servicebay,$(ls -d ~/servicebay-templates/registries/*/templates | paste -sd,) \
+    --out "$OUT" | tee "$OUT.txt"
   # carry over before the first apply, while ServiceBay still runs: the line it printed
   carry=$(sed -n 's/^ServiceBay still runs: \(scripts\/carry-servicebay-secrets.sh .*\)$/\1/p' "$OUT.txt")
   [ -n "$carry" ] || { echo "migrate-servicebay.py printed no carry line"; exit 1; }
@@ -113,7 +114,7 @@ step_forward_again() {
 }
 
 step_caddy() {
-  say "2. Caddy replaces NPM"
+  say "4d. Caddy replaces NPM"
   # until now NPM has served the household's names, Laib's units behind it
   local h
   for h in vault:/alive photos:/api/server/ping home:/ caldav:/; do

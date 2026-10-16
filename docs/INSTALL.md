@@ -49,7 +49,7 @@ laib token mint ops             # for Solaris; paste into its ops profile
 laib token mint claude --ttl 8h # for a Claude session
 ```
 
-Then Caddy beside NPM (step 2). Nothing before that changes a service.
+Nothing before step 3 changes a service; NPM stays the proxy until the services have moved, then Caddy replaces it (step 4d).
 
 ## Updating
 

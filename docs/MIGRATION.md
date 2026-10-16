@@ -30,7 +30,8 @@ things cannot be shared:
    then `laib apply`. Not seen: a host-network `.container` declares no
    ports, so ServiceBay's `llama-embed.container` (11436, Laib's llama's
    embeddings port) is caught by nothing; it goes out with `llama` (step 4).
-2. **Ports 80/443.** Caddy starts on alternative ports beside NPM (step 2).
+2. **Ports 80/443.** NPM holds them until the services have moved; then
+   Caddy replaces it (step 4d).
 3. **Whole-file configs.** Authelia, AdGuard rewrites and the SSH port 2222
    (claude-dev vs Werkstatt) move as a whole, never half.
 
@@ -47,10 +48,21 @@ file moves out.
 
 ## Order
 
-1. **Laib binary + state repo**, nothing applied. `laib init --domain …`,
-   then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
-   --templates <servicebay>/templates,<each external registry>/templates
-   --out /mnt/data/laib/migration` writes a draft `<name>/` per installed
+1. **Laib binary + state repo**, nothing applied: on the box as core,
+   `install-box.sh --domain …` (`laib init`; it layers git), then the
+   migration scripts and ServiceBay's templates as the box runs them — the
+   built-ins in its image, the external registries it cloned into its
+   container:
+   ```sh
+   git clone --depth 1 https://github.com/mdopp/laib ~/laib && cd ~/laib
+   mkdir -p ~/servicebay-templates
+   podman cp servicebay:/app/templates ~/servicebay-templates/servicebay
+   podman cp servicebay:/app/.servicebay/registries ~/servicebay-templates/registries
+   python3 scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json \
+     --templates ~/servicebay-templates/servicebay,$(ls -d ~/servicebay-templates/registries/*/templates | paste -sd,) \
+     --out /mnt/data/laib/migration | tee /mnt/data/laib/migration.txt
+   ```
+   (python3 is on the box: ServiceBay's agent needs it.) It writes a draft `<name>/` per installed
    template — laib.yml with the routes the box's proxy hosts have and the auth
    ServiceBay applied, data paths from the Pod YAML's host paths, secrets and
    ports from `variables.json`; values.yml from `installedVariables` — and
@@ -65,21 +77,24 @@ file moves out.
    for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth),
    and the data-bound ones carried over (below). The rest is generated on
    first apply and the post-deploy hook seeds the app. Nothing runs yet.
-2. **Caddy beside NPM** on a different port, `laib apply caddy`. Routes are
-   verified against `127.0.0.1` before DNS moves. Then AdGuard rewrites
-   switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;
-   Authelia's config is still ServiceBay's at this point and stays compatible
-   because the rules are Authelia's, not the proxy's (ServiceBay ADR 0005, 0006).
+2. **NPM stays the proxy until step 4 is done.** Caddy cannot start beside
+   it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
+   and Caddy's routes come from the state, which holds none of the
+   household's services yet. Meanwhile NPM keeps serving every name: Laib's
+   built-ins publish the ports ServiceBay's proxy hosts forward to, and
+   Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
+   (Authelia's default endpoints). Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
    `auth.kube` out first, then `laib add auth`. OIDC clients are rendered
-   from every `services/*/laib.yml`, which at this point is the full list,
-   so no client is dropped (the #1724 failure class cannot occur).
+   from every `services/*/laib.yml` — at this point only the services
+   already moved; an app still on ServiceBay loses its SSO login until it
+   moves (#245). Password logins are untouched.
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
    model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
-   immich, media, home-assistant** in that order: small and stateless first,
+   immich, paperless, media, home-assistant** in that order: small and stateless first,
    the ones with migrations last. Each one, in this order (the service is
    down from a to c; that is the price of never having two writers on one
    database):
@@ -98,6 +113,10 @@ file moves out.
    c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
+   d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
+      unit out by a. (`nginx`), then `laib add caddy`; its routes are the
+      state's, now the full list. Verify each name through Caddy, then the
+      AdGuard rewrites, if any, point at the box as before.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template; their git
    checkouts are copied into the Werkstatt's workspace (below). Their
    sessions and SSH host keys are an open decision (below).
