@@ -15,8 +15,9 @@ import (
 )
 
 // podmanBox swaps sysd.Run for a podman that holds box (name → value) and
-// logs every argv; inspectErr makes inspect print what it found and fail.
-func podmanBox(t *testing.T, box map[string]string, inspectErr string) *[]string {
+// logs every argv; inspectErr makes inspect print what it found and fail,
+// lsErr makes ls fail.
+func podmanBox(t *testing.T, box map[string]string, inspectErr, lsErr string) *[]string {
 	t.Helper()
 	var calls []string
 	real := sysd.Run
@@ -25,6 +26,8 @@ func podmanBox(t *testing.T, box map[string]string, inspectErr string) *[]string
 		line := name + " " + strings.Join(args, " ")
 		calls = append(calls, line)
 		switch {
+		case strings.HasPrefix(line, "podman secret ls") && lsErr != "":
+			return lsErr, errors.New("exit status 125")
 		case strings.HasPrefix(line, "podman secret ls"):
 			var names []string
 			for n := range box {
@@ -33,7 +36,10 @@ func podmanBox(t *testing.T, box map[string]string, inspectErr string) *[]string
 			slices.Sort(names)
 			return `time="2026-10-16T10:00:00Z" level=warning msg="laib.ignored by the filter"` + "\n" + strings.Join(names, "\n"), nil
 		case strings.HasPrefix(line, "podman secret inspect"):
-			var out []string
+			if len(args) == 5 {
+				return "Error: requires at least 1 arg(s), only received 0", errors.New("exit status 125")
+			}
+			out := []string{`WARN[0000] "a warning podman prints is a line too"`}
 			for _, n := range args[5:] {
 				out = append(out, n+" "+strconv.Quote(box[n]))
 			}
@@ -65,7 +71,7 @@ func TestPlanComparesOnlyLaibsPodmanSecrets(t *testing.T) {
 		"mysql-root":                      "not-laibs",  // not laib's: never read, never touched
 		"laib-lookalike":                  "not-laibs",
 	}
-	calls := podmanBox(t, box, "")
+	calls := podmanBox(t, box, "", "")
 	p, err := Compute(context.Background(), st, secrets, paths, "")
 	if err != nil {
 		t.Fatal(err)
@@ -123,9 +129,40 @@ func TestPlanNeverPrintsInspectOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	podmanBox(t, map[string]string{"laib.whoami.whoami.TOKEN": "s3cr3t-224"}, `Error: no secret with name or id "laib.x": no such secret`)
+	podmanBox(t, map[string]string{"laib.whoami.whoami.TOKEN": "s3cr3t-224"}, `Error: no secret with name or id "laib.x": no such secret`, "")
 	_, err = Compute(context.Background(), st, map[string]string{"WHOAMI_TOKEN": "s3cr3t-224"}, boxfs.Paths{Quadlet: t.TempDir(), Render: t.TempDir()}, "")
 	if err == nil || strings.Contains(err.Error(), "s3cr3t-224") || !strings.Contains(err.Error(), "no such secret") {
 		t.Fatalf("inspect failed: the error must say why and hold no value: %v", err)
+	}
+}
+
+// #224 review: what plan cannot read from podman is red, never an empty box
+// (every secret an add, and the orphans never seen); a box with none of
+// laib's asks inspect nothing. An empty secrets.age (a lost or moved file)
+// compares nothing either: the podman secrets are then the last copy of the
+// values, and plan never removes them.
+func TestPlanReadsPodmanOrFails(t *testing.T) {
+	st, err := state.Load("../../testdata/golden/basic/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := boxfs.Paths{Quadlet: t.TempDir(), Render: t.TempDir()}
+	podmanBox(t, nil, "", "Error: cannot open the secrets database")
+	if _, err := Compute(context.Background(), st, map[string]string{"WHOAMI_TOKEN": "x"}, paths, ""); err == nil || !strings.Contains(err.Error(), "secrets database") {
+		t.Fatalf("a failing podman secret ls must fail the plan with its reason: %v", err)
+	}
+	podmanBox(t, map[string]string{"mysql-root": "x"}, "", "")
+	if _, err := Compute(context.Background(), st, map[string]string{"WHOAMI_TOKEN": "x"}, paths, ""); err != nil {
+		t.Fatalf("a box without laib's secrets: %v", err)
+	}
+	podmanBox(t, map[string]string{"laib.whoami.whoami.TOKEN": "x", "laib.gone.gone.KEY": "y"}, "", "")
+	p, err := Compute(context.Background(), st, map[string]string{}, paths, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range p.Changes {
+		if strings.HasPrefix(c.Path, "secret/") {
+			t.Errorf("an empty secrets.age took a podman secret away: %+v", c)
+		}
 	}
 }

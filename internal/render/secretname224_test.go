@@ -27,7 +27,7 @@ func shareBox(units map[string]string, values map[string]state.Value) *state.Sta
 func TestPodmanSecretNamesAreValidAndDistinct(t *testing.T) {
 	values := map[string]state.Value{"U1": {Literal: "jörg"}, "U2": {Literal: "jürg"}, "U3": {Literal: "x.K"}, "U4": {Literal: strings.Repeat("A", 260)}, "U5": {Literal: ""}}
 	secrets := map[string]string{}
-	for i := range 7 {
+	for i := range 8 {
 		n := "PW" + string(rune('1'+i))
 		values[n] = state.Value{Secret: n}
 		secrets[n] = "pw-" + n + "-v224"
@@ -40,7 +40,8 @@ func TestPodmanSecretNamesAreValidAndDistinct(t *testing.T) {
 			"Environment=L${U4}=${PW4}\n" + // past 253 characters
 			"Environment=ACCOUNT_${U5}=${PW5}\n" + // ends in _
 			"Environment=TOKEN=${PW7}\n",
-		"a.B_x.container": "[Container]\nImage=x\nEnvironment=K=${PW6}\n", // … and laib.share.a.B_x.K again
+		"a.B_x.container": "[Container]\nImage=x\nEnvironment=K=${PW6}\n",             // … and laib.share.a.B_x.K again
+		"b.container":     "[Container]\nImage=x\nEnvironment=ACCOUNT_${U1}=${PW8}\n", // a.container's key, another container
 	}
 	st := shareBox(units, values)
 	out, err := Render(st, secrets)
@@ -48,8 +49,8 @@ func TestPodmanSecretNamesAreValidAndDistinct(t *testing.T) {
 		t.Fatal(err)
 	}
 	sec := PodmanSecrets(st, secrets)
-	if got := slices.Sorted(maps.Values(sec)); len(got) != 7 {
-		t.Fatalf("seven secret-backed lines, seven podman secrets, got %d: %v", len(sec), slices.Collect(maps.Keys(sec)))
+	if got := slices.Sorted(maps.Values(sec)); len(got) != 8 {
+		t.Fatalf("eight secret-backed lines, eight podman secrets, got %d: %v", len(sec), slices.Collect(maps.Keys(sec)))
 	}
 	for name := range sec {
 		if len(name) > 253 || !podmanName.MatchString(name) || !strings.HasPrefix(name, "laib.share.") {
@@ -68,6 +69,9 @@ func TestPodmanSecretNamesAreValidAndDistinct(t *testing.T) {
 	}
 	if !strings.Contains(b, "\nEnvironment=K="+secrets["PW6"]+"\n") {
 		t.Errorf("a.B_x.container's container does not get its own K:\n%s", b)
+	}
+	if c := seen["quadlet/share/b.container"]; !strings.Contains(c, "\nEnvironment=ACCOUNT_jörg="+secrets["PW8"]+"\n") {
+		t.Errorf("b.container's container does not get its own ACCOUNT_jörg:\n%s", c)
 	}
 }
 
@@ -106,7 +110,8 @@ func TestEveryEnvironmentShapeKeepsTheSecretOffArgv(t *testing.T) {
 	for _, bad := range []struct{ line, user string }{
 		{"Environment=A=1 TOKEN=${PW}", "x"},      // two assignments: which one is the secret's?
 		{"Environment=ACCOUNT_${U}=${PW}", "a,b"}, // podman splits --secret at commas
-		{"Environment=ACCOUNT_${U}=${PW}", "a b"}, // Quadlet splits Secret= at spaces
+		{"Environment=ACCOUNT_${U}=${PW}", "a b"},
+		{"Environment=${U}=${PW}", ""}, // no key at all // Quadlet splits Secret= at spaces
 	} {
 		st := shareBox(map[string]string{"a.container": "[Container]\nImage=x\n" + bad.line + "\n"}, map[string]state.Value{"PW": {Secret: "PW"}, "U": {Literal: bad.user}})
 		if out, err := Render(st, secrets); err == nil {

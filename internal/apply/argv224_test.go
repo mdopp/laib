@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,10 +28,14 @@ func TestSecretsReachContainersOffArgv(t *testing.T) {
 		"systemctl": `echo "systemctl $*" >> "$ARGV_LOG"; case "$*" in *is-active*) echo active;; esac`,
 		"podman": `echo "podman $*" >> "$ARGV_LOG"
 case "$1 $2" in
-"secret create") for a; do n=$prev; prev=$a; done; cat > "$STORE/$n";;
+"secret create") for a; do n=$prev; prev=$a; done
+  if [ "$3" = --replace ] && [ -e "$CUT" ]; then rm "$CUT" "$STORE/$n"; echo "Error: cut after the old one went"; exit 125; fi
+  [ "$3" = --replace ] || [ ! -e "$STORE/$n" ] || { echo "Error: $n: secret name in use"; exit 125; }
+  [ "$3" != --replace ] || [ -e "$STORE/$n" ] || { echo "Error: no secret with name $n (podman 4.9)"; exit 125; }
+  cat > "$STORE/$n";;
 "secret ls") ls "$STORE";;
 "secret inspect") shift 5; for n; do printf '%s "%s"\n' "$n" "$(cat "$STORE/$n")"; done;;
-"secret rm") rm "$STORE/$3";;
+"secret rm") if [ -e "$RMFAIL" ]; then rm "$RMFAIL"; echo "Error: secret $3 is in use"; exit 125; fi; rm "$STORE/$3";;
 esac`,
 	}
 	for name, body := range fakes {
@@ -39,6 +44,8 @@ esac`,
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 	t.Setenv("ARGV_LOG", log)
 	t.Setenv("STORE", store)
+	t.Setenv("CUT", filepath.Join(bin, "cut"))
+	t.Setenv("RMFAIL", filepath.Join(bin, "rmfail"))
 	real := sysd.Run
 	t.Cleanup(func() { sysd.Run = real })
 	sysd.Run = unswappedRun // the real thing: an earlier test may have swapped it
@@ -68,11 +75,16 @@ esac`,
 				t.Fatalf("a secret value went onto an argv, where ps shows it:\n%s", b)
 			}
 		}
-		unit, _ := os.ReadFile(filepath.Join(paths.Quadlet, "vault", "vault.container"))
-		for _, v := range secrets {
-			if strings.Contains(string(unit), v) {
-				t.Fatalf("the unit carries a secret value, which Quadlet puts on podman run's argv:\n%s", unit)
-			}
+		for _, root := range []string{home, "."} { // no file laib writes holds a value: not a unit, not anything (this package's sources aside)
+			filepath.WalkDir(root, func(f string, d os.DirEntry, _ error) error {
+				b, _ := os.ReadFile(f)
+				for _, v := range secrets {
+					if !d.IsDir() && !strings.HasSuffix(f, ".go") && strings.Contains(string(b), v) {
+						t.Fatalf("%s carries a secret value (a unit's goes onto podman run's argv):\n%s", f, b)
+					}
+				}
+				return nil
+			})
 		}
 		return res
 	}
@@ -116,8 +128,35 @@ esac`,
 	if res := apply(map[string]string{"VAULT_TOKEN": "s3cr3t-rotated-224"}); !restarted(res) || held()[firstName(held())] != "Bearer s3cr3t-rotated-224" {
 		t.Fatalf("a podman secret that differs from the state is healed and its unit restarted: %+v %v", res, held())
 	}
+	// the secret is in podman before the units reload and restart
+	b, _ := os.ReadFile(log)
+	if c, r := strings.Index(string(b), "podman secret create"), strings.Index(string(b), "daemon-reload"); c < 0 || r < c {
+		t.Fatalf("the podman secret must exist before daemon-reload restarts its unit:\n%s", b)
+	}
+	// --replace drops the old secret before it stores the new one: a create
+	// cut in between leaves none. That apply is red without the value in its
+	// error; the next creates the secret anew and restarts the unit.
+	os.WriteFile(filepath.Join(bin, "cut"), nil, 0o644)
+	third := map[string]string{"VAULT_TOKEN": "s3cr3t-third-224"}
+	p, _ := plan.Compute(context.Background(), st, third, paths, "")
+	if _, err := Run(context.Background(), st, p, paths, third, "test"); err == nil || strings.Contains(err.Error(), "third") || len(held()) != 0 {
+		t.Fatalf("the cut create must be a red apply, the value off its error, the secret gone: %v %v", err, held())
+	}
+	if res := apply(third); !restarted(res) || held()[firstName(held())] != "Bearer s3cr3t-third-224" {
+		t.Fatalf("the next run must create the lost secret and restart its unit: %+v %v", res, held())
+	}
+	// a secret podman will not remove yet is a red check, not a stop: the
+	// units still reload, and the next run removes it
 	delete(st.Services, "vault")
-	apply(map[string]string{"VAULT_TOKEN": "s3cr3t-rotated-224"})
+	os.WriteFile(filepath.Join(bin, "rmfail"), nil, 0o644)
+	if res := apply(third); len(held()) != 1 || !slices.ContainsFunc(res.Checks, func(c Check) bool { return !c.OK && strings.Contains(c.What, "laib.vault.") }) {
+		t.Fatalf("the failed rm must be a red check, the secret still there: %+v", res)
+	}
+	b, _ = os.ReadFile(log)
+	if s, r := strings.Index(string(b), "stop vault.service"), strings.Index(string(b), "podman secret rm"); s < 0 || r < s || !strings.Contains(string(b), "daemon-reload") {
+		t.Fatalf("a removed service's unit stops before its secret goes, and a failed rm stops no reload:\n%s", b)
+	}
+	apply(third)
 	if got := held(); len(got) != 0 {
 		t.Fatalf("a removed service's podman secrets must go with it: %v", got)
 	}
