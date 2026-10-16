@@ -141,9 +141,10 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	}
 	// Podman secrets (#224) differ like files: missing or another value on
 	// the box is a change of its service (which restarts it), one of laib's
-	// that nothing names any more goes. Without the values (lint) there is
+	// that nothing names any more goes. Without the values (lint, or a
+	// secrets.age that is gone: then podman holds their last copy) there is
 	// nothing to compare.
-	if secrets != nil {
+	if len(secrets) > 0 {
 		box, err := boxSecrets(ctx)
 		if err != nil {
 			return nil, err
