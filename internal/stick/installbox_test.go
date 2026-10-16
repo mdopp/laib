@@ -25,9 +25,11 @@ func release(tag string, id int, binaries bool) string {
 }
 
 // runInstallBox runs scripts/install-box.sh without --version against a
-// GitHub API served by a curl shim. Downloading an asset fails on purpose:
-// what is under test is which release the script resolved.
-func runInstallBox(t *testing.T, latest string, list ...string) (log, out string) {
+// GitHub API served by a curl shim, with token as LAIB_GH_TOKEN. Downloading
+// an asset fails on purpose: what is under test is which release the script
+// resolved. The shim logs its argv (what ps shows) and, for a header read
+// from a file (-H @file) that carries the token, that file and its mode.
+func runInstallBox(t *testing.T, token, latest string, list ...string) (log, out string) {
 	t.Helper()
 	root := t.TempDir()
 	bin, home, fx := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(root, "fx")
@@ -45,7 +47,13 @@ func runInstallBox(t *testing.T, latest string, list ...string) (log, out string
 	shim(t, bin, "sudo", "exit 0")
 	shim(t, bin, "sysctl", "echo 0")
 	shim(t, bin, "restic", "exit 0")
-	shim(t, bin, "curl", `url="${@: -1}"
+	shim(t, bin, "curl", `prev=
+for a in "$@"; do
+  [ "$prev" = -H ] && [ "${a:0:1}" = @ ] && [ -n "$LAIB_GH_TOKEN" ] && grep -qxF "Authorization: Bearer $LAIB_GH_TOKEN" "${a:1}" &&
+    echo "curl: the bearer from a file of mode $(stat -c %a "${a:1}")" >> "$SHIM_LOG"
+  prev=$a
+done
+url="${@: -1}"
 case "$url" in
   */releases/latest) cat "$FX/latest";;
   */releases\?*) cat "$FX/list";;
@@ -53,7 +61,7 @@ case "$url" in
   *) exit 22;;
 esac`)
 	cmd := exec.Command("bash", filepath.Join("..", "..", "scripts", "install-box.sh"), "--domain", "trial.example")
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "HOME="+home, "LAIB_GH_TOKEN=")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "HOME="+home, "LAIB_GH_TOKEN="+token)
 	b, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(logf)
 	return string(l), string(b)
@@ -65,7 +73,7 @@ esac`)
 // takes the newest release that has its binaries, and says which it skipped.
 func TestLatestSkipsAReleaseWhoseBinariesAreNotBuiltYet(t *testing.T) {
 	v040, v035 := release("v0.4.0", 4, false), release("v0.3.5", 3, true)
-	log, out := runInstallBox(t, v040, v040, v035)
+	log, out := runInstallBox(t, "", v040, v040, v035)
 	if !strings.Contains(log, "/releases/assets/31\n") {
 		t.Fatalf("the binaries of v0.3.5 were never fetched\nshim log:\n%s\noutput:\n%s", log, out)
 	}
@@ -79,7 +87,7 @@ func TestLatestSkipsAReleaseWhoseBinariesAreNotBuiltYet(t *testing.T) {
 
 func TestLatestWithBinariesIsTakenAsIs(t *testing.T) {
 	v040, v035 := release("v0.4.0", 4, true), release("v0.3.5", 3, true)
-	log, out := runInstallBox(t, v040, v040, v035)
+	log, out := runInstallBox(t, "", v040, v040, v035)
 	if !strings.Contains(log, "/releases/assets/41\n") {
 		t.Fatalf("the binaries of v0.4.0 were never fetched\nshim log:\n%s\noutput:\n%s", log, out)
 	}

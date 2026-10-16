@@ -1,0 +1,15 @@
+# Paperless's documents into the folder the memory library indexes (#219,
+# haus#13): `haus export-documents` in Haus's container, before each
+# refresh (haus-qmd-refresh.service wants it and runs after it). Paperless
+# in trouble leaves the folder as it was and exits 0; a folder Haus cannot
+# write fails this unit, and `laib status` shows haus red, but never stops
+# the notes' refresh. LAIB_TOKEN is emptied: a Haus image older than
+# export-documents ignores the argument and would start a second server;
+# without the token it stops at once instead (red here, nothing else).
+[Unit]
+Description=Haus: export Paperless's documents for the memory library
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec -e LAIB_TOKEN= systemd-haus /haus export-documents
+TimeoutStartSec=45min

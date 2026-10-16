@@ -12,8 +12,8 @@ curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box
 
 Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
 `SHA256SUMS`; the script verifies the sums. The repo, its releases and
-the ghcr images are public: no GitHub token is needed (`--token` stays for a
-private fork or mirror).
+the ghcr images are public: no GitHub token is needed (a private fork or
+mirror exports `LAIB_GH_TOKEN`; never a flag, ps shows every argv, #217).
 
 A box with its own GPU passes `--gpu` instead and later adds the `llama`
 template as its model role. A box without one (the NUC) points

@@ -23,8 +23,12 @@ mkdir -p /run/laib && chmod 700 /run/laib && chown dev:dev /run/laib
 if [ -n "${LAIB_TOKEN:-}" ]; then
   # the token as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
   printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
-  # Every session on this box gets Laib as an MCP server, as the hand the token names.
-  su dev -c "claude mcp add --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer ${LAIB_TOKEN}' >/dev/null 2>&1 || true"
+  # Every session of dev gets Laib as an MCP server, as the hand the token names.
+  # The header names the token and Claude Code expands it from the session's
+  # environment: on su's and claude's argv the host's ps would show it (#217).
+  # A login shell reads it from the 0600 file, so only dev's processes hold it.
+  echo 'if [ -r /run/laib/token ]; then export LAIB_TOKEN="$(cat /run/laib/token)"; fi' > /etc/profile.d/laib.sh
+  su dev -c "claude mcp add -s user --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer \${LAIB_TOKEN}' >/dev/null 2>&1 || true"
 fi
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials
