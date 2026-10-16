@@ -117,6 +117,7 @@ class Migrate(unittest.TestCase):
         self.assertRegex(self.stdout, r"laib secret set IMMICH_DB_PASSWORD .*DB_PASSWORD")
         self.assertIn("laib secret set LLDAP_ADMIN_PASSWORD", self.stdout)
         self.assertNotIn("laib secret set PAPERLESS", self.stdout)    # paperless is not installed here
+        self.assertIn("scripts/carry-servicebay-secrets.sh auth file-share immich", self.stdout)   # one command sets them (#228)
 
     def test_no_secret_value_is_written(self):
         for d in self.out.iterdir():

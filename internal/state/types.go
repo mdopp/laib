@@ -202,8 +202,7 @@ type Contract struct {
 	Requires map[string][]string `yaml:"requires"`
 	// Channels: the people platforms this service delivers on, each on while
 	// its value is set (ADR 0022 §3, #184).
-	Channels     map[string]string `yaml:"channels"`
-	MigratedFrom string            `yaml:"migratedFrom"`
+	Channels map[string]string `yaml:"channels"`
 }
 
 // TemplateRef says where a service's files came from.

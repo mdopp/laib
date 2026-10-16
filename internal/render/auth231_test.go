@@ -77,11 +77,17 @@ func TestNoAuthRoutesFrontNoHeaderTrust(t *testing.T) {
 			}
 		}
 	}
-	// files goes back behind Authelia, File Browser takes the user from it
-	fb, _ := os.ReadFile("../../templates/file-share/file-share-filebrowser.container")
-	for _, want := range []string{"--auth.method=proxy", "--auth.header=Remote-User"} {
-		if !strings.Contains(string(fb), want) {
-			t.Errorf("file-share-filebrowser.container: no %s", want)
+	// files sits behind Authelia and takes the user from it, as in
+	// ServiceBay: one family login, no second password; one LLDAP account is
+	// File Browser's admin from the start, as ServiceBay's post-deploy did
+	for unit, wants := range map[string][]string{
+		"file-share/file-share-filebrowser.container": {"--auth.method=proxy", "--auth.header=Remote-User", "users update ${FILEBROWSER_ADMIN_USER} --perm.admin"},
+	} {
+		b, _ := os.ReadFile("../../templates/" + unit)
+		for _, want := range wants {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s: no %s", unit, want)
+			}
 		}
 	}
 }

@@ -26,7 +26,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moves with it |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); Music Assistant drives the speakers for Assist |
 | immich (4 containers, ML) | `immich` | built-in |
-| paperless (3 containers) | `paperless` | built-in with its own logins (no Remote-User trust, #231) |
+| paperless (3 containers) | `paperless` | built-in with OIDC logins through Authelia |
 | radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
 | vaultwarden | `vaultwarden` | built-in with Authelia OIDC |
 | file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share` | built-in on the host network; notes, documents, music, photos live here |
@@ -34,7 +34,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
-| usage-metrics (8095) | ? | **decide**: keep as a registry template or drop |
+| usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; nothing calls it once Solaris retires |
 | daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them |
 | foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | moves to Laib's lease contract when it moves (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
 
@@ -50,11 +50,11 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 
 ## The count
 
-- Built-ins done (21): caddy, auth (Authelia + LLDAP), adguard, whoami,
+- Built-ins done (23): caddy, auth (Authelia + LLDAP), adguard, whoami,
   werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant,
   radicale, vaultwarden, mosquitto, esphome, beets, home-assistant,
   immich, file-share, stimme (whisper, piper, openwakeword, trainer),
-  paperless. Every unit that runs on the box today has a Laib template.
+  paperless, haus, usage-metrics. Every unit that runs on the box today has a Laib template.
 - Not yet run on any box: all of them. The NUC trial (Phase 1 to 3) and
   the Kraftwerk migration (Phase 4) are where they prove themselves.
 
@@ -72,8 +72,7 @@ anything: in Symfonium untick the Audiobooks library. In Laib: a `phone`
 Jellyfin user that sees Musik only, audiobooks and podcasts in
 Audiobookshelf, radio and speakers through Music Assistant.
 - Repos that need a `laib.yml`: flutstunde, foundry-chronicle (daggerheart).
-- Decisions: usage-metrics keep or drop; `mdopp/haus` and
-  `mdopp/laib-templates` to create.
+- Decisions: `mdopp/laib-templates` to create (usage-metrics: kept, #238).
 
 Each port is mechanical: `scripts/migrate-servicebay.py` writes the
 contract draft from `variables.json` and the backup annotation, `podlet`
