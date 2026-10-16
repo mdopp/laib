@@ -516,7 +516,7 @@ jobs:
                 for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
                 login
                 $L remove audiobookshelf >/dev/null
-                rm -rf "$R" /mnt/data/stacks/audiobookshelf /mnt/data/stacks/abs-media
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/audiobookshelf /mnt/data/stacks/abs-media
                 podman image rm -f ghcr.io/advplyr/audiobookshelf:latest >/dev/null || true
                 echo "audiobookshelf: a family member logged in through Authelia, before and after a rotation"'
       - name: backup and restore — restic in the day-one repo laib init wrote
