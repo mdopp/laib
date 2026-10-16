@@ -8,7 +8,15 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 )
+
+// Plan reads the box's podman secrets through sysd.Run (#224); this box has
+// none, whatever podman the test machine runs.
+func TestMain(m *testing.M) {
+	sysd.Run = func(context.Context, string, ...string) (string, error) { return "", nil }
+	os.Exit(m.Run())
+}
 
 func TestComputeAddsChangesDeletesAndUnmanaged(t *testing.T) {
 	st, err := state.Load("../../testdata/golden/basic/state")

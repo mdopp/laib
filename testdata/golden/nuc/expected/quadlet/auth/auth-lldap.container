@@ -5,10 +5,10 @@ Description=LLDAP — users and groups (laib role: identity)
 Image=docker.io/lldap/lldap:stable
 Pod=auth.pod
 Environment=TZ=Europe/Berlin
-Environment=LLDAP_JWT_SECRET=${secret:LLDAP_JWT_SECRET}
+Secret=laib.auth.auth-lldap.LLDAP_JWT_SECRET,type=env,target=LLDAP_JWT_SECRET
 Environment=LLDAP_LDAP_BASE_DN=dc=example,dc=home
 Environment=LLDAP_LDAP_USER_DN=admin
-Environment=LLDAP_LDAP_USER_PASS=${secret:LLDAP_ADMIN_PASSWORD}
+Secret=laib.auth.auth-lldap.LLDAP_LDAP_USER_PASS,type=env,target=LLDAP_LDAP_USER_PASS
 Environment=LLDAP_HTTP_PORT=17170
 Environment=LLDAP_HTTP_HOST=0.0.0.0
 Environment=LLDAP_LDAP_PORT=3890

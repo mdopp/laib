@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // Change is one file that differs.
@@ -31,12 +32,13 @@ type Change struct {
 
 // Plan is the result of `laib plan`.
 type Plan struct {
-	Changes   []Change      `json:"changes"`
-	Unmanaged []string      `json:"unmanaged"`
-	Conflicts []string      `json:"conflicts,omitempty"` // foreign units that run one of the services too (#227)
-	Services  []string      `json:"services"`            // services with at least one change
-	Only      string        `json:"only,omitempty"`
-	Output    render.Output `json:"-"`
+	Changes   []Change          `json:"changes"`
+	Unmanaged []string          `json:"unmanaged"`
+	Conflicts []string          `json:"conflicts,omitempty"` // foreign units that run one of the services too (#227)
+	Services  []string          `json:"services"`            // services with at least one change
+	Only      string            `json:"only,omitempty"`
+	Output    render.Output     `json:"-"`
+	Secrets   map[string]string `json:"-"` // podman secret → value (#224); a change "secret/<name>" hands it over
 }
 
 // Empty reports whether the box already matches the state.
@@ -138,6 +140,33 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 			}
 		}
 	}
+	// Podman secrets (#224) differ like files: missing or another value on
+	// the box is a change of its service (which restarts it), one of laib's
+	// that nothing names any more goes. Without the values (lint, or a
+	// secrets.age that is gone: then podman holds their last copy) there is
+	// nothing to compare.
+	if len(secrets) > 0 {
+		box, err := boxSecrets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.Secrets = render.PodmanSecrets(st, secrets)
+		names := maps.Clone(p.Secrets)
+		maps.Copy(names, box)
+		for _, n := range slices.Sorted(maps.Keys(names)) {
+			cur, onBox := box[n]
+			want, wanted := p.Secrets[n]
+			svc := strings.SplitN(n, ".", 3)[1]
+			if (onBox && wanted && cur == want) || (only != "" && svc != only) {
+				continue
+			}
+			kind := map[bool]string{true: "change", false: "add"}[onBox]
+			if !wanted {
+				kind = "delete"
+			}
+			add(Change{Path: "secret/" + n, Target: "podman secret " + n, Service: svc, Kind: kind, Diff: "(a secret value, not shown)"})
+		}
+	}
 	p.Unmanaged = unmanaged(st, paths)
 	// a folder whose files the manifest owns is laib's, not unmanaged
 	var um []string
@@ -151,6 +180,34 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	p.Unmanaged = um
 	p.Conflicts = unitConflicts(st, paths)
 	return p, nil
+}
+
+// boxSecrets reads laib's podman secrets on the box, name → value, from
+// podman's output (never an argv).
+func boxSecrets(ctx context.Context) (map[string]string, error) {
+	ls, err := sysd.Run(ctx, "podman", "secret", "ls", "--format", "{{.Name}}")
+	if err != nil {
+		return nil, fmt.Errorf("podman secret ls: %s", ls)
+	}
+	// a warning on stderr is a line too: only laib's names count
+	names := slices.DeleteFunc(strings.Split(ls, "\n"), func(n string) bool { return !strings.HasPrefix(n, "laib.") })
+	if len(names) == 0 {
+		return nil, nil
+	}
+	js, err := sysd.Run(ctx, "podman", append([]string{"secret", "inspect", "--showsecret", "--format", "{{.Spec.Name}} {{json .SecretData}}"}, names...)...)
+	if err != nil {
+		// what it found before it failed is values: only its error lines go on
+		why := slices.DeleteFunc(strings.Split(js, "\n"), func(l string) bool { return !strings.HasPrefix(l, "Error") })
+		return nil, fmt.Errorf("podman secret inspect: %v: %s", err, strings.Join(why, "; "))
+	}
+	out := map[string]string{}
+	for _, line := range strings.Split(js, "\n") {
+		var v string
+		if n, q, _ := strings.Cut(line, " "); slices.Contains(names, n) && json.Unmarshal([]byte(q), &v) == nil {
+			out[n] = v
+		}
+	}
+	return out, nil
 }
 
 // A foreign unit's Pod YAML, host ports (PublishPort=[ip:]host:ctr, a Pod

@@ -103,6 +103,7 @@ func TestShippedTemplatesCarryTheirSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	out = asContainerSees(st, secrets, out) // a podman secret since #224
 	checked := 0
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
