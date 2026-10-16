@@ -150,7 +150,7 @@ func TestTypedIncidentSessionRunsEndToEnd(t *testing.T) {
 
 // #53: the eval runs the typed interface over the same incidents.
 func TestEvalTypedIncidents(t *testing.T) {
-	incidents, err := LoadIncidents(filepath.Join("..", "..", "werkstatt", "evals", "incidents-typed.json"))
+	incidents, err := LoadIncidents(filepath.Join("..", "werkstatt", "evals", "incidents-typed.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

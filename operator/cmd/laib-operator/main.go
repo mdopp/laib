@@ -1,4 +1,5 @@
-// Command laib-operator is the box's admin agent (ADR 0013). It wakes on
+// Command laib-operator is the box's admin agent (ADR 0013), its own
+// program with its own line budget (ADR 0023). It wakes on
 // Laib's webhook, on a tick and at the report hour, and runs one session
 // per wake-up through the operator package. Configuration is environment
 // only; the unit is rendered by laib from box.yml operator.
@@ -19,8 +20,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mdopp/laib/internal/boxfs"
-	"github.com/mdopp/laib/internal/operator"
+	"github.com/mdopp/laib/operator"
 )
 
 func main() {
@@ -28,9 +28,9 @@ func main() {
 	flag.Parse()
 
 	op := &operator.Operator{
-		MCP:  &operator.MCP{URL: boxfs.Env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
-		LLM:  &operator.LLM{URL: strings.TrimRight(boxfs.Env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: boxfs.Env("MODEL_NAME", "gemma-4-e4b")},
-		Home: boxfs.Env("OPERATOR_HOME", "/mnt/data/laib/operator"),
+		MCP:  &operator.MCP{URL: env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
+		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "gemma-4-e4b")},
+		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")
@@ -40,7 +40,7 @@ func main() {
 	// The typed surface (#53) is the default: a household model gets a menu
 	// per trigger with typed parameters; OPERATOR_INTERFACE=cli gives a large
 	// model the verb table. The menu's service enum comes from laib status.
-	op.Typed = boxfs.Env("OPERATOR_INTERFACE", "typed") != "cli"
+	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
 	if op.Typed {
 		if text, _, err := op.MCP.Call(ctx, "laib_status", map[string]string{"args": ""}); err == nil {
 			op.Services = operator.ServicesFromStatus(text)
@@ -113,19 +113,19 @@ func main() {
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"operator":"bereit"}`)
 	})
-	srv := &http.Server{Addr: boxfs.Env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
 
-	tick, _ := time.ParseDuration(boxfs.Env("OPERATOR_TICK", "10m"))
+	tick, _ := time.ParseDuration(env("OPERATOR_TICK", "10m"))
 	if tick <= 0 {
 		tick = 10 * time.Minute
 	}
 	ticker := time.NewTicker(tick)
-	reportAt := boxfs.Env("OPERATOR_REPORT_AT", "07:00")
+	reportAt := env("OPERATOR_REPORT_AT", "07:00")
 	reportedDay := ""
 	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, tick, reportAt)
 	for {
@@ -142,4 +142,13 @@ func main() {
 			run(operator.Trigger{Kind: "tick"})
 		}
 	}
+}
+
+// env is an environment variable or its default. The Operator imports
+// nothing of the kernel (ADR 0023); this is boxfs.Env's one line.
+func env(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }

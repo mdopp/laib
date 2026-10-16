@@ -12,7 +12,7 @@ import (
 // called. Against the household model (OPERATOR_EVAL_MODEL_URL) the same
 // harness records pass/fail per incident into werkstatt/evals/results/.
 func TestEvalScriptedIncidents(t *testing.T) {
-	incidents, err := LoadIncidents(filepath.Join("..", "..", "werkstatt", "evals", "incidents.json"))
+	incidents, err := LoadIncidents(filepath.Join("..", "werkstatt", "evals", "incidents.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestEvalScriptedIncidents(t *testing.T) {
 	// scripted baseline is committed once and not rewritten on every run
 	out := filepath.Join(t.TempDir(), "scripted.json")
 	if real != "" {
-		out = filepath.Join("..", "..", "werkstatt", "evals", "results", "latest-real.json")
+		out = filepath.Join("..", "werkstatt", "evals", "results", "latest-real.json")
 	}
 	if err := rep.Save(out); err != nil {
 		t.Fatal(err)
