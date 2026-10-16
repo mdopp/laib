@@ -194,7 +194,9 @@ func boxSecrets(ctx context.Context) (map[string]string, error) {
 	}
 	js, err := sysd.Run(ctx, "podman", append([]string{"secret", "inspect", "--showsecret", "--format", "{{.Spec.Name}} {{json .SecretData}}"}, names...)...)
 	if err != nil {
-		return nil, fmt.Errorf("podman secret inspect: %s", js)
+		// what it found before it failed is values: only its error lines go on
+		why := slices.DeleteFunc(strings.Split(js, "\n"), func(l string) bool { return !strings.HasPrefix(l, "Error") })
+		return nil, fmt.Errorf("podman secret inspect: %v: %s", err, strings.Join(why, "; "))
 	}
 	out := map[string]string{}
 	for _, line := range strings.Split(js, "\n") {

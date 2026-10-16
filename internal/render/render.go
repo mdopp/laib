@@ -7,13 +7,16 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"golang.org/x/crypto/pbkdf2"
 
@@ -50,7 +53,11 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			case "service", "timer":
 				out["systemd/"+file] = substitute(content, vars) // a plain host unit next to laib's own
 			default:
-				out["quadlet/"+name+"/"+file], _ = secretEnv(svc, file, content, vars)
+				unit, _, err := secretEnv(svc, file, content, vars)
+				if err != nil {
+					return nil, err
+				}
+				out["quadlet/"+name+"/"+file] = unit
 			}
 		}
 		for file, content := range svc.Assets {
@@ -270,7 +277,7 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 		svc := st.Services[name]
 		vars := variables(st, svc, secrets)
 		for file, content := range svc.Units {
-			_, sec := secretEnv(svc, file, content, vars)
+			_, sec, _ := secretEnv(svc, file, content, vars) // Render reported an error first
 			maps.Copy(all, sec)
 		}
 	}
@@ -280,31 +287,83 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 // secretEnv substitutes a unit; in a .container each Environment= line that
 // names a secret-backed value becomes Secret=<name>,type=env,target=<KEY>
 // (#224): Quadlet puts every Environment= value on podman run's argv, where
-// ps shows it to every user on the box. The name is laib.<service>.<container>.<KEY>;
-// the values come back under it. An empty value stays an empty Environment=
-// line: nothing to hide, and podman refuses an empty secret.
-func secretEnv(svc *state.Service, file, content string, vars map[string]string) (string, map[string]string) {
+// ps shows it to every user on the box. The values come back under the
+// names. An empty value stays an empty Environment= line: nothing to hide,
+// and podman refuses an empty secret. What podman cannot take as one secret
+// (two assignments, a key with a comma, quote or blank) is an error, never
+// an Environment= line.
+func secretEnv(svc *state.Service, file, content string, vars map[string]string) (string, map[string]string, error) {
 	if !strings.HasSuffix(file, ".container") {
-		return substitute(content, vars), nil
+		return substitute(content, vars), nil, nil
 	}
 	sec := map[string]string{}
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		rest, ok := strings.CutPrefix(line, "Environment=")
-		if !ok || !slices.ContainsFunc(state.Placeholders(line), func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }) {
+		k, rest, _ := strings.Cut(line, "=") // systemd takes blanks around the =
+		if strings.TrimSpace(k) != "Environment" || !slices.ContainsFunc(state.Placeholders(rest), func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }) {
 			lines[i] = substitute(line, vars)
 			continue
 		}
-		key, val, _ := strings.Cut(substitute(strings.Trim(rest, `"`), vars), "=")
+		words := envWords(rest)
+		if len(words) != 1 {
+			return "", nil, fmt.Errorf("services/%s/%s: %s: a line that names a secret holds one assignment (#224)", svc.Name, file, line)
+		}
+		key, val, _ := strings.Cut(substitute(words[0], vars), "=")
+		if key == "" || strings.ContainsAny(key, ",\"'") || strings.ContainsFunc(key, unicode.IsSpace) {
+			return "", nil, fmt.Errorf("services/%s/%s: %s: its key is no podman secret target (a comma, quote or blank)", svc.Name, file, line)
+		}
 		if val == "" {
 			lines[i] = "Environment=" + key + "="
 			continue
 		}
-		name := "laib." + svc.Name + "." + strings.TrimSuffix(file, ".container") + "." + key
+		name := podmanSecretName(svc.Name, strings.TrimSuffix(file, ".container"), key)
 		sec[name] = val
 		lines[i] = "Secret=" + name + ",type=env,target=" + key
 	}
-	return strings.Join(lines, "\n"), sec
+	return strings.Join(lines, "\n"), sec, nil
+}
+
+// envWords splits an Environment= value into its assignments as systemd
+// does: at blanks outside quotes, the quotes dropped.
+func envWords(s string) (words []string) {
+	var w strings.Builder
+	quote, in := rune(0), false
+	for _, r := range s {
+		switch {
+		case quote != 0 && r == quote:
+			quote = 0
+		case quote == 0 && (r == '"' || r == '\''):
+			quote, in = r, true
+		case quote == 0 && unicode.IsSpace(r):
+			if in {
+				words, in = append(words, w.String()), false
+				w.Reset()
+			}
+		default:
+			w.WriteRune(r)
+			in = true
+		}
+	}
+	if in {
+		words = append(words, w.String())
+	}
+	return words
+}
+
+var plainSecretName = regexp.MustCompile(`^laib\.[a-z0-9-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_]*[A-Za-z0-9]$`)
+
+// podmanSecretName is laib.<service>.<container>.<KEY> when podman takes it
+// (253 of [a-zA-Z0-9_.-], alphanumeric at both ends) and its three dots are
+// the only ones. A key built from a value (ACCOUNT_${SHARE_USER}) can break
+// either; that line gets a hash of container and key instead, a name with
+// two dots, so it never meets a readable one.
+func podmanSecretName(svc, stem, key string) string {
+	name := "laib." + svc + "." + stem + "." + key
+	if len(name) <= 253 && plainSecretName.MatchString(name) {
+		return name
+	}
+	sum := sha256.Sum256([]byte(stem + "\x00" + key))
+	return "laib." + svc + "." + hex.EncodeToString(sum[:12])
 }
 
 func substitute(content string, vars map[string]string) string {
