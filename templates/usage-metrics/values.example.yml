@@ -1,0 +1,3 @@
+IMAGE: ghcr.io/mdopp/usage-metrics:0.2.1   # built and published by the repo's own CI
+RETENTION_DAYS: "90"                        # calendar days of counters kept; older ones are deleted, not rolled up
+TOKEN: !secret USAGE_METRICS_TOKEN
