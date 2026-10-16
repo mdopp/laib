@@ -4,22 +4,23 @@ provides: [music, video]
 # Jellyfin for music and video. Audiobooks and podcasts are NOT here any
 # more (docs/SERVICES.md, the Symfonium finding): they live in
 # audiobookshelf, so a phone player that syncs Jellyfin's audio sees music
-# only. The hook completes the first-run wizard, creates the admin and a
-# "phone" user whose library access is Musik only, and registers the
-# libraries Musik (/media/music) and, when the folders exist, Filme and
-# Serien.
-after: [file-share]              # its folders are mounted here (#36)
+# only. The hook completes the first-run wizard, creates the local admin
+# (break-glass), registers the libraries Musik (/media/music) and, when the
+# folders exist, Filme and Serien, and logs the family in with their LLDAP
+# accounts through the LDAP-Authentication plugin (#256), Quick Connect on.
+after: [auth, file-share]        # LLDAP's read-only account (#256); the share's folders are mounted here (#36)
 routes:
   - host: media
     port: 8096
     exposure: public
-    auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP
+    auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP (#256)
     caddy: |
       # Jellyfin streams and websockets
       proxy_buffering off
 secrets:
   - name: JELLYFIN_ADMIN_PASSWORD
-  - name: JELLYFIN_PHONE_PASSWORD
+  - name: JELLYFIN_LDAP_PASSWORD      # the read-only LLDAP account the plugin binds with, seeded by the auth template (#256)
+    external: true
 data:
   - path: ${DATA_DIR}/media/jellyfin-config
   - path: ${DATA_DIR}/media/jellyfin-cache

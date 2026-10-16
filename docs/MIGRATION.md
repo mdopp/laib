@@ -149,6 +149,14 @@ adguard, the Home Assistant config and the Z-Wave store, immich upload and
 pgdata, paperless, radicale, media, mosquitto, beets, esphome, llama) and is
 adopted in place.
 
+Jellyfin's LDAP login (#256) is adopted too: the plugin is installed on the
+box already; media's post-deploy rewrites its `LDAP-Auth.xml` to bind as the
+read-only `jellyfin` account (ServiceBay bound as the LLDAP admin), lets
+members of `family` and `admins` in, maps `admins` to administrators, and
+keeps the libraries ServiceBay's configuration gave new users. The users
+Jellyfin made from LDAP logins stay. `laib add media BASE_DN=…` comes with
+the box's base DN from the printed line.
+
 **Values and images.** `scripts/migrate-servicebay.py` prints one
 `laib add <name> …` line per built-in. It carries the box's values under
 Laib's names: `BASE_DN` from `LLDAP_BASE_DN` (ServiceBay derived a blank one

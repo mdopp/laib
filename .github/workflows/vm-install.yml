@@ -399,6 +399,8 @@ jobs:
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
                 for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
+                # the operator first password, known to the job: the family login below logs in with it (#254)
+                printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
                 grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
@@ -434,6 +436,37 @@ jobs:
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
                 $L diag || true'
+      - name: media — a family member logs in to Jellyfin with the LLDAP account, through a read-only bind (#256)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, without the GPU (the NUC's); post-deploy is the built-in's
+          $SSH 'rm -rf /tmp/media && mkdir -p /tmp/media'
+          tar -C templates/media -cf - --exclude tests . | $SSH 'tar -C /tmp/media -xf -'
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/media; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/media "$R"
+                sed -i -e "/^gpu: true/d" -e "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                sed -i "/^AddDevice=nvidia/d" "$R/media.container"
+                mkdir -p /mnt/data/stacks/jf-media/music
+                podman pull -q docker.io/jellyfin/jellyfin:latest >/dev/null; echo "jellyfin image pre-pulled"
+                $L add media MEDIA_ROOT=/mnt/data/stacks/jf-media BASE_DN=dc=vm,dc=test | tee /tmp/add-media.txt
+                grep -q "^ok  media post-deploy" /tmp/add-media.txt || { echo "media post-deploy is not green"; exit 1; }
+                grep -q "LDAP-Authentication plugin installed" /tmp/add-media.txt || { echo "the LDAP plugin was not installed"; exit 1; }
+                X=/mnt/data/stacks/media/jellyfin-config/plugins/configurations/LDAP-Auth.xml
+                podman unshare grep -q "<LdapBindUser>uid=jellyfin,ou=people,dc=vm,dc=test</LdapBindUser>" "$X" || { echo "the plugin does not bind read-only"; exit 1; }
+                C="MediaBrowser Client=\"vm\", Device=\"vm\", DeviceId=\"vm-256\", Version=\"1\""
+                jf() { curl -s -o /tmp/jf.json -w "%{http_code}" -H "Authorization: $C" -H "Content-Type: application/json" "$@"; }
+                code=$(jf -d "{\"Username\":\"core\",\"Pw\":\"vm-operator-pw-254\"}" http://127.0.0.1:8096/Users/AuthenticateByName)
+                echo "jellyfin login as core (LLDAP, admins): HTTP $code"
+                [ "$code" = 200 ] || { echo "a family member cannot log in with the LLDAP account"; podman logs --tail 60 systemd-media 2>&1 | grep -i ldap | tail -20; exit 1; }
+                grep -q "\"IsAdministrator\":true" /tmp/jf.json || { echo "a member of admins is no Jellyfin administrator"; exit 1; }
+                code=$(jf -d "{\"Username\":\"core\",\"Pw\":\"not-the-password\"}" http://127.0.0.1:8096/Users/AuthenticateByName)
+                echo "jellyfin login as core with a wrong password: HTTP $code"; [ "$code" = 401 ] || exit 1
+                [ "$(curl -s http://127.0.0.1:8096/QuickConnect/Enabled)" = true ] || { echo "Quick Connect is off"; exit 1; }
+                echo "quick connect on"
+                $L remove media >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
+                podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true
+                echo "media: the family logs in to Jellyfin with LLDAP"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
