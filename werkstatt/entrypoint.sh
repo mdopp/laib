@@ -3,6 +3,9 @@
 # habit of a config UI inside the dev container is gone: configuration is
 # the service's values.yml, applied by laib.
 set -euo pipefail
+# laib creates the workspace data path as core, which is root in here; dev
+# works in it (#262). The folder itself only, never -R over the checkouts.
+chown dev:dev /workspace
 mkdir -p /home/dev/.ssh
 if [ -n "${WERKSTATT_AUTHORIZED_KEY:-}" ]; then
   echo "$WERKSTATT_AUTHORIZED_KEY" > /home/dev/.ssh/authorized_keys
