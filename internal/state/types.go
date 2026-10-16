@@ -238,9 +238,10 @@ type Secret struct {
 
 // OIDC is the service's Authelia client.
 type OIDC struct {
-	ClientID     string   `yaml:"clientId"`
-	RedirectURIs []string `yaml:"redirectUris"`
-	Scopes       []string `yaml:"scopes"`
+	ClientID                string   `yaml:"clientId"`
+	RedirectURIs            []string `yaml:"redirectUris"`
+	Scopes                  []string `yaml:"scopes"`
+	TokenEndpointAuthMethod string   `yaml:"tokenEndpointAuthMethod"` // how the app sends its secret: client_secret_basic (default) or client_secret_post (#251)
 }
 
 // DataPath is a path to back up (or explicitly not).
