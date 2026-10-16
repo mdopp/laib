@@ -41,15 +41,24 @@ file moves out.
 
 1. **Laib binary + state repo**, nothing applied. `laib init --domain …`,
    then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
-   --templates <servicebay>/templates --out /mnt/data/laib/state` writes a draft
-   `services/<name>/` (laib.yml with routes from `reverseProxy.hosts`, secrets
-   and ports from `variables.json`, values.yml from `installedVariables`) for
-   every installed template and prints what it could not map. The drafts are
-   reviewed by hand; the Quadlet files are written from each template's Pod
-   YAML by the agent in the Werkstatt (ADR 0004: `.container` is the primary
-   form). Secrets: `laib secret set` for the external ones (DNS token, SMTP,
-   Fritz!Box, GitHub, Claude OAuth); everything else is re-generated on first
-   apply and the post-deploy hook re-seeds the app. Nothing runs yet.
+   --templates <servicebay>/templates,<each external registry>/templates
+   --out /mnt/data/laib/migration` writes a draft `<name>/` per installed
+   template — laib.yml with the routes the box's proxy hosts have and the auth
+   ServiceBay applied, data paths from the Pod YAML's host paths, secrets and
+   ports from `variables.json`; values.yml from `installedVariables` — and
+   prints what it could not map: proxy hosts and variables without an
+   installed service, named volumes, data the Laib built-in would not mount.
+   The drafts never go into the state repo (the script refuses): a
+   `services/<name>/` without units makes laib refuse the whole state, and
+   `laib add <name>` refuses one that exists (#226). Where Laib has a
+   built-in, the draft is what to compare `laib add <name>` against; the
+   others get their units from their own repo's `laib.yml` or by hand
+   (ADR 0004: `.container` is the primary form). Secrets: `laib secret set`
+   for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth)
+   and for every line under "carry over before the first apply" — the data
+   on the box was made with those values, and a fresh one locks the app out
+   of its own database (#228). The rest is generated on first apply and the
+   post-deploy hook seeds the app. Nothing runs yet.
 2. **Caddy beside NPM** on a different port, `laib apply caddy`. Routes are
    verified against `127.0.0.1` before DNS moves. Then AdGuard rewrites
    switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;

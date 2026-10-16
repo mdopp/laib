@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pi-web
+  annotations:
+    servicebay.schema-version: "1"
+spec:
+  containers:
+  - name: pi-web
+    image: example.invalid/app:1
+  volumes:
+  - name: v0
+    hostPath:
+      path: {{DATA_DIR}}/pi-web/data
+      type: DirectoryOrCreate
+  - name: v1
+    hostPath:
+      path: {{DATA_DIR}}/pi-web/workspace
+      type: DirectoryOrCreate
+  - name: v2
+    hostPath:
+      path: /mnt/data/servicebay/agent-kit/checkout/assists
+      type: DirectoryOrCreate

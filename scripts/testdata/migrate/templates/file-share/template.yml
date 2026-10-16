@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: file-share
+  annotations:
+    servicebay.schema-version: "1"
+    servicebay.backup: |
+      include:
+        - samba-private
+spec:
+  containers:
+  - name: file-share
+    image: example.invalid/app:1
+  volumes:
+  - name: v0
+    hostPath:
+      path: {{DATA_DIR}}/file-share/data
+      type: DirectoryOrCreate
+  - name: v1
+    persistentVolumeClaim:
+      claimName: file-share-syncthing-config
+  - name: v2
+    hostPath:
+      path: {{DATA_DIR}}/file-share/filebrowser-db
+      type: DirectoryOrCreate
