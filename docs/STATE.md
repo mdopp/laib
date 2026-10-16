@@ -155,6 +155,8 @@ secrets:
 oidc:
   clientId: paperless
   redirectUris: ["https://paperless.${DOMAIN}/accounts/oidc/authelia/login/callback/"]
+  tokenEndpointAuthMethod: client_secret_post   # only if the app sends its secret in the form body; default client_secret_basic
+  # every client is one_factor, as ServiceBay registered the family's apps (#251)
 data:
   - path: ${DATA_DIR}/paperless/data    # backed up
   - path: ${DATA_DIR}/paperless/media
