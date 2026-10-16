@@ -288,7 +288,7 @@ shows that argv to every user on the box. So an `Environment=` line of a
 the container's environment is the same. Plan compares each such podman
 secret with the box (`podman secret inspect --showsecret`): a missing one
 or another value is a change of its service, apply hands the value to
-`podman secret create --replace` on stdin before the units start and
+`podman secret create` (`--replace` for a new value) on stdin before the units start and
 restarts the service; a `laib.*` secret nothing names any more is removed
 after its unit stopped. An apply cut off in between is finished by the next
 plan (the value still differs) or the pending marker. An empty value stays

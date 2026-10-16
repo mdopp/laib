@@ -54,7 +54,7 @@ func newCbox(t *testing.T) *cbox {
 		case name == "git":
 			return runGitCmd(t, args...)
 		case strings.HasPrefix(line, "podman secret create"):
-			podSecrets[args[3]] = sysd.Stdin(ctx)
+			podSecrets[args[len(args)-2]] = sysd.Stdin(ctx) // create [--replace] <name> -
 		case strings.HasPrefix(line, "podman secret rm"):
 			delete(podSecrets, args[2])
 		case strings.HasPrefix(line, "podman secret ls"):

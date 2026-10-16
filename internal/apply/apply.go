@@ -82,9 +82,9 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			// before any unit starts. Plan sorts them after the unit files: a
 			// removed one goes after its unit stopped, and one podman still
 			// holds on to is red here and gone on the next run.
-			args := []string{"secret", "create", "--replace", name, "-"}
-			if c.Kind == "delete" {
-				args = []string{"secret", "rm", name}
+			args := map[string][]string{"add": {"secret", "create", name, "-"}, "delete": {"secret", "rm", name}}[c.Kind]
+			if c.Kind == "change" {
+				args = []string{"secret", "create", "--replace", name, "-"} // podman 4.9's --replace fails on a new name
 			}
 			out, err := sysd.Run(sysd.WithStdin(ctx, p.Secrets[name]), "podman", args...)
 			if err != nil && c.Kind != "delete" {
