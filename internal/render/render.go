@@ -50,7 +50,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			case "service", "timer":
 				out["systemd/"+file] = substitute(content, vars) // a plain host unit next to laib's own
 			default:
-				out["quadlet/"+name+"/"+file] = substitute(content, vars)
+				out["quadlet/"+name+"/"+file], _ = secretEnv(svc, file, content, vars)
 			}
 		}
 		for file, content := range svc.Assets {
@@ -260,6 +260,51 @@ func secretValue(secrets map[string]string, name string) string {
 		return Placeholder(name)
 	}
 	return secrets[name]
+}
+
+// PodmanSecrets: every podman secret the rendered units name (#224), name →
+// value. Apply hands each to podman on stdin before a unit starts.
+func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string {
+	all := map[string]string{}
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		vars := variables(st, svc, secrets)
+		for file, content := range svc.Units {
+			_, sec := secretEnv(svc, file, content, vars)
+			maps.Copy(all, sec)
+		}
+	}
+	return all
+}
+
+// secretEnv substitutes a unit; in a .container each Environment= line that
+// names a secret-backed value becomes Secret=<name>,type=env,target=<KEY>
+// (#224): Quadlet puts every Environment= value on podman run's argv, where
+// ps shows it to every user on the box. The name is laib.<service>.<container>.<KEY>;
+// the values come back under it. An empty value stays an empty Environment=
+// line: nothing to hide, and podman refuses an empty secret.
+func secretEnv(svc *state.Service, file, content string, vars map[string]string) (string, map[string]string) {
+	if !strings.HasSuffix(file, ".container") {
+		return substitute(content, vars), nil
+	}
+	sec := map[string]string{}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		rest, ok := strings.CutPrefix(line, "Environment=")
+		if !ok || !slices.ContainsFunc(state.Placeholders(line), func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }) {
+			lines[i] = substitute(line, vars)
+			continue
+		}
+		key, val, _ := strings.Cut(substitute(strings.Trim(rest, `"`), vars), "=")
+		if val == "" {
+			lines[i] = "Environment=" + key + "="
+			continue
+		}
+		name := "laib." + svc.Name + "." + strings.TrimSuffix(file, ".container") + "." + key
+		sec[name] = val
+		lines[i] = "Secret=" + name + ",type=env,target=" + key
+	}
+	return strings.Join(lines, "\n"), sec
 }
 
 func substitute(content string, vars map[string]string) string {

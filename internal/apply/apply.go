@@ -77,6 +77,25 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	for _, c := range p.Changes {
+		if name, ok := strings.CutPrefix(c.Path, "secret/"); ok {
+			// a podman secret (#224), the value on stdin (argv shows in ps),
+			// before any unit starts. Plan sorts them after the unit files: a
+			// removed one goes after its unit stopped, and one podman still
+			// holds on to is red here and gone on the next run.
+			args := []string{"secret", "create", "--replace", name, "-"}
+			if c.Kind == "delete" {
+				args = []string{"secret", "rm", name}
+			}
+			out, err := sysd.Run(sysd.WithStdin(ctx, p.Secrets[name]), "podman", args...)
+			if err != nil && c.Kind != "delete" {
+				return res, fmt.Errorf("%s: %s", c.Target, out)
+			} else if err != nil {
+				res.Checks = append(res.Checks, Check{Service: "laib", What: c.Target + " (removed)", Detail: out})
+				continue
+			}
+			res.Written = append(res.Written, c.Target)
+			continue
+		}
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
 			// forgets it, and a running container would keep running unmanaged;

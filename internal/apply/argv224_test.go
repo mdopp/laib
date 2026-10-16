@@ -3,7 +3,6 @@ package apply
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,7 +29,7 @@ func TestSecretsReachContainersOffArgv(t *testing.T) {
 case "$1 $2" in
 "secret create") for a; do n=$prev; prev=$a; done; cat > "$STORE/$n";;
 "secret ls") ls "$STORE";;
-"secret inspect") shift 3; s=; printf '['; for n; do printf '%s{"Spec":{"Name":"%s"},"SecretData":"%s"}' "$s" "$n" "$(cat "$STORE/$n")"; s=,; done; echo ']';;
+"secret inspect") shift 5; for n; do printf '%s "%s"\n' "$n" "$(cat "$STORE/$n")"; done;;
 "secret rm") rm "$STORE/$3";;
 esac`,
 	}
@@ -42,10 +41,7 @@ esac`,
 	t.Setenv("STORE", store)
 	real := sysd.Run
 	t.Cleanup(func() { sysd.Run = real })
-	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) { // the real thing: an earlier test may have swapped it
-		out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-		return strings.TrimSpace(string(out)), err
-	}
+	sysd.Run = unswappedRun // the real thing: an earlier test may have swapped it
 
 	paths := boxfs.Paths{Home: home, State: filepath.Join(home, "state"), Quadlet: filepath.Join(home, "q"), Render: filepath.Join(home, "r"), Systemd: filepath.Join(home, "s")}
 	os.MkdirAll(paths.State, 0o755)
@@ -126,6 +122,9 @@ esac`,
 		t.Fatalf("a removed service's podman secrets must go with it: %v", got)
 	}
 }
+
+// unswappedRun is sysd.Run as the package has it, before any test swaps it.
+var unswappedRun = sysd.Run
 
 func firstName(m map[string]string) string {
 	for k := range m {

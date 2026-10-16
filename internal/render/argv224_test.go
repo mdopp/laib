@@ -1,9 +1,27 @@
 package render
 
 import (
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/mdopp/laib/internal/state"
 )
+
+// asContainerSees turns each Secret=…,type=env line back into the
+// Environment= line the container's environment ends up with (#224), for
+// the tests that read what a container gets.
+func asContainerSees(st *state.State, secrets map[string]string, out Output) Output {
+	sec := PodmanSecrets(st, secrets)
+	re := regexp.MustCompile(`(?m)^Secret=([^,\n]+),type=env,target=(\S+)$`)
+	for p, c := range out {
+		out[p] = re.ReplaceAllStringFunc(c, func(l string) string {
+			m := re.FindStringSubmatch(l)
+			return "Environment=" + m[2] + "=" + sec[m[1]]
+		})
+	}
+	return out
+}
 
 // #224: Quadlet turns every line of a .container into `podman run` argv
 // (Environment=K=V becomes --env K=V), and ps shows that argv to every user

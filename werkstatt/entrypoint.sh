@@ -12,14 +12,16 @@ chown -R dev:dev /home/dev/.ssh
 if [ -n "${WERKSTATT_SSH_PASSWORD:-}" ]; then
   echo "dev:${WERKSTATT_SSH_PASSWORD}" | chpasswd
 fi
-if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-  # Claude Code reads it from the environment of the login shell.
-  echo "export CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" > /etc/profile.d/claude.sh
-fi
 # Tokens live in this container's own tmpfs (/run/laib, Tmpfs= in the unit),
 # never on the shared /workspace volume: the dev container and the autoloop
 # each keep their own hand and their own GitHub token (#44).
 mkdir -p /run/laib && chmod 700 /run/laib && chown dev:dev /run/laib
+if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+  # Claude Code reads it from the login shell's environment; profile.d is
+  # readable by every user here, so it names the 0600 file, never the token (#224)
+  printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" > /run/laib/claude-token && chmod 600 /run/laib/claude-token && chown dev:dev /run/laib/claude-token
+  echo 'if [ -r /run/laib/claude-token ]; then export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/laib/claude-token)"; fi' > /etc/profile.d/claude.sh
+fi
 if [ -n "${LAIB_TOKEN:-}" ]; then
   # the token as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
   printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
