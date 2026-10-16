@@ -22,10 +22,9 @@ of its units may trust `Remote-User` or turn the app's login off
 (`internal/render/auth231_test.go`, #231). Caddy strips every client-sent
 `Remote-*` header on every site before forward-auth adds Authelia's, so
 only an app behind Authelia ever sees one. File Browser makes a family
-member's account on the first visit, without admin rights; admin rights
-are File Browser's CLI against its database while the unit is stopped
-(`filebrowser -d /database/filebrowser.db users update <name> --perm.admin`
-in a one-off container of the image). An unauthenticated control port on the host network (Z-Wave JS,
+member's account on the first visit, without admin rights; the LLDAP
+account in `FILEBROWSER_ADMIN_USER` is its admin from the first start, as
+in ServiceBay. An unauthenticated control port on the host network (Z-Wave JS,
 Matter) is declared `lan: false` or listens on loopback.
 
 OIDC clients (immich, vaultwarden, audiobookshelf) fetch Authelia's
