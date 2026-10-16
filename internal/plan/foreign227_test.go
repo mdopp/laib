@@ -141,7 +141,7 @@ func TestForeignUnitOnTheSharedTreeIsNoConflict(t *testing.T) {
 func TestBelowTheSharedTreeAndNearMissesAreNoConflict(t *testing.T) {
 	cs := conflictsFor(t, map[string]string{
 		"solaris.kube": "[Kube]\nYaml=solaris.yml\n",
-		"solaris.yml": "spec:\n  containers:\n    - name: s\n      ports:\n        - containerPort: 3890\n      livenessProbe:\n        httpGet:\n          path: /\n          port: 8080\n" +
+		"solaris.yml": "spec:\n  containers:\n    - name: s\n      ports:\n        # nginx runs `hostNetwork: true`, so it reaches this\n        - containerPort: 3890\n      livenessProbe:\n        httpGet:\n          path: /\n          port: 8080\n" +
 			"  volumes:\n    - name: notes\n      hostPath:\n        path: /mnt/data/stacks/file-share/data/notes\n        type: Directory\n",
 		"old.container":       "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth-old:/old:Z\n",
 		"lldap-old.container": "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth/lldap-old:/old:Z\n",
