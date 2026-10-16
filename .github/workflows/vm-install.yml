@@ -433,6 +433,16 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #252: auth.<domain> from a rootless container (pasta, as every Laib unit without Network=host),
+                # mapped as the templates map it: to the host gateway, alone and in a pod; the LAN IP for the record
+                hc() { podman run --rm "$@" -v "$root:/ca.crt:ro,z" "${{ env.HOOKS }}" curl -s -m 10 -o /dev/null -w "%{http_code}" --cacert /ca.crt https://auth.vm.test/api/health || true; }
+                podman --version
+                echo "auth.vm.test at the LAN IP, from a container: HTTP $(hc --add-host auth.vm.test:10.0.2.15)"
+                code=$(hc --add-host auth.vm.test:host-gateway); echo "auth.vm.test at host-gateway, from a container: HTTP $code"
+                [ "$code" = 200 ] || { echo "a container cannot reach Authelia at host-gateway (#252)"; exit 1; }
+                podman pod create --name p252 --add-host auth.vm.test:host-gateway >/dev/null
+                code=$(hc --pod p252); podman pod rm -f p252 >/dev/null; echo "auth.vm.test at host-gateway, from a pod: HTTP $code"
+                [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
