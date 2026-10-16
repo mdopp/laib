@@ -13,10 +13,11 @@ export LAIB_QUADLET="${LAIB_QUADLET:-$HOME/.config/containers/systemd}"
 export LAIB_SYSTEMD="${LAIB_SYSTEMD:-$HOME/.config/systemd/user}"
 cleanup() {
   systemctl --user stop whoami.service 2>/dev/null || true
-  systemctl --user stop usage-metrics.service 2>/dev/null || true
+  systemctl --user stop usage-metrics.service haus-boot.service 2>/dev/null || true
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$WORK"
+  for s in HAUS_PROXY_SECRET LAIB_TOKEN HAUS_USAGE_TOKEN; do podman secret rm "laib.haus-boot.haus-boot.$s" >/dev/null 2>&1 || true; done
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$WORK"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -100,6 +101,28 @@ systemctl --user restart usage-metrics.service
 for _ in $(seq 1 30); do curl -fsS "$UM/healthz" >/dev/null 2>&1 && break; sleep 1; done
 curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c 'import sys,json; s=json.load(sys.stdin); assert s["total"]==2 and s["apps"]==[{"app":"boot","total":2,"events":[{"event":"test","count":2}]}], s'
 test -s "$WORK/data/usage-metrics/usage-metrics.db" || { echo "FAIL: the counters are not in the declared data path"; exit 1; }
+# #266: an unanswered sentence, the one text usage-metrics keeps: only with the token, read back, and
+# gone once it is past its 30 days. A real container's clock cannot be faked (a static Go binary reads
+# the vDSO clock, not libfaketime), so the row is moved back instead, which is the same to retention:
+# stopped, its day set to 30 days ago, started; the sweep at boot deletes it before the first request
+MISS="{\"source\":\"boot\",\"text\":\"Wann kommt der Müll?\",\"day\":\"$DAY\"}"
+[ "$(umCode -X POST -H 'Content-Type: application/json' -d "$MISS" "$UM/miss")" = 401 ] || { echo "FAIL: /miss without the token is not refused"; exit 1; }
+[ "$(umCode "$UM/misses")" = 401 ] || { echo "FAIL: /misses without the token is not refused"; exit 1; }
+curl -fsS -X POST -H @"$WORK/um.auth" -H 'Content-Type: application/json' -d "$MISS" "$UM/miss" | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["count"]==1, r'
+curl -fsS -H @"$WORK/um.auth" "$UM/misses?days=30" | python3 -c 'import sys,json; m=json.load(sys.stdin)["misses"]; assert m==[{"source":"boot","text":"Wann kommt der Müll?","count":1,"lastDay":sys.argv[1]}], m' "$DAY"
+systemctl --user stop usage-metrics.service
+python3 - "$WORK/data/usage-metrics/usage-metrics.db" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+n = c.execute("UPDATE misses SET day = date('now', '-30 days')").rowcount
+c.commit()
+assert n == 1, n
+PY
+systemctl --user start usage-metrics.service
+for _ in $(seq 1 30); do curl -fsS "$UM/healthz" >/dev/null 2>&1 && break; sleep 1; done
+curl -fsS -H @"$WORK/um.auth" "$UM/misses?days=30" | python3 -c 'import sys,json; m=json.load(sys.stdin); assert m["misses"]==[] and m["total"]==0, m'
+python3 -c 'import sqlite3,sys; n=sqlite3.connect(sys.argv[1]).execute("SELECT count(*) FROM misses").fetchone()[0]; assert n==0, "the sweep left %d misses in the file" % n' "$WORK/data/usage-metrics/usage-metrics.db"
+curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c 'import sys,json; s=json.load(sys.stdin); assert s["total"]==2, s'
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
 "$BIN" logs whoami --since 10m | grep -qi "whoami" || { echo "FAIL: no journald lines"; exit 1; }
@@ -134,4 +157,63 @@ kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
 curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="restart" and e["actor"]=="ops" for e in es) and any(e["verb"]=="note" for e in es), [e["verb"] for e in es]'
-echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart"
+# #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it
+# ships, as a pod reaches usage-metrics (host.containers.internal) with its token as a podman secret.
+# A page view is counted in memory and flushed on the next tick or when Haus stops: stopping it is the
+# tick here, so the test does not wait five minutes
+mkdir -p "$LAIB_HOME/state/services/haus-boot"
+cat > "$LAIB_HOME/state/services/haus-boot/laib.yml" <<YML
+name: haus-boot
+template: {registry: builtin, name: haus-boot, version: 1}
+routes: []
+secrets:
+  - name: HAUS_BOOT_PROXY
+  - name: HAUS_BOOT_LAIB
+  - name: USAGE_METRICS_TOKEN
+    external: true
+data:
+  - path: \${DATA_DIR}/haus-boot
+health:
+  http: http://127.0.0.1:18650/healthz
+ports: []
+YML
+cat > "$LAIB_HOME/state/services/haus-boot/values.yml" <<YML
+IMAGE: ghcr.io/mdopp/haus:latest
+PROXY: !secret HAUS_BOOT_PROXY
+LAIB: !secret HAUS_BOOT_LAIB
+USAGE_TOKEN: !secret USAGE_METRICS_TOKEN
+YML
+cat > "$LAIB_HOME/state/services/haus-boot/haus-boot.container" <<'UNIT'
+[Unit]
+Description=Haus boot test (#266)
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:18650:8650
+Environment=HAUS_LISTEN=0.0.0.0:8650
+Environment=LAIB_URL=http://127.0.0.1:1
+Environment=LAIB_TOKEN=${LAIB}
+Environment=HAUS_PROXY_SECRET=${PROXY}
+Environment=HAUS_DATA=/data
+Environment=HAUS_USAGE_URL=http://host.containers.internal:8094
+Environment=HAUS_USAGE_TOKEN=${USAGE_TOKEN}
+Volume=${DATA_DIR}/haus-boot:/data:Z
+
+[Service]
+Restart=no
+
+[Install]
+WantedBy=default.target
+UNIT
+LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test: haus" || { echo "apply haus exit $?"; journalctl --user -u haus-boot.service --no-pager | tail -30; exit 1; }
+HP="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.haus-boot.haus-boot.HAUS_PROXY_SECRET)"
+if grep -rqF -- "$UMTOK" "$LAIB_QUADLET/haus-boot"; then echo "FAIL: usage-metrics' token is in Haus's unit"; exit 1; fi
+for _ in 1 2; do curl -fsS -o /dev/null -H "X-Haus-Proxy: $HP" -H "Remote-User: anna" -H "Remote-Name: Anna" "http://127.0.0.1:18650/start?von=widget.device"; done
+systemctl --user stop haus-boot.service
+curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c '
+import sys, json
+s = json.load(sys.stdin)
+haus = {e["event"]: e["count"] for a in s["apps"] if a["app"] == "haus" for e in a["events"]}
+assert haus.get("seite.start") == 2 and haus.get("von.widget.device") == 2, s
+assert "anna" not in json.dumps(s).lower(), "who looked must never reach usage-metrics"'
+echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who"
