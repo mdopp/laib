@@ -56,6 +56,12 @@ var typedTools = []typedTool{
 	{"escalate", "An die nächste Hand übergeben: Kontextbündel plus rote Journalzeile.", "laib_escalate",
 		[]typedParam{{name: "service", typ: "string", required: true}, {name: "summary", typ: "string", desc: "was du weißt, ein bis drei Sätze", required: true}},
 		func(a map[string]any) string { return str(a, "service") + " " + quote(str(a, "summary")) }},
+	{"suggest", "Ein Verbesserungsvorschlag an den Admin: was du gesehen hast (mit Zahlen), der Vorschlag und was besser wird. Er wartet auf die Freigabe und wird dann ein Ticket.", "laib_wish",
+		[]typedParam{{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen", required: true}, {name: "suggestion", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true}, {name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides", required: true}},
+		func(a map[string]any) string {
+			better := map[string]string{"wartung": "die Wartung", "familie": "der Komfort der Familie", "beides": "die Wartung und der Komfort der Familie"}[str(a, "better")]
+			return quote(str(a, "suggestion") + "\n\nGesehen: " + str(a, "saw") + "\nBesser wird: " + better)
+		}},
 	{"note", "Zum Schluss immer: was du gesehen und getan hast. incident nach Reparatur oder Eskalation, watch wenn alles in Ordnung war, report für den Morgenbericht.", "laib_note",
 		[]typedParam{{name: "kind", typ: "string", enum: []string{"watch", "incident", "report"}, required: true}, {name: "text", typ: "string", desc: "deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst", required: true}},
 		func(a map[string]any) string { return "--kind " + str(a, "kind") + " " + quote(str(a, "text")) }},
@@ -65,7 +71,7 @@ var serviceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,40}$`)
 
 // typedCallText: a reply that starts with a menu name and looks like a call
 // written as text ("restart whoami", "restart(service=whoami)").
-var typedCallText = regexp.MustCompile(`(?i)^\s*(status|diagnose|logs|inspect|restart|set_value|journal|escalate|note)\s*[(\s:]`)
+var typedCallText = regexp.MustCompile(`(?i)^\s*(status|diagnose|logs|inspect|restart|set_value|journal|escalate|suggest|note)\s*[(\s:]`)
 
 func looksLikeTypedCall(text string) bool {
 	return typedCallText.MatchString(text) && len(firstLine(text)) < 200
@@ -209,6 +215,9 @@ func Translate(name string, raw json.RawMessage, services []string) (string, map
 			}
 			if p.name == "key" && !valueKey.MatchString(s) {
 				return "", nil, fmt.Errorf("%s: key %q ist kein values.yml-Schlüssel (GROSSBUCHSTABEN, kein Pfad)", name, s)
+			}
+			if p.name == "saw" && !strings.ContainsAny(s, "0123456789") {
+				return "", nil, fmt.Errorf("%s: saw braucht Zahlen — was hast du gezählt?", name)
 			}
 			if p.name == "value" && strings.ContainsAny(s, "\n\r") {
 				return "", nil, fmt.Errorf("%s: value darf keine Zeilenumbrüche enthalten", name)

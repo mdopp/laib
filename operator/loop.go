@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,6 +41,7 @@ type Operator struct {
 	// results. Services is the enum the menu offers (installed services).
 	Typed    bool
 	Services []string
+	Usage    *Usage // usage-metrics, for a skill with context usage (#270)
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -82,7 +84,23 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	for _, d := range defs {
 		offered[d.Function.Name] = true
 	}
-	ctxText, _, _ := o.MCP.Call(ctx, "laib_context", map[string]string{"args": ""})
+	// the context: the box's bundle, or usage-metrics for a usage skill —
+	// without it the skill says so once and asks no model
+	var ctxText string
+	var sentences []string
+	if sk.Context == "usage" {
+		err := errors.New("usage-metrics ist auf dieser Box nicht eingerichtet")
+		if o.Usage != nil && o.Usage.URL != "" && o.Usage.Token != "" {
+			ctxText, sentences, err = o.Usage.Read(ctx, 7)
+		}
+		if err != nil {
+			s.Outcome, s.Note = "idle", "Nutzungsdaten nicht erreichbar: "+err.Error()+". Keine Vorschläge."
+			mcp.Call(ctx, "laib_note", map[string]string{"args": "--kind watch " + quote(s.Note)})
+			return s, nil
+		}
+	} else {
+		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]string{"args": ""})
+	}
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)
 	if o.Typed {
@@ -95,6 +113,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	textCalls := 0
 	noted := false
+	wished := 0
 	for pass := 0; pass <= max; pass++ {
 		reply, err := o.LLM.Chat(ctx, msgs, defs)
 		if err != nil {
@@ -158,6 +177,21 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "ungültige Argumente: erwartet ein JSON-Objekt {\"args\": \"…\"}; der Aufruf wurde nicht ausgeführt"})
 				continue
 			}
+			if mcpName == "laib_wish" {
+				// a suggestion becomes a ticket: three a week at most, and never a
+				// family member's sentence word for word (#270)
+				why := ""
+				if quotes(args["args"], sentences) {
+					why = "der Vorschlag zitiert einen Satz der Familie wörtlich — nenne Thema und Anzahl, nicht den Satz"
+				} else if wished >= 3 {
+					why = "höchstens drei Vorschläge pro Woche — schreib jetzt die Notiz"
+				}
+				if why != "" {
+					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
+					continue
+				}
+				wished++
+			}
 			if len(s.Calls) >= max {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
 				continue
@@ -202,7 +236,11 @@ func (o *Operator) prompt(sk Skill, tr Trigger, ctx string) string {
 	if tr.Kind == "event" {
 		fmt.Fprintf(&b, "Auslöser: ein Ereignis. Dienst: %s. Detail: %s\n", tr.Service, tr.Detail)
 	}
-	b.WriteString(strings.TrimSpace(sk.Prompt) + "\n\nKontext der Box:\n")
+	label := "Kontext der Box:"
+	if sk.Context == "usage" {
+		label = "Nutzungsdaten:"
+	}
+	b.WriteString(strings.TrimSpace(sk.Prompt) + "\n\n" + label + "\n")
 	max := 9000
 	if o.Typed {
 		max = 6000

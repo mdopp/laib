@@ -240,6 +240,7 @@ LAIB_ACTOR=human:e2e "$BIN" skill pause morgenbericht | grep -q "morgenbericht: 
 grep -q "morgenbericht: paused" "$LAIB_HOME/state/policy.yml" || fail "pause not in policy.yml"
 [ -z "$(git -C "$LAIB_HOME/state" status --porcelain)" ] || fail "skill pause left policy.yml uncommitted"
 LAIB_ACTOR=human:e2e "$BIN" skill enable morgenbericht >/dev/null || fail "skill enable"
+"$BIN" skill list | grep -qE "^aktiv +nutzung" || fail "the weekly usage skill is not active"
 j 'notes=[e for e in es if e["verb"]=="note" and e["actor"]=="ops"]; assert notes and "jetzt grün" in notes[-1]["detail"], notes'
 j 'assert any(e["verb"]=="restart" and e["actor"]=="ops" and e.get("service")=="caddy" for e in es), "operator restart not journaled"'
 test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"
@@ -535,5 +536,11 @@ grep -q "stop bote-signal.service" "$SYSTEMCTL_LOG" || fail "the signal-cli unit
 pre=$(grep -n "podman run hook .*bote/pre-start" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1); start=$(grep -n "restart bote-pod.service" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1)
 [ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "the Bote's pre-start ($pre) did not run before the pod started ($start)"
 kill "$(cat "$WORK/notify.pid")"; rm "$WORK/notify.pid"
+
+# the Operator's wish waits for the admin (#270): a proposal of class human; approving it files the ticket (no intake here: it stays in wishes/)
+LAIB_ACTOR=ops "$BIN" wish "Den Abfuhrkalender anbinden. Gesehen: 9 offene Fragen." | grep -q "nach der Freigabe" || fail "an ops wish is not a proposal"
+WID=$("$BIN" inbox --json | python3 -c 'import sys,json; ps=[p for p in json.load(sys.stdin) if p["actor"]=="ops" and p["reason"].startswith("Wunsch:")]; assert ps and ps[0]["class"]=="human", ps; print(ps[0]["id"])') || fail "the wish is not in the inbox as class human"
+LAIB_ACTOR=human:e2e "$BIN" approve "$WID" >/dev/null || fail "approving the wish"
+j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") for e in es), "the approved wish is not journaled"'
 
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

@@ -17,13 +17,13 @@ import (
 // measures the model. Results go to werkstatt/evals/results/.
 
 type Incident struct {
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Skill   string            `json:"skill,omitempty"` // default: the built-in skill for the trigger's kind
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Skill string `json:"skill,omitempty"` // default: the built-in skill for the trigger's kind
 	// Usage is what usage-metrics answers (summary, misses) for a skill with context usage
-	Usage map[string]json.RawMessage `json:"usage,omitempty"`
-	Trigger Trigger           `json:"trigger"`
-	Replies map[string]string `json:"replies"`
+	Usage   map[string]json.RawMessage `json:"usage,omitempty"`
+	Trigger Trigger                    `json:"trigger"`
+	Replies map[string]string          `json:"replies"`
 	Expect  struct {
 		Outcome      string   `json:"outcome,omitempty"`
 		NoteContains []string `json:"note_contains,omitempty"`

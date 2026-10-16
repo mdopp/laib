@@ -15,7 +15,7 @@ laib exec <service> [--container c] -- <cmd>   inside the container, output jour
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
-laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
+laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake; from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
@@ -65,6 +65,16 @@ kernel grants the running skill. The built-in skills give:
 | `routineblick` | every `operator.tick` | `status`, `diagnose(service?)`, `note(kind, text)` |
 | `vorfall` | a red | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
 | `morgenbericht` | daily at `operator.reportAt` | `status`, `diagnose`, `journal(hours)`, `note` |
+| `nutzung` | weekly, Monday 08:00 | `suggest(saw, suggestion, better)`, `note` |
+
+`nutzung` (#270) starts from usage-metrics instead of `laib context`:
+`/summary?days=7` and `/misses?days=7` with `USAGE_METRICS_TOKEN` (the
+Operator's unit carries URL and token when the box runs usage-metrics).
+`suggest` becomes `laib wish`, i.e. a proposal the admin approves; code
+refuses a fourth suggestion in a session, one whose `saw` has no number,
+and one that quotes an unanswered sentence word for word (they are kept 30
+days without names, for admins only; the intake repo may be public).
+Without usage-metrics the skill writes one note and asks no model.
 
 `service` is an enum of the installed services (from `laib status`),
 `kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
