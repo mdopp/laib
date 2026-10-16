@@ -465,7 +465,7 @@ jobs:
                 [ "$code" = 200 ] && grep -q "Familienkonto" /tmp/welcome.html || { echo "auth_oidc is not set up from the package"; podman logs --tail 80 systemd-home-assistant 2>&1 | grep -i -B2 -A8 "auth_oidc\|error" | tail -60; exit 1; }
                 if podman logs systemd-home-assistant 2>&1 | grep -i "auth_oidc" | grep -qi "duplicate\|invalid config"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
                 $L remove home-assistant >/dev/null
-                rm -rf "$R" /mnt/data/stacks/home-assistant
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
                 echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
       - name: backup and restore — restic in the day-one repo laib init wrote
