@@ -166,6 +166,9 @@ func TestEvalTypedIncidents(t *testing.T) {
 		mcp, _ := fakeMCP(t, inc.Replies)
 		srv := fakeLLM(t, inc.Script)
 		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: srv.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Services: []string{"whoami", "frage", "bote", "file-share"}}
+		if inc.Usage != nil {
+			op.Usage = &Usage{URL: fakeUsage(t, inc.Usage).URL, Token: "um-token"}
+		}
 		return op.Run(ctx, skillFor(t, inc.Trigger, inc.Skill), inc.Trigger)
 	})
 	if rep.Wrong != 0 || rep.Passed != rep.Total {
