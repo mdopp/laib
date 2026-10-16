@@ -1,9 +1,10 @@
 name: paperless
 template: {registry: builtin, name: paperless, version: 1}
 provides: [documents]
-# Paperless-ngx: documents with OCR. Logins come from Authelia's forward
-# auth (Remote-User), so the family uses it without a second password, as in
-# ServiceBay; Caddy strips a client-sent Remote-User first (#231). The
+# Paperless-ngx: documents with OCR. The family logs in through Authelia's
+# OIDC (#231): one login, the account made on the first one, and the
+# Paperless apps keep working with a token, which forward-auth on the route
+# would break. The admin from the secrets stays as break-glass. The
 # consume folder is the file share's paperless-consume, so a scan dropped
 # there is filed. Postgres and Redis in the pod.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
@@ -11,11 +12,14 @@ routes:
   - host: paperless
     port: 8000
     exposure: internal
-    auth: one_factor               # forward-auth, Paperless trusts Authelia's Remote-User (#231, as ServiceBay); Haus uses the API with a token on the port
+    auth: none                     # Paperless logs in itself, through Authelia's OIDC; the apps use tokens (#55, #231)
     caddy: |
       request_body {
         max_size 500MB
       }
+oidc:
+  clientId: paperless
+  redirectUris: ["https://paperless.${DOMAIN}/accounts/oidc/authelia/login/callback/"]
 secrets:
   - name: PAPERLESS_DB_PASSWORD
   - name: PAPERLESS_SECRET_KEY
