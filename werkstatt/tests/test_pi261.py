@@ -9,6 +9,8 @@ from unittest import mock
 
 HERE = Path(__file__).resolve().parent.parent          # werkstatt/
 EXT = "/opt/werkstatt/extensions/laib-llama.js"
+GUIDE = "/opt/werkstatt/guide/AGENTS.md"     # #262: the Werkstatt guide in pi's system prompt
+PRE = ["-e", EXT, "--append-system-prompt", GUIDE]
 
 
 def run_wrapper(*args: str) -> list[str]:
@@ -28,11 +30,11 @@ class EveryPiHasTheBoxModel(unittest.TestCase):
     def test_a_run_loads_the_extension_before_its_own_arguments(self):
         # the autoloop's exact call (autoloop.run_pi)
         argv = run_wrapper("--mode", "json", "--model", "laib-llama/qwen3.8-27b", "sag hallo")
-        self.assertEqual(argv[:2], ["-e", EXT])
-        self.assertEqual(argv[2:], ["--mode", "json", "--model", "laib-llama/qwen3.8-27b", "sag hallo"])
+        self.assertEqual(argv[:4], PRE)
+        self.assertEqual(argv[4:], ["--mode", "json", "--model", "laib-llama/qwen3.8-27b", "sag hallo"])
 
     def test_an_interactive_start_loads_it_too(self):
-        self.assertEqual(run_wrapper(), ["-e", EXT])
+        self.assertEqual(run_wrapper(), PRE)
 
     def test_subcommands_pass_through_untouched(self):
         # pi parses `-e x config` as a prompt run: a leading -e breaks every subcommand
