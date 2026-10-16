@@ -131,3 +131,79 @@ func TestForeignUnitOnTheSharedTreeIsNoConflict(t *testing.T) {
 		t.Fatalf("%v", cs)
 	}
 }
+
+// Review of #234. Everything below the backup:false shared tree is shared
+// too: Solaris keeps running beside Laib until it retires (MIGRATION.md
+// step 6) and mounts file-share/data/notes, which file-share backs up as a
+// folder of the tree. A probe's `path: /` and a name that only starts like a
+// data path (auth-old) are not mounts of it; a pod's containerPort is not a
+// host port.
+func TestBelowTheSharedTreeAndNearMissesAreNoConflict(t *testing.T) {
+	cs := conflictsFor(t, map[string]string{
+		"solaris.kube": "[Kube]\nYaml=solaris.yml\n",
+		"solaris.yml": "spec:\n  containers:\n    - name: s\n      ports:\n        - containerPort: 3890\n      livenessProbe:\n        httpGet:\n          path: /\n          port: 8080\n" +
+			"  volumes:\n    - name: notes\n      hostPath:\n        path: /mnt/data/stacks/file-share/data/notes\n        type: Directory\n",
+		"old.container":       "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth-old:/old:Z\n",
+		"lldap-old.container": "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth/lldap-old:/old:Z\n",
+	})
+	if len(cs) != 0 {
+		t.Fatalf("%v", cs)
+	}
+}
+
+// A foreign unit writes into a service's data when it mounts a folder inside
+// one of its data paths or a parent of one, however the path is spelled
+// (a trailing slash, a symlinked prefix like FCOS's /mnt -> /var/mnt, Mount=
+// instead of Volume=). A host-network pod's containerPort is a host port, and
+// YAML may quote a hostPort. A unit named like one of Laib's units collides
+// whatever its base name is.
+func TestForeignUnitAroundAServicesDataOrOnItsHostNetPortIsAConflict(t *testing.T) {
+	st, paths := kraftwerkBox(t, map[string]string{
+		"lldap-db.container":    "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth/lldap/db:/db:Z\n",
+		"stacks-dump.container": "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth:/dump:ro\n",
+		"cfg.container":         "[Container]\nImage=x\nVolume=/mnt/data/stacks/auth/authelia-config/:/c\n",
+		"st.container":          "[Container]\nImage=x\nMount=type=bind,source=/mnt/data/stacks/file-share/syncthing-config,destination=/var/syncthing\n",
+		"ldap-ui.kube":          "[Kube]\nYaml=ldap-ui.yml\n",
+		"ldap-ui.yml":           "spec:\n  hostNetwork: true\n  containers:\n    - name: l\n      ports:\n        - containerPort: 17170\n",
+		"portal.kube":           "[Kube]\nYaml=portal.yml\n",
+		"portal.yml":            "spec:\n  containers:\n    - name: p\n      ports:\n        - containerPort: 80\n          hostPort: \"9091\"\n",
+		"auth-lldap.container":  "[Container]\nImage=x\n",
+	})
+	// the same data dir behind a symlink, as /var/mnt is /mnt on FCOS
+	real := filepath.Join(paths.Home, "real")
+	os.MkdirAll(filepath.Join(real, "file-share", "samba-private"), 0o755)
+	os.Symlink(real, filepath.Join(paths.Home, "link"))
+	st.Box.DataDir = real
+	os.WriteFile(filepath.Join(paths.Quadlet, "smb.container"), []byte("[Container]\nImage=x\nVolume="+filepath.Join(paths.Home, "link", "file-share", "samba-private")+":/var/lib/samba\n"), 0o644)
+	// and the other way round: the data dir spelled through the symlink, the
+	// data path not made yet, the foreign unit on its real parent
+	st2, paths2 := kraftwerkBox(t, nil)
+	os.MkdirAll(filepath.Join(paths2.Home, "real", "file-share"), 0o755)
+	os.Symlink(filepath.Join(paths2.Home, "real"), filepath.Join(paths2.Home, "link"))
+	st2.Box.DataDir = filepath.Join(paths2.Home, "link")
+	os.WriteFile(filepath.Join(paths2.Quadlet, "fs-all.container"), []byte("[Container]\nImage=x\nVolume="+filepath.Join(paths2.Home, "real", "file-share")+":/all\n"), 0o644)
+	p3, err := Compute(context.Background(), st2, nil, paths2, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a Yaml= with an absolute path is read where it is
+	abs := filepath.Join(paths.Home, "elsewhere.yml")
+	os.WriteFile(abs, []byte("spec:\n  containers:\n    - name: s\n      ports:\n        - hostPort: 8384\n"), 0o644)
+	os.WriteFile(filepath.Join(paths.Quadlet, "abs.kube"), []byte("[Kube]\nYaml="+abs+"\n"), 0o644)
+	p, err := Compute(context.Background(), st, nil, paths, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Box.DataDir = "/mnt/data/stacks"
+	p2, err := Compute(context.Background(), st, nil, paths, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := append(append(p2.Conflicts, p.Conflicts...), p3.Conflicts...)
+	for _, want := range [][2]string{{"auth", "lldap-db.container"}, {"auth", "stacks-dump.container"}, {"auth", "cfg.container"}, {"file-share", "st.container"},
+		{"auth", "ldap-ui.kube"}, {"auth", "portal.kube"}, {"auth", "auth-lldap.container"}, {"file-share", "smb.container"}, {"file-share", "abs.kube"}, {"file-share", "fs-all.container"}} {
+		if !hasConflict(cs, want[0], want[1]) {
+			t.Errorf("%s is not a KONFLIKT for %s: %v", want[1], want[0], cs)
+		}
+	}
+}
