@@ -222,9 +222,13 @@ The values live sealed in ServiceBay's `config.json` (`installedSecrets`,
 AES-256-GCM with `secret.key` beside it). The host has no Python and openssl
 has no GCM, so the script unseals each value inside ServiceBay's container
 with its node and pipes it straight into `laib secret set <Laib name>`. No
-value is passed on argv, kept in a variable or file, or shown. A value the
-store does not have is reported and the script exits non-zero. Read it
-before the apply; it does not set a substitute. The store holds what
+value is passed on argv, kept in a variable or file, or shown, not even in
+an error. A value the store does not have, one it cannot unseal (another
+`secret.key`) and one of ServiceBay's redaction masks (`<redacted>`,
+`__REDACTED__`, which once landed in its store as values) are reported by
+name and the script exits non-zero; so does a service the table does not
+list, a typo included. Read it before the apply; it does not set a
+substitute. A rerun sets the same values again. The store holds what
 ServiceBay deployed. A password changed later inside the app (in LLDAP's UI,
 say) is not in it, and the first apply's verify shows that.
 
