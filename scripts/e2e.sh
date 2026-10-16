@@ -394,13 +394,17 @@ grep -q "bote/notify:/hermes:ro" "$ROOT/templates/bote/bote-notify.container" ||
 if grep -q "bote/hermes:" "$ROOT/templates/bote/bote-notify.container"; then fail "bote-notify mounts the Bote's whole HERMES_HOME (#177)"; fi
 bote_people ""
 if grep -q "mitteilung" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "without the automat the SOUL promises messages it cannot set up (#177)"; fi
-# Home Assistant's rest_command.mitteilung points at bote-notify with the bearer from its own environment
-HA_CFG="$HOOKDIR/home-assistant/homeassistant"; mkdir -p "$HA_CFG"
-ha_hook() { ( cd "$ROOT/templates/home-assistant" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=home-assistant \
-  BOTE_NOTIFY_URL=http://127.0.0.1:8645/mitteilung ./post-deploy > "$WORK/ha-hook.out" ) || fail "home-assistant hook"; }
+# Home Assistant's pre-start (#253): rest_command.mitteilung points at bote-notify with the bearer from its own
+# environment (#177), and the packages include is there before Home Assistant starts. The pinned auth_oidc
+# component counts as installed here: pre-start fetches nothing (its own tests cover the archive)
+HA_CFG="$HOOKDIR/home-assistant/homeassistant"; mkdir -p "$HA_CFG/custom_components/auth_oidc"
+echo e2e0sha > "$HA_CFG/custom_components/auth_oidc/.laib-archive"
+ha_hook() { ( cd "$ROOT/templates/home-assistant" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=home-assistant LAIB_DOMAIN=e2e.home \
+  AUTH_OIDC_ARCHIVE=http://127.0.0.1:9/not-fetched AUTH_OIDC_SHA256=e2e0sha \
+  BOTE_NOTIFY_URL=http://127.0.0.1:8645/mitteilung ./pre-start > "$WORK/ha-hook.out" ) || fail "home-assistant hook"; }
 ha_hook
-grep -qi "configuration.yaml" "$WORK/ha-hook.out" || fail "the HA hook says configuration.yaml is not there yet (#177)"
-[ ! -e "$HA_CFG/configuration.yaml" ] || fail "the HA hook wrote configuration.yaml before Home Assistant did (#177)"
+grep -q "^default_config:" "$HA_CFG/configuration.yaml" || fail "a fresh box gets Home Assistant's default configuration.yaml from pre-start (#253)"
+[ "$(grep -c "packages: !include_dir_named packages" "$HA_CFG/configuration.yaml")" = 1 ] || fail "the first start has the packages include (#253)"
 printf 'default_config:\n\nautomation: !include automations.yaml\n' > "$HA_CFG/configuration.yaml"
 ha_hook; ha_hook
 P="$HA_CFG/packages/laib_mitteilung.yaml"
@@ -408,12 +412,14 @@ grep -q "^  mitteilung:" "$P" || fail "rest_command.mitteilung is rendered (#177
 grep -q 'url: "http://127.0.0.1:8645/mitteilung"' "$P" || fail "rest_command.mitteilung reaches bote-notify on loopback (#177)"
 grep -q "Authorization: !env_var BOTE_NOTIFY_AUTH" "$P" || fail "the bearer comes from HA's environment, not the file (#177)"
 grep -q '"an": {{ an | tojson }}' "$P" || fail "the payload carries an and text (#177)"
+grep -q "client_secret: !env_var AUTH_OIDC_SECRET" "$HA_CFG/packages/laib_auth_oidc.yaml" || fail "the family login's secret comes from HA's environment (#253)"
 [ "$(grep -c "packages: !include_dir_named packages" "$HA_CFG/configuration.yaml")" = 1 ] || fail "the packages include is added exactly once (#177)"
 grep -q "automation: !include automations.yaml" "$HA_CFG/configuration.yaml" || fail "the HA hook changed the admin's configuration.yaml (#177)"
 printf 'homeassistant:\n  name: Haus\n' > "$HA_CFG/configuration.yaml"
 ha_hook
-if grep -q "packages:" "$HA_CFG/configuration.yaml"; then fail "a second homeassistant: key was appended (#177)"; fi
-grep -qi "packages" "$WORK/ha-hook.out" || fail "the HA hook says how to add the packages include by hand (#177)"
+[ "$(grep -c "^homeassistant:" "$HA_CFG/configuration.yaml")" = 1 ] || fail "a second homeassistant: key was appended (#177)"
+grep -q "^  packages: !include_dir_named packages" "$HA_CFG/configuration.yaml" || fail "the include goes under the existing homeassistant: block (#253)"
+grep -q "^  name: Haus" "$HA_CFG/configuration.yaml" || fail "the admin's homeassistant: block lost a key (#253)"
 ( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
