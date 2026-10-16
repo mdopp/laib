@@ -54,11 +54,9 @@ file moves out.
    built-in, the draft is what to compare `laib add <name>` against; the
    others get their units from their own repo's `laib.yml` or by hand
    (ADR 0004: `.container` is the primary form). Secrets: `laib secret set`
-   for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth)
-   and for every line under "carry over before the first apply" — the data
-   on the box was made with those values, and a fresh one locks the app out
-   of its own database (#228). The rest is generated on first apply and the
-   post-deploy hook seeds the app. Nothing runs yet.
+   for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth),
+   and the data-bound ones carried over (below). The rest is generated on
+   first apply and the post-deploy hook seeds the app. Nothing runs yet.
 2. **Caddy beside NPM** on a different port, `laib apply caddy`. Routes are
    verified against `127.0.0.1` before DNS moves. Then AdGuard rewrites
    switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;
@@ -172,6 +170,45 @@ applies:
   for 30 days.
 - ServiceBay API tokens. All agents get new hand tokens.
 - The TUI, the portal, the companion app's `/napi` (Haus owns it now; until haus#10 the rest goes through Haus's Solaris bridge).
+
+## Secrets that carry over (#228)
+
+The data on the box was made with these values. Laib must start with the same
+ones, or the app is locked out of its own database or config:
+
+| Laib secret | ServiceBay name | What a new value breaks |
+|---|---|---|
+| `LLDAP_ADMIN_PASSWORD` | same | LLDAP reads it only when it creates the DB: Authelia's bind, the auth post-deploy, Radicale's seeding |
+| `AUTHELIA_STORAGE_KEY` | `AUTHELIA_STORAGE_ENCRYPTION_KEY` | Authelia refuses its `db.sqlite3`; every TOTP/WebAuthn registration is lost |
+| `IMMICH_DB_PASSWORD` | `DB_PASSWORD` | immich-server cannot reach its Postgres |
+| `PAPERLESS_DB_PASSWORD` | same | the same for Paperless |
+| `MQTT_PASSWORD` | same | every device and Home Assistant lose the broker |
+| `JELLYFIN_ADMIN_PASSWORD` | same | the media post-deploy cannot log in to Jellyfin |
+| `ADGUARD_ADMIN_PASSWORD` | same | post-deploy cannot sync the rewrites into the kept `AdGuardHome.yaml` |
+| `SAMBA_PASSWORD` | `SHARE_PASSWORD` | devices that mount the share with the old account |
+
+They are set **before the service's first apply**, which is `laib add`:
+`secrets.age` is one flat map, and every apply generates whatever secret a
+service in the state is missing, so a value not carried by then is a new one.
+Carrying all of them at step 1 is safe; the services are not in the state yet.
+
+```sh
+# on the box, as core, while ServiceBay's container still runs
+scripts/carry-servicebay-secrets.sh    # all eight, or name services (… auth immich); LAIB=/var/opt/laib/laib if laib is not on PATH
+```
+
+The values live sealed in ServiceBay's `config.json` (`installedSecrets`,
+AES-256-GCM with `secret.key` beside it). The host has no Python and openssl
+has no GCM, so the script unseals each value inside ServiceBay's container
+with its node and pipes it straight into `laib secret set <Laib name>`. No
+value is passed on argv, kept in a variable or file, or shown. A value the
+store does not have is reported and the script exits non-zero. Read it
+before the apply; it does not set a substitute. The store holds what
+ServiceBay deployed. A password changed later inside the app (in LLDAP's UI,
+say) is not in it, and the first apply's verify shows that.
+
+One value goes with them: the box's broker user is `mqtt` and the built-in's
+default is `homeassistant`, so `laib add mosquitto MQTT_USER=mqtt`.
 
 ## Rollback during the weekend
 
