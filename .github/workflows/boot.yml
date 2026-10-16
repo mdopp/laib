@@ -29,6 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)" || true
-      - run: python3 scripts/immich-move-test.py
+      - run: python3 -u scripts/immich-move-test.py
         env:
           XDG_RUNTIME_DIR: /run/user/1001

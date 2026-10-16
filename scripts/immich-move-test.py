@@ -411,5 +411,11 @@ def cleanup():
 if __name__ == "__main__":
     try:
         main()
+    except SystemExit:
+        for c in podman("ps", "-a", "--format", "{{.Names}}", check=False).stdout.split():
+            if c.startswith("mt-"):
+                p = podman("logs", "--tail", "40", c, check=False)
+                print(f"--- podman logs --tail 40 {c}\n{p.stdout}{p.stderr}", flush=True)
+        raise
     finally:
         cleanup()
