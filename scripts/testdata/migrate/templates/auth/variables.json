@@ -1,0 +1,37 @@
+{
+ "AUTHELIA_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "auth",
+  "exposure": "public",
+  "proxyPort": "AUTHELIA_PORT",
+  "proxyConfig": {
+   "ssl_forced": true
+  },
+  "audience": "anonymous"
+ },
+ "LLDAP_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "ldap",
+  "exposure": "internal",
+  "proxyPort": "LLDAP_PORT",
+  "proxyConfig": {
+   "ssl_forced": true,
+   "advanced_config": "__authelia_forward_auth__"
+  },
+  "audience": "admin"
+ },
+ "LLDAP_LDAP_PORT": {
+  "type": "text",
+  "default": "3890",
+  "blockLanAccess": true
+ },
+ "LLDAP_ADMIN_PASSWORD": {
+  "type": "secret"
+ },
+ "AUTHELIA_STORAGE_ENCRYPTION_KEY": {
+  "type": "secret"
+ },
+ "AUTHELIA_OIDC_RSA_PRIVATE_KEY": {
+  "type": "rsa-private"
+ }
+}

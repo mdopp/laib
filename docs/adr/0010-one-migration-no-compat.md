@@ -17,8 +17,9 @@ knows nothing about ServiceBay: no `laib migrate` verb, no reader for its
 stores, no flag. The one-time translation is `scripts/migrate-servicebay.py`,
 a throw-away script run by the operator (or by Claude in a session) that
 reads ServiceBay's `config.json` and templates a single time and writes draft
-`services/<name>/` folders for review. Secrets are moved by hand with
-`laib secret set`; there are 48 of them and most are re-generated anyway. A
+service folders for review, outside the state repo (#226). Secrets are moved
+by hand with `laib secret set`; there are 48 of them and most are
+re-generated, except the ones the existing data was made with (#228). A
 service belongs to exactly one control plane at any moment.
 
 ## Consequences

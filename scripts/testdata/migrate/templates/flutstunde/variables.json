@@ -1,0 +1,16 @@
+{
+ "FLUTSTUNDE_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "flut",
+  "exposure": "public",
+  "proxyPort": "FLUTSTUNDE_PORT",
+  "proxyConfig": {
+   "ssl_forced": true,
+   "advanced_config": "__authelia_forward_auth__"
+  }
+ },
+ "FLUTSTUNDE_PORT": {
+  "type": "text",
+  "default": "3000"
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "PI_WEB_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "pi",
+  "exposure": "internal",
+  "proxyPort": "PI_WEB_PORT",
+  "proxyConfig": {
+   "ssl_forced": true,
+   "advanced_config": "__authelia_forward_auth__"
+  }
+ },
+ "PI_WEB_PORT": {
+  "type": "text",
+  "default": "8504"
+ }
+}

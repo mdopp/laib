@@ -1,0 +1,19 @@
+{
+ "IMMICH_SUBDOMAIN": {
+  "type": "subdomain",
+  "default": "photos",
+  "exposure": "public",
+  "proxyPort": "IMMICH_PORT",
+  "proxyConfig": {
+   "ssl_forced": true
+  },
+  "audience": "family"
+ },
+ "IMMICH_PORT": {
+  "type": "text",
+  "default": "2283"
+ },
+ "DB_PASSWORD": {
+  "type": "secret"
+ }
+}

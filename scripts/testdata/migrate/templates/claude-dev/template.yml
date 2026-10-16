@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: claude-dev
+  annotations:
+    servicebay.schema-version: "1"
+    servicebay.backup: |
+      backup: none
+      reason: scratch
+spec:
+  containers:
+  - name: claude-dev
+    image: example.invalid/app:1
+  volumes:
+  - name: v0
+    hostPath:
+      path: {{DATA_DIR}}/claude-dev/workspace
+      type: DirectoryOrCreate
