@@ -173,7 +173,7 @@ def main():
 
         head = f"# Laib has a built-in: `laib add {name}`, then compare with this draft.\n" if builtin else ""
         tmpl = f"{{registry: builtin, name: {name}}}" if builtin else f"{{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}"
-        laib = [f"{head}name: {name}", f"template: {tmpl}", "migratedFrom: servicebay", "routes:" if routes else "routes: []"]
+        laib = [f"{head}name: {name}", f"template: {tmpl}", "routes:" if routes else "routes: []"]
         for r in routes:
             g = f", group: {r['group']}" if r["group"] else ""
             laib.append(f"  - {{host: {r['host']}, port: {r['port']}, exposure: {r['exposure']}, auth: {r['auth']}{g}}}")

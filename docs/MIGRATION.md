@@ -12,20 +12,38 @@ service on 5900; separate state, separate nftables tables
 files sit in the Quadlet root, Laib's units in `<name>/` folders. Three
 things cannot be shared:
 
-1. **A unit name.** Quadlet names units after the file, not the folder:
-   `media.kube` and `media/media.container` both produce `media.service`.
-   `laib plan` reports this as `KONFLIKT` and `laib apply` refuses it; stop
-   and remove ServiceBay's file first, then apply.
+1. **A service.** Quadlet names units after the file, not the folder, and
+   ServiceBay's `auth.kube` runs the same Authelia and LLDAP on the same
+   data as Laib's `auth/` units, whatever those are called. `laib plan`
+   reports `KONFLIKT` for every file in the Quadlet root that would run a
+   service of the state beside Laib: the same name or unit name, a host port
+   the service publishes (`PublishPort=`, `hostPort:`, a host-network pod's
+   `containerPort:`), or a host path at, inside or above one of its
+   backed-up data paths (`Volume=`, `Mount=`, a `hostPath`; a `.kube` is
+   read with its `Yaml=`). What lies at or below a `backup: false` path is
+   shared on purpose: the shared tree `file-share/data` with its folders,
+   which Immich, Jellyfin, Beets and Solaris read and write. While one is
+   reported, every `laib apply` refuses before it generates a secret or
+   writes a file, so ServiceBay's unit is stopped and its files moved out
+   **before** the service goes into the state (step 4). A `laib add` that
+   refuses has already put the service into the state: move the file out,
+   then `laib apply`. Not seen: a host-network `.container` declares no
+   ports, so ServiceBay's `llama-embed.container` (11436, Laib's llama's
+   embeddings port) is caught by nothing; it goes out with `llama` (step 4).
 2. **Ports 80/443.** Caddy starts on alternative ports beside NPM (step 2).
 3. **Whole-file configs.** Authelia, AdGuard rewrites and the SSH port 2222
    (claude-dev vs Werkstatt) move as a whole, never half.
 
 ## Principle
 
-A service belongs to exactly one control plane, recorded in
-`services/<name>/laib.yml` (`migratedFrom: servicebay` until the end). While a
-service is still ServiceBay's, Laib shows it as `nicht verwaltet` and does not
-touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
+A service belongs to exactly one control plane. It is ServiceBay's while its
+file is in the Quadlet root and Laib's state does not have it; it is Laib's
+from the moment ServiceBay's unit is stopped, its file moved out and
+`laib add <name>` puts it in the state. There is no marker and no in-between:
+the `KONFLIKT` check above keeps the two apart (`migratedFrom` was dropped,
+#227; ADR 0010: the kernel knows nothing about ServiceBay). A Quadlet unit
+cannot be disabled while its file is there, so "disable" always means the
+file moves out.
 
 ## Order
 
@@ -54,7 +72,8 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;
    Authelia's config is still ServiceBay's at this point and stays compatible
    because the rules are Authelia's, not the proxy's (ServiceBay ADR 0005, 0006).
-3. **auth** (Authelia + LLDAP): `laib apply auth`. OIDC clients are rendered
+3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
+   `auth.kube` out first, then `laib add auth`. OIDC clients are rendered
    from every `services/*/laib.yml`, which at this point is the full list,
    so no client is dropped (the #1724 failure class cannot occur).
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
@@ -63,8 +82,22 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
    amendment 2026-10-14): a preset instead of a window name, a holder, the
    model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
    immich, media, home-assistant** in that order: small and stateless first,
-   the ones with migrations last. Each one: `laib plan <name>`, read the diff,
-   `laib apply <name>`, verify green, disable ServiceBay's unit.
+   the ones with migrations last. Each one, in this order (the service is
+   down from a to c; that is the price of never having two writers on one
+   database):
+   a. Stop ServiceBay's unit and move its files out of the Quadlet root:
+      ```sh
+      systemctl --user stop <name>.service
+      mkdir -p ~/servicebay-units
+      mv ~/.config/containers/systemd/<name>.kube ~/.config/containers/systemd/<name>.yml ~/servicebay-units/   # or <name>.container
+      systemctl --user daemon-reload
+      ```
+      For `llama`, `llama-embed.service` is stopped and `llama-embed.container`
+      moved out with it.
+   b. Carry its secrets over (#228) and move its data into Laib's layout
+      (#229).
+   c. `laib add <name>` (it applies). `laib plan` shows no `KONFLIKT`, the
+      apply ends green, the app shows the old data.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template, same
    `/workspace` volume, so checkouts and sessions survive.
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
@@ -84,7 +117,9 @@ touch it. While a service is Laib's, ServiceBay's unit for it is disabled.
 
 ## Rollback during the weekend
 
-Every `laib apply` snapshots first. Re-enabling a ServiceBay unit is
-`systemctl --user enable --now <unit>`; NPM comes back the same way until step
-7. After step 7, rollback is a restore of the ServiceBay data dir, which is
-why it stays 30 days.
+Every `laib apply` snapshots first. Handing a service back to ServiceBay is
+`laib remove <name>`, then its files back from `~/servicebay-units/` into the
+Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
+<name>.service`; NPM comes back the same way until step 7. After step 7,
+rollback is a restore of the ServiceBay data dir, which is why it stays 30
+days.
