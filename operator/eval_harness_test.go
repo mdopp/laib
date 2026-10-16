@@ -19,6 +19,7 @@ import (
 type Incident struct {
 	ID      string            `json:"id"`
 	Title   string            `json:"title"`
+	Skill   string            `json:"skill,omitempty"` // default: the built-in skill for the trigger's kind
 	Trigger Trigger           `json:"trigger"`
 	Replies map[string]string `json:"replies"`
 	Expect  struct {

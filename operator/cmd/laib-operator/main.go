@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	once := flag.String("once", "", "run one session for this trigger kind (tick|report|event:<service>) and exit")
+	once := flag.String("once", "", "run one skill now (its name, or event:<service> for the event skills) and exit")
 	flag.Parse()
 
 	op := &operator.Operator{
@@ -38,7 +38,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// The typed surface (#53) is the default: a household model gets a menu
-	// per trigger with typed parameters; OPERATOR_INTERFACE=cli gives a large
+	// per skill with typed parameters; OPERATOR_INTERFACE=cli gives a large
 	// model the verb table. The menu's service enum comes from laib status.
 	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
 	if op.Typed {
@@ -47,34 +47,52 @@ func main() {
 		}
 	}
 
-	if *once != "" {
-		tr := operator.Trigger{Kind: *once}
-		if strings.HasPrefix(*once, "event:") {
-			tr = operator.Trigger{Kind: "event", Service: strings.TrimPrefix(*once, "event:"), Detail: "manual"}
+	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
+	runner.LoadLast()
+	// the skills come from the kernel (ADR 0023): which exist, which rest,
+	// what each may call; the last good list stands while laib is away
+	var skills []operator.Skill
+	var skillsMu sync.Mutex
+	current := func() []operator.Skill {
+		skillsMu.Lock()
+		defer skillsMu.Unlock()
+		if sks, err := op.MCP.Skills(ctx); err == nil {
+			skills = sks
+		} else {
+			log.Printf("skills: %v", err)
 		}
-		s, err := op.Run(ctx, tr)
-		b, _ := json.MarshalIndent(s, "", "  ")
-		fmt.Println(string(b))
-		if err != nil {
-			log.Fatal(err)
+		return skills
+	}
+	logged := func(ss []operator.Session) {
+		for _, s := range ss {
+			log.Printf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+		}
+	}
+
+	if *once != "" {
+		// -once <skill> runs that skill now; -once event:<service> runs the event skills
+		var ss []operator.Session
+		if svc, ok := strings.CutPrefix(*once, "event:"); ok {
+			ss = runner.Event(ctx, current(), operator.Trigger{Kind: "event", Service: svc, Detail: "manual"})
+		} else {
+			for _, sk := range current() {
+				if sk.Name == *once && sk.Status == "active" {
+					ss = append(ss, runner.RunNow(ctx, sk, operator.Trigger{Kind: "manual"}))
+				}
+			}
+		}
+		if len(ss) == 0 {
+			log.Fatalf("laib-operator: no active skill for %q (laib skill list)", *once)
+		}
+		for _, s := range ss {
+			b, _ := json.MarshalIndent(s, "", "  ")
+			fmt.Println(string(b))
 		}
 		return
 	}
 
-	var mu sync.Mutex // one session at a time; the envelope's budget is per hour anyway
-	run := func(tr operator.Trigger) {
-		mu.Lock()
-		defer mu.Unlock()
-		s, err := op.Run(ctx, tr)
-		if err != nil {
-			log.Printf("session %s/%s: %v", tr.Kind, tr.Service, err)
-			return
-		}
-		log.Printf("session %s/%s: %s, %d calls, %dms", tr.Kind, tr.Service, s.Outcome, len(s.Calls), s.Duration)
-	}
-
 	// Webhook: Laib posts journal entries (red results, proposals, readiness).
-	// Reds start an incident session per service, debounced for ten minutes.
+	// A red runs the event skills for its service, debounced for ten minutes.
 	last := map[string]time.Time{}
 	var lastMu sync.Mutex
 	mux := http.NewServeMux()
@@ -108,7 +126,8 @@ func main() {
 		if recent {
 			return
 		}
-		go run(operator.Trigger{Kind: "event", Service: e.Service, Detail: e.Verb + ": " + e.Detail})
+		tr := operator.Trigger{Kind: "event", Service: e.Service, Detail: e.Verb + ": " + e.Detail}
+		go func() { logged(runner.Event(ctx, current(), tr)) }()
 	})
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"operator":"bereit"}`)
@@ -120,26 +139,16 @@ func main() {
 		}
 	}()
 
-	tick, _ := time.ParseDuration(env("OPERATOR_TICK", "10m"))
-	if tick <= 0 {
-		tick = 10 * time.Minute
-	}
-	ticker := time.NewTicker(tick)
-	reportAt := env("OPERATOR_REPORT_AT", "07:00")
-	reportedDay := ""
-	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, tick, reportAt)
+	// one step a minute: every active skill whose slot has come runs
+	ticker := time.NewTicker(time.Minute)
+	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, runner.Tick, runner.ReportAt)
 	for {
 		select {
 		case <-ctx.Done():
 			srv.Shutdown(context.Background())
 			return
 		case now := <-ticker.C:
-			if now.Format("15:04") >= reportAt && reportedDay != now.Format("2006-01-02") {
-				reportedDay = now.Format("2006-01-02")
-				run(operator.Trigger{Kind: "report"})
-				continue
-			}
-			run(operator.Trigger{Kind: "tick"})
+			logged(runner.Step(ctx, now, current()))
 		}
 	}
 }

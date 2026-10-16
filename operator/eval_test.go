@@ -32,7 +32,7 @@ func TestEvalScriptedIncidents(t *testing.T) {
 			llm = &LLM{URL: srv.URL, Model: "test"}
 		}
 		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: llm, Home: t.TempDir()}
-		return op.Run(ctx, inc.Trigger)
+		return op.Run(ctx, skillFor(t, inc.Trigger, inc.Skill), inc.Trigger)
 	})
 	if rep.Wrong != 0 {
 		t.Fatalf("wrong mutating actions: %d — %+v", rep.Wrong, rep.Results)

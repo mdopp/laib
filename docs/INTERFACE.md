@@ -18,6 +18,7 @@ laib escalate <service> "<was ich weiß>"       context bundle + red journal lin
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
+laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
 laib rollback <service|commit>       git revert + apply
@@ -56,16 +57,19 @@ large model the verbs) offers a **menu per trigger** of task-shaped tools
 with typed parameters, and code turns a call into the CLI arguments laib's
 MCP takes — the model never writes quoting, flags or `--`:
 
-| Trigger | Menu |
-|---|---|
-| tick | `status`, `diagnose(service?)`, `note(kind, text)` |
-| event (a red) | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
-| report | `status`, `diagnose`, `journal(hours)`, `note` |
+The menu is the skill's (ADR 0023): the typed tools whose verb the
+kernel grants the running skill. The built-in skills give:
+
+| Skill | Trigger | Menu |
+|---|---|---|
+| `routineblick` | every `operator.tick` | `status`, `diagnose(service?)`, `note(kind, text)` |
+| `vorfall` | a red | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
+| `morgenbericht` | daily at `operator.reportAt` | `status`, `diagnose`, `journal(hours)`, `note` |
 
 `service` is an enum of the installed services (from `laib status`),
 `kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
-`key` a values.yml key. A tool is in the menu only if the hand has its
-verb (`ops` at ceiling `propose` sees no `restart`). `approve`, `reject`,
+`key` a values.yml key. A tool is in the menu only if the skill is
+granted its verb (`ops` at ceiling `propose` gets no `restart`). `approve`, `reject`,
 `restore`, `rollback`, `converge`, `template`, `adopt`, `apply`, `remove`
 are in no menu. A call with a missing or invalid argument — an unknown
 service, a kind outside the enum, a key with a path in it, a tool outside
@@ -74,6 +78,21 @@ cut to 2 000 characters, the context bundle to 6 000. The eval runs both
 interfaces over the same incidents (`werkstatt/evals/incidents-typed.json`).
 Still open from #53: runbooks in code for the known failure classes, and
 schema-constrained decoding through llama-server.
+
+### Skills (ADR 0023)
+
+`laib skill list` (MCP `laib_skill`, read tier) lists every skill — the
+built-ins in `skills/` of this repo, embedded in `laib`, and the state
+repo's `skills/*.yml` — with its status (`aktiv`, `ruht`, `verweigert`),
+its granted tools and, per tool it does not get, why. The Operator sends
+`X-Laib-Skill: <name>` with every call of a session: `tools/list` then
+answers the skill's granted tools only, and a call outside them — or any
+call of a paused, refused or unknown skill — is answered `nicht
+ausgeführt: …` and never runs. A skill is granted a verb when it names it,
+the verb is in the skill vocabulary (`status diag logs inspect look read
+journal context inbox note escalate propose wish restart exec write`) and
+the hand's ceiling and verb list reach it. `laib skill enable|pause
+<name>` (humans only) writes `policy.yml skills` and commits.
 
 ## Readiness: `/ready`
 

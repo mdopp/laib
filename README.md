@@ -48,6 +48,7 @@ internal/policy      hands, tiers, who needs approval
 internal/proposal    proposals, cards, approval by content
 internal/secrets     age-encrypted secrets.age
 internal/token       hand tokens
+internal/skill       the Operator's skills: registry, vocabulary, what the ceiling grants (ADR 0023)
 internal/lease       the lease and the policy proxy
 internal/frage       Frage's search and summary
 internal/automat     the Automat's tools
@@ -56,6 +57,7 @@ internal/stick       the stick wizard's steps (Butane, ISO, Ignition, write)
 internal/boxfs       the box's paths
 internal/sysd        the systemctl seam
 operator/            the Operator, the admin agent (ADR 0013), a host unit: its own program and line budget (ADR 0023)
+skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop

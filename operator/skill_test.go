@@ -5,11 +5,37 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+// skillFor is a built-in skill as the kernel lists it at ceiling apply:
+// the named one, or the one that took over the trigger's kind (ADR 0023 §6).
+func skillFor(t *testing.T, tr Trigger, name string) Skill {
+	t.Helper()
+	if name == "" {
+		name = map[string]string{"event": "vorfall", "report": "morgenbericht"}[tr.Kind]
+	}
+	if name == "" {
+		name = "routineblick"
+	}
+	b, err := os.ReadFile(filepath.Join("..", "skills", name+".yml"))
+	var sk Skill
+	if err == nil {
+		err = yaml.Unmarshal(b, &sk)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk.Name, sk.Source, sk.Status, sk.Granted = name, "builtin", "active", sk.Tools
+	return sk
+}
 
 // skillMCP is a laib MCP that records, per call, the skill it was made in.
 func skillMCP(t *testing.T) (*httptest.Server, *[]string) {
