@@ -123,11 +123,29 @@ class Migrate(unittest.TestCase):
         # #229: a DB-bearing container (no AutoUpdate in the built-in) whose box tag
         # differs is pinned to the digest the box runs; the same tag is not, nor
         # one Laib updates itself; the box's base DN goes under Laib's name
-        line = next((l for l in self.stdout.splitlines() if l.strip().startswith("laib add auth ")), "")
+        line = next((l for l in self.stdout.splitlines() if "laib add auth " in l), "")
         self.assertIn("LLDAP_IMAGE=$(podman image inspect --format '{{index .RepoDigests 0}}' docker.io/lldap/lldap:latest)", line)
         self.assertIn("BASE_DN=dc=box,dc=test", line)
         self.assertNotIn("AUTHELIA_IMAGE", line)
         self.assertNotIn("SAMBA_IMAGE", self.stdout)
+
+    def test_add_line_never_runs_with_an_empty_pin(self):
+        # #237 review: a box image without a RepoDigest (or gone) makes the
+        # $(podman …) empty; laib add must not run then (a blank image value)
+        line = next(l for l in self.stdout.splitlines() if "laib add auth " in l).strip()
+        with tempfile.TemporaryDirectory() as b:
+            for rc, digest in ((125, ""), (0, "docker.io/lldap/lldap@sha256:feed")):
+                Path(b, "podman").write_text(f"#!/bin/sh\necho {digest}\nexit {rc}\n")
+                Path(b, "laib").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > {b}/laib-argv\n')
+                for f in ("podman", "laib"):
+                    Path(b, f).chmod(0o755)
+                Path(b, "laib-argv").unlink(missing_ok=True)
+                subprocess.run(["bash", "-c", line], env=dict(os.environ, PATH=f"{b}:{os.environ['PATH']}"), capture_output=True)
+                ran = Path(b, "laib-argv").exists()
+                if rc:
+                    self.assertFalse(ran, line)
+                else:
+                    self.assertIn("LLDAP_IMAGE=docker.io/lldap/lldap@sha256:feed", Path(b, "laib-argv").read_text().split("\n"), line)
 
     def test_no_secret_value_is_written(self):
         for d in self.out.iterdir():
