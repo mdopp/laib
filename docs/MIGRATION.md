@@ -114,7 +114,16 @@ handing a service back is re-enabling its unit, and they go with ServiceBay's
 data dir after 30 days. Two files are edited in place, and their ServiceBay
 version is kept beside them as `<file>.servicebay`; a rollback puts those
 back. It refuses a service whose ServiceBay file is still in the Quadlet
-root, or whose target already holds data, before writing anything of it.
+root, whose ServiceBay unit still runs (the wrapper reads the running units
+from `systemctl --user`; a live database copied is no copy), whose target
+already holds data, or whose copy does not fit with 1 GiB to spare, before
+writing anything of it. Each target is copied into `<target>.partial`, synced
+and renamed, so a copy cut off by a power cut or an error is never where the
+built-in starts on it; the next run clears the `.partial` and copies again. A
+second run of a finished service is refused: its targets hold data.
+Ownership is kept as the container uids have it (the copy runs as root in the
+laib-hooks image); SELinux labels are set by the built-in's `:z` on its first
+start; sockets and FIFOs are left out, hardlinks become copies.
 
 | Service | ServiceBay on the box | Laib | Step |
 |---|---|---|---|
@@ -138,7 +147,9 @@ from the domain), `MQTT_USER` from `MQTT_USERNAME` (the box's is `mqtt`), and
 another tag than the built-in's default for a container Laib does not update
 itself (the ones that keep a database), the line pins the digest the box
 runs: `LLDAP_IMAGE=$(podman image inspect --format '{{index .RepoDigests 0}}'
-docker.io/lldap/lldap:latest)`. This covers LLDAP `:latest` against
+docker.io/lldap/lldap:latest) && laib add auth … LLDAP_IMAGE=$LLDAP_IMAGE`, so
+an image the box no longer has, or one without a registry digest, stops the
+line instead of adding the service with a blank image. This covers LLDAP `:latest` against
 `:stable`, Paperless `:beta` against `:latest` and Authelia `:latest` against
 `:4`. Moving to the built-in's tag later is a deliberate update, a values
 change with its snapshot.

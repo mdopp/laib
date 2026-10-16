@@ -197,7 +197,7 @@ def main():
 
         if builtin:   # the laib add line: the box's values, and a database's image pinned to what the box runs (#229)
             bvals, auto = builtin_values(a.builtins, name)
-            add = []
+            add, pins = [], []
             for sb, key in VALUES.get(name, {}).items():
                 v = str(values.get(sb) or decl.get(sb, {}).get("default") or "")
                 if sb == "LLDAP_BASE_DN" and not v:
@@ -209,8 +209,11 @@ def main():
                 repo, _, tag = img.rpartition(":")
                 for key, v in sorted(bvals.items()):
                     if key not in auto and v.rpartition(":")[0] == repo and v.rpartition(":")[2] != tag:
-                        add.append(f"{key}={PIN % img}")
-            adds.append(" ".join([f"laib add {name}"] + add))
+                        pins.append(f"{key}={PIN % img} && ")
+                        add.append(f"{key}=${key}")
+            # an image without a RepoDigest (or gone) fails the $(…), and laib
+            # add does not run with a blank image: it would take the default
+            adds.append("".join(pins) + " ".join([f"laib add {name}"] + add))
         head = f"# Laib has a built-in: `laib add {name}`, then compare with this draft.\n" if builtin else ""
         tmpl = f"{{registry: builtin, name: {name}}}" if builtin else f"{{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}"
         laib = [f"{head}name: {name}", f"template: {tmpl}", "routes:" if routes else "routes: []"]
