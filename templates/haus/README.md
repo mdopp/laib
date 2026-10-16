@@ -62,10 +62,14 @@ under the Gemma Terms of Use, which fit a family's own use.
 Documents (#219): the library indexes Paperless's documents too. Haus
 mirrors what its Paperless user sees (the OCR text Paperless already
 has) into `${DATA_DIR}/haus-dokumente`, one `<id>.md` per document
-(title, date, sender, tags, then the text): `haus export-documents`, the
-refresh's first step, in Haus's container. A document changed in
-Paperless is written again, one deleted there is deleted here; Paperless
-not answering leaves the folder as it was and does not fail the refresh.
+(title, date, sender, tags, then the text): `haus export-documents` in
+Haus's container, as its own oneshot (`haus-documents-export.service`)
+that the refresh wants and runs after. A document changed in Paperless
+is written again, one deleted there is deleted here; Paperless not
+answering leaves the folder as it was. The export failing (a folder Haus
+cannot write, or a Haus image older than the command, which stops at
+once without `LAIB_TOKEN`) shows haus red but never stops the notes'
+refresh.
 qmd indexes the folder read-only as the collection `dokumente`
 (`HAUS_QMD_DOCUMENTS`); Haus checks each hit against Paperless and links
 it to `haus.<domain>/dokumente/<id>`. Without `HAUS_PAPERLESS_TOKEN` the
