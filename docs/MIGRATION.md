@@ -215,6 +215,9 @@ default is `homeassistant`, so `laib add mosquitto MQTT_USER=mqtt`.
 Every `laib apply` snapshots first. Handing a service back to ServiceBay is
 `laib remove <name>`, then its files back from `~/servicebay-units/` into the
 Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
-<name>.service`; NPM comes back the same way until step 7. After step 7,
+<name>.service`. ServiceBay's data paths were only copied from, so they are as
+it left them; for home-assistant, first put the two `<file>.servicebay` files
+back (zwave-js `settings.json`, `.storage/core.config_entries`). NPM comes back
+the same way until step 7. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
