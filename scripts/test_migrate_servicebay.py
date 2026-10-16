@@ -129,6 +129,13 @@ class Migrate(unittest.TestCase):
         self.assertNotIn("AUTHELIA_IMAGE", line)
         self.assertNotIn("SAMBA_IMAGE", self.stdout)
 
+    def test_add_line_carries_the_zwave_stick(self):
+        # #248: the box's Z-Wave stick is a service-less value; the built-in's
+        # default (/dev/ttyACM0) is another box's, and AddDevice= of a path
+        # that is not there keeps Z-Wave JS UI from starting
+        line = next((l for l in self.stdout.splitlines() if "laib add home-assistant" in l), "")
+        self.assertIn("ZWAVE_DEVICE=/dev/ttyACM9", line)
+
     def test_add_line_never_runs_with_an_empty_pin(self):
         # #237 review: a box image without a RepoDigest (or gone) makes the
         # $(podman …) empty; laib add must not run then (a blank image value)

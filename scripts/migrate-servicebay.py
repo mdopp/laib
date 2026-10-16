@@ -40,6 +40,7 @@ VALUES = {
     "radicale": {"LLDAP_BASE_DN": "BASE_DN"},
     "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
     "file-share": {"SHARE_USER": "SHARE_USER"},
+    "home-assistant": {"ZWAVE_DEVICE": "ZWAVE_DEVICE"},   # the box's stick, a service-less value (#248)
 }
 PIN = "$(podman image inspect --format '{{index .RepoDigests 0}}' %s)"
 
