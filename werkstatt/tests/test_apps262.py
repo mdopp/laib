@@ -212,6 +212,30 @@ class LintRunsHere(unittest.TestCase):
             self.assertEqual((Path(d) / "argv").read_text().splitlines(), ["template", "lint", "/workspace/laib-apps/templates/hallo"])
 
 
+class WorkspaceIsDevs(unittest.TestCase):
+    def test_the_entrypoint_hands_the_workspace_to_dev(self):
+        # laib creates ${DATA_DIR}/werkstatt/workspace as core, the container's
+        # root: on a fresh install dev could not write /workspace at all (the
+        # first werkstatt-e2e app run: mkdir /workspace/laib-apps, permission denied)
+        with tempfile.TemporaryDirectory() as root:
+            r, bin_ = Path(root), Path(root) / "bin"
+            bin_.mkdir()
+            for name in ("su", "chpasswd", "ssh-keygen", "claude", "git"):
+                (bin_ / name).write_text("#!/bin/sh\nexit 0\n"); (bin_ / name).chmod(0o755)
+            (bin_ / "chown").write_text(f'#!/bin/sh\necho "$@" >> {root}/chown.log\n'); (bin_ / "chown").chmod(0o755)
+            script = (HERE / "entrypoint.sh").read_text().replace("/usr/sbin/sshd", "true")
+            for p in ("/home/dev", "/run/laib", "/etc/profile.d", "/etc/ssh", "/workspace"):
+                script = script.replace(p, root + p)
+            (r / "etc" / "profile.d").mkdir(parents=True); (r / "workspace").mkdir()
+            (r / "entrypoint.sh").write_text(script)
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("LAIB_", "WERKSTATT_", "CLAUDE_"))}
+            env["PATH"] = f"{bin_}:{os.environ['PATH']}"
+            p = subprocess.run(["bash", str(r / "entrypoint.sh")], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            calls = (r / "chown.log").read_text().splitlines()
+            self.assertIn(f"dev:dev {root}/workspace", calls, calls)   # the folder itself, never -R over the checkouts
+
+
 class TheGuide(unittest.TestCase):
     def test_both_agents_read_it(self):
         cf = (HERE / "Containerfile").read_text()
