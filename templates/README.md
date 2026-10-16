@@ -60,3 +60,4 @@ conversation agent) are set up by hand once; with the optional secret
 | file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's forward auth (Remote-User); consume folder on the file share |
+| usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |
