@@ -14,10 +14,12 @@ Environment=MODEL_URL=${MODEL_URL}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
 # dev's home (#241): ~/.claude, ~/.claude.json, dotfiles, history; ~/.cache
 # (npm, go, pip) is its own data path, not backed up; sshd's host keys, made once.
+# A unit file has no trailing comments: they would be part of the value.
 Volume=${DATA_DIR}/werkstatt/home:/home/dev:z
 Volume=${DATA_DIR}/werkstatt/cache:/home/dev/.cache:z
 Volume=${DATA_DIR}/werkstatt/ssh-host-keys:/etc/ssh/keys:z
-Tmpfs=/run/laib                 # this container's tokens, not the shared volume (#44)
+# this container's tokens, not the shared volume (#44)
+Tmpfs=/run/laib
 AutoUpdate=registry
 
 [Service]

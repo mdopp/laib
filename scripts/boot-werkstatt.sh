@@ -94,5 +94,7 @@ podman unshare test ! -e "$DATA/werkstatt/home/.cache/scratch" || fail "~/.cache
 if podman unshare grep -rlF canary241 "$DATA/werkstatt/home" "$DATA/werkstatt/ssh-host-keys"; then fail "a token is in the persistent home"; fi
 podman unshare grep -qF 'Bearer ${LAIB_TOKEN}' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server in ~/.claude.json"
 # the tokens' tmpfs (#44) is really one
-podman exec systemd-werkstatt grep -q ' /run/laib tmpfs ' /proc/mounts || fail "/run/laib, where the tokens go, is not a tmpfs (#44)"
+for c in systemd-werkstatt systemd-werkstatt-autoloop; do
+  podman exec "$c" grep -q ' /run/laib tmpfs ' /proc/mounts || fail "$c: /run/laib, where the tokens go, is not a tmpfs (#44)"
+done
 echo "werkstatt boot test ok: the home, the session and the host key survived a restart and an image update"
