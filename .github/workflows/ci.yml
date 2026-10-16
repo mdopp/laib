@@ -32,7 +32,7 @@ jobs:
             echo "quadlet -dryrun $d"
             docker run --rm -e QUADLET_UNIT_DIRS=/q -v "$PWD/$d:/q:ro" quay.io/podman/stable:v5 /usr/libexec/podman/quadlet -dryrun -user >/dev/null
           done
-      - run: python3 -m unittest scripts/test_migrate_servicebay.py werkstatt/tests/test_autoloop.py werkstatt/tests/test_werkstatt44.py stimme/trainer/tests/test_trainer.py templates/bote/tests/test_notify.py templates/bote/tests/test_post_deploy.py templates/auth/tests/test_post_deploy.py templates/mosquitto/tests/test_hooks.py && python3 -m py_compile werkstatt/laibctl.py templates/bote/notify.py stimme/trainer/train.py stimme/trainer/trainer.py $(grep -l '^#!/usr/bin/env python3' templates/*/pre-start templates/*/post-deploy)
+      - run: python3 -m unittest scripts/test_migrate_servicebay.py werkstatt/tests/test_autoloop.py werkstatt/tests/test_werkstatt44.py werkstatt/tests/test_home241.py stimme/trainer/tests/test_trainer.py templates/bote/tests/test_notify.py templates/bote/tests/test_post_deploy.py templates/auth/tests/test_post_deploy.py templates/mosquitto/tests/test_hooks.py && python3 -m py_compile werkstatt/laibctl.py templates/bote/notify.py stimme/trainer/train.py stimme/trainer/trainer.py $(grep -l '^#!/usr/bin/env python3' templates/*/pre-start templates/*/post-deploy)
       - run: scripts/loc.sh
       - run: scripts/drift.sh
       - run: scripts/workflow-syntax.sh
