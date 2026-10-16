@@ -10,7 +10,8 @@ it: ADR 0004 (templates), ADR 0007 (routes, certificates, Strato), ADR
 A wish arrives as a GitHub issue labelled `wunsch` (`laib wish`, from the
 Bote or a person). Before you build:
 
-- **Is there a template already?** `laib template list`. An existing app
+- **Is there a template already?** `laib template list` (JSON: `available`
+  and `installed`). An existing app
   that does the job beats a new one; say so and stop.
 - **Is it a program at all?** A calendar, a file share, a photo library
   are upstream apps: write a template for them (`templates.md`), do not
@@ -127,7 +128,7 @@ the owner to add.
 
 ```
 laib template sync                     # the box pulls the registry
-laib template list | grep <name>       # it sees the template
+laib template list | jq -e '.available["<name>"]'   # ["apps"]: the box sees it (over MCP the answer is JSON)
 laib propose --add <name> "<why, in one German sentence for the owner>"
 ```
 

@@ -131,7 +131,7 @@ say "agent: sync, find the template, propose the service (guide step 6)"
 agent <<SH || fail "sync or propose --add"
 set -euo pipefail
 laib template sync
-laib template list | grep -E '^ +hallo +apps'
+laib template list | jq -e '.available.hallo == ["apps"]'
 laib propose --add hallo IMAGE=$REG/hallo:1 "Hallo für die Familie: begrüßt, wer angemeldet ist"
 SH
 ID="$(open_id)"; [ -n "$ID" ] || fail "no open proposal for hallo"
