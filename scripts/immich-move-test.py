@@ -6,8 +6,8 @@ The Kraftwerk's Immich (v3.3.1) and Postgres images run in a pod the way
 ServiceBay ran them: all of file-share/data read-only at /mnt/photos, one
 external library per user on /mnt/photos/<user>/photos and a Shared one on
 /mnt/photos/photos. A second Syncthing stands in for the phones: it syncs the
-box's camera folder and the shared photos. Albums, a favourite, descriptions
-(one from an XMP sidecar), a named person and an edit are made through
+box's camera folder and the shared photos. Albums, favourites, descriptions
+(from XMP sidecars), a named person and an edit are made through
 Immich's API. Then the mover runs (refused while Immich runs, a dry run, the
 run, a second run) and Immich starts on Laib's mount (file-share/data/photos
 at /mnt/photos). Immich's API must show the same asset IDs at the new paths
@@ -239,8 +239,13 @@ def main():
                  ("alice/photos/Camera/a1.jpg", "yellow"), ("alice/photos/Camera/a2.jpg", "cyan"),
                  ("alice/photos/Camera/a3.jpg", "magenta"), ("alice/photos/a4.jpg", "white")):
         jpeg(os.path.join(FS, p), c)
-    with open(os.path.join(FS, "alice/photos/a4.jpg.xmp"), "w") as f:
-        f.write(SIDECAR)
+    # descriptions as Immich keeps them for a read-only library: from XMP
+    # sidecars. One typed into Immich does not survive Immich itself there
+    # (v3.3.1: its sidecar write fails on the read-only mount and the
+    # metadata re-read that follows clears it), on ServiceBay as on Laib.
+    for p, text in (("alice/photos/a4.jpg.xmp", "vom Sidecar"), ("photos/s3.jpg.xmp", "Familienfoto")):
+        with open(os.path.join(FS, p), "w") as f:
+            f.write(SIDECAR.replace("vom Sidecar", text))
     os.makedirs(os.path.join(FS, "alice/documents"))
     with open(os.path.join(FS, "alice/documents/brief.txt"), "w") as f:
         f.write("stays where it is")
@@ -288,15 +293,15 @@ def main():
             by_path[x["originalPath"]] = x["id"]
     check(len(by_path) == 7, "ServiceBay's Immich imported the 7 photos")
     aid = {p.rsplit("/", 1)[1].split(".")[0]: i for p, i in by_path.items()}
-    until(lambda: all((call("GET", f"{API}/assets/{aid[k]}", token=alice).get("exifInfo") or {}).get("exifImageWidth") for k in ("a1", "a2", "a3", "a4")),
-          "alice's photos have their metadata")
+    until(lambda: all((call("GET", f"{API}/assets/{aid[k]}", token=alice).get("exifInfo") or {}).get("exifImageWidth") for k in ("a1", "a2", "a3", "a4"))
+          and (call("GET", f"{API}/assets/{aid['s3']}", token=admin).get("exifInfo") or {}).get("description"),
+          "the photos have their metadata, the sidecars' descriptions read")
 
     # what the household did in Immich
     holiday = call("POST", API + "/albums", {"albumName": "Urlaub", "assetIds": [aid["a1"], aid["a2"], aid["a4"]]}, alice)["id"]
     family = call("POST", API + "/albums", {"albumName": "Familie", "assetIds": [aid["s1"], aid["s3"]]}, admin)["id"]
     call("PUT", f"{API}/assets/{aid['a1']}", {"isFavorite": True}, alice)
     call("PUT", f"{API}/assets/{aid['s3']}", {"isFavorite": True}, admin)
-    call("PUT", f"{API}/assets/{aid['a2']}", {"description": "Oma am Strand"}, alice)
     oma = call("POST", API + "/people", {"name": "Oma"}, alice)["id"]
     call("POST", API + "/faces", {"assetId": aid["a2"], "personId": oma, "imageWidth": 320, "imageHeight": 240,
                                   "x": 40, "y": 40, "width": 80, "height": 80}, alice)
@@ -306,7 +311,7 @@ def main():
     before = state(tokens, libs, albums)
     ba = before["assets"]
     check(ba[aid["a1"]]["favourite"] and ba[aid["s3"]]["favourite"], "two favourites", ba)
-    check(ba[aid["a2"]]["description"] == "Oma am Strand" and ba[aid["a4"]]["description"] == "vom Sidecar", "two descriptions, one from the sidecar", ba)
+    check(ba[aid["s3"]]["description"] == "Familienfoto" and ba[aid["a4"]]["description"] == "vom Sidecar", "two descriptions from sidecars", ba)
     check(ba[aid["a2"]]["people"] == ["Oma"], "a named person", ba)
     check(ba[aid["a3"]]["edits"] == [("rotate", '{"angle": 90}')], "an edit", ba)
     check(len(before["albums"][holiday]) == 3 and len(before["albums"][family]) == 2, "two albums", before["albums"])
@@ -326,7 +331,7 @@ def main():
     out = p.stdout + p.stderr
     check(p.returncode == 0, "the dry run")
     check(re.search(r"library alice: /mnt/photos/alice/photos -> /mnt/photos/alice: 4 asset paths, 4 checksums, 1 asset files", out) is not None, "the dry run counts alice's library")
-    check(re.search(r"library Shared: /mnt/photos/photos -> /mnt/photos/shared: 3 asset paths, 3 checksums, 0 asset files", out) is not None, "the dry run counts the Shared library")
+    check(re.search(r"library Shared: /mnt/photos/photos -> /mnt/photos/shared: 3 asset paths, 3 checksums, 1 asset files", out) is not None, "the dry run counts the Shared library")
     check("kept by asset id: album_asset 5, asset_face 1, favourites 2, descriptions 2, asset_edit 1" in out, "the dry run counts what follows the IDs")
     check(tree(FS) == snap and not os.path.exists(DUMP), "the dry run moved nothing and dumped nothing")
 
