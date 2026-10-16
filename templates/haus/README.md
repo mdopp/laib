@@ -100,3 +100,18 @@ every new key of `values.example.yml` to `values.yml`; no hand edit.
 3. `laib add haus`. To pair a phone, enter `https://haus.<domain>` in the
    app: it opens `/pair-device`, the person logs in and confirms, and the
    app is paired (haus#6). `/box/geraete` lists and removes devices.
+
+What the family uses (#266, haus#…): with usage-metrics installed, Haus
+gets `HAUS_USAGE_URL` (`host.containers.internal:8094`) and
+`HAUS_USAGE_TOKEN` (the `USAGE_METRICS_TOKEN` secret, a podman secret per
+#224) and counts server-side, per feature and UTC day, never who: page
+views, actions (`/schalten`, ☆, search, Sprechen), the plain "antwortet
+gerade nicht" lines it showed, `/napi` refreshes per widget, and taps
+tagged `?von=widget.<kind>` by the Haus app. It batches in memory and
+flushes every few minutes; usage-metrics down drops the counts and logs
+once. Haus also counts voice: Home Assistant's Assist runs, recognized or
+not, and the sentence it did not understand (see `templates/home-assistant`).
+The Box page's admin card "Was wird genutzt" reads it back: the last 30
+days, most and least used, the plain lines, and the sentences the Bote and
+voice could not answer. Without usage-metrics the token renders empty and
+none of it happens.

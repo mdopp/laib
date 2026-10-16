@@ -42,6 +42,11 @@ if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]
   echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
   echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
   echo "HERMES_NON_INTERACTIVE=1"
+  # the plugin laib-nutzung (#266) reads these; without usage-metrics' token no line and no plugin
+  if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
+    echo "USAGE_METRICS_URL=${USAGE_URL:-http://host.containers.internal:8094}"
+    echo "USAGE_METRICS_TOKEN=$LAIB_SECRET_USAGE_METRICS_TOKEN"
+  fi
   # Hermes' API server, for Haus's Sprechen field (#215): on only with a key (gateway/config_env.py
   # _api_server; apply generates BOTE_API_KEY), on the pod's interfaces so the published 8642 reaches it
   if [ -n "${LAIB_SECRET_BOTE_API_KEY:-}" ]; then

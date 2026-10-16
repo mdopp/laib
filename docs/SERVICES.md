@@ -34,7 +34,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
-| usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; nothing calls it once Solaris retires |
+| usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; Haus and the Bote count into it, unanswered sentences 30 days (#266) |
 | daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them |
 | foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | moves to Laib's lease contract when it moves (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
 
