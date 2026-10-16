@@ -113,8 +113,8 @@ esac`,
 		t.Fatalf("the same value again changes nothing and restarts nothing: %+v", res)
 	}
 	res := apply(map[string]string{"VAULT_TOKEN": "s3cr3t-rotated-224"})
-	if !restarted(res) {
-		t.Fatalf("a new secret value must restart the unit that reads it: %+v", res)
+	if !restarted(res) || len(res.Written) != 1 || res.Written[0] != "podman secret laib.vault.vault.AUTH" {
+		t.Fatalf("a new secret value is the one thing written, and restarts the unit that reads it: %+v", res)
 	}
 	for _, v := range held() {
 		if v != "Bearer s3cr3t-rotated-224" {
