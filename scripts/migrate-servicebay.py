@@ -1,146 +1,217 @@
 #!/usr/bin/env python3
-"""One-shot draft writer: ServiceBay config + templates → Laib services/ (ADR 0010).
+"""One-shot draft writer: ServiceBay config + templates → Laib drafts (ADR 0010).
 
 Reads ServiceBay's config.json and template folders ONCE and writes, per
-installed template, a draft services/<name>/laib.yml and values.yml into the
-Laib state repo. It never touches the box, never reads secrets (values of
-kind "secret" become `!secret NAME` references), and prints everything it
-could not map. The Quadlet files are written by hand/agent per service.
+installed template, a draft <out>/<name>/laib.yml and values.yml for review.
+It never touches the box and never reads a secret value: a secret-typed
+variable becomes `!secret NAME`. It prints everything it could not map, and
+the secrets a Laib built-in needs carried over before its first apply.
+
+The drafts never go into the state repo: a services/<name> without units makes
+laib refuse the whole state, and `laib add <name>` refuses one that exists
+(#226). Where Laib has a built-in, the draft is the ServiceBay side to compare
+with what `laib add <name>` writes.
 
 Usage:
-  migrate-servicebay.py --config config.json --templates <dir>[,<dir>...] --out <state repo> [--dry-run]
+  migrate-servicebay.py --config config.json --templates <dir>[,<dir>...] --out <dir>
+                        [--builtins <laib>/templates] [--dry-run]
 """
 import argparse, json, os, re, sys
 
-def load_variables(template_dirs, name):
-    for d in template_dirs:
-        p = os.path.join(d, name, "variables.json")
-        if os.path.exists(p):
-            with open(p) as f:
-                return json.load(f), p
-    return None, None
+SECRET_TYPES = {"secret", "bcrypt", "rsa-private"}   # ServiceBay's own set (install/savedSecrets.ts)
+FORWARD_AUTH = "__authelia_forward_auth__"
 
-def backup_subdirs(template_dirs, name):
-    """dataSubdir entries of the template's servicebay.backup annotation, by regex
-    (no PyYAML dependency; the annotation is a YAML block inside Pod YAML)."""
+# Secrets whose value the existing data was made with: a new value locks the
+# app out of its own database or config (#228). ServiceBay name → Laib name.
+CARRY = {
+    "auth": {"LLDAP_ADMIN_PASSWORD": "LLDAP_ADMIN_PASSWORD", "AUTHELIA_STORAGE_ENCRYPTION_KEY": "AUTHELIA_STORAGE_KEY"},
+    "immich": {"DB_PASSWORD": "IMMICH_DB_PASSWORD"},
+    "paperless": {"PAPERLESS_DB_PASSWORD": "PAPERLESS_DB_PASSWORD"},
+    "mosquitto": {"MQTT_PASSWORD": "MQTT_PASSWORD"},
+    "media": {"JELLYFIN_ADMIN_PASSWORD": "JELLYFIN_ADMIN_PASSWORD"},
+    "adguard": {"ADGUARD_ADMIN_PASSWORD": "ADGUARD_ADMIN_PASSWORD"},
+    "file-share": {"SHARE_PASSWORD": "SAMBA_PASSWORD"},
+}
+
+
+def find(template_dirs, name, filename):
     for d in template_dirs:
-        p = os.path.join(d, name, "template.yml")
+        p = os.path.join(d, name, filename)
         if os.path.exists(p):
-            text = open(p).read()
-            if "servicebay.backup" not in text:
-                return None
-            return re.findall(r"dataSubdir:\s*([^\s#]+)", text)
+            return p
     return None
 
-def yaml_str(s):
-    return json.dumps(s)  # JSON strings are valid YAML scalars
+
+def volumes(text):
+    """hostPath paths and PVC claim names of a Pod YAML, by regex (no PyYAML)."""
+    return re.findall(r"hostPath:\s*\n\s*path:\s*([^\s#]+)", text), re.findall(r"claimName:\s*([^\s#]+)", text)
+
+
+def resolve(expr, values, data_dir):
+    p = re.sub(r"\{\{\s*([A-Z0-9_]+)\s*\}\}",
+               lambda m: "${DATA_DIR}" if m.group(1) == "DATA_DIR" else values.get(m.group(1), m.group(0)), expr)
+    return "${DATA_DIR}" + p[len(data_dir):] if p.startswith(data_dir + "/") else p
+
+
+def in_state_repo(out):
+    out = os.path.abspath(out)
+    return any(os.path.exists(os.path.join(d, "box.yml")) for d in (out, os.path.dirname(out)))
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--templates", required=True, help="comma-separated template roots")
-    ap.add_argument("--out", required=True, help="Laib state repo")
+    ap.add_argument("--out", required=True, help="a review directory, never the state repo")
+    ap.add_argument("--builtins", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"))
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    if in_state_repo(a.out):
+        print(f"{a.out} is (in) a Laib state repo: drafts go to a review directory; laib refuses "
+              "a services/<name> without units, and laib add refuses one that exists", file=sys.stderr)
+        return 1
     cfg = json.load(open(a.config))
     tdirs = a.templates.split(",")
     rp = cfg.get("reverseProxy", {})
     domain = rp.get("publicDomain", "")
+    data_dir = cfg.get("templateSettings", {}).get("DATA_DIR", "/mnt/data/stacks").rstrip("/")
+    installed = cfg.get("installedTemplates", {})
+    unmapped, carry = [], []
+
     hosts_by_service = {}
     for h in rp.get("hosts", []):
-        hosts_by_service.setdefault(h["service"], []).append(h)
-    vars_by_service = {}
+        if h["service"] not in installed:
+            unmapped.append(f"proxy host {h['domain']} → {h['service']}:{h['forwardPort']}: not an installed template; carry it by hand or drop it")
+            continue
+        sub = h["domain"][: -len(domain) - 1] if h["domain"].endswith("." + domain) else h["domain"]
+        hosts_by_service.setdefault(h["service"], {})[sub] = h
+    vars_by_service, globals_ = {}, {}
     for v in cfg.get("installedVariables", []):
-        vars_by_service.setdefault(v.get("service", "_global"), []).append(v)
+        s = v.get("service")
+        if s is None:
+            globals_[v["varName"]] = v
+        elif s in installed:
+            vars_by_service.setdefault(s, []).append(v)
+        else:
+            unmapped.append(f"variable {v['varName']} of {s}: not an installed template; dropped")
+    used_globals = set()
 
-    unmapped = []
-    written = []
-    for name, inst in sorted(cfg.get("installedTemplates", {}).items()):
-        decl, src = load_variables(tdirs, name)
-        if decl is None:
+    written, owners = [], {}
+    for name, inst in sorted(installed.items()):
+        vpath = find(tdirs, name, "variables.json")
+        if vpath is None:
             unmapped.append(f"{name}: no variables.json in {tdirs} (external registry? copy its folder next to the built-ins)")
-            decl = {}
-        routes, secrets, ports, values = [], [], [], {}
+        decl = json.load(open(vpath)) if vpath else {}
+        builtin = os.path.exists(os.path.join(a.builtins, name, "laib.yml"))
+        # values: the box's non-secret values, then the service-less ones the template declares
+        values = {}
+        for v in vars_by_service.get(name, []):
+            if v.get("kind") != "secret" and decl.get(v["varName"], {}).get("type") not in SECRET_TYPES:
+                values[v["varName"]] = v.get("value", "")
+        for k, v in globals_.items():
+            if k in decl:
+                values[k] = v.get("value", "")
+                used_globals.add(k)
+        resolved = {k: d["default"] for k, d in decl.items() if d.get("default") not in (None, "")}
+        resolved.update({k: v for k, v in values.items() if v})
+
+        routes, secrets, ports = [], [], []
+        box_hosts = dict(hosts_by_service.get(name, {}))
         for var, d in decl.items():
             t = d.get("type")
-            if t == "secret":
+            if t in SECRET_TYPES:
                 secrets.append({"name": var, "external": bool(d.get("noAutoGenerate"))})
                 values[var] = f"!secret {var}"
             elif t == "subdomain":
-                port_var = d.get("proxyPort")
-                port = None
-                for h in hosts_by_service.get(name, []):
-                    if h["domain"].split(".")[0] == (d.get("default") or ""):
-                        port = h["forwardPort"]
-                if port is None and port_var:
-                    for v in vars_by_service.get(name, []):
-                        if v["varName"] == port_var and v.get("value"):
-                            port = int(v["value"])
-                routes.append({
-                    "host": d.get("default", var.lower()), "port": port or 0,
-                    "exposure": d.get("exposure", "internal"),
-                    "auth": "none" if d.get("audience") == "public-anon" else "one_factor",
-                    "_from": var,
-                })
-            if d.get("blockLanAccess") and t == "text":
-                ports.append({"port_var": var})
-        # values from the box (non-secret)
-        for v in vars_by_service.get(name, []):
-            if v.get("kind") == "secret":
-                continue
-            values[v["varName"]] = v.get("value", "")
-        # port numbers for blockLanAccess entries
-        for p in ports:
-            val = values.get(p["port_var"]) or decl.get(p["port_var"], {}).get("default")
-            p["port"] = int(val) if val and str(val).isdigit() else 0
-        # routes the box has that the template did not declare as subdomain vars
-        declared_hosts = {r["host"] for r in routes}
-        for h in hosts_by_service.get(name, []):
-            sub = h["domain"][: -len(domain) - 1] if h["domain"].endswith("." + domain) else h["domain"]
-            if sub not in declared_hosts and sub != domain:
-                routes.append({"host": sub, "port": h["forwardPort"], "exposure": h.get("exposure", "internal"), "auth": "one_factor", "_from": "reverseProxy.hosts"})
+                host = values.get(var) or d.get("default") or var.lower()
+                h = box_hosts.pop(host, None)
+                if h is None:
+                    unmapped.append(f"{name}: {var} ({host}) is declared but the box has no proxy host for it; left out")
+                    continue
+                fa = FORWARD_AUTH in (d.get("proxyConfig", {}).get("advanced_config") or "")
+                routes.append({"host": host, "port": h["forwardPort"], "exposure": h.get("exposure", d.get("exposure", "internal")),
+                               "auth": "one_factor" if fa else "none",
+                               "group": "admins" if fa and d.get("audience") == "admin" else None})
+            if d.get("blockLanAccess"):
+                val = str(values.get(var, ""))
+                if not val.isdigit():
+                    if val:
+                        unmapped.append(f"{name}: {var} is {val!r}, not a port; used the template default")
+                    val = str(d.get("default", ""))
+                ports.append(int(val) if val.isdigit() else 0)
+        for host, h in sorted(box_hosts.items()):
+            unmapped.append(f"{name}: route {host} exists only as a proxy host (no template variable); auth one_factor is a guess")
+            routes.append({"host": host, "port": h["forwardPort"], "exposure": h.get("exposure", "internal"), "auth": "one_factor", "group": None})
         for r in routes:
-            if r["port"] == 0:
-                unmapped.append(f"{name}: route {r['host']} has no port (from {r['_from']})")
+            owners.setdefault(r["host"], []).append(name)
 
-        laib = [f"name: {name}", f"template: {{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}", "migratedFrom: servicebay"]
-        laib.append("routes:" if routes else "routes: []")
+        # data: the Pod YAML's host paths under DATA_DIR that are the service's own
+        data, shared = [], []
+        tpath = find(tdirs, name, "template.yml")
+        paths, claims = volumes(open(tpath).read()) if tpath else ([], [])
+        for expr in paths:
+            p = resolve(expr, resolved, data_dir)
+            if p.startswith("${DATA_DIR}/"):
+                (data if p.split("/")[1] == name else shared).append(p)
+            elif "{{" in p:
+                unmapped.append(f"{name}: host path {expr} has no value; declare it by hand")
+            elif not p.startswith(("/run/", "/dev/", "/sys/", "/etc/")):
+                unmapped.append(f"{name}: host path {p} is outside DATA_DIR; not a data path")
+        for c in claims:
+            unmapped.append(f"{name}: podman named volume {c} is not under DATA_DIR; copy it to a data path before the adoption")
+        if not tpath:
+            unmapped.append(f"{name}: no template.yml; data[] is a guess")
+            data.append("${DATA_DIR}/" + name)
+        if builtin and tpath:   # where the built-in would start on an empty directory (#229)
+            mine = re.findall(r"-\s*path:\s*(\S+)", open(os.path.join(a.builtins, name, "laib.yml")).read())
+            for p in dict.fromkeys(data):
+                if p not in mine:
+                    unmapped.append(f"{name}: the box keeps data in {p}; the built-in does not mount it (move it or set the path)")
+        for sb, laib in CARRY.get(name, {}).items():
+            if sb in decl:
+                carry.append(f"laib secret set {laib}   # ServiceBay: {sb} ({name})")
+
+        head = f"# Laib has a built-in: `laib add {name}`, then compare with this draft.\n" if builtin else ""
+        tmpl = f"{{registry: builtin, name: {name}}}" if builtin else f"{{registry: servicebay, name: {name}, version: {inst.get('schemaVersion', 1)}}}"
+        laib = [f"{head}name: {name}", f"template: {tmpl}", "migratedFrom: servicebay", "routes:" if routes else "routes: []"]
         for r in routes:
-            laib.append(f"  - {{host: {r['host']}, port: {r['port']}, exposure: {r['exposure']}, auth: {r['auth']}}}")
+            g = f", group: {r['group']}" if r["group"] else ""
+            laib.append(f"  - {{host: {r['host']}, port: {r['port']}, exposure: {r['exposure']}, auth: {r['auth']}{g}}}")
         laib.append("secrets:" if secrets else "secrets: []")
-        for s_ in secrets:
-            laib.append(f"  - {{name: {s_['name']}" + (", external: true}" if s_["external"] else "}"))
-        subdirs = backup_subdirs(tdirs, name)
-        if subdirs:
-            laib.append("data:            # from the template's servicebay.backup annotation; review")
-            for sd in subdirs:
-                laib.append("  - path: ${DATA_DIR}/" + sd)
-        elif subdirs is None:
-            laib.append("data:            # TODO: the template declared no backup; declare paths or `data: []` with a reason")
-            laib.append("  - path: ${DATA_DIR}/" + name)
-            unmapped.append(f"{name}: no servicebay.backup annotation; data[] is a guess")
-        else:
-            laib.append("data: []         # template declared servicebay.backup without stores")
+        laib += [f"  - {{name: {s_['name']}" + (", external: true}" if s_["external"] else "}") for s_ in secrets]
+        laib.append("data:" if data else "data: []         # the template mounts nothing of its own")
+        laib += [f"  - path: {p}" for p in dict.fromkeys(data)]
+        laib += [f"  # shared, not this service's own: {p}" for p in dict.fromkeys(shared)]
         laib.append("health: {}       # TODO: http health URL")
         laib.append("ports:" if ports else "ports: []")
-        for p in ports:
-            laib.append(f"  - {{port: {p['port']}, lan: false}}")
-        vals = [f"{k}: {v}" if str(v).startswith("!secret ") else f"{k}: {yaml_str(str(v))}" for k, v in sorted(values.items())]
-        written.append((name, "\n".join(laib) + "\n", "\n".join(vals) + "\n"))
+        laib += [f"  - {{port: {p}, lan: false}}" for p in ports]
+        vals = [f"{k}: {v}" if str(v).startswith("!secret ") else f"{k}: {json.dumps(str(v))}" for k, v in sorted(values.items())]
+        written.append((name, builtin, len(routes), len(secrets), "\n".join(laib) + "\n", "\n".join(vals) + "\n"))
 
-    print(f"domain: {domain}  lanIp: {rp.get('lanIp','')}  services: {len(written)}")
-    for name, laib, vals in written:
-        print(f"  {name}: {laib.count('- {host')} routes, {laib.count('- {name')} secrets, {len(vals.splitlines())} values")
+    for host, names in sorted(owners.items()):
+        if len(names) > 1:
+            unmapped.append(f"host {host} is claimed by {', '.join(names)}")
+    for k in sorted(set(globals_) - used_globals):
+        unmapped.append(f"variable {k} has no service and no installed template declares it; dropped")
+
+    print(f"domain: {domain}  dataDir: {data_dir}  services: {len(written)}")
+    for name, builtin, nr, ns, laib, vals in written:
+        print(f"  {name}: {nr} routes, {ns} secrets, {len(vals.splitlines())} values" + ("  (Laib built-in)" if builtin else ""))
         if not a.dry_run:
-            d = os.path.join(a.out, "services", name)
+            d = os.path.join(a.out, name)
             os.makedirs(d, exist_ok=True)
             open(os.path.join(d, "laib.yml"), "w").write(laib)
             open(os.path.join(d, "values.yml"), "w").write(vals)
+    if carry:
+        print("\ncarry over before the first apply (the data was made with these; value on stdin):")
+        for c in carry:
+            print("  " + c)
     if unmapped:
         print("\nunmapped:")
         for u in unmapped:
             print("  -", u)
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

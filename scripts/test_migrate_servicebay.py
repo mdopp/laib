@@ -66,6 +66,11 @@ class Migrate(unittest.TestCase):
         self.assertNotIn("  - path: /mnt/data/servicebay", self.draft("pi-web"))    # ServiceBay's own, not the service's
         self.assertRegex(self.stdout, r"pi-web: .*/mnt/data/servicebay/agent-kit/checkout/assists")
 
+    def test_data_the_builtin_would_not_mount_is_reported(self):
+        self.assertRegex(self.stdout, r"vaultwarden: the box keeps data in \$\{DATA_DIR\}/vaultwarden; the built-in does not mount it")
+        self.assertIn("home-assistant/matter-server; the built-in does not mount it", self.stdout)
+        self.assertNotIn("auth/lldap; the built-in", self.stdout)
+
     def test_named_volume_is_reported(self):
         self.assertIn("file-share-syncthing-config", self.stdout)
 
