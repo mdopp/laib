@@ -347,3 +347,60 @@ esac`)
 		t.Error("the old mnt-data.mount (Where=/mnt/data) is still there")
 	}
 }
+
+// #304: a reinstall's first boot adopts Laib's array while a member that
+// fell behind in a power cut is left out of it. The record took the active
+// count (MEMBERS=1), and from then on every boot said "1 of 1 member(s)
+// active": the box ran on one disk for good, the re-add never ran (run
+// 39030051673). What belongs to the array is what carries its UUID; that
+// member goes back in on the same boot.
+func TestAReinstallAdoptsTheMirrorWithTheMemberThatFellBehind(t *testing.T) {
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
+	root := t.TempDir()
+	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
+	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
+		os.MkdirAll(d, 0o755)
+	}
+	rec := filepath.Join(etc, "laib/data-disk")
+	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("clean\n"), 0o644)
+	log := filepath.Join(root, "shim.log")
+	// vdc1 is in the array, vdb1 carries its UUID but was left out
+	shim(t, bin, "mdadm", `case "$*" in
+  "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
+  "--examine --export /dev/vdb1"|"--examine --export /dev/vdc1") printf 'MD_LEVEL=raid1\nMD_NAME=vm:data\nMD_UUID=aaaa:bbbb\n';;
+  "--detail /dev/md127") printf '     Active Devices : 1\n       2     252       33        1      active sync   /dev/vdc1\n';;
+  "--manage /dev/md127 --re-add /dev/vdb1") exit 0;;
+  *) exit 1;;
+esac`)
+	shim(t, bin, "lsblk", `case "$*" in
+  "/dev/vda4") exit 0;;
+  "-ndo PKNAME /dev/vda4") echo vda;;
+  "-nrpo NAME,TYPE") printf '/dev/vda disk\n/dev/vda4 part\n/dev/vdb disk\n/dev/vdb1 part\n/dev/vdc disk\n/dev/vdc1 part\n/dev/md127 raid1\n';;
+esac`)
+	shim(t, bin, "findmnt", `case "$*" in "-n -o SOURCE /") echo /dev/vda4;; *) test -f "$LAIB_MP/.mounted";; esac`)
+	shim(t, bin, "blkid", `case "$*" in *LABEL*) echo data;; *) echo 1234-fs-uuid;; esac`)
+	shim(t, bin, "mount", `echo mounted > "$LAIB_MP/.mounted"`)
+	shim(t, bin, "readlink", `echo "${@: -1}"`)
+	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
+		shim(t, bin, n, "exit 0")
+	}
+	sh := filepath.Join(root, "laib-data-disk.sh")
+	os.WriteFile(sh, []byte(script), 0o755)
+	cmd := exec.Command("bash", sh)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
+	out, err := cmd.CombinedOutput()
+	logged, _ := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
+	}
+	if b, _ := os.ReadFile(rec); !strings.Contains(string(b), "MEMBERS=2") {
+		t.Fatalf("the record counts the active members, not the array's: %q\n%s", b, out)
+	}
+	if !strings.Contains(string(logged), "mdadm --manage /dev/md127 --re-add /dev/vdb1") {
+		t.Fatalf("the member that fell behind was not added back:\n%s\n%s", logged, out)
+	}
+}
