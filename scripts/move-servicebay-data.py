@@ -438,7 +438,7 @@ def db_preflight(db, rewrites):
   'asset', (select count(*) from asset a where a."libraryId" = m.lib and {old}),
   'checksum', (select count(*) from asset a where a."libraryId" = m.lib and {old} and a."checksumAlgorithm" = 'sha1-path'),
   'asset_file', (select count(*) from asset_file f join asset a on a.id = f."assetId" where a."libraryId" = m.lib and {UNDER.format(col='f.path', p='old')}),
-  'at_new', (select count(*) from asset a where a."libraryId" = m.lib and {UNDER.format(col='a."originalPath"', p='new')}))), '[]'::json) from {m}""")
+  'at_new', (select count(*) from asset a where a."libraryId" = m.lib and {UNDER.format(col='a."originalPath"', p='new')} and not {old}))), '[]'::json) from {m}""")
     mine = 'exists (select 1 from {m} where m.lib = a."libraryId" and {u})'
     guards = db.value(f"""select json_build_object(
   'asset of another library or an upload', (select count(*) from asset a where exists (select 1 from {m} where {old})
