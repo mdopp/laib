@@ -629,6 +629,40 @@ jobs:
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
+      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, without Z-Wave JS and Matter (the NUC's stick and fabric);
+          # Home Assistant's unit and pre-start are the built-in's
+          $SSH 'rm -rf /tmp/ha && mkdir -p /tmp/ha'
+          tar -C templates/home-assistant -cf - --exclude tests . | $SSH 'tar -C /tmp/ha -xf -'
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/home-assistant; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/ha "$R"
+                rm "$R/home-assistant-zwave.container" "$R/home-assistant-matter.container"
+                sed -i "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                # what ServiceBay left: its top-level block with its secret, and a component it installed
+                C=/mnt/data/stacks/home-assistant/homeassistant; mkdir -p "$C/custom_components/auth_oidc"
+                echo v1.1.0 > "$C/custom_components/auth_oidc/.sb_installed_version"
+                printf "default_config:\n\nauth_oidc:\n  client_id: homeassistant\n  client_secret: servicebay-old\n  discovery_url: https://auth.vm.test/.well-known/openid-configuration\n  roles:\n    admin: admins\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
+                touch "$C/automations.yaml" "$C/scripts.yaml" "$C/scenes.yaml"
+                podman pull -q ghcr.io/home-assistant/home-assistant:stable >/dev/null; echo "home assistant image pre-pulled"
+                $L add home-assistant | tee /tmp/add-ha.txt
+                grep -q "^ok  home-assistant pre-start" /tmp/add-ha.txt || { echo "home-assistant pre-start is not green"; exit 1; }
+                grep -q "auth_oidc installed" /tmp/add-ha.txt || { echo "the pinned component was not installed"; exit 1; }
+                if grep -q "^auth_oidc:" "$C/configuration.yaml"; then echo "ServiceBay block is still in configuration.yaml"; exit 1; fi
+                grep -q "AUTH_OIDC_SECRET" "$C/packages/laib_auth_oidc.yaml"
+                if grep -rqF "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.home-assistant.home-assistant.AUTH_OIDC_SECRET)" "$C"; then echo "the OIDC secret is in a file under the config"; exit 1; fi
+                A=/mnt/data/laib/render/authelia/laib-clients.yml
+                grep -A6 "client_id: homeassistant" "$A" | grep -q "token_endpoint_auth_method: client_secret_post" || { echo "Authelia has no homeassistant client for client_secret_post"; cat "$A"; exit 1; }
+                # the component runs with the package: its welcome page answers and names the family account
+                code=000; for i in $(seq 1 90); do code=$(curl -s -o /tmp/welcome.html -w "%{http_code}" http://127.0.0.1:8123/auth/oidc/welcome || true); [ "$code" = 200 ] && break; sleep 5; done
+                echo "home assistant /auth/oidc/welcome -> HTTP $code"
+                [ "$code" = 200 ] && grep -q "Familienkonto" /tmp/welcome.html || { echo "auth_oidc is not set up from the package"; podman logs --tail 80 systemd-home-assistant 2>&1 | grep -i -B2 -A8 "auth_oidc\|error" | tail -60; exit 1; }
+                if podman logs systemd-home-assistant 2>&1 | grep -i "auth_oidc" | grep -qi "duplicate\|invalid config"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
+                $L remove home-assistant >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
+                podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
+                echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
