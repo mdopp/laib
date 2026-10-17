@@ -21,5 +21,6 @@ data:
     backup: false                # query log and stats
 health:
   http: http://127.0.0.1:8083/control/status
+  expect: [401]                 # AdGuard always has a user (pre-start), so its API challenges; 401 is the live answer (#288)
 ports:
   - {port: 8083, lan: false}     # the web UI only through Caddy
