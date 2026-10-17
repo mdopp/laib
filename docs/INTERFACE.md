@@ -77,8 +77,13 @@ takes `args` (one command line) instead, for clients that send it.
 
 The Operator's menu is these tools as the kernel lists them for the
 running skill (ADR 0023): no second menu, no translation in the Operator.
-`OPERATOR_INTERFACE=typed` (default) only keeps results and context
-compact for a small model's window. The built-in skills' menus:
+`OPERATOR_INTERFACE=typed` (default) keeps results and context compact
+for a small model. Above a 32k window the budgets grow with the window —
+about a fifth of it for the context bundle, a fifteenth per tool result
+(#285); the window comes from llama-server's `/props?model=` (through the
+lease proxy) or `box.yml operator.contextWindow`
+(`OPERATOR_CONTEXT_WINDOW`). A reasoning model's `<think>` block is
+dropped from its reply. The built-in skills' menus:
 
 | Skill | Trigger | Menu |
 |---|---|---|

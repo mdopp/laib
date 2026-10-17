@@ -66,6 +66,9 @@ type OperatorCfg struct {
 	Model    string `yaml:"model"`    // preset alias, default gemma-4-e4b
 	ReportAt string `yaml:"reportAt"` // "07:00"
 	Tick     string `yaml:"tick"`     // "10m"
+	// ContextWindow overrides the model's window in tokens (#285); 0 = ask
+	// llama-server's /props
+	ContextWindow int `yaml:"contextWindow"`
 }
 
 // Model is a remote OpenAI-compatible endpoint.

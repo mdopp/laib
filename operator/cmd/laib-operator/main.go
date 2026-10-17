@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,6 +43,14 @@ func main() {
 	// A small model (the default) gets compact results; OPERATOR_INTERFACE=cli
 	// a large model's. The menu is the kernel's typed schemas either way (#290).
 	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
+	// the window: the box's override, else what llama-server says (#285)
+	if n, err := strconv.Atoi(env("OPERATOR_CONTEXT_WINDOW", "0")); err == nil && n > 0 {
+		op.Window = n
+	} else if n, err := op.LLM.ContextWindow(ctx); err == nil {
+		op.Window = n
+	} else {
+		log.Printf("context window unknown (%v): small budgets", err)
+	}
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
 	runner.LoadLast()
@@ -137,7 +146,7 @@ func main() {
 
 	// one step a minute: every active skill whose slot has come runs
 	ticker := time.NewTicker(time.Minute)
-	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, runner.Tick, runner.ReportAt)
+	log.Printf("laib-operator: mcp=%s model=%s window=%d tick=%s report=%s", op.MCP.URL, op.LLM.Model, op.Window, runner.Tick, runner.ReportAt)
 	for {
 		select {
 		case <-ctx.Done():

@@ -62,6 +62,7 @@ operator:                         # laib-operator (ADR 0013); laib operator enab
   model: gemma-4-e4b
   reportAt: "07:00"
   tick: 10m
+  contextWindow: 131072           # the model's window in tokens (#285); unset = llama-server's /props; budgets grow with it above 32k
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
 persona: joshua                   # the house persona (ADR 0020): wake word, voice, Haus, chat default; joshua when unset
