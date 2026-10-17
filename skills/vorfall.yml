@@ -3,6 +3,7 @@
 description: Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren.
 trigger: {event: red}
 tools: [diag, logs, inspect, restart, propose, escalate, note]
+more: [look, read, journal, plan]   # a capable model also looks inside the container, at the journal and the plan (#286)
 output: note
 prompt: |
   Schau dir den Dienst an (diagnose, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, set_value), sonst escalate. Zum Schluss note.

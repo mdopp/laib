@@ -21,8 +21,7 @@ func TestTheInterfaceFollowsTheWindow(t *testing.T) {
 	}
 }
 
-// #286: a skill's `more` tools are for a capable model; a small one keeps
-// the short menu. The kernel granted both.
+// #286: a skill's `more` tools are for a capable model only.
 func TestACapableModelGetsTheSkillsWiderTools(t *testing.T) {
 	sk := skillFor(t, Trigger{Kind: "event"}, "vorfall")
 	if len(sk.More) == 0 {
@@ -49,8 +48,7 @@ func TestACapableModelGetsTheSkillsWiderTools(t *testing.T) {
 	}
 }
 
-// #286: a capable model's plain answer that starts with a tool's name is
-// an answer, not a call written as text; the small model's check stays.
+// #286: a capable model's answer that starts with a tool's name is no text call.
 func TestACapableModelsAnswerIsNotATextCall(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "restart war nicht nötig, whoami ist seit 03:14 grün."}})

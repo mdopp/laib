@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -65,7 +66,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	granted := map[string]bool{}
 	for _, g := range sk.Granted {
-		granted["laib_"+g] = true
+		// a small model keeps the short menu: the skill's more tools are for a capable one (#286)
+		if !o.Typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g) {
+			granted["laib_"+g] = true
+		}
 	}
 	var mine []Tool
 	for _, t := range tools {
@@ -112,7 +116,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			return s, fmt.Errorf("model: %w", err)
 		}
 		msgs = append(msgs, reply)
-		if len(reply.ToolCalls) == 0 && looksLikeToolCall(reply.Content, offered) {
+		if len(reply.ToolCalls) == 0 && looksLikeToolCall(reply.Content, o.Typed, offered) {
 			// a small model writing the call as text (#43): once asked again,
 			// then red — never counted as work done
 			textCalls++
@@ -215,6 +219,19 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	return s, nil
 }
 
+// SmallModel decides the interface (#286): OPERATOR_INTERFACE when set
+// (typed = small, cli = capable), else the window — up to 32k tokens a
+// small model with the short menus and compact budgets.
+func SmallModel(iface string, window int) bool {
+	switch iface {
+	case "typed":
+		return true
+	case "cli":
+		return false
+	}
+	return window <= 32768
+}
+
 // budgets are the context bundle's and each tool result's size in chars.
 // Up to a 32k window they are what a small model was given (#53); above,
 // they grow with the window — about a fifth of it for the context, a
@@ -279,7 +296,7 @@ func budget(ctx string, max int) string {
 // looksLikeToolCall: a reply that carries a JSON call, or starts a line
 // with a tool's name — laib_restart or the bare restart — followed by an
 // argument, instead of using the tool interface.
-func looksLikeToolCall(text string, offered map[string]bool) bool {
+func looksLikeToolCall(text string, small bool, offered map[string]bool) bool {
 	t := strings.TrimSpace(text)
 	if t == "" {
 		return false
@@ -291,6 +308,9 @@ func looksLikeToolCall(text string, offered map[string]bool) bool {
 		line = strings.TrimLeft(strings.TrimSpace(line), "`")
 		if strings.HasPrefix(line, "laib_") {
 			return true
+		}
+		if !small {
+			continue // a capable model's answer that starts with a tool's name is an answer (#286)
 		}
 		for name := range offered {
 			bare := strings.TrimPrefix(name, "laib_")

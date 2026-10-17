@@ -40,10 +40,8 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	// A small model (the default) gets compact results; OPERATOR_INTERFACE=cli
-	// a large model's. The menu is the kernel's typed schemas either way (#290).
-	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
-	// the window: the box's override, else what llama-server says (#285)
+	// the window: the box's override, else what llama-server says (#285);
+	// it decides the interface unless OPERATOR_INTERFACE does (#286)
 	if n, err := strconv.Atoi(env("OPERATOR_CONTEXT_WINDOW", "0")); err == nil && n > 0 {
 		op.Window = n
 	} else if n, err := op.LLM.ContextWindow(ctx); err == nil {
@@ -51,6 +49,7 @@ func main() {
 	} else {
 		log.Printf("context window unknown (%v): small budgets", err)
 	}
+	op.Typed = operator.SmallModel(os.Getenv("OPERATOR_INTERFACE"), op.Window)
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
 	runner.LoadLast()
