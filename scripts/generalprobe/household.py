@@ -424,7 +424,8 @@ def seed_vault(f, s):
     if st not in (200, 204):
         raise RuntimeError(f"Vaultwarden register: HTTP {st} {b[:200]!r}")
     tok, e2, m2 = bw_login(v["email"], v["password"])
-    st, b, _ = req("POST", f"http://{LOOP}:8222/api/ciphers", {"type": 2, "name": enc_string(e2, m2, v["item"].encode()), "notes": None,
+    uid = (js(req("GET", f"http://{LOOP}:8222/api/accounts/profile", headers={"Authorization": "Bearer " + tok})[1]) or {}).get("id")
+    st, b, _ = req("POST", f"http://{LOOP}:8222/api/ciphers", {"type": 2, "encryptedFor": uid, "name": enc_string(e2, m2, v["item"].encode()), "notes": None,
                    "secureNote": {"type": 0}, "favorite": False, "folderId": None, "organizationId": None}, headers={"Authorization": "Bearer " + tok})
     if st != 200:
         raise RuntimeError(f"Vaultwarden item: HTTP {st} {b[:200]!r}")
