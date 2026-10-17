@@ -41,6 +41,7 @@ VALUES = {
     "media": {"LLDAP_BASE_DN": "BASE_DN"},   # the LDAP plugin's search base (#256)
     "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
     "file-share": {"SHARE_USER": "SHARE_USER"},
+    "immich": {"IMMICH_ADMIN_EMAIL": "ADMIN_EMAIL"},   # the admin post-deploy logs in as once, to mint its key (#254)
 }
 PIN = "$(podman image inspect --format '{{index .RepoDigests 0}}' %s)"
 

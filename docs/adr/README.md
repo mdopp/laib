@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0023**. Each file's first paragraph after the title says *in which
+number: **0024**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -28,3 +28,4 @@ situation* it applies, so an agent can self-select.
 | [0020](0020-personas.md) | Personas: the house's character (name, wake word, style, voice, gimmicks, icon) is a package; one house persona for voice and Haus, chat personas per person; a persona is style, never rules; Joshua is the first |
 | [0021](0021-names.md) | Names: one name, one thing; the family sees the persona; services are German nouns, mechanisms English, Bote tools named for the system they reach; legacy names only in a named place with an end condition |
 | [0022](0022-the-app-is-a-widget-client-messages-go-through-chat.md) | The app is a widget client, built new; widgets stay current through a lean live stream while the screen is on; messages go to a person through their chat channel via the Bote; nothing of the Solaris app is carried |
+| [0023](0023-the-operator-has-its-own-budget-and-its-work-comes-in-skills.md) | The Operator has its own line budget (3,000, outside the kernel's 16k); its work comes in skills — declared files, active or paused in `policy.yml`, rights checked by the kernel |

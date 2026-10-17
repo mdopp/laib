@@ -1,0 +1,19 @@
+name: werkstatt-e2e
+# This commit's Werkstatt image, run for real on the runner: pi against a fake
+# lease and model proxy (#261). Only when the Werkstatt changes: the image
+# build costs minutes.
+on:
+  push:
+    branches: [main]
+    paths: [werkstatt/**, templates/werkstatt/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
+  pull_request:
+    paths: [werkstatt/**, templates/werkstatt/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
+  workflow_dispatch:
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: podman --version
+      - run: scripts/werkstatt-model.sh
