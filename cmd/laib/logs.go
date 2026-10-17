@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
@@ -17,7 +18,7 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
 		return env.Fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200]"))
 	}
-	_, svc, err := loadSvc(env, args[0])
+	_, svc, err := envelope.LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}

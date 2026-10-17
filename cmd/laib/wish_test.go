@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/secrets"
 )
@@ -117,7 +118,7 @@ func TestEscalateFilesAnIssueWhenIntakeIsConfigured(t *testing.T) {
 	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
 	c.env.Actor = "ops"
-	if rc := cmdEscalate(context.Background(), c.env, []string{"caddy", "startet nicht, Config-Schlüssel unbekannt"}); rc != cli.ExitOK {
+	if rc := envelope.Escalate(context.Background(), c.env, []string{"caddy", "startet nicht, Config-Schlüssel unbekannt"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 1 {

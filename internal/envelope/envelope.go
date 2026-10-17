@@ -1,4 +1,10 @@
-package main
+// Package envelope is the hands' verbs on one service (ADR 0013, #309):
+// class 1 looks (inspect, read, look) unbounded; class 2 corrects (write,
+// exec, restart, the Operator's own apply) inside the envelope — the
+// hourly budget, a pre-repair snapshot, the journal with the output,
+// verify where it applies, fail closed. And escalate, the hand-over.
+// Trust kernel (ADR 0019 §2c).
+package envelope
 
 import (
 	"bytes"
@@ -19,7 +25,6 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
-	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -41,8 +46,8 @@ const RepairBudget = 8
 // containerName is Quadlet's default name for a .container unit.
 func containerName(unit string) string { return "systemd-" + strings.TrimSuffix(unit, ".service") }
 
-// loadSvc loads the state and the named service in it.
-func loadSvc(env *cliEnv, name string) (*state.State, *state.Service, error) {
+// LoadSvc loads the state and the named service in it.
+func LoadSvc(env *cli.Env, name string) (*state.State, *state.Service, error) {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return nil, nil, err
@@ -104,7 +109,7 @@ func ownContainers(svc *state.Service) []string {
 // a journal line. It fails closed (#35): a journal it cannot read, a
 // missing backup target or a failed snapshot refuse the action — unless
 // policy.yml says `envelope.snapshot: optional`.
-func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Service, verb, detail string) int {
+func envelope(ctx context.Context, env *cli.Env, st *state.State, svc *state.Service, verb, detail string) int {
 	since := time.Now().Add(-time.Hour)
 	recent, skipped, err := journal.ReadCounted(env.Paths.Journal, since)
 	if err != nil {
@@ -169,11 +174,11 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 	return cli.ExitOK
 }
 
-func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
+func Inspect(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) == 0 {
 		return env.Fail(errors.New("usage: laib inspect <service>"))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -235,11 +240,11 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-func cmdRead(_ context.Context, env *cliEnv, args []string) int {
+func Read(_ context.Context, env *cli.Env, args []string) int {
 	if len(args) < 2 {
 		return env.Fail(errors.New("usage: laib read <service> <path>"))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -265,11 +270,11 @@ func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
+func Write(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 2 {
 		return env.Fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -303,12 +308,12 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
+func Exec(ctx context.Context, env *cli.Env, args []string) int {
 	// laib exec <service> [--container name] -- cmd args…
 	if len(args) < 1 {
 		return env.Fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -338,11 +343,11 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
+func Restart(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 1 {
 		return env.Fail(errors.New("usage: laib restart <service>"))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -383,14 +388,14 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitRed
 }
 
-// cmdEscalate hands a service to the next hand: a context bundle under
+// Escalate hands a service to the next hand: a context bundle under
 // /mnt/data/laib/escalations and a red journal line that reaches the
 // webhook, so the Werkstatt's claude hand (or the human) picks it up.
-func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
+func Escalate(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 2 {
 		return env.Fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
 	}
-	st, svc, err := loadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -402,7 +407,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	// the bundle through a buffer (#43): a pipe nobody reads blocked here
 	// at 64 KiB while mcpMu was held, and every agent hung with it
 	var ins bytes.Buffer
-	cmdInspect(ctx, &cliEnv{Paths: env.Paths, Actor: env.Actor, MCP: env.MCP, Out: &ins, ErrOut: env.ErrOut}, []string{svc.Name})
+	Inspect(ctx, &cli.Env{Paths: env.Paths, Actor: env.Actor, MCP: env.MCP, Out: &ins, ErrOut: env.ErrOut}, []string{svc.Name})
 	b.Write(ins.Bytes())
 	es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
 	b.WriteString("\n## Journal 24h\n\n")
@@ -417,7 +422,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
-	if url, ok, err := intake.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+	if url, ok, err := FileIssue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
 		detail = url + " (" + p + ")"
@@ -472,7 +477,7 @@ func containerArgs(args []string) (container string, cmd []string) {
 // secrets redacted, with the journal entry for it — red when cmd failed.
 // The caller books the entry: exec through record, so a red reaches the
 // webhook; look straight into the journal.
-func runIn(ctx context.Context, env *cliEnv, svc *state.Service, verb, container string, cmd []string) (string, journal.Entry, error) {
+func runIn(ctx context.Context, env *cli.Env, svc *state.Service, verb, container string, cmd []string) (string, journal.Entry, error) {
 	start := time.Now()
 	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
@@ -489,13 +494,13 @@ func runIn(ctx context.Context, env *cliEnv, svc *state.Service, verb, container
 // unbounded (ADR 0013), changing is budgeted.
 var lookCommands = map[string]bool{"cat": true, "ls": true, "head": true, "tail": true, "grep": true, "ps": true, "df": true, "du": true, "env": true, "id": true, "stat": true, "find": true, "wc": true, "sort": true, "uniq": true, "date": true, "uptime": true, "hostname": true, "echo": true, "test": true, "readlink": true, "file": true, "ss": true, "ip": true, "nproc": true, "free": true, "true": true, "printenv": true, "md5sum": true, "sha256sum": true}
 
-// cmdLook runs a read-only command in one of the service's containers:
+// Look runs a read-only command in one of the service's containers:
 // no budget, no snapshot, journaled.
-func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
+func Look(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 1 {
 		return env.Fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
 	}
-	_, svc, err := loadSvc(env, args[0])
+	_, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -527,11 +532,11 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-// opsApply: the Operator applies a fix itself (owner, #286, 2026-10-17) —
+// OpsApply: the Operator applies a fix itself (owner, #286, 2026-10-17) —
 // only its own open proposal, never one only a human may free, and inside
 // the envelope of every service it touches: the hourly budget, a snapshot
 // first; then merge, apply, verify and back on red (autoApprove).
-func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) int {
+func OpsApply(ctx context.Context, env *cli.Env, st *state.State, args []string) int {
 	id := ""
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == "--proposal" {
@@ -579,4 +584,11 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
 	}
 	return code
+}
+
+// FileIssue files an escalation as a ticket; ok is false when the box has
+// no intake. cmd/laib sets it to the intake's GitHub client: the intake is
+// a box chore, which the envelope does not import (#309).
+var FileIssue = func(ctx context.Context, env *cli.Env, st *state.State, title, body string, labels []string) (url string, ok bool, err error) {
+	return "", false, nil
 }
