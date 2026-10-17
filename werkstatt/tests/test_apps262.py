@@ -255,7 +255,7 @@ class TheGuide(unittest.TestCase):
         self.assertIn("COPY scaffold /opt/werkstatt/scaffold", cf)
 
     def test_every_command_it_names_exists(self):
-        verbs = set(re.findall(r'\{"([a-z-]+)", "(?:read|propose|apply|destroy)"', (ROOT / "cmd/laib/main.go").read_text()))
+        verbs = set(re.findall(r'\{Name: "([a-z-]+)", Tier: "(?:read|propose|apply|destroy)"', (ROOT / "cmd/laib/main.go").read_text()))
         self.assertIn("propose", verbs)
         subs = {"new", "register", "check"}
         text = "\n".join(p.read_text() for p in (HERE / "guide").glob("*.md"))
