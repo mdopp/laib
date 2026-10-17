@@ -27,7 +27,7 @@ var mcpMu sync.Mutex
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
-	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true,
+	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "skill": true,
 }
 
 type rpcRequest struct {
@@ -83,6 +83,8 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			return
 		}
 		hand := rec.Hand
+		// a call in a skill's name (ADR 0023): only the skill's granted tools
+		inSkill := r.Header.Get("X-Laib-Skill")
 		switch req.Method {
 		case "initialize":
 			rpcReply(w, req.ID, map[string]any{
@@ -94,13 +96,23 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 		case "notifications/initialized", "ping":
 			rpcReply(w, req.ID, map[string]any{}, nil)
 		case "tools/list":
-			rpcReply(w, req.ID, map[string]any{"tools": mcpTools(st, hand)}, nil)
+			tools := mcpTools(st, hand)
+			if inSkill != "" {
+				tools = skillTools(env, st, hand, inSkill, tools)
+			}
+			rpcReply(w, req.ID, map[string]any{"tools": tools}, nil)
 		case "tools/call":
 			var p struct {
 				Name string            `json:"name"`
 				Args map[string]string `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
+			if inSkill != "" {
+				if why := skillGate(env, st, hand, inSkill, strings.TrimPrefix(p.Name, "laib_")); why != "" {
+					rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": "nicht ausgeführt: " + why}}, "isError": true}, nil)
+					return
+				}
+			}
 			out, code := mcpCall(r.Context(), env, st, hand, p.Name, p.Args)
 			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != exitOK}, nil)
 		default:

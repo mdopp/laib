@@ -34,7 +34,7 @@ func fakeMCP(t *testing.T, replies map[string]string) (*httptest.Server, *[]stri
 			reply(map[string]any{"protocolVersion": "2025-03-26"})
 		case "tools/list":
 			var tools []map[string]any
-			for _, n := range []string{"laib_status", "laib_inspect", "laib_restart", "laib_note", "laib_escalate", "laib_context", "laib_exec"} {
+			for _, n := range []string{"laib_status", "laib_diag", "laib_logs", "laib_inspect", "laib_restart", "laib_journal", "laib_propose", "laib_note", "laib_escalate", "laib_context", "laib_exec"} {
 				tools = append(tools, map[string]any{"name": n, "description": n, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"args": map[string]any{"type": "string"}}}})
 			}
 			reply(map[string]any{"tools": tools})
@@ -109,7 +109,7 @@ func TestIncidentSessionLooksThenRestartsThenNotes(t *testing.T) {
 		{Role: "assistant", Content: "fertig"},
 	})
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
-	s, err := op.Run(context.Background(), Trigger{Kind: "event", Service: "whoami", Detail: "health red"})
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami", Detail: "health red"}, ""), Trigger{Kind: "event", Service: "whoami", Detail: "health red"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestBudgetAnswerTurnsTheSessionRedAndEscalationCounts(t *testing.T) {
 		{Role: "assistant", Content: "eskaliert"},
 	})
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
-	s, err := op.Run(context.Background(), Trigger{Kind: "event", Service: "whoami"})
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami"}, ""), Trigger{Kind: "event", Service: "whoami"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestTooManyCallsEndsRed(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
 	llm := fakeLLM(t, []Message{{Role: "assistant", ToolCalls: []ToolCall{call("x", "laib_status", "")}}}) // loops forever
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
-	s, err := op.Run(context.Background(), Trigger{Kind: "tick"})
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestTooManyCallsEndsRed(t *testing.T) {
 func TestWrongTokenIsAnError(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "nope"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "x"}}
-	if _, err := op.Run(context.Background(), Trigger{Kind: "tick"}); err == nil {
+	if _, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"}); err == nil {
 		t.Fatal("expected an auth error")
 	}
 }

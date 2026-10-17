@@ -14,6 +14,10 @@ must say — and a scripted model reply for the mechanics test.
   The Operator keeps ceiling `propose` until that run passes with zero
   wrong mutating actions (#49).
 
+Each incident runs as a skill (ADR 0023): `skill` names it, or the trigger
+picks the built-in one (`event` → `vorfall`, `report` → `morgenbericht`,
+else `routineblick`), and the menu is that skill's.
+
 Add an incident: copy an entry, change the replies and the expectation;
 the forbidden list is the point — a wrong mutating action is the failure
 that matters.
