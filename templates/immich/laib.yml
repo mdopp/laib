@@ -16,9 +16,13 @@ routes:
       }
 secrets:
   - name: IMMICH_DB_PASSWORD
+  - name: IMMICH_ADMIN_PASSWORD      # the admin post-deploy signs up on a fresh Immich; on a box from ServiceBay, carried (#254)
+  - name: IMMICH_API_KEY             # minted by post-deploy: system config only, so the family login is re-set on every apply (#254)
+    external: true
+    optional: true
 oidc:
-  clientId: immich
-  redirectUris: ["https://photos.${DOMAIN}/auth/login", "https://photos.${DOMAIN}/user-settings", "app.immich:///oauth-callback"]
+  clientId: immich                   # post-deploy writes the secret into Immich's settings on every apply (#254)
+  redirectUris: ["https://photos.${DOMAIN}/auth/login", "https://photos.${DOMAIN}/user-settings", "app.immich:/", "app.immich:///oauth-callback"]
 data:
   - path: ${DATA_DIR}/immich/upload
   - path: ${DATA_DIR}/immich/pgdata
