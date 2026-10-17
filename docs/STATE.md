@@ -59,7 +59,7 @@ intake:                           # wishes and escalations become tickets (#56);
   label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator (ADR 0013); laib operator enable sets this
   enabled: true
-  model: gemma-4-e4b
+  model: qwen3.6-35b-a3b
   reportAt: "07:00"
   tick: 10m
   contextWindow: 131072           # the model's window in tokens (#285); unset = llama-server's /props; budgets grow with it above 32k

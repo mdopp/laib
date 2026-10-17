@@ -42,7 +42,7 @@ func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 	}
 	want := map[string]string{
 		"HAUS_LLM_URL":   "http://host.containers.internal:11435/v1",
-		"HAUS_LLM_MODEL": "gemma-4-e4b",
+		"HAUS_LLM_MODEL": "qwen3.6-35b-a3b",
 		"HAUS_LLM_KEY":   "k-model",
 	}
 	for name, w := range want {
