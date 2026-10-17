@@ -30,6 +30,6 @@ data:
   - path: ${DATA_DIR}/paperless/pgdata
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
 health:
-  http: http://127.0.0.1:8000/api/
+  http: http://127.0.0.1:8000/accounts/login/   # 200 without a login; /api/ challenges (#288)
 ports:
   - {port: 8000, lan: false}

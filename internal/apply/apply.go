@@ -284,8 +284,8 @@ func Verify(ctx context.Context, st *state.State, services []string) []Check {
 		for _, unit := range svc.UnitNames() {
 			checks = append(checks, waitActive(ctx, name, unit))
 		}
-		if h := svc.Contract.Health.HTTP; h != "" {
-			checks = append(checks, waitHTTP(ctx, name, h))
+		if svc.Contract.Health.HTTP != "" {
+			checks = append(checks, waitHTTP(ctx, name, svc.Contract.Health))
 		}
 	}
 	return checks
@@ -307,23 +307,27 @@ func waitActive(ctx context.Context, service, unit string) Check {
 	return Check{Service: service, What: "unit " + unit, OK: false, Detail: last}
 }
 
-func waitHTTP(ctx context.Context, service, url string) Check {
+// httpDeadline and httpRetry pace the health probe (a test shortens them).
+var httpDeadline, httpRetry = 90 * time.Second, 3 * time.Second
+
+func waitHTTP(ctx context.Context, service string, h state.Health) Check {
+	url := h.HTTP
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(httpDeadline)
 	last := ""
 	for time.Now().Before(deadline) {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		resp, err := client.Do(req)
 		if err == nil {
 			resp.Body.Close()
-			if resp.StatusCode < 500 {
+			if h.Answers(resp.StatusCode) {
 				return Check{Service: service, What: "health " + url, OK: true, Detail: resp.Status}
 			}
 			last = resp.Status
 		} else {
 			last = err.Error()
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(httpRetry)
 	}
 	return Check{Service: service, What: "health " + url, OK: false, Detail: last}
 }
