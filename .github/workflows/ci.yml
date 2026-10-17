@@ -40,6 +40,14 @@ jobs:
             docker run --rm -e QUADLET_UNIT_DIRS=/q -v "$PWD/$d:/q:ro" quay.io/podman/stable:v5 /usr/libexec/podman/quadlet -dryrun -user >/dev/null
           done
       - run: python3 -m unittest scripts/test_migrate_servicebay.py scripts/test_carry_servicebay_secrets.py scripts/test_move_servicebay_data.py werkstatt/tests/test_autoloop.py werkstatt/tests/test_werkstatt44.py werkstatt/tests/test_home241.py werkstatt/tests/test_pi261.py stimme/trainer/tests/test_trainer.py templates/*/tests/test_*.py werkstatt/tests/test_apps262.py templates/bote/tests/test_notify.py templates/bote/tests/test_post_deploy.py templates/auth/tests/test_post_deploy.py templates/mosquitto/tests/test_hooks.py && python3 -m py_compile werkstatt/laibctl.py templates/bote/notify.py stimme/trainer/train.py stimme/trainer/trainer.py $(grep -l '^#!/usr/bin/env python3' templates/*/pre-start templates/*/post-deploy)
+      - name: the Bote's usage plugin under Hermes' own loader and turn finalizer (#266)
+        run: |
+          # the stock image the box auto-updates to: a hook Hermes renames shows up here, not as counts that stop
+          d=$(mktemp -d)
+          LAIB_DATA_DIR=$d LAIB_RENDER_DIR=$d/none SIGNAL_ACCOUNT=+490 MODEL_URL=http://127.0.0.1:1/v1 MODEL_NAME=m THINKING_MODEL=t \
+            LAIB_SECRET_BOTE_LAIB_TOKEN=x LAIB_SECRET_USAGE_METRICS_TOKEN=proof templates/bote/post-deploy
+          docker run --rm --user "$(id -u)" --entrypoint python -e HOME=/tmp -e HERMES_HOME=/data/bote/hermes -e USAGE_METRICS_TOKEN=proof \
+            -v "$d:/data" -v "$PWD/templates/bote/tests:/t:ro" docker.io/nousresearch/hermes-agent:latest /t/hermes_plugin_proof.py /opt/hermes
       - run: scripts/loc.sh
       - run: scripts/drift.sh
       - run: scripts/workflow-syntax.sh

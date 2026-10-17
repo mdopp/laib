@@ -2,5 +2,4 @@ IMAGE: docker.io/jellyfin/jellyfin:latest
 MEDIA_ROOT: /mnt/data/stacks/file-share/data     # music/, movies/, tv/ live here (the file share)
 ADMIN_USER: admin
 ADMIN_PW: !secret JELLYFIN_ADMIN_PASSWORD
-PHONE_USER: phone                                # the Symfonium login: Musik only
-PHONE_PW: !secret JELLYFIN_PHONE_PASSWORD
+BASE_DN: dc=example,dc=home                      # LLDAP's, as in auth: the plugin's search base (#256)
