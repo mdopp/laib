@@ -12,22 +12,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # TEMPORARY proof (#266), reverted before merge: neither usage-metrics#14 nor haus#51 is released,
-      # so their PR heads are built and served from a registry on the runner, and the shipped names point there
-      - run: |
-          set -e
-          docker run -d -p 5000:5000 --name reg registry:2
-          git clone -q --depth 1 -b feat/misses https://github.com/mdopp/usage-metrics.git /tmp/um
-          git clone -q --depth 1 -b feat/usage https://github.com/mdopp/haus.git /tmp/haus
-          mkdir -p ~/.config/containers
-          printf 'unqualified-search-registries = ["docker.io"]\n[[registry]]\nlocation = "localhost:5000"\ninsecure = true\n' > ~/.config/containers/registries.conf
-          podman build -q -t localhost:5000/usage-metrics:0.3.0 /tmp/um
-          podman build -q -t localhost:5000/haus:boot -f /tmp/haus/Containerfile /tmp/haus
-          podman push -q localhost:5000/usage-metrics:0.3.0 && podman push -q localhost:5000/haus:boot
-          podman rmi localhost:5000/usage-metrics:0.3.0 localhost:5000/haus:boot
-          sed -i 's#ghcr.io/mdopp/usage-metrics:0.3.0#localhost:5000/usage-metrics:0.3.0#' templates/usage-metrics/values.example.yml
-          sed -i 's#IMAGE: ghcr.io/mdopp/haus:latest#IMAGE: localhost:5000/haus:boot#' scripts/boot-test.sh
-          grep -n localhost:5000 templates/usage-metrics/values.example.yml scripts/boot-test.sh
       - run: CGO_ENABLED=0 go build -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./cmd/laib-operator
       - run: |
           podman --version
