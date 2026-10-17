@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -24,7 +25,7 @@ func schemaState() *state.State {
 // installed services — not one free-form command line.
 func TestMcpToolsPublishTypedSchemas(t *testing.T) {
 	var logs map[string]any
-	for _, tl := range mcpTools(schemaState(), "ops") {
+	for _, tl := range mcp.Tools(schemaState(), "ops") {
 		if tl["name"] == "laib_logs" {
 			logs = tl["inputSchema"].(map[string]any)
 		}
@@ -59,12 +60,12 @@ func TestMcpArgvFromTypedArguments(t *testing.T) {
 		{"status", map[string]any{}, nil},
 		{"logs", map[string]any{"args": `whoami --since 1h`}, []string{"whoami", "--since", "1h"}},
 	} {
-		got, _, err := mcpArgv(st, c.verb, c.args)
+		got, _, err := mcp.Argv(st, c.verb, c.args)
 		if err != nil || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s %v → %q, %v; want %q", c.verb, c.args, got, err, c.want)
 		}
 	}
-	argv, _, err := mcpArgv(st, "wish", map[string]any{"text": "Abfuhrkalender anbinden.", "saw": "9 offene Fragen", "better": "familie"})
+	argv, _, err := mcp.Argv(st, "wish", map[string]any{"text": "Abfuhrkalender anbinden.", "saw": "9 offene Fragen", "better": "familie"})
 	if err != nil || len(argv) != 1 || !strings.Contains(argv[0], "Gesehen: 9 offene Fragen") || !strings.Contains(argv[0], "Besser wird: der Komfort der Familie") {
 		t.Fatalf("wish: %q %v", argv, err)
 	}
@@ -86,11 +87,11 @@ func TestMcpRefusesArgumentsOutsideTheSchema(t *testing.T) {
 		{"propose", map[string]any{"service": "whoami", "key": "IMAGE", "value": "a\nb", "reason": "r"}},
 		{"restart", map[string]any{"service": "whoami; rm -rf /"}},
 	} {
-		if argv, _, err := mcpArgv(st, c.verb, c.args); err == nil {
+		if argv, _, err := mcp.Argv(st, c.verb, c.args); err == nil {
 			t.Errorf("%s %v passed as %q", c.verb, c.args, argv)
 		}
 	}
-	out, code := mcpCall(context.Background(), &cliEnv{}, st, "ops", "laib_restart", map[string]any{"service": "nas"})
+	out, code := mcp.Call(context.Background(), &cliEnv{}, st, "ops", "laib_restart", map[string]any{"service": "nas"})
 	if code != cli.ExitUsage || !strings.Contains(out, "nas") {
 		t.Fatalf("%d %q", code, out)
 	}
@@ -104,7 +105,7 @@ func TestATypedNoteKeepsItsQuotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := `whoami war rot: "bind: address in use"; Neustart um 03:12, jetzt grün.`
-	if out, code := mcpCall(context.Background(), c.env, st, "ops", "laib_note", map[string]any{"kind": "incident", "text": text}); code != cli.ExitOK {
+	if out, code := mcp.Call(context.Background(), c.env, st, "ops", "laib_note", map[string]any{"kind": "incident", "text": text}); code != cli.ExitOK {
 		t.Fatalf("%d %s", code, out)
 	}
 	es, _ := journal.Read(c.env.Paths.Journal, time.Time{})

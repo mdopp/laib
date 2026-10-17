@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/envelope"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -32,7 +33,7 @@ func TestMCPCallDoesNotTouchTheProcessStdout(t *testing.T) {
 		<-stray
 		os.Stdout.WriteString("STRAY-LINE\n")
 	}()
-	out, code := mcpCall(context.Background(), c.env, st, "human", "laib_status", map[string]any{"args": ""})
+	out, code := mcp.Call(context.Background(), c.env, st, "human", "laib_status", map[string]any{"args": ""})
 	close(stray)
 	time.Sleep(50 * time.Millisecond)
 	w.Close()
@@ -88,7 +89,7 @@ func TestEscalateCompletesWithALargeInspectBundle(t *testing.T) {
 // #43 (3, 6, 5): diag is an MCP tool; operator enable wires the webhook;
 // a silent operator is red after three ticks, not 'startet' for ever.
 func TestOperatorWiringAndSilence(t *testing.T) {
-	if !mcpVerbs["diag"] {
+	if !mcp.Allowed["diag"] {
 		t.Fatal("the prompt asks for laib_diag; diag must be an MCP tool")
 	}
 	c := newCbox(t)
