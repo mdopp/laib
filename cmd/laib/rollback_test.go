@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/token"
@@ -30,7 +31,7 @@ func writeRegistryTemplate(t *testing.T, c *cbox, name string) {
 func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 	c := newCbox(t)
 	writeRegistryTemplate(t, c, "echo2")
-	if rc := cmdAdd(context.Background(), c.env, []string{"echo2"}); rc != cli.ExitOK {
+	if rc := inbox.Add(context.Background(), c.env, []string{"echo2"}); rc != cli.ExitOK {
 		t.Fatalf("add rc %d", rc)
 	}
 	if _, err := os.Stat(filepath.Join(c.env.Paths.Quadlet, "echo2", "echo2.container")); err != nil {
@@ -43,7 +44,7 @@ func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 	ps, _ := proposal.List(cli.InboxDir(c.env), false)
 	id := ps[0].ID
 	c.calls = nil
-	if rc := cmdRollback(context.Background(), c.env, []string{"#" + itoa(id)}); rc != cli.ExitOK {
+	if rc := inbox.Rollback(context.Background(), c.env, []string{"#" + itoa(id)}); rc != cli.ExitOK {
 		t.Fatalf("rollback #%d rc %d", id, rc)
 	}
 	if _, err := os.Stat(filepath.Join(c.env.Paths.State, "services", "echo2")); err == nil {
@@ -72,13 +73,13 @@ func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 func TestRollbackRefusesAnOptionAsCommit(t *testing.T) {
 	c := newCbox(t)
 	out := filepath.Join(t.TempDir(), "x")
-	if rc := cmdRollback(context.Background(), c.env, []string{"--output=" + out}); rc == cli.ExitOK {
+	if rc := inbox.Rollback(context.Background(), c.env, []string{"--output=" + out}); rc == cli.ExitOK {
 		t.Fatal("an option was accepted as a commit")
 	}
 	if _, err := os.Stat(out); err == nil {
 		t.Fatal("git wrote the file: option injection")
 	}
-	if rc := cmdRollback(context.Background(), c.env, []string{"no-such-commit"}); rc == cli.ExitOK {
+	if rc := inbox.Rollback(context.Background(), c.env, []string{"no-such-commit"}); rc == cli.ExitOK {
 		t.Fatal("an unknown commit was accepted")
 	}
 }
@@ -136,7 +137,7 @@ func TestRemoveRefusesWhenAnotherServiceDependsOnIt(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "laib.yml"), []byte("name: dep\ntemplate: {registry: t, name: dep, version: 1}\nafter: [whoami]\nroutes: []\nsecrets: []\ndata: []\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "values.example.yml"), []byte("IMAGE: docker.io/library/busybox:stable\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "dep.container"), []byte("[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n"), 0o644)
-	if rc := cmdAdd(context.Background(), c.env, []string{"dep"}); rc != cli.ExitOK {
+	if rc := inbox.Add(context.Background(), c.env, []string{"dep"}); rc != cli.ExitOK {
 		t.Fatalf("add rc %d", rc)
 	}
 	c.calls = nil

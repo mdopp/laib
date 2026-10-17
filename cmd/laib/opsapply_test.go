@@ -11,6 +11,7 @@ import (
 
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
@@ -46,7 +47,7 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 func opsPropose(t *testing.T, c *cbox, image string) int {
 	t.Helper()
 	c.env.Actor = "ops"
-	if rc := cmdPropose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
+	if rc := inbox.Propose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
 	ps, _ := proposal.List(cli.InboxDir(c.env), true)
@@ -104,7 +105,7 @@ func TestTheOperatorNeverAppliesWhatOnlyAHumanMayFree(t *testing.T) {
 	c.env.Actor = "ops"
 	patch := "--- /dev/null\n+++ b/services/whoami/post-deploy\n@@ -0,0 +1,2 @@\n+#!/bin/sh\n+echo hi\n"
 	c.env.In = strings.NewReader(patch)
-	if rc := cmdPropose(context.Background(), c.env, []string{"--patch", "whoami braucht ein Skript"}); rc != cli.ExitOK {
+	if rc := inbox.Propose(context.Background(), c.env, []string{"--patch", "whoami braucht ein Skript"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
 	ps, _ := proposal.List(cli.InboxDir(c.env), true)

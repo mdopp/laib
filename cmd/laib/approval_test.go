@@ -12,6 +12,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
@@ -130,7 +131,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 		t.Fatalf("the journal does not say why ops was refused: %+v", es)
 	}
 	// the human may: the inbox told them what it does
-	if code := decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}, true); code != cli.ExitOK {
+	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}, true); code != cli.ExitOK {
 		t.Fatalf("the human's approval: exit %d", code)
 	}
 	if _, err := os.Stat(ran); err == nil {

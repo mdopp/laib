@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -568,7 +569,7 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 			return code
 		}
 	}
-	code := autoApprove(ctx, env, p)
+	code := inbox.AutoApprove(ctx, env, p)
 	result := "green"
 	if code != cli.ExitOK {
 		result = "red"

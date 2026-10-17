@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -44,7 +45,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 		ps[0], ps[1] = ps[1], ps[0]
 	}
 	c.env.Actor = "human:admin"
-	if rc := cmdApprove(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != cli.ExitOK {
+	if rc := inbox.Approve(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != cli.ExitOK {
 		t.Fatalf("approve rc %d", rc)
 	}
 	if len(g.calls) != 1 {
@@ -56,7 +57,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	if !strings.Contains(title+body, "Abfuhrkalender") || !strings.Contains(body, "9 unbeantwortete") || !slices.Contains(labels, any("wunsch")) {
 		t.Fatalf("issue %q %q %v", title, body, labels)
 	}
-	if rc := cmdReject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != cli.ExitOK {
+	if rc := inbox.Reject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != cli.ExitOK {
 		t.Fatalf("reject rc %d", rc)
 	}
 	if len(g.calls) != 1 {

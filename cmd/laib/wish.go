@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
@@ -75,7 +76,7 @@ func wishProposal(ctx context.Context, env *cliEnv, st *state.State, title, body
 	name := "wishes/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
 	lines := strings.Split("# "+title+"\n\n"+body, "\n")
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, title, proposal.Edit{Patch: patch}, judgeFor(st, env.Actor))
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, title, proposal.Edit{Patch: patch}, inbox.JudgeFor(st, env.Actor))
 	if err != nil {
 		return env.Fail(err)
 	}
