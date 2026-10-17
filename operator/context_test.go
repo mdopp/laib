@@ -84,3 +84,15 @@ func (f lastTool) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	return http.DefaultTransport.RoundTrip(r)
 }
+
+// #285: Qwen 3.x thinks out loud; a <think> block never becomes the note
+// or a text call.
+func TestThinkingIsNotTheNote(t *testing.T) {
+	mcp, calls := fakeMCP(t, nil)
+	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "<think>laib_restart whoami wäre falsch, alles grün</think>\nAlles grün um 07:10."}})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Window: 131072}
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"})
+	if err != nil || s.Outcome != "green" || s.Note != "Alles grün um 07:10." {
+		t.Fatalf("%+v %v %v", s, err, *calls)
+	}
+}
