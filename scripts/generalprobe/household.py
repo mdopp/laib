@@ -711,17 +711,13 @@ def check_mqtt(f, s, phase):
 
 
 def check_share(f, s, phase):
-    r = smb(f["share_user"], f["share_password"], "get einkaufsliste.txt /dev/stdout")
+    # ServiceBay's Samba sync keeps exactly the LLDAP users in the passdb: the
+    # legacy share user is dropped by it, so a family member's own login is
+    # what mounts the share on the box
+    r = smb("anna", s["people"]["anna"]["password"], "get einkaufsliste.txt /dev/stdout")
     if r.returncode or b"Generalprobe" not in r.stdout:
-        raise AssertionError(f"Samba as {f['share_user']}: {(r.stdout + r.stderr).decode()[-300:]}")
-    return f"{f['share_user']} mounts the share with the old password and reads the file"
-
-
-def check_share_family(f, s, phase):
-    r = smb("anna", s["people"]["anna"]["password"], "ls")
-    if r.returncode:
-        raise AssertionError(f"Samba as anna with her family password: {(r.stdout + r.stderr).decode()[-200:]}")
-    return "anna mounts the share with her own login"
+        raise AssertionError(f"Samba as anna with her own password: {(r.stdout + r.stderr).decode()[-300:]}")
+    return "anna mounts the share with her own login and reads the file"
 
 
 def check_syncthing(f, s, phase):
@@ -733,7 +729,7 @@ def check_syncthing(f, s, phase):
 
 CHECKS = [("logins", check_logins), ("photos", check_photos), ("immich-library", check_library), ("documents", check_documents),
           ("vault", check_vault), ("calendar", check_dav), ("home-assistant", check_home), ("matter", check_matter), ("mqtt", check_mqtt),
-          ("samba", check_share), ("samba-family-login", check_share_family), ("syncthing", check_syncthing)]
+          ("samba", check_share), ("syncthing", check_syncthing)]
 
 
 def check(phase, only=None):

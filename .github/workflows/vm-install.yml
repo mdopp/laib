@@ -695,7 +695,7 @@ jobs:
                 for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
                 v=$(podman exec systemd-pgtest psql -U postgres -tAc "select x from t"); echo "row after recovery: $v"; [ "$v" = 42 ]
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo; grep -q "\"state\":\"bereit\"" /tmp/ready.json
-                $L secret list | grep -q RESTIC_PASSWORD
+                $L secret list | grep RESTIC_PASSWORD >/dev/null   # not -q: under pipefail an early exit is SIGPIPE (141) for laib
                 $L journal --since 1h | grep -E "restore|backup" | tail -8
                 echo "disaster recovery done with the sheet alone"'
       - name: the power cut during the first boot was survived (#81)
