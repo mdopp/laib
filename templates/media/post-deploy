@@ -43,19 +43,20 @@ def red(msg):
 
 
 def up():
+    """the server, not only /health: during its start Jellyfin answers /health and 503 elsewhere"""
     for _ in range(90):
         try:
             req("GET", "/health", raw=True)
-            return
+            return req("GET", "/System/Info/Public")
         except Exception:
             time.sleep(2)
     red("jellyfin did not come up")
 
 
-up()
+info = up()
 # 1. the wizard, once
 try:
-    if not req("GET", "/System/Info/Public").get("StartupWizardCompleted"):
+    if not info.get("StartupWizardCompleted"):
         req("POST", "/Startup/Configuration", {"UICulture": "de", "MetadataCountryCode": "DE", "PreferredMetadataLanguage": "de"})
         req("GET", "/Startup/User")
         req("POST", "/Startup/User", {"Name": ADMIN, "Password": ADMIN_PW})
