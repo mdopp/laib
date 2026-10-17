@@ -57,7 +57,7 @@ func githubIssue(ctx context.Context, env *cliEnv, st *state.State, title, body 
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	if resp.StatusCode != http.StatusCreated {
-		return "", true, fmt.Errorf("intake %s: HTTP %d: %s", st.Box.Intake.Repo, resp.StatusCode, tail(string(raw), 200))
+		return "", true, fmt.Errorf("intake %s: HTTP %d: %s", st.Box.Intake.Repo, resp.StatusCode, cli.Tail(string(raw), 200))
 	}
 	var out struct {
 		URL string `json:"html_url"`

@@ -13,6 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
@@ -74,7 +75,7 @@ var bootUnclean string
 func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness, []serviceStatus) {
 	var rows []serviceStatus
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: Version}
-	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
+	r.Operator, _ = diag.OperatorState(diag.OperatorFacts(ctx, env, st))
 	r.LastBackup, r.LastChange = guarantees(env, st)
 	if holder := apply.LockHolder(env.Paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
@@ -113,7 +114,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 			}
 		}
 		if p := st.HousePersona(); name == "stimme" && p != nil && row.Detail == "" {
-			row.Detail, _ = wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase)
+			row.Detail, _ = diag.WakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase)
 		}
 		if pz, ok := paused[name]; ok {
 			row.State = "pausiert"

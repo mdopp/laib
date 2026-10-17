@@ -1,4 +1,4 @@
-package main
+package diag
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -99,7 +100,7 @@ func smartFindings(ctx context.Context, devices []string) []Finding {
 		}
 		if jerr := json.Unmarshal([]byte(raw), &r); jerr != nil {
 			if err != nil {
-				out = append(out, Finding{Severity: "gelb", Probe: "smart", Detail: dev + ": smartctl antwortet nicht lesbar (" + tail(strings.TrimSpace(raw), 120) + ")", Fix: "sudo smartctl -a " + dev})
+				out = append(out, Finding{Severity: "gelb", Probe: "smart", Detail: dev + ": smartctl antwortet nicht lesbar (" + cli.Tail(strings.TrimSpace(raw), 120) + ")", Fix: "sudo smartctl -a " + dev})
 			}
 			continue
 		}

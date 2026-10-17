@@ -1,4 +1,8 @@
-package main
+// Package diag is `laib diag`: the probes (units, health, drift, disk
+// pressure, RAID, SMART, temperature, the Operator's heartbeat, the backup
+// and recovery gaps) and their findings. A box chore, not the trust kernel
+// (ADR 0005 amendment #309): it reads and reports, it never fixes.
+package diag
 
 import (
 	"cmp"
@@ -13,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/secrets"
@@ -30,10 +35,10 @@ type Finding struct {
 	Fix      string `json:"fix,omitempty"`
 }
 
-// cmdDiag runs the built-in probes: failed units, drift between state and
+// Cmd runs the built-in probes: failed units, drift between state and
 // box, health URLs, disk pressure. Red first. Probes are deliberately few
 // (docs/DESIGN.md: about ten remain); each new one needs a recurrence.
-func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
+func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
@@ -46,7 +51,7 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		only = a
 	}
-	findings := runProbes(ctx, env, st, only)
+	findings := Probes(ctx, env, st, only)
 	if findings == nil {
 		findings = []Finding{} // JSON [] rather than null for callers
 	}
@@ -80,7 +85,7 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) []Finding {
+func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []Finding {
 	var out []Finding
 	for _, name := range st.ServiceNames() {
 		if only != "" && name != only {
@@ -98,7 +103,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 			}
 		}
 		if p := st.HousePersona(); name == "stimme" && p != nil {
-			if _, f := wakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase); f != nil {
+			if _, f := WakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase); f != nil {
 				out = append(out, *f)
 			}
 		}
@@ -146,7 +151,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		}
 	}
 	// The Operator: enabled but silent or down is the failure nobody notices.
-	if _, f := operatorState(operatorFacts(ctx, env, st)); f != nil {
+	if _, f := OperatorState(OperatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
 	// Home Assistant's wiring (#55): with a token, the manual list becomes a checklist
@@ -197,7 +202,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		}
 	}
 	// The data RAID: one member by design is yellow, a lost member red.
-	if _, members := markerMembers(); members > 0 {
+	if _, members := disk.MarkerMembers(); members > 0 {
 		if b, err := os.ReadFile("/proc/mdstat"); err == nil {
 			out = append(out, raidFindings(string(b), members)...)
 		}

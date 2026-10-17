@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -105,11 +106,11 @@ func TestOperatorWiringAndSilence(t *testing.T) {
 	}
 	now := time.Now()
 	tick := 10 * time.Minute
-	state, f := operatorState(opFacts{Enabled: true, ModelURL: "http://m/v1", UnitActive: true, Answers: true, Now: now, Tick: tick, EnabledAt: now.Add(-tick)})
+	state, f := diag.OperatorState(diag.OpFacts{Enabled: true, ModelURL: "http://m/v1", UnitActive: true, Answers: true, Now: now, Tick: tick, EnabledAt: now.Add(-tick)})
 	if state != "startet" || f != nil {
 		t.Fatalf("right after enable: %s %+v", state, f)
 	}
-	state, f = operatorState(opFacts{Enabled: true, ModelURL: "http://m/v1", UnitActive: true, Answers: true, Now: now, Tick: tick, EnabledAt: now.Add(-4 * tick)})
+	state, f = diag.OperatorState(diag.OpFacts{Enabled: true, ModelURL: "http://m/v1", UnitActive: true, Answers: true, Now: now, Tick: tick, EnabledAt: now.Add(-4 * tick)})
 	if state != "stumm" || f == nil || f.Severity != "rot" {
 		t.Fatalf("four ticks without a note must be red: %s %+v", state, f)
 	}

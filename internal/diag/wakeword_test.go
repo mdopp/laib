@@ -1,4 +1,4 @@
-package main
+package diag
 
 import (
 	"os"
@@ -21,15 +21,15 @@ func TestWakewordStateFromTheTrainersFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if d, f := wakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "noch nicht trainiert") || f != nil {
+	if d, f := WakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "noch nicht trainiert") || f != nil {
 		t.Fatalf("nothing yet: %q %+v", d, f)
 	}
 	write("hey_joshua.status.json", `{"state": "training", "phrase": "Hey Joshua", "rev": "r1", "reason": "", "at": "2026-10-14T08:00:00Z"}`)
-	if d, f := wakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "wird trainiert") || f != nil {
+	if d, f := WakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "wird trainiert") || f != nil {
 		t.Fatalf("training: %q %+v", d, f)
 	}
 	write("hey_joshua.status.json", `{"state": "failed", "phrase": "Hey Joshua", "rev": "r1", "reason": "GPU nicht gefunden", "at": "2026-10-14T09:00:00Z"}`)
-	d, f := wakewordState(data, "hey_joshua", "Hey Joshua")
+	d, f := WakewordState(data, "hey_joshua", "Hey Joshua")
 	if !strings.Contains(d, "fehlgeschlagen") || !strings.Contains(d, "GPU nicht gefunden") {
 		t.Fatalf("failed: %q", d)
 	}
@@ -38,7 +38,7 @@ func TestWakewordStateFromTheTrainersFiles(t *testing.T) {
 	}
 	write("hey_joshua.tflite", "model")
 	write("hey_joshua.json", "{}")
-	if d, f := wakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "„Hey Joshua“ trainiert") || f != nil {
+	if d, f := WakewordState(data, "hey_joshua", "Hey Joshua"); !strings.Contains(d, "„Hey Joshua“ trainiert") || f != nil {
 		t.Fatalf("a model on disk is trained, whatever the status says: %q %+v", d, f)
 	}
 }

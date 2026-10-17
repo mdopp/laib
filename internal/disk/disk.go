@@ -1,4 +1,6 @@
-package main
+// Package disk is `laib disk`: the data RAID's status and `disk add`, which
+// joins a second device to the mirror. A box chore (#309).
+package disk
 
 import (
 	"context"
@@ -20,8 +22,8 @@ import (
 
 const dataDiskMarker = "/etc/laib/data-disk" // DEVICE=/dev/md127 MEMBERS=1, written by laib-data-disk.sh
 
-// mdArray is one line pair of /proc/mdstat.
-type mdArray struct {
+// Array is one line pair of /proc/mdstat.
+type Array struct {
 	Name    string // md127
 	Level   string // raid1
 	Slots   int    // [2/1] → 2
@@ -37,13 +39,13 @@ var (
 	mdSync  = regexp.MustCompile(`(resync|recovery) = *([\d.]+%)`)
 )
 
-// parseMdstat reads the arrays out of /proc/mdstat's text.
-func parseMdstat(text string) []mdArray {
-	var out []mdArray
-	var cur *mdArray
+// ParseMdstat reads the arrays out of /proc/mdstat's text.
+func ParseMdstat(text string) []Array {
+	var out []Array
+	var cur *Array
 	for _, line := range strings.Split(text, "\n") {
 		if m := mdHead.FindStringSubmatch(line); m != nil {
-			out = append(out, mdArray{Name: m[1], Level: m[3]})
+			out = append(out, Array{Name: m[1], Level: m[3]})
 			cur = &out[len(out)-1]
 			for _, f := range strings.Fields(m[4]) {
 				if i := strings.IndexByte(f, '['); i > 0 {
@@ -67,8 +69,8 @@ func parseMdstat(text string) []mdArray {
 	return out
 }
 
-// markerMembers reads the member count the data-disk script recorded.
-func markerMembers() (device string, members int) {
+// MarkerMembers reads the member count the data-disk script recorded.
+func MarkerMembers() (device string, members int) {
 	b, err := os.ReadFile(dataDiskMarker)
 	if err != nil {
 		return "", 0
@@ -82,30 +84,6 @@ func markerMembers() (device string, members int) {
 		}
 	}
 	return
-}
-
-// raidFindings is the diag probe: red when a member that was there is gone
-// (or the array is missing), yellow when the mirror was never added.
-func raidFindings(mdstat string, expectedMembers int) []Finding {
-	arrays := parseMdstat(mdstat)
-	if expectedMembers == 0 {
-		return nil // no data disk on this box: nothing to say
-	}
-	if len(arrays) == 0 {
-		return []Finding{{Severity: "rot", Probe: "raid", Detail: "/mnt/data: kein RAID aktiv, aber die Box hat eine Datenplatte", Fix: "journalctl -u laib-data-disk"}}
-	}
-	var out []Finding
-	for _, a := range arrays {
-		switch {
-		case a.Resync != "":
-			out = append(out, Finding{Severity: "info", Probe: "raid", Detail: fmt.Sprintf("%s: Spiegel synchronisiert (%s)", a.Name, a.Resync)})
-		case a.Active < a.Slots && a.Active >= expectedMembers:
-			out = append(out, Finding{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("%s: %d von %d Platten, kein Spiegel — gewollt, bis eine zweite Platte kommt", a.Name, a.Active, a.Slots), Fix: "laib disk add /dev/sdX"})
-		case a.Active < expectedMembers:
-			out = append(out, Finding{Severity: "rot", Probe: "raid", Detail: fmt.Sprintf("%s: nur %d von %d Platten, eine ist ausgefallen (war %d)", a.Name, a.Active, a.Slots, expectedMembers), Fix: "cat /proc/mdstat; Platte tauschen, dann laib disk add"})
-		}
-	}
-	return out
 }
 
 // spareInfo is what `laib disk add` learns about a device before it wipes it.
@@ -211,21 +189,21 @@ func memberDiskBytes(ctx context.Context, member string) (int64, error) {
 	return strconv.ParseInt(strings.TrimSpace(out), 10, 64)
 }
 
-// cmdDisk: status | add <device> [--wipe <model>] (humans only: sudo,
+// Cmd: status | add <device> [--wipe <model>] (humans only: sudo,
 // irreversible for the device's content). add inspects the device and refuses
 // what it would destroy (spareInfo.refuse), then partitions it, joins it to
 // /dev/md/data and records the new member count.
-func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
+func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) == 0 || args[0] == "status" {
 		b, err := os.ReadFile("/proc/mdstat")
 		if err != nil {
 			return env.Fail(err)
 		}
-		dev, members := markerMembers()
+		dev, members := MarkerMembers()
 		if env.JSON {
-			return cli.Emit(env, map[string]any{"arrays": parseMdstat(string(b)), "device": dev, "members": members})
+			return cli.Emit(env, map[string]any{"arrays": ParseMdstat(string(b)), "device": dev, "members": members})
 		}
-		for _, a := range parseMdstat(string(b)) {
+		for _, a := range ParseMdstat(string(b)) {
 			fmt.Fprintf(env.W(), "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
 		}
 		if members == 0 {
@@ -245,7 +223,7 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("disk add: a human runs this (it wipes the device)"))
 	}
 	dev := args[1]
-	dataDev, members := markerMembers()
+	dataDev, members := MarkerMembers()
 	if dataDev == "" || dataDev == "none" {
 		return env.Fail(errors.New("no data RAID on this box (/etc/laib/data-disk)"))
 	}
@@ -256,7 +234,7 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	arrays := parseMdstat(string(b))
+	arrays := ParseMdstat(string(b))
 	if len(arrays) == 0 || len(arrays[0].Members) == 0 {
 		return env.Fail(errors.New("no active array in /proc/mdstat"))
 	}

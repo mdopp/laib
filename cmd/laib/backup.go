@@ -156,7 +156,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		apply.Resume(env.Paths, name)
 	}
-	entry := journal.Entry{Actor: env.Actor, Verb: "backup", MS: time.Since(start).Milliseconds(), Detail: tail(out, 400)}
+	entry := journal.Entry{Actor: env.Actor, Verb: "backup", MS: time.Since(start).Milliseconds(), Detail: cli.Tail(out, 400)}
 	if len(quiesced) > 0 {
 		entry.Detail = "angehalten für den Snapshot: " + strings.Join(quiesced, ", ") + "\n" + entry.Detail
 	}
@@ -176,7 +176,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if len(quiesced) > 0 {
 		fmt.Fprintf(env.W(), "angehalten für den Snapshot: %s (wieder gestartet)\n", strings.Join(quiesced, ", "))
 	}
-	fmt.Fprintf(env.W(), "grün · %d Pfade · %s\n", len(paths), tail(out, 200))
+	fmt.Fprintf(env.W(), "grün · %d Pfade · %s\n", len(paths), cli.Tail(out, 200))
 	return cli.ExitOK
 }
 
@@ -193,7 +193,7 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 		return env.Fail(fmt.Errorf("%s: %w", what, err))
 	}
 	if out, err := resticRun(ctx, st, pw, "check", "--read-data-subset=5%"); err != nil {
-		return fail1("restic check", fmt.Errorf("%s", tail(out, 300)))
+		return fail1("restic check", fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
 	// one service with a backed-up path: the first in dependency order
 	var probe string
@@ -212,11 +212,11 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 	}
 	defer os.RemoveAll(scratch)
 	if out, err := resticRun(ctx, st, pw, "restore", "latest:"+probe, "--target", scratch); err != nil {
-		return fail1("restore "+probe, fmt.Errorf("%s", tail(out, 300)))
+		return fail1("restore "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
 	if out, err := sysd.Run(ctx, "diff", "-rq", scratch, probe); err != nil && !strings.Contains(out, "Only in "+probe) {
 		// files only on disk are newer than the snapshot; a differing file is not
-		return fail1("compare "+probe, fmt.Errorf("%s", tail(out, 300)))
+		return fail1("compare "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
 	entry.Result, entry.Detail, entry.MS = "green", "restic check 5% ok; "+probe+" restored into a scratch dir and compared", time.Since(start).Milliseconds()
 	journal.Append(env.Paths.Journal, entry)
@@ -284,7 +284,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal([]byte(out[max(strings.IndexAny(out, "["), 0):]), &snaps); err != nil || len(snaps) == 0 {
-			return env.Fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
+			return env.Fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", cli.Tail(out, 200)))
 		}
 		snapshot = snaps[0].ID[:8]
 		fmt.Fprintf(env.W(), "latest = %s\n", snapshot)
@@ -324,7 +324,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		return strings.Join(outs, "\n"), nil
 	}
 	out, err := restorePaths(paths)
-	entry := journal.Entry{Actor: env.Actor, Verb: "restore", Service: only, Reason: snapshot, Detail: tail(out, 400)}
+	entry := journal.Entry{Actor: env.Actor, Verb: "restore", Service: only, Reason: snapshot, Detail: cli.Tail(out, 400)}
 	if err != nil {
 		entry.Result = "red"
 		journal.Append(env.Paths.Journal, entry)
@@ -362,7 +362,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 				sysd.Stop(ctx, u)
 			}
 			out, err := restorePaths(ps)
-			e := journal.Entry{Actor: env.Actor, Verb: "restore", Service: name, Reason: snapshot, Result: "green", Detail: tail(out, 300)}
+			e := journal.Entry{Actor: env.Actor, Verb: "restore", Service: name, Reason: snapshot, Result: "green", Detail: cli.Tail(out, 300)}
 			if err != nil {
 				e.Result, e.Detail = "red", err.Error()
 				journal.Append(env.Paths.Journal, e)
@@ -388,11 +388,4 @@ func unitsOf(st *state.State, only string) []string {
 		return svc.UnitNames()
 	}
 	return nil
-}
-
-func tail(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return "…" + s[len(s)-n:]
 }

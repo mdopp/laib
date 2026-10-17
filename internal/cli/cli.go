@@ -135,3 +135,12 @@ func PostEvent(env *Env, url string, e journal.Entry) {
 type httpErr struct{ status string }
 
 func (h *httpErr) Error() string { return h.status }
+
+// Tail is the last n bytes of s, marked with … when cut: a journal line
+// keeps the end of a long output, where the error is.
+func Tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "…" + s[len(s)-n:]
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 )
 
 // #57 (1): while readiness is not red, serve pings the outside watchdog;
@@ -55,7 +56,7 @@ func TestDiagIsYellowWithoutAWatchdog(t *testing.T) {
 	c := newCbox(t)
 	st, _ := cli.LoadState(c.env)
 	var found bool
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "watchdog" && f.Severity == "gelb" {
 			found = true
 		}

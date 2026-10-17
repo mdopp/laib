@@ -436,7 +436,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
-	if url, ok, err := githubIssue(ctx, env, st, "Eskalation "+svc.Name+": "+tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+	if url, ok, err := githubIssue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
 		detail = url + " (" + p + ")"
@@ -496,10 +496,10 @@ func runIn(ctx context.Context, env *cliEnv, svc *state.Service, verb, container
 	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	out = render.Redact(render.Output{"o": out}, sec)["o"]
-	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
+	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: cli.Tail(out, 1500), MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result = "red"
-		entry.Detail = err.Error() + "\n" + tail(out, 1500)
+		entry.Detail = err.Error() + "\n" + cli.Tail(out, 1500)
 	}
 	return out, entry, err
 }

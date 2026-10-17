@@ -13,6 +13,8 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/disk"
 )
 
 // Version is set by the release build.
@@ -36,7 +38,7 @@ var verbs []verb
 func init() {
 	verbs = []verb{
 		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
-		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", cmdDiag},
+		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", diag.Cmd},
 		{"plan", "read", "render the state and diff it against the box", cmdPlan},
 		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
 		{"inspect", "read", "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", cmdInspect},
@@ -69,7 +71,7 @@ func init() {
 		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
 		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},
 		{"secret", "apply", "set <NAME> (value on stdin) | list | rotate <NAME>", cmdSecret},
-		{"disk", "apply", "status | add <device>: the data RAID; add joins the mirror (humans only)", cmdDisk},
+		{"disk", "apply", "status | add <device>: the data RAID; add joins the mirror (humans only)", disk.Cmd},
 		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
 		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
 		{"version", "read", "print the version", cmdVersion},

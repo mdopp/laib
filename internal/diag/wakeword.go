@@ -1,4 +1,4 @@
-package main
+package diag
 
 import (
 	"encoding/json"
@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 )
 
-// wakewordState reads what Stimme's trainer wrote into its output folder
+// WakewordState reads what Stimme's trainer wrote into its output folder
 // (stimme/trainer/trainer.py): the model, or <id>.status.json. It says in
 // plain German where the house persona's wake word stands; a failed
 // training is a yellow finding with the way out (#169).
-func wakewordState(dataDir, id, phrase string) (string, *Finding) {
+func WakewordState(dataDir, id, phrase string) (string, *Finding) {
 	micro := filepath.Join(dataDir, "stimme", "micro")
 	_, errModel := os.Stat(filepath.Join(micro, id+".tflite"))
 	_, errMeta := os.Stat(filepath.Join(micro, id+".json"))

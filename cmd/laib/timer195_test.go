@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -81,7 +82,7 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 		t.Errorf("a failed refresh is not red in status: %+v", row)
 	}
 	var found bool
-	for _, f := range runProbes(ctx, c.env, st, "tick") {
+	for _, f := range diag.Probes(ctx, c.env, st, "tick") {
 		found = found || (f.Severity == "rot" && strings.Contains(f.Detail, "tick-refresh.service"))
 	}
 	if !found {

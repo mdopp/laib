@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 )
 
 // #281: journald's limits and podman's log driver are the box's own config,
@@ -21,7 +22,7 @@ func TestDiagIsRedWithoutTheBoxConfigAndInstallBoxClearsIt(t *testing.T) {
 	t.Setenv("LAIB_ETC", etc)
 	st, _ := cli.LoadState(c.env)
 	box := func() (n int, detail string) {
-		for _, f := range runProbes(context.Background(), c.env, st, "") {
+		for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 			if f.Probe == "box" && f.Severity == "rot" {
 				n, detail = n+1, detail+f.Detail+"\n"
 			}

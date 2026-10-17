@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -43,7 +44,7 @@ func TestDiagNamesEachMissingHAIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var missing []string
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "ha" {
 			missing = append(missing, f.Detail)
 		}

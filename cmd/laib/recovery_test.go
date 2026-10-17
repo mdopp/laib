@@ -13,6 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -201,7 +202,7 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	}
 	st, _ := cli.LoadState(c.env)
 	var found bool
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "recovery" && f.Severity == "gelb" {
 			found = true
 		}
@@ -212,7 +213,7 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	if rc := cmdRecoverySheet(context.Background(), c.env, []string{"--confirm"}); rc != cli.ExitOK {
 		t.Fatal("confirm")
 	}
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "recovery" {
 			t.Fatalf("still a recovery finding after confirm: %+v", f)
 		}
@@ -229,7 +230,7 @@ func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 	journal.Append(c.env.Paths.Journal, journal.Entry{T: time.Now().Add(-8 * 24 * time.Hour), Actor: "human:core", Verb: "init", Result: "info", Detail: "state repo created"})
 	st, _ := cli.LoadState(c.env)
 	var red, test bool
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "backup" && f.Severity == "rot" && strings.Contains(f.Detail, "Datenplatte") {
 			red = true
 		}

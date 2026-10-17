@@ -41,4 +41,12 @@ for prog in stick frage automat persona mcpserver; do
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
 done
+# inside the kernel: the box chores (ADR 0005 amendment #309) report and
+# maintain; the trust kernel never depends on them. Only cmd/laib and other
+# chores import a chore.
+chores="diag disk"
+for c in $chores; do
+  users=$(grep -rlE "\"github.com/mdopp/laib/internal/$c\"" --include='*.go' internal | grep -vE "^internal/($(echo $chores | tr ' ' '|'))/" || true)
+  [ -z "$users" ] || { echo "the trust kernel imports the chore $c: $users"; bad=1; }
+done
 exit $bad

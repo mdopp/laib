@@ -1,4 +1,4 @@
-package main
+package diag
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -20,7 +21,7 @@ import (
 // operator's port answers; the newest journal note by ops (every tick ends
 // with one) is younger than three ticks.
 
-type opFacts struct {
+type OpFacts struct {
 	Enabled    bool
 	ModelURL   string
 	UnitActive bool
@@ -31,9 +32,9 @@ type opFacts struct {
 	Now        time.Time
 }
 
-// operatorState turns the facts into one word for the readiness line and
+// OperatorState turns the facts into one word for the readiness line and
 // at most one diag finding.
-func operatorState(f opFacts) (string, *Finding) {
+func OperatorState(f OpFacts) (string, *Finding) {
 	switch {
 	case !f.Enabled && f.ModelURL == "":
 		return "aus", nil // a box without a model: nothing to expect
@@ -54,9 +55,9 @@ func operatorState(f opFacts) (string, *Finding) {
 	return "läuft", nil
 }
 
-// operatorFacts gathers the inputs on the box.
-func operatorFacts(ctx context.Context, env *cliEnv, st *state.State) opFacts {
-	f := opFacts{Enabled: st.Box.Operator.Enabled, ModelURL: st.ModelURL(), Now: time.Now()}
+// OperatorFacts gathers the inputs on the box.
+func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
+	f := OpFacts{Enabled: st.Box.Operator.Enabled, ModelURL: st.ModelURL(), Now: time.Now()}
 	f.Tick, _ = time.ParseDuration(st.Box.Operator.Tick)
 	if f.Tick == 0 {
 		f.Tick = 10 * time.Minute
