@@ -1,8 +1,10 @@
 name: paperless
 template: {registry: builtin, name: paperless, version: 1}
 provides: [documents]
-# Paperless-ngx: documents with OCR. Logins come from Authelia's forward
-# auth (Remote-User), so the family uses it without a second password; the
+# Paperless-ngx: documents with OCR. The family logs in through Authelia's
+# OIDC (#231): one login, the account made on the first one, and the
+# Paperless apps keep working with a token, which forward-auth on the route
+# would break. The admin from the secrets stays as break-glass. The
 # consume folder is the file share's paperless-consume, so a scan dropped
 # there is filed. Postgres and Redis in the pod.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
@@ -10,11 +12,14 @@ routes:
   - host: paperless
     port: 8000
     exposure: internal
-    auth: none                     # Paperless logs in itself (its mobile apps cannot pass forward-auth, #55)
+    auth: none                     # Paperless logs in itself, through Authelia's OIDC; the apps use tokens (#55, #231)
     caddy: |
       request_body {
         max_size 500MB
       }
+oidc:
+  clientId: paperless
+  redirectUris: ["https://paperless.${DOMAIN}/accounts/oidc/authelia/login/callback/"]
 secrets:
   - name: PAPERLESS_DB_PASSWORD
   - name: PAPERLESS_SECRET_KEY
@@ -25,6 +30,6 @@ data:
   - path: ${DATA_DIR}/paperless/pgdata
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
 health:
-  http: http://127.0.0.1:8000/api/
+  http: http://127.0.0.1:8000/accounts/login/   # 200 without a login; /api/ challenges (#288)
 ports:
   - {port: 8000, lan: false}

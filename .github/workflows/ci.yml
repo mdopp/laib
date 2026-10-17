@@ -13,6 +13,13 @@ jobs:
           go-version-file: go.mod
       - run: go vet ./...
       - run: go test -race ./...
+      - name: authelia's own verdict on the rendered access rules (#249)
+        run: |
+          # the binary from the image the auth template pins, so the rules are judged by what the box runs
+          img=$(sed -n 's/^AUTHELIA_IMAGE: //p' templates/auth/values.example.yml)
+          id=$(docker create "$img") && docker cp "$id:/app/authelia" "$RUNNER_TEMP/authelia" && docker rm "$id" >/dev/null
+          "$RUNNER_TEMP/authelia" --version
+          LAIB_AUTHELIA="$RUNNER_TEMP/authelia" go test -count=1 -run TestAutheliaPolicyOnTheRealBinary -v ./internal/render/
       - run: CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o laib ./cmd/laib
       - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-operator ./cmd/laib-operator
       - run: CGO_ENABLED=0 go build -ldflags "-s -w" -o laib-lease ./cmd/laib-lease && CGO_ENABLED=0 go build -o /dev/null ./cmd/frage && CGO_ENABLED=0 go build -o /dev/null ./cmd/automat && CGO_ENABLED=0 go build -o /dev/null ./cmd/relay

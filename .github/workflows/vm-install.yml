@@ -376,6 +376,25 @@ jobs:
                 sudo nft list table inet laib >/dev/null || { echo "converge did not load the ruleset"; exit 1; }
                 $L journal --since 10m | grep -q "firewall" || { echo "no journal line for the reload"; exit 1; }'
           rc=$(probe); echo "probe after converge: curl rc $rc"; [ "$rc" = 28 ]
+          # #257: a container's output is in journald under its service's unit, laib logs shows it, and the
+          # journal is the box's own deliberate one (persistent, size and age capped); the line is computed
+          # by the container (tr), so the unit's argv never matches it
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/logmark; mkdir -p "$R"
+                printf "name: logmark\ntemplate: {registry: vm, name: logmark, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n" > "$R/laib.yml"
+                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nExec=sh -c \"echo laib-log-marker_${{ github.run_id }} | tr _ -; exec sleep 1000000\"\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/logmark.container"
+                $L add logmark
+                M=laib-log-marker-${{ github.run_id }}
+                for i in $(seq 1 20); do $L logs logmark --since 10m > /tmp/logs.txt; grep -q "$M" /tmp/logs.txt && break; sleep 1; done
+                cat /tmp/logs.txt; grep -q "$M" /tmp/logs.txt || { echo "laib logs does not show the container output (#257)"; podman logs systemd-logmark || true; journalctl --user --no-pager -n 30 -o verbose | grep -E "MESSAGE=|_SYSTEMD_USER_UNIT|CONTAINER_NAME" | tail -30; exit 1; }
+                echo "log driver: $(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)"
+                [ "$(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)" = journald ] || { echo "the container does not log to journald (#257)"; exit 1; }
+                podman logs systemd-logmark 2>&1 | grep "$M" >/dev/null || { echo "podman logs does not show the container output"; exit 1; }
+                systemd-analyze cat-config systemd/journald.conf | grep -vE "^\s*(#|$)" | tee /tmp/journald.txt
+                last() { sed -n "s/^$1=//p" /tmp/journald.txt | tail -1; }
+                [ "$(last Storage)" = persistent ] && [ "$(last SystemMaxUse)" = 4G ] && [ "$(last MaxRetentionSec)" = 4week ] && [ "$(last MaxFileSec)" = 1week ] || { echo "journald is not on the box'"'"'s limits (#257)"; exit 1; }
+                journalctl --no-pager -b -u systemd-journald | grep -E "System Journal|Runtime Journal" | tail -2 || true; journalctl --disk-usage'
           off; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c; ready
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 sudo nft list table inet laib | grep -q 8080 || { echo "the ruleset is gone after the reboot"; exit 1; }
@@ -389,6 +408,12 @@ jobs:
                 if systemctl --failed --no-legend --type=mount | grep -q .; then echo "a mount unit failed at boot (#203)"; systemctl --failed --type=mount --no-pager; exit 1; fi
                 echo "services up after the reboot, no failed mount"'
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
+          # #257: the marker of the boot before is still there: the journal is on disk, not in /run
+          $SSH 'set -euo pipefail; M=laib-log-marker-${{ github.run_id }}
+                journalctl --user --no-pager -b -1 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "the container output of the previous boot is gone: the journal is not persistent (#257)"; journalctl --list-boots --no-pager | tail -3; exit 1; }
+                journalctl --user --no-pager -b 0 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "after the reboot the container output is not in journald (#257)"; exit 1; }
+                echo "container output in journald under logmark.service, kept across the reboot"
+                LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib remove logmark >/dev/null'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
       - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
@@ -433,6 +458,44 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there
+                pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
+                for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins one_factor" "caldav - bypass"; do
+                  set -- $c; g=$2; [ "$g" = - ] && g=; got=$(pol "$1" "$g"); echo "authelia: $1 as ${g:-anonymous} -> $got"
+                  [ "$got" = "$3" ] || { echo "Authelia applies ${got:-nothing} to $1 for ${g:-anonymous}, want $3 (#249)"; exit 1; }
+                done
+                # #231: files sits behind Authelia and File Browser takes the user only from Remote-User
+                for img in docker.io/filebrowser/filebrowser:latest docker.io/syncthing/syncthing:latest docker.io/servercontainers/samba:latest; do podman pull -q "$img" >/dev/null; done
+                $L add file-share FILEBROWSER_ADMIN_USER=core
+                code=000; for i in $(seq 1 30); do code=$(curl -s -o /dev/null -X POST -H "Remote-User: vmtest" -w "%{http_code}" http://127.0.0.1:8088/api/login || true); [ "$code" = 200 ] && break; sleep 2; done
+                echo "File Browser login with Remote-User on loopback -> HTTP $code"; [ "$code" = 200 ]
+                code=$(curl -s -o /dev/null -X POST -w "%{http_code}" http://127.0.0.1:8088/api/login || true)
+                echo "File Browser login without Remote-User -> HTTP $code (proxy auth: no header, no user)"; [ "$code" != 200 ]
+                users() { tok=$(curl -s -X POST -H "Remote-User: $1" http://127.0.0.1:8088/api/login); curl -s -o /dev/null -w "%{http_code}" -H "X-Auth: $tok" http://127.0.0.1:8088/api/users; }
+                code=$(users core); echo "File Browser user list as core, the admin from FILEBROWSER_ADMIN_USER -> HTTP $code"; [ "$code" = 200 ]
+                code=$(users vmtest); echo "File Browser user list as vmtest, a family member -> HTTP $code"; [ "$code" = 403 ]
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -H "Remote-User: admin" -o /dev/null -w "%{http_code}" https://files.vm.test/ || true)
+                echo "https://files.vm.test/ with a forged Remote-User, no session -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -H "Remote-User: admin" -X POST -o /dev/null -w "%{http_code}" https://files.vm.test/api/login || true)
+                echo "POST https://files.vm.test/api/login with a forged Remote-User, no session -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 303 ] || [ "$code" = 401 ]
+                # #230: a root-owned entry in the share (a disk import) stops no unit that mounts it
+                # a disk import brings its own label too; one equal to the share'"'"'s would let podman skip the file
+                S=/mnt/data/stacks/file-share/data/music; sudo install -d -o root -g root "$S/import"; sudo touch "$S/import/root.flac"; sudo chcon -t user_tmp_t "$S/import" "$S/import/root.flac"
+                getenforce; ls -dZn "$S" "$S/import" "$S/import/root.flac"
+                podman pull -q docker.io/linuxserver/beets:latest >/dev/null
+                $L add beets
+                systemctl --user restart file-share-filebrowser.service file-share-samba.service file-share-syncthing.service beets.service
+                sleep 20
+                for u in file-share-filebrowser file-share-samba file-share-syncthing beets; do
+                  n=$(systemctl --user show -p NRestarts --value "$u.service"); a=$(systemctl --user is-active "$u.service" || true); echo "$u after a restart with a root-owned file in the share: $a, restarts $n"
+                  [ "$a" = active ] && [ "$n" = 0 ] || { journalctl --user -u "$u.service" --no-pager | tail -20; exit 1; }
+                done
+                # no unit walked the share: the import keeps its own label
+                l=$(stat -c %C "$S/import/root.flac"); echo "root.flac after the restarts: $l"; case "$l" in *user_tmp_t*) ;; *) echo "a unit relabelled the share"; exit 1;; esac
+                # what :z does to the same tree on this VM, recorded, not gated: on the CI VM it left the
+                # root-owned file alone (rc 0, label kept); ServiceBay'"'"'s box crashed on it (#1731, #1923)
+                rc=0; podman run --rm -v "$S:/m:z" docker.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
+                echo "observation, :z on the share -> rc $rc, music $(stat -c %C "$S"), root.flac $(stat -c %C "$S/import/root.flac") $(tail -1 /tmp/relabel.txt)"
                 $L diag || true'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
@@ -572,6 +635,6 @@ jobs:
         run: |
           echo "--- serial"; tail -c 20000 serial.log || true
           echo "--- build server"; tail -20 http.log || true
-          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- ignition files (#96: exec format error)"; for f in /usr/local/bin/laib-data-disk.sh /usr/local/bin/laib-firstboot.sh $(ls /etc/sysctl.d/* 2>/dev/null); do echo "$f"; sudo head -c 48 "$f" | od -c | head -3; sudo md5sum "$f"; done; systemctl status --no-pager systemd-sysctl 2>&1 | tail -6; for b in -3 -2 -1; do echo "boot $b data disk:"; journalctl --no-pager -b $b -u laib-data-disk 2>/dev/null | tail -25; done; sudo dmesg | grep -iE "xfs|vda4" | tail -10; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; podman ps -a' || true
+          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- ignition files (#96: exec format error)"; for f in /usr/local/bin/laib-data-disk.sh /usr/local/bin/laib-firstboot.sh $(ls /etc/sysctl.d/* 2>/dev/null); do echo "$f"; sudo head -c 48 "$f" | od -c | head -3; sudo md5sum "$f"; done; systemctl status --no-pager systemd-sysctl 2>&1 | tail -6; for b in -3 -2 -1; do echo "boot $b data disk:"; journalctl --no-pager -b $b -u laib-data-disk 2>/dev/null | tail -25; done; sudo dmesg | grep -iE "xfs|vda4" | tail -10; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; for u in $(systemctl --user list-units --failed --plain --no-legend | cut -d" " -f1); do echo "--- failed: $u"; journalctl --user --no-pager -u "$u" | tail -30; done; podman ps -a' || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; echo "--- authelia"; journalctl --user --no-pager -u auth-authelia | tail -30; echo "--- lldap"; journalctl --user --no-pager -u auth-lldap | tail -30; systemctl --user --no-pager status auth-pod.service auth-lldap.service auth-authelia.service | head -40; echo "--- adguard"; journalctl --user --no-pager -u adguard | tail -30; echo "--- radicale"; journalctl --user --no-pager -u radicale | tail -40; podman logs --tail 40 systemd-radicale 2>&1 | tail -40; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 2h | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true

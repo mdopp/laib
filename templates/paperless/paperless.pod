@@ -3,3 +3,6 @@ PodName=paperless
 # beyond loopback so Haus's Haushalt reaches the API from its container (haus#11, ADR 0012 §4);
 # ports lan: false keeps the LAN out, and the API wants a token
 PublishPort=8000:8000
+# the OIDC discovery and token calls go to Authelia through Caddy on this box (a
+# container in a pod cannot set its own hosts)
+AddHost=auth.${DOMAIN}:${LAN_IP}
