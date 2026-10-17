@@ -64,6 +64,11 @@ func Validate(p state.Policy) error {
 	if e := p.Envelope.Snapshot; e != "" && e != "required" && e != "optional" {
 		return fmt.Errorf("policy.yml: envelope.snapshot must be required or optional")
 	}
+	for name, v := range p.Skills {
+		if v != "active" && v != "paused" {
+			return fmt.Errorf("policy.yml: skills.%s must be active or paused", name)
+		}
+	}
 	for name, h := range p.Hands {
 		for _, v := range h.Verbs {
 			if !KnownVerbs[v] {
@@ -98,7 +103,7 @@ const ConvergeBudget = 3
 
 // KnownVerbs is every verb of the CLI (cmd/laib's table), so policy.yml can
 // name them in a hand's verb list and be validated without importing it.
-var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true}
+var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true}
 
 // MayVerb reports whether a hand may use a verb at all: a hand with a verb
 // list is limited to it (the approver: approve, reject, inbox, status,

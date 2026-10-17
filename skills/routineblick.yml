@@ -1,0 +1,7 @@
+# The ten-minute look (ADR 0023 §6): what the tick did before skills.
+description: Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn alles grün ist.
+trigger: {every: "${TICK}"}
+tools: [status, diag, note]
+output: note
+prompt: |
+  Auslöser: Routineblick. Prüfe status und diagnose. Wenn alles grün ist, note mit kind watch in einem Satz; sonst beschreibe in der Notiz, was gelb oder rot ist.

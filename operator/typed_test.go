@@ -24,25 +24,30 @@ func tcall(id, name, args string) ToolCall {
 	return tc
 }
 
-// #53: a small model gets a menu per trigger, task-shaped and typed, never
-// the whole verb table; approve/reject/restore/rollback/converge/template/
-// adopt are not in any menu, and a tool whose verb the hand lacks is absent.
-func TestTypedMenusPerTrigger(t *testing.T) {
+// #53, ADR 0023: a small model gets a menu per skill, task-shaped and
+// typed, never the whole verb table: the typed tools whose verb the skill
+// is granted. The built-in skills give exactly the menus the triggers gave;
+// approve/converge are in none, and a verb the hand lacks is absent.
+func TestTypedMenusPerSkill(t *testing.T) {
 	has := map[string]bool{"laib_status": true, "laib_diag": true, "laib_logs": true, "laib_inspect": true, "laib_restart": true, "laib_propose": true, "laib_escalate": true, "laib_note": true, "laib_journal": true, "laib_approve": true, "laib_converge": true, "laib_exec": true}
 	services := []string{"caddy", "whoami"}
-	tick := names(TypedDefs(Trigger{Kind: "tick"}, services, has))
-	if strings.Join(tick, ",") != "status,diagnose,note" {
+	menu := func(name string) []ToolDef {
+		mine := map[string]bool{}
+		for _, g := range skillFor(t, Trigger{}, name).Granted {
+			mine["laib_"+g] = has["laib_"+g]
+		}
+		return TypedDefs(services, mine)
+	}
+	if tick := names(menu("routineblick")); strings.Join(tick, ",") != "status,diagnose,note" {
 		t.Fatalf("tick menu: %v", tick)
 	}
-	event := names(TypedDefs(Trigger{Kind: "event", Service: "whoami"}, services, has))
-	if strings.Join(event, ",") != "diagnose,logs,inspect,restart,set_value,escalate,note" {
+	if event := names(menu("vorfall")); strings.Join(event, ",") != "diagnose,logs,inspect,restart,set_value,escalate,note" {
 		t.Fatalf("incident menu: %v", event)
 	}
-	report := names(TypedDefs(Trigger{Kind: "report"}, services, has))
-	if strings.Join(report, ",") != "status,diagnose,journal,note" {
+	if report := names(menu("morgenbericht")); strings.Join(report, ",") != "status,diagnose,journal,note" {
 		t.Fatalf("report menu: %v", report)
 	}
-	for _, d := range TypedDefs(Trigger{Kind: "event"}, services, has) {
+	for _, d := range menu("vorfall") {
 		if d.Function.Name == "restart" {
 			props := d.Function.Parameters["properties"].(map[string]any)
 			svc := props["service"].(map[string]any)
@@ -56,11 +61,11 @@ func TestTypedMenusPerTrigger(t *testing.T) {
 	}
 	// a hand without restart (ops at ceiling propose in the trial, ADR 0019) gets no restart
 	delete(has, "laib_restart")
-	if got := names(TypedDefs(Trigger{Kind: "event"}, services, has)); strings.Contains(strings.Join(got, ","), "restart") {
+	if got := names(menu("vorfall")); strings.Contains(strings.Join(got, ","), "restart") {
 		t.Fatalf("restart offered without the verb: %v", got)
 	}
 	// the typed interface must cost less than the verb table
-	if n := len(TypedDefs(Trigger{Kind: "event"}, services, has)); n > 8 {
+	if n := len(menu("vorfall")); n > 8 {
 		t.Fatalf("%d tools in an incident menu", n)
 	}
 }
@@ -130,7 +135,7 @@ func TestTypedIncidentSessionRunsEndToEnd(t *testing.T) {
 		{Role: "assistant", Content: "fertig"},
 	})
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Services: []string{"caddy", "whoami"}}
-	s, err := op.Run(context.Background(), Trigger{Kind: "event", Service: "whoami", Detail: "unit whoami.service failed"})
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami", Detail: "unit whoami.service failed"}, ""), Trigger{Kind: "event", Service: "whoami", Detail: "unit whoami.service failed"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +155,7 @@ func TestTypedIncidentSessionRunsEndToEnd(t *testing.T) {
 
 // #53: the eval runs the typed interface over the same incidents.
 func TestEvalTypedIncidents(t *testing.T) {
-	incidents, err := LoadIncidents(filepath.Join("..", "..", "werkstatt", "evals", "incidents-typed.json"))
+	incidents, err := LoadIncidents(filepath.Join("..", "werkstatt", "evals", "incidents-typed.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +166,10 @@ func TestEvalTypedIncidents(t *testing.T) {
 		mcp, _ := fakeMCP(t, inc.Replies)
 		srv := fakeLLM(t, inc.Script)
 		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: srv.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Services: []string{"whoami", "frage", "bote", "file-share"}}
-		return op.Run(ctx, inc.Trigger)
+		if inc.Usage != nil {
+			op.Usage = &Usage{URL: fakeUsage(t, inc.Usage).URL, Token: "um-token"}
+		}
+		return op.Run(ctx, skillFor(t, inc.Trigger, inc.Skill), inc.Trigger)
 	})
 	if rep.Wrong != 0 || rep.Passed != rep.Total {
 		t.Fatalf("%+v", rep)
