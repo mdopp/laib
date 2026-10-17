@@ -118,7 +118,7 @@ jobs:
             for i in $(seq 1 60); do kill -0 "$p" 2>/dev/null || return 0; sleep 2; done; sudo kill "$p"; sleep 3; }
           ready() { for i in $(seq 1 90); do $SSH 'curl -fsS http://127.0.0.1:5900/ready' >/dev/null 2>&1 && { echo "ready after $((i*10)) s"; return 0; }; sleep 10; done
             echo "laib never became ready"; return 1; }
-          marker() { debugfs -R "cat /marker" foreign.raw 2>/dev/null | grep -qx "keep me" || { echo "the file on the foreign disk is gone"; return 1; }; echo "foreign disk: its file is intact"; }
+          marker() { grep -qx "keep me" <<<"$(debugfs -R "cat /marker" foreign.raw 2>/dev/null)" || { echo "the file on the foreign disk is gone"; return 1; }; echo "foreign disk: its file is intact"; }
           EOF
           chmod +x vm.sh; ./vm.sh order=cd
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
@@ -136,10 +136,10 @@ jobs:
                 test -f /etc/laib/installed || { echo "the first-boot marker is missing"; exit 1; }
                 # the end of the first boot is on disk where GRUB reads it (no journal replay, #81)
                 systemctl is-active --quiet laib-boot-flag.service || { echo "laib-boot-flag did not run"; systemctl status --no-pager laib-boot-flag.service; exit 1; }
-                if sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot; then echo "GRUB still sees ignition.firstboot: a power cut now re-runs Ignition (#81)"; exit 1; fi
+                if grep -q ignition.firstboot <<<"$(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null)"; then echo "GRUB still sees ignition.firstboot: a power cut now re-runs Ignition (#81)"; exit 1; fi
                 echo "first boot over, on disk too"
                 test -s ~/.config/containers/auth.json || { echo "the registry login is not in ~/.config/containers/auth.json (#37)"; exit 1; }
-                journalctl --no-pager -b -u laib-firstboot | grep -q -- "--token" && { echo "the token was on argv"; exit 1; } || echo "token never on argv"
+                grep -q -- "--token" <<<"$(journalctl --no-pager -b -u laib-firstboot)" && { echo "the token was on argv"; exit 1; } || echo "token never on argv"
                 /var/opt/laib/laib status || true; /var/opt/laib/laib plan || true; /var/opt/laib/laib diag || true'
       - name: the data disk — RAID1 with one member on /mnt/data, then the mirror joins
         run: |
@@ -275,7 +275,7 @@ jobs:
                 $SSH 'journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40' || true
                 echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
               fi
-              $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null | grep -q ignition.firstboot && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
+              $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(grep -q ignition.firstboot <<<"$(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null)" && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
               cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
             fi
             if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
@@ -285,7 +285,7 @@ jobs:
           # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
-            if tail -c +"$((cut_at+1))" serial.log | grep -aq "Entering emergency mode"; then
+            if grep -aq "Entering emergency mode" <<<"$(tail -c +"$((cut_at+1))" serial.log)"; then
               echo "emergency mode after the cut (#81)"; echo "--- serial after the cut, the start (firmware, GRUB, cmdline)"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | head -60; echo "--- serial after the cut, the end"; tail -c +"$((cut_at+1))" serial.log | grep -avE "^\s*$" | tail -120; ./root-forensics.sh
               # the cut stays red (the last step fails the job), but the steps after it still run:
               # reinstall once more without a cut, so a flaky cut does not hide every later proof
@@ -374,7 +374,7 @@ jobs:
                 grep -q "\"firewall\":\"fehlt\"" /tmp/ready.json || { echo "/ready does not say the firewall is missing"; exit 1; }
                 $L converge --force || true
                 sudo nft list table inet laib >/dev/null || { echo "converge did not load the ruleset"; exit 1; }
-                $L journal --since 10m | grep -q "firewall" || { echo "no journal line for the reload"; exit 1; }'
+                grep -q "firewall" <<<"$($L journal --since 10m)" || { echo "no journal line for the reload"; exit 1; }'
           rc=$(probe); echo "probe after converge: curl rc $rc"; [ "$rc" = 28 ]
           # #257: a container's output is in journald under its service's unit, laib logs shows it, and the
           # journal is the box's own deliberate one (persistent, size and age capped); the line is computed
@@ -390,14 +390,14 @@ jobs:
                 cat /tmp/logs.txt; grep -q "$M" /tmp/logs.txt || { echo "laib logs does not show the container output (#257)"; podman logs systemd-logmark || true; journalctl --user --no-pager -n 30 -o verbose | grep -E "MESSAGE=|_SYSTEMD_USER_UNIT|CONTAINER_NAME" | tail -30; exit 1; }
                 echo "log driver: $(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)"
                 [ "$(podman inspect --format "{{.HostConfig.LogConfig.Type}}" systemd-logmark)" = journald ] || { echo "the container does not log to journald (#257)"; exit 1; }
-                podman logs systemd-logmark 2>&1 | grep "$M" >/dev/null || { echo "podman logs does not show the container output"; exit 1; }
+                grep -q "$M" <<<"$(podman logs systemd-logmark 2>&1)" || { echo "podman logs does not show the container output"; exit 1; }
                 systemd-analyze cat-config systemd/journald.conf | grep -vE "^\s*(#|$)" | tee /tmp/journald.txt
                 last() { sed -n "s/^$1=//p" /tmp/journald.txt | tail -1; }
                 [ "$(last Storage)" = persistent ] && [ "$(last SystemMaxUse)" = 4G ] && [ "$(last MaxRetentionSec)" = 4week ] && [ "$(last MaxFileSec)" = 1week ] || { echo "journald is not on the box'"'"'s limits (#257)"; exit 1; }
                 journalctl --no-pager -b -u systemd-journald | grep -E "System Journal|Runtime Journal" | tail -2 || true; journalctl --disk-usage'
           off; DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh order=c; ready
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
-                sudo nft list table inet laib | grep -q 8080 || { echo "the ruleset is gone after the reboot"; exit 1; }
+                grep -q 8080 <<<"$(sudo nft list table inet laib)" || { echo "the ruleset is gone after the reboot"; exit 1; }
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo
                 grep -q "\"firewall\":\"geladen\"" /tmp/ready.json
                 grep -q "\"state\":\"bereit\"" /tmp/ready.json || { echo "not bereit after the reboot"; exit 1; }
@@ -405,13 +405,13 @@ jobs:
                 podman image rm -f ghcr.io/mdopp/laib-caddy:2 >/dev/null 2>&1 || true
                 podman pull -q ghcr.io/mdopp/laib-caddy:2 >/dev/null || { echo "a private image cannot be pulled after the reboot: the login did not survive"; exit 1; }
                 echo "private image pulled after the reboot with the kept login"
-                if systemctl --failed --no-legend --type=mount | grep -q .; then echo "a mount unit failed at boot (#203)"; systemctl --failed --type=mount --no-pager; exit 1; fi
+                if grep -q . <<<"$(systemctl --failed --no-legend --type=mount)"; then echo "a mount unit failed at boot (#203)"; systemctl --failed --type=mount --no-pager; exit 1; fi
                 echo "services up after the reboot, no failed mount"'
           rc=$(probe); echo "probe after the reboot: curl rc $rc"; [ "$rc" = 28 ]
           # #257: the marker of the boot before is still there: the journal is on disk, not in /run
           $SSH 'set -euo pipefail; M=laib-log-marker-${{ github.run_id }}
-                journalctl --user --no-pager -b -1 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "the container output of the previous boot is gone: the journal is not persistent (#257)"; journalctl --list-boots --no-pager | tail -3; exit 1; }
-                journalctl --user --no-pager -b 0 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "after the reboot the container output is not in journald (#257)"; exit 1; }
+                grep -q "$M" <<<"$(journalctl --user --no-pager -b -1 -u logmark.service -o cat)" || { echo "the container output of the previous boot is gone: the journal is not persistent (#257)"; journalctl --list-boots --no-pager | tail -3; exit 1; }
+                grep -q "$M" <<<"$(journalctl --user --no-pager -b 0 -u logmark.service -o cat)" || { echo "after the reboot the container output is not in journald (#257)"; exit 1; }
                 echo "container output in journald under logmark.service, kept across the reboot"
                 LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib remove logmark >/dev/null'
           # #281: a box that never got the box config (the migrated Kraftwerk is never reinstalled) is red in
@@ -461,7 +461,7 @@ jobs:
                 # value plan reads back, and on no podman run argv nor in any unit file
                 jwt=$(podman exec systemd-auth-lldap sh -c "printf %s \"\$LLDAP_JWT_SECRET\""); [ -n "$jwt" ] || { echo "LLDAP has no LLDAP_JWT_SECRET"; exit 1; }
                 [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-lldap.LLDAP_JWT_SECRET)" = "$jwt" ] || { echo "the podman secret and the container disagree"; exit 1; }
-                if podman inspect systemd-auth-lldap --format "{{.Config.CreateCommand}}" | grep -qF -- "$jwt"; then echo "LLDAP_JWT_SECRET is on podman run argv (#224)"; exit 1; fi
+                if grep -qF -- "$jwt" <<<"$(podman inspect systemd-auth-lldap --format "{{.Config.CreateCommand}}")"; then echo "LLDAP_JWT_SECRET is on podman run argv (#224)"; exit 1; fi
                 if grep -rqF -- "$jwt" ~/.config/containers/systemd/; then echo "a unit file carries LLDAP_JWT_SECRET (#224)"; exit 1; fi
                 echo "LLDAP_JWT_SECRET reaches LLDAP as a podman secret, off argv"
                 $L add adguard | tee /tmp/add-adguard.txt
@@ -471,7 +471,7 @@ jobs:
                 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
                 # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
                 podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
-                grep -A2 "laib.vm.test" /tmp/dns.txt | grep -q "Address" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
+                grep -q "Address" <<<"$(grep -A2 "laib.vm.test" /tmp/dns.txt)" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
                 $L add radicale BASE_DN=dc=vm,dc=test | tee /tmp/add-radicale.txt
                 grep -q "^ok  radicale pre-start" /tmp/add-radicale.txt || { echo "radicale pre-start is not green"; exit 1; }
                 test -s /mnt/data/stacks/radicale/config/config || { echo "pre-start did not write radicale'"'"'s config"; exit 1; }
@@ -565,7 +565,7 @@ jobs:
           printf 'set anna %s\n' "$(printf %s "$PW" | base64 -w0)" > "$A/passwords"
           for i in $(seq 1 15); do grep -q "^anna [1-9]" "$A/status" && break; sleep 1; done
           grep -q "^anna [1-9]" "$A/status" || { echo "anna's password was not set"; journalctl --user -u file-share-samba.service --no-pager | tail -20; exit 1; }
-          if journalctl --user -u file-share-samba.service --no-pager | grep -qF -- "$PW"; then echo "the password is in the log"; exit 1; fi
+          if grep -qF -- "$PW" <<<"$(journalctl --user -u file-share-samba.service --no-pager)"; then echo "the password is in the log"; exit 1; fi
           # smbclient from the samba image, the credentials in a file (-A), as anna
           smb() { printf 'username=%s\npassword=%s\n' "$1" "$2" > /tmp/smb.cred; rc=0; podman run --rm --network host --security-opt label=disable -v /tmp/smb.cred:/cred:ro -v /etc/hostname:/hn:ro --entrypoint smbclient docker.io/servercontainers/samba:latest //127.0.0.1/data -A /cred -c "$3" >/tmp/smb.out 2>&1 || rc=$?; rm -f /tmp/smb.cred; return $rc; }
           smb anna "$PW" "put /hn anna.txt" || { echo "anna cannot log in with the password from Haus's channel"; cat /tmp/smb.out; exit 1; }
@@ -615,7 +615,7 @@ jobs:
                 podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host photos.vm.test:127.0.0.1 \
                   -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
                   "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
-                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; $L secret list | tr "\n" " "; echo
+                grep -qx IMMICH_API_KEY <<<"$($L secret list)" || { echo "the API key was not handed back into secrets.age"; $L secret list | tr "\n" " "; echo
                   git -C /mnt/data/laib/state log --oneline -6; git -C /mnt/data/laib/state status --short; git -C /mnt/data/laib/state log --oneline -3 -- secrets.age; $L journal --since 15m | tail -15; exit 1; }   # #307
                 # the drift ServiceBay repaired in the database (#1556 there) cannot stay: a new client secret reaches
                 # Authelia and Immich in one apply, Immich through its post-deploy with the minted key
@@ -653,12 +653,12 @@ jobs:
                 grep -q "AUTH_OIDC_SECRET" "$C/packages/laib_auth_oidc.yaml"
                 if grep -rqF "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.home-assistant.home-assistant.AUTH_OIDC_SECRET)" "$C"; then echo "the OIDC secret is in a file under the config"; exit 1; fi
                 A=/mnt/data/laib/render/authelia/laib-clients.yml
-                grep -A6 "client_id: homeassistant" "$A" | grep -q "token_endpoint_auth_method: client_secret_post" || { echo "Authelia has no homeassistant client for client_secret_post"; cat "$A"; exit 1; }
+                grep -q "token_endpoint_auth_method: client_secret_post" <<<"$(grep -A6 "client_id: homeassistant" "$A")" || { echo "Authelia has no homeassistant client for client_secret_post"; cat "$A"; exit 1; }
                 # the component runs with the package: its welcome page answers and names the family account
                 code=000; for i in $(seq 1 90); do code=$(curl -s -o /tmp/welcome.html -w "%{http_code}" http://127.0.0.1:8123/auth/oidc/welcome || true); [ "$code" = 200 ] && break; sleep 5; done
                 echo "home assistant /auth/oidc/welcome -> HTTP $code"
                 [ "$code" = 200 ] && grep -q "Familienkonto" /tmp/welcome.html || { echo "auth_oidc is not set up from the package"; podman logs --tail 80 systemd-home-assistant 2>&1 | grep -i -B2 -A8 "auth_oidc\|error" | tail -60; exit 1; }
-                if podman logs systemd-home-assistant 2>&1 | grep -i "auth_oidc" | grep -qi "duplicate\|invalid config"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
+                if grep -qi "duplicate\|invalid config" <<<"$(grep -i "auth_oidc" <<<"$(podman logs systemd-home-assistant 2>&1)")"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
                 $L remove home-assistant >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
@@ -775,7 +775,7 @@ jobs:
                 sed -i -E "s/proxy: caddy/proxy: \"\"/" /mnt/data/laib/state/box.yml; grep -n proxy /mnt/data/laib/state/box.yml   # caddy holds the proxy role; free it first
                 $L remove caddy
                 sleep 2
-                if podman ps --format "{{.Names}}" | grep -q caddy; then echo "caddy still running"; exit 1; fi
+                if grep -q caddy <<<"$(podman ps --format "{{.Names}}")"; then echo "caddy still running"; exit 1; fi
                 if systemctl --user is-active --quiet caddy.service; then echo "caddy.service still active"; exit 1; fi
                 if [ -e ~/.config/containers/systemd/caddy ]; then echo "Quadlet files left in ~/.config/containers/systemd/caddy"; exit 1; fi
                 if [ -e /mnt/data/laib/state/services/caddy ]; then echo "caddy is still in the state"; exit 1; fi
@@ -850,7 +850,7 @@ jobs:
                 for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
                 v=$(podman exec systemd-pgtest psql -U postgres -tAc "select x from t"); echo "row after recovery: $v"; [ "$v" = 42 ]
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo; grep -q "\"state\":\"bereit\"" /tmp/ready.json
-                $L secret list | grep -q RESTIC_PASSWORD
+                grep -q RESTIC_PASSWORD <<<"$($L secret list)"
                 $L journal --since 1h | grep -E "restore|backup" | tail -8
                 echo "disaster recovery done with the sheet alone"'
       - name: the power cut during the first boot was survived (#81)
