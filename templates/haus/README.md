@@ -79,7 +79,7 @@ export does nothing and the library is the notes. The folder is a cache
 
 The house model (#198): with a model on the box (the `model` role, or
 `box.yml model.url`) Haus gets `HAUS_LLM_URL` (the proxy's OpenAI base
-as the pod reaches it, `${MODEL_URL}`), `HAUS_LLM_MODEL=gemma-4-e4b` and
+as the pod reaches it, `${MODEL_URL}`), `HAUS_LLM_MODEL=qwen3.6-35b-a3b` and
 the model key as `HAUS_LLM_KEY`, and lets the model tidy the library's
 hits, never blocking. Without a model URL and key are empty and the
 judge is off.

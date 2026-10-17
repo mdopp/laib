@@ -19,7 +19,7 @@ func main() {
 		SearxURL:  boxfs.Env("SEARX_URL", "http://127.0.0.1:8888"),
 		ModelURL:  boxfs.Env("MODEL_URL", ""),
 		ModelKey:  os.Getenv("MODEL_KEY"),
-		ModelName: boxfs.Env("MODEL_NAME", "gemma-4-e4b"),
+		ModelName: boxfs.Env("MODEL_NAME", "qwen3.6-35b-a3b"),
 		Language:  boxfs.Env("FRAGE_LANGUAGE", "de"),
 		Results:   n,
 	}

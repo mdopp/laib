@@ -1,5 +1,5 @@
 {
-  "household": "gemma-4-e4b",
+  "household": "qwen3.6-35b-a3b",
   "presets": [
     {"alias": "gemma-4-e4b", "label": "Gemma 4 E4B", "repo": "ggml-org/gemma-4-E4B-it-GGUF", "file": "gemma-4-E4B-it-Q4_0.gguf", "draft": "mtp-gemma-4-E4B-it-Q8_0.gguf", "mmproj": "mmproj-gemma-4-E4B-it-Q8_0.gguf", "ctx": 32768, "draftMax": 4},
     {"alias": "gemma-4-12b", "label": "Gemma 4 12B", "repo": "ggml-org/gemma-4-12B-it-GGUF", "file": "gemma-4-12B-it-Q4_0.gguf", "draft": "mtp-gemma-4-12B-it-Q8_0.gguf", "ctx": 131072, "draftMax": 4, "cacheK": "q8_0", "cacheV": "q8_0"},

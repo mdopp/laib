@@ -30,7 +30,7 @@ func main() {
 
 	op := &operator.Operator{
 		MCP:  &operator.MCP{URL: env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
-		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "gemma-4-e4b")},
+		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "qwen3.6-35b-a3b")},
 		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 		// rendered into the unit when the box runs usage-metrics (#270)
 		Usage: &operator.Usage{URL: os.Getenv("USAGE_METRICS_URL"), Token: os.Getenv("USAGE_METRICS_TOKEN")},

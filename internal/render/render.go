@@ -583,7 +583,7 @@ func ab64(b []byte) string {
 const OperatorToken = "OPERATOR_TOKEN"
 
 func operatorUnit(st *state.State, secrets map[string]string) string {
-	model := cmp.Or(st.Box.Operator.Model, "gemma-4-e4b")
+	model := cmp.Or(st.Box.Operator.Model, "qwen3.6-35b-a3b")
 	reportAt := cmp.Or(st.Box.Operator.ReportAt, "07:00")
 	tick := cmp.Or(st.Box.Operator.Tick, "10m")
 	key := ""
