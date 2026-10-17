@@ -1,0 +1,8 @@
+# The incident session (ADR 0023 §6): what a red event did before skills.
+# restart is granted only while the ops ceiling is apply (ADR 0023 §4).
+description: Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren.
+trigger: {event: red}
+tools: [diag, logs, inspect, restart, propose, escalate, note]
+output: note
+prompt: |
+  Schau dir den Dienst an (diagnose, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, set_value), sonst escalate. Zum Schluss note.

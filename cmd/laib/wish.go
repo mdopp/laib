@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 )
@@ -63,6 +65,51 @@ func githubIssue(ctx context.Context, env *cliEnv, st *state.State, title, body 
 	return out.URL, true, nil
 }
 
+func wishLabel(st *state.State) string { return cmp.Or(st.Box.Intake.Label, "wunsch") }
+
+// wishProposal: the Operator's wish waits for the admin (ADR 0023 §6). It
+// is a proposal that adds wishes/<time>.md — class human in the review —
+// and approving it files the intake issue (fileWishes).
+func wishProposal(ctx context.Context, env *cliEnv, st *state.State, title, body string) int {
+	name := "wishes/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
+	lines := strings.Split("# "+title+"\n\n"+body, "\n")
+	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
+	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, title, proposal.Edit{Patch: patch}, judgeFor(st, env.actor))
+	if err != nil {
+		return fail(err)
+	}
+	record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: title, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
+	if env.json {
+		return emit(env, p)
+	}
+	fmt.Fprintf(env.w(), "Vorschlag #%d angelegt: nach der Freigabe wird daraus ein Ticket.\n", p.ID)
+	return exitOK
+}
+
+// fileWishes: the wishes an approved proposal adds become intake issues.
+func fileWishes(ctx context.Context, env *cliEnv, st *state.State, p *proposal.Proposal) {
+	for _, f := range p.Files {
+		b, err := os.ReadFile(filepath.Join(env.paths.State, f))
+		if !strings.HasPrefix(f, "wishes/") || err != nil {
+			continue
+		}
+		title, body, _ := strings.Cut(string(b), "\n")
+		title = strings.TrimPrefix(title, "# ")
+		body = strings.TrimSpace(body) + fmt.Sprintf("\n\nFreigegeben von %s (#%d).", env.actor, p.ID)
+		entry := journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: title}
+		url, ok, err := githubIssue(ctx, env, st, title, body, []string{wishLabel(st)})
+		switch {
+		case err != nil:
+			entry.Result, entry.Detail = "red", err.Error()
+		case !ok:
+			entry.Detail = "kein Intake in box.yml: der Wunsch bleibt in " + f
+		default:
+			entry.Detail = url
+		}
+		record(env, st, entry)
+	}
+}
+
 // cmdWish is the intake (#56): "Ich brauche einen Dienst, der …" becomes a
 // GitHub issue with the intake label — never pi:ready, a person triages it
 // first. Without an intake the wish is kept under <home>/wishes and the
@@ -85,11 +132,10 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	title := "Wunsch: " + first
 	body := text + "\n\n— aufgenommen über `laib wish` von " + env.actor + " auf " + st.Box.Domain + ", " + time.Now().Format("02.01.2006 15:04") + ".\n\nNächster Schritt: ein Mensch schneidet daraus ein Ticket mit Akzeptanzkriterien und setzt dann `pi:ready` oder baut es selbst (#56)."
-	label := st.Box.Intake.Label
-	if label == "" {
-		label = "wunsch"
+	if proposal.Hand(env.actor) == "ops" {
+		return wishProposal(ctx, env, st, title, body)
 	}
-	url, ok, err := githubIssue(ctx, env, st, title, body, []string{label})
+	url, ok, err := githubIssue(ctx, env, st, title, body, []string{wishLabel(st)})
 	if err != nil {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "red", Reason: first, Detail: err.Error()})
 		return fail(err)

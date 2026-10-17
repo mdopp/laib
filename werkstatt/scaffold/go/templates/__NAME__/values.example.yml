@@ -1,0 +1,2 @@
+IMAGE: ghcr.io/__OWNER__/__NAME__:latest
+PROXY_SECRET: !secret __SECRET__

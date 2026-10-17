@@ -1,0 +1,17 @@
+name: usage-metrics
+template: {registry: builtin, name: usage-metrics, version: 1}
+provides: [usage-metrics]
+# Aggregate, anonymous usage counters for household apps (mdopp/usage-metrics):
+# a backend POSTs (app, event, day, count) to /ingest, the operator reads
+# /summary. No route: the callers are other services' backends on this box,
+# at host.containers.internal:8094 with the bearer token; the port is dropped
+# on the physical interfaces, so neither the LAN nor the internet reaches it.
+routes: []
+secrets:
+  - name: USAGE_METRICS_TOKEN        # generated; the bearer for /ingest and /summary. A caller's values.yml: !secret USAGE_METRICS_TOKEN
+data:
+  - path: ${DATA_DIR}/usage-metrics  # the SQLite counters; ServiceBay's path, so the Kraftwerk's counters carry over as they are
+health:
+  http: http://127.0.0.1:8094/healthz   # open on purpose (no counters in it); 503 once the retention sweep has stopped
+ports:
+  - {port: 8094, lan: false}         # 8095 is music-assistant's; in-box callers only

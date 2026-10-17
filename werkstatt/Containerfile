@@ -1,12 +1,14 @@
 # Werkstatt v0: the one dev image (docs/DESIGN.md, issue #8).
 # Repos, Claude Code, pi, gh, git, tmux, sshd, podlet, `laib` as a shell
 # command (laibctl) and the autoloop with the pi-first / needs-claude router.
+# The toolbox a small app needs (#262): what the guide prescribes is here,
+# a tool that does not download fails the build instead of going missing.
 FROM docker.io/library/node:22-bookworm-slim
 ARG PI_VERSION=latest
 ARG CLAUDE_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git openssh-server tmux curl ca-certificates python3 jq less procps \
-      build-essential \
+      build-essential python3-venv python3-pip vim-tiny nano ripgrep dnsutils openssl xz-utils \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
@@ -26,14 +28,30 @@ RUN printf 'export NPM_CONFIG_CACHE=%s GOMODCACHE=%s GOCACHE=%s PIP_CACHE_DIR=%s
 # podlet turns an upstream compose file into Quadlet units (docs/DESIGN.md "When there is no template")
 ARG PODLET_VERSION=v0.3.0
 RUN curl -fsSL "https://github.com/containers/podlet/releases/download/${PODLET_VERSION}/podlet-x86_64-unknown-linux-gnu.tar.xz" \
-      | tar -xJ --strip-components=1 -C /usr/local/bin --wildcards '*/podlet' || echo "podlet: download failed, continuing without it"
+      | tar -xJ --strip-components=1 -C /usr/local/bin --wildcards '*/podlet' && podlet --version
+# Go for the apps (guide/apps.md); linked into /usr/local/bin, which a login shell keeps on PATH
+ARG GO_VERSION=1.27.2
+ARG GO_SHA256=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5
+RUN curl -fsSL -o /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
+    && echo "${GO_SHA256}  /tmp/go.tgz" | sha256sum -c - && tar -xzf /tmp/go.tgz -C /usr/local && rm /tmp/go.tgz \
+    && ln -s /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/ && go version
+# the latest release's kernel binary: `laib template lint` runs here, on the Werkstatt's own files (#262)
+RUN mkdir -p /opt/werkstatt/laib && cd /opt/werkstatt/laib \
+    && curl -fsSL -o laib https://github.com/mdopp/laib/releases/latest/download/laib-linux-amd64 \
+    && curl -fsSL https://github.com/mdopp/laib/releases/latest/download/SHA256SUMS | grep ' laib-linux-amd64$' | sed 's/laib-linux-amd64$/laib/' | sha256sum -c - \
+    && chmod +x laib && ./laib version
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY laibctl.py /usr/local/bin/laib
 COPY autoloop.py /opt/werkstatt/autoloop.py
 COPY extensions /opt/werkstatt/extensions
-# every pi loads the laib-llama provider (#261); npm's own pi is pi-upstream
+# every pi loads the laib-llama provider (#261) and the guide; npm's own pi is pi-upstream
 COPY pi /usr/local/bin/pi
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi
+# the guide both agents read (#262): pi appends it to its system prompt, Claude Code reads it as the managed CLAUDE.md
+COPY guide /opt/werkstatt/guide
+COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
+COPY scaffold /opt/werkstatt/scaffold
+COPY laibapp.py /usr/local/bin/laib-app
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
