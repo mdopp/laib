@@ -1,3 +1,8 @@
 [Pod]
 PodName=immich
 PublishPort=2283:2283
+# Authelia for the OIDC discovery and the token exchange: the host gateway is the
+# host (Caddy on 443); under pasta the container has the host's own address, so
+# the LAN IP would stay inside it (ServiceBay #817, #252)
+# on the pod: podman refuses extra hosts on a container that joins one
+AddHost=auth.${DOMAIN}:host-gateway

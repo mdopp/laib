@@ -34,7 +34,7 @@ class Carry(unittest.TestCase):
         (self.data / "secret.key").write_bytes(key)
         # synthetic values, one per shape; none is anything real
         self.values = {name: "v-" + secrets.token_hex(8) for name in
-                       ("LLDAP", "STORAGE", "IMMICH", "PAPERLESS", "JELLYFIN", "ADGUARD", "SHARE")}
+                       ("LLDAP", "STORAGE", "IMMICH", "IMMICH_ADMIN", "PAPERLESS", "JELLYFIN", "ADGUARD", "SHARE")}
         seal = lambda v: subprocess.run(["node", "-e", SEAL, key.hex(), v], capture_output=True, text=True, check=True).stdout
         cfg = {
             "lldap": {"password": seal(self.values["LLDAP"])},     # legacy field, pre-installedSecrets
@@ -42,6 +42,7 @@ class Carry(unittest.TestCase):
             "installedSecrets": [
                 {"varName": "AUTHELIA_STORAGE_ENCRYPTION_KEY", "password": seal(self.values["STORAGE"])},
                 {"varName": "DB_PASSWORD", "password": seal(self.values["IMMICH"])},
+                {"varName": "IMMICH_ADMIN_PASSWORD", "password": seal(self.values["IMMICH_ADMIN"])},
                 {"varName": "PAPERLESS_DB_PASSWORD", "password": seal(self.values["PAPERLESS"])},
                 {"varName": "JELLYFIN_ADMIN_PASSWORD", "password": seal(self.values["JELLYFIN"])},
                 {"varName": "ADGUARD_ADMIN_PASSWORD", "password": seal(self.values["ADGUARD"])},
@@ -88,6 +89,7 @@ printf 'laib %s <%s>\\n' "$*" "$v" >> {self.log}
             "LLDAP_ADMIN_PASSWORD": self.values["LLDAP"],
             "AUTHELIA_STORAGE_KEY": self.values["STORAGE"],
             "IMMICH_DB_PASSWORD": self.values["IMMICH"],
+            "IMMICH_ADMIN_PASSWORD": self.values["IMMICH_ADMIN"],
             "PAPERLESS_DB_PASSWORD": self.values["PAPERLESS"],
             "JELLYFIN_ADMIN_PASSWORD": self.values["JELLYFIN"],
             "ADGUARD_ADMIN_PASSWORD": self.values["ADGUARD"],
@@ -112,7 +114,7 @@ printf 'laib %s <%s>\\n' "$*" "$v" >> {self.log}
     def test_only_the_named_services(self):
         p, calls = self.run_script("immich", "file-share")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(set(self.laib_sets(calls)), {"IMMICH_DB_PASSWORD", "SAMBA_PASSWORD"})
+        self.assertEqual(set(self.laib_sets(calls)), {"IMMICH_DB_PASSWORD", "IMMICH_ADMIN_PASSWORD", "SAMBA_PASSWORD"})
 
     def test_a_wrong_key_sets_nothing(self):
         (self.data / "secret.key").write_bytes(secrets.token_bytes(32))
@@ -177,7 +179,9 @@ class ServiceBaysOwnSeal(unittest.TestCase):
             # the laib shim keeps only what read -r leaves; record stdin raw
             exe(c.bin / "laib", f"#!/bin/sh\ncat > {c.log}.$3\n")
             p, _ = c.run_script("auth", "immich")
-            self.assertEqual(p.returncode, 0, p.stderr)
+            # this store predates IMMICH_ADMIN_PASSWORD in the table (#254): that one is reported, the rest arrive
+            self.assertEqual((p.returncode, [l for l in p.stderr.splitlines() if "NOT set" in l]),
+                             (1, ["immich: IMMICH_ADMIN_PASSWORD is not in ServiceBay's store; IMMICH_ADMIN_PASSWORD NOT set"]), p.stderr)
             got = {n: Path(f"{c.log}.{n}").read_bytes() for n in ("LLDAP_ADMIN_PASSWORD", "AUTHELIA_STORAGE_KEY", "IMMICH_DB_PASSWORD")}
             self.assertEqual(got, {
                 "LLDAP_ADMIN_PASSWORD": b"synthetic-legacy-lldap\n",

@@ -3,4 +3,6 @@ ML_IMAGE: ghcr.io/immich-app/immich-machine-learning:release-cuda
 DB_IMAGE: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
 REDIS_IMAGE: docker.io/library/redis:6.2-alpine
 DB_PASSWORD: !secret IMMICH_DB_PASSWORD
+OIDC_SECRET: !secret OIDC_IMMICH_SECRET   # post-deploy sets it as Immich's OAuth client secret (#254)
+ADMIN_EMAIL: ""                           # Immich's admin; empty: admin@<domain>. On a box from ServiceBay: its IMMICH_ADMIN_EMAIL
 PHOTOS_RO: /mnt/data/stacks/file-share/data/photos

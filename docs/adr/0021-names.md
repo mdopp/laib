@@ -59,6 +59,7 @@ which kind of name goes where.
 |---|---|---|
 | Laib | the kernel: state repo, plan/apply, MCP, the Box page | `cmd/laib`, `internal/` |
 | Operator | the box's admin agent, hand `ops` | `cmd/laib-operator`, `templates/` (ADR 0013) |
+| skill | a declared unit of the Operator's work: trigger, tools, prompt, output; active or paused in `policy.yml`; *Fähigkeit* on the pages; not Hermes' skills (the Bote's are off) | `skills/` (built in), `skills/` in the state repo (ADR 0023) |
 | Werkstatt | the dev container: Claude Code and pi, and the autoloop that works issues | `templates/werkstatt`, `werkstatt/` |
 | Bote | the agent people write to, on Signal and in Haus's Sprechen field | `templates/bote` (ADR 0016) |
 | Hermes | the upstream agent the Bote is built from, as stock | container `bote-hermes` |
