@@ -13,6 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -64,7 +65,7 @@ func TestEscalateCompletesWithALargeInspectBundle(t *testing.T) {
 	t.Cleanup(func() { sysd.Run = inner })
 	done := make(chan int, 1)
 	go func() {
-		done <- cmdEscalate(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops", Out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"})
+		done <- envelope.Escalate(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops", Out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"})
 	}()
 	select {
 	case rc := <-done:

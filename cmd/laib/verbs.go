@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
@@ -234,7 +235,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 		return cli.Refused(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
 	}
 	if hand == "ops" {
-		return opsApply(ctx, env, st, args)
+		return envelope.OpsApply(ctx, env, st, args)
 	}
 	only, reason := "", ""
 	for i := 0; i < len(args); i++ {

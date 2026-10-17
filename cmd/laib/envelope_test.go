@@ -12,6 +12,7 @@ import (
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
@@ -71,7 +72,7 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 
 func writeAs(env *cliEnv, svc, path, content string) int {
 	e := &cliEnv{Actor: env.Actor, Paths: env.Paths, In: strings.NewReader(content)}
-	return cmdWrite(context.Background(), e, []string{svc, path})
+	return envelope.Write(context.Background(), e, []string{svc, path})
 }
 
 // #35 (2): a file that does not exist yet under a symlinked directory passed
@@ -102,7 +103,7 @@ func TestWriteThroughASymlinkIsRefused(t *testing.T) {
 // were booked to the service it did not touch.
 func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 	env, _, calls := envBox(t)
-	code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-home-assistant", "--", "cat", "/etc/passwd"})
+	code := envelope.Exec(context.Background(), env, []string{"whoami", "--container", "systemd-home-assistant", "--", "cat", "/etc/passwd"})
 	if code == cli.ExitOK {
 		t.Fatal("exec in another service's container was accepted")
 	}
@@ -111,7 +112,7 @@ func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 			t.Fatalf("podman exec ran: %s", c)
 		}
 	}
-	if code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != cli.ExitOK {
+	if code := envelope.Exec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != cli.ExitOK {
 		t.Fatalf("exec in the service's own container: exit %d", code)
 	}
 }
@@ -187,7 +188,7 @@ func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 // #35 (4): one unparsable journal line reset the budget to zero.
 func TestACorruptJournalLineDoesNotResetTheBudget(t *testing.T) {
 	env, data, _ := envBox(t)
-	for i := 0; i < RepairBudget; i++ {
+	for i := 0; i < envelope.RepairBudget; i++ {
 		journal.Append(env.Paths.Journal, journal.Entry{T: time.Now().Add(-10 * time.Minute), Actor: "ops", Verb: "exec", Service: "whoami", Result: "info"})
 	}
 	day := filepath.Join(env.Paths.Journal, time.Now().UTC().Format("2006-01-02")+".jsonl")

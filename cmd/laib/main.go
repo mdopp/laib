@@ -16,6 +16,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/registry"
@@ -41,18 +42,19 @@ var verbs []verb
 
 func init() {
 	inbox.Approved = intake.FileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
+	envelope.FileIssue = intake.Issue  // an escalation becomes a needs-claude ticket (#56)
 	verbs = []verb{
 		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
 		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", diag.Cmd},
 		{"plan", "read", "render the state and diff it against the box", cmdPlan},
 		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
-		{"inspect", "read", "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", cmdInspect},
-		{"read", "read", "<service> <path>: a file in the service's data paths, secrets redacted", cmdRead},
-		{"write", "apply", "<service> <path> (stdin): a file in the service's data paths, inside the envelope", cmdWrite},
-		{"look", "read", "<service> [--container c] -- <cat|ls|grep|ps|…>: read-only, in the service's own container, unbudgeted", cmdLook},
-		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the service's own container, budgeted, snapshot first, output journaled", cmdExec},
-		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", cmdRestart},
-		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
+		{"inspect", "read", "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", envelope.Inspect},
+		{"read", "read", "<service> <path>: a file in the service's data paths, secrets redacted", envelope.Read},
+		{"write", "apply", "<service> <path> (stdin): a file in the service's data paths, inside the envelope", envelope.Write},
+		{"look", "read", "<service> [--container c] -- <cat|ls|grep|ps|…>: read-only, in the service's own container, unbudgeted", envelope.Look},
+		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the service's own container, budgeted, snapshot first, output journaled", envelope.Exec},
+		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", envelope.Restart},
+		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", envelope.Escalate},
 		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
 		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", intake.Wish},
 		{"updates", "read", "newer patch and minor releases of every pinned image, from the registry (#287)", registry.Updates},

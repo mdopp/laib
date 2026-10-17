@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/state"
@@ -27,7 +28,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 		return cli.Refused(env, "only a human removes a service")
 	}
 	name := args[0]
-	st, svc, err := loadSvc(env, name)
+	st, svc, err := envelope.LoadSvc(env, name)
 	if err != nil {
 		return env.Fail(err)
 	}
