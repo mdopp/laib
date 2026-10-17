@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
+    && mv /usr/local/bin/pi /usr/local/bin/pi-upstream \
     && mkdir -p /run/sshd /workspace \
     && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace \
     && rm -f /etc/ssh/ssh_host_*
@@ -30,7 +31,9 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY laibctl.py /usr/local/bin/laib
 COPY autoloop.py /opt/werkstatt/autoloop.py
 COPY extensions /opt/werkstatt/extensions
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib
+# every pi loads the laib-llama provider (#261); npm's own pi is pi-upstream
+COPY pi /usr/local/bin/pi
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
