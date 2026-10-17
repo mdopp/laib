@@ -124,11 +124,11 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 	since := time.Now().Add(-time.Hour)
 	recent, skipped, err := journal.ReadCounted(env.paths.Journal, since)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "laib: das Journal ist nicht lesbar, deshalb kein %s: %v\n", verb, err)
+		fmt.Fprintf(env.errw(), "laib: das Journal ist nicht lesbar, deshalb kein %s: %v\n", verb, err)
 		return exitRefused
 	}
 	if skipped > 0 {
-		fmt.Fprintf(os.Stderr, "laib: %d unlesbare Journalzeilen übersprungen\n", skipped)
+		fmt.Fprintf(env.errw(), "laib: %d unlesbare Journalzeilen übersprungen\n", skipped)
 	}
 	used, snapped := 0, false
 	for _, e := range recent {
@@ -146,7 +146,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 	}
 	if used >= RepairBudget {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: verb, Service: svc.Name, Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h). Ein Mensch muss ran: %s", RepairBudget, detail)})
-		fmt.Fprintf(os.Stderr, "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
+		fmt.Fprintf(env.errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
 		return exitRefused
 	}
 	paths := snapshotPaths(st, svc)
@@ -158,7 +158,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		if optional {
 			return exitOK
 		}
-		fmt.Fprintf(os.Stderr, "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
+		fmt.Fprintf(env.errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
 		return exitRefused
 	}
 	_, pw, err := backupPrep(env)
@@ -170,7 +170,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		if optional {
 			return exitOK
 		}
-		fmt.Fprintf(os.Stderr, "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
+		fmt.Fprintf(env.errw(), "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
 		return exitRefused
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: "pre-repair: " + strings.Join(paths, " ")})
@@ -183,11 +183,11 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 
 func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib inspect <service>"))
+		return env.fail(errors.New("usage: laib inspect <service>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	out := map[string]any{"service": svc.Name, "contract": svc.Contract}
 	units := map[string]string{}
@@ -249,20 +249,20 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 
 func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return fail(errors.New("usage: laib read <service> <path>"))
+		return env.fail(errors.New("usage: laib read <service> <path>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	defer root.Close()
 	b, err := root.ReadFile(rel)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	p := args[1]
 	if len(b) > 1<<20 {
@@ -279,24 +279,24 @@ func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 
 func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
+		return env.fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not write")
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	defer root.Close()
 	p := args[1]
 	content, err := io.ReadAll(env.stdin())
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if code := envelope(ctx, env, st, svc, "write", p); code != exitOK {
 		return code
@@ -304,11 +304,11 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 	old, _ := root.ReadFile(rel)
 	if dir := filepath.Dir(rel); dir != "." {
 		if err := root.MkdirAll(dir, 0o755); err != nil {
-			return fail(fmt.Errorf("%s: %w", p, err))
+			return env.fail(fmt.Errorf("%s: %w", p, err))
 		}
 	}
 	if err := boxfs.WriteAtomicIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
-		return fail(fmt.Errorf("%s: %w", p, err))
+		return env.fail(fmt.Errorf("%s: %w", p, err))
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})
 	fmt.Fprintln(env.w(), "geschrieben:", p)
@@ -318,18 +318,18 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	// laib exec <service> [--container name] -- cmd args…
 	if len(args) < 1 {
-		return fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
+		return env.fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not exec")
 	}
 	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
-		return fail(errors.New("no command after --"))
+		return env.fail(errors.New("no command after --"))
 	}
 	container, err = pickContainer(svc, container)
 	if err != nil {
@@ -352,11 +352,11 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 
 func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return fail(errors.New("usage: laib restart <service>"))
+		return env.fail(errors.New("usage: laib restart <service>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not restart")
@@ -400,11 +400,11 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 // webhook, so the Werkstatt's claude hand (or the human) picks it up.
 func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
+		return env.fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	dir := filepath.Join(env.paths.Home, "escalations")
 	os.MkdirAll(dir, 0o755)
@@ -414,7 +414,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	// the bundle through a buffer (#43): a pipe nobody reads blocked here
 	// at 64 KiB while mcpMu was held, and every agent hung with it
 	var ins bytes.Buffer
-	cmdInspect(ctx, &cliEnv{paths: env.paths, actor: env.actor, mcp: env.mcp, out: &ins}, []string{svc.Name})
+	cmdInspect(ctx, &cliEnv{paths: env.paths, actor: env.actor, mcp: env.mcp, out: &ins, errOut: env.errOut}, []string{svc.Name})
 	b.Write(ins.Bytes())
 	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
 	b.WriteString("\n## Journal 24h\n\n")
@@ -425,7 +425,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	p := filepath.Join(dir, name)
 	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
@@ -505,15 +505,15 @@ var lookCommands = map[string]bool{"cat": true, "ls": true, "head": true, "tail"
 // no budget, no snapshot, journaled.
 func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
+		return env.fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
 	}
 	_, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
-		return fail(errors.New("no command after --"))
+		return env.fail(errors.New("no command after --"))
 	}
 	if !lookCommands[filepath.Base(cmd[0])] {
 		return exitRefusedMsg(env, cmd[0]+" is not a read-only command; laib exec is the budgeted way to change something")

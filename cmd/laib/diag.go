@@ -34,7 +34,7 @@ type Finding struct {
 func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	only, toJournal := "", false
 	for _, a := range args {
