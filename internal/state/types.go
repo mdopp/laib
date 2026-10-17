@@ -63,9 +63,12 @@ type Intake struct {
 // OperatorCfg configures laib-operator.
 type OperatorCfg struct {
 	Enabled  bool   `yaml:"enabled"`
-	Model    string `yaml:"model"`    // preset alias, default gemma-4-e4b
+	Model    string `yaml:"model"`    // preset alias, default the household preset (qwen3.6-35b-a3b, #285)
 	ReportAt string `yaml:"reportAt"` // "07:00"
 	Tick     string `yaml:"tick"`     // "10m"
+	// ContextWindow overrides the model's window in tokens (#285); 0 = ask
+	// llama-server's /props
+	ContextWindow int `yaml:"contextWindow"`
 }
 
 // Model is a remote OpenAI-compatible endpoint.

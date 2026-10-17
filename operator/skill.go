@@ -20,6 +20,7 @@ type Skill struct {
 	Description string       `json:"description"`
 	Trigger     SkillTrigger `json:"trigger"`
 	Tools       []string     `json:"tools"`
+	More        []string     `json:"more"` // only for a capable model (#286)
 	Context     string       `json:"context"`
 	Output      string       `json:"output"`
 	Prompt      string       `json:"prompt"`

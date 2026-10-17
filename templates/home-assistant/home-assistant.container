@@ -8,6 +8,8 @@ Network=host
 Environment=TZ=${TZ}
 # rest_command.mitteilung's bearer (packages/laib_mitteilung.yaml reads it with !env_var, #177)
 Environment="BOTE_NOTIFY_AUTH=Bearer ${NOTIFY_TOKEN}"
+# auth_oidc's client secret (packages/laib_auth_oidc.yaml reads it with !env_var, #253)
+Environment=AUTH_OIDC_SECRET=${OIDC_SECRET}
 Volume=${DATA_DIR}/home-assistant/homeassistant:/config:z
 Volume=/run/dbus:/run/dbus:ro
 PodmanArgs=--privileged

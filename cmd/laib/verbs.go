@@ -249,6 +249,9 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 	if !policy.Allowed(st.Policy, hand, "apply") {
 		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.actor, st.Policy.Hands[hand].Ceiling))
 	}
+	if hand == "ops" {
+		return opsApply(ctx, env, st, args)
+	}
 	only, reason := "", ""
 	for i := 0; i < len(args); i++ {
 		switch {

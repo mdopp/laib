@@ -59,9 +59,10 @@ intake:                           # wishes and escalations become tickets (#56);
   label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator (ADR 0013); laib operator enable sets this
   enabled: true
-  model: gemma-4-e4b
+  model: qwen3.6-35b-a3b
   reportAt: "07:00"
   tick: 10m
+  contextWindow: 131072           # the model's window in tokens (#285); unset = llama-server's /props; budgets grow with it above 32k
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
 persona: joshua                   # the house persona (ADR 0020): wake word, voice, Haus, chat default; joshua when unset
@@ -144,10 +145,11 @@ An Operator skill (ADR 0023): `description` (German, one sentence),
 `trigger` (one of `every: 10m`, `daily: "07:00"`, `weekly: "Mo 08:00"`,
 `event: red`; `${TICK}` and `${REPORT_AT}` are `box.yml operator.tick` and
 `reportAt`), `tools` (kernel verbs from `status diag logs inspect look read
-journal context inbox note escalate propose wish restart exec write`;
-`note` required), `context` (`box` or `usage`), `output` (`note`,
+journal context inbox plan note escalate propose wish restart exec write
+apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
+the same way, #286), `context` (`box` or `usage`), `output` (`note`,
 `report`, `propose`) and `prompt`. A file with a built-in's name
-(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`) replaces it. The
+(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
 changing one is class `human` in the review.

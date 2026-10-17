@@ -438,9 +438,21 @@ jobs:
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
+                # #245: a box from ServiceBay. Its Authelia file, with the client of an app not in Laib yet and its
+                # signing key, sits where auth pre-start writes Laib config
+                sb=/mnt/data/stacks/auth/authelia-config; mkdir -p "$sb"
+                podman run --rm "${{ env.HOOKS }}" openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > /tmp/sb-key.pem
+                { printf "identity_providers:\n  oidc:\n    hmac_secret: sb-vm-hmac\n    jwks:\n      - key_id: main\n        algorithm: RS256\n        use: sig\n        key: |\n"
+                  sed "s/^/          /" /tmp/sb-key.pem
+                  printf "    clients:\n      - client_id: sbvm\n        client_name: ServiceBay app\n        client_secret: \"\$plaintext\$sb-vm-secret\"\n        public: false\n        authorization_policy: one_factor\n        redirect_uris:\n          - https://sbvm.vm.test/callback\n        scopes: [openid, profile, email]\n"
+                } > "$sb/configuration.yml"
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
                 grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
+                test -s "$sb/servicebay-clients.yml" || { echo "the ServiceBay clients were not kept (#245)"; exit 1; }
+                cmp -s /tmp/sb-key.pem "$sb/oidc.pem" || { echo "the ServiceBay signing key was not kept (#245)"; exit 1; }
+                grep -q "client_id: sbvm" "$sb/oidc-clients.yml" || { echo "the kept client is not registered (#245)"; exit 1; }
+                grep -q "still ServiceBay.*sbvm" /tmp/add-auth.txt || { echo "the apply does not say which clients are still ServiceBay (#245)"; exit 1; }
                 grep -q "lldap seeded" /tmp/add-auth.txt || { echo "the hook output does not say LLDAP was seeded"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
@@ -472,6 +484,10 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # #245: the kept client is live in Authelia: an authorization request for it goes to the login, with a flow
+                loc=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{redirect_url}" "https://auth.vm.test/api/oidc/authorization?client_id=sbvm&response_type=code&redirect_uri=https://sbvm.vm.test/callback&scope=openid&state=vm245state" || true)
+                echo "authorization for the kept ServiceBay client -> $loc"
+                case "$loc" in https://auth.vm.test/*flow_id=*) ;; *) echo "Authelia does not know the kept ServiceBay client (#245)"; exit 1;; esac
                 # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there
                 pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
                 for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins one_factor" "caldav - bypass"; do
@@ -599,7 +615,8 @@ jobs:
                 podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host photos.vm.test:127.0.0.1 \
                   -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
                   "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
-                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; exit 1; }
+                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; $L secret list | tr "\n" " "; echo
+                  git -C /mnt/data/laib/state log --oneline -6; git -C /mnt/data/laib/state status --short; git -C /mnt/data/laib/state log --oneline -3 -- secrets.age; $L journal --since 15m | tail -15; exit 1; }   # #307
                 # the drift ServiceBay repaired in the database (#1556 there) cannot stay: a new client secret reaches
                 # Authelia and Immich in one apply, Immich through its post-deploy with the minted key
                 $L secret rotate OIDC_IMMICH_SECRET | tee /tmp/rotate-immich.txt
@@ -612,6 +629,40 @@ jobs:
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
+      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, without Z-Wave JS and Matter (the NUC's stick and fabric);
+          # Home Assistant's unit and pre-start are the built-in's
+          $SSH 'rm -rf /tmp/ha && mkdir -p /tmp/ha'
+          tar -C templates/home-assistant -cf - --exclude tests . | $SSH 'tar -C /tmp/ha -xf -'
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/home-assistant; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/ha "$R"
+                rm "$R/home-assistant-zwave.container" "$R/home-assistant-matter.container"
+                sed -i "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                # what ServiceBay left: its top-level block with its secret, and a component it installed
+                C=/mnt/data/stacks/home-assistant/homeassistant; mkdir -p "$C/custom_components/auth_oidc"
+                echo v1.1.0 > "$C/custom_components/auth_oidc/.sb_installed_version"
+                printf "default_config:\n\nauth_oidc:\n  client_id: homeassistant\n  client_secret: servicebay-old\n  discovery_url: https://auth.vm.test/.well-known/openid-configuration\n  roles:\n    admin: admins\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
+                touch "$C/automations.yaml" "$C/scripts.yaml" "$C/scenes.yaml"
+                podman pull -q ghcr.io/home-assistant/home-assistant:stable >/dev/null; echo "home assistant image pre-pulled"
+                $L add home-assistant | tee /tmp/add-ha.txt
+                grep -q "^ok  home-assistant pre-start" /tmp/add-ha.txt || { echo "home-assistant pre-start is not green"; exit 1; }
+                grep -q "auth_oidc installed" /tmp/add-ha.txt || { echo "the pinned component was not installed"; exit 1; }
+                if grep -q "^auth_oidc:" "$C/configuration.yaml"; then echo "ServiceBay block is still in configuration.yaml"; exit 1; fi
+                grep -q "AUTH_OIDC_SECRET" "$C/packages/laib_auth_oidc.yaml"
+                if grep -rqF "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.home-assistant.home-assistant.AUTH_OIDC_SECRET)" "$C"; then echo "the OIDC secret is in a file under the config"; exit 1; fi
+                A=/mnt/data/laib/render/authelia/laib-clients.yml
+                grep -A6 "client_id: homeassistant" "$A" | grep -q "token_endpoint_auth_method: client_secret_post" || { echo "Authelia has no homeassistant client for client_secret_post"; cat "$A"; exit 1; }
+                # the component runs with the package: its welcome page answers and names the family account
+                code=000; for i in $(seq 1 90); do code=$(curl -s -o /tmp/welcome.html -w "%{http_code}" http://127.0.0.1:8123/auth/oidc/welcome || true); [ "$code" = 200 ] && break; sleep 5; done
+                echo "home assistant /auth/oidc/welcome -> HTTP $code"
+                [ "$code" = 200 ] && grep -q "Familienkonto" /tmp/welcome.html || { echo "auth_oidc is not set up from the package"; podman logs --tail 80 systemd-home-assistant 2>&1 | grep -i -B2 -A8 "auth_oidc\|error" | tail -60; exit 1; }
+                if podman logs systemd-home-assistant 2>&1 | grep -i "auth_oidc" | grep -qi "duplicate\|invalid config"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
+                $L remove home-assistant >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
+                podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
+                echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"

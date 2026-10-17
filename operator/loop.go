@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,7 +40,10 @@ type Operator struct {
 	// Typed: a small model's window (#53) — compact results and context;
 	// the menu itself is the kernel's typed schemas (#290).
 	Typed bool
-	Usage *Usage // usage-metrics, for a skill with context usage (#270)
+	// Window is the model's context in tokens (#285): from llama-server's
+	// /props or OPERATOR_CONTEXT_WINDOW; 0 = unknown, the small budgets
+	Window int
+	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -62,7 +66,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	granted := map[string]bool{}
 	for _, g := range sk.Granted {
-		granted["laib_"+g] = true
+		// a small model keeps the short menu: the skill's more tools are for a capable one (#286)
+		if !o.Typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g) {
+			granted["laib_"+g] = true
+		}
 	}
 	var mine []Tool
 	for _, t := range tools {
@@ -109,7 +116,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			return s, fmt.Errorf("model: %w", err)
 		}
 		msgs = append(msgs, reply)
-		if len(reply.ToolCalls) == 0 && looksLikeToolCall(reply.Content, offered) {
+		if len(reply.ToolCalls) == 0 && looksLikeToolCall(reply.Content, o.Typed, offered) {
 			// a small model writing the call as text (#43): once asked again,
 			// then red — never counted as work done
 			textCalls++
@@ -184,10 +191,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			if err != nil {
 				out, isErr = err.Error(), true
 			}
-			limit := 6000
-			if o.Typed {
-				limit = 2000 // compact results for a 32k window (#53)
-			}
+			_, limit := o.budgets()
 			if len(out) > limit {
 				out = out[:limit/2] + "\n…\n" + out[len(out)-limit/2:]
 			}
@@ -215,6 +219,34 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	return s, nil
 }
 
+// SmallModel decides the interface (#286): OPERATOR_INTERFACE when set
+// (typed = small, cli = capable), else the window — up to 32k tokens a
+// small model with the short menus and compact budgets.
+func SmallModel(iface string, window int) bool {
+	switch iface {
+	case "typed":
+		return true
+	case "cli":
+		return false
+	}
+	return window <= 32768
+}
+
+// budgets are the context bundle's and each tool result's size in chars.
+// Up to a 32k window they are what a small model was given (#53); above,
+// they grow with the window — about a fifth of it for the context, a
+// fifteenth per result, at roughly three chars a token (#285).
+func (o *Operator) budgets() (ctx, result int) {
+	ctx, result = 9000, 6000
+	if o.Typed {
+		ctx, result = 6000, 2000
+	}
+	if o.Window > 32768 {
+		ctx, result = max(ctx, o.Window*3/5), max(result, o.Window/5)
+	}
+	return ctx, result
+}
+
 // shownArgs is a call's arguments for the session record: the command line
 // when the model wrote one, else the JSON.
 func shownArgs(a map[string]any) string {
@@ -237,10 +269,7 @@ func (o *Operator) prompt(sk Skill, tr Trigger, ctx string) string {
 		label = "Nutzungsdaten:"
 	}
 	b.WriteString(strings.TrimSpace(sk.Prompt) + "\n\n" + label + "\n")
-	max := 9000
-	if o.Typed {
-		max = 6000
-	}
+	max, _ := o.budgets()
 	b.WriteString(budget(ctx, max))
 	return b.String()
 }
@@ -267,7 +296,7 @@ func budget(ctx string, max int) string {
 // looksLikeToolCall: a reply that carries a JSON call, or starts a line
 // with a tool's name — laib_restart or the bare restart — followed by an
 // argument, instead of using the tool interface.
-func looksLikeToolCall(text string, offered map[string]bool) bool {
+func looksLikeToolCall(text string, small bool, offered map[string]bool) bool {
 	t := strings.TrimSpace(text)
 	if t == "" {
 		return false
@@ -279,6 +308,9 @@ func looksLikeToolCall(text string, offered map[string]bool) bool {
 		line = strings.TrimLeft(strings.TrimSpace(line), "`")
 		if strings.HasPrefix(line, "laib_") {
 			return true
+		}
+		if !small {
+			continue // a capable model's answer that starts with a tool's name is an answer (#286)
 		}
 		for name := range offered {
 			bare := strings.TrimPrefix(name, "laib_")

@@ -6,7 +6,7 @@ After=auth-lldap.service
 Image=${AUTHELIA_IMAGE}
 Pod=auth.pod
 Environment=TZ=${TZ}
-Environment=X_AUTHELIA_CONFIG=/config/configuration.yml,/laib/laib-access.yml,/laib/laib-clients.yml
+Environment=X_AUTHELIA_CONFIG=/config/configuration.yml,/laib/laib-access.yml,/config/oidc-clients.yml
 Environment=X_AUTHELIA_CONFIG_FILTERS=template
 Volume=${DATA_DIR}/auth/authelia-config:/config:z
 Volume=${DATA_DIR}/auth/authelia-data:/data:z

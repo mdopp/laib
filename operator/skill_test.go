@@ -33,7 +33,7 @@ func skillFor(t *testing.T, tr Trigger, name string) Skill {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sk.Name, sk.Source, sk.Status, sk.Granted = name, "builtin", "active", sk.Tools
+	sk.Name, sk.Source, sk.Status, sk.Granted = name, "builtin", "active", append(sk.Tools, sk.More...)
 	return sk
 }
 

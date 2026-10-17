@@ -122,7 +122,7 @@ func TestTheLeaseContract(t *testing.T) {
 
 	// GET with nothing held
 	code, out := call(t, "GET", api, "", "")
-	if code != 200 || out["state"] != "none" || out["holder"] != "" || out["model"] != "" || out["alias"] != "gemma-4-e4b" || out["expires_at"] != nil {
+	if code != 200 || out["state"] != "none" || out["holder"] != "" || out["model"] != "" || out["alias"] != "qwen3.6-35b-a3b" || out["expires_at"] != nil {
 		t.Fatalf("idle GET: %d %v", code, out)
 	}
 	has(t, "idle GET", out, "state", "model", "alias", "expires_at", "holder", "last_renewed_at", "renew_after", "retry_after")
