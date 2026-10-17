@@ -88,7 +88,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	if err != nil {
 		return env.Fail(err)
 	}
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, inboxDir(env), env.Actor, "template update "+svcName,
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "template update "+svcName,
 		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.Actor))
 	if err != nil {
 		if strings.Contains(err.Error(), "nothing to propose") {

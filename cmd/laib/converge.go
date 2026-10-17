@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -27,7 +29,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	if !policy.ConvergeOn(st.Policy) && !has(args, "--force") {
+	if !policy.ConvergeOn(st.Policy) && !slices.Contains(args, "--force") {
 		fmt.Fprintln(env.W(), "converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
 		return cli.ExitOK
 	}
@@ -38,7 +40,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintln(env.W(), "übersprungen: gesperrt durch", holder)
 		return cli.ExitOK
 	}
-	unlock, code := takeLock(env, st, "converge")
+	unlock, code := run.Lock(env, st, "converge")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -118,18 +120,9 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	// Units that are down but whose files match get a restart through apply
 	// by marking their service as changed.
 	for _, name := range inactive {
-		if !has(p.Services, name) {
+		if !slices.Contains(p.Services, name) {
 			p.Services = append(p.Services, name)
 		}
 	}
-	return runApplyPlan(ctx, env, st, p, sec, reason, "converge", true)
-}
-
-func has(args []string, flag string) bool {
-	for _, a := range args {
-		if a == flag {
-			return true
-		}
-	}
-	return false
+	return run.ApplyPlan(ctx, env, st, p, sec, reason, "converge", true)
 }

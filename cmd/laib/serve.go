@@ -134,7 +134,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		w.Write(png)
 	}))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
-		open, err := proposal.List(inboxDir(env), true)
+		open, err := proposal.List(cli.InboxDir(env), true)
 		var b strings.Builder
 		b.WriteString("<h1>Inbox</h1>")
 		if err != nil {
@@ -180,7 +180,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 		}
 		// what was approved lately can be taken back (#41)
-		if all, err := proposal.List(inboxDir(env), false); err == nil {
+		if all, err := proposal.List(cli.InboxDir(env), false); err == nil {
 			n := 0
 			for _, p := range all {
 				if p.Status != "approved" || n >= 5 {

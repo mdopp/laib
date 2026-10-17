@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
@@ -12,8 +11,6 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/token"
 )
-
-func tokenPath(env *cliEnv) string { return filepath.Join(env.Paths.Home, "tokens.json") }
 
 // cmdToken: mint <hand> [--ttl 8h] [--note x] | list | revoke <id>. Minting
 // is a destroy-tier act in spirit (it hands out a capability), so only a
@@ -26,7 +23,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	store, err := token.Load(tokenPath(env))
+	store, err := token.Load(cli.TokenPath(env))
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -48,7 +45,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 			return env.Fail(errors.New("usage: laib token revoke <id>"))
 		}
 		if proposal.Hand(env.Actor) != "human" {
-			return exitRefusedMsg(env, "only a human revokes tokens")
+			return cli.Refused(env, "only a human revokes tokens")
 		}
 		if err := store.Revoke(args[1]); err != nil {
 			return env.Fail(err)
@@ -61,7 +58,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 			return env.Fail(errors.New("usage: laib token mint <hand>"))
 		}
 		if proposal.Hand(env.Actor) != "human" {
-			return exitRefusedMsg(env, "only a human mints tokens")
+			return cli.Refused(env, "only a human mints tokens")
 		}
 		hand := args[1]
 		h, ok := st.Policy.Hands[hand]
@@ -98,9 +95,4 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		return cli.ExitOK
 	}
 	return env.Fail(fmt.Errorf("unknown token subcommand %q", args[0]))
-}
-
-func exitRefusedMsg(env *cliEnv, msg string) int {
-	fmt.Fprintln(env.Errw(), "laib:", msg)
-	return cli.ExitRefused
 }

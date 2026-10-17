@@ -17,6 +17,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -113,7 +114,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
-		return exitRefusedMsg(env, env.Actor+" may not run a backup")
+		return cli.Refused(env, env.Actor+" may not run a backup")
 	}
 	if len(args) > 0 && args[0] == "check" {
 		return backupCheck(ctx, env, st, pw)
@@ -127,7 +128,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	paths := render.BackupPaths(st, env.Paths.State, env.Paths.Journal)
 	// quiesce: true paths (databases, #40) are snapshotted with their service
 	// stopped — under the lock and paused, so converge keeps its hands off
-	unlock, code := takeLock(env, st, "backup")
+	unlock, code := run.Lock(env, st, "backup")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -250,10 +251,10 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not restore")
+		return cli.Refused(env, env.Actor+" may not restore")
 	}
 	if box && proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "restore --box is the human's step")
+		return cli.Refused(env, "restore --box is the human's step")
 	}
 	snapshot, only := args[0], ""
 	if len(args) > 1 {
@@ -291,7 +292,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// the one lock from here to the final verify, and a pause so a converge
 	// that outlives a killed restore does not restart on half-written data (#39)
-	unlock, code := takeLock(env, st, "restore")
+	unlock, code := run.Lock(env, st, "restore")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -377,7 +378,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		}()
 		fmt.Fprintf(env.W(), "Box wiederhergestellt aus %s: State, Journal, %d Dienste; jetzt apply\n", snapshot, len(names))
 	}
-	return applyHeld(ctx, env, st, only, "restore "+snapshot)
+	return run.ApplyHeld(ctx, env, st, only, "restore "+snapshot)
 }
 
 func unitsOf(st *state.State, only string) []string {

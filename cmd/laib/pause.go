@@ -27,7 +27,7 @@ func cmdPause(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not pause a service")
+		return cli.Refused(env, env.Actor+" may not pause a service")
 	}
 	name := args[0]
 	if _, ok := st.Services[name]; !ok {
@@ -74,7 +74,7 @@ func cmdResume(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not resume a service")
+		return cli.Refused(env, env.Actor+" may not resume a service")
 	}
 	if _, ok := apply.Paused(env.Paths)[args[0]]; !ok {
 		fmt.Fprintf(env.W(), "%s ist nicht pausiert\n", args[0])

@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/token"
 	"gopkg.in/yaml.v3"
@@ -99,7 +100,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		return cli.ExitOK
 	case "enable", "disable":
 		if proposal.Hand(env.Actor) != "human" {
-			return exitRefusedMsg(env, "only a human enables or disables the operator")
+			return cli.Refused(env, "only a human enables or disables the operator")
 		}
 		if !policy.Allowed(st.Policy, "ops", "apply") {
 			return env.Fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
@@ -123,7 +124,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 				return env.Fail(err)
 			}
 			if _, ok := sec[render.OperatorToken]; !ok {
-				store, err := token.Load(tokenPath(env))
+				store, err := token.Load(cli.TokenPath(env))
 				if err != nil {
 					return env.Fail(err)
 				}
@@ -151,7 +152,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		if !enable {
 			// nothing keeps running with a valid token (#41): the ops tokens go
-			if store, err := token.Load(tokenPath(env)); err == nil {
+			if store, err := token.Load(cli.TokenPath(env)); err == nil {
 				for _, r := range store.List() {
 					if r.Hand == "ops" {
 						store.Revoke(r.ID)
@@ -165,7 +166,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		return runApply(ctx, env, st, "", "operator "+args[0])
+		return run.Apply(ctx, env, st, "", "operator "+args[0])
 	}
 	return env.Fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
 }

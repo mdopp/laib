@@ -84,10 +84,10 @@ func init() {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	os.Exit(runArgs(os.Args[1:]))
 }
 
-func run(args []string) int {
+func runArgs(args []string) int {
 	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR")}
 	if env.Actor == "" {
 		env.Actor = "human:" + os.Getenv("USER")

@@ -25,7 +25,7 @@ func TestAProposedRouteShowsItsFactOnTheCard(t *testing.T) {
 	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami soll eine Adresse bekommen"`, "patch": patch}); code != cli.ExitOK {
 		t.Fatalf("propose: exit %d: %s", code, out)
 	}
-	ps, _ := proposal.List(inboxDir(env), false)
+	ps, _ := proposal.List(cli.InboxDir(env), false)
 	if len(ps) != 1 {
 		t.Fatalf("want one proposal, got %+v", ps)
 	}

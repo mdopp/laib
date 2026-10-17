@@ -61,7 +61,7 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			return
 		}
 		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		store, err := token.Load(tokenPath(env))
+		store, err := token.Load(cli.TokenPath(env))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

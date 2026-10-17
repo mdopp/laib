@@ -26,7 +26,7 @@ func sheetConfirmed(env *cliEnv) string {
 
 func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 	if proposal.Hand(env.Actor) != "human" || env.MCP {
-		return exitRefusedMsg(env, "the recovery sheet is for the human at the console, never for a hand or over MCP")
+		return cli.Refused(env, "the recovery sheet is for the human at the console, never for a hand or over MCP")
 	}
 	if len(args) > 0 && args[0] == "--confirm" {
 		if err := os.WriteFile(sheetConfirmed(env), []byte(time.Now().UTC().Format(time.RFC3339)+" "+env.Actor+"\n"), 0o644); err != nil {

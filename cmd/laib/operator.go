@@ -293,7 +293,7 @@ func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not write")
+		return cli.Refused(env, env.Actor+" may not write")
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
@@ -332,7 +332,7 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not exec")
+		return cli.Refused(env, env.Actor+" may not exec")
 	}
 	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
@@ -340,7 +340,7 @@ func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	container, err = pickContainer(svc, container)
 	if err != nil {
-		return exitRefusedMsg(env, err.Error())
+		return cli.Refused(env, err.Error())
 	}
 	if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
 		return code
@@ -366,7 +366,7 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not restart")
+		return cli.Refused(env, env.Actor+" may not restart")
 	}
 	if code := envelope(ctx, env, st, svc, "restart", "restart"); code != cli.ExitOK {
 		return code
@@ -523,16 +523,16 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("no command after --"))
 	}
 	if !lookCommands[filepath.Base(cmd[0])] {
-		return exitRefusedMsg(env, cmd[0]+" is not a read-only command; laib exec is the budgeted way to change something")
+		return cli.Refused(env, cmd[0]+" is not a read-only command; laib exec is the budgeted way to change something")
 	}
 	for _, a := range cmd[1:] {
 		if strings.ContainsAny(a, ";&|><`$") {
-			return exitRefusedMsg(env, "look takes one plain command, no shell")
+			return cli.Refused(env, "look takes one plain command, no shell")
 		}
 	}
 	container, err = pickContainer(svc, container)
 	if err != nil {
-		return exitRefusedMsg(env, err.Error())
+		return cli.Refused(env, err.Error())
 	}
 	out, entry, err := runIn(ctx, env, svc, "look", container, cmd)
 	journal.Append(env.Paths.Journal, entry)
@@ -559,17 +559,17 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 	}
 	n, err := strconv.Atoi(id)
 	if err != nil {
-		return exitRefusedMsg(env, "der Operator wendet nur seinen eigenen Vorschlag an: laib apply --proposal <id>")
+		return cli.Refused(env, "der Operator wendet nur seinen eigenen Vorschlag an: laib apply --proposal <id>")
 	}
-	p, err := proposal.Get(inboxDir(env), n)
+	p, err := proposal.Get(cli.InboxDir(env), n)
 	if err != nil {
 		return env.Fail(err)
 	}
 	switch {
 	case p.Actor != env.Actor || p.Status != "open":
-		return exitRefusedMsg(env, fmt.Sprintf("#%d ist nicht dein offener Vorschlag (%s, %s)", n, p.Actor, p.Status))
+		return cli.Refused(env, fmt.Sprintf("#%d ist nicht dein offener Vorschlag (%s, %s)", n, p.Actor, p.Status))
 	case policy.NeedsHuman(st.Policy, p.Tier, p.Class):
-		return exitRefusedMsg(env, fmt.Sprintf("#%d gibt nur ein Mensch frei: %s", n, strings.Join(p.Reasons, "; ")))
+		return cli.Refused(env, fmt.Sprintf("#%d gibt nur ein Mensch frei: %s", n, strings.Join(p.Reasons, "; ")))
 	}
 	var svcs []string
 	for _, f := range p.Files {
@@ -578,12 +578,12 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 		}
 	}
 	if len(svcs) == 0 {
-		return exitRefusedMsg(env, fmt.Sprintf("#%d ändert keinen Dienst", n))
+		return cli.Refused(env, fmt.Sprintf("#%d ändert keinen Dienst", n))
 	}
 	for _, name := range svcs {
 		svc, ok := st.Services[name]
 		if !ok {
-			return exitRefusedMsg(env, fmt.Sprintf("#%d fügt %s hinzu: das gibt ein Mensch frei", n, name))
+			return cli.Refused(env, fmt.Sprintf("#%d fügt %s hinzu: das gibt ein Mensch frei", n, name))
 		}
 		if code := envelope(ctx, env, st, svc, "apply", fmt.Sprintf("#%d %s", n, p.Reason)); code != cli.ExitOK {
 			return code
