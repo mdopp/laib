@@ -32,9 +32,16 @@ LIBRARIES = [("Musik", "music", "music"), ("Filme", "movies", "movies"), ("Serie
 def req(method, path, body=None, token=None, raw=False):
     h = {"Content-Type": "application/json", "Authorization": CLIENT + (f', Token="{token}"' if token else "")}
     r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
-    with urllib.request.urlopen(r, timeout=20) as resp:
-        data = resp.read()
-        return data if raw else (json.loads(data) if data else None)
+    for _ in range(60):  # while Jellyfin finishes its start it answers 503, /health already up (vm-install run 39031896537)
+        try:
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                data = resp.read()
+                return data if raw else (json.loads(data) if data else None)
+        except urllib.error.HTTPError as e:
+            if e.code != 503:
+                raise
+            time.sleep(3)
+    red(f"jellyfin answered {path} 503 for three minutes")
 
 
 def red(msg):
