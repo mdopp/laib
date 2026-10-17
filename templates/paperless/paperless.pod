@@ -4,5 +4,6 @@ PodName=paperless
 # ports lan: false keeps the LAN out, and the API wants a token
 PublishPort=8000:8000
 # the OIDC discovery and token calls go to Authelia through Caddy on this box (a
-# container in a pod cannot set its own hosts)
-AddHost=auth.${DOMAIN}:${LAN_IP}
+# container in a pod cannot set its own hosts); the host gateway, not the LAN IP,
+# which under pasta stays inside the pod (#252)
+AddHost=auth.${DOMAIN}:host-gateway
