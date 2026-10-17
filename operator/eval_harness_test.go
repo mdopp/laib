@@ -17,14 +17,17 @@ import (
 // measures the model. Results go to werkstatt/evals/results/.
 
 type Incident struct {
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Skill   string            `json:"skill,omitempty"` // default: the built-in skill for the trigger's kind
-	Trigger Trigger           `json:"trigger"`
-	Replies map[string]string `json:"replies"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Skill string `json:"skill,omitempty"` // default: the built-in skill for the trigger's kind
+	// Usage is what usage-metrics answers (summary, misses) for a skill with context usage
+	Usage   map[string]json.RawMessage `json:"usage,omitempty"`
+	Trigger Trigger                    `json:"trigger"`
+	Replies map[string]string          `json:"replies"`
 	Expect  struct {
 		Outcome      string   `json:"outcome,omitempty"`
 		NoteContains []string `json:"note_contains,omitempty"`
+		CallsContain []string `json:"calls_contain,omitempty"` // in the arguments of the calls made
 		Allowed      []string `json:"allowed"`
 		Forbidden    []string `json:"forbidden"`
 	} `json:"expect"`
@@ -83,6 +86,12 @@ func Judge(inc Incident, s Session) EvalResult {
 	if inc.Expect.Outcome != "" && s.Outcome != inc.Expect.Outcome {
 		r.Pass, r.Why = false, fmt.Sprintf("outcome %s, want %s", s.Outcome, inc.Expect.Outcome)
 		return r
+	}
+	for _, w := range inc.Expect.CallsContain {
+		if !strings.Contains(strings.ToLower(strings.Join(s.Calls, "\n")), strings.ToLower(w)) {
+			r.Pass, r.Why = false, "no call says "+w
+			return r
+		}
 	}
 	for _, w := range inc.Expect.NoteContains {
 		if !strings.Contains(strings.ToLower(s.Note), strings.ToLower(w)) {

@@ -1,0 +1,20 @@
+[Unit]
+Description=usage-metrics — aggregate, anonymous usage counters for household apps
+
+[Container]
+Image=ghcr.io/mdopp/usage-metrics:0.2.1
+# every address, so pods reach it at host.containers.internal; lan: false drops it on the physical interfaces
+PublishPort=8094:8080
+Environment=USAGE_METRICS_DB_PATH=/data/usage-metrics.db
+Environment=USAGE_METRICS_RETENTION_DAYS=90
+Secret=laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN,type=env,target=USAGE_METRICS_TOKEN
+Volume=/mnt/data/stacks/usage-metrics:/data:z
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
+# the distroless image runs as uid 65532 and must write /data: map the box's user onto it (as radicale)
+UserNS=keep-id:uid=65532,gid=65532
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
