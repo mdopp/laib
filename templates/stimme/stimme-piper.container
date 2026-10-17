@@ -5,8 +5,9 @@ After=network-online.target
 [Container]
 Image=${PIPER_IMAGE}
 Network=host
-# the house persona's voice (ADR 0020)
-Exec=--voice ${PERSONA_VOICE} --uri tcp://127.0.0.1:10200 --data-dir /data --download-dir /data
+# the house persona's voice (ADR 0020). Beyond loopback so pods on the box reach it at
+# host.containers.internal:10200 (foundry-chronicle's chronik, #242); lan: false keeps the LAN out.
+Exec=--voice ${PERSONA_VOICE} --uri tcp://0.0.0.0:10200 --data-dir /data --download-dir /data
 Volume=${DATA_DIR}/stimme/piper:/data:z
 AutoUpdate=registry
 
