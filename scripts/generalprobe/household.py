@@ -442,9 +442,30 @@ def ha(path, token, method="GET", body=None):
     return st, js(b)
 
 
+def ha_token(f, s):
+    """the long-lived token ServiceBay's post-deploy saved, or a session through
+    HA's own login flow as the onboarded admin; either proves HA's auth store"""
+    cfg = os.path.join(f["data_dir"], "home-assistant/homeassistant")
+    for n in (".solaris-long-lived-token", ".solilos-long-lived-token"):
+        p = os.path.join(cfg, n)
+        if os.path.exists(p) and open(p).read().strip():
+            return open(p).read().strip()
+    cid = "http://127.0.0.1:8123/"
+    st, b, _ = req("POST", f"http://{LOOP}:8123/auth/login_flow", {"client_id": cid, "handler": ["homeassistant", None], "redirect_uri": cid})
+    flow = (js(b) or {}).get("flow_id")
+    st, b, _ = req("POST", f"http://{LOOP}:8123/auth/login_flow/{flow}", {"client_id": cid, "username": f["ha_user"], "password": f["ha_password"]})
+    code = (js(b) or {}).get("result")
+    st, b, _ = req("POST", f"http://{LOOP}:8123/auth/token", form={"client_id": cid, "grant_type": "authorization_code", "code": code or ""})
+    tok = (js(b) or {}).get("access_token")
+    if not tok:
+        raise AssertionError(f"HA login as {f['ha_user']}: HTTP {st} {b[:150]!r}")
+    return tok
+
+
 def seed_home(f, s):
     cfg = os.path.join(f["data_dir"], "home-assistant/homeassistant")
-    tok = open(os.path.join(cfg, ".solilos-long-lived-token")).read().strip()
+    wait("Home Assistant's login", lambda: req("GET", f"http://{LOOP}:8123/manifest.json")[0] == 200, tries=90)
+    tok = ha_token(f, s)
     wait("Home Assistant", lambda: ha("/", tok)[0] == 200, tries=90)
     st, d = ha("/config/automation/config/generalprobe_licht", tok, "POST", {
         "id": "generalprobe_licht", "alias": "Generalprobe Licht", "description": "",
@@ -468,7 +489,9 @@ def seed_home(f, s):
         "disabled_by": None, "created_at": "2024-01-01T00:00:00+00:00", "modified_at": "2024-01-01T00:00:00+00:00", "discovery_keys": {}, "subentries": []})
     json.dump(doc, open(p, "w"), indent=2)
     sh("systemctl", "--user", "start", "home-assistant.service")
-    wait("Home Assistant again", lambda: ha("/", tok)[0] == 200, tries=90)
+    wait("Home Assistant again", lambda: req("GET", f"http://{LOOP}:8123/manifest.json")[0] == 200, tries=90)
+    tok = ha_token(f, s)
+    wait("Home Assistant's API", lambda: ha("/", tok)[0] == 200, tries=30)
     s["home"] = {"entries": sorted(e["domain"] for e in doc["data"]["entries"])}
     print(f"Home Assistant: automation, config entries {s['home']['entries']}")
 
@@ -629,8 +652,8 @@ def check_dav(f, s, phase):
 
 def check_home(f, s, phase):
     cfg = os.path.join(f["data_dir"], "home-assistant/homeassistant")
-    tok = open(os.path.join(cfg, ".solilos-long-lived-token")).read().strip()
-    wait("Home Assistant", lambda: ha("/", tok)[0] == 200, tries=60)
+    wait("Home Assistant", lambda: req("GET", f"http://{LOOP}:8123/manifest.json")[0] == 200, tries=60)
+    tok = ha_token(f, s)
     st, _ = ha("/states/automation.generalprobe_licht", tok)
     if st != 200:
         raise AssertionError(f"the automation is gone: HTTP {st}")
@@ -647,7 +670,7 @@ def check_home(f, s, phase):
         zs = json.loads(sh("podman", "unshare", "cat", os.path.join(f["data_dir"], "home-assistant/zwave-js/settings.json")).stdout)
         if zs.get("zwave", {}).get("serverPort") != 3000:
             raise AssertionError(f"Z-Wave JS UI's server port is {zs.get('zwave', {}).get('serverPort')}, the entry says 3000")
-    return f"HA answers with the old token; the automation, {len(have)} config entries, Z-Wave JS at {url}"
+    return f"HA lets its admin in; the automation, {len(have)} config entries, Z-Wave JS at {url}"
 
 
 def check_matter(f, s, phase):

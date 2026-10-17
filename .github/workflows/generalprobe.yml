@@ -73,13 +73,13 @@ jobs:
           f = {"domain": d, "data_dir": "/mnt/data/stacks", "base_dn": ",".join("dc=" + p for p in d.split(".")),
                "sb_user": "admin", "sb_password": h(), "lldap_admin": h(), "immich_email": "admin@" + d, "immich_password": h(),
                "paperless_user": "solaris", "paperless_password": h(), "mqtt_user": "mqtt", "mqtt_password": h(),
-               "share_user": "samba", "share_password": h()}
+               "share_user": "samba", "share_password": h(), "ha_user": "oscar", "ha_password": h()}
           f["vars"] = {"nginx": {"NGINX_ADMIN_EMAIL": "admin@" + d, "NGINX_ADMIN_PASSWORD": h()}, "auth": {"LLDAP_ADMIN_PASSWORD": f["lldap_admin"]},
                        "immich": {"IMMICH_ADMIN_EMAIL": f["immich_email"], "IMMICH_ADMIN_PASSWORD": f["immich_password"]},
                        "paperless": {"PAPERLESS_ADMIN_PASSWORD": f["paperless_password"]},
                        "mosquitto": {"MQTT_USERNAME": f["mqtt_user"], "MQTT_PASSWORD": f["mqtt_password"]},
                        "file-share": {"SHARE_PASSWORD": f["share_password"]},
-                       "home-assistant": {"ZWAVE_DEVICE": "/dev/ttyS1"}}   # the stick: a serial port the VM has
+                       "home-assistant": {"ZWAVE_DEVICE": "/dev/ttyS1", "OSCAR_HA_ADMIN_PASSWORD": f["ha_password"]}}   # the stick: a serial port the VM has
           print(json.dumps(f))
           PY
           cd "$VM"; . ./box.sh
