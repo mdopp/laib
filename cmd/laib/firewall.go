@@ -64,7 +64,7 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("usage: laib self rollback"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "self rollback is the human's verb")
+		return cli.Refused(env, "self rollback is the human's verb")
 	}
 	dir := binDir()
 	bins := []string{"laib", "laib-operator", "laib-lease"}

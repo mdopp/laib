@@ -1,4 +1,4 @@
-package main
+package mcp
 
 import (
 	"context"
@@ -19,18 +19,18 @@ import (
 // The Operator's skills (ADR 0023): the kernel holds the registry and
 // decides what a skill may call; the Operator runs them.
 
-// skillsFor is the registry as hand sees it: a tool is granted when it is
+// SkillsFor is the registry as hand sees it: a tool is granted when it is
 // an MCP verb and the hand's ceiling and verb list reach it.
-func skillsFor(env *cliEnv, st *state.State, hand string) []skill.Skill {
+func SkillsFor(env *cli.Env, st *state.State, hand string) []skill.Skill {
 	return skill.Grant(skill.Load(skills.FS, env.Paths.State), st.Policy.Skills, func(v string) string {
 		tier := ""
-		for _, x := range verbs {
-			if x.name == v {
-				tier = x.tier
+		for _, x := range Verbs {
+			if x.Name == v {
+				tier = x.Tier
 			}
 		}
 		switch {
-		case !mcpVerbs[v]:
+		case !Allowed[v]:
 			return "kein MCP-Werkzeug"
 		case !policy.Allowed(st.Policy, hand, tier):
 			return fmt.Sprintf("Stufe %s über der Decke %s von %s", tier, st.Policy.Hands[hand].Ceiling, hand)
@@ -41,11 +41,11 @@ func skillsFor(env *cliEnv, st *state.State, hand string) []skill.Skill {
 	})
 }
 
-// skillGate says why a call made in a skill's name (X-Laib-Skill) may not
+// SkillGate says why a call made in a skill's name (X-Laib-Skill) may not
 // run, or "": an unknown, refused or paused skill runs nothing, a running
 // one only its granted tools.
-func skillGate(env *cliEnv, st *state.State, hand, name, verb string) string {
-	return gate(skillsFor(env, st, hand), name, verb)
+func SkillGate(env *cli.Env, st *state.State, hand, name, verb string) string {
+	return gate(SkillsFor(env, st, hand), name, verb)
 }
 
 func gate(sks []skill.Skill, name, verb string) string {
@@ -69,9 +69,9 @@ func gate(sks []skill.Skill, name, verb string) string {
 	return verb + " gehört nicht zur Fähigkeit " + name
 }
 
-// skillTools narrows a tools/list to what the skill may call.
-func skillTools(env *cliEnv, st *state.State, hand, name string, tools []map[string]any) []map[string]any {
-	sks := skillsFor(env, st, hand)
+// SkillTools narrows a tools/list to what the skill may call.
+func SkillTools(env *cli.Env, st *state.State, hand, name string, tools []map[string]any) []map[string]any {
+	sks := SkillsFor(env, st, hand)
 	var out []map[string]any
 	for _, t := range tools {
 		if gate(sks, name, strings.TrimPrefix(t["name"].(string), "laib_")) == "" {
@@ -81,15 +81,15 @@ func skillTools(env *cliEnv, st *state.State, hand, name string, tools []map[str
 	return out
 }
 
-// cmdSkill: `laib skill list | enable <name> | pause <name>`. Listing is
+// Skill: `laib skill list | enable <name> | pause <name>`. Listing is
 // for everyone (the Operator reads it over MCP); the switch is a human's
 // and a commit to policy.yml.
-func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
+func Skill(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
 	}
-	sks := skillsFor(env, st, "ops")
+	sks := SkillsFor(env, st, "ops")
 	if len(args) == 0 || args[0] == "list" {
 		if env.JSON {
 			return cli.Emit(env, sks)
@@ -110,13 +110,13 @@ func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "only a human enables or pauses a skill")
+		return cli.Refused(env, "only a human enables or pauses a skill")
 	}
 	if skill.Find(sks, args[1]) == nil {
 		return env.Fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))
 	}
 	value := map[string]string{"enable": "active", "pause": "paused"}[args[0]]
-	if err := setBox(filepath.Join(env.Paths.State, "policy.yml"), "skills", args[1], value); err != nil {
+	if err := state.SetBlock(filepath.Join(env.Paths.State, "policy.yml"), "skills", args[1], value); err != nil {
 		return env.Fail(err)
 	}
 	if err := proposal.CommitDirty(ctx, env.Paths.State, env.Actor); err != nil {

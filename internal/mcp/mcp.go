@@ -1,4 +1,4 @@
-package main
+package mcp
 
 import (
 	"bytes"
@@ -20,13 +20,13 @@ import (
 // MCP over streamable HTTP, JSON-RPC 2.0, stdlib only. The tool list is the
 // verb table filtered by the hand's ceiling (docs/INTERFACE.md); a call runs
 // the verb in-process with --json, writing to its own buffers. Read verbs
-// share mcpMu; anything that changes the box takes it alone (#289), on top
+// share Mu; anything that changes the box takes it alone (#289), on top
 // of the apply lock the mutating verbs hold.
-var mcpMu sync.RWMutex
+var Mu sync.RWMutex
 
-// mcpVerbs are the verbs an agent may reach at all. serve, init and token are
+// Allowed are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
-var mcpVerbs = map[string]bool{
+var Allowed = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "skill": true, "updates": true,
 }
@@ -53,15 +53,15 @@ func rpcReply(w http.ResponseWriter, id json.RawMessage, result any, rerr *rpcEr
 	json.NewEncoder(w).Encode(msg)
 }
 
-// mcpHandler authenticates the bearer, then dispatches.
-func mcpHandler(env *cliEnv) http.HandlerFunc {
+// Handler authenticates the bearer, then dispatches.
+func Handler(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
 		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		store, err := token.Load(tokenPath(env))
+		store, err := token.Load(cli.TokenPath(env))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -97,9 +97,9 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 		case "notifications/initialized", "ping":
 			rpcReply(w, req.ID, map[string]any{}, nil)
 		case "tools/list":
-			tools := mcpTools(st, hand)
+			tools := Tools(st, hand)
 			if inSkill != "" {
-				tools = skillTools(env, st, hand, inSkill, tools)
+				tools = SkillTools(env, st, hand, inSkill, tools)
 			}
 			rpcReply(w, req.ID, map[string]any{"tools": tools}, nil)
 		case "tools/call":
@@ -109,12 +109,12 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			}
 			json.Unmarshal(req.Params, &p)
 			if inSkill != "" {
-				if why := skillGate(env, st, hand, inSkill, strings.TrimPrefix(p.Name, "laib_")); why != "" {
+				if why := SkillGate(env, st, hand, inSkill, strings.TrimPrefix(p.Name, "laib_")); why != "" {
 					rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": "nicht ausgeführt: " + why}}, "isError": true}, nil)
 					return
 				}
 			}
-			out, code := mcpCall(r.Context(), env, st, hand, p.Name, p.Args)
+			out, code := Call(r.Context(), env, st, hand, p.Name, p.Args)
 			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != cli.ExitOK}, nil)
 		default:
 			rpcReply(w, req.ID, nil, &rpcError{-32601, "method not found: " + req.Method})
@@ -122,23 +122,23 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 	}
 }
 
-// mcpTools derives the tool list from the verb table.
-func mcpTools(st *state.State, hand string) []map[string]any {
+// Tools derives the tool list from the verb table.
+func Tools(st *state.State, hand string) []map[string]any {
 	var tools []map[string]any
-	for _, v := range verbs {
-		if !mcpVerbs[v.name] || !policy.Allowed(st.Policy, hand, v.tier) || !policy.MayVerb(st.Policy, hand, v.name) {
+	for _, v := range Verbs {
+		if !Allowed[v.Name] || !policy.Allowed(st.Policy, hand, v.Tier) || !policy.MayVerb(st.Policy, hand, v.Name) {
 			continue
 		}
 		tools = append(tools, map[string]any{
-			"name":        "laib_" + v.name,
-			"description": v.help + " (tier " + v.tier + ")",
-			"inputSchema": mcpSchema(st, v.name),
+			"name":        "laib_" + v.Name,
+			"description": v.Help + " (tier " + v.Tier + ")",
+			"inputSchema": mcpSchema(st, v.Name),
 		})
 	}
 	return tools
 }
 
-func inputSchema(verb string) map[string]any {
+func InputSchema(verb string) map[string]any {
 	props := map[string]any{
 		"args": map[string]any{"type": "string", "description": "arguments exactly as on the command line, e.g. \"media --since 2h\" or \"\\\"reason text\\\"\""},
 	}
@@ -152,45 +152,45 @@ func inputSchema(verb string) map[string]any {
 	return map[string]any{"type": "object", "properties": props}
 }
 
-// mcpCall runs one verb as the hand, capturing stdout.
-func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]any) (string, int) {
+// Call runs one verb as the hand, capturing stdout.
+func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string, args map[string]any) (string, int) {
 	verbName := strings.TrimPrefix(name, "laib_")
-	var v *verb
-	for i := range verbs {
-		if verbs[i].name == verbName {
-			v = &verbs[i]
+	var v *cli.Verb
+	for i := range Verbs {
+		if Verbs[i].Name == verbName {
+			v = &Verbs[i]
 		}
 	}
-	if v == nil || !mcpVerbs[verbName] {
+	if v == nil || !Allowed[verbName] {
 		return "unknown tool " + name, cli.ExitUsage
 	}
-	if !policy.Allowed(st.Policy, hand, v.tier) {
-		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), cli.ExitRefused
+	if !policy.Allowed(st.Policy, hand, v.Tier) {
+		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.Tier), cli.ExitRefused
 	}
 	if !policy.MayVerb(st.Policy, hand, verbName) {
 		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), cli.ExitRefused
 	}
-	callArgs, stdin, err := mcpArgv(st, verbName, args)
+	callArgs, stdin, err := Argv(st, verbName, args)
 	if err != nil {
 		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", cli.ExitUsage
 	}
 	// reads run side by side; a verb that changes something runs alone (#289)
-	if v.tier == "read" && verbName != "skill" && verbName != "template" {
-		mcpMu.RLock()
-		defer mcpMu.RUnlock()
+	if v.Tier == "read" && verbName != "skill" && verbName != "template" {
+		Mu.RLock()
+		defer Mu.RUnlock()
 	} else {
-		mcpMu.Lock()
-		defer mcpMu.Unlock()
+		Mu.Lock()
+		defer Mu.Unlock()
 	}
 	// the verb writes to its own buffers (#43, #289): neither the process's
 	// stdout nor its stderr is ever swapped, so nothing another goroutine
 	// prints can land in a reply
 	var buf, errBuf bytes.Buffer
-	callEnv := &cliEnv{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf}
+	callEnv := &cli.Env{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf}
 	if stdin != "" {
 		callEnv.In = strings.NewReader(stdin)
 	}
-	code := v.run(ctx, callEnv, callArgs)
+	code := v.Run(ctx, callEnv, callArgs)
 	out := buf.String()
 	if e := strings.TrimSpace(errBuf.String()); e != "" {
 		if out != "" {
@@ -201,8 +201,8 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	return out, code
 }
 
-// splitArgs splits a command-line string, honouring double quotes.
-func splitArgs(s string) []string {
+// SplitArgs splits a command-line string, honouring double quotes.
+func SplitArgs(s string) []string {
 	var out []string
 	var cur strings.Builder
 	inQuote := false
