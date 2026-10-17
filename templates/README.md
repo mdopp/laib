@@ -30,7 +30,7 @@ Matter) is declared `lan: false` or listens on loopback.
 OIDC clients (immich, vaultwarden, audiobookshelf, paperless) fetch Authelia's
 discovery document over HTTPS: they need a certificate they trust — real
 certificates (#45, the trial domain at deSEC), never `tls: internal`.
-Radicale binds LDAP with LLDAP's read-only account `radicale`
+Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`),
 (`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
 auth template), never as the admin. Home Assistant's integrations (three
 Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server, Frage as
@@ -56,7 +56,7 @@ conversation agent) are set up by hand once; with the optional secret
 | beets | — | music tagging over the file share's music folder, admins only |
 | home-assistant | — | Home Assistant, Z-Wave JS UI and the Matter server on the host network; the house and the voice brain (ADR 0015) |
 | immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
-| file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network |
+| file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Haus, the shared `SHARE_USER` as fallback (#296) |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share |
 | usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |

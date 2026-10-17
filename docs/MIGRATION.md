@@ -47,8 +47,18 @@ file moves out.
 
 ## Order
 
-1. **Laib binary + state repo**, nothing applied. `laib init --domain …`,
-   then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
+1. **Laib binary + state repo**, nothing applied. `install-box.sh` (as in
+   `docs/INSTALL.md`; it installs the binaries and the unit and runs
+   `laib init --domain …`) also writes the box's own config, as on a stick
+   install: journald persistent with at most 4G and four weeks
+   (`/etc/systemd/journald.conf.d/50-laib.conf`, journald restarted) and
+   podman's log driver pinned to journald
+   (`~/.config/containers/containers.conf.d/50-laib.conf`, a drop-in:
+   ServiceBay's own containers.conf stays; its containers keep logging to
+   journald, Fedora CoreOS's default). The Kraftwerk is never reinstalled, so
+   this is the only way these reach it; `laib diag` is `rot box` while either
+   file is missing, and `install-box.sh --box-config` writes just these two (#281).
+   Then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
    --templates <servicebay>/templates,<each external registry>/templates
    --out /mnt/data/laib/migration` writes a draft `<name>/` per installed
    template — laib.yml with the routes the box's proxy hosts have and the auth
@@ -149,12 +159,69 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | home-assistant | Z-Wave JS server on 3001 through `sb-external-settings.json` (3000 was NPM's) | zwave-js-ui's own `settings.json`, its default 3000 | edited; Home Assistant's Z-Wave JS entry (`.storage/core.config_entries`) follows to `:3000` |
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
+| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
+| immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
+| file-share | Syncthing folders on those paths | the same folders on the new paths | `config.xml` rewritten with the photos, folder and device IDs kept: the devices keep syncing, nothing is re-paired |
 
 Everything else the built-ins mount sits at ServiceBay's paths already (auth,
 adguard, the Home Assistant config and the Z-Wave store, immich upload and
 pgdata, paperless, radicale, media, mosquitto, beets, esphome, llama) and is
 adopted in place.
+
+**Immich's external libraries (#263, the owner's decision on #229).**
+ServiceBay mounted all of `file-share/data` at `/mnt/photos`; the built-in
+mounts only `file-share/data/photos` there. The photos move into that
+layout, one folder per library, so no library's import path holds another
+library's photos (a Shared library on `/mnt/photos` would import every
+user's photos a second time). It runs after file-share (its Syncthing config
+is in Laib's folder by then) and before `laib add immich`, with Immich and
+both Syncthings stopped:
+
+```sh
+systemctl --user stop file-share-syncthing.service      # Laib's, from the file-share step
+scripts/move-servicebay-data.sh --dry-run immich        # per library: asset paths, checksums, asset files; what follows the IDs
+scripts/move-servicebay-data.sh immich
+systemctl --user start file-share-syncthing.service
+```
+
+- **The photos are renamed**, on the same disk, not copied: the library is
+  the biggest data on the box. A folder on another filesystem is refused.
+- **Immich's database is rewritten in place.** Immich has no API that
+  moves an asset, and its own `immich-admin change-media-location` swaps one
+  prefix in every table (it is meant for the upload folder), so the wrapper
+  starts Immich's Postgres image on `immich/pgdata` (never beside a running
+  unit or container that has it open), takes a `pg_dump` with Postgres's
+  own `pg_dump` to `immich/before-library-move.dump`, and the mover rewrites
+  in **one transaction**: the asset paths of each library, their files
+  (XMP sidecars), the path checksums Immich computes for an external asset
+  (`sha1("path:" + path)`, recomputed for the new path) and the libraries'
+  import paths. Each UPDATE must hit exactly the rows the dry run counted,
+  or the transaction is rolled back. Asset IDs do not change, so albums,
+  people, favourites, descriptions and edits, which hang on the ID, stay.
+  A path of those libraries in a table it does not rewrite (person
+  thumbnails, profile images, the storage template's move history, another
+  library's assets) or an asset already at a new path is refused.
+- **Syncthing follows.** Folders at or below a moved path get the new path
+  in `file-share/syncthing-config/config.xml` (ServiceBay's version kept as
+  `config.xml.servicebay`); the folder marker moves with the folder, IDs
+  stay. A folder that contains a moved path is refused (its devices would
+  delete those photos), as is one that would contain a moved library
+  afterwards (its devices would get photos that are not theirs).
+- **Cut off anywhere**, the next run finishes it from the journal
+  `immich/library-move.json`; a finished run does nothing. The dump is
+  kept.
+- **Proof:** boot.yml `library-move` runs it on Immich v3.3.1 and its
+  Postgres (the Kraftwerk's images), with two Syncthings. One of them stands
+  in for a phone. Immich's API shows the same asset IDs at the new paths
+  with albums, favourites, sidecar descriptions, a named person and an
+  edit. A rescan adds nothing and takes nothing offline. A photo the phone
+  takes afterwards lands in `photos/<user>/` and in Immich, and the dump
+  restores. A description typed into Immich for a photo of a read-only
+  library does not survive Immich itself (v3.3.1 fails to write the
+  sidecar, then clears the description on re-reading the metadata). That
+  happens on ServiceBay as well, so the descriptions that last are the
+  sidecars' and the files'.
 
 **Values and images.** `scripts/migrate-servicebay.py` prints one
 `laib add <name> …` line per built-in. It carries the box's values under
@@ -174,14 +241,6 @@ change with its snapshot.
 **Open, the operator's decision (#229).** Until it is made, the default
 applies:
 
-- **Immich's external libraries.** The box mounts all of `file-share/data`
-  at `/mnt/photos`, and the libraries are `/mnt/photos/<user>/photos` and
-  `/mnt/photos/photos`. The built-in mounts `PHOTOS_RO`, by default
-  `file-share/data/photos`, there. Default: those library paths no longer
-  exist and Immich marks their assets offline.
-- **Samba's per-user accounts.** ServiceBay synced LLDAP users into Samba;
-  the built-in has the one `SHARE_USER`. Default: devices mount with that
-  account; the personal ones are gone after the first restart.
 - **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`).
   The built-in declares no `oidc:`, so Authelia no longer knows the client.
   Default: the login button fails, and users log in with their Home
@@ -261,7 +320,13 @@ Every `laib apply` snapshots first. Handing a service back to ServiceBay is
 Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
 <name>.service`. ServiceBay's data paths were only copied from, so they are as
 it left them; for home-assistant, first put the two `<file>.servicebay` files
-back (zwave-js `settings.json`, `.storage/core.config_entries`). NPM comes back
+back (zwave-js `settings.json`, `.storage/core.config_entries`). For immich,
+the photos moved: rename each `file-share/data/photos/<user>` back to
+`file-share/data/<user>/photos` and `file-share/data/photos/shared` to
+`file-share/data/photos` (via a temporary name), restore the dump into the
+stopped database (`pg_restore --clean --if-exists -d immich
+immich/before-library-move.dump` in Immich's Postgres image), put
+`config.xml.servicebay` back, and delete `immich/library-move.json`. NPM comes back
 the same way until step 7. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
