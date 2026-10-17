@@ -1,4 +1,7 @@
-package main
+// Package backup is restic for the box (#309): `laib backup` and its
+// monthly check, `laib restore`, the pre-repair snapshot's prep and the
+// recovery sheet. Trust kernel: snapshots fail closed (ADR 0019 §2c).
+package backup
 
 import (
 	"context"
@@ -17,14 +20,15 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// resticPassword is the secret name; generated on first backup, print it and
+// ResticPassword is the secret name; generated on first backup, print it and
 // keep it with the age key.
-const resticPassword = "RESTIC_PASSWORD"
+const ResticPassword = "RESTIC_PASSWORD"
 
 func restic(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
 	// inside podman's user namespace (rootless): the services' files belong
@@ -45,10 +49,10 @@ func restic(ctx context.Context, st *state.State, pw string, args ...string) (st
 	return text, nil
 }
 
-// resticRun is the seam tests swap; it defaults to the real binary.
-var resticRun = restic
+// ResticRun is the seam tests swap; it defaults to the real binary.
+var ResticRun = restic
 
-func backupPrep(env *cliEnv) (*state.State, string, error) {
+func Prep(env *cli.Env) (*state.State, string, error) {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return nil, "", err
@@ -60,13 +64,13 @@ func backupPrep(env *cliEnv) (*state.State, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	pw, ok := sec[resticPassword]
+	pw, ok := sec[ResticPassword]
 	if fromSheet := os.Getenv("RESTIC_PASSWORD"); fromSheet != "" {
 		// the password from the recovery sheet (a fresh box, #40): it is the
 		// truth, and it goes into secrets.age so the next run has it
 		pw, ok = fromSheet, true
-		if sec[resticPassword] != fromSheet {
-			sec[resticPassword] = fromSheet
+		if sec[ResticPassword] != fromSheet {
+			sec[ResticPassword] = fromSheet
 			if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
 				return nil, "", err
 			}
@@ -79,7 +83,7 @@ func backupPrep(env *cliEnv) (*state.State, string, error) {
 			return nil, "", fmt.Errorf("the repo %s exists but RESTIC_PASSWORD is not in secrets.age: the password from the recovery sheet — RESTIC_PASSWORD=… laib restore --box latest, or laib secret set RESTIC_PASSWORD", st.Box.Backup.Repo)
 		}
 		pw = secrets.Generate()
-		sec[resticPassword] = pw
+		sec[ResticPassword] = pw
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
 			return nil, "", err
 		}
@@ -100,26 +104,26 @@ func repoExists(ctx context.Context, st *state.State) bool {
 		_, err := os.Stat(filepath.Join(repo, "config"))
 		return err == nil
 	}
-	out, err := resticRun(ctx, st, "x", "cat", "config")
+	out, err := ResticRun(ctx, st, "x", "cat", "config")
 	if err == nil {
 		return true
 	}
 	return !strings.Contains(strings.ToLower(out+" "+err.Error()), "does not exist")
 }
 
-func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
-	st, pw, err := backupPrep(env)
+func Cmd(ctx context.Context, env *cli.Env, args []string) int {
+	st, pw, err := Prep(env)
 	if err != nil {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
-		return exitRefusedMsg(env, env.Actor+" may not run a backup")
+		return cli.Refused(env, env.Actor+" may not run a backup")
 	}
 	if len(args) > 0 && args[0] == "check" {
 		return backupCheck(ctx, env, st, pw)
 	}
-	if _, err := resticRun(ctx, st, pw, "cat", "config"); err != nil {
-		if _, err := resticRun(ctx, st, pw, "init"); err != nil {
+	if _, err := ResticRun(ctx, st, pw, "cat", "config"); err != nil {
+		if _, err := ResticRun(ctx, st, pw, "init"); err != nil {
 			journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "backup", Result: "red", Detail: err.Error()})
 			return env.Fail(err)
 		}
@@ -127,7 +131,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	paths := render.BackupPaths(st, env.Paths.State, env.Paths.Journal)
 	// quiesce: true paths (databases, #40) are snapshotted with their service
 	// stopped — under the lock and paused, so converge keeps its hands off
-	unlock, code := takeLock(env, st, "backup")
+	unlock, code := run.Lock(env, st, "backup")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -149,7 +153,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	start := time.Now()
-	out, err := resticRun(ctx, st, pw, append([]string{"backup", "--tag", "laib", "--exclude-caches"}, paths...)...)
+	out, err := ResticRun(ctx, st, pw, append([]string{"backup", "--tag", "laib", "--exclude-caches"}, paths...)...)
 	for _, name := range quiesced {
 		for _, u := range st.Services[name].UnitNames() {
 			sysd.Run(ctx, "systemctl", "--user", "start", u)
@@ -167,7 +171,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	entry.Result = "green"
 	journal.Append(env.Paths.Journal, entry)
-	if _, err := resticRun(ctx, st, pw, "forget", "--tag", "laib", "--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12", "--prune"); err != nil {
+	if _, err := ResticRun(ctx, st, pw, "forget", "--tag", "laib", "--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12", "--prune"); err != nil {
 		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "backup", Result: "red", Detail: "forget: " + err.Error()})
 	}
 	if env.JSON {
@@ -184,7 +188,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 // the repo's data, and one service's first backed-up path is restored into
 // a scratch directory and compared with what is on disk. The result is a
 // journal line (verb backup, reason check) that diag and the box page read.
-func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) int {
+func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw string) int {
 	start := time.Now()
 	entry := journal.Entry{Actor: env.Actor, Verb: "backup", Reason: "check"}
 	fail1 := func(what string, err error) int {
@@ -192,13 +196,13 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 		journal.Append(env.Paths.Journal, entry)
 		return env.Fail(fmt.Errorf("%s: %w", what, err))
 	}
-	if out, err := resticRun(ctx, st, pw, "check", "--read-data-subset=5%"); err != nil {
+	if out, err := ResticRun(ctx, st, pw, "check", "--read-data-subset=5%"); err != nil {
 		return fail1("restic check", fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
 	// one service with a backed-up path: the first in dependency order
 	var probe string
 	for _, name := range st.Order(st.ServiceNames()) {
-		if ps := snapshotPaths(st, st.Services[name]); len(ps) > 0 && ps[0] != "" {
+		if ps := state.SnapshotPaths(st, st.Services[name]); len(ps) > 0 && ps[0] != "" {
 			probe = ps[0]
 			break
 		}
@@ -211,7 +215,7 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 		return fail1("scratch", err)
 	}
 	defer os.RemoveAll(scratch)
-	if out, err := resticRun(ctx, st, pw, "restore", "latest:"+probe, "--target", scratch); err != nil {
+	if out, err := ResticRun(ctx, st, pw, "restore", "latest:"+probe, "--target", scratch); err != nil {
 		return fail1("restore "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
 	if out, err := sysd.Run(ctx, "diff", "-rq", scratch, probe); err != nil && !strings.Contains(out, "Only in "+probe) {
@@ -224,14 +228,14 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 	return cli.ExitOK
 }
 
-// cmdRestore: `laib restore <snapshot|latest> [service]` restores one
+// Restore: `laib restore <snapshot|latest> [service]` restores one
 // service's declared paths (replacing what is there) and applies it;
 // `laib restore --box <snapshot|latest>` is disaster recovery on a fresh
 // box (#40): the state repo and the journal first, then every service in
 // dependency order with its units stopped and its paths replaced, then one
 // apply. The password comes from secrets.age or, on a fresh box, from the
 // recovery sheet (RESTIC_PASSWORD). Everything under the one lock.
-func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
+func Restore(ctx context.Context, env *cli.Env, args []string) int {
 	box := false
 	var rest []string
 	for _, a := range args {
@@ -245,15 +249,15 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 || (!box && len(args) < 2) {
 		return env.Fail(errors.New("usage: laib restore <snapshot|latest> <service>  |  laib restore --box <snapshot|latest>"))
 	}
-	st, pw, err := backupPrep(env)
+	st, pw, err := Prep(env)
 	if err != nil {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not restore")
+		return cli.Refused(env, env.Actor+" may not restore")
 	}
 	if box && proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "restore --box is the human's step")
+		return cli.Refused(env, "restore --box is the human's step")
 	}
 	snapshot, only := args[0], ""
 	if len(args) > 1 {
@@ -267,7 +271,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		if !ok {
 			return env.Fail(fmt.Errorf("unknown service %q", only))
 		}
-		paths = snapshotPaths(st, svc)
+		paths = state.SnapshotPaths(st, svc)
 		if len(paths) == 0 {
 			return env.Fail(fmt.Errorf("%s declares no data paths to restore", only))
 		}
@@ -276,7 +280,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	// pre-restore snapshot below exists — otherwise latest would be that one,
 	// the state just before the restore, and nothing would change (VM run 25).
 	if snapshot == "latest" {
-		out, err := resticRun(ctx, st, pw, "snapshots", "--json", "--tag", "laib", "--latest", "1")
+		out, err := ResticRun(ctx, st, pw, "snapshots", "--json", "--tag", "laib", "--latest", "1")
 		if err != nil {
 			return env.Fail(err)
 		}
@@ -291,7 +295,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// the one lock from here to the final verify, and a pause so a converge
 	// that outlives a killed restore does not restart on half-written data (#39)
-	unlock, code := takeLock(env, st, "restore")
+	unlock, code := run.Lock(env, st, "restore")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -301,7 +305,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		defer apply.Resume(env.Paths, only)
 	}
 	// What is there now goes into the repo first, so a restore is reversible.
-	if _, err := resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-restore"}, paths...)...); err != nil {
+	if _, err := ResticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-restore"}, paths...)...); err != nil {
 		return env.Fail(err)
 	}
 	for _, unit := range unitsOf(st, only) {
@@ -315,7 +319,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	restorePaths := func(ps []string) (string, error) {
 		var outs []string
 		for _, p := range ps {
-			out, err := resticRun(ctx, st, pw, "restore", snapshot+":"+p, "--target", p, "--delete")
+			out, err := ResticRun(ctx, st, pw, "restore", snapshot+":"+p, "--target", p, "--delete")
 			outs = append(outs, out)
 			if err != nil {
 				return strings.Join(outs, "\n"), err
@@ -348,12 +352,12 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	if box {
 		// the restored state is the truth now: every service, roles first,
 		// stopped while its paths are replaced; then one apply brings it up
-		if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil && sec[resticPassword] != "" {
-			pw = sec[resticPassword]
+		if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil && sec[ResticPassword] != "" {
+			pw = sec[ResticPassword]
 		}
 		names := st.Order(st.ServiceNames())
 		for _, name := range names {
-			ps := snapshotPaths(st, st.Services[name])
+			ps := state.SnapshotPaths(st, st.Services[name])
 			if len(ps) == 0 {
 				continue
 			}
@@ -377,7 +381,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 		}()
 		fmt.Fprintf(env.W(), "Box wiederhergestellt aus %s: State, Journal, %d Dienste; jetzt apply\n", snapshot, len(names))
 	}
-	return applyHeld(ctx, env, st, only, "restore "+snapshot)
+	return run.ApplyHeld(ctx, env, st, only, "restore "+snapshot)
 }
 
 func unitsOf(st *state.State, only string) []string {

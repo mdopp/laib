@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/skill"
 	"github.com/mdopp/laib/internal/state"
 )
@@ -48,21 +49,21 @@ prompt: Schau nach.
 // the skill file and the prompt can ask, they cannot get.
 func TestASkillNeverGetsAToolAboveTheCeiling(t *testing.T) {
 	env, st := skillBox(t, "propose", map[string]string{"probe": probeSkill}, nil)
-	sk := findSkill(skillsFor(env, st, "ops"), "probe")
+	sk := findSkill(mcp.SkillsFor(env, st, "ops"), "probe")
 	if sk == nil || sk.Status != "active" || sk.Source != "state" {
 		t.Fatalf("the added skill is not active: %+v", sk)
 	}
 	if slices.Contains(sk.Granted, "restart") || sk.Denied["restart"] == "" || !slices.Contains(sk.Granted, "status") {
 		t.Fatalf("granted %v, denied %v", sk.Granted, sk.Denied)
 	}
-	if why := skillGate(env, st, "ops", "probe", "restart"); why == "" {
+	if why := mcp.SkillGate(env, st, "ops", "probe", "restart"); why == "" {
 		t.Fatal("the kernel let a skill call restart above the ceiling propose")
 	}
-	if why := skillGate(env, st, "ops", "probe", "status"); why != "" {
+	if why := mcp.SkillGate(env, st, "ops", "probe", "status"); why != "" {
 		t.Fatalf("status refused: %s", why)
 	}
 	var listed []string
-	for _, tl := range skillTools(env, st, "ops", "probe", mcpTools(st, "ops")) {
+	for _, tl := range mcp.SkillTools(env, st, "ops", "probe", mcp.Tools(st, "ops")) {
 		listed = append(listed, tl["name"].(string))
 	}
 	if strings.Join(listed, ",") != "laib_status,laib_note" {
@@ -72,10 +73,10 @@ func TestASkillNeverGetsAToolAboveTheCeiling(t *testing.T) {
 	// at ceiling apply restart is granted, and a verb the skill did not name
 	// stays refused although the hand could use it
 	env, st = skillBox(t, "apply", map[string]string{"probe": probeSkill}, nil)
-	if why := skillGate(env, st, "ops", "probe", "restart"); why != "" {
+	if why := mcp.SkillGate(env, st, "ops", "probe", "restart"); why != "" {
 		t.Fatalf("restart at ceiling apply: %s", why)
 	}
-	if why := skillGate(env, st, "ops", "probe", "exec"); why == "" {
+	if why := mcp.SkillGate(env, st, "ops", "probe", "exec"); why == "" {
 		t.Fatal("a skill called a tool it does not name")
 	}
 }
@@ -85,17 +86,17 @@ func TestASkillNeverGetsAToolAboveTheCeiling(t *testing.T) {
 func TestASkillNamingAToolOutsideTheVocabularyIsRefused(t *testing.T) {
 	greedy := strings.Replace(probeSkill, "[status, restart, note]", "[status, approve, note]", 1)
 	env, st := skillBox(t, "apply", map[string]string{"gierig": greedy, "stumm": strings.Replace(probeSkill, ", note]", "]", 1)}, nil)
-	sks := skillsFor(env, st, "ops")
+	sks := mcp.SkillsFor(env, st, "ops")
 	if sk := findSkill(sks, "gierig"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "approve") {
 		t.Fatalf("%+v", sk)
 	}
 	if sk := findSkill(sks, "stumm"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "note") {
 		t.Fatalf("a skill without note must be refused: %+v", sk)
 	}
-	if why := skillGate(env, st, "ops", "gierig", "status"); why == "" {
+	if why := mcp.SkillGate(env, st, "ops", "gierig", "status"); why == "" {
 		t.Fatal("a refused skill's call ran")
 	}
-	if tl := skillTools(env, st, "ops", "gierig", mcpTools(st, "ops")); len(tl) != 0 {
+	if tl := mcp.SkillTools(env, st, "ops", "gierig", mcp.Tools(st, "ops")); len(tl) != 0 {
 		t.Fatalf("a refused skill sees tools: %v", tl)
 	}
 }
@@ -105,17 +106,17 @@ func TestASkillNamingAToolOutsideTheVocabularyIsRefused(t *testing.T) {
 // refused.
 func TestAPausedSkillsCallsAreRefused(t *testing.T) {
 	env, st := skillBox(t, "apply", map[string]string{"probe": probeSkill}, map[string]string{"probe": "paused", "morgenbericht": "paused"})
-	sks := skillsFor(env, st, "ops")
+	sks := mcp.SkillsFor(env, st, "ops")
 	for name, want := range map[string]string{"probe": "paused", "morgenbericht": "paused", "routineblick": "active", "vorfall": "active"} {
 		sk := findSkill(sks, name)
 		if sk == nil || sk.Status != want {
 			t.Fatalf("%s: %+v, want %s", name, sk, want)
 		}
 	}
-	if why := skillGate(env, st, "ops", "probe", "status"); !strings.Contains(why, "ruht") {
+	if why := mcp.SkillGate(env, st, "ops", "probe", "status"); !strings.Contains(why, "ruht") {
 		t.Fatalf("a paused skill's call: %q", why)
 	}
-	if why := skillGate(env, st, "ops", "gibtsnicht", "status"); why == "" {
+	if why := mcp.SkillGate(env, st, "ops", "gibtsnicht", "status"); why == "" {
 		t.Fatal("a call for an unknown skill ran")
 	}
 	if v := findSkill(sks, "vorfall"); v.Source != "builtin" || !slices.Contains(v.Granted, "restart") || v.Trigger.Event != "red" {
@@ -128,14 +129,14 @@ func TestAPausedSkillsCallsAreRefused(t *testing.T) {
 func TestASkillsMoreToolsAreCheckedLikeItsTools(t *testing.T) {
 	wide := strings.Replace(probeSkill, "output: note", "more: [look, plan, restart]\noutput: note", 1)
 	env, st := skillBox(t, "propose", map[string]string{"weit": wide, "gierig": strings.Replace(wide, "[look, plan, restart]", "[look, approve]", 1)}, nil)
-	sks := skillsFor(env, st, "ops")
+	sks := mcp.SkillsFor(env, st, "ops")
 	if sk := findSkill(sks, "weit"); sk == nil || sk.Status != "active" || !slices.Contains(sk.Granted, "look") || !slices.Contains(sk.Granted, "plan") || slices.Contains(sk.Granted, "restart") {
 		t.Fatalf("%+v", sk)
 	}
 	if sk := findSkill(sks, "gierig"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "approve") {
 		t.Fatalf("%+v", sk)
 	}
-	if why := skillGate(env, st, "ops", "weit", "plan"); why != "" {
+	if why := mcp.SkillGate(env, st, "ops", "weit", "plan"); why != "" {
 		t.Fatalf("plan: %s", why)
 	}
 }

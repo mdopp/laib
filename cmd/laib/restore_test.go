@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -86,7 +88,7 @@ func newRbox(t *testing.T) *rbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(context.Background(), b.env, st, "", "test: first apply"); rc != cli.ExitOK {
+	if rc := run.Apply(context.Background(), b.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	b.calls = nil
@@ -115,15 +117,15 @@ func copyGolden(t *testing.T, src, dst string) {
 // inside that minute. A restore starts what it stopped.
 func TestRestoreStartsWhatItStopped(t *testing.T) {
 	b := newRbox(t)
-	realRestic := resticRun
-	t.Cleanup(func() { resticRun = realRestic })
-	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+	realRestic := backup.ResticRun
+	t.Cleanup(func() { backup.ResticRun = realRestic })
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
 		}
 		return "", nil
 	}
-	if rc := cmdRestore(context.Background(), b.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
+	if rc := backup.Restore(context.Background(), b.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
 		t.Fatalf("restore rc %d: %s", rc, strings.Join(b.calls, "\n"))
 	}
 	stopped, started := -1, -1

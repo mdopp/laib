@@ -11,83 +11,80 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
+	"github.com/mdopp/laib/internal/envelope"
+	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/intake"
+	"github.com/mdopp/laib/internal/mcp"
+	"github.com/mdopp/laib/internal/registry"
 )
 
 // Version is set by the release build.
 var Version = "dev"
 
-// verb is one CLI command. tier is the policy tier it needs (docs/STATE.md).
-type verb struct {
-	name string
-	tier string
-	help string
-	run  func(ctx context.Context, env *cliEnv, args []string) int
-}
-
 // cliEnv is what every verb gets (internal/cli).
 type cliEnv = cli.Env
 
-// verbs is filled in init so the MCP handler (reached through cmdServe) may
-// read it without an initialization cycle.
-var verbs []verb
-
 func init() {
-	verbs = []verb{
-		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
-		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", diag.Cmd},
-		{"plan", "read", "render the state and diff it against the box", cmdPlan},
-		{"apply", "apply", "snapshot, write, reload, restart, verify", cmdApply},
-		{"inspect", "read", "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", cmdInspect},
-		{"read", "read", "<service> <path>: a file in the service's data paths, secrets redacted", cmdRead},
-		{"write", "apply", "<service> <path> (stdin): a file in the service's data paths, inside the envelope", cmdWrite},
-		{"look", "read", "<service> [--container c] -- <cat|ls|grep|ps|…>: read-only, in the service's own container, unbudgeted", cmdLook},
-		{"exec", "apply", "<service> [--container c] -- <cmd>: run inside the service's own container, budgeted, snapshot first, output journaled", cmdExec},
-		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", cmdRestart},
-		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
-		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
-		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", cmdWish},
-		{"updates", "read", "newer patch and minor releases of every pinned image, from the registry (#287)", cmdUpdates},
-		{"skill", "read", "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", cmdSkill},
-		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
-		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
-		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
-		{"backup", "propose", "restic snapshot of state, journal and declared data paths", cmdBackup},
-		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", cmdRestore},
-		{"converge", "apply", "bring the box back to the state: re-apply drift, restart inactive units, within a budget", cmdConverge},
-		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
-		{"context", "read", "starter bundle for an agent session", cmdContext},
-		{"template", "read", "lint <dir> | list | sync | update <service>", cmdTemplate},
-		{"add", "apply", "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", cmdAdd},
-		{"remove", "apply", "<service>: stop its units, take it out of the state, apply; data stays (humans only)", cmdRemove},
-		{"inbox", "read", "open proposals (--all for decided ones too)", cmdInbox},
-		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
-		{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
-		{"reject", "apply", "drop a proposal", cmdReject},
-		{"adopt", "propose", "adopt an unmanaged Quadlet folder into services/", cmdAdopt},
-		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
-		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},
-		{"secret", "apply", "set <NAME> (value on stdin) | list | rotate <NAME>", cmdSecret},
-		{"disk", "apply", "status | add <device>: the data RAID; add joins the mirror (humans only)", disk.Cmd},
-		{"init", "apply", "first setup: key, state repo skeleton", cmdInit},
-		{"serve", "read", "daemon: /ready, the three pages", cmdServe},
-		{"version", "read", "print the version", cmdVersion},
-		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
-		{"family-card", "read", "print the one-page card for the family: what the box does, what to do when it is down, whom to call", cmdFamilyCard},
-		{"recovery-sheet", "destroy", "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", cmdRecoverySheet},
-		{"pause", "apply", "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", cmdPause},
-		{"resume", "apply", "<service>: lift a pause", cmdResume},
+	inbox.Approved = intake.FileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
+	mcp.Version = Version
+	envelope.FileIssue = intake.Issue // an escalation becomes a needs-claude ticket (#56)
+	mcp.Verbs = []cli.Verb{
+		{Name: "status", Tier: "read", Help: "one line per service; first line is the readiness state", Run: cmdStatus},
+		{Name: "diag", Tier: "read", Help: "findings with severity and a fix verb each: units, health, drift, disk", Run: diag.Cmd},
+		{Name: "plan", Tier: "read", Help: "render the state and diff it against the box", Run: cmdPlan},
+		{Name: "apply", Tier: "apply", Help: "snapshot, write, reload, restart, verify", Run: cmdApply},
+		{Name: "inspect", Tier: "read", Help: "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", Run: envelope.Inspect},
+		{Name: "read", Tier: "read", Help: "<service> <path>: a file in the service's data paths, secrets redacted", Run: envelope.Read},
+		{Name: "write", Tier: "apply", Help: "<service> <path> (stdin): a file in the service's data paths, inside the envelope", Run: envelope.Write},
+		{Name: "look", Tier: "read", Help: "<service> [--container c] -- <cat|ls|grep|ps|…>: read-only, in the service's own container, unbudgeted", Run: envelope.Look},
+		{Name: "exec", Tier: "apply", Help: "<service> [--container c] -- <cmd>: run inside the service's own container, budgeted, snapshot first, output journaled", Run: envelope.Exec},
+		{Name: "restart", Tier: "apply", Help: "<service>: restart its units and verify, inside the envelope", Run: envelope.Restart},
+		{Name: "escalate", Tier: "propose", Help: "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", Run: envelope.Escalate},
+		{Name: "note", Tier: "propose", Help: "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", Run: cmdNote},
+		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: intake.Wish},
+		{Name: "updates", Tier: "read", Help: "newer patch and minor releases of every pinned image, from the registry (#287)", Run: registry.Updates},
+		{Name: "skill", Tier: "read", Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
+		{Name: "operator", Tier: "apply", Help: "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", Run: cmdOperator},
+		{Name: "logs", Tier: "read", Help: "journald for every unit of a service, secrets redacted (--since 1h)", Run: cmdLogs},
+		{Name: "rollback", Tier: "apply", Help: "revert the last (or a given) state commit and apply", Run: inbox.Rollback},
+		{Name: "backup", Tier: "propose", Help: "restic snapshot of state, journal and declared data paths", Run: backup.Cmd},
+		{Name: "restore", Tier: "apply", Help: "<snapshot|latest> [service] restore declared paths, then apply", Run: backup.Restore},
+		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: cmdConverge},
+		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h)", Run: cmdJournal},
+		{Name: "context", Tier: "read", Help: "starter bundle for an agent session", Run: cmdContext},
+		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: cmdTemplate},
+		{Name: "add", Tier: "apply", Help: "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", Run: inbox.Add},
+		{Name: "remove", Tier: "apply", Help: "<service>: stop its units, take it out of the state, apply; data stays (humans only)", Run: cmdRemove},
+		{Name: "inbox", Tier: "read", Help: "open proposals (--all for decided ones too)", Run: inbox.List},
+		{Name: "propose", Tier: "propose", Help: "commit the working tree to a proposal branch and an inbox entry", Run: inbox.Propose},
+		{Name: "approve", Tier: "apply", Help: "merge a proposal and apply it (never your own)", Run: inbox.Approve},
+		{Name: "reject", Tier: "apply", Help: "drop a proposal", Run: inbox.Reject},
+		{Name: "adopt", Tier: "propose", Help: "adopt an unmanaged Quadlet folder into services/", Run: cmdAdopt},
+		{Name: "ignore", Tier: "propose", Help: "record an unmanaged unit as deliberately unmanaged", Run: cmdIgnore},
+		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", Run: cmdToken},
+		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME>", Run: cmdSecret},
+		{Name: "disk", Tier: "apply", Help: "status | add <device>: the data RAID; add joins the mirror (humans only)", Run: disk.Cmd},
+		{Name: "init", Tier: "apply", Help: "first setup: key, state repo skeleton", Run: cmdInit},
+		{Name: "serve", Tier: "read", Help: "daemon: /ready, the three pages", Run: cmdServe},
+		{Name: "version", Tier: "read", Help: "print the version", Run: cmdVersion},
+		{Name: "self", Tier: "apply", Help: "rollback: the previous binaries back and the units restarted (humans only)", Run: cmdSelf},
+		{Name: "family-card", Tier: "read", Help: "print the one-page card for the family: what the box does, what to do when it is down, whom to call", Run: cmdFamilyCard},
+		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
+		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
+		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
 	}
 }
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	os.Exit(runArgs(os.Args[1:]))
 }
 
-func run(args []string) int {
+func runArgs(args []string) int {
 	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR")}
 	if env.Actor == "" {
 		env.Actor = "human:" + os.Getenv("USER")
@@ -106,9 +103,9 @@ func run(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP) // an SSH drop ends an apply cleanly, the flock goes with the process
 	defer stop()
-	for _, v := range verbs {
-		if v.name == rest[0] {
-			return v.run(ctx, env, rest[1:])
+	for _, v := range mcp.Verbs {
+		if v.Name == rest[0] {
+			return v.Run(ctx, env, rest[1:])
 		}
 	}
 	fmt.Fprintf(env.Errw(), "laib: unknown verb %q\n\n", rest[0])
@@ -118,10 +115,10 @@ func run(args []string) int {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "laib — the control plane for one home box\n\nVerbs (tier in brackets):")
-	sorted := slices.Clone(verbs)
-	slices.SortFunc(sorted, func(a, b verb) int { return strings.Compare(a.name, b.name) })
+	sorted := slices.Clone(mcp.Verbs)
+	slices.SortFunc(sorted, func(a, b cli.Verb) int { return strings.Compare(a.Name, b.Name) })
 	for _, v := range sorted {
-		fmt.Fprintf(os.Stderr, "  %-10s [%s]  %s\n", v.name, v.tier, v.help)
+		fmt.Fprintf(os.Stderr, "  %-10s [%s]  %s\n", v.Name, v.Tier, v.Help)
 	}
 	fmt.Fprintln(os.Stderr, "\nFlags: --json on every verb. Env: LAIB_HOME, LAIB_STATE, LAIB_QUADLET, LAIB_ACTOR.")
 }

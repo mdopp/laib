@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -50,7 +51,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(errors.New("usage: laib secret set <NAME>"))
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-			return exitRefusedMsg(env, env.Actor+" may not set secrets")
+			return cli.Refused(env, env.Actor+" may not set secrets")
 		}
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		val := strings.TrimRight(line, "\r\n")
@@ -74,7 +75,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(errors.New("usage: laib secret rotate <NAME>"))
 		}
 		if proposal.Hand(env.Actor) != "human" {
-			return exitRefusedMsg(env, "only a human rotates secrets")
+			return cli.Refused(env, "only a human rotates secrets")
 		}
 		name := args[1]
 		if _, ok := sec[name]; !ok {
@@ -119,7 +120,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(env.W(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
 		code := cli.ExitOK
 		for _, svcName := range st.Order(touched) {
-			if c := runApply(ctx, env, st, svcName, "secret rotate "+name); c != cli.ExitOK {
+			if c := run.Apply(ctx, env, st, svcName, "secret rotate "+name); c != cli.ExitOK {
 				code = c
 			}
 		}

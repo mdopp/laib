@@ -1,4 +1,4 @@
-package main
+package backup
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 // page an off-box repo is useless. Humans only, never over MCP: a hand
 // that can print the sheet can take the box.
 
-func sheetConfirmed(env *cliEnv) string {
+func sheetConfirmed(env *cli.Env) string {
 	return filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")
 }
 
-func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
+func RecoverySheet(ctx context.Context, env *cli.Env, args []string) int {
 	if proposal.Hand(env.Actor) != "human" || env.MCP {
-		return exitRefusedMsg(env, "the recovery sheet is for the human at the console, never for a hand or over MCP")
+		return cli.Refused(env, "the recovery sheet is for the human at the console, never for a hand or over MCP")
 	}
 	if len(args) > 0 && args[0] == "--confirm" {
 		if err := os.WriteFile(sheetConfirmed(env), []byte(time.Now().UTC().Format(time.RFC3339)+" "+env.Actor+"\n"), 0o644); err != nil {
@@ -38,7 +38,7 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintln(env.W(), "bestätigt: das Wiederherstellungsblatt ist gesichert; diag hört auf zu mahnen")
 		return cli.ExitOK
 	}
-	st, pw, err := backupPrep(env)
+	st, pw, err := Prep(env)
 	if err != nil {
 		return env.Fail(err)
 	}

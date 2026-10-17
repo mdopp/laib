@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
@@ -30,25 +33,25 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 	os.WriteFile(w, []byte(strings.Replace(string(b), "data: []", "data:\n  - path: ${DATA_DIR}/whoami", 1)), 0o644)
 	proposal.CommitDirty(context.Background(), c.env.Paths.State, "human:test")
 	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
-	sec[resticPassword] = "pw"
+	sec[backup.ResticPassword] = "pw"
 	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
 	var snaps []string
-	real := resticRun
-	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+	real := backup.ResticRun
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		snaps = append(snaps, strings.Join(args, " "))
 		return "", nil
 	}
-	t.Cleanup(func() { resticRun = real })
+	t.Cleanup(func() { backup.ResticRun = real })
 	return c, &snaps
 }
 
 func opsPropose(t *testing.T, c *cbox, image string) int {
 	t.Helper()
 	c.env.Actor = "ops"
-	if rc := cmdPropose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
+	if rc := inbox.Propose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
-	ps, _ := proposal.List(inboxDir(c.env), true)
+	ps, _ := proposal.List(cli.InboxDir(c.env), true)
 	return ps[len(ps)-1].ID
 }
 
@@ -61,7 +64,7 @@ func TestTheOperatorAppliesItsOwnFixInsideTheEnvelope(t *testing.T) {
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitOK {
 		t.Fatalf("apply rc %d", rc)
 	}
-	p, _ := proposal.Get(inboxDir(c.env), id)
+	p, _ := proposal.Get(cli.InboxDir(c.env), id)
 	if p.Status != "approved" {
 		t.Fatalf("proposal %s", p.Status)
 	}
@@ -87,13 +90,13 @@ func TestTheOperatorsApplyIsRefusedOutsideTheEnvelope(t *testing.T) {
 		t.Fatalf("the Operator applied without a proposal: rc %d", rc)
 	}
 	id := opsPropose(t, c, "docker.io/traefik/whoami:v1.12")
-	for range RepairBudget {
+	for range envelope.RepairBudget {
 		journal.Append(c.env.Paths.Journal, journal.Entry{Actor: "ops", Verb: "restart", Service: "whoami", Result: "green"})
 	}
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitRefused {
 		t.Fatalf("applied with the budget spent: rc %d", rc)
 	}
-	if p, _ := proposal.Get(inboxDir(c.env), id); p.Status != "open" {
+	if p, _ := proposal.Get(cli.InboxDir(c.env), id); p.Status != "open" {
 		t.Fatalf("the refused proposal is %s", p.Status)
 	}
 }
@@ -103,10 +106,10 @@ func TestTheOperatorNeverAppliesWhatOnlyAHumanMayFree(t *testing.T) {
 	c.env.Actor = "ops"
 	patch := "--- /dev/null\n+++ b/services/whoami/post-deploy\n@@ -0,0 +1,2 @@\n+#!/bin/sh\n+echo hi\n"
 	c.env.In = strings.NewReader(patch)
-	if rc := cmdPropose(context.Background(), c.env, []string{"--patch", "whoami braucht ein Skript"}); rc != cli.ExitOK {
+	if rc := inbox.Propose(context.Background(), c.env, []string{"--patch", "whoami braucht ein Skript"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
-	ps, _ := proposal.List(inboxDir(c.env), true)
+	ps, _ := proposal.List(cli.InboxDir(c.env), true)
 	id := ps[len(ps)-1].ID
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitRefused {
 		t.Fatalf("the Operator freed a human-class proposal: rc %d", rc)

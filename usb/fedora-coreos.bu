@@ -150,11 +150,16 @@ storage:
             dirs
           }
           active() { mdadm --detail "$1" | awk '/Active Devices/ {print $4}'; }
+          ours() {   # $1 = array UUID: every partition that carries it, in the array or left out of it
+            local p
+            for p in $(lsblk -nrpo NAME,TYPE | awk '$2 == "part" {print $1}'); do
+              if [[ "$(mdadm --examine --export "$p" 2>/dev/null | sed -n 's/^MD_UUID=//p')" == "$1" ]]; then echo "$p"; fi
+            done
+          }
           readd() {   # $1 = md device, $2 = array UUID: a member of our own array that fell behind in a
             local p     # power cut is left out by assembly, and the box runs on one disk unseen (#172).
-            for p in $(lsblk -nrpo NAME,TYPE | awk '$2 == "part" {print $1}'); do   # only our array's UUID
-              [[ "$(mdadm --examine --export "$p" 2>/dev/null | sed -n 's/^MD_UUID=//p')" == "$2" ]] || continue
-              mdadm --detail "$1" | grep -q " $p\$" && continue
+            for p in $(ours "$2"); do   # only our array's UUID
+              grep -q " $p\$" <<<"$(mdadm --detail "$1")" && continue
               log "$p belongs to $1 but fell behind (a power cut?): adding it back, the mirror resyncs"
               mdadm --manage "$1" --re-add "$p" >/dev/null 2>&1 || mdadm --manage "$1" --add "$p" >/dev/null 2>&1 \
                 || log "$p could not be added back: laib disk status"
@@ -209,7 +214,11 @@ storage:
             if [[ -n "$md" && "$(blkid -s LABEL -o value "$md")" == data ]]; then
               log "Laib's array $uuid found on $dev: assembled as $md, the data stays"
               mount_array "$md"
-              echo "DEVICE=$md UUID=$uuid MEMBERS=$(active "$md")" | durable "$REC"
+              # the array is what carries its UUID, not what assembly let in: a member that fell
+              # behind in a cut counts, and goes back in now — never a mirror recorded as one disk (#304)
+              members=$(ours "$uuid" | wc -l); (( members >= $(active "$md") )) || members=$(active "$md")
+              echo "DEVICE=$md UUID=$uuid MEMBERS=$members" | durable "$REC"
+              [[ "$(active "$md")" -lt "$members" ]] && readd "$md" "$uuid"
               exit 0
             fi
           done

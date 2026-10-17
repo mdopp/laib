@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -31,7 +32,7 @@ func TestMcpCallEnforcesTheBoundary(t *testing.T) {
 		{"human", "laib_init", cli.ExitUsage},
 		{"bote", "laib_nonsense", cli.ExitUsage},
 	} {
-		out, code := mcpCall(context.Background(), &cliEnv{}, st, tc.hand, tc.tool, map[string]any{"args": ""})
+		out, code := mcp.Call(context.Background(), &cliEnv{}, st, tc.hand, tc.tool, map[string]any{"args": ""})
 		if code != tc.want {
 			t.Errorf("%s calling %s: exit %d (%q), want %d", tc.hand, tc.tool, code, out, tc.want)
 		}
@@ -42,7 +43,7 @@ func TestMcpToolsFollowTheCeiling(t *testing.T) {
 	st := &state.State{Policy: state.Policy{Hands: map[string]state.Hand{"ops": {Ceiling: "propose"}, "claude": {Ceiling: "apply"}}}}
 	names := func(hand string) []string {
 		var out []string
-		for _, tl := range mcpTools(st, hand) {
+		for _, tl := range mcp.Tools(st, hand) {
 			out = append(out, tl["name"].(string))
 		}
 		return out
@@ -63,12 +64,12 @@ func TestMcpToolsFollowTheCeiling(t *testing.T) {
 }
 
 func TestSplitArgs(t *testing.T) {
-	got := splitArgs(`media --since 2h "zwei Wörter" x`)
+	got := mcp.SplitArgs(`media --since 2h "zwei Wörter" x`)
 	want := []string{"media", "--since", "2h", "zwei Wörter", "x"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
 	}
-	if splitArgs("") != nil {
+	if mcp.SplitArgs("") != nil {
 		t.Fatal("empty must be nil")
 	}
 }

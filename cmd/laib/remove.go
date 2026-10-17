@@ -9,7 +9,10 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/run"
+	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -22,10 +25,10 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("usage: laib remove <service>"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "only a human removes a service")
+		return cli.Refused(env, "only a human removes a service")
 	}
 	name := args[0]
-	st, svc, err := loadSvc(env, name)
+	st, svc, err := envelope.LoadSvc(env, name)
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -43,7 +46,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
 		}
 	}
-	unlock, code := takeLock(env, st, "remove")
+	unlock, code := run.Lock(env, st, "remove")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -51,7 +54,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	for _, unit := range svc.UnitNames() {
 		sysd.Stop(ctx, unit)
 	}
-	kept := dataPaths(st, svc)
+	kept := state.DataPaths(st, svc)
 	if err := os.RemoveAll(filepath.Join(env.Paths.State, "services", name)); err != nil {
 		return env.Fail(err)
 	}
@@ -64,7 +67,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
 	}
-	code = applyHeld(ctx, env, st2, "", "remove "+name)
+	code = run.ApplyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {
 		fmt.Fprintf(env.W(), "Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
 	}

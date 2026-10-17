@@ -14,11 +14,14 @@ import (
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/registry"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -229,10 +232,10 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	hand := strings.SplitN(env.Actor, ":", 2)[0]
 	if !policy.Allowed(st.Policy, hand, "apply") {
-		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
+		return cli.Refused(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
 	}
 	if hand == "ops" {
-		return opsApply(ctx, env, st, args)
+		return envelope.OpsApply(ctx, env, st, args)
 	}
 	only, reason := "", ""
 	for i := 0; i < len(args); i++ {
@@ -244,7 +247,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 			only = args[i]
 		}
 	}
-	return runApply(ctx, env, st, only, reason)
+	return run.Apply(ctx, env, st, only, reason)
 }
 
 func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
@@ -310,7 +313,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		avail := availableTemplates(env)
+		avail := registry.Available(env)
 		if env.JSON {
 			return cli.Emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
@@ -320,7 +323,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintf(env.W(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
 		fmt.Fprintln(env.W(), "verfügbar:")
-		for _, name := range sortedKeys(avail) {
+		for _, name := range registry.SortedKeys(avail) {
 			fmt.Fprintf(env.W(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return cli.ExitOK
@@ -329,7 +332,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		lines, err := syncRegistries(ctx, env, st)
+		lines, err := registry.Sync(ctx, env, st)
 		for _, l := range lines {
 			fmt.Fprintln(env.W(), "registry:", l)
 		}
@@ -342,7 +345,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			// proposal; the dial decides whether laib applies it itself.
 			code := cli.ExitOK
 			for _, name := range st.ServiceNames() {
-				if c := templateUpdate(ctx, env, st, name); c != cli.ExitOK && c != cli.ExitUsage {
+				if c := registry.Update(ctx, env, st, name); c != cli.ExitOK && c != cli.ExitUsage {
 					code = c
 				}
 			}
@@ -358,9 +361,9 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(err)
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
-			return exitRefusedMsg(env, env.Actor+" may not propose")
+			return cli.Refused(env, env.Actor+" may not propose")
 		}
-		return templateUpdate(ctx, env, st, args[1])
+		return registry.Update(ctx, env, st, args[1])
 	}
 	return env.Fail(fmt.Errorf("unknown template subcommand %q", args[0]))
 }
@@ -650,7 +653,7 @@ func guarantees(env *cliEnv, st *state.State) (LastBackup, LastChange) {
 		lb.Repos = 1
 	}
 	var lc LastChange
-	if ps, err := proposal.List(inboxDir(env), false); err == nil {
+	if ps, err := proposal.List(cli.InboxDir(env), false); err == nil {
 		var last *proposal.Proposal
 		for _, p := range ps {
 			if p.Status == "approved" && (last == nil || p.Decided.After(last.Decided)) {
@@ -672,7 +675,7 @@ var hookInterpreters = map[string]bool{"#!/usr/bin/env python3": true, "#!/usr/b
 // apply creates only declared paths, and podman refuses a missing bind
 // source (#36; the failure afc1115 fixed for declared paths).
 func lintMounts(st *state.State, name string, out render.Output, neighbours []string) []string {
-	allowed := dataPaths(st, st.Services[name])
+	allowed := state.DataPaths(st, st.Services[name])
 	for _, p := range neighbours {
 		allowed = append(allowed, strings.ReplaceAll(p, "${DATA_DIR}", st.Box.DataDir))
 	}

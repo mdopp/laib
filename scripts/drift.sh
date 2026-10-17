@@ -21,7 +21,7 @@ found "README layout" "$missing"
 lacking=""
 for t in $(grep -ohE 'laib_[a-z_]+' operator/*.go operator/cmd/laib-operator/*.go 2>/dev/null | sort -u); do
   v=${t#laib_}
-  grep -qE "\"$v\": *true" cmd/laib/mcp.go || lacking="$lacking$t is not in mcpVerbs
+  grep -qE "\"$v\": *true" internal/mcp/mcp.go || lacking="$lacking$t is not in mcp.Allowed
 "
 done
 found "operator tools" "$lacking"

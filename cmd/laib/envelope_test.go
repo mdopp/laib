@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
@@ -31,8 +33,8 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 	}}
 	var recorded []string
 	calls = &recorded
-	realRun, realRestic := sysd.Run, resticRun
-	t.Cleanup(func() { sysd.Run, resticRun = realRun, realRestic })
+	realRun, realRestic := sysd.Run, backup.ResticRun
+	t.Cleanup(func() { sysd.Run, backup.ResticRun = realRun, realRestic })
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		recorded = append(recorded, name+" "+strings.Join(args, " "))
 		switch {
@@ -43,7 +45,7 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 		}
 		return "", nil
 	}
-	resticRun = func(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
+	backup.ResticRun = func(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
 		recorded = append(recorded, "restic "+strings.Join(args, " "))
 		return "snapshot fake saved", nil
 	}
@@ -70,7 +72,7 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 
 func writeAs(env *cliEnv, svc, path, content string) int {
 	e := &cliEnv{Actor: env.Actor, Paths: env.Paths, In: strings.NewReader(content)}
-	return cmdWrite(context.Background(), e, []string{svc, path})
+	return envelope.Write(context.Background(), e, []string{svc, path})
 }
 
 // #35 (2): a file that does not exist yet under a symlinked directory passed
@@ -101,7 +103,7 @@ func TestWriteThroughASymlinkIsRefused(t *testing.T) {
 // were booked to the service it did not touch.
 func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 	env, _, calls := envBox(t)
-	code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-home-assistant", "--", "cat", "/etc/passwd"})
+	code := envelope.Exec(context.Background(), env, []string{"whoami", "--container", "systemd-home-assistant", "--", "cat", "/etc/passwd"})
 	if code == cli.ExitOK {
 		t.Fatal("exec in another service's container was accepted")
 	}
@@ -110,7 +112,7 @@ func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 			t.Fatalf("podman exec ran: %s", c)
 		}
 	}
-	if code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != cli.ExitOK {
+	if code := envelope.Exec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != cli.ExitOK {
 		t.Fatalf("exec in the service's own container: exit %d", code)
 	}
 }
@@ -121,7 +123,7 @@ func TestNoSnapshotNoMutation(t *testing.T) {
 	env, data, calls := envBox(t)
 	target := filepath.Join(data, "whoami", "cfg", "app.conf")
 	// restic fails: the write must not happen
-	resticRun = func(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
+	backup.ResticRun = func(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
 		*calls = append(*calls, "restic "+strings.Join(args, " "))
 		return "Fatal: unable to open repository", os.ErrNotExist
 	}
@@ -169,7 +171,7 @@ func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := snapshotPaths(st, st.Services["whoami"])
+	paths := state.SnapshotPaths(st, st.Services["whoami"])
 	if len(paths) != 1 || paths[0] != filepath.Join(data, "whoami", "cfg") {
 		t.Fatalf("snapshot paths: %v", paths)
 	}
@@ -186,7 +188,7 @@ func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 // #35 (4): one unparsable journal line reset the budget to zero.
 func TestACorruptJournalLineDoesNotResetTheBudget(t *testing.T) {
 	env, data, _ := envBox(t)
-	for i := 0; i < RepairBudget; i++ {
+	for i := 0; i < envelope.RepairBudget; i++ {
 		journal.Append(env.Paths.Journal, journal.Entry{T: time.Now().Add(-10 * time.Minute), Actor: "ops", Verb: "exec", Service: "whoami", Result: "info"})
 	}
 	day := filepath.Join(env.Paths.Journal, time.Now().UTC().Format("2006-01-02")+".jsonl")
