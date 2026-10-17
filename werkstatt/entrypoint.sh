@@ -14,6 +14,9 @@ if [ -d /home/dev/.cache ]; then chown dev:dev /home/dev/.cache; fi
 if [ -d /opt/werkstatt/home-seed ] && [ -z "$(ls -A /home/dev | grep -vx .cache || true)" ]; then
   su dev -c "cp -a /opt/werkstatt/home-seed/. /home/dev/"
 fi
+# laib creates the workspace data path as core, which is root in here; dev
+# works in it (#262). The folder itself only, never -R over the checkouts.
+chown dev:dev /workspace
 mkdir -p /home/dev/.ssh
 if [ -n "${WERKSTATT_AUTHORIZED_KEY:-}" ]; then
   echo "$WERKSTATT_AUTHORIZED_KEY" > /home/dev/.ssh/authorized_keys
