@@ -218,7 +218,7 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 || args[0] == "status" {
 		b, err := os.ReadFile("/proc/mdstat")
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		dev, members := markerMembers()
 		if env.json {
@@ -238,37 +238,37 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 		args = args[:2]
 	}
 	if args[0] != "add" || len(args) != 2 {
-		return fail(errors.New("usage: laib disk status | add <device, e.g. /dev/sdb> [--wipe <model, when the disk is not empty>]"))
+		return env.fail(errors.New("usage: laib disk status | add <device, e.g. /dev/sdb> [--wipe <model, when the disk is not empty>]"))
 	}
 	if !strings.HasPrefix(env.actor, "human") {
-		return fail(errors.New("disk add: a human runs this (it wipes the device)"))
+		return env.fail(errors.New("disk add: a human runs this (it wipes the device)"))
 	}
 	dev := args[1]
 	dataDev, members := markerMembers()
 	if dataDev == "" || dataDev == "none" {
-		return fail(errors.New("no data RAID on this box (/etc/laib/data-disk)"))
+		return env.fail(errors.New("no data RAID on this box (/etc/laib/data-disk)"))
 	}
 	if members >= 2 {
-		return fail(errors.New("the array already has two members"))
+		return env.fail(errors.New("the array already has two members"))
 	}
 	b, err := os.ReadFile("/proc/mdstat")
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	arrays := parseMdstat(string(b))
 	if len(arrays) == 0 || len(arrays[0].Members) == 0 {
-		return fail(errors.New("no active array in /proc/mdstat"))
+		return env.fail(errors.New("no active array in /proc/mdstat"))
 	}
 	minBytes, err := memberDiskBytes(ctx, arrays[0].Members[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	spare, err := inspectSpare(ctx, dev)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := spare.refuse(minBytes, wipe); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	steps := [][]string{
 		{"sudo", "wipefs", "-a", dev},
@@ -277,7 +277,7 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	for _, s := range steps {
 		if out, err := sysd.Run(ctx, s[0], s[1:]...); err != nil {
-			return fail(fmt.Errorf("%s: %v: %s", strings.Join(s, " "), err, out))
+			return env.fail(fmt.Errorf("%s: %v: %s", strings.Join(s, " "), err, out))
 		}
 	}
 	part := dev + "1"
@@ -287,14 +287,14 @@ func cmdDisk(ctx context.Context, env *cliEnv, args []string) int {
 	// the recorded device, not /dev/md/data: after a reinstall under another
 	// hostname the array may carry a different name
 	if out, err := sysd.Run(ctx, "sudo", "mdadm", "--manage", dataDev, "--add", part); err != nil {
-		return fail(fmt.Errorf("mdadm --add: %v: %s", err, out))
+		return env.fail(fmt.Errorf("mdadm --add: %v: %s", err, out))
 	}
 	rec, err := os.ReadFile(dataDiskMarker)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if out, err := sysd.Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
-		return fail(fmt.Errorf("marker: %v: %s", err, out))
+		return env.fail(fmt.Errorf("marker: %v: %s", err, out))
 	}
 	fmt.Fprintf(env.w(), "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
 	return 0

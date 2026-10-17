@@ -49,45 +49,57 @@ ceiling and a reboot is not a verb; a public route is a values change,
 which the dial may auto-apply — the "always a human's call" in
 `policy.yml`'s comment is a convention today, not enforced (#47).
 
-## The Operator's typed surface (#53)
+## Typed MCP tools and the Operator's menu (#53, #290)
 
-A small local model does not get the verb table with one free-text `args`
-per tool. `laib-operator` (default `OPERATOR_INTERFACE=typed`; `cli` gives a
-large model the verbs) offers a **menu per trigger** of task-shaped tools
-with typed parameters, and code turns a call into the CLI arguments laib's
-MCP takes — the model never writes quoting, flags or `--`:
+The tools agents use most publish typed parameters (`cmd/laib/mcpschema.go`),
+and the kernel turns a call's JSON into the verb's argv without joining and
+splitting a command line, so quotes and spaces survive:
 
-The menu is the skill's (ADR 0023): the typed tools whose verb the
-kernel grants the running skill. The built-in skills give:
+| Tool | Parameters |
+|---|---|
+| `laib_status`, `laib_diag` | `service?` |
+| `laib_logs` | `service`, `since?` (`60m`, `24h`) |
+| `laib_inspect`, `laib_restart` | `service` |
+| `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
+| `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
+| `laib_escalate` | `service`, `summary` |
+| `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
+| `laib_journal`, `laib_context` | `since?` |
+| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch` |
+| `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
+| `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
+
+`service` is an enum of the installed services, `key` a values.yml key
+(capitals, no path), `value` one line. An unknown parameter, a wrong type,
+a value outside an enum or a missing required one is answered `ungültige
+Argumente … — nicht ausgeführt` and the verb never runs. Every tool still
+takes `args` (one command line) instead, for clients that send it.
+
+The Operator's menu is these tools as the kernel lists them for the
+running skill (ADR 0023): no second menu, no translation in the Operator.
+`OPERATOR_INTERFACE=typed` (default) only keeps results and context
+compact for a small model's window. The built-in skills' menus:
 
 | Skill | Trigger | Menu |
 |---|---|---|
-| `routineblick` | every `operator.tick` | `status`, `diagnose(service?)`, `note(kind, text)` |
-| `vorfall` | a red | `diagnose`, `logs(service, minutes)`, `inspect(service)`, `restart(service)`, `set_value(service, key, value, reason)`, `escalate(service, summary)`, `note` |
-| `morgenbericht` | daily at `operator.reportAt` | `status`, `diagnose`, `journal(hours)`, `note` |
-| `nutzung` | weekly, Monday 08:00 | `suggest(saw, suggestion, better)`, `note` |
+| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_note` |
+| `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note` |
+| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
+| `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 
 `nutzung` (#270) starts from usage-metrics instead of `laib context`:
 `/summary?days=7` and `/misses?days=7` with `USAGE_METRICS_TOKEN` (the
 Operator's unit carries URL and token when the box runs usage-metrics).
-`suggest` becomes `laib wish`, i.e. a proposal the admin approves; code
-refuses a fourth suggestion in a session, one whose `saw` has no number,
-and one that quotes an unanswered sentence word for word (they are kept 30
-days without names, for admins only; the intake repo may be public).
-Without usage-metrics the skill writes one note and asks no model.
+A wish from the ops hand is a proposal the admin approves; Operator code
+refuses a fourth wish in a session, one whose `saw` has no number, and one
+that quotes an unanswered sentence word for word (they are kept 30 days
+without names, for admins only; the intake repo may be public). Without
+usage-metrics the skill writes one note and asks no model.
 
-`service` is an enum of the installed services (from `laib status`),
-`kind` is `watch | incident | report`, `minutes` 1–1440, `hours` 1–168,
-`key` a values.yml key. A tool is in the menu only if the skill is
-granted its verb (`ops` at ceiling `propose` gets no `restart`). `approve`, `reject`,
-`restore`, `rollback`, `converge`, `template`, `adopt`, `apply`, `remove`
-are in no menu. A call with a missing or invalid argument — an unknown
-service, a kind outside the enum, a key with a path in it, a tool outside
-the menu — is answered to the model and never reaches laib. Results are
-cut to 2 000 characters, the context bundle to 6 000. The eval runs both
-interfaces over the same incidents (`werkstatt/evals/incidents-typed.json`).
-Still open from #53: runbooks in code for the known failure classes, and
-schema-constrained decoding through llama-server.
+A tool is in the menu only if the skill is granted its verb (`ops` at
+ceiling `propose` gets no `restart`). `approve`, `reject`, `restore`,
+`rollback`, `converge`, `template`, `adopt`, `apply`, `remove` are in no
+skill's vocabulary.
 
 ### Skills (ADR 0023)
 
@@ -172,8 +184,9 @@ once when the state changes.
 `laib serve` exposes `/mcp` (streamable HTTP, JSON-RPC 2.0, stdlib). Auth is
 a bearer token minted by `laib token mint <hand>`; tokens are hashed in
 `/mnt/data/laib/tokens.json`, never in the state repo. `tools/list` returns
-only the verbs the hand's ceiling allows, named `laib_<verb>`, each taking one
-`args` string exactly as on the command line. `serve`, `init`, `token` and
+only the verbs the hand's ceiling allows, named `laib_<verb>`, with typed
+parameters (above) or, for the rest, one `args` string exactly as on the
+command line. `serve`, `init`, `token` and
 `secret` are never tools. A call above the ceiling answers exit 3 with the
 hint to propose. Claude Code: `claude mcp add --transport http laib
 http://127.0.0.1:5900/mcp --header "Authorization: Bearer <token>"`.

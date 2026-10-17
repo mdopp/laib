@@ -5,7 +5,10 @@ provides: [files]
 # share), File Browser (the web). The shared data folder is where music,
 # audiobooks, podcasts, photos, documents and notes live (ADR 0017). Host
 # network for Samba discovery and Syncthing's local announcements.
+# Samba has one account per family member (#296): who is family comes from
+# LLDAP (the auth pod), each password from the person in Haus.
 hostNetwork: true
+after: [auth]
 routes:
   - host: sync
     port: 8384
@@ -18,11 +21,15 @@ routes:
     auth: one_factor               # the family's one login (#231): File Browser takes the user from Authelia's Remote-User
     bypass: [/share/, /api/public/, /static/]   # share links and their page stay open; File Browser checks a share's own password
 secrets:
-  - name: SAMBA_PASSWORD
+  - name: SAMBA_PASSWORD                # the shared account's, the fallback
+  - name: FILE_SHARE_LDAP_PASSWORD      # the read-only LLDAP account samba-members.py reads with, seeded by the auth template (#296, #55)
+    external: true
 data:
   - path: ${DATA_DIR}/file-share/syncthing-config
   - path: ${DATA_DIR}/file-share/filebrowser
-  - path: ${DATA_DIR}/file-share/samba-private   # Samba's TDBs (the lint found it unmounted, #36)
+  - path: ${DATA_DIR}/file-share/samba-private   # Samba's TDBs and the passdb with each account's hash (the lint found it unmounted, #36)
+  - path: ${DATA_DIR}/file-share/samba-accounts  # the member list, who has a password, the FIFO Haus hands passwords through (#296)
+    backup: false                                 # made again from LLDAP and the passdb
   - path: ${DATA_DIR}/file-share/data   # the share itself (the units mount it); backed up folder by folder below
     backup: false
   - path: ${DATA_DIR}/file-share/data/notes

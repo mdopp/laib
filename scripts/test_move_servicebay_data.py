@@ -83,6 +83,18 @@ class Move(unittest.TestCase):
         self.assertEqual((self.d / "file-share/syncthing-config/key.pem").read_text(), "made-up")
         self.assertEqual((self.d / "file-share/filebrowser/filebrowser.db").read_text(), "fb")
 
+    def test_file_share_keeps_sambas_per_user_accounts_in_place(self):
+        # ServiceBay's passdb sits where Laib's samba mounts it (#296): nothing is copied, the
+        # NT hashes stay, and the operator reads whose accounts carry over and on what condition
+        passdb = "samba:1000:XX:AA:[U          ]:LCT-6A000000:\nanna:1001:XX:BB:[U          ]:LCT-6A000001:\nben:1002:XX:CC:[U          ]:LCT-6A000002:\n"
+        write(self.d / "file-share/samba-private/smbpasswd", passdb)
+        p = self.run_script("file-share")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual((self.d / "file-share/samba-private/smbpasswd").read_text(), passdb)
+        self.assertIn("file-share: Samba's accounts stay in place with their passwords: anna, ben, samba", p.stdout)
+        self.assertIn("family or admins", p.stdout)
+        self.assertNotIn("BB", p.stdout)
+
     def test_werkstatt_takes_the_checkouts_only(self):
         p = self.run_script("werkstatt")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -233,6 +245,172 @@ class Move(unittest.TestCase):
             p = subprocess.run(["bash", str(WRAPPER), "vaultwarden"], env=env, capture_output=True, text=True)
             self.assertNotEqual(p.returncode, 0, "without the unit list nothing says the unit is stopped")
             self.assertFalse(log.exists())
+
+
+def load_mover():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("mover", SCRIPT)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+ST_CONFIG = """<configuration version="37">
+    <folder id="alice-cam" label="Alice Kamera" path="/var/syncthing/Sync/alice/photos/Camera" type="sendreceive">
+        <device id="PHONE-ALICE" introducedBy=""></device>
+        <versioning></versioning>
+    </folder>
+    <folder id="shared-fotos" label="Fotos" path="~/Sync/photos" type="sendreceive">
+        <device id="LAPTOP" introducedBy=""></device>
+        <versioning></versioning>
+    </folder>
+    <folder id="docs" label="Dokumente" path="/var/syncthing/Sync/documents" type="sendreceive">
+        <versioning></versioning>
+    </folder>
+    <device id="BOX-ID" name="box"></device>
+    <defaults>
+        <folder id="" label="" path="~" type="sendreceive"></folder>
+    </defaults>
+</configuration>
+"""
+
+
+class ImmichLibraries(unittest.TestCase):
+    """#263: ServiceBay mounted all of file-share/data at /mnt/photos; its
+    disk import made one external library per box user on
+    /mnt/photos/<user>/photos and a Shared one on /mnt/photos/photos. Laib
+    mounts file-share/data/photos there. Each library becomes one folder
+    under photos/ (Shared as photos/shared), so no library holds another's
+    photos; Immich's paths are rewritten (in the real-Postgres job,
+    scripts/immich-move-test.py) and the Syncthing folders follow."""
+
+    LIBS = [
+        {"id": "L-shared", "name": "Shared", "importPaths": ["/mnt/photos/photos"], "deleted": False},
+        {"id": "L-alice", "name": "alice", "importPaths": ["/mnt/photos/alice/photos"], "deleted": False},
+        {"id": "L-bob", "name": "bob", "importPaths": ["/mnt/photos/bob/photos/"], "deleted": False},
+        {"id": "L-up", "name": "elsewhere", "importPaths": ["/srv/old"], "deleted": False},
+    ]
+
+    def setUp(self):
+        self.m = load_mover()
+        self.tmp = tempfile.TemporaryDirectory()
+        t = Path(self.tmp.name)
+        self.d, self.q, self.v = t / "stacks", t / "quadlet", t / "volumes"
+        self.q.mkdir()
+        self.base = self.d / "file-share/data"
+        write(self.base / "photos/2019 Urlaub/a.jpg", "shared-a")
+        write(self.base / "photos/.stfolder/x", "")
+        write(self.base / "alice/photos/Camera/b.jpg", "alice-b")
+        write(self.base / "alice/documents/c.pdf", "stays")
+        write(self.base / "bob/photos/d.jpg", "bob-d")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_script(self, *args):
+        return subprocess.run([sys.executable, "-I", str(SCRIPT), "--data-dir", str(self.d), "--quadlet", str(self.q),
+                               "--volumes", str(self.v), *args], capture_output=True, text=True)
+
+    def test_each_library_becomes_one_folder_under_photos(self):
+        rewrites, moves, notes = self.m.photo_plan(self.LIBS)
+        self.assertEqual(rewrites, [("L-shared", "/mnt/photos/photos", "/mnt/photos/shared"),
+                                    ("L-alice", "/mnt/photos/alice/photos", "/mnt/photos/alice"),
+                                    ("L-bob", "/mnt/photos/bob/photos/", "/mnt/photos/bob")])
+        self.assertEqual(moves, [("photos", "photos/shared"), ("alice/photos", "photos/alice"), ("bob/photos", "photos/bob")])
+        self.assertTrue(any("/srv/old" in n for n in notes), "a library outside the share is named, not touched")
+
+    def test_refuses_what_servicebay_never_made(self):
+        for paths in (["/mnt/photos"], ["/mnt/photos/alice"], ["/mnt/photos/alice/photos/2020"], ["/mnt/photos/shared/photos"]):
+            with self.assertRaises(self.m.Refused, msg=paths):
+                self.m.photo_plan([{"id": "L", "name": "x", "importPaths": paths, "deleted": False}])
+
+    def test_photos_move_and_a_rerun_or_a_cut_off_run_ends_the_same(self):
+        _, moves, _ = self.m.photo_plan(self.LIBS)
+        journal = str(self.d / "immich/library-move.json")
+        os.makedirs(self.d / "immich")
+        real, calls = os.rename, []
+
+        def cut(a, b):
+            calls.append(a)
+            if len(calls) == 3:
+                raise OSError("power cut")
+            real(a, b)
+        from unittest import mock
+        with mock.patch.object(self.m.os, "rename", side_effect=cut):
+            with self.assertRaises(OSError):
+                self.m.move_photos(str(self.base), moves, journal)
+        self.m.move_photos(str(self.base), moves, journal)
+        self.m.move_photos(str(self.base), moves, journal)
+        p = self.base / "photos"
+        self.assertEqual(sorted(x.name for x in p.iterdir()), ["alice", "bob", "shared"])
+        self.assertEqual((p / "shared/2019 Urlaub/a.jpg").read_text(), "shared-a")
+        self.assertTrue((p / "shared/.stfolder").is_dir(), "Syncthing's folder marker moves with its folder")
+        self.assertEqual((p / "alice/Camera/b.jpg").read_text(), "alice-b")
+        self.assertEqual((p / "bob/d.jpg").read_text(), "bob-d")
+        self.assertFalse((self.base / "alice/photos").exists())
+        self.assertEqual((self.base / "alice/documents/c.pdf").read_text(), "stays")
+        self.assertEqual(sorted(x.name for x in self.base.iterdir()), ["alice", "bob", "photos"], "no temporary name left behind")
+
+    def test_syncthing_folders_follow_their_photos_with_their_ids(self):
+        _, moves, _ = self.m.photo_plan(self.LIBS)
+        text, changes = self.m.syncthing_repoint(ST_CONFIG, moves)
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(text)
+        paths = {f.get("id"): f.get("path") for f in root.findall("folder")}
+        self.assertEqual(paths, {"alice-cam": "/var/syncthing/Sync/photos/alice/Camera",
+                                 "shared-fotos": "/var/syncthing/Sync/photos/shared",
+                                 "docs": "/var/syncthing/Sync/documents"})
+        self.assertEqual([d.get("id") for d in root.iter("device") if d.get("name") == "box"], ["BOX-ID"])
+        self.assertEqual(root.find("defaults/folder").get("path"), "~", "the defaults are no folder")
+        self.assertEqual(sorted(c[0] for c in changes), ["alice-cam", "shared-fotos"])
+        self.assertEqual(self.m.syncthing_repoint(text, [])[1], [])
+
+    def test_syncthing_refuses_a_folder_the_move_would_empty_or_fill(self):
+        _, moves, _ = self.m.photo_plan(self.LIBS)
+        whole = ST_CONFIG.replace("/var/syncthing/Sync/documents", "/var/syncthing/Sync/alice")
+        with self.assertRaisesRegex(self.m.Refused, "docs"):
+            self.m.syncthing_repoint(whole, moves)       # its peers would delete alice's photos
+        _, only_users, _ = self.m.photo_plan(self.LIBS[1:2])
+        with self.assertRaisesRegex(self.m.Refused, "shared-fotos"):
+            self.m.syncthing_repoint(ST_CONFIG, only_users)  # alice's photos would go to the family's laptop
+
+    def test_immich_refuses_while_syncthing_or_immich_runs(self):
+        write(self.d / "immich/pgdata/PG_VERSION", "14")
+        for unit in ("file-share-syncthing.service", "file-share.service", "immich-db.service", "immich.service"):
+            p = self.run_script("--active", "laib.service " + unit, "--pg-socket", str(self.d), "immich")
+            self.assertNotEqual(p.returncode, 0, unit)
+            self.assertIn(unit, p.stderr)
+        self.assertTrue((self.base / "alice/photos/Camera/b.jpg").exists())
+
+    def test_immich_waits_for_file_shares_syncthing_config(self):
+        write(self.d / "immich/pgdata/PG_VERSION", "14")
+        write(self.v / "file-share-syncthing-config/config.xml", ST_CONFIG)
+        p = self.run_script("--pg-socket", str(self.d), "immich")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("file-share", p.stderr)
+        self.assertTrue((self.base / "alice/photos/Camera/b.jpg").exists())
+
+    def test_wrapper_never_starts_a_second_postgres_on_immichs_data(self):
+        write(self.d / "immich/pgdata/PG_VERSION", "14")
+        with tempfile.TemporaryDirectory() as b:
+            log = Path(b, "calls")
+            # a container of ServiceBay's immich pod still has the database open
+            write(Path(b, "podman"), f"""#!/bin/sh
+echo "$*" >> {log}
+case "$1" in
+  volume) exit 1;;
+  ps) echo c1;;
+  inspect) echo "immich-database {self.d}/immich/pgdata";;
+esac
+""")
+            write(Path(b, "systemctl"), "#!/bin/sh\necho 'laib.service loaded active running x'\n")
+            for f in ("podman", "systemctl"):
+                Path(b, f).chmod(0o755)
+            env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", DATA_DIR=str(self.d), QUADLET=str(self.q))
+            p = subprocess.run(["bash", str(WRAPPER), "immich"], env=env, capture_output=True, text=True)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("immich-database", p.stderr)
+            self.assertNotIn("run ", log.read_text(), "no Postgres and no mover started")
 
 
 if __name__ == "__main__":

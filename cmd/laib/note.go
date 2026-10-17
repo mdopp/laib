@@ -38,14 +38,14 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		text = text[:4000] + "…" // a note is a few sentences; the journal reader has a line limit (#35)
 	}
 	if text == "" {
-		return fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
+		return env.fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
 	}
 	if kind != "report" && kind != "incident" && kind != "watch" {
-		return fail(fmt.Errorf("unknown kind %q", kind))
+		return env.fail(fmt.Errorf("unknown kind %q", kind))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	e := journal.Entry{Actor: env.actor, Verb: "note", Reason: kind, Result: "info", Detail: text}
 	journal.Append(env.paths.Journal, e)
@@ -82,11 +82,11 @@ func lastReport(env *cliEnv) (string, string) {
 // box.yml operator.enabled and applies, which renders and starts the unit.
 func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib operator enable [--model alias] [--report-at 07:00] | disable | status"))
+		return env.fail(errors.New("usage: laib operator enable [--model alias] [--report-at 07:00] | disable | status"))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	switch args[0] {
 	case "status":
@@ -101,7 +101,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 			return exitRefusedMsg(env, "only a human enables or disables the operator")
 		}
 		if !policy.Allowed(st.Policy, "ops", "apply") {
-			return fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
+			return env.fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
 		}
 		enable := args[0] == "enable"
 		model, reportAt := "", ""
@@ -115,36 +115,36 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		if enable {
 			if st.ModelURL() == "" {
-				return fail(errors.New("no model: set box.yml model.url or a model role first"))
+				return env.fail(errors.New("no model: set box.yml model.url or a model role first"))
 			}
 			sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 			if err != nil {
-				return fail(err)
+				return env.fail(err)
 			}
 			if _, ok := sec[render.OperatorToken]; !ok {
 				store, err := token.Load(tokenPath(env))
 				if err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				plain, rec, err := store.Mint("ops", 0, "laib-operator")
 				if err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				sec[render.OperatorToken] = plain
 				if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "mint " + rec.ID + " for ops (laib-operator)"})
 			}
 		}
 		if err := setBox(filepath.Join(env.paths.State, "box.yml"), "operator", "enabled", fmt.Sprint(enable), "model", model, "reportAt", reportAt); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		if enable {
 			// reds wake the operator (#43): the webhook points at its event endpoint unless the owner set another
 			if st.Box.Notify.URL == "" {
 				if err := setBox(filepath.Join(env.paths.State, "box.yml"), "notify", "url", "http://127.0.0.1:5901/event"); err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 			}
 		}
@@ -162,11 +162,11 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "operator", Result: "info", Detail: args[0]})
 		st, err = loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		return runApply(ctx, env, st, "", "operator "+args[0])
 	}
-	return fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
+	return env.fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
 }
 
 // setBox sets keys of one top-level block of box.yml (operator, notify),
