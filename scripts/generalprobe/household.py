@@ -531,11 +531,11 @@ def smb(user, password, cmd, vol=()):
 
 
 def seed_share(f, s, bearer):
-    src = "/var/tmp/generalprobe/einkaufsliste.txt"
-    open(src, "w").write("Milch, Brot, Generalprobe\n")
-    r = smb(f["share_user"], f["share_password"], "put /gp/einkaufsliste.txt einkaufsliste.txt", vol=("-v", "/var/tmp/generalprobe:/gp:z"))
-    if r.returncode:
-        raise RuntimeError(f"Samba put as {f['share_user']}: {(r.stdout + r.stderr).decode()[-300:]}")
+    # a file in the share as Syncthing or File Browser leaves one; the share user reads it
+    open(os.path.join(f["data_dir"], "file-share/data/einkaufsliste.txt"), "w").write("Milch, Brot, Generalprobe\n")
+    r = smb(f["share_user"], f["share_password"], "get einkaufsliste.txt /dev/stdout")
+    if r.returncode or b"Generalprobe" not in r.stdout:
+        raise RuntimeError(f"Samba get as {f['share_user']}: {(r.stdout + r.stderr).decode()[-300:]}")
     # the family's own logins: ServiceBay syncs LLDAP users into Samba; anna's
     # Samba password is set to her LLDAP one (the owner's decision, #229)
     base = "http://127.0.0.1:5888"
