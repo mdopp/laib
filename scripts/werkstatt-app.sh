@@ -185,8 +185,9 @@ R=(--resolve "hallo.$DOMAIN:443:127.0.0.1" --resolve "auth.$DOMAIN:443:127.0.0.1
 code="$(curlc "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -H 'Remote-User: mallory' "https://hallo.$DOMAIN/")"
 echo "without a login, with a forged Remote-User: $code"
 case "$code" in 30[23]\ https://auth.$DOMAIN/*) ;; *) fail "hallo without a login: $code" ;; esac
-curlc "${R[@]}" -c "$WORK/jar" -o "$WORK/login.json" -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
-  -d "{\"username\":\"core\",\"password\":\"$OPW\",\"keepMeLoggedIn\":false,\"targetURL\":\"https://hallo.$DOMAIN/\"}" "https://auth.$DOMAIN/api/firstfactor" | grep -q '^200$' || fail "Authelia login: $(cat "$WORK/login.json")"
+code="$(curlc "${R[@]}" -c "$WORK/jar" -o "$WORK/login.json" -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+  -d "{\"username\":\"core\",\"password\":\"$OPW\",\"keepMeLoggedIn\":false,\"targetURL\":\"https://hallo.$DOMAIN/\"}" "https://auth.$DOMAIN/api/firstfactor")"
+grep -q '^200$' <<<"$code" || fail "Authelia login: $(cat "$WORK/login.json")"
 body="$(curlc "${R[@]}" -b "$WORK/jar" "https://hallo.$DOMAIN/")"
 echo "logged in as core (family): $body"
 [ "$body" = "Hallo, core!" ] || fail "hallo behind the login answered: $body"

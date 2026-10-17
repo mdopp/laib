@@ -71,14 +71,14 @@ UNIT
 
 "$BIN" plan > plan.out; head -5 plan.out   # no pipe: head closing early made plan die of SIGPIPE under pipefail (exit 141)
 LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test" || { echo "apply exit $?"; journalctl --user -u whoami.service --no-pager | tail -20; exit 1; }
-curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: whoami does not answer with its name"; exit 1; }
+grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami does not answer with its name"; exit 1; }
 # #224: the token is a podman secret: in the container's environment (whoami's ?env=true), in no unit
 # file, on no podman run argv; a rotation replaces it and restarts the container with the new value
 tokenOK() {
   local tok; tok="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.whoami.whoami.TOKEN)"
   [ -n "$tok" ] && [ "$tok" != "$1" ] || { echo "FAIL: no podman secret for TOKEN, or the old value" >&2; exit 1; }
-  curl -fsS "http://127.0.0.1:18080/?env=true" | grep -qF "TOKEN=$tok" || { echo "FAIL: the container's TOKEN is not the podman secret" >&2; exit 1; }
-  if grep -rqF -- "$tok" "$LAIB_QUADLET/whoami" || podman inspect systemd-whoami --format "{{.Config.CreateCommand}}" | grep -qF -- "$tok"; then echo "FAIL: the token is in the unit or on podman run's argv" >&2; exit 1; fi
+  grep -qF "TOKEN=$tok" <<<"$(curl -fsS "http://127.0.0.1:18080/?env=true")" || { echo "FAIL: the container's TOKEN is not the podman secret" >&2; exit 1; }
+  if grep -rqF -- "$tok" "$LAIB_QUADLET/whoami" || grep -qF -- "$tok" <<<"$(podman inspect systemd-whoami --format "{{.Config.CreateCommand}}")"; then echo "FAIL: the token is in the unit or on podman run's argv" >&2; exit 1; fi
   echo "$tok"
 }
 TOK="$(tokenOK "")"
@@ -127,7 +127,7 @@ python3 -c 'import sqlite3,sys; n=sqlite3.connect(sys.argv[1]).execute("SELECT c
 curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c 'import sys,json; s=json.load(sys.stdin); assert s["total"]==2, s'
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
-"$BIN" logs whoami --since 10m | grep -qi "whoami" || { echo "FAIL: no journald lines"; exit 1; }
+grep -qi "whoami" <<<"$("$BIN" logs whoami --since 10m)" || { echo "FAIL: no journald lines"; exit 1; }
 # the operator against the real unit with a scripted model on the typed
 # surface (#53, the default): inspect, restart, note
 python3 - 18081 <<'PY2' &
@@ -157,7 +157,7 @@ OPS_TOKEN="$(LAIB_ACTOR=human:boot "$BIN" token mint ops --json | python3 -c 'im
 LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
-curl -fsS http://127.0.0.1:18080/ | grep -q "whoami.boot.test" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
+grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="restart" and e["actor"]=="ops" for e in es) and any(e["verb"]=="note" for e in es), [e["verb"] for e in es]'
 # #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it
 # ships, as a pod reaches usage-metrics (host.containers.internal) with its token as a podman secret.
