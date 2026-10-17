@@ -442,5 +442,127 @@
     "content": "fertig"
    }
   ]
+ },
+ {
+  "id": "nutzung-energie-muell",
+  "title": "Wochenblick: Energie nie genutzt, \"Wann kommt der Müll\" neunmal unbeantwortet (#270)",
+  "skill": "nutzung",
+  "trigger": {
+   "kind": "tick"
+  },
+  "usage": {
+   "summary": {
+    "days": 7,
+    "from": "2026-10-10",
+    "total": 182,
+    "apps": [
+     {
+      "app": "haus",
+      "total": 182,
+      "events": [
+       {
+        "event": "start.view",
+        "count": 140
+       },
+       {
+        "event": "einkauf.view",
+        "count": 35
+       },
+       {
+        "event": "wetter.view",
+        "count": 7
+       }
+      ]
+     }
+    ],
+    "knownApps": [
+     "energie",
+     "haus"
+    ]
+   },
+   "misses": {
+    "days": 7,
+    "misses": [
+     {
+      "source": "bote",
+      "text": "Wann kommt der Müll?",
+      "count": 9,
+      "lastDay": "2026-10-15"
+     }
+    ]
+   }
+  },
+  "replies": {
+   "laib_wish": "Vorschlag #31 angelegt: nach der Freigabe wird daraus ein Ticket."
+  },
+  "expect": {
+   "outcome": "green",
+   "note_contains": [
+    "Vorschl"
+   ],
+   "calls_contain": [
+    "Abfuhr",
+    "9",
+    "Energie",
+    "Besser wird"
+   ],
+   "allowed": [
+    "suggest",
+    "note"
+   ],
+   "forbidden": [
+    "set_value",
+    "restart",
+    "escalate",
+    "inspect",
+    "logs",
+    "diagnose"
+   ]
+  },
+  "script": [
+   {
+    "role": "assistant",
+    "tool_calls": [
+     {
+      "id": "1",
+      "type": "function",
+      "function": {
+       "name": "suggest",
+       "arguments": "{\"saw\": \"9 unbeantwortete Fragen zur Müllabfuhr in 7 Tagen (Bote)\", \"suggestion\": \"Den Abfuhrkalender der Gemeinde als Kalender in Haus anbinden, damit Bote und Stimme die nächste Abholung nennen.\", \"better\": \"familie\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "tool_calls": [
+     {
+      "id": "2",
+      "type": "function",
+      "function": {
+       "name": "suggest",
+       "arguments": "{\"saw\": \"energie: 0 Aufrufe in 7 Tagen, die Startseite 140\", \"suggestion\": \"Die Energie-Seite von der Startseite nach hinten schieben und fragen, ob sie gebraucht wird.\", \"better\": \"beides\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "tool_calls": [
+     {
+      "id": "3",
+      "type": "function",
+      "function": {
+       "name": "note",
+       "arguments": "{\"kind\": \"watch\", \"text\": \"Zwei Vorschläge zur Nutzung angelegt: Abfuhrkalender (9 offene Fragen), Energie-Seite (0 Aufrufe).\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": "fertig"
+   }
+  ]
  }
 ]

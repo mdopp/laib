@@ -222,6 +222,11 @@ user's words. In the Werkstatt:
    list and asks: "Das Template ist da, soll ich es vorschlagen?" Then the
    ordinary path: `laib propose --add`, Inbox, apply.
 
+For the household's own small programs (a wish no upstream app answers),
+the Werkstatt writes the program too. Program and template go into one app
+registry repo (`mdopp/laib-apps`). The path from scaffold to checked route
+is `werkstatt/guide/apps.md`, and the mechanics are `laib-app` (#262).
+
 Two registries, deliberately: the **built-ins** in this repo hold only the
 platform roles (caddy, authelia, adguard, llama), whoami and the Werkstatt,
 so the kernel repo does not grow with every app; the **household registry**

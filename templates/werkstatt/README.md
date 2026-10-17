@@ -67,6 +67,39 @@ a person logs into themselves: Claude Code's own login after `claude
 set there is none), `gh auth login`'s token. The autoloop has no home of
 its own on disk: pi's hand stays apart (#44).
 
+**Small programs (#262).** The Werkstatt builds the household's own small
+programs and deploys them under their own `<name>.<domain>`. Both agents
+read one guide, `werkstatt/guide/` in this repo and `/opt/werkstatt/guide/`
+in the image: Claude Code as its managed CLAUDE.md
+(`/etc/claude-code/CLAUDE.md`), pi appended to its system prompt by the `pi`
+wrapper. `apps.md` covers the path from a wish to a checked route, and
+`templates.md` covers the template contract and the login order.
+The mechanics are one command, `laib-app`:
+
+- `laib-app new <name>` scaffolds the app (Go, tests, Containerfile) and its
+  template in the app registry repo `laib-apps`. That repo has one CI that
+  tests every app, publishes `ghcr.io/<owner>/<name>` only after green tests,
+  and lints every template.
+- `laib-app register <url>` proposes the repo as the box's template registry,
+  once.
+- `laib-app check <name>.<domain>` checks public DNS, the certificate and the
+  login. Exit 0 is done, 8 says what is missing, including the Strato
+  sentence for the owner, and 9 means it could not be measured.
+
+`laib template lint` runs inside the container with the latest release's
+kernel. The image carries the toolbox the guide prescribes: go, the Python
+venv and pip, an editor, ripgrep, dig and openssl. A tool that fails to
+download fails the build.
+
+The owner's steps:
+- **once:** create the GitHub repo `mdopp/laib-apps`, then approve the
+  registry proposal;
+- **per app:** merge the PR, make the new ghcr package public, create the
+  Strato CNAME `<name>` → `dopp.cloud`, and approve the service in the Inbox.
+
+`scripts/werkstatt-app.sh` (job `werkstatt-e2e/app`) walks the path in this
+image on a box on the runner.
+
 Migration from `claude-dev`: point `${DATA_DIR}/werkstatt/workspace` at the
 old `/workspace` volume for the checkouts; claude-dev's home and sessions
 and its SSH host keys are copied into `werkstatt/home` and

@@ -159,6 +159,9 @@ type Policy struct {
 	// Envelope: snapshot "required" (default) or "optional" — whether a
 	// class-2 action may go ahead without a pre-repair snapshot (#35).
 	Envelope Envelope `yaml:"envelope"`
+	// Skills switches the Operator's skills (ADR 0023): "paused" rests one,
+	// "active" (or absent) runs it.
+	Skills map[string]string `yaml:"skills"`
 }
 
 // Envelope tunes the operator's envelope.

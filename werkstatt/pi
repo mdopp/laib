@@ -1,11 +1,13 @@
 #!/bin/sh
 # Every pi in the Werkstatt talks to the box's model (#261): the laib-llama
 # provider (extensions/laib-llama.js) is loaded on every run, the
-# autoloop's and a person's. pi reads `-e x config` as a prompt run, so its
+# autoloop's and a person's, and the Werkstatt guide is appended to its
+# system prompt (#262). pi reads `-e x config` as a prompt run, so its
 # subcommands pass straight through. pi-upstream is npm's own `pi`, moved
 # aside by the Containerfile.
 EXT="${PI_LAIB_EXTENSION:-/opt/werkstatt/extensions/laib-llama.js}"
+GUIDE="${PI_LAIB_GUIDE:-/opt/werkstatt/guide/AGENTS.md}"   # the Werkstatt's house rules (#262)
 case "${1:-}" in
   install|remove|uninstall|update|list|config|auth|mcp) exec pi-upstream "$@" ;;
 esac
-exec pi-upstream -e "$EXT" "$@"
+exec pi-upstream -e "$EXT" --append-system-prompt "$GUIDE" "$@"

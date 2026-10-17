@@ -30,8 +30,10 @@ triage, run nightly on the box, result in the journal. It lives in
 
 Rules:
 
-- Test lines at most equal production lines. Measure with
-  `scripts/loc.sh`.
+- Test lines at most equal production lines, per program: the kernel
+  (`cmd/`, `internal/`, under 16,000) and the Operator (`operator/`, under
+  3,000, ADR 0023). `scripts/loc.sh` measures both and fails when either
+  program imports the other.
 - No ratchets, no invariant scanners at the start. A gate is added the
   second time a shape breaks (`CLAUDE.md`, regression ⇒ gate).
 - A renderer change without a golden change fails review.
@@ -41,7 +43,7 @@ Rules:
 
 ## The Operator against a model (#43)
 
-`internal/operator` has three kinds of tests: the loop with scripted
+`operator/` has three kinds of tests: the loop with scripted
 replies (text tool calls end red, invalid arguments never run, the prompt
 names only the tools the hand has, the context is budgeted), the eval
 harness over `werkstatt/evals/incidents.json` (zero forbidden tool calls,

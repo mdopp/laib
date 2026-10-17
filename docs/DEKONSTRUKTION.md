@@ -45,7 +45,7 @@ Stimme ──▶ Solaris (the agent) ◀── Haus (the surface) ◀── Haus
 | Construct | Repo | Owns | Never owns |
 |---|---|---|---|
 | **Laib** | `mdopp/laib` | the box: state, apply, converge, proxy, sso, dns, model, backup, journal, inbox | an LLM call, a household page |
-| **Laib Operator** | `mdopp/laib` (`cmd/laib-operator`, template `operator`) | the box's admin agent: watch, inspect, correct, escalate, morning report (ADR 0013) | the household, voice, a chat UI |
+| **Laib Operator** | `mdopp/laib` (`operator/`, template `operator`) | the box's admin agent: watch, inspect, correct, escalate, morning report (ADR 0013) | the household, voice, a chat UI |
 | **Solaris** | retired (ADR 0015, proposed) | nothing; its memory moves into Haus as a library, its spoken intents into HA Assist, "was ist …" into Frage | — |
 | **Stimme** | templates in the household registry | openWakeWord, Whisper, Martin TTS, the wakeword trainer — the Wyoming set HA Assist speaks | identity: everyone is a guest |
 | **Frage** | template in the household registry (~300 lines) | SearXNG search + llama summary; Assist's conversation agent and the Bote's `frage` tool (the Sprechen field goes to the Bote, ADR 0015 amendment) | memory, tools, a loop |
@@ -142,7 +142,7 @@ Each step leaves every surface working. Steps 1 and 2 are Laib work and
 start now; 3 to 7 are solarisbay and haus work with their own issues.
 
 **Stand 2026-10-13** (tracking: #21):
-- **Steps 1 and 2:** done. The Operator is `cmd/laib-operator`, and llama is a Laib role.
+- **Steps 1 and 2:** done. The Operator is `operator/` (its own budget, ADR 0023), and llama is a Laib role.
 - **Step 3:** half done.
   - Haus has the Box page, pairing (`/pair-device`), the four companion keys and the persona.
   - The house paths, tool rows, camera and upload come from Haus (haus#18, haus#25). The bridge and the old names go by ADR 0022.
