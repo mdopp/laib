@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -150,21 +151,21 @@ func registryTags(ctx context.Context, host, repo string) ([]string, error) {
 }
 
 func cmdUpdates(ctx context.Context, env *cliEnv, _ []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	ups := imageUpdates(ctx, st)
-	if env.json {
+	if env.JSON {
 		if ups == nil {
 			ups = []imageUpdate{}
 		}
-		return emit(env, ups)
+		return cli.Emit(env, ups)
 	}
 	for _, u := range ups {
-		fmt.Fprintf(env.w(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, or(u.Patch, "—"), or(u.Minor, "—"), u.Error)
+		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, or(u.Patch, "—"), or(u.Minor, "—"), u.Error)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func or(s, def string) string {

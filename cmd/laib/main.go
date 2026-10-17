@@ -4,9 +4,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"slices"
@@ -14,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 )
 
 // Version is set by the release build.
@@ -27,47 +26,8 @@ type verb struct {
 	run  func(ctx context.Context, env *cliEnv, args []string) int
 }
 
-// cliEnv is what every verb gets.
-type cliEnv struct {
-	paths boxfs.Paths
-	json  bool
-	actor string
-	in    io.Reader // stdin for --patch; MCP passes the patch here
-	mcp   bool      // the call came over MCP: no file access, so propose needs content
-	out   io.Writer // where a verb writes (#43): nil = os.Stdout; MCP and escalate pass a buffer
-	// errOut is where a verb's errors go (#289): nil = os.Stderr; MCP passes
-	// the call's own buffer, so no process-wide stderr is ever swapped
-	errOut io.Writer
-}
-
-// errw is the verb's error writer.
-func (e *cliEnv) errw() io.Writer {
-	if e != nil && e.errOut != nil {
-		return e.errOut
-	}
-	return os.Stderr
-}
-
-// fail prints a one-line error to the verb's error writer.
-func (e *cliEnv) fail(err error) int {
-	fmt.Fprintln(e.errw(), "laib:", strings.TrimSpace(err.Error()))
-	return 1
-}
-
-// w is the verb's output: never the process stdout when a caller passed its own.
-func (e *cliEnv) w() io.Writer {
-	if e != nil && e.out != nil {
-		return e.out
-	}
-	return os.Stdout
-}
-
-func (e *cliEnv) stdin() io.Reader {
-	if e.in != nil {
-		return e.in
-	}
-	return os.Stdin
-}
+// cliEnv is what every verb gets (internal/cli).
+type cliEnv = cli.Env
 
 // verbs is filled in init so the MCP handler (reached through cmdServe) may
 // read it without an initialization cycle.
@@ -126,14 +86,14 @@ func main() {
 }
 
 func run(args []string) int {
-	env := &cliEnv{paths: boxfs.Default(), actor: os.Getenv("LAIB_ACTOR")}
-	if env.actor == "" {
-		env.actor = "human:" + os.Getenv("USER")
+	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR")}
+	if env.Actor == "" {
+		env.Actor = "human:" + os.Getenv("USER")
 	}
 	var rest []string
 	for _, a := range args {
 		if a == "--json" {
-			env.json = true
+			env.JSON = true
 			continue
 		}
 		rest = append(rest, a)
@@ -149,7 +109,7 @@ func run(args []string) int {
 			return v.run(ctx, env, rest[1:])
 		}
 	}
-	fmt.Fprintf(env.errw(), "laib: unknown verb %q\n\n", rest[0])
+	fmt.Fprintf(env.Errw(), "laib: unknown verb %q\n\n", rest[0])
 	usage()
 	return 1
 }
@@ -165,20 +125,10 @@ func usage() {
 }
 
 func cmdVersion(_ context.Context, env *cliEnv, _ []string) int {
-	if env.json {
-		return emit(env, map[string]string{"version": Version})
+	if env.JSON {
+		return cli.Emit(env, map[string]string{"version": Version})
 	}
-	fmt.Fprintln(env.w(), "laib", Version)
-	return 0
-}
-
-// emit prints JSON and returns 0.
-func emit(env *cliEnv, v any) int {
-	enc := json.NewEncoder(env.w())
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
-		return env.fail(err)
-	}
+	fmt.Fprintln(env.W(), "laib", Version)
 	return 0
 }
 

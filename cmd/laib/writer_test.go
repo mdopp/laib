@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -20,7 +21,7 @@ import (
 // an MCP reply, and a verb's output cannot fill a pipe nobody reads.
 func TestMCPCallDoesNotTouchTheProcessStdout(t *testing.T) {
 	c := newCbox(t)
-	st, _ := loadState(c.env)
+	st, _ := cli.LoadState(c.env)
 	r, w, _ := os.Pipe()
 	old := os.Stdout
 	os.Stdout = w
@@ -36,7 +37,7 @@ func TestMCPCallDoesNotTouchTheProcessStdout(t *testing.T) {
 	os.Stdout = old
 	var captured bytes.Buffer
 	io.Copy(&captured, r)
-	if code != exitOK || !strings.Contains(out, "\"ready\"") {
+	if code != cli.ExitOK || !strings.Contains(out, "\"ready\"") {
 		t.Fatalf("status over MCP: %d %q", code, out)
 	}
 	if strings.Contains(out, "STRAY") {
@@ -62,17 +63,17 @@ func TestEscalateCompletesWithALargeInspectBundle(t *testing.T) {
 	t.Cleanup(func() { sysd.Run = inner })
 	done := make(chan int, 1)
 	go func() {
-		done <- cmdEscalate(context.Background(), &cliEnv{paths: c.env.paths, actor: "ops", out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"})
+		done <- cmdEscalate(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops", Out: &bytes.Buffer{}}, []string{"caddy", "test: large bundle"})
 	}()
 	select {
 	case rc := <-done:
-		if rc != exitOK {
+		if rc != cli.ExitOK {
 			t.Fatalf("escalate rc %d", rc)
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("escalate hung (a pipe nobody reads)")
 	}
-	files, _ := filepath.Glob(filepath.Join(c.env.paths.Home, "escalations", "*.md"))
+	files, _ := filepath.Glob(filepath.Join(c.env.Paths.Home, "escalations", "*.md"))
 	if len(files) != 1 {
 		t.Fatalf("escalation files: %v", files)
 	}
@@ -89,13 +90,13 @@ func TestOperatorWiringAndSilence(t *testing.T) {
 		t.Fatal("the prompt asks for laib_diag; diag must be an MCP tool")
 	}
 	c := newCbox(t)
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
 	text := regexp.MustCompile(`(?m)^notify:\n(  .*\n)*`).ReplaceAllString(string(b), "") // a box without a webhook of its own
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), append([]byte(text), []byte("model:\n  url: http://10.0.0.9:11435/v1\n")...), 0o644)
-	if rc := cmdOperator(context.Background(), c.env, []string{"enable"}); rc != exitOK {
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append([]byte(text), []byte("model:\n  url: http://10.0.0.9:11435/v1\n")...), 0o644)
+	if rc := cmdOperator(context.Background(), c.env, []string{"enable"}); rc != cli.ExitOK {
 		t.Fatalf("enable rc %d", rc)
 	}
-	st, err := loadState(c.env)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}

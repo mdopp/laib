@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mdopp/laib/internal/cli"
 )
 
 // #57 (1): while readiness is not red, serve pings the outside watchdog;
@@ -20,9 +22,9 @@ func TestServePingsTheWatchdogWhileNotRed(t *testing.T) {
 	var pings int32
 	wd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { atomic.AddInt32(&pings, 1) }))
 	defer wd.Close()
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), append(b, []byte("watchdog:\n  url: "+wd.URL+"/ping/abc\n  contact: Martin, 0170 1234567\n")...), 0o644)
-	st, err := loadState(c.env)
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  url: "+wd.URL+"/ping/abc\n  contact: Martin, 0170 1234567\n")...), 0o644)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,7 @@ func TestServePingsTheWatchdogWhileNotRed(t *testing.T) {
 // #57 (1): no watchdog configured is a yellow diag finding.
 func TestDiagIsYellowWithoutAWatchdog(t *testing.T) {
 	c := newCbox(t)
-	st, _ := loadState(c.env)
+	st, _ := cli.LoadState(c.env)
 	var found bool
 	for _, f := range runProbes(context.Background(), c.env, st, "") {
 		if f.Probe == "watchdog" && f.Severity == "gelb" {
@@ -67,10 +69,10 @@ func TestDiagIsYellowWithoutAWatchdog(t *testing.T) {
 // unplug-and-wait instruction and whom to call.
 func TestFamilyCardIsOnePageInGerman(t *testing.T) {
 	c := newCbox(t)
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), append(b, []byte("watchdog:\n  contact: Martin, 0170 1234567\n")...), 0o644)
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  contact: Martin, 0170 1234567\n")...), 0o644)
 	out := captureStdout(t, func() {
-		if rc := cmdFamilyCard(context.Background(), c.env, nil); rc != exitOK {
+		if rc := cmdFamilyCard(context.Background(), c.env, nil); rc != cli.ExitOK {
 			t.Errorf("rc %d", rc)
 		}
 	})

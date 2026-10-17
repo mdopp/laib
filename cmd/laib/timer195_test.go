@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -18,7 +19,7 @@ import (
 func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 	ctx := context.Background()
 	c := newCbox(t)
-	dir := filepath.Join(c.env.paths.State, "services", "tick")
+	dir := filepath.Join(c.env.Paths.State, "services", "tick")
 	os.MkdirAll(dir, 0o755)
 	for f, body := range map[string]string{
 		"laib.yml":             "name: tick\ntemplate: {registry: vm, name: tick, version: 1}\nroutes: []\nsecrets: []\ndata: []\nhealth: {none: a test unit}\nports: []\n",
@@ -37,11 +38,11 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 		}
 		return prev(ctx, name, args...)
 	}
-	st, err := loadState(c.env)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(ctx, c.env, st, "", "test: a service with a timer"); rc != exitOK {
+	if rc := runApply(ctx, c.env, st, "", "test: a service with a timer"); rc != cli.ExitOK {
 		t.Fatalf("apply waited for the timer's oneshot to become active: rc %d", rc)
 	}
 	if !slices.Contains(c.calls, "systemctl --user enable --now tick-refresh.timer") {

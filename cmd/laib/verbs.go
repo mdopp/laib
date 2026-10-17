@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
@@ -22,26 +23,6 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 	"gopkg.in/yaml.v3"
 )
-
-// Exit codes (docs/INTERFACE.md).
-const (
-	exitOK      = 0
-	exitUsage   = 1
-	exitRed     = 2
-	exitRefused = 3
-	exitLocked  = 4
-)
-
-func loadState(env *cliEnv) (*state.State, error) {
-	st, err := state.Load(env.paths.State)
-	if err != nil {
-		return nil, err
-	}
-	if err := policy.Validate(st.Policy); err != nil {
-		return nil, err
-	}
-	return st, nil
-}
 
 // LastBackup: the last successful backup and how many places hold it.
 type LastBackup struct {
@@ -95,7 +76,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 	r := readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: Version}
 	r.Operator, _ = operatorState(operatorFacts(ctx, env, st))
 	r.LastBackup, r.LastChange = guarantees(env, st)
-	if holder := apply.LockHolder(env.paths); holder != "" {
+	if holder := apply.LockHolder(env.Paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
 	}
 	r.Firewall = firewallState(ctx, env)
@@ -103,13 +84,13 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 	if r.Firewall == "fehlt" && r.Lock == "" {
 		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
-	if sec, err := secrets.Load(env.paths.Secrets, env.paths.Key); err == nil {
-		if p, err := plan.Compute(ctx, st, sec, env.paths, ""); err == nil {
+	if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil {
+		if p, err := plan.Compute(ctx, st, sec, env.Paths, ""); err == nil {
 			r.Drift = len(p.Changes)
 		}
 	}
-	paused := apply.Paused(env.paths)
-	r.Pending = apply.Pending(env.paths)
+	paused := apply.Paused(env.Paths)
+	r.Pending = apply.Pending(env.Paths)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		row := serviceStatus{Name: name, State: "grün", Units: map[string]string{}}
@@ -160,9 +141,9 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 }
 
 func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	r, rows := collectStatus(ctx, env, st)
 	if len(args) > 0 {
@@ -174,80 +155,80 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		rows = one
 	}
-	if env.json {
-		return emit(env, map[string]any{"ready": r, "services": rows})
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"ready": r, "services": rows})
 	}
-	fmt.Fprintf(env.w(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
+	fmt.Fprintf(env.W(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
-		fmt.Fprintf(env.w(), "  gesperrt durch: %s\n", r.Lock)
+		fmt.Fprintf(env.W(), "  gesperrt durch: %s\n", r.Lock)
 	}
 	for _, row := range rows {
-		fmt.Fprintf(env.w(), "  %-5s %-20s", row.State, row.Name)
+		fmt.Fprintf(env.W(), "  %-5s %-20s", row.State, row.Name)
 		for u, a := range row.Units {
 			if a != "active" {
-				fmt.Fprintf(env.w(), " %s=%s", u, a)
+				fmt.Fprintf(env.W(), " %s=%s", u, a)
 			}
 		}
-		fmt.Fprintln(env.w())
+		fmt.Fprintln(env.W())
 	}
-	if e, ok := journal.Last(env.paths.Journal); ok {
-		fmt.Fprintf(env.w(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+	if e, ok := journal.Last(env.Paths.Journal); ok {
+		fmt.Fprintf(env.W(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	only := ""
 	if len(args) > 0 {
 		only = args[0]
 	}
-	p, err := plan.Compute(ctx, st, sec, env.paths, only)
+	p, err := plan.Compute(ctx, st, sec, env.Paths, only)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if env.json {
-		return emit(env, p)
+	if env.JSON {
+		return cli.Emit(env, p)
 	}
 	if p.Empty() {
-		fmt.Fprintln(env.w(), "Keine Änderung: die Box entspricht dem State.")
+		fmt.Fprintln(env.W(), "Keine Änderung: die Box entspricht dem State.")
 	}
 	for _, c := range p.Changes {
-		fmt.Fprintf(env.w(), "%-6s %s\n", c.Kind, c.Target)
+		fmt.Fprintf(env.W(), "%-6s %s\n", c.Kind, c.Target)
 		if c.Diff != "" {
-			fmt.Fprintln(env.w(), c.Diff)
+			fmt.Fprintln(env.W(), c.Diff)
 		}
 	}
 	for _, u := range p.Unmanaged {
-		fmt.Fprintf(env.w(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+		fmt.Fprintf(env.W(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
 	}
 	for _, c := range p.Conflicts {
-		fmt.Fprintf(env.w(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
+		fmt.Fprintf(env.W(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)
 	}
 	for _, w := range st.Warnings {
-		fmt.Fprintf(env.w(), "HINWEIS: %s\n", w)
+		fmt.Fprintf(env.W(), "HINWEIS: %s\n", w)
 	}
 	for _, o := range st.Off {
-		fmt.Fprintf(env.w(), "AUS: %s\n", o)
+		fmt.Fprintf(env.W(), "AUS: %s\n", o)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	hand := strings.SplitN(env.actor, ":", 2)[0]
+	hand := strings.SplitN(env.Actor, ":", 2)[0]
 	if !policy.Allowed(st.Policy, hand, "apply") {
-		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.actor, st.Policy.Hands[hand].Ceiling))
+		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
 	}
 	if hand == "ops" {
 		return opsApply(ctx, env, st, args)
@@ -271,116 +252,116 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 		if args[i] == "--since" && i+1 < len(args) {
 			d, err := time.ParseDuration(args[i+1])
 			if err != nil {
-				return env.fail(err)
+				return env.Fail(err)
 			}
 			since = d
 			i++
 		}
 	}
-	es, err := journal.Read(env.paths.Journal, time.Now().Add(-since))
+	es, err := journal.Read(env.Paths.Journal, time.Now().Add(-since))
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if env.json {
-		return emit(env, es)
+	if env.JSON {
+		return cli.Emit(env, es)
 	}
 	for _, e := range es {
-		fmt.Fprintf(env.w(), "%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
+		fmt.Fprintf(env.W(), "%s  %-14s %-8s %-12s %-5s %s %s\n", e.T.Local().Format("02.01. 15:04:05"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	r, rows := collectStatus(ctx, env, st)
-	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
-	if env.json {
-		return emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
+	es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain})
 	}
-	fmt.Fprintf(env.w(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
-	fmt.Fprintln(env.w(), "## Services")
+	fmt.Fprintf(env.W(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
+	fmt.Fprintln(env.W(), "## Services")
 	for _, row := range rows {
-		fmt.Fprintf(env.w(), "- %s: %s\n", row.Name, row.State)
+		fmt.Fprintf(env.W(), "- %s: %s\n", row.Name, row.State)
 	}
-	fmt.Fprintln(env.w(), "\n## Journal, letzte 24h")
+	fmt.Fprintln(env.W(), "\n## Journal, letzte 24h")
 	for _, e := range es {
-		fmt.Fprintf(env.w(), "- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
+		fmt.Fprintf(env.W(), "- %s %s %s %s %s %s\n", e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason)
 	}
-	fmt.Fprintln(env.w(), "\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
-	return exitOK
+	fmt.Fprintln(env.W(), "\n## Read next\n- docs/DESIGN.md, docs/INTERFACE.md, docs/STATE.md in the laib repo\n- `laib plan` before any change; `laib propose` if your hand may not apply")
+	return cli.ExitOK
 }
 
 func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.fail(errors.New("usage: laib template lint <dir> | list | sync | update <service>"))
+		return env.Fail(errors.New("usage: laib template lint <dir> | list | sync | update <service>"))
 	}
 	switch args[0] {
 	case "lint":
 		if len(args) < 2 {
-			return env.fail(errors.New("usage: laib template lint <dir>"))
+			return env.Fail(errors.New("usage: laib template lint <dir>"))
 		}
 		return lintTemplate(env, args[1])
 	case "list":
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
 		avail := availableTemplates(env)
-		if env.json {
-			return emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
+		if env.JSON {
+			return cli.Emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
-		fmt.Fprintln(env.w(), "installiert:")
+		fmt.Fprintln(env.W(), "installiert:")
 		for _, name := range st.ServiceNames() {
 			t := st.Services[name].Contract.Template
-			fmt.Fprintf(env.w(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
+			fmt.Fprintf(env.W(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
-		fmt.Fprintln(env.w(), "verfügbar:")
+		fmt.Fprintln(env.W(), "verfügbar:")
 		for _, name := range sortedKeys(avail) {
-			fmt.Fprintf(env.w(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
+			fmt.Fprintf(env.W(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
-		return exitOK
+		return cli.ExitOK
 	case "sync":
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
 		lines, err := syncRegistries(ctx, env, st)
 		for _, l := range lines {
-			fmt.Fprintln(env.w(), "registry:", l)
+			fmt.Fprintln(env.W(), "registry:", l)
 		}
 		if err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
-		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "template", Result: "info", Detail: "sync " + strings.Join(lines, "; ")})
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "template", Result: "info", Detail: "sync " + strings.Join(lines, "; ")})
 		if len(args) > 1 && args[1] == "--propose" {
 			// Every installed service whose template changed gets an update
 			// proposal; the dial decides whether laib applies it itself.
-			code := exitOK
+			code := cli.ExitOK
 			for _, name := range st.ServiceNames() {
-				if c := templateUpdate(ctx, env, st, name); c != exitOK && c != exitUsage {
+				if c := templateUpdate(ctx, env, st, name); c != cli.ExitOK && c != cli.ExitUsage {
 					code = c
 				}
 			}
 			return code
 		}
-		return exitOK
+		return cli.ExitOK
 	case "update":
 		if len(args) < 2 {
-			return env.fail(errors.New("usage: laib template update <service>"))
+			return env.Fail(errors.New("usage: laib template update <service>"))
 		}
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
-		if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
-			return exitRefusedMsg(env, env.actor+" may not propose")
+		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
+			return exitRefusedMsg(env, env.Actor+" may not propose")
 		}
 		return templateUpdate(ctx, env, st, args[1])
 	}
-	return env.fail(fmt.Errorf("unknown template subcommand %q", args[0]))
+	return env.Fail(fmt.Errorf("unknown template subcommand %q", args[0]))
 }
 
 // lintTemplate loads a template folder as if it were the only service of a
@@ -388,7 +369,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 func lintTemplate(env *cliEnv, dir string) int {
 	tmp, err := os.MkdirTemp("", "laib-lint")
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Base(filepath.Clean(dir))
@@ -398,7 +379,7 @@ func lintTemplate(env *cliEnv, dir string) int {
 	os.MkdirAll(dst, 0o755)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -433,12 +414,12 @@ func lintTemplate(env *cliEnv, dir string) int {
 	}
 	st, err := state.Load(tmp)
 	if err != nil {
-		fmt.Fprintln(env.errw(), err)
-		return exitUsage
+		fmt.Fprintln(env.Errw(), err)
+		return cli.ExitUsage
 	}
 	out, err := render.Render(st, nil)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	// the after: neighbours' declared data paths (their apply creates them)
 	// may be mounted too: the file share's folders in media, immich, paperless
@@ -460,23 +441,23 @@ func lintTemplate(env *cliEnv, dir string) int {
 	}
 	if errs := lintMounts(st, name, out, neighbours); len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintln(env.errw(), e)
+			fmt.Fprintln(env.Errw(), e)
 		}
-		return exitUsage
+		return cli.ExitUsage
 	}
 	for _, phase := range []string{"pre-start", "post-deploy"} {
 		if b, err := os.ReadFile(filepath.Join(dir, phase)); err == nil {
 			first := strings.SplitN(string(b), "\n", 2)[0]
 			if !hookInterpreters[first] {
-				fmt.Fprintf(env.errw(), "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
-				return exitUsage
+				fmt.Fprintf(env.Errw(), "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
+				return cli.ExitUsage
 			}
 		}
 	}
 	// a health declaration (#46): an http probe, or a reason why there is none
 	if h := st.Services[name].Contract.Health; h.HTTP == "" && h.None == "" {
-		fmt.Fprintf(env.errw(), "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
-		return exitUsage
+		fmt.Fprintf(env.Errw(), "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
+		return cli.ExitUsage
 	}
 	// a host port another template of the same registry publishes (#46: whoami and bote on 8080)
 	mine := map[string]bool{}
@@ -495,31 +476,31 @@ func lintTemplate(env *cliEnv, dir string) int {
 		b, _ := os.ReadFile(f)
 		for _, hp := range state.PublishedHostPorts(string(b)) {
 			if mine[hp] {
-				fmt.Fprintf(env.errw(), "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
-				return exitUsage
+				fmt.Fprintf(env.Errw(), "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
+				return cli.ExitUsage
 			}
 		}
 	}
 	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return env.fail(errors.New("usage: laib adopt <quadlet folder>"))
+		return env.Fail(errors.New("usage: laib adopt <quadlet folder>"))
 	}
 	name := args[0]
-	src := filepath.Join(env.paths.Quadlet, name)
-	dst := filepath.Join(env.paths.State, "services", name)
+	src := filepath.Join(env.Paths.Quadlet, name)
+	dst := filepath.Join(env.Paths.State, "services", name)
 	if _, err := os.Stat(dst); err == nil {
-		return env.fail(fmt.Errorf("services/%s exists already", name))
+		return env.Fail(fmt.Errorf("services/%s exists already", name))
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -530,30 +511,30 @@ func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	}
 	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
-	fmt.Fprintf(env.w(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
-	return exitOK
+	fmt.Fprintf(env.W(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
+	return cli.ExitOK
 }
 
 func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return env.fail(errors.New("usage: laib ignore <unit>"))
+		return env.Fail(errors.New("usage: laib ignore <unit>"))
 	}
-	p := filepath.Join(env.paths.State, "ignore.yml")
+	p := filepath.Join(env.Paths.State, "ignore.yml")
 	b, _ := os.ReadFile(p)
 	content := string(b)
 	if content == "" {
 		content = "units:\n"
 	}
 	if strings.Contains(content, "- "+args[0]+"\n") {
-		fmt.Fprintln(env.w(), "already ignored:", args[0])
-		return exitOK
+		fmt.Fprintln(env.W(), "already ignored:", args[0])
+		return cli.ExitOK
 	}
 	content += "  - " + args[0] + "\n"
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	fmt.Fprintln(env.w(), "ignored:", args[0])
-	return exitOK
+	fmt.Fprintln(env.W(), "ignored:", args[0])
+	return cli.ExitOK
 }
 
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
@@ -588,25 +569,25 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 		i++
 	}
 	if domain == "" {
-		return env.fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+		return env.Fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
 	}
 	if tlsMode != "" && tlsMode != "internal" {
-		return env.fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
+		return env.Fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
 	}
 	if !gpu && modelURL == "" {
-		fmt.Fprintln(env.errw(), "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
+		fmt.Fprintln(env.Errw(), "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
 	}
-	for _, d := range []string{env.paths.Home, env.paths.State, env.paths.Journal, env.paths.Render, filepath.Join(env.paths.State, "services")} {
+	for _, d := range []string{env.Paths.Home, env.Paths.State, env.Paths.Journal, env.Paths.Render, filepath.Join(env.Paths.State, "services")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
 	}
-	recipient, err := secrets.EnsureKey(env.paths.Key)
+	recipient, err := secrets.EnsureKey(env.Paths.Key)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	write := func(name, content string) error {
-		p := filepath.Join(env.paths.State, name)
+		p := filepath.Join(env.Paths.State, name)
 		if _, err := os.Stat(p); err == nil {
 			return nil
 		}
@@ -635,29 +616,29 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	backup := fmt.Sprintf("backup:\n  repo: %s          # restic, on the data disk: protects against mistakes and bad updates from day one; a NAS or second repo protects against the disk\n  schedule: \"03:00\"\n", filepath.Join(filepath.Dir(dataDir), "backup", "restic"))
 	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; never approves\n  approver: {ceiling: apply, human: true, verbs: [approve, reject, inbox, status, note]}   # the Signal relay (#48): acts only on the admin's verified number, can only decide\n  haus: {ceiling: apply, verbs: [status, inbox, journal, restart]}   # the family's pages (haus#1): looks, restarts, decides nothing\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: proposal\n  patch: proposal\n  new-service: proposal   # adds surface: a human decides\n  # whatever the dial says: a change the content review marks (a script on the box, a public route,\n  # policy.yml, a token, a host folder …) waits for a human (#34)\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if err := proposal.EnsureRepo(ctx, env.paths.State); err != nil {
-		return env.fail(err)
+	if err := proposal.EnsureRepo(ctx, env.Paths.State); err != nil {
+		return env.Fail(err)
 	}
-	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
-		return env.fail(err)
+	if err := journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
+		return env.Fail(err)
 	}
-	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
-	return exitOK
+	fmt.Fprintf(env.W(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.Paths.State, recipient, env.Paths.Key)
+	return cli.ExitOK
 }
 
 // guarantees reads the last successful backup from the journal and the
 // last approved proposal from the inbox (haus#2).
 func guarantees(env *cliEnv, st *state.State) (LastBackup, LastChange) {
 	var lb LastBackup
-	if es, err := journal.Read(env.paths.Journal, time.Time{}); err == nil {
+	if es, err := journal.Read(env.Paths.Journal, time.Time{}); err == nil {
 		for _, e := range es {
 			if e.Verb == "backup" && e.Result == "green" && e.Reason == "" {
 				lb = LastBackup{At: e.T.UTC().Format(time.RFC3339), OK: true}

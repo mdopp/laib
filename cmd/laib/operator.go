@@ -16,6 +16,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -39,7 +40,7 @@ func containerName(unit string) string { return "systemd-" + strings.TrimSuffix(
 
 // loadSvc loads the state and the named service in it.
 func loadSvc(env *cliEnv, name string) (*state.State, *state.Service, error) {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,13 +125,13 @@ func ownContainers(svc *state.Service) []string {
 // policy.yml says `envelope.snapshot: optional`.
 func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Service, verb, detail string) int {
 	since := time.Now().Add(-time.Hour)
-	recent, skipped, err := journal.ReadCounted(env.paths.Journal, since)
+	recent, skipped, err := journal.ReadCounted(env.Paths.Journal, since)
 	if err != nil {
-		fmt.Fprintf(env.errw(), "laib: das Journal ist nicht lesbar, deshalb kein %s: %v\n", verb, err)
-		return exitRefused
+		fmt.Fprintf(env.Errw(), "laib: das Journal ist nicht lesbar, deshalb kein %s: %v\n", verb, err)
+		return cli.ExitRefused
 	}
 	if skipped > 0 {
-		fmt.Fprintf(env.errw(), "laib: %d unlesbare Journalzeilen übersprungen\n", skipped)
+		fmt.Fprintf(env.Errw(), "laib: %d unlesbare Journalzeilen übersprungen\n", skipped)
 	}
 	used, snapped := 0, false
 	for _, e := range recent {
@@ -141,7 +142,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		case "exec", "write", "restart":
 			used++
 		case "apply": // the Operator's own applies (#286); a human's never count
-			if e.Actor == env.actor {
+			if e.Actor == env.Actor {
 				used++
 			}
 		case "snapshot":
@@ -151,49 +152,49 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		}
 	}
 	if used >= RepairBudget {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: verb, Service: svc.Name, Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h). Ein Mensch muss ran: %s", RepairBudget, detail)})
-		fmt.Fprintf(env.errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
-		return exitRefused
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h). Ein Mensch muss ran: %s", RepairBudget, detail)})
+		fmt.Fprintf(env.Errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
+		return cli.ExitRefused
 	}
 	paths := snapshotPaths(st, svc)
 	optional := st.Policy.Envelope.Snapshot == "optional"
 	if snapped || len(paths) == 0 {
-		return exitOK
+		return cli.ExitOK
 	}
 	if st.Box.Backup.Repo == "" {
 		if optional {
-			return exitOK
+			return cli.ExitOK
 		}
-		fmt.Fprintf(env.errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
-		return exitRefused
+		fmt.Fprintf(env.Errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
+		return cli.ExitRefused
 	}
 	_, pw, err := backupPrep(env)
 	if err == nil {
 		_, err = resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-repair", "--tag", svc.Name, "--exclude-caches"}, paths...)...)
 	}
 	if err != nil {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: err.Error()})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: err.Error()})
 		if optional {
-			return exitOK
+			return cli.ExitOK
 		}
-		fmt.Fprintf(env.errw(), "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
-		return exitRefused
+		fmt.Fprintf(env.Errw(), "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
+		return cli.ExitRefused
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: "pre-repair: " + strings.Join(paths, " ")})
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: "pre-repair: " + strings.Join(paths, " ")})
 	// pre-repair snapshots are for the next hours, not for the archive
 	if _, err := resticRun(ctx, st, pw, "forget", "--tag", "pre-repair", "--keep-within", "7d", "--prune"); err != nil {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: "forget pre-repair: " + err.Error()})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: "forget pre-repair: " + err.Error()})
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.fail(errors.New("usage: laib inspect <service>"))
+		return env.Fail(errors.New("usage: laib inspect <service>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	out := map[string]any{"service": svc.Name, "contract": svc.Contract}
 	units := map[string]string{}
@@ -224,156 +225,156 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 			out["health"] = resp.Status + " " + strings.TrimSpace(string(b))
 		}
 	}
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	logs := map[string]string{}
 	for _, u := range svc.UnitNames() {
 		text, _ := sysd.Run(ctx, "journalctl", "--user", "-u", u, "-n", "100", "--no-pager", "-o", "short-iso")
 		logs[u] = render.Redact(render.Output{"l": text}, sec)["l"]
 	}
 	out["logs"] = logs
-	if env.json {
-		return emit(env, out)
+	if env.JSON {
+		return cli.Emit(env, out)
 	}
-	fmt.Fprintf(env.w(), "# %s\n", svc.Name)
+	fmt.Fprintf(env.W(), "# %s\n", svc.Name)
 	for u, s := range units {
-		fmt.Fprintf(env.w(), "## unit %s\n%s\n", u, s)
+		fmt.Fprintf(env.W(), "## unit %s\n%s\n", u, s)
 	}
 	for c, s := range containers {
-		fmt.Fprintf(env.w(), "## container %s\n%s\n", c, s)
+		fmt.Fprintf(env.W(), "## container %s\n%s\n", c, s)
 	}
 	for p, s := range files {
-		fmt.Fprintf(env.w(), "## data %s\n%s\n", p, s)
+		fmt.Fprintf(env.W(), "## data %s\n%s\n", p, s)
 	}
 	if h, ok := out["health"]; ok {
-		fmt.Fprintf(env.w(), "## health\n%v\n", h)
+		fmt.Fprintf(env.W(), "## health\n%v\n", h)
 	}
 	for u, s := range logs {
-		fmt.Fprintf(env.w(), "## logs %s\n%s\n", u, s)
+		fmt.Fprintf(env.W(), "## logs %s\n%s\n", u, s)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdRead(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return env.fail(errors.New("usage: laib read <service> <path>"))
+		return env.Fail(errors.New("usage: laib read <service> <path>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	defer root.Close()
 	b, err := root.ReadFile(rel)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	p := args[1]
 	if len(b) > 1<<20 {
 		b = b[:1<<20]
 	}
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	text := render.Redact(render.Output{"f": string(b)}, sec)["f"]
-	if env.json {
-		return emit(env, map[string]string{"path": p, "content": text})
+	if env.JSON {
+		return cli.Emit(env, map[string]string{"path": p, "content": text})
 	}
-	fmt.Fprint(env.w(), text)
-	return exitOK
+	fmt.Fprint(env.W(), text)
+	return cli.ExitOK
 }
 
 func cmdWrite(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return env.fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
+		return env.Fail(errors.New("usage: laib write <service> <path>   (content on stdin)"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
-		return exitRefusedMsg(env, env.actor+" may not write")
+	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
+		return exitRefusedMsg(env, env.Actor+" may not write")
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	defer root.Close()
 	p := args[1]
-	content, err := io.ReadAll(env.stdin())
+	content, err := io.ReadAll(env.Stdin())
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if code := envelope(ctx, env, st, svc, "write", p); code != exitOK {
+	if code := envelope(ctx, env, st, svc, "write", p); code != cli.ExitOK {
 		return code
 	}
 	old, _ := root.ReadFile(rel)
 	if dir := filepath.Dir(rel); dir != "." {
 		if err := root.MkdirAll(dir, 0o755); err != nil {
-			return env.fail(fmt.Errorf("%s: %w", p, err))
+			return env.Fail(fmt.Errorf("%s: %w", p, err))
 		}
 	}
 	if err := boxfs.WriteAtomicIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
-		return env.fail(fmt.Errorf("%s: %w", p, err))
+		return env.Fail(fmt.Errorf("%s: %w", p, err))
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})
-	fmt.Fprintln(env.w(), "geschrieben:", p)
-	return exitOK
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})
+	fmt.Fprintln(env.W(), "geschrieben:", p)
+	return cli.ExitOK
 }
 
 func cmdExec(ctx context.Context, env *cliEnv, args []string) int {
 	// laib exec <service> [--container name] -- cmd args…
 	if len(args) < 1 {
-		return env.fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
+		return env.Fail(errors.New("usage: laib exec <service> [--container <name>] -- <cmd…>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
-		return exitRefusedMsg(env, env.actor+" may not exec")
+	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
+		return exitRefusedMsg(env, env.Actor+" may not exec")
 	}
 	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
-		return env.fail(errors.New("no command after --"))
+		return env.Fail(errors.New("no command after --"))
 	}
 	container, err = pickContainer(svc, container)
 	if err != nil {
 		return exitRefusedMsg(env, err.Error())
 	}
-	if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != exitOK {
+	if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
 		return code
 	}
 	out, entry, err := runIn(ctx, env, svc, "exec", container, cmd)
-	record(env, st, entry)
-	if env.json {
-		return emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
+	cli.Record(env, st, entry)
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
 	}
-	fmt.Fprintln(env.w(), out)
+	fmt.Fprintln(env.W(), out)
 	if err != nil {
-		return exitRed
+		return cli.ExitRed
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return env.fail(errors.New("usage: laib restart <service>"))
+		return env.Fail(errors.New("usage: laib restart <service>"))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
-		return exitRefusedMsg(env, env.actor+" may not restart")
+	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
+		return exitRefusedMsg(env, env.Actor+" may not restart")
 	}
-	if code := envelope(ctx, env, st, svc, "restart", "restart"); code != exitOK {
+	if code := envelope(ctx, env, st, svc, "restart", "restart"); code != cli.ExitOK {
 		return code
 	}
 	for _, u := range svc.UnitNames() {
 		if err := sysd.Restart(ctx, u); err != nil {
-			record(env, st, journal.Entry{Actor: env.actor, Verb: "restart", Service: svc.Name, Result: "red", Detail: u + ": " + err.Error()})
-			return exitRed
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "restart", Service: svc.Name, Result: "red", Detail: u + ": " + err.Error()})
+			return cli.ExitRed
 		}
 	}
 	checks := apply.Verify(ctx, st, []string{svc.Name})
@@ -385,20 +386,20 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 			bad = append(bad, c.What+" "+c.Detail)
 		}
 	}
-	entry := journal.Entry{Actor: env.actor, Verb: "restart", Service: svc.Name, Result: "green"}
+	entry := journal.Entry{Actor: env.Actor, Verb: "restart", Service: svc.Name, Result: "green"}
 	if !green {
 		entry.Result, entry.Detail = "red", strings.Join(bad, "; ")
 	}
-	record(env, st, entry)
-	if env.json {
-		return emit(env, map[string]any{"checks": checks, "green": green})
+	cli.Record(env, st, entry)
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"checks": checks, "green": green})
 	}
 	if green {
-		fmt.Fprintln(env.w(), "grün:", svc.Name)
-		return exitOK
+		fmt.Fprintln(env.W(), "grün:", svc.Name)
+		return cli.ExitOK
 	}
-	fmt.Fprintln(env.w(), "rot:", entry.Detail)
-	return exitRed
+	fmt.Fprintln(env.W(), "rot:", entry.Detail)
+	return cli.ExitRed
 }
 
 // cmdEscalate hands a service to the next hand: a context bundle under
@@ -406,23 +407,23 @@ func cmdRestart(ctx context.Context, env *cliEnv, args []string) int {
 // webhook, so the Werkstatt's claude hand (or the human) picks it up.
 func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 2 {
-		return env.fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
+		return env.Fail(errors.New("usage: laib escalate <service> \"<was ich weiß>\""))
 	}
 	st, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	dir := filepath.Join(env.paths.Home, "escalations")
+	dir := filepath.Join(env.Paths.Home, "escalations")
 	os.MkdirAll(dir, 0o755)
 	name := time.Now().UTC().Format("2006-01-02T15-04-05") + "-" + svc.Name + ".md"
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Eskalation %s · von %s\n\n%s\n\n## inspect\n\n", svc.Name, env.actor, strings.Join(args[1:], " "))
+	fmt.Fprintf(&b, "# Eskalation %s · von %s\n\n%s\n\n## inspect\n\n", svc.Name, env.Actor, strings.Join(args[1:], " "))
 	// the bundle through a buffer (#43): a pipe nobody reads blocked here
 	// at 64 KiB while mcpMu was held, and every agent hung with it
 	var ins bytes.Buffer
-	cmdInspect(ctx, &cliEnv{paths: env.paths, actor: env.actor, mcp: env.mcp, out: &ins, errOut: env.errOut}, []string{svc.Name})
+	cmdInspect(ctx, &cliEnv{Paths: env.Paths, Actor: env.Actor, MCP: env.MCP, Out: &ins, ErrOut: env.ErrOut}, []string{svc.Name})
 	b.Write(ins.Bytes())
-	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
+	es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
 	b.WriteString("\n## Journal 24h\n\n")
 	for _, e := range es {
 		if e.Service == svc.Name || e.Service == "" {
@@ -431,7 +432,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	p := filepath.Join(dir, name)
 	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
@@ -440,12 +441,12 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	} else if ok {
 		detail = url + " (" + p + ")"
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: detail})
-	if env.json {
-		return emit(env, map[string]string{"file": p, "issue": strings.TrimSuffix(strings.Split(detail, " (")[0], p)})
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: detail})
+	if env.JSON {
+		return cli.Emit(env, map[string]string{"file": p, "issue": strings.TrimSuffix(strings.Split(detail, " (")[0], p)})
 	}
-	fmt.Fprintln(env.w(), "eskaliert:", detail)
-	return exitOK
+	fmt.Fprintln(env.W(), "eskaliert:", detail)
+	return cli.ExitOK
 }
 
 // pickContainer resolves --container to one of the service's own containers,
@@ -493,9 +494,9 @@ func containerArgs(args []string) (container string, cmd []string) {
 func runIn(ctx context.Context, env *cliEnv, svc *state.Service, verb, container string, cmd []string) (string, journal.Entry, error) {
 	start := time.Now()
 	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	out = render.Redact(render.Output{"o": out}, sec)["o"]
-	entry := journal.Entry{Actor: env.actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
+	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: tail(out, 1500), MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result = "red"
 		entry.Detail = err.Error() + "\n" + tail(out, 1500)
@@ -511,15 +512,15 @@ var lookCommands = map[string]bool{"cat": true, "ls": true, "head": true, "tail"
 // no budget, no snapshot, journaled.
 func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return env.fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
+		return env.Fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
 	}
 	_, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	container, cmd := containerArgs(args[1:])
 	if len(cmd) == 0 {
-		return env.fail(errors.New("no command after --"))
+		return env.Fail(errors.New("no command after --"))
 	}
 	if !lookCommands[filepath.Base(cmd[0])] {
 		return exitRefusedMsg(env, cmd[0]+" is not a read-only command; laib exec is the budgeted way to change something")
@@ -534,15 +535,15 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 		return exitRefusedMsg(env, err.Error())
 	}
 	out, entry, err := runIn(ctx, env, svc, "look", container, cmd)
-	journal.Append(env.paths.Journal, entry)
-	if env.json {
-		return emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
+	journal.Append(env.Paths.Journal, entry)
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
 	}
 	fmt.Println(out)
 	if err != nil {
-		return exitRed
+		return cli.ExitRed
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 // opsApply: the Operator applies a fix itself (owner, #286, 2026-10-17) —
@@ -562,10 +563,10 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 	}
 	p, err := proposal.Get(inboxDir(env), n)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	switch {
-	case p.Actor != env.actor || p.Status != "open":
+	case p.Actor != env.Actor || p.Status != "open":
 		return exitRefusedMsg(env, fmt.Sprintf("#%d ist nicht dein offener Vorschlag (%s, %s)", n, p.Actor, p.Status))
 	case policy.NeedsHuman(st.Policy, p.Tier, p.Class):
 		return exitRefusedMsg(env, fmt.Sprintf("#%d gibt nur ein Mensch frei: %s", n, strings.Join(p.Reasons, "; ")))
@@ -584,17 +585,17 @@ func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) 
 		if !ok {
 			return exitRefusedMsg(env, fmt.Sprintf("#%d fügt %s hinzu: das gibt ein Mensch frei", n, name))
 		}
-		if code := envelope(ctx, env, st, svc, "apply", fmt.Sprintf("#%d %s", n, p.Reason)); code != exitOK {
+		if code := envelope(ctx, env, st, svc, "apply", fmt.Sprintf("#%d %s", n, p.Reason)); code != cli.ExitOK {
 			return code
 		}
 	}
 	code := autoApprove(ctx, env, p)
 	result := "green"
-	if code != exitOK {
+	if code != cli.ExitOK {
 		result = "red"
 	}
 	for _, name := range svcs {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
 	}
 	return code
 }

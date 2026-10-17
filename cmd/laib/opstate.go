@@ -70,7 +70,7 @@ func operatorFacts(ctx context.Context, env *cliEnv, st *state.State) opFacts {
 		resp.Body.Close()
 		f.Answers = resp.StatusCode < 500
 	}
-	if es, err := journal.Read(env.paths.Journal, f.Now.Add(-24*time.Hour)); err == nil {
+	if es, err := journal.Read(env.Paths.Journal, f.Now.Add(-24*time.Hour)); err == nil {
 		for _, e := range es {
 			if e.Actor == "ops" && e.Verb == "note" && e.T.After(f.LastNote) {
 				f.LastNote = e.T

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -29,15 +30,15 @@ func TestDiagNamesEachMissingHAIntegration(t *testing.T) {
 		w.Write([]byte(`[{"domain":"wyoming","title":"faster-whisper"},{"domain":"mqtt","title":"mosquitto"},{"domain":"caldav","title":"Radicale"}]`))
 	}))
 	defer ha.Close()
-	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
+	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	sec["HA_TOKEN"] = "ha-token-1"
-	secrets.Save(c.env.paths.Secrets, c.env.paths.Key, sec)
-	dir := filepath.Join(c.env.paths.State, "services", "home-assistant")
+	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
+	dir := filepath.Join(c.env.Paths.State, "services", "home-assistant")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "laib.yml"), []byte("name: home-assistant\ntemplate: {registry: builtin, name: home-assistant, version: 1}\nroutes: []\nsecrets:\n  - name: HA_TOKEN\n    external: true\n    optional: true\ndata: []\nhealth: {http: "+ha.URL+"/api/}\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "values.yml"), []byte("IMAGE: x\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "home-assistant.container"), []byte("[Container]\nImage=${IMAGE}\n"), 0o644)
-	st, err := loadState(c.env)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}

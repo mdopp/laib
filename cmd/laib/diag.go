@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/secrets"
@@ -33,9 +34,9 @@ type Finding struct {
 // box, health URLs, disk pressure. Red first. Probes are deliberately few
 // (docs/DESIGN.md: about ten remain); each new one needs a recurrence.
 func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	only, toJournal := "", false
 	for _, a := range args {
@@ -56,27 +57,27 @@ func cmdDiag(ctx context.Context, env *cliEnv, args []string) int {
 		for _, f := range findings {
 			if f.Severity == "rot" {
 				red++
-				record(env, st, journal.Entry{Actor: env.actor, Verb: "diag", Service: f.Service, Result: "red", Detail: f.Probe + ": " + f.Detail})
+				cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "diag", Service: f.Service, Result: "red", Detail: f.Probe + ": " + f.Detail})
 			}
 		}
 		if red == 0 {
-			record(env, st, journal.Entry{Actor: env.actor, Verb: "diag", Result: "green", Detail: "keine roten Befunde"})
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "diag", Result: "green", Detail: "keine roten Befunde"})
 		}
 	}
-	if env.json {
-		return emit(env, findings)
+	if env.JSON {
+		return cli.Emit(env, findings)
 	}
 	if len(findings) == 0 {
-		fmt.Fprintln(env.w(), "Keine Befunde.")
+		fmt.Fprintln(env.W(), "Keine Befunde.")
 	}
 	for _, f := range findings {
-		fmt.Fprintf(env.w(), "%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
+		fmt.Fprintf(env.W(), "%-5s %-8s %-14s %s", f.Severity, f.Probe, f.Service, f.Detail)
 		if f.Fix != "" {
-			fmt.Fprintf(env.w(), "   → %s", f.Fix)
+			fmt.Fprintf(env.W(), "   → %s", f.Fix)
 		}
-		fmt.Fprintln(env.w())
+		fmt.Fprintln(env.W())
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) []Finding {
@@ -116,8 +117,8 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		}
 	}
 	// Drift: the box differs from the state. Not red: apply fixes it.
-	sec, _ := secrets.Load(env.paths.Secrets, env.paths.Key)
-	if p, err := plan.Compute(ctx, st, sec, env.paths, only); err == nil {
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	if p, err := plan.Compute(ctx, st, sec, env.Paths, only); err == nil {
 		if len(p.Changes) > 0 {
 			var files []string
 			for _, c := range p.Changes {
@@ -155,7 +156,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		out = append(out, hardwareFindings(ctx)...)
 	}
 	// The box's own config (#281): install-box.sh writes it on every box, stick or migrated.
-	for _, f := range []string{cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/journald.conf.d/50-laib.conf", filepath.Join(filepath.Dir(env.paths.Quadlet), "containers.conf.d", "50-laib.conf")} {
+	for _, f := range []string{cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/journald.conf.d/50-laib.conf", filepath.Join(filepath.Dir(env.Paths.Quadlet), "containers.conf.d", "50-laib.conf")} {
 		if _, err := os.Stat(f); err != nil && only == "" {
 			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config (docs/MIGRATION.md Schritt 1)"})
 		}
@@ -166,7 +167,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
-	all, _ := journal.Read(env.paths.Journal, time.Time{})
+	all, _ := journal.Read(env.Paths.Journal, time.Time{})
 	var installed time.Time
 	var lastCheck time.Time
 	for _, e := range all {
@@ -188,7 +189,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
 	}
 	if st.Box.Backup.Repo != "" {
-		if _, err := os.Stat(filepath.Join(env.paths.Home, "recovery-sheet.confirmed")); err != nil {
+		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {
 			out = append(out, Finding{Severity: "gelb", Probe: "recovery", Detail: "das Wiederherstellungsblatt (age-Schlüssel, restic-Passwort) ist nicht als gesichert bestätigt: ohne es ist das Backup nach Plattenverlust unlesbar", Fix: "laib recovery-sheet  → ausdrucken, dann laib recovery-sheet --confirm"})
 		}
 		if lastCheck.IsZero() || time.Since(lastCheck) > 35*24*time.Hour {
