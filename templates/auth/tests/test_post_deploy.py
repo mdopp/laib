@@ -18,7 +18,8 @@ from pathlib import Path
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": []}
 BASE_DN = "dc=vm,dc=test"
-SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw"}
+SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
 # "take", "swallow" (success, nothing stored) or "refuse" (insufficientAccessRights)
@@ -163,15 +164,18 @@ class PostDeploy(unittest.TestCase):
         # file-share's reader (#296): who is family, read-only like radicale's
         self.assertEqual(LDAP["pw"].get("uid=file-share,ou=people," + BASE_DN), SECRETS["FILE_SHARE_LDAP_PASSWORD"], LDAP)
         self.assertIn("file-share", STATE["users"])
+        self.assertEqual(LDAP["pw"].get("uid=jellyfin,ou=people," + BASE_DN), SECRETS["JELLYFIN_LDAP_PASSWORD"], LDAP)
+        self.assertIn("jellyfin", STATE["users"])
         # and each account binds with it afterwards: a set that did not take is red, not "seeded"
-        for uid in ("core", "radicale", "file-share"):
+        for uid in ("core", "radicale", "file-share", "jellyfin"):
             self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
 
     def test_radicales_password_is_set_again_when_the_account_exists(self):
         # a set that failed once (the account exists, the password does not) is not final:
         # radicale's password is a service secret, so every run sets it again
-        self.run_hook(["core", "radicale"], ["admins", "family", "lldap_strict_readonly"])
+        self.run_hook(["core", "radicale", "jellyfin"], ["admins", "family", "lldap_strict_readonly"])
         self.assertIn("uid=radicale,ou=people," + BASE_DN, LDAP["set"], LDAP)
+        self.assertIn("uid=jellyfin,ou=people," + BASE_DN, LDAP["set"], LDAP)
         self.assertNotIn("uid=core,ou=people," + BASE_DN, LDAP["set"],
                          "the operator's own password must not be reset once the account exists")
 
@@ -195,7 +199,7 @@ class PostDeploy(unittest.TestCase):
 
     def test_an_empty_password_or_a_name_ldap_cannot_address_is_red_before_anything_is_created(self):
         # an empty password binds anonymously, which proves nothing; "a,ou=x" is another entry's DN
-        for kw in ({"RADICALE_LDAP_PASSWORD": ""}, {"FILE_SHARE_LDAP_PASSWORD": ""}, {"OPERATOR_PASSWORD": ""}, {"op": "core,ou=admins"}, {"op": "a+b"}, {"op": "a\\,b"}):
+        for kw in ({"RADICALE_LDAP_PASSWORD": ""}, {"FILE_SHARE_LDAP_PASSWORD": ""}, {"JELLYFIN_LDAP_PASSWORD": ""}, {"OPERATOR_PASSWORD": ""}, {"op": "core,ou=admins"}, {"op": "a+b"}, {"op": "a\\,b"}):
             with self.subTest(**kw):
                 self.run_hook([], [], ok=False, **kw)
                 self.assertEqual((STATE["users"], LDAP["set"]), ([], []), "nothing may be created or set first")
