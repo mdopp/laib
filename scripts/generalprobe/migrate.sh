@@ -52,8 +52,9 @@ step_install() {
   curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh
   bash /tmp/install-box.sh --source "$SRC" --domain "$DOMAIN" --tls internal
   if [ -n "${HOOKS:-}" ]; then   # this commit's hooks image (CI only; the box takes :latest)
-    printf "laib:\n    hooksImage: %s\n" "$HOOKS" >> /mnt/data/laib/state/box.yml
-    git -C /mnt/data/laib/state commit -qam "generalprobe: this commit's hooks image" || true
+    b=/mnt/data/laib/state/box.yml
+    if grep -q "^laib:" $b; then sed -i "s|^laib:|laib:\n    hooksImage: $HOOKS|" $b; else printf "laib:\n    hooksImage: %s\n" "$HOOKS" >> $b; fi
+    grep -n hooksImage $b
   fi
   laib plan > /tmp/plan-1.txt 2>&1 || true
   head -40 /tmp/plan-1.txt

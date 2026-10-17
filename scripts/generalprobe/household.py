@@ -413,8 +413,8 @@ def seed_vault(f, s):
     # box sends no mail), then register/finish; the server keeps the sealed keys as given
     st, b, _ = req("POST", f"http://{LOOP}:8222/identity/accounts/register/send-verification-email",
                    {"email": v["email"], "name": "Ben", "receiveMarketingEmails": False})
-    token = js(b) if st == 200 else None
-    if isinstance(token, str):
+    token = (js(b) if b[:1] == b'"' else b.decode(errors="replace").strip()) if st == 200 else None   # plain text unless Accept: json
+    if token:
         fin = {"email": v["email"], "emailVerificationToken": token, "masterPasswordHash": h, "masterPasswordHint": None,
                "userSymmetricKey": body["key"], "kdf": 0, "kdfIterations": 600000,
                "userAsymmetricKeys": {"publicKey": b64(secrets.token_bytes(294)), "encryptedPrivateKey": enc_string(enc, mac, secrets.token_bytes(64))}}
