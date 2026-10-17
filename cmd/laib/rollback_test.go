@@ -40,7 +40,7 @@ func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 	if before["ECHO2_KEY"] == "" || before["DNS_API_TOKEN"] == "" {
 		t.Fatalf("fixture: %v", before)
 	}
-	ps, _ := proposal.List(inboxDir(c.env), false)
+	ps, _ := proposal.List(cli.InboxDir(c.env), false)
 	id := ps[0].ID
 	c.calls = nil
 	if rc := cmdRollback(context.Background(), c.env, []string{"#" + itoa(id)}); rc != cli.ExitOK {
@@ -96,7 +96,7 @@ func TestOperatorDisableStopsTheUnitAndRevokesTheToken(t *testing.T) {
 	if _, err := os.Stat(unit); err != nil {
 		t.Fatal("operator unit not rendered")
 	}
-	store, _ := token.Load(tokenPath(c.env))
+	store, _ := token.Load(cli.TokenPath(c.env))
 	var ops int
 	for _, r := range store.List() {
 		if r.Hand == "ops" {
@@ -117,7 +117,7 @@ func TestOperatorDisableStopsTheUnitAndRevokesTheToken(t *testing.T) {
 	if !strings.Contains(joined, "stop laib-operator.service") || !strings.Contains(joined, "disable laib-operator.service") {
 		t.Fatalf("the unit must be stopped and disabled:\n%s", joined)
 	}
-	store, _ = token.Load(tokenPath(c.env))
+	store, _ = token.Load(cli.TokenPath(c.env))
 	for _, r := range store.List() {
 		if r.Hand == "ops" {
 			t.Fatal("the ops token is still valid after disable")

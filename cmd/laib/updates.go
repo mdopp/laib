@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -163,14 +164,7 @@ func cmdUpdates(ctx context.Context, env *cliEnv, _ []string) int {
 		return cli.Emit(env, ups)
 	}
 	for _, u := range ups {
-		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, or(u.Patch, "—"), or(u.Minor, "—"), u.Error)
+		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)
 	}
 	return cli.ExitOK
-}
-
-func or(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

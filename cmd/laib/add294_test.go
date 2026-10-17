@@ -30,7 +30,7 @@ func TestAddAgainFinishesAnAddThatDidNotApply(t *testing.T) {
 	if _, err := os.Stat(unit); err != nil {
 		t.Fatal("the second add did not apply the service")
 	}
-	if ps, _ := proposal.List(inboxDir(c.env), false); len(ps) != 1 {
+	if ps, _ := proposal.List(cli.InboxDir(c.env), false); len(ps) != 1 {
 		t.Fatalf("%d proposals, want the one from the first add", len(ps))
 	}
 	writeRegistryTemplate(t, c, "other")

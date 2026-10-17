@@ -19,6 +19,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -229,7 +230,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	hand := strings.SplitN(env.Actor, ":", 2)[0]
 	if !policy.Allowed(st.Policy, hand, "apply") {
-		return exitRefusedMsg(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
+		return cli.Refused(env, fmt.Sprintf("%s may not apply (ceiling %s). Make a proposal: laib propose \"<grund>\"", env.Actor, st.Policy.Hands[hand].Ceiling))
 	}
 	if hand == "ops" {
 		return opsApply(ctx, env, st, args)
@@ -244,7 +245,7 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 			only = args[i]
 		}
 	}
-	return runApply(ctx, env, st, only, reason)
+	return run.Apply(ctx, env, st, only, reason)
 }
 
 func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
@@ -358,7 +359,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(err)
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
-			return exitRefusedMsg(env, env.Actor+" may not propose")
+			return cli.Refused(env, env.Actor+" may not propose")
 		}
 		return templateUpdate(ctx, env, st, args[1])
 	}
@@ -650,7 +651,7 @@ func guarantees(env *cliEnv, st *state.State) (LastBackup, LastChange) {
 		lb.Repos = 1
 	}
 	var lc LastChange
-	if ps, err := proposal.List(inboxDir(env), false); err == nil {
+	if ps, err := proposal.List(cli.InboxDir(env), false); err == nil {
 		var last *proposal.Proposal
 		for _, p := range ps {
 			if p.Status == "approved" && (last == nil || p.Decided.After(last.Decided)) {

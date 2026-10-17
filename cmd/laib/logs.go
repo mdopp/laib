@@ -12,6 +12,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -64,7 +65,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return exitRefusedMsg(env, env.Actor+" may not rollback")
+		return cli.Refused(env, env.Actor+" may not rollback")
 	}
 	arg := "HEAD"
 	if len(args) > 0 {
@@ -73,7 +74,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	if strings.HasPrefix(arg, "-") {
 		return env.Fail(fmt.Errorf("%q is not a commit", arg))
 	}
-	unlock, code := takeLock(env, st, "rollback")
+	unlock, code := run.Lock(env, st, "rollback")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -91,7 +92,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		return applyHeld(ctx, env, st, "", "rollback "+subject)
+		return run.ApplyHeld(ctx, env, st, "", "rollback "+subject)
 	}
 	sha, err := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
 	if err != nil || strings.TrimSpace(sha) == "" {
@@ -113,7 +114,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	return applyHeld(ctx, env, st, "", "rollback "+subject)
+	return run.ApplyHeld(ctx, env, st, "", "rollback "+subject)
 }
 
 // revertProposal reverts the approve merge of proposal id (#41): the tree

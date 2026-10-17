@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -108,7 +109,7 @@ func newCbox(t *testing.T) *cbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(context.Background(), c.env, st, "", "test: first apply"); rc != cli.ExitOK {
+	if rc := run.Apply(context.Background(), c.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	c.calls = nil
@@ -305,7 +306,7 @@ func TestAStaleLockIsTakenOverWithAJournalLine(t *testing.T) {
 	c := newCbox(t)
 	os.WriteFile(c.env.Paths.Lock, []byte("apply:human:core pid 999999999 since 2026-10-11T10:00:00Z"), 0o644)
 	st, _ := cli.LoadState(c.env)
-	if rc := runApply(context.Background(), c.env, st, "", "after a crash"); rc != cli.ExitOK {
+	if rc := run.Apply(context.Background(), c.env, st, "", "after a crash"); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if !c.journalHas(t, "übernommen") || !c.journalHas(t, "999999999") {

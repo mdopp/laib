@@ -110,7 +110,7 @@ func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
-		return exitRefusedMsg(env, "only a human enables or pauses a skill")
+		return cli.Refused(env, "only a human enables or pauses a skill")
 	}
 	if skill.Find(sks, args[1]) == nil {
 		return env.Fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))

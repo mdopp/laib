@@ -31,7 +31,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	if len(g.calls) != 0 {
 		t.Fatalf("an Operator wish filed an issue before anyone approved it: %v", g.calls)
 	}
-	ps, err := proposal.List(inboxDir(c.env), true)
+	ps, err := proposal.List(cli.InboxDir(c.env), true)
 	if err != nil || len(ps) != 2 {
 		t.Fatalf("two proposals expected: %v %v", ps, err)
 	}

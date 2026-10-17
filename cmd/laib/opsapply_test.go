@@ -48,7 +48,7 @@ func opsPropose(t *testing.T, c *cbox, image string) int {
 	if rc := cmdPropose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
-	ps, _ := proposal.List(inboxDir(c.env), true)
+	ps, _ := proposal.List(cli.InboxDir(c.env), true)
 	return ps[len(ps)-1].ID
 }
 
@@ -61,7 +61,7 @@ func TestTheOperatorAppliesItsOwnFixInsideTheEnvelope(t *testing.T) {
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitOK {
 		t.Fatalf("apply rc %d", rc)
 	}
-	p, _ := proposal.Get(inboxDir(c.env), id)
+	p, _ := proposal.Get(cli.InboxDir(c.env), id)
 	if p.Status != "approved" {
 		t.Fatalf("proposal %s", p.Status)
 	}
@@ -93,7 +93,7 @@ func TestTheOperatorsApplyIsRefusedOutsideTheEnvelope(t *testing.T) {
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitRefused {
 		t.Fatalf("applied with the budget spent: rc %d", rc)
 	}
-	if p, _ := proposal.Get(inboxDir(c.env), id); p.Status != "open" {
+	if p, _ := proposal.Get(cli.InboxDir(c.env), id); p.Status != "open" {
 		t.Fatalf("the refused proposal is %s", p.Status)
 	}
 }
@@ -106,7 +106,7 @@ func TestTheOperatorNeverAppliesWhatOnlyAHumanMayFree(t *testing.T) {
 	if rc := cmdPropose(context.Background(), c.env, []string{"--patch", "whoami braucht ein Skript"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
-	ps, _ := proposal.List(inboxDir(c.env), true)
+	ps, _ := proposal.List(cli.InboxDir(c.env), true)
 	id := ps[len(ps)-1].ID
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitRefused {
 		t.Fatalf("the Operator freed a human-class proposal: rc %d", rc)

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -144,3 +145,15 @@ func Tail(s string, n int) string {
 	}
 	return "…" + s[len(s)-n:]
 }
+
+// TokenPath is the hand-token store, next to the state repo.
+func TokenPath(env *Env) string { return filepath.Join(env.Paths.Home, "tokens.json") }
+
+// Refused prints why and returns ExitRefused.
+func Refused(env *Env, msg string) int {
+	fmt.Fprintln(env.Errw(), "laib:", msg)
+	return ExitRefused
+}
+
+// InboxDir holds the proposals' inbox entries.
+func InboxDir(env *Env) string { return env.Paths.Home + "/inbox" }
