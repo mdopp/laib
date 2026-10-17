@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mdopp/laib/internal/stick"
+	"github.com/mdopp/laib/stick"
 	"golang.org/x/term"
 )
 

@@ -29,7 +29,7 @@ func TestInstallBoxKeepsTheGitHubTokenOffArgv(t *testing.T) {
 // The token as a flag is on bash's argv for the whole install: install-box.sh
 // takes it from LAIB_GH_TOKEN only and says so.
 func TestInstallBoxRefusesTheTokenAsAFlag(t *testing.T) {
-	cmd := exec.Command("bash", filepath.Join("..", "..", "scripts", "install-box.sh"), "--domain", "trial.example", "--token", "ghp_x")
+	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "trial.example", "--token", "ghp_x")
 	b, err := cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(b), "LAIB_GH_TOKEN") {
 		t.Fatalf("--token must be refused with a pointer to LAIB_GH_TOKEN (err %v):\n%s", err, b)

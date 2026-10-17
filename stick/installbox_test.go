@@ -60,7 +60,7 @@ case "$url" in
   */releases/tags/*) cat "$FX/tag-${url##*/}" 2>/dev/null || exit 22;;
   *) exit 22;;
 esac`)
-	cmd := exec.Command("bash", filepath.Join("..", "..", "scripts", "install-box.sh"), "--domain", "trial.example")
+	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "trial.example")
 	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "HOME="+home, "LAIB_GH_TOKEN="+token)
 	b, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(logf)
@@ -119,7 +119,7 @@ func runLayering(t *testing.T, etc, rpmOstree string) (log, out string, rc int) 
 	shim(t, bin, "sysctl", "echo 0")
 	shim(t, bin, "rpm-ostree", rpmOstree)
 	shim(t, bin, "curl", `case "${@: -1}" in */VERSION) echo abc1234;; *) exit 22;; esac`)
-	cmd := exec.Command("bash", filepath.Join("..", "..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
+	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
 	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "BIN="+bin, "HOME="+home, "LAIB_ETC="+etc, "LAIB_GH_TOKEN=")
 	b, err := cmd.CombinedOutput()
 	if ee, ok := err.(*exec.ExitError); ok {

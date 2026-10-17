@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mdopp/laib/internal/stick"
+	"github.com/mdopp/laib/stick"
 )
 
 // #116: without a DNS provider the stick set tls: internal on its own, so

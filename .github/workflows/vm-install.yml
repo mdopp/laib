@@ -13,10 +13,10 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, .github/workflows/vm-install.yml]
   pull_request:
     # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
-    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, .github/workflows/vm-install.yml]
   workflow_dispatch:
 concurrency:
   group: vm-install-${{ github.ref }}
@@ -48,7 +48,7 @@ jobs:
       - name: this commit's build, served to the box; the stick
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
-          go build -o laib-stick ./cmd/laib-stick
+          go build -o laib-stick ./stick/cmd/laib-stick
           # the release's asset names, plus VERSION, plus install-box.sh: what --source expects
           mkdir -p dist
           for b in laib laib-operator laib-lease; do src=./cmd/$b; [ $b = laib-operator ] && src=./operator/cmd/$b; CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o dist/$b-linux-amd64 $src; done

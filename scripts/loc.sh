@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
-# Two programs, two budgets (ADR 0023): the kernel (cmd/, internal/) and the
-# Operator (operator/). Each: production under its cap, tests at most equal
-# to production (docs/TESTING.md). They meet over MCP, never by import.
+# One budget per program (ADR 0023, ADR 0005 amendment #309): the kernel
+# (cmd/, internal/), the Operator (operator/) and each program that moved out
+# of the kernel. Each: production under its cap, tests at most equal to
+# production (docs/TESTING.md). They meet over MCP, files or HTTP, never by
+# import.
 set -e
 cd "$(dirname "$0")/.."
 bad=0
@@ -15,6 +17,7 @@ budget() { # budget <name> <cap> <dir…>
 }
 budget kernel 16000 cmd internal
 budget operator 3000 operator
+budget stick 1800 stick # the laptop's install-stick builder: 1,468 lines when it moved out (#309), plus a quarter
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -25,4 +28,12 @@ up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' operato
 [ -z "$up" ] || { echo "the Operator imports the kernel: $up"; bad=1; }
 down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal || true)
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
+# a program that moved out of the kernel imports none of it, and the kernel
+# imports none of them
+for prog in stick; do
+  up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
+  [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
+  down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
+  [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
+done
 exit $bad

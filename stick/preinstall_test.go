@@ -50,7 +50,7 @@ esac`)
 	for _, n := range []string{"hostnamectl", "hostname"} {
 		shim(t, bin, n, "exit 0")
 	}
-	cmd := exec.Command("bash", filepath.Join("..", "..", "usb", "pre-install.sh"))
+	cmd := exec.Command("bash", filepath.Join("..", "usb", "pre-install.sh"))
 	re := ""
 	if reinstall {
 		re = "1"
