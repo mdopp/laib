@@ -78,7 +78,7 @@ func skillMCP(t *testing.T) (*httptest.Server, *[]string) {
 
 func noteOnly(t *testing.T) *httptest.Server {
 	return fakeLLM(t, []Message{
-		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "note", `{"kind":"watch","text":"Der Garten ist grün."}`)}},
+		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"watch","text":"Der Garten ist grün."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
 }

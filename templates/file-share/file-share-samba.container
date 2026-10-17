@@ -6,14 +6,24 @@ After=network-online.target
 Image=${SAMBA_IMAGE}
 Network=host
 Environment=TZ=${TZ}
+# the shared account: the fallback for devices that mount with it, as ServiceBay kept its own
 Environment=ACCOUNT_${SHARE_USER}=${SHARE_PW}
-Environment="SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read only=no; valid users=${SHARE_USER}"
+Environment=SHARE_USER=${SHARE_USER}
+# any account in the passdb may mount: the shared one and one per family member (#296).
+# force user: every write is the container's root, the box's core, as File Browser's and
+# Syncthing's are, so one person's file is everyone's to change, and the tree stays core's (#230)
+Environment="SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read only=no; force user=root; force group=root"
 Environment="SAMBA_GLOBAL_STANZA=server min protocol = SMB2"
+# the family's accounts (#296): samba-accounts.sh runs beside smbd under the image's runit;
+# the member list comes from file-share-samba-members, the passwords from Haus, both in samba-accounts/
+Exec=/bin/sh -c "install -D -m 755 /laib/samba-accounts.sh /container/config/runit/accounts/run && exec runsvdir -P /container/config/runit"
+Volume=./samba-accounts.sh:/laib/samba-accounts.sh:ro
 # the shared file-share tree: never relabelled (:z walks it on every start and
 # fails on an entry core does not own, #230); labelling off for this container
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/file-share/data:/data
 Volume=${DATA_DIR}/file-share/samba-private:/var/lib/samba/private:z
+Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
 AutoUpdate=registry
 
 [Service]

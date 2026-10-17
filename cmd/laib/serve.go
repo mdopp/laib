@@ -54,7 +54,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// boot-time convergence of the non-file state (#37): the ruleset
 	if loaded, err := ensureFirewall(ctx, env); err != nil {
-		fmt.Fprintln(os.Stderr, "laib serve: firewall:", err)
+		fmt.Fprintln(env.errw(), "laib serve: firewall:", err)
 	} else if loaded {
 		if st, err := loadState(env); err == nil {
 			record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
@@ -237,7 +237,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -258,9 +258,9 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	journal.Append(env.paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
-	fmt.Fprintln(os.Stderr, "laib serve: listening on", addr)
+	fmt.Fprintln(env.errw(), "laib serve: listening on", addr)
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		return fail(err)
+		return env.fail(err)
 	}
 	return exitOK
 }

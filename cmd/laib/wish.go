@@ -76,7 +76,7 @@ func wishProposal(ctx context.Context, env *cliEnv, st *state.State, title, body
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
 	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, title, proposal.Edit{Patch: patch}, judgeFor(st, env.actor))
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: title, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
 	if env.json {
@@ -117,11 +117,11 @@ func fileWishes(ctx context.Context, env *cliEnv, st *state.State, p *proposal.P
 func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	text := strings.TrimSpace(strings.Join(args, " "))
 	if text == "" {
-		return fail(errors.New("usage: laib wish \"<was das Haus braucht>\""))
+		return env.fail(errors.New("usage: laib wish \"<was das Haus braucht>\""))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	first := text
 	if i := strings.IndexAny(first, ".\n"); i > 0 {
@@ -138,14 +138,14 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	url, ok, err := githubIssue(ctx, env, st, title, body, []string{wishLabel(st)})
 	if err != nil {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "red", Reason: first, Detail: err.Error()})
-		return fail(err)
+		return env.fail(err)
 	}
 	if !ok {
 		dir := filepath.Join(env.paths.Home, "wishes")
 		os.MkdirAll(dir, 0o755)
 		p := filepath.Join(dir, time.Now().UTC().Format("2006-01-02T15-04-05")+".md")
 		if err := os.WriteFile(p, []byte("# "+title+"\n\n"+body+"\n"), 0o644); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: first, Detail: "kein Intake in box.yml: der Wunsch liegt unter " + p + ", bis jemand ihn liest"})
 		if env.json {

@@ -16,7 +16,7 @@ cleanup() {
   systemctl --user stop usage-metrics.service 2>/dev/null || true
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$WORK"
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -24,6 +24,8 @@ trap cleanup EXIT
 systemctl --user --version >/dev/null
 podman --version
 mkdir -p "$LAIB_QUADLET"
+# the box config as every box has it (#281): journald's drop-in under a scratch /etc, the log driver for real
+export LAIB_ETC="$WORK/etc"; bash "$ROOT/scripts/install-box.sh" --box-config
 
 LAIB_ACTOR=human:boot "$BIN" init --domain boot.test --data-dir "$HOME/laib-data" >/dev/null
 # No proxy, no sso: just the one service, so the check is Quadlet itself.
@@ -109,9 +111,9 @@ python3 - 18081 <<'PY2' &
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"whoami neu gestartet, grün."})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"kind":"incident","text":"whoami neu gestartet, grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0

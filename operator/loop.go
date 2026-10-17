@@ -36,12 +36,10 @@ type Operator struct {
 	Home     string // OPERATOR_HOME: incidents.jsonl lives here
 	MaxCalls int    // tool calls per session
 	Now      func() time.Time
-	// Typed: the task-shaped surface for small models (#53) — a menu per
-	// trigger, typed parameters, CLI arguments built in code, compact
-	// results. Services is the enum the menu offers (installed services).
-	Typed    bool
-	Services []string
-	Usage    *Usage // usage-metrics, for a skill with context usage (#270)
+	// Typed: a small model's window (#53) — compact results and context;
+	// the menu itself is the kernel's typed schemas (#290).
+	Typed bool
+	Usage *Usage // usage-metrics, for a skill with context usage (#270)
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -72,14 +70,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mine = append(mine, t)
 		}
 	}
+	// the kernel's typed schemas (#290) are the menu: no second one here
 	defs := Defs(mine)
-	has := map[string]bool{}
-	for _, d := range defs {
-		has[d.Function.Name] = true
-	}
-	if o.Typed {
-		defs = TypedDefs(o.Services, has)
-	}
 	offered := map[string]bool{}
 	for _, d := range defs {
 		offered[d.Function.Name] = true
@@ -95,17 +87,14 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 		if err != nil {
 			s.Outcome, s.Note = "idle", "Nutzungsdaten nicht erreichbar: "+err.Error()+". Keine Vorschläge."
-			mcp.Call(ctx, "laib_note", map[string]string{"args": "--kind watch " + quote(s.Note)})
+			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
 			return s, nil
 		}
 	} else {
-		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]string{"args": ""})
+		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 	}
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)
-	if o.Typed {
-		system = TypedSystemPrompt(defs)
-	}
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
 	max := o.MaxCalls
 	if max <= 0 {
@@ -120,7 +109,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			return s, fmt.Errorf("model: %w", err)
 		}
 		msgs = append(msgs, reply)
-		if len(reply.ToolCalls) == 0 && (looksLikeToolCall(reply.Content) || (o.Typed && looksLikeTypedCall(reply.Content))) {
+		if len(reply.ToolCalls) == 0 && looksLikeToolCall(reply.Content, offered) {
 			// a small model writing the call as text (#43): once asked again,
 			// then red — never counted as work done
 			textCalls++
@@ -130,7 +119,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 			s.Outcome = "red"
 			s.Note = "Sitzung rot: das Modell antwortete mit Text statt mit einem Tool-Aufruf (" + strings.TrimSpace(firstLine(reply.Content)) + "). Keine Änderung ausgeführt."
-			mcp.Call(ctx, "laib_note", map[string]string{"args": "--kind incident \"" + strings.ReplaceAll(s.Note, "\"", "'") + "\""})
+			mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": s.Note})
 			return s, nil
 		}
 		if len(reply.ToolCalls) == 0 {
@@ -147,7 +136,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				} else if tr.Kind == "event" {
 					kind = "incident"
 				}
-				mcp.Call(ctx, "laib_note", map[string]string{"args": "--kind " + kind + " \"" + strings.ReplaceAll(note, "\"", "'") + "\""})
+				mcp.Call(ctx, "laib_note", map[string]any{"kind": kind, "text": note})
 				s.Note = note
 			}
 			if s.Outcome == "error" {
@@ -157,31 +146,25 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 		for _, tc := range reply.ToolCalls {
 			mcpName := tc.Function.Name
-			var args map[string]string
-			if !offered[mcpName] && (!o.Typed || isTypedTool(mcpName)) {
-				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + mcpName + " ist nicht im Menü der Fähigkeit " + sk.Name})
+			var args map[string]any
+			if !offered[mcpName] {
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: mcpName, Content: "nicht ausgeführt: " + mcpName + " ist nicht im Menü der Fähigkeit " + sk.Name})
 				continue
 			}
-			if o.Typed {
-				// typed calls are validated and turned into CLI arguments here;
-				// anything missing, out of range or outside the menu never runs
-				name, a, err := Translate(tc.Function.Name, json.RawMessage(tc.Function.Arguments), o.Services)
-				if err != nil {
-					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + err.Error()})
-					continue
-				}
-				mcpName, args = name, a
-			} else if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil || args == nil {
-				// invalid arguments never run (#43, #53): laib_apply with an empty
-				// map would act on the whole box
-				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "ungültige Argumente: erwartet ein JSON-Objekt {\"args\": \"…\"}; der Aufruf wurde nicht ausgeführt"})
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil || args == nil {
+				// invalid arguments never run (#43): laib_apply with an empty map
+				// would act on the whole box; the kernel checks the rest (#290)
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: mcpName, Content: "ungültige Argumente: erwartet ein JSON-Objekt nach dem Schema des Werkzeugs; der Aufruf wurde nicht ausgeführt"})
 				continue
 			}
+			shown := shownArgs(args)
 			if mcpName == "laib_wish" {
 				// a suggestion becomes a ticket: three a week at most, and never a
 				// family member's sentence word for word (#270)
 				why := ""
-				if quotes(args["args"], sentences) {
+				if saw, ok := args["saw"].(string); ok && !strings.ContainsAny(saw, "0123456789") {
+					why = "saw braucht Zahlen — was hast du gezählt?"
+				} else if quotes(shown, sentences) {
 					why = "der Vorschlag zitiert einen Satz der Familie wörtlich — nenne Thema und Anzahl, nicht den Satz"
 				} else if wished >= 3 {
 					why = "höchstens drei Vorschläge pro Woche — schreib jetzt die Notiz"
@@ -196,7 +179,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
 				continue
 			}
-			s.Calls = append(s.Calls, tc.Function.Name+" "+args["args"])
+			s.Calls = append(s.Calls, mcpName+" "+shown)
 			out, isErr, err := mcp.Call(ctx, mcpName, args)
 			if err != nil {
 				out, isErr = err.Error(), true
@@ -212,7 +195,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			case "laib_escalate":
 				s.Outcome = "escalated"
 			case "laib_note":
-				s.Note = args["args"]
+				s.Note = shown
+				if t, ok := args["text"].(string); ok {
+					s.Note = t
+				}
 				noted = true
 				if s.Outcome == "error" {
 					s.Outcome = "green"
@@ -225,8 +211,18 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 	}
 	s.Outcome = "red"
-	mcp.Call(ctx, "laib_note", map[string]string{"args": "--kind incident \"Sitzung nach zu vielen Schritten abgebrochen; siehe Journal.\""})
+	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
 	return s, nil
+}
+
+// shownArgs is a call's arguments for the session record: the command line
+// when the model wrote one, else the JSON.
+func shownArgs(a map[string]any) string {
+	if s, ok := a["args"].(string); ok && len(a) == 1 {
+		return s
+	}
+	b, _ := json.Marshal(a)
+	return string(b)
 }
 
 // prompt is the user turn: the event (for an event skill), the skill's
@@ -268,9 +264,10 @@ func budget(ctx string, max int) string {
 	return cut + "\n…(gekürzt)…\n" + rest
 }
 
-// looksLikeToolCall: a reply that names a laib_ tool or carries a JSON
-// call instead of using the tool interface.
-func looksLikeToolCall(text string) bool {
+// looksLikeToolCall: a reply that carries a JSON call, or starts a line
+// with a tool's name — laib_restart or the bare restart — followed by an
+// argument, instead of using the tool interface.
+func looksLikeToolCall(text string, offered map[string]bool) bool {
 	t := strings.TrimSpace(text)
 	if t == "" {
 		return false
@@ -279,9 +276,15 @@ func looksLikeToolCall(text string) bool {
 		return true
 	}
 	for _, line := range strings.Split(t, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "laib_") || strings.HasPrefix(line, "`laib_") {
+		line = strings.TrimLeft(strings.TrimSpace(line), "`")
+		if strings.HasPrefix(line, "laib_") {
 			return true
+		}
+		for name := range offered {
+			bare := strings.TrimPrefix(name, "laib_")
+			if rest, ok := strings.CutPrefix(line, bare); ok && len(line) < 80 && (strings.HasPrefix(rest, " ") || strings.HasPrefix(rest, "(")) {
+				return true
+			}
 		}
 	}
 	return false
@@ -328,27 +331,6 @@ func SystemPrompt(defs []ToolDef) string {
 		b.WriteString("5. Zum Schluss immer laib_note: --kind incident wenn du etwas repariert oder eskaliert hast, --kind watch wenn alles in Ordnung war, --kind report für den Morgenbericht. Deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst.\n")
 	}
 	b.WriteString("\nAntworte knapp. Keine Erklärungen an den Nutzer, nur Tool-Aufrufe und am Ende die Notiz.")
-	return b.String()
-}
-
-// TypedSystemPrompt names the menu and the rules in the menu's words.
-func TypedSystemPrompt(defs []ToolDef) string {
-	var names []string
-	has := map[string]bool{}
-	for _, d := range defs {
-		names = append(names, d.Function.Name)
-		has[d.Function.Name] = true
-	}
-	var b strings.Builder
-	b.WriteString("Du bist der Operator einer Home-Box, die von Laib verwaltet wird: der Familien-Admin. Du schaust zuerst, dann korrigierst du, dann schreibst du auf.\n\nDeine Werkzeuge: " + strings.Join(names, ", ") + ". Nur diese, nur über die Tool-Schnittstelle, mit genau den Parametern, die sie nennen.\n\nRegeln:\n1. Erst schauen, dann eine Hypothese, dann handeln.\n")
-	if has["restart"] || has["set_value"] {
-		b.WriteString("2. Korrigieren nur, wenn es rückgängig geht; Laib macht Snapshot, Journal und Rollback.\n   Miss jede Änderung an dem, was vorher funktioniert hat (Journal, Notizen, die bisherige Lösung): Sie muss leichter zu warten oder für die Familie angenehmer sein, und keins von beiden spürbar schlechter. Ein Vorschlag nennt, was vorher war und was besser wird.\n")
-	}
-	b.WriteString("3. Löschen, Reboot, öffentliche Routen, Secrets, Tokens: nie — das entscheidet ein Mensch.\n")
-	if has["escalate"] {
-		b.WriteString("4. Wenn ein Werkzeug \"Budget erschöpft\" sagt oder du nach zwei Versuchen nicht weiterkommst: escalate mit allem, was du weißt.\n")
-	}
-	b.WriteString("5. Zum Schluss immer note. Deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst.\n\nAntworte knapp: Tool-Aufrufe, am Ende die Notiz.")
 	return b.String()
 }
 

@@ -21,18 +21,18 @@ func TestLintRefusesARelabelledShare(t *testing.T) {
 		"z through a values entry": "Volume=${MUSIC}:/music:ro,z\nSecurityLabelDisable=true\n",
 	} {
 		dir := writeTemplate(t, root, "t", c, map[string]string{"t.container": "[Container]\nImage=img\n" + unit, "values.example.yml": "MUSIC: /mnt/data/stacks/file-share/data/music\n"})
-		if lintTemplate(dir) == exitOK {
+		if lintTemplate(&cliEnv{}, dir) == exitOK {
 			t.Errorf("%s on the share passed lint", why)
 		}
 	}
 	dir := writeTemplate(t, root, "t", c, map[string]string{"t.container": "[Container]\nImage=img\nSecurityLabelDisable=true\nVolume=${DATA_DIR}/file-share/data/music:/music:ro\nVolume=${DATA_DIR}/file-share/data/notes:/notes\nVolume=${DATA_DIR}/t/data:/data:z\n"})
-	if lintTemplate(dir) != exitOK {
+	if lintTemplate(&cliEnv{}, dir) != exitOK {
 		t.Fatal("the share without a relabel and labelling off, the service's own data with :z, is fine")
 	}
 	// and every built-in that mounts the share
 	ymls, _ := filepath.Glob("../../templates/*/laib.yml")
 	for _, y := range ymls {
-		if lintTemplate(filepath.Dir(y)) != exitOK {
+		if lintTemplate(&cliEnv{}, filepath.Dir(y)) != exitOK {
 			t.Errorf("templates/%s does not pass lint", filepath.Base(filepath.Dir(y)))
 		}
 	}
