@@ -541,7 +541,15 @@ def seed_share(f, s, bearer):
     base = "http://127.0.0.1:5888"
     req("POST", base + "/api/system/file-share/samba/users", {}, headers=bearer)
     st, b, _ = req("POST", base + "/api/system/file-share/samba/users/anna/set-password", {"password": s["people"]["anna"]["password"]}, headers=bearer)
-    if st != 200:
+    if st != 200 and b"useradd" in b:
+        # ServiceBay 5.44.3's sync calls useradd, which servercontainers/samba (Alpine)
+        # no longer has; what it means to do, with Alpine's adduser: a POSIX account
+        # without home or shell, then smbpasswd -a into the passdb in samba-private
+        print(f"ServiceBay could not add anna to Samba ({b[:120]!r}); its steps by hand with adduser")
+        sh("podman", "exec", "file-share-samba", "adduser", "-D", "-H", "-s", "/sbin/nologin", "anna", check=False)
+        pw_ = s["people"]["anna"]["password"]
+        sh("podman", "exec", "-i", "file-share-samba", "smbpasswd", "-s", "-a", "anna", inp=f"{pw_}\n{pw_}\n".encode())
+    elif st != 200:
         raise RuntimeError(f"ServiceBay: anna's Samba password: HTTP {st} {b[:200]!r}")
     print("Samba: a file in the share, anna's own login")
 
