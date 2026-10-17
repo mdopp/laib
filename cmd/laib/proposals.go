@@ -488,6 +488,12 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	if reason == "" {
 		reason = "add " + add.Name
 	}
+	// the same add again after its apply was cut short (lock, power cut):
+	// the service is in the state already, so finish the apply (#294)
+	if svc, ok := st.Services[add.Name]; ok && svc.Contract.Template.Name == args[0] {
+		fmt.Fprintf(env.w(), "%s ist schon im Zustand: rolle es aus\n", add.Name)
+		return runApply(ctx, env, st, add.Name, reason)
+	}
 	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, proposal.Edit{Add: add}, judgeFor(st, env.actor))
 	if err != nil {
 		return fail(err)

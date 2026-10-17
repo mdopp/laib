@@ -7,7 +7,7 @@ Image=${ZWAVE_IMAGE}
 Network=host
 Environment=TZ=${TZ}
 Environment=SESSION_SECRET=${ZWAVE_SECRET}
-Environment=HOST=0.0.0.0
+Environment=HOST=127.0.0.1
 Environment=PORT=8091
 Volume=${DATA_DIR}/home-assistant/zwave-js:/usr/src/app/store:z
 AddDevice=${ZWAVE_DEVICE}:${ZWAVE_DEVICE}

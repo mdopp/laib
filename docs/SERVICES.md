@@ -23,10 +23,10 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 |---|---|---|
 | home-assistant (8123, zwave 8091, 3 containers) | `home-assistant` | built-in: HA, Z-Wave JS UI, Matter on the host network; onboarding and the Wyoming/CalDAV/MQTT integrations are configuration in HA |
 | solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` and `haus` built-ins exist; Haus is its own repo, `mdopp/haus` |
-| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moves with it |
+| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moved with it: `chronik-whisper` in foundry-chronicle's template (Stimme's Wyoming Whisper returns no timestamps) |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video and gets a phone user limited to Musik (the Symfonium finding); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); its family login is set from Laib's OIDC secret on every apply, the cached client rebuilt, so the drift that retired it on ServiceBay cannot stay (#255); Music Assistant drives the speakers for Assist |
 | immich (4 containers, ML) | `immich` | built-in |
-| paperless (3 containers) | `paperless` | built-in with forward-auth logins |
+| paperless (3 containers) | `paperless` | built-in with OIDC logins through Authelia |
 | radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
 | vaultwarden | `vaultwarden` | built-in with Authelia OIDC |
 | file-share (Syncthing, Samba, filebrowser; 14 ports) | `file-share` | built-in on the host network; notes, documents, music, photos live here |
@@ -35,8 +35,8 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
 | usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; nothing calls it once Solaris retires |
-| daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them |
-| foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | moves to Laib's lease contract when it moves (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
+| daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them. foundry-chronicle's is `chronik` (`templates/chronik`, foundry-chronicle#362): bot and timestamped Whisper in their own namespaces, Piper from `stimme` for the announcement |
+| foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | speaks Laib's lease contract from `${MODEL_LEASE}`/`${MODEL_KEY}`, preset `gemma-4-12b` (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
 
 ## New, not there today
 
@@ -71,7 +71,7 @@ the `podcasts/` folder on purpose. On the box today, without changing
 anything: in Symfonium untick the Audiobooks library. In Laib: a `phone`
 Jellyfin user that sees Musik only, audiobooks and podcasts in
 Audiobookshelf, radio and speakers through Music Assistant.
-- Repos that need a `laib.yml`: flutstunde, foundry-chronicle (daggerheart).
+- Repos that need a `laib.yml`: flutstunde. foundry-chronicle has one (`chronik`).
 - Decisions: `mdopp/laib-templates` to create (usage-metrics: kept, #238).
 
 Each port is mechanical: `scripts/migrate-servicebay.py` writes the

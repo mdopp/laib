@@ -10,8 +10,11 @@ Environment=TZ=${TZ}
 Environment=LAIB_OIDC_SECRET=${OIDC_SECRET}
 Volume=${DATA_DIR}/audiobookshelf/config:/config:z
 Volume=${DATA_DIR}/audiobookshelf/metadata:/metadata:z
-Volume=${AUDIOBOOKS}:/audiobooks:ro,z
-Volume=${PODCASTS}:/podcasts:z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${AUDIOBOOKS}:/audiobooks:ro
+Volume=${PODCASTS}:/podcasts
 # Authelia for the OIDC discovery and the token exchange: the host gateway is the
 # host (Caddy on 443); under pasta the container has the host's own address, so
 # the LAN IP would stay inside it (ServiceBay #817, #252)

@@ -715,6 +715,12 @@ func lintMounts(st *state.State, name string, out render.Output, neighbours []st
 			if !ok {
 				errs = append(errs, fmt.Sprintf("%s: %s mounts %s, which is not a declared data path (apply creates only declared paths; podman refuses a missing bind source)", key, line, src))
 			}
+			// the shared tree is never relabelled (#230): :z walks it on every start and fails on an entry core does not own
+			share, opts := st.Box.DataDir+"/file-share/data", strings.Split(line, ":")
+			relabel := len(opts) > 2 && slices.ContainsFunc(strings.Split(opts[2], ","), func(o string) bool { return o == "z" || o == "Z" })
+			if (src == share || strings.HasPrefix(src, share+"/")) && (relabel || !strings.Contains(text, "\nSecurityLabelDisable=true")) {
+				errs = append(errs, fmt.Sprintf("%s: %s relabels the shared file-share tree: mount it without :z/:Z and set SecurityLabelDisable=true", key, line))
+			}
 		}
 	}
 	return errs

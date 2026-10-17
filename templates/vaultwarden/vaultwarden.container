@@ -14,7 +14,7 @@ Environment=SSO_ONLY=false
 Environment=SSO_AUTHORITY=https://auth.${DOMAIN}
 Environment=SSO_CLIENT_ID=vaultwarden
 Environment=SSO_CLIENT_SECRET=${SSO_SECRET}
-Environment=SSO_SCOPES=email profile offline_access
+Environment="SSO_SCOPES=email profile offline_access"
 # Authelia for the OIDC discovery and the token exchange: the host gateway is the
 # host (Caddy on 443); under pasta the container has the host's own address, so
 # the LAN IP would stay inside it (ServiceBay #817, #252)
