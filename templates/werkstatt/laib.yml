@@ -17,6 +17,10 @@ secrets:
     external: true               # pi's own PAT, limited to AUTOLOOP_REPOS: Contents rw (branch push, claim ref), Issues r, Pull requests rw — never the dev token (#44)
 data:
   - path: ${DATA_DIR}/werkstatt/workspace
+  - path: ${DATA_DIR}/werkstatt/home           # dev's home (#241): Claude Code's sessions and its own login, dotfiles, history
+  - path: ${DATA_DIR}/werkstatt/ssh-host-keys  # sshd's host keys: the app keeps trusting the box after a restore
+  - path: ${DATA_DIR}/werkstatt/cache          # ~/.cache: npm, go, pip — rebuilt on demand
+    backup: false
 health: {none: "a dev box with no server to probe; the unit state is the check"}
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password

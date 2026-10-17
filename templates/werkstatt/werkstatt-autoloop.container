@@ -16,7 +16,8 @@ Environment=MODEL_KEY=${MODEL_KEY}
 Environment=LAIB_TOKEN=${LAIB_PI_TOKEN}
 Environment=WERKSTATT_GIT_TOKEN=${PI_GIT_TOKEN}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
-Tmpfs=/run/laib                 # pi's own tokens (#44)
+# pi's own tokens (#44)
+Tmpfs=/run/laib
 AutoUpdate=registry
 
 [Service]

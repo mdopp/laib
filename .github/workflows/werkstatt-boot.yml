@@ -1,0 +1,27 @@
+name: werkstatt-boot
+# The boot job's approach for the Werkstatt (#241): this commit's image under a
+# real systemd --user + Quadlet on the runner, restarted and updated. Only when
+# the Werkstatt changes: the image build costs minutes.
+on:
+  push:
+    branches: [main]
+    paths: [werkstatt/**, templates/werkstatt/**, scripts/boot-werkstatt.sh, .github/workflows/werkstatt-boot.yml]
+  pull_request:
+    paths: [werkstatt/**, templates/werkstatt/**, scripts/boot-werkstatt.sh, .github/workflows/werkstatt-boot.yml]
+  workflow_dispatch:
+jobs:
+  home:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib
+      - run: |
+          podman --version
+          loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)" || true
+      - run: scripts/boot-werkstatt.sh
+        env:
+          XDG_RUNTIME_DIR: /run/user/1001
