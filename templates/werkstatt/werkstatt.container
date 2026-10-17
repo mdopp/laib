@@ -4,14 +4,22 @@ Description=Werkstatt — the one place where agents build (Claude Code, pi, rep
 [Container]
 Image=${IMAGE}
 PublishPort=${SSH_PORT}:22
-Environment=WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}
+# quoted: Quadlet splits Environment= on whitespace, and a public key has two spaces
+Environment="WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}"
 Environment=WERKSTATT_SSH_PASSWORD=${SSH_PASSWORD}
 Environment=CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_TOKEN}
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=LAIB_MCP_URL=http://host.containers.internal:5900/mcp
 Environment=MODEL_URL=${MODEL_URL}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
-Tmpfs=/run/laib                 # this container's tokens, not the shared volume (#44)
+# dev's home (#241): ~/.claude, ~/.claude.json, dotfiles, history; ~/.cache
+# (npm, go, pip) is its own data path, not backed up; sshd's host keys, made once.
+# A unit file has no trailing comments: they would be part of the value.
+Volume=${DATA_DIR}/werkstatt/home:/home/dev:z
+Volume=${DATA_DIR}/werkstatt/cache:/home/dev/.cache:z
+Volume=${DATA_DIR}/werkstatt/ssh-host-keys:/etc/ssh/keys:z
+# this container's tokens, not the shared volume (#44)
+Tmpfs=/run/laib
 AutoUpdate=registry
 
 [Service]
