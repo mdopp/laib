@@ -42,5 +42,30 @@ and `claude` for the dev container's. Still open: the `dev.<domain>` web
 surface (pi-web's UI), which arrives with Haus; LDAP logins; per-project
 tokens.
 
+**The home is kept (#241).** `/home/dev` is the data path
+`${DATA_DIR}/werkstatt/home`: Claude Code's sessions and settings
+(`~/.claude`, `~/.claude.json`), dotfiles, shell history, git config —
+a restart and an image update keep them, and the backup carries them.
+`~/.cache` is its own data path, `${DATA_DIR}/werkstatt/cache`, with
+`backup: false`; the image points npm (`NPM_CONFIG_CACHE`), Go
+(`GOMODCACHE`, `GOCACHE`) and pip (`PIP_CACHE_DIR`) there. On the first
+start into an empty home the entrypoint copies the image's dotfiles
+(`/opt/werkstatt/home-seed`); a home with anything in it is never seeded
+again, so nothing of the person's is overwritten. The folder is made by
+laib as the container's root; the entrypoint (root in the container)
+gives `/home/dev` and `~/.cache` to `dev` (uid 1000 in the container, a
+subuid of `core` on the host) — no `UserNS=keep-id`, the backup reads the
+files under `podman unshare` (docs/BACKUP.md). sshd's host keys live in
+`${DATA_DIR}/werkstatt/ssh-host-keys` (`/etc/ssh/keys`, root's, 0600),
+made on the first start and then kept, so the mobile app keeps trusting
+the box; the image carries none. Secrets stay in `/run/laib`; the
+entrypoint writes none into the home. What lands there in clear is what
+a person logs into themselves: Claude Code's own login after `claude
+/login` (`~/.claude/.credentials.json`; with `CLAUDE_CODE_OAUTH_TOKEN`
+set there is none), `gh auth login`'s token. The autoloop has no home of
+its own on disk: pi's hand stays apart (#44).
+
 Migration from `claude-dev`: point `${DATA_DIR}/werkstatt/workspace` at the
-old `/workspace` volume and the checkouts and `~/.claude` history carry over.
+old `/workspace` volume for the checkouts; claude-dev's home and sessions
+and its SSH host keys are copied into `werkstatt/home` and
+`werkstatt/ssh-host-keys` once by the Kraftwerk move (docs/MIGRATION.md).

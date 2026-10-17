@@ -5,11 +5,24 @@ After=network-online.target
 [Container]
 Image=${FILEBROWSER_IMAGE}
 Network=host
+# container root is core on the host, who owns the share and the database folder;
+# the image's own user (1000) is a subuid that may write neither
+User=0
 Environment=FB_PORT=8088
 Environment=FB_ADDRESS=127.0.0.1
 Environment=FB_DATABASE=/database/filebrowser.db
-Environment=FB_NOAUTH=true
-Volume=${DATA_DIR}/file-share/data:/srv:z
+# Proxy auth behind Authelia (#231): the user is Caddy's Remote-User, which only
+# forward_auth sets (Caddy strips the client's own); a family member's account is
+# made on the first visit. Set on every start, so an older database (no login
+# before #231) is switched too; when it cannot be set, File Browser does not start.
+# FILEBROWSER_ADMIN_USER (an LLDAP account) is File Browser's admin, as ServiceBay's
+# post-deploy made it; its random password is locked, the login stays Authelia's.
+Entrypoint=/bin/sh
+Exec=-c 'if [ -f /database/filebrowser.db ]; then filebrowser config set --auth.method=proxy --auth.header=Remote-User; else filebrowser config init --auth.method=proxy --auth.header=Remote-User; fi >/dev/null && { filebrowser users update ${FILEBROWSER_ADMIN_USER} --perm.admin >/dev/null 2>&1 || tr -dc A-Za-z0-9 </dev/urandom | head -c 32 | xargs -I{} filebrowser users add ${FILEBROWSER_ADMIN_USER} {} --perm.admin --lockPassword >/dev/null || echo "File Browser: no admin ${FILEBROWSER_ADMIN_USER}" >&2; } && exec tini -- /init.sh'
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/file-share/data:/srv
 Volume=${DATA_DIR}/file-share/filebrowser:/database:z
 AutoUpdate=registry
 

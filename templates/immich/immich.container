@@ -15,7 +15,10 @@ Environment=DB_VECTOR_EXTENSION=vectorchord
 Environment=REDIS_HOSTNAME=127.0.0.1
 Environment=IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:3003
 Volume=${DATA_DIR}/immich/upload:/usr/src/app/upload:z
-Volume=${PHOTOS_RO}:/mnt/photos:ro,z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${PHOTOS_RO}:/mnt/photos:ro
 AddHost=auth.${DOMAIN}:${LAN_IP}
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 

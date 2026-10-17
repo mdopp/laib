@@ -17,15 +17,25 @@ Environment=PAPERLESS_CSRF_TRUSTED_ORIGINS=https://paperless.${DOMAIN}
 Environment=PAPERLESS_SECRET_KEY=${SECRET_KEY}
 Environment=PAPERLESS_OCR_LANGUAGE=${OCR_LANGUAGE}
 Environment=PAPERLESS_OCR_MODE=auto
-Environment=PAPERLESS_ENABLE_HTTP_REMOTE_USER=true
-Environment=PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_REMOTE_USER
+# One family login through Authelia's OIDC (django-allauth, #231): the account is
+# made on the first login, groups follow Authelia's on every login (give the Paperless
+# group of that name its permissions once), the local admin stays as break-glass and
+# the apps log in with a token. The client secret is a podman secret, rendered from
+# secrets.age on every apply, so it cannot drift from Authelia's.
+Environment=PAPERLESS_APPS=allauth.socialaccount.providers.openid_connect
+Environment=PAPERLESS_SOCIAL_AUTO_SIGNUP=true
+Environment=PAPERLESS_SOCIAL_ACCOUNT_SYNC_GROUPS=true
+Environment='PAPERLESS_SOCIALACCOUNT_PROVIDERS={"openid_connect":{"SCOPE":["openid","profile","email","groups"],"OAUTH_PKCE_ENABLED":true,"APPS":[{"provider_id":"authelia","name":"Authelia","client_id":"paperless","secret":"${OIDC_SECRET}","settings":{"server_url":"https://auth.${DOMAIN}","token_auth_method":"client_secret_basic"}}]}}'
 Environment=PAPERLESS_ADMIN_USER=${ADMIN_USER}
 Environment=PAPERLESS_ADMIN_PASSWORD=${ADMIN_PW}
 Environment=USERMAP_UID=1000
 Environment=USERMAP_GID=1000
 Volume=${DATA_DIR}/paperless/data:/usr/src/paperless/data:z
 Volume=${DATA_DIR}/paperless/media:/usr/src/paperless/media:z
-Volume=${CONSUME}:/usr/src/paperless/consume:z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${CONSUME}:/usr/src/paperless/consume
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]

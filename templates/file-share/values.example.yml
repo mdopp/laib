@@ -3,3 +3,4 @@ SAMBA_IMAGE: docker.io/servercontainers/samba:latest
 FILEBROWSER_IMAGE: docker.io/filebrowser/filebrowser:latest
 SHARE_USER: samba
 SHARE_PW: !secret SAMBA_PASSWORD
+FILEBROWSER_ADMIN_USER: admin     # the LLDAP account File Browser makes its admin (ServiceBay's default); laib add file-share FILEBROWSER_ADMIN_USER=<you>

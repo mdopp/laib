@@ -74,7 +74,7 @@ jobs:
                "sb_user": "admin", "sb_password": h(), "lldap_admin": h(), "immich_email": "admin@" + d, "immich_password": h(),
                "paperless_user": "solaris", "paperless_password": h(), "mqtt_user": "mqtt", "mqtt_password": h(),
                "share_user": "samba", "share_password": h()}
-          f["vars"] = {"nginx": {"NGINX_ADMIN_EMAIL": "admin@" + d}, "auth": {"LLDAP_ADMIN_PASSWORD": f["lldap_admin"]},
+          f["vars"] = {"nginx": {"NGINX_ADMIN_EMAIL": "admin@" + d, "NGINX_ADMIN_PASSWORD": h()}, "auth": {"LLDAP_ADMIN_PASSWORD": f["lldap_admin"]},
                        "immich": {"IMMICH_ADMIN_EMAIL": f["immich_email"], "IMMICH_ADMIN_PASSWORD": f["immich_password"]},
                        "paperless": {"PAPERLESS_ADMIN_PASSWORD": f["paperless_password"]},
                        "mosquitto": {"MQTT_USERNAME": f["mqtt_user"], "MQTT_PASSWORD": f["mqtt_password"]},
@@ -142,7 +142,7 @@ jobs:
           . ./box.sh
           if $SSH true 2>/dev/null; then
             $SSH 'podman ps -a --format "{{.Names}} {{.Status}}"; echo "--- laib"; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 3h | tail -60; journalctl --user --no-pager -u laib | tail -40
-                  echo "--- servicebay"; podman logs --tail 80 servicebay 2>&1
+                  echo "--- servicebay"; podman logs servicebay 2>&1 | grep -iE "registr|git |clone" | tail -20; podman logs --tail 80 servicebay 2>&1
                   echo "--- failed units"; systemctl --user --failed --no-pager
                   for u in $(systemctl --user list-units --failed --plain --no-legend | awk "{print \$1}"); do echo "--- $u"; journalctl --user --no-pager -u "$u" | tail -30; done' || true
           else

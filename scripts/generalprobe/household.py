@@ -228,7 +228,17 @@ def servicebay_install(f, items):
                 sys.stdout.flush()
             off = d.get("logsOffset", off)
             phase = (d.get("job") or {}).get("phase")
-            if phase in ("done", "error", "aborted", "crashed", "needs_credentials") or time.time() - t0 > 1500:
+            if phase == "needs_credentials":
+                # ServiceBay asks for NPM's admin login when its own check ran before
+                # NPM had seeded it (a slow first start); the operator types the
+                # login the wizard was given, once NPM answers
+                nv = f["vars"]["nginx"]
+                wait("NPM's API", lambda: req("GET", "http://127.0.0.1:81/api/")[0] == 200, tries=60)
+                st, b, _ = req("POST", base + "/api/install/credentials", {"jobId": job, "email": nv["NGINX_ADMIN_EMAIL"], "password": nv["NGINX_ADMIN_PASSWORD"]}, headers=bearer)
+                print(f"    (the NPM login typed in: HTTP {st})", flush=True)
+                time.sleep(5)
+                continue
+            if phase in ("done", "error", "aborted", "crashed") or time.time() - t0 > 1500:
                 break
             time.sleep(5)
         _, b, _ = req("GET", f"{base}/api/install/current?jobId={job}", headers=bearer)

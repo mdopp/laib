@@ -2,7 +2,10 @@
 
 Whisper on 10300, Piper on 10200, openWakeWord on 10400, all on the host
 network so Home Assistant adds them as Wyoming integrations at
-`127.0.0.1`. Piper speaks with the house persona's voice (`PERSONA_VOICE`,
+`127.0.0.1`. Piper also answers pods on the box at
+`host.containers.internal:10200` (it binds `0.0.0.0`, the port is `lan:
+false`): foundry-chronicle's `chronik` speaks its consent announcement
+through it (#242). Piper speaks with the house persona's voice (`PERSONA_VOICE`,
 ADR 0020). Martin, the Kokoro GPU voice of the old stack, is not in the
 Assist path; it would need a Wyoming bridge.
 
