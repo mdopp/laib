@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
@@ -23,7 +24,7 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 	t.Helper()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	env = &cliEnv{actor: "ops", paths: boxfs.Paths{
+	env = &cliEnv{Actor: "ops", Paths: boxfs.Paths{
 		Home: home, State: filepath.Join(home, "state"), Journal: filepath.Join(home, "journal"), Render: filepath.Join(home, "render"),
 		Quadlet: filepath.Join(dir, "quadlet"), Systemd: filepath.Join(dir, "systemd"),
 		Key: filepath.Join(home, "age.key"), Secrets: filepath.Join(home, "state", "secrets.age"), Lock: filepath.Join(home, "apply.lock"),
@@ -48,11 +49,11 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 	}
 	dataDir = filepath.Join(dir, "data")
 	os.MkdirAll(filepath.Join(dataDir, "whoami", "cfg"), 0o755)
-	human := &cliEnv{actor: "human:test", paths: env.paths}
-	if code := cmdInit(context.Background(), human, []string{"--domain", "box.test", "--lan-ip", "10.0.0.2", "--data-dir", dataDir}); code != exitOK {
+	human := &cliEnv{Actor: "human:test", Paths: env.Paths}
+	if code := cmdInit(context.Background(), human, []string{"--domain", "box.test", "--lan-ip", "10.0.0.2", "--data-dir", dataDir}); code != cli.ExitOK {
 		t.Fatalf("init: exit %d", code)
 	}
-	svc := filepath.Join(env.paths.State, "services", "whoami")
+	svc := filepath.Join(env.Paths.State, "services", "whoami")
 	os.MkdirAll(svc, 0o755)
 	for name, content := range map[string]string{
 		"laib.yml":         "name: whoami\ndata:\n  - path: ${DATA_DIR}/whoami/cfg\n  - path: ${DATA_DIR}/whoami/cache\n    backup: false\n",
@@ -61,14 +62,14 @@ func envBox(t *testing.T) (env *cliEnv, dataDir string, calls *[]string) {
 	} {
 		os.WriteFile(filepath.Join(svc, name), []byte(content), 0o644)
 	}
-	if err := proposal.CommitDirty(context.Background(), env.paths.State, "human:test"); err != nil {
+	if err := proposal.CommitDirty(context.Background(), env.Paths.State, "human:test"); err != nil {
 		t.Fatal(err)
 	}
 	return env, dataDir, calls
 }
 
 func writeAs(env *cliEnv, svc, path, content string) int {
-	e := &cliEnv{actor: env.actor, paths: env.paths, in: strings.NewReader(content)}
+	e := &cliEnv{Actor: env.Actor, Paths: env.Paths, In: strings.NewReader(content)}
 	return cmdWrite(context.Background(), e, []string{svc, path})
 }
 
@@ -84,11 +85,11 @@ func TestWriteThroughASymlinkIsRefused(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(outside, "authorized_keys")); err == nil {
 		t.Fatalf("the write escaped the jail through the symlink (exit %d)", code)
 	}
-	if code == exitOK {
+	if code == cli.ExitOK {
 		t.Fatalf("a write through a symlink out of the jail was accepted")
 	}
 	// and the honest case still works
-	if code := writeAs(env, "whoami", filepath.Join(data, "whoami", "cfg", "app.conf"), "key=value"); code != exitOK {
+	if code := writeAs(env, "whoami", filepath.Join(data, "whoami", "cfg", "app.conf"), "key=value"); code != cli.ExitOK {
 		t.Fatalf("a plain write inside the jail: exit %d", code)
 	}
 	if b, _ := os.ReadFile(filepath.Join(data, "whoami", "cfg", "app.conf")); string(b) != "key=value" {
@@ -101,7 +102,7 @@ func TestWriteThroughASymlinkIsRefused(t *testing.T) {
 func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 	env, _, calls := envBox(t)
 	code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-home-assistant", "--", "cat", "/etc/passwd"})
-	if code == exitOK {
+	if code == cli.ExitOK {
 		t.Fatal("exec in another service's container was accepted")
 	}
 	for _, c := range *calls {
@@ -109,7 +110,7 @@ func TestExecOnlyInTheServicesOwnContainers(t *testing.T) {
 			t.Fatalf("podman exec ran: %s", c)
 		}
 	}
-	if code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != exitOK {
+	if code := cmdExec(context.Background(), env, []string{"whoami", "--container", "systemd-whoami", "--", "true"}); code != cli.ExitOK {
 		t.Fatalf("exec in the service's own container: exit %d", code)
 	}
 }
@@ -124,14 +125,14 @@ func TestNoSnapshotNoMutation(t *testing.T) {
 		*calls = append(*calls, "restic "+strings.Join(args, " "))
 		return "Fatal: unable to open repository", os.ErrNotExist
 	}
-	if code := writeAs(env, "whoami", target, "x"); code == exitOK {
+	if code := writeAs(env, "whoami", target, "x"); code == cli.ExitOK {
 		t.Fatal("a write went ahead although the snapshot failed")
 	}
 	if _, err := os.Stat(target); err == nil {
 		t.Fatal("the file was written without a snapshot")
 	}
 	// no backup repo at all: refused with a reason
-	box := filepath.Join(env.paths.State, "box.yml")
+	box := filepath.Join(env.Paths.State, "box.yml")
 	b, _ := os.ReadFile(box)
 	lines := strings.Split(string(b), "\n")
 	var kept []string
@@ -148,14 +149,14 @@ func TestNoSnapshotNoMutation(t *testing.T) {
 		kept = append(kept, l)
 	}
 	os.WriteFile(box, []byte(strings.Join(kept, "\n")), 0o644)
-	if code := writeAs(env, "whoami", target, "x"); code == exitOK {
+	if code := writeAs(env, "whoami", target, "x"); code == cli.ExitOK {
 		t.Fatal("a write went ahead with no backup repo")
 	}
 	// unless policy.yml says the envelope's snapshot is optional
-	pol := filepath.Join(env.paths.State, "policy.yml")
+	pol := filepath.Join(env.Paths.State, "policy.yml")
 	pb, _ := os.ReadFile(pol)
 	os.WriteFile(pol, append(pb, []byte("envelope:\n  snapshot: optional\n")...), 0o644)
-	if code := writeAs(env, "whoami", target, "x"); code != exitOK {
+	if code := writeAs(env, "whoami", target, "x"); code != cli.ExitOK {
 		t.Fatalf("with snapshot: optional the write should go ahead, exit %d", code)
 	}
 }
@@ -164,7 +165,7 @@ func TestNoSnapshotNoMutation(t *testing.T) {
 // snapshot is pruned.
 func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 	env, data, calls := envBox(t)
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,13 +187,13 @@ func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 func TestACorruptJournalLineDoesNotResetTheBudget(t *testing.T) {
 	env, data, _ := envBox(t)
 	for i := 0; i < RepairBudget; i++ {
-		journal.Append(env.paths.Journal, journal.Entry{T: time.Now().Add(-10 * time.Minute), Actor: "ops", Verb: "exec", Service: "whoami", Result: "info"})
+		journal.Append(env.Paths.Journal, journal.Entry{T: time.Now().Add(-10 * time.Minute), Actor: "ops", Verb: "exec", Service: "whoami", Result: "info"})
 	}
-	day := filepath.Join(env.paths.Journal, time.Now().UTC().Format("2006-01-02")+".jsonl")
+	day := filepath.Join(env.Paths.Journal, time.Now().UTC().Format("2006-01-02")+".jsonl")
 	f, _ := os.OpenFile(day, os.O_APPEND|os.O_WRONLY, 0o644)
 	f.WriteString("{this is not json\n")
 	f.Close()
-	if code := writeAs(env, "whoami", filepath.Join(data, "whoami", "cfg", "a"), "x"); code != exitRefused {
+	if code := writeAs(env, "whoami", filepath.Join(data, "whoami", "cfg", "a"), "x"); code != cli.ExitRefused {
 		t.Fatalf("the budget was reset by a corrupt line: exit %d", code)
 	}
 }

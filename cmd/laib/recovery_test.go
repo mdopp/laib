@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -25,7 +27,7 @@ func resticRecorder(t *testing.T, c *cbox) *[]string {
 	t.Cleanup(func() { resticRun = real })
 	var calls []string
 	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
-		calls = append(calls, "restic "+strings.Join(args, " ")+" [lock="+apply.LockHolder(c.env.paths)+"]")
+		calls = append(calls, "restic "+strings.Join(args, " ")+" [lock="+apply.LockHolder(c.env.Paths)+"]")
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
 		}
@@ -57,11 +59,11 @@ func TestBackupPrepRefusesToInventAPasswordForAnExistingRepo(t *testing.T) {
 	repo := filepath.Join(t.TempDir(), "restic")
 	os.MkdirAll(repo, 0o755)
 	os.WriteFile(filepath.Join(repo, "config"), []byte("x"), 0o644)
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), []byte(strings.Replace(string(b), "backup:\n  repo: ", "backup:\n  repo: "+repo+" #", 1)), 0o644)
-	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), []byte(strings.Replace(string(b), "backup:\n  repo: ", "backup:\n  repo: "+repo+" #", 1)), 0o644)
+	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	delete(sec, "RESTIC_PASSWORD")
-	secrets.Save(c.env.paths.Secrets, c.env.paths.Key, sec)
+	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
 	if _, _, err := backupPrep(c.env); err == nil || !strings.Contains(err.Error(), "RESTIC_PASSWORD") {
 		t.Fatalf("a repo without the password in secrets must ask, not invent: %v", err)
 	}
@@ -76,7 +78,7 @@ func TestBackupPrepRefusesToInventAPasswordForAnExistingRepo(t *testing.T) {
 // converge meanwhile.
 func TestBackupQuiescesDeclaredPaths(t *testing.T) {
 	c := newCbox(t)
-	f := filepath.Join(c.env.paths.State, "services", "caddy", "laib.yml")
+	f := filepath.Join(c.env.Paths.State, "services", "caddy", "laib.yml")
 	b, _ := os.ReadFile(f)
 	text := strings.Replace(string(b), "  - path: ${DATA_DIR}/caddy/data\n", "  - path: ${DATA_DIR}/caddy/data\n    quiesce: true\n", 1)
 	if text == string(b) {
@@ -86,8 +88,8 @@ func TestBackupQuiescesDeclaredPaths(t *testing.T) {
 	calls := resticRecorder(t, c)
 	c.calls = nil
 	var console bytes.Buffer
-	c.env.out = &console
-	if rc := cmdBackup(context.Background(), c.env, nil); rc != exitOK {
+	c.env.Out = &console
+	if rc := cmdBackup(context.Background(), c.env, nil); rc != cli.ExitOK {
 		t.Fatalf("backup rc %d", rc)
 	}
 	// the human at the console sees that the database was stopped for the snapshot
@@ -111,7 +113,7 @@ func TestBackupQuiescesDeclaredPaths(t *testing.T) {
 	if backup == "" || strings.Contains(backup, "[lock=]") {
 		t.Fatalf("the snapshot must run under the lock: %q", backup)
 	}
-	if len(apply.Paused(c.env.paths)) != 0 || apply.LockHolder(c.env.paths) != "" {
+	if len(apply.Paused(c.env.Paths)) != 0 || apply.LockHolder(c.env.Paths) != "" {
 		t.Fatal("pause and lock must be gone after the backup")
 	}
 	_ = all
@@ -125,7 +127,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	c := newCbox(t)
 	calls := resticRecorder(t, c)
 	c.calls = nil
-	if rc := cmdRestore(context.Background(), c.env, []string{"--box", "latest"}); rc != exitOK {
+	if rc := cmdRestore(context.Background(), c.env, []string{"--box", "latest"}); rc != cli.ExitOK {
 		t.Fatalf("restore --box rc %d", rc)
 	}
 	var restores []string
@@ -140,7 +142,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 			restores = append(restores, l)
 		}
 	}
-	if len(restores) < 3 || !strings.Contains(restores[0], c.env.paths.State) {
+	if len(restores) < 3 || !strings.Contains(restores[0], c.env.Paths.State) {
 		t.Fatalf("state first, then the services: %v", restores)
 	}
 	// every service with data (auth: three paths, caddy: one, usage-metrics: one; whoami declares none)
@@ -152,10 +154,10 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	if !strings.Contains(joined, "systemctl --user stop caddy.service") || !strings.Contains(joined, "daemon-reload") {
 		t.Fatalf("units stopped and one apply at the end:\n%s", joined)
 	}
-	if apply.LockHolder(c.env.paths) != "" || len(apply.Paused(c.env.paths)) != 0 {
+	if apply.LockHolder(c.env.Paths) != "" || len(apply.Paused(c.env.Paths)) != 0 {
 		t.Fatal("lock and pauses released")
 	}
-	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != exitOK {
+	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
 		t.Fatalf("single-service restore rc %d", rc)
 	}
 	last := (*calls)[len(*calls)-1]
@@ -171,25 +173,25 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	c := newCbox(t)
 	resticRecorder(t, c)
-	if rc := cmdRecoverySheet(context.Background(), &cliEnv{paths: c.env.paths, actor: "ops"}, nil); rc == exitOK {
+	if rc := cmdRecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops"}, nil); rc == cli.ExitOK {
 		t.Fatal("a hand got the recovery sheet")
 	}
-	if rc := cmdRecoverySheet(context.Background(), &cliEnv{paths: c.env.paths, actor: "human:core", mcp: true}, nil); rc == exitOK {
+	if rc := cmdRecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "human:core", MCP: true}, nil); rc == cli.ExitOK {
 		t.Fatal("the sheet went out over MCP")
 	}
 	out := captureStdout(t, func() {
-		if rc := cmdRecoverySheet(context.Background(), c.env, nil); rc != exitOK {
+		if rc := cmdRecoverySheet(context.Background(), c.env, nil); rc != cli.ExitOK {
 			t.Errorf("rc %d", rc)
 		}
 	})
-	keyFile, _ := os.ReadFile(c.env.paths.Key)
+	keyFile, _ := os.ReadFile(c.env.Paths.Key)
 	key := ""
 	for _, line := range strings.Split(string(keyFile), "\n") {
 		if strings.HasPrefix(line, "AGE-SECRET-KEY-") {
 			key = line
 		}
 	}
-	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
+	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	for _, want := range []string{key, sec["RESTIC_PASSWORD"], "restic", "1.", "2.", "3.", "4.", "laib restore --box latest"} {
 		if want == "" || !strings.Contains(out, want) {
 			t.Fatalf("sheet lacks %q:\n%s", want, out)
@@ -198,9 +200,9 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	if !strings.Contains(out, "sftp:nas:/backup/laib") {
 		t.Fatalf("sheet lacks the repo:\n%s", out)
 	}
-	st, _ := loadState(c.env)
+	st, _ := cli.LoadState(c.env)
 	var found bool
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "recovery" && f.Severity == "gelb" {
 			found = true
 		}
@@ -208,10 +210,10 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	if !found {
 		t.Fatal("diag must be yellow until the sheet is confirmed as stored")
 	}
-	if rc := cmdRecoverySheet(context.Background(), c.env, []string{"--confirm"}); rc != exitOK {
+	if rc := cmdRecoverySheet(context.Background(), c.env, []string{"--confirm"}); rc != cli.ExitOK {
 		t.Fatal("confirm")
 	}
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "recovery" {
 			t.Fatalf("still a recovery finding after confirm: %+v", f)
 		}
@@ -222,13 +224,13 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 // restore test older than 35 days is yellow.
 func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 	c := newCbox(t)
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.paths.State, "box.yml"), []byte(strings.Replace(string(b), "repo: sftp:nas:/backup/laib", "repo: "+filepath.Join(c.env.paths.Home, "backup", "restic"), 1)), 0o644)
-	os.RemoveAll(c.env.paths.Journal)
-	journal.Append(c.env.paths.Journal, journal.Entry{T: time.Now().Add(-8 * 24 * time.Hour), Actor: "human:core", Verb: "init", Result: "info", Detail: "state repo created"})
-	st, _ := loadState(c.env)
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), []byte(strings.Replace(string(b), "repo: sftp:nas:/backup/laib", "repo: "+filepath.Join(c.env.Paths.Home, "backup", "restic"), 1)), 0o644)
+	os.RemoveAll(c.env.Paths.Journal)
+	journal.Append(c.env.Paths.Journal, journal.Entry{T: time.Now().Add(-8 * 24 * time.Hour), Actor: "human:core", Verb: "init", Result: "info", Detail: "state repo created"})
+	st, _ := cli.LoadState(c.env)
 	var red, test bool
-	for _, f := range runProbes(context.Background(), c.env, st, "") {
+	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "backup" && f.Severity == "rot" && strings.Contains(f.Detail, "Datenplatte") {
 			red = true
 		}

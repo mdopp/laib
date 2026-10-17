@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -16,12 +17,12 @@ import (
 func TestAProposedRouteShowsItsFactOnTheCard(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	patch := "diff --git a/services/whoami/laib.yml b/services/whoami/laib.yml\n--- a/services/whoami/laib.yml\n+++ b/services/whoami/laib.yml\n@@ -1,3 +1,8 @@\n name: whoami\n secrets:\n   - name: WHOAMI_TOKEN\n+routes:\n+  - host: who\n+    port: 8080\n+    exposure: internal\n+    auth: none\n"
-	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami soll eine Adresse bekommen"`, "patch": patch}); code != exitOK {
+	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami soll eine Adresse bekommen"`, "patch": patch}); code != cli.ExitOK {
 		t.Fatalf("propose: exit %d: %s", code, out)
 	}
 	ps, _ := proposal.List(inboxDir(env), false)

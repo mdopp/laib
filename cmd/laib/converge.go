@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
@@ -22,40 +23,40 @@ import (
 // human through the journal and the webhook. It never touches the state
 // repo, never generates a secret anew, and never decides anything.
 func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	if !policy.ConvergeOn(st.Policy) && !has(args, "--force") {
-		fmt.Fprintln(env.w(), "converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
-		return exitOK
+		fmt.Fprintln(env.W(), "converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
+		return cli.ExitOK
 	}
 	// one lock (#39): a tick beside a restore, a remove or a human's apply is
 	// skipped, never run alongside
-	if holder := apply.LockHolder(env.paths); holder != "" {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
-		fmt.Fprintln(env.w(), "übersprungen: gesperrt durch", holder)
-		return exitOK
+	if holder := apply.LockHolder(env.Paths); holder != "" {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
+		fmt.Fprintln(env.W(), "übersprungen: gesperrt durch", holder)
+		return cli.ExitOK
 	}
 	unlock, code := takeLock(env, st, "converge")
-	if code != exitOK {
+	if code != cli.ExitOK {
 		return code
 	}
 	defer unlock()
-	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	p, err := plan.Compute(ctx, st, sec, env.paths, "")
+	p, err := plan.Compute(ctx, st, sec, env.Paths, "")
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	if len(p.Conflicts) > 0 {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "KONFLIKT: " + strings.Join(p.Conflicts, "; ")})
-		return exitRed
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: "KONFLIKT: " + strings.Join(p.Conflicts, "; ")})
+		return cli.ExitRed
 	}
 	// paused services (#39): a human's stop, a restore, the lease — not ours to restart
-	paused := apply.Paused(env.paths)
+	paused := apply.Paused(env.Paths)
 	var pausedNames []string
 	for n, pz := range paused {
 		pausedNames = append(pausedNames, fmt.Sprintf("%s (von %s bis %s)", n, pz.By, pz.Until.Local().Format("02.01. 15:04")))
@@ -75,30 +76,30 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fw, fwErr := ensureFirewall(ctx, env)
 	if fwErr != nil {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "firewall: " + fwErr.Error()})
-		return exitRed
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: "firewall: " + fwErr.Error()})
+		return cli.ExitRed
 	}
 	if fw {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
 	}
-	pending := apply.Pending(env.paths)
+	pending := apply.Pending(env.Paths)
 	if len(pausedNames) > 0 {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
 	}
 	if p.Empty() && len(inactive) == 0 && len(pending) == 0 {
-		if env.json {
-			return emit(env, map[string]any{"converged": true, "paused": pausedNames})
+		if env.JSON {
+			return cli.Emit(env, map[string]any{"converged": true, "paused": pausedNames})
 		}
-		fmt.Fprintln(env.w(), "konvergent: Box entspricht dem State, alle Units aktiv")
-		return exitOK
+		fmt.Fprintln(env.W(), "konvergent: Box entspricht dem State, alle Units aktiv")
+		return cli.ExitOK
 	}
 	// Budget: three converge applies per hour; a service that needs more is
 	// flapping, and flapping is a bug for a human or the ops hand, not a loop.
 	since := time.Now().Add(-time.Hour)
-	recent, _, err := journal.ReadCounted(env.paths.Journal, since)
+	recent, _, err := journal.ReadCounted(env.Paths.Journal, since)
 	if err != nil {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "Journal nicht lesbar, kein Converge: " + err.Error()})
-		return exitRed
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: "Journal nicht lesbar, kein Converge: " + err.Error()})
+		return cli.ExitRed
 	}
 	runs := 0
 	for _, e := range recent {
@@ -107,8 +108,8 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	if runs >= policy.ConvergeBudget {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h): %d Dateien Drift, nicht aktiv: %s. Ein Mensch oder die Ops-Hand muss ran.", policy.ConvergeBudget, len(p.Changes), strings.Join(inactive, ", "))})
-		return exitRed
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h): %d Dateien Drift, nicht aktiv: %s. Ein Mensch oder die Ops-Hand muss ran.", policy.ConvergeBudget, len(p.Changes), strings.Join(inactive, ", "))})
+		return cli.ExitRed
 	}
 	reason := fmt.Sprintf("converge: %d Dateien Drift, nicht aktiv: %s", len(p.Changes), strings.Join(inactive, ", "))
 	if len(pending) > 0 {

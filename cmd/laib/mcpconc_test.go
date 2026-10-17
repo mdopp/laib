@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -32,9 +33,9 @@ func TestMcpReadCallsRunConcurrently(t *testing.T) {
 		wg.Done()
 		select {
 		case <-both:
-			return exitOK
+			return cli.ExitOK
 		case <-time.After(3 * time.Second):
-			return env.fail(errors.New("allein: der andere Aufruf wartet"))
+			return env.Fail(errors.New("allein: der andere Aufruf wartet"))
 		}
 	}})
 	st := &state.State{Policy: state.Policy{Hands: map[string]state.Hand{"ops": {Ceiling: "apply"}}}}
@@ -49,7 +50,7 @@ func TestMcpReadCallsRunConcurrently(t *testing.T) {
 		}()
 	}
 	done.Wait()
-	if codes[0] != exitOK || codes[1] != exitOK {
+	if codes[0] != cli.ExitOK || codes[1] != cli.ExitOK {
 		t.Fatalf("read calls were serialized: %q %v", outs, codes)
 	}
 }
@@ -60,13 +61,13 @@ func TestMcpErrorsGoThroughTheCallsWriterNotStderr(t *testing.T) {
 	orig := os.Stderr
 	withVerb(t, verb{"probe289e", "read", "test", func(_ context.Context, env *cliEnv, _ []string) int {
 		if os.Stderr != orig {
-			return env.fail(errors.New("stderr wurde umgebogen"))
+			return env.Fail(errors.New("stderr wurde umgebogen"))
 		}
-		return env.fail(errors.New("kaputt: Datei fehlt"))
+		return env.Fail(errors.New("kaputt: Datei fehlt"))
 	}})
 	st := &state.State{Policy: state.Policy{Hands: map[string]state.Hand{"ops": {Ceiling: "apply"}}}}
 	out, code := mcpCall(context.Background(), &cliEnv{}, st, "ops", "laib_probe289e", map[string]any{"args": ""})
-	if code == exitOK || !strings.Contains(out, "kaputt: Datei fehlt") {
+	if code == cli.ExitOK || !strings.Contains(out, "kaputt: Datei fehlt") {
 		t.Fatalf("%d %q", code, out)
 	}
 }

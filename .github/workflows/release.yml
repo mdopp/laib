@@ -71,7 +71,7 @@ jobs:
       - run: |
           for t in linux-amd64 darwin-arm64 darwin-amd64 windows-amd64; do
             ext=""; [ "$t" = windows-amd64 ] && ext=.exe
-            CGO_ENABLED=0 GOOS=${t%-*} GOARCH=${t#*-} go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-stick-$t$ext ./cmd/laib-stick
+            CGO_ENABLED=0 GOOS=${t%-*} GOARCH=${t#*-} go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-stick-$t$ext ./stick/cmd/laib-stick
           done
       - run: sha256sum laib-* > SHA256SUMS
       - uses: actions/attest-build-provenance@v2

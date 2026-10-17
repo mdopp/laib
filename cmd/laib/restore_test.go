@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -30,7 +31,7 @@ func newRbox(t *testing.T) *rbox {
 	home := t.TempDir()
 	paths := boxfs.Paths{Home: home, State: filepath.Join(home, "state"), Journal: filepath.Join(home, "journal"), Render: filepath.Join(home, "render"),
 		Quadlet: filepath.Join(home, "quadlet"), Systemd: filepath.Join(home, "systemd"), Key: filepath.Join(home, "age.key"), Secrets: filepath.Join(home, "state", "secrets.age"), Lock: filepath.Join(home, "apply.lock")}
-	b := &rbox{env: &cliEnv{paths: paths, actor: "human:test"}, down: map[string]bool{}}
+	b := &rbox{env: &cliEnv{Paths: paths, Actor: "human:test"}, down: map[string]bool{}}
 	real := sysd.Run
 	t.Cleanup(func() { sysd.Run = real })
 	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
@@ -58,7 +59,7 @@ func newRbox(t *testing.T) *rbox {
 		}
 		return "", nil
 	}
-	if rc := cmdInit(context.Background(), b.env, []string{"--domain", "e2e.home", "--data-dir", filepath.Join(home, "data")}); rc != exitOK {
+	if rc := cmdInit(context.Background(), b.env, []string{"--domain", "e2e.home", "--data-dir", filepath.Join(home, "data")}); rc != cli.ExitOK {
 		t.Fatalf("init rc %d", rc)
 	}
 	golden := filepath.Join("..", "..", "testdata", "golden", "basic", "state")
@@ -81,11 +82,11 @@ func newRbox(t *testing.T) *rbox {
 	sec["DNS_API_TOKEN"] = "x"
 	sec["RESTIC_PASSWORD"] = "pw" // the repo exists after the first backup, and so does its password (#40)
 	secrets.Save(paths.Secrets, paths.Key, sec)
-	st, err := loadState(b.env)
+	st, err := cli.LoadState(b.env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(context.Background(), b.env, st, "", "test: first apply"); rc != exitOK {
+	if rc := runApply(context.Background(), b.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	b.calls = nil
@@ -122,7 +123,7 @@ func TestRestoreStartsWhatItStopped(t *testing.T) {
 		}
 		return "", nil
 	}
-	if rc := cmdRestore(context.Background(), b.env, []string{"latest", "caddy"}); rc != exitOK {
+	if rc := cmdRestore(context.Background(), b.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
 		t.Fatalf("restore rc %d: %s", rc, strings.Join(b.calls, "\n"))
 	}
 	stopped, started := -1, -1

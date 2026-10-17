@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /persona ./cmd/persona
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /persona ./persona/cmd/persona
 FROM scratch
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
 COPY --from=build /persona /persona
