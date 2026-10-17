@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/mdopp/laib/internal/state"
 )
 
 // Input is Talk in the session's language (English for a new one).
@@ -27,7 +25,7 @@ func (t *Terminal) clone(from, to string) *Terminal {
 }
 
 func joshua() Cast {
-	p, err := state.BuiltinPersona("joshua")
+	p, err := builtin("joshua")
 	if err != nil {
 		panic(err)
 	}
@@ -39,8 +37,8 @@ func term() *Terminal {
 	return t
 }
 
-func hal() *state.Persona {
-	return &state.Persona{Name: "hal", Display: "HAL", Prompt: "HAL", Languages: []string{"en"}, Greeting: map[string]string{"en": "Good afternoon."}}
+func hal() *Persona {
+	return &Persona{Name: "hal", Display: "HAL", Prompt: "HAL", Languages: []string{"en"}, Greeting: map[string]string{"en": "Good afternoon."}}
 }
 
 // #126: the engine is generic; a persona without gimmicks has a plain
@@ -72,7 +70,7 @@ func TestASecondPersonaWithoutGimmicks(t *testing.T) {
 // persona; every other number to the house's.
 func TestAChatPersonaPerNumber(t *testing.T) {
 	c := joshua()
-	c.ByName = map[string]*state.Persona{"hal": hal()}
+	c.ByName = map[string]*Persona{"hal": hal()}
 	c.Chat = map[string]string{"+4917012345678": "hal"}
 	j := New(func() []string { return []string{"laib"} }, c)
 	if out := j.Talk("+4917012345678", "en", "menu"); !strings.HasSuffix(out, "HAL>") {
@@ -95,13 +93,8 @@ func TestLoadCastFromTheRenderedPackages(t *testing.T) {
 	w("chat.yml", "house: hal\nchat:\n  \"+4917012345678\": joshua\n")
 	w("hal/persona.yml", "name: hal\ndisplay: HAL\nlanguages: [en]\nwakeword: {phrase: Hello Hal}\n")
 	w("hal/style.md", "Calm.\n")
-	w("hal/icon.svg", "<svg/>")
-	j, _ := state.BuiltinPersona("joshua")
-	w("hal/icon.png", j.Files["icon.png"])
 	w("joshua/persona.yml", "name: joshua\ndisplay: Joshua\nlanguages: [de, en]\nprompt: JOSHUA\ngimmicks: [wopr-directory]\n")
 	w("joshua/style.md", "WOPR.\n")
-	w("joshua/icon.svg", "<svg/>")
-	w("joshua/icon.png", j.Files["icon.png"])
 	c, err := LoadCast(dir)
 	if err != nil || c.House == nil || c.House.Name != "hal" || c.Chat["+4917012345678"] != "joshua" || c.ByName["joshua"] == nil {
 		t.Fatalf("cast from %s: %+v %v", dir, c, err)
@@ -334,7 +327,7 @@ func TestANameResolvesToItsNumbersPersona(t *testing.T) {
 	}))
 	defer contacts.Close()
 	c := joshua()
-	c.ByName = map[string]*state.Persona{"hal": hal()}
+	c.ByName = map[string]*Persona{"hal": hal()}
 	c.ByName["hal"].Files = map[string]string{"style.md": "Calm, polite, a little too calm.\n\nMore lines.\n"}
 	c.Chat = map[string]string{"+4917012345678": "hal", "+4917000000001": "hal"}
 	c.Resolve = SignalContacts(contacts.URL, "+4911100000", nil)

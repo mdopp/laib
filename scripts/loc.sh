@@ -21,6 +21,7 @@ budget operator 3000 operator
 budget stick 1800 stick         # the laptop's install-stick builder, 1,468
 budget frage 400 frage          # "was ist …", 261
 budget automat 600 automat      # the Bote's HA automations, 421
+budget persona 900 persona      # the Bote's persona engine, 701
 budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
 
 # the boundary: the Operator's code is not in the kernel's tree, and
@@ -34,10 +35,10 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick frage automat mcpserver; do
+for prog in stick frage automat persona mcpserver; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
-  down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal | grep -v '^internal/persona/' || true) # persona until it moves (#309)
+  down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
 done
 exit $bad

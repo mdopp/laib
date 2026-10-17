@@ -66,7 +66,7 @@ which kind of name goes where.
 | relay | approvals by the admin's verified number, code not model | `cmd/relay`, container `bote-relay` |
 | Automat | Home Assistant automations as a Bote tool | `automat/`, container `bote-automat`, tool `automat` |
 | notify | a message for a person on their chat channel, sent by the Bote with `hermes send` (ADR 0022 §3); Home Assistant calls it as `rest_command.mitteilung` | `templates/bote/notify.py`, container `bote-notify` |
-| persona (engine) | where a person stands in the Bote: directory, levels, context, gimmicks | `internal/persona`, container `bote-persona`, tool `persona` |
+| persona (engine) | where a person stands in the Bote: directory, levels, context, gimmicks | `persona/`, container `bote-persona`, tool `persona` |
 | Joshua | the first persona: WOPR from WarGames, "Hey Joshua" | persona package (ADR 0020) |
 | Haus | the family's surface: pages, cards, `/napi`, the app's server | repo `mdopp/haus`, `templates/haus`, `haus.<domain>` |
 | Haushalt | the household's data: calendar, contacts, notes, reminders | Haus's MCP source (ADR 0017), Bote tool `haushalt` |

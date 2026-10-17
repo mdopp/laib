@@ -35,7 +35,6 @@ layer (ADR 0010).
 ```
 cmd/laib/            the one binary: CLI + daemon (`laib serve`), diag probes
 cmd/laib-lease/      the model role's policy proxy and GPU lease (ADR 0011)
-cmd/persona/         the Bote's persona engine: directory, levels, gimmicks (ADR 0020)
 internal/state       load + validate the state repo
 internal/render      pure renderers: quadlet, caddy, authelia, adguard, nftables
 internal/plan        state → files → diff against the box
@@ -52,6 +51,7 @@ internal/sysd        the systemctl seam
 operator/            the Operator, the admin agent (ADR 0013), a host unit: its own program and line budget (ADR 0023)
 frage/               "was ist …": SearXNG + summary, OpenAI-compatible and MCP; its own program and budget (#309)
 automat/             Home Assistant automations as an MCP tool in the bote pod; its own program and budget
+persona/             the Bote's persona engine: directory, levels, gimmicks (ADR 0020); its own program and budget
 mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, persona)
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)

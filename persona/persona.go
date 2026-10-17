@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/mcpserver"
-	"github.com/mdopp/laib/internal/state"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,21 +47,21 @@ type session struct {
 	ctx   string // "" = the directory, games, or one of the Bote's tools (#122)
 	lang  string // de or en
 	last  time.Time
-	p     *state.Persona // who speaks to this person
+	p     *Persona // who speaks to this person
 }
 
 // Cast is who speaks to whom: the house persona, and per Signal number another
 // one (box.yml chatPersonas, rendered to render/persona/chat.yml).
 type Cast struct {
-	House   *state.Persona
-	ByName  map[string]*state.Persona
+	House   *Persona
+	ByName  map[string]*Persona
 	Chat    map[string]string         // number → persona name
 	Resolve func(label string) string // the session's label (a profile name) → its number; "" when unknown or ambiguous
 }
 
 // For is the persona of one session: its id is the number, or the name
 // Hermes shows the model, resolved to a number.
-func (c Cast) For(sid string) *state.Persona {
+func (c Cast) For(sid string) *Persona {
 	if p := c.ByName[c.Chat[sid]]; p != nil {
 		return p
 	}
@@ -137,7 +136,7 @@ func (t *Terminal) figur(s *session) string {
 func LoadCast(dir string) (Cast, error) {
 	b, err := os.ReadFile(filepath.Join(dir, "chat.yml"))
 	if errors.Is(err, os.ErrNotExist) {
-		p, err := state.BuiltinPersona("joshua")
+		p, err := builtin("joshua")
 		return Cast{House: p}, err
 	}
 	if err != nil {
@@ -150,7 +149,7 @@ func LoadCast(dir string) (Cast, error) {
 	if err := yaml.Unmarshal(b, &m); err != nil {
 		return Cast{}, fmt.Errorf("chat.yml: %w", err)
 	}
-	c := Cast{ByName: map[string]*state.Persona{}, Chat: m.Chat}
+	c := Cast{ByName: map[string]*Persona{}, Chat: m.Chat}
 	names := []string{m.House}
 	for _, n := range m.Chat {
 		names = append(names, n)
@@ -159,7 +158,7 @@ func LoadCast(dir string) (Cast, error) {
 		if c.ByName[n] != nil {
 			continue
 		}
-		p, err := state.ReadPersona(os.DirFS(filepath.Join(dir, n)), n, "rendered")
+		p, err := readPersona(os.DirFS(filepath.Join(dir, n)), n, "rendered")
 		if err != nil {
 			return Cast{}, err
 		}
@@ -169,10 +168,10 @@ func LoadCast(dir string) (Cast, error) {
 	return c, nil
 }
 
-func gimmick(p *state.Persona, g string) bool { return slices.Contains(p.Gimmicks, g) }
+func gimmick(p *Persona, g string) bool { return slices.Contains(p.Gimmicks, g) }
 
 // gamesOn: the persona brings at least one game, so there is a games level.
-func gamesOn(p *state.Persona) bool {
+func gamesOn(p *Persona) bool {
 	return gimmick(p, "tictactoe") || gimmick(p, "global-thermonuclear-war")
 }
 
@@ -241,7 +240,7 @@ func wordsFor(s *session) words {
 }
 
 // named: the persona's own name, as a word of its own, opens the directory.
-func named(p *state.Persona, in string) bool {
+func named(p *Persona, in string) bool {
 	for _, f := range strings.Fields(in) {
 		f = strings.Trim(f, ",.!?:;")
 		if f == strings.ToUpper(p.Prompt) || f == strings.ToUpper(p.Display) {
