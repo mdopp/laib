@@ -19,18 +19,18 @@ import (
 // a pause never outlives a day without being renewed.
 func cmdPause(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return fail(errors.New("usage: laib pause <service> [--until 2h|<RFC3339>] [\"<grund>\"]"))
+		return env.fail(errors.New("usage: laib pause <service> [--until 2h|<RFC3339>] [\"<grund>\"]"))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not pause a service")
 	}
 	name := args[0]
 	if _, ok := st.Services[name]; !ok {
-		return fail(fmt.Errorf("unknown service %q", name))
+		return env.fail(fmt.Errorf("unknown service %q", name))
 	}
 	until := time.Now().Add(2 * time.Hour)
 	var words []string
@@ -42,18 +42,18 @@ func cmdPause(ctx context.Context, env *cliEnv, args []string) int {
 			} else if ts, err := time.Parse(time.RFC3339, args[i]); err == nil {
 				until = ts
 			} else {
-				return fail(fmt.Errorf("--until %q: a duration (2h) or an RFC3339 time", args[i]))
+				return env.fail(fmt.Errorf("--until %q: a duration (2h) or an RFC3339 time", args[i]))
 			}
 			continue
 		}
 		words = append(words, args[i])
 	}
 	if until.After(time.Now().Add(24 * time.Hour)) {
-		return fail(errors.New("a pause lasts at most a day; renew it"))
+		return env.fail(errors.New("a pause lasts at most a day; renew it"))
 	}
 	pz := apply.Pause{Service: name, By: env.actor, Until: until.UTC(), Reason: strings.Join(words, " ")}
 	if err := apply.WritePause(env.paths, pz); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "pause", Service: name, Reason: pz.Reason, Result: "info", Detail: "pausiert bis " + until.Local().Format("02.01. 15:04")})
 	if env.json {
@@ -66,11 +66,11 @@ func cmdPause(ctx context.Context, env *cliEnv, args []string) int {
 // cmdResume lifts a pause.
 func cmdResume(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return fail(errors.New("usage: laib resume <service>"))
+		return env.fail(errors.New("usage: laib resume <service>"))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not resume a service")

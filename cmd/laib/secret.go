@@ -20,15 +20,15 @@ import (
 // so it never lands in a shell history; `laib secret list` prints names only.
 func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib secret set <NAME> (value on stdin) | list | rotate <NAME>"))
+		return env.fail(errors.New("usage: laib secret set <NAME> (value on stdin) | list | rotate <NAME>"))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	switch args[0] {
 	case "list":
@@ -46,7 +46,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		return exitOK
 	case "set":
 		if len(args) != 2 {
-			return fail(errors.New("usage: laib secret set <NAME>"))
+			return env.fail(errors.New("usage: laib secret set <NAME>"))
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 			return exitRefusedMsg(env, env.actor+" may not set secrets")
@@ -54,14 +54,14 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		val := strings.TrimRight(line, "\r\n")
 		if val == "" {
-			return fail(errors.New("empty value on stdin"))
+			return env.fail(errors.New("empty value on stdin"))
 		}
 		if _, err := secrets.EnsureKey(env.paths.Key); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		sec[args[1]] = val
 		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "secret", Result: "info", Detail: "set " + args[1]})
 		fmt.Fprintln(env.w(), "gesetzt:", args[1])
@@ -70,14 +70,14 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		// #17: a new value, applied to every service that references it, so
 		// the post-deploy hooks re-seed the apps. Humans only.
 		if len(args) != 2 {
-			return fail(errors.New("usage: laib secret rotate <NAME>"))
+			return env.fail(errors.New("usage: laib secret rotate <NAME>"))
 		}
 		if proposal.Hand(env.actor) != "human" {
 			return exitRefusedMsg(env, "only a human rotates secrets")
 		}
 		name := args[1]
 		if _, ok := sec[name]; !ok {
-			return fail(fmt.Errorf("no secret %s", name))
+			return env.fail(fmt.Errorf("no secret %s", name))
 		}
 		external := false
 		for _, d := range render.SecretNames(st) {
@@ -86,11 +86,11 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 			}
 		}
 		if external {
-			return fail(fmt.Errorf("%s is external: obtain a new value and use `laib secret set`", name))
+			return env.fail(fmt.Errorf("%s is external: obtain a new value and use `laib secret set`", name))
 		}
 		sec[name] = secrets.Generate()
 		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "secret", Result: "info", Detail: "rotate " + name})
 		// Every service that references the secret, or declares it, gets applied.
@@ -124,5 +124,5 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		return code
 	}
-	return fail(fmt.Errorf("unknown secret subcommand %q", args[0]))
+	return env.fail(fmt.Errorf("unknown secret subcommand %q", args[0]))
 }

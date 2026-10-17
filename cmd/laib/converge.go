@@ -24,7 +24,7 @@ import (
 func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.ConvergeOn(st.Policy) && !has(args, "--force") {
 		fmt.Fprintln(env.w(), "converge ist aus (policy.yml autonomy.converge: on schaltet die Schleife ein; --force für einen Lauf)")
@@ -44,11 +44,11 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	defer unlock()
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	p, err := plan.Compute(ctx, st, sec, env.paths, "")
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if len(p.Conflicts) > 0 {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "converge", Result: "red", Detail: "KONFLIKT: " + strings.Join(p.Conflicts, "; ")})

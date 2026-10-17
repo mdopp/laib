@@ -12,10 +12,13 @@ E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
 DOMAIN = E["LAIB_DOMAIN"]
 op = E["OPERATOR_USER"]
+READERS = [("radicale", "RADICALE_LDAP_PASSWORD", "Radicale (Lesekonto)"),
+           ("file-share", "FILE_SHARE_LDAP_PASSWORD", "Netzlaufwerk (Lesekonto)"),
+           ("jellyfin", "JELLYFIN_LDAP_PASSWORD", "Jellyfin (Lesekonto)")]   # its LDAP plugin's bind (#256)
 # checked before anything is created: an empty password binds anonymously, which
 # proves nothing, and a name with DN specials ("," "+" ...) is another entry's DN
 if not op or set(op) & set(',+"\\<>;=') or op[0] in "# " or op[-1] == " " or \
-        not all(S(n) for n in ("LLDAP_ADMIN_PASSWORD", "OPERATOR_PASSWORD", "RADICALE_LDAP_PASSWORD", "JELLYFIN_LDAP_PASSWORD")):
+        not all(S(n) for n in ("LLDAP_ADMIN_PASSWORD", "OPERATOR_PASSWORD", *(r[1] for r in READERS))):
     print(f"OPERATOR_USER {op!r} is not a name LDAP can address, or a password is empty: nothing seeded", file=sys.stderr); sys.exit(1)
 
 # seed LLDAP through its GraphQL API: groups, the operator's account
@@ -97,21 +100,21 @@ if "admins" not in {g["displayName"] for g in member}:
     gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": op, "g": groups["admins"]})
     print("operator added to admins")
 
-# the read-only accounts other services bind with (#55): radicale and Jellyfin's
-# LDAP plugin (#256) look users up through them — never as the LLDAP admin.
-# lldap_strict_readonly is LLDAP's own group for exactly that.
+# the read-only accounts other services read LLDAP with (#55): radicale looks
+# users up through its own, file-share reads who is family (#296) — never as
+# the LLDAP admin. lldap_strict_readonly is LLDAP's own group for exactly that.
 if "lldap_strict_readonly" not in groups:
     groups["lldap_strict_readonly"] = gql("mutation($n:String!){ createGroup(name:$n){ id } }", {"n": "lldap_strict_readonly"})["createGroup"]["id"]
-for uid, secret, name in (("radicale", "RADICALE_LDAP_PASSWORD", "Radicale"), ("jellyfin", "JELLYFIN_LDAP_PASSWORD", "Jellyfin")):
-    if uid not in users:
+for reader, secret, display in READERS:
+    if reader not in users:
         gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
-            {"u": {"id": uid, "email": uid + "@" + DOMAIN, "displayName": name + " (Lesekonto)"}})
-        print("read-only account created:", uid)
+            {"u": {"id": reader, "email": reader + "@" + DOMAIN, "displayName": display}})
+        print("read-only account created:", reader)
     # a service secret, not a person's password: set on every run, so a set that failed once
-    # does not leave the account without one for good (#209)
-    set_password(uid, S(secret))
-    rmember = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": uid})["user"]["groups"]
+    # does not leave the reader without one for good (#209)
+    set_password(reader, S(secret))
+    rmember = gql("query($id:String!){ user(userId:$id){ groups { displayName } } }", {"id": reader})["user"]["groups"]
     if "lldap_strict_readonly" not in {g["displayName"] for g in rmember}:
-        gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": uid, "g": groups["lldap_strict_readonly"]})
-        print(uid, "added to lldap_strict_readonly")
+        gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": reader, "g": groups["lldap_strict_readonly"]})
+        print(reader, "added to lldap_strict_readonly")
 print("lldap seeded: groups admins, family; operator", op)

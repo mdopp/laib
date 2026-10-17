@@ -45,11 +45,11 @@ func runApply(ctx context.Context, env *cliEnv, st *state.State, only, reason st
 func takeLock(env *cliEnv, st *state.State, verb string) (func(), int) {
 	unlock, stale, err := apply.Lock(env.paths, verb+":"+env.actor)
 	if errors.Is(err, apply.ErrLocked) {
-		fmt.Fprintln(os.Stderr, "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
+		fmt.Fprintln(env.errw(), "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.paths))
 		return nil, exitLocked
 	}
 	if err != nil {
-		return nil, fail(err)
+		return nil, env.fail(err)
 	}
 	if stale != "" {
 		record(env, st, journal.Entry{Actor: env.actor, Verb: verb, Result: "info", Detail: "Sperre übernommen: " + stale + " (Prozess weg)"})
@@ -62,7 +62,7 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	changed := false
 	// a refused apply (#227) generates and mints nothing: the plan below refuses
@@ -76,12 +76,12 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 				// a Laib token the service needs: minted here, once, as the hand the template names
 				h, ok := st.Policy.Hands[s.Mint]
 				if !ok || s.Mint == "human" {
-					fmt.Fprintf(os.Stderr, "laib: secret %s wants a token for hand %q, which policy.yml does not have (or is human)\n", s.Name, s.Mint)
+					fmt.Fprintf(env.errw(), "laib: secret %s wants a token for hand %q, which policy.yml does not have (or is human)\n", s.Name, s.Mint)
 					return exitUsage
 				}
 				store, err := token.Load(tokenPath(env))
 				if err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				ttl := time.Duration(0)
 				if h.TTL != "" {
@@ -89,7 +89,7 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 				}
 				plain, rec, err := store.Mint(s.Mint, ttl, s.Name)
 				if err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: fmt.Sprintf("mint %s for %s (%s)", rec.ID, s.Mint, s.Name)})
 				sec[s.Name] = plain
@@ -99,7 +99,7 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 			if s.Optional {
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "laib: secret %s is external and not set; add it to secrets.age first\n", s.Name)
+			fmt.Fprintf(env.errw(), "laib: secret %s is external and not set; add it to secrets.age first\n", s.Name)
 			return exitUsage
 		}
 		sec[s.Name] = secrets.Generate()
@@ -107,13 +107,13 @@ func applyHeld(ctx context.Context, env *cliEnv, st *state.State, only, reason s
 	}
 	if changed {
 		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 	}
 
 	p, err := plan.Compute(ctx, st, sec, env.paths, only)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	return runApplyPlan(ctx, env, st, p, sec, reason, "apply", true)
 }
@@ -142,14 +142,14 @@ func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Pla
 	if err != nil {
 		entry.Result, entry.Detail = "red", err.Error()
 		journal.Append(env.paths.Journal, entry)
-		return fail(err)
+		return env.fail(err)
 	}
 	if len(res.NewSecrets) > 0 {
 		for k, v := range res.NewSecrets {
 			sec[k] = v
 		}
 		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 	}
 	entry.Result = "green"
@@ -205,7 +205,7 @@ func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Pla
 func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
 		return exitRefusedMsg(env, env.actor+" may not propose")
@@ -219,11 +219,11 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 			usePatch = true
 		case "--set":
 			if i+1 >= len(args) {
-				return fail(errors.New("--set wants path:KEY=VALUE"))
+				return env.fail(errors.New("--set wants path:KEY=VALUE"))
 			}
 			k, v, ok := strings.Cut(args[i+1], "=")
 			if !ok {
-				return fail(errors.New("--set wants path:KEY=VALUE"))
+				return env.fail(errors.New("--set wants path:KEY=VALUE"))
 			}
 			if edit.Set == nil {
 				edit.Set = map[string]string{}
@@ -232,17 +232,17 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 			i++
 		case "--add":
 			if i+1 >= len(args) {
-				return fail(errors.New("--add wants a template name"))
+				return env.fail(errors.New("--add wants a template name"))
 			}
 			tpl, err := templateFS(env, args[i+1])
 			if err != nil {
-				return fail(err)
+				return env.fail(err)
 			}
 			edit.Add = &proposal.AddService{Name: args[i+1], Template: tpl, Values: map[string]string{}}
 			i++
 		case "--name":
 			if edit.Add == nil || i+1 >= len(args) {
-				return fail(errors.New("--name follows --add"))
+				return env.fail(errors.New("--name follows --add"))
 			}
 			edit.Add.Name = args[i+1]
 			i++
@@ -258,25 +258,25 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	if usePatch {
 		b, err := io.ReadAll(env.stdin())
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		edit.Patch = string(b)
 	}
 	reason := strings.Join(words, " ")
 	if reason == "" {
-		return fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]] \"<grund>\""))
+		return env.fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]] \"<grund>\""))
 	}
 	var p *proposal.Proposal
 	if edit.Patch == "" && edit.Set == nil && edit.Add == nil {
 		if env.mcp {
-			return fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
+			return env.fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
 		}
 		p, err = proposal.Create(ctx, env.paths.State, inboxDir(env), env.actor, reason, judgeFor(st, env.actor))
 	} else {
 		p, err = proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, edit, judgeFor(st, env.actor))
 	}
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
 	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
@@ -348,11 +348,11 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 	}
 	defer unlock()
 	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, "laib", stateLoads); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
 	code = applyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
@@ -364,7 +364,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 		record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d zurückgenommen: verify war rot", p.ID)})
 		st, err = loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		applyHeld(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
 		return exitRed
@@ -374,19 +374,19 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 
 func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	if len(args) != 1 {
-		return fail(errors.New("usage: laib approve|reject <id>"))
+		return env.fail(errors.New("usage: laib approve|reject <id>"))
 	}
 	id, err := strconv.Atoi(strings.TrimPrefix(args[0], "#"))
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	p, err := proposal.Get(inboxDir(env), id)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), p.Tier) {
 		return exitRefusedMsg(env, fmt.Sprintf("%s may not decide a %s-tier proposal", env.actor, p.Tier))
@@ -396,13 +396,13 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 		if why == "" {
 			why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"
 		}
-		fmt.Fprintf(os.Stderr, "laib: %s may not approve #%d — nur ein Mensch: %s\n", env.actor, p.ID, why)
+		fmt.Fprintf(env.errw(), "laib: %s may not approve #%d — nur ein Mensch: %s\n", env.actor, p.ID, why)
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d abgelehnt für %s: nur ein Mensch — %s", p.ID, env.actor, why)})
 		return exitRefused
 	}
 	if !approve {
 		if err := proposal.Reject(ctx, env.paths.State, inboxDir(env), p, env.actor); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		record(env, st, journal.Entry{Actor: env.actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
 		fmt.Fprintf(env.w(), "Vorschlag #%d abgelehnt.\n", p.ID)
@@ -415,16 +415,16 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	defer unlock()
 	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, env.actor, stateLoads); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
-			fmt.Fprintln(os.Stderr, "laib:", err)
+			fmt.Fprintln(env.errw(), "laib:", err)
 			return exitRefused
 		}
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
 	// The merged state is the new truth: reload and apply it.
 	st, err = loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	fileWishes(ctx, env, st, p)
 	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") }) {
@@ -462,18 +462,18 @@ func templateFS(env *cliEnv, name string) (fs.FS, error) {
 // human, applied. Agents keep proposing; this is sugar for the shell.
 func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 {
-		return fail(errors.New("usage: laib add <template> [--name <service>] [KEY=VALUE…] [\"<grund>\"]"))
+		return env.fail(errors.New("usage: laib add <template> [--name <service>] [KEY=VALUE…] [\"<grund>\"]"))
 	}
 	if proposal.Hand(env.actor) != "human" {
 		return exitRefusedMsg(env, "add is the human's verb; agents use propose --add")
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	tpl, err := templateFS(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	add := &proposal.AddService{Name: args[0], Template: tpl, Values: map[string]string{}}
 	var words []string
@@ -501,18 +501,18 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, reason, proposal.Edit{Add: add}, judgeFor(st, env.actor))
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	for _, w := range p.Warnings {
 		fmt.Fprintln(env.w(), "HINWEIS:", w)
 	}
 	if err := proposal.ApproveChecked(ctx, env.paths.State, inboxDir(env), p, env.actor, stateLoads); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d add %s", p.ID, add.Name)})
 	st, err = loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	return runApply(ctx, env, st, "", reason)
 }
@@ -527,7 +527,7 @@ func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
 	}
 	ps, err := proposal.List(inboxDir(env), openOnly)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	domain := ""
 	if st, err := loadState(env); err == nil {
