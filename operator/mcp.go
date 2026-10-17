@@ -87,7 +87,7 @@ func (m *MCP) Tools(ctx context.Context) ([]Tool, error) {
 }
 
 // Call runs one tool and returns its text output and whether it errored.
-func (m *MCP) Call(ctx context.Context, name string, args map[string]string) (string, bool, error) {
+func (m *MCP) Call(ctx context.Context, name string, args map[string]any) (string, bool, error) {
 	raw, err := m.call(ctx, "tools/call", map[string]any{"name": name, "arguments": args})
 	if err != nil {
 		return "", true, err

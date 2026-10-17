@@ -37,7 +37,7 @@ type SkillTrigger struct {
 
 // Skills asks the kernel for the registry.
 func (m *MCP) Skills(ctx context.Context) ([]Skill, error) {
-	text, isErr, err := m.Call(ctx, "laib_skill", map[string]string{"args": "list"})
+	text, isErr, err := m.Call(ctx, "laib_skill", map[string]any{"action": "list"})
 	if err != nil || isErr {
 		return nil, fmt.Errorf("laib skill list: %v %s", err, firstLine(text))
 	}

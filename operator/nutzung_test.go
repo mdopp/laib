@@ -39,8 +39,8 @@ var usageWeek = map[string]json.RawMessage{
 }
 
 func suggest(id, saw, suggestion, better string) ToolCall {
-	b, _ := json.Marshal(map[string]string{"saw": saw, "suggestion": suggestion, "better": better})
-	return tcall(id, "suggest", string(b))
+	b, _ := json.Marshal(map[string]string{"text": suggestion, "saw": saw, "better": better})
+	return tcall(id, "laib_wish", string(b))
 }
 
 // #270: the weekly skill reads the counts and the unanswered sentences,
@@ -63,13 +63,13 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 			res["tools"] = []map[string]any{{"name": "laib_wish"}, {"name": "laib_note"}, {"name": "laib_restart"}}
 		case "tools/call":
 			var p struct {
-				Name string            `json:"name"`
-				Args map[string]string `json:"arguments"`
+				Name string         `json:"name"`
+				Args map[string]any `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
 			mu.Lock()
 			if p.Name == "laib_wish" {
-				wishes = append(wishes, p.Args["args"])
+				wishes = append(wishes, shownArgs(p.Args))
 			}
 			mu.Unlock()
 			res["content"] = []map[string]string{{"type": "text", "text": "Vorschlag angelegt"}}
@@ -84,7 +84,7 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("4", "keine Zahlen", "Mehr Musik.", "familie")}},
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("5", "2 Bitten um Musik im Bad in 7 Tagen", "Den Lautsprecher im Bad in Music Assistant aufnehmen.", "familie")}},
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("6", "1 weitere Sache, 3 Mal", "Noch ein Vorschlag.", "wartung")}},
-		{Role: "assistant", ToolCalls: []ToolCall{tcall("7", "note", `{"kind":"watch","text":"Drei Vorschläge zur Nutzung angelegt."}`)}},
+		{Role: "assistant", ToolCalls: []ToolCall{tcall("7", "laib_note", `{"kind":"watch","text":"Drei Vorschläge zur Nutzung angelegt."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
 	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true,
@@ -111,11 +111,11 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 		t.Fatalf("a quote, a suggestion without numbers or a fourth one went out: %q", wishes)
 	}
 	for _, w := range wishes {
-		if !strings.Contains(w, "Gesehen:") || !strings.Contains(w, "Besser wird:") {
+		if !strings.Contains(w, `"saw":`) || !strings.Contains(w, `"better":`) {
 			t.Fatalf("a suggestion without what it saw or what gets better: %q", w)
 		}
 	}
-	if !strings.Contains(all, "Abfuhrkalender") || !strings.Contains(all, "Energie-Seite") || !strings.Contains(all, "Wartung und der Komfort der Familie") {
+	if !strings.Contains(all, "Abfuhrkalender") || !strings.Contains(all, "Energie-Seite") || !strings.Contains(all, `"better":"beides"`) {
 		t.Fatalf("%q", wishes)
 	}
 	if s.Outcome != "green" || !strings.Contains(s.Note, "Vorschläge") {
@@ -133,7 +133,7 @@ func TestNutzungWithoutUsageMetricsNotesAndProposesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Join(*calls, "\n")
-	if strings.Contains(got, "laib_wish") || !strings.Contains(got, "laib_note --kind watch") || !strings.Contains(s.Note, "Nutzungsdaten") {
+	if strings.Contains(got, "laib_wish") || !strings.Contains(got, `laib_note {"kind":"watch"`) || !strings.Contains(s.Note, "Nutzungsdaten") {
 		t.Fatalf("calls %v, session %+v", *calls, s)
 	}
 }

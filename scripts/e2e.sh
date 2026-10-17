@@ -181,10 +181,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # a scripted model on the typed surface (#53): inspect, a refused call
 # (a service that does not exist), restart, note, then stop
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"nas"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"nas"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"laib_note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0
@@ -194,10 +194,10 @@ class H(BaseHTTPRequestHandler):
         global i
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n))
         names = [t["function"]["name"] for t in body["tools"]]
-        # the incident menu for the ops hand: typed, small, without approve/apply/converge
-        assert "restart" in names and "note" in names and "diagnose" in names, names
-        assert not any(n.startswith("laib_") for n in names) and len(names) <= 8, names
-        svc = body["tools"][names.index("restart")]["function"]["parameters"]["properties"]["service"]
+        # the incident menu for the ops hand: the kernel's typed tools the skill is granted, without approve/apply/converge
+        assert "laib_restart" in names and "laib_note" in names and "laib_diag" in names, names
+        assert not set(names) & {"laib_approve", "laib_apply", "laib_converge"} and len(names) <= 8, names
+        svc = body["tools"][names.index("laib_restart")]["function"]["parameters"]["properties"]["service"]
         assert "caddy" in svc.get("enum", []), svc
         if i == 2:  # the refused call came back as a tool message, not as an execution
             last = body["messages"][-1]; assert last["role"] == "tool" and "nicht ausgef" in last["content"] and "nas" in last["content"], last
@@ -231,7 +231,7 @@ mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] fo
 mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
 mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
-python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==3, s' "$WORK/op.json"
+python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==4, s' "$WORK/op.json"
 # the switch: listed for everyone, set by a human, a commit to policy.yml
 "$BIN" skill list | grep -qE "^aktiv +morgenbericht" || fail "skill list"
 if LAIB_ACTOR=ops "$BIN" skill pause routineblick >/dev/null 2>&1; then fail "ops paused a skill"; fi

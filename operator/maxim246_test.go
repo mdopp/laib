@@ -20,8 +20,8 @@ func defsNamed(names ...string) []ToolDef {
 // better, neither noticeably worse, and a proposal says which.
 func TestOperatorWeighsAChangeAgainstWhatWorkedBefore(t *testing.T) {
 	for name, p := range map[string]string{
-		"free":  SystemPrompt(defsNamed("laib_status", "laib_restart", "laib_propose", "laib_note")),
-		"typed": TypedSystemPrompt(defsNamed("restart", "set_value", "escalate")),
+		"free":   SystemPrompt(defsNamed("laib_status", "laib_restart", "laib_propose", "laib_note")),
+		"repair": SystemPrompt(defsNamed("laib_restart", "laib_propose", "laib_escalate")),
 	} {
 		for _, want := range []string{"was vorher funktioniert hat", "leichter zu warten", "angenehmer", "keins von beiden spürbar schlechter"} {
 			if !strings.Contains(p, want) {
