@@ -17,6 +17,8 @@ import (
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/intake"
+	"github.com/mdopp/laib/internal/registry"
 )
 
 // Version is set by the release build.
@@ -38,7 +40,7 @@ type cliEnv = cli.Env
 var verbs []verb
 
 func init() {
-	inbox.Approved = fileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
+	inbox.Approved = intake.FileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
 	verbs = []verb{
 		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
 		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", diag.Cmd},
@@ -52,8 +54,8 @@ func init() {
 		{"restart", "apply", "<service>: restart its units and verify, inside the envelope", cmdRestart},
 		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
 		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
-		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", cmdWish},
-		{"updates", "read", "newer patch and minor releases of every pinned image, from the registry (#287)", cmdUpdates},
+		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", intake.Wish},
+		{"updates", "read", "newer patch and minor releases of every pinned image, from the registry (#287)", registry.Updates},
 		{"skill", "read", "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", cmdSkill},
 		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},

@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/registry"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
@@ -311,7 +312,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		avail := availableTemplates(env)
+		avail := registry.Available(env)
 		if env.JSON {
 			return cli.Emit(env, map[string]any{"available": avail, "installed": st.ServiceNames()})
 		}
@@ -321,7 +322,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintf(env.W(), "  %-20s %s/%s v%d\n", name, t.Registry, t.Name, t.Version)
 		}
 		fmt.Fprintln(env.W(), "verfügbar:")
-		for _, name := range sortedKeys(avail) {
+		for _, name := range registry.SortedKeys(avail) {
 			fmt.Fprintf(env.W(), "  %-20s %s\n", name, strings.Join(avail[name], ", "))
 		}
 		return cli.ExitOK
@@ -330,7 +331,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		lines, err := syncRegistries(ctx, env, st)
+		lines, err := registry.Sync(ctx, env, st)
 		for _, l := range lines {
 			fmt.Fprintln(env.W(), "registry:", l)
 		}
@@ -343,7 +344,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 			// proposal; the dial decides whether laib applies it itself.
 			code := cli.ExitOK
 			for _, name := range st.ServiceNames() {
-				if c := templateUpdate(ctx, env, st, name); c != cli.ExitOK && c != cli.ExitUsage {
+				if c := registry.Update(ctx, env, st, name); c != cli.ExitOK && c != cli.ExitUsage {
 					code = c
 				}
 			}
@@ -361,7 +362,7 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
 			return cli.Refused(env, env.Actor+" may not propose")
 		}
-		return templateUpdate(ctx, env, st, args[1])
+		return registry.Update(ctx, env, st, args[1])
 	}
 	return env.Fail(fmt.Errorf("unknown template subcommand %q", args[0]))
 }

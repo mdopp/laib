@@ -1,4 +1,8 @@
-package main
+// Package registry is the templates and images from outside (#309): the
+// box.yml registries (sync, the available templates, a template update as
+// a proposal) and `laib updates`, the newer releases of every pinned image.
+// A box chore: it reads and proposes, it never applies on its own.
+package registry
 
 import (
 	"context"
@@ -20,11 +24,11 @@ import (
 	"github.com/mdopp/laib/templates"
 )
 
-func registriesDir(env *cliEnv) string { return filepath.Join(env.Paths.Home, "registries") }
+func registriesDir(env *cli.Env) string { return filepath.Join(env.Paths.Home, "registries") }
 
-// syncRegistries clones or fetches every box.yml registry into
+// Sync clones or fetches every box.yml registry into
 // /mnt/data/laib/registries/<name> at its ref (#14).
-func syncRegistries(ctx context.Context, env *cliEnv, st *state.State) ([]string, error) {
+func Sync(ctx context.Context, env *cli.Env, st *state.State) ([]string, error) {
 	var lines []string
 	for _, r := range st.Box.Registries {
 		if r.Name == "" || r.URL == "" {
@@ -54,9 +58,9 @@ func syncRegistries(ctx context.Context, env *cliEnv, st *state.State) ([]string
 	return lines, nil
 }
 
-// availableTemplates lists built-ins and every registry template, with the
+// Available lists built-ins and every registry template, with the
 // registry name ("builtin" for embedded ones).
-func availableTemplates(env *cliEnv) map[string][]string {
+func Available(env *cli.Env) map[string][]string {
 	out := map[string][]string{}
 	if entries, err := fs.ReadDir(templates.FS, "."); err == nil {
 		for _, e := range entries {
@@ -74,9 +78,9 @@ func availableTemplates(env *cliEnv) map[string][]string {
 	return out
 }
 
-// templateUpdate proposes refreshing a service from its template's current
+// Update proposes refreshing a service from its template's current
 // files; the diff lands in the Inbox like any other proposal.
-func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName string) int {
+func Update(ctx context.Context, env *cli.Env, st *state.State, svcName string) int {
 	svc, ok := st.Services[svcName]
 	if !ok {
 		return env.Fail(fmt.Errorf("unknown service %q", svcName))
@@ -108,7 +112,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	return cli.ExitOK
 }
 
-func sortedKeys(m map[string][]string) []string {
+func SortedKeys(m map[string][]string) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

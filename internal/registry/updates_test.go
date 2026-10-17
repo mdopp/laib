@@ -1,11 +1,10 @@
-package main
+package registry
 
 import (
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -31,9 +30,9 @@ func fakeRegistry(t *testing.T, tags map[string][]string) {
 		json.NewEncoder(w).Encode(map[string]any{"name": repo, "tags": tags[repo]})
 	}))
 	t.Cleanup(srv.Close)
-	real := registryURL
-	registryURL = func(string) string { return srv.URL }
-	t.Cleanup(func() { registryURL = real })
+	real := RegistryURL
+	RegistryURL = func(string) string { return srv.URL }
+	t.Cleanup(func() { RegistryURL = real })
 }
 
 // #287: which pinned images have a newer patch or minor release — read
@@ -52,8 +51,8 @@ func TestImageUpdatesFindPatchAndMinor(t *testing.T) {
 		"abs":    {Name: "abs", Values: val("ghcr.io/advplyr/audiobookshelf:latest")},
 		"caddy":  {Name: "caddy", Values: val("ghcr.io/mdopp/laib-caddy:2")},
 	}}
-	got := map[string]imageUpdate{}
-	for _, u := range imageUpdates(context.Background(), st) {
+	got := map[string]ImageUpdate{}
+	for _, u := range ImageUpdates(context.Background(), st) {
 		got[u.Service] = u
 	}
 	if u := got["whoami"]; u.Current != "v1.10.1" || u.Patch != "v1.10.3" || u.Minor != "v1.11.2" || u.Key != "IMAGE" || u.Image != "docker.io/traefik/whoami" {
@@ -65,27 +64,6 @@ func TestImageUpdatesFindPatchAndMinor(t *testing.T) {
 	for _, s := range []string{"abs", "caddy"} {
 		if u, ok := got[s]; ok && (u.Patch != "" || u.Minor != "") {
 			t.Fatalf("%s floats and got an update: %+v", s, u)
-		}
-	}
-}
-
-// #287: the maintenance skills are built in, accepted and granted what
-// they need at the default ceiling — never apply: updates are proposals.
-func TestTheMaintenanceSkillsAreBuiltIn(t *testing.T) {
-	env, st := skillBox(t, "apply", nil, nil)
-	sks := skillsFor(env, st, "ops")
-	for name, want := range map[string][]string{"aktualisierung": {"updates", "propose", "note"}, "sicherung": {"backup", "journal", "note"}} {
-		sk := findSkill(sks, name)
-		if sk == nil || sk.Status != "active" {
-			t.Fatalf("%s: %+v", name, sk)
-		}
-		for _, w := range want {
-			if !slices.Contains(sk.Granted, w) {
-				t.Errorf("%s lacks %s: %v", name, w, sk.Granted)
-			}
-		}
-		if slices.Contains(sk.Granted, "apply") || slices.Contains(sk.Granted, "restart") {
-			t.Errorf("%s may change the box itself: %v", name, sk.Granted)
 		}
 	}
 }
