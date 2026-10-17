@@ -386,10 +386,15 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
+const stripRemote = "\trequest_header -Remote-*\n"
+
 func caddyfile(st *state.State, secrets map[string]string) string {
 	var b strings.Builder
 	b.WriteString("# Rendered by laib. Do not edit; change services/*/laib.yml and run laib apply.\n")
 	b.WriteString("{\n\temail admin@" + st.Box.Domain + "\n")
+	// before forward_auth, which runs first by default: every site strips the
+	// client's Remote-* and only Authelia's copy reaches an app (#231)
+	b.WriteString("\torder request_header first\n")
 	if st.Box.DNS.Provider != "" {
 		fmt.Fprintf(&b, "\tacme_dns %s {env.LAIB_DNS_TOKEN}\n", st.Box.DNS.Provider)
 	}
@@ -403,7 +408,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	if st.Box.Roles.Proxy != "" {
 		// Laib's own page: LAN only, Authelia, and a proxy secret so the pages
 		// trust Remote-User only when it arrived through Caddy (ADR 0012).
-		fmt.Fprintf(&b, "%s {\n\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host))
+		fmt.Fprintf(&b, "%s {\n%s\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host), stripRemote)
 		if st.Box.Roles.SSO != "" {
 			b.WriteString("\t\timport authelia\n")
 		}
@@ -412,7 +417,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, r := range svc.Contract.Routes {
-			fmt.Fprintf(&b, "%s {\n", fqdn(st, r.Host))
+			fmt.Fprintf(&b, "%s {\n%s", fqdn(st, r.Host), stripRemote)
 			indent := "\t"
 			if r.Exposure == "internal" {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")
@@ -454,7 +459,9 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 
 func autheliaAccess(st *state.State) string {
 	var b strings.Builder
-	b.WriteString("# Rendered by laib: one rule per route. The apex deny and the wildcard\n# default live in the auth service's own config.\naccess_control:\n  rules:\n")
+	// Every rule Authelia has (#249): a list from a later config file replaces
+	// an earlier one instead of joining it, so the auth hook's config has none.
+	b.WriteString("# Rendered by laib: every access rule. Anything unlisted, the bare apex\n# included, is denied.\naccess_control:\n  default_policy: deny\n  rules:\n")
 	fmt.Fprintf(&b, "    - domain: %s\n      policy: one_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
@@ -466,8 +473,14 @@ func autheliaAccess(st *state.State) string {
 				fmt.Fprintf(&b, "    - domain: %s\n      policy: bypass\n      resources: [\"^%s.*$\"]\n", fqdn(st, r.Host), strings.TrimSuffix(p, "/")+"/")
 			}
 			fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", fqdn(st, r.Host), policy)
-			if r.Group != "" {
-				fmt.Fprintf(&b, "      subject: \"group:%s\"\n", r.Group)
+			// family and admins, never just any LLDAP account (radicale's bind
+			// account is one); admins reach what the family reaches
+			subject := `["group:` + cmp.Or(r.Group, "family") + `", "group:admins"]`
+			if r.Group == "admins" {
+				subject = `"group:admins"`
+			}
+			if policy != "bypass" {
+				b.WriteString("      subject: " + subject + "\n")
 			}
 		}
 	}
