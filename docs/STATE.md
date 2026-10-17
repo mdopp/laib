@@ -14,6 +14,8 @@ services/
     *.container       Quadlet units with ${VAR} placeholders (from the template)
     *.pod
     rendered/         written only by laib: the files as they are on the box
+skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
+wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
 ignore.yml            units on the box that are deliberately unmanaged
 ```
 
@@ -129,10 +131,26 @@ autonomy:                       # the repair dial (docs/DESIGN.md "Repair")
   patch: auto
   new-service: proposal         # adds surface: a human decides
   # remove is never auto; a public route is always a human's call
+skills:                         # the Operator's skills (ADR 0023): absent = active
+  routineblick: paused          # active | paused; laib skill enable|pause <name>
 ```
 
 A hand never approves its own proposal. `destroy` requires a human on the box
 page or a Solaris card; a token cannot approve.
+
+## skills/<name>.yml (optional)
+
+An Operator skill (ADR 0023): `description` (German, one sentence),
+`trigger` (one of `every: 10m`, `daily: "07:00"`, `weekly: "Mo 08:00"`,
+`event: red`; `${TICK}` and `${REPORT_AT}` are `box.yml operator.tick` and
+`reportAt`), `tools` (kernel verbs from `status diag logs inspect look read
+journal context inbox note escalate propose wish restart exec write`;
+`note` required), `context` (`box` or `usage`), `output` (`note`,
+`report`, `propose`) and `prompt`. A file with a built-in's name
+(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`) replaces it. The
+kernel grants only the tools the ops ceiling reaches; a file it cannot
+accept is listed as `verweigert` with the reason and never runs. Adding or
+changing one is class `human` in the review.
 
 ## services/<name>/laib.yml
 

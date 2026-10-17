@@ -52,3 +52,14 @@ func TestAutonomyDial(t *testing.T) {
 		}
 	}
 }
+
+// ADR 0023 §5: policy.yml skills switches a skill active or paused, nothing else.
+func TestSkillSwitchIsActiveOrPaused(t *testing.T) {
+	ok := state.Policy{Skills: map[string]string{"routineblick": "paused", "nutzung": "active"}}
+	if err := Validate(ok); err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(state.Policy{Skills: map[string]string{"routineblick": "aus"}}); err == nil {
+		t.Fatal("skills.routineblick: aus passed validation")
+	}
+}

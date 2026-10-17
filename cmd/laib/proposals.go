@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -424,6 +425,10 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	st, err = loadState(env)
 	if err != nil {
 		return fail(err)
+	}
+	fileWishes(ctx, env, st, p)
+	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") }) {
+		return exitOK // a wish changes nothing on the box: no apply
 	}
 	return applyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
 }

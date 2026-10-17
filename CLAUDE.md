@@ -15,8 +15,8 @@ them.
 2. **Proof is on the box, not in-process.** A green unit test proves the
    renderer. `laib apply` ending green on the box proves the feature. If you
    cannot verify on the box, say so in those words.
-3. **KISS.** Under 15k production lines for the kernel, tests at most equal to
-   production lines, no gate until something recurs. Three similar lines beat a
+3. **KISS.** Under 16k production lines for the kernel and 3k for the
+   Operator (ADR 0023), tests at most equal to production lines in each, no gate until something recurs. Three similar lines beat a
    premature abstraction. No feature flags for cases that cannot happen.
 
 ## Where things are
