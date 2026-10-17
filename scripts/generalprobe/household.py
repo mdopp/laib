@@ -374,14 +374,16 @@ def seed_documents(f, s):
                        files={"document": (f"{word}.txt", (text + "\n").encode(), "text/plain")})
         if st != 200:
             raise RuntimeError(f"Paperless upload: HTTP {st} {b[:200]!r}")
-        task = js(b)
-        def tasks():
-            d = js(req("GET", f"http://{LOOP}:8000/api/tasks/?task_id={task}", auth=auth)[1]) or []
-            return d.get("results", []) if isinstance(d, dict) else d   # paginated since Paperless 2.x
-        done = wait(f"Paperless consumes {word}", lambda: next((t for t in tasks() if t.get("status") in ("SUCCESS", "FAILURE")), None), pause=3)
-        if done["status"] != "SUCCESS":
-            raise RuntimeError(f"Paperless consumed {word}: {done.get('result')}")
-        s["documents"][word] = done.get("related_document")
+        def filed():   # the document is filed once Paperless lists it under its title
+            d = js(req("GET", f"http://{LOOP}:8000/api/documents/?title__icontains=Generalprobe%20{word}", auth=auth)[1]) or {}
+            return (d.get("results") or [None])[0]
+        try:
+            doc = wait(f"Paperless files {word}", filed, tries=120, pause=5)
+        except RuntimeError:
+            print(req("GET", f"http://{LOOP}:8000/api/tasks/", auth=auth)[1][:1500].decode(errors="replace"), file=sys.stderr)
+            print(sh("sh", "-c", "podman ps --format '{{.Names}}' | grep -i paperless | head -3 | xargs -n1 podman logs --tail 30 2>&1", check=False).stdout.decode()[-4000:], file=sys.stderr)
+            raise
+        s["documents"][word] = doc["id"]
     print("Paperless: 2 documents")
 
 
