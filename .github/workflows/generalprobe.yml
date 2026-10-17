@@ -95,6 +95,7 @@ jobs:
           cd "$VM"; . ./box.sh
           $SSH 'python3 gp/household.py seed' < facts.json
       - name: the checks pass on ServiceBay — or a red one later proves nothing
+        id: before
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'python3 gp/household.py check --phase before'
@@ -110,21 +111,25 @@ jobs:
           $SSH "STEP=auth SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
           $SSH "STEP=services SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
       - name: rollback mid-migration — Home Assistant back to ServiceBay with its data, then to Laib again
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
           $SSH "STEP=rollback SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
           $SSH 'python3 gp/household.py check --phase before home-assistant matter'
           $SSH "STEP=forward SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
       - name: "MIGRATION.md 2 and 7: Caddy replaces NPM, ServiceBay off"
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
           $SSH "STEP=caddy SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
           $SSH "STEP=retire SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
       - name: the household survived — the same checks, on Laib
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'python3 gp/household.py check --phase after'
       - name: laib status green, ServiceBay off
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib

@@ -48,6 +48,7 @@ laib_add() {
     for c in $(podman ps -a --format '{{.Names}}' | grep "^systemd-$n" || true) $(journalctl --user --no-pager -o export --since -15min 2>/dev/null | sed -n "s/^CONTAINER_NAME=\(systemd-$n.*\)/\1/p" | sort -u); do
       echo "--- $c"; journalctl --user --no-pager -o cat CONTAINER_NAME="$c" | tail -30
     done
+    echo "--- owners and labels of $n's data"; ls -laZn /mnt/data/stacks/"$n" /mnt/data/stacks/"$n"/* 2>&1 | head -40
     return "$rc"
   fi
 }
@@ -88,7 +89,7 @@ step_auth() {
 
 step_services() {
   say "4. the household services, in MIGRATION.md's order"
-  local n
+  local n red=""
   for n in ${SERVICES:-vaultwarden radicale mosquitto file-share immich paperless home-assistant}; do
     say "4. $n"
     servicebay_out "$n"
@@ -100,8 +101,10 @@ step_services() {
         systemctl --user start file-share-syncthing.service;;
     esac
     # "One value goes with them": the box's broker user (MIGRATION.md, secrets that carry over)
-    if [ "$n" = mosquitto ]; then laib_add "$n" MQTT_USER=mqtt; else laib_add "$n"; fi
+    # a red service is reported and the next one goes on, so one run shows every defect
+    if [ "$n" = mosquitto ]; then laib_add "$n" MQTT_USER=mqtt || red="$red $n"; else laib_add "$n" || red="$red $n"; fi
   done
+  [ -z "$red" ] || { echo "red:$red"; return 1; }
 }
 
 # MIGRATION.md "Rollback during the weekend", mid-migration: hand a service back
