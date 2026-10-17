@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
@@ -23,7 +24,7 @@ import (
 // Authelia sit in front of it; the listener is loopback only.
 func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	addr := "127.0.0.1:5900"
-	if st, err := loadState(env); err == nil {
+	if st, err := cli.LoadState(env); err == nil {
 		addr = fmt.Sprintf("%s:%d", st.Box.Laib.Listen, st.Box.Laib.Port)
 	}
 	if v := os.Getenv("LAIB_LISTEN"); v != "" {
@@ -33,7 +34,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	// Before a proxy role exists there is no secret and loopback is the only
 	// listener, so the pages are open to the box operator (ADR 0012).
 	viaProxy := func(r *http.Request) bool {
-		sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+		sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 		if err != nil {
 			return false
 		}
@@ -54,16 +55,16 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// boot-time convergence of the non-file state (#37): the ruleset
 	if loaded, err := ensureFirewall(ctx, env); err != nil {
-		fmt.Fprintln(env.errw(), "laib serve: firewall:", err)
+		fmt.Fprintln(env.Errw(), "laib serve: firewall:", err)
 	} else if loaded {
-		if st, err := loadState(env); err == nil {
-			record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
+		if st, err := cli.LoadState(env); err == nil {
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
 		}
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcpHandler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -78,7 +79,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			http.NotFound(w, r)
 			return
 		}
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil {
 			page(w, "Status", "<p class=rot>State nicht lesbar: "+html.EscapeString(err.Error())+"</p>")
 			return
@@ -100,7 +101,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintf(&b, "<tr class=%s><td>%s</td><td>%s</td><td>%s</td></tr>", row.State, row.State, html.EscapeString(row.Name), html.EscapeString(strings.Join(bad, " ")))
 		}
 		b.WriteString("</table>")
-		if e, ok := journal.Last(env.paths.Journal); ok {
+		if e, ok := journal.Last(env.Paths.Journal); ok {
 			fmt.Fprintf(&b, "<p>Letzte Änderung %s · %s · %s %s · %s</p>", e.T.Local().Format("02.01. 15:04"), html.EscapeString(e.Actor), e.Verb, html.EscapeString(e.Service), html.EscapeString(e.Reason))
 		}
 		if day, text := lastReport(env); day != "" {
@@ -118,7 +119,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		page(w, "Bote verbinden", `<h1>Bote verbinden</h1><p>Auf dem Telefon mit der Nummer des Boten: Signal → Einstellungen → Gekoppelte Geräte → Neues Gerät koppeln, dann diesen Code scannen. Der Code gilt einige Minuten; die Seite neu laden holt einen frischen.</p><p><img src="/bote/link.png" alt="QR zum Koppeln" width=320 height=320></p><p><a href="/">zurück</a></p>`)
 	}))
 	mux.HandleFunc("/bote/link.png", guard(func(w http.ResponseWriter, r *http.Request) {
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil || boteSignalBase(st) == "" {
 			http.Error(w, "kein Bote auf dieser Box", http.StatusNotFound)
 			return
@@ -143,7 +144,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			b.WriteString("<p>Keine offenen Vorschläge.</p>")
 		}
 		domain := ""
-		if st, err := loadState(env); err == nil {
+		if st, err := cli.LoadState(env); err == nil {
 			domain = st.Box.Domain
 		}
 		for _, p := range open {
@@ -176,7 +177,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 				fmt.Fprintf(&b, "<p>%s %s %s</p>", approve, reject, later)
 			}
 			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
-				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.paths.State, p)))
+				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 		}
 		// what was approved lately can be taken back (#41)
 		if all, err := proposal.List(inboxDir(env), false); err == nil {
@@ -206,21 +207,21 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if actor == "human:" {
 			actor = "human:web"
 		}
-		webEnv := &cliEnv{paths: env.paths, actor: actor}
+		webEnv := &cliEnv{Paths: env.Paths, Actor: actor}
 		var code int
 		if r.PathValue("decision") == "rollback" {
 			code = cmdRollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
 		} else {
 			code = decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
 		}
-		if code != exitOK && code != exitRed {
+		if code != cli.ExitOK && code != cli.ExitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
 			return
 		}
 		http.Redirect(w, r, "/journal", http.StatusSeeOther)
 	}))
 	mux.HandleFunc("/journal", guard(func(w http.ResponseWriter, r *http.Request) {
-		es, err := journal.Read(env.paths.Journal, time.Now().Add(-7*24*time.Hour))
+		es, err := journal.Read(env.Paths.Journal, time.Now().Add(-7*24*time.Hour))
 		var b strings.Builder
 		b.WriteString("<h1>Journal · 7 Tage</h1>")
 		if err != nil {
@@ -237,7 +238,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -248,21 +249,21 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		srv.Shutdown(shutdown)
 	}()
 	// Boot comparison (#9): bereit only once units and files match the state.
-	if st, err := loadState(env); err == nil {
+	if st, err := cli.LoadState(env); err == nil {
 		r, _ := collectStatus(ctx, env, st)
 		if r.Red > 0 || r.Drift > 0 {
 			bootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
-			record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: bootUnclean})
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: bootUnclean})
 		} else {
-			record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
 		}
 	}
-	journal.Append(env.paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
-	fmt.Fprintln(env.errw(), "laib serve: listening on", addr)
+	journal.Append(env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
+	fmt.Fprintln(env.Errw(), "laib serve: listening on", addr)
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	return exitOK
+	return cli.ExitOK
 }
 
 func resultClass(r string) string {

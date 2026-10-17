@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/mdopp/laib/internal/apply"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
@@ -26,7 +28,7 @@ func testBox(t *testing.T) (env *cliEnv, dataDir string) {
 	t.Helper()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	env = &cliEnv{actor: "human:test", paths: boxfs.Paths{
+	env = &cliEnv{Actor: "human:test", Paths: boxfs.Paths{
 		Home: home, State: filepath.Join(home, "state"), Journal: filepath.Join(home, "journal"), Render: filepath.Join(home, "render"),
 		Quadlet: filepath.Join(dir, "quadlet"), Systemd: filepath.Join(dir, "systemd"),
 		Key: filepath.Join(home, "age.key"), Secrets: filepath.Join(home, "state", "secrets.age"), Lock: filepath.Join(home, "apply.lock"),
@@ -46,10 +48,10 @@ func testBox(t *testing.T) (env *cliEnv, dataDir string) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if code := cmdInit(context.Background(), env, []string{"--domain", "box.test", "--lan-ip", "10.0.0.2", "--data-dir", dataDir}); code != exitOK {
+	if code := cmdInit(context.Background(), env, []string{"--domain", "box.test", "--lan-ip", "10.0.0.2", "--data-dir", dataDir}); code != cli.ExitOK {
 		t.Fatalf("init: exit %d", code)
 	}
-	svc := filepath.Join(env.paths.State, "services", "whoami")
+	svc := filepath.Join(env.Paths.State, "services", "whoami")
 	if err := os.MkdirAll(svc, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func testBox(t *testing.T) (env *cliEnv, dataDir string) {
 			t.Fatal(err)
 		}
 	}
-	if err := proposal.CommitDirty(context.Background(), env.paths.State, "human:test"); err != nil {
+	if err := proposal.CommitDirty(context.Background(), env.Paths.State, "human:test"); err != nil {
 		t.Fatal(err)
 	}
 	return env, dataDir
@@ -85,7 +87,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 		hooks = append(hooks, h.Image+" "+strings.Join(h.Command, " "))
 		return "", nil
 	}
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +96,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	if _, err := os.Stat(ran); err == nil {
 		t.Fatalf("bote's script ran on the host (propose exit %d): %s", code, out)
 	}
-	if code != exitOK {
+	if code != cli.ExitOK {
 		t.Fatalf("propose: exit %d: %s", code, out)
 	}
 	open, _ := proposal.List(inboxDir(env), true)
@@ -107,8 +109,8 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	id := strconv.Itoa(open[0].ID)
 	for _, hand := range []string{"ops", "claude"} {
 		out, code = mcpCall(ctx, env, st, hand, "laib_approve", map[string]any{"args": id})
-		if code != exitRefused || !strings.Contains(out, "Skript") {
-			t.Fatalf("%s approving: exit %d, want %d and the reason: %s", hand, code, exitRefused, out)
+		if code != cli.ExitRefused || !strings.Contains(out, "Skript") {
+			t.Fatalf("%s approving: exit %d, want %d and the reason: %s", hand, code, cli.ExitRefused, out)
 		}
 	}
 	if _, err := os.Stat(ran); err == nil || len(hooks) != 0 {
@@ -117,7 +119,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	if p, _ := proposal.Get(inboxDir(env), open[0].ID); p.Status != "open" {
 		t.Fatalf("status %q after the refusals, want open", p.Status)
 	}
-	es, _ := journal.Read(env.paths.Journal, time.Time{})
+	es, _ := journal.Read(env.Paths.Journal, time.Time{})
 	said := false
 	for _, e := range es {
 		if e.Verb == "approve" && e.Actor == "ops" && strings.Contains(e.Detail, "Skript") {
@@ -128,7 +130,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 		t.Fatalf("the journal does not say why ops was refused: %+v", es)
 	}
 	// the human may: the inbox told them what it does
-	if code := decide(ctx, &cliEnv{paths: env.paths, actor: "human:test"}, []string{id}, true); code != exitOK {
+	if code := decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}, true); code != cli.ExitOK {
 		t.Fatalf("the human's approval: exit %d", code)
 	}
 	if _, err := os.Stat(ran); err == nil {
@@ -144,19 +146,19 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 func TestANewerImageTagIsStillAutomatic(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `--set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "neueres whoami"`})
-	if code != exitOK {
+	if code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	all, _ := proposal.List(inboxDir(env), false)
 	if len(all) != 1 || all[0].Status != "approved" || all[0].DecidedBy != "laib" {
 		t.Fatalf("laib should approve a newer tag itself: %+v", all)
 	}
-	b, _ := os.ReadFile(filepath.Join(env.paths.Quadlet, "whoami", "whoami.container"))
+	b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "whoami", "whoami.container"))
 	if !strings.Contains(string(b), "whoami:v1.11") {
 		t.Fatalf("not applied: %s", b)
 	}
@@ -167,7 +169,7 @@ func TestANewerImageTagIsStillAutomatic(t *testing.T) {
 func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +181,7 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 			t.Fatalf("an ops token was minted for pi's proposal (exit %d): %s", code, out)
 		}
 	}
-	if code == exitOK || !strings.Contains(out, "ops") {
+	if code == cli.ExitOK || !strings.Contains(out, "ops") {
 		t.Fatalf("pi's proposal was accepted (exit %d): %s", code, out)
 	}
 	if ps, _ := proposal.List(inboxDir(env), false); len(ps) != 0 {
@@ -200,22 +202,22 @@ func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
 		hooks = append(hooks, h.Image+" "+strings.Join(h.Command, " "))
 		return "", nil
 	}
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	patch := "diff --git a/services/whoami/post-deploy b/services/whoami/post-deploy\nnew file mode 100755\n--- /dev/null\n+++ b/services/whoami/post-deploy\n@@ -0,0 +1,2 @@\n+#!/bin/sh\n+touch \"$LAIB_DATA_DIR/ran-on-the-host\"\n"
-	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami braucht ein Einrichtungs-Skript"`, "patch": patch}); code != exitOK {
+	if out, code := mcpCall(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami braucht ein Einrichtungs-Skript"`, "patch": patch}); code != cli.ExitOK {
 		t.Fatalf("propose: %d %s", code, out)
 	}
 	open, _ := proposal.List(inboxDir(env), true)
 	id := strconv.Itoa(open[0].ID)
 	for _, verb := range []string{"laib_exec", "laib_write", "laib_restore", "laib_propose"} {
-		if out, code := mcpCall(ctx, env, st, "approver", verb, map[string]any{"args": "whoami -- true"}); code == exitOK {
+		if out, code := mcpCall(ctx, env, st, "approver", verb, map[string]any{"args": "whoami -- true"}); code == cli.ExitOK {
 			t.Fatalf("the approver could %s: %s", verb, out)
 		}
 	}
-	if out, code := mcpCall(ctx, env, st, "approver", "laib_approve", map[string]any{"args": id}); code != exitOK {
+	if out, code := mcpCall(ctx, env, st, "approver", "laib_approve", map[string]any{"args": id}); code != cli.ExitOK {
 		t.Fatalf("the approver's verdict was refused: %d %s", code, out)
 	}
 	if _, err := os.Stat(ran); err == nil {

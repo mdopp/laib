@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -17,18 +18,18 @@ func TestMcpCallEnforcesTheBoundary(t *testing.T) {
 		hand, tool string
 		want       int
 	}{
-		{"bote", "laib_write", exitRefused},
-		{"bote", "laib_exec", exitRefused},
-		{"bote", "laib_approve", exitRefused},
-		{"bote", "laib_restore", exitRefused},
-		{"nobody", "laib_status", exitRefused},
-		{"human", "laib_token", exitUsage}, // the box's own business, never over MCP
-		{"human", "laib_secret", exitUsage},
-		{"human", "laib_disk", exitUsage},
-		{"human", "laib_remove", exitUsage},
-		{"human", "laib_serve", exitUsage},
-		{"human", "laib_init", exitUsage},
-		{"bote", "laib_nonsense", exitUsage},
+		{"bote", "laib_write", cli.ExitRefused},
+		{"bote", "laib_exec", cli.ExitRefused},
+		{"bote", "laib_approve", cli.ExitRefused},
+		{"bote", "laib_restore", cli.ExitRefused},
+		{"nobody", "laib_status", cli.ExitRefused},
+		{"human", "laib_token", cli.ExitUsage}, // the box's own business, never over MCP
+		{"human", "laib_secret", cli.ExitUsage},
+		{"human", "laib_disk", cli.ExitUsage},
+		{"human", "laib_remove", cli.ExitUsage},
+		{"human", "laib_serve", cli.ExitUsage},
+		{"human", "laib_init", cli.ExitUsage},
+		{"bote", "laib_nonsense", cli.ExitUsage},
 	} {
 		out, code := mcpCall(context.Background(), &cliEnv{}, st, tc.hand, tc.tool, map[string]any{"args": ""})
 		if code != tc.want {
