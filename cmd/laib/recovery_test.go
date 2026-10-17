@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
@@ -23,10 +24,10 @@ import (
 // lock holder at that moment; snapshots answers one id.
 func resticRecorder(t *testing.T, c *cbox) *[]string {
 	t.Helper()
-	real := resticRun
-	t.Cleanup(func() { resticRun = real })
+	real := backup.ResticRun
+	t.Cleanup(func() { backup.ResticRun = real })
 	var calls []string
-	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		calls = append(calls, "restic "+strings.Join(args, " ")+" [lock="+apply.LockHolder(c.env.Paths)+"]")
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
@@ -64,11 +65,11 @@ func TestBackupPrepRefusesToInventAPasswordForAnExistingRepo(t *testing.T) {
 	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	delete(sec, "RESTIC_PASSWORD")
 	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
-	if _, _, err := backupPrep(c.env); err == nil || !strings.Contains(err.Error(), "RESTIC_PASSWORD") {
+	if _, _, err := backup.Prep(c.env); err == nil || !strings.Contains(err.Error(), "RESTIC_PASSWORD") {
 		t.Fatalf("a repo without the password in secrets must ask, not invent: %v", err)
 	}
 	t.Setenv("RESTIC_PASSWORD", "from-the-sheet")
-	if _, pw, err := backupPrep(c.env); err != nil || pw != "from-the-sheet" {
+	if _, pw, err := backup.Prep(c.env); err != nil || pw != "from-the-sheet" {
 		t.Fatalf("the password from the sheet (RESTIC_PASSWORD) must be used: %q %v", pw, err)
 	}
 }
@@ -89,7 +90,7 @@ func TestBackupQuiescesDeclaredPaths(t *testing.T) {
 	c.calls = nil
 	var console bytes.Buffer
 	c.env.Out = &console
-	if rc := cmdBackup(context.Background(), c.env, nil); rc != cli.ExitOK {
+	if rc := backup.Cmd(context.Background(), c.env, nil); rc != cli.ExitOK {
 		t.Fatalf("backup rc %d", rc)
 	}
 	// the human at the console sees that the database was stopped for the snapshot
@@ -127,7 +128,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	c := newCbox(t)
 	calls := resticRecorder(t, c)
 	c.calls = nil
-	if rc := cmdRestore(context.Background(), c.env, []string{"--box", "latest"}); rc != cli.ExitOK {
+	if rc := backup.Restore(context.Background(), c.env, []string{"--box", "latest"}); rc != cli.ExitOK {
 		t.Fatalf("restore --box rc %d", rc)
 	}
 	var restores []string
@@ -157,7 +158,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 	if apply.LockHolder(c.env.Paths) != "" || len(apply.Paused(c.env.Paths)) != 0 {
 		t.Fatal("lock and pauses released")
 	}
-	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
+	if rc := backup.Restore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK {
 		t.Fatalf("single-service restore rc %d", rc)
 	}
 	last := (*calls)[len(*calls)-1]
@@ -173,14 +174,14 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	c := newCbox(t)
 	resticRecorder(t, c)
-	if rc := cmdRecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops"}, nil); rc == cli.ExitOK {
+	if rc := backup.RecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "ops"}, nil); rc == cli.ExitOK {
 		t.Fatal("a hand got the recovery sheet")
 	}
-	if rc := cmdRecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "human:core", MCP: true}, nil); rc == cli.ExitOK {
+	if rc := backup.RecoverySheet(context.Background(), &cliEnv{Paths: c.env.Paths, Actor: "human:core", MCP: true}, nil); rc == cli.ExitOK {
 		t.Fatal("the sheet went out over MCP")
 	}
 	out := captureStdout(t, func() {
-		if rc := cmdRecoverySheet(context.Background(), c.env, nil); rc != cli.ExitOK {
+		if rc := backup.RecoverySheet(context.Background(), c.env, nil); rc != cli.ExitOK {
 			t.Errorf("rc %d", rc)
 		}
 	})
@@ -210,7 +211,7 @@ func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	if !found {
 		t.Fatal("diag must be yellow until the sheet is confirmed as stored")
 	}
-	if rc := cmdRecoverySheet(context.Background(), c.env, []string{"--confirm"}); rc != cli.ExitOK {
+	if rc := backup.RecoverySheet(context.Background(), c.env, []string{"--confirm"}); rc != cli.ExitOK {
 		t.Fatal("confirm")
 	}
 	for _, f := range diag.Probes(context.Background(), c.env, st, "") {

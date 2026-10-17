@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
@@ -55,8 +56,8 @@ func init() {
 		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
-		{"backup", "propose", "restic snapshot of state, journal and declared data paths", cmdBackup},
-		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", cmdRestore},
+		{"backup", "propose", "restic snapshot of state, journal and declared data paths", backup.Cmd},
+		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", backup.Restore},
 		{"converge", "apply", "bring the box back to the state: re-apply drift, restart inactive units, within a budget", cmdConverge},
 		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 		{"context", "read", "starter bundle for an agent session", cmdContext},
@@ -77,7 +78,7 @@ func init() {
 		{"version", "read", "print the version", cmdVersion},
 		{"self", "apply", "rollback: the previous binaries back and the units restarted (humans only)", cmdSelf},
 		{"family-card", "read", "print the one-page card for the family: what the box does, what to do when it is down, whom to call", cmdFamilyCard},
-		{"recovery-sheet", "destroy", "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", cmdRecoverySheet},
+		{"recovery-sheet", "destroy", "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", backup.RecoverySheet},
 		{"pause", "apply", "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", cmdPause},
 		{"resume", "apply", "<service>: lift a pause", cmdResume},
 	}

@@ -673,7 +673,7 @@ var hookInterpreters = map[string]bool{"#!/usr/bin/env python3": true, "#!/usr/b
 // apply creates only declared paths, and podman refuses a missing bind
 // source (#36; the failure afc1115 fixed for declared paths).
 func lintMounts(st *state.State, name string, out render.Output, neighbours []string) []string {
-	allowed := dataPaths(st, st.Services[name])
+	allowed := state.DataPaths(st, st.Services[name])
 	for _, p := range neighbours {
 		allowed = append(allowed, strings.ReplaceAll(p, "${DATA_DIR}", st.Box.DataDir))
 	}

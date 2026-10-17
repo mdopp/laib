@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
@@ -30,15 +31,15 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 	os.WriteFile(w, []byte(strings.Replace(string(b), "data: []", "data:\n  - path: ${DATA_DIR}/whoami", 1)), 0o644)
 	proposal.CommitDirty(context.Background(), c.env.Paths.State, "human:test")
 	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
-	sec[resticPassword] = "pw"
+	sec[backup.ResticPassword] = "pw"
 	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
 	var snaps []string
-	real := resticRun
-	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+	real := backup.ResticRun
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		snaps = append(snaps, strings.Join(args, " "))
 		return "", nil
 	}
-	t.Cleanup(func() { resticRun = real })
+	t.Cleanup(func() { backup.ResticRun = real })
 	return c, &snaps
 }
 

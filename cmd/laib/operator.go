@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
@@ -51,28 +52,6 @@ func loadSvc(env *cliEnv, name string) (*state.State, *state.Service, error) {
 	return st, svc, nil
 }
 
-// dataPaths expands a service's declared data paths.
-func dataPaths(st *state.State, svc *state.Service) []string {
-	var out []string
-	for _, d := range svc.Contract.Data {
-		out = append(out, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-	}
-	return out
-}
-
-// snapshotPaths are the data paths worth a pre-repair snapshot: the ones
-// the service backs up (backup: false marks caches and bulk media).
-func snapshotPaths(st *state.State, svc *state.Service) []string {
-	var out []string
-	for _, d := range svc.Contract.Data {
-		if d.Backup != nil && !*d.Backup {
-			continue
-		}
-		out = append(out, strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir))
-	}
-	return out
-}
-
 // jail opens the data path the file lies in as an os.Root and returns the
 // path inside it. Every open, mkdir and rename then goes through the root,
 // so no component — a symlink planted by a container, a `..` — can leave
@@ -85,7 +64,7 @@ func jail(st *state.State, svc *state.Service, p string) (*os.Root, string, erro
 		return nil, "", err
 	}
 	abs = filepath.Clean(abs)
-	allowed := dataPaths(st, svc)
+	allowed := state.DataPaths(st, svc)
 	if len(allowed) == 0 {
 		allowed = []string{filepath.Join(st.Box.DataDir, svc.Name)}
 	}
@@ -156,7 +135,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		fmt.Fprintf(env.Errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
 		return cli.ExitRefused
 	}
-	paths := snapshotPaths(st, svc)
+	paths := state.SnapshotPaths(st, svc)
 	optional := st.Policy.Envelope.Snapshot == "optional"
 	if snapped || len(paths) == 0 {
 		return cli.ExitOK
@@ -168,9 +147,9 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		fmt.Fprintf(env.Errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
 		return cli.ExitRefused
 	}
-	_, pw, err := backupPrep(env)
+	_, pw, err := backup.Prep(env)
 	if err == nil {
-		_, err = resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-repair", "--tag", svc.Name, "--exclude-caches"}, paths...)...)
+		_, err = backup.ResticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-repair", "--tag", svc.Name, "--exclude-caches"}, paths...)...)
 	}
 	if err != nil {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: err.Error()})
@@ -182,7 +161,7 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: "pre-repair: " + strings.Join(paths, " ")})
 	// pre-repair snapshots are for the next hours, not for the archive
-	if _, err := resticRun(ctx, st, pw, "forget", "--tag", "pre-repair", "--keep-within", "7d", "--prune"); err != nil {
+	if _, err := backup.ResticRun(ctx, st, pw, "forget", "--tag", "pre-repair", "--keep-within", "7d", "--prune"); err != nil {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: "forget pre-repair: " + err.Error()})
 	}
 	return cli.ExitOK
@@ -210,7 +189,7 @@ func cmdInspect(ctx context.Context, env *cliEnv, args []string) int {
 	out["units"] = units
 	out["containers"] = containers
 	files := map[string]string{}
-	for _, p := range dataPaths(st, svc) {
+	for _, p := range state.DataPaths(st, svc) {
 		ls, _ := sysd.Run(ctx, "ls", "-lnA", "--time-style=+%F", p)
 		files[p] = ls
 	}

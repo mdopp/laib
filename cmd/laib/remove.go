@@ -11,6 +11,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/run"
+	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -52,7 +53,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	for _, unit := range svc.UnitNames() {
 		sysd.Stop(ctx, unit)
 	}
-	kept := dataPaths(st, svc)
+	kept := state.DataPaths(st, svc)
 	if err := os.RemoveAll(filepath.Join(env.Paths.State, "services", name)); err != nil {
 		return env.Fail(err)
 	}
