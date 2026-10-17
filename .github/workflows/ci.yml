@@ -6,6 +6,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read # ghcr.io/mdopp/laib-caddy for the Caddyfile check
+      issues: write # the Kern-Diät issue (scripts/kern-diaet.sh, #309)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -49,6 +53,11 @@ jobs:
           docker run --rm --user "$(id -u)" --entrypoint python -e HOME=/tmp -e HERMES_HOME=/data/bote/hermes -e USAGE_METRICS_TOKEN=proof \
             -v "$d:/data" -v "$PWD/templates/bote/tests:/t:ro" docker.io/nousresearch/hermes-agent:latest /t/hermes_plugin_proof.py /opt/hermes
       - run: scripts/loc.sh
+      - name: the Kern-Diät issue at 95 % of the kernel's cap (#309)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/kern-diaet.sh
       - run: scripts/drift.sh
       - run: scripts/workflow-syntax.sh
       - run: scripts/e2e.sh
