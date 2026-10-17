@@ -1,5 +1,10 @@
-// Command laib is the one binary: CLI and daemon. The verb table below is the
-// single source for `laib help`, the MCP tool list and the tier check.
+// Command laib is the one binary: CLI and daemon. It fills the verb table
+// (mcp.Verbs: the single source for `laib help`, the MCP tool list and the
+// tier check), wires the seams between the trust kernel and the box chores,
+// and holds the small verbs that only parse and delegate: plan and apply,
+// journal, note and context, logs, the state repo's init, adopt and ignore,
+// remove, pause, secret, token, operator and self (#309). Everything else
+// lives in internal/.
 package main
 
 import (
