@@ -81,6 +81,17 @@ WHO=""
 if [ -n "$WHO" ]; then APPROVALS="\"gib #17 frei\" oder \"lehne #17 ab\" liest das Relais direkt, nur $WHO, und entscheidet"
 else APPROVALS="im Chat gibt es keine Freigaben, der Admin entscheidet auf der Box-Seite"; fi
 [ -z "$TELEGRAM_ALLOWED_USERS" ] || APPROVALS="$APPROVALS (über Telegram nie)"
+# What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
+# turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
+# without its sender. The model marks that turn; the plugin strips the mark before anyone sees it.
+NUTZ="$H/plugins/laib-nutzung"; PLUGINS=""; UNBEANTWORTET=""
+if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
+  mkdir -p "$NUTZ"
+  cp "$(dirname "$0")/nutzung.py" "$NUTZ/__init__.py"
+  printf 'name: laib-nutzung\nversion: "1"\ndescription: anonymous usage counts for usage-metrics (laib#266)\n' > "$NUTZ/plugin.yaml"
+  PLUGINS=$'plugins:\n  enabled: [laib-nutzung]'
+  UNBEANTWORTET=" Kannst du nicht helfen (du weißt es nicht, kein Werkzeug kann es, oder es schlägt fehl), beginne die Antwort mit [unbeantwortet]; das Wort wird vor dem Senden entfernt, die Person liest nur, was danach kommt."
+else rm -rf "$NUTZ"; fi
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
@@ -128,6 +139,7 @@ platform_toolsets:
   api_server: [todo, memory, session_search, clarify]
   cron: [todo, memory, session_search, clarify]
 non_interactive_hard_stop_enabled: true
+${PLUGINS}
 YAML
 # the soul: who the Bote is. Rendered on every apply while it carries the
 # marker below, so it names exactly the tools wired above (#54); a SOUL.md
@@ -142,7 +154,7 @@ Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwa
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
-Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).
+Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}
 SOUL
 fi
 echo "hermes config rendered: $H/.env, $H/config.yaml"

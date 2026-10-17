@@ -5,6 +5,9 @@ Description=Audiobookshelf — Hörbücher und Podcasts
 Image=${IMAGE}
 PublishPort=13378:80
 Environment=TZ=${TZ}
+# ABS does not read this: it ties the OIDC secret to this unit, so a rotation
+# restarts ABS and post-deploy sets the new one in ABS's settings (#255)
+Environment=LAIB_OIDC_SECRET=${OIDC_SECRET}
 Volume=${DATA_DIR}/audiobookshelf/config:/config:z
 Volume=${DATA_DIR}/audiobookshelf/metadata:/metadata:z
 # the shared file-share tree: never relabelled (:z walks it on every start and

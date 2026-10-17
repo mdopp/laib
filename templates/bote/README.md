@@ -184,6 +184,48 @@ to the domains the family touches. The SOUL tells the model to take
 Bote remembers nothing beyond a conversation and says so when asked to —
 and points to the Haushalt (calendar, notes) once Haus serves it.
 
+## What the Bote is used for: counts, and what it could not answer (#266)
+
+With usage-metrics installed (its token `USAGE_METRICS_TOKEN` set), the
+Bote counts into it, anonymously: per event and UTC day, never who. It is
+Hermes' own plugin system (no fork, ADR 0016): post-deploy places
+`nutzung.py` as `plugins/laib-nutzung/__init__.py`, writes its
+`plugin.yaml` and enables it in `config.yaml` (`plugins.enabled`); without
+the token there is no plugin, no `.env` line and no SOUL line. pre-start
+writes `USAGE_METRICS_URL` (`USAGE_URL`, usage-metrics as the pod reaches
+it, `host.containers.internal:8094`) and the token into Hermes' `.env`,
+never into bote-notify's copy.
+
+| Event (app `bote`) | Hook (hermes-agent, 2026-10-15) | Means |
+|---|---|---|
+| `werkzeug.<server>.<tool>` | `post_tool_call` | one tool call, e.g. `werkzeug.haushalt.kalender`; the persona router is left out (the SOUL sends every message there, so its count is the turn count) |
+| `zug` | `post_llm_call` | one turn someone asked (a cron job is not counted) |
+| `unbeantwortet` | `transform_llm_output` + `post_llm_call` | a turn the Bote could not help with |
+
+**Unanswered** is the model's judgment: the SOUL asks it to start such an
+answer with `[unbeantwortet]`; the plugin's `transform_llm_output` strips
+the mark before the answer is sent or stored, so nobody reads it. That
+turn's sentence goes to usage-metrics' `POST /miss` (`source: bote`), the
+one place a text is kept (owner decision 2026-10-16): without the sender —
+the `[Name]` Hermes puts before a message in a shared chat, a timestamp
+prefix and a backfill's channel context are cut off — and with no number,
+session or platform; at most 280 characters, kept 30 days, admins read it
+on the Box page's "Was wird genutzt" (Haus). A name *inside* the sentence
+stays what it is.
+
+The hooks only touch memory; a daemon thread flushes every five minutes.
+usage-metrics not answering drops that batch and writes one log line
+(`[laib-nutzung] usage-metrics antwortet nicht`) until a flush gets
+through again; a turn never waits for it. Tests:
+`tests/test_nutzung.py` (the hooks as Hermes calls them, a fake
+usage-metrics) and `tests/hermes_plugin_proof.py`, which ci.yml runs in
+the stock image the box updates to: Hermes' own loader finds the plugin
+from the rendered `config.yaml`, its tool-call and turn-finalizer call
+sites fire it, and the mark is gone from the answer.
+
+ServiceBay/Solaris counted nothing of the chat; the only counter was the
+widgets' `?src=widget.*`, forwarded by the Solaris engine (solarisbay#1026).
+
 ## What is verified and what is not
 
 Verified from the Hermes source (`NousResearch/hermes-agent` at

@@ -2,3 +2,4 @@ IMAGE: ghcr.io/advplyr/audiobookshelf:latest
 AUDIOBOOKS: /mnt/data/stacks/file-share/data/audiobooks
 PODCASTS: /mnt/data/stacks/file-share/data/podcasts
 ROOT_PW: !secret ABS_ROOT_PASSWORD
+OIDC_SECRET: !secret OIDC_AUDIOBOOKSHELF_SECRET   # post-deploy sets it as ABS's OIDC client secret (#255)

@@ -26,4 +26,5 @@ RELAY_IMAGE: ghcr.io/mdopp/laib-relay:latest      # the approval relay (#48)
 PERSONA_IMAGE: ghcr.io/mdopp/laib-persona:latest  # the persona engine (ADR 0020); today Joshua
 APPROVER_TOKEN: !secret BOTE_APPROVER_TOKEN
 LAIB_MCP_URL: http://host.containers.internal:5900/mcp
+USAGE_URL: http://host.containers.internal:8094  # usage-metrics (#266): tool calls, turns, unanswered turns; used only with its token
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN         # bote-notify (#177): Home Assistant sends it with rest_command.mitteilung
