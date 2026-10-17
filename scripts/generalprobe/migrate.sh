@@ -86,7 +86,7 @@ step_services() {
     say "4. $n"
     servicebay_out "$n"
     case "$n" in
-      vaultwarden|home-assistant|file-share) move "$n";;
+      vaultwarden|home-assistant|file-share|radicale) move "$n";;
       immich)   # "Immich's external libraries": both Syncthings stopped (ServiceBay's is out with file-share)
         systemctl --user stop file-share-syncthing.service
         move --dry-run immich; move immich

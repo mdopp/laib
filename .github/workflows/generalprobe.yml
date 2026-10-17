@@ -144,7 +144,7 @@ jobs:
             $SSH 'podman ps -a --format "{{.Names}} {{.Status}}"; echo "--- laib"; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 3h | tail -60; journalctl --user --no-pager -u laib | tail -40
                   echo "--- servicebay"; podman logs servicebay 2>&1 | grep -iE "registr|git |clone" | tail -20; podman logs --tail 80 servicebay 2>&1
                   echo "--- failed units"; systemctl --user --failed --no-pager
-                  for u in $(systemctl --user list-units --failed --plain --no-legend | awk "{print \$1}"); do echo "--- $u"; journalctl --user --no-pager -u "$u" | tail -30; done' || true
+                  for u in $(systemctl --user list-units --state=failed,activating,deactivating --plain --no-legend | awk "{print \$1}"); do echo "--- $u"; systemctl --user status --no-pager "$u" | head -15; journalctl --user --no-pager -u "$u" | tail -40; done' || true
           else
             echo "--- the VM does not answer; its journal from the disk (nbd)"
             sudo kill "$(cat qemu.pid)" 2>/dev/null; sleep 5

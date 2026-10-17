@@ -178,13 +178,14 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
 | file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
+| radicale | `radicale/data`, owned by the image's radicale user (2999) as ServiceBay's default user namespace maps it (a subuid) | the same path; Laib's unit maps the box's user onto 2999 | in place, handed to the box's user: otherwise Radicale cannot write its collections and restarts forever (#311). ServiceBay's image takes them back on its next start |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
 | file-share | Syncthing folders on those paths | the same folders on the new paths | `config.xml` rewritten with the photos, folder and device IDs kept: the devices keep syncing, nothing is re-paired |
 
 Everything else the built-ins mount sits at ServiceBay's paths already (auth,
 adguard, the Home Assistant config and the Z-Wave store, immich upload and
-pgdata, paperless, radicale, media, mosquitto, beets, esphome, llama) and is
+pgdata, paperless, media, mosquitto, beets, esphome, llama) and is
 adopted in place.
 
 **Immich's external libraries (#263, the owner's decision on #229).**

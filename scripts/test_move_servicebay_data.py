@@ -63,6 +63,17 @@ class Move(unittest.TestCase):
         self.assertTrue((self.d / "vaultwarden/data/attachments/a1").exists())
         self.assertTrue((self.d / "vaultwarden/db.sqlite3").exists(), "ServiceBay's copy stays for a rollback")
 
+    def test_radicale_collections_go_to_the_box_user_in_place(self):
+        # #311: ServiceBay's radicale image chowned /data to its uid 2999 in the
+        # default user namespace (a subuid on the host); Laib maps core onto 2999
+        # (UserNS=keep-id), so the collections must be core's or radicale cannot
+        # write them and crash-loops (the Generalprobe's first radicale)
+        write(self.d / "radicale/data/collections/collection-root/anna/kalender/e.ics", "BEGIN:VCALENDAR")
+        p = self.run_script("radicale")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("radicale: hand", p.stdout)
+        self.assertTrue((self.d / "radicale/data/collections/collection-root/anna/kalender/e.ics").exists(), "in place, not copied")
+
     def test_home_assistant_matter_and_zwave_on_laibs_port(self):
         p = self.run_script("home-assistant")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
