@@ -85,8 +85,15 @@ step_services() {
   for n in ${SERVICES:-vaultwarden radicale mosquitto file-share immich paperless home-assistant}; do
     say "4. $n"
     servicebay_out "$n"
-    case "$n" in vaultwarden|home-assistant|file-share) move "$n";; esac
-    laib_add "$n"
+    case "$n" in
+      vaultwarden|home-assistant|file-share) move "$n";;
+      immich)   # "Immich's external libraries": both Syncthings stopped (ServiceBay's is out with file-share)
+        systemctl --user stop file-share-syncthing.service
+        move --dry-run immich; move immich
+        systemctl --user start file-share-syncthing.service;;
+    esac
+    # "One value goes with them": the box's broker user (MIGRATION.md, secrets that carry over)
+    if [ "$n" = mosquitto ]; then laib_add "$n" MQTT_USER=mqtt; else laib_add "$n"; fi
   done
 }
 

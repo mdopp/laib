@@ -581,10 +581,7 @@ def seed(f):
 # Each runs in both phases and raises AssertionError with what the family
 # would notice. XFAIL: decided by the owner, not built yet; only after.
 
-XFAIL = {
-    "immich-library": "#229 (owner decision 1: the library photos move into Laib's layout, Immich's paths rewritten) — not built",
-    "samba-family-login": "#229 (owner decision 2: file-share syncs LLDAP users into Samba with the same password) — not built",
-}
+XFAIL = {}   # every owner decision of #229 is built now (#263, #296)
 
 
 def check_logins(f, s, phase):
