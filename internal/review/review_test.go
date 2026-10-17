@@ -92,6 +92,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a new host unit", func(t *testing.T, d string) {
 			write(t, d, "services/whoami/whoami-helper.service", "[Service]\nExecStart=/usr/bin/true\n\n[Install]\nWantedBy=default.target\n", 0o644)
 		}, "läuft direkt auf der Box"},
+		{"a skill for the Operator", func(t *testing.T, d string) {
+			write(t, d, "skills/gartenblick.yml", "description: x\n", 0o644)
+		}, "gibt dem Operator eine Fähigkeit"},
 		{"policy.yml", func(t *testing.T, d string) {
 			edit(t, d, "policy.yml", "pi: {ceiling: propose}", "pi: {ceiling: apply}")
 		}, "Freigaberegeln"},

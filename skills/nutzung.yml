@@ -1,0 +1,12 @@
+# Weekly usage suggestions (#270, ADR 0023): reads usage-metrics, proposes
+# at most three improvements; each waits in the inbox and becomes a
+# Werkstatt ticket when the admin approves it. It changes nothing itself.
+description: Einmal pro Woche — was die Familie nutzt und was ihr fehlt; höchstens drei Vorschläge, die der Admin freigibt.
+trigger: {weekly: "Mo 08:00"}
+tools: [wish, note]
+context: usage
+output: propose
+prompt: |
+  Auslöser: Wochenblick auf die Nutzung. Lies die Nutzungsdaten unten: was die Familie oft nutzt, was sie in dieser Woche nicht genutzt hat und welche Sätze unbeantwortet blieben.
+  Mach höchstens drei konkrete Verbesserungsvorschläge mit suggest, und nur, wenn die Zahlen sie tragen. Jeder nennt, was du gesehen hast (mit Zahlen), den Vorschlag und ob die Wartung leichter oder es für die Familie angenehmer wird. Zitiere keine Sätze der Familie wörtlich; nenne das Thema und wie oft.
+  Du änderst nichts selbst: ein Vorschlag wartet auf die Freigabe des Admins und wird dann ein Ticket. Zum Schluss note mit kind watch: was du vorgeschlagen hast oder warum nichts.

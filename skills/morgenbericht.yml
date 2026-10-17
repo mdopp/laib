@@ -1,0 +1,7 @@
+# The morning report (ADR 0023 §6): what the report hour did before skills.
+description: Jeden Morgen ein Bericht — was nachts passiert ist und was ansteht, Rot zuerst.
+trigger: {daily: "${REPORT_AT}"}
+tools: [status, diag, journal, note]
+output: report
+prompt: |
+  Auslöser: Morgenbericht. Lies journal (24 Stunden) und status, fasse zusammen, was nachts passiert ist und was ansteht. Rot zuerst. Dann note mit kind report.

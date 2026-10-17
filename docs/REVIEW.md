@@ -17,7 +17,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 | Piece | Code | Does | Proof |
 |---|---|---|---|
 | Kernel | `cmd/laib`, `internal/{state,render,plan,apply,proposal,policy,secrets,token,journal,sysd,boxfs}` | Git state repo as truth; `plan`/`apply` (snapshot, write, daemon-reload, restart, verify); proposals + inbox; hands/tiers; MCP over HTTP; three pages; converge; `disk`, `inbox`, `remove`, `backup`/`restore` | unit + golden tests (`testdata/golden/{basic,nuc}`), `scripts/e2e.sh` (shims), `scripts/boot-test.sh` (real Quadlet on a runner), VM |
-| Operator | `cmd/laib-operator`, `internal/operator` | admin agent: OpenAI-compatible tool loop over Laib's MCP as hand `ops`, budget, pre-repair snapshots, notes, morning report; heartbeat in readiness/diag | e2e with a scripted model only |
+| Operator | `operator/` (own budget, ADR 0023) | admin agent: OpenAI-compatible tool loop over Laib's MCP as hand `ops`, budget, pre-repair snapshots, notes, morning report; heartbeat in readiness/diag | e2e with a scripted model only |
 | Lease | `cmd/laib-lease`, `internal/lease` | llama policy proxy + GPU lease, host unit | unit tests; never on a GPU |
 | Frage | `cmd/frage`, `internal/frage` | SearXNG + summary, OpenAI-compatible ("was ist …") | unit tests; image built |
 | Automat | `cmd/automat`, `internal/automat`, `internal/mcpserver` | HA automations as MCP in the bote pod, writes behind the admin's confirmation | unit tests vs fake HA; image built |
