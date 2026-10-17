@@ -19,12 +19,14 @@ a throw-away script run by the operator (or by Claude in a session) that
 reads ServiceBay's `config.json` and templates a single time and writes draft
 service folders for review, outside the state repo (#226). Secrets are moved
 by hand with `laib secret set`; there are 48 of them and most are
-re-generated, except the ones the existing data was made with (#228). A
+re-generated. The eight the existing data was made with are carried by
+`scripts/carry-servicebay-secrets.sh`, a second throw-away script that pipes
+each from ServiceBay's store into `laib secret set` (#228). A
 service belongs to exactly one control plane at any moment.
 
 ## Consequences
 
-- The migration script lives in `scripts/` until step 7 of the plan is done,
-  then it is deleted. It never becomes part of the binary.
+- The migration scripts live in `scripts/` until step 7 of the plan is done,
+  then they are deleted. They never become part of the binary.
 - Rollback during the migration is per service (re-enable the old unit); after
   it, a restore of the kept ServiceBay data dir for 30 days.
