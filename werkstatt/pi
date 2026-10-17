@@ -1,0 +1,11 @@
+#!/bin/sh
+# Every pi in the Werkstatt talks to the box's model (#261): the laib-llama
+# provider (extensions/laib-llama.js) is loaded on every run, the
+# autoloop's and a person's. pi reads `-e x config` as a prompt run, so its
+# subcommands pass straight through. pi-upstream is npm's own `pi`, moved
+# aside by the Containerfile.
+EXT="${PI_LAIB_EXTENSION:-/opt/werkstatt/extensions/laib-llama.js}"
+case "${1:-}" in
+  install|remove|uninstall|update|list|config|auth|mcp) exec pi-upstream "$@" ;;
+esac
+exec pi-upstream -e "$EXT" "$@"

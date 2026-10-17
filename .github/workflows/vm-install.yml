@@ -383,6 +383,8 @@ jobs:
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
                 for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
+                # the operator first password, known to the job: the family login below logs in with it (#254)
+                printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
                 grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
@@ -455,7 +457,58 @@ jobs:
                 # root-owned file alone (rc 0, label kept); ServiceBay'"'"'s box crashed on it (#1731, #1923)
                 rc=0; podman run --rm -v "$S:/m:z" docker.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
                 echo "observation, :z on the share -> rc $rc, music $(stat -c %C "$S"), root.flac $(stat -c %C "$S/import/root.flac") $(tail -1 /tmp/relabel.txt)"
+                # #252: auth.<domain> from a rootless container (pasta, as every Laib unit without Network=host),
+                # mapped as the templates map it: to the host gateway, alone and in a pod; the LAN IP for the record
+                hc() { podman run --rm "$@" -v "$root:/ca.crt:ro,z" "${{ env.HOOKS }}" curl -s -m 10 -o /dev/null -w "%{http_code}" --cacert /ca.crt https://auth.vm.test/api/health || true; }
+                podman --version
+                echo "auth.vm.test at the LAN IP, from a container: HTTP $(hc --add-host auth.vm.test:10.0.2.15)"
+                code=$(hc --add-host auth.vm.test:host-gateway); echo "auth.vm.test at host-gateway, from a container: HTTP $code"
+                [ "$code" = 200 ] || { echo "a container cannot reach Authelia at host-gateway (#252)"; exit 1; }
+                podman pod create --name p252 --add-host auth.vm.test:host-gateway >/dev/null
+                code=$(hc --pod p252); podman pod rm -f p252 >/dev/null; echo "auth.vm.test at host-gateway, from a pod: HTTP $code"
+                [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
+      - name: immich — a family member's OIDC login end to end against the real Authelia (#254, #251, #252)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped immich template from a registry on the box, two things changed for the VM: no machine
+          # learning (it needs the NUC's GPU) and Caddy's local CA trusted by Node (the NUC has a public cert).
+          # Its post-deploy and its units are otherwise the built-in's.
+          $SSH 'rm -rf /tmp/immich && mkdir -p /tmp/immich'
+          tar -C templates/immich -cf - --exclude tests . | $SSH 'tar -C /tmp/immich -xf -'
+          $SSH 'cat > /tmp/oidc-login.py' < scripts/oidc-login.py
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
+                R=/mnt/data/laib/registries/vm/templates/immich; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/immich "$R"
+                rm "$R/immich-ml.container"
+                sed -i -e "/^gpu: true/d" -e "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                sed -i "s|^Pod=immich.pod|Pod=immich.pod\nEnvironment=NODE_EXTRA_CA_CERTS=/laib-ca.crt\nVolume=$root:/laib-ca.crt:ro,z|" "$R/immich.container"
+                grep -q "^AddHost=auth.\${DOMAIN}:host-gateway" "$R/immich.pod" || { echo "the pod does not map auth to the host gateway"; exit 1; }
+                for img in ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 docker.io/library/redis:6.2-alpine; do podman pull -q "$img" >/dev/null; done; echo "immich images pre-pulled"
+                mkdir -p /mnt/data/stacks/immich-photos
+                $L add immich PHOTOS_RO=/mnt/data/stacks/immich-photos ADMIN_EMAIL=admin@vm.test | tee /tmp/add-immich.txt
+                grep -q "^ok  immich post-deploy" /tmp/add-immich.txt || { echo "immich post-deploy is not green"; exit 1; }
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/add-immich.txt || { echo "post-deploy did not set the family login"; exit 1; }
+                grep -q "client_id: immich" /mnt/data/laib/render/authelia/laib-clients.yml || { echo "Authelia has no immich client"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                # the login, as a browser: Immich → Authelia (password, consent) → Immich exchanges the code
+                export OIDC_USER=core OIDC_PASSWORD=vm-operator-pw-254 OIDC_EMAIL=core@vm.test
+                podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host photos.vm.test:127.0.0.1 \
+                  -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
+                  "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
+                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; exit 1; }
+                # the drift ServiceBay repaired in the database (#1556 there) cannot stay: a new client secret reaches
+                # Authelia and Immich in one apply, Immich through its post-deploy with the minted key
+                $L secret rotate OIDC_IMMICH_SECRET | tee /tmp/rotate-immich.txt
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/rotate-immich.txt || { echo "the rotation did not reach Immich"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host photos.vm.test:127.0.0.1 \
+                  -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
+                  "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
+                $L remove immich >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
+                podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
+                echo "immich: a family member logged in through Authelia"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"

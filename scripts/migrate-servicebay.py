@@ -41,6 +41,7 @@ VALUES = {
     "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
     "file-share": {"SHARE_USER": "SHARE_USER"},
     "home-assistant": {"ZWAVE_DEVICE": "ZWAVE_DEVICE"},   # the box's stick, a service-less value (#248)
+    "immich": {"IMMICH_ADMIN_EMAIL": "ADMIN_EMAIL"},   # the admin post-deploy logs in as once, to mint its key (#254)
 }
 PIN = "$(podman image inspect --format '{{index .RepoDigests 0}}' %s)"
 

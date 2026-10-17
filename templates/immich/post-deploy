@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""immich post-deploy (#254): the family's login. Immich keeps its OAuth
+settings, the client secret among them, in its own database; Authelia gets
+Laib's secret from the render. So on every apply this hook sets Immich's
+OAuth block from Laib's secret, through Immich's API, and reads it back:
+a secret left behind in the database (a box migrated from ServiceBay, a
+restore of an older database) is overwritten here, never carried.
+
+The API wants an admin. On a fresh Immich the hook signs the admin up
+(ADMIN_EMAIL, IMMICH_ADMIN_PASSWORD); on any Immich it logs in once and
+mints an API key that may read and write the system config and nothing
+else, handed back as IMMICH_API_KEY. Later runs use the key, so a password
+the admin changes in the app does not lock the hook out. Immich's own login
+stays visible (autoLaunch off): the fallback when Authelia is down."""
+import json, os, sys, time, urllib.error, urllib.request
+
+E = os.environ
+BASE = E.get("IMMICH_URL", "http://127.0.0.1:2283")
+DOMAIN = E["LAIB_DOMAIN"]
+EMAIL = E.get("ADMIN_EMAIL") or "admin@" + DOMAIN
+PW, KEY = E["LAIB_SECRET_IMMICH_ADMIN_PASSWORD"], E.get("LAIB_SECRET_IMMICH_API_KEY", "")
+WANT = {  # the fields the family's login needs; every other field stays as the admin set it
+    "enabled": True, "issuerUrl": "https://auth." + DOMAIN, "clientId": "immich", "clientSecret": E["OIDC_SECRET"],
+    "tokenEndpointAuthMethod": "client_secret_basic",  # as Laib registers the client (#251)
+    "scope": "openid email profile", "signingAlgorithm": "RS256",
+    "profileSigningAlgorithm": "none",  # Authelia's userinfo is plain JSON, not a JWT (ServiceBay found it the hard way)
+    "autoRegister": True, "autoLaunch": False, "buttonText": "Mit Familienkonto anmelden",
+}
+
+
+def call(method, path, body=None, key=None, token=None):
+    h = {"Content-Type": "application/json", "Accept": "application/json"}
+    if key:
+        h["x-api-key"] = key
+    if token:
+        h["Authorization"] = "Bearer " + token
+    r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
+    try:
+        with urllib.request.urlopen(r, timeout=30) as resp:
+            data = resp.read()
+            return resp.status, json.loads(data) if data else None
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def red(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+for _ in range(300):  # first start: the image, Postgres, the migrations
+    try:
+        if call("GET", "/api/server/ping")[0] == 200:
+            break
+    except OSError:
+        pass
+    time.sleep(2)
+else:
+    red("immich did not answer /api/server/ping")
+
+code, info = call("GET", "/api/server/config")
+if code == 200 and not info.get("isInitialized"):
+    code, _ = call("POST", "/api/auth/admin-sign-up", {"name": "Admin", "email": EMAIL, "password": PW})
+    if code not in (200, 201):
+        red(f"immich: admin sign-up refused (HTTP {code})")
+    print("immich admin created:", EMAIL)
+
+if not KEY or call("GET", "/api/system-config", key=KEY)[0] != 200:
+    token = None
+    for _ in range(8):  # right after the sign-up Immich refuses the login for a moment
+        code, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": PW})
+        if code == 201 and body and body.get("accessToken"):
+            token = body["accessToken"]
+            break
+        time.sleep(2.5)
+    if not token:
+        red(f"immich: the admin {EMAIL} cannot log in (HTTP {code}), and there is no working API key: the family "
+            "login was NOT configured. Set ADMIN_EMAIL to Immich's admin and IMMICH_ADMIN_PASSWORD to its password "
+            "(laib secret set; on a box from ServiceBay, carry-servicebay-secrets.sh immich), then laib apply immich")
+    code, body = call("POST", "/api/api-keys", {"name": "laib", "permissions": ["systemConfig.read", "systemConfig.update"]}, token=token)
+    if code not in (200, 201) or not body or not body.get("secret"):
+        red(f"immich: could not mint the API key (HTTP {code})")
+    KEY = body["secret"]
+    print("laib-secret: IMMICH_API_KEY=" + KEY)
+    print("immich: API key minted for the system config")
+
+code, conf = call("GET", "/api/system-config", key=KEY)
+if code != 200:
+    red(f"immich: cannot read the system config (HTTP {code})")
+if all(conf["oauth"].get(k) == v for k, v in WANT.items()):
+    print("immich: family login (OIDC via Authelia) unchanged")
+    sys.exit(0)
+conf["oauth"].update(WANT)
+code, _ = call("PUT", "/api/system-config", conf, key=KEY)
+if code not in (200, 201):
+    red(f"immich: the OAuth settings were refused (HTTP {code})")
+code, conf = call("GET", "/api/system-config", key=KEY)
+if code != 200 or any(conf["oauth"].get(k) != v for k, v in WANT.items()):
+    red("immich: the OAuth settings did not stick")
+print("immich: family login (OIDC via Authelia) set from Laib's secret")
