@@ -19,6 +19,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -416,7 +417,7 @@ func cmdEscalate(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
-	if url, ok, err := githubIssue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+	if url, ok, err := intake.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
 		detail = url + " (" + p + ")"
