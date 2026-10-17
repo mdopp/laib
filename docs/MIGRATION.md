@@ -94,10 +94,20 @@ file moves out.
    Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
    (Authelia's default endpoints). Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
-   `auth.kube` out first, then `laib add auth`. OIDC clients are rendered
-   from every `services/*/laib.yml` — at this point only the services
-   already moved; an app still on ServiceBay loses its SSO login until it
-   moves (#245). Password logins are untouched.
+   `auth.kube` out first, then `laib add auth`. Only the services already
+   in Laib's state have Laib clients at this point, so the apps still on
+   ServiceBay keep theirs another way (#245): auth's pre-start finds
+   ServiceBay's `authelia-config/configuration.yml`, the file it is about to
+   overwrite, keeps its `clients:` once in `servicebay-clients.yml` and its
+   signing key as `oidc.pem`, and registers each kept client, verbatim with
+   ServiceBay's secret, until a Laib service declares the same client id.
+   Then that service's client is Laib's: same id, Laib's secret, which the
+   service's own unit or hook hands to the app (Vaultwarden's environment,
+   Immich's settings, Home Assistant's `auth_oidc`). The apply prints which
+   clients are still ServiceBay's. The signing key stays, so the JWKS and
+   every token an app holds stay valid. From here on, a client ServiceBay
+   registers itself is ignored (Authelia reads the clients from
+   `oidc-clients.yml`): install no new SSO app through ServiceBay.
 4. **adguard**, then **llama** as the `model` role (ADR 0011): the template
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
@@ -140,6 +150,8 @@ file moves out.
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
    they go off in Phase 5 (#160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
+   Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own
+   `servicebay` client and any app that never moved), then `laib apply auth`.
    ServiceBay's assist catalog: there is no import tool yet; what happens to
    it is decided in #160.
 
@@ -260,11 +272,12 @@ change with its snapshot.
 **Open, the operator's decision (#229).** Until it is made, the default
 applies:
 
-- **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`).
-  The built-in declares no `oidc:`, so Authelia no longer knows the client.
-  Default: the login button fails, and users log in with their Home
-  Assistant password. A user who only ever used Authelia needs one set
-  before the move.
+- **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`):
+  decided, kept (#229, #253). The built-in declares the same client;
+  pre-start installs the same pinned component and moves ServiceBay's
+  top-level `auth_oidc:` block out of `configuration.yaml` into
+  `packages/laib_auth_oidc.yaml`, with Laib's secret. The users it linked
+  stay linked. Nothing to carry.
 - **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
   claude-dev's `/workspace` (its home; host keys in `.ssh/host_keys`); the
   Werkstatt keeps its home in `werkstatt/home` and its host keys in

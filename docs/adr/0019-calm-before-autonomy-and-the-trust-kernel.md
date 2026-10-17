@@ -8,6 +8,8 @@ prove before the Kraftwerk moves.
 - **Status:** Accepted, 2026-10-12 — the answer to the concept review
   (#49), proposal by proposal. Where a proposal is already code, the pull
   request is named; where it is the owner's call, it says so.
+  Amended 2026-10-17 (#286): a capable model may run `apply` itself,
+  inside the envelope — see the amendment under Consequences.
 - **Deciders:** operator (mdopp), on the review's measure: good UX,
   resilience, agentic operation — for people who mostly do not think
   technically and are afraid of breaking something.
@@ -108,3 +110,31 @@ Rejected from the review, with the reason:
   sheet, and a month without a red the family noticed first.
 - What is still prose: the public-route rule ("always a human's call")
   and the webhook that wakes the Operator (#87 marks both).
+
+## Amendment 2026-10-17 — a capable model applies its own fix (#286)
+
+The owner (mdopp), on #286: **"a capable model may run `apply` itself,
+within the budget — the hourly envelope, snapshot first, automatic
+rollback on red."** Chosen over keeping `apply` a human's or the dial's
+alone, because Qwen 3.x on the Kraftwerk diagnoses well enough that
+waiting for a human on a one-value fix costs the family more than the
+envelope risks.
+
+What the kernel does, never the prompt (`cmd/laib` `opsApply`):
+
+- the ops hand's `apply` must name **its own open proposal**
+  (`laib apply --proposal <id>`); a whole-box or bare service apply by the
+  Operator is refused;
+- a proposal **only a human may free** (class `human`, `remove`, the
+  `destroy` tier, `approvals … by: human`) is refused, whatever the dial;
+- every service the proposal touches passes the **envelope** first: the
+  hourly budget (`RepairBudget`, which now also counts the Operator's own
+  applies), and the pre-repair **snapshot**, failing closed;
+- then merge, apply, verify, and **revert and re-apply on red** — the
+  dial's auto-approve machinery; the journal books the apply against each
+  service's budget.
+
+Which model may: the Operator offers `apply` only to a capable model (a
+skill's `more:` tools, ADR 0023 amendment); a small model never sees it.
+That choice is the Operator's; the limits above hold whatever it sends.
+

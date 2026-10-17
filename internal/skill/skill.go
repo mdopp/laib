@@ -33,8 +33,9 @@ type Skill struct {
 	Description string   `yaml:"description" json:"description"`
 	Trigger     Trigger  `yaml:"trigger" json:"trigger"`
 	Tools       []string `yaml:"tools" json:"tools"`
-	Context     string   `yaml:"context" json:"context"` // box | usage
-	Output      string   `yaml:"output" json:"output"`   // note | report | propose
+	More        []string `yaml:"more" json:"more,omitempty"` // tools only a capable model gets (#286), checked like tools
+	Context     string   `yaml:"context" json:"context"`     // box | usage
+	Output      string   `yaml:"output" json:"output"`       // note | report | propose
 	Prompt      string   `yaml:"prompt" json:"prompt"`
 
 	Status  string            `yaml:"-" json:"status"` // active | paused | refused
@@ -43,10 +44,12 @@ type Skill struct {
 	Refused string            `yaml:"-" json:"refused,omitempty"`
 }
 
-// Vocabulary is every kernel verb a skill may name. approve, apply,
-// rollback, restore, remove, token, secret and the rest are not in it: no
-// skill gets them, whatever the hand's ceiling.
-var Vocabulary = []string{"status", "diag", "logs", "inspect", "look", "read", "journal", "context", "inbox", "note", "escalate", "propose", "wish", "restart", "exec", "write"}
+// Vocabulary is every kernel verb a skill may name. approve, rollback,
+// restore, remove, token, secret and the rest are not in it: no skill gets
+// them, whatever the hand's ceiling. apply is (owner, #286, 2026-10-17):
+// for the ops hand the kernel lets it free only its own proposal inside the
+// envelope (cmd/laib opsApply).
+var Vocabulary = []string{"status", "diag", "logs", "inspect", "look", "read", "journal", "context", "inbox", "plan", "apply", "updates", "backup", "note", "escalate", "propose", "wish", "restart", "exec", "write"}
 
 var (
 	nameRe   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
@@ -122,7 +125,7 @@ func check(s *Skill) string {
 	case t.Event != "" && t.Event != "red":
 		return fmt.Sprintf("trigger event %q: es gibt nur red", t.Event)
 	}
-	for _, tool := range s.Tools {
+	for _, tool := range append(slices.Clone(s.Tools), s.More...) {
 		if !slices.Contains(Vocabulary, tool) {
 			return fmt.Sprintf("%s gehört nicht zu den Werkzeugen einer Fähigkeit (%s)", tool, strings.Join(Vocabulary, ", "))
 		}
@@ -164,7 +167,7 @@ func Grant(sks []Skill, switches map[string]string, reach func(verb string) stri
 		default:
 			s.Status = "active"
 		}
-		for _, tool := range s.Tools {
+		for _, tool := range append(slices.Clone(s.Tools), s.More...) {
 			if why := reach(tool); why != "" {
 				if s.Denied == nil {
 					s.Denied = map[string]string{}

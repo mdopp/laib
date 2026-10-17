@@ -139,7 +139,7 @@ holds the card (ADR 0011):
 
 | Preset | Used by | Why |
 |---|---|---|
-| household (gemma-4-e4b, MTP, 32k) | Operator, Frage, Bote by default | fast, always resident |
+| household (qwen3.6-35b-a3b, MTP, 131k; owner 2026-10-17, #285) | Operator, Frage, Bote, Haus by default | always resident, the card never switches between them |
 | qwen3.6-35b-a3b (MTP, 131k), window `full` | Bote for hard questions, long documents | text waits happily two seconds |
 | qwen3.8-27b, window `full` | Werkstatt (pi) | the window is a timer; the Bote can propose to move it ("heute Filmabend") |
 | gemma-4-12b, window `shared` | foundry-chronicle | fits beside the voice stack |

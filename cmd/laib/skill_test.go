@@ -122,3 +122,20 @@ func TestAPausedSkillsCallsAreRefused(t *testing.T) {
 		t.Fatalf("vorfall: %+v", v)
 	}
 }
+
+// #286: a skill's `more` tools are checked like its tools — the vocabulary
+// and the ceiling — before a capable model gets them.
+func TestASkillsMoreToolsAreCheckedLikeItsTools(t *testing.T) {
+	wide := strings.Replace(probeSkill, "output: note", "more: [look, plan, restart]\noutput: note", 1)
+	env, st := skillBox(t, "propose", map[string]string{"weit": wide, "gierig": strings.Replace(wide, "[look, plan, restart]", "[look, approve]", 1)}, nil)
+	sks := skillsFor(env, st, "ops")
+	if sk := findSkill(sks, "weit"); sk == nil || sk.Status != "active" || !slices.Contains(sk.Granted, "look") || !slices.Contains(sk.Granted, "plan") || slices.Contains(sk.Granted, "restart") {
+		t.Fatalf("%+v", sk)
+	}
+	if sk := findSkill(sks, "gierig"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "approve") {
+		t.Fatalf("%+v", sk)
+	}
+	if why := skillGate(env, st, "ops", "weit", "plan"); why != "" {
+		t.Fatalf("plan: %s", why)
+	}
+}

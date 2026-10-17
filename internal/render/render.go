@@ -583,12 +583,16 @@ func ab64(b []byte) string {
 const OperatorToken = "OPERATOR_TOKEN"
 
 func operatorUnit(st *state.State, secrets map[string]string) string {
-	model := cmp.Or(st.Box.Operator.Model, "gemma-4-e4b")
+	model := cmp.Or(st.Box.Operator.Model, "qwen3.6-35b-a3b")
 	reportAt := cmp.Or(st.Box.Operator.ReportAt, "07:00")
 	tick := cmp.Or(st.Box.Operator.Tick, "10m")
 	key := ""
 	if st.Box.Model.KeySecret != "" {
 		key = secretValue(secrets, st.Box.Model.KeySecret)
+	}
+	window := ""
+	if n := st.Box.Operator.ContextWindow; n > 0 {
+		window = "Environment=OPERATOR_CONTEXT_WINDOW=" + fmt.Sprint(n) + "\n"
 	}
 	// the nutzung skill reads usage-metrics with its token (#270), on the host port
 	usage := ""
@@ -597,5 +601,5 @@ func operatorUnit(st *state.State, secrets map[string]string) string {
 			usage = "Environment=USAGE_METRICS_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\nEnvironment=USAGE_METRICS_TOKEN=" + secretValue(secrets, "USAGE_METRICS_TOKEN") + "\n"
 		}
 	}
-	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=LAIB_TOKEN=" + secretValue(secrets, OperatorToken) + "\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_KEY=" + key + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + usage + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
+	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=LAIB_TOKEN=" + secretValue(secrets, OperatorToken) + "\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_KEY=" + key + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
 }

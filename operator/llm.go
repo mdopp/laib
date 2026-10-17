@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -64,6 +66,36 @@ func Defs(tools []Tool) []ToolDef {
 	return out
 }
 
+// ContextWindow asks llama-server's /props (through the lease proxy, for
+// this model) how many tokens the model's context holds (#285).
+func (l *LLM) ContextWindow(ctx context.Context) (int, error) {
+	base := strings.TrimSuffix(strings.TrimRight(l.URL, "/"), "/v1")
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/props?model="+url.QueryEscape(l.Model), nil)
+	if err != nil {
+		return 0, err
+	}
+	if l.Key != "" {
+		r.Header.Set("Authorization", "Bearer "+l.Key)
+	}
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(r)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	var p struct {
+		Settings struct {
+			NCtx int `json:"n_ctx"`
+		} `json:"default_generation_settings"`
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("/props: %s", resp.Status)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil || p.Settings.NCtx <= 0 {
+		return 0, fmt.Errorf("/props: no n_ctx (%v)", err)
+	}
+	return p.Settings.NCtx, nil
+}
+
 // Chat sends the conversation and returns the assistant message.
 func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Message, error) {
 	req := map[string]any{"model": l.Model, "messages": msgs, "temperature": 0.2}
@@ -104,5 +136,14 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Messag
 	if len(out.Choices) == 0 {
 		return Message{}, fmt.Errorf("model: no choices")
 	}
-	return out.Choices[0].Message, nil
+	m := out.Choices[0].Message
+	// a reasoning model's <think> block is not the answer (#285)
+	for {
+		i, j := strings.Index(m.Content, "<think>"), strings.Index(m.Content, "</think>")
+		if i < 0 || j < i {
+			break
+		}
+		m.Content = strings.TrimSpace(m.Content[:i] + m.Content[j+len("</think>"):])
+	}
+	return m, nil
 }

@@ -20,6 +20,7 @@ operator:
   enabled: true
   reportAt: "06:30"
   tick: 5m
+  contextWindow: 131072
 dns:
   provider: cloudflare
   secretRef: DNS_API_TOKEN

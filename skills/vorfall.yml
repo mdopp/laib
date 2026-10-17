@@ -3,6 +3,8 @@
 description: Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren.
 trigger: {event: red}
 tools: [diag, logs, inspect, restart, propose, escalate, note]
+more: [look, read, journal, plan, apply]   # a capable model also looks inside the container, at the journal and the plan (#286)
 output: note
 prompt: |
   Schau dir den Dienst an (diagnose, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, set_value), sonst escalate. Zum Schluss note.
+  Sind mehrere Dienste rot, such die eine Ursache: diagnose für die ganze Box, dann die Dienste, von denen die anderen abhängen (after: in inspect, die Anmeldung, der Proxy, die Datenbank). Repariere die Ursache, nicht jede Folge einzeln, und schreib eine Notiz mit der Ursache.

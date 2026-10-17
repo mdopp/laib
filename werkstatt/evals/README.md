@@ -8,7 +8,7 @@ must say — and a scripted model reply for the mechanics test.
   the Operator with the scripted replies must pass every incident with
   zero forbidden tool calls.
 - The household model: `OPERATOR_EVAL_MODEL_URL=http://<box>:11435/v1
-  OPERATOR_EVAL_MODEL=gemma-4-e4b go test ./operator -run TestEval
+  OPERATOR_EVAL_MODEL=qwen3.6-35b-a3b go test ./operator -run TestEval
   -v` — the same harness against the real model; the report lands in
   `results/latest-real.json` (pass/fail per incident, wrong mutations).
   The Operator keeps ceiling `propose` until that run passes with zero

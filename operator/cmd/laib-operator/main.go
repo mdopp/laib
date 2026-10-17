@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,7 +30,7 @@ func main() {
 
 	op := &operator.Operator{
 		MCP:  &operator.MCP{URL: env("LAIB_MCP_URL", "http://127.0.0.1:5900/mcp"), Token: os.Getenv("LAIB_TOKEN")},
-		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "gemma-4-e4b")},
+		LLM:  &operator.LLM{URL: strings.TrimRight(env("MODEL_URL", ""), "/"), Key: os.Getenv("MODEL_KEY"), Model: env("MODEL_NAME", "qwen3.6-35b-a3b")},
 		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 		// rendered into the unit when the box runs usage-metrics (#270)
 		Usage: &operator.Usage{URL: os.Getenv("USAGE_METRICS_URL"), Token: os.Getenv("USAGE_METRICS_TOKEN")},
@@ -39,9 +40,16 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	// A small model (the default) gets compact results; OPERATOR_INTERFACE=cli
-	// a large model's. The menu is the kernel's typed schemas either way (#290).
-	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
+	// the window: the box's override, else what llama-server says (#285);
+	// it decides the interface unless OPERATOR_INTERFACE does (#286)
+	if n, err := strconv.Atoi(env("OPERATOR_CONTEXT_WINDOW", "0")); err == nil && n > 0 {
+		op.Window = n
+	} else if n, err := op.LLM.ContextWindow(ctx); err == nil {
+		op.Window = n
+	} else {
+		log.Printf("context window unknown (%v): small budgets", err)
+	}
+	op.Typed = operator.SmallModel(os.Getenv("OPERATOR_INTERFACE"), op.Window)
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
 	runner.LoadLast()
@@ -91,6 +99,12 @@ func main() {
 	// A red runs the event skills for its service, debounced for ten minutes.
 	last := map[string]time.Time{}
 	var lastMu sync.Mutex
+	// reds within a minute are one cascade and one session (#287)
+	wait, err := time.ParseDuration(env("OPERATOR_EVENT_GATHER", "60s"))
+	if err != nil || wait <= 0 {
+		wait = time.Minute
+	}
+	gather := &operator.Gatherer{Wait: wait, Fire: func(tr operator.Trigger) { logged(runner.Event(ctx, current(), tr)) }}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /event", func(w http.ResponseWriter, r *http.Request) {
 		var e struct {
@@ -122,8 +136,7 @@ func main() {
 		if recent {
 			return
 		}
-		tr := operator.Trigger{Kind: "event", Service: e.Service, Detail: e.Verb + ": " + e.Detail}
-		go func() { logged(runner.Event(ctx, current(), tr)) }()
+		gather.Add(e.Service, e.Verb+": "+e.Detail)
 	})
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"operator":"bereit"}`)
@@ -137,7 +150,7 @@ func main() {
 
 	// one step a minute: every active skill whose slot has come runs
 	ticker := time.NewTicker(time.Minute)
-	log.Printf("laib-operator: mcp=%s model=%s tick=%s report=%s", op.MCP.URL, op.LLM.Model, runner.Tick, runner.ReportAt)
+	log.Printf("laib-operator: mcp=%s model=%s window=%d tick=%s report=%s", op.MCP.URL, op.LLM.Model, op.Window, runner.Tick, runner.ReportAt)
 	for {
 		select {
 		case <-ctx.Done():
