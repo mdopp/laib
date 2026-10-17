@@ -82,7 +82,7 @@ func backupPrep(env *cliEnv) (*state.State, string, error) {
 		if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
 			return nil, "", err
 		}
-		fmt.Fprintln(os.Stderr, "laib: RESTIC_PASSWORD generated — `laib recovery-sheet` prints it with the age key; print that page")
+		fmt.Fprintln(env.errw(), "laib: RESTIC_PASSWORD generated — `laib recovery-sheet` prints it with the age key; print that page")
 	}
 	return st, pw, nil
 }
@@ -109,7 +109,7 @@ func repoExists(ctx context.Context, st *state.State) bool {
 func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	st, pw, err := backupPrep(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
 		return exitRefusedMsg(env, env.actor+" may not run a backup")
@@ -120,7 +120,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if _, err := resticRun(ctx, st, pw, "cat", "config"); err != nil {
 		if _, err := resticRun(ctx, st, pw, "init"); err != nil {
 			journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "backup", Result: "red", Detail: err.Error()})
-			return fail(err)
+			return env.fail(err)
 		}
 	}
 	paths := render.BackupPaths(st, env.paths.State, env.paths.Journal)
@@ -162,7 +162,7 @@ func cmdBackup(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		entry.Result = "red"
 		journal.Append(env.paths.Journal, entry)
-		return fail(err)
+		return env.fail(err)
 	}
 	entry.Result = "green"
 	journal.Append(env.paths.Journal, entry)
@@ -189,7 +189,7 @@ func backupCheck(ctx context.Context, env *cliEnv, st *state.State, pw string) i
 	fail1 := func(what string, err error) int {
 		entry.Result, entry.Detail, entry.MS = "red", what+": "+err.Error(), time.Since(start).Milliseconds()
 		journal.Append(env.paths.Journal, entry)
-		return fail(fmt.Errorf("%s: %w", what, err))
+		return env.fail(fmt.Errorf("%s: %w", what, err))
 	}
 	if out, err := resticRun(ctx, st, pw, "check", "--read-data-subset=5%"); err != nil {
 		return fail1("restic check", fmt.Errorf("%s", tail(out, 300)))
@@ -242,11 +242,11 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	args = rest
 	if len(args) == 0 || (!box && len(args) < 2) {
-		return fail(errors.New("usage: laib restore <snapshot|latest> <service>  |  laib restore --box <snapshot|latest>"))
+		return env.fail(errors.New("usage: laib restore <snapshot|latest> <service>  |  laib restore --box <snapshot|latest>"))
 	}
 	st, pw, err := backupPrep(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not restore")
@@ -264,11 +264,11 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	} else {
 		svc, ok := st.Services[only]
 		if !ok {
-			return fail(fmt.Errorf("unknown service %q", only))
+			return env.fail(fmt.Errorf("unknown service %q", only))
 		}
 		paths = snapshotPaths(st, svc)
 		if len(paths) == 0 {
-			return fail(fmt.Errorf("%s declares no data paths to restore", only))
+			return env.fail(fmt.Errorf("%s declares no data paths to restore", only))
 		}
 	}
 	// "latest" means the latest regular backup (tag laib), resolved before the
@@ -277,13 +277,13 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	if snapshot == "latest" {
 		out, err := resticRun(ctx, st, pw, "snapshots", "--json", "--tag", "laib", "--latest", "1")
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		var snaps []struct {
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal([]byte(out[max(strings.IndexAny(out, "["), 0):]), &snaps); err != nil || len(snaps) == 0 {
-			return fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
+			return env.fail(fmt.Errorf("no regular backup (tag laib) in the repo yet: %s", tail(out, 200)))
 		}
 		snapshot = snaps[0].ID[:8]
 		fmt.Fprintf(env.w(), "latest = %s\n", snapshot)
@@ -301,7 +301,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// What is there now goes into the repo first, so a restore is reversible.
 	if _, err := resticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-restore"}, paths...)...); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	for _, unit := range unitsOf(st, only) {
 		sysd.Stop(ctx, unit)
@@ -327,7 +327,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		entry.Result = "red"
 		journal.Append(env.paths.Journal, entry)
-		return fail(err)
+		return env.fail(err)
 	}
 	entry.Result = "green"
 	journal.Append(env.paths.Journal, entry)
@@ -337,12 +337,12 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 	// through the pod unit, as apply does.
 	for _, unit := range apply.PodRestartSet(unitsOf(st, only)) {
 		if err := sysd.Restart(ctx, unit); err != nil {
-			return fail(fmt.Errorf("start %s after restore: %w", unit, err))
+			return env.fail(fmt.Errorf("start %s after restore: %w", unit, err))
 		}
 	}
 	st, err = loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if box {
 		// the restored state is the truth now: every service, roles first,
@@ -365,7 +365,7 @@ func cmdRestore(ctx context.Context, env *cliEnv, args []string) int {
 			if err != nil {
 				e.Result, e.Detail = "red", err.Error()
 				journal.Append(env.paths.Journal, e)
-				return fail(fmt.Errorf("restore %s: %w", name, err))
+				return env.fail(fmt.Errorf("restore %s: %w", name, err))
 			}
 			journal.Append(env.paths.Journal, e)
 		}

@@ -1,6 +1,8 @@
 SYNCTHING_IMAGE: docker.io/syncthing/syncthing:latest
 SAMBA_IMAGE: docker.io/servercontainers/samba:latest
+MEMBERS_IMAGE: docker.io/library/python:3.13-alpine   # samba-members.py, the standard library only (#296)
 FILEBROWSER_IMAGE: docker.io/filebrowser/filebrowser:latest
 SHARE_USER: samba
 SHARE_PW: !secret SAMBA_PASSWORD
+LDAP_PASSWORD: !secret FILE_SHARE_LDAP_PASSWORD
 FILEBROWSER_ADMIN_USER: admin     # the LLDAP account File Browser makes its admin (ServiceBay's default); laib add file-share FILEBROWSER_ADMIN_USER=<you>

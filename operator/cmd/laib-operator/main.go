@@ -39,15 +39,9 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	// The typed surface (#53) is the default: a household model gets a menu
-	// per skill with typed parameters; OPERATOR_INTERFACE=cli gives a large
-	// model the verb table. The menu's service enum comes from laib status.
+	// A small model (the default) gets compact results; OPERATOR_INTERFACE=cli
+	// a large model's. The menu is the kernel's typed schemas either way (#290).
 	op.Typed = env("OPERATOR_INTERFACE", "typed") != "cli"
-	if op.Typed {
-		if text, _, err := op.MCP.Call(ctx, "laib_status", map[string]string{"args": ""}); err == nil {
-			op.Services = operator.ServicesFromStatus(text)
-		}
-	}
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
 	runner.LoadLast()

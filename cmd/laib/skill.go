@@ -86,7 +86,7 @@ func skillTools(env *cliEnv, st *state.State, hand, name string, tools []map[str
 func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	sks := skillsFor(env, st, "ops")
 	if len(args) == 0 || args[0] == "list" {
@@ -106,20 +106,20 @@ func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
 		return exitOK
 	}
 	if len(args) != 2 || (args[0] != "enable" && args[0] != "pause") {
-		return fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
+		return env.fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
 	}
 	if proposal.Hand(env.actor) != "human" {
 		return exitRefusedMsg(env, "only a human enables or pauses a skill")
 	}
 	if skill.Find(sks, args[1]) == nil {
-		return fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))
+		return env.fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))
 	}
 	value := map[string]string{"enable": "active", "pause": "paused"}[args[0]]
 	if err := setBox(filepath.Join(env.paths.State, "policy.yml"), "skills", args[1], value); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := proposal.CommitDirty(ctx, env.paths.State, env.actor); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "skill", Result: "info", Detail: args[0] + " " + args[1]})
 	fmt.Fprintf(env.w(), "%s: %s\n", args[1], map[string]string{"active": "aktiv", "paused": "ruht"}[value])

@@ -7,6 +7,7 @@
 #       [--version vX.Y.Z]
 #       [--dns-provider desec|cloudflare|…  (token: LAIB_DNS_TOKEN)] [--tls internal]
 #       [--source <base url>]   one build served over HTTP instead of a release (the VM job, #38)
+#   … | bash -s -- --box-config  only the box's own config below (journald, podman's log driver), then exit
 #
 # mdopp/laib, its releases and its images are public: no token. A private fork
 # or mirror exports LAIB_GH_TOKEN (Contents: read, Packages: read); never as a
@@ -26,9 +27,39 @@ while [ $# -gt 0 ]; do
     --token) echo "--token puts the token on argv, where ps shows it (#217): export LAIB_GH_TOKEN instead" >&2; exit 1;;
     --dns-provider) DNS_PROVIDER="$2"; shift 2;;
     --tls) TLS="$2"; shift 2;;
+    --box-config) BOXCONF=1; shift;;
     *) echo "unknown flag $1" >&2; exit 1;;
   esac
 done
+
+# The box's own config (#257, #281), one source for every box: the stick's
+# first boot runs this script, a migrated box runs it in step 1
+# (docs/MIGRATION.md); laib diag is red while either file is missing.
+# journald: persistent (the boot before a crash is the one to read), 4G and
+# four weeks, whichever comes first. Four weeks answers "since when" for
+# anything the family reports; 4G holds that at up to ~145 MB a day of the
+# services' output (laib's own journal is a file on /mnt/data) and is a small
+# share of the OS disk (the NUC's is 256G; journald still keeps SystemKeepFree,
+# 15 %, free on a small disk). A noisier box loses days, not disk. Weekly
+# files, so the age limit drops a week at a time instead of a month.
+# podman: log driver journald, so a container's output is in its unit's
+# journal (laib logs) and podman logs reads it; Quadlet passes no --log-driver
+# unless a unit says LogDriver=. A drop-in, so a containers.conf already on
+# the box (ServiceBay's) stays as it is.
+box_config() {
+  local etc="${LAIB_ETC:-/etc}" s="" conf want   # LAIB_ETC, LAIB_QUADLET: the test harness only
+  [ "$etc" = /etc ] && s=sudo
+  want="$(printf '[Journal]\nStorage=persistent\nSystemMaxUse=4G\nMaxRetentionSec=4week\nMaxFileSec=1week')"
+  if [ "$(cat "$etc/systemd/journald.conf.d/50-laib.conf" 2>/dev/null)" != "$want" ]; then
+    $s mkdir -p "$etc/systemd/journald.conf.d"
+    printf '%s\n' "$want" | $s tee "$etc/systemd/journald.conf.d/50-laib.conf" >/dev/null
+    [ -z "$s" ] || sudo systemctl restart systemd-journald   # it reads its config only at start
+    echo "journald: persistent, at most 4G and four weeks"
+  fi
+  conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
+  mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
+}
+[ -z "${BOXCONF:-}" ] || { box_config; exit 0; }
 [ "$(id -un)" = "core" ] || { echo "run as the core user (rootless podman, user systemd)" >&2; exit 1; }
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
@@ -133,6 +164,7 @@ fi
 # refuses to run otherwise, and so would every Quadlet service.
 mkdir -p ~/.config/containers/systemd ~/.config/systemd/user 2>/dev/null || true
 [ "$(stat -c %U ~/.config)" = core ] || sudo chown -R core:core ~/.config
+box_config
 
 # Laib's own images (ghcr.io/mdopp/laib-*) are public. A private fork's images
 # are not: with a token, podman logs in so Quadlet and auto-update can pull.

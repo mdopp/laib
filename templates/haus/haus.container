@@ -62,6 +62,12 @@ SecurityLabelDisable=true
 Volume=${DATA_DIR}/file-share/data/notes:/notes
 Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload
 Volume=${DATA_DIR}/haus-dokumente:/dokumente:z
+# the network drive's passwords (#296, haus#52): each person sets their own on /netzlaufwerk, Haus
+# hands it to file-share's Samba through the FIFO there (no argv, no file) and reads who has one
+Environment=HAUS_SAMBA_DIR=/samba-accounts
+# shown to people as \\<address>\data and smb://<address>/data, never used to connect
+Environment=HAUS_SAMBA_HOST=${LAN_IP}
+Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
 AutoUpdate=registry
 
 [Service]

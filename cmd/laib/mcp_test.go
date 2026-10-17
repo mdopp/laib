@@ -30,7 +30,7 @@ func TestMcpCallEnforcesTheBoundary(t *testing.T) {
 		{"human", "laib_init", exitUsage},
 		{"bote", "laib_nonsense", exitUsage},
 	} {
-		out, code := mcpCall(context.Background(), &cliEnv{}, st, tc.hand, tc.tool, map[string]string{"args": ""})
+		out, code := mcpCall(context.Background(), &cliEnv{}, st, tc.hand, tc.tool, map[string]any{"args": ""})
 		if code != tc.want {
 			t.Errorf("%s calling %s: exit %d (%q), want %d", tc.hand, tc.tool, code, out, tc.want)
 		}

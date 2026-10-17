@@ -29,7 +29,7 @@ func TestMCPCallDoesNotTouchTheProcessStdout(t *testing.T) {
 		<-stray
 		os.Stdout.WriteString("STRAY-LINE\n")
 	}()
-	out, code := mcpCall(context.Background(), c.env, st, "human", "laib_status", map[string]string{"args": ""})
+	out, code := mcpCall(context.Background(), c.env, st, "human", "laib_status", map[string]any{"args": ""})
 	close(stray)
 	time.Sleep(50 * time.Millisecond)
 	w.Close()
