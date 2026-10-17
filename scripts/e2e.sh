@@ -77,6 +77,7 @@ SH
 chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH" SYSTEMCTL_LOG="$WORK/systemctl.log"
 export LAIB_HOME="$WORK/home" LAIB_QUADLET="$WORK/quadlet" LAIB_SYSTEMD="$WORK/systemd"
+export LAIB_ETC="$WORK/etc"; bash "$ROOT/scripts/install-box.sh" --box-config >/dev/null   # the box config as every box has it (#281); diag is red without it
 fail() { echo "FAIL: $*"; "$BIN" journal 2>/dev/null | tail -5; exit 1; }
 j() { "$BIN" journal --json | python3 -c "import sys,json; es=json.load(sys.stdin); $1"; }
 

@@ -47,8 +47,18 @@ file moves out.
 
 ## Order
 
-1. **Laib binary + state repo**, nothing applied. `laib init --domain …`,
-   then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
+1. **Laib binary + state repo**, nothing applied. `install-box.sh` (as in
+   `docs/INSTALL.md`; it installs the binaries and the unit and runs
+   `laib init --domain …`) also writes the box's own config, as on a stick
+   install: journald persistent with at most 4G and four weeks
+   (`/etc/systemd/journald.conf.d/50-laib.conf`, journald restarted) and
+   podman's log driver pinned to journald
+   (`~/.config/containers/containers.conf.d/50-laib.conf`, a drop-in:
+   ServiceBay's own containers.conf stays; its containers keep logging to
+   journald, Fedora CoreOS's default). The Kraftwerk is never reinstalled, so
+   this is the only way these reach it; `laib diag` is `rot box` while either
+   file is missing, and `install-box.sh --box-config` writes just these two (#281).
+   Then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
    --templates <servicebay>/templates,<each external registry>/templates
    --out /mnt/data/laib/migration` writes a draft `<name>/` per installed
    template — laib.yml with the routes the box's proxy hosts have and the auth
