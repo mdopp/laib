@@ -1,4 +1,7 @@
-package main
+// Package converge is the mechanical half of repair (#309, docs/DESIGN.md
+// "Repair"): the box back to the state within a budget, never the state to
+// the box. Trust kernel.
+package converge
 
 import (
 	"context"
@@ -18,13 +21,13 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// cmdConverge is the mechanical half of repair (docs/DESIGN.md "Repair"):
+// Converge is the mechanical half of repair (docs/DESIGN.md "Repair"):
 // bring the box back to the state, never the state to the box. It re-applies
 // drifted files and restarts units that are not active, within a budget;
 // when the budget is spent or a conflict blocks it, it stops and tells the
 // human through the journal and the webhook. It never touches the state
 // repo, never generates a secret anew, and never decides anything.
-func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
+func Converge(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)

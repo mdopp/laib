@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/converge"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/run"
@@ -60,7 +61,7 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 		}
 	}
 	c.calls = nil
-	cmdConverge(ctx, c.env, []string{"--force"})
+	converge.Converge(ctx, c.env, []string{"--force"})
 	for _, u := range c.restarts() {
 		if strings.HasPrefix(u, "tick") {
 			t.Errorf("converge restarted %s for an idle oneshot", u)
