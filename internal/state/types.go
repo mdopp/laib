@@ -255,9 +255,26 @@ type DataPath struct {
 // Health is what apply verifies.
 type Health struct {
 	HTTP string `yaml:"http"`
+	// Expect names the codes a probe answers when it is not 2xx/3xx (an
+	// API that challenges with 401); set, only these are green (#288).
+	Expect []int `yaml:"expect"`
 	// None says why there is no probe (MQTT speaks no HTTP …): the unit
 	// state is the check. Lint wants one of the two (#46).
 	None string `yaml:"none"`
+}
+
+// Answers says whether a probe's status code means the service is up:
+// 2xx/3xx, or exactly the declared codes. 404 is a wrong path, not a live app.
+func (h Health) Answers(code int) bool {
+	if len(h.Expect) == 0 {
+		return code >= 200 && code < 400
+	}
+	for _, c := range h.Expect {
+		if c == code {
+			return true
+		}
+	}
+	return false
 }
 
 // Port is a published host port; LAN=false renders an nftables drop.

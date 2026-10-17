@@ -15,7 +15,8 @@ routes:
   - host: files
     port: 8088
     exposure: public
-    auth: none                     # File Browser logs in itself (#55); sync (Syncthing's GUI) stays behind Authelia
+    auth: one_factor               # the family's one login (#231): File Browser takes the user from Authelia's Remote-User
+    bypass: [/share/, /api/public/, /static/]   # share links and their page stay open; File Browser checks a share's own password
 secrets:
   - name: SAMBA_PASSWORD
 data:

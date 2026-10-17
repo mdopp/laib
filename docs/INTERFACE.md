@@ -288,13 +288,24 @@ entfernen“), before anything is stopped. The box's own proposals (the
 template-sync timer, actor `laib`) are approved by the box when the dial
 says auto; the same change proposed twice reuses the open proposal.
 
+### The shared file-share tree is never relabelled (#230)
+
+`laib template lint` refuses a unit that mounts `${DATA_DIR}/file-share/data`
+or a path under it (also through a values entry) with `:z`/`:Z` or without
+`SecurityLabelDisable=true`. `:z` makes podman relabel the whole
+multi-writer tree on every start; the rootless `lsetxattr` fails on any
+entry `core` does not own (a root-owned file from a disk import), and the
+container exits 125 in a crash loop (ServiceBay #1731, #1923). The
+service's own data folders keep `:z`; with labelling off it is a no-op.
+
 ### Templates on CoreOS: ports, health, needs, images (#46)
 
 The state refuses two services publishing the same host port, and
 `laib template lint` refuses a template that publishes a port a sibling
 template already uses (whoami and the bote pod both had 8080; the bote's
 signal-cli is on 8085 now). Every template declares health: an `http:`
-probe or `none: "<why>"` (MQTT speaks no HTTP). A template whose
+probe or `none: "<why>"` (MQTT speaks no HTTP). The probe is green on 2xx/3xx only; an app whose probe
+path challenges declares `expect: [401]`, and then only those codes count (#288). A template whose
 containers talk to laib's MCP declares `needs: [mcp]`; the state then
 insists on `box.yml laib.listen: 0.0.0.0` (ADR 0012 §4) instead of a
 container that silently cannot reach laib. Apply pulls the images of new

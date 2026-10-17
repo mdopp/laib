@@ -109,7 +109,7 @@ func runProbes(ctx context.Context, env *cliEnv, st *state.State, only string) [
 				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name})
 			} else {
 				resp.Body.Close()
-				if resp.StatusCode >= 500 {
+				if !svc.Contract.Health.Answers(resp.StatusCode) {
 					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name})
 				}
 			}

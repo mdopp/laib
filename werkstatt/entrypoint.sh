@@ -3,6 +3,17 @@
 # habit of a config UI inside the dev container is gone: configuration is
 # the service's values.yml, applied by laib.
 set -euo pipefail
+# The home is a data path (${DATA_DIR}/werkstatt/home, #241): Claude's
+# sessions, the dotfiles and the history survive a restart and an image
+# update. laib makes the folder as the container's root; dev gets it here.
+# The image's dotfiles go into an empty home once (~/.cache is the cache
+# data path's mount point), never over the person's files.
+mkdir -p /home/dev
+chown dev:dev /home/dev
+if [ -d /home/dev/.cache ]; then chown dev:dev /home/dev/.cache; fi
+if [ -d /opt/werkstatt/home-seed ] && [ -z "$(ls -A /home/dev | grep -vx .cache || true)" ]; then
+  su dev -c "cp -a /opt/werkstatt/home-seed/. /home/dev/"
+fi
 mkdir -p /home/dev/.ssh
 if [ -n "${WERKSTATT_AUTHORIZED_KEY:-}" ]; then
   echo "$WERKSTATT_AUTHORIZED_KEY" > /home/dev/.ssh/authorized_keys
@@ -30,6 +41,8 @@ if [ -n "${LAIB_TOKEN:-}" ]; then
   # environment: on su's and claude's argv the host's ps would show it (#217).
   # A login shell reads it from the 0600 file, so only dev's processes hold it.
   echo 'if [ -r /run/laib/token ]; then export LAIB_TOKEN="$(cat /run/laib/token)"; fi' > /etc/profile.d/laib.sh
+  # the home is kept now: drop the entry a previous start wrote, so a new URL takes
+  su dev -c "claude mcp remove -s user laib >/dev/null 2>&1 || true"
   su dev -c "claude mcp add -s user --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer \${LAIB_TOKEN}' >/dev/null 2>&1 || true"
 fi
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
@@ -41,5 +54,13 @@ if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace
   exec su dev -c "python3 /opt/werkstatt/autoloop.py"
 fi
-ssh-keygen -A
-exec /usr/sbin/sshd -D -e -p 22
+# sshd's host keys live in their own data path (${DATA_DIR}/werkstatt/ssh-host-keys),
+# root's and 0600: made on the first start, then kept — the app trusts this key
+mkdir -p /etc/ssh/keys && chmod 700 /etc/ssh/keys
+hostkeys=()
+for t in ed25519 ecdsa rsa; do
+  k=/etc/ssh/keys/ssh_host_${t}_key
+  if [ ! -s "$k" ]; then rm -f "$k" "$k.pub"; ssh-keygen -q -t "$t" -N '' -C "werkstatt" -f "$k"; fi
+  hostkeys+=(-h "$k")
+done
+exec /usr/sbin/sshd -D -e -p 22 "${hostkeys[@]}"
