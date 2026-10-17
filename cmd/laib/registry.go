@@ -77,7 +77,7 @@ func availableTemplates(env *cliEnv) map[string][]string {
 func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName string) int {
 	svc, ok := st.Services[svcName]
 	if !ok {
-		return fail(fmt.Errorf("unknown service %q", svcName))
+		return env.fail(fmt.Errorf("unknown service %q", svcName))
 	}
 	tplName := svc.Contract.Template.Name
 	if tplName == "" {
@@ -85,7 +85,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	}
 	tpl, err := templateFS(env, tplName)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, "template update "+svcName,
 		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.actor))
@@ -93,7 +93,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 		if strings.Contains(err.Error(), "nothing to propose") {
 			return exitUsage // up to date; the caller's loop skips it
 		}
-		return fail(err)
+		return env.fail(err)
 	}
 	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
 	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation

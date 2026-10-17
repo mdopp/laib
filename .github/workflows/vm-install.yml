@@ -13,7 +13,7 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:
     # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
     paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, scripts/vm/**, .github/workflows/vm-install.yml]
@@ -373,6 +373,18 @@ jobs:
                 journalctl --user --no-pager -b 0 -u logmark.service -o cat | grep "$M" >/dev/null || { echo "after the reboot the container output is not in journald (#257)"; exit 1; }
                 echo "container output in journald under logmark.service, kept across the reboot"
                 LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib remove logmark >/dev/null'
+          # #281: a box that never got the box config (the migrated Kraftwerk is never reinstalled) is red in
+          # diag, and the migration's step 1 (install-box.sh --box-config, docs/MIGRATION.md) puts it right, no reboot
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+                sudo rm -f /etc/systemd/journald.conf.d/50-laib.conf; rm -f ~/.config/containers/containers.conf.d/50-laib.conf; sudo systemctl restart systemd-journald
+                d=$(/var/opt/laib/laib diag 2>&1 || true); grep -E "^rot +box " <<<"$d" || true
+                [ "$(grep -cE "^rot +box " <<<"$d")" = 2 ] || { echo "diag is not red twice on a box without its config (#281)"; echo "$d"; exit 1; }
+                curl -fsSL ${{ env.SRC }}/install-box.sh | bash -s -- --box-config
+                d=$(/var/opt/laib/laib diag 2>&1 || true)
+                if grep -qE "^rot +box " <<<"$d"; then echo "still red after install-box.sh --box-config (#281)"; echo "$d"; exit 1; fi
+                sleep 2; journalctl --no-pager -u systemd-journald --since -3min | grep "System Journal" | tail -1 | tee /tmp/jd.txt || true
+                grep -q "max 4G" /tmp/jd.txt || { echo "journald did not take the limits without a reboot (#281)"; exit 1; }
+                echo "box config back from install-box.sh --box-config: diag green on it, journald on 4G"'
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
       - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
@@ -426,7 +438,7 @@ jobs:
                   [ "$got" = "$3" ] || { echo "Authelia applies ${got:-nothing} to $1 for ${g:-anonymous}, want $3 (#249)"; exit 1; }
                 done
                 # #231: files sits behind Authelia and File Browser takes the user only from Remote-User
-                for img in docker.io/filebrowser/filebrowser:latest docker.io/syncthing/syncthing:latest docker.io/servercontainers/samba:latest; do podman pull -q "$img" >/dev/null; done
+                for img in docker.io/filebrowser/filebrowser:latest docker.io/syncthing/syncthing:latest docker.io/servercontainers/samba:latest docker.io/library/python:3.13-alpine; do podman pull -q "$img" >/dev/null; done
                 $L add file-share FILEBROWSER_ADMIN_USER=core
                 code=000; for i in $(seq 1 30); do code=$(curl -s -o /dev/null -X POST -H "Remote-User: vmtest" -w "%{http_code}" http://127.0.0.1:8088/api/login || true); [ "$code" = 200 ] && break; sleep 2; done
                 echo "File Browser login with Remote-User on loopback -> HTTP $code"; [ "$code" = 200 ]
@@ -468,6 +480,56 @@ jobs:
                 code=$(hc --pod p252); podman pod rm -f p252 >/dev/null; echo "auth.vm.test at host-gateway, from a pod: HTTP $code"
                 [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
+      - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          A=/mnt/data/stacks/file-share/samba-accounts; PW='Fam1lie äö-x'
+          sec() { podman secret inspect --showsecret --format "{{.SecretData}}" "$1"; }
+          # LLDAP as its admin, the token and the bodies in files, off argv
+          printf '{"username":"admin","password":"%s"}' "$(sec laib.auth.auth-lldap.LLDAP_LDAP_USER_PASS)" > /tmp/login.json
+          curl -fsS -H "Content-Type: application/json" -d @/tmp/login.json http://127.0.0.1:17170/auth/simple/login | sed 's/.*"token":"\([^"]*\)".*/Authorization: Bearer \1/' > /tmp/auth.h; rm /tmp/login.json
+          gql() { printf '%s' "$1" > /tmp/q.json; curl -fsS -H @/tmp/auth.h -H "Content-Type: application/json" -d @/tmp/q.json http://127.0.0.1:17170/api/graphql; }
+          fam=$(gql '{"query":"{ groups { id displayName } }"}' | grep -o '"id":[0-9]*,"displayName":"family"' | sed 's/"id":\([0-9]*\).*/\1/'); test -n "$fam"
+          gql '{"query":"mutation { createUser(user:{id:\"anna\",email:\"anna@vm.test\"}){ id } }"}' >/dev/null
+          gql "{\"query\":\"mutation { addUserToGroup(userId:\\\"anna\\\", groupId:$fam){ ok } }\"}" >/dev/null
+          echo "LLDAP: anna in family"
+          # the member list is read every five minutes; a restart reads it now
+          systemctl --user restart file-share-samba-members.service
+          for i in $(seq 1 30); do grep -qx anna "$A/members" 2>/dev/null && break; sleep 2; done
+          grep -qx anna "$A/members" || { echo "anna is not in samba's member list"; journalctl --user -u file-share-samba-members.service --no-pager | tail -20; exit 1; }
+          grep -qx file-share "$A/members" && { echo "the read-only account got a Samba account"; exit 1; }
+          for i in $(seq 1 30); do grep -qx "anna 0" "$A/status" 2>/dev/null && break; sleep 2; done
+          grep -qx "anna 0" "$A/status" || { echo "anna is not in the status as without a password"; cat "$A/status" || true; exit 1; }
+          echo "anna is a member without a password, as the status says"
+          test -p "$A/passwords" && [ "$(stat -c %a "$A/passwords")" = 600 ] || { echo "no FIFO, or not 600"; ls -la "$A"; exit 1; }
+          # what Haus writes (haus#52): one line, the password base64 inside, into the FIFO
+          printf 'set anna %s\n' "$(printf %s "$PW" | base64 -w0)" > "$A/passwords"
+          for i in $(seq 1 15); do grep -q "^anna [1-9]" "$A/status" && break; sleep 1; done
+          grep -q "^anna [1-9]" "$A/status" || { echo "anna's password was not set"; journalctl --user -u file-share-samba.service --no-pager | tail -20; exit 1; }
+          if journalctl --user -u file-share-samba.service --no-pager | grep -qF -- "$PW"; then echo "the password is in the log"; exit 1; fi
+          # smbclient from the samba image, the credentials in a file (-A), as anna
+          smb() { printf 'username=%s\npassword=%s\n' "$1" "$2" > /tmp/smb.cred; rc=0; podman run --rm --network host --security-opt label=disable -v /tmp/smb.cred:/cred:ro -v /etc/hostname:/hn:ro --entrypoint smbclient docker.io/servercontainers/samba:latest //127.0.0.1/data -A /cred -c "$3" >/tmp/smb.out 2>&1 || rc=$?; rm -f /tmp/smb.cred; return $rc; }
+          smb anna "$PW" "put /hn anna.txt" || { echo "anna cannot log in with the password from Haus's channel"; cat /tmp/smb.out; exit 1; }
+          f=/mnt/data/stacks/file-share/data/anna.txt; test -f "$f"; [ "$(stat -c %U "$f")" = core ] || { echo "anna's file is not core's: $(stat -c %U "$f")"; exit 1; }
+          echo "anna logged in with the password set through Haus's channel and wrote anna.txt, owned by core"
+          smb anna wrong "ls" && { echo "a wrong password logs in"; exit 1; }
+          # a restart: the passdb stays, the POSIX side is made again
+          systemctl --user restart file-share-samba.service; sleep 15
+          smb anna "$PW" "ls anna.txt" || { echo "anna cannot log in after a samba restart"; cat /tmp/smb.out; exit 1; }
+          echo "anna logs in after a restart of samba"
+          # the shared account stays
+          smb samba "$(sec laib.file-share.file-share-samba.ACCOUNT_samba)" "ls" || { echo "the shared account no longer logs in"; cat /tmp/smb.out; exit 1; }
+          echo "the shared account still logs in"
+          # anna leaves LLDAP: her account goes
+          gql '{"query":"mutation { deleteUser(userId:\"anna\"){ ok } }"}' >/dev/null; rm /tmp/auth.h
+          systemctl --user restart file-share-samba-members.service
+          for i in $(seq 1 45); do grep -q "^anna " "$A/status" || break; sleep 2; done
+          smb anna "$PW" "ls" && { echo "anna still logs in after she left LLDAP"; exit 1; }
+          echo "anna, removed from LLDAP, cannot log in any more"
+          journalctl --user -u file-share-samba.service --no-pager | grep "samba: " | tail -10
+          EOS
       - name: immich — a family member's OIDC login end to end against the real Authelia (#254, #251, #252)
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"

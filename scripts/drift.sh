@@ -11,7 +11,7 @@ found() { # found <label> <lines>: print them as drift, mark red
 
 # 1. README's layout names directories that exist
 missing=""
-for d in $(sed -n '/^## Layout/,/^## /p' README.md | grep -oE '^(cmd|internal|templates|usb|werkstatt|docs|testdata|scripts|hooks)[A-Za-z0-9_/.-]*'); do
+for d in $(sed -n '/^## Layout/,/^## /p' README.md | grep -oE '^(cmd|internal|operator|templates|usb|werkstatt|docs|testdata|scripts|hooks)[A-Za-z0-9_/.-]*'); do
   [ -e "$d" ] || missing="$missing$d does not exist
 "
 done
@@ -19,7 +19,7 @@ found "README layout" "$missing"
 
 # 2. the Operator's tools are verbs the MCP exposes
 lacking=""
-for t in $(grep -ohE 'laib_[a-z_]+' internal/operator/*.go cmd/laib-operator/*.go 2>/dev/null | sort -u); do
+for t in $(grep -ohE 'laib_[a-z_]+' operator/*.go operator/cmd/laib-operator/*.go 2>/dev/null | sort -u); do
   v=${t#laib_}
   grep -qE "\"$v\": *true" cmd/laib/mcp.go || lacking="$lacking$t is not in mcpVerbs
 "

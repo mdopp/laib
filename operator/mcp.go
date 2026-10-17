@@ -18,8 +18,8 @@ import (
 type MCP struct {
 	URL    string
 	Token  string
+	Skill  string // when set, every call is made in this skill's name (X-Laib-Skill, ADR 0023)
 	Client *http.Client
-	next   int
 }
 
 // Tool is one MCP tool as advertised.
@@ -30,14 +30,18 @@ type Tool struct {
 }
 
 func (m *MCP) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	m.next++
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": m.next, "method": method, "params": params})
+	// one request, one answer over HTTP: the id needs no counter, and a
+	// counter would be shared by the webhook's sessions and the scheduler
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+m.Token)
+	if m.Skill != "" {
+		req.Header.Set("X-Laib-Skill", m.Skill)
+	}
 	client := m.Client
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Minute}
@@ -83,7 +87,7 @@ func (m *MCP) Tools(ctx context.Context) ([]Tool, error) {
 }
 
 // Call runs one tool and returns its text output and whether it errored.
-func (m *MCP) Call(ctx context.Context, name string, args map[string]string) (string, bool, error) {
+func (m *MCP) Call(ctx context.Context, name string, args map[string]any) (string, bool, error) {
 	raw, err := m.call(ctx, "tools/call", map[string]any{"name": name, "arguments": args})
 	if err != nil {
 		return "", true, err

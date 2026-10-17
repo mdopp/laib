@@ -12,11 +12,23 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./cmd/laib-operator
+      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./operator/cmd/laib-operator
       - run: |
           podman --version
           systemctl --user status --no-pager | head -3 || true
           loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)" || true
       - run: scripts/boot-test.sh
+        env:
+          XDG_RUNTIME_DIR: /run/user/1001
+  library-move:
+    # Immich's external libraries and their Syncthing folders move into Laib's
+    # photos layout (#263): the Kraftwerk's Immich and Postgres, two real
+    # Syncthings, the mover through its wrapper, Immich's API as the judge.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)" || true
+      - run: python3 -u scripts/immich-move-test.py
         env:
           XDG_RUNTIME_DIR: /run/user/1001

@@ -1,0 +1,20 @@
+[Unit]
+Description=Samba — wer ein Konto hat: Familie und Admins aus LLDAP
+After=network-online.target
+
+[Container]
+# samba-members.py on stock Python: reads LLDAP (on the host's loopback) with
+# the read-only account file-share and writes samba-accounts/members (#296)
+Image=${MEMBERS_IMAGE}
+Network=host
+Exec=python3 /laib/samba-members.py
+Environment=LDAP_PASSWORD=${LDAP_PASSWORD}
+Volume=./samba-members.py:/laib/samba-members.py:ro,z
+Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

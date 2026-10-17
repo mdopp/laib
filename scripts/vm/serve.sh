@@ -7,7 +7,7 @@
 set -euo pipefail
 v=${1:?version}
 mkdir -p dist
-for b in laib laib-operator laib-lease; do CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=$v" -o dist/$b-linux-amd64 ./cmd/$b; done
+for b in laib laib-operator laib-lease; do src=./cmd/$b; [ $b = laib-operator ] && src=./operator/cmd/$b; CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=$v" -o dist/$b-linux-amd64 $src; done
 cp scripts/install-box.sh dist/install-box.sh
 (cd dist && sha256sum laib-*-amd64 > SHA256SUMS && cat SHA256SUMS)
 printf '%s' "$v" > dist/VERSION

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -20,15 +19,15 @@ func tokenPath(env *cliEnv) string { return filepath.Join(env.paths.Home, "token
 // human may do it; the TTL defaults to the hand's ttl in policy.yml.
 func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib token mint <hand> [--ttl 8h] [--note text] | list | revoke <id>"))
+		return env.fail(errors.New("usage: laib token mint <hand> [--ttl 8h] [--note text] | list | revoke <id>"))
 	}
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	store, err := token.Load(tokenPath(env))
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	switch args[0] {
 	case "list":
@@ -45,20 +44,20 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		return exitOK
 	case "revoke":
 		if len(args) != 2 {
-			return fail(errors.New("usage: laib token revoke <id>"))
+			return env.fail(errors.New("usage: laib token revoke <id>"))
 		}
 		if proposal.Hand(env.actor) != "human" {
 			return exitRefusedMsg(env, "only a human revokes tokens")
 		}
 		if err := store.Revoke(args[1]); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "revoke " + args[1]})
 		fmt.Fprintln(env.w(), "widerrufen:", args[1])
 		return exitOK
 	case "mint":
 		if len(args) < 2 {
-			return fail(errors.New("usage: laib token mint <hand>"))
+			return env.fail(errors.New("usage: laib token mint <hand>"))
 		}
 		if proposal.Hand(env.actor) != "human" {
 			return exitRefusedMsg(env, "only a human mints tokens")
@@ -66,7 +65,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		hand := args[1]
 		h, ok := st.Policy.Hands[hand]
 		if !ok || hand == "human" {
-			return fail(fmt.Errorf("unknown hand %q (policy.yml hands, not human)", hand))
+			return env.fail(fmt.Errorf("unknown hand %q (policy.yml hands, not human)", hand))
 		}
 		ttl, note := time.Duration(0), ""
 		if h.TTL != "" {
@@ -79,7 +78,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 			case "--ttl":
 				d, err := time.ParseDuration(args[i+1])
 				if err != nil {
-					return fail(err)
+					return env.fail(err)
 				}
 				ttl = d
 			case "--note":
@@ -88,7 +87,7 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		}
 		plain, rec, err := store.Mint(hand, ttl, note)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: fmt.Sprintf("mint %s for %s ttl=%s", rec.ID, hand, ttl)})
 		if env.json {
@@ -97,10 +96,10 @@ func cmdToken(_ context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(env.w(), "%s\n# id %s · hand %s · ceiling %s · shown once, never stored in clear\n", plain, rec.ID, hand, h.Ceiling)
 		return exitOK
 	}
-	return fail(fmt.Errorf("unknown token subcommand %q", args[0]))
+	return env.fail(fmt.Errorf("unknown token subcommand %q", args[0]))
 }
 
 func exitRefusedMsg(env *cliEnv, msg string) int {
-	fmt.Fprintln(os.Stderr, "laib:", msg)
+	fmt.Fprintln(env.errw(), "laib:", msg)
 	return exitRefused
 }

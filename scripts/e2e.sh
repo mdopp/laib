@@ -77,6 +77,7 @@ SH
 chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH" SYSTEMCTL_LOG="$WORK/systemctl.log"
 export LAIB_HOME="$WORK/home" LAIB_QUADLET="$WORK/quadlet" LAIB_SYSTEMD="$WORK/systemd"
+export LAIB_ETC="$WORK/etc"; bash "$ROOT/scripts/install-box.sh" --box-config >/dev/null   # the box config as every box has it (#281); diag is red without it
 fail() { echo "FAIL: $*"; "$BIN" journal 2>/dev/null | tail -5; exit 1; }
 j() { "$BIN" journal --json | python3 -c "import sys,json; es=json.load(sys.stdin); $1"; }
 
@@ -181,10 +182,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # a scripted model on the typed surface (#53): inspect, a refused call
 # (a service that does not exist), restart, note, then stop
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"nas"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"caddy"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"nas"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"caddy"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"4","type":"function","function":{"name":"laib_note","arguments":json.dumps({"kind":"incident","text":"caddy war rot, Neustart, jetzt grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0
@@ -194,10 +195,10 @@ class H(BaseHTTPRequestHandler):
         global i
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n))
         names = [t["function"]["name"] for t in body["tools"]]
-        # the incident menu for the ops hand: typed, small, without approve/apply/converge
-        assert "restart" in names and "note" in names and "diagnose" in names, names
-        assert not any(n.startswith("laib_") for n in names) and len(names) <= 8, names
-        svc = body["tools"][names.index("restart")]["function"]["parameters"]["properties"]["service"]
+        # the incident menu for the ops hand: the kernel's typed tools the skill is granted, without approve/apply/converge
+        assert "laib_restart" in names and "laib_note" in names and "laib_diag" in names, names
+        assert not set(names) & {"laib_approve", "laib_apply", "laib_converge"} and len(names) <= 8, names
+        svc = body["tools"][names.index("laib_restart")]["function"]["parameters"]["properties"]["service"]
         assert "caddy" in svc.get("enum", []), svc
         if i == 2:  # the refused call came back as a tool message, not as an execution
             last = body["messages"][-1]; assert last["role"] == "tool" and "nicht ausgef" in last["content"] and "nas" in last["content"], last
@@ -217,8 +218,30 @@ printf '%s' "$OPS_TOKEN" > "$WORK/token"; chmod 600 "$WORK/token"
 LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py" | grep -q "^status" || fail "laibctl list"
 LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py" status | python3 -c 'import sys,json; assert json.load(sys.stdin)["ready"]["state"]' || fail "laibctl status"
 if LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/none" python3 "$ROOT/werkstatt/laibctl.py" status >/dev/null 2>&1; then fail "laibctl without token got through"; fi
+# skills (ADR 0023): a call in a skill's name gets only that skill's tools, on the real server
+mcp_skill() { python3 - "$OPS_TOKEN" "$@" <<'PY3'
+import json, sys, urllib.request
+tok, skill, method, name = sys.argv[1], sys.argv[2], sys.argv[3], (sys.argv[4] if len(sys.argv) > 4 else "")
+params = {"name": name, "arguments": {"args": ""}} if name else {}
+req = urllib.request.Request("http://127.0.0.1:5976/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
+    {"Authorization": "Bearer " + tok, "Content-Type": "application/json", "X-Laib-Skill": skill})
+print(json.dumps(json.load(urllib.request.urlopen(req))["result"]))
+PY3
+}
+mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] for t in json.load(sys.stdin)["tools"]]; assert n==["laib_status","laib_diag","laib_note"], n' || fail "routineblick sees more than its tools"
+mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
+mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
-python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and len(s["calls"])==3, s' "$WORK/op.json"
+python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==4, s' "$WORK/op.json"
+# the switch: listed for everyone, set by a human, a commit to policy.yml
+"$BIN" skill list | grep -qE "^aktiv +morgenbericht" || fail "skill list"
+if LAIB_ACTOR=ops "$BIN" skill pause routineblick >/dev/null 2>&1; then fail "ops paused a skill"; fi
+LAIB_ACTOR=human:e2e "$BIN" skill pause morgenbericht | grep -q "morgenbericht: ruht" || fail "skill pause"
+"$BIN" skill list | grep -qE "^ruht +morgenbericht" || fail "paused skill listed as active"
+grep -q "morgenbericht: paused" "$LAIB_HOME/state/policy.yml" || fail "pause not in policy.yml"
+[ -z "$(git -C "$LAIB_HOME/state" status --porcelain)" ] || fail "skill pause left policy.yml uncommitted"
+LAIB_ACTOR=human:e2e "$BIN" skill enable morgenbericht >/dev/null || fail "skill enable"
+"$BIN" skill list | grep -qE "^aktiv +nutzung" || fail "the weekly usage skill is not active"
 j 'notes=[e for e in es if e["verb"]=="note" and e["actor"]=="ops"]; assert notes and "jetzt grün" in notes[-1]["detail"], notes'
 j 'assert any(e["verb"]=="restart" and e["actor"]=="ops" and e.get("service")=="caddy" for e in es), "operator restart not journaled"'
 test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"
@@ -514,5 +537,11 @@ grep -q "stop bote-signal.service" "$SYSTEMCTL_LOG" || fail "the signal-cli unit
 pre=$(grep -n "podman run hook .*bote/pre-start" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1); start=$(grep -n "restart bote-pod.service" "$SYSTEMCTL_LOG" | tail -1 | cut -d: -f1)
 [ -n "$pre" ] && [ -n "$start" ] && [ "$pre" -lt "$start" ] || fail "the Bote's pre-start ($pre) did not run before the pod started ($start)"
 kill "$(cat "$WORK/notify.pid")"; rm "$WORK/notify.pid"
+
+# the Operator's wish waits for the admin (#270): a proposal of class human; approving it files the ticket (no intake here: it stays in wishes/)
+LAIB_ACTOR=ops "$BIN" wish "Den Abfuhrkalender anbinden. Gesehen: 9 offene Fragen." | grep -q "nach der Freigabe" || fail "an ops wish is not a proposal"
+WID=$("$BIN" inbox --json | python3 -c 'import sys,json; ps=[p for p in json.load(sys.stdin) if p["actor"]=="ops" and p["reason"].startswith("Wunsch:")]; assert ps and ps[0]["class"]=="human", ps; print(ps[0]["id"])') || fail "the wish is not in the inbox as class human"
+LAIB_ACTOR=human:e2e "$BIN" approve "$WID" >/dev/null || fail "approving the wish"
+j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") for e in es), "the approved wish is not journaled"'
 
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

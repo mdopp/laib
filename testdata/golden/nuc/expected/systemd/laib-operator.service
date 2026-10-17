@@ -15,6 +15,8 @@ Environment=OPERATOR_HOME=/mnt/data/laib/operator
 Environment=OPERATOR_LISTEN=127.0.0.1:5901
 Environment=OPERATOR_TICK=5m
 Environment=OPERATOR_REPORT_AT=06:30
+Environment=USAGE_METRICS_URL=http://127.0.0.1:8094
+Environment=USAGE_METRICS_TOKEN=${secret:USAGE_METRICS_TOKEN}
 Restart=always
 RestartSec=5
 

@@ -66,7 +66,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-linux-amd64 ./cmd/laib
-      - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-operator-linux-amd64 ./cmd/laib-operator
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-operator-linux-amd64 ./operator/cmd/laib-operator
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-lease-linux-amd64 ./cmd/laib-lease
       - run: |
           for t in linux-amd64 darwin-arm64 darwin-amd64 windows-amd64; do

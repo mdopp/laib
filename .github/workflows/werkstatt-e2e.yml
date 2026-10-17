@@ -1,13 +1,14 @@
 name: werkstatt-e2e
 # This commit's Werkstatt image, run for real on the runner: pi against a fake
-# lease and model proxy (#261). Only when the Werkstatt changes: the image
-# build costs minutes.
+# lease and model proxy (#261), and a small app from the scaffold to its
+# route behind Caddy and Authelia (#262). Only when the Werkstatt changes:
+# the image build costs minutes.
 on:
   push:
     branches: [main]
-    paths: [werkstatt/**, templates/werkstatt/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
+    paths: [werkstatt/**, templates/werkstatt/**, templates/caddy/**, templates/auth/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
   pull_request:
-    paths: [werkstatt/**, templates/werkstatt/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
+    paths: [werkstatt/**, templates/werkstatt/**, templates/caddy/**, templates/auth/**, scripts/werkstatt-*.sh, .github/workflows/werkstatt-e2e.yml]
   workflow_dispatch:
 jobs:
   model:
@@ -17,3 +18,23 @@ jobs:
       - uses: actions/checkout@v4
       - run: podman --version
       - run: scripts/werkstatt-model.sh
+  app:
+    # podman 5 as on Fedora CoreOS: the auth template is a Quadlet .pod, which 24.04's podman 4.9 does not know
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o laib ./cmd/laib
+      - name: a box on the runner
+        run: |
+          podman --version
+          loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)" || true
+          # Caddy binds 80/443 rootless on the host network, as on CoreOS (install-box.sh)
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+          sudo mkdir -p /mnt/data && sudo chown "$(id -u):$(id -g)" /mnt/data
+      - run: scripts/werkstatt-app.sh
+        env:
+          XDG_RUNTIME_DIR: /run/user/1001

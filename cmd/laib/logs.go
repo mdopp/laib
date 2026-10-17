@@ -20,11 +20,11 @@ import (
 // (ADR 0003: journald is the agent).
 func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200]"))
+		return env.fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200]"))
 	}
 	_, svc, err := loadSvc(env, args[0])
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	since, lines := "1h", "200"
 	for i := 1; i+1 < len(args); i += 2 {
@@ -60,7 +60,7 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "apply") {
 		return exitRefusedMsg(env, env.actor+" may not rollback")
@@ -70,7 +70,7 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 		arg = args[0]
 	}
 	if strings.HasPrefix(arg, "-") {
-		return fail(fmt.Errorf("%q is not a commit", arg))
+		return env.fail(fmt.Errorf("%q is not a commit", arg))
 	}
 	unlock, code := takeLock(env, st, "rollback")
 	if code != exitOK {
@@ -80,21 +80,21 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	if strings.HasPrefix(arg, "#") {
 		id, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
 		if err != nil {
-			return fail(fmt.Errorf("%q is not a proposal", arg))
+			return env.fail(fmt.Errorf("%q is not a proposal", arg))
 		}
 		subject, err := revertProposal(ctx, env, st, id)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		st, err = loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		return applyHeld(ctx, env, st, "", "rollback "+subject)
 	}
 	sha, err := sysd.Run(ctx, "git", "-C", env.paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
 	if err != nil || strings.TrimSpace(sha) == "" {
-		return fail(fmt.Errorf("unknown commit %q", arg))
+		return env.fail(fmt.Errorf("unknown commit %q", arg))
 	}
 	sha = strings.TrimSpace(sha)
 	subject, _ := sysd.Run(ctx, "git", "-C", env.paths.State, "log", "-1", "--format=%h %s", "--end-of-options", sha)
@@ -105,12 +105,12 @@ func cmdRollback(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	if out, err := sysd.Run(ctx, "git", append(revert, sha)...); err != nil {
 		sysd.Run(ctx, "git", "-C", env.paths.State, "revert", "--abort")
-		return fail(fmt.Errorf("revert: %s", out))
+		return env.fail(fmt.Errorf("revert: %s", out))
 	}
 	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "rollback", Result: "info", Detail: subject})
 	st, err = loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	return applyHeld(ctx, env, st, "", "rollback "+subject)
 }

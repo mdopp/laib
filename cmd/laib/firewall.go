@@ -60,7 +60,7 @@ var selfUnits = []string{"laib.service", "laib-operator.service", "laib-lease.se
 // as *.prev) and the units that run them restarted. Humans only.
 func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 || args[0] != "rollback" {
-		return fail(errors.New("usage: laib self rollback"))
+		return env.fail(errors.New("usage: laib self rollback"))
 	}
 	if proposal.Hand(env.actor) != "human" {
 		return exitRefusedMsg(env, "self rollback is the human's verb")
@@ -69,16 +69,16 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	bins := []string{"laib", "laib-operator", "laib-lease"}
 	for _, b := range bins {
 		if _, err := os.Stat(filepath.Join(dir, b+".prev")); err != nil {
-			return fail(fmt.Errorf("no previous %s in %s: nothing to roll back to (install-box.sh keeps *.prev after an update)", b, dir))
+			return env.fail(fmt.Errorf("no previous %s in %s: nothing to roll back to (install-box.sh keeps *.prev after an update)", b, dir))
 		}
 	}
 	for _, b := range bins {
 		cur, prev := filepath.Join(dir, b), filepath.Join(dir, b+".prev")
 		if _, err := sysd.Run(ctx, "sudo", "mv", "-f", cur, cur+".rolled"); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		if _, err := sysd.Run(ctx, "sudo", "mv", prev, cur); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		sysd.Run(ctx, "sudo", "mv", "-f", cur+".rolled", prev)
 	}

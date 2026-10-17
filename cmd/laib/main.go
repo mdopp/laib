@@ -35,6 +35,23 @@ type cliEnv struct {
 	in    io.Reader // stdin for --patch; MCP passes the patch here
 	mcp   bool      // the call came over MCP: no file access, so propose needs content
 	out   io.Writer // where a verb writes (#43): nil = os.Stdout; MCP and escalate pass a buffer
+	// errOut is where a verb's errors go (#289): nil = os.Stderr; MCP passes
+	// the call's own buffer, so no process-wide stderr is ever swapped
+	errOut io.Writer
+}
+
+// errw is the verb's error writer.
+func (e *cliEnv) errw() io.Writer {
+	if e != nil && e.errOut != nil {
+		return e.errOut
+	}
+	return os.Stderr
+}
+
+// fail prints a one-line error to the verb's error writer.
+func (e *cliEnv) fail(err error) int {
+	fmt.Fprintln(e.errw(), "laib:", strings.TrimSpace(err.Error()))
+	return 1
 }
 
 // w is the verb's output: never the process stdout when a caller passed its own.
@@ -71,6 +88,7 @@ func init() {
 		{"escalate", "propose", "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", cmdEscalate},
 		{"note", "propose", "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", cmdNote},
 		{"wish", "propose", "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", cmdWish},
+		{"skill", "read", "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", cmdSkill},
 		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
 		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
@@ -130,7 +148,7 @@ func run(args []string) int {
 			return v.run(ctx, env, rest[1:])
 		}
 	}
-	fmt.Fprintf(os.Stderr, "laib: unknown verb %q\n\n", rest[0])
+	fmt.Fprintf(env.errw(), "laib: unknown verb %q\n\n", rest[0])
 	usage()
 	return 1
 }
@@ -158,7 +176,7 @@ func emit(env *cliEnv, v any) int {
 	enc := json.NewEncoder(env.w())
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	return 0
 }

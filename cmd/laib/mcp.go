@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,15 +18,16 @@ import (
 
 // MCP over streamable HTTP, JSON-RPC 2.0, stdlib only. The tool list is the
 // verb table filtered by the hand's ceiling (docs/INTERFACE.md); a call runs
-// the verb in-process with --json. One call at a time, because the verbs
-// write to os.Stdout and the capture swaps it.
-var mcpMu sync.Mutex
+// the verb in-process with --json, writing to its own buffers. Read verbs
+// share mcpMu; anything that changes the box takes it alone (#289), on top
+// of the apply lock the mutating verbs hold.
+var mcpMu sync.RWMutex
 
 // mcpVerbs are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
 var mcpVerbs = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
-	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true,
+	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "skill": true,
 }
 
 type rpcRequest struct {
@@ -83,6 +83,8 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			return
 		}
 		hand := rec.Hand
+		// a call in a skill's name (ADR 0023): only the skill's granted tools
+		inSkill := r.Header.Get("X-Laib-Skill")
 		switch req.Method {
 		case "initialize":
 			rpcReply(w, req.ID, map[string]any{
@@ -94,13 +96,23 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 		case "notifications/initialized", "ping":
 			rpcReply(w, req.ID, map[string]any{}, nil)
 		case "tools/list":
-			rpcReply(w, req.ID, map[string]any{"tools": mcpTools(st, hand)}, nil)
+			tools := mcpTools(st, hand)
+			if inSkill != "" {
+				tools = skillTools(env, st, hand, inSkill, tools)
+			}
+			rpcReply(w, req.ID, map[string]any{"tools": tools}, nil)
 		case "tools/call":
 			var p struct {
-				Name string            `json:"name"`
-				Args map[string]string `json:"arguments"`
+				Name string         `json:"name"`
+				Args map[string]any `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
+			if inSkill != "" {
+				if why := skillGate(env, st, hand, inSkill, strings.TrimPrefix(p.Name, "laib_")); why != "" {
+					rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": "nicht ausgeführt: " + why}}, "isError": true}, nil)
+					return
+				}
+			}
 			out, code := mcpCall(r.Context(), env, st, hand, p.Name, p.Args)
 			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != exitOK}, nil)
 		default:
@@ -119,7 +131,7 @@ func mcpTools(st *state.State, hand string) []map[string]any {
 		tools = append(tools, map[string]any{
 			"name":        "laib_" + v.name,
 			"description": v.help + " (tier " + v.tier + ")",
-			"inputSchema": inputSchema(v.name),
+			"inputSchema": mcpSchema(st, v.name),
 		})
 	}
 	return tools
@@ -140,7 +152,7 @@ func inputSchema(verb string) map[string]any {
 }
 
 // mcpCall runs one verb as the hand, capturing stdout.
-func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]string) (string, int) {
+func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]any) (string, int) {
 	verbName := strings.TrimPrefix(name, "laib_")
 	var v *verb
 	for i := range verbs {
@@ -157,35 +169,27 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if !policy.MayVerb(st.Policy, hand, verbName) {
 		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), exitRefused
 	}
-	mcpMu.Lock()
-	defer mcpMu.Unlock()
-	var buf bytes.Buffer
-	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf}
-	callArgs := splitArgs(args["args"])
-	if patch := args["patch"]; patch != "" {
-		callEnv.in = strings.NewReader(patch)
-		callArgs = append([]string{"--patch"}, callArgs...)
-	}
-	if in := args["stdin"]; in != "" {
-		callEnv.in = strings.NewReader(in)
-	}
-	// the verb writes to buf (#43: the process stdout is never swapped, so
-	// nothing another goroutine prints can land here); fail()'s one-line
-	// errors still go to stderr — captured through a pipe read concurrently,
-	// never a pipe nobody drains
-	r, w, err := os.Pipe()
+	callArgs, stdin, err := mcpArgv(st, verbName, args)
 	if err != nil {
-		return err.Error(), exitUsage
+		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", exitUsage
 	}
-	savedErr := os.Stderr
-	os.Stderr = w
-	var errBuf bytes.Buffer
-	done := make(chan struct{})
-	go func() { io.Copy(&errBuf, r); close(done) }()
+	// reads run side by side; a verb that changes something runs alone (#289)
+	if v.tier == "read" && verbName != "skill" && verbName != "template" {
+		mcpMu.RLock()
+		defer mcpMu.RUnlock()
+	} else {
+		mcpMu.Lock()
+		defer mcpMu.Unlock()
+	}
+	// the verb writes to its own buffers (#43, #289): neither the process's
+	// stdout nor its stderr is ever swapped, so nothing another goroutine
+	// prints can land in a reply
+	var buf, errBuf bytes.Buffer
+	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf, errOut: &errBuf}
+	if stdin != "" {
+		callEnv.in = strings.NewReader(stdin)
+	}
 	code := v.run(ctx, callEnv, callArgs)
-	os.Stderr = savedErr
-	w.Close()
-	<-done
 	out := buf.String()
 	if e := strings.TrimSpace(errBuf.String()); e != "" {
 		if out != "" {
