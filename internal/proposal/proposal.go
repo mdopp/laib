@@ -96,11 +96,28 @@ func CommitDirty(ctx context.Context, repo, actor string) error {
 	return err
 }
 
+// CommitSecrets commits secrets.age on main when it changed (#328): a
+// secret a hook handed back, or one `laib secret set` wrote, is the box's
+// truth, never part of a proposal a reject would drop.
+func CommitSecrets(ctx context.Context, repo, why string) error {
+	if st, err := git(ctx, repo, "status", "--porcelain", "--", "secrets.age"); err != nil || st == "" {
+		return err
+	}
+	if _, err := git(ctx, repo, "add", "--", "secrets.age"); err != nil {
+		return err
+	}
+	_, err := git(ctx, repo, "commit", "-q", "-m", why, "--", "secrets.age")
+	return err
+}
+
 // Create commits the working tree to proposal/<id> and returns to main with
 // a clean tree. The inbox entry lists the files the branch changes. The
 // judge reads the dirty tree against a detached checkout of HEAD first.
 func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge) (*Proposal, error) {
 	if err := EnsureRepo(ctx, repo); err != nil {
+		return nil, err
+	}
+	if err := CommitSecrets(ctx, repo, "secrets.age as the box has it"); err != nil {
 		return nil, err
 	}
 	status, err := git(ctx, repo, "status", "--porcelain")

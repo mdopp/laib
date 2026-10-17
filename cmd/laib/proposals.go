@@ -152,6 +152,10 @@ func runApplyPlan(ctx context.Context, env *cliEnv, st *state.State, p *plan.Pla
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
 			return env.Fail(err)
 		}
+		// on main before green: a proposal cannot carry it off (#328)
+		if err := proposal.CommitSecrets(ctx, env.Paths.State, "apply: secrets handed back by hooks"); err != nil {
+			return env.Fail(err)
+		}
 	}
 	entry.Result = "green"
 	if !res.Green {
