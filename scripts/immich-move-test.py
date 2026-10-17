@@ -111,7 +111,11 @@ def immich_pod(name, photos):
     podman("run", "-d", "--pod", name, "--name", f"{name}-db", "-e", f"POSTGRES_PASSWORD={PW}", "-e", "POSTGRES_USER=postgres",
            "-e", "POSTGRES_DB=immich", "-e", "POSTGRES_INITDB_ARGS=--data-checksums", "-v", f"{PG}:/var/lib/postgresql/data", DB)
     podman("run", "-d", "--pod", name, "--name", f"{name}-redis", REDIS)
-    podman("run", "-d", "--pod", name, "--name", f"{name}-server", "-e", "DB_HOSTNAME=127.0.0.1", "-e", "DB_USERNAME=postgres",
+    # Postgres's first start initialises, stops and starts again: an Immich
+    # started in that gap exits on ECONNREFUSED (run 38899434157)
+    until(lambda: podman("exec", f"{name}-db", "pg_isready", "-q", "-h", "127.0.0.1", "-U", "postgres", check=False).returncode == 0,
+          f"{name}: Postgres takes connections", timeout=180)
+    podman("run", "-d", "--pod", name, "--name", f"{name}-server", "--restart", "on-failure", "-e", "DB_HOSTNAME=127.0.0.1", "-e", "DB_USERNAME=postgres",
            "-e", f"DB_PASSWORD={PW}", "-e", "DB_DATABASE_NAME=immich", "-e", "DB_VECTOR_EXTENSION=vectorchord",
            "-e", "REDIS_HOSTNAME=127.0.0.1", "-e", "IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:3003",
            "-v", f"{UPLOAD}:/usr/src/app/upload", "-v", f"{photos}:/mnt/photos:ro", SERVER)
