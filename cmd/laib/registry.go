@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -84,12 +85,12 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	if tplName == "" {
 		tplName = svcName
 	}
-	tpl, err := templateFS(env, tplName)
+	tpl, err := inbox.TemplateFS(env, tplName)
 	if err != nil {
 		return env.Fail(err)
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "template update "+svcName,
-		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.Actor))
+		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, inbox.JudgeFor(st, env.Actor))
 	if err != nil {
 		if strings.Contains(err.Error(), "nothing to propose") {
 			return cli.ExitUsage // up to date; the caller's loop skips it
@@ -98,7 +99,7 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
 	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
-		return autoApprove(ctx, env, p)
+		return inbox.AutoApprove(ctx, env, p)
 	}
 	if env.JSON {
 		return cli.Emit(env, p)

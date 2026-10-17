@@ -1,4 +1,10 @@
-package main
+// Package inbox is the change flow (#309): propose, the judge every
+// proposal passes (the state must render, the content review names what
+// only a human may allow, a token above the proposer's ceiling is refused),
+// approve, reject, the canary auto-approve, add, the inbox listing and
+// rollback by proposal. Trust kernel: a proposal's class comes from its
+// content (ADR 0019 §2b).
+package inbox
 
 import (
 	"context"
@@ -24,11 +30,11 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// cmdPropose has two shapes. A human with a shell: `laib propose "<grund>"`
+// Propose has two shapes. A human with a shell: `laib propose "<grund>"`
 // commits the working tree. An agent over MCP (issue #11): `--patch` (diff
 // on stdin), `--set services/x/values.yml:KEY=VALUE`, `--add <template>
 // [--name n] [KEY=VALUE…]`, applied in a worktree and validated first.
-func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
+func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
@@ -60,7 +66,7 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 			if i+1 >= len(args) {
 				return env.Fail(errors.New("--add wants a template name"))
 			}
-			tpl, err := templateFS(env, args[i+1])
+			tpl, err := TemplateFS(env, args[i+1])
 			if err != nil {
 				return env.Fail(err)
 			}
@@ -97,9 +103,9 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		if env.MCP {
 			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
 		}
-		p, err = proposal.Create(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, judgeFor(st, env.Actor))
+		p, err = proposal.Create(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, JudgeFor(st, env.Actor))
 	} else {
-		p, err = proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, edit, judgeFor(st, env.Actor))
+		p, err = proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, edit, JudgeFor(st, env.Actor))
 	}
 	if err != nil {
 		return env.Fail(err)
@@ -109,7 +115,7 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 		// The dial says laib decides this class itself: approve as laib,
 		// apply, and roll back on a red verify. A warning (a second service
 		// for one purpose) and anything the judge named always go to a human.
-		return autoApprove(ctx, env, p)
+		return AutoApprove(ctx, env, p)
 	}
 	if env.JSON {
 		return cli.Emit(env, p)
@@ -128,12 +134,12 @@ func cmdPropose(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-// judgeFor is the judge every proposal passes: the state must render, the
+// JudgeFor is the judge every proposal passes: the state must render, the
 // content review (internal/review) names what only a human may allow, and
 // a token for a hand above the proposer's own ceiling is refused outright
 // (#34: a template may never mint a token stronger than the hand that
 // asked for it; a human may mint anything).
-func judgeFor(st *state.State, actor string) proposal.Judge {
+func JudgeFor(st *state.State, actor string) proposal.Judge {
 	return func(base, changed string) (proposal.Verdict, error) {
 		cst, err := state.Load(changed)
 		if err != nil {
@@ -163,11 +169,11 @@ func reasonsSuffix(p *proposal.Proposal) string {
 	return ": " + strings.Join(p.Reasons, "; ")
 }
 
-// autoApprove is the "canary by rollback": laib merges and applies; if the
+// AutoApprove is the "canary by rollback": laib merges and applies; if the
 // verify is red, it reverts the merge and applies again, and the journal
 // carries both so the human sees what was tried.
-func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
-	laibEnv := &cliEnv{Paths: env.Paths, JSON: env.JSON, Actor: "laib", In: env.In, MCP: env.MCP}
+func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
+	laibEnv := &cli.Env{Paths: env.Paths, JSON: env.JSON, Actor: "laib", In: env.In, MCP: env.MCP}
 	unlock, code := run.Lock(laibEnv, nil, "approve")
 	if code != cli.ExitOK {
 		return code
@@ -183,7 +189,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
 	code = run.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
 	if code == cli.ExitRed {
-		if _, err := revertProposal(ctx, laibEnv, st, p.ID); err != nil {
+		if _, err := RevertProposal(ctx, laibEnv, st, p.ID); err != nil {
 			cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
 			return cli.ExitRed
 		}
@@ -198,7 +204,7 @@ func autoApprove(ctx context.Context, env *cliEnv, p *proposal.Proposal) int {
 	return code
 }
 
-func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
+func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int {
 	if len(args) != 1 {
 		return env.Fail(errors.New("usage: laib approve|reject <id>"))
 	}
@@ -252,23 +258,23 @@ func decide(ctx context.Context, env *cliEnv, args []string, approve bool) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	fileWishes(ctx, env, st, p)
+	Approved(ctx, env, st, p)
 	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") }) {
 		return cli.ExitOK // a wish changes nothing on the box: no apply
 	}
 	return run.ApplyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
 }
 
-func cmdApprove(ctx context.Context, env *cliEnv, args []string) int {
-	return decide(ctx, env, args, true)
+func Approve(ctx context.Context, env *cli.Env, args []string) int {
+	return Decide(ctx, env, args, true)
 }
-func cmdReject(ctx context.Context, env *cliEnv, args []string) int {
-	return decide(ctx, env, args, false)
+func Reject(ctx context.Context, env *cli.Env, args []string) int {
+	return Decide(ctx, env, args, false)
 }
 
-// templateFS finds a template: a registry under /mnt/data/laib/registries
+// TemplateFS finds a template: a registry under /mnt/data/laib/registries
 // first (issue #14), then the built-ins embedded in the binary.
-func templateFS(env *cliEnv, name string) (fs.FS, error) {
+func TemplateFS(env *cli.Env, name string) (fs.FS, error) {
 	regs, _ := filepath.Glob(filepath.Join(env.Paths.Home, "registries", "*", "templates", name, "laib.yml"))
 	if len(regs) > 0 {
 		return os.DirFS(filepath.Dir(regs[0])), nil
@@ -283,10 +289,10 @@ func templateFS(env *cliEnv, name string) (fs.FS, error) {
 	return sub, nil
 }
 
-// cmdAdd is the human's install verb: `laib add <template> [--name n]
+// Add is the human's install verb: `laib add <template> [--name n]
 // [KEY=VALUE…] ["reason"]` — the --add proposal, approved by the same
 // human, applied. Agents keep proposing; this is sugar for the shell.
-func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
+func Add(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 1 {
 		return env.Fail(errors.New("usage: laib add <template> [--name <service>] [KEY=VALUE…] [\"<grund>\"]"))
 	}
@@ -297,7 +303,7 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	tpl, err := templateFS(env, args[0])
+	tpl, err := TemplateFS(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -325,7 +331,7 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(env.W(), "%s ist schon im Zustand: rolle es aus\n", add.Name)
 		return run.Apply(ctx, env, st, add.Name, reason)
 	}
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Add: add}, judgeFor(st, env.Actor))
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Add: add}, JudgeFor(st, env.Actor))
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -343,8 +349,8 @@ func cmdAdd(ctx context.Context, env *cliEnv, args []string) int {
 	return run.Apply(ctx, env, st, "", reason)
 }
 
-// cmdInbox lists proposals: open ones by default, --all for every one.
-func cmdInbox(_ context.Context, env *cliEnv, args []string) int {
+// List lists proposals: open ones by default, --all for every one.
+func List(_ context.Context, env *cli.Env, args []string) int {
 	openOnly := true
 	for _, a := range args {
 		if a == "--all" {
@@ -407,3 +413,8 @@ func stateLoads(dir string) error {
 	_, err = render.Render(st, nil)
 	return err
 }
+
+// Approved runs after an approval merged a proposal and before its apply.
+// cmd/laib sets it to file the wishes the proposal adds: the intake is a
+// box chore, which the inbox does not import (#309).
+var Approved = func(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Proposal) {}

@@ -16,6 +16,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
+	"github.com/mdopp/laib/internal/inbox"
 )
 
 // Version is set by the release build.
@@ -37,6 +38,7 @@ type cliEnv = cli.Env
 var verbs []verb
 
 func init() {
+	inbox.Approved = fileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
 	verbs = []verb{
 		{"status", "read", "one line per service; first line is the readiness state", cmdStatus},
 		{"diag", "read", "findings with severity and a fix verb each: units, health, drift, disk", diag.Cmd},
@@ -55,19 +57,19 @@ func init() {
 		{"skill", "read", "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", cmdSkill},
 		{"operator", "apply", "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", cmdOperator},
 		{"logs", "read", "journald for every unit of a service, secrets redacted (--since 1h)", cmdLogs},
-		{"rollback", "apply", "revert the last (or a given) state commit and apply", cmdRollback},
+		{"rollback", "apply", "revert the last (or a given) state commit and apply", inbox.Rollback},
 		{"backup", "propose", "restic snapshot of state, journal and declared data paths", backup.Cmd},
 		{"restore", "apply", "<snapshot|latest> [service] restore declared paths, then apply", backup.Restore},
 		{"converge", "apply", "bring the box back to the state: re-apply drift, restart inactive units, within a budget", cmdConverge},
 		{"journal", "read", "show journal entries (--since 24h)", cmdJournal},
 		{"context", "read", "starter bundle for an agent session", cmdContext},
 		{"template", "read", "lint <dir> | list | sync | update <service>", cmdTemplate},
-		{"add", "apply", "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", cmdAdd},
+		{"add", "apply", "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", inbox.Add},
 		{"remove", "apply", "<service>: stop its units, take it out of the state, apply; data stays (humans only)", cmdRemove},
-		{"inbox", "read", "open proposals (--all for decided ones too)", cmdInbox},
-		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", cmdPropose},
-		{"approve", "apply", "merge a proposal and apply it (never your own)", cmdApprove},
-		{"reject", "apply", "drop a proposal", cmdReject},
+		{"inbox", "read", "open proposals (--all for decided ones too)", inbox.List},
+		{"propose", "propose", "commit the working tree to a proposal branch and an inbox entry", inbox.Propose},
+		{"approve", "apply", "merge a proposal and apply it (never your own)", inbox.Approve},
+		{"reject", "apply", "drop a proposal", inbox.Reject},
 		{"adopt", "propose", "adopt an unmanaged Quadlet folder into services/", cmdAdopt},
 		{"ignore", "propose", "record an unmanaged unit as deliberately unmanaged", cmdIgnore},
 		{"token", "apply", "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", cmdToken},

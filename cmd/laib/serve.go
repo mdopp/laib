@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
@@ -210,9 +211,9 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		webEnv := &cliEnv{Paths: env.Paths, Actor: actor}
 		var code int
 		if r.PathValue("decision") == "rollback" {
-			code = cmdRollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
+			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
 		} else {
-			code = decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+			code = inbox.Decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
 		}
 		if code != cli.ExitOK && code != cli.ExitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
