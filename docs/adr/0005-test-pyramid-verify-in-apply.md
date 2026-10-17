@@ -33,9 +33,12 @@ The owner raised the cap by 1,000 lines to 16,000 so the Joshua easter egg
 (#119) fits into Laib beside the Bote. It is a raise, not a removal: the
 slimming pass (#112) stays open, and the next feature still has to fit.
 
-## Amendment 2026-10-17 (#309, proposed): structure the kernel, then an honest cap
+## Amendment 2026-10-17 (#309): structure the kernel, then an honest cap
 
-**Status: proposed.** The owner reviews this plan before code moves.
+**Status: accepted, 2026-10-17.** The owner decided on the plan (#315):
+the cap is **15,000** with the warning at 95 % (14,250); the lease stays in
+the kernel; each program outside it gets its own budget; the relay stays in
+the trust kernel.
 
 The owner, on #309: "not only a diet — structure the code cleanly, then set
 an honest cap." The kernel stood at 15,936 of 16,000. The cap is still the
@@ -76,33 +79,35 @@ Assistant's integration checklist), `bote.go` plus its `serve` route (~70,
 the Signal link QR) and `wakeword.go` plus the `stimme` lines in `verbs`
 and `diag` (~50). A template should bring these itself.
 
-**Programs that are not the kernel** (3,870 lines, 24 % of the count):
+**Programs in the kernel's count** (3,870 lines, 24 % of it); all but the lease move out:
 
 | Program | Lines | Runs |
 |---|---:|---|
 | `cmd/laib-stick` + `internal/stick` | 1,468 | on the laptop; builds the install stick |
-| `cmd/laib-lease` + `internal/lease` | 908 | the llama template's sidecar: policy proxy and GPU lease (ADR 0011) |
+| `cmd/laib-lease` + `internal/lease` | 908 | the llama template's sidecar: policy proxy and GPU lease (ADR 0011); **stays** (owner, 2026-10-17): it pauses services and journals like a hand of the kernel |
 | `cmd/persona` + `internal/persona` | 701 | the Bote's persona engine (ADR 0020), an image in the bote pod; the reason for the 16k raise above |
 | `cmd/automat` + `internal/automat` | 421 | the Bote's HA-automation MCP tool, an image |
 | `cmd/frage` + `internal/frage` | 261 | the "was ist …" tool (ADR 0015), an image |
 | `internal/mcpserver` | 111 | the small MCP server that only persona, automat and frage use (the kernel has its own) |
 
 Each of these is already its own binary with its own Containerfile or
-release asset. None of them is part of the trust kernel. They sit in the
+release asset. None of them is part of the trust kernel. The five that move
+sit in the
 kernel's tree and count because `cmd/` and `internal/` were the only place
 for Go code before `operator/` existed.
 
 ### Target layout
 
 1. **Programs move out, as the Operator did (#268, ADR 0023 §1).** Each gets
-   its own top-level tree with its package and `cmd/`: `stick/`, `lease/`,
+   its own top-level tree with its package and `cmd/`: `stick/`,
    `persona/`, `automat/`, `frage/` (the last three already hold the
    Containerfiles), and `mcpserver/` as their shared library. Each program
    gets its own budget line in `scripts/loc.sh`: today's size plus about a
-   quarter, rounded (stick 1,800 · lease 1,200 · persona 900 · automat 600 ·
-   frage 400 · mcpserver 200). Each budget keeps the rule that tests are at
-   most equal to production. `relay` stays in the kernel because it is
-   invariant §2e.
+   quarter, rounded (stick 1,800 · persona 900 · automat 600 · frage 400 ·
+   mcpserver 200). Each budget keeps the rule that tests are at most equal
+   to production. `relay` stays in the kernel because it is invariant §2e;
+   `lease` stays because it writes the kernel's pause markers and journal
+   (`internal/lease`, `cmd/laib-lease` unchanged).
 2. **`cmd/laib` becomes thin.** It keeps `main`, the verb table, `cliEnv` and
    argument glue, about 400 lines. The verbs move into packages with one
    responsibility each:
@@ -129,26 +134,18 @@ for Go code before `operator/` existed.
    `mcpserver/`. Inside the kernel, no trust-kernel package imports a
    box-chore package, and only `cmd/laib` wires the two together.
 
-Two couplings need more than a move:
+One coupling needs more than a move:
 
-- **lease** reads the state repo, writes the kernel's pause markers and
-  appends to the journal directly. The proposal: the kernel renders the
-  role → service → units map the lease needs into the lease's folder.
-  Pause markers and journal lines become a file contract documented in
-  `docs/STATE.md`, and the lease gets its own writer for it (about 30
-  lines). Behaviour stays the same. A separate issue covers the fact that
-  the lease stops units outside the one lock.
 - **persona** imports `state.Persona`. It will read the persona package
   that the kernel already renders (`persona/<name>/persona.json`) with its
   own decoder, and embed the `joshua` fallback itself.
 
-### Order of the PRs (after the owner's yes)
+### Order of the PRs
 
 1. Pure moves with no behaviour change, golden/e2e/vm-install green: stick,
    then frage + automat + mcpserver. Each PR also updates its Containerfile,
    workflow path filters and its `loc.sh` budget.
-2. Extractions: persona (its own decoder), then lease (rendered unit map,
-   file contract).
+2. Extraction: persona (its own decoder).
 3. Split `cmd/laib` into the packages above. The first PRs only move code,
    and the boundary check comes in the same PR as the package it guards.
 4. Template checks: the `check` hook, then HA, Stimme and the Bote route move
@@ -159,21 +156,22 @@ Two couplings need more than a move:
    lists the box-chore packages and their sizes as the first candidates.
    CLAUDE.md rule 3 is rewritten to match.
 
-### The honest cap: 14,000
+### The honest cap: 15,000 (owner, 2026-10-17)
 
 - **What the restructured kernel needs:** trust kernel ~9,650 + box chores
-  ~2,240 + the check runner ~50 ≈ 11,950, plus about 300 for the split
-  itself (package docs, exported names, the env passed in), so **~12,250**.
-- **Headroom: ~1,750, about 14 %.** It is enough for the open trust-kernel
+  ~2,240 + the lease ~910 + the check runner ~50 ≈ 12,850, plus about 300
+  for the split itself (package docs, exported names, the env passed in),
+  so **~13,150**.
+- **Headroom: ~1,850, about 14 %.** It is enough for the open trust-kernel
   and box-chore work at the recent pace (the kernel without the programs
   grew ~1,900 lines from 10-13 to 10-17, mostly the skill registry and
-  typed MCP). It is too little to absorb another program. The 95 % warning
-  comes at 13,300, roughly a month's normal growth after the build-out,
-  and it opens the diet issue before the cap bites.
-- **Why not keep 16,000:** after the moves it would leave 3,750 lines (30 %)
-  of slack. Nobody would ask what belongs in the kernel for months, and that
-  is the failure #309 describes.
-- **Why not tighter (13,000):** it would be met the way 16,000 was, by
+  typed MCP), and too little to absorb another program. The 95 % warning
+  comes at 14,250 and opens the "Kern-Diät" issue before the cap bites.
+- **Why not keep 16,000:** after the moves it would leave about 2,850 lines
+  (18 %) of slack beyond that. Nobody would ask what belongs in the kernel
+  for months, and that is the failure #309 describes.
+- **Why not tighter (14,000, the plan's first number):** with the lease
+  staying it would leave 850 lines; it would be met the way 16,000 was, by
   squeezing, which is a review finding (#309).
 - Crossing the cap means raising it in the same PR, with its one-line reason
   in `loc.sh` and the owner's approval (#309).
@@ -185,7 +183,7 @@ Two couplings need more than a move:
   template's quirks live in the template, so a new template no longer means
   a kernel PR.
 - **The family's comfort is not worse.** Every move is behaviour-neutral, the
-  HA checklist and the QR stay where the admin sees them, and the lease and
-  persona keep their wire behaviour.
-- **What it costs:** about 300 lines for the package split, and six small
-  budget lines in `loc.sh` instead of one big one.
+  HA checklist and the QR stay where the admin sees them, and persona keeps
+  its wire behaviour.
+- **What it costs:** about 300 lines for the package split, and five small
+  budget lines in `loc.sh` beside the kernel's and the Operator's.
