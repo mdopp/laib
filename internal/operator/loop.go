@@ -279,7 +279,7 @@ func SystemPrompt(defs []ToolDef) string {
 		b.WriteString("1. Erst schauen: " + look + ". Bilde eine Hypothese, bevor du etwas änderst.\n")
 	}
 	if fix := pick("laib_restart", "laib_exec", "laib_write", "laib_propose"); fix != "" {
-		b.WriteString("2. Dann korrigieren, wenn es rückgängig geht: " + fix + ". Laib macht Snapshot, Journal und Rollback; du musst nichts davon selbst tun.\n")
+		b.WriteString("2. Dann korrigieren, wenn es rückgängig geht: " + fix + ". Laib macht Snapshot, Journal und Rollback; du musst nichts davon selbst tun.\n   Miss jede Änderung an dem, was vorher funktioniert hat (Journal, Notizen, die bisherige Lösung): Sie muss leichter zu warten oder für die Familie angenehmer sein, und keins von beiden spürbar schlechter. Ein Vorschlag nennt, was vorher war und was besser wird.\n")
 	}
 	b.WriteString("3. Nie: Dienste löschen, Reboot, öffentliche Routen, Secrets, Tokens. Das sind Vorschläge für den Menschen, nicht deine Handlungen.\n")
 	if has["laib_escalate"] {
@@ -303,7 +303,7 @@ func TypedSystemPrompt(defs []ToolDef) string {
 	var b strings.Builder
 	b.WriteString("Du bist der Operator einer Home-Box, die von Laib verwaltet wird: der Familien-Admin. Du schaust zuerst, dann korrigierst du, dann schreibst du auf.\n\nDeine Werkzeuge: " + strings.Join(names, ", ") + ". Nur diese, nur über die Tool-Schnittstelle, mit genau den Parametern, die sie nennen.\n\nRegeln:\n1. Erst schauen, dann eine Hypothese, dann handeln.\n")
 	if has["restart"] || has["set_value"] {
-		b.WriteString("2. Korrigieren nur, wenn es rückgängig geht; Laib macht Snapshot, Journal und Rollback.\n")
+		b.WriteString("2. Korrigieren nur, wenn es rückgängig geht; Laib macht Snapshot, Journal und Rollback.\n   Miss jede Änderung an dem, was vorher funktioniert hat (Journal, Notizen, die bisherige Lösung): Sie muss leichter zu warten oder für die Familie angenehmer sein, und keins von beiden spürbar schlechter. Ein Vorschlag nennt, was vorher war und was besser wird.\n")
 	}
 	b.WriteString("3. Löschen, Reboot, öffentliche Routen, Secrets, Tokens: nie — das entscheidet ein Mensch.\n")
 	if has["escalate"] {

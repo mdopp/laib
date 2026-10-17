@@ -13,7 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
     && mkdir -p /run/sshd /workspace \
-    && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace
+    && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace \
+    && rm -f /etc/ssh/ssh_host_*
+# The home is a data path (#241). The image's /home/dev is the seed for an
+# empty one; sshd's host keys are made on the first start in /etc/ssh/keys,
+# never baked in: every box pulls this image, a key in it is everybody's.
+# Package caches go to ~/.cache, a data path that is not backed up.
+ENV NPM_CONFIG_CACHE=/home/dev/.cache/npm GOMODCACHE=/home/dev/.cache/go/mod GOCACHE=/home/dev/.cache/go/build PIP_CACHE_DIR=/home/dev/.cache/pip
+RUN printf 'export NPM_CONFIG_CACHE=%s GOMODCACHE=%s GOCACHE=%s PIP_CACHE_DIR=%s\n' "$NPM_CONFIG_CACHE" "$GOMODCACHE" "$GOCACHE" "$PIP_CACHE_DIR" > /etc/profile.d/werkstatt-cache.sh \
+    && mkdir -p /opt/werkstatt /etc/ssh/keys && cp -a /home/dev /opt/werkstatt/home-seed
 # podlet turns an upstream compose file into Quadlet units (docs/DESIGN.md "When there is no template")
 ARG PODLET_VERSION=v0.3.0
 RUN curl -fsSL "https://github.com/containers/podlet/releases/download/${PODLET_VERSION}/podlet-x86_64-unknown-linux-gnu.tar.xz" \

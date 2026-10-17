@@ -78,3 +78,20 @@ The deSEC delegation (2026-10-11) stays the fallback, as does a DNS provider
 with an API (INWX), which would also allow a wildcard certificate. When the
 Kraftwerk itself runs Laib, it does HTTP-01 on its own port 80 and this
 forwarding disappears.
+
+## Amendment 2026-10-16 (#249): Authelia's rules are one rendered list
+
+Point 4 kept ServiceBay's two own rules (apex deny, wildcard `one_factor` for
+`family` and `admins`) in the auth hook's `configuration.yml`, next to laib's
+rendered `laib-access.yml`. Authelia's own `check-policy` shows the two lists
+are not joined: the later file's `rules` replace the earlier one's. The
+wildcard was already gone on the box, and with the files in the other order
+it alone would have decided, opening every admin host to the family at one
+factor (ServiceBay's #878 shape).
+
+So `laib-access.yml` is the whole of `access_control`: `default_policy: deny`
+(the apex deny), and one rule per route whose subject is the route's group
+plus `admins`, or `family` and `admins` where the route names none (the
+wildcard's audience, now per host). The hook's config has no access rules.
+A CI job judges the rendered rules with Authelia's binary from the pinned
+image, in both file orders.

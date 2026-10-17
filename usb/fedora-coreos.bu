@@ -66,6 +66,36 @@ storage:
         inline: |
           # rootless Caddy binds 80/443 and AdGuard 53 (ServiceBay set this too)
           net.ipv4.ip_unprivileged_port_start=0
+    # journald on chosen limits, not the distro's (#257). Persistent: the boot
+    # before a crash is the one to read. 4G and four weeks, whichever comes
+    # first: four weeks is enough to see "since when" for anything a family
+    # member reports; 4G holds that at up to ~145 MB a day of the services'
+    # own output (laib's journal is its own file on /mnt/data, not journald)
+    # and is a small share of the OS disk (the NUC's is 256G; journald still
+    # keeps SystemKeepFree, 15 % of a small disk, free). A noisier box loses
+    # days, not disk. Weekly files, so the age limit drops a week at a time
+    # instead of the default whole month.
+    - path: /etc/systemd/journald.conf.d/50-laib.conf
+      mode: 0644
+      contents:
+        inline: |
+          [Journal]
+          Storage=persistent
+          SystemMaxUse=4G
+          MaxRetentionSec=4week
+          MaxFileSec=1week
+    # podman's log driver pinned to journald (#257): a container's output is
+    # then in the journal under its unit (laib logs) and podman logs reads it
+    # too. Quadlet passes no --log-driver unless a unit says LogDriver=, so
+    # this is what every unit gets, whatever the distro default becomes.
+    - path: /var/home/core/.config/containers/containers.conf
+      mode: 0644
+      user: {name: core}
+      group: {name: core}
+      contents:
+        inline: |
+          [containers]
+          log_driver = "journald"
     - path: /etc/udev/rules.d/99-zwave.rules
       mode: 0644
       contents:

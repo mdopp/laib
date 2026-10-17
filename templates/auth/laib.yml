@@ -2,11 +2,11 @@ name: auth
 template: {registry: builtin, name: auth, version: 1}
 provides: [sso, identity]
 # Authelia (forward-auth, OIDC) and LLDAP (users, groups) in one pod. Laib
-# renders the per-route rules and the OIDC clients as fragments
-# (render/authelia/*.yml); the hook writes Authelia's own configuration.yml,
-# generates the OIDC signing key once, and seeds LLDAP (groups admins and
-# family, the operator's account). Authelia's apex-deny and the wildcard
-# one_factor rule (ServiceBay ADR 0005/0006) live in the hook's config.
+# renders all of Authelia's access rules and the OIDC clients as fragments
+# (render/authelia/*.yml); the hook writes Authelia's own configuration.yml
+# (no access rules: a later file's list replaces it, #249), generates the
+# OIDC signing key once, and seeds LLDAP (groups admins and family, the
+# operator's account).
 routes:
   - host: auth
     port: 9091

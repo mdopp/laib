@@ -1,6 +1,7 @@
 # Rendered by laib. Do not edit; change services/*/laib.yml and run laib apply.
 {
 	email admin@example.home
+	order request_header first
 	acme_dns cloudflare {env.LAIB_DNS_TOKEN}
 }
 
@@ -12,6 +13,7 @@
 }
 
 laib.example.home {
+	request_header -Remote-*
 	@lan remote_ip private_ranges
 	handle @lan {
 		import authelia
@@ -23,10 +25,12 @@ laib.example.home {
 }
 
 auth.example.home {
+	request_header -Remote-*
 	reverse_proxy 127.0.0.1:9091
 }
 
 ldap.example.home {
+	request_header -Remote-*
 	@lan remote_ip private_ranges
 	handle @lan {
 		reverse_proxy 127.0.0.1:17170
@@ -35,6 +39,7 @@ ldap.example.home {
 }
 
 whoami.example.home {
+	request_header -Remote-*
 	@lan remote_ip private_ranges
 	handle @lan {
 		import authelia
