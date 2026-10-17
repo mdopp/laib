@@ -10,6 +10,19 @@ MQTT for mosquitto, and Frage as the conversation agent fallback. The
 hass-oidc-auth custom component for Authelia login is optional and not
 part of the template.
 
+## Z-Wave JS and Matter stay off the LAN (#231)
+
+Z-Wave JS's server websocket (3000; 3001 on a box migrated from
+ServiceBay) and the Matter server's (5580) have no login: whoever reaches
+them includes and excludes nodes, reads the network keys and opens locks.
+They are declared `lan: false`, so `laib.nft` drops them on the wired and
+wireless interfaces; Z-Wave JS UI itself listens on loopback
+(`HOST=127.0.0.1`), Caddy serves it as `zwave.<domain>` behind Authelia.
+Home Assistant is on the host network too and reaches the servers on
+loopback, which the drop does not touch: the Z-Wave JS integration's URL
+is `ws://localhost:3000` (or `:3001`), the Matter one's
+`ws://localhost:5580/ws`.
+
 ## Messages to people (#177, ADR 0022 §3)
 
 The post-deploy hook writes `packages/laib_mitteilung.yaml` with

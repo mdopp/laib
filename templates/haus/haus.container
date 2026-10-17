@@ -61,8 +61,11 @@ Environment=HAUS_PERSONA=${PERSONA}
 Environment=PERSONA_REV=${PERSONA_REV}
 Volume=/mnt/data/laib/render/persona:/persona:ro,z
 Volume=${DATA_DIR}/haus:/data:Z
-Volume=${DATA_DIR}/file-share/data/notes:/notes:z
-Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload:z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/file-share/data/notes:/notes
+Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload
 Volume=${DATA_DIR}/haus-dokumente:/dokumente:z
 AutoUpdate=registry
 

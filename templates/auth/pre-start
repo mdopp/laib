@@ -28,7 +28,7 @@ indented = "\n".join("          " + line for line in key.splitlines())
 # 2. configuration.yml (secrets arrive as LAIB_SECRET_*; nothing is logged)
 S = lambda n: E["LAIB_SECRET_" + n]
 conf = f"""---
-# rendered by laib pre-start (templates/auth); route rules and OIDC clients come from /laib/*.yml
+# rendered by laib pre-start (templates/auth); access rules and OIDC clients come from /laib/*.yml
 theme: dark
 server:
   address: 'tcp://0.0.0.0:9091'
@@ -68,17 +68,10 @@ storage:
 notifier:
   filesystem:
     filename: '/data/notification.txt'
-access_control:
-  default_policy: deny          # the bare apex and anything unlisted are denied (ServiceBay ADR 0006)
-  rules:
-    - domain: 'auth.{DOMAIN}'
-      policy: bypass
-    # per-route rules from laib come from /laib/laib-access.yml (X_AUTHELIA_CONFIG merges lists)
-    - domain: '*.{DOMAIN}'
-      policy: one_factor
-      subject:
-        - 'group:family'
-        - 'group:admins'
+# access_control: all of it in /laib/laib-access.yml, rendered by laib (#249).
+# No rule here: Authelia replaces a list from an earlier file with the later
+# file's instead of joining them, so a rule here would be dropped or, with the
+# files in another order, decide alone (a wildcard would open the admin hosts).
 """
 # OIDC only once a client exists: Authelia refuses an oidc block without
 # clients (VM run 38161974424). laib renders the clients into /laib/laib-clients.yml
