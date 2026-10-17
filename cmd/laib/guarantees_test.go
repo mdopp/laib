@@ -8,6 +8,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -20,7 +21,7 @@ func TestReadinessCarriesTheLastBackupAndTheLastChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _ := collectStatus(context.Background(), env, st)
+	r, _ := pages.CollectStatus(context.Background(), env, st)
 	if r.LastBackup.OK || r.LastBackup.At != "" {
 		t.Fatalf("no backup yet must say so: %+v", r.LastBackup)
 	}
@@ -32,7 +33,7 @@ func TestReadinessCarriesTheLastBackupAndTheLastChange(t *testing.T) {
 	inbox := cli.InboxDir(env)
 	os.MkdirAll(inbox, 0o755)
 	os.WriteFile(inbox+"/4.json", []byte(`{"id":4,"actor":"ops","reason":"Dokumente scannen","branch":"proposal/4","tier":"apply","status":"approved","created":"2026-10-11T10:00:00Z","decided":"2026-10-11T18:40:00Z","decidedBy":"human:core","files":["services/paperless/laib.yml"],"class":"new-service","kind":"new-service","adds":["paperless"],"facts":["paperless ist unter paperless.box.test nur im Heimnetz erreichbar"]}`), 0o644)
-	r, _ = collectStatus(context.Background(), env, st)
+	r, _ = pages.CollectStatus(context.Background(), env, st)
 	if !r.LastBackup.OK || r.LastBackup.Repos != 1 || r.LastBackup.At == "" {
 		t.Fatalf("last backup: %+v", r.LastBackup)
 	}

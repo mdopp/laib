@@ -1,4 +1,4 @@
-package main
+package pages
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
@@ -21,10 +22,10 @@ import (
 	"github.com/mdopp/laib/internal/secrets"
 )
 
-// cmdServe is the daemon: /ready for Solaris and the pages, and the three
+// Serve is the daemon: /ready for Solaris and the pages, and the three
 // pages (Status, Inbox, Journal) as plain server-rendered HTML. Caddy and
 // Authelia sit in front of it; the listener is loopback only.
-func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
+func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	addr := "127.0.0.1:5900"
 	if st, err := cli.LoadState(env); err == nil {
 		addr = fmt.Sprintf("%s:%d", st.Box.Laib.Listen, st.Box.Laib.Port)
@@ -56,7 +57,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	// boot-time convergence of the non-file state (#37): the ruleset
-	if loaded, err := ensureFirewall(ctx, env); err != nil {
+	if loaded, err := apply.EnsureFirewall(ctx, env.Paths); err != nil {
 		fmt.Fprintln(env.Errw(), "laib serve: firewall:", err)
 	} else if loaded {
 		if st, err := cli.LoadState(env); err == nil {
@@ -73,7 +74,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			json.NewEncoder(w).Encode(map[string]string{"state": "eingeschränkt", "lock": "state: " + err.Error()})
 			return
 		}
-		rd, _ := collectStatus(r.Context(), env, st)
+		rd, _ := CollectStatus(r.Context(), env, st)
 		json.NewEncoder(w).Encode(rd)
 	})
 	mux.HandleFunc("/", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +87,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 			page(w, "Status", "<p class=rot>State nicht lesbar: "+html.EscapeString(err.Error())+"</p>")
 			return
 		}
-		rd, rows := collectStatus(r.Context(), env, st)
+		rd, rows := CollectStatus(r.Context(), env, st)
 		var b strings.Builder
 		fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste · Operator %s · zuletzt gehört %s</h1>", rd.State, rd.Services, html.EscapeString(rd.Operator), rd.LastHeard[11:19])
 		if rd.Lock != "" {
@@ -106,11 +107,11 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if e, ok := journal.Last(env.Paths.Journal); ok {
 			fmt.Fprintf(&b, "<p>Letzte Änderung %s · %s · %s %s · %s</p>", e.T.Local().Format("02.01. 15:04"), html.EscapeString(e.Actor), e.Verb, html.EscapeString(e.Service), html.EscapeString(e.Reason))
 		}
-		if day, text := lastReport(env); day != "" {
+		if day, text := LastReport(env); day != "" {
 			fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(day), html.EscapeString(text))
 		}
 		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a>`)
-		if boteSignalBase(st) != "" {
+		if BoteSignalBase(st) != "" {
 			b.WriteString(` · <a href="/bote/link">Bote verbinden (QR)</a>`)
 		}
 		b.WriteString(`</p>`)
@@ -122,11 +123,11 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	}))
 	mux.HandleFunc("/bote/link.png", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
-		if err != nil || boteSignalBase(st) == "" {
+		if err != nil || BoteSignalBase(st) == "" {
 			http.Error(w, "kein Bote auf dieser Box", http.StatusNotFound)
 			return
 		}
-		png, err := signalLinkQR(r.Context(), boteSignalBase(st), "Bote")
+		png, err := SignalLinkQR(r.Context(), BoteSignalBase(st), "Bote")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -209,7 +210,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		if actor == "human:" {
 			actor = "human:web"
 		}
-		webEnv := &cliEnv{Paths: env.Paths, Actor: actor}
+		webEnv := &cli.Env{Paths: env.Paths, Actor: actor}
 		var code int
 		if r.PathValue("decision") == "rollback" {
 			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
@@ -252,10 +253,10 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 	}()
 	// Boot comparison (#9): bereit only once units and files match the state.
 	if st, err := cli.LoadState(env); err == nil {
-		r, _ := collectStatus(ctx, env, st)
+		r, _ := CollectStatus(ctx, env, st)
 		if r.Red > 0 || r.Drift > 0 {
-			bootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
-			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: bootUnclean})
+			BootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: BootUnclean})
 		} else {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
 		}

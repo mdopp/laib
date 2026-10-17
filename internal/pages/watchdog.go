@@ -1,4 +1,4 @@
-package main
+package pages
 
 import (
 	"context"
@@ -22,17 +22,17 @@ import (
 // minutes of silence into a push to the admin's phone. A red box stays
 // silent on purpose.
 
-var watchdogInterval = 5 * time.Minute
+var WatchdogInterval = 5 * time.Minute
 
-func watchdogStamp(env *cliEnv) string { return filepath.Join(env.Paths.Home, "watchdog.last") }
+func watchdogStamp(env *cli.Env) string { return filepath.Join(env.Paths.Home, "watchdog.last") }
 
-// watchdogPing pings once; false when nothing was sent (no URL, red, or an error).
-func watchdogPing(ctx context.Context, env *cliEnv, st *state.State) bool {
+// WatchdogPing pings once; false when nothing was sent (no URL, red, or an error).
+func WatchdogPing(ctx context.Context, env *cli.Env, st *state.State) bool {
 	url := st.Box.Watchdog.URL
 	if url == "" {
 		return false
 	}
-	r, _ := collectStatus(ctx, env, st)
+	r, _ := CollectStatus(ctx, env, st)
 	if r.Red > 0 || r.State == "eingeschränkt" {
 		return false
 	}
@@ -53,7 +53,7 @@ func watchdogPing(ctx context.Context, env *cliEnv, st *state.State) bool {
 }
 
 // watchdogState for readiness: "kein Wächter" | "zuletzt gemeldet 12:05" | "noch nie gemeldet".
-func watchdogState(env *cliEnv, st *state.State) string {
+func watchdogState(env *cli.Env, st *state.State) string {
 	if st.Box.Watchdog.URL == "" {
 		return "kein Wächter"
 	}
@@ -69,12 +69,12 @@ func watchdogState(env *cliEnv, st *state.State) string {
 }
 
 // watchdogLoop runs in serve until ctx ends.
-func watchdogLoop(ctx context.Context, env *cliEnv) {
-	t := time.NewTicker(watchdogInterval)
+func watchdogLoop(ctx context.Context, env *cli.Env) {
+	t := time.NewTicker(WatchdogInterval)
 	defer t.Stop()
 	for {
 		if st, err := cli.LoadState(env); err == nil {
-			watchdogPing(ctx, env, st)
+			WatchdogPing(ctx, env, st)
 		}
 		select {
 		case <-ctx.Done():
@@ -84,10 +84,10 @@ func watchdogLoop(ctx context.Context, env *cliEnv) {
 	}
 }
 
-// cmdFamilyCard prints the paper card (#57): one HTML page in German for
+// FamilyCard prints the paper card (#57): one HTML page in German for
 // the family — what the box does, what to look at, what to do when it
 // does not work, whom to call. Printed once with the recovery sheet.
-func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
+func FamilyCard(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)

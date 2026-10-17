@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -65,15 +66,15 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 			t.Errorf("converge restarted %s for an idle oneshot", u)
 		}
 	}
-	tick := func() serviceStatus {
-		_, rows := collectStatus(ctx, c.env, st)
+	tick := func() pages.ServiceStatus {
+		_, rows := pages.CollectStatus(ctx, c.env, st)
 		for _, row := range rows {
 			if row.Name == "tick" {
 				return row
 			}
 		}
 		t.Fatal("no status row for tick")
-		return serviceStatus{}
+		return pages.ServiceStatus{}
 	}
 	if row := tick(); row.State != "grün" {
 		t.Errorf("an idle oneshot turned the service %s: %+v", row.State, row)

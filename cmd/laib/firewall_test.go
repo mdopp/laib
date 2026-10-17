@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -52,17 +54,17 @@ func fwBox(t *testing.T, rendered bool, loaded bool) (*cliEnv, *state.State, *[]
 // across a reboot: readiness must look at the kernel, not at the file (#37).
 func TestReadinessIsRestrictedWhenTheFirewallTableIsMissing(t *testing.T) {
 	env, st, _ := fwBox(t, true, false)
-	r, _ := collectStatus(context.Background(), env, st)
+	r, _ := pages.CollectStatus(context.Background(), env, st)
 	if r.State != "eingeschränkt" || !strings.Contains(r.Lock, "firewall") || r.Firewall != "fehlt" {
 		t.Fatalf("a rendered ruleset that is not in the kernel must restrict readiness: %+v", r)
 	}
 	env, st, _ = fwBox(t, true, true)
-	r, _ = collectStatus(context.Background(), env, st)
+	r, _ = pages.CollectStatus(context.Background(), env, st)
 	if r.State != "bereit" || r.Firewall != "geladen" {
 		t.Fatalf("loaded ruleset: %+v", r)
 	}
 	env, st, _ = fwBox(t, false, false)
-	r, _ = collectStatus(context.Background(), env, st)
+	r, _ = pages.CollectStatus(context.Background(), env, st)
 	if r.State != "bereit" || r.Firewall != "" {
 		t.Fatalf("no ruleset rendered, nothing to load: %+v", r)
 	}
@@ -75,7 +77,7 @@ func TestReadinessIsRestrictedWhenTheFirewallTableIsMissing(t *testing.T) {
 // converge load the rendered ruleset when the kernel has no table.
 func TestEnsureFirewallLoadsTheRulesetOnlyWhenMissing(t *testing.T) {
 	env, _, calls := fwBox(t, true, false)
-	loaded, err := ensureFirewall(context.Background(), env)
+	loaded, err := apply.EnsureFirewall(context.Background(), env.Paths)
 	if err != nil || !loaded {
 		t.Fatalf("loaded=%v err=%v", loaded, err)
 	}
@@ -83,7 +85,7 @@ func TestEnsureFirewallLoadsTheRulesetOnlyWhenMissing(t *testing.T) {
 		t.Fatalf("nft -f not run: %v", *calls)
 	}
 	env, _, calls = fwBox(t, true, true)
-	if loaded, _ := ensureFirewall(context.Background(), env); loaded {
+	if loaded, _ := apply.EnsureFirewall(context.Background(), env.Paths); loaded {
 		t.Fatal("the table is there: nothing to load")
 	}
 	for _, c := range *calls {
@@ -92,7 +94,7 @@ func TestEnsureFirewallLoadsTheRulesetOnlyWhenMissing(t *testing.T) {
 		}
 	}
 	env, _, calls = fwBox(t, false, false)
-	if loaded, err := ensureFirewall(context.Background(), env); loaded || err != nil {
+	if loaded, err := apply.EnsureFirewall(context.Background(), env.Paths); loaded || err != nil {
 		t.Fatalf("no ruleset rendered: loaded=%v err=%v", loaded, err)
 	}
 }

@@ -166,3 +166,6 @@ type Verb struct {
 	Help string
 	Run  func(ctx context.Context, env *Env, args []string) int
 }
+
+// Version is the binary's (initialize, /ready); cmd/laib sets it.
+var Version = "dev"
