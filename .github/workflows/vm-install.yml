@@ -615,7 +615,8 @@ jobs:
                 podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host photos.vm.test:127.0.0.1 \
                   -e OIDC_USER -e OIDC_PASSWORD -e OIDC_EMAIL -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
                   "${{ env.HOOKS }}" python3 /oidc-login.py immich https://photos.vm.test
-                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; exit 1; }
+                $L secret list | grep -qx IMMICH_API_KEY || { echo "the API key was not handed back into secrets.age"; $L secret list | tr "\n" " "; echo
+                  git -C /mnt/data/laib/state log --oneline -6; git -C /mnt/data/laib/state status --short; git -C /mnt/data/laib/state log --oneline -3 -- secrets.age; $L journal --since 15m | tail -15; exit 1; }   # #307
                 # the drift ServiceBay repaired in the database (#1556 there) cannot stay: a new client secret reaches
                 # Authelia and Immich in one apply, Immich through its post-deploy with the minted key
                 $L secret rotate OIDC_IMMICH_SECRET | tee /tmp/rotate-immich.txt
