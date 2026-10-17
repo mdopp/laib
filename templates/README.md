@@ -46,7 +46,7 @@ conversation agent) are set up by hand once; with the optional secret
 | werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |
 | bote | — | Hermes as stock with signal-cli: the agent you talk to; config rendered by the hook (ADR 0016) |
 | frage | — | "was ist …": SearXNG + model summary; /ask and an OpenAI-compatible endpoint for Assist and the Bote (ADR 0015) |
-| media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the admin and a phone user limited to Musik, registers libraries |
+| media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the local admin, registers libraries, logs the family in through LLDAP (read-only bind) with Quick Connect |
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
 | music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |
 | radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |

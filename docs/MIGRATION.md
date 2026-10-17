@@ -200,6 +200,14 @@ adguard, the Home Assistant config and the Z-Wave store, immich upload and
 pgdata, paperless, media, mosquitto, beets, esphome, llama) and is
 adopted in place.
 
+Jellyfin's LDAP login (#256) is adopted too: the plugin is installed on the
+box already; media's post-deploy rewrites its `LDAP-Auth.xml` to bind as the
+read-only `jellyfin` account (ServiceBay bound as the LLDAP admin), lets
+members of `family` and `admins` in, maps `admins` to administrators, and
+keeps the libraries ServiceBay's configuration gave new users. The users
+Jellyfin made from LDAP logins stay. `laib add media BASE_DN=…` comes with
+the box's base DN from the printed line.
+
 **Immich's external libraries (#263, the owner's decision on #229).**
 ServiceBay mounted all of `file-share/data` at `/mnt/photos`; the built-in
 mounts only `file-share/data/photos` there. The photos move into that

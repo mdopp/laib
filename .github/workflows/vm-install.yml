@@ -622,6 +622,69 @@ jobs:
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
                 echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
+      - name: media — a family member logs in to Jellyfin with the LLDAP account, through a read-only bind (#256)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, without the GPU (the NUC's); post-deploy is the built-in's
+          $SSH 'rm -rf /tmp/media && mkdir -p /tmp/media'
+          tar -C templates/media -cf - --exclude tests . | $SSH 'tar -C /tmp/media -xf -'
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                R=/mnt/data/laib/registries/vm/templates/media; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/media "$R"
+                sed -i -e "/^gpu: true/d" -e "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                sed -i "/^AddDevice=nvidia/d" "$R/media.container"
+                mkdir -p /mnt/data/stacks/jf-media/music
+                podman pull -q docker.io/jellyfin/jellyfin:latest >/dev/null; echo "jellyfin image pre-pulled"
+                $L add media MEDIA_ROOT=/mnt/data/stacks/jf-media BASE_DN=dc=vm,dc=test | tee /tmp/add-media.txt
+                grep -q "^ok  media post-deploy" /tmp/add-media.txt || { echo "media post-deploy is not green"; exit 1; }
+                grep -q "LDAP-Authentication plugin installed" /tmp/add-media.txt || { echo "the LDAP plugin was not installed"; exit 1; }
+                X=/mnt/data/stacks/media/jellyfin-config/plugins/configurations/LDAP-Auth.xml
+                podman unshare grep -q "<LdapBindUser>uid=jellyfin,ou=people,dc=vm,dc=test</LdapBindUser>" "$X" || { echo "the plugin does not bind read-only"; exit 1; }
+                C="MediaBrowser Client=\"vm\", Device=\"vm\", DeviceId=\"vm-256\", Version=\"1\""
+                jf() { curl -s -o /tmp/jf.json -w "%{http_code}" -H "Authorization: $C" -H "Content-Type: application/json" "$@"; }
+                code=$(jf -d "{\"Username\":\"core\",\"Pw\":\"vm-operator-pw-254\"}" http://127.0.0.1:8096/Users/AuthenticateByName)
+                echo "jellyfin login as core (LLDAP, admins): HTTP $code"
+                [ "$code" = 200 ] || { echo "a family member cannot log in with the LLDAP account"; podman logs --tail 60 systemd-media 2>&1 | grep -i ldap | tail -20; exit 1; }
+                grep -q "\"IsAdministrator\":true" /tmp/jf.json || { echo "a member of admins is no Jellyfin administrator"; exit 1; }
+                code=$(jf -d "{\"Username\":\"core\",\"Pw\":\"not-the-password\"}" http://127.0.0.1:8096/Users/AuthenticateByName)
+                echo "jellyfin login as core with a wrong password: HTTP $code"; [ "$code" = 401 ] || exit 1
+                [ "$(curl -s http://127.0.0.1:8096/QuickConnect/Enabled)" = true ] || { echo "Quick Connect is off"; exit 1; }
+                echo "quick connect on"
+                $L remove media >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
+                podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true
+                echo "media: the family logs in to Jellyfin with LLDAP"'
+      - name: audiobookshelf — a family member's OIDC login end to end, and after a rotation (#255)
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          # the shipped template from a registry on the box, Caddy's local CA trusted by Node (the NUC has a public cert)
+          $SSH 'rm -rf /tmp/abs && mkdir -p /tmp/abs'
+          tar -C templates/audiobookshelf -cf - --exclude tests . | $SSH 'tar -C /tmp/abs -xf -'
+          $SSH 'cat > /tmp/oidc-login.py' < scripts/oidc-login.py
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt
+                R=/mnt/data/laib/registries/vm/templates/audiobookshelf; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/abs "$R"
+                sed -i "s/^after: .*/after: [auth]/" "$R/laib.yml"
+                sed -i "s|^PublishPort=13378:80|PublishPort=13378:80\nEnvironment=NODE_EXTRA_CA_CERTS=/laib-ca.crt\nVolume=$root:/laib-ca.crt:ro,z|" "$R/audiobookshelf.container"
+                grep -q "^AddHost=auth.\${DOMAIN}:host-gateway" "$R/audiobookshelf.container" || { echo "ABS does not map auth to the host gateway"; exit 1; }
+                podman pull -q ghcr.io/advplyr/audiobookshelf:latest >/dev/null; echo "audiobookshelf image pre-pulled"
+                mkdir -p /mnt/data/stacks/abs-media/audiobooks /mnt/data/stacks/abs-media/podcasts
+                $L add audiobookshelf AUDIOBOOKS=/mnt/data/stacks/abs-media/audiobooks PODCASTS=/mnt/data/stacks/abs-media/podcasts | tee /tmp/add-abs.txt
+                grep -q "^ok  audiobookshelf post-deploy" /tmp/add-abs.txt || { echo "audiobookshelf post-deploy is not green"; exit 1; }
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/add-abs.txt || { echo "post-deploy did not set the family login"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                login() { podman run --rm --network host --add-host auth.vm.test:127.0.0.1 --add-host hoerbuecher.vm.test:127.0.0.1 \
+                  -e OIDC_USER=core -e OIDC_PASSWORD=vm-operator-pw-254 -e OIDC_CA=/ca.crt -v "$root:/ca.crt:ro,z" -v /tmp/oidc-login.py:/oidc-login.py:ro,z \
+                  "${{ env.HOOKS }}" python3 /oidc-login.py audiobookshelf https://hoerbuecher.vm.test; }
+                login
+                # the drift that retired ABS on ServiceBay: a new secret reaches Authelia and the client ABS caches, in one apply
+                $L secret rotate OIDC_AUDIOBOOKSHELF_SECRET | tee /tmp/rotate-abs.txt
+                grep -q "family login (OIDC via Authelia) set from Laib" /tmp/rotate-abs.txt || { echo "the rotation did not reach ABS"; exit 1; }
+                for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:9091/api/health && break; sleep 2; done
+                login
+                $L remove audiobookshelf >/dev/null
+                rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/audiobookshelf /mnt/data/stacks/abs-media
+                podman image rm -f ghcr.io/advplyr/audiobookshelf:latest >/dev/null || true
+                echo "audiobookshelf: a family member logged in through Authelia, before and after a rotation"'
       - name: backup and restore — restic in the day-one repo laib init wrote
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
