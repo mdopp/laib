@@ -502,15 +502,13 @@ func autheliaClients(st *state.State, secrets map[string]string) string {
 		if o == nil {
 			continue
 		}
-		fmt.Fprintf(&b, "      - client_id: %s\n        client_name: %s\n        client_secret: %q\n        redirect_uris:\n", o.ClientID, name, clientSecretHash(secrets, o.ClientID))
+		// one factor, as ServiceBay registered the family's clients (Authelia's default is two, #251)
+		fmt.Fprintf(&b, "      - client_id: %s\n        client_name: %s\n        client_secret: %q\n        authorization_policy: one_factor\n        token_endpoint_auth_method: %s\n        redirect_uris:\n",
+			o.ClientID, name, clientSecretHash(secrets, o.ClientID), cmp.Or(o.TokenEndpointAuthMethod, "client_secret_basic"))
 		for _, u := range o.RedirectURIs {
 			fmt.Fprintf(&b, "          - %s\n", strings.ReplaceAll(u, "${DOMAIN}", st.Box.Domain))
 		}
-		scopes := o.Scopes
-		if len(scopes) == 0 {
-			scopes = []string{"openid", "profile", "email", "groups"}
-		}
-		b.WriteString("        scopes: [" + strings.Join(scopes, ", ") + "]\n")
+		b.WriteString("        scopes: [" + cmp.Or(strings.Join(o.Scopes, ", "), "openid, profile, email, groups") + "]\n")
 	}
 	return b.String()
 }
