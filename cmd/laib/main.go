@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/converge"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/envelope"
@@ -55,10 +56,10 @@ func init() {
 		{Name: "rollback", Tier: "apply", Help: "revert the last (or a given) state commit and apply", Run: inbox.Rollback},
 		{Name: "backup", Tier: "propose", Help: "restic snapshot of state, journal and declared data paths", Run: backup.Cmd},
 		{Name: "restore", Tier: "apply", Help: "<snapshot|latest> [service] restore declared paths, then apply", Run: backup.Restore},
-		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: cmdConverge},
+		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: converge.Converge},
 		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h)", Run: cmdJournal},
 		{Name: "context", Tier: "read", Help: "starter bundle for an agent session", Run: cmdContext},
-		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: cmdTemplate},
+		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: registry.TemplateCmd},
 		{Name: "add", Tier: "apply", Help: "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", Run: inbox.Add},
 		{Name: "remove", Tier: "apply", Help: "<service>: stop its units, take it out of the state, apply; data stays (humans only)", Run: cmdRemove},
 		{Name: "inbox", Tier: "read", Help: "open proposals (--all for decided ones too)", Run: inbox.List},

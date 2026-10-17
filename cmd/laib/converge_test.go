@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/converge"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/run"
@@ -164,7 +165,7 @@ func TestConvergeSkipsWhenSomeoneHoldsTheLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := converge.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("a locked tick is skipped, not red: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 {
@@ -183,7 +184,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	if rc := cmdPause(context.Background(), c.env, []string{"whoami", "--until", "2h", "wartung"}); rc != cli.ExitOK {
 		t.Fatalf("pause rc %d", rc)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := converge.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	for _, u := range c.restarts() {
@@ -209,7 +210,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 		t.Fatalf("resume rc %d", rc)
 	}
 	c.calls = nil
-	cmdConverge(context.Background(), c.env, []string{"--force"})
+	converge.Converge(context.Background(), c.env, []string{"--force"})
 	if len(c.restarts()) == 0 {
 		t.Fatal("after resume converge restarts the inactive unit again")
 	}
@@ -223,14 +224,14 @@ func TestRestartOnlyConvergeRunsCountAgainstTheBudget(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		c.calls = nil
 		c.down["whoami.service"] = true // down again: a flapping unit
-		cmdConverge(context.Background(), c.env, []string{"--force"})
+		converge.Converge(context.Background(), c.env, []string{"--force"})
 		if len(c.restarts()) == 0 {
 			t.Fatalf("run %d did not restart", i+1)
 		}
 	}
 	c.calls = nil
 	c.down["whoami.service"] = true
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitRed {
+	if rc := converge.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitRed {
 		t.Fatalf("the fourth restart-only run must exhaust the budget: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 || !c.journalHas(t, "Budget erschöpft") {
@@ -246,7 +247,7 @@ func TestConvergeCompletesAKilledApply(t *testing.T) {
 	if err := apply.WritePending(c.env.Paths, []string{"whoami"}, "test: killed apply"); err != nil {
 		t.Fatal(err)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := converge.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	var hit bool
