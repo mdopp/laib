@@ -12,7 +12,7 @@ written down.
 | Construct | What it is | Repo | Runs as |
 |---|---|---|---|
 | **Laib** | the control plane: state repo, plan/apply/converge, proxy, SSO, DNS, model role, backup, journal, inbox, `/mcp` | `mdopp/laib` | one binary, user service |
-| **Operator** | the box's admin agent: watches, inspects, corrects inside the envelope, escalates, writes the morning report (ADR 0013) | `mdopp/laib` `cmd/laib-operator` | template `operator` |
+| **Operator** | the box's admin agent: watches, inspects, corrects inside the envelope, escalates, writes the morning report (ADR 0013) | `mdopp/laib` `operator/` | template `operator` |
 | **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house, box, questions, memory, approvals as you (ADR 0016) | Hermes, stock, configured by a template | template `bote` |
 | **Haus** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/haus` | template `haus` |
 | **Haus-Android** | the phone: TWA of Haus plus native widgets and the quick-settings tile | `mdopp/haus-android` | app |
