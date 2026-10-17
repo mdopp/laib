@@ -138,6 +138,14 @@ class Migrate(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("built-in", p.stderr)
 
+    def test_a_sealed_value_never_lands_on_the_add_line(self):
+        # #248: ServiceBay declares MQTT_USERNAME a secret; the add line carried
+        # it as `MQTT_USER=!secret MQTT_USERNAME`, two words on laib's argv
+        line = next((l for l in self.stdout.splitlines() if "laib add mosquitto" in l), "")
+        self.assertTrue(line, self.stdout)
+        self.assertNotIn("!secret", line)
+        self.assertRegex(self.stdout, r"mosquitto: MQTT_USER .*sealed.*MQTT_USERNAME")
+
     def test_add_line_carries_the_zwave_stick(self):
         # #248: the box's Z-Wave stick is a service-less value; the built-in's
         # default (/dev/ttyACM0) is another box's, and AddDevice= of a path

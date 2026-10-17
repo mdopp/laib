@@ -205,6 +205,9 @@ def main():
             add, pins = [], []
             for sb, key in VALUES.get(name, {}).items():
                 v = str(values.get(sb) or decl.get(sb, {}).get("default") or "")
+                if v.startswith("!secret "):   # sealed in ServiceBay's store: never a value this script reads (#248)
+                    unmapped.append(f"{name}: {key} is sealed in ServiceBay's store ({sb}); add {key}=<the box's value> to the laib add line (docs/MIGRATION.md)")
+                    continue
                 if sb == "LLDAP_BASE_DN" and not v:
                     v = ",".join("dc=" + p for p in domain.split("."))
                 if v and v != bvals.get(key):

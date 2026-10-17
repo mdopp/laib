@@ -41,8 +41,15 @@ laib_add() {
   echo "\$ $line $*"
   laib plan "$n" > /tmp/plan-$n.txt 2>&1 || true
   if grep -q KONFLIKT /tmp/plan-$n.txt; then echo "laib plan $n still reports KONFLIKT:"; cat /tmp/plan-$n.txt; return 1; fi
-  eval "$line $*"
+  local rc=0
+  eval "$line $*" || rc=$?
   laib status "$n"
+  if [ "$rc" != 0 ]; then   # what the apply's red verify cannot say: the containers' own words
+    for c in $(podman ps -a --format '{{.Names}}' | grep "^systemd-$n" || true) $(journalctl --user --no-pager -o export --since -15min 2>/dev/null | sed -n "s/^CONTAINER_NAME=\(systemd-$n.*\)/\1/p" | sort -u); do
+      echo "--- $c"; journalctl --user --no-pager -o cat CONTAINER_NAME="$c" | tail -30
+    done
+    return "$rc"
+  fi
 }
 
 move() { HOOKS_IMAGE="$HOOKS" scripts/move-servicebay-data.sh "$@"; }
