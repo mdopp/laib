@@ -6,6 +6,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -157,3 +158,11 @@ func Refused(env *Env, msg string) int {
 
 // InboxDir holds the proposals' inbox entries.
 func InboxDir(env *Env) string { return env.Paths.Home + "/inbox" }
+
+// Verb is one CLI command. tier is the policy tier it needs (docs/STATE.md).
+type Verb struct {
+	Name string
+	Tier string
+	Help string
+	Run  func(ctx context.Context, env *Env, args []string) int
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
@@ -63,7 +64,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/mcp", mcpHandler(env))
+	mux.HandleFunc("/mcp", mcp.Handler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		w.Header().Set("Content-Type", "application/json")

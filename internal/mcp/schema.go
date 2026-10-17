@@ -1,4 +1,4 @@
-package main
+package mcp
 
 import (
 	"fmt"
@@ -66,7 +66,7 @@ var (
 func mcpSchema(st *state.State, verb string) map[string]any {
 	params, ok := mcpParams[verb]
 	if !ok {
-		return inputSchema(verb)
+		return InputSchema(verb)
 	}
 	props := map[string]any{}
 	required := []string{}
@@ -95,10 +95,10 @@ func mcpSchema(st *state.State, verb string) map[string]any {
 	return map[string]any{"type": "object", "properties": props, "required": required}
 }
 
-// mcpArgv turns a call's arguments into the verb's argv and stdin. Typed
+// Argv turns a call's arguments into the verb's argv and stdin. Typed
 // arguments are checked against the schema first; anything outside it is
 // an error and the verb never runs.
-func mcpArgv(st *state.State, verb string, a map[string]any) ([]string, string, error) {
+func Argv(st *state.State, verb string, a map[string]any) ([]string, string, error) {
 	stdin, _ := a["stdin"].(string)
 	if p, _ := a["patch"].(string); p != "" {
 		stdin = p
@@ -110,7 +110,7 @@ func mcpArgv(st *state.State, verb string, a map[string]any) ([]string, string, 
 		if hasRaw && !ok {
 			return nil, "", fmt.Errorf("args muss ein String sein")
 		}
-		argv := splitArgs(s)
+		argv := SplitArgs(s)
 		if a["patch"] != nil {
 			argv = append([]string{"--patch"}, argv...)
 		}
