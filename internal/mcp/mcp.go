@@ -91,7 +91,7 @@ func Handler(env *cli.Env) http.HandlerFunc {
 			rpcReply(w, req.ID, map[string]any{
 				"protocolVersion": "2025-03-26",
 				"capabilities":    map[string]any{"tools": map[string]any{}},
-				"serverInfo":      map[string]any{"name": "laib", "version": Version},
+				"serverInfo":      map[string]any{"name": "laib", "version": cli.Version},
 				"instructions":    "Laib is the control plane of this box. Your hand is " + hand + " (ceiling " + st.Policy.Hands[hand].Ceiling + "). Run laib_context first. Changes below your ceiling become proposals a human approves.",
 			}, nil)
 		case "notifications/initialized", "ping":

@@ -19,6 +19,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -194,7 +195,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 		t.Fatal("the journal must say the service is paused")
 	}
 	st, _ := cli.LoadState(c.env)
-	r, rows := collectStatus(context.Background(), c.env, st)
+	r, rows := pages.CollectStatus(context.Background(), c.env, st)
 	var paused bool
 	for _, row := range rows {
 		if row.Name == "whoami" && row.State == "pausiert" {

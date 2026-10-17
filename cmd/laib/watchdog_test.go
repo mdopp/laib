@@ -13,6 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/pages"
 )
 
 // #57 (1): while readiness is not red, serve pings the outside watchdog;
@@ -29,25 +30,25 @@ func TestServePingsTheWatchdogWhileNotRed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !watchdogPing(context.Background(), c.env, st) {
+	if !pages.WatchdogPing(context.Background(), c.env, st) {
 		t.Fatal("a green box must ping")
 	}
 	if atomic.LoadInt32(&pings) != 1 {
 		t.Fatalf("pings: %d", pings)
 	}
-	r, _ := collectStatus(context.Background(), c.env, st)
+	r, _ := pages.CollectStatus(context.Background(), c.env, st)
 	if r.Watchdog == "" || !strings.Contains(r.Watchdog, "zuletzt gemeldet") {
 		t.Fatalf("readiness must show the last report: %+v", r)
 	}
 	c.down["whoami.service"] = true
-	if watchdogPing(context.Background(), c.env, st) {
+	if pages.WatchdogPing(context.Background(), c.env, st) {
 		t.Fatal("a red box must not ping: silence is the alarm")
 	}
 	if atomic.LoadInt32(&pings) != 1 {
 		t.Fatalf("pinged while red: %d", pings)
 	}
-	if watchdogInterval < 4*time.Minute || watchdogInterval > 6*time.Minute {
-		t.Fatalf("every five minutes: %v", watchdogInterval)
+	if pages.WatchdogInterval < 4*time.Minute || pages.WatchdogInterval > 6*time.Minute {
+		t.Fatalf("every five minutes: %v", pages.WatchdogInterval)
 	}
 }
 
@@ -73,7 +74,7 @@ func TestFamilyCardIsOnePageInGerman(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
 	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  contact: Martin, 0170 1234567\n")...), 0o644)
 	out := captureStdout(t, func() {
-		if rc := cmdFamilyCard(context.Background(), c.env, nil); rc != cli.ExitOK {
+		if rc := pages.FamilyCard(context.Background(), c.env, nil); rc != cli.ExitOK {
 			t.Errorf("rc %d", rc)
 		}
 	})

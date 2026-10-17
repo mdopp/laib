@@ -76,7 +76,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 			}
 		}
 	}
-	fw, fwErr := ensureFirewall(ctx, env)
+	fw, fwErr := apply.EnsureFirewall(ctx, env.Paths)
 	if fwErr != nil {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: "firewall: " + fwErr.Error()})
 		return cli.ExitRed

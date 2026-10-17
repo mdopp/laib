@@ -6,46 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/sysd"
 )
-
-// The firewall is the one piece of state that is not a file on disk: nft
-// loads the rendered ruleset into the kernel, and a reboot empties the
-// kernel while the file stays the same, so plan and converge saw no drift
-// and every lan: false port was open after the first reboot (#37).
-// Readiness asks the kernel; serve and converge load what is missing.
-
-func firewallFile(env *cliEnv) string {
-	return filepath.Join(env.Paths.Render, "nftables", "laib.nft")
-}
-
-// firewallState: "" (nothing rendered), "geladen", "fehlt".
-func firewallState(ctx context.Context, env *cliEnv) string {
-	if _, err := os.Stat(firewallFile(env)); err != nil {
-		return ""
-	}
-	if _, err := sysd.Run(ctx, "sudo", "nft", "list", "table", "inet", "laib"); err != nil {
-		return "fehlt"
-	}
-	return "geladen"
-}
-
-// ensureFirewall loads the rendered ruleset when the kernel has no table.
-// Returns whether it loaded something.
-func ensureFirewall(ctx context.Context, env *cliEnv) (bool, error) {
-	if firewallState(ctx, env) != "fehlt" {
-		return false, nil
-	}
-	if out, err := sysd.Run(ctx, "sudo", "nft", "-f", firewallFile(env)); err != nil {
-		return false, fmt.Errorf("nft -f: %s", strings.TrimSpace(out))
-	}
-	return true, nil
-}
 
 // binDir is where install-box.sh puts the binaries (and keeps *.prev).
 func binDir() string {

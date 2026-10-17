@@ -68,17 +68,6 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-// LastReport returns the newest morning report, if any.
-func lastReport(env *cliEnv) (string, string) {
-	files, _ := filepath.Glob(filepath.Join(env.Paths.Home, "reports", "*.md"))
-	if len(files) == 0 {
-		return "", ""
-	}
-	last := files[len(files)-1]
-	b, _ := os.ReadFile(last)
-	return strings.TrimSuffix(filepath.Base(last), ".md"), string(b)
-}
-
 // cmdOperator: `laib operator enable|disable|status`. enable mints the ops
 // token (humans only), stores it as OPERATOR_TOKEN in secrets.age, sets
 // box.yml operator.enabled and applies, which renders and starts the unit.
