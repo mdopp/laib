@@ -24,6 +24,9 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 	b, _ := os.ReadFile(p)
 	text := strings.Replace(strings.Replace(string(b), "values: auto", "values: proposal", 1), "  apply: {by: human}\n", "", 1)
 	os.WriteFile(p, []byte(text), 0o644)
+	w := filepath.Join(c.env.paths.State, "services", "whoami", "laib.yml")
+	b, _ = os.ReadFile(w)
+	os.WriteFile(w, []byte(strings.Replace(string(b), "data: []", "data:\n  - path: ${DATA_DIR}/whoami", 1)), 0o644)
 	proposal.CommitDirty(context.Background(), c.env.paths.State, "human:test")
 	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
 	sec[resticPassword] = "pw"

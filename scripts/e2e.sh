@@ -544,4 +544,7 @@ WID=$("$BIN" inbox --json | python3 -c 'import sys,json; ps=[p for p in json.loa
 LAIB_ACTOR=human:e2e "$BIN" approve "$WID" >/dev/null || fail "approving the wish"
 j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") for e in es), "the approved wish is not journaled"'
 
+# the Operator applies only its own proposal, inside the envelope (#286): a bare apply by ops is refused
+rc=0; LAIB_ACTOR=ops "$BIN" apply whoami >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "ops applied without a proposal (rc $rc)"
+
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

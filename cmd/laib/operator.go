@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,6 +140,10 @@ func envelope(ctx context.Context, env *cliEnv, st *state.State, svc *state.Serv
 		switch e.Verb {
 		case "exec", "write", "restart":
 			used++
+		case "apply": // the Operator's own applies (#286); a human's never count
+			if e.Actor == env.actor {
+				used++
+			}
 		case "snapshot":
 			if e.Result == "info" {
 				snapped = true
@@ -537,4 +543,58 @@ func cmdLook(ctx context.Context, env *cliEnv, args []string) int {
 		return exitRed
 	}
 	return exitOK
+}
+
+// opsApply: the Operator applies a fix itself (owner, #286, 2026-10-17) —
+// only its own open proposal, never one only a human may free, and inside
+// the envelope of every service it touches: the hourly budget, a snapshot
+// first; then merge, apply, verify and back on red (autoApprove).
+func opsApply(ctx context.Context, env *cliEnv, st *state.State, args []string) int {
+	id := ""
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--proposal" {
+			id = strings.TrimPrefix(args[i+1], "#")
+		}
+	}
+	n, err := strconv.Atoi(id)
+	if err != nil {
+		return exitRefusedMsg(env, "der Operator wendet nur seinen eigenen Vorschlag an: laib apply --proposal <id>")
+	}
+	p, err := proposal.Get(inboxDir(env), n)
+	if err != nil {
+		return env.fail(err)
+	}
+	switch {
+	case p.Actor != env.actor || p.Status != "open":
+		return exitRefusedMsg(env, fmt.Sprintf("#%d ist nicht dein offener Vorschlag (%s, %s)", n, p.Actor, p.Status))
+	case policy.NeedsHuman(st.Policy, p.Tier, p.Class):
+		return exitRefusedMsg(env, fmt.Sprintf("#%d gibt nur ein Mensch frei: %s", n, strings.Join(p.Reasons, "; ")))
+	}
+	var svcs []string
+	for _, f := range p.Files {
+		if parts := strings.Split(f, "/"); len(parts) > 2 && parts[0] == "services" && !slices.Contains(svcs, parts[1]) {
+			svcs = append(svcs, parts[1])
+		}
+	}
+	if len(svcs) == 0 {
+		return exitRefusedMsg(env, fmt.Sprintf("#%d ändert keinen Dienst", n))
+	}
+	for _, name := range svcs {
+		svc, ok := st.Services[name]
+		if !ok {
+			return exitRefusedMsg(env, fmt.Sprintf("#%d fügt %s hinzu: das gibt ein Mensch frei", n, name))
+		}
+		if code := envelope(ctx, env, st, svc, "apply", fmt.Sprintf("#%d %s", n, p.Reason)); code != exitOK {
+			return code
+		}
+	}
+	code := autoApprove(ctx, env, p)
+	result := "green"
+	if code != exitOK {
+		result = "red"
+	}
+	for _, name := range svcs {
+		record(env, st, journal.Entry{Actor: env.actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
+	}
+	return code
 }

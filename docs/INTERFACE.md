@@ -68,6 +68,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch` |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
+| `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
 `service` is an enum of the installed services, `key` a values.yml key
 (capitals, no path), `value` one line. An unknown parameter, a wrong type,
@@ -77,8 +78,11 @@ takes `args` (one command line) instead, for clients that send it.
 
 The Operator's menu is these tools as the kernel lists them for the
 running skill (ADR 0023): no second menu, no translation in the Operator.
-`OPERATOR_INTERFACE=typed` (default) keeps results and context compact
-for a small model. Above a 32k window the budgets grow with the window —
+The interface follows the model (#286): `OPERATOR_INTERFACE` when set
+(`typed` = small, `cli` = capable), else the window — up to 32k tokens a
+small model with the short menus and compact budgets, above it a capable
+one that also gets each skill's `more:` tools, and whose plain answer is
+never mistaken for a call written as text. Above a 32k window the budgets grow with the window —
 about a fifth of it for the context bundle, a fifteenth per tool result
 (#285); the window comes from llama-server's `/props?model=` (through the
 lease proxy) or `box.yml operator.contextWindow`
@@ -88,7 +92,7 @@ dropped from its reply. The built-in skills' menus:
 | Skill | Trigger | Menu |
 |---|---|---|
 | `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_note` |
-| `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note` |
+| `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 

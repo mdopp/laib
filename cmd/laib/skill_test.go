@@ -127,12 +127,12 @@ func TestAPausedSkillsCallsAreRefused(t *testing.T) {
 // and the ceiling — before a capable model gets them.
 func TestASkillsMoreToolsAreCheckedLikeItsTools(t *testing.T) {
 	wide := strings.Replace(probeSkill, "output: note", "more: [look, plan, restart]\noutput: note", 1)
-	env, st := skillBox(t, "propose", map[string]string{"weit": wide, "gierig": strings.Replace(wide, "[look, plan, restart]", "[look, apply]", 1)}, nil)
+	env, st := skillBox(t, "propose", map[string]string{"weit": wide, "gierig": strings.Replace(wide, "[look, plan, restart]", "[look, approve]", 1)}, nil)
 	sks := skillsFor(env, st, "ops")
 	if sk := findSkill(sks, "weit"); sk == nil || sk.Status != "active" || !slices.Contains(sk.Granted, "look") || !slices.Contains(sk.Granted, "plan") || slices.Contains(sk.Granted, "restart") {
 		t.Fatalf("%+v", sk)
 	}
-	if sk := findSkill(sks, "gierig"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "apply") {
+	if sk := findSkill(sks, "gierig"); sk == nil || sk.Status != "refused" || !strings.Contains(sk.Refused, "approve") {
 		t.Fatalf("%+v", sk)
 	}
 	if why := skillGate(env, st, "ops", "weit", "plan"); why != "" {

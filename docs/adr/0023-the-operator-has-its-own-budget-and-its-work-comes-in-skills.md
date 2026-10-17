@@ -5,7 +5,8 @@ schedule or a new tool, pause something it does, wonder whether Operator
 code counts against the kernel's 16k lines, or decide what the kernel must
 check about an agent's task before it runs.
 
-- **Status:** Accepted, 2026-10-16 (#267)
+- **Status:** Accepted, 2026-10-16 (#267); amended 2026-10-17 (#286):
+  `more:` tools for a capable model, `plan` and `apply` in the vocabulary
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -112,8 +113,9 @@ prompt: |
   repeat it.
 - **tools**: kernel verb names from the skill vocabulary — `status`,
   `diag`, `logs`, `inspect`, `look`, `read`, `journal`, `context`,
-  `inbox`, `note`, `escalate`, `propose`, `wish`, `restart`, `exec`,
-  `write`. `note` is required: every session ends in a note, which is what
+  `inbox`, `plan`, `note`, `escalate`, `propose`, `wish`, `restart`,
+  `exec`, `write`, `apply` (the last two added 2026-10-17, see the
+  amendment). `note` is required: every session ends in a note, which is what
   the heartbeat counts. The Operator offers a typed menu entry when its
   verb is granted (`set_value` → `propose`, `suggest` → `wish`); the menu
   stays Operator code, the vocabulary is the kernel's.
@@ -236,3 +238,21 @@ for admins only, and an intake repo may be public) are code, not prompt.
   surface).
 - Still prose: whether the model follows a skill's prompt. That is the
   eval's job (`werkstatt/evals`), per skill.
+
+## Amendment 2026-10-17 — a capable model gets the wide surface (#286)
+
+The owner (mdopp), on #286: **"a capable model may run `apply` itself,
+within the budget"** (ADR 0019, amended the same day). For skills:
+
+- A skill may name **`more:`** tools besides `tools:` — the ones only a
+  capable model gets. The kernel checks them exactly like `tools`
+  (vocabulary, ceiling, verb list) and grants them; the Operator offers
+  them only when it runs a capable model (`SmallModel`: `OPERATOR_INTERFACE`
+  when set, else a window above 32k tokens). `vorfall` names
+  `more: [look, read, journal, plan, apply]`.
+- The vocabulary gains **`plan`** (read) and **`apply`**. `apply` from the
+  ops hand is the kernel's narrow form: only the Operator's own open
+  proposal, never one only a human may free, inside the envelope of every
+  service it touches (ADR 0019 amendment). `approve`, `rollback`,
+  `restore`, `remove`, `token`, `secret` stay outside it.
+
