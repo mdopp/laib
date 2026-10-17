@@ -49,6 +49,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		}
 		vars := variables(st, svc, secrets)
 		for file, content := range svc.Units {
+			if err := secretOffEnvironment(svc, file, content); err != nil {
+				return nil, err
+			}
 			switch strings.TrimPrefix(filepath.Ext(file), ".") {
 			case "service", "timer":
 				out["systemd/"+file] = substitute(content, vars) // a plain host unit next to laib's own
@@ -300,7 +303,7 @@ func secretEnv(svc *state.Service, file, content string, vars map[string]string)
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		k, rest, _ := strings.Cut(line, "=") // systemd takes blanks around the =
-		if strings.TrimSpace(k) != "Environment" || !slices.ContainsFunc(state.Placeholders(rest), func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }) {
+		if strings.TrimSpace(k) != "Environment" || !slices.ContainsFunc(state.Placeholders(rest), isSecret(svc)) {
 			lines[i] = substitute(line, vars)
 			continue
 		}
@@ -321,6 +324,30 @@ func secretEnv(svc *state.Service, file, content string, vars map[string]string)
 		lines[i] = "Secret=" + name + ",type=env,target=" + key
 	}
 	return strings.Join(lines, "\n"), sec, nil
+}
+
+// isSecret: the value is secret-backed, a !secret or the builtin MODEL_KEY.
+func isSecret(svc *state.Service) func(string) bool {
+	return func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }
+}
+
+// secretOffEnvironment refuses a secret-backed value anywhere in a unit but
+// an Environment= line (#233): substituted into Exec=, PodmanArgs=, Label=
+// or a host unit's ExecStart= it lands in the unit file and on argv, where
+// ps shows it to every user on the box. The error names the template line,
+// which holds the placeholder, never the value.
+func secretOffEnvironment(svc *state.Service, file, content string) error {
+	for i, line := range strings.Split(content, "\n") {
+		k, _, _ := strings.Cut(line, "=")
+		if strings.TrimSpace(k) == "Environment" {
+			continue
+		}
+		names := state.Placeholders(line)
+		if v := slices.IndexFunc(names, isSecret(svc)); v >= 0 {
+			return fmt.Errorf("services/%s/%s:%d: %s: ${%s} is a secret; only an Environment= line may carry one (#224, #233)", svc.Name, file, i+1, line, names[v])
+		}
+	}
+	return nil
 }
 
 // envWords splits an Environment= value into its assignments as systemd
