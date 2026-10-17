@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -18,32 +19,32 @@ import (
 // deleting data is the human's own, separate act, and Laib says where it is.
 func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return env.fail(errors.New("usage: laib remove <service>"))
+		return env.Fail(errors.New("usage: laib remove <service>"))
 	}
-	if proposal.Hand(env.actor) != "human" {
+	if proposal.Hand(env.Actor) != "human" {
 		return exitRefusedMsg(env, "only a human removes a service")
 	}
 	name := args[0]
 	st, svc, err := loadSvc(env, name)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	// nobody may need it (#50): a dependant left behind makes the state
 	// unloadable, and the refusal comes before anything is stopped or deleted
 	for _, other := range st.ServiceNames() {
 		for _, dep := range st.Services[other].Contract.After {
 			if dep == name {
-				return env.fail(fmt.Errorf("%s braucht %s (after:) — erst dort entfernen", other, name))
+				return env.Fail(fmt.Errorf("%s braucht %s (after:) — erst dort entfernen", other, name))
 			}
 		}
 	}
 	for role, holder := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "identity": st.Box.Roles.Identity, "dns": st.Box.Roles.DNS, "model": st.Box.Roles.Model} {
 		if holder == name {
-			return env.fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
+			return env.Fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
 		}
 	}
 	unlock, code := takeLock(env, st, "remove")
-	if code != exitOK {
+	if code != cli.ExitOK {
 		return code
 	}
 	defer unlock()
@@ -51,21 +52,21 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 		sysd.Stop(ctx, unit)
 	}
 	kept := dataPaths(st, svc)
-	if err := os.RemoveAll(filepath.Join(env.paths.State, "services", name)); err != nil {
-		return env.fail(err)
+	if err := os.RemoveAll(filepath.Join(env.Paths.State, "services", name)); err != nil {
+		return env.Fail(err)
 	}
 	// the service's Quadlet folder and its rendered files go with it: plan only
 	// scans folders of services the state still has (an unknown folder is
 	// "unmanaged", never deleted on its own)
-	os.RemoveAll(filepath.Join(env.paths.Quadlet, name))
-	os.RemoveAll(filepath.Join(env.paths.Render, name))
-	st2, err := loadState(env)
+	os.RemoveAll(filepath.Join(env.Paths.Quadlet, name))
+	os.RemoveAll(filepath.Join(env.Paths.Render, name))
+	st2, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
+		return env.Fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
 	}
 	code = applyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {
-		fmt.Fprintf(env.w(), "Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
+		fmt.Fprintf(env.W(), "Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
 	}
 	return code
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -38,37 +39,37 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		text = text[:4000] + "…" // a note is a few sentences; the journal reader has a line limit (#35)
 	}
 	if text == "" {
-		return env.fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
+		return env.Fail(errors.New("usage: laib note [--kind report|incident|watch] \"<text>\""))
 	}
 	if kind != "report" && kind != "incident" && kind != "watch" {
-		return env.fail(fmt.Errorf("unknown kind %q", kind))
+		return env.Fail(fmt.Errorf("unknown kind %q", kind))
 	}
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	e := journal.Entry{Actor: env.actor, Verb: "note", Reason: kind, Result: "info", Detail: text}
-	journal.Append(env.paths.Journal, e)
+	e := journal.Entry{Actor: env.Actor, Verb: "note", Reason: kind, Result: "info", Detail: text}
+	journal.Append(env.Paths.Journal, e)
 	// reports and incidents reach the webhook like a red does
 	if (kind == "report" || kind == "incident") && st.Box.Notify.URL != "" {
-		go postEvent(env, st.Box.Notify.URL, e)
+		go cli.PostEvent(env, st.Box.Notify.URL, e)
 		time.Sleep(50 * time.Millisecond)
 	}
 	if kind == "report" {
-		dir := filepath.Join(env.paths.Home, "reports")
+		dir := filepath.Join(env.Paths.Home, "reports")
 		os.MkdirAll(dir, 0o755)
 		os.WriteFile(filepath.Join(dir, time.Now().Format("2006-01-02")+".md"), []byte(text+"\n"), 0o644)
 	}
-	if env.json {
-		return emit(env, e)
+	if env.JSON {
+		return cli.Emit(env, e)
 	}
-	fmt.Fprintln(env.w(), "notiert:", kind)
-	return exitOK
+	fmt.Fprintln(env.W(), "notiert:", kind)
+	return cli.ExitOK
 }
 
 // LastReport returns the newest morning report, if any.
 func lastReport(env *cliEnv) (string, string) {
-	files, _ := filepath.Glob(filepath.Join(env.paths.Home, "reports", "*.md"))
+	files, _ := filepath.Glob(filepath.Join(env.Paths.Home, "reports", "*.md"))
 	if len(files) == 0 {
 		return "", ""
 	}
@@ -82,26 +83,26 @@ func lastReport(env *cliEnv) (string, string) {
 // box.yml operator.enabled and applies, which renders and starts the unit.
 func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.fail(errors.New("usage: laib operator enable [--model alias] [--report-at 07:00] | disable | status"))
+		return env.Fail(errors.New("usage: laib operator enable [--model alias] [--report-at 07:00] | disable | status"))
 	}
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	switch args[0] {
 	case "status":
 		on := st.Box.Operator.Enabled
-		if env.json {
-			return emit(env, map[string]any{"enabled": on, "model": st.Box.Operator.Model, "modelUrl": st.ModelURL()})
+		if env.JSON {
+			return cli.Emit(env, map[string]any{"enabled": on, "model": st.Box.Operator.Model, "modelUrl": st.ModelURL()})
 		}
-		fmt.Fprintf(env.w(), "operator: enabled=%v model=%s url=%s\n", on, st.Box.Operator.Model, st.ModelURL())
-		return exitOK
+		fmt.Fprintf(env.W(), "operator: enabled=%v model=%s url=%s\n", on, st.Box.Operator.Model, st.ModelURL())
+		return cli.ExitOK
 	case "enable", "disable":
-		if proposal.Hand(env.actor) != "human" {
+		if proposal.Hand(env.Actor) != "human" {
 			return exitRefusedMsg(env, "only a human enables or disables the operator")
 		}
 		if !policy.Allowed(st.Policy, "ops", "apply") {
-			return env.fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
+			return env.Fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
 		}
 		enable := args[0] == "enable"
 		model, reportAt := "", ""
@@ -115,36 +116,36 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		if enable {
 			if st.ModelURL() == "" {
-				return env.fail(errors.New("no model: set box.yml model.url or a model role first"))
+				return env.Fail(errors.New("no model: set box.yml model.url or a model role first"))
 			}
-			sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+			sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 			if err != nil {
-				return env.fail(err)
+				return env.Fail(err)
 			}
 			if _, ok := sec[render.OperatorToken]; !ok {
 				store, err := token.Load(tokenPath(env))
 				if err != nil {
-					return env.fail(err)
+					return env.Fail(err)
 				}
 				plain, rec, err := store.Mint("ops", 0, "laib-operator")
 				if err != nil {
-					return env.fail(err)
+					return env.Fail(err)
 				}
 				sec[render.OperatorToken] = plain
-				if err := secrets.Save(env.paths.Secrets, env.paths.Key, sec); err != nil {
-					return env.fail(err)
+				if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
+					return env.Fail(err)
 				}
-				journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "mint " + rec.ID + " for ops (laib-operator)"})
+				journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "token", Result: "info", Detail: "mint " + rec.ID + " for ops (laib-operator)"})
 			}
 		}
-		if err := setBox(filepath.Join(env.paths.State, "box.yml"), "operator", "enabled", fmt.Sprint(enable), "model", model, "reportAt", reportAt); err != nil {
-			return env.fail(err)
+		if err := setBox(filepath.Join(env.Paths.State, "box.yml"), "operator", "enabled", fmt.Sprint(enable), "model", model, "reportAt", reportAt); err != nil {
+			return env.Fail(err)
 		}
 		if enable {
 			// reds wake the operator (#43): the webhook points at its event endpoint unless the owner set another
 			if st.Box.Notify.URL == "" {
-				if err := setBox(filepath.Join(env.paths.State, "box.yml"), "notify", "url", "http://127.0.0.1:5901/event"); err != nil {
-					return env.fail(err)
+				if err := setBox(filepath.Join(env.Paths.State, "box.yml"), "notify", "url", "http://127.0.0.1:5901/event"); err != nil {
+					return env.Fail(err)
 				}
 			}
 		}
@@ -154,19 +155,19 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 				for _, r := range store.List() {
 					if r.Hand == "ops" {
 						store.Revoke(r.ID)
-						journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "token", Result: "info", Detail: "revoke " + r.ID + " (operator disabled)"})
+						journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "token", Result: "info", Detail: "revoke " + r.ID + " (operator disabled)"})
 					}
 				}
 			}
 		}
-		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "operator", Result: "info", Detail: args[0]})
-		st, err = loadState(env)
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "operator", Result: "info", Detail: args[0]})
+		st, err = cli.LoadState(env)
 		if err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
 		return runApply(ctx, env, st, "", "operator "+args[0])
 	}
-	return env.fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
+	return env.Fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
 }
 
 // setBox sets keys of one top-level block of box.yml (operator, notify),

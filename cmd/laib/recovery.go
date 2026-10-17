@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 )
@@ -20,30 +21,30 @@ import (
 // that can print the sheet can take the box.
 
 func sheetConfirmed(env *cliEnv) string {
-	return filepath.Join(env.paths.Home, "recovery-sheet.confirmed")
+	return filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")
 }
 
 func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
-	if proposal.Hand(env.actor) != "human" || env.mcp {
+	if proposal.Hand(env.Actor) != "human" || env.MCP {
 		return exitRefusedMsg(env, "the recovery sheet is for the human at the console, never for a hand or over MCP")
 	}
 	if len(args) > 0 && args[0] == "--confirm" {
-		if err := os.WriteFile(sheetConfirmed(env), []byte(time.Now().UTC().Format(time.RFC3339)+" "+env.actor+"\n"), 0o644); err != nil {
-			return env.fail(err)
+		if err := os.WriteFile(sheetConfirmed(env), []byte(time.Now().UTC().Format(time.RFC3339)+" "+env.Actor+"\n"), 0o644); err != nil {
+			return env.Fail(err)
 		}
-		if st, err := loadState(env); err == nil {
-			record(env, st, journal.Entry{Actor: env.actor, Verb: "recovery-sheet", Result: "info", Detail: "als gesichert bestätigt (ausgedruckt oder im Passwortmanager)"})
+		if st, err := cli.LoadState(env); err == nil {
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "recovery-sheet", Result: "info", Detail: "als gesichert bestätigt (ausgedruckt oder im Passwortmanager)"})
 		}
-		fmt.Fprintln(env.w(), "bestätigt: das Wiederherstellungsblatt ist gesichert; diag hört auf zu mahnen")
-		return exitOK
+		fmt.Fprintln(env.W(), "bestätigt: das Wiederherstellungsblatt ist gesichert; diag hört auf zu mahnen")
+		return cli.ExitOK
 	}
 	st, pw, err := backupPrep(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	keyFile, err := os.ReadFile(env.paths.Key)
+	keyFile, err := os.ReadFile(env.Paths.Key)
 	if err != nil {
-		return env.fail(errors.New("no age key at " + env.paths.Key + ": laib init first"))
+		return env.Fail(errors.New("no age key at " + env.Paths.Key + ": laib init first"))
 	}
 	key := ""
 	for _, line := range strings.Split(string(keyFile), "\n") {
@@ -52,13 +53,13 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	if key == "" {
-		return env.fail(errors.New("no AGE-SECRET-KEY line in " + env.paths.Key))
+		return env.Fail(errors.New("no AGE-SECRET-KEY line in " + env.Paths.Key))
 	}
 	repo := st.Box.Backup.Repo
 	if repo == "" {
 		repo = "(kein backup.repo in box.yml — ohne Repo gibt es nichts wiederherzustellen)"
 	}
-	fmt.Fprintf(env.w(), `══════════════════════════════════════════════════════════════════════
+	fmt.Fprintf(env.W(), `══════════════════════════════════════════════════════════════════════
   LAIB — WIEDERHERSTELLUNGSBLATT · %s · Stand %s
   Ausdrucken oder im Passwortmanager ablegen. Ohne dieses Blatt ist das
   Backup nach einem Plattenverlust nicht lesbar.
@@ -88,7 +89,7 @@ Nach dem Lesen: laib recovery-sheet --confirm  (sonst mahnt laib diag)
 ══════════════════════════════════════════════════════════════════════
 `, st.Box.Domain, time.Now().Format("02.01.2006 15:04"), key, repo, pw, pw)
 	if _, err := os.Stat(sheetConfirmed(env)); err != nil {
-		fmt.Fprintln(env.errw(), "laib: noch nicht bestätigt — nach dem Ausdrucken: laib recovery-sheet --confirm")
+		fmt.Fprintln(env.Errw(), "laib: noch nicht bestätigt — nach dem Ausdrucken: laib recovery-sheet --confirm")
 	}
-	return exitOK
+	return cli.ExitOK
 }

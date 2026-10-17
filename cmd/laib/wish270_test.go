@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -18,12 +19,12 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
 	ctx := context.Background()
-	c.env.actor = "ops"
+	c.env.Actor = "ops"
 	for _, text := range []string{
 		"Den Abfuhrkalender als Antwort für Haus und Bote einrichten.\n\nGesehen: 9 unbeantwortete Fragen zur Müllabfuhr in 7 Tagen.",
 		"Die Energie-Seite von der Startseite nach hinten.\n\nGesehen: 0 Aufrufe in 7 Tagen.",
 	} {
-		if rc := cmdWish(ctx, c.env, []string{text}); rc != exitOK {
+		if rc := cmdWish(ctx, c.env, []string{text}); rc != cli.ExitOK {
 			t.Fatalf("rc %d", rc)
 		}
 	}
@@ -42,8 +43,8 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	if strings.Contains(ps[0].Reason, "Energie") {
 		ps[0], ps[1] = ps[1], ps[0]
 	}
-	c.env.actor = "human:admin"
-	if rc := cmdApprove(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != exitOK {
+	c.env.Actor = "human:admin"
+	if rc := cmdApprove(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != cli.ExitOK {
 		t.Fatalf("approve rc %d", rc)
 	}
 	if len(g.calls) != 1 {
@@ -55,7 +56,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	if !strings.Contains(title+body, "Abfuhrkalender") || !strings.Contains(body, "9 unbeantwortete") || !slices.Contains(labels, any("wunsch")) {
 		t.Fatalf("issue %q %q %v", title, body, labels)
 	}
-	if rc := cmdReject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != exitOK {
+	if rc := cmdReject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != cli.ExitOK {
 		t.Fatalf("reject rc %d", rc)
 	}
 	if len(g.calls) != 1 {

@@ -2,7 +2,7 @@ name: frage-image
 on:
   push:
     branches: [main]
-    paths: ["cmd/frage/**", "internal/frage/**", "frage/**", "go.mod", "go.sum"]
+    paths: ["frage/**", "mcpserver/**", "go.mod", "go.sum"]
   workflow_dispatch:
 permissions:
   contents: read

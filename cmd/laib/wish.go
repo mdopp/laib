@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
@@ -33,7 +34,7 @@ func githubIssue(ctx context.Context, env *cliEnv, st *state.State, title, body 
 	if st.Box.Intake.Repo == "" {
 		return "", false, nil
 	}
-	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	if err != nil {
 		return "", true, err
 	}
@@ -56,7 +57,7 @@ func githubIssue(ctx context.Context, env *cliEnv, st *state.State, title, body 
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	if resp.StatusCode != http.StatusCreated {
-		return "", true, fmt.Errorf("intake %s: HTTP %d: %s", st.Box.Intake.Repo, resp.StatusCode, tail(string(raw), 200))
+		return "", true, fmt.Errorf("intake %s: HTTP %d: %s", st.Box.Intake.Repo, resp.StatusCode, cli.Tail(string(raw), 200))
 	}
 	var out struct {
 		URL string `json:"html_url"`
@@ -74,29 +75,29 @@ func wishProposal(ctx context.Context, env *cliEnv, st *state.State, title, body
 	name := "wishes/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
 	lines := strings.Split("# "+title+"\n\n"+body, "\n")
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
-	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, title, proposal.Edit{Patch: patch}, judgeFor(st, env.actor))
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, inboxDir(env), env.Actor, title, proposal.Edit{Patch: patch}, judgeFor(st, env.Actor))
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: title, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
-	if env.json {
-		return emit(env, p)
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: title, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
+	if env.JSON {
+		return cli.Emit(env, p)
 	}
-	fmt.Fprintf(env.w(), "Vorschlag #%d angelegt: nach der Freigabe wird daraus ein Ticket.\n", p.ID)
-	return exitOK
+	fmt.Fprintf(env.W(), "Vorschlag #%d angelegt: nach der Freigabe wird daraus ein Ticket.\n", p.ID)
+	return cli.ExitOK
 }
 
 // fileWishes: the wishes an approved proposal adds become intake issues.
 func fileWishes(ctx context.Context, env *cliEnv, st *state.State, p *proposal.Proposal) {
 	for _, f := range p.Files {
-		b, err := os.ReadFile(filepath.Join(env.paths.State, f))
+		b, err := os.ReadFile(filepath.Join(env.Paths.State, f))
 		if !strings.HasPrefix(f, "wishes/") || err != nil {
 			continue
 		}
 		title, body, _ := strings.Cut(string(b), "\n")
 		title = strings.TrimPrefix(title, "# ")
-		body = strings.TrimSpace(body) + fmt.Sprintf("\n\nFreigegeben von %s (#%d).", env.actor, p.ID)
-		entry := journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: title}
+		body = strings.TrimSpace(body) + fmt.Sprintf("\n\nFreigegeben von %s (#%d).", env.Actor, p.ID)
+		entry := journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: title}
 		url, ok, err := githubIssue(ctx, env, st, title, body, []string{wishLabel(st)})
 		switch {
 		case err != nil:
@@ -106,7 +107,7 @@ func fileWishes(ctx context.Context, env *cliEnv, st *state.State, p *proposal.P
 		default:
 			entry.Detail = url
 		}
-		record(env, st, entry)
+		cli.Record(env, st, entry)
 	}
 }
 
@@ -117,11 +118,11 @@ func fileWishes(ctx context.Context, env *cliEnv, st *state.State, p *proposal.P
 func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	text := strings.TrimSpace(strings.Join(args, " "))
 	if text == "" {
-		return env.fail(errors.New("usage: laib wish \"<was das Haus braucht>\""))
+		return env.Fail(errors.New("usage: laib wish \"<was das Haus braucht>\""))
 	}
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	first := text
 	if i := strings.IndexAny(first, ".\n"); i > 0 {
@@ -131,33 +132,33 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 		first = string([]rune(first)[:70]) + "…"
 	}
 	title := "Wunsch: " + first
-	body := text + "\n\n— aufgenommen über `laib wish` von " + env.actor + " auf " + st.Box.Domain + ", " + time.Now().Format("02.01.2006 15:04") + ".\n\nNächster Schritt: ein Mensch schneidet daraus ein Ticket mit Akzeptanzkriterien und setzt dann `pi:ready` oder baut es selbst (#56)."
-	if proposal.Hand(env.actor) == "ops" {
+	body := text + "\n\n— aufgenommen über `laib wish` von " + env.Actor + " auf " + st.Box.Domain + ", " + time.Now().Format("02.01.2006 15:04") + ".\n\nNächster Schritt: ein Mensch schneidet daraus ein Ticket mit Akzeptanzkriterien und setzt dann `pi:ready` oder baut es selbst (#56)."
+	if proposal.Hand(env.Actor) == "ops" {
 		return wishProposal(ctx, env, st, title, body)
 	}
 	url, ok, err := githubIssue(ctx, env, st, title, body, []string{wishLabel(st)})
 	if err != nil {
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "red", Reason: first, Detail: err.Error()})
-		return env.fail(err)
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "red", Reason: first, Detail: err.Error()})
+		return env.Fail(err)
 	}
 	if !ok {
-		dir := filepath.Join(env.paths.Home, "wishes")
+		dir := filepath.Join(env.Paths.Home, "wishes")
 		os.MkdirAll(dir, 0o755)
 		p := filepath.Join(dir, time.Now().UTC().Format("2006-01-02T15-04-05")+".md")
 		if err := os.WriteFile(p, []byte("# "+title+"\n\n"+body+"\n"), 0o644); err != nil {
-			return env.fail(err)
+			return env.Fail(err)
 		}
-		record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: first, Detail: "kein Intake in box.yml: der Wunsch liegt unter " + p + ", bis jemand ihn liest"})
-		if env.json {
-			return emit(env, map[string]string{"file": p, "issue": ""})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: first, Detail: "kein Intake in box.yml: der Wunsch liegt unter " + p + ", bis jemand ihn liest"})
+		if env.JSON {
+			return cli.Emit(env, map[string]string{"file": p, "issue": ""})
 		}
-		fmt.Fprintf(env.w(), "aufgeschrieben: %s (kein Intake konfiguriert — box.yml intake.repo)\n", p)
-		return exitOK
+		fmt.Fprintf(env.W(), "aufgeschrieben: %s (kein Intake konfiguriert — box.yml intake.repo)\n", p)
+		return cli.ExitOK
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "wish", Result: "info", Reason: first, Detail: url})
-	if env.json {
-		return emit(env, map[string]string{"issue": url})
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: first, Detail: url})
+	if env.JSON {
+		return cli.Emit(env, map[string]string{"issue": url})
 	}
-	fmt.Fprintln(env.w(), "aufgenommen:", url)
-	return exitOK
+	fmt.Fprintln(env.W(), "aufgenommen:", url)
+	return cli.ExitOK
 }

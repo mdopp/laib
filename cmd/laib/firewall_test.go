@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -44,7 +45,7 @@ func fwBox(t *testing.T, rendered bool, loaded bool) (*cliEnv, *state.State, *[]
 		}
 		return "", nil
 	}
-	return &cliEnv{paths: paths, actor: "human:test"}, st, &calls
+	return &cliEnv{Paths: paths, Actor: "human:test"}, st, &calls
 }
 
 // The ruleset lives in kernel memory and the rendered file never changes
@@ -78,7 +79,7 @@ func TestEnsureFirewallLoadsTheRulesetOnlyWhenMissing(t *testing.T) {
 	if err != nil || !loaded {
 		t.Fatalf("loaded=%v err=%v", loaded, err)
 	}
-	if !strings.Contains(strings.Join(*calls, "\n"), "sudo nft -f "+filepath.Join(env.paths.Render, "nftables", "laib.nft")) {
+	if !strings.Contains(strings.Join(*calls, "\n"), "sudo nft -f "+filepath.Join(env.Paths.Render, "nftables", "laib.nft")) {
 		t.Fatalf("nft -f not run: %v", *calls)
 	}
 	env, _, calls = fwBox(t, true, true)
@@ -106,7 +107,7 @@ func TestSelfRollbackSwapsThePreviousBinariesAndRestarts(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, b+".prev"), []byte("old"), 0o755)
 	}
 	t.Setenv("LAIB_BIN_DIR", dir)
-	if rc := cmdSelf(context.Background(), env, []string{"rollback"}); rc != exitOK {
+	if rc := cmdSelf(context.Background(), env, []string{"rollback"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	joined := strings.Join(*calls, "\n")
@@ -115,11 +116,11 @@ func TestSelfRollbackSwapsThePreviousBinariesAndRestarts(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
 	}
-	if rc := cmdSelf(context.Background(), &cliEnv{paths: env.paths, actor: "ops"}, []string{"rollback"}); rc == exitOK {
+	if rc := cmdSelf(context.Background(), &cliEnv{Paths: env.Paths, Actor: "ops"}, []string{"rollback"}); rc == cli.ExitOK {
 		t.Fatal("an agent rolled the binaries back")
 	}
 	os.Remove(filepath.Join(dir, "laib.prev"))
-	if rc := cmdSelf(context.Background(), env, []string{"rollback"}); rc == exitOK {
+	if rc := cmdSelf(context.Background(), env, []string{"rollback"}); rc == cli.ExitOK {
 		t.Fatal("rollback without a previous binary must refuse")
 	}
 }

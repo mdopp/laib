@@ -261,7 +261,7 @@ answers with that tool until ZURÜCK (one level up) or MENÜ. Under SPIELE:
 the film's list, tic-tac-toe (it never loses; 0 players plays itself) and
 Global Thermonuclear War, which nobody wins. Approvals, warnings and errors
 stay plain words. Where you are is the persona engine, the `bote-persona`
-container (`cmd/persona`, ADR 0020/0021), an MCP tool named `persona` with no
+container (`persona/`, ADR 0020/0021), an MCP tool named `persona` with no
 side effects; every message goes there first.
 
 The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to

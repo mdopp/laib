@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -17,13 +18,13 @@ import (
 func TestAddAgainFinishesAnAddThatDidNotApply(t *testing.T) {
 	c := newCbox(t)
 	writeRegistryTemplate(t, c, "echo2")
-	if rc := cmdAdd(context.Background(), c.env, []string{"echo2"}); rc != exitOK {
+	if rc := cmdAdd(context.Background(), c.env, []string{"echo2"}); rc != cli.ExitOK {
 		t.Fatalf("add rc %d", rc)
 	}
-	unit := filepath.Join(c.env.paths.Quadlet, "echo2", "echo2.container")
+	unit := filepath.Join(c.env.Paths.Quadlet, "echo2", "echo2.container")
 	os.RemoveAll(filepath.Dir(unit)) // as if the apply never ran
 	c.calls = nil
-	if rc := cmdAdd(context.Background(), c.env, []string{"echo2"}); rc != exitOK {
+	if rc := cmdAdd(context.Background(), c.env, []string{"echo2"}); rc != cli.ExitOK {
 		t.Fatalf("the same add again: rc %d, want ok", rc)
 	}
 	if _, err := os.Stat(unit); err != nil {
@@ -33,7 +34,7 @@ func TestAddAgainFinishesAnAddThatDidNotApply(t *testing.T) {
 		t.Fatalf("%d proposals, want the one from the first add", len(ps))
 	}
 	writeRegistryTemplate(t, c, "other")
-	if rc := cmdAdd(context.Background(), c.env, []string{"other", "--name", "echo2"}); rc == exitOK {
+	if rc := cmdAdd(context.Background(), c.env, []string{"other", "--name", "echo2"}); rc == cli.ExitOK {
 		t.Fatal("another template under an existing service's name was accepted")
 	}
 }

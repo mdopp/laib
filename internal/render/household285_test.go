@@ -42,7 +42,7 @@ func TestEveryConsumerDefaultsToTheHouseholdPreset(t *testing.T) {
 		"templates/haus/haus.container":      `HAUS_LLM_MODEL=(\S+)`,
 		"templates/bote/values.example.yml":  `(?m)^MODEL_NAME: (\S+)`,
 		"templates/frage/values.example.yml": `(?m)^MODEL_NAME: (\S+)`,
-		"cmd/frage/main.go":                  `"MODEL_NAME", "([^"]+)"`,
+		"frage/cmd/frage/main.go":            `"MODEL_NAME", "([^"]+)"`,
 		"operator/cmd/laib-operator/main.go": `"MODEL_NAME", "([^"]+)"`,
 	} {
 		b, err := os.ReadFile(filepath.Join(root, file))
