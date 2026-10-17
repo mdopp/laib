@@ -14,6 +14,8 @@ ServiceBay unit is stopped and its file moved out of the Quadlet root
                   Z-Wave JS entry follows
   file-share      podman volume file-share-syncthing-config -> <D>/file-share/syncthing-config
                   <D>/file-share/filebrowser-db/filebrowser.db -> <D>/file-share/filebrowser/
+                  Samba's passdb stays in place (<D>/file-share/samba-private): said, whose
+                  accounts carry over with their passwords
   werkstatt       the git checkouts of <D>/claude-dev/workspace and
                   <D>/pi-web/workspace -> <D>/werkstatt/workspace (pi-web's
                   under pi-web-<name> where claude-dev has the same name)
@@ -183,6 +185,13 @@ def plan(service, d, volumes):
             into(db, os.path.join(fs, "filebrowser", "filebrowser.db"))
         if os.path.isdir(os.path.join(fs, "filebrowser-config")):
             notes.append("filebrowser-config stays behind: Laib's File Browser is configured by its unit")
+        # the passdb sits where Laib's samba mounts it: nothing to copy, the NT hashes stay (#296);
+        # the names only, never a hash, so the operator knows whose accounts carry over
+        passdb = os.path.join(fs, "samba-private", "smbpasswd")
+        if os.path.isfile(passdb):
+            names = sorted(l.split(":", 1)[0] for l in open(passdb) if ":" in l)
+            notes.append(f"Samba's accounts stay in place with their passwords: {', '.join(names)}; a person's "
+                         "stays while they are in family or admins in LLDAP, the shared SHARE_USER always")
     elif service == "werkstatt":
         dst = os.path.join(d, "werkstatt", "workspace")
         # the names follow from the sources alone, so a second run finds its

@@ -86,11 +86,13 @@ class Members(unittest.TestCase):
 
 
 FAKES = {
-    # passdb lines: name:uid:LM:NT:[U          ]:LCT-HEX:
+    # passdb lines: name:uid:LM:NT:[U          ]:LCT-HEX:. As the real one, pdbedit -L stops
+    # at the first entry whose POSIX account is missing ("smbpasswd database is corrupt!")
     "pdbedit": r'''#!/bin/bash
 echo "pdbedit $*" >> "$FAKE/argv"
 case "$1" in
-  -L) if [ "$2" = -w ]; then cat "$FAKE/passdb"; else cut -d: -f1,2 "$FAKE/passdb"; fi ;;
+  -L) while IFS=: read -r n rest; do grep -qx "$n" "$FAKE/posix" || { echo "corrupt: $n" >&2; exit 0; }
+        if [ "$2" = -w ]; then echo "$n:$rest"; else echo "$n:${rest%%:*}"; fi; done < "$FAKE/passdb" ;;
   -x) grep -q "^$3:" "$FAKE/passdb" || exit 1; grep -v "^$3:" "$FAKE/passdb" > "$FAKE/p.tmp"; mv "$FAKE/p.tmp" "$FAKE/passdb" ;;
 esac''',
     "smbpasswd": r'''#!/bin/bash
@@ -134,7 +136,8 @@ class Accounts(unittest.TestCase):
     def start(self, members="anna\nben\n"):
         if members is not None:
             (self.dir / "members").write_text(members)
-        env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", FAKE=str(self.fake), ACCOUNTS_DIR=str(self.dir), SHARE_USER="samba", TICK="1")
+        env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", FAKE=str(self.fake), ACCOUNTS_DIR=str(self.dir), SHARE_USER="samba", TICK="1",
+                   PASSDB=str(self.fake / "passdb"))
         self.out = open(self.root / "out", "w+")
         self.proc = subprocess.Popen(["bash", str(ACCOUNTS)], env=env, stdout=self.out, stderr=subprocess.STDOUT)
         self.wait(lambda: "in step" in self.output())
