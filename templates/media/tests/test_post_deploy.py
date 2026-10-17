@@ -18,7 +18,7 @@ JF = {}
 
 def fresh():
     JF.clear()
-    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0,
+    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0,
               config={"QuickConnectAvailable": False, "ServerName": "x"})
 
 
@@ -71,6 +71,9 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         if not self.client():
             return self.reply(400, {"error": "no client identity"})
         p = self.path
+        if p.startswith("/Startup/") and JF["wizard503"]:  # vm-install run 39031896537: Info/Public 200, the wizard 503
+            JF["wizard503"] -= 1
+            return self.reply(503)
         if p.startswith("/Startup/"):
             if p == "/Startup/User":
                 JF["users"][b["Name"]] = {"Name": b["Name"], "Id": "u-admin", "pw": b["Password"]}
@@ -160,7 +163,7 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual((JF["installs"], JF["restarts"]), (0, 1), "a changed config must be loaded, an installed plugin not installed again")
 
     def test_a_server_still_starting_behind_a_green_health_is_waited_for(self):
-        JF["starting"] = 3
+        JF["starting"], JF["wizard503"] = 3, 2
         p = self.run_hook()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertTrue(JF["wizard"])
