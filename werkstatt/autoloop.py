@@ -604,6 +604,7 @@ def run_pi(
         res = subprocess.run(
             cmd,
             cwd=str(cwd),
+            stdin=subprocess.DEVNULL,  # pi reads a piped stdin as more prompt; an open one holds the run (#261)
             capture_output=True,
             text=True,
             timeout=time_cap_s,
