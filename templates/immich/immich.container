@@ -14,6 +14,9 @@ Environment=DB_DATABASE_NAME=immich
 Environment=DB_VECTOR_EXTENSION=vectorchord
 Environment=REDIS_HOSTNAME=127.0.0.1
 Environment=IMMICH_MACHINE_LEARNING_URL=http://127.0.0.1:3003
+# Immich does not read this: it ties the OIDC secret to this unit, so a rotation
+# restarts immich and post-deploy sets the new one in Immich's settings (#254)
+Environment=LAIB_OIDC_SECRET=${OIDC_SECRET}
 Volume=${DATA_DIR}/immich/upload:/usr/src/app/upload:z
 # the shared file-share tree: never relabelled (:z walks it on every start and
 # fails on an entry core does not own, #230); labelling off for this container
