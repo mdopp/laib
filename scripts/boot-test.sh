@@ -111,9 +111,9 @@ python3 - 18081 <<'PY2' &
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 SCRIPT = [
-  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"inspect","arguments":json.dumps({"service":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"restart","arguments":json.dumps({"service":"whoami"})}}]},
-  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"note","arguments":json.dumps({"kind":"incident","text":"whoami neu gestartet, grün."})}}]},
+  {"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"laib_inspect","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"2","type":"function","function":{"name":"laib_restart","arguments":json.dumps({"service":"whoami"})}}]},
+  {"role":"assistant","tool_calls":[{"id":"3","type":"function","function":{"name":"laib_note","arguments":json.dumps({"kind":"incident","text":"whoami neu gestartet, grün."})}}]},
   {"role":"assistant","content":"fertig"},
 ]
 i = 0

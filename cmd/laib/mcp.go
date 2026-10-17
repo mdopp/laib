@@ -103,8 +103,8 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			rpcReply(w, req.ID, map[string]any{"tools": tools}, nil)
 		case "tools/call":
 			var p struct {
-				Name string            `json:"name"`
-				Args map[string]string `json:"arguments"`
+				Name string         `json:"name"`
+				Args map[string]any `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
 			if inSkill != "" {
@@ -131,7 +131,7 @@ func mcpTools(st *state.State, hand string) []map[string]any {
 		tools = append(tools, map[string]any{
 			"name":        "laib_" + v.name,
 			"description": v.help + " (tier " + v.tier + ")",
-			"inputSchema": inputSchema(v.name),
+			"inputSchema": mcpSchema(st, v.name),
 		})
 	}
 	return tools
@@ -152,7 +152,7 @@ func inputSchema(verb string) map[string]any {
 }
 
 // mcpCall runs one verb as the hand, capturing stdout.
-func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]string) (string, int) {
+func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name string, args map[string]any) (string, int) {
 	verbName := strings.TrimPrefix(name, "laib_")
 	var v *verb
 	for i := range verbs {
@@ -169,17 +169,16 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if !policy.MayVerb(st.Policy, hand, verbName) {
 		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), exitRefused
 	}
+	callArgs, stdin, err := mcpArgv(st, verbName, args)
+	if err != nil {
+		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", exitUsage
+	}
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
 	var buf bytes.Buffer
 	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf}
-	callArgs := splitArgs(args["args"])
-	if patch := args["patch"]; patch != "" {
-		callEnv.in = strings.NewReader(patch)
-		callArgs = append([]string{"--patch"}, callArgs...)
-	}
-	if in := args["stdin"]; in != "" {
-		callEnv.in = strings.NewReader(in)
+	if stdin != "" {
+		callEnv.in = strings.NewReader(stdin)
 	}
 	// the verb writes to buf (#43: the process stdout is never swapped, so
 	// nothing another goroutine prints can land here); fail()'s one-line
