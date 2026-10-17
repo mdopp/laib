@@ -294,7 +294,8 @@ The state refuses two services publishing the same host port, and
 `laib template lint` refuses a template that publishes a port a sibling
 template already uses (whoami and the bote pod both had 8080; the bote's
 signal-cli is on 8085 now). Every template declares health: an `http:`
-probe or `none: "<why>"` (MQTT speaks no HTTP). A template whose
+probe or `none: "<why>"` (MQTT speaks no HTTP). The probe is green on 2xx/3xx only; an app whose probe
+path challenges declares `expect: [401]`, and then only those codes count (#288). A template whose
 containers talk to laib's MCP declares `needs: [mcp]`; the state then
 insists on `box.yml laib.listen: 0.0.0.0` (ADR 0012 §4) instead of a
 container that silently cannot reach laib. Apply pulls the images of new
