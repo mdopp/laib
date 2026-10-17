@@ -18,7 +18,7 @@ JF = {}
 
 def fresh():
     JF.clear()
-    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0,
+    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0,
               config={"QuickConnectAvailable": False, "ServerName": "x"})
 
 
@@ -48,6 +48,9 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         if self.path == "/health":
             return self.reply(200)
         if self.path == "/System/Info/Public":
+            if JF["starting"]:                       # /health is up, the server is not (vm-install run 39030739987)
+                JF["starting"] -= 1
+                return self.reply(503)
             return self.reply(200, {"StartupWizardCompleted": JF["wizard"]})
         if self.path == "/Startup/User":
             return self.reply(200, {"Name": "root"})
@@ -155,6 +158,12 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("<string>sb-public-1</string>", x, "the libraries ServiceBay gave new users are gone")
         self.assertNotIn("sb-anna-1", x, "anna's private library is open to every new user")
         self.assertEqual((JF["installs"], JF["restarts"]), (0, 1), "a changed config must be loaded, an installed plugin not installed again")
+
+    def test_a_server_still_starting_behind_a_green_health_is_waited_for(self):
+        JF["starting"] = 3
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(JF["wizard"])
 
     def test_a_plugin_that_does_not_come_up_is_red(self):
         JF.update(wizard=True, users={"admin": {"Name": "admin", "Id": "u-admin", "pw": ADMIN_PW}},
