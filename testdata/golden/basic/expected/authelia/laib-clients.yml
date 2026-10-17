@@ -5,6 +5,8 @@ identity_providers:
       - client_id: whoami
         client_name: whoami
         client_secret: "${secret:OIDC_WHOAMI_SECRET}"
+        authorization_policy: one_factor
+        token_endpoint_auth_method: client_secret_basic
         redirect_uris:
           - https://whoami.example.home/callback
         scopes: [openid, profile, email, groups]
