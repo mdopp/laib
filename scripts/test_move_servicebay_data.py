@@ -83,6 +83,18 @@ class Move(unittest.TestCase):
         self.assertEqual((self.d / "file-share/syncthing-config/key.pem").read_text(), "made-up")
         self.assertEqual((self.d / "file-share/filebrowser/filebrowser.db").read_text(), "fb")
 
+    def test_file_share_keeps_sambas_per_user_accounts_in_place(self):
+        # ServiceBay's passdb sits where Laib's samba mounts it (#296): nothing is copied, the
+        # NT hashes stay, and the operator reads whose accounts carry over and on what condition
+        passdb = "samba:1000:XX:AA:[U          ]:LCT-6A000000:\nanna:1001:XX:BB:[U          ]:LCT-6A000001:\nben:1002:XX:CC:[U          ]:LCT-6A000002:\n"
+        write(self.d / "file-share/samba-private/smbpasswd", passdb)
+        p = self.run_script("file-share")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual((self.d / "file-share/samba-private/smbpasswd").read_text(), passdb)
+        self.assertIn("file-share: Samba's accounts stay in place with their passwords: anna, ben, samba", p.stdout)
+        self.assertIn("family or admins", p.stdout)
+        self.assertNotIn("BB", p.stdout)
+
     def test_werkstatt_takes_the_checkouts_only(self):
         p = self.run_script("werkstatt")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)

@@ -159,6 +159,7 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | home-assistant | Z-Wave JS server on 3001 through `sb-external-settings.json` (3000 was NPM's) | zwave-js-ui's own `settings.json`, its default 3000 | edited; Home Assistant's Z-Wave JS entry (`.storage/core.config_entries`) follows to `:3000` |
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
+| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
 | file-share | Syncthing folders on those paths | the same folders on the new paths | `config.xml` rewritten with the photos, folder and device IDs kept: the devices keep syncing, nothing is re-paired |
@@ -240,9 +241,6 @@ change with its snapshot.
 **Open, the operator's decision (#229).** Until it is made, the default
 applies:
 
-- **Samba's per-user accounts.** ServiceBay synced LLDAP users into Samba;
-  the built-in has the one `SHARE_USER`. Default: devices mount with that
-  account; the personal ones are gone after the first restart.
 - **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`).
   The built-in declares no `oidc:`, so Authelia no longer knows the client.
   Default: the login button fails, and users log in with their Home
