@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -18,7 +19,7 @@ import (
 	"github.com/mdopp/laib/templates"
 )
 
-func registriesDir(env *cliEnv) string { return filepath.Join(env.paths.Home, "registries") }
+func registriesDir(env *cliEnv) string { return filepath.Join(env.Paths.Home, "registries") }
 
 // syncRegistries clones or fetches every box.yml registry into
 // /mnt/data/laib/registries/<name> at its ref (#14).
@@ -77,7 +78,7 @@ func availableTemplates(env *cliEnv) map[string][]string {
 func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName string) int {
 	svc, ok := st.Services[svcName]
 	if !ok {
-		return env.fail(fmt.Errorf("unknown service %q", svcName))
+		return env.Fail(fmt.Errorf("unknown service %q", svcName))
 	}
 	tplName := svc.Contract.Template.Name
 	if tplName == "" {
@@ -85,25 +86,25 @@ func templateUpdate(ctx context.Context, env *cliEnv, st *state.State, svcName s
 	}
 	tpl, err := templateFS(env, tplName)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	p, err := proposal.CreateFromEdit(ctx, env.paths.State, inboxDir(env), env.actor, "template update "+svcName,
-		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.actor))
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, inboxDir(env), env.Actor, "template update "+svcName,
+		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, judgeFor(st, env.Actor))
 	if err != nil {
 		if strings.Contains(err.Error(), "nothing to propose") {
-			return exitUsage // up to date; the caller's loop skips it
+			return cli.ExitUsage // up to date; the caller's loop skips it
 		}
-		return env.fail(err)
+		return env.Fail(err)
 	}
-	record(env, st, journal.Entry{Actor: env.actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		return autoApprove(ctx, env, p)
 	}
-	if env.json {
-		return emit(env, p)
+	if env.JSON {
+		return cli.Emit(env, p)
 	}
-	fmt.Fprintf(env.w(), "Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
-	return exitOK
+	fmt.Fprintf(env.W(), "Vorschlag #%d: %s aus Template %s aktualisieren (%s)\n", p.ID, svcName, tplName, strings.Join(p.Files, ", "))
+	return cli.ExitOK
 }
 
 func sortedKeys(m map[string][]string) []string {

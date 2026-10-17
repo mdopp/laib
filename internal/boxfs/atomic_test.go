@@ -17,7 +17,6 @@ import (
 func TestEveryRenameIsADurableWrite(t *testing.T) {
 	allowed := map[string]string{
 		"internal/boxfs/atomic.go": "the helper itself",
-		"internal/stick/stream.go": "the ISO download cache on the admin's computer: re-downloaded and hash-checked, not box state",
 	}
 	rename := regexp.MustCompile(`\bRename\(`)
 	var bad []string

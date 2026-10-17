@@ -24,7 +24,7 @@ func skillBox(t *testing.T, ceiling string, files, statuses map[string]string) (
 		}
 	}
 	st := &state.State{Policy: state.Policy{Hands: map[string]state.Hand{"ops": {Ceiling: ceiling}}, Skills: statuses}}
-	return &cliEnv{paths: boxfs.Paths{State: dir}}, st
+	return &cliEnv{Paths: boxfs.Paths{State: dir}}, st
 }
 
 func findSkill(sks []skill.Skill, name string) *skill.Skill {

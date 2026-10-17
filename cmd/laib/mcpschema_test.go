@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 )
@@ -90,7 +91,7 @@ func TestMcpRefusesArgumentsOutsideTheSchema(t *testing.T) {
 		}
 	}
 	out, code := mcpCall(context.Background(), &cliEnv{}, st, "ops", "laib_restart", map[string]any{"service": "nas"})
-	if code != exitUsage || !strings.Contains(out, "nas") {
+	if code != cli.ExitUsage || !strings.Contains(out, "nas") {
 		t.Fatalf("%d %q", code, out)
 	}
 }
@@ -98,15 +99,15 @@ func TestMcpRefusesArgumentsOutsideTheSchema(t *testing.T) {
 // #290 acceptance: a note with quotes and spaces reaches the journal whole.
 func TestATypedNoteKeepsItsQuotes(t *testing.T) {
 	c := newCbox(t)
-	st, err := loadState(c.env)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := `whoami war rot: "bind: address in use"; Neustart um 03:12, jetzt grün.`
-	if out, code := mcpCall(context.Background(), c.env, st, "ops", "laib_note", map[string]any{"kind": "incident", "text": text}); code != exitOK {
+	if out, code := mcpCall(context.Background(), c.env, st, "ops", "laib_note", map[string]any{"kind": "incident", "text": text}); code != cli.ExitOK {
 		t.Fatalf("%d %s", code, out)
 	}
-	es, _ := journal.Read(c.env.paths.Journal, time.Time{})
+	es, _ := journal.Read(c.env.Paths.Journal, time.Time{})
 	if len(es) == 0 || es[len(es)-1].Detail != text {
 		t.Fatalf("journal: %+v", es)
 	}

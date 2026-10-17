@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-SYS="${LAIB_SYS:-/sys}"                                   # test seams (internal/stick)
+SYS="${LAIB_SYS:-/sys}"                                   # test seams (stick/)
 INSTALLER_D="${LAIB_INSTALLER_D:-/etc/coreos/installer.d}"
 
 # Set hostname in live environment so the DHCP lease registers the correct name

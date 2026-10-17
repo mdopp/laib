@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -23,7 +24,7 @@ import (
 
 var watchdogInterval = 5 * time.Minute
 
-func watchdogStamp(env *cliEnv) string { return filepath.Join(env.paths.Home, "watchdog.last") }
+func watchdogStamp(env *cliEnv) string { return filepath.Join(env.Paths.Home, "watchdog.last") }
 
 // watchdogPing pings once; false when nothing was sent (no URL, red, or an error).
 func watchdogPing(ctx context.Context, env *cliEnv, st *state.State) bool {
@@ -72,7 +73,7 @@ func watchdogLoop(ctx context.Context, env *cliEnv) {
 	t := time.NewTicker(watchdogInterval)
 	defer t.Stop()
 	for {
-		if st, err := loadState(env); err == nil {
+		if st, err := cli.LoadState(env); err == nil {
 			watchdogPing(ctx, env, st)
 		}
 		select {
@@ -87,9 +88,9 @@ func watchdogLoop(ctx context.Context, env *cliEnv) {
 // the family — what the box does, what to look at, what to do when it
 // does not work, whom to call. Printed once with the recovery sheet.
 func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	contact := st.Box.Watchdog.Contact
 	if contact == "" {
@@ -104,7 +105,7 @@ func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
 	if len(svcs) == 0 {
 		svcs = []string{"noch keine Dienste"}
 	}
-	fmt.Fprintf(env.w(), `<!doctype html><html lang="de"><meta charset="utf-8"><title>Die Box – Karte für die Familie</title>
+	fmt.Fprintf(env.W(), `<!doctype html><html lang="de"><meta charset="utf-8"><title>Die Box – Karte für die Familie</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;color:#1d1d1b}h1{font-size:1.5rem}h2{font-size:1.1rem;margin-top:1.4rem}li{margin:.3rem 0}.k{color:#6b665c}@media print{body{margin:0}}</style>
 <h1>Die Box im Haus – %s</h1>
 <p>Die Box ist der kleine Rechner, auf dem unsere Dinge laufen: %s.</p>
@@ -125,8 +126,8 @@ func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
 </html>
 `, html.EscapeString(st.Box.Domain), html.EscapeString(strings.Join(svcs, ", ")), html.EscapeString(contact), time.Now().Format("02.01.2006"))
 	if st.Box.Watchdog.Contact == "" {
-		fmt.Fprintln(env.errw(), "laib: box.yml watchdog.contact is empty — the card says 'den Admin'; set it to a name and a number")
+		fmt.Fprintln(env.Errw(), "laib: box.yml watchdog.contact is empty — the card says 'den Admin'; set it to a name and a number")
 	}
 	_ = errors.New
-	return exitOK
+	return cli.ExitOK
 }
