@@ -102,7 +102,7 @@ jobs:
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'rm -rf ~/laib; mkdir -p ~/laib'
-          tar -C "$GITHUB_WORKSPACE" -cf - scripts docs | $SSH 'tar -C ~/laib -xf -'
+          tar -C "$GITHUB_WORKSPACE" -cf - scripts docs templates | $SSH 'tar -C ~/laib -xf -'
           $SSH "STEP=install SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
       - name: "MIGRATION.md 3 and 4: auth, then the household services, one by one"
         run: |

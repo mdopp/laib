@@ -96,6 +96,9 @@ def main():
         print(f"{a.out} is (in) a Laib state repo: drafts go to a review directory; laib refuses "
               "a services/<name> without units, and laib add refuses one that exists", file=sys.stderr)
         return 1
+    if not os.path.exists(os.path.join(a.builtins, "caddy", "laib.yml")):
+        print(f"{a.builtins} holds no Laib built-ins (caddy/laib.yml): run it from a laib checkout, or pass --builtins <laib>/templates", file=sys.stderr)
+        return 1
     cfg = json.load(open(a.config))
     tdirs = a.templates.split(",")
     rp = cfg.get("reverseProxy", {})

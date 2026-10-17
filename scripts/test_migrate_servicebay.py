@@ -129,6 +129,15 @@ class Migrate(unittest.TestCase):
         self.assertNotIn("AUTHELIA_IMAGE", line)
         self.assertNotIn("SAMBA_IMAGE", self.stdout)
 
+    def test_builtins_that_are_not_laibs_templates_are_refused(self):
+        # #248: run from a copy without templates/, every service was taken for a
+        # foreign one: no laib add line, no carry check against the built-in, no word
+        with tempfile.TemporaryDirectory() as d:
+            p = subprocess.run([sys.executable, "-I", str(SCRIPT), "--config", str(FIX / "config.json"), "--templates", str(FIX / "templates"),
+                                "--builtins", d, "--out", str(Path(d) / "o")], capture_output=True, text=True)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("built-in", p.stderr)
+
     def test_add_line_carries_the_zwave_stick(self):
         # #248: the box's Z-Wave stick is a service-less value; the built-in's
         # default (/dev/ttyACM0) is another box's, and AddDevice= of a path
