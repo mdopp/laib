@@ -162,7 +162,7 @@ func collectStatus(ctx context.Context, env *cliEnv, st *state.State) (readiness
 func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	r, rows := collectStatus(ctx, env, st)
 	if len(args) > 0 {
@@ -199,11 +199,11 @@ func cmdStatus(ctx context.Context, env *cliEnv, args []string) int {
 func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	sec, err := secrets.Load(env.paths.Secrets, env.paths.Key)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	only := ""
 	if len(args) > 0 {
@@ -211,7 +211,7 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	p, err := plan.Compute(ctx, st, sec, env.paths, only)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if env.json {
 		return emit(env, p)
@@ -243,7 +243,7 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	hand := strings.SplitN(env.actor, ":", 2)[0]
 	if !policy.Allowed(st.Policy, hand, "apply") {
@@ -268,7 +268,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 		if args[i] == "--since" && i+1 < len(args) {
 			d, err := time.ParseDuration(args[i+1])
 			if err != nil {
-				return fail(err)
+				return env.fail(err)
 			}
 			since = d
 			i++
@@ -276,7 +276,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 	}
 	es, err := journal.Read(env.paths.Journal, time.Now().Add(-since))
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if env.json {
 		return emit(env, es)
@@ -290,7 +290,7 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	r, rows := collectStatus(ctx, env, st)
 	es, _ := journal.Read(env.paths.Journal, time.Now().Add(-24*time.Hour))
@@ -312,18 +312,18 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 
 func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return fail(errors.New("usage: laib template lint <dir> | list | sync | update <service>"))
+		return env.fail(errors.New("usage: laib template lint <dir> | list | sync | update <service>"))
 	}
 	switch args[0] {
 	case "lint":
 		if len(args) < 2 {
-			return fail(errors.New("usage: laib template lint <dir>"))
+			return env.fail(errors.New("usage: laib template lint <dir>"))
 		}
-		return lintTemplate(args[1])
+		return lintTemplate(env, args[1])
 	case "list":
 		st, err := loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		avail := availableTemplates(env)
 		if env.json {
@@ -342,14 +342,14 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 	case "sync":
 		st, err := loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		lines, err := syncRegistries(ctx, env, st)
 		for _, l := range lines {
 			fmt.Fprintln(env.w(), "registry:", l)
 		}
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "template", Result: "info", Detail: "sync " + strings.Join(lines, "; ")})
 		if len(args) > 1 && args[1] == "--propose" {
@@ -366,26 +366,26 @@ func cmdTemplate(ctx context.Context, env *cliEnv, args []string) int {
 		return exitOK
 	case "update":
 		if len(args) < 2 {
-			return fail(errors.New("usage: laib template update <service>"))
+			return env.fail(errors.New("usage: laib template update <service>"))
 		}
 		st, err := loadState(env)
 		if err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		if !policy.Allowed(st.Policy, proposal.Hand(env.actor), "propose") {
 			return exitRefusedMsg(env, env.actor+" may not propose")
 		}
 		return templateUpdate(ctx, env, st, args[1])
 	}
-	return fail(fmt.Errorf("unknown template subcommand %q", args[0]))
+	return env.fail(fmt.Errorf("unknown template subcommand %q", args[0]))
 }
 
 // lintTemplate loads a template folder as if it were the only service of a
 // throw-away state, so the same validation applies (ADR 0004).
-func lintTemplate(dir string) int {
+func lintTemplate(env *cliEnv, dir string) int {
 	tmp, err := os.MkdirTemp("", "laib-lint")
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	defer os.RemoveAll(tmp)
 	name := filepath.Base(filepath.Clean(dir))
@@ -395,7 +395,7 @@ func lintTemplate(dir string) int {
 	os.MkdirAll(dst, 0o755)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -430,12 +430,12 @@ func lintTemplate(dir string) int {
 	}
 	st, err := state.Load(tmp)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(env.errw(), err)
 		return exitUsage
 	}
 	out, err := render.Render(st, nil)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	// the after: neighbours' declared data paths (their apply creates them)
 	// may be mounted too: the file share's folders in media, immich, paperless
@@ -457,7 +457,7 @@ func lintTemplate(dir string) int {
 	}
 	if errs := lintMounts(st, name, out, neighbours); len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, e)
+			fmt.Fprintln(env.errw(), e)
 		}
 		return exitUsage
 	}
@@ -465,14 +465,14 @@ func lintTemplate(dir string) int {
 		if b, err := os.ReadFile(filepath.Join(dir, phase)); err == nil {
 			first := strings.SplitN(string(b), "\n", 2)[0]
 			if !hookInterpreters[first] {
-				fmt.Fprintf(os.Stderr, "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
+				fmt.Fprintf(env.errw(), "%s/%s: interpreter %q is not in the hooks image (use one of: %s)\n", dir, phase, first, strings.Join(slices.Sorted(maps.Keys(hookInterpreters)), ", "))
 				return exitUsage
 			}
 		}
 	}
 	// a health declaration (#46): an http probe, or a reason why there is none
 	if h := st.Services[name].Contract.Health; h.HTTP == "" && h.None == "" {
-		fmt.Fprintf(os.Stderr, "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
+		fmt.Fprintf(env.errw(), "%s: laib.yml declares no health (health: {http: …} or health: {none: \"why\"})\n", dir)
 		return exitUsage
 	}
 	// a host port another template of the same registry publishes (#46: whoami and bote on 8080)
@@ -492,7 +492,7 @@ func lintTemplate(dir string) int {
 		b, _ := os.ReadFile(f)
 		for _, hp := range state.PublishedHostPorts(string(b)) {
 			if mine[hp] {
-				fmt.Fprintf(os.Stderr, "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
+				fmt.Fprintf(env.errw(), "%s: publishes host port %s like template %s — two services on one port never both start\n", dir, hp, other)
 				return exitUsage
 			}
 		}
@@ -503,20 +503,20 @@ func lintTemplate(dir string) int {
 
 func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return fail(errors.New("usage: laib adopt <quadlet folder>"))
+		return env.fail(errors.New("usage: laib adopt <quadlet folder>"))
 	}
 	name := args[0]
 	src := filepath.Join(env.paths.Quadlet, name)
 	dst := filepath.Join(env.paths.State, "services", name)
 	if _, err := os.Stat(dst); err == nil {
-		return fail(fmt.Errorf("services/%s exists already", name))
+		return env.fail(fmt.Errorf("services/%s exists already", name))
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -533,7 +533,7 @@ func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
 
 func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return fail(errors.New("usage: laib ignore <unit>"))
+		return env.fail(errors.New("usage: laib ignore <unit>"))
 	}
 	p := filepath.Join(env.paths.State, "ignore.yml")
 	b, _ := os.ReadFile(p)
@@ -547,7 +547,7 @@ func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 	}
 	content += "  - " + args[0] + "\n"
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	fmt.Fprintln(env.w(), "ignored:", args[0])
 	return exitOK
@@ -585,22 +585,22 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 		i++
 	}
 	if domain == "" {
-		return fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
+		return env.fail(errors.New("usage: laib init --domain <domain> [--lan-ip <ip>] [--data-dir /mnt/data/stacks] [--dns-provider desec|cloudflare|…] [--tls internal] [--gpu | --model-url <openai-compatible /v1> [--model-lease <url>]]"))
 	}
 	if tlsMode != "" && tlsMode != "internal" {
-		return fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
+		return env.fail(fmt.Errorf("--tls %q: only \"internal\" (Caddy's own CA, a laptop-only trial) or nothing (Let's Encrypt; DNS-01 with --dns-provider)", tlsMode))
 	}
 	if !gpu && modelURL == "" {
-		fmt.Fprintln(os.Stderr, "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
+		fmt.Fprintln(env.errw(), "laib: no --gpu and no --model-url: the Operator, Bote and Frage will have no model until box.yml model.url is set")
 	}
 	for _, d := range []string{env.paths.Home, env.paths.State, env.paths.Journal, env.paths.Render, filepath.Join(env.paths.State, "services")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 	}
 	recipient, err := secrets.EnsureKey(env.paths.Key)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	write := func(name, content string) error {
 		p := filepath.Join(env.paths.State, name)
@@ -632,19 +632,19 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	backup := fmt.Sprintf("backup:\n  repo: %s          # restic, on the data disk: protects against mistakes and bad updates from day one; a NAS or second repo protects against the disk\n  schedule: \"03:00\"\n", filepath.Join(filepath.Dir(dataDir), "backup", "restic"))
 	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; never approves\n  approver: {ceiling: apply, human: true, verbs: [approve, reject, inbox, status, note]}   # the Signal relay (#48): acts only on the admin's verified number, can only decide\n  haus: {ceiling: apply, verbs: [status, inbox, journal, restart]}   # the family's pages (haus#1): looks, restarts, decides nothing\n  claude: {ceiling: apply, ttl: 8h}\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: proposal\n  patch: proposal\n  new-service: proposal   # adds surface: a human decides\n  # whatever the dial says: a change the content review marks (a script on the box, a public route,\n  # policy.yml, a token, a host folder …) waits for a human (#34)\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := proposal.EnsureRepo(ctx, env.paths.State); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	if err := journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "init", Result: "info", Detail: "state repo created"}); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	fmt.Fprintf(env.w(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.paths.State, recipient, env.paths.Key)
 	return exitOK

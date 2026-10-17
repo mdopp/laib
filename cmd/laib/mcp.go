@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +18,10 @@ import (
 
 // MCP over streamable HTTP, JSON-RPC 2.0, stdlib only. The tool list is the
 // verb table filtered by the hand's ceiling (docs/INTERFACE.md); a call runs
-// the verb in-process with --json. One call at a time, because the verbs
-// write to os.Stdout and the capture swaps it.
-var mcpMu sync.Mutex
+// the verb in-process with --json, writing to its own buffers. Read verbs
+// share mcpMu; anything that changes the box takes it alone (#289), on top
+// of the apply lock the mutating verbs hold.
+var mcpMu sync.RWMutex
 
 // mcpVerbs are the verbs an agent may reach at all. serve, init and token are
 // the box's own business; secret set would put a value into a transcript.
@@ -173,30 +173,23 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	if err != nil {
 		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", exitUsage
 	}
-	mcpMu.Lock()
-	defer mcpMu.Unlock()
-	var buf bytes.Buffer
-	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf}
+	// reads run side by side; a verb that changes something runs alone (#289)
+	if v.tier == "read" && verbName != "skill" && verbName != "template" {
+		mcpMu.RLock()
+		defer mcpMu.RUnlock()
+	} else {
+		mcpMu.Lock()
+		defer mcpMu.Unlock()
+	}
+	// the verb writes to its own buffers (#43, #289): neither the process's
+	// stdout nor its stderr is ever swapped, so nothing another goroutine
+	// prints can land in a reply
+	var buf, errBuf bytes.Buffer
+	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf, errOut: &errBuf}
 	if stdin != "" {
 		callEnv.in = strings.NewReader(stdin)
 	}
-	// the verb writes to buf (#43: the process stdout is never swapped, so
-	// nothing another goroutine prints can land here); fail()'s one-line
-	// errors still go to stderr — captured through a pipe read concurrently,
-	// never a pipe nobody drains
-	r, w, err := os.Pipe()
-	if err != nil {
-		return err.Error(), exitUsage
-	}
-	savedErr := os.Stderr
-	os.Stderr = w
-	var errBuf bytes.Buffer
-	done := make(chan struct{})
-	go func() { io.Copy(&errBuf, r); close(done) }()
 	code := v.run(ctx, callEnv, callArgs)
-	os.Stderr = savedErr
-	w.Close()
-	<-done
 	out := buf.String()
 	if e := strings.TrimSpace(errBuf.String()); e != "" {
 		if out != "" {

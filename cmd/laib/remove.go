@@ -18,7 +18,7 @@ import (
 // deleting data is the human's own, separate act, and Laib says where it is.
 func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
-		return fail(errors.New("usage: laib remove <service>"))
+		return env.fail(errors.New("usage: laib remove <service>"))
 	}
 	if proposal.Hand(env.actor) != "human" {
 		return exitRefusedMsg(env, "only a human removes a service")
@@ -26,20 +26,20 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	name := args[0]
 	st, svc, err := loadSvc(env, name)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	// nobody may need it (#50): a dependant left behind makes the state
 	// unloadable, and the refusal comes before anything is stopped or deleted
 	for _, other := range st.ServiceNames() {
 		for _, dep := range st.Services[other].Contract.After {
 			if dep == name {
-				return fail(fmt.Errorf("%s braucht %s (after:) — erst dort entfernen", other, name))
+				return env.fail(fmt.Errorf("%s braucht %s (after:) — erst dort entfernen", other, name))
 			}
 		}
 	}
 	for role, holder := range map[string]string{"proxy": st.Box.Roles.Proxy, "sso": st.Box.Roles.SSO, "identity": st.Box.Roles.Identity, "dns": st.Box.Roles.DNS, "model": st.Box.Roles.Model} {
 		if holder == name {
-			return fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
+			return env.fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
 		}
 	}
 	unlock, code := takeLock(env, st, "remove")
@@ -52,7 +52,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	kept := dataPaths(st, svc)
 	if err := os.RemoveAll(filepath.Join(env.paths.State, "services", name)); err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	// the service's Quadlet folder and its rendered files go with it: plan only
 	// scans folders of services the state still has (an unknown folder is
@@ -61,7 +61,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	os.RemoveAll(filepath.Join(env.paths.Render, name))
 	st2, err := loadState(env)
 	if err != nil {
-		return fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
+		return env.fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
 	}
 	code = applyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {

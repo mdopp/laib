@@ -89,7 +89,7 @@ func watchdogLoop(ctx context.Context, env *cliEnv) {
 func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := loadState(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	contact := st.Box.Watchdog.Contact
 	if contact == "" {
@@ -125,7 +125,7 @@ func cmdFamilyCard(ctx context.Context, env *cliEnv, args []string) int {
 </html>
 `, html.EscapeString(st.Box.Domain), html.EscapeString(strings.Join(svcs, ", ")), html.EscapeString(contact), time.Now().Format("02.01.2006"))
 	if st.Box.Watchdog.Contact == "" {
-		fmt.Fprintln(os.Stderr, "laib: box.yml watchdog.contact is empty — the card says 'den Admin'; set it to a name and a number")
+		fmt.Fprintln(env.errw(), "laib: box.yml watchdog.contact is empty — the card says 'den Admin'; set it to a name and a number")
 	}
 	_ = errors.New
 	return exitOK
