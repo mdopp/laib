@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -21,7 +22,7 @@ import (
 // skillsFor is the registry as hand sees it: a tool is granted when it is
 // an MCP verb and the hand's ceiling and verb list reach it.
 func skillsFor(env *cliEnv, st *state.State, hand string) []skill.Skill {
-	return skill.Grant(skill.Load(skills.FS, env.paths.State), st.Policy.Skills, func(v string) string {
+	return skill.Grant(skill.Load(skills.FS, env.Paths.State), st.Policy.Skills, func(v string) string {
 		tier := ""
 		for _, x := range verbs {
 			if x.name == v {
@@ -84,44 +85,44 @@ func skillTools(env *cliEnv, st *state.State, hand, name string, tools []map[str
 // for everyone (the Operator reads it over MCP); the switch is a human's
 // and a commit to policy.yml.
 func cmdSkill(ctx context.Context, env *cliEnv, args []string) int {
-	st, err := loadState(env)
+	st, err := cli.LoadState(env)
 	if err != nil {
-		return env.fail(err)
+		return env.Fail(err)
 	}
 	sks := skillsFor(env, st, "ops")
 	if len(args) == 0 || args[0] == "list" {
-		if env.json {
-			return emit(env, sks)
+		if env.JSON {
+			return cli.Emit(env, sks)
 		}
 		word := map[string]string{"active": "aktiv", "paused": "ruht", "refused": "verweigert"}
 		for _, s := range sks {
-			fmt.Fprintf(env.w(), "%-10s %-14s %s\n", word[s.Status], s.Name, s.Description)
+			fmt.Fprintf(env.W(), "%-10s %-14s %s\n", word[s.Status], s.Name, s.Description)
 			if s.Refused != "" {
-				fmt.Fprintf(env.w(), "           %s\n", s.Refused)
+				fmt.Fprintf(env.W(), "           %s\n", s.Refused)
 			}
 			for tool, why := range s.Denied {
-				fmt.Fprintf(env.w(), "           ohne %s: %s\n", tool, why)
+				fmt.Fprintf(env.W(), "           ohne %s: %s\n", tool, why)
 			}
 		}
-		return exitOK
+		return cli.ExitOK
 	}
 	if len(args) != 2 || (args[0] != "enable" && args[0] != "pause") {
-		return env.fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
+		return env.Fail(errors.New("usage: laib skill list | enable <name> | pause <name>"))
 	}
-	if proposal.Hand(env.actor) != "human" {
+	if proposal.Hand(env.Actor) != "human" {
 		return exitRefusedMsg(env, "only a human enables or pauses a skill")
 	}
 	if skill.Find(sks, args[1]) == nil {
-		return env.fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))
+		return env.Fail(fmt.Errorf("no skill %q (laib skill list)", args[1]))
 	}
 	value := map[string]string{"enable": "active", "pause": "paused"}[args[0]]
-	if err := setBox(filepath.Join(env.paths.State, "policy.yml"), "skills", args[1], value); err != nil {
-		return env.fail(err)
+	if err := setBox(filepath.Join(env.Paths.State, "policy.yml"), "skills", args[1], value); err != nil {
+		return env.Fail(err)
 	}
-	if err := proposal.CommitDirty(ctx, env.paths.State, env.actor); err != nil {
-		return env.fail(err)
+	if err := proposal.CommitDirty(ctx, env.Paths.State, env.Actor); err != nil {
+		return env.Fail(err)
 	}
-	journal.Append(env.paths.Journal, journal.Entry{Actor: env.actor, Verb: "skill", Result: "info", Detail: args[0] + " " + args[1]})
-	fmt.Fprintf(env.w(), "%s: %s\n", args[1], map[string]string{"active": "aktiv", "paused": "ruht"}[value])
-	return exitOK
+	journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "skill", Result: "info", Detail: args[0] + " " + args[1]})
+	fmt.Fprintf(env.W(), "%s: %s\n", args[1], map[string]string{"active": "aktiv", "paused": "ruht"}[value])
+	return cli.ExitOK
 }

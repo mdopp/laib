@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/token"
@@ -71,7 +72,7 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		st, err := loadState(env)
+		st, err := cli.LoadState(env)
 		if err != nil {
 			http.Error(w, "state: "+err.Error(), http.StatusServiceUnavailable)
 			return
@@ -114,7 +115,7 @@ func mcpHandler(env *cliEnv) http.HandlerFunc {
 				}
 			}
 			out, code := mcpCall(r.Context(), env, st, hand, p.Name, p.Args)
-			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != exitOK}, nil)
+			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != cli.ExitOK}, nil)
 		default:
 			rpcReply(w, req.ID, nil, &rpcError{-32601, "method not found: " + req.Method})
 		}
@@ -161,17 +162,17 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 		}
 	}
 	if v == nil || !mcpVerbs[verbName] {
-		return "unknown tool " + name, exitUsage
+		return "unknown tool " + name, cli.ExitUsage
 	}
 	if !policy.Allowed(st.Policy, hand, v.tier) {
-		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), exitRefused
+		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.tier), cli.ExitRefused
 	}
 	if !policy.MayVerb(st.Policy, hand, verbName) {
-		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), exitRefused
+		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), cli.ExitRefused
 	}
 	callArgs, stdin, err := mcpArgv(st, verbName, args)
 	if err != nil {
-		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", exitUsage
+		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", cli.ExitUsage
 	}
 	// reads run side by side; a verb that changes something runs alone (#289)
 	if v.tier == "read" && verbName != "skill" && verbName != "template" {
@@ -185,9 +186,9 @@ func mcpCall(ctx context.Context, env *cliEnv, st *state.State, hand, name strin
 	// stdout nor its stderr is ever swapped, so nothing another goroutine
 	// prints can land in a reply
 	var buf, errBuf bytes.Buffer
-	callEnv := &cliEnv{paths: env.paths, json: true, actor: hand, mcp: true, out: &buf, errOut: &errBuf}
+	callEnv := &cliEnv{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf}
 	if stdin != "" {
-		callEnv.in = strings.NewReader(stdin)
+		callEnv.In = strings.NewReader(stdin)
 	}
 	code := v.run(ctx, callEnv, callArgs)
 	out := buf.String()

@@ -23,9 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mdopp/laib/internal/apply"
-	"github.com/mdopp/laib/internal/boxfs"
-	"github.com/mdopp/laib/internal/journal"
 	"io"
 	"maps"
 	"net/http"
@@ -40,6 +37,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/journal"
 )
 
 // Preset is one model the router serves.

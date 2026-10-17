@@ -13,10 +13,10 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:
     # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
-    paths: [usb/**, internal/stick/**, cmd/laib-stick/**, scripts/install-box.sh, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, scripts/vm/**, .github/workflows/vm-install.yml]
   workflow_dispatch:
 concurrency:
   group: vm-install-${{ github.ref }}
@@ -48,7 +48,7 @@ jobs:
       - name: this commit's build, served to the box; the stick
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
-          go build -o laib-stick ./cmd/laib-stick
+          go build -o laib-stick ./stick/cmd/laib-stick
           scripts/vm/serve.sh "${GITHUB_SHA::7}"
           ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
           # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box

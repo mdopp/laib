@@ -2,7 +2,7 @@ name: persona-image
 on:
   push:
     branches: [main]
-    paths: ["cmd/persona/**", "internal/persona/**", "internal/mcpserver/**", "internal/state/**", "personas/**", "persona/**", "go.mod", "go.sum"]
+    paths: ["persona/**", "mcpserver/**", "personas/**", "go.mod", "go.sum"]
   workflow_dispatch:
 permissions:
   contents: read

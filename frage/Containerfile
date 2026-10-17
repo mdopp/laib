@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /frage ./cmd/frage
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /frage ./frage/cmd/frage
 FROM scratch
 COPY --from=build /frage /frage
 EXPOSE 8710

@@ -16,6 +16,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -43,7 +44,7 @@ func newCbox(t *testing.T) *cbox {
 	home := t.TempDir()
 	paths := boxfs.Paths{Home: home, State: filepath.Join(home, "state"), Journal: filepath.Join(home, "journal"), Render: filepath.Join(home, "render"),
 		Quadlet: filepath.Join(home, "quadlet"), Systemd: filepath.Join(home, "systemd"), Key: filepath.Join(home, "age.key"), Secrets: filepath.Join(home, "state", "secrets.age"), Lock: filepath.Join(home, "apply.lock")}
-	c := &cbox{env: &cliEnv{paths: paths, actor: "human:test"}, down: map[string]bool{}}
+	c := &cbox{env: &cliEnv{Paths: paths, Actor: "human:test"}, down: map[string]bool{}}
 	real := sysd.Run
 	t.Cleanup(func() { sysd.Run = real })
 	podSecrets := map[string]string{} // the box's podman secrets (#224)
@@ -80,7 +81,7 @@ func newCbox(t *testing.T) *cbox {
 		}
 		return "", nil
 	}
-	if rc := cmdInit(context.Background(), c.env, []string{"--domain", "e2e.home", "--data-dir", filepath.Join(home, "data")}); rc != exitOK {
+	if rc := cmdInit(context.Background(), c.env, []string{"--domain", "e2e.home", "--data-dir", filepath.Join(home, "data")}); rc != cli.ExitOK {
 		t.Fatalf("init rc %d", rc)
 	}
 	golden := filepath.Join("..", "..", "testdata", "golden", "basic", "state")
@@ -103,11 +104,11 @@ func newCbox(t *testing.T) *cbox {
 	}
 	sec["DNS_API_TOKEN"] = "x"
 	secrets.Save(paths.Secrets, paths.Key, sec)
-	st, err := loadState(c.env)
+	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(context.Background(), c.env, st, "", "test: first apply"); rc != exitOK {
+	if rc := runApply(context.Background(), c.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	c.calls = nil
@@ -126,7 +127,7 @@ func (c *cbox) restarts() []string {
 
 func (c *cbox) journalHas(t *testing.T, want string) bool {
 	t.Helper()
-	es, _ := journal.Read(c.env.paths.Journal, time.Now().Add(-time.Hour))
+	es, _ := journal.Read(c.env.Paths.Journal, time.Now().Add(-time.Hour))
 	for _, e := range es {
 		if strings.Contains(e.Detail, want) || strings.Contains(e.Reason, want) {
 			return true
@@ -155,12 +156,12 @@ func copyDir(t *testing.T, src, dst string) {
 func TestConvergeSkipsWhenSomeoneHoldsTheLock(t *testing.T) {
 	c := newCbox(t)
 	c.down["whoami.service"] = true
-	unlock, _, err := apply.Lock(c.env.paths, "restore:human:core")
+	unlock, _, err := apply.Lock(c.env.Paths, "restore:human:core")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != exitOK {
+	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("a locked tick is skipped, not red: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 {
@@ -176,10 +177,10 @@ func TestConvergeSkipsWhenSomeoneHoldsTheLock(t *testing.T) {
 func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	c := newCbox(t)
 	c.down["whoami.service"] = true
-	if rc := cmdPause(context.Background(), c.env, []string{"whoami", "--until", "2h", "wartung"}); rc != exitOK {
+	if rc := cmdPause(context.Background(), c.env, []string{"whoami", "--until", "2h", "wartung"}); rc != cli.ExitOK {
 		t.Fatalf("pause rc %d", rc)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != exitOK {
+	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	for _, u := range c.restarts() {
@@ -190,7 +191,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	if !c.journalHas(t, "pausiert") {
 		t.Fatal("the journal must say the service is paused")
 	}
-	st, _ := loadState(c.env)
+	st, _ := cli.LoadState(c.env)
 	r, rows := collectStatus(context.Background(), c.env, st)
 	var paused bool
 	for _, row := range rows {
@@ -201,7 +202,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	if !paused || r.Red != 0 {
 		t.Fatalf("readiness shows a paused service as pausiert, not rot: %+v %+v", r, rows)
 	}
-	if rc := cmdResume(context.Background(), c.env, []string{"whoami"}); rc != exitOK {
+	if rc := cmdResume(context.Background(), c.env, []string{"whoami"}); rc != cli.ExitOK {
 		t.Fatalf("resume rc %d", rc)
 	}
 	c.calls = nil
@@ -226,7 +227,7 @@ func TestRestartOnlyConvergeRunsCountAgainstTheBudget(t *testing.T) {
 	}
 	c.calls = nil
 	c.down["whoami.service"] = true
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != exitRed {
+	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitRed {
 		t.Fatalf("the fourth restart-only run must exhaust the budget: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 || !c.journalHas(t, "Budget erschöpft") {
@@ -239,10 +240,10 @@ func TestRestartOnlyConvergeRunsCountAgainstTheBudget(t *testing.T) {
 // the next converge finish the activation.
 func TestConvergeCompletesAKilledApply(t *testing.T) {
 	c := newCbox(t)
-	if err := apply.WritePending(c.env.paths, []string{"whoami"}, "test: killed apply"); err != nil {
+	if err := apply.WritePending(c.env.Paths, []string{"whoami"}, "test: killed apply"); err != nil {
 		t.Fatal(err)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != exitOK {
+	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	var hit bool
@@ -254,7 +255,7 @@ func TestConvergeCompletesAKilledApply(t *testing.T) {
 	if !hit {
 		t.Fatalf("whoami not restarted although its activation was pending: %v", c.calls)
 	}
-	if len(apply.Pending(c.env.paths)) != 0 {
+	if len(apply.Pending(c.env.Paths)) != 0 {
 		t.Fatal("the pending marker must be cleared after verify")
 	}
 }
@@ -274,12 +275,12 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 		return "", nil
 	}
 	var lockedAtStop []string
-	c.onStop = func() { lockedAtStop = append(lockedAtStop, apply.LockHolder(c.env.paths)) }
-	b, _ := os.ReadFile(filepath.Join(c.env.paths.State, "box.yml"))
+	c.onStop = func() { lockedAtStop = append(lockedAtStop, apply.LockHolder(c.env.Paths)) }
+	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
 	if !strings.Contains(string(b), "backup:") {
 		t.Fatal("init writes a backup repo")
 	}
-	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != exitOK { // caddy declares a data path
+	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK { // caddy declares a data path
 		t.Fatalf("restore rc %d", rc)
 	}
 	if len(lockedAtStop) == 0 {
@@ -290,10 +291,10 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 			t.Fatalf("the lock was not held at stop time: %q", h)
 		}
 	}
-	if apply.LockHolder(c.env.paths) != "" {
+	if apply.LockHolder(c.env.Paths) != "" {
 		t.Fatal("the lock must be released after restore")
 	}
-	if len(apply.Paused(c.env.paths)) != 0 {
+	if len(apply.Paused(c.env.Paths)) != 0 {
 		t.Fatal("restore's own pause must be lifted when it is done")
 	}
 }
@@ -302,9 +303,9 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 // says so.
 func TestAStaleLockIsTakenOverWithAJournalLine(t *testing.T) {
 	c := newCbox(t)
-	os.WriteFile(c.env.paths.Lock, []byte("apply:human:core pid 999999999 since 2026-10-11T10:00:00Z"), 0o644)
-	st, _ := loadState(c.env)
-	if rc := runApply(context.Background(), c.env, st, "", "after a crash"); rc != exitOK {
+	os.WriteFile(c.env.Paths.Lock, []byte("apply:human:core pid 999999999 since 2026-10-11T10:00:00Z"), 0o644)
+	st, _ := cli.LoadState(c.env)
+	if rc := runApply(context.Background(), c.env, st, "", "after a crash"); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if !c.journalHas(t, "übernommen") || !c.journalHas(t, "999999999") {

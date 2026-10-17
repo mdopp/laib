@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -49,12 +50,12 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 // intake configures box.yml intake and the token the verbs need.
 func (c *cbox) intake(t *testing.T, repo string) {
 	t.Helper()
-	p := filepath.Join(c.env.paths.State, "box.yml")
+	p := filepath.Join(c.env.Paths.State, "box.yml")
 	b, _ := os.ReadFile(p)
 	os.WriteFile(p, append(b, []byte("intake:\n  repo: "+repo+"\n  label: wunsch\n")...), 0o644)
-	sec, _ := secrets.Load(c.env.paths.Secrets, c.env.paths.Key)
+	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	sec[intakeTokenSecret] = "ghp_test"
-	secrets.Save(c.env.paths.Secrets, c.env.paths.Key, sec)
+	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
 }
 
 // #56 (1): a wish becomes a GitHub issue with the intake label — the Bote's
@@ -63,8 +64,8 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 	c := newCbox(t)
 	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
-	c.env.actor = "bote"
-	if rc := cmdWish(context.Background(), c.env, []string{"Ich brauche einen Dienst, der Rezepte sammelt", "und mit dem Handy teilt"}); rc != exitOK {
+	c.env.Actor = "bote"
+	if rc := cmdWish(context.Background(), c.env, []string{"Ich brauche einen Dienst, der Rezepte sammelt", "und mit dem Handy teilt"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 1 || g.paths[0] != "POST /repos/mdopp/x/issues" {
@@ -94,13 +95,13 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 func TestWishWithoutIntakeIsKeptOnDisk(t *testing.T) {
 	c := newCbox(t)
 	g := newFakeGitHub(t)
-	if rc := cmdWish(context.Background(), c.env, []string{"ein Kalender für alle"}); rc != exitOK {
+	if rc := cmdWish(context.Background(), c.env, []string{"ein Kalender für alle"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 0 {
 		t.Fatal("no intake, no issue")
 	}
-	files, _ := filepath.Glob(filepath.Join(c.env.paths.Home, "wishes", "*.md"))
+	files, _ := filepath.Glob(filepath.Join(c.env.Paths.Home, "wishes", "*.md"))
 	if len(files) != 1 {
 		t.Fatalf("the wish must be kept: %v", files)
 	}
@@ -114,8 +115,8 @@ func TestEscalateFilesAnIssueWhenIntakeIsConfigured(t *testing.T) {
 	c := newCbox(t)
 	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
-	c.env.actor = "ops"
-	if rc := cmdEscalate(context.Background(), c.env, []string{"caddy", "startet nicht, Config-Schlüssel unbekannt"}); rc != exitOK {
+	c.env.Actor = "ops"
+	if rc := cmdEscalate(context.Background(), c.env, []string{"caddy", "startet nicht, Config-Schlüssel unbekannt"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 1 {
