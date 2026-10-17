@@ -6,9 +6,9 @@ Authelia's token endpoint. Test tooling for vm-install (#254), never the
 box's: it proves the app's OIDC settings, Authelia's client and the path
 between the app and auth.<domain> together.
 
-Usage: oidc-login.py <app> <app base url>   (app: immich)
+Usage: oidc-login.py <app> <app base url>   (app: immich, audiobookshelf)
 Env:   OIDC_USER, OIDC_PASSWORD, OIDC_CA (the CA file Caddy's certs chain to),
-       OIDC_EMAIL (what the app must say it logged in)."""
+       OIDC_EMAIL (what Immich must say it logged in)."""
 import http.cookiejar, json, os, ssl, sys, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
@@ -36,7 +36,7 @@ def req(method, url, body=None):
     try:
         data = json.loads(raw) if raw else None
     except ValueError:
-        data = None
+        data = raw.decode(errors="replace")[:300]  # a text answer, shown when it is an error
     return resp.status if hasattr(resp, "status") else resp.code, data, resp.headers.get("Location")
 
 
@@ -64,7 +64,7 @@ def authelia(url, client_id):
             if flow:
                 body.update(flow=q.get("flow", "openid_connect"), flowID=flow)
             code, res, _ = req("POST", f"https://{auth}/api/firstfactor", body)
-            if code != 200 or (res or {}).get("status") != "OK":
+            if code != 200 or not isinstance(res, dict) or res.get("status") != "OK":
                 fail(f"Authelia refused the first factor: HTTP {code} {res}")
             print("authelia: logged in as", E["OIDC_USER"])
             logged_in = True
@@ -72,7 +72,7 @@ def authelia(url, client_id):
         if not flow:
             fail(f"Authelia sent us to {u.path} with no flow to consent to")
         code, res, _ = req("POST", f"https://{auth}/api/oidc/consent", {"flow_id": flow, "client_id": client_id, "consent": True, "pre_configure": False})
-        if code != 200 or (res or {}).get("status") != "OK":
+        if code != 200 or not isinstance(res, dict) or res.get("status") != "OK":
             fail(f"Authelia refused the consent: HTTP {code} {res}")
         print("authelia: consent given for", client_id)
         url = urllib.parse.urljoin(url, res["data"]["redirect_uri"])
@@ -81,16 +81,32 @@ def authelia(url, client_id):
 
 def immich(base):
     code, body, _ = req("POST", base + "/api/oauth/authorize", {"redirectUri": base + "/auth/login"})
-    if code not in (200, 201) or not body or not body.get("url"):
+    if code not in (200, 201) or not isinstance(body, dict) or not body.get("url"):
         fail(f"immich /api/oauth/authorize: HTTP {code} {body} (Immich could not reach Authelia's discovery?)")
     print("immich: sends the browser to", body["url"].split("?")[0])
     back = authelia(body["url"], "immich")
     if "code=" not in back:
         fail(f"Authelia sent us back without a code: {back}")
     code, body, _ = req("POST", base + "/api/oauth/callback", {"url": back})
-    if code not in (200, 201) or not body or body.get("userEmail") != E["OIDC_EMAIL"]:
+    if code not in (200, 201) or not isinstance(body, dict) or body.get("userEmail") != E["OIDC_EMAIL"]:
         fail(f"immich /api/oauth/callback (the code exchange): HTTP {code} {body}")
     print(f"immich: code exchanged, logged in as {body['userEmail']}")
 
 
-{"immich": immich}[sys.argv[1]](sys.argv[2].rstrip("/"))
+def audiobookshelf(base):
+    # as ABS's login page does it: ABS serves under its router base path, /audiobookshelf, and takes
+    # only a callback below it (OidcAuthStrategy.isValidWebCallbackUrl)
+    code, body, loc = req("GET", base + "/audiobookshelf/auth/openid?callback=" + urllib.parse.quote(base + "/audiobookshelf/login", safe=""))
+    if not loc or not loc.startswith("https://auth."):
+        fail(f"audiobookshelf /auth/openid: HTTP {code}, to {loc}: {body}")
+    print("audiobookshelf: sends the browser to", loc.split("?")[0])
+    back = authelia(loc, "audiobookshelf")
+    if "code=" not in back:
+        fail(f"Authelia sent us back without a code: {back}")
+    code, body, loc = req("GET", back)  # ABS exchanges the code at Authelia's token endpoint
+    if not loc or "accessToken=" not in loc:
+        fail(f"audiobookshelf /auth/openid/callback (the code exchange): HTTP {code}, to {loc}: {body}")
+    print("audiobookshelf: code exchanged, logged in")
+
+
+{"immich": immich, "audiobookshelf": audiobookshelf}[sys.argv[1]](sys.argv[2].rstrip("/"))

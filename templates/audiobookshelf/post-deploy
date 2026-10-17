@@ -1,18 +1,44 @@
 #!/usr/bin/env python3
 """audiobookshelf post-deploy: the root user on first run, the two
-libraries (Hörbücher, Podcasts). Podcast subscriptions are added in the
-app or the UI; ABS downloads new episodes on its own schedule."""
+libraries (Hörbücher, Podcasts), and the family's login (#255). Podcast
+subscriptions are added in the app or the UI; ABS downloads new episodes
+on its own schedule.
+
+The login: ABS keeps its OIDC settings, the client secret among them, in
+its own database, and builds its OIDC client from them once, in memory. That
+pair retired ABS on ServiceBay (its secret drifted from Authelia's, #1725
+there). So on every apply this hook sets the settings from Laib's secret
+through ABS's API (PATCH /api/auth-settings), reads them back, and when they
+changed switches openid off and on, which is what makes ABS drop its cached
+client (MiscController.updateAuthSettings → unuse/init). ABS's own login
+stays on: the fallback when Authelia is down."""
 import json, os, sys, time, urllib.request, urllib.error
 
-BASE = "http://127.0.0.1:13378"
-PW = os.environ["LAIB_SECRET_ABS_ROOT_PASSWORD"]
+E = os.environ
+BASE = E.get("ABS_URL", "http://127.0.0.1:13378")
+PW = E["LAIB_SECRET_ABS_ROOT_PASSWORD"]
+AUTH = "https://auth." + E["LAIB_DOMAIN"]
+WANT = {  # Authelia's endpoints; ABS does no discovery of its own
+    "authOpenIDIssuerURL": AUTH, "authOpenIDAuthorizationURL": AUTH + "/api/oidc/authorization",
+    "authOpenIDTokenURL": AUTH + "/api/oidc/token", "authOpenIDUserInfoURL": AUTH + "/api/oidc/userinfo",
+    "authOpenIDJwksURL": AUTH + "/jwks.json", "authOpenIDClientID": "audiobookshelf", "authOpenIDClientSecret": E["OIDC_SECRET"],
+    "authOpenIDTokenSigningAlgorithm": "RS256", "authOpenIDButtonText": "Mit Familienkonto anmelden",
+    "authOpenIDAutoLaunch": False, "authOpenIDAutoRegister": True,
+    "authOpenIDGroupClaim": "",  # with a group claim ABS refuses everyone not in a group named admin, user or guest
+    "authOpenIDSubfolderForRedirectURLs": "",  # unset, ABS's callback becomes /undefined/auth/openid/callback
+    "authOpenIDMobileRedirectURIs": ["audiobookshelf://oauth"],
+}
+
 
 def req(method, path, body=None, token=None):
     h = {"Content-Type": "application/json", **({"Authorization": "Bearer " + token} if token else {})}
     r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
     with urllib.request.urlopen(r, timeout=20) as resp:
         data = resp.read()
-        return json.loads(data) if data else None
+        try:
+            return json.loads(data) if data else None
+        except ValueError:
+            return data.decode(errors="replace")  # /init answers "OK", text
 
 for _ in range(60):
     try:
@@ -24,10 +50,20 @@ else:
 if not status.get("isInit"):
     req("POST", "/init", {"newRoot": {"username": "root", "password": PW}})
     print("root user created")
-token = req("POST", "/login", {"username": "root", "password": PW})["user"]["token"]
+user = req("POST", "/login", {"username": "root", "password": PW})["user"]
+token = user.get("accessToken") or user["token"]  # ABS 2.26 added accessToken; token is the old one
 have = {l["name"] for l in req("GET", "/api/libraries", token=token)["libraries"]}
 for name, folder, mtype in (("Hörbücher", "/audiobooks", "book"), ("Podcasts", "/podcasts", "podcast")):
     if name not in have:
         req("POST", "/api/libraries", {"name": name, "folders": [{"fullPath": folder}], "mediaType": mtype}, token=token)
         print("library created:", name)
-print("audiobookshelf provisioned")
+
+ok = lambda s: all(s.get(k) == v for k, v in WANT.items()) and "openid" in s.get("authActiveAuthMethods", [])
+if ok(req("GET", "/api/auth-settings", token=token)):
+    print("audiobookshelf: family login (OIDC via Authelia) unchanged")
+    sys.exit(0)
+req("PATCH", "/api/auth-settings", {"authActiveAuthMethods": ["local"]}, token=token)  # drops the cached client
+req("PATCH", "/api/auth-settings", {**WANT, "authActiveAuthMethods": ["local", "openid"]}, token=token)
+if not ok(req("GET", "/api/auth-settings", token=token)):
+    print("audiobookshelf: the OIDC settings did not stick", file=sys.stderr); sys.exit(1)
+print("audiobookshelf: family login (OIDC via Authelia) set from Laib's secret")
