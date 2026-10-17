@@ -1,0 +1,10 @@
+# Patch updates as proposals (#287): what the registry has that is newer
+# than a pinned image, proposed one service at a time; the dial and the
+# content review decide whether laib applies it (ADR 0019 §4).
+description: Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund.
+trigger: {weekly: "Sa 10:00"}
+tools: [updates, propose, note]
+output: propose
+prompt: |
+  Auslöser: Wochenblick auf Aktualisierungen. Lies updates. Schlage für jeden Dienst mit einer neueren Patch-Version genau diesen Wert vor (propose mit service, key, value = Image:Patch-Tag und einem Grund: was vorher lief, was die Patch-Version bringt). Höchstens drei Vorschläge.
+  Minor-Versionen schlägst du nicht vor; nenne sie in der Notiz, damit ein Mensch entscheidet. Fehler beim Lesen einer Registry stehen in der Notiz, sonst nichts. Zum Schluss note mit kind watch.

@@ -50,8 +50,10 @@ var mcpParams = map[string][]mcpParam{
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true},
 		{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen"},
 		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"}},
-	"apply": {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
-	"skill": {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
+	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
+	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
+	"updates": {},
+	"skill":   {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 
 var (
@@ -171,6 +173,11 @@ func mcpArgv(st *state.State, verb string, a map[string]any) ([]string, string, 
 			argv = append([]string{"--patch"}, argv...)
 		}
 		return argv, stdin, nil
+	case "backup":
+		if val["action"] == "check" {
+			return []string{"check"}, stdin, nil
+		}
+		return nil, stdin, nil
 	case "wish":
 		text := val["text"]
 		if val["saw"] != "" {

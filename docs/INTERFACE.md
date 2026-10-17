@@ -18,6 +18,7 @@ laib escalate <service> "<was ich weiß>"       context bundle + red journal lin
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake; from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
+laib updates                         newer patch and minor releases of every pinned image, from the registry (#287)
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
@@ -68,6 +69,8 @@ splitting a command line, so quotes and spaces survive:
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch` |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
+| `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
+| `laib_updates` | none |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
 `service` is an enum of the installed services, `key` a values.yml key
@@ -95,6 +98,13 @@ dropped from its reply. The built-in skills' menus:
 | `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
+| `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287) |
+| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
+
+Reds within a minute (`OPERATOR_EVENT_GATHER`, default 60s) are one
+incident session (#287): a cascade — lldap, then Authelia, then Caddy —
+reaches `vorfall` once, with every red in its detail, and the prompt asks
+for the one cause instead of a restart per symptom.
 
 `nutzung` (#270) starts from usage-metrics instead of `laib context`:
 `/summary?days=7` and `/misses?days=7` with `USAGE_METRICS_TOKEN` (the

@@ -5,3 +5,4 @@ tools: [status, diag, journal, note]
 output: report
 prompt: |
   Auslöser: Morgenbericht. Lies journal (24 Stunden) und status, fasse zusammen, was nachts passiert ist und was ansteht. Rot zuerst. Dann note mit kind report.
+  Ist die Sicherung rot oder älter als einen Tag, oder hat die Wochenprobe abgewichen, steht das als Erstes im Bericht.

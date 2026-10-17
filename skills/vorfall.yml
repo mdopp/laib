@@ -7,3 +7,4 @@ more: [look, read, journal, plan, apply]   # a capable model also looks inside t
 output: note
 prompt: |
   Schau dir den Dienst an (diagnose, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, set_value), sonst escalate. Zum Schluss note.
+  Sind mehrere Dienste rot, such die eine Ursache: diagnose für die ganze Box, dann die Dienste, von denen die anderen abhängen (after: in inspect, die Anmeldung, der Proxy, die Datenbank). Repariere die Ursache, nicht jede Folge einzeln, und schreib eine Notiz mit der Ursache.

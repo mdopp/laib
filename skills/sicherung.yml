@@ -1,0 +1,11 @@
+# Backup integrity (#287): restic checks a sample of the repository and one
+# service's path is restored into a scratch dir and compared (laib backup
+# check, the canary restore); stale or red backups go into the note the
+# morning report reads.
+description: Einmal pro Woche — die Sicherung prüfen und probeweise wiederherstellen; was nicht stimmt, steht im Morgenbericht.
+trigger: {weekly: "So 05:00"}
+tools: [backup, journal, diag, note]
+output: note
+prompt: |
+  Auslöser: Wochenprobe der Sicherung. Rufe backup mit action check auf: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her. Lies dann journal der letzten 168 Stunden für die Sicherungen (verb backup) und diagnose für ihren Zustand.
+  Rot, eine Abweichung bei der Probe oder keine grüne Sicherung seit mehr als einem Tag: note mit kind incident, deutsch, mit Uhrzeit und Pfad. Du stellst nichts wieder her. Sonst note mit kind watch in einem Satz.

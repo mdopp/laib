@@ -146,10 +146,10 @@ An Operator skill (ADR 0023): `description` (German, one sentence),
 `event: red`; `${TICK}` and `${REPORT_AT}` are `box.yml operator.tick` and
 `reportAt`), `tools` (kernel verbs from `status diag logs inspect look read
 journal context inbox plan note escalate propose wish restart exec write
-apply`; `note` required), `more` (tools only a capable model gets, checked
+apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
 the same way, #286), `context` (`box` or `usage`), `output` (`note`,
 `report`, `propose`) and `prompt`. A file with a built-in's name
-(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`) replaces it. The
+(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
 changing one is class `human` in the review.

@@ -99,6 +99,12 @@ func main() {
 	// A red runs the event skills for its service, debounced for ten minutes.
 	last := map[string]time.Time{}
 	var lastMu sync.Mutex
+	// reds within a minute are one cascade and one session (#287)
+	wait, err := time.ParseDuration(env("OPERATOR_EVENT_GATHER", "60s"))
+	if err != nil || wait <= 0 {
+		wait = time.Minute
+	}
+	gather := &operator.Gatherer{Wait: wait, Fire: func(tr operator.Trigger) { logged(runner.Event(ctx, current(), tr)) }}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /event", func(w http.ResponseWriter, r *http.Request) {
 		var e struct {
@@ -130,8 +136,7 @@ func main() {
 		if recent {
 			return
 		}
-		tr := operator.Trigger{Kind: "event", Service: e.Service, Detail: e.Verb + ": " + e.Detail}
-		go func() { logged(runner.Event(ctx, current(), tr)) }()
+		gather.Add(e.Service, e.Verb+": "+e.Detail)
 	})
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"operator":"bereit"}`)

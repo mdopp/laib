@@ -49,7 +49,7 @@ type Skill struct {
 // them, whatever the hand's ceiling. apply is (owner, #286, 2026-10-17):
 // for the ops hand the kernel lets it free only its own proposal inside the
 // envelope (cmd/laib opsApply).
-var Vocabulary = []string{"status", "diag", "logs", "inspect", "look", "read", "journal", "context", "inbox", "plan", "apply", "note", "escalate", "propose", "wish", "restart", "exec", "write"}
+var Vocabulary = []string{"status", "diag", "logs", "inspect", "look", "read", "journal", "context", "inbox", "plan", "apply", "updates", "backup", "note", "escalate", "propose", "wish", "restart", "exec", "write"}
 
 var (
 	nameRe   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
