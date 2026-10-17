@@ -2,8 +2,9 @@ name: usage-metrics
 template: {registry: builtin, name: usage-metrics, version: 1}
 provides: [usage-metrics]
 # Aggregate, anonymous usage counters for household apps (mdopp/usage-metrics):
-# a backend POSTs (app, event, day, count) to /ingest, the operator reads
-# /summary. No route: the callers are other services' backends on this box,
+# a backend POSTs (app, event, day, count) to /ingest and an unanswered
+# sentence to /miss (30 days, no who); /summary and /misses read it back.
+# Callers: Haus and the Bote (#266). No route: the callers are other services' backends on this box,
 # at host.containers.internal:8094 with the bearer token; the port is dropped
 # on the physical interfaces, so neither the LAN nor the internet reaches it.
 routes: []

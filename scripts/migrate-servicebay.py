@@ -38,6 +38,7 @@ for _line in open(CARRY_SCRIPT).read().split("TABLE='", 1)[1].split("'", 1)[0].s
 VALUES = {
     "auth": {"LLDAP_BASE_DN": "BASE_DN"},
     "radicale": {"LLDAP_BASE_DN": "BASE_DN"},
+    "media": {"LLDAP_BASE_DN": "BASE_DN"},   # the LDAP plugin's search base (#256)
     "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
     "file-share": {"SHARE_USER": "SHARE_USER"},
     "immich": {"IMMICH_ADMIN_EMAIL": "ADMIN_EMAIL"},   # the admin post-deploy logs in as once, to mint its key (#254)

@@ -46,6 +46,11 @@ Environment=HAUS_LLM_KEY=${MODEL_KEY}
 # without the Bote the key renders empty and Haus shows no field
 Environment=HAUS_BOTE_URL=${BOTE_URL}
 Environment=HAUS_BOTE_KEY=${BOTE_KEY}
+# what the family uses (#266): counts per feature and day, never who, flushed every few minutes to
+# usage-metrics as this pod reaches it; the admins' "Was wird genutzt" card reads it back. Without
+# usage-metrics the token renders empty and Haus counts nothing
+Environment=HAUS_USAGE_URL=${USAGE_URL}
+Environment=HAUS_USAGE_TOKEN=${USAGE_TOKEN}
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
