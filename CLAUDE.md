@@ -38,6 +38,12 @@ them.
 - **Releases via release-please only.** Never bump a version by hand.
 - **A renderer change ships with its golden file.** A PR that touches
   `internal/render` and no `testdata/golden` fails review.
+- **Weigh a change against what worked before.** Rethinking is welcome, but
+  the new solution must be easier to maintain or more pleasant for the family,
+  and neither noticeably worse (owner, 2026-10-16, #246). Before replacing a
+  solution, read the one it replaces (for anything ServiceBay did: its
+  template and `assists/`), and say in the PR what was there and which of the
+  two gets better. The Operator's prompts carry the same rule.
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
   check. Not the first time.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
