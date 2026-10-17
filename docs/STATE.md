@@ -271,6 +271,12 @@ trusts `Remote-User` only when the header matches (ADR 0012 §3). The
 secret is one of the service's own declared secrets; the loader refuses a
 route naming one the service does not declare.
 
+Caddy strips every client-sent `Remote-*` header on every site, ordered
+before forward-auth (`order request_header first`), so the only
+`Remote-User` an app ever sees is Authelia's. A route with `auth: none`
+gets none at all, and its app must not trust one (#231,
+`internal/render/auth231_test.go`).
+
 ### Secrets that may stay unset
 
 A contract secret with `external: true` must be in `secrets.age` before

@@ -79,7 +79,7 @@ file moves out.
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
    model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
-   immich, media, home-assistant** in that order: small and stateless first,
+   immich, media, home-assistant, chronik** in that order: small and stateless first,
    the ones with migrations last. Each one, in this order (the service is
    down from a to c; that is the price of never having two writers on one
    database):
@@ -98,6 +98,13 @@ file moves out.
    c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
+   **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
+   (`laib template sync`) and needs `llama` for the lease and `stimme` for
+   Piper. Its data moves once, in step b with ServiceBay's unit stopped (one
+   Discord token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
+   `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved; the
+   commands are in foundry-chronicle's `templates/chronik/README.md`. The
+   Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template; their git
    checkouts are copied into the Werkstatt's workspace (below). Their
    sessions and SSH host keys are an open decision (below).
@@ -182,8 +189,11 @@ applies:
   `packages/laib_auth_oidc.yaml`, with Laib's secret. The users it linked
   stay linked. Nothing to carry.
 - **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
-  `/workspace`; the Werkstatt keeps its home in the image. Default: sessions
-  start fresh, and the host key changes once (the app asks to trust it again).
+  claude-dev's `/workspace` (its home; host keys in `.ssh/host_keys`); the
+  Werkstatt keeps its home in `werkstatt/home` and its host keys in
+  `werkstatt/ssh-host-keys` (#241). Copying claude-dev's into them is not
+  in `move-servicebay-data.py` yet. Until it is: sessions start fresh, and
+  the host key changes once (the app asks to trust it again).
 
 ## What does not move
 

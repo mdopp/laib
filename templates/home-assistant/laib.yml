@@ -39,3 +39,5 @@ health:
 ports:
   - {port: 8091, lan: false}
   - {port: 5580, lan: false}       # matter server websocket
+  - {port: 3000, lan: false}       # Z-Wave JS server websocket, no login (#231); HA reaches it on loopback
+  - {port: 3001, lan: false}       # the same on a box migrated from ServiceBay, which moved it off 3000
