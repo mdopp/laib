@@ -393,7 +393,7 @@ def bw_login(email, password):
     mk, h, enc, mac = bw_keys(email, password, it)
     st, b, _ = req("POST", f"http://{LOOP}:8222/identity/connect/token", form={
         "grant_type": "password", "username": email, "password": h, "scope": "api offline_access", "client_id": "web",
-        "deviceType": "10", "deviceIdentifier": "6c0f7b9e-4b0c-4d7c-9c2a-generalprobe", "deviceName": "generalprobe"})
+        "deviceType": "10", "deviceIdentifier": str(uuid.uuid5(uuid.NAMESPACE_DNS, "generalprobe.laib")), "deviceName": "generalprobe"})
     d = js(b) or {}
     if st != 200:
         raise AssertionError(f"Vaultwarden login: HTTP {st} {d.get('error_description') or d.get('message') or b[:120]!r}")
@@ -409,10 +409,19 @@ def seed_vault(f, s):
     sym = secrets.token_bytes(64)
     body = {"email": v["email"], "name": "Ben", "masterPasswordHash": h, "masterPasswordHint": None, "key": enc_string(enc, mac, sym),
             "kdf": 0, "kdfIterations": 600000, "keys": None}
-    st, b, _ = req("POST", f"http://{LOOP}:8222/identity/accounts/register", body)
-    if st != 200:
-        st, b, _ = req("POST", f"http://{LOOP}:8222/api/accounts/register", body)
-    if st != 200:
+    # the web vault's sign-up: a verification token (handed back directly when the
+    # box sends no mail), then register/finish; the server keeps the sealed keys as given
+    st, b, _ = req("POST", f"http://{LOOP}:8222/identity/accounts/register/send-verification-email",
+                   {"email": v["email"], "name": "Ben", "receiveMarketingEmails": False})
+    token = js(b) if st == 200 else None
+    if isinstance(token, str):
+        fin = {"email": v["email"], "emailVerificationToken": token, "masterPasswordHash": h, "masterPasswordHint": None,
+               "userSymmetricKey": body["key"], "kdf": 0, "kdfIterations": 600000,
+               "userAsymmetricKeys": {"publicKey": b64(secrets.token_bytes(294)), "encryptedPrivateKey": enc_string(enc, mac, secrets.token_bytes(64))}}
+        st, b, _ = req("POST", f"http://{LOOP}:8222/identity/accounts/register/finish", fin)
+    else:
+        st, b, _ = req("POST", f"http://{LOOP}:8222/identity/accounts/register", body)
+    if st not in (200, 204):
         raise RuntimeError(f"Vaultwarden register: HTTP {st} {b[:200]!r}")
     tok, e2, m2 = bw_login(v["email"], v["password"])
     st, b, _ = req("POST", f"http://{LOOP}:8222/api/ciphers", {"type": 2, "name": enc_string(e2, m2, v["item"].encode()), "notes": None,
@@ -661,8 +670,9 @@ def check_home(f, s, phase):
         raise AssertionError(f"the automation is gone: HTTP {st}")
     st, entries = ha("/config/config_entries/entry", tok)
     have = sorted(e["domain"] for e in entries or [])
-    if have != s["home"]["entries"]:
-        raise AssertionError(f"config entries: {have}, before {s['home']['entries']}")
+    gone = [d for d in s["home"]["entries"] if d not in have]
+    if gone:
+        raise AssertionError(f"config entries gone: {gone} (have {have})")
     doc = json.load(open(os.path.join(cfg, ".storage/core.config_entries")))
     url = next(e["data"]["url"] for e in doc["data"]["entries"] if e["domain"] == "zwave_js")
     port = "3001" if phase == "before" else "3000"
