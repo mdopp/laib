@@ -29,7 +29,7 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	if len(args) > 0 && args[0] == "--confirm" {
 		if err := os.WriteFile(sheetConfirmed(env), []byte(time.Now().UTC().Format(time.RFC3339)+" "+env.actor+"\n"), 0o644); err != nil {
-			return fail(err)
+			return env.fail(err)
 		}
 		if st, err := loadState(env); err == nil {
 			record(env, st, journal.Entry{Actor: env.actor, Verb: "recovery-sheet", Result: "info", Detail: "als gesichert bestätigt (ausgedruckt oder im Passwortmanager)"})
@@ -39,11 +39,11 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	st, pw, err := backupPrep(env)
 	if err != nil {
-		return fail(err)
+		return env.fail(err)
 	}
 	keyFile, err := os.ReadFile(env.paths.Key)
 	if err != nil {
-		return fail(errors.New("no age key at " + env.paths.Key + ": laib init first"))
+		return env.fail(errors.New("no age key at " + env.paths.Key + ": laib init first"))
 	}
 	key := ""
 	for _, line := range strings.Split(string(keyFile), "\n") {
@@ -52,7 +52,7 @@ func cmdRecoverySheet(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	if key == "" {
-		return fail(errors.New("no AGE-SECRET-KEY line in " + env.paths.Key))
+		return env.fail(errors.New("no AGE-SECRET-KEY line in " + env.paths.Key))
 	}
 	repo := st.Box.Backup.Repo
 	if repo == "" {
@@ -88,7 +88,7 @@ Nach dem Lesen: laib recovery-sheet --confirm  (sonst mahnt laib diag)
 ══════════════════════════════════════════════════════════════════════
 `, st.Box.Domain, time.Now().Format("02.01.2006 15:04"), key, repo, pw, pw)
 	if _, err := os.Stat(sheetConfirmed(env)); err != nil {
-		fmt.Fprintln(os.Stderr, "laib: noch nicht bestätigt — nach dem Ausdrucken: laib recovery-sheet --confirm")
+		fmt.Fprintln(env.errw(), "laib: noch nicht bestätigt — nach dem Ausdrucken: laib recovery-sheet --confirm")
 	}
 	return exitOK
 }

@@ -41,6 +41,8 @@ data:
     backup: false                             # backed up by file-share
   - path: ${DATA_DIR}/file-share/data/paperless-consume   # the app's camera uploads land here for Paperless (haus#10); transient
     backup: false
+  - path: ${DATA_DIR}/file-share/samba-accounts   # where Haus hands a network-drive password to file-share (#296); without file-share no FIFO, no page
+    backup: false
 health:
   http: http://127.0.0.1:8650/healthz
 ports:

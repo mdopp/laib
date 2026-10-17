@@ -34,18 +34,18 @@ func fakeMCP(t *testing.T, replies map[string]string) (*httptest.Server, *[]stri
 			reply(map[string]any{"protocolVersion": "2025-03-26"})
 		case "tools/list":
 			var tools []map[string]any
-			for _, n := range []string{"laib_status", "laib_diag", "laib_logs", "laib_inspect", "laib_restart", "laib_journal", "laib_propose", "laib_wish", "laib_note", "laib_escalate", "laib_context", "laib_exec"} {
+			for _, n := range []string{"laib_status", "laib_diag", "laib_logs", "laib_inspect", "laib_restart", "laib_journal", "laib_propose", "laib_wish", "laib_note", "laib_skill", "laib_escalate", "laib_context", "laib_exec"} {
 				tools = append(tools, map[string]any{"name": n, "description": n, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"args": map[string]any{"type": "string"}}}})
 			}
 			reply(map[string]any{"tools": tools})
 		case "tools/call":
 			var p struct {
-				Name string            `json:"name"`
-				Args map[string]string `json:"arguments"`
+				Name string         `json:"name"`
+				Args map[string]any `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
 			mu.Lock()
-			calls = append(calls, p.Name+" "+p.Args["args"])
+			calls = append(calls, p.Name+" "+shownArgs(p.Args))
 			mu.Unlock()
 			text, ok := replies[p.Name]
 			if !ok {
@@ -140,7 +140,7 @@ func TestBudgetAnswerTurnsTheSessionRedAndEscalationCounts(t *testing.T) {
 		t.Fatalf("outcome %s", s.Outcome)
 	}
 	// the model ended without a note: the operator writes one itself
-	if !strings.Contains(strings.Join(*calls, "\n"), "laib_note --kind incident") {
+	if !strings.Contains(strings.Join(*calls, "\n"), `laib_note {"kind":"incident"`) {
 		t.Fatal("no note written for a silent end")
 	}
 }
