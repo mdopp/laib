@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
@@ -264,9 +265,9 @@ func TestConvergeCompletesAKilledApply(t *testing.T) {
 // #39 (2): restore holds the lock from the first stop to the final verify.
 func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 	c := newCbox(t)
-	realRestic := resticRun
-	t.Cleanup(func() { resticRun = realRestic })
-	resticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+	realRestic := backup.ResticRun
+	t.Cleanup(func() { backup.ResticRun = realRestic })
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
 		if args[0] == "snapshots" {
 			return `[{"id":"abcdef0123456789"}]`, nil
 		}
@@ -281,7 +282,7 @@ func TestRestoreHoldsTheLockFromStopToVerify(t *testing.T) {
 	if !strings.Contains(string(b), "backup:") {
 		t.Fatal("init writes a backup repo")
 	}
-	if rc := cmdRestore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK { // caddy declares a data path
+	if rc := backup.Restore(context.Background(), c.env, []string{"latest", "caddy"}); rc != cli.ExitOK { // caddy declares a data path
 		t.Fatalf("restore rc %d", rc)
 	}
 	if len(lockedAtStop) == 0 {
