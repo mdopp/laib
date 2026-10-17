@@ -14,10 +14,20 @@ Two kinds of route, written into every `laib.yml` (#55):
 
 | Kind | `auth:` | Why | Templates |
 |---|---|---|---|
-| browser only, behind Authelia | `auth: one_factor` / `two_factor` | admin surfaces people open in a browser; forward-auth does the login | laib, sync (Syncthing), ldap, dns, adguard, whoami |
-| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless, files (File Browser), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
+| browser only, behind Authelia | `auth: one_factor` / `two_factor` | surfaces people open in a browser; forward-auth does the login | laib, sync (Syncthing), files (File Browser, proxy auth on Remote-User), ldap, dns, adguard, whoami |
+| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless (OIDC, account on the first login), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
 
-OIDC clients (immich, vaultwarden, audiobookshelf) fetch Authelia's
+An `auth: none` route fronts an app that really logs in on its own: none
+of its units may trust `Remote-User` or turn the app's login off
+(`internal/render/auth231_test.go`, #231). Caddy strips every client-sent
+`Remote-*` header on every site before forward-auth adds Authelia's, so
+only an app behind Authelia ever sees one. File Browser makes a family
+member's account on the first visit, without admin rights; the LLDAP
+account in `FILEBROWSER_ADMIN_USER` is its admin from the first start, as
+in ServiceBay. An unauthenticated control port on the host network (Z-Wave JS,
+Matter) is declared `lan: false` or listens on loopback.
+
+OIDC clients (immich, vaultwarden, audiobookshelf, paperless) fetch Authelia's
 discovery document over HTTPS: they need a certificate they trust — real
 certificates (#45, the trial domain at deSEC), never `tls: internal`.
 Radicale binds LDAP with LLDAP's read-only account `radicale`
@@ -48,5 +58,5 @@ conversation agent) are set up by hand once; with the optional secret
 | immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
 | file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
-| paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's forward auth; consume folder on the file share |
+| paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share |
 | usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |
