@@ -12,7 +12,6 @@ Volume=${DATA_DIR}/media/jellyfin-config:/config:z
 Volume=${DATA_DIR}/media/jellyfin-cache:/cache:z
 # the shared file-share tree: never relabelled (#230), labelling is off above
 Volume=${MEDIA_ROOT}:/media:ro
-AddHost=auth.${DOMAIN}:${LAN_IP}
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]

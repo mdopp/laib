@@ -210,6 +210,7 @@ ones, or the app is locked out of its own database or config:
 | `LLDAP_ADMIN_PASSWORD` | same | LLDAP reads it only when it creates the DB: Authelia's bind, the auth post-deploy, Radicale's seeding |
 | `AUTHELIA_STORAGE_KEY` | `AUTHELIA_STORAGE_ENCRYPTION_KEY` | Authelia refuses its `db.sqlite3`; every TOTP/WebAuthn registration is lost |
 | `IMMICH_DB_PASSWORD` | `DB_PASSWORD` | immich-server cannot reach its Postgres |
+| `IMMICH_ADMIN_PASSWORD` | same | post-deploy logs in as Immich's admin once, to mint the key it sets the family login with (#254); ServiceBay kept the admin on this password (its #1928) |
 | `PAPERLESS_DB_PASSWORD` | same | the same for Paperless |
 | `MQTT_PASSWORD` | same | every device and Home Assistant lose the broker |
 | `JELLYFIN_ADMIN_PASSWORD` | same | the media post-deploy cannot log in to Jellyfin |
@@ -223,7 +224,7 @@ Carrying all of them at step 1 is safe; the services are not in the state yet.
 
 ```sh
 # on the box, as core, while ServiceBay's container still runs
-scripts/carry-servicebay-secrets.sh    # all eight, or name services (… auth immich); LAIB=/var/opt/laib/laib if laib is not on PATH
+scripts/carry-servicebay-secrets.sh    # all of them, or name services (… auth immich); LAIB=/var/opt/laib/laib if laib is not on PATH
 ```
 
 The values live sealed in ServiceBay's `config.json` (`installedSecrets`,
@@ -241,7 +242,15 @@ ServiceBay deployed. A password changed later inside the app (in LLDAP's UI,
 say) is not in it, and the first apply's verify shows that.
 
 One value goes with them: the box's broker user is `mqtt` and the built-in's
-default is `homeassistant`, so `laib add mosquitto MQTT_USER=mqtt`.
+default is `homeassistant`, so `laib add mosquitto MQTT_USER=mqtt`. And Immich's
+admin: `laib add immich ADMIN_EMAIL=<the admin's address>` (Immich →
+Administration → Users; ServiceBay seeded it from `IMMICH_ADMIN_EMAIL`, or
+`OPERATOR_EMAIL` when that was blank).
+
+**Not carried: OIDC client secrets.** Laib generates its own
+(`OIDC_<CLIENT>_SECRET`) and every app that keeps a copy is handed it on each
+apply: Immich's post-deploy writes it into Immich's settings (#254), so the
+secret ServiceBay left in Immich's database is overwritten, not migrated.
 
 ## Rollback during the weekend
 

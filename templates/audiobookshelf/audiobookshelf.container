@@ -12,7 +12,10 @@ Volume=${DATA_DIR}/audiobookshelf/metadata:/metadata:z
 SecurityLabelDisable=true
 Volume=${AUDIOBOOKS}:/audiobooks:ro
 Volume=${PODCASTS}:/podcasts
-AddHost=auth.${DOMAIN}:${LAN_IP}
+# Authelia for the OIDC discovery and the token exchange: the host gateway is the
+# host (Caddy on 443); under pasta the container has the host's own address, so
+# the LAN IP would stay inside it (ServiceBay #817, #252)
+AddHost=auth.${DOMAIN}:host-gateway
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]
