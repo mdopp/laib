@@ -14,7 +14,7 @@ Environment=SSO_ONLY=false
 Environment=SSO_AUTHORITY=https://auth.${DOMAIN}
 Environment=SSO_CLIENT_ID=vaultwarden
 Environment=SSO_CLIENT_SECRET=${SSO_SECRET}
-Environment=SSO_SCOPES=email profile offline_access
+Environment="SSO_SCOPES=email profile offline_access"
 AddHost=auth.${DOMAIN}:${LAN_IP}
 Volume=${DATA_DIR}/vaultwarden/data:/data:z
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
