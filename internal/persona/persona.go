@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mdopp/laib/internal/mcpserver"
+	"github.com/mdopp/laib/mcpserver"
 	"github.com/mdopp/laib/internal/state"
 	"gopkg.in/yaml.v3"
 )

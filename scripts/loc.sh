@@ -17,7 +17,11 @@ budget() { # budget <name> <cap> <dir…>
 }
 budget kernel 16000 cmd internal
 budget operator 3000 operator
-budget stick 1800 stick # the laptop's install-stick builder: 1,468 lines when it moved out (#309), plus a quarter
+# the programs that moved out of the kernel (#309): their size then, plus a quarter
+budget stick 1800 stick         # the laptop's install-stick builder, 1,468
+budget frage 400 frage          # "was ist …", 261
+budget automat 600 automat      # the Bote's HA automations, 421
+budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -30,10 +34,10 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick; do
+for prog in stick frage automat mcpserver; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
-  down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
+  down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal | grep -v '^internal/persona/' || true) # persona until it moves (#309)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
 done
 exit $bad

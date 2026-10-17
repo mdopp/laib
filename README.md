@@ -35,8 +35,6 @@ layer (ADR 0010).
 ```
 cmd/laib/            the one binary: CLI + daemon (`laib serve`), diag probes
 cmd/laib-lease/      the model role's policy proxy and GPU lease (ADR 0011)
-cmd/frage/           "was ist …": SearXNG + summary, OpenAI-compatible and MCP
-cmd/automat/         Home Assistant automations as an MCP tool in the bote pod
 cmd/persona/         the Bote's persona engine: directory, levels, gimmicks (ADR 0020)
 internal/state       load + validate the state repo
 internal/render      pure renderers: quadlet, caddy, authelia, adguard, nftables
@@ -49,12 +47,12 @@ internal/secrets     age-encrypted secrets.age
 internal/token       hand tokens
 internal/skill       the Operator's skills: registry, vocabulary, what the ceiling grants (ADR 0023)
 internal/lease       the lease and the policy proxy
-internal/frage       Frage's search and summary
-internal/automat     the Automat's tools
-internal/mcpserver   the smallest MCP server (Hermes, Claude Code, laib's client)
 internal/boxfs       the box's paths
 internal/sysd        the systemctl seam
 operator/            the Operator, the admin agent (ADR 0013), a host unit: its own program and line budget (ADR 0023)
+frage/               "was ist …": SearXNG + summary, OpenAI-compatible and MCP; its own program and budget (#309)
+automat/             Home Assistant automations as an MCP tool in the bote pod; its own program and budget
+mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, persona)
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
@@ -75,8 +73,8 @@ Nothing has run on a real box yet. What exists and how far it is proven:
 | Kernel: state repo, plan/apply, converge, operator verbs, MCP, pages | `cmd/laib`, `internal/` | unit + golden tests, e2e with shims, real Quadlet on a runner |
 | The stick: `laib-stick`, first boot, data disk (RAID1, one member) | `stick/`, `usb/` | CI `vm-install`: KVM guest installs CoreOS, reboots, `laib` ready, mirror joins, reinstall keeps data |
 | First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
-| Operator (admin agent), lease, Frage | `operator/`, `cmd/laib-lease`, `cmd/frage` | e2e with a scripted model; never against a real model |
-| Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; the approval relay | `templates/bote`, `cmd/automat`, `cmd/relay` | config rendered and checked against Hermes' source; automat and relay unit-tested against a fake HA and a fake homeserver |
+| Operator (admin agent), lease, Frage | `operator/`, `cmd/laib-lease`, `frage/` | e2e with a scripted model; never against a real model |
+| Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; the approval relay | `templates/bote`, `automat/`, `cmd/relay` | config rendered and checked against Hermes' source; automat and relay unit-tested against a fake HA and a fake homeserver |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
 | 23 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 

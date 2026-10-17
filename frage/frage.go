@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mdopp/laib/internal/mcpserver"
+	"github.com/mdopp/laib/mcpserver"
 )
 
 // Config is what the service needs.
