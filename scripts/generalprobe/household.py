@@ -375,8 +375,10 @@ def seed_documents(f, s):
         if st != 200:
             raise RuntimeError(f"Paperless upload: HTTP {st} {b[:200]!r}")
         task = js(b)
-        done = wait(f"Paperless consumes {word}", lambda: next((t for t in js(req("GET", f"http://{LOOP}:8000/api/tasks/?task_id={task}", auth=auth)[1]) or []
-                                                              if t.get("status") in ("SUCCESS", "FAILURE")), None), pause=3)
+        def tasks():
+            d = js(req("GET", f"http://{LOOP}:8000/api/tasks/?task_id={task}", auth=auth)[1]) or []
+            return d.get("results", []) if isinstance(d, dict) else d   # paginated since Paperless 2.x
+        done = wait(f"Paperless consumes {word}", lambda: next((t for t in tasks() if t.get("status") in ("SUCCESS", "FAILURE")), None), pause=3)
         if done["status"] != "SUCCESS":
             raise RuntimeError(f"Paperless consumed {word}: {done.get('result')}")
         s["documents"][word] = done.get("related_document")
