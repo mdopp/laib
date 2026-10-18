@@ -23,7 +23,7 @@ HA = {}
 def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
-    HA.update(users={}, creds={}, tokens={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0)
+    HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0)
     if onboarded:
         uid = add_user("Owner", admin=True, owner=True)
         HA["creds"][onboarded[0]] = (onboarded[1], uid)
@@ -38,10 +38,14 @@ def add_user(name, admin, owner=False):
     return uid
 
 
-def token_for(uid, long_lived):
+def token_for(uid, long_lived, name=None):
+    if long_lived and name and any(HA["names"].get(t) == (uid, name) for t in HA["tokens"]):
+        raise ValueError(f"{name} already exists")   # HA: each client_name only once per user (auth/__init__.py)
     HA["n"] += 1
     t = f"{'llat' if long_lived else 'access'}-{HA['n']}-{uid}"
     HA["tokens"][t] = uid
+    if long_lived:
+        HA["names"][t] = (uid, name)
     return t
 
 
@@ -165,7 +169,19 @@ class FakeHA(BaseHTTPRequestHandler):
         ok = lambda r=None: {"id": i, "type": "result", "success": True, "result": r}
         err = lambda code, text: {"id": i, "type": "result", "success": False, "error": {"code": code, "message": text}}
         if t == "auth/long_lived_access_token":
-            return ok(token_for(uid, True))
+            try:
+                return ok(token_for(uid, True, m["client_name"]))
+            except ValueError:
+                return err("unknown_error", "Unknown error")   # what HA answers
+        if t == "auth/refresh_tokens":
+            return ok([{"id": "rt-" + tok, "client_name": HA["names"][tok][1], "type": "long_lived_access_token"}
+                       for tok in HA["tokens"] if tok in HA["names"] and HA["names"][tok][0] == uid])
+        if t == "auth/delete_refresh_token":
+            tok = m["refresh_token_id"][3:]
+            if HA["names"].get(tok, (None,))[0] != uid:
+                return err("invalid_token_id", "Received invalid token")
+            del HA["tokens"][tok], HA["names"][tok]
+            return ok()
         if not is_admin(uid):
             return err("unauthorized", "Unauthorized")
         if t == "config/auth/list":
@@ -277,6 +293,19 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(self.kind(again["HAUS_HA_TOKEN"]), "admin")
         self.assertEqual(self.kind(again["BOTE_HA_TOKEN"]), "user")
         self.assertEqual(HA["logins"], ["bote"], "the administrator logged in although HA_TOKEN works")
+
+    def test_a_secret_lost_while_ha_still_holds_its_token_by_name_is_replaced(self):
+        # HA keeps one long-lived token per name and user: Laib lost HA_TOKEN (or it was set to junk),
+        # HA still has "laib: home-assistant-check"; the old one goes, a new one is minted
+        fresh()
+        _, handed, _ = self.run_hook()
+        tokens = dict(handed, HA_TOKEN="junk")
+        p, again, log = self.run_hook(tokens=tokens)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(again), {"HA_TOKEN"})
+        self.assertEqual(self.kind(again["HA_TOKEN"]), "admin")
+        self.assertNotIn(handed["HA_TOKEN"], HA["tokens"], "the old token of that name is still valid in HA")
+        self.assertEqual(self.kind(handed["HAUS_HA_TOKEN"]), "admin", "another consumer's token was revoked")
 
     def test_a_box_from_servicebay_logs_in_as_its_admin_and_the_bote_stays_no_admin(self):
         # ServiceBay onboarded as oscar; the owner once pasted an administrator's token as BOTE_HA_TOKEN,
