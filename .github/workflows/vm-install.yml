@@ -9,14 +9,28 @@
 #
 # Every remote script runs under `set -euo pipefail`, and every probe is its own
 # command that can fail: a step that passes has checked what its name says.
+#
+# When (#343): on train PRs (train/*), on main and by dispatch. A single PR
+# gets ci and boot (real systemd --user + Quadlet); its `not run` check says
+# that this VM proof did not run for it, so a green PR never claims it.
+# How: one build (the binaries, laib-stick, the hooks image), then four boxes
+# in parallel, each installed from that build and taken through one part of
+# the proof. Every step of the old single box runs in exactly one part, in the
+# same order, with what it needs from the steps before it:
+#   disks     the data disk and its mirror, a foreign disk, a stick left in,
+#             the reinstall with its power cuts (#81, #111), a lost member
+#   services  the data disk, a real apply, the reboot (#37), auth/adguard/
+#             radicale, file-share, backup and restore, the update path, remove
+#   logins    a real apply, auth, then each family login (Immich, Home
+#             Assistant, Jellyfin, Audiobookshelf)
+#   recovery  the data disk, the foreign disk (the backup target), a real
+#             apply, the disaster recovery with only the sheet (#40)
 name: vm-install
 on:
   push:
     branches: [main]
     paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
-  pull_request:
-    # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
-    paths: [usb/**, stick/**, scripts/install-box.sh, scripts/vm/**, .github/workflows/vm-install.yml]
+  pull_request:   # every PR: a train runs the VM, a single PR gets the `not run` check
   workflow_dispatch:
 concurrency:
   group: vm-install-${{ github.ref }}
@@ -25,11 +39,20 @@ permissions:
   contents: read
   packages: write   # this commit's hooks image (#36)
 jobs:
-  install:
+  not-run:
+    name: not run — a single PR; train/* and main run vm-install (or dispatch it)
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'train/')
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # install, mirror sync, two reinstalls and the disaster recovery take ~80 min on the runner
+    steps:
+      - run: |
+          msg="vm-install did NOT run for this PR: it runs on train PRs (train/*), on main, and by dispatch (gh workflow run vm-install --ref ${{ github.head_ref }}). Proven here: ci and boot only (#343)."
+          echo "::notice title=vm-install not run::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+  build:
+    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
       HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +64,33 @@ jobs:
           podman login ghcr.io -u "${{ github.actor }}" -p "${{ github.token }}"
           podman build -q -t "$HOOKS" -f hooks/Containerfile . && podman push -q "$HOOKS"
           echo "pushed $HOOKS"
+      - name: this commit's binaries and laib-stick, once for every box
+        run: |
+          scripts/vm/serve.sh "${GITHUB_SHA::7}" build
+          go build -o dist/laib-stick ./stick/cmd/laib-stick
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vm-build
+          path: dist/
+          retention-days: 3
+  install:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [disks, services, logins, recovery]
+    env:
+      SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
+      HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vm-build
+          path: dist/
       - name: qemu + kvm
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
@@ -48,8 +98,9 @@ jobs:
       - name: this commit's build, served to the box; the stick
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
-          go build -o laib-stick ./stick/cmd/laib-stick
-          scripts/vm/serve.sh "${GITHUB_SHA::7}"
+          mv dist/laib-stick laib-stick; chmod +x laib-stick dist/laib-*-amd64
+          scripts/vm/serve.sh "${GITHUB_SHA::7}" serve
+          # the stick carries this job's token (the registry login, #37): built here, not in build
           ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
           # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box
           ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --reinstall --out laib-vm-reinstall.iso
@@ -101,6 +152,7 @@ jobs:
                 grep -q -- "--token" <<<"$(journalctl --no-pager -b -u laib-firstboot)" && { echo "the token was on argv"; exit 1; } || echo "token never on argv"
                 /var/opt/laib/laib status || true; /var/opt/laib/laib plan || true; /var/opt/laib/laib diag || true'
       - name: the data disk — RAID1 with one member on /mnt/data, then the mirror joins
+        if: matrix.part == 'disks' || matrix.part == 'services' || matrix.part == 'recovery'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail
@@ -123,6 +175,7 @@ jobs:
                 sudo sync'
           df -h / | tail -1; ls -la *.qcow2
       - name: a disk that turns up later is never claimed — reboot with a foreign ext4 disk
+        if: matrix.part == 'disks' || matrix.part == 'recovery'
         run: |
           . ./box.sh
           off
@@ -139,6 +192,7 @@ jobs:
                 echo "foreign disk $dev: still ext4, label backup"'
           marker
       - name: a stick left in an installed box does nothing — the plain stick refuses
+        if: matrix.part == 'disks'
         run: |
           . ./box.sh
           sudo kill "$(cat qemu.pid)"; sleep 3
@@ -158,6 +212,7 @@ jobs:
                 echo "the plain stick left the installed box alone"'
           marker
       - name: reinstall from a --reinstall stick — the data disk survives, the foreign disk too
+        if: matrix.part == 'disks'
         run: |
           sudo kill "$(cat qemu.pid)"; sleep 3
           ISO=laib-vm-reinstall.iso DISKS="disk.qcow2 data1.qcow2 data2.qcow2 foreign.raw" ./vm.sh once=d
@@ -276,6 +331,7 @@ jobs:
                 [ "$(sudo blkid -s TYPE -o value "$(sudo blkid -L backup)")" = ext4 ] || { echo "the reinstall touched the foreign disk"; exit 1; }'
           . ./box.sh; marker
       - name: a real apply on real CoreOS — the NUC's step 2 and 3, Caddy with its own CA
+        if: matrix.part == 'services' || matrix.part == 'logins' || matrix.part == 'recovery'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           # pre-pull with the box's own login (install-box.sh logged in with the stick's token), so
@@ -302,6 +358,7 @@ jobs:
                 [ "$code" = 200 ]
                 $L journal --since 1h'
       - name: reboot — the firewall is back in the kernel, the registry login survives, services come up (#37)
+        if: matrix.part == 'services'
         run: |
           . ./box.sh
           probe() { # 18080 → the box's 8080, declared lan: false by the probe service: dropped on the NIC = timeout; no rule = answered
@@ -390,6 +447,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; /var/opt/laib/laib remove probe >/dev/null; rm -rf /mnt/data/laib/registries/vm'
 
       - name: auth, adguard, radicale — hooks in the image, pre-start before the first start (#36)
+        if: matrix.part == 'services' || matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
@@ -499,6 +557,7 @@ jobs:
                 [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
+        if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH bash -s <<'EOS'
@@ -549,6 +608,7 @@ jobs:
           journalctl --user -u file-share-samba.service --no-pager | grep "samba: " | tail -10
           EOS
       - name: immich — a family member's OIDC login end to end against the real Authelia (#254, #251, #252)
+        if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           # the shipped immich template from a registry on the box, two things changed for the VM: no machine
@@ -591,6 +651,7 @@ jobs:
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
       - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253)
+        if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           # the shipped template from a registry on the box, without Z-Wave JS and Matter (the NUC's stick and fabric);
@@ -634,6 +695,7 @@ jobs:
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
                 echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
       - name: media — a family member logs in to Jellyfin with the LLDAP account, through a read-only bind (#256)
+        if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           # the shipped template from a registry on the box, without the GPU (the NUC's); post-deploy is the built-in's
@@ -665,6 +727,7 @@ jobs:
                 podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true
                 echo "media: the family logs in to Jellyfin with LLDAP"'
       - name: audiobookshelf — a family member's OIDC login end to end, and after a rotation (#255)
+        if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           # the shipped template from a registry on the box, Caddy's local CA trusted by Node (the NUC has a public cert)
@@ -697,6 +760,7 @@ jobs:
                 podman image rm -f ghcr.io/advplyr/audiobookshelf:latest >/dev/null || true
                 echo "audiobookshelf: a family member logged in through Authelia, before and after a rotation"'
       - name: backup and restore — restic in the day-one repo laib init wrote
+        if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
@@ -712,6 +776,7 @@ jobs:
                 $L journal --since 1h > /tmp/journal.txt
                 grep -E "backup|restore" /tmp/journal.txt'
       - name: update path — a pinned release, the latest release, then this commit again
+        if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_GH_TOKEN="${{ github.token }}" SRC="${{ env.SRC }}"
@@ -739,6 +804,7 @@ jobs:
                 bash /tmp/install-box.sh --source "$SRC" > /tmp/ib4.log 2>&1 || { tail -20 /tmp/ib4.log; exit 1; }
                 v=$(/var/opt/laib/laib version); echo "forward again: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]'
       - name: remove — units stopped, files gone, data kept
+        if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
@@ -753,6 +819,7 @@ jobs:
                 echo "units stopped, files gone, data kept"
                 $L status; $L diag || true'
       - name: a lost mirror member is red, not "by design" — boot without one data disk
+        if: matrix.part == 'disks'
         run: |
           . ./box.sh
           off
@@ -769,6 +836,7 @@ jobs:
                 grep -qE "^rot +raid " <<<"$d" || { echo "diag does not say the mirror is gone"; exit 1; }'
           marker
       - name: disaster recovery — backup to a second disk, data disks gone, reinstall, restore --box with only the sheet (#40)
+        if: matrix.part == 'recovery'
         run: |
           . ./box.sh
           # the foreign ext4 disk (label backup) is the off-box repo; a database service from a
@@ -824,7 +892,7 @@ jobs:
                 $L journal --since 1h | grep -E "restore|backup" | tail -8
                 echo "disaster recovery done with the sheet alone"'
       - name: the power cut during the first boot was survived (#81)
-        if: always()
+        if: always() && matrix.part == 'disks'
         run: |
           if [ "${POWERCUT_RED:-}" = 1 ]; then echo "the box did not come back by itself after the power cut in the first boot after a reinstall (#81) — the forensics are in the reinstall step"; exit 1; fi
           if [ "${EARLYCUT_RED:-}" = 1 ]; then echo "after a power cut as the first boot starts, the resumed boot took over 240 s to land its binaries (#111) — the journal is in the reinstall step"; exit 1; fi
