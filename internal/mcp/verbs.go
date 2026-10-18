@@ -9,6 +9,3 @@ import "github.com/mdopp/laib/internal/cli"
 // Verbs is the verb table: the single source for `laib help`, the MCP tool
 // list and the tier check. cmd/laib fills it in init.
 var Verbs []cli.Verb
-
-// Version is the binary's, for initialize; cmd/laib sets it.
-var Version = "dev"

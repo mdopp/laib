@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -24,14 +25,14 @@ func TestSignalLinkQRComesFromTheRESTAPI(t *testing.T) {
 		w.Write([]byte("\x89PNG fake"))
 	}))
 	defer signal.Close()
-	png, err := signalLinkQR(context.Background(), signal.URL, "Bote")
+	png, err := pages.SignalLinkQR(context.Background(), signal.URL, "Bote")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(string(png), "\x89PNG") || !strings.Contains(seen, "device_name=Bote") {
 		t.Fatalf("%q %q", png, seen)
 	}
-	if _, err := signalLinkQR(context.Background(), "http://127.0.0.1:1", "Bote"); err == nil {
+	if _, err := pages.SignalLinkQR(context.Background(), "http://127.0.0.1:1", "Bote"); err == nil {
 		t.Fatal("a dead signal-cli must be an error, not an empty image")
 	}
 }
@@ -44,10 +45,10 @@ func TestTheSignalQROnlyWithSignal(t *testing.T) {
 			Contract: state.Contract{Provides: []string{"bote"}, Ports: []state.Port{{Port: 8085}}, Channels: map[string]string{"signal": "SIGNAL_ACCOUNT", "matrix": "MATRIX_HOMESERVER"}},
 			Values:   map[string]state.Value{"SIGNAL_ACCOUNT": {Literal: account}, "MATRIX_HOMESERVER": {Literal: "https://hs.example.org"}}}}}
 	}
-	if got := boteSignalBase(bote("+4917012345678")); got != "http://127.0.0.1:8085" {
+	if got := pages.BoteSignalBase(bote("+4917012345678")); got != "http://127.0.0.1:8085" {
 		t.Fatalf("with Signal: %q", got)
 	}
-	if got := boteSignalBase(bote("")); got != "" {
+	if got := pages.BoteSignalBase(bote("")); got != "" {
 		t.Fatalf("without Signal the QR link points at nothing: %q", got)
 	}
 }

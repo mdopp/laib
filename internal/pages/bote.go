@@ -1,4 +1,4 @@
-package main
+package pages
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// signalLinkQR fetches the QR that links the Bote's number from signal-cli's
+// SignalLinkQR fetches the QR that links the Bote's number from signal-cli's
 // REST API (GET /v1/qrcodelink?device_name=…), so the Box page can show it
 // (#54): no terminal, no sgnl:// URI to copy.
-func signalLinkQR(ctx context.Context, base, device string) ([]byte, error) {
+func SignalLinkQR(ctx context.Context, base, device string) ([]byte, error) {
 	u := base + "/v1/qrcodelink?device_name=" + url.QueryEscape(device)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -39,10 +39,10 @@ func signalLinkQR(ctx context.Context, base, device string) ([]byte, error) {
 	return png, nil
 }
 
-// boteSignalBase is signal-cli's REST address on this box: the first port
+// BoteSignalBase is signal-cli's REST address on this box: the first port
 // the service providing `bote` declares (its laib.yml says so), on loopback;
 // empty while the Bote has no Signal (#184).
-func boteSignalBase(st *state.State) string {
+func BoteSignalBase(st *state.State) string {
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, p := range svc.Contract.Provides {

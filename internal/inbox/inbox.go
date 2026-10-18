@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/templates"
 
 	"github.com/mdopp/laib/internal/journal"
@@ -174,7 +174,7 @@ func reasonsSuffix(p *proposal.Proposal) string {
 // carries both so the human sees what was tried.
 func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 	laibEnv := &cli.Env{Paths: env.Paths, JSON: env.JSON, Actor: "laib", In: env.In, MCP: env.MCP}
-	unlock, code := run.Lock(laibEnv, nil, "approve")
+	unlock, code := apply.TakeLock(laibEnv, nil, "approve")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -187,7 +187,7 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 		return env.Fail(err)
 	}
 	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
-	code = run.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
+	code = apply.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
 	if code == cli.ExitRed {
 		if _, err := RevertProposal(ctx, laibEnv, st, p.ID); err != nil {
 			cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
@@ -198,7 +198,7 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		run.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
+		apply.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
 		return cli.ExitRed
 	}
 	return code
@@ -240,7 +240,7 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
 	}
-	unlock, code := run.Lock(env, st, "approve")
+	unlock, code := apply.TakeLock(env, st, "approve")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -258,11 +258,11 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	if err != nil {
 		return env.Fail(err)
 	}
-	Approved(ctx, env, st, p)
+	FileWishes(ctx, env, st, p)
 	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") }) {
 		return cli.ExitOK // a wish changes nothing on the box: no apply
 	}
-	return run.ApplyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
+	return apply.ApplyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
 }
 
 func Approve(ctx context.Context, env *cli.Env, args []string) int {
@@ -329,7 +329,7 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 	// the service is in the state already, so finish the apply (#294)
 	if svc, ok := st.Services[add.Name]; ok && svc.Contract.Template.Name == args[0] {
 		fmt.Fprintf(env.W(), "%s ist schon im Zustand: rolle es aus\n", add.Name)
-		return run.Apply(ctx, env, st, add.Name, reason)
+		return apply.ApplyLocked(ctx, env, st, add.Name, reason)
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Add: add}, JudgeFor(st, env.Actor))
 	if err != nil {
@@ -346,7 +346,7 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	return run.Apply(ctx, env, st, "", reason)
+	return apply.ApplyLocked(ctx, env, st, "", reason)
 }
 
 // List lists proposals: open ones by default, --all for every one.
@@ -413,8 +413,3 @@ func stateLoads(dir string) error {
 	_, err = render.Render(st, nil)
 	return err
 }
-
-// Approved runs after an approval merged a proposal and before its apply.
-// cmd/laib sets it to file the wishes the proposal adds: the intake is a
-// box chore, which the inbox does not import (#309).
-var Approved = func(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Proposal) {}

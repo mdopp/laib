@@ -422,7 +422,7 @@ func Escalate(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
-	if url, ok, err := FileIssue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+	if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
 		detail = url + " (" + p + ")"
@@ -584,11 +584,4 @@ func OpsApply(ctx context.Context, env *cli.Env, st *state.State, args []string)
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
 	}
 	return code
-}
-
-// FileIssue files an escalation as a ticket; ok is false when the box has
-// no intake. cmd/laib sets it to the intake's GitHub client: the intake is
-// a box chore, which the envelope does not import (#309).
-var FileIssue = func(ctx context.Context, env *cli.Env, st *state.State, title, body string, labels []string) (url string, ok bool, err error) {
-	return "", false, nil
 }

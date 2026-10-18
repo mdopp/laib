@@ -1,5 +1,9 @@
 // Package apply makes the box match the state: snapshot, write, reload,
-// restart, verify. A red verify is a red result, never a retry.
+// restart, verify. A red verify is a red result, never a retry. It also
+// holds what every mutating verb runs around that (run.go: the one lock
+// with an owner, the secrets a plan needs, the journal line), converge
+// (converge.go: the box back to the state within a budget) and the
+// firewall's kernel state (firewall.go). Trust kernel (#309).
 package apply
 
 import (

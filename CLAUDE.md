@@ -15,9 +15,16 @@ them.
 2. **Proof is on the box, not in-process.** A green unit test proves the
    renderer. `laib apply` ending green on the box proves the feature. If you
    cannot verify on the box, say so in those words.
-3. **KISS.** Under 16k production lines for the kernel and 3k for the
-   Operator (ADR 0023), tests at most equal to production lines in each, no gate until something recurs. Three similar lines beat a
-   premature abstraction. No feature flags for cases that cannot happen.
+3. **KISS, and the kernel grows only on purpose.** Every program has a
+   production-line cap in `scripts/loc.sh` with its reason next to the
+   number: the kernel 15,000, the Operator 3,000, and one for each program
+   that left the kernel (ADR 0005 amendment #309, ADR 0023). Tests are not
+   capped. At 95 % CI warns and opens the
+   "Kern-Diät" issue; crossing a cap means raising it in the same PR, with
+   its reason and the owner's approval. Lines count as gofmt writes them:
+   squeezing code to fit is a review finding, not a fix. No gate until
+   something recurs. Three similar lines beat a premature abstraction. No
+   feature flags for cases that cannot happen.
 
 ## Where things are
 

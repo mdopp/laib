@@ -9,12 +9,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -120,7 +120,7 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(env.W(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
 		code := cli.ExitOK
 		for _, svcName := range st.Order(touched) {
-			if c := run.Apply(ctx, env, st, svcName, "secret rotate "+name); c != cli.ExitOK {
+			if c := apply.ApplyLocked(ctx, env, st, svcName, "secret rotate "+name); c != cli.ExitOK {
 				code = c
 			}
 		}

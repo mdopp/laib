@@ -19,7 +19,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/run"
+	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -110,7 +110,7 @@ func newCbox(t *testing.T) *cbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := run.Apply(context.Background(), c.env, st, "", "test: first apply"); rc != cli.ExitOK {
+	if rc := apply.ApplyLocked(context.Background(), c.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	c.calls = nil
@@ -163,7 +163,7 @@ func TestConvergeSkipsWhenSomeoneHoldsTheLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := apply.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("a locked tick is skipped, not red: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 {
@@ -182,7 +182,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 	if rc := cmdPause(context.Background(), c.env, []string{"whoami", "--until", "2h", "wartung"}); rc != cli.ExitOK {
 		t.Fatalf("pause rc %d", rc)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := apply.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	for _, u := range c.restarts() {
@@ -194,7 +194,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 		t.Fatal("the journal must say the service is paused")
 	}
 	st, _ := cli.LoadState(c.env)
-	r, rows := collectStatus(context.Background(), c.env, st)
+	r, rows := pages.CollectStatus(context.Background(), c.env, st)
 	var paused bool
 	for _, row := range rows {
 		if row.Name == "whoami" && row.State == "pausiert" {
@@ -208,7 +208,7 @@ func TestConvergeLeavesAPausedServiceAlone(t *testing.T) {
 		t.Fatalf("resume rc %d", rc)
 	}
 	c.calls = nil
-	cmdConverge(context.Background(), c.env, []string{"--force"})
+	apply.Converge(context.Background(), c.env, []string{"--force"})
 	if len(c.restarts()) == 0 {
 		t.Fatal("after resume converge restarts the inactive unit again")
 	}
@@ -222,14 +222,14 @@ func TestRestartOnlyConvergeRunsCountAgainstTheBudget(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		c.calls = nil
 		c.down["whoami.service"] = true // down again: a flapping unit
-		cmdConverge(context.Background(), c.env, []string{"--force"})
+		apply.Converge(context.Background(), c.env, []string{"--force"})
 		if len(c.restarts()) == 0 {
 			t.Fatalf("run %d did not restart", i+1)
 		}
 	}
 	c.calls = nil
 	c.down["whoami.service"] = true
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitRed {
+	if rc := apply.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitRed {
 		t.Fatalf("the fourth restart-only run must exhaust the budget: rc %d", rc)
 	}
 	if len(c.restarts()) > 0 || !c.journalHas(t, "Budget erschöpft") {
@@ -245,7 +245,7 @@ func TestConvergeCompletesAKilledApply(t *testing.T) {
 	if err := apply.WritePending(c.env.Paths, []string{"whoami"}, "test: killed apply"); err != nil {
 		t.Fatal(err)
 	}
-	if rc := cmdConverge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
+	if rc := apply.Converge(context.Background(), c.env, []string{"--force"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	var hit bool
@@ -307,7 +307,7 @@ func TestAStaleLockIsTakenOverWithAJournalLine(t *testing.T) {
 	c := newCbox(t)
 	os.WriteFile(c.env.Paths.Lock, []byte("apply:human:core pid 999999999 since 2026-10-11T10:00:00Z"), 0o644)
 	st, _ := cli.LoadState(c.env)
-	if rc := run.Apply(context.Background(), c.env, st, "", "after a crash"); rc != cli.ExitOK {
+	if rc := apply.ApplyLocked(context.Background(), c.env, st, "", "after a crash"); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if !c.journalHas(t, "übernommen") || !c.journalHas(t, "999999999") {

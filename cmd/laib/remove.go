@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/proposal"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -46,7 +46,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(fmt.Errorf("%s holds the %s role: point box.yml roles.%s elsewhere first", name, role, role))
 		}
 	}
-	unlock, code := run.Lock(env, st, "remove")
+	unlock, code := apply.TakeLock(env, st, "remove")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -67,7 +67,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(fmt.Errorf("state without %s does not load: %w (git checkout -- services/%s restores it)", name, err, name))
 	}
-	code = run.ApplyHeld(ctx, env, st2, "", "remove "+name)
+	code = apply.ApplyHeld(ctx, env, st2, "", "remove "+name)
 	if len(kept) > 0 {
 		fmt.Fprintf(env.W(), "Daten bleiben: %s  (löschen ist dein Schritt; laib rollback holt den Dienst zurück)\n", strings.Join(kept, ", "))
 	}

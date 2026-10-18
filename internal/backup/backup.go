@@ -20,7 +20,6 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -131,7 +130,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	paths := render.BackupPaths(st, env.Paths.State, env.Paths.Journal)
 	// quiesce: true paths (databases, #40) are snapshotted with their service
 	// stopped — under the lock and paused, so converge keeps its hands off
-	unlock, code := run.Lock(env, st, "backup")
+	unlock, code := apply.TakeLock(env, st, "backup")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -295,7 +294,7 @@ func Restore(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	// the one lock from here to the final verify, and a pause so a converge
 	// that outlives a killed restore does not restart on half-written data (#39)
-	unlock, code := run.Lock(env, st, "restore")
+	unlock, code := apply.TakeLock(env, st, "restore")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -381,7 +380,7 @@ func Restore(ctx context.Context, env *cli.Env, args []string) int {
 		}()
 		fmt.Fprintf(env.W(), "Box wiederhergestellt aus %s: State, Journal, %d Dienste; jetzt apply\n", snapshot, len(names))
 	}
-	return run.ApplyHeld(ctx, env, st, only, "restore "+snapshot)
+	return apply.ApplyHeld(ctx, env, st, only, "restore "+snapshot)
 }
 
 func unitsOf(st *state.State, only string) []string {
