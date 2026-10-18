@@ -60,7 +60,7 @@ try {
 '
 
 for want in "$@"; do
-  if ! printf '%s\n' "$TABLE" | awk '{print $1}' | grep -qxF -- "$want"; then
+  if ! grep -qxF -- "$want" <<<"$(printf '%s\n' "$TABLE" | awk '{print $1}')"; then
     echo "$want: no secret of it carries over (the table has: $(printf '%s\n' "$TABLE" | awk 'NF{print $1}' | sort -u | tr '\n' ' '))" >&2
     exit 2
   fi
@@ -69,7 +69,7 @@ done
 fail=0
 while read -r svc from to; do
   [ -n "${svc:-}" ] || continue
-  if [ $# -gt 0 ] && ! printf '%s\n' "$@" | grep -qxF "$svc"; then
+  if [ $# -gt 0 ] && ! grep -qxF "$svc" <<<"$(printf '%s\n' "$@")"; then
     continue
   fi
   podman exec "$SB" node -e "$UNSEAL" "$from" </dev/null | "$LAIB" secret set "$to" >/dev/null 2>&1

@@ -9,13 +9,14 @@
 # and pipefail — every $SSH block sets it — turns a match red, or a match
 # that must not be there green (#307, #304: `laib secret list | grep -qx`
 # and `nft list table | grep -q` went red with the line right there). The
-# writer runs to its end first: grep -q X <<<"$(writer)".
+# writer runs to its end first: grep -q X <<<"$(writer)". The same holds
+# for scripts/*.sh (#329).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 - <<'PY'
 import glob, re, subprocess, sys, yaml
 bad = 0
-early = re.compile(r"\|\s*(?:sudo\s+)?grep\b[^|;&\n]*?(?:\s-[A-Za-z]*q|\s--quiet|\s--silent|>\s*/dev/null)")
+early = re.compile(r"(?<!\|)\|(?!\|)\s*(?:sudo\s+)?grep\b[^|;&\n]*?(?:\s-[A-Za-z]*q|\s--quiet|\s--silent|>\s*/dev/null)")
 for f in sorted(glob.glob(".github/workflows/*.yml")):
     wf = yaml.safe_load(open(f))
     for jname, job in (wf.get("jobs") or {}).items():
@@ -31,6 +32,12 @@ for f in sorted(glob.glob(".github/workflows/*.yml")):
                 if early.search(line):
                     bad += 1
                     print(f"{f}: {jname}: a pipe into an early grep (SIGPIPE under pipefail, #307): {line.strip()[:160]}")
-print(f"workflow run blocks: {bad} with a syntax error or an early grep")
+# the scripts CI and the boxes run carry the same pipefail (#329)
+for f in sorted(glob.glob("scripts/*.sh")):
+    for n, line in enumerate(open(f).read().replace("\\\n", " ").splitlines(), 1):
+        if not line.lstrip().startswith("#") and early.search(line):
+            bad += 1
+            print(f"{f}:{n}: a pipe into an early grep (SIGPIPE under pipefail, #307): {line.strip()[:160]}")
+print(f"workflow run blocks and scripts: {bad} with a syntax error or an early grep")
 sys.exit(1 if bad else 0)
 PY
