@@ -659,6 +659,15 @@ jobs:
                 echo "home assistant /auth/oidc/welcome -> HTTP $code"
                 [ "$code" = 200 ] && grep -q "Familienkonto" /tmp/welcome.html || { echo "auth_oidc is not set up from the package"; podman logs --tail 80 systemd-home-assistant 2>&1 | grep -i -B2 -A8 "auth_oidc\|error" | tail -60; exit 1; }
                 if podman logs systemd-home-assistant 2>&1 | grep -i "auth_oidc" | grep -qi "duplicate\|invalid config"; then echo "Home Assistant complains about auth_oidc"; exit 1; fi
+                # the template owns the integrations checklist (#309): its check runs inside Home Assistant,
+                # writes the status file, and laib diag shows it with its age; a wrong token is a finding, never a failed unit
+                systemctl --user is-enabled home-assistant-check.timer >/dev/null || { echo "the hourly check timer is not enabled"; exit 1; }
+                echo vm-not-a-token-309 | $L secret set HA_TOKEN >/dev/null && $L apply >/dev/null
+                systemctl --user start home-assistant-check.service || { journalctl --user -u home-assistant-check.service --no-pager | tail -20; exit 1; }
+                grep -q "\"at\"" "$C/.laib-status.json" || { echo "the check wrote no status file"; ls -la "$C"; exit 1; }
+                $L diag --json home-assistant > /tmp/diag-ha.json
+                grep -q "antwortet nicht auf die Integrationsliste" /tmp/diag-ha.json && grep -q "geprüft" /tmp/diag-ha.json || { echo "diag does not show the template status"; cat /tmp/diag-ha.json; exit 1; }
+                echo "home-assistant: the check ran inside Home Assistant and diag shows its status"
                 $L remove home-assistant >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true

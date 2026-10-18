@@ -1,0 +1,78 @@
+package main
+
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/mdopp/laib/internal/pages"
+	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/secrets"
+)
+
+// #309: the Box page shows what a template says about itself with its age;
+// looking at a stale one starts the template's check in the background and
+// the page reloads until it lands; "jetzt prüfen" starts it on demand.
+func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
+	c := newCbox(t)
+	svc := filepath.Join(c.env.Paths.State, "services", "whoami")
+	b, _ := os.ReadFile(filepath.Join(svc, "laib.yml"))
+	os.WriteFile(filepath.Join(svc, "laib.yml"), append(b, []byte("status:\n  file: ${DATA_DIR}/whoami/laib-status.json\n  check: whoami-check.service\n")...), 0o644)
+	os.WriteFile(filepath.Join(svc, "whoami-check.service"), []byte("[Service]\nType=oneshot\nExecStart=/bin/true\n"), 0o644)
+	data := filepath.Join(filepath.Dir(c.env.Paths.State), "data", "whoami")
+	os.MkdirAll(data, 0o755)
+	at := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
+	os.WriteFile(filepath.Join(data, "laib-status.json"), []byte(`{"at":"`+at+`","detail":"fehlt: CalDAV"}`), 0o644)
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	t.Setenv("LAIB_LISTEN", addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go pages.Serve(ctx, c.env, nil)
+	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
+	do := func(method, path string) (*http.Response, error) { // through Caddy, as Authelia's user sees it
+		req, _ := http.NewRequest(method, "http://"+addr+path, nil)
+		req.Header.Set("X-Laib-Proxy", sec[render.ProxySecret])
+		return http.DefaultTransport.RoundTrip(req)
+	}
+	var page string
+	for i := 0; i < 50; i++ {
+		if resp, err := do("GET", "/"); err == nil {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			page = string(body)
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !strings.Contains(page, "fehlt: CalDAV · geprüft vor 2 h") {
+		t.Fatalf("the page shows the status with its age:\n%s", page)
+	}
+	if !strings.Contains(page, "wird geprüft") || !strings.Contains(page, "http-equiv=refresh") {
+		t.Fatalf("a stale status is being checked and the page reloads:\n%s", page)
+	}
+	started := func() int {
+		return strings.Count(strings.Join(c.calls, "\n"), "systemctl --user start --no-block whoami-check.service")
+	}
+	if started() != 1 {
+		t.Fatalf("looking at a stale status starts the check once: %v", c.calls)
+	}
+	resp, err := do("POST", "/check/whoami")
+	if err != nil || resp.StatusCode != http.StatusSeeOther || started() != 2 {
+		t.Fatalf("jetzt prüfen starts the check and goes back to the page: %v %v %v", err, resp, c.calls)
+	}
+	if resp, _ := do("POST", "/check/caddy"); resp == nil || resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("a service without a check has nothing to start: %v", resp)
+	}
+}

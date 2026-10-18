@@ -1,0 +1,68 @@
+"""Home Assistant's integrations, as laib's status file (#55, #309).
+
+Home Assistant's integrations are set up by hand once (README.md). With a
+long-lived token in the secret HA_TOKEN this reads HA's config entries and
+names what is still missing, the checklist the Box page and `laib diag`
+show ("Wyoming Whisper: fehlt"). It runs inside the Home Assistant
+container (home-assistant-check.service, `podman exec -i … python3 -`):
+laib starts it when someone looks and the file is older than five minutes,
+the timer once an hour so the morning report reads a fresh one.
+
+It writes /config/.laib-status.json:
+{"at": RFC3339, "detail": "…", "findings": [{"severity", "detail", "fix"}]}
+"""
+import json
+import os
+import time
+import urllib.request
+
+# what ADR 0015 wires into HA: a domain and a word of the entry's title
+# (Wyoming has three entries of one domain)
+EXPECTED = [
+    ("Wyoming Whisper", "wyoming", "whisper"),
+    ("Wyoming Piper", "wyoming", "piper"),
+    ("Wyoming openWakeWord", "wyoming", "wake"),
+    ("CalDAV", "caldav", ""),
+    ("Music Assistant", "music_assistant", ""),
+    ("MQTT", "mqtt", ""),
+    ("MCP Server", "mcp_server", ""),
+]
+FIX = "in Home Assistant unter Einstellungen → Integrationen einrichten (templates/home-assistant/README.md)"
+
+
+def entries(base: str, token: str) -> list:
+    req = urllib.request.Request(base.rstrip("/") + "/api/config/config_entries/entry",
+                                 headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return json.load(resp)
+
+
+def report(token: str, base: str) -> dict:
+    if not token:
+        return {"detail": "", "findings": []}  # no token, no checklist (as before #309)
+    try:
+        got = entries(base, token)
+    except Exception as err:  # an unreachable HA is a finding, never a failed unit
+        return {"detail": "Integrationsliste nicht lesbar", "findings": [{
+            "severity": "gelb", "detail": f"Home Assistant antwortet nicht auf die Integrationsliste: {err}",
+            "fix": "HA_TOKEN prüfen (langlebiger Token eines Admin-Kontos)"}]}
+    missing = [name for name, domain, title in EXPECTED
+               if not any(e.get("domain") == domain and (not title or title in (e.get("title") or "").lower()) for e in got)]
+    if not missing:
+        return {"detail": f"alle {len(EXPECTED)} Integrationen eingerichtet", "findings": []}
+    return {"detail": "fehlt: " + ", ".join(missing),
+            "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIX} for name in missing]}
+
+
+def write(path: str, r: dict) -> None:
+    r["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(r, f, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+if __name__ == "__main__":
+    write(os.environ.get("LAIB_STATUS_FILE", "/config/.laib-status.json"),
+          report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123")))

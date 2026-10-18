@@ -183,6 +183,10 @@ data:
     backup: false                       # bulk, skipped
 health:
   http: http://127.0.0.1:8000/api/      # verify after apply
+status:                                # what the service says about itself beyond up/down (#309), optional
+  file: ${DATA_DIR}/paperless/laib-status.json   # {"at", "detail", "findings": [{severity, detail, fix}]}
+  check: paperless-check.service        # optional: a oneshot that refreshes it
+  stale: 5m                             # older than this, a look starts the check (default 5m)
 ports:
   - { port: 8000, lan: false }          # nftables drop on physical interfaces
   - { port: 8025, lan: false, when: [MAIL_HOST] }   # only while MAIL_HOST is set (#190)
@@ -195,6 +199,18 @@ requires:                        # a set value needs these set too (#184)
   MAIL_HOST: [MAIL_PASSWORD]
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 ```
+
+`status` is a file the template keeps about itself. laib reads it fresh on
+every `laib status`, `/ready` and `laib diag` (a file read, no watcher) and
+shows its `detail` on the Box page and its `findings` in diag, each with its
+age ("geprüft vor 12 min"). A service that knows when its state changes
+writes the file then (Stimme's trainer). One that cannot (Home Assistant
+does not push its config) names a `check`: a `.service` of the template
+without `[Install]`. laib starts it with `--no-block` when someone looks at
+diag or the Box page and the file is older than `stale`. The page shows the
+last state and reloads until the new one lands, and offers "jetzt prüfen".
+A slow timer of the template keeps it fresh for the morning report. The
+kernel names no template.
 
 `when` names a unit file and the values that switch it on. While none of
 them is set, the unit is gone from the load: not rendered, not verified,

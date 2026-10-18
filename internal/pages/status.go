@@ -112,8 +112,11 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 				row.Units[u], row.State = a, "rot"
 			}
 		}
-		if p := st.HousePersona(); name == "stimme" && p != nil && row.Detail == "" {
-			row.Detail, _ = diag.WakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase)
+		if rep := diag.ReadStatus(st, svc); rep.Detail != "" {
+			row.Detail = rep.Detail
+			if a := diag.Age(rep.At, time.Now()); a != "" {
+				row.Detail += " · " + a
+			}
 		}
 		if pz, ok := paused[name]; ok {
 			row.State = "pausiert"
