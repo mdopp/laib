@@ -72,7 +72,8 @@ dry=""; [ "$1" = --dry-run ] && { dry=1; shift; }
 ''')
         # migrate-servicebay.py: the lines MIGRATION.md's step 1 prints, and a draft per service
         exe(b / "migrate", "#!/bin/bash\n" + RECORD + r'''
-for s in auth radicale mosquitto vaultwarden; do mkdir -p "$OUT/$s"; printf 'routes:\n  - {host: %s, port: 1}\n' "$s" > "$OUT/$s/laib.yml"; done
+out=""; while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
+for s in auth radicale mosquitto vaultwarden; do mkdir -p "$out/$s"; printf 'routes:\n  - {host: %s, port: 1}\n' "$s" > "$out/$s/laib.yml"; done
 echo "ServiceBay still runs: scripts/carry-servicebay-secrets.sh auth mosquitto"
 echo "laib add, once ServiceBay's unit is out"
 echo "  laib add auth BASE_DN=dc=box,dc=test"
@@ -190,7 +191,7 @@ echo "  laib add vaultwarden"
         r = self.run_md("--foreground", "--until", "auth")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.progress(), {s: "green" for s in ("preflight", "install", "drafts", "secrets", "auth")})
-        self.assertIn("auth BASE_DN=dc=box,dc=test", self.calls_of("laib"))
+        self.assertIn("add auth BASE_DN=dc=box,dc=test", self.calls_of("laib"))
         self.assertEqual(self.calls_of("carry"), ["auth mosquitto"])
         self.assertFalse((self.t / "q" / "auth.kube").exists())
         self.assertTrue((self.t / "home" / "servicebay-units" / "auth.kube").exists())
@@ -247,6 +248,19 @@ echo "  laib add vaultwarden"
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.progress()["beets"], "skip")
         self.assertEqual(self.progress()["adguard"], "skip")
+
+    def test_install_takes_the_release_or_the_ci_build(self):
+        self.run_md("--foreground", "--until", "install")
+        self.assertEqual(self.calls_of("install-box"), ["--version v0.6.0 --domain box.test --gpu"])
+        (self.t / "mig" / "progress").unlink()
+        self.calls.write_text("")
+        self.run_md("--foreground", "--until", "install", SRC="http://10.0.2.2:8000", INSTALL_ARGS="--tls internal")
+        self.assertEqual(self.calls_of("install-box"), ["--source http://10.0.2.2:8000 --domain box.test --gpu --tls internal"])
+
+    def test_dry_run_names_what_no_step_claims(self):
+        (self.t / "q" / "auth.kube.bak-old").write_text("")
+        r = self.run_md("--dry-run")
+        self.assertIn("claimed by no step and not in IGNORE: auth.kube.bak-old", r.stdout)
 
     def test_unknown_step_is_refused(self):
         r = self.run_md("--dry-run", "--until", "vaultwardn")

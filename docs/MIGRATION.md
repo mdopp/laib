@@ -4,6 +4,12 @@ Only one box runs ServiceBay. So: no compatibility layer, no dual control
 plane for months, no feature flags. One weekend, one order, one script that
 reads ServiceBay's config once.
 
+On the box, this order is run by `scripts/migration-day.sh` (#350), the
+script the generalprobe rehearses: step by step, in a systemd user unit that
+outlives the SSH session, stopping at the first red step with that service
+handed back to ServiceBay, resumable. The session that runs it starts at
+[`MIGRATION-DAY.md`](MIGRATION-DAY.md).
+
 ## Running side by side
 
 Both run at once: ServiceBay in its container on 5888, Laib as a user
@@ -115,8 +121,9 @@ file moves out.
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
-   model key. Then **radicale, mosquitto, file-share, beets, immich,
-   paperless, media, home-assistant, chronik, vaultwarden** in that order:
+   model key. Then **radicale, mosquitto, file-share, beets, esphome,
+   usage-metrics, immich, paperless, media, home-assistant, vaultwarden** in
+   that order (usage-metrics keeps its counters in place, #160):
    small and stateless first, the ones with migrations later, and
    Vaultwarden last, right before 4d: its built-in listens on 127.0.0.1
    only, where ServiceBay's proxy host does not forward (it forwards to the
@@ -140,12 +147,16 @@ file moves out.
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
       Its names still answer through NPM (Vaultwarden's not, see above).
-   **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
-   (`laib template sync`) and needs `llama` for the lease and `stimme` for
-   Piper. Its data moves once, in step b with ServiceBay's unit stopped (one
-   Discord token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
-   `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved; the
-   commands are in foundry-chronicle's `templates/chronik/README.md`. The
+   **chronik** (daggerheart-chronik) will come from foundry-chronicle's
+   registry (`laib template sync`) and needs `llama` for the lease and
+   `stimme` for Piper. That template does not exist yet
+   (foundry-chronicle#362; the registry has only ServiceBay's
+   `daggerheart-chronik`), so on migration day chronik stays on its
+   ServiceBay unit, ignored (step 6), and keeps running: a ServiceBay unit is
+   a plain Quadlet file and needs no ServiceBay to run. When the template
+   lands, its data moves once, with ServiceBay's unit stopped (one Discord
+   token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
+   `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved. The
    Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
    d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
       unit out by a. (`nginx`), then `laib add caddy`; its routes are the
@@ -157,7 +168,9 @@ file moves out.
    sessions and SSH host keys are an open decision (below).
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
-   they go off in Phase 5 (#160).
+   they go off in Phase 5 (#160). So do chronik's (above) and the Google
+   import's (`solaris-import-google`, no decision yet). flutstunde and the
+   inactive daggerheart-asteroids go with ServiceBay in step 7 (owner, #160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own
    `servicebay` client and any app that never moved), then `laib apply auth`.
@@ -199,7 +212,7 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | home-assistant | Z-Wave JS server on 3001 through `sb-external-settings.json` (3000 was NPM's) | zwave-js-ui's own `settings.json`, its default 3000 | edited; Home Assistant's Z-Wave JS entry (`.storage/core.config_entries`) follows to `:3000` |
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
-| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
+| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there. The Kraftwerk's passdb holds one entry, by its size the shared account (read-only dry run, 2026-10-18; servicebay#3055): no family member has a per-person account to keep, so each one sets a first password in Haus after the move |
 | radicale | `radicale/data`, owned by the image's radicale user (2999) as ServiceBay's default user namespace maps it (a subuid) | the same path; Laib's unit maps the box's user onto 2999 | in place, handed to the box's user: otherwise Radicale cannot write its collections and restarts forever (#311). ServiceBay's image takes them back on its next start |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |

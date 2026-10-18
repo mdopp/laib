@@ -3,7 +3,7 @@
 # image, which installs ServiceBay's real templates through its own install API;
 # synthetic household data goes in through each app's own API; then the box is
 # migrated exactly as docs/MIGRATION.md and its scripts say
-# (scripts/generalprobe/migrate.sh), and the household's checks that passed on
+# (scripts/migration-day.sh, the script the Kraftwerk runs, #350), and the household's checks that passed on
 # ServiceBay must pass on Laib (scripts/generalprobe/household.py).
 #
 # The VM machinery is vm-install's (scripts/vm/). Every remote script runs under
@@ -11,7 +11,7 @@
 name: generalprobe
 on:
   pull_request:
-    paths: [docs/MIGRATION.md, scripts/migrate-servicebay.py, scripts/carry-servicebay-secrets.sh, scripts/move-servicebay-data.*,
+    paths: [docs/MIGRATION.md, scripts/migration-day.sh, scripts/migrate-servicebay.py, scripts/carry-servicebay-secrets.sh, scripts/move-servicebay-data.*,
             scripts/generalprobe/**, scripts/vm/**, .github/workflows/generalprobe.yml,
             templates/auth/**, templates/caddy/**, templates/vaultwarden/**, templates/radicale/**, templates/mosquitto/**,
             templates/file-share/**, templates/immich/**, templates/paperless/**, templates/home-assistant/**]
@@ -32,6 +32,8 @@ jobs:
       SERVICEBAY: ghcr.io/mdopp/servicebay:5.44.3   # what the Kraftwerk runs (its :latest)
       DOMAIN: gp.test
       VM: /mnt/gp
+      # migration-day.sh as the Kraftwerk runs it, but on this commit's build and Caddy's own CA
+      MD: SRC=http://10.0.2.2:8000 DOMAIN=gp.test HOOKS=ghcr.io/mdopp/laib-hooks:${{ github.sha }} INSTALL_ARGS='--tls internal' bash ~/laib/scripts/migration-day.sh
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -103,28 +105,37 @@ jobs:
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'rm -rf ~/laib; mkdir -p ~/laib'
-          tar -C "$GITHUB_WORKSPACE" -cf - scripts docs templates | $SSH 'tar -C ~/laib -xf -'
-          $SSH "STEP=install SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          tar -C "$GITHUB_WORKSPACE" -cf - scripts docs templates version.txt | $SSH 'tar -C ~/laib -xf -'
+          # the dry run first: every step and precondition listed, nothing changed, and the
+          # missing off-box backup refused (this VM has no NAS, so no ServiceBay backup ever ran)
+          rc=0; $SSH "$MD --dry-run" > dry.txt 2>&1 || rc=$?
+          cat dry.txt
+          { [ "$rc" != 0 ] && grep -q "no fresh off-box backup" dry.txt; } || { echo "the dry run did not refuse the missing backup"; exit 1; }
+          $SSH 'test ! -e ~/laib-migration/progress && test ! -e /var/opt/laib/laib && test -e ~/.config/containers/systemd/auth.kube' || { echo "the dry run changed the box"; exit 1; }
+          # going on without one is the owner's explicit choice; here CI's
+          $SSH "$MD --foreground --no-fresh-backup --until secrets"
       - name: "MIGRATION.md 3 and 4: auth, then the household services, one by one"
         run: |
           cd "$VM"; . ./box.sh
-          $SSH "STEP=auth SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
-          $SSH "STEP=services SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          # as on migration day: in its transient unit, which outlives this SSH session
+          $SSH "$MD --resume --until vaultwarden"
+          $SSH 'bash ~/laib/scripts/migration-day.sh wait 5400'
       - name: rollback mid-migration — Home Assistant back to ServiceBay with its data, then to Laib again
         if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
-          $SSH "STEP=rollback SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH 'bash ~/laib/scripts/migration-day.sh rollback home-assistant'
           rb=0; $SSH 'python3 gp/household.py check --phase before home-assistant matter' || rb=1
-          # forward again whatever the check said: the rest of the run needs Home Assistant on Laib
-          $SSH "STEP=forward SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          # forward again whatever the check said: the rest of the run needs Home Assistant on Laib;
+          # --resume takes it over again, the stale copies of the first move removed first
+          $SSH "$MD --foreground --resume --until vaultwarden"
           exit $rb
       - name: "MIGRATION.md 2 and 7: Caddy replaces NPM, ServiceBay off"
         if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
           cd "$VM"; . ./box.sh
-          $SSH "STEP=caddy SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
-          $SSH "STEP=retire SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH "$MD --foreground --resume"
+          $SSH 'bash ~/laib/scripts/migration-day.sh status'
       - name: the household survived — the same checks, on Laib
         if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
@@ -148,7 +159,7 @@ jobs:
           cd "$VM" 2>/dev/null || exit 0
           . ./box.sh
           if $SSH true 2>/dev/null; then
-            $SSH 'podman ps -a --format "{{.Names}} {{.Status}}"; echo "--- laib"; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 3h | tail -60; journalctl --user --no-pager -u laib | tail -40
+            $SSH 'podman ps -a --format "{{.Names}} {{.Status}}"; echo "--- migration-day.sh"; cat ~/laib-migration/progress; journalctl --user --no-pager -u laib-migration | tail -60; echo "--- laib"; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 3h | tail -60; journalctl --user --no-pager -u laib | tail -40
                   echo "--- servicebay"; podman logs servicebay 2>&1 | grep -iE "registr|git |clone" | tail -20; podman logs --tail 80 servicebay 2>&1
                   echo "--- failed units"; systemctl --user --failed --no-pager
                   for u in $(systemctl --user list-units --state=failed,activating,deactivating --plain --no-legend | awk "{print \$1}"); do echo "--- $u"; systemctl --user status --no-pager "$u" | head -15; journalctl --user --no-pager -u "$u" | tail -40; done' || true
