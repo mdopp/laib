@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
@@ -74,5 +76,22 @@ func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
 	}
 	if resp, _ := do("POST", "/check/caddy"); resp == nil || resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("a service without a check has nothing to start: %v", resp)
+	}
+	// no file yet: the page says so instead of showing nothing, and starts the check
+	os.Remove(filepath.Join(data, "laib-status.json"))
+	resp, err = do("GET", "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "noch kein Stand") || started() != 3 {
+		t.Fatalf("a declared status not written yet is a line, and its check starts:\n%s\n%v", body, c.calls)
+	}
+	st, _ := cli.LoadState(c.env)
+	if _, rows := pages.CollectStatus(context.Background(), c.env, st); !slices.ContainsFunc(rows, func(r pages.ServiceStatus) bool {
+		return r.Name == "whoami" && r.Detail == "noch kein Stand"
+	}) {
+		t.Fatalf("laib status says it too: %+v", rows)
 	}
 }

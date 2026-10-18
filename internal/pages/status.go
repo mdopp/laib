@@ -117,6 +117,8 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 			if a := diag.Age(rep.At, time.Now()); a != "" {
 				row.Detail += " · " + a
 			}
+		} else if svc.Contract.Status != nil && !rep.Found {
+			row.Detail = "noch kein Stand" // declared, not written yet: a line, never nothing (#246)
 		}
 		if pz, ok := paused[name]; ok {
 			row.State = "pausiert"

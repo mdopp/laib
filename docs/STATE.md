@@ -203,7 +203,8 @@ channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on
 `status` is a file the template keeps about itself. laib reads it fresh on
 every `laib status`, `/ready` and `laib diag` (a file read, no watcher) and
 shows its `detail` on the Box page and its `findings` in diag, each with its
-age ("geprüft vor 12 min"). A service that knows when its state changes
+age ("geprüft vor 12 min"). Until the file exists the line says "noch kein
+Stand". A service that knows when its state changes
 writes the file then (Stimme's trainer). One that cannot (Home Assistant
 does not push its config) names a `check`: a `.service` of the template
 without `[Install]`. laib starts it with `--no-block` when someone looks at
