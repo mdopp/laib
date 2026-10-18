@@ -8,7 +8,6 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/lint"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 )
@@ -22,7 +21,7 @@ func TemplateCmd(ctx context.Context, env *cli.Env, args []string) int {
 		if len(args) < 2 {
 			return env.Fail(errors.New("usage: laib template lint <dir>"))
 		}
-		return lint.Template(env, args[1])
+		return LintTemplate(env, args[1])
 	case "list":
 		st, err := cli.LoadState(env)
 		if err != nil {

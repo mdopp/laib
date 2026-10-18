@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/run"
 )
 
 // A refused apply writes nothing (#227 review): `laib add` with ServiceBay's
@@ -29,7 +29,7 @@ func TestApplyRefusedForAConflictLeavesSecretsAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.calls = nil
-	if rc := run.Apply(context.Background(), c.env, st, "", "test: add beside ServiceBay's tick.kube"); rc == cli.ExitOK {
+	if rc := apply.ApplyLocked(context.Background(), c.env, st, "", "test: add beside ServiceBay's tick.kube"); rc == cli.ExitOK {
 		t.Fatal("apply did not refuse while tick.kube is in the Quadlet root")
 	}
 	if after, _ := os.ReadFile(c.env.Paths.Secrets); !bytes.Equal(before, after) {

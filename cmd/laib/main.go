@@ -1,10 +1,9 @@
 // Command laib is the one binary: CLI and daemon. It fills the verb table
 // (mcp.Verbs: the single source for `laib help`, the MCP tool list and the
-// tier check), wires the seams between the trust kernel and the box chores,
-// and holds the small verbs that only parse and delegate: plan and apply,
-// journal, note and context, logs, the state repo's init, adopt and ignore,
-// remove, pause, secret, token, operator and self (#309). Everything else
-// lives in internal/.
+// tier check) and holds the small verbs that only parse and delegate: plan
+// and apply, journal, note and context, logs, the state repo's init, adopt
+// and ignore, remove, pause, secret, token, operator and self (#309).
+// Everything else lives in internal/.
 package main
 
 import (
@@ -16,15 +15,14 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/converge"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/inbox"
-	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/registry"
@@ -37,9 +35,7 @@ var Version = "dev"
 type cliEnv = cli.Env
 
 func init() {
-	inbox.Approved = intake.FileWishes // an approved wish becomes an intake issue (ADR 0023 §6)
 	cli.Version = Version
-	envelope.FileIssue = intake.Issue // an escalation becomes a needs-claude ticket (#56)
 	mcp.Verbs = []cli.Verb{
 		{Name: "status", Tier: "read", Help: "one line per service; first line is the readiness state", Run: pages.Status},
 		{Name: "diag", Tier: "read", Help: "findings with severity and a fix verb each: units, health, drift, disk", Run: diag.Cmd},
@@ -53,7 +49,7 @@ func init() {
 		{Name: "restart", Tier: "apply", Help: "<service>: restart its units and verify, inside the envelope", Run: envelope.Restart},
 		{Name: "escalate", Tier: "propose", Help: "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", Run: envelope.Escalate},
 		{Name: "note", Tier: "propose", Help: "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", Run: cmdNote},
-		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: intake.Wish},
+		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: inbox.Wish},
 		{Name: "updates", Tier: "read", Help: "newer patch and minor releases of every pinned image, from the registry (#287)", Run: registry.Updates},
 		{Name: "skill", Tier: "read", Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
 		{Name: "operator", Tier: "apply", Help: "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", Run: cmdOperator},
@@ -61,7 +57,7 @@ func init() {
 		{Name: "rollback", Tier: "apply", Help: "revert the last (or a given) state commit and apply", Run: inbox.Rollback},
 		{Name: "backup", Tier: "propose", Help: "restic snapshot of state, journal and declared data paths", Run: backup.Cmd},
 		{Name: "restore", Tier: "apply", Help: "<snapshot|latest> [service] restore declared paths, then apply", Run: backup.Restore},
-		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: converge.Converge},
+		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: apply.Converge},
 		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h)", Run: cmdJournal},
 		{Name: "context", Tier: "read", Help: "starter bundle for an agent session", Run: cmdContext},
 		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: registry.TemplateCmd},

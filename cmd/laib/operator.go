@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/token"
@@ -104,7 +104,7 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		return run.Apply(ctx, env, st, "", "operator "+args[0])
+		return apply.ApplyLocked(ctx, env, st, "", "operator "+args[0])
 	}
 	return env.Fail(fmt.Errorf("unknown operator subcommand %q", args[0]))
 }

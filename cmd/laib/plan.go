@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -79,5 +79,5 @@ func cmdApply(ctx context.Context, env *cliEnv, args []string) int {
 			only = args[i]
 		}
 	}
-	return run.Apply(ctx, env, st, only, reason)
+	return apply.ApplyLocked(ctx, env, st, only, reason)
 }

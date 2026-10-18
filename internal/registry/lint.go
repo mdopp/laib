@@ -1,10 +1,11 @@
-// Package lint is `laib template lint` (#309, ADR 0004): a template folder
+// The template lint (`laib template lint`, ADR 0004): a template folder
 // loaded as the only service of a throw-away state, so the same validation
 // applies, plus what only a template can get wrong — mounts outside its
-// data, hook interpreters outside the hooks image, a missing health, a
-// host port a sibling template publishes. Trust kernel: units and hooks
-// come only from templates (ADR 0019 §2a).
-package lint
+// data, hook interpreters outside the hooks image, a missing health, a host
+// port a sibling template publishes. Units and hooks come only from
+// templates (ADR 0019 §2a).
+
+package registry
 
 import (
 	"fmt"
@@ -20,9 +21,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Template loads a template folder as if it were the only service of a
+// LintTemplate loads a template folder as if it were the only service of a
 // throw-away state, so the same validation applies (ADR 0004).
-func Template(env *cli.Env, dir string) int {
+func LintTemplate(env *cli.Env, dir string) int {
 	tmp, err := os.MkdirTemp("", "laib-lint")
 	if err != nil {
 		return env.Fail(err)

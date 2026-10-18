@@ -1,8 +1,4 @@
-// Package run is the apply mechanics every mutating verb shares (#309): the
-// one lock with an owner (#39, ADR 0019 §2d), generating and minting the
-// secrets a plan needs, plan, apply, verify and the journal line. Trust
-// kernel: whoever calls it has passed the policy check.
-package run
+package apply
 
 import (
 	"context"
@@ -12,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
@@ -22,10 +17,10 @@ import (
 	"github.com/mdopp/laib/internal/token"
 )
 
-// Apply is the apply mechanics after the policy check: lock, secrets,
+// ApplyLocked is the apply mechanics after the policy check: lock, secrets,
 // plan, apply, journal. Used by `laib apply` and by an approval.
-func Apply(ctx context.Context, env *cli.Env, st *state.State, only, reason string) int {
-	unlock, code := Lock(env, st, "apply")
+func ApplyLocked(ctx context.Context, env *cli.Env, st *state.State, only, reason string) int {
+	unlock, code := TakeLock(env, st, "apply")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -33,12 +28,12 @@ func Apply(ctx context.Context, env *cli.Env, st *state.State, only, reason stri
 	return ApplyHeld(ctx, env, st, only, reason)
 }
 
-// Lock takes the one lock (#39) for a verb; a stale lock (its process
+// TakeLock takes the one lock (#39) for a verb; a stale lock (its process
 // gone) is taken over with a journal line, a live one refuses with exitLocked.
-func Lock(env *cli.Env, st *state.State, verb string) (func(), int) {
-	unlock, stale, err := apply.Lock(env.Paths, verb+":"+env.Actor)
-	if errors.Is(err, apply.ErrLocked) {
-		fmt.Fprintln(env.Errw(), "laib: eingeschränkt, gesperrt durch", apply.LockHolder(env.Paths))
+func TakeLock(env *cli.Env, st *state.State, verb string) (func(), int) {
+	unlock, stale, err := Lock(env.Paths, verb+":"+env.Actor)
+	if errors.Is(err, ErrLocked) {
+		fmt.Fprintln(env.Errw(), "laib: eingeschränkt, gesperrt durch", LockHolder(env.Paths))
 		return nil, cli.ExitLocked
 	}
 	if err != nil {
@@ -116,7 +111,7 @@ func ApplyHeld(ctx context.Context, env *cli.Env, st *state.State, only, reason 
 func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan, sec map[string]string, reason, verb string, held bool) int {
 	only := p.Only
 	if !held {
-		unlock, code := Lock(env, st, verb)
+		unlock, code := TakeLock(env, st, verb)
 		if code != cli.ExitOK {
 			return code
 		}
@@ -124,13 +119,13 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 	}
 	// an apply killed between write and restart (#39): its services are
 	// restarted and verified now, even with a clean file diff
-	for _, name := range apply.Pending(env.Paths) {
+	for _, name := range Pending(env.Paths) {
 		if _, ok := st.Services[name]; ok && !slices.Contains(p.Services, name) {
 			p.Services = append(p.Services, name)
 		}
 	}
 	start := time.Now()
-	res, err := apply.Run(ctx, st, p, env.Paths, sec, reason)
+	res, err := Run(ctx, st, p, env.Paths, sec, reason)
 	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result, entry.Detail = "red", err.Error()

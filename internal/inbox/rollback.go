@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -37,7 +37,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 	if strings.HasPrefix(arg, "-") {
 		return env.Fail(fmt.Errorf("%q is not a commit", arg))
 	}
-	unlock, code := run.Lock(env, st, "rollback")
+	unlock, code := apply.TakeLock(env, st, "rollback")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -55,7 +55,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 		if err != nil {
 			return env.Fail(err)
 		}
-		return run.ApplyHeld(ctx, env, st, "", "rollback "+subject)
+		return apply.ApplyHeld(ctx, env, st, "", "rollback "+subject)
 	}
 	sha, err := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
 	if err != nil || strings.TrimSpace(sha) == "" {
@@ -77,7 +77,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	return run.ApplyHeld(ctx, env, st, "", "rollback "+subject)
+	return apply.ApplyHeld(ctx, env, st, "", "rollback "+subject)
 }
 
 // RevertProposal reverts the approve merge of proposal id (#41): the tree

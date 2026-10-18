@@ -63,7 +63,7 @@ fi
 # inside the kernel: the box chores (ADR 0005 amendment #309) report and
 # maintain; the trust kernel never depends on them. Only cmd/laib and other
 # chores import a chore.
-chores="diag disk intake registry pages"
+chores="diag disk registry pages"
 for c in $chores; do
   users=$(grep -rlE "\"github.com/mdopp/laib/internal/$c\"" --include='*.go' internal | grep -vE "^internal/($(echo $chores | tr ' ' '|'))/" || true)
   [ -z "$users" ] || { echo "the trust kernel imports the chore $c: $users"; bad=1; }

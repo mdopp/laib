@@ -8,11 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/converge"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/pages"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -46,7 +45,7 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := run.Apply(ctx, c.env, st, "", "test: a service with a timer"); rc != cli.ExitOK {
+	if rc := apply.ApplyLocked(ctx, c.env, st, "", "test: a service with a timer"); rc != cli.ExitOK {
 		t.Fatalf("apply waited for the timer's oneshot to become active: rc %d", rc)
 	}
 	if !slices.Contains(c.calls, "systemctl --user enable --now tick-refresh.timer") {
@@ -61,7 +60,7 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 		}
 	}
 	c.calls = nil
-	converge.Converge(ctx, c.env, []string{"--force"})
+	apply.Converge(ctx, c.env, []string{"--force"})
 	for _, u := range c.restarts() {
 		if strings.HasPrefix(u, "tick") {
 			t.Errorf("converge restarted %s for an idle oneshot", u)

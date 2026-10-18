@@ -13,7 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/envelope"
-	"github.com/mdopp/laib/internal/intake"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -43,9 +43,9 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		json.NewEncoder(w).Encode(map[string]any{"number": 42, "html_url": "https://github.com/mdopp/x/issues/42"})
 	}))
 	t.Cleanup(g.srv.Close)
-	real := intake.GitHubAPI
-	intake.GitHubAPI = g.srv.URL
-	t.Cleanup(func() { intake.GitHubAPI = real })
+	real := inbox.GitHubAPI
+	inbox.GitHubAPI = g.srv.URL
+	t.Cleanup(func() { inbox.GitHubAPI = real })
 	return g
 }
 
@@ -56,7 +56,7 @@ func (c *cbox) intake(t *testing.T, repo string) {
 	b, _ := os.ReadFile(p)
 	os.WriteFile(p, append(b, []byte("intake:\n  repo: "+repo+"\n  label: wunsch\n")...), 0o644)
 	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
-	sec[intake.TokenSecret] = "ghp_test"
+	sec[inbox.TokenSecret] = "ghp_test"
 	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
 }
 
@@ -67,7 +67,7 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
 	c.env.Actor = "bote"
-	if rc := intake.Wish(context.Background(), c.env, []string{"Ich brauche einen Dienst, der Rezepte sammelt", "und mit dem Handy teilt"}); rc != cli.ExitOK {
+	if rc := inbox.Wish(context.Background(), c.env, []string{"Ich brauche einen Dienst, der Rezepte sammelt", "und mit dem Handy teilt"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 1 || g.paths[0] != "POST /repos/mdopp/x/issues" {
@@ -97,7 +97,7 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 func TestWishWithoutIntakeIsKeptOnDisk(t *testing.T) {
 	c := newCbox(t)
 	g := newFakeGitHub(t)
-	if rc := intake.Wish(context.Background(), c.env, []string{"ein Kalender für alle"}); rc != cli.ExitOK {
+	if rc := inbox.Wish(context.Background(), c.env, []string{"ein Kalender für alle"}); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
 	if len(g.calls) != 0 {
