@@ -55,25 +55,13 @@ laib_add() {
 
 move() { HOOKS_IMAGE="$HOOKS" scripts/move-servicebay-data.sh "$@"; }
 
-# MIGRATION.md step 4c, last line: NPM still serves the name. A built-in that
-# publishes on 127.0.0.1 only (Vaultwarden) is not where ServiceBay's proxy host
-# forwards (the LAN address); NPM runs on the host network, so its proxy host
-# points at 127.0.0.1. NPM's own API, with the admin login the wizard was given.
+# MIGRATION.md step 4c, last line: NPM still serves the moved service's names
+# (Vaultwarden's not: it moves last, right before Caddy takes over, 4d)
 npm_serves() {
-  local n=$1 h code tok id
+  local n=$1 h code
+  [ "$n" = vaultwarden ] && { echo "NPM: vault.$DOMAIN waits for Caddy (4d), as MIGRATION.md says"; return 0; }
   for h in $(sed -n 's/^  - {host: \([^,]*\),.*/\1/p' "$OUT/$n/laib.yml"); do
     code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true)
-    if [ "$code" = 502 ]; then
-      tok=$(curl -fsS -H 'Content-Type: application/json' -d "{\"identity\":\"$NPM_EMAIL\",\"secret\":\"$NPM_PASSWORD\"}" http://127.0.0.1:81/api/tokens | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-      id=$(curl -fsS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts | python3 -c 'import json,sys; print(next(p["id"] for p in json.load(sys.stdin) if sys.argv[1] in p["domain_names"]))' "$h.$DOMAIN")
-      echo "NPM proxy host $id before: $(curl -sS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts/$id | head -c 600)"
-      curl -sS -w ' (HTTP %{http_code})\n' -X PUT -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{"forward_host":"127.0.0.1"}' http://127.0.0.1:81/api/nginx/proxy-hosts/$id | tail -c 300
-      for i in $(seq 1 15); do   # NPM regenerates and reloads its nginx
-        code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true); [ "$code" != 502 ] && break; sleep 2
-      done
-      curl -s -o /dev/null -w "direct: http://127.0.0.1:%{local_port}… HTTP %{http_code}\n" "http://127.0.0.1:$(sed -n "s/^  - {host: $h, port: \([0-9]*\),.*/\1/p" "$OUT/$n/laib.yml")/" || true
-      echo "NPM: $h.$DOMAIN pointed at 127.0.0.1 (Laib publishes $n on loopback only)"
-    fi
     echo "NPM: http://$h.$DOMAIN/ -> HTTP $code"
     case "$code" in 2??|3??|401) ;; *) echo "NPM does not serve $h.$DOMAIN after $n moved"; return 1;; esac
   done
@@ -114,7 +102,7 @@ step_auth() {
 step_services() {
   say "4. the household services, in MIGRATION.md's order"
   local n red=""
-  for n in ${SERVICES:-vaultwarden radicale mosquitto file-share immich paperless home-assistant}; do
+  for n in ${SERVICES:-radicale mosquitto file-share immich paperless home-assistant vaultwarden}; do
     say "4. $n"
     servicebay_out "$n"
     case "$n" in
@@ -162,6 +150,15 @@ step_caddy() {
   say "4d. Caddy replaces NPM"
   servicebay_out nginx
   laib add caddy
+  # every name of the state through Caddy, against its own CA: none answers 502
+  local ca=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt h code bad=""
+  for i in $(seq 1 30); do [ -s $ca ] && break; sleep 2; done
+  for h in $(cat /mnt/data/laib/state/services/*/laib.yml | sed -n 's/^ *- *{\{0,1\}host: *\([a-z0-9-]*\).*/\1/p' | sort -u); do
+    code=$(curl -s --cacert $ca --resolve "$h.$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' "https://$h.$DOMAIN/" || true)
+    echo "Caddy: https://$h.$DOMAIN/ -> HTTP $code"
+    case "$code" in 2??|3??|401|403) ;; *) bad="$bad $h";; esac
+  done
+  [ -z "$bad" ] || { echo "Caddy does not serve:$bad"; return 1; }
 }
 
 step_retire() {

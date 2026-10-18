@@ -92,8 +92,8 @@ file moves out.
    it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
    and Caddy's routes come from the state, which holds none of the
    household's services yet. Meanwhile NPM keeps serving every name: Laib's
-   built-ins publish the ports ServiceBay's proxy hosts forward to (one
-   that publishes on 127.0.0.1 only gets its proxy host repointed, 4c), and
+   built-ins publish the ports ServiceBay's proxy hosts forward to (except
+   Vaultwarden, which therefore moves last, right before 4d), and
    Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
    (Authelia's default endpoints). Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
@@ -115,9 +115,13 @@ file moves out.
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
-   model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
-   immich, paperless, media, home-assistant, chronik** in that order: small and stateless first,
-   the ones with migrations last. Each one, in this order (the service is
+   model key. Then **radicale, mosquitto, file-share, beets, immich,
+   paperless, media, home-assistant, chronik, vaultwarden** in that order:
+   small and stateless first, the ones with migrations later, and
+   Vaultwarden last, right before 4d: its built-in listens on 127.0.0.1
+   only, where ServiceBay's proxy host does not forward (it forwards to the
+   LAN address), so vault.<domain> answers 502 from its c until Caddy serves
+   it in 4d — minutes, not the weekend. Each one, in this order (the service is
    down from a to c; that is the price of never having two writers on one
    database):
    a. Stop ServiceBay's unit and move its files out of the Quadlet root:
@@ -135,10 +139,7 @@ file moves out.
    c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
-      Its names still answer through NPM. Where one answers 502, the
-      built-in publishes on 127.0.0.1 only (Vaultwarden) while ServiceBay's
-      proxy host forwards to the LAN address: in NPM, set that proxy host's
-      forward host to `127.0.0.1` (NPM runs on the host network).
+      Its names still answer through NPM (Vaultwarden's not, see above).
    **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
    (`laib template sync`) and needs `llama` for the lease and `stimme` for
    Piper. Its data moves once, in step b with ServiceBay's unit stopped (one
@@ -148,7 +149,8 @@ file moves out.
    Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
    d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
       unit out by a. (`nginx`), then `laib add caddy`; its routes are the
-      state's, now the full list. Verify each name through Caddy, then the
+      state's, now the full list. Verify each name through Caddy (none
+      answers 502), then the
       AdGuard rewrites, if any, point at the box as before.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template; their git
    checkouts are copied into the Werkstatt's workspace (below). Their

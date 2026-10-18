@@ -109,9 +109,7 @@ jobs:
         run: |
           cd "$VM"; . ./box.sh
           $SSH "STEP=auth SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
-          # the NPM login the operator typed into ServiceBay's wizard (step 4c repoints a proxy host)
-          npm=$(python3 -c 'import json; v=json.load(open("facts.json"))["vars"]["nginx"]; print(v["NGINX_ADMIN_EMAIL"], v["NGINX_ADMIN_PASSWORD"])')
-          $SSH "STEP=services SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS NPM_EMAIL=${npm% *} NPM_PASSWORD=${npm#* } bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH "STEP=services SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
       - name: rollback mid-migration — Home Assistant back to ServiceBay with its data, then to Laib again
         if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
