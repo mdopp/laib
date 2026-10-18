@@ -710,7 +710,7 @@ jobs:
                 systemctl --user start home-assistant-check.service || { journalctl --user -u home-assistant-check.service --no-pager | tail -20; exit 1; }
                 grep -q "\"at\"" "$C/.laib-status.json" || { echo "the check wrote no status file"; ls -la "$C"; exit 1; }
                 $L diag --json home-assistant > /tmp/diag-ha.json
-                grep -q "fehlt: Wyoming Whisper" /tmp/diag-ha.json && grep -q "geprüft" /tmp/diag-ha.json || { echo "diag does not show the integrations the check listed"; cat /tmp/diag-ha.json; exit 1; }
+                grep -q "Wyoming Whisper: fehlt" /tmp/diag-ha.json && grep -q "geprüft" /tmp/diag-ha.json || { echo "diag does not show the integrations the check listed"; cat /tmp/diag-ha.json; exit 1; }
                 if grep -q "antwortet nicht" /tmp/diag-ha.json; then echo "the check could not read the integrations with HA_TOKEN"; exit 1; fi
                 echo "home-assistant: the minted HA_TOKEN lists the integrations; diag shows them"
                 # the next apply keeps what works; a token HA refuses is replaced
@@ -722,7 +722,7 @@ jobs:
                 grep -q "HA_TOKEN minted (replaces one HA refuses)" /tmp/apply-ha3.txt || { echo "the refused HA_TOKEN was not replaced"; exit 1; }
                 systemctl --user start home-assistant-check.service
                 $L diag --json home-assistant > /tmp/diag-ha3.json
-                grep -q "fehlt: Wyoming Whisper" /tmp/diag-ha3.json || { echo "the check does not read with the replaced token"; cat /tmp/diag-ha3.json; exit 1; }
+                grep -q "Wyoming Whisper: fehlt" /tmp/diag-ha3.json || { echo "the check does not read with the replaced token"; cat /tmp/diag-ha3.json; exit 1; }
                 echo "home-assistant: tokens minted, kept, and a refused one replaced (#349)"
                 $L remove tokens >/dev/null; rm -rf "$T"
                 $L remove home-assistant >/dev/null

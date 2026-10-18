@@ -221,7 +221,8 @@ def main():
             if kind(token) != "admin":
                 red(f"the token minted for {name} is not an administrator's")
             print(f"laib-secret: {name}={token}")
-            print(f"home-assistant: {name} minted ({'replaces one HA refuses' if kinds[name] is None else 'replaces a non-admin one'})")
+            why = "new" if not E.get("LAIB_SECRET_" + name) else "replaces one HA refuses" if kinds[name] is None else "replaces a non-admin one"
+            print(f"home-assistant: {name} minted ({why})")
 
     if kinds["BOTE_HA_TOKEN"] != "user":
         # the user "bote": there, no administrator, with the password Laib holds
