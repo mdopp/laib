@@ -55,6 +55,26 @@ laib_add() {
 
 move() { HOOKS_IMAGE="$HOOKS" scripts/move-servicebay-data.sh "$@"; }
 
+# MIGRATION.md step 4c, last line: NPM still serves the name. A built-in that
+# publishes on 127.0.0.1 only (Vaultwarden) is not where ServiceBay's proxy host
+# forwards (the LAN address); NPM runs on the host network, so its proxy host
+# points at 127.0.0.1. NPM's own API, with the admin login the wizard was given.
+npm_serves() {
+  local n=$1 h code tok id
+  for h in $(sed -n 's/^  - {host: \([^,]*\),.*/\1/p' "$OUT/$n/laib.yml"); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true)
+    if [ "$code" = 502 ]; then
+      tok=$(curl -fsS -H 'Content-Type: application/json' -d "{\"identity\":\"$NPM_EMAIL\",\"secret\":\"$NPM_PASSWORD\"}" http://127.0.0.1:81/api/tokens | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+      id=$(curl -fsS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts | python3 -c 'import json,sys; print(next(p["id"] for p in json.load(sys.stdin) if sys.argv[1] in p["domain_names"]))' "$h.$DOMAIN")
+      curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{"forward_host":"127.0.0.1"}' http://127.0.0.1:81/api/nginx/proxy-hosts/$id
+      code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true)
+      echo "NPM: $h.$DOMAIN pointed at 127.0.0.1 (Laib publishes $n on loopback only)"
+    fi
+    echo "NPM: http://$h.$DOMAIN/ -> HTTP $code"
+    case "$code" in 2??|3??|401) ;; *) echo "NPM does not serve $h.$DOMAIN after $n moved"; return 1;; esac
+  done
+}
+
 step_install() {
   say "1. Laib beside ServiceBay: the binary, the state repo, the drafts, the secrets"
   curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh
@@ -103,6 +123,7 @@ step_services() {
     # "One value goes with them": the box's broker user (MIGRATION.md, secrets that carry over)
     # a red service is reported and the next one goes on, so one run shows every defect
     if [ "$n" = mosquitto ]; then laib_add "$n" MQTT_USER=mqtt || red="$red $n"; else laib_add "$n" || red="$red $n"; fi
+    npm_serves "$n" || red="$red $n(npm)"
   done
   [ -z "$red" ] || { echo "red:$red"; return 1; }
 }
@@ -133,11 +154,6 @@ step_forward_again() {
 
 step_caddy() {
   say "4d. Caddy replaces NPM"
-  # until now NPM has served the household's names, Laib's units behind it
-  local h
-  for h in vault:/alive photos:/api/server/ping home:/ caldav:/; do
-    echo "NPM: http://${h%%:*}.$DOMAIN${h#*:} -> HTTP $(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${h%%:*}.$DOMAIN" "http://127.0.0.1${h#*:}" || true)"
-  done
   servicebay_out nginx
   laib add caddy
 }

@@ -92,7 +92,8 @@ file moves out.
    it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
    and Caddy's routes come from the state, which holds none of the
    household's services yet. Meanwhile NPM keeps serving every name: Laib's
-   built-ins publish the ports ServiceBay's proxy hosts forward to, and
+   built-ins publish the ports ServiceBay's proxy hosts forward to (one
+   that publishes on 127.0.0.1 only gets its proxy host repointed, 4c), and
    Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
    (Authelia's default endpoints). Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
@@ -134,6 +135,10 @@ file moves out.
    c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
+      Its names still answer through NPM. Where one answers 502, the
+      built-in publishes on 127.0.0.1 only (Vaultwarden) while ServiceBay's
+      proxy host forwards to the LAN address: in NPM, set that proxy host's
+      forward host to `127.0.0.1` (NPM runs on the host network).
    **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
    (`laib template sync`) and needs `llama` for the lease and `stimme` for
    Piper. Its data moves once, in step b with ServiceBay's unit stopped (one

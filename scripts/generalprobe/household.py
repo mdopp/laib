@@ -679,7 +679,11 @@ def check_home(f, s, phase):
         raise AssertionError(str(e))
     st, _ = ha("/states/automation.generalprobe_licht", tok)
     if st != 200:
-        raise AssertionError(f"the automation is gone: HTTP {st}")
+        _, b, _ = req("GET", f"http://{LOOP}:8123/api/error_log", headers={"Authorization": "Bearer " + tok})
+        errs = [l for l in b.decode(errors="replace").splitlines() if re.search(r"ERROR|automation|Invalid config|recovery", l)][-15:]
+        conf = open(os.path.join(cfg, "configuration.yaml")).read()
+        raise AssertionError(f"the automation is gone: HTTP {st}\n  HA's errors: " + "\n    ".join(errs) +
+                             f"\n  automations.yaml: {os.path.getsize(os.path.join(cfg, 'automations.yaml'))} bytes\n  configuration.yaml:\n" + conf[:1500])
     st, entries = ha("/config/config_entries/entry", tok)
     have = sorted(e["domain"] for e in entries or [])
     gone = [d for d in s["home"]["entries"] if d not in have]
