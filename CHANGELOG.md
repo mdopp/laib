@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/mdopp/laib/compare/v0.6.0...v0.7.0) (2026-10-18)
+
+
+### Features
+
+* **auth:** Authelia mails through the box's SMTP server, carried from ServiceBay ([4d31d3a](https://github.com/mdopp/laib/commit/4d31d3ab8d16c1cf4a6fafe6d4dcda7ea9f08886)), closes [#359](https://github.com/mdopp/laib/issues/359)
+* **person:** invite a resident from one verb, the link by Authelia's mail or back ([cab91cf](https://github.com/mdopp/laib/commit/cab91cf344e9d5c084345e82667ec84ac16c2756)), closes [#360](https://github.com/mdopp/laib/issues/360)
+* **scripts:** migration-day.sh runs MIGRATION.md on the box, and the generalprobe runs it ([#350](https://github.com/mdopp/laib/issues/350)) ([4dd8e12](https://github.com/mdopp/laib/commit/4dd8e12fdf329b264051183c4489ba1a63369cc1))
+* **template:** Home Assistant's post-deploy mints the tokens of the check, Haus and a non-admin Bote ([98ab618](https://github.com/mdopp/laib/commit/98ab61834ce231580cc1a8c0ddecfdb13a0ae67a)), closes [#349](https://github.com/mdopp/laib/issues/349)
+
+
+### Bug Fixes
+
+* **add:** a KEY=VALUE with blanks is a value, not the reason; VM stand-ins from mirror.gcr.io ([3eb0ada](https://github.com/mdopp/laib/commit/3eb0adacd9cc153e97da799a1472a44bb56290dd))
+* **scripts:** migration-day.sh frees a handed-back service's roles; loopback names wait for Caddy ([#350](https://github.com/mdopp/laib/issues/350)) ([c504255](https://github.com/mdopp/laib/commit/c50425519abfdfd2855aed96852977ca8ae3f0af))
+* **status:** laib status prints the template's status line, not only --json ([c7630a4](https://github.com/mdopp/laib/commit/c7630a4c21d1fd106b617b3fe8a9a050db06b8f0))
+* **template:** e2e on the Assist URL and the Automat's token; vm-install reads diag's wording ([f011bf9](https://github.com/mdopp/laib/commit/f011bf97030cad7b88a848a9d661fd6df25730f2)), closes [#349](https://github.com/mdopp/laib/issues/349)
+* **template:** revoke Laib's old token of a name before minting it anew ([1150498](https://github.com/mdopp/laib/commit/115049889940e656e6f8825ca3f7d2146c6b5271)), closes [#349](https://github.com/mdopp/laib/issues/349)
+
 ## 0.6.0 (2026-10-18)
 
 
