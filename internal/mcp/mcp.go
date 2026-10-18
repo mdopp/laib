@@ -29,6 +29,7 @@ var Mu sync.RWMutex
 var Allowed = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "skill": true, "updates": true,
+	"person_invite": true, "person_pending": true,
 }
 
 type rpcRequest struct {

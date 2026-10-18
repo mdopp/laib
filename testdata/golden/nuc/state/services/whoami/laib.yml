@@ -9,6 +9,7 @@ routes:
     bypass: [/napi/]       # token-only API next to the page (Haus)
     proxySecret: WHOAMI_TOKEN   # the page trusts Remote-User only behind this header
     group: family
+    redirectFrom: ["@", www]   # the old entry points (#360): a redirect, no service
     caddy: |
       request_body {
         max_size 10MB

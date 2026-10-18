@@ -39,3 +39,21 @@ func TestAddAgainFinishesAnAddThatDidNotApply(t *testing.T) {
 		t.Fatal("another template under an existing service's name was accepted")
 	}
 }
+
+// #359: a value with blanks goes into values.yml, not into the reason;
+// ServiceBay's mail sender is "atHome-Server (.100) <…@gmail.com>".
+func TestAddTakesAValueWithBlanks(t *testing.T) {
+	c := newCbox(t)
+	writeRegistryTemplate(t, c, "echo2")
+	from := "Die Box (.100) <box@vm.test>"
+	if rc := inbox.Add(context.Background(), c.env, []string{"echo2", "IMAGE=docker.io/library/busybox:stable", "SMTP_FROM=" + from}); rc != cli.ExitOK {
+		t.Fatalf("add rc %d", rc)
+	}
+	st, err := cli.LoadState(c.env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Services["echo2"].Values["SMTP_FROM"].Literal; got != from {
+		t.Fatalf("SMTP_FROM = %q, want %q", got, from)
+	}
+}

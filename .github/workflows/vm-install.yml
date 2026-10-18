@@ -369,7 +369,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 R=/mnt/data/laib/registries/vm/templates/probe; mkdir -p "$R"
                 printf "name: probe\ntemplate: {registry: vm, name: probe, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports:\n  - {port: 8080, lan: false}\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
                 $L add probe
                 sudo nft list table inet laib > /tmp/nft.txt 2>&1 || true
@@ -401,7 +401,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 R=/mnt/data/laib/registries/vm/templates/logmark; mkdir -p "$R"
                 printf "name: logmark\ntemplate: {registry: vm, name: logmark, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=sh -c \"echo laib-log-marker_${{ github.run_id }} | tr _ -; exec sleep 1000000\"\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/logmark.container"
                 $L add logmark
                 M=laib-log-marker-${{ github.run_id }}
@@ -454,7 +454,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
-                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
@@ -490,7 +490,7 @@ jobs:
                 test -s /mnt/data/stacks/adguard/conf/AdGuardHome.yaml || { echo "pre-start did not write AdGuardHome.yaml"; exit 1; }
                 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
                 # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
-                podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
+                podman run --rm --network host mirror.gcr.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
                 grep -q "Address" <<<"$(grep -A2 "laib.vm.test" /tmp/dns.txt)" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
                 $L add radicale BASE_DN=dc=vm,dc=test | tee /tmp/add-radicale.txt
                 grep -q "^ok  radicale pre-start" /tmp/add-radicale.txt || { echo "radicale pre-start is not green"; exit 1; }
@@ -544,7 +544,7 @@ jobs:
                 l=$(stat -c %C "$S/import/root.flac"); echo "root.flac after the restarts: $l"; case "$l" in *user_tmp_t*) ;; *) echo "a unit relabelled the share"; exit 1;; esac
                 # what :z does to the same tree on this VM, recorded, not gated: on the CI VM it left the
                 # root-owned file alone (rc 0, label kept); ServiceBay'"'"'s box crashed on it (#1731, #1923)
-                rc=0; podman run --rm -v "$S:/m:z" docker.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
+                rc=0; podman run --rm -v "$S:/m:z" mirror.gcr.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
                 echo "observation, :z on the share -> rc $rc, music $(stat -c %C "$S"), root.flac $(stat -c %C "$S/import/root.flac") $(tail -1 /tmp/relabel.txt)"
                 # #252: auth.<domain> from a rootless container (pasta, as every Laib unit without Network=host),
                 # mapped as the templates map it: to the host gateway, alone and in a pod; the LAN IP for the record
@@ -557,6 +557,107 @@ jobs:
                 code=$(hc --pod p252); podman pod rm -f p252 >/dev/null; echo "auth.vm.test at host-gateway, from a pod: HTTP $code"
                 [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
+      - name: auth — "Passwort vergessen" reaches a mail server, its password a podman secret (#359)
+        if: matrix.part == 'logins'
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+          lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+          S=/mnt/data/laib/state; V=$S/services/auth/values.yml; D=/mnt/data/stacks/auth
+          setv() { sed -i "s|^$1:.*|$1: $2|" "$V"; grep -q "^$1: $2\$" "$V"; }
+          commit() { git -C "$S" -c user.name=core -c user.email=core@vm.test commit -qam "$1"; }
+          root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+          # a fresh box without a mail server: the file notifier, and diag and status say so
+          grep -q '^SMTP_HOST: ""' "$V" || { echo "values.yml has no empty SMTP_HOST"; cat "$V"; exit 1; }
+          grep -q "filesystem:" "$D/authelia-config/configuration.yml"
+          lw diag auth | tee /tmp/diag-auth.txt || true
+          grep -qE "^gelb +status +auth +Passwort-Mails gehen nicht" /tmp/diag-auth.txt || { echo "diag does not say that resets cannot be mailed"; exit 1; }
+          grep -q "Passwort-Mails gehen nicht" <<<"$(lw status)" || { echo "laib status does not say it"; lw status; exit 1; }
+          # the sink: mailpit on the box's host network; pods reach it at host.containers.internal
+          podman run -d -q --name mailpit --network host docker.io/axllent/mailpit:v1.31.6 >/dev/null
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8025/api/v1/messages && break; sleep 2; done
+          # 1. a login, as a Gmail account has one: the password goes in as a podman secret, never into a file or argv
+          PW="vm-smtp-pw-359 'x\""
+          printf '%s\n' "$PW" | lw secret set AUTHELIA_SMTP_PASSWORD
+          setv SMTP_HOST host.containers.internal; setv SMTP_PORT '"1025"'; setv SMTP_USER box@vm.test; setv SMTP_FROM "'Die Box <box@vm.test>'"
+          commit "vm: auth mails with a login (#359)"
+          lw apply auth | tee /tmp/apply-auth.txt
+          grep -q "notifier: smtp via host.containers.internal" /tmp/apply-auth.txt || { echo "pre-start did not render the smtp notifier"; exit 1; }
+          [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-authelia.X_LAIB_SMTP_PASSWORD)" = "$PW" ] || { echo "the podman secret is not the password"; exit 1; }
+          pid=$(podman inspect --format "{{.State.Pid}}" systemd-auth-authelia)  # the image has no printenv: read its environment from the host
+          grep -qxF "X_LAIB_SMTP_PASSWORD=$PW" <<<"$(tr "\\0" "\\n" < /proc/$pid/environ)" || { echo "Authelia does not get the password"; exit 1; }
+          if grep -qF -- "vm-smtp-pw-359" <<<"$(podman inspect systemd-auth-authelia --format "{{.Config.CreateCommand}}"; cat "$D/authelia-config/configuration.yml" /tmp/apply-auth.txt)"; then echo "the SMTP password is on argv, in configuration.yml or in the apply's output"; exit 1; fi
+          code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://auth.vm.test/api/health || true)
+          [ "$code" = 200 ] || { echo "Authelia is not healthy with the smtp notifier: $code"; podman logs --tail 30 systemd-auth-authelia; exit 1; }
+          echo "Authelia runs with the smtp notifier; the password reached it as a podman secret only"
+          # 2. the sink takes no login over plain SMTP (nor would Authelia send one): a relay without TLS and login
+          setv SMTP_SECURITY none; setv SMTP_USER '""'
+          commit "vm: auth mails through the sink (#359)"
+          lw apply auth >/dev/null
+          grep -q "Passwort-Mails über host.containers.internal" <<<"$(lw status)" || { echo "laib status does not name the mail server"; lw status; exit 1; }
+          rm -f "$D/authelia-data/notification.txt"
+          code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /tmp/reset.json -w "%{http_code}" \
+                   -H "Content-Type: application/json" -d '{"username":"core"}' https://auth.vm.test/api/reset-password/identity/start || true)
+          echo "Passwort vergessen for core -> HTTP $code $(cat /tmp/reset.json)"; [ "$code" = 200 ]
+          id=""; for i in $(seq 1 30); do
+            id=$(curl -fsS "http://127.0.0.1:8025/api/v1/search?query=to:core@vm.test" | grep -o '"ID":"[^"]*"' | sed -n '1s/"ID":"\(.*\)"/\1/p' || true)
+            [ -n "$id" ] && break; sleep 2; done
+          [ -n "$id" ] || { echo "no reset mail reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
+          curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
+          grep -q 'https://auth.vm.test/reset-password/step2?token=' /tmp/mail.json || { echo "the mail holds no reset link"; head -c 2000 /tmp/mail.json; exit 1; }
+          grep -q '"Address":"box@vm.test"' <<<"$(grep -o '"From":{[^}]*}' /tmp/mail.json)" || { echo "the mail is not from SMTP_FROM"; grep -o '"From":{[^}]*}' /tmp/mail.json; exit 1; }
+          test ! -e "$D/authelia-data/notification.txt" || { echo "the reset still went into the file"; exit 1; }
+          echo "the reset mail for core reached the sink, from box@vm.test, with its link"
+          EOS
+      - name: invite a person — LLDAP without a password, the link by mail or back, a first password, a login (#360)
+        if: matrix.part == 'logins'
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+          lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+          root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+          au() { local p=$1; shift; curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -b /tmp/jar -c /tmp/jar -H "Content-Type: application/json" -o /tmp/au.json -w "%{http_code}" "$@" "https://auth.vm.test$p" || true; }
+          # the link to a first password, as the person follows it: the token, a password, then a login
+          first_password() {   # <user> <token> <password>
+            rm -f /tmp/jar
+            [ "$(au /api/reset-password/identity/finish -d "{\"token\":\"$2\"}")" = 200 ] || { echo "$1: Authelia does not take the link: $(cat /tmp/au.json)"; exit 1; }
+            [ "$(au /api/reset-password -d "{\"password\":\"$3\"}")" = 200 ] || { echo "$1: the password was not set: $(cat /tmp/au.json)"; exit 1; }
+            rm -f /tmp/jar
+            [ "$(au /api/firstfactor -d "{\"username\":\"$1\",\"password\":\"$3\",\"keepMeLoggedIn\":false}")" = 200 ] || { echo "$1 cannot log in with the first password: $(cat /tmp/au.json)"; exit 1; }
+            echo "$1 set a first password through the link and logged in"
+          }
+          # 1. with the mail server (#359's sink): the link is mailed, German, with the way to Haus
+          lw person invite lena --first Lena --last Muster --email lena@vm.test --json | tee /tmp/inv.json
+          grep -q '"mailed": true' /tmp/inv.json && ! grep -q '"link"' /tmp/inv.json || { echo "the invite was not mailed"; exit 1; }
+          grep -q '"user": "lena"' <<<"$(lw person pending --json)" || { echo "lena is not pending"; exit 1; }
+          lw person invite lena --first Lena --last Muster --email lena@vm.test > /tmp/again.txt 2>&1 && { echo "a second invite was not refused"; exit 1; }
+          grep -q "gibt es schon" /tmp/again.txt || { cat /tmp/again.txt; exit 1; }
+          id=""; for i in $(seq 1 30); do
+            id=$(curl -fsS "http://127.0.0.1:8025/api/v1/search?query=to:lena@vm.test" | grep -o '"ID":"[^"]*"' | sed -n '1s/"ID":"\(.*\)"/\1/p' || true)
+            [ -n "$id" ] && break; sleep 2; done
+          [ -n "$id" ] || { echo "no invitation reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
+          curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
+          for w in "Hallo Lena Muster" "https://haus.vm.test/willkommen" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
+          tok=$(grep -o 'step2?token=[A-Za-z0-9._-]*' /tmp/mail.json | sed -n '1s/.*token=//p')
+          [ -n "$tok" ] || { echo "no link in the mail"; exit 1; }
+          first_password lena "$tok" 'Lena-Passwort-360!'
+          if grep -q '"user": "lena"' <<<"$(lw person pending --json)"; then echo "lena is still pending after her first password"; exit 1; fi
+          # 2. without a mail server: the link comes back, to be passed on
+          S=/mnt/data/laib/state; sed -i 's|^SMTP_HOST:.*|SMTP_HOST: ""|' "$S/services/auth/values.yml"
+          git -C "$S" -c user.name=core -c user.email=core@vm.test commit -qam "vm: auth without a mail server (#360)"
+          lw apply auth >/dev/null
+          lw person invite max --first Max --last Muster --email max@vm.test --json | tee /tmp/inv.json
+          grep -q '"mailed": false' /tmp/inv.json || { echo "an invite without SMTP says it was mailed"; exit 1; }
+          link=$(grep -o '"link": "[^"]*"' /tmp/inv.json | sed 's/"link": "\(.*\)"/\1/')
+          case "$link" in https://auth.vm.test/reset-password/step2?token=*) ;; *) echo "no link back: $link"; exit 1;; esac
+          grep -q '"expires": "20' /tmp/inv.json || { echo "no expiry"; exit 1; }
+          first_password max "${link#*token=}" 'Max-Passwort-360!'
+          grep -q "person" <<<"$(lw journal --since 15m)" || { echo "the invites are not in the journal"; exit 1; }
+          EOS
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
         if: matrix.part == 'services'
         run: |
@@ -673,7 +774,7 @@ jobs:
                 # do, so the apply that mints them must hand them to it (as podman secrets the probe can read)
                 T=/mnt/data/laib/registries/vm/templates/tokens; mkdir -p "$T"
                 printf "name: tokens\ntemplate: {registry: vm, name: tokens, version: 1}\nroutes: []\nsecrets:\n  - {name: HAUS_HA_TOKEN, external: true, optional: true}\n  - {name: BOTE_HA_TOKEN, external: true, optional: true}\ndata: []\n" > "$T/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=sleep infinity\nEnvironment=HAUS=\${HAUS}\nEnvironment=BOTE=\${BOTE}\n\n[Install]\nWantedBy=default.target\n" > "$T/tokens.container"
                 $L add tokens >/dev/null
                 $L add home-assistant | tee /tmp/add-ha.txt
@@ -879,9 +980,9 @@ jobs:
                 sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml; grep -n "repo:" /mnt/data/laib/state/box.yml
                 R=/mnt/data/laib/registries/vm/templates/pgtest; mkdir -p "$R"
                 printf "name: pgtest\ntemplate: {registry: vm, name: pgtest, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: \${DATA_DIR}/pgtest/pgdata\n    quiesce: true\nports: []\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
-                podman pull -q docker.io/library/postgres:16-alpine >/dev/null
+                podman pull -q mirror.gcr.io/library/postgres:16-alpine >/dev/null
                 $L add caddy; $L add pgtest
                 for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
                 podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"

@@ -68,3 +68,7 @@ whoami.nuc.home {
 	respond 403
 }
 
+nuc.home, www.nuc.home {
+	redir https://whoami.nuc.home{uri}
+}
+

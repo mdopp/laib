@@ -174,6 +174,9 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(env.W(), " %s=%s", u, a)
 			}
 		}
+		if row.Detail != "" { // what the template says about itself, as the Box page shows it (#359)
+			fmt.Fprintf(env.W(), " %s", row.Detail)
+		}
 		fmt.Fprintln(env.W())
 	}
 	if e, ok := journal.Last(env.Paths.Journal); ok {

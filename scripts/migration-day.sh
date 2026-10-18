@@ -298,7 +298,26 @@ step_secrets() {
   echo "\$ scripts/carry-servicebay-secrets.sh $carry"
   # shellcheck disable=SC2086
   LAIB="$LAIB_BIN" "$CARRY" $carry
+  carry_smtp || return 1
   laib secret list
+}
+
+# ServiceBay's mail password (#359), beside the settings the auth line carries: plain in
+# its config.json (notifications.email.pass), read by python and piped into laib secret
+# set, never on argv, in a variable or a file. Only a complete setting, as ServiceBay's
+# auth hook took it; without one, Authelia writes its mails into a file and diag says so.
+smtp_py='import json, sys
+em = (json.load(open(sys.argv[1])).get("notifications") or {}).get("email") or {}
+ok = all(em.get(k) for k in ("host", "user", "pass", "from"))
+sys.stdout.write(em["pass"] if ok and sys.argv[2] == "pass" else "yes" if ok else "no")'
+carry_smtp() {
+  if [ "$(python3 -I -c "$smtp_py" "$SB_DATA/config.json" ok 2>/dev/null)" != yes ]; then
+    echo "ServiceBay has no complete mail setting (notifications.email): Laib's Authelia writes its mails into a file (laib diag says so)"
+    return 0
+  fi
+  python3 -I -c "$smtp_py" "$SB_DATA/config.json" pass | "$LAIB_BIN" secret set AUTHELIA_SMTP_PASSWORD >/dev/null ||
+    { echo "AUTHELIA_SMTP_PASSWORD: not set from ServiceBay's notifications.email"; return 1; }
+  echo "AUTHELIA_SMTP_PASSWORD set from ServiceBay's notifications.email (the settings go with laib add auth)"
 }
 
 step_service() {   # MIGRATION.md step 3 and 4, a–c
@@ -442,7 +461,7 @@ dry_run() {
       preflight) d="the preconditions above";;
       install) d="install-box.sh $([ -n "${SRC:-}" ] && echo "--source $SRC" || echo "--version $LAIB_VERSION") --domain $DOMAIN --gpu ${INSTALL_ARGS:-}";;
       drafts) d="ServiceBay's templates out of its container, migrate-servicebay.py -> $OUT.txt";;
-      secrets) d="carry-servicebay-secrets.sh, the line migrate-servicebay.py prints";;
+      secrets) d="carry-servicebay-secrets.sh, the line migrate-servicebay.py prints; ServiceBay's mail password (notifications.email)";;
       caddy) d="NPM out, laib add caddy, every name through Caddy";;
       ignore) d="laib ignore what stays: $IGNORE";;
       retire) d="out with ServiceBay: $(sb_units retire)";;

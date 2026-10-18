@@ -26,15 +26,17 @@ grep -qF "$(cut -d' ' -f2 $D/ssh/id_rsa.pub)" ~/.ssh/authorized_keys 2>/dev/null
 [ -s $D/nodes.json ] || printf '[{"Name":"Local","URI":"ssh://core@127.0.0.1","Identity":"/app/data/ssh/id_rsa","Default":true}]\n' > $D/nodes.json
 # config.json as the stick's builder writes it (tools/sb/internal/build/config.go),
 # plus the external registry the box has (paperless lives in solarisbay) and the
-# operator's mail (the auth and immich post-deploys read it); no self-update mid-run
+# operator's mail (the auth and immich post-deploys read it) with a mail server, as the
+# Kraftwerk has one (a synthetic login; the migration carries it, #359); no self-update mid-run
 [ -s $D/config.json ] || python3 -c '
-import json, sys
+import json, secrets, sys
 u, d = sys.argv[1:]
 print(json.dumps({"serverName": "kraftwerk", "auth": {"username": u}, "autoUpdate": {"enabled": False, "schedule": "0 0 * * *"},
   "templateSettings": {"DATA_DIR": "/mnt/data/stacks"}, "setupCompleted": True, "stackSetupPending": True,
   "reverseProxy": {"publicDomain": d},
   "registries": {"enabled": True, "items": [{"name": "solarisbay", "url": "https://github.com/mdopp/solarisbay"}]},
-  "notifications": {"email": {"enabled": False, "to": ["admin@" + d]}}}, indent=2))' "$ADMIN" "$DOMAIN" > $D/config.json
+  "notifications": {"email": {"enabled": False, "host": "host.containers.internal", "port": 1025, "secure": False, "user": "box@" + d,
+                               "pass": secrets.token_hex(12), "from": "Die Box <box@" + d + ">", "to": ["admin@" + d]}}}, indent=2))' "$ADMIN" "$DOMAIN" > $D/config.json
 umask 022
 # the box's names resolve to the box (on the Kraftwerk: public DNS and AdGuard's rewrites)
 for h in auth ldap home zwave photos paperless vault caldav files sync nginx admin laib; do

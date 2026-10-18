@@ -71,6 +71,8 @@ splitting a command line, so quotes and spaces survive:
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
 | `laib_updates` | none |
+| `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean) → `{user, mailed, link?, expires (RFC 3339), message}` (#360) |
+| `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
 `service` is an enum of the installed services, `key` a values.yml key

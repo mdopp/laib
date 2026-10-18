@@ -39,8 +39,8 @@ fragt dich, welche Variante du willst.
 **Wo du dabei sein musst:** beim Start (die Sicherung, Punkt 1), nach jeder
 Phase für die Stichproben in der Checkliste unten (anmelden, ein Foto, ein
 Dokument, ein Licht), beim Wechsel von NPM zu Caddy (danach laufen alle
-Adressen über Caddy; `chat`, `import`, `asteroids`, `flut`, `dopp.cloud`
-und `www` sind dann weg, siehe "Known risks"), für die Werkstatt-Tokens und
+Adressen über Caddy; `chat`, `import`, `asteroids` und `flut` sind dann
+weg, `dopp.cloud` und `www` leiten auf `haus` um, siehe "Known risks"), für die Werkstatt-Tokens und
 ganz am Ende, wenn ServiceBay ausgeht. Danach setzt jedes Familienmitglied
 in Haus (`/netzlaufwerk`) sein eigenes Samba-Passwort: auf dem Kraftwerk gibt
 es heute nur das gemeinsame Konto.
@@ -99,12 +99,15 @@ Link, don't re-ask. Each one was decided; asking again is noise.
 | Tests are not capped: "Tests may have more lines than code" | [ADR 0005, amendment 2026-10-18](adr/0005-test-pyramid-verify-in-apply.md) |
 | The first precondition of migration day is a fresh off-box backup, refused without one unless `--no-fresh-backup` | [#350](https://github.com/mdopp/laib/issues/350) |
 
-Still open, so ask when you reach them, with options: what serves
-`dopp.cloud` and `www` after ServiceBay (today its portal), and what happens
-to `solaris-import-google` (`import.`). Both are listed on
-[#160](https://github.com/mdopp/laib/issues/160). The script keeps
-`solaris-import-google` running on its ServiceBay unit, ignored, until
-that is decided.
+Decided 2026-10-18 (owner): `dopp.cloud`, `www.` and `import.` are not
+needed. `import.` goes dark with NPM and gets no Laib route; `dopp.cloud`
+and `www.` redirect to `haus.` from Caddy's switch on (#360: the haus
+route's `redirectFrom`, no service), so the family's old entry point leads
+to Haus. ServiceBay's portal and its request form behind them are gone;
+residents are invited (`laib person invite`, Haus's Box card). `solaris-import-google`
+keeps running on its ServiceBay unit, ignored, and goes off with Solaris in
+phase 5 (its importers become scripts, SERVICES.md). Listed on
+[#160](https://github.com/mdopp/laib/issues/160).
 
 ## Preconditions
 
@@ -295,9 +298,11 @@ the Werkstatt answers on SSH 2222 (its host key is new, the app asks once).
   (#350).
 - **Names that go dark with NPM** in phase 4, because no Laib service routes
   them: `chat.` (Solaris), `import.` (the Google import), `asteroids.` and
-  `flut.` (go with ServiceBay, #160), `dopp.cloud` and `www.` (ServiceBay's
-  portal; also the token mint URL Solaris uses). `ws-test-2205.` is stale.
-  Ask the owner before phase 4 whether that is acceptable for the weekend.
+  `flut.` (go with ServiceBay, #160). `ws-test-2205.` is stale.
+  `dopp.cloud` and `www.` (ServiceBay's portal; also the token mint URL
+  Solaris uses) do not go dark: Caddy redirects them to `haus.` (#360). The
+  owner does not need `import.` (2026-10-18); ask before phase 4 only
+  whether `chat.` may go dark for the weekend.
 - **chronik** stays on its ServiceBay unit (ignored) until
   foundry-chronicle#362 brings its Laib template. It keeps running.
 - **Untested on the VM:** the generalprobe installs auth, file-share,

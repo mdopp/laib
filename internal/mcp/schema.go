@@ -16,7 +16,7 @@ import (
 // `args` (one command line) stays accepted for every verb.
 
 type mcpParam struct {
-	name, typ, desc string // typ: string | array
+	name, typ, desc string // typ: string | array | boolean (a flag, set when true)
 	flag            string // "" = positional, "--" = the rest of argv
 	required        bool
 	enum            []string
@@ -53,7 +53,13 @@ var mcpParams = map[string][]mcpParam{
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
 	"updates": {},
-	"skill":   {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
+	"person_invite": {{name: "user", typ: "string", desc: "der Benutzername in LLDAP, klein, ohne Leerzeichen", required: true},
+		{name: "first", typ: "string", flag: "--first", desc: "Vorname", required: true}, {name: "last", typ: "string", flag: "--last", desc: "Nachname"},
+		{name: "email", typ: "string", flag: "--email", desc: "wohin der Link zum Passwort geht", required: true},
+		{name: "group", typ: "string", flag: "--group", enum: []string{"family", "admins"}, desc: "neu: family, wenn leer; beim erneuten Senden bleibt die Gruppe"},
+		{name: "resend", typ: "boolean", flag: "--resend", desc: "den Link für einen eingeladenen Benutzer noch einmal schicken"}},
+	"person_pending": {},
+	"skill":          {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 
 var (
@@ -139,6 +145,16 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 			}
 			continue
 		}
+		if p.typ == "boolean" {
+			b, ok := v.(bool)
+			if !ok {
+				return nil, "", fmt.Errorf("%s muss true oder false sein", k)
+			}
+			if b {
+				val[k] = "true"
+			}
+			continue
+		}
 		s, ok := v.(string)
 		if !ok {
 			return nil, "", fmt.Errorf("%s muss ein String sein", k)
@@ -194,6 +210,8 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		case p.flag == "--" && len(rest) > 0:
 			argv = append(argv, append([]string{"--"}, rest...)...)
 		case val[p.name] == "":
+		case p.typ == "boolean":
+			argv = append(argv, p.flag)
 		case p.flag != "":
 			argv = append(argv, p.flag, val[p.name])
 		default:

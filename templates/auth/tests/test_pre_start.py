@@ -8,7 +8,7 @@ the JWKS and the tokens the apps hold stay valid.
 Authelia replaces a list from a later config file instead of merging it
 (koanf's Merge), so Laib's clients and the carried ones are one list, in one
 file pre-start writes (oidc-clients.yml)."""
-import os, re, subprocess, sys, tempfile, unittest
+import json, os, re, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "pre-start"
@@ -124,6 +124,55 @@ class PreStart(unittest.TestCase):
         _, clients, conf = self.run_hook("immich")
         self.assertEqual(ids(clients), ["immich"])
         self.assertIn("identity_providers:", conf)
+
+    def notifier(self, **smtp):
+        (self.cfg / "oidc.pem").write_text(KEY)
+        self.env.update(smtp)
+        p, _, conf = self.run_hook()
+        status = json.loads((self.cfg / "laib-status.json").read_text())
+        return p, conf.split("notifier:\n", 1)[1].split("\n#", 1)[0], status
+
+    def test_no_mail_server_is_a_file_and_a_yellow_finding(self):
+        # #359: a fresh box without SMTP still starts; diag and the Box page say resets are not mailed
+        _, notifier, status = self.notifier()
+        self.assertIn("filesystem:", notifier)
+        self.assertNotIn("smtp", notifier)
+        self.assertEqual(status["detail"], "Passwort-Mails gehen nicht (kein Mailserver)")
+        self.assertEqual([f["severity"] for f in status["findings"]], ["gelb"])
+        self.assertIn("SMTP_HOST", status["findings"][0]["fix"])
+        self.assertIn("at", status)
+
+    def test_mail_server_renders_smtp_with_the_password_from_the_podman_secret(self):
+        pw = "pw-' {{ x }}\"gmail"
+        p, notifier, status = self.notifier(SMTP_HOST="smtp.gmail.com", SMTP_PORT="587", SMTP_SECURITY="starttls",
+                                            SMTP_USER="box@gmail.com", SMTP_FROM="Die Box <box@gmail.com>", SMTP_PASSWORD=pw)
+        self.assertIn("address: 'submission://smtp.gmail.com:587'", notifier)
+        self.assertIn("sender: 'Die Box <box@gmail.com>'", notifier)
+        self.assertIn("username: 'box@gmail.com'", notifier)
+        self.assertIn('password: |2-\n      {{ env "X_LAIB_SMTP_PASSWORD" }}', notifier)
+        self.assertIn("disable_startup_check: true", notifier, "a mail server that is down must not keep everyone out (#987)")
+        self.assertNotIn("filesystem", notifier)
+        self.assertNotIn("disable_require_tls", notifier)
+        self.assertNotIn(pw, (self.cfg / "configuration.yml").read_text() + p.stdout + p.stderr)
+        self.assertEqual(status, {"detail": "Passwort-Mails über smtp.gmail.com", "findings": [], "at": status["at"]})
+        self.assertIn("Environment=X_LAIB_SMTP_PASSWORD=${SMTP_PASSWORD}", UNIT.read_text())
+
+    def test_implicit_tls_and_a_relay_without_tls_or_login(self):
+        _, notifier, _ = self.notifier(SMTP_HOST="mail.test", SMTP_PORT="465", SMTP_SECURITY="tls", SMTP_USER="u@mail.test")
+        self.assertIn("filesystem:", notifier, "a login without its password is no mail server")
+        _, notifier, _ = self.notifier(SMTP_PASSWORD="x")
+        self.assertIn("address: 'submissions://mail.test:465'", notifier)
+        _, notifier, _ = self.notifier(SMTP_HOST="host.containers.internal", SMTP_PORT="1025", SMTP_SECURITY="none", SMTP_USER="", SMTP_FROM="box@mail.test")
+        self.assertIn("address: 'smtp://host.containers.internal:1025'", notifier)
+        self.assertIn("disable_require_tls: true", notifier)
+        self.assertNotIn("username", notifier)
+        self.assertNotIn("password", notifier)
+
+    def test_an_incomplete_setting_says_what_is_missing(self):
+        _, notifier, status = self.notifier(SMTP_HOST="mail.test", SMTP_SECURITY="ssl")
+        self.assertIn("filesystem:", notifier)
+        self.assertIn("SMTP_FROM", status["findings"][0]["detail"])
+        self.assertIn("SMTP_SECURITY", status["findings"][0]["detail"])
 
     def test_authelia_reads_the_one_list(self):
         unit = UNIT.read_text()

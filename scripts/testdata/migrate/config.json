@@ -171,5 +171,19 @@
       "value": "8710",
       "service": "spike"
     }
-  ]
+  ],
+  "notifications": {
+    "email": {
+      "enabled": true,
+      "host": "smtp.mail.test",
+      "port": 587,
+      "secure": false,
+      "user": "box@mail.test",
+      "pass": "synthetic-smtp-pass",
+      "from": "Die Box <box@mail.test>",
+      "to": [
+        "owner@mail.test"
+      ]
+    }
+  }
 }

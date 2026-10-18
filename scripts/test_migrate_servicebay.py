@@ -129,6 +129,21 @@ class Migrate(unittest.TestCase):
         self.assertNotIn("AUTHELIA_IMAGE", line)
         self.assertNotIn("SAMBA_IMAGE", self.stdout)
 
+    def test_add_line_carries_servicebays_mail_settings_but_never_the_password(self):
+        # #359: ServiceBay rewrote Authelia to SMTP from notifications.email; Laib's auth takes
+        # the same settings as values, the password as a secret (migration-day.sh sets it)
+        line = next(l for l in self.stdout.splitlines() if "laib add auth " in l).strip()
+        for v in ("SMTP_HOST=smtp.mail.test", "SMTP_PORT=587", "SMTP_SECURITY=starttls", "SMTP_USER=box@mail.test", "'SMTP_FROM=Die Box <box@mail.test>'"):
+            self.assertIn(v, line)
+        self.assertNotIn("synthetic-smtp-pass", self.stdout + self.p.stderr)
+        with tempfile.TemporaryDirectory() as b:   # the line runs as printed: the sender is one word on laib's argv
+            Path(b, "podman").write_text("#!/bin/sh\necho docker.io/lldap/lldap@sha256:feed\n")
+            Path(b, "laib").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > {b}/laib-argv\n')
+            for f in ("podman", "laib"):
+                Path(b, f).chmod(0o755)
+            subprocess.run(["bash", "-c", line], env=dict(os.environ, PATH=f"{b}:{os.environ['PATH']}"), capture_output=True)
+            self.assertIn("SMTP_FROM=Die Box <box@mail.test>", Path(b, "laib-argv").read_text().split("\n"))
+
     def test_builtins_that_are_not_laibs_templates_are_refused(self):
         # #248: run from a copy without templates/, every service was taken for a
         # foreign one: no laib add line, no carry check against the built-in, no word

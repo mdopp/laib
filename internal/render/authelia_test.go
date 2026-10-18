@@ -1,12 +1,14 @@
 package render
 
 import (
+	htmltemplate "html/template"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	texttemplate "text/template"
 
 	"github.com/mdopp/laib/internal/state"
 	"gopkg.in/yaml.v3"
@@ -62,6 +64,7 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 	if out, err := hook.CombinedOutput(); err != nil {
 		t.Fatalf("auth pre-start: %v\n%s", err, out)
 	}
+	hostTemplates(t, filepath.Join(dir, "auth", "authelia-config"))
 
 	// the files in the order the container loads them, /config and /laib mapped to the temp dir
 	unit, _ := os.ReadFile("../../templates/auth/auth-authelia.container")
@@ -135,4 +138,101 @@ func configArgs(files []string) []string {
 		args = append(args, "--config", f)
 	}
 	return args
+}
+
+// TestAutheliaSMTPOnTheRealBinary: with a mail server, the hook's
+// configuration.yml is one Authelia loads, and the password the container
+// gets as a podman secret (X_LAIB_SMTP_PASSWORD, #359) is what Authelia's
+// template filter puts into notifier.smtp.password, quotes, braces and
+// trailing blanks included.
+func TestAutheliaSMTPOnTheRealBinary(t *testing.T) {
+	bin := os.Getenv("LAIB_AUTHELIA")
+	if bin == "" {
+		t.Skip("LAIB_AUTHELIA (the authelia binary) not set")
+	}
+	dir := t.TempDir()
+	render := filepath.Join(dir, "render", "authelia")
+	os.MkdirAll(render, 0o755)
+	os.WriteFile(filepath.Join(render, "laib-clients.yml"), []byte("# none\n"), 0o644)
+	os.WriteFile(filepath.Join(render, "laib-access.yml"), []byte("access_control:\n  default_policy: one_factor\n"), 0o644)
+	hook := exec.Command("python3", "../../templates/auth/pre-start")
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render"),
+		"SMTP_HOST=smtp.mail.test", "SMTP_PORT=587", "SMTP_SECURITY=starttls", "SMTP_USER=box@mail.test", "SMTP_FROM=Die Box <box@mail.test>", "SMTP_PASSWORD=set"}
+	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
+		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=a-test-value-that-is-long-enough-for-authelia-0123456789")
+	}
+	if out, err := hook.CombinedOutput(); err != nil {
+		t.Fatalf("auth pre-start: %v\n%s", err, out)
+	}
+	hostTemplates(t, filepath.Join(dir, "auth", "authelia-config"))
+	cfg := filepath.Join(dir, "auth", "authelia-config")
+	files := []string{filepath.Join(cfg, "configuration.yml"), filepath.Join(render, "laib-access.yml"), filepath.Join(cfg, "oidc-clients.yml")}
+	pw := `pw-' {{ x }}"gm:ail  `
+	run := func(args ...string) string {
+		c := exec.Command(bin, append(configArgs(files), args...)...)
+		c.Env = append(os.Environ(), "X_LAIB_SMTP_PASSWORD="+pw)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("authelia %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	run("validate-config")
+	if out := run("config", "template"); !strings.Contains(out, "\n      "+pw+"\n") || !strings.Contains(out, "address: 'submission://smtp.mail.test:587'") {
+		t.Fatalf("the templated notifier does not carry the password as given:\n%s", out)
+	}
+}
+
+// hostTemplates points the config's template_path (the container's
+// /config/templates) at the folder pre-start wrote, so Authelia loads the
+// German mail templates (#360) here as on the box.
+func hostTemplates(t *testing.T, cfg string) {
+	t.Helper()
+	p := filepath.Join(cfg, "configuration.yml")
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "template_path: '/config/templates'") {
+		t.Fatalf("configuration.yml has no template_path:\n%s", b)
+	}
+	os.WriteFile(p, []byte(strings.ReplaceAll(string(b), "'/config/templates'", "'"+filepath.Join(cfg, "templates")+"'")), 0o600)
+}
+
+// TestAutheliaMailTemplates: the German reset mail pre-start writes (#360)
+// is a template Go parses, names only fields Authelia fills for
+// IdentityVerificationJWT, and carries the link and the way to Haus.
+func TestAutheliaMailTemplates(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "render", "authelia"), 0o755)
+	hook := exec.Command("python3", "../../templates/auth/pre-start")
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
+	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
+		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=x")
+	}
+	if out, err := hook.CombinedOutput(); err != nil {
+		t.Fatalf("auth pre-start: %v\n%s", err, out)
+	}
+	fields := struct{ Title, DisplayName, RemoteIP, Domain, LinkURL, LinkText, RevocationLinkURL, RevocationLinkText string }{
+		"Reset your password", "Anna Muster", "127.0.0.1", "auth.vm.test", "https://auth.vm.test/reset-password/step2?token=t&x=1", "Reset", "https://auth.vm.test/revoke/reset-password?id=r", "Revoke"}
+	for _, ext := range []string{"txt", "html"} {
+		b, err := os.ReadFile(filepath.Join(dir, "auth", "authelia-config", "templates", "IdentityVerificationJWT."+ext))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out strings.Builder
+		if ext == "txt" {
+			err = texttemplate.Must(texttemplate.New(ext).Option("missingkey=error").Parse(string(b))).Execute(&out, fields)
+		} else {
+			err = htmltemplate.Must(htmltemplate.New(ext).Option("missingkey=error").Parse(string(b))).Execute(&out, fields)
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", ext, err)
+		}
+		for _, want := range []string{"Hallo Anna Muster", "https://haus.vm.test/willkommen", "24 Stunden", "revoke/reset-password"} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%s: no %q in\n%s", ext, want, out.String())
+			}
+		}
+		if !strings.Contains(out.String(), "step2?token=t") {
+			t.Errorf("%s: no link in\n%s", ext, out.String())
+		}
+	}
 }

@@ -6,7 +6,7 @@ green verify. Idempotent: the config and the clients are rewritten on every
 apply (values may change), the key is kept. On a box from ServiceBay its
 clients are carried until their service moves (#245). LLDAP is seeded by
 post-deploy. Runs in the hooks image, not on the host."""
-import os, re, subprocess, sys
+import datetime, json, os, re, subprocess, sys
 
 E = os.environ
 D = E["LAIB_DATA_DIR"]
@@ -55,6 +55,55 @@ indented = "\n".join("          " + line for line in key.splitlines())
 
 # 2. configuration.yml (secrets arrive as LAIB_SECRET_*; nothing is logged)
 S = lambda n: E["LAIB_SECRET_" + n]
+q = lambda v: "'" + v.replace("'", "''") + "'"
+
+# the notifier (#359): mail through the box's SMTP server when SMTP_HOST is
+# set, else a file in /data that nobody reads. The password is no line in
+# this file: it reaches the container as a podman secret (X_LAIB_SMTP_PASSWORD,
+# auth-authelia.container) and Authelia's template filter reads it there, as
+# a literal block, so no quote in it can end the YAML string. The startup
+# check is off, as ServiceBay had it (#987): a mail server that is down or
+# refuses a login must not keep everyone out of every app.
+smtp = {k: E.get("SMTP_" + k, "").strip() for k in ("HOST", "PORT", "SECURITY", "USER", "FROM")}
+sender = smtp["FROM"] or smtp["USER"]
+scheme = {"starttls": "submission", "tls": "submissions", "none": "smtp"}.get(smtp["SECURITY"] or "starttls")
+missing = [w for w, bad in (("SMTP_FROM (der Absender)", "@" not in sender), ("ein gültiges SMTP_SECURITY (starttls, tls, none)", not scheme),
+                            ("das Passwort (laib secret set AUTHELIA_SMTP_PASSWORD)", smtp["USER"] and not E.get("SMTP_PASSWORD")))
+           if bad] if smtp["HOST"] else []
+if smtp["HOST"] and not missing:
+    notifier = f"""notifier:
+  disable_startup_check: true
+  template_path: '/config/templates'
+  smtp:
+    address: {q(f'{scheme}://{smtp["HOST"]}:{smtp["PORT"] or 587}')}
+    timeout: '10s'
+    sender: {q(sender)}
+    identifier: 'localhost'
+    tls:
+      server_name: {q(smtp["HOST"])}
+      minimum_version: 'TLS1.2'
+"""
+    if smtp["SECURITY"] == "none":
+        notifier += "    disable_require_tls: true\n"
+    if smtp["USER"]:
+        notifier += f"""    username: {q(smtp["USER"])}
+    password: |2-
+      {{{{ env "X_LAIB_SMTP_PASSWORD" }}}}
+"""
+    status = {"detail": f"Passwort-Mails über {smtp['HOST']}", "findings": []}
+    print(f"notifier: smtp via {smtp['HOST']}")
+else:
+    notifier = """notifier:
+  template_path: '/config/templates'
+  filesystem:
+    filename: '/data/notification.txt'
+"""
+    why = "SMTP_HOST ist leer" if not smtp["HOST"] else "es fehlt " + ", ".join(missing)
+    status = {"detail": "Passwort-Mails gehen nicht (kein Mailserver)", "findings": [{
+        "severity": "gelb",
+        "detail": f"Passwort-Mails gehen nicht: {why}. „Passwort vergessen“, Einladungen und der Code vor dem zweiten Faktor landen in einer Datei auf der Box (auth/authelia-data/notification.txt)",
+        "fix": "in services/auth/values.yml SMTP_HOST, SMTP_PORT, SMTP_SECURITY, SMTP_USER, SMTP_FROM setzen, laib secret set AUTHELIA_SMTP_PASSWORD, dann laib apply auth"}]}
+    print("notifier: filesystem (" + why + ")")
 conf = f"""---
 # rendered by laib pre-start (templates/auth); access rules come from /laib/laib-access.yml, OIDC clients from oidc-clients.yml
 theme: dark
@@ -64,6 +113,7 @@ log:
   level: info
 identity_validation:
   reset_password:
+    jwt_lifespan: '24h'
     jwt_secret: '{S("AUTHELIA_JWT_SECRET")}'
 authentication_backend:
   ldap:
@@ -93,14 +143,43 @@ storage:
   encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'
   local:
     path: '/data/db.sqlite3'
-notifier:
-  filesystem:
-    filename: '/data/notification.txt'
-# access_control: all of it in /laib/laib-access.yml, rendered by laib (#249).
+{notifier}# access_control: all of it in /laib/laib-access.yml, rendered by laib (#249).
 # No rule here: Authelia replaces a list from an earlier file with the later
 # file's instead of joining them, so a rule here would be dropped or, with the
 # files in another order, decide alone (a wildcard would open the admin hosts).
 """
+# 2c. the reset mail in German (#360): the same mail sets a first password
+# (laib person invite) and a forgotten one, so it says both, and where the
+# family goes next. Authelia fills the {{ }}; the link lives 24 hours
+# (jwt_lifespan above), long enough to pass it on by Signal.
+tpl_dir = os.path.join(cfg_dir, "templates")
+os.makedirs(tpl_dir, exist_ok=True)
+TXT = """Hallo {{ .DisplayName }},
+
+mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:
+
+{{ .LinkURL }}
+
+Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem
+Benutzernamen und dem Passwort an. Los geht es hier: https://haus.@DOMAIN@/willkommen
+
+Hast du das nicht angefordert? Dann sperre den Link: {{ .RevocationLinkURL }}
+"""
+HTML = """<!DOCTYPE html>
+<html lang="de"><body style="font-family: sans-serif; line-height: 1.5; max-width: 34em">
+<p>Hallo {{ .DisplayName }},</p>
+<p>mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:</p>
+<p><a href="{{ .LinkURL }}" style="font-size: 1.1em">Passwort setzen</a></p>
+<p>Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem Benutzernamen und dem Passwort an.
+Los geht es hier: <a href="https://haus.@DOMAIN@/willkommen">haus.@DOMAIN@</a></p>
+<p style="color: #666; font-size: 0.9em">Hast du das nicht angefordert? Dann <a href="{{ .RevocationLinkURL }}">sperre den Link</a>.</p>
+</body></html>
+"""
+for ext, body in (("txt", TXT), ("html", HTML)):
+    with open(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), "w") as f:
+        f.write(body.replace("@DOMAIN@", DOMAIN))
+    os.replace(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), os.path.join(tpl_dir, "IdentityVerificationJWT." + ext))
+
 # 3. the OIDC clients, one list in one file (oidc-clients.yml): Laib's, rendered
 # into /laib/laib-clients.yml (render/authelia; the hook runs again whenever it
 # changes), then the carried ServiceBay ones Laib does not declare (#245).
@@ -143,3 +222,9 @@ with open(tmp, "w") as f:
 os.chmod(tmp, 0o600)
 os.replace(tmp, conf_path)
 print("authelia configuration.yml written")
+# what auth says about itself (#309): laib diag and the Box page read it
+status["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+tmp = os.path.join(cfg_dir, "laib-status.json.tmp")
+with open(tmp, "w") as f:
+    json.dump(status, f, ensure_ascii=False)
+os.replace(tmp, os.path.join(cfg_dir, "laib-status.json"))

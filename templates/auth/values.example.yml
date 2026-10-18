@@ -11,3 +11,11 @@ OIDC_HMAC: !secret AUTHELIA_OIDC_HMAC_SECRET
 LLDAP_JWT: !secret LLDAP_JWT_SECRET
 LLDAP_ADMIN: !secret LLDAP_ADMIN_PASSWORD
 OPERATOR_PW: !secret OPERATOR_PASSWORD
+# the mail server Authelia sends "Passwort vergessen", invitations and the 2FA code through (#359);
+# SMTP_HOST empty: no mail, the messages land in a file on the box and laib diag says so
+SMTP_HOST: ""
+SMTP_PORT: "587"
+SMTP_SECURITY: starttls              # starttls (587) | tls (465) | none (a relay without TLS)
+SMTP_USER: ""
+SMTP_FROM: ""                        # the sender; empty: SMTP_USER
+SMTP_PASSWORD: !secret AUTHELIA_SMTP_PASSWORD

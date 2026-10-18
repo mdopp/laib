@@ -78,6 +78,8 @@ func init() {
 		{Name: "self", Tier: "apply", Help: "rollback: the previous binaries back and the units restarted (humans only)", Run: cmdSelf},
 		{Name: "family-card", Tier: "read", Help: "print the one-page card for the family: what the box does, what to do when it is down, whom to call", Run: pages.FamilyCard},
 		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
+		{Name: "person_invite", Tier: "apply", Help: "<user> --first F --last L --email E [--group family|admins] [--resend]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back (`laib person invite`)", Run: cmdPersonInvite},
+		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
 	}
@@ -100,6 +102,7 @@ func runArgs(args []string) int {
 		}
 		rest = append(rest, a)
 	}
+	rest = personArgs(rest)
 	if len(rest) == 0 || rest[0] == "help" || rest[0] == "-h" || rest[0] == "--help" {
 		usage()
 		return 1

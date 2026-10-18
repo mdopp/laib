@@ -141,6 +141,22 @@ jobs:
         run: |
           cd "$VM"; . ./box.sh
           $SSH 'python3 gp/household.py check --phase after'
+      - name: "the mail settings carried: ServiceBay's notifications.email is Laib's Authelia's (#359)"
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib
+                V=/mnt/data/laib/state/services/auth/values.yml; C=/mnt/data/stacks/auth/authelia-config
+                val() { sed -n "s/^$1: //p" "$V" | sed "s/^[\"]\(.*\)[\"]\$/\1/"; }
+                for v in "SMTP_HOST=host.containers.internal" "SMTP_PORT=1025" "SMTP_SECURITY=starttls" "SMTP_USER=box@gp.test" "SMTP_FROM=Die Box <box@gp.test>"; do
+                  [ "$(val "${v%%=*}")" = "${v#*=}" ] || { echo "not carried: $v"; grep "^SMTP_" "$V"; exit 1; }
+                done
+                pw=$(python3 -I -c "import json; print(json.load(open(\"/mnt/data/servicebay/config.json\"))[\"notifications\"][\"email\"][\"pass\"])")
+                [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-authelia.X_LAIB_SMTP_PASSWORD)" = "$pw" ] || { echo "the SMTP password was not carried"; exit 1; }
+                grep -q "address: .submission://host.containers.internal:1025." "$C/configuration.yml" || { echo "Authelia has no smtp notifier"; sed -n "/^notifier/,/^#/p" "$C/configuration.yml"; exit 1; }
+                if grep -qF -- "$pw" "$C/configuration.yml"; then echo "the SMTP password is in configuration.yml"; exit 1; fi
+                grep -q "Passwort-Mails über host.containers.internal" <<<"$(/var/opt/laib/laib status)" || { echo "laib status does not name the mail server"; exit 1; }
+                echo "ServiceBay'"'"'s mail settings are Laib'"'"'s: values, the password as a podman secret, the smtp notifier"'
       - name: laib status green, ServiceBay off
         if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
         run: |
