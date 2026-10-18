@@ -66,11 +66,11 @@ npm_serves() {
     if [ "$code" = 502 ]; then
       tok=$(curl -fsS -H 'Content-Type: application/json' -d "{\"identity\":\"$NPM_EMAIL\",\"secret\":\"$NPM_PASSWORD\"}" http://127.0.0.1:81/api/tokens | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
       id=$(curl -fsS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts | python3 -c 'import json,sys; print(next(p["id"] for p in json.load(sys.stdin) if sys.argv[1] in p["domain_names"]))' "$h.$DOMAIN")
-      curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{"forward_host":"127.0.0.1"}' http://127.0.0.1:81/api/nginx/proxy-hosts/$id
+      echo "NPM proxy host $id before: $(curl -sS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts/$id | head -c 600)"
+      curl -sS -w ' (HTTP %{http_code})\n' -X PUT -H "Authorization: Bearer $tok" -H 'Content-Type: application/json' -d '{"forward_host":"127.0.0.1"}' http://127.0.0.1:81/api/nginx/proxy-hosts/$id | tail -c 300
       for i in $(seq 1 15); do   # NPM regenerates and reloads its nginx
         code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true); [ "$code" != 502 ] && break; sleep 2
       done
-      curl -fsS -H "Authorization: Bearer $tok" http://127.0.0.1:81/api/nginx/proxy-hosts/$id | python3 -c 'import json,sys; p=json.load(sys.stdin); print("NPM proxy host:", p["forward_scheme"], p["forward_host"], p["forward_port"])'
       curl -s -o /dev/null -w "direct: http://127.0.0.1:%{local_port}… HTTP %{http_code}\n" "http://127.0.0.1:$(sed -n "s/^  - {host: $h, port: \([0-9]*\),.*/\1/p" "$OUT/$n/laib.yml")/" || true
       echo "NPM: $h.$DOMAIN pointed at 127.0.0.1 (Laib publishes $n on loopback only)"
     fi
@@ -139,7 +139,7 @@ step_rollback() {
   say "rollback: $n back to ServiceBay"
   laib remove "$n"
   if [ "$n" = home-assistant ]; then
-    for f in /mnt/data/stacks/home-assistant/zwave-js/settings.json /mnt/data/stacks/home-assistant/homeassistant/.storage/core.config_entries; do
+    for f in /mnt/data/stacks/home-assistant/zwave-js/settings.json /mnt/data/stacks/home-assistant/homeassistant/.storage/core.config_entries /mnt/data/stacks/home-assistant/homeassistant/configuration.yaml; do
       podman unshare sh -c "test -e '$f.servicebay' && mv '$f.servicebay' '$f'" && echo "put back $f"
     done
   fi

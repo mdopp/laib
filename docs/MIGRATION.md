@@ -176,7 +176,8 @@ scripts/move-servicebay-data.sh <service>             # on the box, as core
 It **copies** and never moves. ServiceBay's paths stay as they were, so
 handing a service back is re-enabling its unit, and they go with ServiceBay's
 data dir after 30 days. Two files are edited in place, and their ServiceBay
-version is kept beside them as `<file>.servicebay`; a rollback puts those
+version is kept beside them as `<file>.servicebay`, as is Home Assistant's
+`configuration.yaml`, which Laib's pre-start edits; a rollback puts those
 back. It refuses a service whose ServiceBay file is still in the Quadlet
 root, whose ServiceBay unit still runs (the wrapper reads the running units
 from `systemctl --user`; a live database copied is no copy), whose target
@@ -366,8 +367,10 @@ Every `laib apply` snapshots first. Handing a service back to ServiceBay is
 `laib remove <name>`, then its files back from `~/servicebay-units/` into the
 Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
 <name>.service`. ServiceBay's data paths were only copied from, so they are as
-it left them; for home-assistant, first put the two `<file>.servicebay` files
-back (zwave-js `settings.json`, `.storage/core.config_entries`). For immich,
+it left them; for home-assistant, first put the three `<file>.servicebay` files
+back (zwave-js `settings.json`, `.storage/core.config_entries`, and
+`configuration.yaml`: Laib's version reads a secret from Laib's unit, and
+without it Home Assistant starts in recovery mode with no automation). For immich,
 the photos moved: rename each `file-share/data/photos/<user>` back to
 `file-share/data/<user>/photos` and `file-share/data/photos/shared` to
 `file-share/data/photos` (via a temporary name), restore the dump into the

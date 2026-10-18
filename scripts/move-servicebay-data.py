@@ -34,8 +34,8 @@ ServiceBay unit is stopped and its file moved out of the Quadlet root
 It copies, it never moves: ServiceBay's paths stay as they were, so handing a
 service back is re-enabling its unit; they go with ServiceBay's data dir after
 30 days. The two files it edits in place (zwave-js settings.json, Home
-Assistant's core.config_entries) keep ServiceBay's version beside them as
-<file>.servicebay. A service whose ServiceBay file is still in the Quadlet
+Assistant's core.config_entries), and configuration.yaml, which Laib's
+pre-start edits, keep ServiceBay's version beside them as <file>.servicebay. A service whose ServiceBay file is still in the Quadlet
 root, whose ServiceBay unit still runs (--active, from the wrapper), whose
 target already holds data or whose copy does not fit is refused before
 anything of it is written. Each target is copied into <target>.partial and
@@ -195,6 +195,13 @@ def plan(service, d, volumes, a=None):
         ha = os.path.join(d, "home-assistant")
         if os.path.isdir(os.path.join(ha, "matter-server")):
             into(os.path.join(ha, "matter-server"), os.path.join(ha, "matter"))
+        # Laib's pre-start edits configuration.yaml (ServiceBay's auth_oidc block
+        # goes into a package that reads Laib's AUTH_OIDC_SECRET); ServiceBay's
+        # version stays beside it, or a handed-back HA starts in recovery mode (#338)
+        conf = os.path.join(ha, "homeassistant", "configuration.yaml")
+        if os.path.exists(conf) and not os.path.exists(conf + ".servicebay"):
+            steps.append(("keep Home Assistant's configuration.yaml as configuration.yaml.servicebay (Laib's pre-start edits it)", [],
+                          lambda: shutil.copy2(conf, conf + ".servicebay")))
         ext = os.path.join(ha, "zwave-js", "sb-external-settings.json")
         if os.path.exists(ext):
             old = json.load(open(ext))

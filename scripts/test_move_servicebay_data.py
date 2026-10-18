@@ -88,6 +88,16 @@ class Move(unittest.TestCase):
         self.assertIn("3001", (self.d / "home-assistant/homeassistant/.storage/core.config_entries.servicebay").read_text())
         self.assertNotIn("server", (self.d / "home-assistant/zwave-js/settings.json.servicebay").read_text())
 
+    def test_home_assistant_keeps_servicebays_configuration_yaml_for_a_rollback(self):
+        # #338: Laib's pre-start moves ServiceBay's auth_oidc block into a package
+        # that reads AUTH_OIDC_SECRET from Laib's unit; handed back, ServiceBay's
+        # Home Assistant found no such variable and started in recovery mode,
+        # every automation gone (the Generalprobe's rollback)
+        write(self.d / "home-assistant/homeassistant/configuration.yaml", "automation: !include automations.yaml\nauth_oidc:\n  client_id: homeassistant\n")
+        p = self.run_script("home-assistant")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("auth_oidc:", (self.d / "home-assistant/homeassistant/configuration.yaml.servicebay").read_text())
+
     def test_file_share_syncthing_volume_and_filebrowser_db(self):
         p = self.run_script("file-share")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
