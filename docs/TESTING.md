@@ -14,9 +14,12 @@ Tests proved the loader, not the box. Laib turns that around in four steps.
    stick, installs Fedora CoreOS in a KVM guest on the runner, reboots,
    installs this commit and does real work on the box (caddy, auth, adguard,
    radicale, backup and restore, reinstall, update). This is the gate; a
-   release waits for a green run of its commit (`release.yml`). The `boot`
-   job runs real Quadlet on the runner as the cheap check. The real box
-   stays a canary, not a gate.
+   release waits for a green run of its commit (`release.yml`). It runs on
+   train PRs (`train/*`), on main and by dispatch, as four boxes in
+   parallel from one build (disks, services, logins, recovery; #343). A
+   single PR gets ci and the `boot` job (real Quadlet on the runner, the
+   cheap check), and its `vm-install / not run` check says the VM proof did
+   not run for it. The real box stays a canary, not a gate.
 4. **Verify is part of apply.** Every `laib apply` ends with: unit active,
    health endpoint answers (`apply.Verify`); a role's rendered output is
    validated before it is written (`caddy validate`). The route through
