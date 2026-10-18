@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -93,5 +94,30 @@ func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
 		return r.Name == "whoami" && r.Detail == "noch kein Stand"
 	}) {
 		t.Fatalf("laib status says it too: %+v", rows)
+	}
+}
+
+// #359: laib status prints what the status file says, not only --json.
+func TestLaibStatusPrintsTheTemplatesStatusLine(t *testing.T) {
+	c := newCbox(t)
+	svc := filepath.Join(c.env.Paths.State, "services", "whoami")
+	b, _ := os.ReadFile(filepath.Join(svc, "laib.yml"))
+	os.WriteFile(filepath.Join(svc, "laib.yml"), append(b, []byte("status:\n  file: ${DATA_DIR}/whoami/laib-status.json\n")...), 0o644)
+	data := filepath.Join(filepath.Dir(c.env.Paths.State), "data", "whoami")
+	os.MkdirAll(data, 0o755)
+	os.WriteFile(filepath.Join(data, "laib-status.json"), []byte(`{"detail":"Passwort-Mails gehen nicht (kein Mailserver)"}`), 0o644)
+	var out bytes.Buffer
+	c.env.Out = &out
+	if rc := pages.Status(context.Background(), c.env, nil); rc != cli.ExitOK {
+		t.Fatalf("status rc %d", rc)
+	}
+	line := ""
+	for _, l := range strings.Split(out.String(), "\n") {
+		if strings.Contains(l, " whoami ") {
+			line = l
+		}
+	}
+	if !strings.Contains(line, "Passwort-Mails gehen nicht (kein Mailserver)") {
+		t.Fatalf("the whoami line carries the status detail:\n%s", out.String())
 	}
 }
