@@ -158,7 +158,9 @@ class PreStart(unittest.TestCase):
         contract = (T / "laib.yml").read_text()
         self.assertRegex(contract, r"(?s)oidc:[^\n]*\n\s+clientId: homeassistant.*/auth/oidc/callback.*tokenEndpointAuthMethod: client_secret_post")
         self.assertIn("OIDC_SECRET: !secret OIDC_HOMEASSISTANT_SECRET", (T / "values.example.yml").read_text())
-        self.assertFalse((T / "post-deploy").exists(), "the config is pre-start's now: it must be there before Home Assistant starts")
+        # the config is pre-start's: it must be there before Home Assistant starts; post-deploy only mints the tokens (#349)
+        hook = (T / "post-deploy").read_text()
+        self.assertFalse(any(w in hook for w in ("configuration.yaml", "packages/", "custom_components")), "post-deploy writes config")
 
 
 if __name__ == "__main__":

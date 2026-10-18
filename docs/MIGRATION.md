@@ -4,6 +4,12 @@ Only one box runs ServiceBay. So: no compatibility layer, no dual control
 plane for months, no feature flags. One weekend, one order, one script that
 reads ServiceBay's config once.
 
+On the box, this order is run by `scripts/migration-day.sh` (#350), the
+script the generalprobe rehearses: step by step, in a systemd user unit that
+outlives the SSH session, stopping at the first red step with that service
+handed back to ServiceBay, resumable. The session that runs it starts at
+[`MIGRATION-DAY.md`](MIGRATION-DAY.md).
+
 ## Running side by side
 
 Both run at once: ServiceBay in its container on 5888, Laib as a user
@@ -91,11 +97,18 @@ file moves out.
 2. **NPM stays the proxy until step 4 is done.** Caddy cannot start beside
    it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
    and Caddy's routes come from the state, which holds none of the
-   household's services yet. Meanwhile NPM keeps serving every name: Laib's
-   built-ins publish the ports ServiceBay's proxy hosts forward to (except
-   Vaultwarden, which therefore moves last, right before 4d), and
+   household's services yet. Meanwhile NPM keeps serving most names: Laib's
+   built-ins publish the ports ServiceBay's proxy hosts forward to, and
    Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
-   (Authelia's default endpoints). Caddy replaces NPM in step 4d.
+   (Authelia's default endpoints, on 127.0.0.1, where NPM's forward-auth
+   asks). Three built-ins listen on 127.0.0.1 only while ServiceBay's proxy
+   host forwards to the LAN address, so their names answer 502 through NPM
+   from their step c until Caddy serves them in 4d: `vault.` (Vaultwarden,
+   which therefore moves last), `llama.`, and `auth.`, Authelia's own
+   portal. The last one matters: from the auth step until 4d nobody can log
+   in anew through NPM (an app's forward-auth sends the browser to the
+   portal), so steps 3 to 4d run in one sitting (the generalprobe, #350).
+   Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
    `auth.kube` out first, then `laib add auth`. Only the services already
    in Laib's state have Laib clients at this point, so the apps still on
@@ -115,8 +128,9 @@ file moves out.
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
-   model key. Then **radicale, mosquitto, file-share, beets, immich,
-   paperless, media, home-assistant, chronik, vaultwarden** in that order:
+   model key. Then **radicale, mosquitto, file-share, beets, esphome,
+   usage-metrics, immich, paperless, media, home-assistant, vaultwarden** in
+   that order (usage-metrics keeps its counters in place, #160):
    small and stateless first, the ones with migrations later, and
    Vaultwarden last, right before 4d: its built-in listens on 127.0.0.1
    only, where ServiceBay's proxy host does not forward (it forwards to the
@@ -140,12 +154,16 @@ file moves out.
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
       Its names still answer through NPM (Vaultwarden's not, see above).
-   **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
-   (`laib template sync`) and needs `llama` for the lease and `stimme` for
-   Piper. Its data moves once, in step b with ServiceBay's unit stopped (one
-   Discord token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
-   `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved; the
-   commands are in foundry-chronicle's `templates/chronik/README.md`. The
+   **chronik** (daggerheart-chronik) will come from foundry-chronicle's
+   registry (`laib template sync`) and needs `llama` for the lease and
+   `stimme` for Piper. That template does not exist yet
+   (foundry-chronicle#362; the registry has only ServiceBay's
+   `daggerheart-chronik`), so on migration day chronik stays on its
+   ServiceBay unit, ignored (step 6), and keeps running: a ServiceBay unit is
+   a plain Quadlet file and needs no ServiceBay to run. When the template
+   lands, its data moves once, with ServiceBay's unit stopped (one Discord
+   token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
+   `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved. The
    Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
    d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
       unit out by a. (`nginx`), then `laib add caddy`; its routes are the
@@ -157,7 +175,9 @@ file moves out.
    sessions and SSH host keys are an open decision (below).
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
-   they go off in Phase 5 (#160).
+   they go off in Phase 5 (#160). So do chronik's (above) and the Google
+   import's (`solaris-import-google`, no decision yet). flutstunde and the
+   inactive daggerheart-asteroids go with ServiceBay in step 7 (owner, #160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own
    `servicebay` client and any app that never moved), then `laib apply auth`.
@@ -199,7 +219,7 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | home-assistant | Z-Wave JS server on 3001 through `sb-external-settings.json` (3000 was NPM's) | zwave-js-ui's own `settings.json`, its default 3000 | edited; Home Assistant's Z-Wave JS entry (`.storage/core.config_entries`) follows to `:3000` |
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
-| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
+| file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there. The Kraftwerk's passdb holds one entry, by its size the shared account (read-only dry run, 2026-10-18; servicebay#3055): no family member has a per-person account to keep, so each one sets a first password in Haus after the move |
 | radicale | `radicale/data`, owned by the image's radicale user (2999) as ServiceBay's default user namespace maps it (a subuid) | the same path; Laib's unit maps the box's user onto 2999 | in place, handed to the box's user: otherwise Radicale cannot write its collections and restarts forever (#311). ServiceBay's image takes them back on its next start |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
@@ -290,6 +310,20 @@ change with its snapshot.
 **Open, the operator's decision (#229).** Until it is made, the default
 applies:
 
+- **Home Assistant's tokens** (`HAUS_HA_TOKEN`, `BOTE_HA_TOKEN`,
+  `BOTE_AUTOMAT_HA_TOKEN`, `HA_TOKEN`): decided, Laib mints them (#349).
+  Nobody creates a long-lived token in HA's UI any more:
+  home-assistant's post-deploy logs in as HA's administrator (the carried
+  `HA_ADMIN_PASSWORD`, above), mints one token per consumer, creates HA's
+  non-admin user `bote` for the Bote's, and the same apply restarts what
+  uses them. ServiceBay's one administrator token in
+  `homeassistant/.solaris-long-lived-token` is not read; it stays valid in
+  HA until someone revokes it (Settings → People → the user → Security).
+  **The one thing you type**, only if ServiceBay never onboarded Home
+  Assistant itself (its `OSCAR_HA_ADMIN_USERNAME` blank, HA set up by
+  hand): add `HA_ADMIN_USER=<an HA administrator>` to the `laib add
+  home-assistant` line and set its password once, `laib secret set
+  HA_ADMIN_PASSWORD`, before the add.
 - **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`):
   decided, kept (#229, #253). The built-in declares the same client;
   pre-start installs the same pinned component and moves ServiceBay's
@@ -327,6 +361,7 @@ ones, or the app is locked out of its own database or config:
 | `JELLYFIN_ADMIN_PASSWORD` | same | the media post-deploy cannot log in to Jellyfin |
 | `ADGUARD_ADMIN_PASSWORD` | same | post-deploy cannot sync the rewrites into the kept `AdGuardHome.yaml` |
 | `SAMBA_PASSWORD` | `SHARE_PASSWORD` | devices that mount the share with the old account |
+| `HA_ADMIN_PASSWORD` | `OSCAR_HA_ADMIN_PASSWORD` | Home Assistant's post-deploy logs in as the administrator ServiceBay onboarded (`HA_ADMIN_USER`, `oscar`; the `laib add` line carries it) to mint the tokens of Haus, the Bote and the check (#349); a generated value cannot log in, and the apply is red |
 
 They are set **before the service's first apply**, which is `laib add`:
 `secrets.age` is one flat map, and every apply generates whatever secret a

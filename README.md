@@ -96,6 +96,8 @@ pre-flight. The Kraftwerk follows `docs/ZIELBILD.md`.
    [`docs/adr/README.md`](docs/adr/README.md) before changing anything about
    runtime, identity, proxy, templates or tests.
 5. [`docs/MIGRATION.md`](docs/MIGRATION.md) — the one-shot move from ServiceBay.
+   The session that runs it on the Kraftwerk starts at
+   [`docs/MIGRATION-DAY.md`](docs/MIGRATION-DAY.md) (`scripts/migration-day.sh`).
 6. [`docs/DEKONSTRUKTION.md`](docs/DEKONSTRUKTION.md) — how Solaris and the
    Android app split into Solaris, Haus, Stimme and the Laib Operator.
 7. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the

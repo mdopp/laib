@@ -381,7 +381,9 @@ first and the default window is 04:30, never the backup's 03:00.
 
 Both run in the hooks image (ADR 0004 amendment), never on the host:
 `pre-start` before the units start, `post-deploy` after a green verify.
-Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age) and
+Protocol lines on stdout: `laib-secret: NAME=value` (into secrets.age; a
+service that declares NAME is re-applied in the same apply when its output
+changed, #349) and
 `laib-exec: <container> <command…>` (run by Laib in the service's own
 container). A `laib-exec` line that carries a secret is refused: ps shows
 every argv on the box to every user (#214), so a secret travels on stdin,

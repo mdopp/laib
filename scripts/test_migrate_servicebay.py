@@ -117,7 +117,7 @@ class Migrate(unittest.TestCase):
         self.assertRegex(self.stdout, r"laib secret set IMMICH_DB_PASSWORD .*DB_PASSWORD")
         self.assertIn("laib secret set LLDAP_ADMIN_PASSWORD", self.stdout)
         self.assertNotIn("laib secret set PAPERLESS", self.stdout)    # paperless is not installed here
-        self.assertIn("scripts/carry-servicebay-secrets.sh auth file-share immich", self.stdout)   # one command sets them (#228)
+        self.assertIn("scripts/carry-servicebay-secrets.sh auth file-share home-assistant immich", self.stdout)   # one command sets them (#228)
 
     def test_add_line_pins_db_bearing_images_and_carries_values(self):
         # #229: a DB-bearing container (no AutoUpdate in the built-in) whose box tag
@@ -152,6 +152,9 @@ class Migrate(unittest.TestCase):
         # that is not there keeps Z-Wave JS UI from starting
         line = next((l for l in self.stdout.splitlines() if "laib add home-assistant" in l), "")
         self.assertIn("ZWAVE_DEVICE=/dev/ttyACM9", line)
+        # #349: the administrator ServiceBay onboarded Home Assistant as, which post-deploy logs in as
+        self.assertIn("HA_ADMIN_USER=oscar", line)
+        self.assertIn("laib secret set HA_ADMIN_PASSWORD   # ServiceBay: OSCAR_HA_ADMIN_PASSWORD (home-assistant)", self.stdout)
 
     def test_add_line_never_runs_with_an_empty_pin(self):
         # #237 review: a box image without a RepoDigest (or gone) makes the

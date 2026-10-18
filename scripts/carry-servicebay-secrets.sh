@@ -29,6 +29,7 @@ mosquitto     MQTT_PASSWORD                    MQTT_PASSWORD
 media         JELLYFIN_ADMIN_PASSWORD          JELLYFIN_ADMIN_PASSWORD
 adguard       ADGUARD_ADMIN_PASSWORD           ADGUARD_ADMIN_PASSWORD
 file-share    SHARE_PASSWORD                   SAMBA_PASSWORD
+home-assistant OSCAR_HA_ADMIN_PASSWORD         HA_ADMIN_PASSWORD
 '
 
 # ServiceBay's own lookup (install/savedSecrets.ts loadSavedSecrets):

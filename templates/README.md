@@ -34,8 +34,9 @@ Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads 
 (`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
 auth template), never as the admin. Home Assistant's integrations (three
 Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server, Frage as
-conversation agent) are set up by hand once; with the optional secret
-`HA_TOKEN` (a long-lived HA token) `laib diag` lists what is still missing.
+conversation agent) are set up by hand once; with `HA_TOKEN`, which
+home-assistant's post-deploy mints like Haus's and the Bote's (#349),
+`laib diag` lists what is still missing.
 
 | Template | Role | Notes |
 |---|---|---|

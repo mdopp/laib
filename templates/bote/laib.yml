@@ -22,7 +22,10 @@ secrets:
   - name: BOTE_MODEL_KEY             # only for a cloud model
     external: true
     optional: true
-  - name: BOTE_HA_TOKEN              # Home Assistant long-lived token → the Bote's `ha` tool (README); without it the tool is absent
+  - name: BOTE_HA_TOKEN              # minted by home-assistant's post-deploy (#349) for HA's non-admin user bote → the `ha` tool; without HA the tool is absent
+    external: true
+    optional: true
+  - name: BOTE_AUTOMAT_HA_TOKEN      # minted the same, an administrator's: the Automat only (HA's automation config API is admin-only); without it no automat
     external: true
     optional: true
   - name: BOTE_NOTIFY_TOKEN          # bote-notify's bearer (#177), generated on add; Home Assistant's rest_command.mitteilung sends it

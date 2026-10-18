@@ -47,10 +47,17 @@ if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
     TOOLS="$TOOLS, das Gedächtnis des Hauses (haushalt: Kalender, Notizen, Erinnerungen)"
   else echo "haushalt: $HAUSHALT_MCP_URL ${why:-antwortet nicht} (Token), weggelassen"; fi
 fi
+# Home Assistant's tokens are minted by its post-deploy (#349): BOTE_HA_TOKEN is the
+# non-admin user bote's, which HA serves the Assist API only (/api/mcp/assist);
+# the Automat edits automations, admin-only in HA, with BOTE_AUTOMAT_HA_TOKEN in its
+# own container, never in Hermes'.
 if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
+  MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/api/mcp/assist\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server, Assist API as the user bote: lights, switches, players, \"was ist an\"\n"
+  TOOLS="$TOOLS, die Geräte (ha: Licht, Schalter, Musik, was gerade an ist)"
+fi
+if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
-  MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/mcp_server/sse\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server: lights, switches, players, \"was ist an\" (Assist API)\n"
-  TOOLS="$TOOLS, die Geräte (ha: Licht, Schalter, Musik, was gerade an ist; automat: Automationen anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
+  TOOLS="$TOOLS, die Automationen (automat: anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
 fi
 # The persona engine (ADR 0020; today Joshua, #122): its directory lists the
 # tools wired above, by name (laib, frage, ha, …). No side effects.
@@ -70,7 +77,7 @@ if [ -s "$P" ]; then STYLE="$(cat "$P")"; fi
 PEOPLE=""; PJ="${LAIB_RENDER_DIR:-/nonexistent}/people/people.json"
 if [ -s "$PJ" ]; then PEOPLE="$(python3 -c 'import json, sys; print(", ".join(json.load(open(sys.argv[1]))))' "$PJ")"; fi
 MITTEILUNG=""
-if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
+if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
   MITTEILUNG="
 Sagt jemand \"Sag mir Bescheid, wenn …\" (oder \"sag Mama Bescheid, wenn …\"), leg das mit automat als Automation an: der Auslöser ist das Ereignis, die Aktion ist rest_command.mitteilung mit data {an: <person>, text: <kurze Mitteilung>}. <person> ist, wer fragt, oder die genannte Person, und nur eine von: $PEOPLE. Ist unklar, wer gemeint ist, frag nach. Wie jede Automation: erst der Entwurf in Worten, geschrieben wird erst mit dem Code, den automat nennt."
 fi

@@ -34,7 +34,7 @@ class Carry(unittest.TestCase):
         (self.data / "secret.key").write_bytes(key)
         # synthetic values, one per shape; none is anything real
         self.values = {name: "v-" + secrets.token_hex(8) for name in
-                       ("LLDAP", "STORAGE", "IMMICH", "IMMICH_ADMIN", "PAPERLESS", "JELLYFIN", "ADGUARD", "SHARE")}
+                       ("LLDAP", "STORAGE", "IMMICH", "IMMICH_ADMIN", "PAPERLESS", "JELLYFIN", "ADGUARD", "SHARE", "HA_ADMIN")}
         seal = lambda v: subprocess.run(["node", "-e", SEAL, key.hex(), v], capture_output=True, text=True, check=True).stdout
         cfg = {
             "lldap": {"password": seal(self.values["LLDAP"])},     # legacy field, pre-installedSecrets
@@ -47,6 +47,7 @@ class Carry(unittest.TestCase):
                 {"varName": "JELLYFIN_ADMIN_PASSWORD", "password": seal(self.values["JELLYFIN"])},
                 {"varName": "ADGUARD_ADMIN_PASSWORD", "password": seal(self.values["ADGUARD"])},
                 {"varName": "SHARE_PASSWORD", "password": self.values["SHARE"]},   # stored plain
+                {"varName": "OSCAR_HA_ADMIN_PASSWORD", "password": seal(self.values["HA_ADMIN"])},   # #349
                 # MQTT_PASSWORD missing: reported, not set
             ],
         }
@@ -94,6 +95,7 @@ printf 'laib %s <%s>\\n' "$*" "$v" >> {self.log}
             "JELLYFIN_ADMIN_PASSWORD": self.values["JELLYFIN"],
             "ADGUARD_ADMIN_PASSWORD": self.values["ADGUARD"],
             "SAMBA_PASSWORD": self.values["SHARE"],
+            "HA_ADMIN_PASSWORD": self.values["HA_ADMIN"],
         })
         self.assertTrue(all(c.split()[2] == "servicebay" for c in calls if c.startswith("podman ")), calls)
 

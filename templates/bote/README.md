@@ -94,17 +94,24 @@ exists once they wrote to it.
 
 4. The house as a tool: in Home Assistant add the integration **Model
    Context Protocol Server** (Settings → Integrations; it exposes the Assist
-   API: turn on/off, set, play, and what is on right now), create a
-   long-lived access token for a user who may see the exposed entities
-   (Profile → Security), then `laib secret set BOTE_HA_TOKEN`. Expose the
+   API: turn on/off, set, play, and what is on right now) and expose the
    entities the family may touch under Settings → Voice assistants →
-   Expose. Without the token the `ha` tool is simply absent.
+   Expose. The token is not yours to make: home-assistant's post-deploy
+   creates HA's user `bote` (no administrator) and mints its token into
+   `BOTE_HA_TOKEN` (#349). Hermes reaches HA's Assist API at
+   `/api/mcp/assist`, the one MCP endpoint HA serves a non-admin user
+   (`/mcp_server/sse` wants an administrator by default), so whoever chats
+   with the Bote reaches no admin API. Without Home Assistant the `ha` tool
+   is simply absent.
 
 5. Automations by sentence: the `bote-automat` container (image
    `ghcr.io/mdopp/laib-automat`) serves HA's automation config API as MCP
    on loopback; Hermes gets it as `automat` with `trust: untrusted`, so
-   every write asks you on Signal first. Same HA token as the `ha` tool.
-   Tools: entitaeten, automationen, automation_lesen, automation_schreiben,
+   every write asks you on Signal first. HA lets only administrators read
+   and write automations, so the Automat has a token of its own,
+   `BOTE_AUTOMAT_HA_TOKEN` (an administrator's, minted with the others,
+   #349), in its container only; Hermes never holds it. Tools: entitaeten,
+   automationen, automation_lesen, automation_schreiben,
    automation_loeschen, automation_schalten.
 
 6. Messages to people (ADR 0022 §3, #177): declare the household in
@@ -171,9 +178,10 @@ file yours and stop the hook from rewriting it.
 | `laib` | always | 16 (hand `bote`: read, propose, note, escalate) |
 | `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
 | `haushalt` | Haus is installed (it generates `HAUS_HAUSHALT_TOKEN`) **and** answers with that token at `HAUSHALT_MCP_URL` (default: Haus on the host's port 8650, haus#11, #170) | calendar, reminders, notes |
-| `automat` + `ha` | `BOTE_HA_TOKEN` set | 6 + Home Assistant's Assist tools (depends on the exposed domains) |
+| `ha` | `BOTE_HA_TOKEN` minted (Home Assistant installed, #349) | Home Assistant's Assist tools (depends on the exposed domains) |
+| `automat` | `BOTE_AUTOMAT_HA_TOKEN` minted (the same) | 6 |
 
-A normal conversation without the HA token sees 17 tools; with it, 23 plus
+A normal conversation without Home Assistant sees 17 tools; with it, 23 plus
 HA's. Hermes' `mcp_servers` has no per-server tool allowlist in the
 verified config (2026-10), so the HA set is bounded only by what you
 expose in Home Assistant (Settings → Voice assistants → Expose) — keep it
@@ -247,7 +255,7 @@ stays unencrypted. From the Hermes docs (2026-10): the image and its
 `model_aliases.<name>: {model, provider: custom, base_url}` (all from
 `cli-config.yaml.example`, 2026-10-10), `trust: full | untrusted` and the
 MCP client's Streamable-HTTP-then-SSE fallback (`tools/mcp_tool.py`), so
-Home Assistant's `/mcp_server/sse` needs no bridge. Not yet verified:
+Home Assistant's `/api/mcp/assist` needs no bridge. Not yet verified:
 the whole thing on a box, Matrix and Telegram included.
 Issue: the Bote on the NUC (#23, phase 2).
 

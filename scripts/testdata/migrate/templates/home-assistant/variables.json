@@ -26,5 +26,12 @@
  },
  "ZWAVE_SECRET": {
   "type": "secret"
+ },
+ "OSCAR_HA_ADMIN_USERNAME": {
+  "type": "text",
+  "default": "oscar"
+ },
+ "OSCAR_HA_ADMIN_PASSWORD": {
+  "type": "secret"
  }
 }
