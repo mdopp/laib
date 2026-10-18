@@ -16,7 +16,7 @@ Usage:
   migrate-servicebay.py --config config.json --templates <dir>[,<dir>...] --out <dir>
                         [--builtins <laib>/templates] [--dry-run]
 """
-import argparse, json, os, re, sys
+import argparse, json, os, re, shlex, sys
 
 SECRET_TYPES = {"secret", "bcrypt", "rsa-private"}   # ServiceBay's own set (install/savedSecrets.ts)
 FORWARD_AUTH = "__authelia_forward_auth__"
@@ -84,6 +84,18 @@ def resolve(expr, values, data_dir):
 def in_state_repo(out):
     out = os.path.abspath(out)
     return any(os.path.exists(os.path.join(d, "box.yml")) for d in (out, os.path.dirname(out)))
+
+
+def smtp_values(cfg):
+    """auth's SMTP_* values from ServiceBay's notifications.email, shell-quoted
+    (the line is run as it is printed). Only a complete setting, as
+    ServiceBay's own auth hook took it (#987): host, user, pass and from."""
+    em = (cfg.get("notifications") or {}).get("email") or {}
+    if not all(em.get(k) for k in ("host", "user", "pass", "from")):
+        return []
+    vals = {"SMTP_HOST": em["host"], "SMTP_PORT": str(em.get("port") or 587),
+            "SMTP_SECURITY": "tls" if em.get("secure") else "starttls", "SMTP_USER": em["user"], "SMTP_FROM": em["from"]}
+    return [shlex.quote(f"{k}={v}") for k, v in vals.items()]
 
 
 def main():
@@ -221,6 +233,8 @@ def main():
                     if key not in auto and v.rpartition(":")[0] == repo and v.rpartition(":")[2] != tag:
                         pins.append(f"{key}={PIN % img} && ")
                         add.append(f"{key}=${key}")
+            if name == "auth":   # ServiceBay's mail settings (notifications.email, #359); the password is migration-day.sh's
+                add += smtp_values(cfg)
             # an image without a RepoDigest (or gone) fails the $(…), and laib
             # add does not run with a blank image: it would take the default
             adds.append("".join(pins) + " ".join([f"laib add {name}"] + add))

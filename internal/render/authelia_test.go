@@ -136,3 +136,45 @@ func configArgs(files []string) []string {
 	}
 	return args
 }
+
+// TestAutheliaSMTPOnTheRealBinary: with a mail server, the hook's
+// configuration.yml is one Authelia loads, and the password the container
+// gets as a podman secret (X_LAIB_SMTP_PASSWORD, #359) is what Authelia's
+// template filter puts into notifier.smtp.password, quotes, braces and
+// trailing blanks included.
+func TestAutheliaSMTPOnTheRealBinary(t *testing.T) {
+	bin := os.Getenv("LAIB_AUTHELIA")
+	if bin == "" {
+		t.Skip("LAIB_AUTHELIA (the authelia binary) not set")
+	}
+	dir := t.TempDir()
+	render := filepath.Join(dir, "render", "authelia")
+	os.MkdirAll(render, 0o755)
+	os.WriteFile(filepath.Join(render, "laib-clients.yml"), []byte("# none\n"), 0o644)
+	os.WriteFile(filepath.Join(render, "laib-access.yml"), []byte("access_control:\n  default_policy: one_factor\n"), 0o644)
+	hook := exec.Command("python3", "../../templates/auth/pre-start")
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render"),
+		"SMTP_HOST=smtp.mail.test", "SMTP_PORT=587", "SMTP_SECURITY=starttls", "SMTP_USER=box@mail.test", "SMTP_FROM=Die Box <box@mail.test>", "SMTP_PASSWORD=set"}
+	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
+		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=a-test-value-that-is-long-enough-for-authelia-0123456789")
+	}
+	if out, err := hook.CombinedOutput(); err != nil {
+		t.Fatalf("auth pre-start: %v\n%s", err, out)
+	}
+	cfg := filepath.Join(dir, "auth", "authelia-config")
+	files := []string{filepath.Join(cfg, "configuration.yml"), filepath.Join(render, "laib-access.yml"), filepath.Join(cfg, "oidc-clients.yml")}
+	pw := `pw-' {{ x }}"gm:ail  `
+	run := func(args ...string) string {
+		c := exec.Command(bin, append(configArgs(files), args...)...)
+		c.Env = append(os.Environ(), "X_LAIB_SMTP_PASSWORD="+pw)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("authelia %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	run("validate-config")
+	if out := run("config", "template"); !strings.Contains(out, "\n      "+pw+"\n") || !strings.Contains(out, "address: 'submission://smtp.mail.test:587'") {
+		t.Fatalf("the templated notifier does not carry the password as given:\n%s", out)
+	}
+}

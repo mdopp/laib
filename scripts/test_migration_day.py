@@ -60,7 +60,7 @@ case "$1" in
   version) echo "laib ${FAKE_LAIB_VERSION:-v0.6.0}";;
   add) [ "$2" = "${FAKE_FAIL_ADD:-}" ] && { echo "apply: rot"; exit 1; }; mkdir -p "$LAIB_STATE/services/$2";;
   remove) rm -rf "$LAIB_STATE/services/$2";;
-  secret) [ "$2" = list ] && printf '%s\n' ${FAKE_SECRETS:-};;
+  secret) [ "$2" = list ] && printf '%s\n' ${FAKE_SECRETS:-}; [ "$2" = set ] && cat > "$FAKE/secret-$3";;
 esac
 exit 0
 ''')
@@ -196,6 +196,24 @@ echo "  laib add vaultwarden"
         self.assertFalse((self.t / "q" / "auth.kube").exists())
         self.assertTrue((self.t / "home" / "servicebay-units" / "auth.kube").exists())
         self.assertTrue((self.t / "q" / "radicale.kube").exists())   # not reached
+
+    def test_servicebays_mail_password_is_piped_into_laib(self):
+        # #359: the password of notifications.email goes into AUTHELIA_SMTP_PASSWORD on stdin,
+        # never on argv or into the log; without a complete setting nothing is set
+        cfg = json.loads((self.t / "sb" / "config.json").read_text())
+        (self.t / "sb" / "config.json").write_text(json.dumps(cfg | {"notifications": {"email": {"host": "smtp.mail.test", "port": 587, "user": "box@mail.test", "from": "box@mail.test"}}}))
+        r = self.run_md("--foreground", "--until", "secrets")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("set AUTHELIA_SMTP_PASSWORD", " ".join(self.calls_of("laib")))
+        self.assertIn("no complete mail setting", r.stdout)
+        (self.t / "mig" / "progress").unlink()
+        cfg["notifications"] = {"email": {"host": "smtp.mail.test", "port": 587, "user": "box@mail.test", "pass": "pw-n'ever \"printed", "from": "box@mail.test"}}
+        (self.t / "sb" / "config.json").write_text(json.dumps(cfg))
+        r = self.run_md("--foreground", "--until", "secrets")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("secret set AUTHELIA_SMTP_PASSWORD", self.calls_of("laib"))
+        self.assertEqual((self.t / "secret-AUTHELIA_SMTP_PASSWORD").read_text(), "pw-n'ever \"printed")
+        self.assertNotIn("never", r.stdout + r.stderr + self.calls.read_text())
 
     def test_red_step_stops_and_hands_the_service_back(self):
         r = self.run_md("--foreground", "--until", "vaultwarden", FAKE_FAIL_ADD="radicale")

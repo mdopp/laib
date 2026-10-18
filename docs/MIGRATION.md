@@ -91,8 +91,8 @@ file moves out.
    built-in, the draft is what to compare `laib add <name>` against; the
    others get their units from their own repo's `laib.yml` or by hand
    (ADR 0004: `.container` is the primary form). Secrets: `laib secret set`
-   for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth),
-   and the data-bound ones carried over (below). The rest is generated on
+   for the external ones (DNS token, Fritz!Box, GitHub, Claude OAuth),
+   and the data-bound ones and the mail password carried over (below). The rest is generated on
    first apply and the post-deploy hook seeds the app. Nothing runs yet.
 2. **NPM stays the proxy until step 4 is done.** Caddy cannot start beside
    it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
@@ -296,7 +296,14 @@ systemctl --user start file-share-syncthing.service
 `laib add <name> …` line per built-in. It carries the box's values under
 Laib's names: `BASE_DN` from `LLDAP_BASE_DN` (ServiceBay derived a blank one
 from the domain), `MQTT_USER` from `MQTT_USERNAME` (the box's is `mqtt`), and
-`SHARE_USER`. **The migration never downgrades a database.** If the box runs
+`SHARE_USER`. Authelia's mail server comes from ServiceBay's
+`notifications.email`, which its auth hook wrote into Authelia (#987):
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM`, and `SMTP_SECURITY`
+`tls` for `secure: true` (port 465), else `starttls`; only a complete
+setting (host, user, pass and from, as ServiceBay took it), and its password
+as `AUTHELIA_SMTP_PASSWORD` (below). Without one, `laib diag` says
+"Passwort-Mails gehen nicht" until the values and the secret are set and
+auth is applied (#359). **The migration never downgrades a database.** If the box runs
 another tag than the built-in's default for a container Laib does not update
 itself (the ones that keep a database), the line pins the digest the box
 runs: `LLDAP_IMAGE=$(podman image inspect --format '{{index .RepoDigests 0}}'
@@ -361,6 +368,7 @@ ones, or the app is locked out of its own database or config:
 | `JELLYFIN_ADMIN_PASSWORD` | same | the media post-deploy cannot log in to Jellyfin |
 | `ADGUARD_ADMIN_PASSWORD` | same | post-deploy cannot sync the rewrites into the kept `AdGuardHome.yaml` |
 | `SAMBA_PASSWORD` | `SHARE_PASSWORD` | devices that mount the share with the old account |
+| `AUTHELIA_SMTP_PASSWORD` | `notifications.email.pass` (config.json, not sealed) | nothing is locked out, but Authelia sends no mail: "Passwort vergessen", invitations and the code before a second factor land in a file on the box (#359). `migration-day.sh`'s secrets step pipes it into `laib secret set`; the other settings go with `laib add auth` (below) |
 | `HA_ADMIN_PASSWORD` | `OSCAR_HA_ADMIN_PASSWORD` | Home Assistant's post-deploy logs in as the administrator ServiceBay onboarded (`HA_ADMIN_USER`, `oscar`; the `laib add` line carries it) to mint the tokens of Haus, the Bote and the check (#349); a generated value cannot log in, and the apply is red |
 
 They are set **before the service's first apply**, which is `laib add`:

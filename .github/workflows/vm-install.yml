@@ -557,6 +557,59 @@ jobs:
                 code=$(hc --pod p252); podman pod rm -f p252 >/dev/null; echo "auth.vm.test at host-gateway, from a pod: HTTP $code"
                 [ "$code" = 200 ] || { echo "a pod cannot reach Authelia at host-gateway (#252)"; exit 1; }
                 $L diag || true'
+      - name: auth — "Passwort vergessen" reaches a mail server, its password a podman secret (#359)
+        if: matrix.part == 'logins'
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+          lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+          S=/mnt/data/laib/state; V=$S/services/auth/values.yml; D=/mnt/data/stacks/auth
+          setv() { sed -i "s|^$1:.*|$1: $2|" "$V"; grep -q "^$1: $2\$" "$V"; }
+          commit() { git -C "$S" -c user.name=core -c user.email=core@vm.test commit -qam "$1"; }
+          root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+          # a fresh box without a mail server: the file notifier, and diag and status say so
+          grep -q '^SMTP_HOST: ""' "$V" || { echo "values.yml has no empty SMTP_HOST"; cat "$V"; exit 1; }
+          grep -q "filesystem:" "$D/authelia-config/configuration.yml"
+          lw diag auth | tee /tmp/diag-auth.txt || true
+          grep -qE "^gelb +status +auth +Passwort-Mails gehen nicht" /tmp/diag-auth.txt || { echo "diag does not say that resets cannot be mailed"; exit 1; }
+          grep -q "Passwort-Mails gehen nicht" <<<"$(lw status)" || { echo "laib status does not say it"; lw status; exit 1; }
+          # the sink: mailpit on the box's host network; pods reach it at host.containers.internal
+          podman run -d -q --name mailpit --network host docker.io/axllent/mailpit:v1.31.6 >/dev/null
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8025/api/v1/messages && break; sleep 2; done
+          # 1. a login, as a Gmail account has one: the password goes in as a podman secret, never into a file or argv
+          PW="vm-smtp-pw-359 'x\""
+          printf '%s\n' "$PW" | lw secret set AUTHELIA_SMTP_PASSWORD
+          setv SMTP_HOST host.containers.internal; setv SMTP_PORT '"1025"'; setv SMTP_USER box@vm.test; setv SMTP_FROM "'Die Box <box@vm.test>'"
+          commit "vm: auth mails with a login (#359)"
+          lw apply auth | tee /tmp/apply-auth.txt
+          grep -q "notifier: smtp via host.containers.internal" /tmp/apply-auth.txt || { echo "pre-start did not render the smtp notifier"; exit 1; }
+          [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-authelia.X_LAIB_SMTP_PASSWORD)" = "$PW" ] || { echo "the podman secret is not the password"; exit 1; }
+          [ "$(podman exec systemd-auth-authelia printenv X_LAIB_SMTP_PASSWORD)" = "$PW" ] || { echo "Authelia does not get the password"; exit 1; }
+          if grep -qF -- "vm-smtp-pw-359" <<<"$(podman inspect systemd-auth-authelia --format "{{.Config.CreateCommand}}"; cat "$D/authelia-config/configuration.yml" /tmp/apply-auth.txt)"; then echo "the SMTP password is on argv, in configuration.yml or in the apply's output"; exit 1; fi
+          code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://auth.vm.test/api/health || true)
+          [ "$code" = 200 ] || { echo "Authelia is not healthy with the smtp notifier: $code"; podman logs --tail 30 systemd-auth-authelia; exit 1; }
+          echo "Authelia runs with the smtp notifier; the password reached it as a podman secret only"
+          # 2. the sink takes no login over plain SMTP (nor would Authelia send one): a relay without TLS and login
+          setv SMTP_SECURITY none; setv SMTP_USER '""'
+          commit "vm: auth mails through the sink (#359)"
+          lw apply auth >/dev/null
+          grep -q "Passwort-Mails über host.containers.internal" <<<"$(lw status)" || { echo "laib status does not name the mail server"; lw status; exit 1; }
+          rm -f "$D/authelia-data/notification.txt"
+          code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /tmp/reset.json -w "%{http_code}" \
+                   -H "Content-Type: application/json" -d '{"username":"core"}' https://auth.vm.test/api/reset-password/identity/start || true)
+          echo "Passwort vergessen for core -> HTTP $code $(cat /tmp/reset.json)"; [ "$code" = 200 ]
+          id=""; for i in $(seq 1 30); do
+            id=$(curl -fsS "http://127.0.0.1:8025/api/v1/search?query=to:core@vm.test" | grep -o '"ID":"[^"]*"' | sed -n '1s/"ID":"\(.*\)"/\1/p' || true)
+            [ -n "$id" ] && break; sleep 2; done
+          [ -n "$id" ] || { echo "no reset mail reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
+          curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
+          grep -q 'https://auth.vm.test/reset-password/step2?token=' /tmp/mail.json || { echo "the mail holds no reset link"; head -c 2000 /tmp/mail.json; exit 1; }
+          grep -q '"Address":"box@vm.test"' <<<"$(grep -o '"From":{[^}]*}' /tmp/mail.json)" || { echo "the mail is not from SMTP_FROM"; grep -o '"From":{[^}]*}' /tmp/mail.json; exit 1; }
+          test ! -e "$D/authelia-data/notification.txt" || { echo "the reset still went into the file"; exit 1; }
+          echo "the reset mail for core reached the sink, from box@vm.test, with its link"
+          EOS
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
         if: matrix.part == 'services'
         run: |
