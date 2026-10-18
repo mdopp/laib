@@ -176,7 +176,7 @@ file moves out.
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
    they go off in Phase 5 (#160). So do chronik's (above) and the Google
-   import's (`solaris-import-google`; `import.`, `dopp.cloud` and `www.` are not needed, owner 2026-10-18). flutstunde and the
+   import's (`solaris-import-google`; `import.` is not needed, owner 2026-10-18, and `dopp.cloud` and `www.` redirect to `haus.`, #360). flutstunde and the
    inactive daggerheart-asteroids go with ServiceBay in step 7 (owner, #160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own
