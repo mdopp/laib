@@ -24,8 +24,9 @@ func release(tag string, id int, binaries bool) string {
   "assets": [` + assets + `]}`
 }
 
-// installBoxSudo is runInstallBox's sudo: it runs nothing.
-const installBoxSudo = "exit 0"
+// installBoxSudo is runInstallBox's sudo: it runs nothing, and as tee it
+// reads what it is handed (#304).
+const installBoxSudo = `[ "$1" != tee ] || cat >/dev/null`
 
 // #304: install-box.sh runs under pipefail and hands files to `… | sudo
 // tee`. A sudo that exits without reading its stdin breaks that pipe: the
