@@ -158,8 +158,14 @@ def login(user, pw):
 
 
 def mint(session, name):
+    """a new long-lived token named name; HA keeps one per name and user, so the one
+    Laib holds no more (lost, or refused under another value) is revoked first"""
     ws = WS(session)
     try:
+        for t in ws("auth/refresh_tokens"):
+            if t.get("client_name") == name and t.get("type") == "long_lived_access_token":
+                ws("auth/delete_refresh_token", refresh_token_id=t["id"])
+                print(f"home-assistant: the old token \"{name}\" revoked")
         return ws("auth/long_lived_access_token", client_name=name, lifespan=3650)
     finally:
         ws.close()
