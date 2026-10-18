@@ -703,6 +703,97 @@ def check_home(f, s, phase):
     return f"HA lets its admin in; the automation, {len(have)} config entries, Z-Wave JS at {url}"
 
 
+def ha_ws_admin_only(token):
+    """an admin-only command on HA's WebSocket API (config/auth/list): True if HA runs it"""
+    sock = socket.create_connection((LOOP, 8123), timeout=20)
+    key = base64.b64encode(os.urandom(16)).decode()
+    sock.sendall(f"GET /api/websocket HTTP/1.1\r\nHost: {LOOP}:8123\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                 f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
+    buf = b""
+    while b"\r\n\r\n" not in buf:
+        buf += sock.recv(4096)
+    buf = buf.split(b"\r\n\r\n", 1)[1]
+
+    def take(n):
+        nonlocal buf
+        while len(buf) < n:
+            buf += sock.recv(65536)
+        out, buf = buf[:n], buf[n:]
+        return out
+
+    def recv():
+        b0, b1 = take(2)
+        n = b1 & 0x7F
+        n = struct.unpack(">H", take(2))[0] if n == 126 else struct.unpack(">Q", take(8))[0] if n == 127 else n
+        return json.loads(take(n))
+
+    def send(obj):
+        data, mask = json.dumps(obj).encode(), os.urandom(4)
+        n = len(data)
+        head = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0xFE]) + struct.pack(">H", n))
+        sock.sendall(head + mask + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+    recv()
+    send({"type": "auth", "access_token": token})
+    if recv().get("type") != "auth_ok":
+        raise AssertionError("HA's WebSocket API refuses the token")
+    send({"id": 1, "type": "config/auth/list"})
+    while (m := recv()).get("id") != 1:
+        pass
+    sock.close()
+    return bool(m.get("success"))
+
+
+GP_TOKENS = """name: gp-ha-tokens
+template: {registry: generalprobe, name: gp-ha-tokens, version: 1}
+# the Generalprobe's stand-in for Haus and the Bote (#349): it declares their Home Assistant
+# tokens as they do, so their container gets them as podman secrets the probe can read
+routes: []
+secrets:
+  - {name: HAUS_HA_TOKEN, external: true, optional: true}
+  - {name: BOTE_HA_TOKEN, external: true, optional: true}
+data: []
+"""
+
+
+def check_ha_tokens(f, s, phase):
+    """#349: Home Assistant's post-deploy minted the tokens, nobody clicked them: the check
+    lists the integrations with HA_TOKEN, Haus's token reads a state, the Bote's is refused
+    an admin-only call. Haus and the Bote are not part of the migration: a stand-in service
+    declares their tokens, as a consumer added after Home Assistant would."""
+    if phase == "before":
+        return "ServiceBay kept one administrator token in a file; Laib mints per consumer (after)"
+    env = ["env", "LAIB_HOME=/mnt/data/laib", "LAIB_ACTOR=human:core", "/var/opt/laib/laib"]
+    reg = "/mnt/data/laib/registries/generalprobe/templates/gp-ha-tokens"
+    os.makedirs(reg, exist_ok=True)
+    open(os.path.join(reg, "laib.yml"), "w").write(GP_TOKENS)
+    open(os.path.join(reg, "values.example.yml"), "w").write("IMAGE: docker.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n")
+    open(os.path.join(reg, "gp-ha-tokens.container"), "w").write(
+        "[Container]\nImage=${IMAGE}\nExec=sleep infinity\nEnvironment=HAUS=${HAUS}\nEnvironment=BOTE=${BOTE}\n\n[Install]\nWantedBy=default.target\n")
+    try:
+        sh(*env, "add", "gp-ha-tokens")
+        tok = {k: sh("podman", "secret", "inspect", "--showsecret", "--format", "{{.SecretData}}", f"laib.gp-ha-tokens.gp-ha-tokens.{k}").stdout.decode().strip()
+               for k in ("HAUS", "BOTE")}
+        st, state = ha("/states/sun.sun", tok["HAUS"])
+        if st != 200:
+            st, states = ha("/states", tok["HAUS"])
+            state = (states or [None])[0] if st == 200 else None
+        if not state:
+            raise AssertionError(f"Haus's token reads no state: HTTP {st}")
+        if not ha_ws_admin_only(tok["HAUS"]):
+            raise AssertionError("Haus's token is no administrator's: voice counting would be refused")
+        if ha("/states/" + state["entity_id"], tok["BOTE"])[0] != 200:
+            raise AssertionError("the Bote's token reads no state")
+        if ha_ws_admin_only(tok["BOTE"]):
+            raise AssertionError("the Bote's token ran an admin-only command: whoever chats with the Bote is an administrator")
+    finally:
+        sh(*env, "remove", "gp-ha-tokens", check=False)
+    sh("systemctl", "--user", "start", "home-assistant-check.service")
+    status = json.load(open(os.path.join(f["data_dir"], "home-assistant/homeassistant/.laib-status.json")))
+    if any("antwortet nicht" in x["detail"] for x in status["findings"]) or not status.get("detail"):
+        raise AssertionError(f"the check does not list the integrations with HA_TOKEN: {status}")
+    return f"Haus's token reads {state['entity_id']}, the Bote's is refused config/auth/list, the check: {status['detail']}"
+
+
 def check_matter(f, s, phase):
     d = os.path.join(f["data_dir"], "home-assistant/matter-server" if phase == "before" else "home-assistant/matter")
     have = matter_files(d)
@@ -740,7 +831,7 @@ def check_syncthing(f, s, phase):
 
 
 CHECKS = [("logins", check_logins), ("photos", check_photos), ("immich-library", check_library), ("documents", check_documents),
-          ("vault", check_vault), ("calendar", check_dav), ("home-assistant", check_home), ("matter", check_matter), ("mqtt", check_mqtt),
+          ("vault", check_vault), ("calendar", check_dav), ("home-assistant", check_home), ("ha-tokens", check_ha_tokens), ("matter", check_matter), ("mqtt", check_mqtt),
           ("samba", check_share), ("syncthing", check_syncthing)]
 
 

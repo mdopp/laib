@@ -1,7 +1,7 @@
 """Home Assistant's integrations, as laib's status file (#55, #309).
 
-Home Assistant's integrations are set up by hand once (README.md). With a
-long-lived token in the secret HA_TOKEN this reads HA's config entries and
+Home Assistant's integrations are set up by hand once (README.md). With the
+long-lived token post-deploy mints into HA_TOKEN (#349) this reads HA's config entries and
 names what is still missing, the checklist the Box page and `laib diag`
 show ("Wyoming Whisper: fehlt"). It runs inside the Home Assistant
 container (home-assistant-check.service, `podman exec -i … python3 -`):
@@ -45,7 +45,7 @@ def report(token: str, base: str) -> dict:
     except Exception as err:  # an unreachable HA is a finding, never a failed unit
         return {"detail": "Integrationsliste nicht lesbar", "findings": [{
             "severity": "gelb", "detail": f"Home Assistant antwortet nicht auf die Integrationsliste: {err}",
-            "fix": "HA_TOKEN prüfen (langlebiger Token eines Admin-Kontos)"}]}
+            "fix": "laib apply home-assistant (ersetzt einen HA_TOKEN, den Home Assistant ablehnt, #349)"}]}
     missing = [name for name, domain, title in EXPECTED
                if not any(e.get("domain") == domain and (not title or title in (e.get("title") or "").lower()) for e in got)]
     if not missing:

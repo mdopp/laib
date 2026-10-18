@@ -8,6 +8,9 @@ Image=${HERMES_IMAGE}
 Pod=bote.pod
 Volume=${DATA_DIR}/bote/hermes:/opt/data:z
 Environment=HERMES_HOME=/opt/data
+# the user bote's Home Assistant token (#349): in .env for the ha tool; here too, so a newly
+# minted one is a change of this unit, and the apply that minted it restarts the Bote with it
+Environment=HA_TOKEN=${HA_TOKEN}
 Exec=gateway run
 AutoUpdate=registry
 

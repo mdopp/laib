@@ -6,8 +6,9 @@ the Box keys under `/napi/box/*` come from Laib. Nothing of the Solaris app
 is carried. Port 8650 is published beyond loopback for the Bote's pod
 (below); the LAN reaches it only through Caddy.
 
-With `laib secret set HAUS_HA_TOKEN` (a Home Assistant long-lived token),
-Haus serves the house paths itself from Home Assistant: `ha/call` with the
+With `HAUS_HA_TOKEN`, an administrator's long-lived token that
+home-assistant's post-deploy mints and hands back (#349; nothing to click
+in HA), Haus serves the house paths itself from Home Assistant: `ha/call` with the
 companion contract's safety rules, `portal/{state,energy,entity-history,active}`
 and the live stream that keeps the app's widgets current while the screen
 is on (ADR 0022). `ENERGY_FLOW`/`ENERGY_TOTALS` name the energy sensors by

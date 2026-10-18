@@ -364,7 +364,7 @@ grep -qi "haushalt.*antwortet nicht\|haushalt.*weggelassen" "$WORK/bote-hook.out
 grep -q "Frage" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names Frage once it is wired"
 # #134: Home Assistant is the tool ha (ADR 0021); haus is the family's pages, never a Bote tool
 grep -q "^  ha:" "$HOOKDIR/bote/hermes/config.yaml" || fail "Home Assistant is wired as the Bote tool ha (#134)"
-grep -q "url: http://127.0.0.1:8123/mcp_server/sse" "$HOOKDIR/bote/hermes/config.yaml" || fail "the ha tool reaches Home Assistant (#134)"
+grep -q "url: http://127.0.0.1:8123/api/mcp/assist" "$HOOKDIR/bote/hermes/config.yaml" || fail "the ha tool reaches Home Assistant's Assist API, which it serves a non-admin (#134, #349)"
 if grep -q "^  haus:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Bote tool is named haus (#134)"; fi
 grep -qx "ha" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists ha (#134)"
 # #170: the Haushalt (haus#11) is wired with Haus's bearer; a Haushalt that refuses the token is left out and named
@@ -400,7 +400,7 @@ bote_people() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SER
   LAIB_RENDER_DIR="$WORK/render" MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
-  LAIB_SECRET_BOTE_HA_TOKEN="$1" HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with people"; }
+  LAIB_SECRET_BOTE_HA_TOKEN="$1" LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN="$1" HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with people"; }
 bote_people ha_y
 grep -q "Sag mir Bescheid, wenn" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL turns 'sag mir Bescheid' into an automation (#177)"
 grep -q "rest_command.mitteilung" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the automation's action is rest_command.mitteilung (#177)"

@@ -310,6 +310,20 @@ change with its snapshot.
 **Open, the operator's decision (#229).** Until it is made, the default
 applies:
 
+- **Home Assistant's tokens** (`HAUS_HA_TOKEN`, `BOTE_HA_TOKEN`,
+  `BOTE_AUTOMAT_HA_TOKEN`, `HA_TOKEN`): decided, Laib mints them (#349).
+  Nobody creates a long-lived token in HA's UI any more:
+  home-assistant's post-deploy logs in as HA's administrator (the carried
+  `HA_ADMIN_PASSWORD`, above), mints one token per consumer, creates HA's
+  non-admin user `bote` for the Bote's, and the same apply restarts what
+  uses them. ServiceBay's one administrator token in
+  `homeassistant/.solaris-long-lived-token` is not read; it stays valid in
+  HA until someone revokes it (Settings → People → the user → Security).
+  **The one thing you type**, only if ServiceBay never onboarded Home
+  Assistant itself (its `OSCAR_HA_ADMIN_USERNAME` blank, HA set up by
+  hand): add `HA_ADMIN_USER=<an HA administrator>` to the `laib add
+  home-assistant` line and set its password once, `laib secret set
+  HA_ADMIN_PASSWORD`, before the add.
 - **Home Assistant's Authelia login** (`auth_oidc`, client `homeassistant`):
   decided, kept (#229, #253). The built-in declares the same client;
   pre-start installs the same pinned component and moves ServiceBay's
@@ -347,6 +361,7 @@ ones, or the app is locked out of its own database or config:
 | `JELLYFIN_ADMIN_PASSWORD` | same | the media post-deploy cannot log in to Jellyfin |
 | `ADGUARD_ADMIN_PASSWORD` | same | post-deploy cannot sync the rewrites into the kept `AdGuardHome.yaml` |
 | `SAMBA_PASSWORD` | `SHARE_PASSWORD` | devices that mount the share with the old account |
+| `HA_ADMIN_PASSWORD` | `OSCAR_HA_ADMIN_PASSWORD` | Home Assistant's post-deploy logs in as the administrator ServiceBay onboarded (`HA_ADMIN_USER`, `oscar`; the `laib add` line carries it) to mint the tokens of Haus, the Bote and the check (#349); a generated value cannot log in, and the apply is red |
 
 They are set **before the service's first apply**, which is `laib add`:
 `secrets.age` is one flat map, and every apply generates whatever secret a

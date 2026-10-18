@@ -651,7 +651,7 @@ jobs:
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
-      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253)
+      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253); Laib mints its tokens (#349)
         if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
@@ -669,6 +669,13 @@ jobs:
                 printf "default_config:\n\nauth_oidc:\n  client_id: homeassistant\n  client_secret: servicebay-old\n  discovery_url: https://auth.vm.test/.well-known/openid-configuration\n  roles:\n    admin: admins\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
                 touch "$C/automations.yaml" "$C/scripts.yaml" "$C/scenes.yaml"
                 podman pull -q ghcr.io/home-assistant/home-assistant:stable >/dev/null; echo "home assistant image pre-pulled"
+                # #349: a stand-in for Haus and the Bote, there before Home Assistant: it declares their tokens as they
+                # do, so the apply that mints them must hand them to it (as podman secrets the probe can read)
+                T=/mnt/data/laib/registries/vm/templates/tokens; mkdir -p "$T"
+                printf "name: tokens\ntemplate: {registry: vm, name: tokens, version: 1}\nroutes: []\nsecrets:\n  - {name: HAUS_HA_TOKEN, external: true, optional: true}\n  - {name: BOTE_HA_TOKEN, external: true, optional: true}\ndata: []\n" > "$T/laib.yml"
+                printf "IMAGE: docker.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nExec=sleep infinity\nEnvironment=HAUS=\${HAUS}\nEnvironment=BOTE=\${BOTE}\n\n[Install]\nWantedBy=default.target\n" > "$T/tokens.container"
+                $L add tokens >/dev/null
                 $L add home-assistant | tee /tmp/add-ha.txt
                 grep -q "^ok  home-assistant pre-start" /tmp/add-ha.txt || { echo "home-assistant pre-start is not green"; exit 1; }
                 grep -q "auth_oidc installed" /tmp/add-ha.txt || { echo "the pinned component was not installed"; exit 1; }
@@ -685,12 +692,40 @@ jobs:
                 # the template owns the integrations checklist (#309): its check runs inside Home Assistant,
                 # writes the status file, and laib diag shows it with its age; a wrong token is a finding, never a failed unit
                 systemctl --user is-enabled home-assistant-check.timer >/dev/null || { echo "the hourly check timer is not enabled"; exit 1; }
-                echo vm-not-a-token-309 | $L secret set HA_TOKEN >/dev/null && $L apply >/dev/null
+                # #349: the tokens, minted by post-deploy against this real Home Assistant: onboarded as laib, one token
+                # per consumer, the Bote a user of its own; none of it typed, none of it in the output of the apply
+                grep -q "onboarded, administrator laib" /tmp/add-ha.txt || { echo "post-deploy did not onboard Home Assistant"; exit 1; }
+                for n in HA_TOKEN HAUS_HA_TOKEN BOTE_AUTOMAT_HA_TOKEN BOTE_HA_TOKEN; do grep -q "$n minted" /tmp/add-ha.txt || { echo "$n was not minted"; exit 1; }; done
+                tok() { podman secret inspect --showsecret --format "{{.SecretData}}" "laib.tokens.tokens.$1"; }
+                [ -n "$(tok HAUS)" ] && [ -n "$(tok BOTE)" ] || { echo "the stand-in did not get the tokens in the apply that minted them"; exit 1; }
+                if grep -qFf <(printf "%s\n" "$(tok HAUS)" "$(tok BOTE)") /tmp/add-ha.txt || grep -q "laib-secret" /tmp/add-ha.txt; then echo "a token is in the apply output"; exit 1; fi
+                # the token rides in a header file (curl -H @), never on argv
+                ha() { curl -s -o /tmp/ha-body.json -w "%{http_code}" -H @<(printf "Authorization: Bearer %s" "$(tok "$1")") "http://127.0.0.1:8123$2"; }
+                for i in $(seq 1 45); do code=$(ha HAUS /api/states/sun.sun); [ "$code" = 200 ] && break; sleep 2; done   # a restarted HA sets sun up shortly after it answers
+                echo "Haus reads sun.sun -> HTTP $code"; [ "$code" = 200 ] || { cat /tmp/ha-body.json; exit 1; }
+                code=$(ha BOTE /api/states/sun.sun); echo "the Bote reads sun.sun -> HTTP $code"; [ "$code" = 200 ]
+                # an admin-only call (the automation config API of HA): Haus is let through (no such automation: 404), the Bote refused
+                code=$(ha HAUS /api/config/automation/config/laib-349); echo "Haus, admin-only call -> HTTP $code"; [ "$code" = 404 ]
+                code=$(ha BOTE /api/config/automation/config/laib-349); echo "the Bote, admin-only call -> HTTP $code"; [ "$code" = 401 ] || { echo "the Bote token is an administrator token"; exit 1; }
+                # the check lists the integrations with the minted HA_TOKEN
                 systemctl --user start home-assistant-check.service || { journalctl --user -u home-assistant-check.service --no-pager | tail -20; exit 1; }
                 grep -q "\"at\"" "$C/.laib-status.json" || { echo "the check wrote no status file"; ls -la "$C"; exit 1; }
                 $L diag --json home-assistant > /tmp/diag-ha.json
-                grep -q "antwortet nicht auf die Integrationsliste" /tmp/diag-ha.json && grep -q "geprüft" /tmp/diag-ha.json || { echo "diag does not show the template status"; cat /tmp/diag-ha.json; exit 1; }
-                echo "home-assistant: the check ran inside Home Assistant and diag shows its status"
+                grep -q "Wyoming Whisper: fehlt" /tmp/diag-ha.json && grep -q "geprüft" /tmp/diag-ha.json || { echo "diag does not show the integrations the check listed"; cat /tmp/diag-ha.json; exit 1; }
+                if grep -q "antwortet nicht" /tmp/diag-ha.json; then echo "the check could not read the integrations with HA_TOKEN"; exit 1; fi
+                echo "home-assistant: the minted HA_TOKEN lists the integrations; diag shows them"
+                # the next apply keeps what works; a token HA refuses is replaced
+                $L apply home-assistant | tee /tmp/apply-ha2.txt
+                if grep -q " minted" /tmp/apply-ha2.txt; then echo "a working token was minted again"; exit 1; fi
+                grep -q "tokens for the check, Haus, the Automat and the Bote work" /tmp/apply-ha2.txt
+                echo vm-not-a-token-349 | $L secret set HA_TOKEN >/dev/null
+                $L apply home-assistant | tee /tmp/apply-ha3.txt
+                grep -q "HA_TOKEN minted (replaces one HA refuses)" /tmp/apply-ha3.txt || { echo "the refused HA_TOKEN was not replaced"; exit 1; }
+                systemctl --user start home-assistant-check.service
+                $L diag --json home-assistant > /tmp/diag-ha3.json
+                grep -q "Wyoming Whisper: fehlt" /tmp/diag-ha3.json || { echo "the check does not read with the replaced token"; cat /tmp/diag-ha3.json; exit 1; }
+                echo "home-assistant: tokens minted, kept, and a refused one replaced (#349)"
+                $L remove tokens >/dev/null; rm -rf "$T"
                 $L remove home-assistant >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
