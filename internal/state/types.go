@@ -195,6 +195,7 @@ type Contract struct {
 	OIDC        *OIDC       `yaml:"oidc"`
 	Data        []DataPath  `yaml:"data"`
 	Health      Health      `yaml:"health"`
+	Status      *StatusFile `yaml:"status"`
 	Ports       []Port      `yaml:"ports"`
 	GPU         bool        `yaml:"gpu"`
 	HostNetwork bool        `yaml:"hostNetwork"`
@@ -260,6 +261,19 @@ type DataPath struct {
 }
 
 // Health is what apply verifies.
+// StatusFile is what a service says about itself beyond up and down (#309):
+// a JSON file it keeps, {"at": RFC3339, "detail": "…", "findings":
+// [{"severity", "detail", "fix"}]}. laib reads it fresh on every status,
+// /ready and diag, with its age. Check names a oneshot of the service that
+// refreshes it: laib starts it, without waiting, when someone looks at diag
+// or the Box page and the file is older than Stale (default 5m). A service
+// whose own state changes writes the file itself and needs no check.
+type StatusFile struct {
+	File  string `yaml:"file"`  // under ${DATA_DIR}
+	Check string `yaml:"check"` // a .service of the template without [Install]
+	Stale string `yaml:"stale"` // a duration, default 5m
+}
+
 type Health struct {
 	HTTP string `yaml:"http"`
 	// Expect names the codes a probe answers when it is not 2xx/3xx (an

@@ -86,10 +86,29 @@ def status_path(out: pathlib.Path, wake_id: str) -> pathlib.Path:
 
 def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: str, reason: str) -> None:
     out.mkdir(parents=True, exist_ok=True)
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = status_path(out, wake_id).with_suffix(".tmp")
     tmp.write_text(json.dumps({"state": state, "phrase": phrase, "rev": rev, "reason": reason,
-                               "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, ensure_ascii=False) + "\n")
+                               "at": at}, ensure_ascii=False) + "\n")
     tmp.replace(status_path(out, wake_id))
+    write_laib_status(out, state, phrase, reason, at)
+
+
+LAIB_STATUS = "laib-status.json"
+RETRY = "erneut versucht wird erst bei einem neuen Satz oder einer neuen Revision der persona (box.yml persona)"
+
+
+def write_laib_status(out: pathlib.Path, state: str, phrase: str, reason: str, at: str) -> None:
+    """The status laib shows on the Box page and in diag (#169, #309): written
+    when the state changes, so laib reads it fresh and nothing polls."""
+    detail = {"done": f"Wake-Word „{phrase}“ trainiert",
+              "training": f"Wake-Word „{phrase}“ wird trainiert (seit {at})",
+              "failed": f"Wake-Word „{phrase}“: Training fehlgeschlagen: {reason}"}.get(state, f"Wake-Word „{phrase}“ noch nicht trainiert")
+    findings = [{"severity": "gelb", "detail": detail, "fix": RETRY}] if state == "failed" else []
+    out.mkdir(parents=True, exist_ok=True)
+    tmp = out / (LAIB_STATUS + ".tmp")
+    tmp.write_text(json.dumps({"at": at, "detail": detail, "findings": findings}, ensure_ascii=False) + "\n")
+    tmp.replace(out / LAIB_STATUS)
 
 
 def decide(out: pathlib.Path, phrase: str, wake_id: str, rev: str) -> str:
@@ -193,6 +212,11 @@ def main() -> int:
         return 2
     what = decide(out, phrase, wake_id, rev)
     log.info("wake word %r (%s), persona rev %s: %s", phrase, wake_id, rev, what)
+    if what == "done":  # a model from an earlier run, or a phrase that came back
+        write_laib_status(out, "done", phrase, "", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    elif what == "wait":  # the failed run's reason stays what laib shows
+        s = json.loads(status_path(out, wake_id).read_text())
+        write_laib_status(out, "failed", phrase, s.get("reason", ""), s.get("at", ""))
     if what == "train":
         sets = positive_sets(phrase, languages)
         write_status(out, wake_id, "training", phrase, rev, "")

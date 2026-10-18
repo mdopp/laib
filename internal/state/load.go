@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -136,6 +137,17 @@ func loadService(dir string) (*Service, error) {
 	}
 	if err := svc.applyWhen(); err != nil {
 		return nil, err
+	}
+	if s := svc.Contract.Status; s != nil {
+		if !strings.HasPrefix(s.File, "${DATA_DIR}/") || strings.Contains(s.File, "..") {
+			return nil, fmt.Errorf("services/%s/laib.yml: status.file %q must lie under ${DATA_DIR}/", svc.Name, s.File)
+		}
+		if s.Check != "" && !slices.Contains(svc.Oneshots(), s.Check) {
+			return nil, fmt.Errorf("services/%s/laib.yml: status.check %s is no .service of the template without [Install]", svc.Name, s.Check)
+		}
+		if _, err := time.ParseDuration(cmp.Or(s.Stale, "5m")); err != nil {
+			return nil, fmt.Errorf("services/%s/laib.yml: status.stale %q: %w", svc.Name, s.Stale, err)
+		}
 	}
 	return svc, nil
 }

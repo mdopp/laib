@@ -102,10 +102,17 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name})
 			}
 		}
-		if p := st.HousePersona(); name == "stimme" && p != nil {
-			if _, f := WakewordState(st.Box.DataDir, p.WakewordID(), p.Wakeword.Phrase); f != nil {
-				out = append(out, *f)
+		// what the service says about itself (#309); a stale one is re-checked
+		// in the background, the next look shows the result
+		rep := ReadStatus(st, svc)
+		if Stale(svc, rep, time.Now()) {
+			Refresh(ctx, svc)
+		}
+		for _, f := range rep.Findings {
+			if a := Age(rep.At, time.Now()); a != "" {
+				f.Detail += " (" + a + ")"
 			}
+			out = append(out, f)
 		}
 		if h := svc.Contract.Health.HTTP; h != "" {
 			client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -154,8 +161,6 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	if _, f := OperatorState(OperatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
-	// Home Assistant's wiring (#55): with a token, the manual list becomes a checklist
-	out = append(out, haFindings(ctx, st, sec)...)
 	// The hardware (#59): disks by SMART, the box's temperature.
 	if only == "" {
 		out = append(out, hardwareFindings(ctx)...)
