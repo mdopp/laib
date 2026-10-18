@@ -20,6 +20,7 @@
 #   migration-day.sh --resume [--until <step>]   every step that is not green yet, in order
 #   migration-day.sh status | wait [seconds] | steps
 #   migration-day.sh rollback <service>   hand one service back to ServiceBay; --resume takes it again
+#   migration-day.sh rollback all         abort: every service back, Caddy first, in reverse order
 #   --no-fresh-backup   the owner's explicit choice to go on without one
 #   --foreground        run here instead of in the unit (the unit itself, and CI)
 #
@@ -86,6 +87,8 @@ import json, sys
 c = json.load(open(sys.argv[1]))
 if sys.argv[2] == "domain":
     print((c.get("reverseProxy") or {}).get("publicDomain", ""))
+elif sys.argv[2] == "updates":
+    print(bool((c.get("autoUpdate") or {}).get("enabled")), bool((c.get("updateWindow") or {}).get("enabled")))
 else:
     b = c.get("externalBackup") or {}
     print(b.get("lastRun", ""), b.get("lastStatus", ""), ",".join(b.get("servicesIncomplete") or []) or "-")
@@ -142,6 +145,8 @@ preconditions() {
     podman exec servicebay test -d /app/templates; check $? "ServiceBay's templates at servicebay:/app/templates"
     podman exec servicebay test -d /app/.servicebay/registries || echo "  WARN  no external registries in servicebay:/app/.servicebay/registries"
   fi
+  read -r v free <<<"$(sbjson updates)"
+  if [ "$v $free" != "False False" ]; then echo "  WARN  ServiceBay's auto-update ($v) or update window ($free) is on: switch both off for the weekend (ServiceBay → Settings), so nothing restarts a service mid-move"; fi
   [ -n "$DOMAIN" ]; check $? "the domain: ${DOMAIN:-none} (ServiceBay's reverseProxy.publicDomain)"
   free=$(df -P -BG "$(dirname "$DATA")" 2>/dev/null | awk 'NR == 2 {sub("G", "", $4); print $4}')
   [ "${free:-0}" -ge "$MIN_FREE_GB" ]; check $? "free on the data disk: ${free:-?} GiB (at least $MIN_FREE_GB)"
@@ -217,6 +222,10 @@ laib_add() {
   # "One value goes with them" (MIGRATION.md, secrets that carry over)
   if [ "$n" = mosquitto ] && [[ "$line" != *MQTT_USER=* ]]; then extra=" MQTT_USER=$MQTT_USER"; fi
   if [ "$n" = immich ] && [[ "$line" != *ADMIN_EMAIL=* ]] && [ -n "${IMMICH_ADMIN_EMAIL:-}" ]; then extra=" ADMIN_EMAIL=$IMMICH_ADMIN_EMAIL"; fi
+  if [ -d "$STATE/services/$n" ]; then   # an attempt cut off after its add (MIGRATION.md: a laib add that refused has put it in the state)
+    line="laib apply $n" extra=""
+    echo "$n is in Laib's state already (an earlier attempt): its apply again"
+  fi
   echo "\$ $line$extra"
   laib plan "$n" > "$MIG/plan-$n.txt" 2>&1 || true
   if grep -q KONFLIKT "$MIG/plan-$n.txt"; then echo "laib plan $n still reports KONFLIKT:"; cat "$MIG/plan-$n.txt"; return 1; fi
@@ -233,10 +242,14 @@ laib_add() {
 
 # MIGRATION.md step 4c, last line: NPM still serves the moved service's names
 # (Vaultwarden's not: it moves last, right before Caddy takes over, 4d)
+# Names whose built-in listens on 127.0.0.1 only while ServiceBay's proxy host
+# forwards to the LAN address: they answer 502 through NPM until Caddy serves
+# them (MIGRATION.md step 2): Vaultwarden, Authelia's portal, llama.
+WAITS_FOR_CADDY="vault auth llama"
 npm_serves() {
   local n=$1 h code
-  [ "$n" = vaultwarden ] && { echo "NPM: vault.$DOMAIN waits for Caddy (4d), as MIGRATION.md says"; return 0; }
   for h in $(sed -n 's/^  - {host: \([^,]*\),.*/\1/p' "$OUT/$n/laib.yml" 2>/dev/null); do
+    case " $WAITS_FOR_CADDY " in *" $h "*) echo "NPM: $h.$DOMAIN waits for Caddy (4d): Laib's $n listens on 127.0.0.1, NPM forwards to the LAN address (MIGRATION.md)"; continue;; esac
     code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.$DOMAIN" http://127.0.0.1/ || true)
     echo "NPM: http://$h.$DOMAIN/ -> HTTP $code"
     case "$code" in 2??|3??|401) ;; *) echo "NPM does not serve $h.$DOMAIN after $n moved"; return 1;; esac
@@ -372,7 +385,14 @@ handback() {
     echo "  'Rollback during the weekend', immich (rename the photos back, pg_restore the dump)."
     return 1
   fi
-  if [ -d "$STATE/services/$n" ]; then laib remove "$n" || echo "laib remove $n failed: laib status $n"; fi
+  if [ -d "$STATE/services/$n" ]; then
+    # a role it holds is released first (laib remove refuses otherwise); its next laib add claims it again
+    if [ -f "$STATE/box.yml" ] && grep -Eq "(proxy|sso|identity|dns|model): $n([,} ]|$)" "$STATE/box.yml"; then
+      sed -i -E "s/(proxy|sso|identity|dns|model): $n([,} ]|$)/\1: \"\"\2/g" "$STATE/box.yml"
+      echo "box.yml: the roles $n held are free again"
+    fi
+    laib remove "$n" || echo "laib remove $n failed: laib status $n"
+  fi
   if [ "$s" = home-assistant ]; then
     for f in "$DATA/home-assistant/zwave-js/settings.json" "$DATA/home-assistant/homeassistant/.storage/core.config_entries" "$DATA/home-assistant/homeassistant/configuration.yaml"; do
       podman unshare sh -c "test -e '$f.servicebay' && mv '$f.servicebay' '$f'" && echo "put back $f"
@@ -420,7 +440,7 @@ dry_run() {
     if service_step "$s" && ! on_box "$s"; then st="${st:-skip: ServiceBay does not run it here}"; fi
     case $s in
       preflight) d="the preconditions above";;
-      install) d="install-box.sh ${SRC:+--source $SRC}${SRC:+ }--version $LAIB_VERSION --domain $DOMAIN --gpu ${INSTALL_ARGS:-}";;
+      install) d="install-box.sh $([ -n "${SRC:-}" ] && echo "--source $SRC" || echo "--version $LAIB_VERSION") --domain $DOMAIN --gpu ${INSTALL_ARGS:-}";;
       drafts) d="ServiceBay's templates out of its container, migrate-servicebay.py -> $OUT.txt";;
       secrets) d="carry-servicebay-secrets.sh, the line migrate-servicebay.py prints";;
       caddy) d="NPM out, laib add caddy, every name through Caddy";;
@@ -525,12 +545,21 @@ case "$CMD" in
   status) status; exit $?;;
   wait) wait_unit "${1:-}"; exit $?;;
   rollback)
-    s=${1:-}; valid_step "$s" && service_step "$s" || { echo "usage: migration-day.sh rollback <service step>" >&2; exit 2; }
+    s=${1:-}
+    if [ "$s" = all ]; then
+      back=""
+      for s in $STEPS; do service_step "$s" && case "$(last_status "$s")" in green|red) back="$s $back";; esac; done
+    else
+      valid_step "$s" && service_step "$s" || { echo "usage: migration-day.sh rollback <service step>|all" >&2; exit 2; }
+      back=$s
+    fi
     systemctl --user is-active --quiet "$UNIT" && { echo "$UNIT runs: wait for it, then roll back" >&2; exit 1; }
-    say "rollback: $s back to ServiceBay"
-    handback "$s" || exit 1
-    record "$s" rolledback
-    echo "$s is ServiceBay's again. scripts/migration-day.sh --resume takes it over again (the stale copies go first)."
+    for s in $back; do
+      say "rollback: $s back to ServiceBay"
+      handback "$s" || { echo "rollback stops at $s; the ones before it are ServiceBay's again"; exit 1; }
+      record "$s" rolledback
+      echo "$s is ServiceBay's again. scripts/migration-day.sh --resume takes it over again (the stale copies go first)."
+    done
     exit 0;;
 esac
 if [ -n "$DRY" ]; then dry_run; exit $?; fi

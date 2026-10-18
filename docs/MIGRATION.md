@@ -97,11 +97,18 @@ file moves out.
 2. **NPM stays the proxy until step 4 is done.** Caddy cannot start beside
    it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
    and Caddy's routes come from the state, which holds none of the
-   household's services yet. Meanwhile NPM keeps serving every name: Laib's
-   built-ins publish the ports ServiceBay's proxy hosts forward to (except
-   Vaultwarden, which therefore moves last, right before 4d), and
+   household's services yet. Meanwhile NPM keeps serving most names: Laib's
+   built-ins publish the ports ServiceBay's proxy hosts forward to, and
    Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
-   (Authelia's default endpoints). Caddy replaces NPM in step 4d.
+   (Authelia's default endpoints, on 127.0.0.1, where NPM's forward-auth
+   asks). Three built-ins listen on 127.0.0.1 only while ServiceBay's proxy
+   host forwards to the LAN address, so their names answer 502 through NPM
+   from their step c until Caddy serves them in 4d: `vault.` (Vaultwarden,
+   which therefore moves last), `llama.`, and `auth.`, Authelia's own
+   portal. The last one matters: from the auth step until 4d nobody can log
+   in anew through NPM (an app's forward-auth sends the browser to the
+   portal), so steps 3 to 4d run in one sitting (the generalprobe, #350).
+   Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
    `auth.kube` out first, then `laib add auth`. Only the services already
    in Laib's state have Laib clients at this point, so the apps still on

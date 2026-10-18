@@ -243,6 +243,46 @@ echo "  laib add vaultwarden"
         self.assertEqual(self.progress()["vaultwarden"], "green")
         self.assertIn("removed the stale copy", r.stdout)
 
+    def test_rollback_all_hands_back_every_service_caddy_first(self):
+        (self.t / "q" / "nginx.kube").touch()
+        self.run_md("--foreground", "--until", "vaultwarden")
+        r = self.run_md("rollback", "all")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for u in ("auth", "radicale", "mosquitto", "vaultwarden"):
+            self.assertTrue((self.t / "q" / f"{u}.kube").exists(), u)
+        removed = [c for c in self.calls_of("laib") if c.startswith("remove ")]
+        self.assertEqual(removed, ["remove vaultwarden", "remove mosquitto", "remove radicale", "remove auth"])
+
+    def test_handback_frees_the_roles_the_service_holds(self):
+        self.run_md("--foreground", "--until", "auth")
+        (self.t / "state" / "box.yml").write_text("domain: box.test\nroles: {sso: auth, identity: auth, proxy: caddy}\nhostNetwork: [caddy]\n")
+        r = self.run_md("rollback", "auth")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((self.t / "state" / "box.yml").read_text(),
+                         'domain: box.test\nroles: {sso: "", identity: "", proxy: caddy}\nhostNetwork: [caddy]\n')
+        self.assertIn("remove auth", self.calls_of("laib"))
+
+    def test_names_behind_a_loopback_built_in_wait_for_caddy(self):
+        r = self.run_md("--foreground", "--until", "auth")
+        self.assertIn("NPM: auth.box.test waits for Caddy", r.stdout)
+        self.assertEqual([c for c in self.calls_of("curl") if "Host: auth." in c], [])
+
+    def test_a_step_cut_off_after_its_add_applies_on_resume(self):
+        (self.t / "state" / "services" / "auth").mkdir()   # an earlier attempt's add, the unit stopped before it recorded
+        r = self.run_md("--foreground", "--until", "auth")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        laib = self.calls_of("laib")
+        self.assertIn("apply auth", laib)
+        self.assertFalse([c for c in laib if c.startswith("add auth")], laib)
+
+    def test_auto_update_on_is_a_warning(self):
+        cfg = json.loads((self.t / "sb" / "config.json").read_text())
+        cfg["autoUpdate"] = {"enabled": True}
+        (self.t / "sb" / "config.json").write_text(json.dumps(cfg))
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("auto-update", r.stdout)
+
     def test_a_service_the_box_does_not_run_is_skipped(self):
         r = self.run_md("--foreground", "--until", "beets")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
