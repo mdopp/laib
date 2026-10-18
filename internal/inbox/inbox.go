@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -79,7 +80,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 			edit.Add.Name = args[i+1]
 			i++
 		default:
-			if edit.Add != nil && strings.Contains(args[i], "=") && !strings.Contains(args[i], " ") {
+			if edit.Add != nil && isValueArg(args[i]) {
 				k, v, _ := strings.Cut(args[i], "=")
 				edit.Add.Values[k] = v
 				continue
@@ -314,7 +315,7 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 		case args[i] == "--name" && i+1 < len(args):
 			add.Name = args[i+1]
 			i++
-		case strings.Contains(args[i], "=") && !strings.Contains(args[i], " "):
+		case isValueArg(args[i]):
 			k, v, _ := strings.Cut(args[i], "=")
 			add.Values[k] = v
 		default:
@@ -412,4 +413,13 @@ func stateLoads(dir string) error {
 	}
 	_, err = render.Render(st, nil)
 	return err
+}
+
+// valueKey is a template value's name at the start of an argument.
+var valueKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*=`)
+
+// isValueArg: KEY=VALUE, not a word of the reason. A value may hold blanks
+// when its key is a value's name ("SMTP_FROM=Die Box <box@…>", #359).
+func isValueArg(a string) bool {
+	return valueKey.MatchString(a) || strings.Contains(a, "=") && !strings.Contains(a, " ")
 }

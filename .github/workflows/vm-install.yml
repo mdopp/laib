@@ -369,7 +369,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 R=/mnt/data/laib/registries/vm/templates/probe; mkdir -p "$R"
                 printf "name: probe\ntemplate: {registry: vm, name: probe, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports:\n  - {port: 8080, lan: false}\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=httpd -f -p 80 -h /tmp\nPublishPort=8080:80\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/probe.container"
                 $L add probe
                 sudo nft list table inet laib > /tmp/nft.txt 2>&1 || true
@@ -401,7 +401,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 R=/mnt/data/laib/registries/vm/templates/logmark; mkdir -p "$R"
                 printf "name: logmark\ntemplate: {registry: vm, name: logmark, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=sh -c \"echo laib-log-marker_${{ github.run_id }} | tr _ -; exec sleep 1000000\"\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/logmark.container"
                 $L add logmark
                 M=laib-log-marker-${{ github.run_id }}
@@ -454,7 +454,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
-                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest docker.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
@@ -490,7 +490,7 @@ jobs:
                 test -s /mnt/data/stacks/adguard/conf/AdGuardHome.yaml || { echo "pre-start did not write AdGuardHome.yaml"; exit 1; }
                 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8083/control/status); echo "adguard /control/status -> $code (401/403 = the web UI is up and wants the admin login)"; [ "$code" = 401 ] || [ "$code" = 403 ] || [ "$code" = 200 ]
                 # CoreOS has no dig: busybox asks AdGuard on :53 for a name the rewrites answer
-                podman run --rm --network host docker.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
+                podman run --rm --network host mirror.gcr.io/library/busybox:stable nslookup laib.vm.test 127.0.0.1 | tee /tmp/dns.txt
                 grep -q "Address" <<<"$(grep -A2 "laib.vm.test" /tmp/dns.txt)" || { echo "adguard does not answer laib.vm.test (the rewrites)"; exit 1; }
                 $L add radicale BASE_DN=dc=vm,dc=test | tee /tmp/add-radicale.txt
                 grep -q "^ok  radicale pre-start" /tmp/add-radicale.txt || { echo "radicale pre-start is not green"; exit 1; }
@@ -544,7 +544,7 @@ jobs:
                 l=$(stat -c %C "$S/import/root.flac"); echo "root.flac after the restarts: $l"; case "$l" in *user_tmp_t*) ;; *) echo "a unit relabelled the share"; exit 1;; esac
                 # what :z does to the same tree on this VM, recorded, not gated: on the CI VM it left the
                 # root-owned file alone (rc 0, label kept); ServiceBay'"'"'s box crashed on it (#1731, #1923)
-                rc=0; podman run --rm -v "$S:/m:z" docker.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
+                rc=0; podman run --rm -v "$S:/m:z" mirror.gcr.io/library/busybox:stable true 2>/tmp/relabel.txt || rc=$?
                 echo "observation, :z on the share -> rc $rc, music $(stat -c %C "$S"), root.flac $(stat -c %C "$S/import/root.flac") $(tail -1 /tmp/relabel.txt)"
                 # #252: auth.<domain> from a rootless container (pasta, as every Laib unit without Network=host),
                 # mapped as the templates map it: to the host gateway, alone and in a pod; the LAN IP for the record
@@ -774,7 +774,7 @@ jobs:
                 # do, so the apply that mints them must hand them to it (as podman secrets the probe can read)
                 T=/mnt/data/laib/registries/vm/templates/tokens; mkdir -p "$T"
                 printf "name: tokens\ntemplate: {registry: vm, name: tokens, version: 1}\nroutes: []\nsecrets:\n  - {name: HAUS_HA_TOKEN, external: true, optional: true}\n  - {name: BOTE_HA_TOKEN, external: true, optional: true}\ndata: []\n" > "$T/laib.yml"
-                printf "IMAGE: docker.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nExec=sleep infinity\nEnvironment=HAUS=\${HAUS}\nEnvironment=BOTE=\${BOTE}\n\n[Install]\nWantedBy=default.target\n" > "$T/tokens.container"
                 $L add tokens >/dev/null
                 $L add home-assistant | tee /tmp/add-ha.txt
@@ -980,9 +980,9 @@ jobs:
                 sed -i -E "s|^( *repo:) .*|\1 /mnt/backup/restic|" /mnt/data/laib/state/box.yml; grep -n "repo:" /mnt/data/laib/state/box.yml
                 R=/mnt/data/laib/registries/vm/templates/pgtest; mkdir -p "$R"
                 printf "name: pgtest\ntemplate: {registry: vm, name: pgtest, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: \${DATA_DIR}/pgtest/pgdata\n    quiesce: true\nports: []\n" > "$R/laib.yml"
-                printf "IMAGE: docker.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
+                printf "IMAGE: mirror.gcr.io/library/postgres:16-alpine\n" > "$R/values.example.yml"
                 printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
-                podman pull -q docker.io/library/postgres:16-alpine >/dev/null
+                podman pull -q mirror.gcr.io/library/postgres:16-alpine >/dev/null
                 $L add caddy; $L add pgtest
                 for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
                 podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"
