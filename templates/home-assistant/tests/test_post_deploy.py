@@ -94,7 +94,7 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path == "/api/":
             return self.reply(200, {"message": "API running."})
         if self.path == "/api/config/config_entries/entry":
-            return self.reply(200, [{"domain": "met", "title": "Home"}]) if is_admin(uid) else self.reply(401, {"message": "Unauthorized"})
+            return self.reply(200, [{"domain": "met", "title": "Home"}])   # every user may list them over REST, as in HA
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
         self.reply(404)
@@ -154,13 +154,13 @@ class FakeHA(BaseHTTPRequestHandler):
         while True:
             try:
                 msg = self.ws_recv()
-            except (ConnectionError, struct.error):
+            except (ConnectionError, ValueError, struct.error):  # the client hung up
                 return
             if msg is None:
                 return
-            self.ws_send(self.command(uid, msg))
+            self.ws_send(self.ws_command(uid, msg))
 
-    def command(self, uid, m):
+    def ws_command(self, uid, m):
         t, i = m["type"], m["id"]
         ok = lambda r=None: {"id": i, "type": "result", "success": True, "result": r}
         err = lambda code, text: {"id": i, "type": "result", "success": False, "error": {"code": code, "message": text}}

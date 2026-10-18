@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -133,10 +134,9 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 		journal.Append(env.Paths.Journal, entry)
 		return env.Fail(err)
 	}
-	if len(res.NewSecrets) > 0 {
-		for k, v := range res.NewSecrets {
-			sec[k] = v
-		}
+	handed := res.NewSecrets
+	for round := 0; len(handed) > 0; round++ {
+		maps.Copy(sec, handed)
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
 			return env.Fail(err)
 		}
@@ -144,6 +144,35 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 		if err := proposal.CommitSecrets(ctx, env.Paths.State, "apply: secrets handed back by hooks"); err != nil {
 			return env.Fail(err)
 		}
+		if round > 0 {
+			break // a hand-back of the follow-up is stored, not followed again
+		}
+		// A service that declares a handed-back secret takes it in this apply,
+		// not the next (#349: Home Assistant mints Haus's and the Bote's
+		// tokens): planned again, applied when its rendered output changed.
+		next := map[string]string{}
+		for _, name := range st.ServiceNames() {
+			if !slices.ContainsFunc(st.Services[name].Contract.Secrets, func(s state.Secret) bool { _, ok := handed[s.Name]; return ok }) {
+				continue
+			}
+			p2, err := plan.Compute(ctx, st, sec, env.Paths, name)
+			if err != nil {
+				return env.Fail(err)
+			}
+			if p2.Empty() {
+				continue
+			}
+			r2, err := Run(ctx, st, p2, env.Paths, sec, reason+" (übergebene Secrets: "+name+")")
+			if err != nil {
+				return env.Fail(err)
+			}
+			res.Written = append(res.Written, r2.Written...)
+			res.Restarted = append(res.Restarted, r2.Restarted...)
+			res.Checks = append(res.Checks, r2.Checks...)
+			res.Green = res.Green && r2.Green
+			maps.Copy(next, r2.NewSecrets)
+		}
+		handed = next
 	}
 	entry.Result = "green"
 	if !res.Green {

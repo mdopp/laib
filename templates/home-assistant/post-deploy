@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""home-assistant post-deploy (#349): the Home Assistant tokens, minted here,
+never clicked together in HA's UI. One long-lived token per consumer, each
+handed back (`laib-secret:`) and revocable on its own (HA lists them by name
+under the user's Security tab):
+
+  HA_TOKEN               administrator: the integrations checklist (#55, #309)
+  HAUS_HA_TOKEN          administrator: Haus's pages, widgets, voice counting (#266)
+  BOTE_AUTOMAT_HA_TOKEN  administrator: the Automat (HA's automation config API is admin-only)
+  BOTE_HA_TOKEN          the user "bote", no administrator: the Bote's `ha` tool,
+                         so whoever chats with the Bote reaches no admin API
+
+A token that works and is of its kind is kept; a revoked one, or an
+administrator's in BOTE_HA_TOKEN, is replaced. The administrator session is
+an administrator token above that still works, else HA's own login flow as
+HA_ADMIN_USER with HA_ADMIN_PASSWORD: on a fresh Home Assistant this hook
+onboards that user first (a generated password, the family signs in with
+Familienkonto); on a box from ServiceBay it is ServiceBay's admin, carried
+(scripts/carry-servicebay-secrets.sh). The Bote's password HA_BOTE_PASSWORD
+is generated; its token is minted by logging in as the Bote.
+
+Tokens and passwords go only into the laib-secret lines: never on argv, never
+in another line of output (#214, #224). Python's standard library only: the
+hooks image has no WebSocket client, so the few frames HA needs are here."""
+import base64, json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
+
+E = os.environ
+BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
+CLIENT = BASE + "/"  # HA's IndieAuth client id; the redirect is the same URL
+USER, PW = E.get("HA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_HA_ADMIN_PASSWORD", "")
+BOTE_PW = E.get("LAIB_SECRET_HA_BOTE_PASSWORD", "")
+ADMIN = {"HA_TOKEN": "laib: home-assistant-check", "HAUS_HA_TOKEN": "laib: haus", "BOTE_AUTOMAT_HA_TOKEN": "laib: bote-automat"}
+
+
+def red(msg):
+    print("home-assistant: " + msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def call(method, path, body=None, token=None, form=False):
+    """(status, json or None); never raises on an HTTP status"""
+    h = {"Authorization": "Bearer " + token} if token else {}
+    data = None
+    if body is not None:
+        data = urllib.parse.urlencode(body).encode() if form else json.dumps(body).encode()
+        h["Content-Type"] = "application/x-www-form-urlencoded" if form else "application/json"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(BASE + path, data=data, headers=h, method=method), timeout=30) as r:
+            raw = r.read()
+            return r.status, json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def kind(token):
+    """'admin', 'user', or None for a token HA refuses. An admin-only command
+    decides: HA's REST API lets every user list the config entries."""
+    if not token or call("GET", "/api/", token=token)[0] != 200:
+        return None
+    ws = WS(token)
+    try:
+        ws("config/auth/list")
+        return "admin"
+    except RuntimeError:
+        return "user"
+    finally:
+        ws.close()
+
+
+class WS:
+    """Home Assistant's WebSocket API: authenticated with a token, one command at a time"""
+
+    def __init__(self, token):
+        u = urllib.parse.urlsplit(BASE)
+        self.s = socket.create_connection((u.hostname, u.port or 80), timeout=30)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.s.sendall((f"GET /api/websocket HTTP/1.1\r\nHost: {u.netloc}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+        self.buf = b""
+        while b"\r\n\r\n" not in self.buf:
+            self.buf += self.read_some()
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        if b" 101 " not in head.split(b"\r\n")[0]:
+            red("the WebSocket API refused the upgrade: " + head.split(b"\r\n")[0].decode(errors="replace"))
+        self.recv()  # auth_required
+        self.send({"type": "auth", "access_token": token})
+        if self.recv().get("type") != "auth_ok":
+            red("the WebSocket API refused a token the REST API took")
+        self.n = 0
+
+    def read_some(self):
+        b = self.s.recv(65536)
+        if not b:
+            raise ConnectionError("Home Assistant closed the WebSocket")
+        return b
+
+    def take(self, n):
+        while len(self.buf) < n:
+            self.buf += self.read_some()
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def send(self, obj, opcode=1):
+        data = json.dumps(obj).encode() if opcode == 1 else obj
+        n, mask = len(data), os.urandom(4)
+        head = bytes([0x80 | opcode]) + (bytes([0x80 | n]) if n < 126 else bytes([0xFE]) + struct.pack(">H", n) if n < 65536
+                                         else bytes([0xFF]) + struct.pack(">Q", n))
+        self.s.sendall(head + mask + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+
+    def recv(self):
+        msg = b""
+        while True:
+            b0, b1 = self.take(2)
+            n = b1 & 0x7F
+            if n == 126:
+                n = struct.unpack(">H", self.take(2))[0]
+            elif n == 127:
+                n = struct.unpack(">Q", self.take(8))[0]
+            data = self.take(n)
+            if b0 & 0x0F == 8:
+                raise ConnectionError("Home Assistant closed the WebSocket")
+            if b0 & 0x0F == 9:
+                self.send(data, opcode=10)  # pong
+                continue
+            msg += data
+            if b0 & 0x80:
+                return json.loads(msg)
+
+    def close(self):
+        self.send(b"", opcode=8)
+        self.s.close()
+
+    def __call__(self, type, **kw):
+        self.n += 1
+        self.send(dict(kw, id=self.n, type=type))
+        while True:
+            m = self.recv()
+            if m.get("id") == self.n and m.get("type") == "result":
+                if not m.get("success"):
+                    raise RuntimeError(f"{type}: {(m.get('error') or {}).get('message', 'refused')}")
+                return m.get("result")
+
+
+def code_to_token(code):
+    st, b = call("POST", "/auth/token", {"grant_type": "authorization_code", "code": code, "client_id": CLIENT}, form=True)
+    return (b or {}).get("access_token") if st == 200 else None
+
+
+def login(user, pw):
+    """a short-lived session through HA's own login flow, or None"""
+    if not pw:
+        return None
+    st, b = call("POST", "/auth/login_flow", {"client_id": CLIENT, "handler": ["homeassistant", None], "redirect_uri": CLIENT})
+    if st != 200 or not (b or {}).get("flow_id"):
+        return None
+    st, b = call("POST", "/auth/login_flow/" + b["flow_id"], {"client_id": CLIENT, "username": user, "password": pw})
+    return code_to_token(b["result"]) if st == 200 and (b or {}).get("type") == "create_entry" else None
+
+
+def mint(session, name):
+    ws = WS(session)
+    try:
+        return ws("auth/long_lived_access_token", client_name=name, lifespan=3650)
+    finally:
+        ws.close()
+
+
+# Home Assistant up, its auth and onboarding loaded (both before its HTTP server serves)
+for _ in range(150):
+    try:
+        if call("GET", "/auth/providers")[0] in (200, 400):
+            break
+    except OSError:
+        pass
+    time.sleep(2)
+else:
+    red(f"Home Assistant does not answer on {BASE}/auth/providers")
+
+session = None  # an administrator's token or session, once needed
+
+
+def admin_session():
+    """an administrator's token or session; onboards a fresh Home Assistant first"""
+    global session
+    if session:
+        return session
+    st, steps = call("GET", "/api/onboarding")
+    done = {s["step"] for s in steps or [] if s.get("done")} if st == 200 else {"user", "core_config", "analytics", "integration"}
+    if "user" not in done:
+        if not PW:
+            red("Home Assistant is not onboarded and HA_ADMIN_PASSWORD is empty")
+        st, b = call("POST", "/api/onboarding/users", {"client_id": CLIENT, "name": "Laib", "username": USER, "password": PW, "language": "de"})
+        session = code_to_token((b or {}).get("auth_code", "")) if st == 200 else None
+        if not session:
+            red(f"onboarding the administrator {USER} was refused (HTTP {st})")
+        print(f"home-assistant: onboarded, administrator {USER} (the family signs in with Familienkonto)")
+    else:
+        session = login(USER, PW)
+    if not session:
+        red(f"no administrator token works and {USER} cannot log in: the tokens were NOT minted. Set HA_ADMIN_USER to a "
+            "Home Assistant administrator (values.yml) and its password with `laib secret set HA_ADMIN_PASSWORD` (on a box "
+            "from ServiceBay: scripts/carry-servicebay-secrets.sh home-assistant), then laib apply home-assistant")
+    for step, body in (("core_config", {}), ("analytics", {}), ("integration", {"client_id": CLIENT, "redirect_uri": CLIENT})):
+        if step not in done:  # what the onboarding wizard would ask; location and country stay HA's settings
+            if call("POST", "/api/onboarding/" + step, body, token=session)[0] != 200:
+                red(f"the onboarding step {step} was refused")
+    if "core_config" not in done:
+        ws = WS(session)
+        ws("config/core/update", time_zone=E.get("LAIB_TZ") or "Europe/Berlin")
+        ws.close()
+    return session
+
+
+def main():
+    global session
+    kinds = {n: kind(E.get("LAIB_SECRET_" + n, "")) for n in [*ADMIN, "BOTE_HA_TOKEN"]}
+    session = next((E["LAIB_SECRET_" + n] for n in ADMIN if kinds[n] == "admin"), None)
+    for name, label in ADMIN.items():
+        if kinds[name] != "admin":
+            token = mint(admin_session(), label)
+            if kind(token) != "admin":
+                red(f"the token minted for {name} is not an administrator's")
+            print(f"laib-secret: {name}={token}")
+            print(f"home-assistant: {name} minted ({'replaces one HA refuses' if kinds[name] is None else 'replaces a non-admin one'})")
+
+    if kinds["BOTE_HA_TOKEN"] != "user":
+        # the user "bote": there, no administrator, with the password Laib holds
+        ws = WS(admin_session())
+        users = ws("config/auth/list")
+        bote = next((u for u in users if u.get("username") == "bote"), None)
+        if bote is None:
+            bote = ws("config/auth/create", name="Bote", group_ids=["system-users"])["user"]
+            ws("config/auth_provider/homeassistant/create", user_id=bote["id"], username="bote", password=BOTE_PW)
+            print("home-assistant: user bote created (no administrator)")
+        elif bote.get("group_ids") != ["system-users"]:
+            ws("config/auth/update", user_id=bote["id"], group_ids=["system-users"])
+            print("home-assistant: user bote is no administrator any more")
+        session_bote = login("bote", BOTE_PW)
+        if not session_bote:
+            ws("config/auth_provider/homeassistant/admin_change_password", user_id=bote["id"], password=BOTE_PW)
+            session_bote = login("bote", BOTE_PW)
+        ws.close()
+        if not session_bote:
+            red("the user bote cannot log in with HA_BOTE_PASSWORD")
+        token = mint(session_bote, "laib: bote")
+        if kind(token) != "user":
+            red("the token minted for BOTE_HA_TOKEN is an administrator's or refused")
+        print(f"laib-secret: BOTE_HA_TOKEN={token}")
+        print("home-assistant: BOTE_HA_TOKEN minted for the user bote (no administrator)")
+
+    print("home-assistant: tokens for the check, Haus, the Automat and the Bote work")
+
+
+try:
+    main()
+except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
+    red(f"{type(e).__name__}: {e}")
