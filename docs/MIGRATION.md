@@ -374,6 +374,10 @@ the photos moved: rename each `file-share/data/photos/<user>` back to
 stopped database (`pg_restore --clean --if-exists -d immich
 immich/before-library-move.dump` in Immich's Postgres image), put
 `config.xml.servicebay` back, and delete `immich/library-move.json`. NPM comes back
-the same way until step 7. After step 7,
+the same way until step 7. Taking a handed-back service over again is a–c
+once more, but the copies the first move made are stale by then (ServiceBay
+wrote on): delete each target it printed (`copy … -> <target>`, e.g.
+`podman unshare rm -rf ${DATA_DIR}/home-assistant/matter`) before the move
+runs again; it refuses a target that holds data. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
