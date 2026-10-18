@@ -14,4 +14,8 @@ persistence_location /mosquitto/data/
 log_dest stdout
 CFG
 [ -e "$C/passwd" ] || (umask 077; : > "$C/passwd")
+# eclipse-mosquitto 2.1 drops to its own user (1883) before it opens the
+# password file and writes its persistence: both are that user's, as the
+# broker's user namespace maps it (this hook runs in the same one, #248)
+chown 1883:1883 "$C/passwd" "$LAIB_DATA_DIR/mosquitto/data"
 echo "mosquitto.conf rendered"

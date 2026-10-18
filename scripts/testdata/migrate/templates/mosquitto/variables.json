@@ -1,0 +1,17 @@
+{
+  "MQTT_PORT": {
+    "type": "text",
+    "description": "TCP port the broker listens on. 1883 is the MQTT default and what most devices (smart locks, Shelly, Tasmota, Zigbee2MQTT) offer to fill in for you. The port is published on every interface so LAN devices can connect in — change it only if something else on the box already owns 1883.",
+    "default": "1883"
+  },
+  "MQTT_USERNAME": {
+    "type": "secret",
+    "deviceSafe": true,
+    "description": "Broker username. Every client — Home Assistant and each device — sends this. Anonymous access is off, so nothing connects without it. Auto-generated (no guessable default); overwrite it with something you would rather type into a device's app before deploying."
+  },
+  "MQTT_PASSWORD": {
+    "type": "secret",
+    "deviceSafe": true,
+    "description": "Broker password for the username above. Auto-generated at a length device firmware accepts, and surfaced in the credentials banner after install. Stored on the broker only as a hash (mosquitto_passwd), never in cleartext on disk. Do not reuse a password you use elsewhere — the README explains why it travels the LAN unencrypted."
+  }
+}

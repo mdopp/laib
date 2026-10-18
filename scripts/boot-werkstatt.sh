@@ -59,7 +59,7 @@ ssh-keygen -q -t ed25519 -N '' -f "$WORK/id"
 sed -i "s|^AUTHORIZED_KEY:.*|AUTHORIZED_KEY: \"$(cat "$WORK/id.pub")\"|" "$LAIB_HOME/state/services/werkstatt/values.yml"
 SSHO=(-p 2222 -i "$WORK/id" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$WORK/known_hosts" -o ConnectTimeout=5)
 waitSSH() {
-  for _ in $(seq 60); do ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null | grep -q ssh-ed25519 && return 0; sleep 2; done
+  for _ in $(seq 60); do grep -q ssh-ed25519 <<<"$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null)" && return 0; sleep 2; done
   fail "sshd did not answer on 2222"
 }
 waitSSH

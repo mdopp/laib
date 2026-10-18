@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -88,7 +88,7 @@ func newRbox(t *testing.T) *rbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := run.Apply(context.Background(), b.env, st, "", "test: first apply"); rc != cli.ExitOK {
+	if rc := apply.ApplyLocked(context.Background(), b.env, st, "", "test: first apply"); rc != cli.ExitOK {
 		t.Fatalf("first apply rc %d", rc)
 	}
 	b.calls = nil

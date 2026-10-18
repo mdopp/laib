@@ -91,7 +91,7 @@ echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set DNS_API_TOKEN >/dev/nul
 
 # --- 2. a tree proposal by ops, approved by the human (#1)
 LAIB_ACTOR=ops "$BIN" propose "e2e: three services" >/dev/null
-"$BIN" inbox --json | grep -q '"status": "open"' || fail "inbox lists the open proposal"
+grep -q '"status": "open"' <<<"$("$BIN" inbox --json)" || fail "inbox lists the open proposal"
 if LAIB_ACTOR=ops "$BIN" approve 1 >/dev/null 2>&1; then fail "ops approved its own proposal"; fi
 LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null || fail "approve #1 exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "unit not written"
@@ -107,9 +107,9 @@ grep -q "X-Laib-Proxy" "$LAIB_HOME/render/caddy/Caddyfile" || fail "laib route m
 # --- 3. the read verbs after a clean apply
 j 'r=es and None' >/dev/null
 "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["state"]=="bereit" and r["red"]==0 and r["drift"]==0, r'
-"$BIN" plan | grep -q "Keine Änderung" || fail "plan not empty after apply"
+grep -q "Keine Änderung" <<<"$("$BIN" plan)" || fail "plan not empty after apply"
 "$BIN" diag --json | python3 -c 'import sys,json; f=json.load(sys.stdin); assert not [x for x in f if x["severity"]=="rot"], f'
-"$BIN" logs whoami | grep -q "shim journal" || fail "logs"
+grep -q "shim journal" <<<"$("$BIN" logs whoami)" || fail "logs"
 
 # --- 4. a direct human change, then rollback
 sed -i 's/WHOAMI_NAME=\${SERVICE}/WHOAMI_NAME=changed-${SERVICE}/' "$LAIB_HOME/state/services/whoami/whoami.container"
@@ -124,14 +124,14 @@ grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" || fail "--set pr
 j 'assert any(e["actor"]=="laib" and e["verb"]=="approve" for e in es), "laib did not approve"'
 if LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null 2>&1; then fail "an auto-approved proposal was approved twice"; fi
 OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io/traefik/whoami:v1.11 "e2e: second whoami" 2>&1 || true)"
-echo "$OUT" | grep -q "already published" || fail "duplicate host not refused: $OUT"
+grep -q "already published" <<<"$OUT" || fail "duplicate host not refused: $OUT"
 
 # --- 6. secret rotation
 OLD="$(cat "$WORK/podsec/laib.whoami.whoami.TOKEN")"; N=$(wc -l < "$SYSTEMCTL_LOG")
 LAIB_ACTOR=human:e2e "$BIN" secret rotate WHOAMI_TOKEN >/dev/null || fail "rotate exit $?"
 NEW="$(cat "$WORK/podsec/laib.whoami.whoami.TOKEN")"
 [ -n "$OLD" ] && [ "$OLD" != "$NEW" ] || fail "rotate changed nothing"
-tail -n +"$N" "$SYSTEMCTL_LOG" | grep -q "restart whoami.service" || fail "a rotated secret did not restart its unit"
+grep -q "restart whoami.service" <<<"$(tail -n +"$N" "$SYSTEMCTL_LOG")" || fail "a rotated secret did not restart its unit"
 if grep -qF -e "$OLD" -e "$NEW" -e cf-token "$SYSTEMCTL_LOG"; then fail "a secret value on an argv (#224)"; fi
 if LAIB_ACTOR=ops "$BIN" secret rotate WHOAMI_TOKEN >/dev/null 2>&1; then fail "ops rotated"; fi
 
@@ -150,29 +150,29 @@ echo "# hand edit" >> "$LAIB_QUADLET/whoami/whoami.container"
 "$BIN" status --json | python3 -c 'import sys,json; assert json.load(sys.stdin)["ready"]["drift"]==1'
 LAIB_ACTOR=laib "$BIN" converge >/dev/null || fail "converge exit $?"
 grep -q "hand edit" "$LAIB_QUADLET/whoami/whoami.container" && fail "converge left the hand edit"
-LAIB_ACTOR=laib "$BIN" converge | grep -q "konvergent" || fail "second converge not idle"
+grep -q "konvergent" <<<"$(LAIB_ACTOR=laib "$BIN" converge)" || fail "second converge not idle"
 
 # --- 9. the operator verbs (ADR 0013): look unbounded, correct inside the envelope
 mkdir -p "$WORK/data/whoami/cfg"; echo "key=value" > "$WORK/data/whoami/cfg/app.conf"
 sed -i "s#^data: \[\]#data:\n  - path: $WORK/data/whoami/cfg#" "$LAIB_HOME/state/services/whoami/laib.yml"
-LAIB_ACTOR=ops "$BIN" inspect whoami | grep -q "container systemd-whoami" || fail "inspect"
-LAIB_ACTOR=ops "$BIN" read whoami "$WORK/data/whoami/cfg/app.conf" | grep -q "key=value" || fail "read"
+grep -q "container systemd-whoami" <<<"$(LAIB_ACTOR=ops "$BIN" inspect whoami)" || fail "inspect"
+grep -q "key=value" <<<"$(LAIB_ACTOR=ops "$BIN" read whoami "$WORK/data/whoami/cfg/app.conf")" || fail "read"
 if LAIB_ACTOR=ops "$BIN" read whoami /etc/passwd >/dev/null 2>&1; then fail "read escaped the jail"; fi
 # #35: the envelope fails closed — no snapshot, no write; looking costs no budget; exec stays in the service's own containers
 if echo "key=evil" | RESTIC_RC=1 LAIB_ACTOR=ops "$BIN" write whoami "$WORK/data/whoami/cfg/app.conf" >/dev/null 2>&1; then fail "write went ahead although the snapshot failed"; fi
 grep -q "key=value" "$WORK/data/whoami/cfg/app.conf" || fail "the refused write changed the file"
 if LAIB_ACTOR=ops "$BIN" exec whoami --container systemd-caddy -- true >/dev/null 2>&1; then fail "exec reached another service's container"; fi
-LAIB_ACTOR=ops "$BIN" look whoami -- cat /etc/hostname | grep -q "exec in systemd-whoami: cat /etc/hostname" || fail "look"
+grep -q "exec in systemd-whoami: cat /etc/hostname" <<<"$(LAIB_ACTOR=ops "$BIN" look whoami -- cat /etc/hostname)" || fail "look"
 if LAIB_ACTOR=ops "$BIN" look whoami -- rm -rf / >/dev/null 2>&1; then fail "look ran a command that changes things"; fi
 echo "key=new" | LAIB_ACTOR=ops "$BIN" write whoami "$WORK/data/whoami/cfg/app.conf" >/dev/null 2>&1 || fail "write exit $?"
 grep -q "key=new" "$WORK/data/whoami/cfg/app.conf" || fail "write content"
-LAIB_ACTOR=ops "$BIN" exec whoami -- cat /etc/hostname | grep -q "exec in systemd-whoami: cat /etc/hostname" || fail "exec"
-LAIB_ACTOR=ops "$BIN" restart whoami | grep -q "grün" || fail "restart"
+grep -q "exec in systemd-whoami: cat /etc/hostname" <<<"$(LAIB_ACTOR=ops "$BIN" exec whoami -- cat /etc/hostname)" || fail "exec"
+grep -q "grün" <<<"$(LAIB_ACTOR=ops "$BIN" restart whoami)" || fail "restart"
 if LAIB_ACTOR=resident "$BIN" exec whoami -- id >/dev/null 2>&1; then fail "resident may exec"; fi
 # budget: write + exec + restart are three; five more reach RepairBudget (8); the ninth is refused
 for i in 1 2 3 4 5; do LAIB_ACTOR=ops "$BIN" exec whoami -- true >/dev/null 2>&1 || true; done
 if LAIB_ACTOR=ops "$BIN" exec whoami -- true >/dev/null 2>&1; then fail "budget not enforced"; fi
-LAIB_ACTOR=ops "$BIN" escalate whoami "budget spent, needs a look" | grep -q "eskaliert" || fail "escalate"
+grep -q "eskaliert" <<<"$(LAIB_ACTOR=ops "$BIN" escalate whoami "budget spent, needs a look")" || fail "escalate"
 [ "$(grep -c 'restic backup --tag pre-repair' "$SYSTEMCTL_LOG")" = 1 ] || fail "pre-repair snapshot expected exactly once per hour"
 
 # --- 10. the operator against a real laib serve and a scripted model
@@ -215,7 +215,7 @@ OPERATOR="${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}"
 LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:5977/v1 OPERATOR_HOME="$WORK/op" "$OPERATOR" -once event:caddy > "$WORK/op.json" || { echo "FAIL: operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 # laibctl: the Werkstatt's `laib` shell command against the same server
 printf '%s' "$OPS_TOKEN" > "$WORK/token"; chmod 600 "$WORK/token"
-LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py" | grep -q "^status" || fail "laibctl list"
+grep -q "^status" <<<"$(LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py")" || fail "laibctl list"
 LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py" status | python3 -c 'import sys,json; assert json.load(sys.stdin)["ready"]["state"]' || fail "laibctl status"
 if LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/none" python3 "$ROOT/werkstatt/laibctl.py" status >/dev/null 2>&1; then fail "laibctl without token got through"; fi
 # skills (ADR 0023): a call in a skill's name gets only that skill's tools, on the real server
@@ -234,14 +234,14 @@ mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; asser
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==4, s' "$WORK/op.json"
 # the switch: listed for everyone, set by a human, a commit to policy.yml
-"$BIN" skill list | grep -qE "^aktiv +morgenbericht" || fail "skill list"
+grep -qE "^aktiv +morgenbericht" <<<"$("$BIN" skill list)" || fail "skill list"
 if LAIB_ACTOR=ops "$BIN" skill pause routineblick >/dev/null 2>&1; then fail "ops paused a skill"; fi
-LAIB_ACTOR=human:e2e "$BIN" skill pause morgenbericht | grep -q "morgenbericht: ruht" || fail "skill pause"
-"$BIN" skill list | grep -qE "^ruht +morgenbericht" || fail "paused skill listed as active"
+grep -q "morgenbericht: ruht" <<<"$(LAIB_ACTOR=human:e2e "$BIN" skill pause morgenbericht)" || fail "skill pause"
+grep -qE "^ruht +morgenbericht" <<<"$("$BIN" skill list)" || fail "paused skill listed as active"
 grep -q "morgenbericht: paused" "$LAIB_HOME/state/policy.yml" || fail "pause not in policy.yml"
 [ -z "$(git -C "$LAIB_HOME/state" status --porcelain)" ] || fail "skill pause left policy.yml uncommitted"
 LAIB_ACTOR=human:e2e "$BIN" skill enable morgenbericht >/dev/null || fail "skill enable"
-"$BIN" skill list | grep -qE "^aktiv +nutzung" || fail "the weekly usage skill is not active"
+grep -qE "^aktiv +nutzung" <<<"$("$BIN" skill list)" || fail "the weekly usage skill is not active"
 j 'notes=[e for e in es if e["verb"]=="note" and e["actor"]=="ops"]; assert notes and "jetzt grün" in notes[-1]["detail"], notes'
 j 'assert any(e["verb"]=="restart" and e["actor"]=="ops" and e.get("service")=="caddy" for e in es), "operator restart not journaled"'
 test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"
@@ -384,7 +384,7 @@ bote_hh() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE
   LAIB_SECRET_HAUS_HAUSHALT_TOKEN="$1" HAUSHALT_MCP_URL="http://127.0.0.1:$HH_PORT/mcp/haushalt" ./post-deploy > "$WORK/bote-hh.out" ) || fail "bote hook with a haushalt"; }
 bote_hh hh_tok
 grep -q "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml" || fail "a Haushalt that accepts the token is wired (#170)"
-grep -A4 "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml" | grep -q 'Authorization: "Bearer ${HAUSHALT_TOKEN}"' || fail "the Haushalt entry sends Haus's bearer from .env (#170)"
+grep -q 'Authorization: "Bearer ${HAUSHALT_TOKEN}"' <<<"$(grep -A4 "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml")" || fail "the Haushalt entry sends Haus's bearer from .env (#170)"
 grep -q "^HAUSHALT_TOKEN=hh_tok$" "$HOOKDIR/bote/hermes/.env" || fail "the Haushalt token is in .env, not in config.yaml (#170)"
 if grep -q "hh_tok" "$HOOKDIR/bote/hermes/config.yaml"; then fail "the token itself landed in config.yaml (#170)"; fi
 grep -qi "Gedächtnis des Hauses" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names the Haushalt once it is wired (#170)"
@@ -475,7 +475,7 @@ LAIB_ACTOR=human:e2e "$BIN" remove hooked >/dev/null || fail "remove hooked"
 # --- 12. remove: units stopped, files gone, data kept, state without the service
 if LAIB_ACTOR=ops "$BIN" remove whoami >/dev/null 2>&1; then fail "ops removed a service"; fi
 if LAIB_ACTOR=human:e2e "$BIN" remove caddy >/dev/null 2>&1; then fail "a role holder was removed"; fi
-LAIB_ACTOR=human:e2e "$BIN" remove whoami | grep -q "Daten bleiben" || fail "remove exit $?"
+grep -q "Daten bleiben" <<<"$(LAIB_ACTOR=human:e2e "$BIN" remove whoami)" || fail "remove exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" && fail "remove left the unit file"
 test -d "$LAIB_HOME/state/services/whoami" && fail "remove left the state folder"
 test -f "$WORK/data/whoami/cfg/app.conf" || fail "remove deleted data"
@@ -545,7 +545,7 @@ pre=$(grep -n "podman run hook .*bote/pre-start" "$SYSTEMCTL_LOG" | tail -1 | cu
 kill "$(cat "$WORK/notify.pid")"; rm "$WORK/notify.pid"
 
 # the Operator's wish waits for the admin (#270): a proposal of class human; approving it files the ticket (no intake here: it stays in wishes/)
-LAIB_ACTOR=ops "$BIN" wish "Den Abfuhrkalender anbinden. Gesehen: 9 offene Fragen." | grep -q "nach der Freigabe" || fail "an ops wish is not a proposal"
+grep -q "nach der Freigabe" <<<"$(LAIB_ACTOR=ops "$BIN" wish "Den Abfuhrkalender anbinden. Gesehen: 9 offene Fragen.")" || fail "an ops wish is not a proposal"
 WID=$("$BIN" inbox --json | python3 -c 'import sys,json; ps=[p for p in json.load(sys.stdin) if p["actor"]=="ops" and p["reason"].startswith("Wunsch:")]; assert ps and ps[0]["class"]=="human", ps; print(ps[0]["id"])') || fail "the wish is not in the inbox as class human"
 LAIB_ACTOR=human:e2e "$BIN" approve "$WID" >/dev/null || fail "approving the wish"
 j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") for e in es), "the approved wish is not journaled"'

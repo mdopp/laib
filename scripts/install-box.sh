@@ -104,7 +104,7 @@ else
     for t in $(api "releases?per_page=20" | tr -d '\n' | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/'); do
       [ "$t" = "$skipped" ] && continue
       use_release "$(api "releases/tags/$t")" || continue
-      printf '%s' "$FLAT" | grep -q '"draft": *false.*"prerelease": *false' || continue
+      grep -q '"draft": *false.*"prerelease": *false' <<<"$(printf '%s' "$FLAT")" || continue
       asset_url laib-linux-amd64 >/dev/null 2>&1 && break
     done
     asset_url laib-linux-amd64 >/dev/null 2>&1 || { echo "no release has its binaries yet (newest: $skipped)" >&2; exit 1; }

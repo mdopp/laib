@@ -63,6 +63,17 @@ class Move(unittest.TestCase):
         self.assertTrue((self.d / "vaultwarden/data/attachments/a1").exists())
         self.assertTrue((self.d / "vaultwarden/db.sqlite3").exists(), "ServiceBay's copy stays for a rollback")
 
+    def test_radicale_collections_go_to_the_box_user_in_place(self):
+        # #311: ServiceBay's radicale image chowned /data to its uid 2999 in the
+        # default user namespace (a subuid on the host); Laib maps core onto 2999
+        # (UserNS=keep-id), so the collections must be core's or radicale cannot
+        # write them and crash-loops (the Generalprobe's first radicale)
+        write(self.d / "radicale/data/collections/collection-root/anna/kalender/e.ics", "BEGIN:VCALENDAR")
+        p = self.run_script("radicale")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("radicale: hand", p.stdout)
+        self.assertTrue((self.d / "radicale/data/collections/collection-root/anna/kalender/e.ics").exists(), "in place, not copied")
+
     def test_home_assistant_matter_and_zwave_on_laibs_port(self):
         p = self.run_script("home-assistant")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -76,6 +87,16 @@ class Move(unittest.TestCase):
         # the edited files keep ServiceBay's version beside them for a rollback
         self.assertIn("3001", (self.d / "home-assistant/homeassistant/.storage/core.config_entries.servicebay").read_text())
         self.assertNotIn("server", (self.d / "home-assistant/zwave-js/settings.json.servicebay").read_text())
+
+    def test_home_assistant_keeps_servicebays_configuration_yaml_for_a_rollback(self):
+        # #338: Laib's pre-start moves ServiceBay's auth_oidc block into a package
+        # that reads AUTH_OIDC_SECRET from Laib's unit; handed back, ServiceBay's
+        # Home Assistant found no such variable and started in recovery mode,
+        # every automation gone (the Generalprobe's rollback)
+        write(self.d / "home-assistant/homeassistant/configuration.yaml", "automation: !include automations.yaml\nauth_oidc:\n  client_id: homeassistant\n")
+        p = self.run_script("home-assistant")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("auth_oidc:", (self.d / "home-assistant/homeassistant/configuration.yaml.servicebay").read_text())
 
     def test_file_share_syncthing_volume_and_filebrowser_db(self):
         p = self.run_script("file-share")

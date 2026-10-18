@@ -84,8 +84,8 @@ old Solaris PWA.
 ### Phase 4 — the Kraftwerk gets Laib (docs/MIGRATION.md)
 
 14. Laib installed on the GPU box beside ServiceBay with `--gpu`;
-    ServiceBay's units ignored; Caddy beside NPM (step 2 of MIGRATION.md),
-    then auth, adguard, llama as the model role (issue #18).
+    ServiceBay's units ignored; NPM stays the proxy until Caddy replaces it
+    (step 4d of MIGRATION.md); auth, adguard, llama as the model role (issue #18).
 15. The household services adopted one by one from ServiceBay: Radicale,
     Paperless, Vaultwarden, file share, Home Assistant, media, Immich,
     foundry-chronicle; each `laib plan`, `laib apply`, verify, old unit

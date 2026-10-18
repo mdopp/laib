@@ -1,4 +1,4 @@
-package main
+package apply
 
 import (
 	"context"
@@ -8,23 +8,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
-	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// cmdConverge is the mechanical half of repair (docs/DESIGN.md "Repair"):
+// Converge is the mechanical half of repair (docs/DESIGN.md "Repair"):
 // bring the box back to the state, never the state to the box. It re-applies
 // drifted files and restarts units that are not active, within a budget;
 // when the budget is spent or a conflict blocks it, it stops and tells the
 // human through the journal and the webhook. It never touches the state
 // repo, never generates a secret anew, and never decides anything.
-func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
+func Converge(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
@@ -35,12 +33,12 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	// one lock (#39): a tick beside a restore, a remove or a human's apply is
 	// skipped, never run alongside
-	if holder := apply.LockHolder(env.Paths); holder != "" {
+	if holder := LockHolder(env.Paths); holder != "" {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
 		fmt.Fprintln(env.W(), "übersprungen: gesperrt durch", holder)
 		return cli.ExitOK
 	}
-	unlock, code := run.Lock(env, st, "converge")
+	unlock, code := TakeLock(env, st, "converge")
 	if code != cli.ExitOK {
 		return code
 	}
@@ -58,7 +56,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 		return cli.ExitRed
 	}
 	// paused services (#39): a human's stop, a restore, the lease — not ours to restart
-	paused := apply.Paused(env.Paths)
+	paused := Paused(env.Paths)
 	var pausedNames []string
 	for n, pz := range paused {
 		pausedNames = append(pausedNames, fmt.Sprintf("%s (von %s bis %s)", n, pz.By, pz.Until.Local().Format("02.01. 15:04")))
@@ -76,7 +74,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 			}
 		}
 	}
-	fw, fwErr := ensureFirewall(ctx, env)
+	fw, fwErr := EnsureFirewall(ctx, env.Paths)
 	if fwErr != nil {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "red", Detail: "firewall: " + fwErr.Error()})
 		return cli.ExitRed
@@ -84,7 +82,7 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 	if fw {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel"})
 	}
-	pending := apply.Pending(env.Paths)
+	pending := Pending(env.Paths)
 	if len(pausedNames) > 0 {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "pausiert, nicht angefasst: " + strings.Join(pausedNames, "; ")})
 	}
@@ -124,5 +122,5 @@ func cmdConverge(ctx context.Context, env *cliEnv, args []string) int {
 			p.Services = append(p.Services, name)
 		}
 	}
-	return run.ApplyPlan(ctx, env, st, p, sec, reason, "converge", true)
+	return ApplyPlan(ctx, env, st, p, sec, reason, "converge", true)
 }
