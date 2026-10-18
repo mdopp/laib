@@ -19,6 +19,13 @@ for f in sorted(glob.glob(".github/workflows/*.yml")):
             if r.returncode:
                 bad += 1
                 print(f"{f}: {jname}: {st.get('name', st['run'][:40])}: {r.stderr.strip()}")
-print(f"workflow run blocks: {bad} with a syntax error")
+            # `$L <verb> | grep -q` under pipefail: grep exits at the first match, laib's
+            # next write is SIGPIPE (141) and the probe fails though the line was there
+            # (vm-install: RESTIC_PASSWORD, then IMMICH_API_KEY); grep … >/dev/null reads to the end
+            for n, line in enumerate(st["run"].splitlines(), 1):
+                if re.search(r"\$L [^|#]*\|\s*grep -[a-zA-Z]*q", line):
+                    bad += 1
+                    print(f"{f}: {jname}: {st.get('name', '')}: line {n}: `$L … | grep -q` is SIGPIPE under pipefail; use `grep … >/dev/null`")
+print(f"workflow run blocks: {bad} with a syntax error or a laib | grep -q")
 sys.exit(1 if bad else 0)
 PY
