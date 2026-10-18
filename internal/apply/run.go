@@ -11,6 +11,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -137,6 +138,10 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 			sec[k] = v
 		}
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
+			return env.Fail(err)
+		}
+		// on main before green: a proposal cannot carry it off (#328)
+		if err := proposal.CommitSecrets(ctx, env.Paths.State, "apply: secrets handed back by hooks"); err != nil {
 			return env.Fail(err)
 		}
 	}
