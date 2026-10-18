@@ -1,0 +1,162 @@
+# The Generalprobe (#248): the one migration from ServiceBay, rehearsed before the
+# Kraftwerk. A Fedora CoreOS VM shaped like the Kraftwerk runs ServiceBay's real
+# image, which installs ServiceBay's real templates through its own install API;
+# synthetic household data goes in through each app's own API; then the box is
+# migrated exactly as docs/MIGRATION.md and its scripts say
+# (scripts/generalprobe/migrate.sh), and the household's checks that passed on
+# ServiceBay must pass on Laib (scripts/generalprobe/household.py).
+#
+# The VM machinery is vm-install's (scripts/vm/). Every remote script runs under
+# `set -euo pipefail`; a step that passes has checked what its name says.
+name: generalprobe
+on:
+  pull_request:
+    paths: [docs/MIGRATION.md, scripts/migrate-servicebay.py, scripts/carry-servicebay-secrets.sh, scripts/move-servicebay-data.*,
+            scripts/generalprobe/**, scripts/vm/**, .github/workflows/generalprobe.yml,
+            templates/auth/**, templates/caddy/**, templates/vaultwarden/**, templates/radicale/**, templates/mosquitto/**,
+            templates/file-share/**, templates/immich/**, templates/paperless/**, templates/home-assistant/**]
+  workflow_dispatch:
+concurrency:
+  group: generalprobe-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  packages: write   # this commit's hooks image (#36), as vm-install
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150   # ServiceBay's installs ~35 min, seeding ~10, the migration ~40, the checks ~5
+    env:
+      SRC: http://10.0.2.2:8000   # this commit's build, as the box sees the runner
+      HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}
+      SERVICEBAY: ghcr.io/mdopp/servicebay:5.44.3   # what the Kraftwerk runs (its :latest)
+      DOMAIN: gp.test
+      VM: /mnt/gp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: room on the runner — the VM's disks on /mnt, the toolchains it does not need gone
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
+          sudo mkdir -p "$VM" && sudo chown "$USER" "$VM"
+          wait; df -h / /mnt
+      - name: this commit's hooks image, pushed so the box can pull it
+        run: |
+          podman login ghcr.io -u "${{ github.actor }}" -p "${{ github.token }}"
+          podman build -q -t "$HOOKS" -f hooks/Containerfile . && podman push -q "$HOOKS"
+      - name: qemu + kvm, this commit's build served to the box
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
+          test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
+          scripts/vm/serve.sh "${GITHUB_SHA::7}"
+      - name: a Kraftwerk-shaped box — Fedora CoreOS, a data disk, ServiceBay's prerequisites
+        run: |
+          cp scripts/vm/vm.sh scripts/vm/box.sh "$VM/"; cd "$VM"
+          ssh-keygen -q -t ed25519 -N "" -f key
+          podman run --rm -v "$PWD:/data:z" -w /data quay.io/coreos/coreos-installer:release download -s stable -p qemu -f qcow2.xz --decompress
+          mv fedora-coreos-*-qemu.x86_64.qcow2 disk.qcow2 && qemu-img resize -q disk.qcow2 30G
+          qemu-img create -q -f qcow2 data1.qcow2 120G
+          sed "s|@KEY@|$(cat key.pub)|" "$GITHUB_WORKSPACE/scripts/generalprobe/box.bu" | podman run --rm -i quay.io/coreos/butane:release --strict > box.ign
+          IGN=box.ign DISKS="disk.qcow2 data1.qcow2" MEM=12288 CPUS=4 ./vm.sh c
+          . ./box.sh
+          for i in $(seq 1 60); do $SSH true 2>/dev/null && break; sleep 5; done
+          $SSH 'set -euo pipefail; findmnt /var/mnt/data; ls -ld /var/mnt/data; podman --version; cat /etc/os-release | grep VERSION='
+      - name: ServiceBay, as its stick leaves it — its image, its agent connected
+        run: |
+          # synthetic logins: what the operator typed into ServiceBay's wizard (never a real secret)
+          python3 - > "$VM/facts.json" <<'PY'
+          import json, os, secrets
+          h = lambda: secrets.token_hex(12)
+          d = os.environ["DOMAIN"]
+          f = {"domain": d, "data_dir": "/mnt/data/stacks", "base_dn": ",".join("dc=" + p for p in d.split(".")),
+               "sb_user": "admin", "sb_password": h(), "lldap_admin": h(), "immich_email": "admin@" + d, "immich_password": h(),
+               "paperless_user": "solaris", "paperless_password": h(), "mqtt_user": "mqtt", "mqtt_password": h(),
+               "share_user": "samba", "share_password": h(), "ha_user": "oscar", "ha_password": h()}
+          f["vars"] = {"nginx": {"NGINX_ADMIN_EMAIL": "admin@" + d, "NGINX_ADMIN_PASSWORD": h()}, "auth": {"LLDAP_ADMIN_PASSWORD": f["lldap_admin"]},
+                       "immich": {"IMMICH_ADMIN_EMAIL": f["immich_email"], "IMMICH_ADMIN_PASSWORD": f["immich_password"]},
+                       "paperless": {"PAPERLESS_ADMIN_PASSWORD": f["paperless_password"]},
+                       "mosquitto": {"MQTT_USERNAME": f["mqtt_user"], "MQTT_PASSWORD": f["mqtt_password"]},
+                       "file-share": {"SHARE_PASSWORD": f["share_password"]},
+                       "home-assistant": {"ZWAVE_DEVICE": "/dev/ttyS1", "OSCAR_HA_ADMIN_PASSWORD": f["ha_password"]}}   # the stick: a serial port the VM has
+          print(json.dumps(f))
+          PY
+          cd "$VM"; . ./box.sh
+          scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -P 2222 -r "$GITHUB_WORKSPACE/scripts/generalprobe" core@127.0.0.1:gp
+          python3 -c 'import json; print(json.load(open("facts.json"))["sb_password"])' | $SSH "bash gp/servicebay-box.sh $SERVICEBAY $DOMAIN admin"
+      - name: ServiceBay installs the household through its own install API
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'python3 gp/household.py install nginx auth file-share mosquitto radicale vaultwarden home-assistant immich solarisbay/paperless' < facts.json
+          $SSH 'set -euo pipefail; ls ~/.config/containers/systemd/; podman ps --format "{{.Names}} {{.Status}}"'
+      - name: the household's data, through each app's own API
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'python3 gp/household.py seed' < facts.json
+      - name: the checks pass on ServiceBay — or a red one later proves nothing
+        id: before
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'python3 gp/household.py check --phase before'
+      - name: "MIGRATION.md 1: Laib beside ServiceBay, the drafts, the secrets carried"
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'rm -rf ~/laib; mkdir -p ~/laib'
+          tar -C "$GITHUB_WORKSPACE" -cf - scripts docs templates | $SSH 'tar -C ~/laib -xf -'
+          $SSH "STEP=install SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+      - name: "MIGRATION.md 3 and 4: auth, then the household services, one by one"
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH "STEP=auth SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH "STEP=services SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+      - name: rollback mid-migration — Home Assistant back to ServiceBay with its data, then to Laib again
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH "STEP=rollback SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH 'python3 gp/household.py check --phase before home-assistant matter'
+          $SSH "STEP=forward SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+      - name: "MIGRATION.md 2 and 7: Caddy replaces NPM, ServiceBay off"
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH "STEP=caddy SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+          $SSH "STEP=retire SRC=$SRC DOMAIN=$DOMAIN HOOKS=$HOOKS bash ~/laib/scripts/generalprobe/migrate.sh"
+      - name: the household survived — the same checks, on Laib
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'python3 gp/household.py check --phase after'
+      - name: laib status green, ServiceBay off
+        if: ${{ !cancelled() && steps.before.outcome == 'success' }}   # a red step before still shows what survived
+        run: |
+          cd "$VM"; . ./box.sh
+          $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib
+                s=$(/var/opt/laib/laib status); echo "$s"
+                head -1 <<<"$s" | grep -q " 0 gelb · 0 rot " || { echo "laib status is not green"; exit 1; }
+                if podman ps --format "{{.Names}}" | grep -qx servicebay; then echo "ServiceBay still runs"; exit 1; fi
+                if curl -s -o /dev/null http://127.0.0.1:5888/; then echo "something still answers on ServiceBay'"'"'s 5888"; exit 1; fi
+                left=$(ls ~/.config/containers/systemd/ | grep -E "\.(kube|yml|container)$" || true)
+                [ -z "$left" ] || { echo "ServiceBay files left in the Quadlet root: $left"; exit 1; }
+                echo "laib status green; ServiceBay off, none of its units left"'
+      - name: logs
+        if: always()
+        run: |
+          cd "$VM" 2>/dev/null || exit 0
+          . ./box.sh
+          if $SSH true 2>/dev/null; then
+            $SSH 'podman ps -a --format "{{.Names}} {{.Status}}"; echo "--- laib"; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 3h | tail -60; journalctl --user --no-pager -u laib | tail -40
+                  echo "--- servicebay"; podman logs servicebay 2>&1 | grep -iE "registr|git |clone" | tail -20; podman logs --tail 80 servicebay 2>&1
+                  echo "--- failed units"; systemctl --user --failed --no-pager
+                  for u in $(systemctl --user list-units --state=failed,activating,deactivating --plain --no-legend | awk "{print \$1}"); do echo "--- $u"; systemctl --user status --no-pager "$u" | head -15; journalctl --user --no-pager -u "$u" | tail -40; done' || true
+          else
+            echo "--- the VM does not answer; its journal from the disk (nbd)"
+            sudo kill "$(cat qemu.pid)" 2>/dev/null; sleep 5
+            sudo modprobe nbd max_part=16; sudo qemu-nbd --read-only -f qcow2 -c /dev/nbd0 disk.qcow2; sleep 3
+            sudo mkdir -p /mnt/vroot; sudo mount -o ro,norecovery /dev/nbd0p4 /mnt/vroot && \
+              sudo journalctl --no-pager -D "$(sudo find /mnt/vroot/ostree/deploy/fedora-coreos/var/log/journal -maxdepth 1 -mindepth 1 -type d | head -1)" | tail -150
+            sudo umount /mnt/vroot; sudo qemu-nbd -d /dev/nbd0
+            tail -c 8000 serial.log
+          fi
+          [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" 2>/dev/null || true

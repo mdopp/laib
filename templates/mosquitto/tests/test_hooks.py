@@ -35,6 +35,9 @@ class Box:
         self.bin.mkdir()
         (self.bin / "podman").write_text("#!/bin/sh\necho 'podman: command not found (the hooks image has none)' >&2\nexit 127\n")
         (self.bin / "podman").chmod(0o755)
+        # the hooks image runs as root over the broker's uids; here chown is recorded
+        (self.bin / "chown").write_text(f"#!/bin/sh\necho \"$@\" >> {self.root / 'chown.log'}\n")
+        (self.bin / "chown").chmod(0o755)
         self.broker = None      # the users the running broker knows: user → hash
         self.execs = []         # every argv laib handed to podman exec
         self.events = []
@@ -136,3 +139,18 @@ class Hooks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Owner(unittest.TestCase):
+    """#248: eclipse-mosquitto 2.1 drops to its own user (1883) before it opens
+    password_file; a 0600 file of the hooks image's root (the box's user) is
+    one it cannot open, so the broker exited 13 on its first start and the
+    post-deploy found no container to hash in (the Generalprobe's mosquitto)."""
+
+    def test_pre_start_hands_the_password_file_to_the_brokers_user(self):
+        with tempfile.TemporaryDirectory() as d:
+            box = Box(d)
+            log = Path(d) / "chown.log"
+            box.hook("pre-start")
+            calls = log.read_text() if log.exists() else ""
+            self.assertRegex(calls, r"1883:1883 .*/mosquitto/config/passwd")

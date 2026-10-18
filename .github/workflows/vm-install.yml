@@ -13,10 +13,10 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:
     # the install path only: kernel PRs dispatch this job when they need it (Actions minutes)
-    paths: [usb/**, stick/**, scripts/install-box.sh, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, scripts/vm/**, .github/workflows/vm-install.yml]
   workflow_dispatch:
 concurrency:
   group: vm-install-${{ github.ref }}
@@ -49,15 +49,7 @@ jobs:
         run: |
           ssh-keygen -q -t ed25519 -N "" -f key
           go build -o laib-stick ./stick/cmd/laib-stick
-          # the release's asset names, plus VERSION, plus install-box.sh: what --source expects
-          mkdir -p dist
-          for b in laib laib-operator laib-lease; do src=./cmd/$b; [ $b = laib-operator ] && src=./operator/cmd/$b; CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" -o dist/$b-linux-amd64 $src; done
-          cp scripts/install-box.sh dist/install-box.sh
-          (cd dist && sha256sum laib-*-amd64 > SHA256SUMS && cat SHA256SUMS)
-          printf '%s' "${GITHUB_SHA::7}" > dist/VERSION
-          nohup python3 -m http.server 8000 --bind 127.0.0.1 --directory dist > http.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/VERSION >/dev/null 2>&1 && break; sleep 1; done
-          echo "serving $(curl -fsS http://127.0.0.1:8000/VERSION) on :8000"
+          scripts/vm/serve.sh "${GITHUB_SHA::7}"
           ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --out laib-vm.iso
           # the same box, a stick that may reinstall it (#33): a plain stick refuses an installed box
           ./laib-stick --yes --hostname vm --domain vm.test --lan-ip 10.0.2.15 --ssh-key key.pub --token "${{ github.token }}" --source "$SRC" --tls internal --reinstall --out laib-vm-reinstall.iso
@@ -85,41 +77,8 @@ jobs:
           mkdir -p foreign && echo "keep me" > foreign/marker
           truncate -s 12G foreign.raw && mkfs.ext4 -q -F -L backup -d foreign foreign.raw
           df -h / | tail -1
-          cat > vm.sh <<'EOF'
-          #!/usr/bin/env bash
-          # $1 = qemu -boot argument: order=cd (disk first, empty disk falls through to the stick),
-          # once=d (the stick once = reinstall; without "once" the VM would reinstall forever,
-          # the job the EFI post-install step does on real hardware), order=c (the disk only)
-          # DISKS = the drives in this order (default: the OS disk and the two data disks)
-          drives=()
-          for d in ${DISKS:-disk.qcow2 data1.qcow2 data2.qcow2}; do
-            f=qcow2; [[ $d == *.raw ]] && f=raw
-            # the OS disk without QEMU's zero detection: detect-zeroes=unmap turns the guest's
-            # zero writes into qcow2 discards, and a hard reset in the middle of that left a
-            # root no real disk would (#81: the same cut was green in run 38308352527 without it,
-            # red with it, and a guest-side sync did not help). The data disks keep it (thin images).
-            if [ "$d" = disk.qcow2 ]; then drives+=(-drive "file=$d,if=virtio,format=$f")
-            else drives+=(-drive "file=$d,if=virtio,format=$f,discard=unmap,detect-zeroes=unmap"); fi
-          done
-          rm -f qmp.sock
-          qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 -display none -daemonize \
-            -pidfile qemu.pid -serial file:serial.log -qmp unix:qmp.sock,server,nowait "${drives[@]}" \
-            -cdrom "${ISO:-laib-vm.iso}" -boot $1 \
-            -nic user,model=virtio,hostfwd=tcp::2222-:22,hostfwd=tcp::18080-:8080
-          EOF
-          # a clean power-off (QEMU gone), and waiting for laib after a boot
-          # every remote script runs laib as $L = lw: a verb that meets the apply lock (exit 4,
-          # docs/INTERFACE.md) tries again for up to 3 min; any other exit code fails as before.
-          # The box's converge timer fires 2 min after each boot, while a step may be at its
-          # first mutating verb (#211).
-          cat > box.sh <<'EOF'
-          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
-          off() { local p; p=$(cat qemu.pid 2>/dev/null) || return 0; $SSH 'sudo systemctl poweroff' || true
-            for i in $(seq 1 60); do kill -0 "$p" 2>/dev/null || return 0; sleep 2; done; sudo kill "$p"; sleep 3; }
-          ready() { for i in $(seq 1 90); do $SSH 'curl -fsS http://127.0.0.1:5900/ready' >/dev/null 2>&1 && { echo "ready after $((i*10)) s"; return 0; }; sleep 10; done
-            echo "laib never became ready"; return 1; }
-          marker() { debugfs -R "cat /marker" foreign.raw 2>/dev/null | grep -qx "keep me" || { echo "the file on the foreign disk is gone"; return 1; }; echo "foreign disk: its file is intact"; }
-          EOF
+          # the guest's launcher and the SSH helpers (off, ready, marker), shared with generalprobe
+          cp scripts/vm/vm.sh scripts/vm/box.sh .
           chmod +x vm.sh; ./vm.sh order=cd
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
           for i in $(seq 1 120); do
@@ -850,7 +809,7 @@ jobs:
                 for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
                 v=$(podman exec systemd-pgtest psql -U postgres -tAc "select x from t"); echo "row after recovery: $v"; [ "$v" = 42 ]
                 curl -fsS http://127.0.0.1:5900/ready | tee /tmp/ready.json; echo; grep -q "\"state\":\"bereit\"" /tmp/ready.json
-                $L secret list | grep -q RESTIC_PASSWORD
+                $L secret list | grep RESTIC_PASSWORD >/dev/null   # not -q: under pipefail an early exit is SIGPIPE (141) for laib
                 $L journal --since 1h | grep -E "restore|backup" | tail -8
                 echo "disaster recovery done with the sheet alone"'
       - name: the power cut during the first boot was survived (#81)

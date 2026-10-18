@@ -41,6 +41,7 @@ VALUES = {
     "media": {"LLDAP_BASE_DN": "BASE_DN"},   # the LDAP plugin's search base (#256)
     "mosquitto": {"MQTT_USERNAME": "MQTT_USER"},
     "file-share": {"SHARE_USER": "SHARE_USER"},
+    "home-assistant": {"ZWAVE_DEVICE": "ZWAVE_DEVICE"},   # the box's stick, a service-less value (#248)
     "immich": {"IMMICH_ADMIN_EMAIL": "ADMIN_EMAIL"},   # the admin post-deploy logs in as once, to mint its key (#254)
 }
 PIN = "$(podman image inspect --format '{{index .RepoDigests 0}}' %s)"
@@ -95,6 +96,9 @@ def main():
     if in_state_repo(a.out):
         print(f"{a.out} is (in) a Laib state repo: drafts go to a review directory; laib refuses "
               "a services/<name> without units, and laib add refuses one that exists", file=sys.stderr)
+        return 1
+    if not os.path.exists(os.path.join(a.builtins, "caddy", "laib.yml")):
+        print(f"{a.builtins} holds no Laib built-ins (caddy/laib.yml): run it from a laib checkout, or pass --builtins <laib>/templates", file=sys.stderr)
         return 1
     cfg = json.load(open(a.config))
     tdirs = a.templates.split(",")
@@ -202,6 +206,9 @@ def main():
             add, pins = [], []
             for sb, key in VALUES.get(name, {}).items():
                 v = str(values.get(sb) or decl.get(sb, {}).get("default") or "")
+                if v.startswith("!secret "):   # sealed in ServiceBay's store: never a value this script reads (#248)
+                    unmapped.append(f"{name}: {key} is sealed in ServiceBay's store ({sb}); add {key}=<the box's value> to the laib add line (docs/MIGRATION.md)")
+                    continue
                 if sb == "LLDAP_BASE_DN" and not v:
                     v = ",".join("dc=" + p for p in domain.split("."))
                 if v and v != bvals.get(key):

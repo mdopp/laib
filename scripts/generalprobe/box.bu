@@ -1,0 +1,83 @@
+# The Kraftwerk's shape, as ServiceBay's own stick leaves a box
+# (mdopp/servicebay tools/sb/internal/build/assets/fedora-coreos.bu), minus what
+# a VM without a GPU, a RAID or a LAN cannot have: core with the runner's key,
+# the data disk at /mnt/data (XFS, label data), podman's graph root on it,
+# linger, the user's podman socket (ServiceBay talks to podman through it),
+# resolved without its stub (port 53 is AdGuard's on the box).
+# servicebay-box.sh does the rest over SSH: python3 for ServiceBay's agent,
+# secret.key, AUTH_SECRET, the agent's key, servicebay.container.
+variant: fcos
+version: 1.5.0
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - "@KEY@"
+storage:
+  disks:
+    - device: /dev/vdb
+      wipe_table: true
+      partitions:
+        - number: 1
+          label: data
+  filesystems:
+    - path: /var/mnt/data
+      device: /dev/disk/by-partlabel/data
+      format: xfs
+      label: data
+      with_mount_unit: true
+  directories:
+    - {path: /var/mnt/data/servicebay, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/mnt/data/servicebay/ssh, mode: 0700, user: {name: core}, group: {name: core}}
+    - {path: /var/mnt/data/stacks, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/mnt/data/containers, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/containers, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/containers/systemd, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/systemd, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/systemd/user, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/systemd/user/sockets.target.wants, mode: 0755, user: {name: core}, group: {name: core}}
+    - {path: /var/home/core/.config/systemd/user/default.target.wants, mode: 0755, user: {name: core}, group: {name: core}}
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      overwrite: true
+      contents: {inline: kraftwerk}
+    - path: /etc/systemd/resolved.conf.d/no-stub.conf
+      mode: 0644
+      contents:
+        inline: |
+          [Resolve]
+          DNSStubListener=no
+    - path: /var/lib/systemd/linger/core
+      mode: 0644
+    - path: /var/home/core/.config/containers/storage.conf
+      mode: 0644
+      user: {name: core}
+      group: {name: core}
+      contents:
+        inline: |
+          [storage]
+          driver = "overlay"
+          graphroot = "/var/mnt/data/containers/storage"
+    # The Kraftwerk has an NVIDIA GPU (CDI nvidia.com/gpu=all, which Immich's
+    # machine learning asks for): a CDI spec of that name with no device, so a
+    # unit that adds it starts as on the box; the work runs on the CPU here.
+    - path: /etc/cdi/nvidia.yaml
+      mode: 0644
+      contents:
+        inline: |
+          cdiVersion: 0.5.0
+          kind: nvidia.com/gpu
+          devices:
+            - name: all
+              containerEdits:
+                env: [GENERALPROBE_NO_GPU=1]
+  links:
+    - path: /etc/resolv.conf
+      target: /run/systemd/resolve/resolv.conf
+      overwrite: true
+    - path: /var/home/core/.config/systemd/user/sockets.target.wants/podman.socket
+      target: /usr/lib/systemd/user/podman.socket
+      user: {name: core}
+      group: {name: core}
