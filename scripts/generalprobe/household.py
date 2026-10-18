@@ -600,6 +600,7 @@ def check_logins(f, s, phase):
     if authelia_login(f, s, "clara", "falsch-" + pw(), f"http://{LOOP}:9091", second=False) is None:
         raise AssertionError("Authelia accepted a wrong password: the check proves nothing")
     if phase == "after":   # and through Laib's Caddy, with the box's own CA
+        time.sleep(31 - time.time() % 30)   # Authelia takes a TOTP code once: the next window
         ca = "/var/tmp/generalprobe/caddy-root.crt"
         sh("sh", "-c", f"cp {f['data_dir']}/caddy/data/caddy/pki/authorities/local/root.crt {ca}")
         ctx = ssl.create_default_context(cafile=ca)
@@ -671,6 +672,11 @@ def check_home(f, s, phase):
     cfg = os.path.join(f["data_dir"], "home-assistant/homeassistant")
     wait("Home Assistant", lambda: req("GET", f"http://{LOOP}:8123/manifest.json")[0] == 200, tries=60)
     tok = ha_token(f, s)
+    # a restarted HA answers before it has set up its integrations: wait until it runs
+    try:
+        wait("HA running", lambda: (ha("/config", tok)[1] or {}).get("state") == "RUNNING", tries=60, pause=5)
+    except RuntimeError as e:
+        raise AssertionError(str(e))
     st, _ = ha("/states/automation.generalprobe_licht", tok)
     if st != 200:
         raise AssertionError(f"the automation is gone: HTTP {st}")
@@ -694,7 +700,7 @@ def check_home(f, s, phase):
 def check_matter(f, s, phase):
     d = os.path.join(f["data_dir"], "home-assistant/matter-server" if phase == "before" else "home-assistant/matter")
     have = matter_files(d)
-    lost = {k for k, v in s["matter"].items() if have.get(k) != v}
+    lost = {k for k in s["matter"] if k not in have}   # the server rewrites its counters as it runs: the files, not their bytes
     if lost:
         raise AssertionError(f"the Matter fabric in {d} lacks {sorted(lost)}")
     return f"the Matter server's {len(s['matter'])} files are in {d}"

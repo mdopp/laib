@@ -58,7 +58,7 @@ move() { HOOKS_IMAGE="$HOOKS" scripts/move-servicebay-data.sh "$@"; }
 step_install() {
   say "1. Laib beside ServiceBay: the binary, the state repo, the drafts, the secrets"
   curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh
-  bash /tmp/install-box.sh --source "$SRC" --domain "$DOMAIN" --tls internal
+  bash /tmp/install-box.sh --source "$SRC" --domain "$DOMAIN" --tls internal --gpu   # the Kraftwerk is the GPU box
   if [ -n "${HOOKS:-}" ]; then   # this commit's hooks image (CI only; the box takes :latest)
     b=/mnt/data/laib/state/box.yml
     if grep -q "^laib:" $b; then sed -i "s|^laib:|laib:\n    hooksImage: $HOOKS|" $b; else printf "laib:\n    hooksImage: %s\n" "$HOOKS" >> $b; fi

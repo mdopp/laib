@@ -50,7 +50,9 @@ file moves out.
 
 1. **Laib binary + state repo**, nothing applied. `install-box.sh` (as in
    `docs/INSTALL.md`; it installs the binaries and the unit and runs
-   `laib init --domain …`) also writes the box's own config, as on a stick
+   `laib init --domain …`; the Kraftwerk is the GPU box: `--gpu`, without
+   which `laib add immich` refuses, its machine learning wants the GPU)
+   also writes the box's own config, as on a stick
    install: journald persistent with at most 4G and four weeks
    (`/etc/systemd/journald.conf.d/50-laib.conf`, journald restarted) and
    podman's log driver pinned to journald
