@@ -187,3 +187,10 @@ One coupling needs more than a move:
   its wire behaviour.
 - **What it costs:** about 300 lines for the package split, and five small
   budget lines in `loc.sh` beside the kernel's and the Operator's.
+
+### Tests are not capped (owner, 2026-10-18)
+
+"Tests may have more lines than code." The rule "test lines at most equal
+production lines" (the Decision above, ADR 0023 §1) is dropped for every
+program; `scripts/loc.sh` still prints the test count, and caps only
+production lines.

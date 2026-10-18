@@ -18,8 +18,8 @@ them.
 3. **KISS, and the kernel grows only on purpose.** Every program has a
    production-line cap in `scripts/loc.sh` with its reason next to the
    number: the kernel 15,000, the Operator 3,000, and one for each program
-   that left the kernel (ADR 0005 amendment #309, ADR 0023). Tests are at
-   most equal to production lines in each. At 95 % CI warns and opens the
+   that left the kernel (ADR 0005 amendment #309, ADR 0023). Tests are not
+   capped. At 95 % CI warns and opens the
    "Kern-Diät" issue; crossing a cap means raising it in the same PR, with
    its reason and the owner's approval. Lines count as gofmt writes them:
    squeezing code to fit is a review finding, not a fix. No gate until

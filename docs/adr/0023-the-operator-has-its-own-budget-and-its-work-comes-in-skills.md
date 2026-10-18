@@ -46,7 +46,8 @@ activate, add, let rest.
 - Its code lives in its own tree, `operator/` (the package and
   `operator/cmd/laib-operator`), in this repo, this Go module and this
   release (release-please, one version). #268 moves it.
-- **Budget: 3,000 production lines, tests at most equal to production**,
+- **Budget: 3,000 production lines** (tests at most equal to production
+  until 2026-10-18; the owner dropped that rule, ADR 0005 amendment #309),
   counted and capped by `scripts/loc.sh` separately from the kernel, which
   keeps its 16,000. The number: today ~920; the skill runner and the first
   new skill (#269, #270) add a few hundred; the known next steps — runbooks

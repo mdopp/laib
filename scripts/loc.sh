@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 # One budget per program (ADR 0023, ADR 0005 amendment #309): the kernel
 # (cmd/, internal/), the Operator (operator/) and each program that moved out
-# of the kernel. Each: production under its cap, tests at most equal to
-# production (docs/TESTING.md). They meet over MCP, files or HTTP, never by
-# import.
+# of the kernel. Each: production under its cap; test lines are counted
+# but not capped (owner, 2026-10-18). They meet over MCP, files or HTTP,
+# never by import.
 #
 # Crossing a cap means raising it in the same PR, with its reason next to
 # the number and the owner's approval; at 95 % this warns, and on main CI
@@ -24,7 +24,6 @@ budget() { # budget <name> <cap> <dir…>
   echo "$name production: $prod  tests: $test  (cap $cap)"
   [ "$prod" -lt "$cap" ] || { echo "$name over $cap lines (ADR 0005, 0023)"; bad=1; }
   [ "$((prod * 100))" -lt "$((cap * 95))" ] || [ "$prod" -ge "$cap" ] || echo "warning: $name at $prod of $cap lines, 95 % or more (#309)"
-  [ "$test" -le "$prod" ] || { echo "$name: more test lines than production (docs/TESTING.md)"; bad=1; }
 }
 diet=""
 [ "${1:-}" = --diet ] && diet=1
