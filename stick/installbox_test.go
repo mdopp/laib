@@ -24,6 +24,27 @@ func release(tag string, id int, binaries bool) string {
   "assets": [` + assets + `]}`
 }
 
+// installBoxSudo is runInstallBox's sudo: it runs nothing, and as tee it
+// reads what it is handed (#304).
+const installBoxSudo = `[ "$1" != tee ] || cat >/dev/null`
+
+// #304: install-box.sh runs under pipefail and hands files to `… | sudo
+// tee`. A sudo that exits without reading its stdin breaks that pipe: the
+// writer dies of SIGPIPE when it is slower than the shim (a loaded
+// `go test ./...`), and the script stops at its journald drop-in without a
+// word — the release was never fetched. The fake must take what tee is
+// handed, as tee does. A writer slower than the shim, on purpose:
+func TestTheSudoShimTakesWhatTeeIsHanded(t *testing.T) {
+	bin := t.TempDir()
+	t.Setenv("SHIM_LOG", filepath.Join(bin, "log"))
+	shim(t, bin, "sudo", installBoxSudo)
+	cmd := exec.Command("bash", "-c", `set -euo pipefail; { sleep 0.3; printf 'x\n'; } | sudo tee /etc/x >/dev/null`)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("a pipe into the sudo shim fails (%v): the writer gets SIGPIPE\n%s", err, out)
+	}
+}
+
 // runInstallBox runs scripts/install-box.sh without --version against a
 // GitHub API served by a curl shim, with token as LAIB_GH_TOKEN. Downloading
 // an asset fails on purpose: what is under test is which release the script
@@ -44,7 +65,7 @@ func runInstallBox(t *testing.T, token, latest string, list ...string) (log, out
 	}
 	logf := filepath.Join(root, "shim.log")
 	shim(t, bin, "id", "echo core")
-	shim(t, bin, "sudo", "exit 0")
+	shim(t, bin, "sudo", installBoxSudo)
 	shim(t, bin, "sysctl", "echo 0")
 	shim(t, bin, "restic", "exit 0")
 	shim(t, bin, "curl", `prev=
