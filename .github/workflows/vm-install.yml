@@ -20,7 +20,8 @@
 #   disks     the data disk and its mirror, a foreign disk, a stick left in,
 #             the reinstall with its power cuts (#81, #111), a lost member
 #   services  the data disk, a real apply, the reboot (#37), auth/adguard/
-#             radicale, file-share, backup and restore, the update path, remove
+#             radicale, file-share, backup and restore, the update path (latest release → this commit; no older
+#             chain: no box runs an older Laib, owner 2026-10-18), remove
 #   logins    a real apply, auth, then each family login (Immich, Home
 #             Assistant, Jellyfin, Audiobookshelf)
 #   recovery  the data disk, the foreign disk (the backup target), a real
@@ -775,18 +776,15 @@ jobs:
                 grep -q "before backup" /mnt/data/stacks/caddy/data/vm-marker
                 $L journal --since 1h > /tmp/journal.txt
                 grep -E "backup|restore" /tmp/journal.txt'
-      - name: update path — a pinned release, the latest release, then this commit again
+      - name: update path — the latest release, then this commit, then back and forward again
         if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
           $SSH 'set -euo pipefail; export LAIB_GH_TOKEN="${{ github.token }}" SRC="${{ env.SRC }}"
                 curl -fsSL "$SRC/install-box.sh" -o /tmp/install-box.sh   # this commit'"'"'s installer, against real releases
-                bash /tmp/install-box.sh --version v0.3.2 > /tmp/ib1.log 2>&1 || { tail -20 /tmp/ib1.log; exit 1; }
-                v=$(/var/opt/laib/laib version); echo "pinned: $v"; [ "$v" = "laib v0.3.2" ]
                 bash /tmp/install-box.sh > /tmp/ib2.log 2>&1 || { tail -20 /tmp/ib2.log; exit 1; }
                 v=$(/var/opt/laib/laib version); echo "latest: $v"
                 case "$v" in "laib v"*) ;; *) echo "latest is not a release version"; exit 1;; esac
-                [ "$v" != "laib v0.3.2" ]
                 bash /tmp/install-box.sh --source "$SRC" > /tmp/ib3.log 2>&1 || { tail -20 /tmp/ib3.log; exit 1; }
                 v=$(/var/opt/laib/laib version); echo "this commit: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]
                 curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json; cat /tmp/ready.json; echo
