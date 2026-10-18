@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/run"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -43,7 +44,7 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rc := runApply(ctx, c.env, st, "", "test: a service with a timer"); rc != cli.ExitOK {
+	if rc := run.Apply(ctx, c.env, st, "", "test: a service with a timer"); rc != cli.ExitOK {
 		t.Fatalf("apply waited for the timer's oneshot to become active: rc %d", rc)
 	}
 	if !slices.Contains(c.calls, "systemctl --user enable --now tick-refresh.timer") {

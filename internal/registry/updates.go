@@ -1,6 +1,7 @@
-package main
+package registry
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 // (latest, a bare major) is podman auto-update's business, not a proposal.
 // Reading only; the Operator's aktualisierung skill proposes from it.
 
-type imageUpdate struct {
+type ImageUpdate struct {
 	Service string `json:"service"`
 	Key     string `json:"key"`
 	Image   string `json:"image"`
@@ -30,8 +31,8 @@ type imageUpdate struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// registryURL is where a registry host's v2 API lives; tests swap it.
-var registryURL = func(host string) string {
+// RegistryURL is where a registry host's v2 API lives; tests swap it.
+var RegistryURL = func(host string) string {
 	if host == "docker.io" {
 		host = "registry-1.docker.io"
 	}
@@ -58,8 +59,8 @@ func splitImage(ref string) (host, repo, tag string) {
 	return host, repo, tag
 }
 
-func imageUpdates(ctx context.Context, st *state.State) []imageUpdate {
-	var out []imageUpdate
+func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
+	var out []ImageUpdate
 	for _, name := range st.ServiceNames() {
 		for key, v := range st.Services[name].Values {
 			host, repo, tag := splitImage(v.Literal)
@@ -68,7 +69,7 @@ func imageUpdates(ctx context.Context, st *state.State) []imageUpdate {
 				continue
 			}
 			ref, _, _ := strings.Cut(v.Literal, "@")
-			u := imageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag}
+			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag}
 			tags, err := registryTags(ctx, host, repo)
 			if err != nil {
 				u.Error = err.Error()
@@ -106,7 +107,7 @@ func imageUpdates(ctx context.Context, st *state.State) []imageUpdate {
 // the anonymous bearer token public registries hand out.
 func registryTags(ctx context.Context, host, repo string) ([]string, error) {
 	client := &http.Client{Timeout: 20 * time.Second}
-	url := registryURL(host) + "/v2/" + repo + "/tags/list?n=1000"
+	url := RegistryURL(host) + "/v2/" + repo + "/tags/list?n=1000"
 	get := func(token string) (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -150,27 +151,20 @@ func registryTags(ctx context.Context, host, repo string) ([]string, error) {
 	return out.Tags, json.NewDecoder(resp.Body).Decode(&out)
 }
 
-func cmdUpdates(ctx context.Context, env *cliEnv, _ []string) int {
+func Updates(ctx context.Context, env *cli.Env, _ []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
 	}
-	ups := imageUpdates(ctx, st)
+	ups := ImageUpdates(ctx, st)
 	if env.JSON {
 		if ups == nil {
-			ups = []imageUpdate{}
+			ups = []ImageUpdate{}
 		}
 		return cli.Emit(env, ups)
 	}
 	for _, u := range ups {
-		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, or(u.Patch, "—"), or(u.Minor, "—"), u.Error)
+		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)
 	}
 	return cli.ExitOK
-}
-
-func or(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

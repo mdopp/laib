@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/intake"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -24,14 +26,14 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 		"Den Abfuhrkalender als Antwort für Haus und Bote einrichten.\n\nGesehen: 9 unbeantwortete Fragen zur Müllabfuhr in 7 Tagen.",
 		"Die Energie-Seite von der Startseite nach hinten.\n\nGesehen: 0 Aufrufe in 7 Tagen.",
 	} {
-		if rc := cmdWish(ctx, c.env, []string{text}); rc != cli.ExitOK {
+		if rc := intake.Wish(ctx, c.env, []string{text}); rc != cli.ExitOK {
 			t.Fatalf("rc %d", rc)
 		}
 	}
 	if len(g.calls) != 0 {
 		t.Fatalf("an Operator wish filed an issue before anyone approved it: %v", g.calls)
 	}
-	ps, err := proposal.List(inboxDir(c.env), true)
+	ps, err := proposal.List(cli.InboxDir(c.env), true)
 	if err != nil || len(ps) != 2 {
 		t.Fatalf("two proposals expected: %v %v", ps, err)
 	}
@@ -44,7 +46,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 		ps[0], ps[1] = ps[1], ps[0]
 	}
 	c.env.Actor = "human:admin"
-	if rc := cmdApprove(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != cli.ExitOK {
+	if rc := inbox.Approve(ctx, c.env, []string{fmt.Sprint(ps[0].ID)}); rc != cli.ExitOK {
 		t.Fatalf("approve rc %d", rc)
 	}
 	if len(g.calls) != 1 {
@@ -56,7 +58,7 @@ func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	if !strings.Contains(title+body, "Abfuhrkalender") || !strings.Contains(body, "9 unbeantwortete") || !slices.Contains(labels, any("wunsch")) {
 		t.Fatalf("issue %q %q %v", title, body, labels)
 	}
-	if rc := cmdReject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != cli.ExitOK {
+	if rc := inbox.Reject(ctx, c.env, []string{fmt.Sprint(ps[1].ID)}); rc != cli.ExitOK {
 		t.Fatalf("reject rc %d", rc)
 	}
 	if len(g.calls) != 1 {

@@ -47,25 +47,65 @@ func shim(t *testing.T, bin, name, body string) {
 	}
 }
 
+// diskBox is a scratch root for laib-data-disk.sh: its bin, etc, sys and the
+// mount point, with the array's state and (unless nil) the record written.
+type diskBox struct{ root, bin, etc, sys, mp, rec, log, script string }
+
+func newDiskBox(t *testing.T, mp, record, state string) *diskBox { // mp "-": no mount point made
+	t.Helper()
+	ign, err := DestIgnition(box())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	b := &diskBox{root: root, bin: filepath.Join(root, "bin"), etc: filepath.Join(root, "etc"), sys: filepath.Join(root, "sys"),
+		mp: filepath.Join(root, "mnt"), log: filepath.Join(root, "shim.log"), script: fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")}
+	if mp != "" { // "-": the test makes its own mount point
+		b.mp = filepath.Join(root, "mnt", "data")
+	}
+	b.rec = filepath.Join(b.etc, "laib/data-disk")
+	for _, d := range []string{b.bin, filepath.Join(b.etc, "laib"), filepath.Join(b.etc, "systemd/system/multi-user.target.wants"), filepath.Join(b.sys, "block/md127/md")} {
+		os.MkdirAll(d, 0o755)
+	}
+	if mp == "" {
+		os.MkdirAll(b.mp, 0o755)
+	}
+	if record != "-" {
+		os.WriteFile(b.rec, []byte(record), 0o644)
+	}
+	os.WriteFile(filepath.Join(b.sys, "block/md127/md/array_state"), []byte(state+"\n"), 0o644)
+	return b
+}
+
+// run gives every tool not shimmed yet a no-op, runs the script, and fails
+// the test on a non-zero exit; it returns the script's output and the shim log.
+func (b *diskBox) run(t *testing.T, env ...string) (string, string) {
+	t.Helper()
+	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
+		if _, err := os.Stat(filepath.Join(b.bin, n)); err != nil {
+			shim(t, b.bin, n, "exit 0")
+		}
+	}
+	sh := filepath.Join(b.root, "laib-data-disk.sh")
+	os.WriteFile(sh, []byte(b.script), 0o755)
+	cmd := exec.Command("bash", sh)
+	cmd.Env = append(append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "SHIM_LOG="+b.log, "LAIB_ETC="+b.etc, "LAIB_SYS="+b.sys, "LAIB_MP="+b.mp), env...)
+	out, err := cmd.CombinedOutput()
+	logged, _ := os.ReadFile(b.log)
+	if err != nil {
+		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
+	}
+	return string(out), string(logged)
+}
+
 // TestDataDiskStartsAnInactiveArray: after a boot with a mirror member gone,
 // udev's incremental assembly leaves the recorded array INACTIVE (it waits
 // for the missing member). The script must start it degraded (mdadm --run)
 // before mounting — otherwise /mnt/data stays unmounted, laib's state is
 // missing and /ready answers 503 (#33's VM run on c654ce4).
 func TestDataDiskStartsAnInactiveArray(t *testing.T) {
-	ign, err := DestIgnition(box())
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
-	root := t.TempDir()
-	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
-	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
-		os.MkdirAll(d, 0o755)
-	}
-	os.WriteFile(filepath.Join(etc, "laib/data-disk"), []byte("DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n"), 0o644)
-	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("inactive\n"), 0o644)
-	log := filepath.Join(root, "shim.log")
+	b := newDiskBox(t, "", "DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n", "inactive")
+	bin, mp := b.bin, b.mp
 	// the array is known to the kernel (scan lists it) but inactive until --run
 	shim(t, bin, "mdadm", `case "$*" in
   "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
@@ -76,18 +116,7 @@ esac`)
 	shim(t, bin, "mount", `grep -q active "$LAIB_SYS/block/md127/md/array_state" || { echo "mount: can't read superblock" >&2; exit 32; }; echo mounted > "$LAIB_MP/.mounted"`)
 	shim(t, bin, "findmnt", `test -f "$LAIB_MP/.mounted"`)
 	shim(t, bin, "readlink", `echo "${@: -1}"`)
-	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep"} {
-		shim(t, bin, n, "exit 0")
-	}
-	sh := filepath.Join(root, "laib-data-disk.sh")
-	os.WriteFile(sh, []byte(script), 0o755)
-	cmd := exec.Command("bash", sh)
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
-	out, err := cmd.CombinedOutput()
-	logged, _ := os.ReadFile(log)
-	if err != nil {
-		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
-	}
+	out, logged := b.run(t)
 	if !strings.Contains(string(logged), "mdadm --run /dev/md127") {
 		t.Fatalf("the inactive array was never started:\n%s\n%s", logged, out)
 	}
@@ -104,21 +133,10 @@ esac`)
 // it and `--assemble` fails because the member is busy. The script must
 // start the inactive array it sees in /proc/mdstat and carry on.
 func TestDataDiskStartsAnArrayUdevHoldsInactive(t *testing.T) {
-	ign, err := DestIgnition(box())
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
-	root := t.TempDir()
-	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
-	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
-		os.MkdirAll(d, 0o755)
-	}
-	os.WriteFile(filepath.Join(etc, "laib/data-disk"), []byte("DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n"), 0o644)
-	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("inactive\n"), 0o644)
+	b := newDiskBox(t, "", "DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n", "inactive")
+	bin, root := b.bin, b.root
 	mdstat := filepath.Join(root, "mdstat")
 	os.WriteFile(mdstat, []byte("Personalities : [raid1]\nmd127 : inactive vdb1[0](S)\n      9426880 blocks super 1.2\n\nunused devices: <none>\n"), 0o644)
-	log := filepath.Join(root, "shim.log")
 	shim(t, bin, "mdadm", `case "$*" in
   "--detail --scan") grep -q active "$LAIB_SYS/block/md127/md/array_state" && echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
   "--run /dev/md127") echo active > "$LAIB_SYS/block/md127/md/array_state"; printf 'Personalities : [raid1]\nmd127 : active raid1 vdb1[0]\n      9426880 blocks super 1.2 [2/1] [U_]\n' > "$LAIB_MDSTAT";;
@@ -129,18 +147,7 @@ esac`)
 	shim(t, bin, "mount", `grep -q active "$LAIB_SYS/block/md127/md/array_state" || exit 32; echo mounted > "$LAIB_MP/.mounted"`)
 	shim(t, bin, "findmnt", `test -f "$LAIB_MP/.mounted"`)
 	shim(t, bin, "readlink", `echo "${@: -1}"`)
-	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep"} {
-		shim(t, bin, n, "exit 0")
-	}
-	sh := filepath.Join(root, "laib-data-disk.sh")
-	os.WriteFile(sh, []byte(script), 0o755)
-	cmd := exec.Command("bash", sh)
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp, "LAIB_MDSTAT="+mdstat)
-	out, err := cmd.CombinedOutput()
-	logged, _ := os.ReadFile(log)
-	if err != nil {
-		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
-	}
+	out, logged := b.run(t, "LAIB_MDSTAT="+mdstat)
 	if !strings.Contains(string(logged), "mdadm --run /dev/md127") || !strings.Contains(string(out), "1 of 2 member(s) active") {
 		t.Fatalf("the udev-held array was not started:\n%s\n%s", logged, out)
 	}
@@ -225,21 +232,9 @@ func TestFirstBootNeverRunsWithoutItsDataDisk(t *testing.T) {
 // record is no record: adopt Laib's array again, and write the record so
 // it survives a cut (fsync before it counts).
 func TestAnEmptyRecordAfterACutAdoptsTheArrayAgain(t *testing.T) {
-	ign, err := DestIgnition(box())
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
-	root := t.TempDir()
-	bin, etc, sys, mp := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys"), filepath.Join(root, "mnt")
-	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(etc, "systemd/system"), filepath.Join(sys, "block/md127/md"), mp} {
-		os.MkdirAll(d, 0o755)
-	}
-	rec := filepath.Join(etc, "laib/data-disk")
-	os.WriteFile(rec, nil, 0o644)
+	b := newDiskBox(t, "", "", "clean")
+	bin, etc, mp, rec := b.bin, b.etc, b.mp, b.rec
 	os.WriteFile(filepath.Join(etc, "mdadm.conf"), nil, 0o644)
-	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("clean\n"), 0o644)
-	log := filepath.Join(root, "shim.log")
 	shim(t, bin, "mdadm", `case "$*" in
   "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
   "--examine --export /dev/vdb1") printf 'MD_LEVEL=raid1\nMD_NAME=vm:data\nMD_UUID=aaaa:bbbb\n';;
@@ -255,18 +250,7 @@ esac`)
 	shim(t, bin, "blkid", `case "$*" in *LABEL*) echo data;; *) echo 1234-fs-uuid;; esac`)
 	shim(t, bin, "mount", `echo mounted > "$LAIB_MP/.mounted"`)
 	shim(t, bin, "readlink", `echo "${@: -1}"`)
-	for _, n := range []string{"systemctl", "chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
-		shim(t, bin, n, "exit 0")
-	}
-	sh := filepath.Join(root, "laib-data-disk.sh")
-	os.WriteFile(sh, []byte(script), 0o755)
-	cmd := exec.Command("bash", sh)
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
-	out, err := cmd.CombinedOutput()
-	logged, _ := os.ReadFile(log)
-	if err != nil {
-		t.Fatalf("the empty record killed the script: %v\n%s\nshims:\n%s", err, out, logged)
-	}
+	out, logged := b.run(t)
 	if _, err := os.Stat(filepath.Join(mp, ".mounted")); err != nil {
 		t.Fatalf("the array was not mounted:\n%s\n%s", out, logged)
 	}
@@ -285,25 +269,14 @@ esac`)
 // the work. No unit the script leaves may name a path behind a symlink, and
 // the old mnt-data.mount of an installed box is gone after its next boot.
 func TestDataDiskLeavesNoMountUnitSystemdRefuses(t *testing.T) {
-	ign, err := DestIgnition(box())
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := fileFromIgnition(t, ign, "/usr/local/bin/laib-data-disk.sh")
-	root := t.TempDir()
-	bin, etc, sys := filepath.Join(root, "bin"), filepath.Join(root, "etc"), filepath.Join(root, "sys")
-	units := filepath.Join(etc, "systemd/system")
-	for _, d := range []string{bin, filepath.Join(etc, "laib"), filepath.Join(units, "multi-user.target.wants"), filepath.Join(sys, "block/md127/md"), filepath.Join(root, "var/mnt/data")} {
-		os.MkdirAll(d, 0o755)
-	}
+	b := newDiskBox(t, "-", "DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n", "clean")
+	bin, root, mp := b.bin, b.root, b.mp
+	units := filepath.Join(b.etc, "systemd/system")
+	os.MkdirAll(filepath.Join(root, "var/mnt/data"), 0o755)
 	os.Symlink("var/mnt", filepath.Join(root, "mnt")) // CoreOS: /mnt -> var/mnt
-	mp := filepath.Join(root, "mnt", "data")
-	os.WriteFile(filepath.Join(etc, "laib/data-disk"), []byte("DEVICE=/dev/md127 UUID=aaaa:bbbb MEMBERS=2\n"), 0o644)
-	os.WriteFile(filepath.Join(sys, "block/md127/md/array_state"), []byte("clean\n"), 0o644)
 	old := filepath.Join(units, "mnt-data.mount")
 	os.WriteFile(old, []byte("[Mount]\nWhere=/mnt/data\n"), 0o644)
 	os.Symlink(old, filepath.Join(units, "multi-user.target.wants", "mnt-data.mount"))
-	log := filepath.Join(root, "shim.log")
 	shim(t, bin, "mdadm", `case "$*" in
   "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
   "--detail /dev/md127") echo "     Active Devices : 2";;
@@ -314,18 +287,7 @@ esac`)
 	shim(t, bin, "findmnt", `test -f "$LAIB_MP/.mounted"`)
 	shim(t, bin, "readlink", `echo "${@: -1}"`)
 	shim(t, bin, "systemctl", `case "$*" in "disable mnt-data.mount") rm -f "$LAIB_ETC/systemd/system/multi-user.target.wants/mnt-data.mount";; esac; exit 0`)
-	for _, n := range []string{"chattr", "chcon", "chown", "udevadm", "sleep", "sync"} {
-		shim(t, bin, n, "exit 0")
-	}
-	sh := filepath.Join(root, "laib-data-disk.sh")
-	os.WriteFile(sh, []byte(script), 0o755)
-	cmd := exec.Command("bash", sh)
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+log, "LAIB_ETC="+etc, "LAIB_SYS="+sys, "LAIB_MP="+mp)
-	out, err := cmd.CombinedOutput()
-	logged, _ := os.ReadFile(log)
-	if err != nil {
-		t.Fatalf("script failed: %v\n%s\nshims:\n%s", err, out, logged)
-	}
+	out, logged := b.run(t)
 	if _, err := os.Stat(filepath.Join(mp, ".mounted")); err != nil {
 		t.Fatalf("the array was not mounted:\n%s\n%s", out, logged)
 	}
@@ -345,5 +307,40 @@ esac`)
 	}
 	if b, err := os.ReadFile(old); err == nil && strings.Contains(string(b), "Where=/mnt/data") {
 		t.Error("the old mnt-data.mount (Where=/mnt/data) is still there")
+	}
+}
+
+// #304: a reinstall's first boot adopts Laib's array while a member that
+// fell behind in a power cut is left out of it. The record took the active
+// count (MEMBERS=1), and from then on every boot said "1 of 1 member(s)
+// active": the box ran on one disk for good, the re-add never ran (run
+// 39030051673). What belongs to the array is what carries its UUID; that
+// member goes back in on the same boot.
+func TestAReinstallAdoptsTheMirrorWithTheMemberThatFellBehind(t *testing.T) {
+	b := newDiskBox(t, "", "-", "clean")
+	bin, rec := b.bin, b.rec
+	// vdc1 is in the array, vdb1 carries its UUID but was left out
+	shim(t, bin, "mdadm", `case "$*" in
+  "--detail --scan") echo "ARRAY /dev/md127 metadata=1.2 name=vm:data UUID=aaaa:bbbb";;
+  "--examine --export /dev/vdb1"|"--examine --export /dev/vdc1") printf 'MD_LEVEL=raid1\nMD_NAME=vm:data\nMD_UUID=aaaa:bbbb\n';;
+  "--detail /dev/md127") printf '     Active Devices : 1\n       2     252       33        1      active sync   /dev/vdc1\n';;
+  "--manage /dev/md127 --re-add /dev/vdb1") exit 0;;
+  *) exit 1;;
+esac`)
+	shim(t, bin, "lsblk", `case "$*" in
+  "/dev/vda4") exit 0;;
+  "-ndo PKNAME /dev/vda4") echo vda;;
+  "-nrpo NAME,TYPE") printf '/dev/vda disk\n/dev/vda4 part\n/dev/vdb disk\n/dev/vdb1 part\n/dev/vdc disk\n/dev/vdc1 part\n/dev/md127 raid1\n';;
+esac`)
+	shim(t, bin, "findmnt", `case "$*" in "-n -o SOURCE /") echo /dev/vda4;; *) test -f "$LAIB_MP/.mounted";; esac`)
+	shim(t, bin, "blkid", `case "$*" in *LABEL*) echo data;; *) echo 1234-fs-uuid;; esac`)
+	shim(t, bin, "mount", `echo mounted > "$LAIB_MP/.mounted"`)
+	shim(t, bin, "readlink", `echo "${@: -1}"`)
+	out, logged := b.run(t)
+	if b, _ := os.ReadFile(rec); !strings.Contains(string(b), "MEMBERS=2") {
+		t.Fatalf("the record counts the active members, not the array's: %q\n%s", b, out)
+	}
+	if !strings.Contains(string(logged), "mdadm --manage /dev/md127 --re-add /dev/vdb1") {
+		t.Fatalf("the member that fell behind was not added back:\n%s\n%s", logged, out)
 	}
 }

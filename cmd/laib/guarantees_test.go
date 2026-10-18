@@ -29,7 +29,7 @@ func TestReadinessCarriesTheLastBackupAndTheLastChange(t *testing.T) {
 	}
 	when := time.Now().Add(-2 * time.Hour).UTC()
 	journal.Append(env.Paths.Journal, journal.Entry{T: when, Actor: "laib", Verb: "backup", Result: "green", Detail: "3 Pfade"})
-	inbox := inboxDir(env)
+	inbox := cli.InboxDir(env)
 	os.MkdirAll(inbox, 0o755)
 	os.WriteFile(inbox+"/4.json", []byte(`{"id":4,"actor":"ops","reason":"Dokumente scannen","branch":"proposal/4","tier":"apply","status":"approved","created":"2026-10-11T10:00:00Z","decided":"2026-10-11T18:40:00Z","decidedBy":"human:core","files":["services/paperless/laib.yml"],"class":"new-service","kind":"new-service","adds":["paperless"],"facts":["paperless ist unter paperless.box.test nur im Heimnetz erreichbar"]}`), 0o644)
 	r, _ = collectStatus(context.Background(), env, st)

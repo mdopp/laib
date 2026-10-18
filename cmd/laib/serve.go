@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
@@ -62,7 +64,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/mcp", mcpHandler(env))
+	mux.HandleFunc("/mcp", mcp.Handler(env))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		w.Header().Set("Content-Type", "application/json")
@@ -134,7 +136,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		w.Write(png)
 	}))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
-		open, err := proposal.List(inboxDir(env), true)
+		open, err := proposal.List(cli.InboxDir(env), true)
 		var b strings.Builder
 		b.WriteString("<h1>Inbox</h1>")
 		if err != nil {
@@ -180,7 +182,7 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 		}
 		// what was approved lately can be taken back (#41)
-		if all, err := proposal.List(inboxDir(env), false); err == nil {
+		if all, err := proposal.List(cli.InboxDir(env), false); err == nil {
 			n := 0
 			for _, p := range all {
 				if p.Status != "approved" || n >= 5 {
@@ -210,9 +212,9 @@ func cmdServe(ctx context.Context, env *cliEnv, args []string) int {
 		webEnv := &cliEnv{Paths: env.Paths, Actor: actor}
 		var code int
 		if r.PathValue("decision") == "rollback" {
-			code = cmdRollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
+			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
 		} else {
-			code = decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+			code = inbox.Decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
 		}
 		if code != cli.ExitOK && code != cli.ExitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
