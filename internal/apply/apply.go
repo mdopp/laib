@@ -498,41 +498,15 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 		// present but not executable: a red check, never a silent skip (PR #70's first VM run)
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: "hook is not executable (chmod +x services/" + svc.Name + "/" + phase + ")"}, true
 	}
-	model := render.ModelVars(st, secrets) // as a unit gets them (#200)
-	var env []string
-	env = append(env,
-		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
-		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
-		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
-		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
-	for k, v := range svc.Values {
-		val := v.Literal
-		if v.Secret != "" {
-			val = secrets[v.Secret]
-		}
-		env = append(env, k+"="+val)
-	}
-	for _, sec := range svc.Contract.Secrets {
-		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
-	}
-	envFile, err := os.CreateTemp(paths.Home, ".hook-env-*")
+	spec, cleanup, err := hookSpec(st, svc, paths, phase, secrets)
 	if err != nil {
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error()}, true
 	}
-	defer os.Remove(envFile.Name())
-	os.Chmod(envFile.Name(), 0o600)
-	envFile.WriteString(strings.Join(env, "\n") + "\n")
-	envFile.Close()
-	image := cmp.Or(st.Box.Laib.HooksImage, DefaultHooksImage)
-	mounts := []string{svc.Dir + ":ro", paths.Render + ":ro"}
-	for _, d := range svc.Contract.Data {
-		p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
-		os.MkdirAll(p, 0o755)
-		mounts = append(mounts, p)
-	}
+	defer cleanup()
+	spec.Command = []string{hook}
 	hctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	out, err := RunHook(hctx, HookSpec{Image: image, Mounts: mounts, EnvFile: envFile.Name(), Dir: svc.Dir, Command: []string{hook}})
+	out, err := RunHook(hctx, spec)
 	var kept []string
 	own := map[string]bool{}
 	for _, u := range svc.UnitNames() {
@@ -573,6 +547,61 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error() + "\n" + tail}, true
 	}
 	return Check{Service: svc.Name, What: phase, OK: true, Detail: tail}, true
+}
+
+// hookSpec is a hook's run in the hooks image, without its command: the
+// builtins, every value and LAIB_SECRET_<NAME> for the service's declared
+// secrets in a 0600 env file (cleanup removes it), the service folder and
+// the render folder read-only, the data paths read-write.
+func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string) (HookSpec, func(), error) {
+	model := render.ModelVars(st, secrets) // as a unit gets them (#200)
+	var env []string
+	env = append(env,
+		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
+		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
+		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
+		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp")
+	for k, v := range svc.Values {
+		val := v.Literal
+		if v.Secret != "" {
+			val = secrets[v.Secret]
+		}
+		env = append(env, k+"="+val)
+	}
+	for _, sec := range svc.Contract.Secrets {
+		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
+	}
+	envFile, err := os.CreateTemp(paths.Home, ".hook-env-*")
+	if err != nil {
+		return HookSpec{}, func() {}, err
+	}
+	os.Chmod(envFile.Name(), 0o600)
+	envFile.WriteString(strings.Join(env, "\n") + "\n")
+	envFile.Close()
+	mounts := []string{svc.Dir + ":ro", paths.Render + ":ro"}
+	for _, d := range svc.Contract.Data {
+		p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+		os.MkdirAll(p, 0o755)
+		mounts = append(mounts, p)
+	}
+	return HookSpec{Image: cmp.Or(st.Box.Laib.HooksImage, DefaultHooksImage), Mounts: mounts, EnvFile: envFile.Name(), Dir: svc.Dir},
+		func() { os.Remove(envFile.Name()) }, nil
+}
+
+// RunTool runs one of a template's own tools (a Python file in its folder,
+// e.g. auth's person.py, #360) the way a hook runs: in the hooks image, with
+// the hook's environment and mounts, never on the host. The argv must hold
+// no secret (ps shows it); the output is the tool's.
+func RunTool(ctx context.Context, st *state.State, svc *state.Service, paths boxfs.Paths, secrets map[string]string, tool string, args ...string) (string, error) {
+	spec, cleanup, err := hookSpec(st, svc, paths, "tool", secrets)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+	spec.Command = append([]string{"python3", filepath.Join(svc.Dir, tool)}, args...)
+	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	return RunHook(tctx, spec)
 }
 
 func tailOf(s string, n int) string {

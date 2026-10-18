@@ -19,10 +19,26 @@ port-forward edges in the network map); Laib does not know the router exists.
 
 ## Residents, groups, passwords
 
-Users live in LLDAP at runtime, not in the state repo. Creating, approving
-and removing a resident is Solaris's onboarding card talking to LLDAP
-directly (solarisbay #10 tracking). Laib renders Authelia's access rules
-(which *group* may reach which route) and nothing about *who* is in a group.
+Users live in LLDAP at runtime, not in the state repo. Laib renders
+Authelia's access rules (which *group* may reach which route) and nothing
+about *who* is in a group.
+
+A resident is invited, never signs up (owner, 2026-10-18; no public form, as
+ServiceBay's `dopp.cloud` request page was). `laib person invite <user>
+--first F --last L --email E [--group family|admins]`, or Haus's Box card
+through the haus hand's `person_invite` (haus#56), creates the LLDAP user
+without a password, in the group, and starts Authelia's "Passwort vergessen"
+for it (#360). Authelia mails the link, in German, with the way to
+`haus.<domain>/willkommen`; the person sets the first password there, so no
+password passes through Laib or Haus. Without a mail server (#359) the verb
+returns the link to pass on (Signal); it lives 24 hours, and `--resend`
+sends a new one and keeps the group. `laib person pending` lists who has not
+used the link yet. The haus hand may invite into `family` only: an admin is
+a human's call at the console. Removing someone stays LLDAP's admin UI
+(`ldap.`). The tool doing the LLDAP and Authelia work is the auth template's
+`person.py`, run in the hooks image like a hook. `dopp.cloud` and `www.`
+redirect to `haus.` (the haus route's `redirectFrom`), so the old entry point
+still leads somewhere.
 
 ## No canary channel
 

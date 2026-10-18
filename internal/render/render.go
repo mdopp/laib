@@ -479,6 +479,13 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				b.WriteString("\t}\n\trespond 403\n")
 			}
 			b.WriteString("}\n\n")
+			if len(r.RedirectFrom) > 0 {
+				var from []string
+				for _, h := range r.RedirectFrom {
+					from = append(from, strings.TrimPrefix(fqdn(st, h), "@."))
+				}
+				fmt.Fprintf(&b, "%s {\n\tredir https://%s{uri}\n}\n\n", strings.Join(from, ", "), fqdn(st, r.Host))
+			}
 		}
 	}
 	return b.String()

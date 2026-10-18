@@ -313,6 +313,13 @@ trusts `Remote-User` only when the header matches (ADR 0012 §3). The
 secret is one of the service's own declared secrets; the loader refuses a
 route naming one the service does not declare.
 
+### Names that only redirect
+
+`redirectFrom: ["@", www]` on a route makes Caddy answer those names with a
+redirect to the route's host, `{uri}` kept; `@` is the domain itself. No
+service and no Authelia behind them: the old entry points `dopp.cloud` and
+`www.` lead to `haus.` (#360).
+
 Caddy strips every client-sent `Remote-*` header on every site, ordered
 before forward-auth (`order request_header first`), so the only
 `Remote-User` an app ever sees is Authelia's. A route with `auth: none`

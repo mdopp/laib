@@ -233,6 +233,10 @@ type Route struct {
 	// solely behind the proxy (ADR 0012 §3; Laib's own page does the same).
 	ProxySecret string `yaml:"proxySecret"`
 	ProxyHeader string `yaml:"proxyHeader"` // the header's name, default X-<Service>-Proxy
+	// RedirectFrom: names Caddy sends to this route's host, no service behind
+	// them (#360: the old entry points dopp.cloud and www. to haus.); "@" is
+	// the domain itself.
+	RedirectFrom []string `yaml:"redirectFrom"`
 }
 
 // Secret is a declared secret; non-external ones are generated once.

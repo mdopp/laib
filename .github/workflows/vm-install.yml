@@ -610,6 +610,53 @@ jobs:
           test ! -e "$D/authelia-data/notification.txt" || { echo "the reset still went into the file"; exit 1; }
           echo "the reset mail for core reached the sink, from box@vm.test, with its link"
           EOS
+      - name: invite a person — LLDAP without a password, the link by mail or back, a first password, a login (#360)
+        if: matrix.part == 'logins'
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+          lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+          root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+          au() { local p=$1; shift; curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -b /tmp/jar -c /tmp/jar -H "Content-Type: application/json" -o /tmp/au.json -w "%{http_code}" "$@" "https://auth.vm.test$p" || true; }
+          # the link to a first password, as the person follows it: the token, a password, then a login
+          first_password() {   # <user> <token> <password>
+            rm -f /tmp/jar
+            [ "$(au /api/reset-password/identity/finish -d "{\"token\":\"$2\"}")" = 200 ] || { echo "$1: Authelia does not take the link: $(cat /tmp/au.json)"; exit 1; }
+            [ "$(au /api/reset-password -d "{\"password\":\"$3\"}")" = 200 ] || { echo "$1: the password was not set: $(cat /tmp/au.json)"; exit 1; }
+            rm -f /tmp/jar
+            [ "$(au /api/firstfactor -d "{\"username\":\"$1\",\"password\":\"$3\",\"keepMeLoggedIn\":false}")" = 200 ] || { echo "$1 cannot log in with the first password: $(cat /tmp/au.json)"; exit 1; }
+            echo "$1 set a first password through the link and logged in"
+          }
+          # 1. with the mail server (#359's sink): the link is mailed, German, with the way to Haus
+          lw person invite lena --first Lena --last Muster --email lena@vm.test --json | tee /tmp/inv.json
+          grep -q '"mailed": true' /tmp/inv.json && ! grep -q '"link"' /tmp/inv.json || { echo "the invite was not mailed"; exit 1; }
+          grep -q '"user": "lena"' <<<"$(lw person pending --json)" || { echo "lena is not pending"; exit 1; }
+          lw person invite lena --first Lena --last Muster --email lena@vm.test > /tmp/again.txt 2>&1 && { echo "a second invite was not refused"; exit 1; }
+          grep -q "gibt es schon" /tmp/again.txt || { cat /tmp/again.txt; exit 1; }
+          id=""; for i in $(seq 1 30); do
+            id=$(curl -fsS "http://127.0.0.1:8025/api/v1/search?query=to:lena@vm.test" | grep -o '"ID":"[^"]*"' | sed -n '1s/"ID":"\(.*\)"/\1/p' || true)
+            [ -n "$id" ] && break; sleep 2; done
+          [ -n "$id" ] || { echo "no invitation reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
+          curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
+          for w in "Hallo Lena Muster" "https://haus.vm.test/willkommen" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
+          tok=$(grep -o 'step2?token=[A-Za-z0-9._-]*' /tmp/mail.json | sed -n '1s/.*token=//p')
+          [ -n "$tok" ] || { echo "no link in the mail"; exit 1; }
+          first_password lena "$tok" 'Lena-Passwort-360!'
+          if grep -q '"user": "lena"' <<<"$(lw person pending --json)"; then echo "lena is still pending after her first password"; exit 1; fi
+          # 2. without a mail server: the link comes back, to be passed on
+          S=/mnt/data/laib/state; sed -i 's|^SMTP_HOST:.*|SMTP_HOST: ""|' "$S/services/auth/values.yml"
+          git -C "$S" -c user.name=core -c user.email=core@vm.test commit -qam "vm: auth without a mail server (#360)"
+          lw apply auth >/dev/null
+          lw person invite max --first Max --last Muster --email max@vm.test --json | tee /tmp/inv.json
+          grep -q '"mailed": false' /tmp/inv.json || { echo "an invite without SMTP says it was mailed"; exit 1; }
+          link=$(grep -o '"link": "[^"]*"' /tmp/inv.json | sed 's/"link": "\(.*\)"/\1/')
+          case "$link" in https://auth.vm.test/reset-password/step2?token=*) ;; *) echo "no link back: $link"; exit 1;; esac
+          grep -q '"expires": "20' /tmp/inv.json || { echo "no expiry"; exit 1; }
+          first_password max "${link#*token=}" 'Max-Passwort-360!'
+          grep -q "person" <<<"$(lw journal --since 15m)" || { echo "the invites are not in the journal"; exit 1; }
+          EOS
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
         if: matrix.part == 'services'
         run: |

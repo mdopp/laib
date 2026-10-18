@@ -33,7 +33,9 @@ enough: nobody needs to be recognised.
    search) becomes a library used by Haus for the Notizen & Dokumente
    search. Pages, cards and the companion API go to Haus (ADR 0014);
    administration to the Operator and Laib (ADR 0013); resident
-   onboarding to a Box card against LLDAP. Soul, skills, topics,
+   onboarding to Haus's Box card, which invites through Laib's
+   `person_invite` (an LLDAP user without a password, Authelia's reset mail
+   for the first one, #360) instead of talking to LLDAP itself. Soul, skills, topics,
    chronicle, sessions, compaction and the chat go away. A chat UI against
    llama-server, if anyone wants one, is an ordinary template.
 5. **Hermes** gets one job, the Bote (ADR 0016): the text agent on Signal

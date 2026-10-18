@@ -73,6 +73,7 @@ missing = [w for w, bad in (("SMTP_FROM (der Absender)", "@" not in sender), ("e
 if smtp["HOST"] and not missing:
     notifier = f"""notifier:
   disable_startup_check: true
+  template_path: '/config/templates'
   smtp:
     address: {q(f'{scheme}://{smtp["HOST"]}:{smtp["PORT"] or 587}')}
     timeout: '10s'
@@ -93,6 +94,7 @@ if smtp["HOST"] and not missing:
     print(f"notifier: smtp via {smtp['HOST']}")
 else:
     notifier = """notifier:
+  template_path: '/config/templates'
   filesystem:
     filename: '/data/notification.txt'
 """
@@ -111,6 +113,7 @@ log:
   level: info
 identity_validation:
   reset_password:
+    jwt_lifespan: '24h'
     jwt_secret: '{S("AUTHELIA_JWT_SECRET")}'
 authentication_backend:
   ldap:
@@ -145,6 +148,38 @@ storage:
 # file's instead of joining them, so a rule here would be dropped or, with the
 # files in another order, decide alone (a wildcard would open the admin hosts).
 """
+# 2c. the reset mail in German (#360): the same mail sets a first password
+# (laib person invite) and a forgotten one, so it says both, and where the
+# family goes next. Authelia fills the {{ }}; the link lives 24 hours
+# (jwt_lifespan above), long enough to pass it on by Signal.
+tpl_dir = os.path.join(cfg_dir, "templates")
+os.makedirs(tpl_dir, exist_ok=True)
+TXT = """Hallo {{ .DisplayName }},
+
+mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:
+
+{{ .LinkURL }}
+
+Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem
+Benutzernamen und dem Passwort an. Los geht es hier: https://haus.@DOMAIN@/willkommen
+
+Hast du das nicht angefordert? Dann sperre den Link: {{ .RevocationLinkURL }}
+"""
+HTML = """<!DOCTYPE html>
+<html lang="de"><body style="font-family: sans-serif; line-height: 1.5; max-width: 34em">
+<p>Hallo {{ .DisplayName }},</p>
+<p>mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:</p>
+<p><a href="{{ .LinkURL }}" style="font-size: 1.1em">Passwort setzen</a></p>
+<p>Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem Benutzernamen und dem Passwort an.
+Los geht es hier: <a href="https://haus.@DOMAIN@/willkommen">haus.@DOMAIN@</a></p>
+<p style="color: #666; font-size: 0.9em">Hast du das nicht angefordert? Dann <a href="{{ .RevocationLinkURL }}">sperre den Link</a>.</p>
+</body></html>
+"""
+for ext, body in (("txt", TXT), ("html", HTML)):
+    with open(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), "w") as f:
+        f.write(body.replace("@DOMAIN@", DOMAIN))
+    os.replace(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), os.path.join(tpl_dir, "IdentityVerificationJWT." + ext))
+
 # 3. the OIDC clients, one list in one file (oidc-clients.yml): Laib's, rendered
 # into /laib/laib-clients.yml (render/authelia; the hook runs again whenever it
 # changes), then the carried ServiceBay ones Laib does not declare (#245).
