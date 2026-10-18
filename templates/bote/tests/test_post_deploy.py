@@ -48,5 +48,31 @@ class PostDeploy(unittest.TestCase):
             self.assertNotIn(s, argv, f"{name} is on a process's argv, where ps shows it")
 
 
+    def test_the_ha_tool_speaks_assist_as_the_bote_and_the_automat_has_its_own_token(self):
+        """#349: BOTE_HA_TOKEN belongs to HA's non-admin user bote, and HA serves
+        a non-admin only the Assist API (/api/mcp/assist; /mcp_server/sse wants an
+        administrator by default). The Automat edits automations, which HA allows
+        administrators only: it gets BOTE_AUTOMAT_HA_TOKEN, not the Bote's."""
+        def config(**secrets):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                           MODEL_NAME="m", THINKING_MODEL="t", HA_URL="http://host.containers.internal:8123", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok",
+                           **{"LAIB_SECRET_" + k: v for k, v in secrets.items()})
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                return Path(d, "bote/hermes/config.yaml").read_text(), Path(d, "bote/hermes/.env").read_text()
+        conf, dotenv = config(BOTE_HA_TOKEN="bote-user-tok")
+        self.assertIn("url: http://host.containers.internal:8123/api/mcp/assist", conf)
+        self.assertNotIn("mcp_server/sse", conf)
+        self.assertNotIn("automat:", conf, "the Automat wired without its administrator token")
+        self.assertIn("HA_TOKEN=bote-user-tok", dotenv)
+        conf, _ = config(BOTE_HA_TOKEN="bote-user-tok", BOTE_AUTOMAT_HA_TOKEN="admin-tok")
+        self.assertIn("automat:", conf)
+        self.assertNotIn("admin-tok", conf + dotenv, "the Automat's administrator token reaches Hermes")
+        conf, _ = config(BOTE_AUTOMAT_HA_TOKEN="admin-tok")
+        self.assertIn("automat:", conf)
+        self.assertNotIn("api/mcp/assist", conf)
+
+
 if __name__ == "__main__":
     unittest.main()
