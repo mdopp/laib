@@ -33,7 +33,7 @@ for f in sorted(glob.glob(".github/workflows/*.yml")):
                     bad += 1
                     print(f"{f}: {jname}: a pipe into an early grep (SIGPIPE under pipefail, #307): {line.strip()[:160]}")
 # the scripts CI and the boxes run carry the same pipefail (#329)
-for f in sorted(glob.glob("scripts/*.sh")):
+for f in sorted(glob.glob("scripts/**/*.sh", recursive=True)):
     for n, line in enumerate(open(f).read().replace("\\\n", " ").splitlines(), 1):
         if not line.lstrip().startswith("#") and early.search(line):
             bad += 1

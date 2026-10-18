@@ -30,7 +30,8 @@ things cannot be shared:
    then `laib apply`. Not seen: a host-network `.container` declares no
    ports, so ServiceBay's `llama-embed.container` (11436, Laib's llama's
    embeddings port) is caught by nothing; it goes out with `llama` (step 4).
-2. **Ports 80/443.** Caddy starts on alternative ports beside NPM (step 2).
+2. **Ports 80/443.** NPM holds them until the services have moved; then
+   Caddy replaces it (step 4d).
 3. **Whole-file configs.** Authelia, AdGuard rewrites and the SSH port 2222
    (claude-dev vs Werkstatt) move as a whole, never half.
 
@@ -49,7 +50,9 @@ file moves out.
 
 1. **Laib binary + state repo**, nothing applied. `install-box.sh` (as in
    `docs/INSTALL.md`; it installs the binaries and the unit and runs
-   `laib init --domain …`) also writes the box's own config, as on a stick
+   `laib init --domain …`; the Kraftwerk is the GPU box: `--gpu`, without
+   which `laib add immich` refuses, its machine learning wants the GPU)
+   also writes the box's own config, as on a stick
    install: journald persistent with at most 4G and four weeks
    (`/etc/systemd/journald.conf.d/50-laib.conf`, journald restarted) and
    podman's log driver pinned to journald
@@ -58,9 +61,19 @@ file moves out.
    journald, Fedora CoreOS's default). The Kraftwerk is never reinstalled, so
    this is the only way these reach it; `laib diag` is `rot box` while either
    file is missing, and `install-box.sh --box-config` writes just these two (#281).
-   Then `scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json
-   --templates <servicebay>/templates,<each external registry>/templates
-   --out /mnt/data/laib/migration` writes a draft `<name>/` per installed
+   Then the migration scripts and ServiceBay's templates as the box runs
+   them — the built-ins in its image, the external registries it cloned into
+   its container:
+   ```sh
+   git clone --depth 1 https://github.com/mdopp/laib ~/laib && cd ~/laib
+   mkdir -p ~/servicebay-templates
+   podman cp servicebay:/app/templates ~/servicebay-templates/servicebay
+   podman cp servicebay:/app/.servicebay/registries ~/servicebay-templates/registries
+   python3 scripts/migrate-servicebay.py --config /mnt/data/servicebay/config.json \
+     --templates ~/servicebay-templates/servicebay,$(ls -d ~/servicebay-templates/registries/*/templates | paste -sd,) \
+     --out /mnt/data/laib/migration | tee /mnt/data/laib/migration.txt
+   ```
+   (python3 is on the box: ServiceBay's agent needs it.) It writes a draft `<name>/` per installed
    template — laib.yml with the routes the box's proxy hosts have and the auth
    ServiceBay applied, data paths from the Pod YAML's host paths, secrets and
    ports from `variables.json`; values.yml from `installedVariables` — and
@@ -75,11 +88,14 @@ file moves out.
    for the external ones (DNS token, SMTP, Fritz!Box, GitHub, Claude OAuth),
    and the data-bound ones carried over (below). The rest is generated on
    first apply and the post-deploy hook seeds the app. Nothing runs yet.
-2. **Caddy beside NPM** on a different port, `laib apply caddy`. Routes are
-   verified against `127.0.0.1` before DNS moves. Then AdGuard rewrites
-   switch, NPM's unit is disabled. SSO forward-auth now goes through Caddy;
-   Authelia's config is still ServiceBay's at this point and stays compatible
-   because the rules are Authelia's, not the proxy's (ServiceBay ADR 0005, 0006).
+2. **NPM stays the proxy until step 4 is done.** Caddy cannot start beside
+   it: both are host-network, and Caddy binds 80 and 443, which NPM holds;
+   and Caddy's routes come from the state, which holds none of the
+   household's services yet. Meanwhile NPM keeps serving every name: Laib's
+   built-ins publish the ports ServiceBay's proxy hosts forward to (except
+   Vaultwarden, which therefore moves last, right before 4d), and
+   Laib's Authelia answers NPM's `auth-request` as ServiceBay's did
+   (Authelia's default endpoints). Caddy replaces NPM in step 4d.
 3. **auth** (Authelia + LLDAP), by the a–c of step 4: ServiceBay's
    `auth.kube` out first, then `laib add auth`. Only the services already
    in Laib's state have Laib clients at this point, so the apps still on
@@ -99,9 +115,13 @@ file moves out.
    moves from solarisbay into Laib with the lease sidecar; Its consumers
    (foundry-chronicle now, the Werkstatt's pi from step 5) speak Laib's lease contract (ADR 0011,
    amendment 2026-10-14): a preset instead of a window name, a holder, the
-   model key. Then **vaultwarden, radicale, mosquitto, file-share, beets,
-   immich, media, home-assistant, chronik** in that order: small and stateless first,
-   the ones with migrations last. Each one, in this order (the service is
+   model key. Then **radicale, mosquitto, file-share, beets, immich,
+   paperless, media, home-assistant, chronik, vaultwarden** in that order:
+   small and stateless first, the ones with migrations later, and
+   Vaultwarden last, right before 4d: its built-in listens on 127.0.0.1
+   only, where ServiceBay's proxy host does not forward (it forwards to the
+   LAN address), so vault.<domain> answers 502 from its c until Caddy serves
+   it in 4d — minutes, not the weekend. Each one, in this order (the service is
    down from a to c; that is the price of never having two writers on one
    database):
    a. Stop ServiceBay's unit and move its files out of the Quadlet root:
@@ -119,6 +139,7 @@ file moves out.
    c. The `laib add <name> …` line `migrate-servicebay.py` printed for it
       (the box's values, a database's image pinned; it applies). `laib plan`
       shows no `KONFLIKT`, the apply ends green, the app shows the old data.
+      Its names still answer through NPM (Vaultwarden's not, see above).
    **chronik** (daggerheart-chronik) comes from foundry-chronicle's registry
    (`laib template sync`) and needs `llama` for the lease and `stimme` for
    Piper. Its data moves once, in step b with ServiceBay's unit stopped (one
@@ -126,6 +147,11 @@ file moves out.
    `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved; the
    commands are in foundry-chronicle's `templates/chronik/README.md`. The
    Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
+   d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
+      unit out by a. (`nginx`), then `laib add caddy`; its routes are the
+      state's, now the full list. Verify each name through Caddy (none
+      answers 502), then the
+      AdGuard rewrites, if any, point at the box as before.
 5. **Werkstatt** replaces `claude-dev` + `pi-web`: one template; their git
    checkouts are copied into the Werkstatt's workspace (below). Their
    sessions and SSH host keys are an open decision (below).
@@ -152,7 +178,8 @@ scripts/move-servicebay-data.sh <service>             # on the box, as core
 It **copies** and never moves. ServiceBay's paths stay as they were, so
 handing a service back is re-enabling its unit, and they go with ServiceBay's
 data dir after 30 days. Two files are edited in place, and their ServiceBay
-version is kept beside them as `<file>.servicebay`; a rollback puts those
+version is kept beside them as `<file>.servicebay`, as is Home Assistant's
+`configuration.yaml`, which Laib's pre-start edits; a rollback puts those
 back. It refuses a service whose ServiceBay file is still in the Quadlet
 root, whose ServiceBay unit still runs (the wrapper reads the running units
 from `systemctl --user`; a live database copied is no copy), whose target
@@ -173,13 +200,14 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | file-share | podman named volume `file-share-syncthing-config` | `file-share/syncthing-config` | copied: device ID and keys survive, nothing is re-paired |
 | file-share | `file-share/filebrowser-db/filebrowser.db` | `file-share/filebrowser/filebrowser.db` | copied: users, scopes and share links survive; `filebrowser-config` stays behind (the unit configures File Browser) |
 | file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there |
+| radicale | `radicale/data`, owned by the image's radicale user (2999) as ServiceBay's default user namespace maps it (a subuid) | the same path; Laib's unit maps the box's user onto 2999 | in place, handed to the box's user: otherwise Radicale cannot write its collections and restarts forever (#311). ServiceBay's image takes them back on its next start |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
 | file-share | Syncthing folders on those paths | the same folders on the new paths | `config.xml` rewritten with the photos, folder and device IDs kept: the devices keep syncing, nothing is re-paired |
 
 Everything else the built-ins mount sits at ServiceBay's paths already (auth,
 adguard, the Home Assistant config and the Z-Wave store, immich upload and
-pgdata, paperless, radicale, media, mosquitto, beets, esphome, llama) and is
+pgdata, paperless, media, mosquitto, beets, esphome, llama) and is
 adopted in place.
 
 Jellyfin's LDAP login (#256) is adopted too: the plugin is installed on the
@@ -341,14 +369,20 @@ Every `laib apply` snapshots first. Handing a service back to ServiceBay is
 `laib remove <name>`, then its files back from `~/servicebay-units/` into the
 Quadlet root, `systemctl --user daemon-reload`, `systemctl --user start
 <name>.service`. ServiceBay's data paths were only copied from, so they are as
-it left them; for home-assistant, first put the two `<file>.servicebay` files
-back (zwave-js `settings.json`, `.storage/core.config_entries`). For immich,
+it left them; for home-assistant, first put the three `<file>.servicebay` files
+back (zwave-js `settings.json`, `.storage/core.config_entries`, and
+`configuration.yaml`: Laib's version reads a secret from Laib's unit, and
+without it Home Assistant starts in recovery mode with no automation). For immich,
 the photos moved: rename each `file-share/data/photos/<user>` back to
 `file-share/data/<user>/photos` and `file-share/data/photos/shared` to
 `file-share/data/photos` (via a temporary name), restore the dump into the
 stopped database (`pg_restore --clean --if-exists -d immich
 immich/before-library-move.dump` in Immich's Postgres image), put
 `config.xml.servicebay` back, and delete `immich/library-move.json`. NPM comes back
-the same way until step 7. After step 7,
+the same way until step 7. Taking a handed-back service over again is a–c
+once more, but the copies the first move made are stale by then (ServiceBay
+wrote on): delete each target it printed (`copy … -> <target>`, e.g.
+`podman unshare rm -rf ${DATA_DIR}/home-assistant/matter`) before the move
+runs again; it refuses a target that holds data. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.

@@ -129,6 +129,30 @@ class Migrate(unittest.TestCase):
         self.assertNotIn("AUTHELIA_IMAGE", line)
         self.assertNotIn("SAMBA_IMAGE", self.stdout)
 
+    def test_builtins_that_are_not_laibs_templates_are_refused(self):
+        # #248: run from a copy without templates/, every service was taken for a
+        # foreign one: no laib add line, no carry check against the built-in, no word
+        with tempfile.TemporaryDirectory() as d:
+            p = subprocess.run([sys.executable, "-I", str(SCRIPT), "--config", str(FIX / "config.json"), "--templates", str(FIX / "templates"),
+                                "--builtins", d, "--out", str(Path(d) / "o")], capture_output=True, text=True)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("built-in", p.stderr)
+
+    def test_a_sealed_value_never_lands_on_the_add_line(self):
+        # #248: ServiceBay declares MQTT_USERNAME a secret; the add line carried
+        # it as `MQTT_USER=!secret MQTT_USERNAME`, two words on laib's argv
+        line = next((l for l in self.stdout.splitlines() if "laib add mosquitto" in l), "")
+        self.assertTrue(line, self.stdout)
+        self.assertNotIn("!secret", line)
+        self.assertRegex(self.stdout, r"mosquitto: MQTT_USER .*sealed.*MQTT_USERNAME")
+
+    def test_add_line_carries_the_zwave_stick(self):
+        # #248: the box's Z-Wave stick is a service-less value; the built-in's
+        # default (/dev/ttyACM0) is another box's, and AddDevice= of a path
+        # that is not there keeps Z-Wave JS UI from starting
+        line = next((l for l in self.stdout.splitlines() if "laib add home-assistant" in l), "")
+        self.assertIn("ZWAVE_DEVICE=/dev/ttyACM9", line)
+
     def test_add_line_never_runs_with_an_empty_pin(self):
         # #237 review: a box image without a RepoDigest (or gone) makes the
         # $(podman …) empty; laib add must not run then (a blank image value)

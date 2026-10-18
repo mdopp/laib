@@ -16,6 +16,8 @@ ServiceBay unit is stopped and its file moved out of the Quadlet root
                   <D>/file-share/filebrowser-db/filebrowser.db -> <D>/file-share/filebrowser/
                   Samba's passdb stays in place (<D>/file-share/samba-private): said, whose
                   accounts carry over with their passwords
+  radicale        <D>/radicale/data stays where it is and becomes the box user's,
+                  whom Laib's unit maps onto radicale's uid (keep-id), #311
   werkstatt       the git checkouts of <D>/claude-dev/workspace and
                   <D>/pi-web/workspace -> <D>/werkstatt/workspace (pi-web's
                   under pi-web-<name> where claude-dev has the same name)
@@ -32,8 +34,8 @@ ServiceBay unit is stopped and its file moved out of the Quadlet root
 It copies, it never moves: ServiceBay's paths stay as they were, so handing a
 service back is re-enabling its unit; they go with ServiceBay's data dir after
 30 days. The two files it edits in place (zwave-js settings.json, Home
-Assistant's core.config_entries) keep ServiceBay's version beside them as
-<file>.servicebay. A service whose ServiceBay file is still in the Quadlet
+Assistant's core.config_entries), and configuration.yaml, which Laib's
+pre-start edits, keep ServiceBay's version beside them as <file>.servicebay. A service whose ServiceBay file is still in the Quadlet
 root, whose ServiceBay unit still runs (--active, from the wrapper), whose
 target already holds data or whose copy does not fit is refused before
 anything of it is written. Each target is copied into <target>.partial and
@@ -110,6 +112,17 @@ def own(s, d, uid):
         # not root: the tests
 
 
+def chown_tree(p, uid, gid):
+    """lchown p and everything below it; not root (the tests) leaves owners as they are"""
+    for root, dirs, files in os.walk(p):
+        for n in [root] + [os.path.join(root, x) for x in dirs + files]:
+            try:
+                os.lchown(n, uid, gid)
+            except PermissionError:
+                if os.geteuid() == 0:
+                    raise
+
+
 def put(src, dst, uid):
     if os.path.isdir(src) and not os.path.islink(src):
         shutil.copytree(src, dst, symlinks=True, ignore=special)
@@ -182,6 +195,13 @@ def plan(service, d, volumes, a=None):
         ha = os.path.join(d, "home-assistant")
         if os.path.isdir(os.path.join(ha, "matter-server")):
             into(os.path.join(ha, "matter-server"), os.path.join(ha, "matter"))
+        # Laib's pre-start edits configuration.yaml (ServiceBay's auth_oidc block
+        # goes into a package that reads Laib's AUTH_OIDC_SECRET); ServiceBay's
+        # version stays beside it, or a handed-back HA starts in recovery mode (#338)
+        conf = os.path.join(ha, "homeassistant", "configuration.yaml")
+        if os.path.exists(conf) and not os.path.exists(conf + ".servicebay"):
+            steps.append(("keep Home Assistant's configuration.yaml as configuration.yaml.servicebay (Laib's pre-start edits it)", [],
+                          lambda: shutil.copy2(conf, conf + ".servicebay")))
         ext = os.path.join(ha, "zwave-js", "sb-external-settings.json")
         if os.path.exists(ext):
             old = json.load(open(ext))
@@ -221,6 +241,15 @@ def plan(service, d, volumes, a=None):
             names = sorted(l.split(":", 1)[0] for l in open(passdb) if ":" in l)
             notes.append(f"Samba's accounts stay in place with their passwords: {', '.join(names)}; a person's "
                          "stays while they are in family or admins in LLDAP, the shared SHARE_USER always")
+    elif service == "radicale":
+        # ServiceBay's image chowned /data to its radicale user (2999) in the
+        # default user namespace, a subuid on the host; Laib's unit maps core
+        # onto 2999 (UserNS=keep-id), so the collections become core's, in
+        # place: the wrapper's root is core. ServiceBay's image chowns them
+        # back on its next start, so a rollback needs nothing (#311)
+        data = os.path.join(d, "radicale", "data")
+        if os.path.isdir(data):
+            steps.append((f"hand {data} to the box's user (Laib maps it onto radicale's 2999)", [], lambda: chown_tree(data, 0, 0)))
     elif service == "werkstatt":
         dst = os.path.join(d, "werkstatt", "workspace")
         # the names follow from the sources alone, so a second run finds its
