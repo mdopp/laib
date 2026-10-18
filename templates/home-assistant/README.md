@@ -8,6 +8,17 @@ install: the Wyoming integrations for Stimme (whisper, piper/Martin,
 openWakeWord), the CalDAV integration for Radicale, Music Assistant,
 MQTT for mosquitto, and Frage as the conversation agent fallback.
 
+## The checklist on the Box page (#55, #309)
+
+With a long-lived token of an admin account in the secret `HA_TOKEN`
+(`laib secret set HA_TOKEN`), `home-assistant-check.service` reads the
+config entries and writes `.laib-status.json` into HA's config folder:
+which of the integrations above are still missing. The Box page and
+`laib diag` show it with its age ("geprüft vor 12 min"). Looking at either
+re-checks a result older than five minutes in the background, the Box
+page has "jetzt prüfen", and a timer re-checks once an hour so the morning
+report reads a fresh one. Without the token there is no checklist.
+
 ## The family's login (#253)
 
 "Login with Familienkonto" signs a family member in through Authelia with

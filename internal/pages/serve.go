@@ -14,12 +14,14 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // Serve is the daemon: /ready for Solaris and the pages, and the three
@@ -88,7 +90,27 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			return
 		}
 		rd, rows := CollectStatus(r.Context(), env, st)
+		// a status the admin looks at is checked again when it is stale, in
+		// the background (#309); while a check runs the page reloads itself
+		checking := map[string]bool{}
+		for _, name := range st.ServiceNames() {
+			svc := st.Services[name]
+			if svc.Contract.Status == nil || svc.Contract.Status.Check == "" {
+				continue
+			}
+			if diag.Stale(svc, diag.ReadStatus(st, svc), time.Now()) {
+				checking[name] = diag.Refresh(r.Context(), svc)
+			} else {
+				checking[name] = sysd.Active(r.Context(), svc.Contract.Status.Check) == "activating"
+			}
+		}
 		var b strings.Builder
+		for _, on := range checking {
+			if on {
+				b.WriteString(`<meta http-equiv=refresh content=10>`)
+				break
+			}
+		}
 		fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste · Operator %s · zuletzt gehört %s</h1>", rd.State, rd.Services, html.EscapeString(rd.Operator), rd.LastHeard[11:19])
 		if rd.Lock != "" {
 			fmt.Fprintf(&b, "<p>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
@@ -101,7 +123,14 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 					bad = append(bad, u+"="+a)
 				}
 			}
-			fmt.Fprintf(&b, "<tr class=%s><td>%s</td><td>%s</td><td>%s</td></tr>", row.State, row.State, html.EscapeString(row.Name), html.EscapeString(strings.Join(bad, " ")))
+			check := ""
+			if on, ok := checking[row.Name]; ok {
+				check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
+				if on {
+					check = "wird geprüft …"
+				}
+			}
+			fmt.Fprintf(&b, "<tr class=%s><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>", row.State, row.State, html.EscapeString(row.Name), html.EscapeString(strings.Join(bad, " ")), html.EscapeString(row.Detail), check)
 		}
 		b.WriteString("</table>")
 		if e, ok := journal.Last(env.Paths.Journal); ok {
@@ -222,6 +251,20 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			return
 		}
 		http.Redirect(w, r, "/journal", http.StatusSeeOther)
+	}))
+	// "jetzt prüfen" (#309): the service's check, started without waiting
+	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
+		st, err := cli.LoadState(env)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		svc, ok := st.Services[r.PathValue("service")]
+		if !ok || !diag.Refresh(r.Context(), svc) {
+			http.Error(w, "kein Check für diesen Dienst", http.StatusNotFound)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}))
 	mux.HandleFunc("/journal", guard(func(w http.ResponseWriter, r *http.Request) {
 		es, err := journal.Read(env.Paths.Journal, time.Now().Add(-7*24*time.Hour))

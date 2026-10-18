@@ -37,6 +37,18 @@ class Decide(unittest.TestCase):
         s = json.loads((self.out / "hey_joshua.status.json").read_text())
         self.assertEqual((s["state"], s["phrase"], s["rev"]), ("done", "Hey Joshua", "r1"))
 
+    def test_laib_reads_where_the_wake_word_stands(self):
+        # #309: the Box page and diag read laib-status.json, which the trainer
+        # writes on every change; laib names no template
+        for state, reason, want in (("training", "", "wird trainiert"), ("done", "Modell gebaut", "trainiert"),
+                                    ("failed", "OOM", "Training fehlgeschlagen: OOM")):
+            trainer.write_status(self.out, "hey_joshua", state, "Hey Joshua", "r1", reason)
+            s = json.loads((self.out / "laib-status.json").read_text())
+            self.assertIn(want, s["detail"])
+            self.assertTrue(s["at"].endswith("Z"))
+            self.assertEqual(len(s["findings"]), 1 if state == "failed" else 0)
+        self.assertEqual(s["findings"][0]["severity"], "gelb")
+
 
 class Positives(unittest.TestCase):
     def test_every_language_of_the_persona_says_the_phrase(self):

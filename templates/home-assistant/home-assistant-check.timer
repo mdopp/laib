@@ -1,0 +1,9 @@
+[Unit]
+Description=Home Assistant: laib's integration check, hourly, so the morning report reads a fresh one
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -23,3 +23,12 @@ func SnapshotPaths(st *State, svc *Service) []string {
 	}
 	return out
 }
+
+// StatusPath is the service's status file with ${DATA_DIR} expanded, or ""
+// when it declares none (#309).
+func StatusPath(st *State, svc *Service) string {
+	if svc.Contract.Status == nil {
+		return ""
+	}
+	return strings.ReplaceAll(svc.Contract.Status.File, "${DATA_DIR}", st.Box.DataDir)
+}

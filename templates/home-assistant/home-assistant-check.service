@@ -1,0 +1,15 @@
+# laib's look at Home Assistant's integrations (#55, #309): the script runs
+# inside the running Home Assistant container and writes the status file
+# laib.yml declares. laib starts this when someone looks at diag or the Box
+# page and the file is older than five minutes; the timer once an hour.
+# The token reaches podman through the environment, never on argv.
+[Unit]
+Description=Home Assistant: check the integrations for laib's status
+After=home-assistant.service
+
+[Service]
+Type=oneshot
+Environment=HA_TOKEN=${HA_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/home-assistant/home-assistant-check.py
+ExecStart=/usr/bin/podman exec -i -e HA_TOKEN systemd-home-assistant python3 -
+TimeoutStartSec=60
