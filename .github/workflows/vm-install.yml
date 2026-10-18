@@ -586,7 +586,8 @@ jobs:
           lw apply auth | tee /tmp/apply-auth.txt
           grep -q "notifier: smtp via host.containers.internal" /tmp/apply-auth.txt || { echo "pre-start did not render the smtp notifier"; exit 1; }
           [ "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.auth.auth-authelia.X_LAIB_SMTP_PASSWORD)" = "$PW" ] || { echo "the podman secret is not the password"; exit 1; }
-          [ "$(podman exec systemd-auth-authelia printenv X_LAIB_SMTP_PASSWORD)" = "$PW" ] || { echo "Authelia does not get the password"; exit 1; }
+          pid=$(podman inspect --format "{{.State.Pid}}" systemd-auth-authelia)  # the image has no printenv: read its environment from the host
+          grep -qxF "X_LAIB_SMTP_PASSWORD=$PW" <<<"$(tr "\\0" "\\n" < /proc/$pid/environ)" || { echo "Authelia does not get the password"; exit 1; }
           if grep -qF -- "vm-smtp-pw-359" <<<"$(podman inspect systemd-auth-authelia --format "{{.Config.CreateCommand}}"; cat "$D/authelia-config/configuration.yml" /tmp/apply-auth.txt)"; then echo "the SMTP password is on argv, in configuration.yml or in the apply's output"; exit 1; fi
           code=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://auth.vm.test/api/health || true)
           [ "$code" = 200 ] || { echo "Authelia is not healthy with the smtp notifier: $code"; podman logs --tail 30 systemd-auth-authelia; exit 1; }
