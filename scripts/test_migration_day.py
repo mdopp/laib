@@ -345,6 +345,11 @@ echo "  laib add vaultwarden"
         self.assertIn(f"RED   radicale: other-import.kube runs it too (data {self.t}/data/radicale/data)", r.stdout)
         self.assertNotIn("file-share/data)", r.stdout)   # the shared tree is nobody's own (backup: false)
         self.changed_nothing()
+        # the run refuses the step before it stops anything
+        r = self.run_md("--foreground", "--until", "radicale", IGNORE="other-import")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("radicale: laib add would refuse (KONFLIKT), nothing changed yet", r.stdout)
+        self.assertNotIn("--user stop radicale.service", self.calls_of("systemctl"))
 
     def test_the_google_import_goes_off_with_radicale(self):
         # #371, decided: solaris-import-google writes into radicale's data, so it leaves with radicale

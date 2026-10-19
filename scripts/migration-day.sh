@@ -60,12 +60,14 @@ export LAIB_HOME=${LAIB_HOME:-/mnt/data/laib} LAIB_ACTOR=human:core LAIB=$LAIB_B
 # MIGRATION.md's order: step 1 (install, drafts, secrets), 3 (auth), 4, 4d (caddy), 5 (werkstatt), 6 (ignore), 7 (retire)
 STEPS="preflight install drafts secrets auth adguard llama radicale mosquitto file-share beets esphome usage-metrics immich paperless media home-assistant vaultwarden caddy werkstatt ignore retire"
 # what stays on its ServiceBay unit, ignored (MIGRATION.md step 6; #160): Solaris until Phase 5,
-# chronik until foundry-chronicle has its Laib template (foundry-chronicle#362), the Google import (undecided)
-IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solaris-wakeword-trainer daggerheart-chronik solaris-import-google}
+# chronik until foundry-chronicle has its Laib template (foundry-chronicle#362). The Google import
+# goes off with radicale: it writes into radicale's data, a KONFLIKT once radicale is Laib's (#371)
+IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solaris-wakeword-trainer daggerheart-chronik}
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
   case $1 in
     llama) echo "llama llama-embed";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
+    radicale) echo "radicale solaris-import-google";;   # #371: the Google import writes into radicale's data
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
     preflight|install|drafts|secrets|ignore) ;;
     *) echo "$1";;
@@ -336,6 +338,8 @@ step_service() {   # MIGRATION.md step 3 and 4, a–c
   on_box "$s" || { echo "$s: ServiceBay does not run it here: skipped"; return 10; }
   miss=$(external_missing "$s")
   [ -z "$miss" ] || { echo "$s: set these first, nothing changed yet: $(for m in $miss; do printf 'laib secret set %s  ' "$m"; done)"; return 1; }
+  miss=$(konflikte | grep "at the $s step$" || true)
+  [ -z "$miss" ] || { echo "$miss"; echo "$s: laib add would refuse (KONFLIKT), nothing changed yet"; return 1; }
   prepull "$s"
   # shellcheck disable=SC2046
   servicebay_out $(sb_units "$s")
@@ -460,6 +464,58 @@ unclaimed() {   # Quadlet entries no step takes and IGNORE does not keep: the re
     echo "        retire stays red while they are there: move them out, or IGNORE=\"… them\" for laib ignore"; fi
 }
 
+# laib plan's KONFLIKT (internal/plan Conflicts, #227) ahead of the run (#371): at each step, the
+# services Laib holds by then against every ServiceBay unit still in the Quadlet root (IGNORE, not
+# claimed, or a later step's): the same host port, or a host path at, inside or above a backed-up
+# data path of the service's template (at or below a backup: false path is shared, not its own)
+konflikt_py='import os, re, sys
+q, data, tpl = sys.argv[1:4]
+yaml_re = re.compile(r"(?m)^Yaml=(.+)$")
+port_re = re.compile(r"""(?m)(?:^PublishPort=(?:\[[0-9a-fA-F:.]*\]:|[0-9.]+:)?(\d+):|hostPort:\s*["\x27]?(\d+))""")
+path_re = re.compile(r"""(?m)(?:^Volume=|^Mount=.*\b(?:source|src)=|hostPath:\s*\n\s*(?:type:.*\n\s*)?path:\s*["\x27]?)(/[^\s:,"\x27#]*)""")
+inside = lambda a, b: a == b or a.startswith(b.rstrip("/") + "/")
+def contract(s):
+    own, shared, ports, block, last = [], [], set(), "", None
+    for line in open(os.path.join(tpl, s, "laib.yml")):
+        line = line.split("#")[0].rstrip()
+        if re.match(r"^[a-z]", line): block = line.split(":")[0]
+        m = re.match(r"^\s*- path: *(\S+)", line)
+        if block == "data" and m: last = os.path.realpath(m.group(1).replace("${DATA_DIR}", data)); own.append(last)
+        elif block == "data" and re.match(r"^\s+backup: *false", line) and last: own.remove(last); shared.append(last); last = None
+        m = re.search(r"\bport: *(\d+)", line)
+        if block == "ports" and m: ports.add(m.group(1))
+    return own, shared, ports
+steps = [a.split("=") for a in sys.argv[4:]]
+held, taken, seen = [], set(), set()
+for step, units in steps:
+    held.append(step); taken |= set(units.split(","))
+    for f in sorted(os.listdir(q)):
+        base, ext = os.path.splitext(f)
+        if ext not in (".kube", ".container") or base in taken: continue
+        text = open(os.path.join(q, f)).read()
+        m = yaml_re.search(text)
+        if m:
+            y = m.group(1).strip()
+            try: text += open(y if os.path.isabs(y) else os.path.join(q, y)).read()
+            except OSError: pass
+        for s in held:
+            try: own, shared, ports = contract(s)
+            except OSError: continue
+            why = ["host port " + a + b for a, b in port_re.findall(text) if a + b in ports]
+            for p in path_re.findall(text):
+                h = os.path.realpath(p)
+                if any(inside(h, o) or inside(o, h) for o in own) and not any(inside(h, d) for d in shared): why.append("data " + p)
+            if why and (s, f) not in seen:
+                seen.add((s, f)); print("  RED   %s: %s runs it too (%s): it is still in the Quadlet root at the %s step" % (s, f, ", ".join(why), step))'
+konflikte() {   # konflikte: RED lines, none when every step can take its service
+  local s args=()
+  for s in $STEPS; do
+    service_step "$s" && on_box "$s" && args+=("$s=$(sb_units "$s" | tr ' ' ,)")
+  done
+  [ "${#args[@]}" -gt 0 ] || return 0
+  python3 -I -c "$konflikt_py" "$Q" "$DATA" "$TEMPLATES" "${args[@]}"
+}
+
 dry_run() {
   local s st rc=0 tmp
   say "dry run: nothing on this box changes"
@@ -482,6 +538,8 @@ dry_run() {
     printf '  %-15s %-40s %s\n' "$s" "${st:-pending}" "$d"
   done
   unclaimed
+  st=$(konflikte)
+  if [ -n "$st" ]; then echo "$st"; echo "        laib add refuses these (KONFLIKT): stop the unit with the step that takes the service, or drop its mount"; rc=1; fi
   if [ "$(last_status drafts)" != green ] && [ "$(podman container inspect -f '{{.State.Running}}' servicebay 2>/dev/null)" = true ]; then
     say "the drafts, into a scratch directory (what the drafts step will print)"
     tmp=$(mktemp -d)

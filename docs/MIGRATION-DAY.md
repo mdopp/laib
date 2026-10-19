@@ -105,8 +105,10 @@ and `www.` redirect to `haus.` from Caddy's switch on (#360: the haus
 route's `redirectFrom`, no service), so the family's old entry point leads
 to Haus. ServiceBay's portal and its request form behind them are gone;
 residents are invited (`laib person invite`, Haus's Box card). `solaris-import-google`
-keeps running on its ServiceBay unit, ignored, and goes off with Solaris in
-phase 5 (its importers become scripts, SERVICES.md). Listed on
+goes off with radicale in phase 3: it writes into radicale's data, which
+`laib add radicale` refuses as a `KONFLIKT` (#371); its importers become
+scripts (SERVICES.md). The dry run lists every unit that stays and would be
+a `KONFLIKT` for a step, as `RED`. Listed on
 [#160](https://github.com/mdopp/laib/issues/160).
 
 ## Preconditions
@@ -262,7 +264,7 @@ Caddy's own; AdGuard's rewrites point at the box.
 
 After **phase 5**: `laib status` first line `0 gelb · 0 rot`; ServiceBay's
 container is gone and nothing answers on 5888; the Quadlet root has no
-ServiceBay file except the ignored ones (Solaris, chronik, the Google import);
+ServiceBay file except the ignored ones (Solaris, chronik);
 the Werkstatt answers on SSH 2222 (its host key is new, the app asks once).
 
 ## Known risks
