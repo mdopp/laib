@@ -66,6 +66,12 @@ building a kernel under 15k lines beside it. One user, one migration
 
 ## Features that are dropped
 
+The owner on #441 (2026-10-19): "Das Interface ist jetzt der Chat, das heißt
+aber nicht, dass die Daten deshalb falsch sein dürfen." Start/stop, live
+logs and the backups come back as verbs the chat hands call (`laib start`,
+`laib stop`, `laib logs`, `laib backups`), each answering from the running
+state or the journal, not as web pages.
+
 - The Next.js dashboard: wizard, network map, backup page, browser terminal, YAML editor, registry browser, settings pages.
 - 28 JSON stores, the digital twin, the store version ledger.
 - Nginx Proxy Manager, its admin client, the rekey logic.
