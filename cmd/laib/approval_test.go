@@ -192,7 +192,9 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 }
 
 // #48: the approver hand (the Signal relay behind the admin's verified number)
-// counts as a human for a human-class proposal, and can do nothing else.
+// can decide and do nothing else. Since #441 (owner, 2026-10-19) it decides
+// in the chat only what is not destructive: a human-class proposal (here a
+// script on the host) is refused with the Inbox's link, and approved there.
 func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
 	ctx := context.Background()
 	env, data := testBox(t)
@@ -219,8 +221,14 @@ func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
 			t.Fatalf("the approver could %s: %s", verb, out)
 		}
 	}
-	if out, code := mcp.Call(ctx, env, st, "approver", "laib_approve", map[string]any{"args": id}); code != cli.ExitOK {
-		t.Fatalf("the approver's verdict was refused: %d %s", code, out)
+	if out, code := mcp.Call(ctx, env, st, "approver", "laib_approve", map[string]any{"args": id}); code != cli.ExitRefused || !strings.Contains(out, "nur in der Inbox") {
+		t.Fatalf("the chat approved a script on the host (#441: only the Inbox): %d %s", code, out)
+	}
+	if len(hooks) != 0 {
+		t.Fatalf("a refused verdict ran the script: %v", hooks)
+	}
+	if code := cmdApproveFor(t, &cliEnv{Paths: env.Paths, Actor: "human:martin"}, id); code != cli.ExitOK {
+		t.Fatalf("the Inbox's verdict was refused: %d", code)
 	}
 	if _, err := os.Stat(ran); err == nil {
 		t.Fatal("the script ran on the host: hooks run in the hooks image (#36)")

@@ -101,8 +101,9 @@ type Updates struct {
 // Notify is the webhook Laib posts red results, proposals and readiness
 // changes to (#15). Empty means polling only.
 type Notify struct {
-	URL  string `yaml:"url"`
-	Mail string `yaml:"mail"` // the owner's address for laib's mails (#393); empty: the sso service's OPERATOR_EMAIL
+	URL    string `yaml:"url"`
+	Mail   string `yaml:"mail"`   // the owner's address for laib's mails (#393); empty: the sso service's OPERATOR_EMAIL
+	Person string `yaml:"person"` // the owner in people: laib-notify tells them through the Bote first, mail is the fallback (#441)
 }
 
 // Watchdog: the outside check and the family's contact (#57).
@@ -199,7 +200,7 @@ var BoxHand = Hand{Ceiling: "propose", Verbs: []string{"backup", "diag"}}
 // NotifyHand is laib-notify's (#443): it reads diag and the image updates and
 // journals a failed mail (note, tier propose); it proposes and decides nothing.
 // Supplied like BoxHand to a policy.yml without one.
-var NotifyHand = Hand{Ceiling: "propose", Verbs: []string{"diag", "updates", "note"}}
+var NotifyHand = Hand{Ceiling: "propose", Verbs: []string{"diag", "updates", "inbox", "note"}} // inbox: the proposals it announces (#441)
 
 // Approval says who may approve a tier.
 type Approval struct {

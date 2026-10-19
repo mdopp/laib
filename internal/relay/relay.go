@@ -142,6 +142,7 @@ type proposal struct {
 	ID      int      `json:"id"`
 	Actor   string   `json:"actor"`
 	Reason  string   `json:"reason"`
+	Tier    string   `json:"tier"`
 	Class   string   `json:"class"`
 	Reasons []string `json:"reasons"`
 	Files   []string `json:"files"`
@@ -162,7 +163,9 @@ func cardText(p *proposal) string {
 		fmt.Fprintf(&b, "· %s\n", i)
 	}
 	fmt.Fprintf(&b, "%s\n%s\n", p.Card.Reversible, p.Card.Why)
-	if p.Card.Primary == "Später" {
+	if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" { // not in the chat (#441)
+		b.WriteString("Das entscheidest du nur in der Inbox, mit dem zweiten Faktor.")
+	} else if p.Card.Primary == "Später" {
 		fmt.Fprintf(&b, "Das kann warten — nichts tun ist sicher. Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)
 	} else {
 		fmt.Fprintf(&b, "Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)

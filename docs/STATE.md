@@ -58,6 +58,8 @@ notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
   mail: owner@example.home        # laib's mails (#393): red for 10 min, once a week the updates; empty: the sso
                                   # service's OPERATOR_EMAIL. Sent with Authelia's SMTP_* values and AUTHELIA_SMTP_PASSWORD
+  person: martin                  # the owner in people (#441): laib-notify tells them through the Bote first (incidents,
+                                  # updates, each new proposal); mail only when no channel is reachable
 updates:
   days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
   time: "03:00"
@@ -132,7 +134,7 @@ hands:
   resident: { ceiling: read }
   ops:      { ceiling: apply }  # the operator (ADR 0013)
   laib:     { ceiling: propose, verbs: [backup, diag] }  # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update; supplied when missing
-  notify:   { ceiling: propose, verbs: [diag, updates, note] }  # laib-notify (#443): the watchdog ping and the owner's mail; reads, journals a failed send; supplied when missing
+  notify:   { ceiling: propose, verbs: [diag, updates, inbox, note] }  # laib-notify (#443, #441): the watchdog ping and the owner's messages; reads, journals a failed send; supplied when missing
   pi:       { ceiling: propose }
   claude:   { ceiling: apply, ttl: 8h }
   human:    { ceiling: destroy }

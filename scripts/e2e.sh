@@ -308,6 +308,8 @@ grep -q "jede Nachricht zuerst an das Werkzeug persona" "$HOOKDIR/bote/hermes/SO
 grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warnings stay plain words (#122)"
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
+grep -q "Laib schreibt dem Admin hierher" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL does not say Laib's messages arrive in the chat (#441)"
+grep -q "nur in der Inbox, mit dem zweiten Faktor" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL lets the chat decide what only the Inbox may (#441)"
 grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists the Bote's tools (#121, #133)"
 # #184: Signal, Matrix and Telegram are each optional; an unset channel leaves no entry in Hermes' .env
 if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Signal-only Bote has Matrix or Telegram entries (#184)"; fi
