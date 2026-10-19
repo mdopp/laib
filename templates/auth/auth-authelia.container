@@ -11,10 +11,6 @@ Environment=X_AUTHELIA_CONFIG_FILTERS=template
 # the SMTP password as a podman secret (#224), read by configuration.yml's
 # template (#359); empty without a mail server, and then nothing reads it
 Environment=X_LAIB_SMTP_PASSWORD=${SMTP_PASSWORD}
-# the other mail settings go into configuration.yml by pre-start; named here so
-# that changing one changes this unit, and the apply re-runs pre-start and
-# restarts the pod (a value only a hook reads changes nothing on the box)
-# smtp: ${SMTP_SECURITY} ${SMTP_HOST}:${SMTP_PORT} ${SMTP_USER} ${SMTP_FROM}
 Volume=${DATA_DIR}/auth/authelia-config:/config:z
 Volume=${DATA_DIR}/auth/authelia-data:/data:z
 Volume=/mnt/data/laib/render/authelia:/laib:ro,z

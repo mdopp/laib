@@ -1,0 +1,6 @@
+# Rendered by laib: the values of melder (#364); a secret by its name only.
+IMAGE=docker.io/library/python:3-alpine
+MATRIX_HOMESERVER=https://matrix.persona.home
+SIGNAL_ACCOUNT=+4917000000001
+SMS_ACCOUNT=
+TELEGRAM_ALLOWED_USERS=123456
