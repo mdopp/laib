@@ -23,8 +23,8 @@ class Tidy(unittest.TestCase):
             cfg = {
                 "numStartups": 7,
                 "mcpServers": {
-                    "servicebay": {"type": "http", "url": SB, "headers": {"Authorization": "Bearer sb_synthetic-0"}},
-                    "atHome-Servicebay": {"type": "http", "url": SB + "/", "headers": {"Authorization": "Bearer sb_synthetic-1"}},
+                    "servicebay": {"type": "http", "url": SB, "headers": {"Authorization": "Bearer synthetic-token-0"}},
+                    "atHome-Servicebay": {"type": "http", "url": SB + "/", "headers": {"Authorization": "Bearer synthetic-token-1"}},
                     "laib": {"type": "http", "url": "http://host.containers.internal:5900/mcp", "headers": {"Authorization": "Bearer ${LAIB_TOKEN}"}},
                     "github": {"type": "stdio", "command": "gh-mcp"},
                 },
@@ -45,7 +45,7 @@ class Tidy(unittest.TestCase):
             self.assertEqual(out["numStartups"], 7)
             self.assertEqual(stat.S_IMODE(p.stat().st_mode), 0o600)
             self.assertIn("servicebay", r.stdout)
-            self.assertNotIn("sb_synthetic", r.stdout + r.stderr)
+            self.assertNotIn("synthetic-token", r.stdout + r.stderr)
             # the next start: nothing to do, the file is not rewritten
             before = p.stat().st_mtime_ns
             r = self.run_tidy(home)

@@ -42,6 +42,8 @@ RUN mkdir -p /opt/werkstatt/laib && cd /opt/werkstatt/laib \
     && chmod +x laib && ./laib version
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY laibctl.py /usr/local/bin/laib
+# drops ServiceBay's dead MCP entries from the sessions' config at every start (#392)
+COPY mcp_tidy.py /usr/local/bin/werkstatt-mcp-tidy
 COPY autoloop.py /opt/werkstatt/autoloop.py
 COPY extensions /opt/werkstatt/extensions
 # every pi loads the laib-llama provider (#261) and the guide; npm's own pi is pi-upstream
@@ -51,7 +53,7 @@ COPY guide /opt/werkstatt/guide
 COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
 COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app
+RUN chmod +x /usr/local/bin/werkstatt-mcp-tidy /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
