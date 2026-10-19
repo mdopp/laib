@@ -53,7 +53,7 @@ COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
 COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
 # one Claude Code Remote Control session per checkout (#383), in the tmux session `claude`
-COPY sessions.sh /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
+COPY sessions.sh /usr/local/bin/werkstatt-sessions
 COPY tmux.conf /etc/tmux.conf
 # pi in the browser (#384): pi-web-ui with the Werkstatt's provider, guide and hand
 COPY piweb.sh /usr/local/bin/werkstatt-pi-web
