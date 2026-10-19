@@ -199,7 +199,7 @@ and sends the link; it never approves them.
   verdicts still do not count. A bot token is not an identity the relay
   can check itself, and the owner's decision does not change what a
   verified identity is. A Discord verdict needs the relay to read the
-  owner's DM with the bot itself (follow-up issue).
+  owner's DM with the bot itself (#463).
 - The SOUL tells the Bote that these messages arrive in the chat, that it
   reads the state from laib rather than from memory, and that it sends
   the Inbox link for what the chat may not decide.
