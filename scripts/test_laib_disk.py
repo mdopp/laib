@@ -60,7 +60,7 @@ class LaibDisk(unittest.TestCase):
         r = self.run_it("scan", str(self.src), "--json")
         self.assertEqual(r.returncode, 0, r.stderr)
         s = json.loads(r.stdout)
-        self.assertEqual(s["kinds"]["photos"]["files"], 6)          # two photos, their sidecar and motion, the copy
+        self.assertEqual(s["kinds"]["photos"]["files"], 5)          # two photos, a sidecar, a Live Photo video, the copy
         self.assertEqual(s["kinds"]["documents"]["files"], 1)
         self.assertEqual(s["kinds"]["music"]["files"], 1)
         self.assertEqual(s["kinds"]["other"]["files"], 1)
@@ -74,7 +74,7 @@ class LaibDisk(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.files(self.dest), [])
         self.assertIn("dry run", r.stdout)
-        self.assertIn("5 to copy", r.stdout)                         # the second IMG_0001.JPG is the same content
+        self.assertIn("4 to copy", r.stdout)                         # the second IMG_0001.JPG is the same content
         self.assertEqual(self.journal(), [])
 
     def test_copy_verifies_keeps_folders_and_journals_one_line(self):
@@ -111,6 +111,20 @@ class LaibDisk(unittest.TestCase):
         self.assertEqual((self.dest / "DCIM/2019/IMG_0001.JPG").read_bytes(), b"another photo")
         self.assertEqual((self.dest / "DCIM/2019/IMG_0001 (2).JPG").read_bytes(), b"jpeg-one")
         self.assertEqual((self.dest / "DCIM/2019/IMG_0002 (2).HEIC").read_bytes(), b"heic-two")
+
+    def test_a_run_cut_off_leaves_no_partial_file_and_the_next_one_finishes(self):
+        if os.geteuid() == 0:
+            self.skipTest("root writes into a read-only folder")
+        (self.dest / "DCIM/2019").mkdir(parents=True)
+        (self.dest / "DCIM/2019").chmod(0o555)                         # the target goes away under the copy
+        r = self.run_it("copy", str(self.src), str(self.dest), "--kind", "photos", "--go")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(self.journal()[-1]["result"], "red")
+        self.assertFalse([p for p in self.dest.rglob("*laib-part")])
+        (self.dest / "DCIM/2019").chmod(0o755)
+        r = self.run_it("copy", str(self.src), str(self.dest), "--kind", "photos", "--go")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(len(self.files(self.dest)), 4)
 
     def test_a_target_outside_the_data_tree_needs_no_guess(self):
         r = self.run_it("copy", str(self.src), str(self.src / "inside"), "--kind", "all")
