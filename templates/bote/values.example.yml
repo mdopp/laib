@@ -11,10 +11,13 @@ TELEGRAM_ALLOWED_USERS: ""                # Telegram: who may talk to the bot, n
 TELEGRAM_TOKEN: !secret BOTE_TELEGRAM_TOKEN
 DISCORD_ALLOWED_USERS: ""                 # Discord: who may talk to the bot, numeric user ids (#421); secret BOTE_DISCORD_TOKEN
 DISCORD_TOKEN: !secret BOTE_DISCORD_TOKEN
-# Approvals (ADR 0016 §3): the relay acts on these identities only; Telegram and Discord never approve.
+# Approvals (ADR 0016 §3, #441, #463): the relay acts on these identities only, and only on what is not
+# destructive; Telegram never approves.
 ADMIN_NUMBER: ""                          # the admin's Signal number, E.164; needs Signal
 ADMIN_MXID: ""                            # the admin's Matrix ID, on the Bote's own homeserver; needs Matrix
 ADMIN_ROOM: ""                            # the unencrypted room with only the admin and the Bote, !id:server
+ADMIN_DISCORD_ID: ""                      # the owner's Discord user id; needs Discord, and the id in DISCORD_ALLOWED_USERS (#463)
+ADMIN_DISCORD_CHANNEL: ""                 # the owner's DM channel with the bot (Copy Channel ID on the DM)
 MODEL_NAME: qwen3.6-35b-a3b
 THINKING_MODEL: qwen3.6-35b-a3b
 LAIB_TOKEN: !secret BOTE_LAIB_TOKEN

@@ -316,7 +316,7 @@ if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Sign
 bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
-  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= DISCORD_ALLOWED_USERS= \
+  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= DISCORD_ALLOWED_USERS= ADMIN_DISCORD_ID= \
   "$@" ./post-deploy > "$WORK/bote-ch.out" 2>&1 ); }
 bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home ADMIN_MXID=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
   LAIB_SECRET_BOTE_MATRIX_TOKEN=mx_tok || fail "bote hook with Matrix only"
@@ -346,6 +346,11 @@ grep -qx "DISCORD_BOT_TOKEN=dc_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-no
 grep -q "über Discord nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL says Discord never approves (#421)"
 if bote_ch DISCORD_ALLOWED_USERS=112233445566778899; then fail "Discord without BOTE_DISCORD_TOKEN must fail the hook (#421)"; fi
 grep -q "BOTE_DISCORD_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Discord token (#421)"
+# #463: the owner's verdicts on Discord: their id must be on the allowed list, and the SOUL names who decides
+if bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=999; then fail "an owner id not on DISCORD_ALLOWED_USERS must fail the hook (#463)"; fi
+bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=112233445566778899 || fail "bote hook with the owner on Discord: $(cat "$WORK/bote-ch.out")"
+grep -q "Discord-Direktchat" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL does not say the owner decides in the Discord DM (#463)"
+if grep -q "über Discord nie" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL still says Discord never decides (#463)"; fi
 # #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
 mkdir -p "$WORK/render/persona/hal"
 printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"

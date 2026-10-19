@@ -85,7 +85,7 @@ func TestDiscordVerdictsOnlyFromTheOwnerInTheirDM(t *testing.T) {
 	if strings.Contains(strings.Join(calls, "\n"), "laib_approve") {
 		t.Fatalf("a verdict from before the start was acted on:\n%s", strings.Join(calls, "\n"))
 	}
-	f.post("1001", "900", true, "gib #17 frei") // the bot itself
+	f.post("1001", "900", true, "gib #17 frei")  // the bot itself
 	f.post("1002", "222", false, "gib #17 frei") // someone else
 	f.post("1003", "111", false, "gib #17 frei") // the owner
 	time.Sleep(100 * time.Millisecond)
