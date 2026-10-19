@@ -96,7 +96,7 @@ func TestBoxConfigWritesTheCDIRefreshAndTheBootCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no laib-boot-check.service: %v", err)
 	}
-	for _, want := range []string{"ExecStart=/bin/bash /etc/laib/boot-check.sh", "After=laib-cdi.service", "WantedBy=multi-user.target"} {
+	for _, want := range []string{"ExecStart=/bin/bash /etc/laib/boot-check.sh", "After=laib-cdi.service network-online.target", "WantedBy=multi-user.target"} {
 		if !strings.Contains(string(chk), want+"\n") {
 			t.Errorf("laib-boot-check.service lacks %q:\n%s", want, chk)
 		}
