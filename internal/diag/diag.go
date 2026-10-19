@@ -36,6 +36,9 @@ type Finding struct {
 	Service  string `json:"service,omitempty"`
 	Detail   string `json:"detail"`
 	Fix      string `json:"fix,omitempty"`
+	// Repair: the one laib verb that repairs it, when there is one (#441):
+	// `laib repair <probe> [service]` makes it a proposal a human approves.
+	Repair []string `json:"repair,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -83,6 +86,9 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		if f.Fix != "" {
 			fmt.Fprintf(env.W(), "   → %s", f.Fix)
 		}
+		if f.Repair != nil {
+			fmt.Fprintf(env.W(), "   ↻ laib repair %s %s", f.Probe, f.Service)
+		}
 		fmt.Fprintln(env.W())
 	}
 	return cli.ExitOK
@@ -97,12 +103,12 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		svc := st.Services[name]
 		for _, u := range svc.UnitNames() {
 			if a := sysd.Active(ctx, u); a != "active" {
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		for _, u := range svc.Oneshots() {
 			if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		// what the service says about itself (#309); a stale one is re-checked
@@ -122,11 +128,11 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
 			resp, err := client.Do(req)
 			if err != nil {
-				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			} else {
 				resp.Body.Close()
 				if !svc.Contract.Health.Answers(resp.StatusCode) {
-					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name})
+					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name, Repair: []string{"restart", name}})
 				}
 			}
 		}
@@ -139,7 +145,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			for _, c := range p.Changes {
 				files = append(files, c.Path)
 			}
-			out = append(out, Finding{Severity: "gelb", Probe: "drift", Detail: fmt.Sprintf("%d Dateien weichen vom State ab: %s", len(files), strings.Join(files, ", ")), Fix: "laib plan && laib apply"})
+			out = append(out, Finding{Severity: "gelb", Probe: "drift", Detail: fmt.Sprintf("%d Dateien weichen vom State ab: %s", len(files), strings.Join(files, ", ")), Fix: "laib plan && laib apply", Repair: []string{"apply"}})
 		}
 		for _, u := range p.Unmanaged {
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
@@ -214,14 +220,14 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
 	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
 		what := map[bool]string{true: "ist noch nie gelaufen"}[lastGreen.IsZero()]
-		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup"})
+		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup", Repair: []string{"backup"}})
 	}
 	if st.Box.Backup.Repo != "" {
 		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {
 			out = append(out, Finding{Severity: "gelb", Probe: "recovery", Detail: "das Wiederherstellungsblatt (age-Schlüssel, restic-Passwort) ist nicht als gesichert bestätigt: ohne es ist das Backup nach Plattenverlust unlesbar", Fix: "laib recovery-sheet  → ausdrucken, dann laib recovery-sheet --confirm"})
 		}
 		if lastCheck.IsZero() || time.Since(lastCheck) > 35*24*time.Hour {
-			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich"})
+			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich", Repair: []string{"backup", "check"}})
 		}
 	}
 	// The delegated ACME challenge (#378): a wrong CNAME fails every renewal, silently.

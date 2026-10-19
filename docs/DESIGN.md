@@ -75,7 +75,7 @@ state or the journal, not as web pages.
 - The Next.js dashboard: wizard, network map, backup page, browser terminal, YAML editor, registry browser, settings pages.
 - 28 JSON stores, the digital twin, the store version ledger.
 - Nginx Proxy Manager, its admin client, the rekey logic.
-- Credential self-heal and 36 diagnose probes with action buttons. About ten probe scripts remain.
+- Credential self-heal and 36 diagnose probes with action buttons. About ten probe scripts remain. One-click repairs come back through the chat, not a button (owner, mdopp, 2026-10-19, #441): a finding's `repair` verb becomes a proposal with `laib repair`, and it runs once a human approves.
 - 64 hand-written MCP tools and the in-code policy table.
 - Learning proposals, the Hermes and Claude-dev modules, the chat embed.
 - The portal with access requests; onboarding is a Solaris card.

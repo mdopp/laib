@@ -30,6 +30,7 @@ var cmdParams = []mcpParam{svcParam, {name: "container", typ: "string", flag: "-
 var mcpParams = map[string][]mcpParam{
 	"status":   {optSvc},
 	"diag":     {optSvc},
+	"repair":   {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
 	"logs":     {svcParam, sinceParam},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},

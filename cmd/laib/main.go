@@ -51,6 +51,7 @@ func init() {
 		{Name: "backups", Tier: "read", Help: "the backups from the journal: last nightly, last green, off-box copy, restore test, with diag's fixes", Run: diag.Backups},
 		{Name: "escalate", Tier: "propose", Help: "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", Run: envelope.Escalate},
 		{Name: "note", Tier: "propose", Help: "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", Run: cmdNote},
+		{Name: "repair", Tier: "propose", Help: "<probe> [service]: a diag finding's repair as a proposal; it runs once a human approves (#441)", Run: diag.Repair},
 		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: inbox.Wish},
 		{Name: "net", Tier: "read", Help: "[--mermaid]: every name with its reach, Authelia and target, the direct ports, the host network, the pods' links — from the rendered config (#439)", Run: cmdNet},
 		{Name: "updates", Tier: "read", Help: "newer patch and minor releases of every pinned image, from the registry (#287)", Run: registry.Updates},
@@ -86,6 +87,14 @@ func init() {
 		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
+	}
+	inbox.RunVerb = func(ctx context.Context, env *cli.Env, argv []string) int {
+		for _, v := range mcp.Verbs {
+			if v.Name == argv[0] {
+				return v.Run(ctx, env, argv[1:])
+			}
+		}
+		return cli.ExitRefused
 	}
 }
 
