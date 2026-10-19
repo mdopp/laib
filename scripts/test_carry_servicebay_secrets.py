@@ -195,6 +195,7 @@ class FakeApps:
 
     def close(self):
         self.srv.shutdown()
+        self.srv.server_close()
 
 
 class TryLogin(unittest.TestCase):
