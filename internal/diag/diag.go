@@ -177,6 +177,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	if _, err := os.Stat(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/system/laib-boot-check.service"); err != nil && only == "" {
 		out = append(out, Finding{Severity: "rot", Probe: "boot-check", Detail: "laib-boot-check.service fehlt: ein OS-Update, das die GPU oder Laib bricht, rollt nicht von selbst zurück", Fix: "install-box.sh --version <diese Version> (die Installation legt die Prüfung an)"})
 	}
+	// #445: Laib filters with its own nftables table; firewalld beside it lets only SSH in.
+	if fw, _ := sysd.Run(ctx, "systemctl", "is-active", "firewalld.service"); strings.TrimSpace(fw) == "active" && only == "" {
+		out = append(out, Finding{Severity: "rot", Probe: "firewall", Detail: "firewalld läuft und blockiert alles außer SSH aus dem LAN (Laibs Firewall ist die nftables-Tabelle inet laib)", Fix: "sudo systemctl mask --now firewalld.service (oder install-box.sh --box-config)"})
+	}
 	if only == "" {
 		var fs syscall.Statfs_t
 		if syscall.Statfs("/boot", &fs) == nil {
