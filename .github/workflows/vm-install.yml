@@ -982,7 +982,7 @@ jobs:
                 printf "[Service]\nEnvironment=LAIB_BOOT_CHECK_TIMEOUT=120 LAIB_BOOT_CHECK_INTERVAL=5\n" | sudo tee /etc/systemd/system/laib-boot-check.service.d/vm.conf >/dev/null
                 sudo systemctl daemon-reload
                 sudo rm -f /etc/laib/boot-proven /etc/laib/boot-rolled-back
-                sudo systemctl start laib-boot-check.service
+                sudo systemctl restart laib-boot-check.service   # the boot-time run still waits its 15 minutes: restart it with the short window
                 # a red box (the degraded mirror of the step before) is recorded only after the 120 s timeout
                 for i in $(seq 1 90); do test -s /etc/laib/boot-proven && break; sleep 2; done
                 test -s /etc/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
