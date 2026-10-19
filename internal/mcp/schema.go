@@ -30,6 +30,7 @@ var cmdParams = []mcpParam{svcParam, {name: "container", typ: "string", flag: "-
 var mcpParams = map[string][]mcpParam{
 	"status":   {optSvc},
 	"diag":     {optSvc},
+	"repair":   {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
 	"logs":     {svcParam, sinceParam},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
@@ -37,6 +38,9 @@ var mcpParams = map[string][]mcpParam{
 	"look":     cmdParams,
 	"exec":     cmdParams,
 	"restart":  {svcParam},
+	"start":    {svcParam},
+	"stop":     {svcParam, {name: "until", typ: "string", flag: "--until", desc: "wie lange er aus bleibt, höchstens ein Tag, z. B. 2h"}, {name: "reason", typ: "string", desc: "warum, ein Satz"}},
+	"backups":  {},
 	"escalate": {svcParam, {name: "summary", typ: "string", desc: "was du weißt, ein bis drei Sätze", required: true}},
 	"note": {{name: "kind", typ: "string", flag: "--kind", enum: []string{"watch", "incident", "report"}, required: true, desc: "incident nach Reparatur oder Eskalation, watch wenn alles in Ordnung war, report für den Morgenbericht"},
 		{name: "text", typ: "string", desc: "deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst", required: true}},

@@ -70,6 +70,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcp.Handler(env))
+	mux.HandleFunc("/v1/", FleetLock(env, time.Now))
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		w.Header().Set("Content-Type", "application/json")

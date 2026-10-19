@@ -26,8 +26,10 @@ secrets:
   - name: AUTHELIA_OIDC_HMAC_SECRET
   - name: LLDAP_JWT_SECRET
   - name: LLDAP_ADMIN_PASSWORD
+    login: {user: admin, host: ldap, note: "LLDAP, Benutzer und Gruppen"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: OPERATOR_PASSWORD           # the admin's own first password; change it in LLDAP afterwards
+    login: {user: "${OPERATOR_USER}", host: auth, note: "dein Konto für alle Dienste (erstes Passwort, in LLDAP ändern)"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: RADICALE_LDAP_PASSWORD      # the read-only LDAP account radicale binds with (#55): seeded here, used there
   - name: FILE_SHARE_LDAP_PASSWORD    # the read-only account file-share reads the family with (#296): seeded here, used there

@@ -9,7 +9,7 @@ mkdir -p "$H"
 MODEL_URL="${MODEL_URL:?MODEL_URL builtin missing}"
 "$(dirname "$0")/pre-start"   # the channels and both .env files (#184)
 SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}" DISCORD_ALLOWED_USERS="${DISCORD_ALLOWED_USERS:-}"
-ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
+ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}" ADMIN_DISCORD_ID="${ADMIN_DISCORD_ID:-}"
 # Only MCP servers that answer are rendered (#54): a server Hermes cannot
 # reach would be a tool the model is told it has. Any HTTP answer counts
 # (401, 405 are answers); a connection error leaves the entry out and says so.
@@ -85,11 +85,12 @@ fi
 WHO=""
 [ -z "$ADMIN_NUMBER" ] || WHO="von $ADMIN_NUMBER auf Signal"
 [ -z "$ADMIN_MXID" ] || WHO="${WHO:+$WHO und }von $ADMIN_MXID im Matrix-Raum $ADMIN_ROOM"
+[ -z "$ADMIN_DISCORD_ID" ] || WHO="${WHO:+$WHO und }vom Admin in seinem Discord-Direktchat mit dir"
 if [ -n "$WHO" ]; then APPROVALS="\"gib #17 frei\" oder \"lehne #17 ab\" liest das Relais direkt, nur $WHO, und entscheidet"
 else APPROVALS="im Chat gibt es keine Freigaben, der Admin entscheidet auf der Box-Seite"; fi
 NIE=""
 [ -z "$TELEGRAM_ALLOWED_USERS" ] || NIE="Telegram"
-[ -z "$DISCORD_ALLOWED_USERS" ] || NIE="${NIE:+$NIE und }Discord"
+[ -z "$DISCORD_ALLOWED_USERS" ] || [ -n "$ADMIN_DISCORD_ID" ] || NIE="${NIE:+$NIE und }Discord"
 [ -z "$NIE" ] || APPROVALS="$APPROVALS (über $NIE nie)"
 # What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
 # turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
@@ -164,6 +165,7 @@ Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwa
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
+Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und jeden neuen Vorschlag mit seiner Nummer. Fragt der Admin dazu, lies den Stand mit laib (laib inbox, laib diag, laib status), statt ihn zu raten, und erklär die Möglichkeiten und ihre Folgen. Entscheiden tut er selbst: was nicht zerstört, mit "gib #N frei" im Chat; Löschen, Entfernen und was nur ein Mensch erlauben darf nur in der Inbox, mit dem zweiten Faktor. Schick ihm dann den Link aus der Mitteilung.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}
 SOUL
 fi

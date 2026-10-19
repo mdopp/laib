@@ -25,6 +25,7 @@ secrets:
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: PAPERLESS_SECRET_KEY
   - name: PAPERLESS_ADMIN_PASSWORD
+    login: {user: "${ADMIN_USER}", host: paperless, note: "Paperless-Admin"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
 data:
   - path: ${DATA_DIR}/paperless/data

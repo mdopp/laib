@@ -4,7 +4,7 @@ access_control:
   default_policy: deny
   rules:
     - domain: laib.nuc.home
-      policy: one_factor
+      policy: two_factor
       subject: "group:admins"
     - domain: dns.nuc.home
       policy: two_factor

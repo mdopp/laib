@@ -4,7 +4,8 @@
 // every subscriber) and reads the admin's one Matrix room, reacts only to
 // the admin's number or Matrix ID and only to "gib #N frei" / "lehne #N
 // ab", shows the proposal's consequence back, and calls Laib with a token
-// that can do nothing but decide. Telegram never decides (ADR 0016 §3).
+// that can do nothing but decide. On Discord it reads the owner's DM with
+// the bot itself (#463). Telegram never decides (ADR 0016 §3).
 package relay
 
 import (
@@ -27,22 +28,27 @@ type Config struct {
 	Admin     string // E.164; on Signal only this number decides (empty: no Signal approvals)
 	AdminMXID string // on Matrix only this ID decides, in Room (empty: no Matrix approvals)
 	Room      string // the admin's one Matrix room, !id:server
-	LaibURL   string // http://host.containers.internal:5900/mcp
-	Token     string // the approver hand's token
-	SignalURL string // http://127.0.0.1:8080 — signal-cli daemon --http
-	Account   string // the Bote's own number
+	// AdminDiscord decides on Discord only in DiscordChannel, the DM with the bot (#463)
+	AdminDiscord, DiscordChannel string
+	LaibURL                      string // http://host.containers.internal:5900/mcp
+	Token                        string // the approver hand's token
+	SignalURL                    string // http://127.0.0.1:8080 — signal-cli daemon --http
+	Account                      string // the Bote's own number
 }
 
-// Message is one incoming message. Platform is "signal" or "matrix"; any
-// other, or none, never decides.
+// Message is one incoming message. Platform is "signal", "matrix" or
+// "discord" (#463); any other, or none, never decides.
 type Message struct {
 	Platform, From, Room, Text string
 }
 
 // replyTo: a Matrix answer goes to the room, a Signal one to the number.
 func (m Message) replyTo() string {
-	if m.Platform == "matrix" {
+	switch m.Platform {
+	case "matrix":
 		return m.Room
+	case "discord":
+		return "discord:" + m.Room
 	}
 	return m.From
 }
@@ -52,14 +58,17 @@ type Sender interface {
 	Send(ctx context.Context, to, text string) error
 }
 
-// Senders routes an answer by its address: a room (!…) to Matrix, a number to Signal.
-type Senders struct{ Signal, Matrix Sender }
+// Senders routes an answer by its address: a room (!…) to Matrix,
+// discord:<channel> to Discord, a number to Signal.
+type Senders struct{ Signal, Matrix, Discord Sender }
 
 // Send one message on the address's platform.
 func (s Senders) Send(ctx context.Context, to, text string) error {
 	out := s.Signal
 	if strings.HasPrefix(to, "!") {
 		out = s.Matrix
+	} else if strings.HasPrefix(to, "discord:") {
+		out = s.Discord
 	}
 	if out == nil {
 		return fmt.Errorf("no sender for %s", to)
@@ -74,6 +83,8 @@ func (r *Relay) admin(m Message) bool {
 		return r.cfg.Admin != "" && m.From == r.cfg.Admin
 	case "matrix":
 		return r.cfg.AdminMXID != "" && m.From == r.cfg.AdminMXID && m.Room == r.cfg.Room
+	case "discord": // the author Discord names, in the owner's DM the relay itself reads (#463)
+		return r.cfg.AdminDiscord != "" && m.From == r.cfg.AdminDiscord && m.Room == r.cfg.DiscordChannel
 	}
 	return false // Telegram and anything else never decide
 }
@@ -142,6 +153,7 @@ type proposal struct {
 	ID      int      `json:"id"`
 	Actor   string   `json:"actor"`
 	Reason  string   `json:"reason"`
+	Tier    string   `json:"tier"`
 	Class   string   `json:"class"`
 	Reasons []string `json:"reasons"`
 	Files   []string `json:"files"`
@@ -162,7 +174,9 @@ func cardText(p *proposal) string {
 		fmt.Fprintf(&b, "· %s\n", i)
 	}
 	fmt.Fprintf(&b, "%s\n%s\n", p.Card.Reversible, p.Card.Why)
-	if p.Card.Primary == "Später" {
+	if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" { // not in the chat (#441)
+		b.WriteString("Das entscheidest du nur in der Inbox, mit dem zweiten Faktor.")
+	} else if p.Card.Primary == "Später" {
 		fmt.Fprintf(&b, "Das kann warten — nichts tun ist sicher. Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)
 	} else {
 		fmt.Fprintf(&b, "Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)

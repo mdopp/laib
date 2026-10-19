@@ -19,6 +19,7 @@ routes:
     # Caddy refused the whole Caddyfile, so media never applied (vm-install run 38898317486)
 secrets:
   - name: JELLYFIN_ADMIN_PASSWORD
+    login: {user: "${ADMIN_USER}", host: media, note: "Jellyfin-Admin"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: JELLYFIN_LDAP_PASSWORD      # the read-only LLDAP account the plugin binds with, seeded by the auth template (#256)
     external: true

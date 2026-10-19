@@ -54,6 +54,9 @@ func (st *State) validatePeople() []error {
 			errs = append(errs, fmt.Errorf("services/%s: no channel is set (one of %s)", name, strings.Join(vals, ", ")))
 		}
 	}
+	if p := st.Box.Notify.Person; p != "" && st.Box.People[p] == nil {
+		errs = append(errs, fmt.Errorf("box.yml notify.person: %q is not in people, so the Bote cannot reach them (#441)", p))
+	}
 	for _, name := range slices.Sorted(maps.Keys(st.Box.People)) {
 		if !nameRe.MatchString(name) {
 			errs = append(errs, fmt.Errorf("box.yml people: %q is not a name (lowercase, like mama)", name))

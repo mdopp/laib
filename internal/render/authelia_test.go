@@ -104,7 +104,7 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 		}
 	}
 
-	check(st.Box.Laib.Host, "/", "admins", "one_factor")
+	check(st.Box.Laib.Host, "/", "admins", "two_factor") // the Inbox decides what the chat may not (#441)
 	check(st.Box.Laib.Host, "/", "family", "deny")
 	check("nowhere", "/", "admins", "deny") // a host no service routes
 	n := 0

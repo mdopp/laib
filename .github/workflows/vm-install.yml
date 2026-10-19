@@ -504,9 +504,9 @@ jobs:
                 loc=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{redirect_url}" "https://auth.vm.test/api/oidc/authorization?client_id=sbvm&response_type=code&redirect_uri=https://sbvm.vm.test/callback&scope=openid&state=vm245state" || true)
                 echo "authorization for the kept ServiceBay client -> $loc"
                 case "$loc" in https://auth.vm.test/*flow_id=*) ;; *) echo "Authelia does not know the kept ServiceBay client (#245)"; exit 1;; esac
-                # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there
+                # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there; the Inbox (laib.) asks two since #441: destructive approvals need the second factor
                 pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
-                for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins one_factor" "caldav - bypass"; do
+                for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins two_factor" "caldav - bypass"; do
                   set -- $c; g=$2; [ "$g" = - ] && g=; got=$(pol "$1" "$g"); echo "authelia: $1 as ${g:-anonymous} -> $got"
                   [ "$got" = "$3" ] || { echo "Authelia applies ${got:-nothing} to $1 for ${g:-anonymous}, want $3 (#249)"; exit 1; }
                 done
@@ -987,8 +987,10 @@ jobs:
                 printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
                 podman pull -q mirror.gcr.io/library/postgres:16-alpine >/dev/null
                 $L add caddy; $L add pgtest
-                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
-                podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"
+                # the first start of postgres runs initdb with a temporary server, stops it and starts the real one:
+                # pg_isready can answer in that gap, so the first write is retried until the real server takes it
+                ok=""; for i in $(seq 1 45); do podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);" && { ok=1; break; }; sleep 2; done
+                [ -n "$ok" ] || { echo "postgres never took the first write"; exit 1; }
                 echo "caddy marker for the recovery" > /mnt/data/stacks/caddy/data/vm-marker
                 $L backup | tee /tmp/backup.txt
                 grep -q "angehalten für den Snapshot: pgtest" /tmp/backup.txt || { echo "the database was not quiesced for the snapshot"; exit 1; }

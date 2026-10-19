@@ -220,3 +220,26 @@ func TestBoteOnDiscordOnly(t *testing.T) {
 		t.Fatalf("a Discord bot token without users is Discord off, not an error: %v", err)
 	}
 }
+
+// #463: the owner's verdicts on Discord: with ADMIN_DISCORD_ID the relay
+// runs (on a Discord-only Bote too) and reads the owner's DM with the bot
+// token; the owner must be on the allowed list and name the DM channel.
+func TestTheRelayReadsTheOwnersDiscordDM(t *testing.T) {
+	owner := map[string]string{"ADMIN_DISCORD_ID": "112233445566778899", "ADMIN_DISCORD_CHANNEL": "998877665544332211"}
+	out, err := boteBox(t, "", merge(noSignal, discordOn, owner))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay := out["quadlet/bote/bote-relay.container"]
+	for _, w := range []string{"ADMIN_DISCORD_ID=112233445566778899\n", "ADMIN_DISCORD_CHANNEL=998877665544332211\n", "DISCORD_BOT_TOKEN=dc-tok\n"} {
+		if !strings.Contains(relay, w) {
+			t.Errorf("the relay lacks %s:\n%s", w, relay)
+		}
+	}
+	if _, err := boteBox(t, "", merge(noSignal, discordOn, map[string]string{"ADMIN_DISCORD_ID": "112233445566778899"})); err == nil || !strings.Contains(err.Error(), "ADMIN_DISCORD_CHANNEL") {
+		t.Errorf("an owner id without the DM channel must fail plan: %v", err)
+	}
+	if _, err := boteBox(t, "", merge(map[string]string{"DISCORD_ALLOWED_USERS": ""}, owner)); err == nil || !strings.Contains(err.Error(), "DISCORD_ALLOWED_USERS") {
+		t.Errorf("an owner id without Discord must fail plan: %v", err)
+	}
+}

@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
@@ -233,6 +234,12 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d abgelehnt für %s: nur ein Mensch — %s", p.ID, env.Actor, why)})
 		return cli.ExitRefused
 	}
+	// the chat decides only what is not destructive (#441, ADR 0016): what the review marks
+	// for a human, a removal and every destroy are the Inbox's, behind the second factor
+	if approve && proposal.Hand(env.Actor) != "human" && (p.Tier == "destroy" || p.Class == "human" || p.Class == "remove") {
+		fmt.Fprintf(env.Errw(), "laib: #%d nur in der Inbox, mit dem zweiten Faktor: https://%s.%s/inbox\n", p.ID, st.Box.Laib.Host, st.Box.Domain)
+		return cli.ExitRefused
+	}
 	if !approve {
 		if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor); err != nil {
 			return env.Fail(err)
@@ -245,7 +252,8 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	if code != cli.ExitOK {
 		return code
 	}
-	defer unlock()
+	release := sync.OnceFunc(unlock)
+	defer release()
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(env.Errw(), "laib:", err)
@@ -260,8 +268,9 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		return env.Fail(err)
 	}
 	FileWishes(ctx, env, st, p)
-	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") }) {
-		return cli.ExitOK // a wish changes nothing on the box: no apply
+	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") }) {
+		release() // a wish changes nothing on the box: no apply; a repair's verb takes the lock itself
+		return RunRepairs(ctx, env, st, p)
 	}
 	return apply.ApplyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
 }

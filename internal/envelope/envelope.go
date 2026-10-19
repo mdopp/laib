@@ -125,7 +125,7 @@ func envelope(ctx context.Context, env *cli.Env, st *state.State, svc *state.Ser
 			continue
 		}
 		switch e.Verb {
-		case "exec", "write", "restart":
+		case "exec", "write", "restart", "start", "stop":
 			used++
 		case "apply": // the Operator's own applies (#286); a human's never count
 			if e.Actor == env.Actor {
@@ -344,22 +344,68 @@ func Exec(ctx context.Context, env *cli.Env, args []string) int {
 }
 
 func Restart(ctx context.Context, env *cli.Env, args []string) int {
+	return units(ctx, env, "restart", args)
+}
+
+// Start is `laib start <service>` (#441: the chat's interface): it lifts a
+// pause a stop left, starts the units and verifies, inside the envelope.
+func Start(ctx context.Context, env *cli.Env, args []string) int {
+	return units(ctx, env, "start", args)
+}
+
+// Stop is `laib stop <service> [--until 2h] ["grund"]` (#441): a pause (the
+// service is the caller's; converge leaves it alone, at most a day) and the
+// stop, inside the envelope. A service off for good is `laib remove`.
+func Stop(ctx context.Context, env *cli.Env, args []string) int { return units(ctx, env, "stop", args) }
+
+func units(ctx context.Context, env *cli.Env, verb string, args []string) int {
 	if len(args) < 1 {
-		return env.Fail(errors.New("usage: laib restart <service>"))
+		return env.Fail(errors.New("usage: laib " + verb + " <service>"))
 	}
 	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
-		return cli.Refused(env, env.Actor+" may not restart")
+		return cli.Refused(env, env.Actor+" may not "+verb)
 	}
-	if code := envelope(ctx, env, st, svc, "restart", "restart"); code != cli.ExitOK {
+	if code := envelope(ctx, env, st, svc, verb, verb); code != cli.ExitOK {
 		return code
 	}
-	for _, u := range svc.UnitNames() {
-		if err := sysd.Restart(ctx, u); err != nil {
-			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "restart", Service: svc.Name, Result: "red", Detail: u + ": " + err.Error()})
+	if verb == "stop" {
+		until, why := time.Now().Add(2*time.Hour), strings.Join(args[1:], " ")
+		if len(args) > 2 && args[1] == "--until" {
+			d, err := time.ParseDuration(args[2])
+			if err != nil || d > 24*time.Hour {
+				return env.Fail(errors.New("--until: a duration of at most a day (2h); a service off for good is laib remove"))
+			}
+			until, why = time.Now().Add(d), strings.Join(args[3:], " ")
+		}
+		if err := apply.WritePause(env.Paths, apply.Pause{Service: svc.Name, By: env.Actor, Until: until.UTC(), Reason: why}); err != nil {
+			return env.Fail(err)
+		}
+		for _, u := range apply.PodRestartSet(svc.UnitNames()) {
+			sysd.Stop(ctx, u)
+		}
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "stop", Service: svc.Name, Reason: why, Result: "info", Detail: "gestoppt und pausiert bis " + until.Local().Format("02.01. 15:04")})
+		fmt.Fprintf(env.W(), "%s gestoppt bis %s (laib start %s startet ihn früher)\n", svc.Name, until.Local().Format("02.01. 15:04"), svc.Name)
+		return cli.ExitOK
+	}
+	todo := svc.UnitNames()
+	if verb == "start" {
+		apply.Resume(env.Paths, svc.Name)
+		todo = apply.PodRestartSet(todo)
+	}
+	for _, u := range todo {
+		run := sysd.Restart
+		if verb == "start" {
+			run = func(ctx context.Context, u string) error {
+				_, err := sysd.Run(ctx, "systemctl", "--user", "start", u)
+				return err
+			}
+		}
+		if err := run(ctx, u); err != nil {
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: u + ": " + err.Error()})
 			return cli.ExitRed
 		}
 	}
@@ -372,7 +418,7 @@ func Restart(ctx context.Context, env *cli.Env, args []string) int {
 			bad = append(bad, c.What+" "+c.Detail)
 		}
 	}
-	entry := journal.Entry{Actor: env.Actor, Verb: "restart", Service: svc.Name, Result: "green"}
+	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "green"}
 	if !green {
 		entry.Result, entry.Detail = "red", strings.Join(bad, "; ")
 	}

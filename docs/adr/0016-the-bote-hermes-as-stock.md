@@ -164,3 +164,70 @@ page and in Haus. A token without users is not refused. It leaves Discord
 off, the same as Telegram. Signal without a second SIM is possible on a
 spare landline, registered with signal-cli as primary by voice call. The
 template README has the steps; the Box page does not do it.
+
+## Amendment 2026-10-19 (#441): Laib talks to the owner in the chat; the chat decides only what is not destructive
+
+Owner decision (mdopp, 2026-10-19): "Das Interface ist jetzt der Chat." Laib's
+messages to the owner go through the Bote's channels, whichever Hermes has
+configured (Signal, Discord, Telegram, Matrix). Mail is only the fallback
+when no channel is reachable. In the chat the owner gets incidents and
+proposals, discusses them with the Bote and chooses between the options.
+**Non-destructive** actions (an update, a restart, one of a proposal's
+options) are approved right there. **Destructive** ones are approved
+**only in the Inbox**, behind Authelia's second factor. The chat informs
+and sends the link; it never approves them.
+
+- **Delivery.** laib-notify (#443) gets `box.yml notify.person`, a person
+  in `people`. It posts each message to bote-notify (`POST /mitteilung`,
+  the Bote's `BOTE_NOTIFY_TOKEN`), which tries that person's channels in
+  their order. Mail (Authelia's settings) is used only when that fails or
+  there is no Bote. The messages are: a red that stays ten minutes, the
+  weekly updates, and each new open proposal, once.
+- **What the chat may decide.** The line is the one the kernel already
+  draws: a proposal of tier `destroy`, of class `remove`, or one the
+  content review marks for a human (a removal, data out of the backup, a
+  script on the host, a public route, a token, policy.yml …) is the
+  Inbox's. `laib approve` refuses it for every hand but `human`, so the
+  relay's approver gets the Inbox link instead of a verdict. Everything
+  else can be approved with "gib #N frei" in the chat. The Inbox
+  (`laib.<domain>`) moves from one factor to two.
+- **Who decides in the chat stays as it was (#48, §3).** Code that sees
+  the sender decides, never the model. The relay acts only on the owner's
+  verified identity: the Signal number, or the Matrix ID in its room. The
+  Bote's allowed-user lists keep everyone else out of the conversation.
+  Discord and Telegram carry the messages and the discussion, and their
+  verdicts still do not count. A bot token is not an identity the relay
+  can check itself, and the owner's decision does not change what a
+  verified identity is. A Discord verdict needs the relay to read the
+  owner's DM with the bot itself (#463).
+- The SOUL tells the Bote that these messages arrive in the chat, that it
+  reads the state from laib rather than from memory, and that it sends
+  the Inbox link for what the chat may not decide.
+
+## Amendment 2026-10-19 (#463): the owner's verdicts on Discord, read by the relay itself
+
+Owner decision (#441: non-destructive actions are approved in the chat;
+the owner talks to the Bote on Discord, #421). The relay now accepts a
+verdict on Discord under the same rule as Signal and Matrix: code that
+sees the sender decides, never Hermes or the model.
+
+- **How it sees the sender.** The relay reads the owner's direct chat
+  with the bot itself, polling Discord's REST API with the bot token. A
+  verdict counts only when Discord names the owner (`ADMIN_DISCORD_ID`) as
+  the author, in that one DM (`ADMIN_DISCORD_CHANNEL`). At start the relay
+  checks that the channel is a DM (type 1) with the owner alone. A bot
+  token can post as the bot and never as a person, so Hermes holding the
+  same token cannot forge the owner's verdict. Messages from before the
+  start, the bot's own messages and any other author never decide.
+- **What counts as verified.** Identity decision (proposed, for the owner):
+  the owner's Discord account, as Discord asserts it, counts as their
+  identity for **non-destructive** verdicts, the same weight as the Signal
+  number. Discord is a third party, so whoever holds the owner's Discord
+  session decides in the chat as them: the owner keeps two-factor login on
+  that account. The id must also be on the Bote's allowed list
+  (`DISCORD_ALLOWED_USERS`). pre-start refuses an owner id the Bote would
+  not even talk to. Destructive verdicts stay with the Inbox and the second
+  factor (#441); `laib approve` refuses them to the approver whatever the
+  channel.
+- Telegram still never decides. The same construction would work there
+  but has not been asked for.

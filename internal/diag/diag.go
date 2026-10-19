@@ -36,6 +36,9 @@ type Finding struct {
 	Service  string `json:"service,omitempty"`
 	Detail   string `json:"detail"`
 	Fix      string `json:"fix,omitempty"`
+	// Repair: the one laib verb that repairs it, when there is one (#441):
+	// `laib repair <probe> [service]` makes it a proposal a human approves.
+	Repair []string `json:"repair,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -83,6 +86,9 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		if f.Fix != "" {
 			fmt.Fprintf(env.W(), "   → %s", f.Fix)
 		}
+		if f.Repair != nil {
+			fmt.Fprintf(env.W(), "   ↻ laib repair %s %s", f.Probe, f.Service)
+		}
 		fmt.Fprintln(env.W())
 	}
 	return cli.ExitOK
@@ -97,12 +103,12 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		svc := st.Services[name]
 		for _, u := range svc.UnitNames() {
 			if a := sysd.Active(ctx, u); a != "active" {
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		for _, u := range svc.Oneshots() {
 			if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		// what the service says about itself (#309); a stale one is re-checked
@@ -122,11 +128,11 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
 			resp, err := client.Do(req)
 			if err != nil {
-				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name})
+				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			} else {
 				resp.Body.Close()
 				if !svc.Contract.Health.Answers(resp.StatusCode) {
-					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name})
+					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name, Repair: []string{"restart", name}})
 				}
 			}
 		}
@@ -139,7 +145,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			for _, c := range p.Changes {
 				files = append(files, c.Path)
 			}
-			out = append(out, Finding{Severity: "gelb", Probe: "drift", Detail: fmt.Sprintf("%d Dateien weichen vom State ab: %s", len(files), strings.Join(files, ", ")), Fix: "laib plan && laib apply"})
+			out = append(out, Finding{Severity: "gelb", Probe: "drift", Detail: fmt.Sprintf("%d Dateien weichen vom State ab: %s", len(files), strings.Join(files, ", ")), Fix: "laib plan && laib apply", Repair: []string{"apply"}})
 		}
 		for _, u := range p.Unmanaged {
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
@@ -173,6 +179,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config (docs/MIGRATION.md Schritt 1)"})
 		}
 	}
+	// #368: an OS update Zincati staged waits for laib's reboot lock
+	if o, ok := OS(ctx); ok && o.Staged != "" && only == "" {
+		out = append(out, Finding{Severity: "info", Probe: "os-update", Detail: "OS-Update " + o.Staged + " bereitgestellt: der Neustart kommt im Fenster " + WindowText(st) + ", wenn alles grün und der laufende Stand bewiesen ist"})
+	}
 	// #368: without the boot check a broken OS update stays broken until someone has SSH.
 	if _, err := os.Stat(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/system/laib-boot-check.service"); err != nil && only == "" {
 		out = append(out, Finding{Severity: "rot", Probe: "boot-check", Detail: "laib-boot-check.service fehlt: ein OS-Update, das die GPU oder Laib bricht, rollt nicht von selbst zurück", Fix: "install-box.sh --version <diese Version> (die Installation legt die Prüfung an)"})
@@ -195,27 +205,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
-	all, _ := journal.Read(env.Paths.Journal, time.Time{})
-	var installed time.Time
-	var lastCheck, lastGreen, lastOffsite time.Time
-	lastRun := ""
-	for _, e := range all {
-		if e.Verb == "backup" && e.Reason == "offsite" && e.Result == "green" {
-			lastOffsite = e.T
-		}
-		if e.Verb == "backup" && e.Reason == "" {
-			lastRun = e.Result
-			if e.Result == "green" {
-				lastGreen = e.T
-			}
-		}
-		if e.Verb == "init" && installed.IsZero() {
-			installed = e.T
-		}
-		if e.Verb == "backup" && e.Reason == "check" && e.Result == "green" && e.T.After(lastCheck) {
-			lastCheck = e.T
-		}
-	}
+	bf := backupFacts(env)
+	installed, lastCheck, lastGreen, lastOffsite, lastRun := bf.installed, bf.RestoreTest, bf.LastGreen, bf.Offsite, bf.Nightly.Result
 	switch repo := st.Box.Backup.Repo; {
 	case st.Box.Backup.Offsite != nil && repo != "":
 		if time.Since(lastOffsite) > 48*time.Hour { // #391: the copy off the data disk is the one a dead disk leaves
@@ -233,14 +224,14 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
 	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
 		what := map[bool]string{true: "ist noch nie gelaufen"}[lastGreen.IsZero()]
-		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup"})
+		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup", Repair: []string{"backup"}})
 	}
 	if st.Box.Backup.Repo != "" {
 		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {
 			out = append(out, Finding{Severity: "gelb", Probe: "recovery", Detail: "das Wiederherstellungsblatt (age-Schlüssel, restic-Passwort) ist nicht als gesichert bestätigt: ohne es ist das Backup nach Plattenverlust unlesbar", Fix: "laib recovery-sheet  → ausdrucken, dann laib recovery-sheet --confirm"})
 		}
 		if lastCheck.IsZero() || time.Since(lastCheck) > 35*24*time.Hour {
-			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich"})
+			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich", Repair: []string{"backup", "check"}})
 		}
 	}
 	// The delegated ACME challenge (#378): a wrong CNAME fails every renewal, silently.
@@ -274,6 +265,66 @@ func diskFindings(ctx context.Context, hardware bool) []Finding {
 		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")"}}
 	}
 	return out
+}
+
+// BackupFacts is what the journal says the backups did (#441): the last
+// nightly run, the last green one, the last off-box copy and restore test.
+type BackupFacts struct {
+	Nightly                         journal.Entry `json:"nightly"`
+	LastGreen, Offsite, RestoreTest time.Time
+	Findings                        []Finding `json:"findings"`
+	installed                       time.Time
+}
+
+func backupFacts(env *cli.Env) BackupFacts {
+	var f BackupFacts
+	all, _ := journal.Read(env.Paths.Journal, time.Time{})
+	for _, e := range all {
+		switch {
+		case e.Verb == "init" && f.installed.IsZero():
+			f.installed = e.T
+		case e.Verb != "backup" || e.Result != "green" && e.Reason != "":
+		case e.Reason == "":
+			f.Nightly = e
+			if e.Result == "green" {
+				f.LastGreen = e.T
+			}
+		case e.Reason == "offsite":
+			f.Offsite = e.T
+		case e.Reason == "check" && e.T.After(f.RestoreTest):
+			f.RestoreTest = e.T
+		}
+	}
+	return f
+}
+
+// Backups is `laib backups` (read, #441): the backups as the chat hands see
+// them — what the journal records and diag's backup findings with their fix.
+func Backups(ctx context.Context, env *cli.Env, _ []string) int {
+	st, err := cli.LoadState(env)
+	if err != nil {
+		return env.Fail(err)
+	}
+	f := backupFacts(env)
+	for _, x := range Probes(ctx, env, st, "") {
+		if x.Probe == "backup" || x.Probe == "restore-test" || x.Probe == "recovery" {
+			f.Findings = append(f.Findings, x)
+		}
+	}
+	if env.JSON {
+		return cli.Emit(env, f)
+	}
+	when := func(t time.Time) string {
+		if t.IsZero() {
+			return "nie"
+		}
+		return t.Local().Format("02.01. 15:04") + fmt.Sprintf(" (vor %.0f h)", time.Since(t).Hours())
+	}
+	fmt.Fprintf(env.W(), "letzte Sicherung: %s %s %s\nletzte grüne:     %s\naußer Haus:       %s\nProbe-Restore:    %s\n", cmp.Or(f.Nightly.Result, "nie"), when(f.Nightly.T), f.Nightly.Detail, when(f.LastGreen), when(f.Offsite), when(f.RestoreTest))
+	for _, x := range f.Findings {
+		fmt.Fprintf(env.W(), "%-5s %s → %s\n", x.Severity, x.Detail, x.Fix)
+	}
+	return cli.ExitOK
 }
 
 // challengeFinding judges what the public DNS answers for _acme-challenge.<domain>.

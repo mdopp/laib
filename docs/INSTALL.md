@@ -206,6 +206,30 @@ the rebase. The Kraftwerk ran into the first one (#445):
    arrive). More blocked ports than at the last proven boot means "not
    proven", and the box rolls back once.
 
+### OS updates (Zincati and laib's reboot lock, ADR 0024)
+
+Zincati finds and stages OS updates. With `install-box.sh`'s
+`/etc/zincati/config.d/60-laib-updates.toml` (strategy `fleet_lock`), it asks
+laib before every reboot. laib says yes only in the window two to four hours
+after the backup (05:00–07:00 for `backup.schedule: "03:00"`), only while the
+backup is not running, only while laib is green, and only once the running
+deployment is proven (`/etc/laib/boot-proven`). `laib diag` shows a staged
+update (`os-update`), and the journal shows the grant and the arrival. After
+the reboot the boot check proves the new deployment or rolls it back once.
+
+Lifting a pause is the owner's step. Do it once the running deployment is
+proven with the LAN probe (#445):
+```
+cat /etc/laib/boot-proven                                   # the booted deployment, "0 0" at the end
+ls /etc/zincati/config.d/                                   # 60-laib-updates.toml, and the pause files
+sudo rm /etc/zincati/config.d/55-servicebay-lock.toml       # ServiceBay's window, if it is still there
+sudo rm /etc/zincati/config.d/90-paused-nvidia-kmod.toml    # the hand-made pause (the driver is prebuilt now)
+sudo systemctl restart zincati.service
+journalctl -u zincati -n 20 --no-pager                      # "fleet_lock" and "reached steady state"
+```
+`95-laib-boot-check.toml` appears only after an automatic rollback. Delete
+it only once the cause is understood.
+
 ## Before the first attempt (pre-flight, the NUC)
 
 What makes or breaks the first boot is settled before the stick is built:
