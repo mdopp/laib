@@ -80,6 +80,35 @@ building a kernel under 15k lines beside it. One user, one migration
 - pi-web and claude-dev as separate templates, the laptop-side autoloop, the public MCP origin for Claude.
 - Hermes, unless it clears the threshold in ADR 0009.
 
+## ServiceBay's features, decided (#441)
+
+The list above was written at the founding commit without the owner. Each
+ServiceBay feature it dropped, or that vanished unnamed, now has a decision.
+Where a line here and the list above disagree, this one holds.
+
+**Back** (each built under its own issue, linked on #441):
+
+- **Network map**: what reaches what, from the rendered config. Entscheidung: mdopp, 2026-10-19 — the agents guessed the network wrong without it. Done: `laib net`, `--mermaid`, the page `/net` (#440).
+- **Start and stop per service on the Box page**, for admins. Entscheidung: mdopp, 2026-10-19 — restarting in Haus is not enough when a service has to stay off for a while.
+- **Live logs in the browser**: the last lines per service on the Box page. Entscheidung: mdopp, 2026-10-19 — reading a red service's log should not need SSH.
+- **One-click repairs**: a diag finding's fix becomes an Inbox proposal a human approves. Entscheidung: mdopp, 2026-10-19 — the fix verb is known; turning it into a click keeps the human's approval without the typing.
+- **A backup section on the Box page**: the last backup, the off-box copy's age, the last restore test. Entscheidung: mdopp, 2026-10-19 — one line in Haus does not say whether the backup can be trusted.
+- **Credentials handover**: the admin logins Laib holds go into Vaultwarden and onto the recovery sheet. Entscheidung: mdopp, 2026-10-19 — the household must reach its apps when the admin is not there.
+- **Disk import**, as a Werkstatt skill with a deterministic copy tool. Entscheidung: mdopp, 2026-10-19 — importing an old disk is a judgement (what goes where) plus mechanics (copy, verify, dedupe); the agent judges, the tool copies.
+- **Notifications through the Bote's channels, mail as the fallback.** This replaces ServiceBay's mail on a destructive action. Entscheidung: mdopp, 2026-10-19 — the owner reads Signal before mail; the mail of #393 stays for when no channel is set up.
+- **OS updates**, with the GPU surviving them. Entscheidung: mdopp, 2026-10-19 — an unpatched host is no option. Done (#368).
+
+**Dropped on purpose:**
+
+- **Web terminal.** Entscheidung: mdopp, 2026-10-19 — pi in the browser and Claude's Remote Control cover it.
+- **Health history graphs.** Entscheidung: mdopp, 2026-10-19 — the journal has the history.
+- **Settings, registry browser and setup pages.** Entscheidung: mdopp, 2026-10-19 — the state repo and the agents are the interface.
+- **Learning proposals** (`propose_learning`). Entscheidung: mdopp, 2026-10-19 — replaced by pull requests to the Werkstatt guide's skills (#394).
+- **Fritz!Box integration** (TR-064: port forwards, DNS). Entscheidung: mdopp, 2026-10-19 — a one-time setup, not worth the attack surface.
+- **The `:dev` canary channel.** Entscheidung: mdopp, 2026-10-19 — vm-install and the generalprobe test every release.
+- **Multi-node over SSH.** Entscheidung: mdopp, 2026-10-19 — Laib is one box (ADR 0003).
+- **The factory-reset assistant.** Entscheidung: mdopp, 2026-10-19 — the stick reinstalls the box.
+
 ## What agents do that scripts cannot
 
 The line is not easy versus hard; it is known versus unknown. A script can do
