@@ -117,20 +117,18 @@ func TestLatestWithBinariesIsTakenAsIs(t *testing.T) {
 	}
 }
 
-// runLayering runs install-box.sh --source against an rpm-ostree shim (body
-// rpmOstree) until the layering is over: what is under test is which
-// rpm-ostree calls it makes, whether it reboots, and its exit code. etc is
-// LAIB_ETC, shared between runs that stand for consecutive boots.
-func runLayering(t *testing.T, etc, rpmOstree string) (log, out string, rc int) {
+// runPrereqs runs install-box.sh --source until its prerequisites are in
+// place: a curl shim (body curl) stands for the network, rpm-ostree and
+// systemctl only log. What is under test is what the script does to the OS
+// for restic, git and diff (#367). LAIB_RESTIC_BIN is where restic goes.
+func runPrereqs(t *testing.T, curl string) (log, out string, rc int, resticBin string) {
 	t.Helper()
-	if _, err := exec.LookPath("restic"); err == nil {
-		t.Skip("restic is installed here: install-box.sh would not layer it")
-	}
 	root := t.TempDir()
-	bin, home, fx := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(etc, "fx")
-	for _, d := range []string{bin, home, fx, filepath.Join(etc, "laib")} {
+	bin, home, fx, etc := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(root, "fx"), filepath.Join(root, "etc")
+	for _, d := range []string{bin, home, fx, filepath.Join(etc, "laib"), filepath.Join(root, "usrlocal")} {
 		os.MkdirAll(d, 0o755)
 	}
+	resticBin = filepath.Join(root, "usrlocal", "restic")
 	logf := filepath.Join(root, "shim.log")
 	shim(t, bin, "id", "echo core")
 	shim(t, bin, "sudo", `exec "$@"`)
@@ -138,66 +136,66 @@ func runLayering(t *testing.T, etc, rpmOstree string) (log, out string, rc int) 
 	shim(t, bin, "sync", "exit 0")
 	shim(t, bin, "systemctl", "exit 0")
 	shim(t, bin, "sysctl", "echo 0")
-	shim(t, bin, "rpm-ostree", rpmOstree)
-	shim(t, bin, "curl", `case "${@: -1}" in */VERSION) echo abc1234;; *) exit 22;; esac`)
+	shim(t, bin, "rpm-ostree", "exit 0")
+	shim(t, bin, "curl", curl)
 	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "BIN="+bin, "HOME="+home, "LAIB_ETC="+etc, "LAIB_GH_TOKEN=")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+logf, "FX="+fx, "HOME="+home, "LAIB_ETC="+etc, "LAIB_RESTIC_BIN="+resticBin, "LAIB_GH_TOKEN=")
 	b, err := cmd.CombinedOutput()
 	if ee, ok := err.(*exec.ExitError); ok {
 		rc = ee.ExitCode()
 	}
 	l, _ := os.ReadFile(logf)
-	return string(l), string(b), rc
+	return string(l), string(b), rc, resticBin
 }
 
-// #206: a power cut during the first `rpm-ostree install` leaves zero-length
-// files in its metadata cache (a metalink, a repo's GPG key), and every later
-// run fails on them: "PKI file /var/cache/rpm-ostree/repomd/…/RPM-GPG-KEY-…
-// contains no valid public key" (vm-install 38732387270, 38732400495). A
-// reboot heals nothing; the box rebooted every 23 s, forever. The cache is
-// cleared and the layering tried again in the same boot.
-func TestLayeringHealsAnEmptiedCacheWithoutAReboot(t *testing.T) {
-	etc := t.TempDir()
-	os.MkdirAll(filepath.Join(etc, "laib"), 0o755)
-	os.WriteFile(filepath.Join(etc, "laib", "layer-reboots"), []byte("1\n"), 0o644)
-	log, out, _ := runLayering(t, etc, `case "$1" in
-  cleanup) touch "$FX/cleaned";;
-  install) [ -f "$FX/cleaned" ] || { echo "error: PKI file /var/cache/rpm-ostree/repomd/x/RPM-GPG-KEY-fedora-44-x86_64 contains no valid public key" >&2; exit 1; }
-           printf '#!/bin/sh\n' > "$BIN/restic"; chmod +x "$BIN/restic";;
+// #367: on the Kraftwerk, a missing restic made install-box.sh run `rpm-ostree
+// install restic`: 98 packages (515 MB), because a layering re-resolves every
+// layered package (the NVIDIA ones), and with a staged deployment the live
+// apply is refused and the script rebooted the box mid-migration into a stale
+// tree. Installing Laib is not an OS update: the script never layers and never
+// reboots, on any box. restic is restic's own static release, pinned by its
+// SHA256; git and diff are in the CoreOS image.
+func TestInstallBoxNeverLayersNorReboots(t *testing.T) {
+	if _, err := exec.LookPath("restic"); err == nil {
+		t.Skip("restic is installed here: a failed download would keep it")
+	}
+	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
+	for _, bad := range []string{"rpm-ostree install", "systemctl reboot"} {
+		if strings.Contains(string(src), bad) {
+			t.Errorf("install-box.sh still runs %q: installing Laib must not change the OS or reboot the box", bad)
+		}
+	}
+	// restic's download fails: the script stops and says so
+	log, out, rc, _ := runPrereqs(t, `case "${@: -1}" in */VERSION) echo abc1234;; *) exit 22;; esac`)
+	if strings.Contains(log, "rpm-ostree") || strings.Contains(log, "systemctl reboot") {
+		t.Fatalf("install-box.sh touched rpm-ostree or rebooted for a missing restic\nshims:\n%s\noutput:\n%s", log, out)
+	}
+	if rc == 0 || rc == 75 {
+		t.Fatalf("without restic the install must stop (not succeed, not ask for a reboot), got rc %d\n%s", rc, out)
+	}
+	if !strings.Contains(out, "restic") {
+		t.Errorf("the stop must name restic:\n%s", out)
+	}
+}
+
+// #367: restic comes from restic's GitHub release, so its checksum is pinned in
+// the script: a download that does not match is refused and nothing lands in
+// /usr/local/bin.
+func TestResticIsRefusedOnAChecksumMismatch(t *testing.T) {
+	log, out, rc, resticBin := runPrereqs(t, `o=""; prev=""
+for a in "$@"; do [ "$prev" = -o ] && o=$a; prev=$a; done
+case "${@: -1}" in
+  */VERSION) echo abc1234;;
+  https://github.com/restic/restic/releases/download/v*/restic_*_linux_amd64.bz2) printf 'not restic' > "$o";;
+  *) exit 22;;
 esac`)
-	if !strings.Contains(log, "rpm-ostree cleanup --repomd") {
-		t.Fatalf("the emptied metadata cache was never cleared\nshims:\n%s\noutput:\n%s", log, out)
+	if !strings.Contains(out, "checksum") {
+		t.Fatalf("a restic download with the wrong checksum was not refused by name\nshims:\n%s\noutput:\n%s", log, out)
 	}
-	if strings.Count(log, "\nrpm-ostree install") != 2 { // the sudo shim logs each call twice
-		t.Fatalf("the layering must be tried once more after the cache is cleared\nshims:\n%s", log)
+	if rc == 0 {
+		t.Errorf("the install went on with an unverified restic:\n%s", out)
 	}
-	if strings.Contains(log, "systemctl reboot") {
-		t.Fatalf("rebooted although the layering succeeded after clearing the cache\nshims:\n%s\noutput:\n%s", log, out)
-	}
-	if _, err := os.Stat(filepath.Join(etc, "laib", "layer-reboots")); err == nil {
-		t.Error("the reboot count survives a layering that succeeded: the next failure gets fewer reboots")
-	}
-}
-
-// #206: a layering failure no reboot fixes must not become a reboot loop.
-// Two reboots into the layered tree (counted on disk, like the DNS reboots of
-// #111), then install-box.sh fails and the box stays up and reachable.
-func TestLayeringRebootsAtMostTwice(t *testing.T) {
-	etc := t.TempDir()
-	always := `case "$1" in install) echo "error: no luck" >&2; exit 1;; esac`
-	for boot := 1; boot <= 3; boot++ {
-		log, out, rc := runLayering(t, etc, always)
-		rebooted := strings.Contains(log, "systemctl reboot")
-		if boot <= 2 && (rc != 75 || !rebooted) {
-			t.Fatalf("boot %d: want a reboot into the layered tree (exit 75), got rc %d\nshims:\n%s\noutput:\n%s", boot, rc, log, out)
-		}
-		if boot == 3 {
-			if rebooted || rc == 75 || rc == 0 {
-				t.Fatalf("boot 3: after two reboots the layering must fail without another reboot, got rc %d\nshims:\n%s\noutput:\n%s", rc, log, out)
-			}
-			if !strings.Contains(out, "rpm-ostree") {
-				t.Errorf("boot 3: the failure should name rpm-ostree:\n%s", out)
-			}
-		}
+	if _, err := os.Stat(resticBin); err == nil {
+		t.Errorf("an unverified restic was installed at %s", resticBin)
 	}
 }
