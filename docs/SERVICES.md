@@ -33,7 +33,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 | mosquitto, esphome | `mosquitto`, `esphome` | built-ins |
 | beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
-| solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service |
+| solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service: `scripts/import-google.py` brings a Takeout's calendars and contacts into a person's Radicale over DAV (#372) |
 | usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; Haus and the Bote count into it, unanswered sentences 30 days (#266) |
 | daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them. foundry-chronicle's is `chronik` (`templates/chronik`, foundry-chronicle#362): bot and timestamped Whisper in their own namespaces, Piper from `stimme` for the announcement |
 | foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | speaks Laib's lease contract from `${MODEL_LEASE}`/`${MODEL_KEY}`, preset `gemma-4-12b` (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
