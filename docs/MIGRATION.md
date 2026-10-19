@@ -447,3 +447,19 @@ wrote on): delete each target it printed (`copy … -> <target>`, e.g.
 runs again; it refuses a target that holds data. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
+
+## Solaris until phase 5 (#396)
+
+Solaris runs on, ignored, until it retires (ADR 0015), but its links into
+ServiceBay break on migration day and would fail silently: the admin
+toolbox and its token mint (`SB_MCP_URL`, `SB_API_URL`, `SB_MINT_URL`;
+administration is Laib's and the Operator's), and the deadlines and
+contacts write-back into each resident's `solaris` calendar and address
+book (`DEADLINES_SYNC_URL…`, `CONTACTS_SYNC_URL…`), which needs Radicale
+rights ServiceBay's `radicale.yml` carried and Laib's Radicale
+(`owner_only`) does not grant. No shim is built for them:
+`scripts/solaris-links-off.py` switches them off explicitly (an empty value
+disables each in Solaris), disables `solaris-radicale-rights.timer` and
+restarts Solaris. What the write-back wrote stays in Radicale. Solaris's
+reading (`CALDAV_URL`, `CARDDAV_URL`, Home Assistant, llama) is untouched.
+`chat.` is dark (owner, 2026-10-18).
