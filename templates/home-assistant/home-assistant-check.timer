@@ -1,8 +1,8 @@
 [Unit]
-Description=Home Assistant: laib's integration check, hourly, so the morning report reads a fresh one
+Description=Home Assistant: laib's check every 15 minutes (a dead Z-Wave network turns red within that, #417)
 
 [Timer]
-OnCalendar=hourly
+OnCalendar=*:0/15
 Persistent=true
 
 [Install]
