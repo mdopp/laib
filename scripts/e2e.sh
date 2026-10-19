@@ -304,7 +304,8 @@ grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
 grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
-grep -q "jede Nachricht zuerst an das Werkzeug persona" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the persona tool first (#122, #133)"
+grep -q "Laibs Persona sieht jede Nachricht vor dir" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the persona engine first (#122, #133, #471)"
+test -s "$HOOKDIR/bote/hermes/plugins/laib-persona/__init__.py" && grep -q "enabled: \[laib-persona" "$HOOKDIR/bote/hermes/config.yaml" || fail "the persona engine is the plugin laib-persona in front of the model (#471)"
 grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warnings stay plain words (#122)"
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
@@ -361,7 +362,7 @@ printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
 grep -q "Du bist HAL, ruhig und höflich" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks as the house persona's style.md (#127)"
 if grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "another house persona still says Joshua (#127)"; fi
-for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "jede Nachricht zuerst an das Werkzeug persona" "FIGUR"; do
+for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "Laibs Persona sieht jede Nachricht vor dir" "FIGUR"; do
   grep -q "$rule" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the rules are in every persona's SOUL: $rule (#127)"
 done
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
