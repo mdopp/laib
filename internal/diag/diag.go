@@ -179,8 +179,15 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
 	all, _ := journal.Read(env.Paths.Journal, time.Time{})
 	var installed time.Time
-	var lastCheck time.Time
+	var lastCheck, lastGreen time.Time
+	lastRun := ""
 	for _, e := range all {
+		if e.Verb == "backup" && e.Reason == "" {
+			lastRun = e.Result
+			if e.Result == "green" {
+				lastGreen = e.T
+			}
+		}
 		if e.Verb == "init" && installed.IsZero() {
 			installed = e.T
 		}
@@ -197,6 +204,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			sev = "rot"
 		}
 		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
+	}
+	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
+	if st.Box.Backup.Repo != "" && !installed.IsZero() && time.Since(installed) > 36*time.Hour && (lastRun == "red" || time.Since(lastGreen) > 36*time.Hour) {
+		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung ist fehlgeschlagen oder älter als 36 Stunden", Fix: "laib journal (verb backup); laib backup"})
 	}
 	if st.Box.Backup.Repo != "" {
 		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {

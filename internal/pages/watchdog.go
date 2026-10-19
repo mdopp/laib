@@ -75,6 +75,7 @@ func watchdogLoop(ctx context.Context, env *cli.Env) {
 	for {
 		if st, err := cli.LoadState(env); err == nil {
 			WatchdogPing(ctx, env, st)
+			MailSweep(ctx, env, st, time.Now())
 		}
 		select {
 		case <-ctx.Done():
