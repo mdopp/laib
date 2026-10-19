@@ -239,6 +239,14 @@ func (st *State) validate() []error {
 			fail("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
 		}
 	}
+	if _, ok := st.Policy.Hands["laib"]; !ok && st.Policy.Hands != nil {
+		// the box's own timers (backup, its check, the snapshot before an image
+		// update) run as laib (#444): a policy.yml from before it lacks the hand
+		st.Policy.Hands["laib"] = BoxHand
+	}
+	if _, ok := st.Policy.Hands["notify"]; !ok && st.Policy.Hands != nil {
+		st.Policy.Hands["notify"] = NotifyHand // laib-notify (#443), the same way
+	}
 	st.Box.Laib.Host = cmp.Or(st.Box.Laib.Host, "laib")
 	st.Box.Laib.Port = cmp.Or(st.Box.Laib.Port, 5900)
 	st.Box.Laib.Listen = cmp.Or(st.Box.Laib.Listen, "127.0.0.1")

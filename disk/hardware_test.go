@@ -1,4 +1,4 @@
-package diag
+package disk
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mdopp/laib/internal/sysd"
 )
 
 const smartHealthy = `{"smart_status":{"passed":true},"temperature":{"current":31},"ata_smart_attributes":{"table":[{"id":5,"name":"Reallocated_Sector_Ct","raw":{"value":0}},{"id":197,"name":"Current_Pending_Sector","raw":{"value":0}}]}}`
@@ -33,15 +31,15 @@ func TestSmartFindingsFromRecordedFixtures(t *testing.T) {
 		{"nvme worn and warm", smartNVMeWorn, "gelb", "abgenutzt"},
 	}
 	for _, tc := range cases {
-		real := sysd.Run
-		sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+		real := Run
+		Run = func(_ context.Context, name string, args ...string) (string, error) {
 			if strings.Contains(name+" "+strings.Join(args, " "), "smartctl") {
 				return tc.json, nil
 			}
 			return "", nil
 		}
 		fs := smartFindings(context.Background(), []string{"/dev/sda"})
-		sysd.Run = real
+		Run = real
 		if tc.sev == "" {
 			if len(fs) != 0 {
 				t.Fatalf("%s: unexpected findings %+v", tc.name, fs)
@@ -59,12 +57,12 @@ func TestSmartFindingsFromRecordedFixtures(t *testing.T) {
 		}
 	}
 	// smartctl missing: one plain hint, not a failure
-	real := sysd.Run
-	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+	real := Run
+	Run = func(_ context.Context, name string, args ...string) (string, error) {
 		return "sudo: smartctl: command not found", errors.New("exit status 1")
 	}
 	fs := smartFindings(context.Background(), []string{"/dev/sda"})
-	sysd.Run = real
+	Run = real
 	if len(fs) != 1 || fs[0].Severity != "info" || !strings.Contains(fs[0].Fix, "smartmontools") {
 		t.Fatalf("without smartctl: %+v", fs)
 	}

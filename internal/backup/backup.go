@@ -126,12 +126,15 @@ func repoExists(ctx context.Context, st *state.State) bool {
 }
 
 func Cmd(ctx context.Context, env *cli.Env, args []string) int {
+	// a run that never starts is a failed run, red in the journal like one (#444)
+	reason := map[bool]string{true: "check"}[len(args) > 0 && args[0] == "check"]
 	st, pw, err := Prep(env)
-	if err != nil {
-		return env.Fail(err)
+	if err == nil && !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
+		err = errors.New(env.Actor + " may not run a backup")
 	}
-	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
-		return cli.Refused(env, env.Actor+" may not run a backup")
+	if err != nil {
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "backup", Reason: reason, Result: "red", Detail: err.Error()})
+		return env.Fail(err)
 	}
 	if len(args) > 0 && args[0] == "check" {
 		rc := backupCheck(ctx, env, st, pw, "check")

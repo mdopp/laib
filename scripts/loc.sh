@@ -38,6 +38,8 @@ budget frage 400 frage          # "was ist …", 261
 budget automat 600 automat      # the Bote's HA automations, 421
 budget persona 900 persona      # the Bote's persona engine, 701
 budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
+budget disk 700 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
+budget notify 400 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -50,7 +52,7 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick frage automat persona mcpserver; do
+for prog in stick frage automat persona mcpserver disk notify; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
@@ -63,7 +65,7 @@ fi
 # inside the kernel: the box chores (ADR 0005 amendment #309) report and
 # maintain; the trust kernel never depends on them. Only cmd/laib and other
 # chores import a chore.
-chores="diag disk registry pages"
+chores="diag registry pages"
 for c in $chores; do
   users=$(grep -rlE "\"github.com/mdopp/laib/internal/$c\"" --include='*.go' internal | grep -vE "^internal/($(echo $chores | tr ' ' '|'))/" || true)
   [ -z "$users" ] || { echo "the trust kernel imports the chore $c: $users"; bad=1; }
