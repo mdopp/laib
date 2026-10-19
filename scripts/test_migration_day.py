@@ -235,6 +235,9 @@ echo "  laib add llama"
         self.assertLess(lines.index("systemctl --user disable --now solaris-llama-policy.service"), lines.index("laib add llama"),
                         "laib-lease starts before the old proxy let go of 11435")
         self.assertIn("solaris-llama-policy", r.stdout)
+        # the other steps' units stay claimed (a comment in sb_units once swallowed caddy's nginx)
+        st = self.run_md("--dry-run")
+        self.assertNotIn("nginx.kube", st.stdout + st.stderr)
         r = self.run_md("rollback", "llama")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("--user enable --now solaris-llama-policy.service", self.calls_of("systemctl"))

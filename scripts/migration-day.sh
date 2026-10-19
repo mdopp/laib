@@ -65,7 +65,8 @@ IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solar
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
   case $1 in
-    llama) echo "llama llama-embed solaris-llama-policy";;   # the last a plain host unit on 11435, laib-lease's port (#374) caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
+    # solaris-llama-policy: a plain host unit on 11435, laib-lease's port (#374)
+    llama) echo "llama llama-embed solaris-llama-policy";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
     preflight|install|drafts|secrets|ignore) ;;
     *) echo "$1";;
