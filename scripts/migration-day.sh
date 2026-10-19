@@ -526,6 +526,28 @@ konflikte() {   # konflikte: RED lines, none when every step can take its servic
   python3 -I -c "$konflikt_py" "$Q" "$DATA" "$TEMPLATES" "${args[@]}"
 }
 
+# the carried admin passwords the post-deploy logs in with, tried read-only against the app
+# ServiceBay still runs (#373): one changed inside the app after ServiceBay set it is red here,
+# not at the post-deploy after the move. <drafts.txt>
+logins() {
+  local s v pw user out lrc red=0
+  for s in home-assistant adguard; do
+    on_box "$s" || continue
+    case $s in home-assistant) v=HA_ADMIN_USER pw=HA_ADMIN_PASSWORD;; adguard) v=ADMIN_USER pw=ADGUARD_ADMIN_PASSWORD;; esac
+    user=$(sed -n "s/^.*laib add $s .*\b$v=\([^ ]*\).*$/\1/p" "$1" | head -1)
+    [ -n "$user" ] || user=$(sed -n "s/^$v: *\([^ #]*\).*/\1/p" "$TEMPLATES/$s/values.example.yml")
+    out=$("$CARRY" --login "$s" "$user" 2>&1); lrc=$?
+    case $lrc in
+      0) echo "  ok    $s: the carried administrator login works ($out)";;
+      1) echo "  RED   $s: the carried administrator login, user $user, meldet sich nicht an ($out)"
+         echo "        after the secrets step: laib secret set $pw with the password the app has now (--until secrets, set it, --resume)"
+         red=1;;
+      *) echo "  WARN  $s: the carried administrator login was not tried ($out)";;
+    esac
+  done
+  return "$red"
+}
+
 dry_run() {
   local s st rc=0 tmp
   say "dry run: nothing on this box changes"
@@ -558,6 +580,7 @@ dry_run() {
       echo "  RED   immich: set IMMICH_ADMIN_EMAIL=<Immich's admin address> (Immich → Administration → Users)"; rc=1
     fi
     on_box mosquitto && ! grep -q "laib add mosquitto.*MQTT_USER=" "$tmp/migration.txt" && echo "  note  mosquitto: MQTT_USER=$MQTT_USER goes on its line (the box's broker user)"
+    logins "$tmp/migration.txt" || rc=1
     rm -rf "$tmp"
   fi
   [ "$rc" = 0 ] && echo "dry run: every precondition holds" || echo "dry run: RED, see above"
