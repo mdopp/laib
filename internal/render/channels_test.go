@@ -14,7 +14,7 @@ import (
 // replaced, and the given people (#184).
 func boteBox(t *testing.T, people string, values map[string]string) (Output, error) {
 	t.Helper()
-	return boteBoxSecrets(t, people, values, map[string]string{"BOTE_APPROVER_TOKEN": "approver-tok", "BOTE_MATRIX_TOKEN": "matrix-tok", "BOTE_TELEGRAM_TOKEN": "tg-tok", "BOTE_HA_TOKEN": "ha-tok"})
+	return boteBoxSecrets(t, people, values, map[string]string{"BOTE_APPROVER_TOKEN": "approver-tok", "BOTE_MATRIX_TOKEN": "matrix-tok", "BOTE_TELEGRAM_TOKEN": "tg-tok", "BOTE_DISCORD_TOKEN": "dc-tok", "BOTE_HA_TOKEN": "ha-tok"})
 }
 
 func boteBoxSecrets(t *testing.T, people string, values, secrets map[string]string) (Output, error) {
@@ -55,6 +55,7 @@ var (
 	noSignal   = map[string]string{"SIGNAL_ACCOUNT": "", "SIGNAL_ALLOWED_USERS": "", "ADMIN_NUMBER": ""}
 	matrixOn   = map[string]string{"MATRIX_HOMESERVER": "https://hs.example.org", "MATRIX_ALLOWED_USERS": "@admin:example.org", "ADMIN_MXID": "@admin:example.org", "ADMIN_ROOM": "!raum:example.org"}
 	telegramOn = map[string]string{"TELEGRAM_ALLOWED_USERS": "123456"}
+	discordOn  = map[string]string{"DISCORD_ALLOWED_USERS": "112233445566778899"}
 )
 
 func merge(ms ...map[string]string) map[string]string {
@@ -190,5 +191,31 @@ func TestBoteWithoutSignalHasNoPort8085(t *testing.T) {
 	}
 	if !strings.Contains(out[pod], "PublishPort=127.0.0.1:8085:8080\n") || !strings.Contains(out[nft], "8085") {
 		t.Fatalf("Signal: 8085 stays, on loopback:\n%s\n%s", out[pod], out[nft])
+	}
+}
+
+// #421: Discord is a fourth channel, as Telegram (#184): on while
+// DISCORD_ALLOWED_USERS is set, no signal-cli and no relay for it (Discord
+// never approves), a person reached on their DM channel id, and plan refuses
+// users without the bot token and the bot token without users.
+func TestBoteOnDiscordOnly(t *testing.T) {
+	out, err := boteBox(t, "people: {papa: [\"discord:998877665544332211\"]}\n", merge(noSignal, discordOn))
+	if err != nil {
+		t.Fatalf("a Discord-only Bote: %v", err)
+	}
+	if _, ok := out["quadlet/bote/bote-signal.container"]; ok {
+		t.Fatal("Discord only: no bote-signal unit")
+	}
+	if _, ok := out["quadlet/bote/bote-relay.container"]; ok {
+		t.Fatal("Discord only: no relay, Discord never approves")
+	}
+	if _, err := boteBox(t, "people: {papa: [\"discord:998877665544332211\"]}\n", nil); err == nil || !strings.Contains(err.Error(), "DISCORD_ALLOWED_USERS") {
+		t.Fatalf("a discord target on a Bote without Discord must fail plan: %v", err)
+	}
+	if _, err := boteBoxSecrets(t, "", merge(noSignal, discordOn), map[string]string{"BOTE_APPROVER_TOKEN": "a"}); err == nil || !strings.Contains(err.Error(), "BOTE_DISCORD_TOKEN") {
+		t.Fatalf("Discord users without the bot token must fail plan: %v", err)
+	}
+	if _, err := boteBoxSecrets(t, "", nil, map[string]string{"BOTE_APPROVER_TOKEN": "a", "BOTE_DISCORD_TOKEN": "dc-tok"}); err == nil || !strings.Contains(err.Error(), "DISCORD_ALLOWED_USERS") {
+		t.Fatalf("a Discord bot token without users must fail plan: %v", err)
 	}
 }
