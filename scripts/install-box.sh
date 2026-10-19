@@ -187,6 +187,9 @@ for BIN in laib laib-operator laib-lease; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
+# vm-install cuts the power on this line (the first boot's console): the
+# binaries are in place, the first boot's marker is not (#37, #367)
+echo "binaries $TAG in /var/opt/laib"
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
 
 # The user unit, inline so a private repo needs no second fetch (dist/laib.service is the same text).

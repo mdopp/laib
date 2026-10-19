@@ -199,3 +199,18 @@ esac`)
 		t.Errorf("an unverified restic was installed at %s", resticBin)
 	}
 }
+
+// #367: vm-install cuts the power on install-box.sh's line "binaries <tag> in
+// /var/opt/laib" to prove the first boot resumes between the binaries and its
+// marker. The line must come after the binaries are in place and before the
+// work that keeps the window open (the unit, `sleep 1`, the apply, /ready).
+func TestTheBinariesLineOpensTheCutWindow(t *testing.T) {
+	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
+	s := string(src)
+	placed := strings.Index(s, `sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"`)
+	line := strings.Index(s, `echo "binaries $TAG in /var/opt/laib"`)
+	pause := strings.Index(s, "\nsleep 1\n")
+	if placed < 0 || line < 0 || pause < 0 || !(placed < line && line < pause) {
+		t.Fatalf("install-box.sh must print \"binaries $TAG in /var/opt/laib\" after the binaries are moved in place and before `sleep 1` (placed %d, line %d, sleep %d)", placed, line, pause)
+	}
+}
