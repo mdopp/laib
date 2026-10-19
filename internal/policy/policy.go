@@ -4,6 +4,7 @@ package policy
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/mdopp/laib/internal/state"
 )
@@ -84,6 +85,14 @@ func Validate(p state.Policy) error {
 		if name != "human" && h.Ceiling == "destroy" {
 			return fmt.Errorf("policy.yml: only human may hold destroy")
 		}
+		if h.Session != "" {
+			// a session token always expires, and it is never a door to more sessions (#380)
+			t, ok := p.Hands[h.Session]
+			d, err := time.ParseDuration(t.TTL)
+			if !ok || h.Session == "human" || t.Session != "" || err != nil || d <= 0 {
+				return fmt.Errorf("policy.yml: hand %q: session %q must be a hand with a ttl, not human, without sessions of its own", name, h.Session)
+			}
+		}
 	}
 	return nil
 }
@@ -103,7 +112,7 @@ const ConvergeBudget = 3
 
 // KnownVerbs is every verb of the CLI (cmd/laib's table), so policy.yml can
 // name them in a hand's verb list and be validated without importing it.
-var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "person_invite": true, "person_pending": true}
+var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "person_invite": true, "person_pending": true, "session": true}
 
 // MayVerb reports whether a hand may use a verb at all: a hand with a verb
 // list is limited to it (the approver: approve, reject, inbox, status,

@@ -69,6 +69,7 @@ func init() {
 		{Name: "reject", Tier: "apply", Help: "drop a proposal", Run: inbox.Reject},
 		{Name: "adopt", Tier: "propose", Help: "adopt an unmanaged Quadlet folder into services/", Run: cmdAdopt},
 		{Name: "ignore", Tier: "propose", Help: "record an unmanaged unit as deliberately unmanaged", Run: cmdIgnore},
+		{Name: "session", Tier: "read", Help: "[<name>]: a token of the hand policy.yml names in your session:, with its ttl, for one session (#380)", Run: cmdSession},
 		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", Run: cmdToken},
 		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME>", Run: cmdSecret},
 		{Name: "disk", Tier: "apply", Help: "status | add <device>: the data RAID; add joins the mirror (humans only)", Run: disk.Cmd},
