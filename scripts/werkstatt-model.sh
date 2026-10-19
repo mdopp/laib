@@ -143,7 +143,7 @@ cat > "$WORK/chat.mjs" <<'JS'
 // one chat over pi-web-ui's websocket, as the browser does it: hello, the
 // model list, the household model, one prompt; every message is printed
 import { createRequire } from "node:module";
-const require = createRequire("/usr/local/lib/node_modules/pi-web-ui/");
+const require = createRequire("/opt/pi-web/node_modules/pi-web-ui/");
 const WebSocket = require("ws");
 const ws = new WebSocket("ws://127.0.0.1:8791/ws");
 const done = setTimeout(() => { console.log(JSON.stringify({ type: "timeout" })); process.exit(0); }, 150000);

@@ -18,10 +18,10 @@ IMG="$REG/laib-werkstatt"
 DATA="$WORK/data"
 REGCONF="$HOME/.config/containers/registries.conf.d/laib-boot-werkstatt.conf"
 cleanup() {
-  systemctl --user stop werkstatt.service werkstatt-autoloop.service 2>/dev/null || true
+  systemctl --user stop werkstatt.service werkstatt-autoloop.service sso.service 2>/dev/null || true
   podman rm -f laib-boot-registry >/dev/null 2>&1 || true
   for s in $(podman secret ls --format '{{.Name}}' 2>/dev/null | grep '^laib\.werkstatt\.' || true); do podman secret rm "$s" >/dev/null || true; done
-  rm -rf "$LAIB_QUADLET/werkstatt" "$REGCONF"
+  rm -rf "$LAIB_QUADLET/werkstatt" "$LAIB_QUADLET/sso" "$REGCONF"
   podman unshare rm -rf "$WORK" 2>/dev/null || rm -rf "$WORK"
   systemctl --user daemon-reload 2>/dev/null || true
 }
@@ -42,10 +42,17 @@ for t in 1 2; do podman push -q "$IMG:$t"; done
 podman rmi "$IMG:2" >/dev/null   # the update is pulled, as on a box
 
 LAIB_ACTOR=human:boot "$BIN" init --domain boot.test --data-dir "$DATA" >/dev/null
+# the Werkstatt's pi.<domain> route wants a login (#384), so a box needs an sso
+# role: here a stub service in that role, no Authelia (werkstatt-e2e/app has the real one)
+mkdir -p "$LAIB_HOME/state/services/sso"
+printf 'name: sso\nprovides: [sso]\nroutes: []\nhealth: {none: "a stub for the role"}\n' > "$LAIB_HOME/state/services/sso/laib.yml"
+printf 'IMAGE: docker.io/library/registry:2\n' > "$LAIB_HOME/state/services/sso/values.yml"
+printf '[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n' > "$LAIB_HOME/state/services/sso/sso.container"
+git -C "$LAIB_HOME/state" add -A && git -C "$LAIB_HOME/state" -c user.name=boot -c user.email=boot@test commit -qm "an sso stub"
 cat > "$LAIB_HOME/state/box.yml" <<YML
 domain: boot.test
 dataDir: $DATA
-roles: {}
+roles: {sso: sso}
 gpu: {present: false}
 laib: {listen: 0.0.0.0}
 YML

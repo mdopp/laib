@@ -49,6 +49,8 @@ export PI_CODING_AGENT_DIR="$AGENT" PI_WEB_PORT="${PI_WEB_PORT:-8791}" PI_WEB_HO
 export PI_WEB_DATA_DIR="$HOME/.pi-web" PI_WEB_ALLOW_HOSTS="$host,127.0.0.1,localhost" PI_WEB_ALLOW_ORIGINS="https://$host"
 # `laib` in pi's shell (laibctl) speaks as the pi hand too, not as claude
 export LAIB_TOKEN_FILE=/run/laib/pi-token
+# the SDK installed beside it (/opt/pi-web), the same pi version as the CLI
+export PI_WEB_SDK=bundled
 # the Claude login and the shell's claude hand are not pi's
 unset PI_WEB_TOKEN CLAUDE_CODE_OAUTH_TOKEN
 exec pi-web-ui --no-browser
