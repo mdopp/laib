@@ -160,6 +160,98 @@ printf 'laib %s <%s>\\n' "$*" "$v" >> {self.log}
         self.assertEqual(self.laib_sets(calls), {})
 
 
+class FakeApps:
+    """Home Assistant's login flow and AdGuard's basic auth on loopback, with one right password each."""
+    def __init__(self, ha_pw, adguard_pw):
+        import base64, http.server, threading
+        seen = self.seen = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+
+            def reply(self, code, body):
+                b = json.dumps(body).encode()
+                self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                seen.append(("POST", self.path, body))
+                if self.path == "/auth/login_flow":
+                    return self.reply(200, {"flow_id": "f1", "type": "form"})
+                if self.path == "/auth/login_flow/f1":
+                    if body.get("username") == "oscar" and body.get("password") == ha_pw:
+                        return self.reply(200, {"type": "create_entry", "result": "an-auth-code"})
+                    return self.reply(200, {"type": "form", "errors": {"base": "invalid_auth"}})
+                self.reply(404, {})
+
+            def do_GET(self):
+                seen.append(("GET", self.path, self.headers.get("Authorization")))
+                ok = "Basic " + base64.b64encode(f"admin:{adguard_pw}".encode()).decode()
+                self.reply(200 if self.path == "/control/status" and self.headers.get("Authorization") == ok else 401, {})
+
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+class TryLogin(unittest.TestCase):
+    """#373: --login tries the carried admin password against the app ServiceBay
+    still runs, read-only (HA's login flow up to its code, never /auth/token;
+    AdGuard's API with basic auth), and sets nothing in Laib."""
+    def setUp(self):
+        self.c = Carry()
+        self.c.setUp()
+
+    def tearDown(self):
+        self.c.tearDown()
+
+    def login(self, svc, user, apps):
+        env = dict(os.environ, PATH=f"{self.c.bin}:{os.environ['PATH']}", HA_URL=apps.url, ADGUARD_URL=apps.url)
+        p = subprocess.run(["bash", str(SCRIPT), "--login", svc, user], capture_output=True, text=True, env=env)
+        return p, self.c.log.read_text().splitlines() if self.c.log.exists() else []
+
+    def test_the_right_passwords_log_in(self):
+        apps = FakeApps(self.c.values["HA_ADMIN"], self.c.values["ADGUARD"])
+        try:
+            for svc, user in (("home-assistant", "oscar"), ("adguard", "admin")):
+                p, calls = self.login(svc, user, apps)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertFalse([c for c in calls if c.startswith("laib ")], calls)
+            self.assertFalse([s for s in apps.seen if s[1] == "/auth/token"], "no token minted")
+        finally:
+            apps.close()
+
+    def test_a_password_changed_in_the_app_is_refused(self):
+        apps = FakeApps("changed-in-ha", "changed-in-adguard")
+        try:
+            for svc, user, name in (("home-assistant", "oscar", "HA_ADMIN_PASSWORD"), ("adguard", "admin", "ADGUARD_ADMIN_PASSWORD")):
+                p, calls = self.login(svc, user, apps)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn(f"{name} meldet sich nicht an", p.stdout + p.stderr)
+                for v in self.c.values.values():
+                    self.assertNotIn(v, p.stdout + p.stderr + "\n".join(calls))
+        finally:
+            apps.close()
+
+    def test_an_app_that_does_not_answer_is_not_a_wrong_password(self):
+        apps = FakeApps("x", "y")
+        apps.close()
+        p, _ = self.login("home-assistant", "oscar", apps)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+
+    def test_no_login_check_for_a_service_without_one(self):
+        apps = FakeApps("x", "y")
+        try:
+            p, _ = self.login("immich", "a@b.test", apps)
+            self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        finally:
+            apps.close()
+
+
 class ServiceBaysOwnSeal(unittest.TestCase):
     """A store written by ServiceBay's own code, not by this test: its
     persistSingleSecret and updateConfig (secrets.ts encrypt through config.ts)

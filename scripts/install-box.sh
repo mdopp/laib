@@ -210,45 +210,34 @@ else
   get=("${auth[@]}" -H "Accept: application/octet-stream")
 fi
 
-# Fedora CoreOS ships without git, restic and diff; laib shells out to all
-# three (state repo, backups, plan diffs). Layer them live, once. If the live
-# apply is refused (a pending deployment), reboot into the layered tree: the
-# first-boot unit re-runs this script, it is idempotent.
-# A power cut during an earlier run can leave rpm-ostree's metadata cache with
-# empty files (a metalink, a repo's GPG key), and rpm-ostree fails on them on
-# every run after: a reboot heals nothing (#206). So a failure clears the cache
-# and tries once more, and the reboots are counted: two, then a plain failure.
-REBOOTS="${LAIB_ETC:-/etc}/laib/layer-reboots"   # LAIB_ETC: the test harness only
-need=""
-for t in git:git restic:restic diff:diffutils; do command -v "${t%%:*}" >/dev/null 2>&1 || need="$need ${t##*:}"; done
-if [ -n "$need" ] && command -v rpm-ostree >/dev/null 2>&1; then
-  echo "layering$need (rpm-ostree, live)"
-  # shellcheck disable=SC2086
-  layer() { sudo rpm-ostree install --idempotent --allow-inactive --apply-live $need; }
-  layered=0; layer && layered=1
-  if [ "$layered" = 0 ]; then
-    echo "layering failed; clearing rpm-ostree's metadata cache and trying once more (#206)" >&2
-    sudo rpm-ostree cleanup --repomd >/dev/null 2>&1 || true
-    layer && layered=1
-  fi
-  if [ "$layered" = 0 ]; then
-    n=$(cat "$REBOOTS" 2>/dev/null || echo 0)
-    if [ "$n" -ge 2 ]; then
-      echo "layering$need failed again after $n reboots: not rebooting again (rpm-ostree's error is above; journalctl -u rpm-ostreed)" >&2
-      exit 1
-    fi
-    # say what failed: a box without DNS is not a refused live apply (#111)
-    if ! getent hosts mirrors.fedoraproject.org >/dev/null 2>&1; then
-      echo "layering failed: no DNS (mirrors.fedoraproject.org does not resolve); rebooting to try again ($((n + 1)) of 2), the first-boot unit continues" >&2
-    else
-      echo "live apply refused; rebooting into the layered tree ($((n + 1)) of 2), the first-boot unit continues" >&2
-    fi
-    sudo mkdir -p "$(dirname "$REBOOTS")" && echo $((n + 1)) | sudo tee "$REBOOTS" >/dev/null && sudo sync
-    sudo systemctl reboot; exit 75   # EX_TEMPFAIL: the caller keeps what the next run needs
+# laib shells out to git, diff and restic (state repo, plan diffs, backups).
+# git and diff are in the CoreOS image (git-core, diffutils); restic is not.
+# Installing Laib is not an OS update (#367): no rpm-ostree layering, which
+# re-resolves every layered package (98 packages on the Kraftwerk, its NVIDIA
+# stack among them) and on a box with a staged deployment needs a reboot. So
+# restic is restic's own static release, pinned by its SHA256 like Laib's
+# binaries, into /usr/local/bin (/var/usrlocal on CoreOS: no deployment).
+# A bump changes the version and both sums (restic's SHA256SUMS has the first).
+RESTIC_VERSION=0.19.1
+RESTIC_BZ2_SHA256=f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+RESTIC_SHA256=20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639
+RESTIC_BIN="${LAIB_RESTIC_BIN:-/usr/local/bin/restic}"   # LAIB_RESTIC_BIN: the test harness only
+for t in git diff; do
+  command -v "$t" >/dev/null 2>&1 || { echo "$t missing: it is in every current CoreOS image; this script does not change the OS (#367)" >&2; exit 1; }
+done
+if [ "$(sha256sum "$RESTIC_BIN" 2>/dev/null | cut -d' ' -f1)" != "$RESTIC_SHA256" ]; then
+  url="https://github.com/restic/restic/releases/download/v$RESTIC_VERSION/restic_${RESTIC_VERSION}_linux_amd64.bz2"
+  if ! curl -fsSL -o "$TMPD/restic.bz2" "$url"; then
+    command -v restic >/dev/null 2>&1 || { echo "cannot download restic $RESTIC_VERSION ($url); laib's backups need it" >&2; exit 1; }
+    echo "cannot download restic $RESTIC_VERSION; keeping $(command -v restic) ($(restic version 2>/dev/null | cut -d' ' -f2))" >&2
+  else
+    [ "$(sha256sum "$TMPD/restic.bz2" | cut -d' ' -f1)" = "$RESTIC_BZ2_SHA256" ] || { echo "checksum mismatch for restic $RESTIC_VERSION: refusing an unverified restic" >&2; exit 1; }
+    bunzip2 -c "$TMPD/restic.bz2" > "$TMPD/restic"
+    [ "$(sha256sum "$TMPD/restic" | cut -d' ' -f1)" = "$RESTIC_SHA256" ] || { echo "checksum mismatch for the unpacked restic $RESTIC_VERSION: refusing it" >&2; exit 1; }
+    sudo install -D -m 0755 "$TMPD/restic" "$RESTIC_BIN.new" && sudo mv "$RESTIC_BIN.new" "$RESTIC_BIN"
+    echo "restic $RESTIC_VERSION in $RESTIC_BIN (checksum-verified)"
   fi
 fi
-sudo rm -f "$REBOOTS"
-for t in git restic diff; do command -v "$t" >/dev/null 2>&1 || { echo "$t still missing" >&2; exit 1; }; done
 
 # Rootless Caddy (80/443) and AdGuard (53): low ports for unprivileged users.
 # The stick's Ignition sets it persistently; this covers a box installed otherwise.
@@ -295,6 +284,9 @@ for BIN in laib laib-operator laib-lease; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
+# vm-install cuts the power on this line (the first boot's console): the
+# binaries are in place, the first boot's marker is not (#37, #367)
+echo "binaries $TAG in /var/opt/laib"
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
 
 # The user unit, inline so a private repo needs no second fetch (dist/laib.service is the same text).
