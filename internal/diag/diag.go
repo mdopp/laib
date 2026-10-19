@@ -7,10 +7,12 @@ package diag
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,7 +20,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/render"
@@ -163,10 +164,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	if _, f := OperatorState(OperatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
-	// The hardware (#59): disks by SMART, the box's temperature.
-	if only == "" {
-		out = append(out, hardwareFindings(ctx)...)
-	}
+	// The data RAID always; the hardware (#59: SMART, the box's temperature)
+	// for the whole box. Both are laib-disk's (#443).
+	out = append(out, diskFindings(ctx, only == "")...)
 	// The box's own config (#281): install-box.sh writes it on every box, stick or migrated.
 	for _, f := range []string{cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/journald.conf.d/50-laib.conf", filepath.Join(filepath.Dir(env.Paths.Quadlet), "containers.conf.d", "50-laib.conf")} {
 		if _, err := os.Stat(f); err != nil && only == "" {
@@ -176,6 +176,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// #368: without the boot check a broken OS update stays broken until someone has SSH.
 	if _, err := os.Stat(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/system/laib-boot-check.service"); err != nil && only == "" {
 		out = append(out, Finding{Severity: "rot", Probe: "boot-check", Detail: "laib-boot-check.service fehlt: ein OS-Update, das die GPU oder Laib bricht, rollt nicht von selbst zurück", Fix: "install-box.sh --version <diese Version> (die Installation legt die Prüfung an)"})
+	}
+	// #445: Laib filters with its own nftables table; firewalld beside it lets only SSH in.
+	if fw, _ := sysd.Run(ctx, "systemctl", "is-active", "firewalld.service"); strings.TrimSpace(fw) == "active" && only == "" {
+		out = append(out, Finding{Severity: "rot", Probe: "firewall", Detail: "firewalld läuft und blockiert alles außer SSH aus dem LAN (Laibs Firewall ist die nftables-Tabelle inet laib)", Fix: "sudo systemctl mask --now firewalld.service (oder install-box.sh --box-config)"})
 	}
 	if only == "" {
 		var fs syscall.Statfs_t
@@ -227,8 +231,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
 	}
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
-	if st.Box.Backup.Repo != "" && !installed.IsZero() && time.Since(installed) > 36*time.Hour && (lastRun == "red" || time.Since(lastGreen) > 36*time.Hour) {
-		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung ist fehlgeschlagen oder älter als 36 Stunden", Fix: "laib journal (verb backup); laib backup"})
+	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
+		what := map[bool]string{true: "ist noch nie gelaufen"}[lastGreen.IsZero()]
+		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup"})
 	}
 	if st.Box.Backup.Repo != "" {
 		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {
@@ -248,14 +253,26 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, *f)
 		}
 	}
-	// The data RAID: one member by design is yellow, a lost member red.
-	if _, members := disk.MarkerMembers(); members > 0 {
-		if b, err := os.ReadFile("/proc/mdstat"); err == nil {
-			out = append(out, raidFindings(string(b), members)...)
-		}
-	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })
+	return out
+}
+
+// DiskBin is the program laib-disk (#443), beside laib.
+func DiskBin() string { return cmp.Or(os.Getenv("LAIB_DISK"), "/var/opt/laib/laib-disk") }
+
+// diskFindings: what laib-disk probe says, the program that holds the RAID,
+// SMART and thermal probes outside the kernel (#443).
+func diskFindings(ctx context.Context, hardware bool) []Finding {
+	args := []string{"probe"}
+	if hardware {
+		args = append(args, "--hardware")
+	}
+	b, err := exec.CommandContext(ctx, DiskBin(), args...).Output()
+	var out []Finding
+	if err != nil || json.Unmarshal(b, &out) != nil {
+		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")"}}
+	}
 	return out
 }
 

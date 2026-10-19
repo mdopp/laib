@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // #281: journald's limits and podman's log driver are the box's own config,
@@ -79,5 +80,38 @@ func TestDiagIsRedWithoutTheBootCheck(t *testing.T) {
 	os.WriteFile(filepath.Join(etc, "systemd", "system", "laib-boot-check.service"), []byte("[Unit]\n"), 0o644)
 	if red() {
 		t.Fatal("still red with laib-boot-check.service in place")
+	}
+}
+
+// #445: uCore enables firewalld (zone FedoraServer: ssh only). Laib filters
+// with its own nftables table; a running firewalld blocks everything else
+// from the LAN, and diag says so in red.
+func TestDiagIsRedWithAnActiveFirewalld(t *testing.T) {
+	c := newCbox(t)
+	t.Setenv("LAIB_ETC", t.TempDir())
+	st, _ := cli.LoadState(c.env)
+	real := sysd.Run
+	t.Cleanup(func() { sysd.Run = real })
+	state := "active"
+	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "systemctl" && strings.Contains(strings.Join(args, " "), "firewalld") {
+			return state + "\n", nil
+		}
+		return real(ctx, name, args...)
+	}
+	red := func() string {
+		for _, f := range diag.Probes(context.Background(), c.env, st, "") {
+			if f.Probe == "firewall" && f.Severity == "rot" {
+				return f.Detail + " → " + f.Fix
+			}
+		}
+		return ""
+	}
+	if d := red(); !strings.Contains(d, "blockiert alles außer SSH") || !strings.Contains(d, "mask") {
+		t.Fatalf("an active firewalld must be red, say what it blocks and how to stop it: %q", d)
+	}
+	state = "inactive"
+	if d := red(); d != "" {
+		t.Fatalf("firewalld inactive, still red: %q", d)
 	}
 }

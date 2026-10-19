@@ -1,19 +1,28 @@
-// Package disk is `laib disk`: the data RAID's status and `disk add`, which
-// joins a second device to the mirror. A box chore (#309).
+// Package disk is the program laib-disk (#443, moved out of the kernel like
+// the Operator and the programs of #309): the data RAID's status and `add`,
+// which joins a second device to the mirror, and `probe`, the RAID, SMART
+// and thermal findings diag shows. It imports nothing of the kernel; the
+// kernel runs it (`laib disk`, `laib diag`) and reads its output.
 package disk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/sysd"
 )
+
+// Run is the seam to the host's tools (lsblk, mdadm, smartctl); tests swap it.
+var Run = func(ctx context.Context, name string, args ...string) (string, error) {
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
 
 // The data disk (usb/fedora-coreos.bu laib-data-disk.sh, #29): /mnt/data is a
 // RAID1 with two slots. Fresh boxes run with one member on purpose; `laib disk
@@ -101,7 +110,7 @@ var lsblkPair = regexp.MustCompile(`(\w+)="([^"]*)"`)
 // inspectSpare reads the device the human named, without changing it.
 func inspectSpare(ctx context.Context, dev string) (spareInfo, error) {
 	s := spareInfo{Dev: dev}
-	out, err := sysd.Run(ctx, "lsblk", "-dnbP", "-o", "TYPE,SIZE,RM,TRAN,MODEL", dev)
+	out, err := Run(ctx, "lsblk", "-dnbP", "-o", "TYPE,SIZE,RM,TRAN,MODEL", dev)
 	if err != nil {
 		return s, fmt.Errorf("lsblk %s: %v: %s", dev, err, out)
 	}
@@ -114,12 +123,12 @@ func inspectSpare(ctx context.Context, dev string) (spareInfo, error) {
 	}
 	s.Size, _ = strconv.ParseInt(kv["SIZE"], 10, 64)
 	s.Removable, s.Tran, s.Model = kv["RM"] == "1", kv["TRAN"], strings.TrimSpace(kv["MODEL"])
-	if out, err := sysd.Run(ctx, "lsblk", "-nr", "-o", "NAME", dev); err == nil {
+	if out, err := Run(ctx, "lsblk", "-nr", "-o", "NAME", dev); err == nil {
 		if n := len(strings.Fields(out)); n > 1 {
 			s.Partitions = n - 1
 		}
 	}
-	out, err = sysd.Run(ctx, "sudo", "wipefs", "-n", "--noheadings", "-O", "TYPE,LABEL", dev)
+	out, err = Run(ctx, "sudo", "wipefs", "-n", "--noheadings", "-O", "TYPE,LABEL", dev)
 	if err != nil {
 		return s, fmt.Errorf("wipefs -n %s: %v: %s", dev, err, out)
 	}
@@ -128,7 +137,7 @@ func inspectSpare(ctx context.Context, dev string) (spareInfo, error) {
 			s.Signatures = append(s.Signatures, line)
 		}
 	}
-	if _, err := sysd.Run(ctx, "sudo", "mdadm", "--examine", dev); err == nil {
+	if _, err := Run(ctx, "sudo", "mdadm", "--examine", dev); err == nil {
 		s.Superblock = true
 	}
 	return s, nil
@@ -177,12 +186,12 @@ func (s spareInfo) refuse(minBytes int64, wipe string) error {
 // (vdb1 → vdb): the least a new mirror disk needs.
 func memberDiskBytes(ctx context.Context, member string) (int64, error) {
 	// -d: without it lsblk lists the member's children too (md127), one PKNAME per line
-	parent, err := sysd.Run(ctx, "lsblk", "-dno", "PKNAME", "/dev/"+member)
+	parent, err := Run(ctx, "lsblk", "-dno", "PKNAME", "/dev/"+member)
 	parent, _, _ = strings.Cut(strings.TrimSpace(parent), "\n")
 	if err != nil || parent == "" {
 		parent = member // the member is a whole disk
 	}
-	out, err := sysd.Run(ctx, "lsblk", "-dnbo", "SIZE", "/dev/"+strings.TrimSpace(parent))
+	out, err := Run(ctx, "lsblk", "-dnbo", "SIZE", "/dev/"+strings.TrimSpace(parent))
 	if err != nil {
 		return 0, fmt.Errorf("lsblk %s: %v: %s", parent, err, out)
 	}
@@ -193,23 +202,23 @@ func memberDiskBytes(ctx context.Context, member string) (int64, error) {
 // irreversible for the device's content). add inspects the device and refuses
 // what it would destroy (spareInfo.refuse), then partitions it, joins it to
 // /dev/md/data and records the new member count.
-func Cmd(ctx context.Context, env *cli.Env, args []string) int {
+func Cmd(ctx context.Context, w io.Writer, actor string, jsonOut bool, args []string) error {
 	if len(args) == 0 || args[0] == "status" {
 		b, err := os.ReadFile("/proc/mdstat")
 		if err != nil {
-			return env.Fail(err)
+			return err
 		}
 		dev, members := MarkerMembers()
-		if env.JSON {
-			return cli.Emit(env, map[string]any{"arrays": ParseMdstat(string(b)), "device": dev, "members": members})
+		if jsonOut {
+			return json.NewEncoder(w).Encode(map[string]any{"arrays": ParseMdstat(string(b)), "device": dev, "members": members})
 		}
 		for _, a := range ParseMdstat(string(b)) {
-			fmt.Fprintf(env.W(), "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
+			fmt.Fprintf(w, "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
 		}
 		if members == 0 {
-			fmt.Fprintln(env.W(), "keine Datenplatte: /mnt/data liegt auf der OS-Platte")
+			fmt.Fprintln(w, "keine Datenplatte: /mnt/data liegt auf der OS-Platte")
 		}
-		return 0
+		return nil
 	}
 	wipe := ""
 	if len(args) == 4 && args[2] == "--wipe" {
@@ -217,37 +226,37 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		args = args[:2]
 	}
 	if args[0] != "add" || len(args) != 2 {
-		return env.Fail(errors.New("usage: laib disk status | add <device, e.g. /dev/sdb> [--wipe <model, when the disk is not empty>]"))
+		return errors.New("usage: laib disk status | add <device, e.g. /dev/sdb> [--wipe <model, when the disk is not empty>]")
 	}
-	if !strings.HasPrefix(env.Actor, "human") {
-		return env.Fail(errors.New("disk add: a human runs this (it wipes the device)"))
+	if !strings.HasPrefix(actor, "human") {
+		return errors.New("disk add: a human runs this (it wipes the device)")
 	}
 	dev := args[1]
 	dataDev, members := MarkerMembers()
 	if dataDev == "" || dataDev == "none" {
-		return env.Fail(errors.New("no data RAID on this box (/etc/laib/data-disk)"))
+		return errors.New("no data RAID on this box (/etc/laib/data-disk)")
 	}
 	if members >= 2 {
-		return env.Fail(errors.New("the array already has two members"))
+		return errors.New("the array already has two members")
 	}
 	b, err := os.ReadFile("/proc/mdstat")
 	if err != nil {
-		return env.Fail(err)
+		return err
 	}
 	arrays := ParseMdstat(string(b))
 	if len(arrays) == 0 || len(arrays[0].Members) == 0 {
-		return env.Fail(errors.New("no active array in /proc/mdstat"))
+		return errors.New("no active array in /proc/mdstat")
 	}
 	minBytes, err := memberDiskBytes(ctx, arrays[0].Members[0])
 	if err != nil {
-		return env.Fail(err)
+		return err
 	}
 	spare, err := inspectSpare(ctx, dev)
 	if err != nil {
-		return env.Fail(err)
+		return err
 	}
 	if err := spare.refuse(minBytes, wipe); err != nil {
-		return env.Fail(err)
+		return err
 	}
 	steps := [][]string{
 		{"sudo", "wipefs", "-a", dev},
@@ -255,8 +264,8 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		{"sudo", "udevadm", "settle"},
 	}
 	for _, s := range steps {
-		if out, err := sysd.Run(ctx, s[0], s[1:]...); err != nil {
-			return env.Fail(fmt.Errorf("%s: %v: %s", strings.Join(s, " "), err, out))
+		if out, err := Run(ctx, s[0], s[1:]...); err != nil {
+			return fmt.Errorf("%s: %v: %s", strings.Join(s, " "), err, out)
 		}
 	}
 	part := dev + "1"
@@ -265,18 +274,18 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	// the recorded device, not /dev/md/data: after a reinstall under another
 	// hostname the array may carry a different name
-	if out, err := sysd.Run(ctx, "sudo", "mdadm", "--manage", dataDev, "--add", part); err != nil {
-		return env.Fail(fmt.Errorf("mdadm --add: %v: %s", err, out))
+	if out, err := Run(ctx, "sudo", "mdadm", "--manage", dataDev, "--add", part); err != nil {
+		return fmt.Errorf("mdadm --add: %v: %s", err, out)
 	}
 	rec, err := os.ReadFile(dataDiskMarker)
 	if err != nil {
-		return env.Fail(err)
+		return err
 	}
-	if out, err := sysd.Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
-		return env.Fail(fmt.Errorf("marker: %v: %s", err, out))
+	if out, err := Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
+		return fmt.Errorf("marker: %v: %s", err, out)
 	}
-	fmt.Fprintf(env.W(), "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
-	return 0
+	fmt.Fprintf(w, "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
+	return nil
 }
 
 var membersField = regexp.MustCompile(`MEMBERS=\d+`)

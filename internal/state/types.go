@@ -191,6 +191,16 @@ type Hand struct {
 	Session string   `yaml:"session"` // the hand this one may get a short token of, one per session: the Werkstatt's claude (#380)
 }
 
+// BoxHand is the hand laib's own timers run as (#444): it snapshots and
+// checks the backup, nothing more. laib init writes it; Load supplies it to a
+// policy.yml without one, which may narrow it but not miss it.
+var BoxHand = Hand{Ceiling: "propose", Verbs: []string{"backup", "diag"}}
+
+// NotifyHand is laib-notify's (#443): it reads diag and the image updates and
+// journals a failed mail (note, tier propose); it proposes and decides nothing.
+// Supplied like BoxHand to a policy.yml without one.
+var NotifyHand = Hand{Ceiling: "propose", Verbs: []string{"diag", "updates", "note"}}
+
 // Approval says who may approve a tier.
 type Approval struct {
 	By       string `yaml:"by"`

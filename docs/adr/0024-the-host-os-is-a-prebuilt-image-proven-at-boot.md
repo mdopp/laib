@@ -51,7 +51,11 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    `laib-boot-check.service` (`/etc/laib/boot-check.sh`) waits up to 15
    minutes for: the GPU answering (`nvidia-smi`) and the CDI spec naming that
    driver, on a box with an NVIDIA card; laib's `/ready` answering with no
-   more red services than the last proven boot had. Green: the deployment is
+   more red services than the last proven boot had; and the LAN reaching
+   the box (#445): every TCP port it listens on outside loopback is probed on
+   the LAN address from a network namespace over a veth pair (loopback
+   passes any firewall), with no more blocked than at the last proven boot.
+   Green: the deployment is
    recorded in `/etc/laib/boot-proven`. Not green: `rpm-ostree rollback`,
    reboot, Zincati paused with `/etc/zincati/config.d/95-laib-boot-check.toml`
    (otherwise it stages the same update again), and an incident note in
@@ -64,6 +68,16 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    than one kernel set (~150 MiB).
 5. **No layering on an existing box** (#367): `install-box.sh` never layers
    or reboots a box that is already in use.
+6. **One firewall mechanism** (#445): Laib's nftables table. An image that
+   brings its own firewall has it masked: uCore's firewalld (zone
+   `FedoraServer`, ssh only) blocked the household for 2h20 after the
+   Kraftwerk's rebase. `install-box.sh` masks it and `laib diag` is red
+   while it runs. Two more things uCore turns on are handled with the
+   rebase: `rpm-ostreed-automatic.timer` is disabled, because Zincati is the
+   one update driver and the boot check's pause is a Zincati file; the ZFS
+   units are disabled, because the data disk is mdadm with XFS and an
+   import scan must not take a foreign disk. The checklist is in
+   `docs/INSTALL.md` ("Rebasing a GPU box to uCore").
 
 ## Consequences
 

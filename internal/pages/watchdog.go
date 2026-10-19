@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,40 +16,12 @@ import (
 
 // The outside watchdog (#57): every surface that could say "something is
 // wrong" runs on the box, so when the box itself is down nobody is told.
-// serve pings box.yml watchdog.url every five minutes while readiness is
-// not red; the outside (a healthchecks-style endpoint) turns fifteen
-// minutes of silence into a push to the admin's phone. A red box stays
-// silent on purpose.
-
-var WatchdogInterval = 5 * time.Minute
+// laib-notify (#443) pings box.yml watchdog.url every five minutes while
+// readiness is not red and writes watchdog.last, which /ready shows; the
+// outside (a healthchecks-style endpoint) turns fifteen minutes of silence
+// into a push to the admin's phone. A red box stays silent on purpose.
 
 func watchdogStamp(env *cli.Env) string { return filepath.Join(env.Paths.Home, "watchdog.last") }
-
-// WatchdogPing pings once; false when nothing was sent (no URL, red, or an error).
-func WatchdogPing(ctx context.Context, env *cli.Env, st *state.State) bool {
-	url := st.Box.Watchdog.URL
-	if url == "" {
-		return false
-	}
-	r, _ := CollectStatus(ctx, env, st)
-	if r.Red > 0 || r.State == "eingeschränkt" {
-		return false
-	}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return false
-	}
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-	if err != nil {
-		return false
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return false
-	}
-	os.WriteFile(watchdogStamp(env), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
-	return true
-}
 
 // watchdogState for readiness: "kein Wächter" | "zuletzt gemeldet 12:05" | "noch nie gemeldet".
 func watchdogState(env *cli.Env, st *state.State) string {
@@ -66,23 +37,6 @@ func watchdogState(env *cli.Env, st *state.State) string {
 		return "noch nie gemeldet"
 	}
 	return "zuletzt gemeldet " + t.Local().Format("02.01. 15:04")
-}
-
-// watchdogLoop runs in serve until ctx ends.
-func watchdogLoop(ctx context.Context, env *cli.Env) {
-	t := time.NewTicker(WatchdogInterval)
-	defer t.Stop()
-	for {
-		if st, err := cli.LoadState(env); err == nil {
-			WatchdogPing(ctx, env, st)
-			MailSweep(ctx, env, st, time.Now())
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
 }
 
 // FamilyCard prints the paper card (#57): one HTML page in German for
