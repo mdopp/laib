@@ -76,13 +76,13 @@ jobs:
             ext=""; [ "$t" = windows-amd64 ] && ext=.exe
             CGO_ENABLED=0 GOOS=${t%-*} GOARCH=${t#*-} go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }}" -o laib-stick-$t$ext ./stick/cmd/laib-stick
           done
-      - run: cp scripts/boot-check.sh laib-boot-check.sh   # the boot check (#368), verified with the binaries
+      - run: cp scripts/boot-check.sh laib-boot-check.sh && cp scripts/host-image.sh laib-host-image.sh   # the boot check and the host image follower (#368), verified with the binaries
       - run: sha256sum laib-* > SHA256SUMS
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             laib-*
             SHA256SUMS
-      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64 laib-lease-linux-amd64 laib-disk-linux-amd64 laib-notify-linux-amd64 laib-boot-check.sh laib-stick-* SHA256SUMS
+      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64 laib-lease-linux-amd64 laib-disk-linux-amd64 laib-notify-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-stick-* SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}

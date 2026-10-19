@@ -263,6 +263,17 @@ func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, o
 	var b, h strings.Builder
 	b.WriteString("Patch-Versionen, die du vorschlagen kannst:\n")
 	for _, u := range ups {
+		if u.Service == "host" && u.Patch != "" {
+			// the host image (#368): the runner proposes it itself, a human approves
+			patch := fmt.Sprintf("--- a/host/image\n+++ b/host/image\n@@ -1,2 +1,2 @@\n # tag: %s\n-%s@%s\n+%s@%s\n", u.Key, u.Image, u.Current, u.Image, u.Patch)
+			out, isErr, err := mcp.Call(ctx, "laib_propose", map[string]any{"reason": "Host-Image " + u.Key + ": " + u.Current + " → " + u.Patch, "patch": patch})
+			if err != nil || isErr {
+				fmt.Fprintf(&h, " Host-Image %s → %s ließ sich nicht vorschlagen: %s.", u.Key, u.Patch, firstLine(cmp.Or(out, fmt.Sprint(err))))
+			} else {
+				fmt.Fprintf(&h, " Host-Image %s → %s vorgeschlagen, für einen Menschen.", u.Key, u.Patch)
+			}
+			continue
+		}
 		if u.Patch != "" {
 			offers[u.Service+" "+u.Key] = u.Image + ":" + u.Patch
 			fmt.Fprintf(&b, "- service %s, key %s, value %s:%s (jetzt %s)\n", u.Service, u.Key, u.Image, u.Patch, u.Current)

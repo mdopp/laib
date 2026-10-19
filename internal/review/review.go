@@ -166,6 +166,8 @@ func Dirs(base, changed string) Result {
 			}
 		case parts[0] == "repairs" && len(parts) == 2:
 			say("eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus", p)
+		case p == "host/image":
+			say("das Betriebssystem der Box (%s): nach der Freigabe wird das Image bereitgestellt, der Neustart kommt im Update-Fenster (#368)", p)
 		case parts[0] == "wishes" && len(parts) == 2:
 			say("ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket", p)
 		case parts[0] == "skills" && len(parts) == 2:

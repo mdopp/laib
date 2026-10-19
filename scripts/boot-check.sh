@@ -13,11 +13,15 @@ PAUSE="$ETC/zincati/config.d/95-laib-boot-check.toml"
 say() { echo "laib-boot-check: $*"; }
 note() { runuser -u core -- env LAIB_HOME=/mnt/data/laib LAIB_ACTOR=laib /var/opt/laib/laib note --kind "$1" "$2" >/dev/null 2>&1 || true; }
 st="$(ostree admin status 2>/dev/null)"
-booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]*.*/\1/p' <<<"$st")"
-back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]* (rollback).*/\1/p' <<<"$st")"
+# a deployment is its commit and its serial: a kernel-argument change is a new
+# deployment of the same commit, and can break the box as well
+booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\).*/\1/p' <<<"$st")"
+back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\) (rollback).*/\1/p' <<<"$st")"
 [ -n "$booted" ] || { say "not an ostree deployment: nothing to prove"; exit 0; }
 proven=""; base=0; base_blocked=0
 [ -f "$PROVEN" ] && read -r proven base base_blocked <"$PROVEN"
+# a boot-proven from before the serial names the bare commit: it meant that commit's deployment
+case "$proven" in *.* | "") ;; *) for d in "$booted" "$back"; do [ "${d%.*}" != "$proven" ] || { proven=$d; break; }; done ;; esac
 base_blocked="${base_blocked:-0}"
 [ "$booted" != "$proven" ] || { say "deployment ${booted:0:12} is the proven one"; exit 0; }
 gpu=""; [ -z "$(lspci -n -d 10de: 2>/dev/null)" ] || gpu=1

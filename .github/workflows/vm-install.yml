@@ -972,6 +972,37 @@ jobs:
                 d=$(LAIB_HOME=/mnt/data/laib /var/opt/laib/laib diag 2>&1 || true); echo "$d"
                 grep -qE "^rot +raid " <<<"$d" || { echo "diag does not say the mirror is gone"; exit 1; }'
           marker
+      - name: a broken OS deployment rolls itself back once and pauses Zincati (#368)
+        if: matrix.part == 'disks'
+        run: |
+          . ./box.sh
+          # the boot check's 15 minutes, shortened for the VM; the booted deployment is the proven baseline
+          $SSH 'set -euo pipefail
+                sudo mkdir -p /etc/systemd/system/laib-boot-check.service.d
+                printf "[Service]\nEnvironment=LAIB_BOOT_CHECK_TIMEOUT=120 LAIB_BOOT_CHECK_INTERVAL=5\n" | sudo tee /etc/systemd/system/laib-boot-check.service.d/vm.conf >/dev/null
+                sudo systemctl daemon-reload
+                sudo rm -f /etc/laib/boot-proven /etc/laib/boot-rolled-back
+                sudo systemctl start laib-boot-check.service
+                for i in $(seq 1 30); do test -s /etc/laib/boot-proven && break; sleep 2; done
+                echo "proven: $(cat /etc/laib/boot-proven)"
+                # broken on purpose: its kernel line masks the core user manager, so laib never answers /ready
+                sudo rpm-ostree kargs --append=systemd.mask=user@1000.service >/dev/null || sudo rpm-ostree kargs --bypass-driver --append=systemd.mask=user@1000.service >/dev/null
+                rpm-ostree status --json | jq -e ".deployments[] | select(.staged)" >/dev/null || { echo "no staged deployment"; rpm-ostree status; exit 1; }'
+          good=$($SSH 'cut -d" " -f1 /etc/laib/boot-proven')
+          $SSH 'sudo systemctl reboot' || true
+          sleep 60
+          # the broken boot: the check waits 120 s, rolls back and reboots; then laib on the proven deployment
+          ready
+          $SSH "set -euo pipefail
+                b=\$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | \"\\(.checksum).\\(.serial)\"')
+                [ \"\$b\" = '$good' ] || { echo \"booted \$b, want the proven $good back\"; rpm-ostree status; journalctl -b -1 -u laib-boot-check --no-pager | tail -20; exit 1; }
+                ! grep -q 'systemd.mask=user@1000.service' /proc/cmdline || { echo 'still the broken kernel line'; exit 1; }
+                test -s /etc/laib/boot-rolled-back || { echo 'no record of the rollback'; exit 1; }
+                grep -q 'enabled = false' /etc/zincati/config.d/95-laib-boot-check.toml || { echo 'Zincati is not paused'; exit 1; }
+                journalctl -b -1 -u laib-boot-check --no-pager | tail -4
+                echo 'the broken deployment rolled itself back once, Zincati paused'"
+          # the steps after start clean: no pause, the broken deployment gone, the boot check's own timeout
+          $SSH 'sudo rm -f /etc/zincati/config.d/95-laib-boot-check.toml /etc/systemd/system/laib-boot-check.service.d/vm.conf; sudo systemctl daemon-reload; sudo rpm-ostree cleanup -r >/dev/null || true'
       - name: disaster recovery — backup to a second disk, data disks gone, reinstall, restore --box with only the sheet (#40)
         if: matrix.part == 'recovery'
         run: |

@@ -23,6 +23,7 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 		Deployments []struct {
 			Booted, Staged    bool
 			Checksum, Version string
+			Serial            int
 		}
 	}
 	if err != nil || json.Unmarshal([]byte(out), &s) != nil {
@@ -30,7 +31,7 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 	}
 	for _, d := range s.Deployments {
 		if d.Booted {
-			o.Booted, o.BootedVersion = d.Checksum, d.Version
+			o.Booted, o.BootedVersion = fmt.Sprintf("%s.%d", d.Checksum, d.Serial), d.Version // the boot check's id: commit and serial
 		}
 		if d.Staged {
 			o.Staged = d.Version

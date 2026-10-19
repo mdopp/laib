@@ -40,6 +40,9 @@ func newHostBox(t *testing.T, pin string) *hostBox {
 // container references, lock is the HTTP code laib's reboot lock answers.
 func (h *hostBox) run(t *testing.T, booted, staged, lock string) (log, out string) {
 	t.Helper()
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq is not here; Fedora CoreOS ships it and the script reads rpm-ostree's JSON with it")
+	}
 	os.WriteFile(h.log, nil, 0o644)
 	deps := `{"booted":true,"staged":false,"checksum":"c1","container-image-reference":"` + booted + `"}`
 	if staged != "" {
