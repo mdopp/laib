@@ -34,7 +34,7 @@ func TestEveryConsumerDefaultsToTheHouseholdPreset(t *testing.T) {
 	if !strings.HasPrefix(h, "qwen3") {
 		t.Fatalf("the household preset is %q, not Qwen 3.x", h)
 	}
-	unit := operatorUnit(&state.State{}, nil)
+	unit, _ := operatorUnit(&state.State{}, nil)
 	if !strings.Contains(unit, "Environment=MODEL_NAME="+h+"\n") {
 		t.Fatalf("the Operator's unit does not default to %s:\n%s", h, unit)
 	}

@@ -2,6 +2,7 @@
 /laib-operator
 /laib-lease
 /laib-disk
+/laib-notify
 /frage/frage
 /dist/
 *.test

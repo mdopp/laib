@@ -28,7 +28,8 @@ What it does, in order:
 1. Downloads the release binaries to `/var/opt/laib/`: `laib`,
    `laib-operator` (the admin agent), `laib-lease` (the model role's
    sidecar) and, since #443, `laib-disk` (the data RAID and the disks'
-   health, which `laib disk` and `laib diag` run). The `/var/opt` prefix is writable on CoreOS; `/opt` is not.
+   health, which `laib disk` and `laib diag` run) and `laib-notify` (the
+   watchdog ping and the owner's mail, on a timer laib renders). The `/var/opt` prefix is writable on CoreOS; `/opt` is not.
 2. Creates `/mnt/data/laib` owned by `core`.
 3. Installs `dist/laib.service` as a **user** unit and enables linger so it
    runs without a login session.

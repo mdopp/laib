@@ -258,7 +258,6 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	go watchdogLoop(ctx, env) // the outside check (#57)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

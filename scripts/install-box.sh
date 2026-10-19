@@ -242,18 +242,21 @@ fi
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
  done
  [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
-# laib-disk (#443): the data RAID and disk health, out of the kernel; a release
-# from before #443 has none, then laib disk and diag's RAID probe say it is missing
-DISK=""
-if grep -q " laib-disk-linux-amd64\$" "$TMPD/SHA256SUMS"; then
-  DISK=laib-disk
-  curl -fsSL "${get[@]}" -o "$TMPD/laib-disk" "$(asset_url laib-disk-linux-amd64)" || { echo "$TAG lists laib-disk but it does not download: refusing" >&2; exit 1; }
-  [ "$(grep " laib-disk-linux-amd64\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/laib-disk" | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-disk" >&2; exit 1; }
-else
-  echo "$TAG carries no laib-disk (#443): installing without it; laib diag shows it missing"
-fi
+# the programs out of the kernel (#443): laib-disk (the data RAID and disk
+# health) and laib-notify (the watchdog ping, the owner's mail). A release from
+# before has them not; then laib diag says so
+EXTRA=""
+for P in laib-disk laib-notify; do
+  if grep -q " $P-linux-amd64\$" "$TMPD/SHA256SUMS"; then
+    curl -fsSL "${get[@]}" -o "$TMPD/$P" "$(asset_url "$P-linux-amd64")" || { echo "$TAG lists $P but it does not download: refusing" >&2; exit 1; }
+    [ "$(grep " $P-linux-amd64\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/$P" | cut -d' ' -f1)" ] || { echo "checksum mismatch for $P" >&2; exit 1; }
+    EXTRA="$EXTRA $P"
+  else
+    echo "$TAG carries no $P (#443): installing without it"
+  fi
+done
 # the previous binaries stay as *.prev: `laib self rollback` puts them back
-for BIN in laib laib-operator laib-lease $DISK; do
+for BIN in laib laib-operator laib-lease $EXTRA; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
