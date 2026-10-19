@@ -67,6 +67,18 @@ ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null > "$WORK/known_hosts"
 podman exec -u dev systemd-werkstatt bash -c 'test -f ~/.bashrc' || fail "the image's dotfiles were not seeded into the empty home"
 podman exec -u dev systemd-werkstatt bash -c 'mkdir -p ~/.claude/projects/-workspace && echo "{\"session\":241}" > ~/.claude/projects/-workspace/s.jsonl && echo "# mine 241" >> ~/.bashrc && mkdir -p ~/.cache && echo x > ~/.cache/scratch'
 
+# #383: one Claude Remote Control session per checkout with a CLAUDE.md, a
+# switched-off one stays off, a content repo gets none — after every restart
+podman exec -u dev systemd-werkstatt bash -c 'for r in laib flut content; do mkdir -p /workspace/$r/.git; done; echo "# rules" > /workspace/laib/CLAUDE.md; echo "# rules" > /workspace/flut/CLAUDE.md'
+podman exec -u dev systemd-werkstatt bash -lc 'werkstatt-sessions off flut && werkstatt-sessions' || fail "werkstatt-sessions exit $?"
+sessions() {   # $1: when
+  local w
+  w="$(podman exec -u dev systemd-werkstatt tmux list-windows -t claude -F '#{window_name}' 2>&1 | sort | paste -sd' ')"
+  [ "$w" = laib ] || fail "$1: tmux session claude has windows '$w', want 'laib' ($(podman exec -u dev systemd-werkstatt tmux list-windows -a -F '#{window_name} dead=#{pane_dead} #{pane_current_command}' 2>&1))"
+  [[ "$(podman exec -u dev systemd-werkstatt tmux list-panes -t claude:laib -F '#{pane_start_command}')" == *"--remote-control laib"* ]] || fail "$1: the laib window does not run claude --remote-control laib"
+  echo "sessions ok after $1: $w"
+}
+sessions "the first pass"
 kept() {   # $1: what happened since the files were written
   local id; id="$(podman inspect systemd-werkstatt --format '{{.Id}}')"
   [ "$id" != "$LAST" ] || fail "$1: the container was not recreated, so this proves nothing"
@@ -75,6 +87,7 @@ kept() {   # $1: what happened since the files were written
   ssh "${SSHO[@]}" dev@127.0.0.1 true || fail "$1: SSH refused with the first host key (the key changed, or the login broke)"
   [ "$(ssh "${SSHO[@]}" dev@127.0.0.1 cat .claude/projects/-workspace/s.jsonl)" = '{"session":241}' ] || fail "$1: the Claude session in ~/.claude is gone"
   [ "$(ssh "${SSHO[@]}" dev@127.0.0.1 tail -1 .bashrc)" = "# mine 241" ] || fail "$1: the edited ~/.bashrc is gone"
+  sessions "$1"
   echo "kept after $1"
 }
 LAST="$(podman inspect systemd-werkstatt --format '{{.Id}}')"

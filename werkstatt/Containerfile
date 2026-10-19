@@ -51,7 +51,10 @@ COPY guide /opt/werkstatt/guide
 COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
 COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app
+# one Claude Code Remote Control session per checkout (#383), in the tmux session `claude`
+COPY sessions.sh /usr/local/bin/werkstatt-sessions
+COPY tmux.conf /etc/tmux.conf
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

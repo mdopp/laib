@@ -230,6 +230,7 @@ class WorkspaceIsDevs(unittest.TestCase):
             (r / "entrypoint.sh").write_text(script)
             env = {k: v for k, v in os.environ.items() if not k.startswith(("LAIB_", "WERKSTATT_", "CLAUDE_"))}
             env["PATH"] = f"{bin_}:{os.environ['PATH']}"
+            env["WERKSTATT_SESSIONS_EVERY"] = "0"   # the sessions' timer (#383) would outlive the test
             p = subprocess.run(["bash", str(r / "entrypoint.sh")], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             calls = (r / "chown.log").read_text().splitlines()

@@ -57,6 +57,21 @@ if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace
   exec su dev -c "python3 /opt/werkstatt/autoloop.py"
 fi
+# Claude Code's Remote Control sessions, one per checkout with a CLAUDE.md
+# (#383, werkstatt-sessions): a pass now, then every WERKSTATT_SESSIONS_EVERY
+# seconds (0: only now), so a new checkout gets its session without a
+# restart. As dev in a clean login shell: profile.d gives it the Claude and
+# Laib tokens from /run/laib, and none of the container's other variables
+# (the SSH password, the git token) reach a session.
+sessions() {
+  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash TERM=xterm-256color PATH=/usr/local/bin:/usr/bin:/bin bash -lc werkstatt-sessions" \
+    || echo "werkstatt: WARNING: the Claude sessions did not start (werkstatt-sessions)" >&2
+}
+sessions
+every="${WERKSTATT_SESSIONS_EVERY:-300}"
+if [ "$every" -gt 0 ] 2>/dev/null; then
+  (while sleep "$every"; do sessions; done) &
+fi
 # sshd's host keys live in their own data path (${DATA_DIR}/werkstatt/ssh-host-keys),
 # root's and 0600: made on the first start, then kept — the app trusts this key
 mkdir -p /etc/ssh/keys && chmod 700 /etc/ssh/keys

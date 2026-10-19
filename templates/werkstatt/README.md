@@ -44,6 +44,28 @@ and `claude` for the dev container's. Still open: the `dev.<domain>` web
 surface (pi-web's UI), which arrives with Haus; LDAP logins; per-project
 tokens.
 
+**Claude's sessions per checkout (#383).** As ServiceBay's `claude-dev`
+did, the dev container starts one Claude Code session with Remote Control
+per checkout in `/workspace` that has a `CLAUDE.md`: a window in the tmux
+session `claude`, named after the checkout, running `claude --continue
+--remote-control <name>` (a fresh session where there is nothing to
+continue). They show up under the checkout's name in the Claude app and on
+claude.ai. `werkstatt-sessions` (werkstatt/sessions.sh) does one pass; the
+entrypoint runs it on every start and then every five minutes
+(`WERKSTATT_SESSIONS_EVERY`), so a new checkout gets its session without a
+restart, and a session that ended is started again. `werkstatt-sessions off
+<name>` switches one off with a marker in `~/.werkstatt/no-autostart/` (the
+kept home), so it stays off across restarts; `on <name>` brings it back.
+Over SSH, `tmux attach -t claude` shows them; a new checkout's first start
+may ask Claude Code's folder-trust question once in its window. The
+sessions run as `dev` in a clean login shell (the Claude and Laib tokens
+from `/run/laib`, no other variable of the container) and in Claude Code's
+default permission mode: unlike claude-dev, no
+`--allow-dangerously-skip-permissions`, because a session reachable from
+the phone holds the apply-capable `claude` hand, not a read-only token.
+`scripts/boot-werkstatt.sh` checks the windows after the first start, a
+restart and an image update.
+
 **The home is kept (#241).** `/home/dev` is the data path
 `${DATA_DIR}/werkstatt/home`: Claude Code's sessions and settings
 (`~/.claude`, `~/.claude.json`), dotfiles, shell history, git config —
