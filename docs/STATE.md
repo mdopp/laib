@@ -148,7 +148,12 @@ An Operator skill (ADR 0023): `description` (German, one sentence),
 journal context inbox plan note escalate propose wish restart exec write
 apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
 the same way, #286), `context` (`box` or `usage`), `output` (`note`,
-`report`, `propose`) and `prompt`. A file with a built-in's name
+`report`, `propose`) and `prompt`. The mechanics are fields the Operator's
+runner enforces, never prompt prose (#376): `limits` (a cap per tool and
+session, `{propose: 3}`) and, for an updates skill, `updates: patch` (the
+runner reads `updates` itself, shows and allows only the patch values, and
+writes the minor versions and the registry errors into the note). The
+prompt keeps the judgment. A file with a built-in's name
 (`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
