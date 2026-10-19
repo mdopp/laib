@@ -163,7 +163,11 @@ jobs:
           cd "$VM"; . ./box.sh
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib
                 s=$(/var/opt/laib/laib status); echo "$s"
-                grep -q " 0 gelb · 0 rot " <<<"$(head -1 <<<"$s")" || { echo "laib status is not green"; exit 1; }
+                if ! grep -q " 0 gelb · 0 rot " <<<"$(head -1 <<<"$s")"; then
+                  # the VM has no Z-Wave stick: home-assistant red for exactly that (#417) is the one red allowed
+                  grep -q " 0 gelb · 1 rot " <<<"$(head -1 <<<"$s")" && grep -Eq "^  rot +home-assistant +home-assistant-check.service=failed Z-Wave ohne Controller" <<<"$s" || { echo "laib status is not green"; exit 1; }
+                  echo "home-assistant is red only for the Z-Wave stick the VM does not have (#417)"
+                fi
                 if grep -qx servicebay <<<"$(podman ps --format "{{.Names}}")"; then echo "ServiceBay still runs"; exit 1; fi
                 if curl -s -o /dev/null http://127.0.0.1:5888/; then echo "something still answers on ServiceBay'"'"'s 5888"; exit 1; fi
                 left=$(ls ~/.config/containers/systemd/ | grep -E "\.(kube|yml|container)$" || true)
