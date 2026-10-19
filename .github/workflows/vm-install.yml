@@ -656,6 +656,13 @@ jobs:
           case "$link" in https://auth.vm.test/reset-password/step2?token=*) ;; *) echo "no link back: $link"; exit 1;; esac
           grep -q '"expires": "20' /tmp/inv.json || { echo "no expiry"; exit 1; }
           first_password max "${link#*token=}" 'Max-Passwort-360!'
+          # #369: max's session survives a restart of the auth pod (Authelia's sessions in the pod's Valkey, on disk)
+          files() { curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -b /tmp/jar -o /dev/null -w "%{http_code}" https://files.vm.test/ || true; }
+          [ "$(files)" = 200 ] || { echo "max's session does not open files.vm.test: $(files)"; exit 1; }
+          systemctl --user restart auth-pod.service
+          for i in $(seq 1 60); do [ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9091/api/health || true)" = 200 ] && break; sleep 2; done
+          code=$(files); echo "files.vm.test with max's session after a restart of the auth pod -> HTTP $code"
+          [ "$code" = 200 ] || { echo "the restart logged max out (#369)"; podman logs --tail 20 systemd-auth-authelia; exit 1; }
           grep -q "person" <<<"$(lw journal --since 15m)" || { echo "the invites are not in the journal"; exit 1; }
           EOS
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
