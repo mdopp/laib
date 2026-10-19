@@ -46,6 +46,7 @@ INSTALL_BOX=${INSTALL_BOX:-$HERE/install-box.sh}
 MIGRATE_PY=${MIGRATE_PY:-$HERE/migrate-servicebay.py}
 CARRY=${CARRY:-$HERE/carry-servicebay-secrets.sh}
 MOVE=${MOVE:-$HERE/move-servicebay-data.sh}
+TEMPLATES=${TEMPLATES:-$HERE/../templates}
 PY=${PYTHON-python3}
 CONTAINERENV=${CONTAINERENV:-/run/.containerenv}
 SB_VERSION=${SB_VERSION:-5.44.3}
@@ -320,12 +321,22 @@ carry_smtp() {
   echo "AUTHELIA_SMTP_PASSWORD set from ServiceBay's notifications.email (the settings go with laib add auth)"
 }
 
+# a step's images, pulled while ServiceBay's unit still runs: its AdGuard is the box's resolver,
+# and once it is stopped no pull resolves (#370). Best effort: the apply pulls again.
+prepull() {
+  local img
+  for img in $(sed -n 's/^[A-Z_]*IMAGE: *"\{0,1\}\([^" ]*\)"\{0,1\} *$/\1/p' "$TEMPLATES/$1/values.example.yml" 2>/dev/null); do
+    if podman pull -q "$img" >/dev/null; then echo "pulled $img"; else echo "WARN  pulling $img failed: laib apply tries again"; fi
+  done
+}
+
 step_service() {   # MIGRATION.md step 3 and 4, a–c
   local s=$1 miss
   say "4. $s"
   on_box "$s" || { echo "$s: ServiceBay does not run it here: skipped"; return 10; }
   miss=$(external_missing "$s")
   [ -z "$miss" ] || { echo "$s: set these first, nothing changed yet: $(for m in $miss; do printf 'laib secret set %s  ' "$m"; done)"; return 1; }
+  prepull "$s"
   # shellcheck disable=SC2046
   servicebay_out $(sb_units "$s")
   case "$s" in
@@ -344,6 +355,7 @@ step_service() {   # MIGRATION.md step 3 and 4, a–c
 step_caddy() {
   say "4d. Caddy replaces NPM"
   on_box caddy || { echo "no NPM here: skipped"; return 10; }
+  prepull caddy
   servicebay_out nginx
   laib_add caddy
   # every name of the state through Caddy: none answers 502
@@ -525,7 +537,7 @@ launch() {   # the run, as a transient user unit that outlives the SSH session
   fi
   local v envs=()
   for v in PATH DOMAIN LAIB_VERSION SRC INSTALL_ARGS HOOKS MQTT_USER IMMICH_ADMIN_EMAIL SB_VERSION BACKUP_MAX_AGE_H MIN_FREE_GB MIG_DIR IGNORE RESTIC_REPOSITORY RESTIC_PASSWORD_FILE \
-           Q DATA_DIR SB_DATA LAIB_BIN LAIB_STATE OUT INSTALL_BOX MIGRATE_PY CARRY MOVE PYTHON CONTAINERENV MIG_USER; do
+           Q DATA_DIR SB_DATA LAIB_BIN LAIB_STATE OUT INSTALL_BOX MIGRATE_PY CARRY MOVE TEMPLATES PYTHON CONTAINERENV MIG_USER; do
     [ -n "${!v+x}" ] && envs+=("--setenv=$v=${!v}")
   done
   systemd-run --user --unit="$UNIT" --collect --same-dir "${envs[@]}" bash "$SELF" --foreground "${ARGS[@]}" || return 1
