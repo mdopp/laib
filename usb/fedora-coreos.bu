@@ -378,7 +378,6 @@ storage:
           [ -n "${LAIB_DNS_PROVIDER:-}" ] && flags+=(--dns-provider "$LAIB_DNS_PROVIDER")
           [ -n "${LAIB_TLS:-}" ] && flags+=(--tls "$LAIB_TLS")
           rc=0; bash /tmp/install-box.sh "${flags[@]}" || rc=$?   # LAIB_GH_TOKEN and LAIB_DNS_TOKEN come from the environment
-          if [ "$rc" = 75 ]; then echo "laib-firstboot: rebooting into the layered tree; continues after"; exit 0; fi
           [ "$rc" = 0 ] || exit "$rc"
           sudo mkdir -p /etc/laib && sudo touch /etc/laib/installed
 systemd:

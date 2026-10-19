@@ -152,9 +152,12 @@ What makes or breaks the first boot is settled before the stick is built:
 - **A way back**: the NUC is wiped and reinstalled by the same stick at any
   time; the Kraftwerk is not touched by anything in this trial.
 
-`install-box.sh` layers `git`, `restic` and `diffutils` onto CoreOS with
-`rpm-ostree install --apply-live` (none of them ships in the image; laib
-shells out to all three). That is the one package layering Laib needs.
+Laib shells out to `git`, `diff` and `restic`. The first two are in the
+CoreOS image (`git-core`, `diffutils`); `install-box.sh` puts restic's own
+static release in `/usr/local/bin` (version and SHA256 pinned in the script,
+like Laib's binaries). It layers nothing and never reboots (#367): an
+rpm-ostree layering re-resolves every layered package, and on a box with a
+staged deployment it needs a reboot. Installing Laib is not an OS update.
 
 It also writes the box's own config, on every box and on every run (#281):
 journald persistent with at most 4G and four weeks

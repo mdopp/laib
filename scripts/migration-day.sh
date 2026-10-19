@@ -135,6 +135,16 @@ preconditions() {
   v=$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)
   [ "$v" = yes ]; check $? "linger is on (the unit outlives the SSH session): ${v:-unknown}"
   command -v python3 >/dev/null; check $? "python3 on the host (migrate-servicebay.py)"
+  # what laib shells out to (#367); install-box.sh brings restic, never by layering
+  command -v git >/dev/null; check $? "git on the host (laib's state repo; in the CoreOS image)"
+  command -v diff >/dev/null; check $? "diff on the host (laib plan; in the CoreOS image)"
+  if command -v restic >/dev/null; then echo "  ok    restic on the host: $(restic version 2>/dev/null | cut -d' ' -f2)"
+  else echo "  WARN  restic is missing: install puts restic's static release in /usr/local/bin (checksum-pinned, no rpm-ostree)"; fi
+  # a staged deployment boots at the next reboot, a power cut included: mid-migration, into an old tree (#367)
+  if command -v rpm-ostree >/dev/null; then
+    rpm-ostree status --pending-exit-77 >/dev/null 2>&1
+    [ $? != 77 ] || echo "  WARN  a staged rpm-ostree deployment: any reboot boots it. Drop it first: sudo rpm-ostree cleanup --pending"
+  fi
   if backup_fresh | sed 's/^/        /'; [ "${PIPESTATUS[0]}" = 0 ]; then check 0 "a fresh off-box backup (at most $BACKUP_MAX_AGE_H h old)"
   elif [ -n "${NO_FRESH_BACKUP:-}" ]; then echo "  WARN  no fresh off-box backup: going on because the owner passed --no-fresh-backup"
   else check 1 "no fresh off-box backup (at most $BACKUP_MAX_AGE_H h old): run ServiceBay's backup to the NAS first, or pass --no-fresh-backup"; fi
