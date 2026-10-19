@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/backup"
+	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
@@ -97,4 +99,44 @@ func TestTheRenderedTimersRunAsTheirActor(t *testing.T) {
 			t.Fatalf("before444=%v: two snapshots and a check, journaled green as laib: %+v", before444, es)
 		}
 	}
+}
+
+// #444: a refused nightly backup is a red journal line and a red diag at once,
+// not only after 36 h; a policy.yml may narrow the hand laib, and then says so.
+func TestARefusedBackupIsRedInDiag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("LAIB_HOME", home)
+	t.Setenv("LAIB_QUADLET", filepath.Join(home, "quadlet"))
+	t.Setenv("LAIB_SYSTEMD", filepath.Join(home, "systemd"))
+	real := sysd.Run
+	t.Cleanup(func() { sysd.Run = real })
+	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+		if name == "git" {
+			out, err := exec.Command("git", args...).CombinedOutput()
+			return string(out), err
+		}
+		return "", nil
+	}
+	t.Setenv("LAIB_ACTOR", "human:test")
+	if rc := runArgs([]string{"init", "--domain", "e2e.home", "--data-dir", filepath.Join(home, "data", "stacks")}); rc != cli.ExitOK {
+		t.Fatalf("init rc %d", rc)
+	}
+	pol := filepath.Join(home, "state", "policy.yml")
+	raw, _ := os.ReadFile(pol)
+	os.WriteFile(pol, []byte(regexp.MustCompile(`(?m)^  laib: .*$`).ReplaceAllString(string(raw), "  laib: {ceiling: read}")), 0o644)
+	t.Setenv("LAIB_ACTOR", "laib")
+	if rc := runArgs([]string{"backup"}); rc == cli.ExitOK {
+		t.Fatal("a hand laib narrowed to read may not back up")
+	}
+	env := &cliEnv{Paths: boxfs.Default(), Actor: "human:test"}
+	st, err := cli.LoadState(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range diag.Probes(context.Background(), env, st, "") {
+		if f.Probe == "backup" && f.Severity == "rot" && strings.Contains(f.Detail, "letzte Sicherung") {
+			return
+		}
+	}
+	t.Fatal("a refused backup must be red in diag at once")
 }

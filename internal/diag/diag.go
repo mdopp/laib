@@ -227,8 +227,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
 	}
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
-	if st.Box.Backup.Repo != "" && !installed.IsZero() && time.Since(installed) > 36*time.Hour && (lastRun == "red" || time.Since(lastGreen) > 36*time.Hour) {
-		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung ist fehlgeschlagen oder älter als 36 Stunden", Fix: "laib journal (verb backup); laib backup"})
+	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
+		what := map[bool]string{true: "ist noch nie gelaufen"}[lastGreen.IsZero()]
+		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup"})
 	}
 	if st.Box.Backup.Repo != "" {
 		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {

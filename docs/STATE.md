@@ -131,6 +131,7 @@ tiers: [read, propose, apply, destroy]   # destroy covers reboot and exec
 hands:
   resident: { ceiling: read }
   ops:      { ceiling: apply }  # the operator (ADR 0013)
+  laib:     { ceiling: propose, verbs: [backup, diag] }  # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update; supplied when missing
   pi:       { ceiling: propose }
   claude:   { ceiling: apply, ttl: 8h }
   human:    { ceiling: destroy }
