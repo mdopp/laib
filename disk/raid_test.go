@@ -1,9 +1,7 @@
-package diag
+package disk
 
 import (
 	"testing"
-
-	"github.com/mdopp/laib/internal/disk"
 )
 
 const mdstatOne = `Personalities : [raid1]
@@ -25,11 +23,11 @@ md127 : active raid1 vdc1[2] vdb1[0]
 `
 
 func TestParseMdstat(t *testing.T) {
-	a := disk.ParseMdstat(mdstatTwo)
+	a := ParseMdstat(mdstatTwo)
 	if len(a) != 1 || a[0].Name != "md127" || a[0].Slots != 2 || a[0].Active != 2 || a[0].Status != "UU" || len(a[0].Members) != 2 {
 		t.Fatalf("parsed %+v", a)
 	}
-	if s := disk.ParseMdstat(mdstatSync); s[0].Resync != "recovery 17.4%" {
+	if s := ParseMdstat(mdstatSync); s[0].Resync != "recovery 17.4%" {
 		t.Fatalf("resync %q", s[0].Resync)
 	}
 }

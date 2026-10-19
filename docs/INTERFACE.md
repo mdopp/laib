@@ -230,7 +230,10 @@ http://127.0.0.1:5900/mcp --header "Authorization: Bearer <token>"`.
 member count). `laib disk add /dev/sdX` (humans only) wipes the device,
 partitions it and joins it as the mirror of `/dev/md/data`; the sync runs in
 the background and `laib diag` shows it. The stick creates the array with one
-member on purpose (#29).
+member on purpose (#29). The work is the program `laib-disk` beside `laib`
+(`disk/`, out of the kernel since #443; `laib disk` hands it the actor and
+`--json`), which also gives `laib diag` the RAID, SMART and temperature
+findings (`laib-disk probe [--hardware]`, JSON).
 
 ### `laib inbox`
 

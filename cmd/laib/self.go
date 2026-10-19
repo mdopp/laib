@@ -34,6 +34,9 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	dir := binDir()
 	bins := []string{"laib", "laib-operator", "laib-lease"}
+	if _, err := os.Stat(filepath.Join(dir, "laib-disk.prev")); err == nil {
+		bins = append(bins, "laib-disk") // since #443; a box from before has none to roll back
+	}
 	for _, b := range bins {
 		if _, err := os.Stat(filepath.Join(dir, b+".prev")); err != nil {
 			return env.Fail(fmt.Errorf("no previous %s in %s: nothing to roll back to (install-box.sh keeps *.prev after an update)", b, dir))
