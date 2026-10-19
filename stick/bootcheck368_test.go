@@ -55,7 +55,10 @@ func (b *bootBox) run(t *testing.T, booted, gpuDriver, cdiDriver, red string) (l
 func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOstree string) (log, out string) {
 	t.Helper()
 	os.WriteFile(b.log, nil, 0o644)
-	status := "* fedora-coreos " + booted + ".0\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
+	if !strings.Contains(booted, ".") {
+		booted += ".0" // the deployment's serial
+	}
+	status := "* fedora-coreos " + booted + "\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
 	shim(t, b.bin, "ostree", "cat <<'EOF'\n"+status+"EOF")
 	if gpuDriver != "" {
 		shim(t, b.bin, "lspci", `echo "01:00.0 0300: 10de:2204 (rev a1)"`)
@@ -235,7 +238,7 @@ func TestTheFirstBootCheckIsTheBaselineAndNeverRollsBack(t *testing.T) {
 		t.Fatalf("no proven deployment yet, but the check rolled back:\n%s\n%s", log, out)
 	}
 	p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven"))
-	if !strings.HasPrefix(string(p), fresh+" ") {
+	if !strings.HasPrefix(string(p), fresh+".0 ") {
 		t.Fatalf("the baseline is not recorded: %q\n%s", p, out)
 	}
 	if !strings.Contains(log, "note --kind incident") {
@@ -274,7 +277,7 @@ func TestANewHealthyDeploymentBecomesProven(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("a healthy deployment was rolled back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 1 0\n" {
+	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+".0 1 0\n" {
 		t.Fatalf("boot-proven = %q, want the new deployment with its red count", p)
 	}
 }
@@ -304,5 +307,22 @@ func TestNoGPUNoGPUCheck(t *testing.T) {
 	b.prove(t, proven, "0")
 	if log, out := b.run(t, fresh, "", "", "0"); rolledBack(log) {
 		t.Fatalf("a box without a GPU was rolled back for its GPU:\n%s\n%s", log, out)
+	}
+}
+
+// A kernel-argument change is a new deployment of the same commit (serial
+// .1 beside .0), and it can break the box as well: it is checked and rolled
+// back like a new commit. A boot-proven from before the serial (the bare
+// commit) still names its .0 deployment.
+func TestANewDeploymentOfTheSameCommitIsChecked(t *testing.T) {
+	b := newBootBox(t)
+	b.prove(t, proven+".0", "0")
+	if log, out := b.run(t, proven+".1", "", "", ""); !strings.Contains(log, "rpm-ostree rollback") {
+		t.Fatalf("a kernel-argument deployment with laib down was not rolled back:\n%s\n%s", log, out)
+	}
+	b = newBootBox(t)
+	b.prove(t, proven, "0") // the old format: the bare commit
+	if log, out := b.run(t, proven+".0", "", "", ""); rolledBack(log) || !strings.Contains(out, "is the proven one") {
+		t.Fatalf("an old boot-proven must still name its deployment:\n%s\n%s", log, out)
 	}
 }
