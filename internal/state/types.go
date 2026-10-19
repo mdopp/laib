@@ -271,6 +271,18 @@ type Secret struct {
 	// login), and no hook changes it inside the app: `laib secret rotate`
 	// refuses it, a new value would lock the app out (#353).
 	DataBound bool `yaml:"dataBound"`
+	// Login: the secret is a human's login (#441): the recovery sheet lists
+	// it, `laib recovery-sheet --vaultwarden` exports it with its password.
+	Login *Login `yaml:"login"`
+}
+
+// Login: user is a literal or ${KEY} of values.yml, host a route host;
+// path and note are optional.
+type Login struct {
+	User string `yaml:"user"`
+	Host string `yaml:"host"`
+	Path string `yaml:"path"`
+	Note string `yaml:"note"`
 }
 
 // OIDC is the service's Authelia client.
