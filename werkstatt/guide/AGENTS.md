@@ -43,6 +43,10 @@ No podman: images are built by the repo's CI and published to ghcr.
 - **Laib itself** (kernel, built-in templates): the laib repo's
   `CLAUDE.md`, then `docs/DESIGN.md`, `docs/STATE.md`, `docs/adr/`.
 - **What the box runs now:** `laib status`, `laib context`, `laib template list`.
+- **How the network looks** (names, who logs in where, ports, what reaches
+  what): `laib net`, and answer with the flowchart of `laib net --mermaid`.
+  It is computed from the rendered config; never reconstruct it from
+  templates (#439).
 - **How to check, measure and ask:** the skills in
   `/opt/werkstatt/guide/skills/` (pi and Claude Code load them by their
   description): a probe that cannot fail, a deployment you have looked at,

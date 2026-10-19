@@ -500,7 +500,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				}
 				fmt.Fprintf(&b, "%s@bypass %s\n%shandle @bypass {\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, strings.Join(ms, " "), indent, indent, r.Port, indent)
 			}
-			if r.Auth != "none" && name != st.Box.Roles.SSO {
+			if forwardAuth(st, name, r) {
 				b.WriteString(indent + "import authelia\n")
 			}
 			if r.Caddy != "" {
@@ -541,19 +541,20 @@ func autheliaAccess(st *state.State) string {
 	fmt.Fprintf(&b, "    - domain: %s\n      policy: one_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
-			policy := r.Auth
-			if policy == "none" {
-				policy = "bypass"
-			}
+			policy := policyOf(r)
 			for _, p := range r.Bypass {
 				fmt.Fprintf(&b, "    - domain: %s\n      policy: bypass\n      resources: [\"^%s.*$\"]\n", fqdn(st, r.Host), strings.TrimSuffix(p, "/")+"/")
 			}
 			fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", fqdn(st, r.Host), policy)
 			// family and admins, never just any LLDAP account (radicale's bind
 			// account is one); admins reach what the family reaches
-			subject := `["group:` + cmp.Or(r.Group, "family") + `", "group:admins"]`
-			if r.Group == "admins" {
-				subject = `"group:admins"`
+			var groups []string
+			for _, g := range subjects(r) {
+				groups = append(groups, `"group:`+g+`"`)
+			}
+			subject := "[" + strings.Join(groups, ", ") + "]"
+			if len(groups) == 1 {
+				subject = groups[0]
 			}
 			if policy != "bypass" {
 				b.WriteString("      subject: " + subject + "\n")

@@ -53,6 +53,7 @@ var mcpParams = map[string][]mcpParam{
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
 	"updates": {},
+	"net":     {},
 	"person_invite": {{name: "user", typ: "string", desc: "der Benutzername in LLDAP, klein, ohne Leerzeichen", required: true},
 		{name: "first", typ: "string", flag: "--first", desc: "Vorname", required: true}, {name: "last", typ: "string", flag: "--last", desc: "Nachname"},
 		{name: "email", typ: "string", flag: "--email", desc: "wohin der Link zum Passwort geht", required: true},
