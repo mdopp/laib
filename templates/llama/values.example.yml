@@ -1,4 +1,4 @@
-IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda
+IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda-b11723@sha256:ffbb0d908f22ca66c0261dc96b260f4a12429eda88bd561c09fd9fa94caa220a
 ROUTER_PORT: "11434"
 PORT: "11435"
 LEASE_TOKEN: !secret MODEL_API_KEY

@@ -20,7 +20,7 @@ secrets:
     mint: haus
   - name: HAUS_PROXY_SECRET        # generated; without it no page request counts (haus#1)
   - name: HAUS_HAUSHALT_TOKEN      # generated; the Bote's bearer for the Haushalt MCP (haus#11, #170)
-  - name: HAUS_RADICALE_PASSWORD   # the Radicale account Haus writes the household's calendar with; without it no calendar tools
+  - name: HAUS_RADICALE_PASSWORD   # the Radicale account `haus`, owner of the household's calendar: seeded by the auth template (#418); without it no calendar tools
     external: true
     optional: true
   - name: HAUS_PAPERLESS_TOKEN     # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search

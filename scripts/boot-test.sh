@@ -27,6 +27,8 @@ podman --version
 mkdir -p "$LAIB_QUADLET"
 # the box config as every box has it (#281): journald's drop-in under a scratch /etc, the log driver for real
 export LAIB_ETC="$WORK/etc"; bash "$ROOT/scripts/install-box.sh" --box-config
+# the boot check the install writes beside the binaries (#368); these harnesses run no install
+mkdir -p "$LAIB_ETC/systemd/system" && : > "$LAIB_ETC/systemd/system/laib-boot-check.service"
 
 LAIB_ACTOR=human:boot "$BIN" init --domain boot.test --data-dir "$HOME/laib-data" >/dev/null
 # No proxy, no sso: just the one service, so the check is Quadlet itself.

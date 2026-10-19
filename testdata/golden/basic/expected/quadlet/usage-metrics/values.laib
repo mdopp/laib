@@ -1,0 +1,4 @@
+# Rendered by laib: the values of usage-metrics (#364); a secret by its name only.
+IMAGE=ghcr.io/mdopp/usage-metrics:0.2.1
+RETENTION_DAYS=90
+TOKEN=!secret USAGE_METRICS_TOKEN

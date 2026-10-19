@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0024**. Each file's first paragraph after the title says *in which
+number: **0025**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -21,7 +21,7 @@ situation* it applies, so an agent can self-select.
 | [0013](0013-the-agent-is-the-operator.md) | The agent is the operator: observe unbounded, correct inside an automatic envelope, ask only for the irreversible |
 | [0014](0014-operator-solaris-haus-are-three-programs.md) | The Operator (box agent), Solaris (household agent) and Haus (pages, cards, companion API) are three programs; the Solaris part superseded by 0015/0016 |
 | [0015](0015-voice-is-ha-assist-solaris-retired.md) | Proposed: voice is HA Assist + Stimme + Frage; Solaris the agent is retired, its memory becomes a Haus library; Haus's Sprechen field goes to the Bote (amended) |
-| [0016](0016-the-bote-hermes-as-stock.md) | The Bote: the agent you talk to on Signal, Matrix or Telegram, Hermes as stock, approval by verified Signal number or Matrix ID (amended) |
+| [0016](0016-the-bote-hermes-as-stock.md) | The Bote: the agent you talk to on Signal, Matrix, Telegram or Discord, Hermes as stock, approval by verified Signal number or Matrix ID (amended) |
 | [0017](0017-data-lives-in-standard-backends.md) | Data lives in standard backends (Radicale, Markdown files, Paperless, HA); agents are clients through one Haus MCP source; the Bote remembers about you, never for you |
 | [0018](0018-two-boxes-are-a-role-federation-not-a-cluster.md) | Parked: two boxes would be a role federation, not a cluster; in use from it: a remote model URL for a box without a GPU |
 | [0019](0019-calm-before-autonomy-and-the-trust-kernel.md) | Calm before autonomy: the trial proves five enforced invariants, three visible guarantees, updates as proposals, an outside watchdog and plain-language decisions before the Operator gets mutating verbs |
@@ -29,3 +29,4 @@ situation* it applies, so an agent can self-select.
 | [0021](0021-names.md) | Names: one name, one thing; the family sees the persona; services are German nouns, mechanisms English, Bote tools named for the system they reach; legacy names only in a named place with an end condition |
 | [0022](0022-the-app-is-a-widget-client-messages-go-through-chat.md) | The app is a widget client, built new; widgets stay current through a lean live stream while the screen is on; messages go to a person through their chat channel via the Bote; nothing of the Solaris app is carried |
 | [0023](0023-the-operator-has-its-own-budget-and-its-work-comes-in-skills.md) | The Operator has its own line budget (3,000, outside the kernel's cap, 15k since #309); its work comes in skills — declared files, active or paused in `policy.yml`, rights checked by the kernel |
+| [0024](0024-the-host-os-is-a-prebuilt-image-proven-at-boot.md) | Proposed: the host OS is a prebuilt image (the NVIDIA module built in CI, not on the box); the CDI spec at every boot; every new deployment proven or rolled back once |

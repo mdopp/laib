@@ -54,6 +54,21 @@ def report(token: str, base: str) -> dict:
             "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIX} for name in missing]}
 
 
+def zwave(url: str) -> dict:
+    """#417: zwave-js-ui's own health of its driver: 200 once the stick's
+    controller is ready. Without it every Z-Wave device is unavailable while
+    Home Assistant itself answers 200."""
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/health/zwave", timeout=8) as resp:
+            if resp.status == 200:
+                return {}
+            why = f"HTTP {resp.status}"
+    except Exception as err:
+        why = str(err)
+    return {"severity": "rot", "detail": f"Z-Wave: kein Controller, alle Z-Wave-Geräte sind nicht erreichbar ({why})",
+            "fix": "journalctl --user -u home-assistant-zwave: der Stick (ZWAVE_DEVICE) und SELinux (SecurityLabelDisable, #417)"}
+
+
 def write(path: str, r: dict) -> None:
     r["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = path + ".tmp"
@@ -64,5 +79,10 @@ def write(path: str, r: dict) -> None:
 
 
 if __name__ == "__main__":
-    write(os.environ.get("LAIB_STATUS_FILE", "/config/.laib-status.json"),
-          report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123")))
+    r = report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123"))
+    z = zwave(os.environ["ZWAVE_URL"]) if os.environ.get("ZWAVE_URL") else {}
+    if z:   # first, and the unit fails: laib status shows home-assistant red (#417)
+        r["findings"].insert(0, z)
+        r["detail"] = "Z-Wave ohne Controller" + (" · " + r["detail"] if r["detail"] else "")
+    write(os.environ.get("LAIB_STATUS_FILE", "/config/.laib-status.json"), r)
+    raise SystemExit(1 if z else 0)

@@ -11,6 +11,10 @@ Environment=HOST=127.0.0.1
 Environment=PORT=8091
 Volume=${DATA_DIR}/home-assistant/zwave-js:/usr/src/app/store:z
 AddDevice=${ZWAVE_DEVICE}:${ZWAVE_DEVICE}
+# SELinux: a container_t process may not open a USB serial device; with the
+# label on, the stick gives EACCES and the whole Z-Wave network is down while
+# Home Assistant answers 200 (#417). ServiceBay ran this container privileged.
+SecurityLabelDisable=true
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
 
 [Service]

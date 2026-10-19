@@ -225,7 +225,7 @@ func Dirs(base, changed string) Result {
 	}
 	before2 := len(r.Human)
 	for key, text := range aout {
-		if !strings.HasPrefix(key, "quadlet/") {
+		if !strings.HasPrefix(key, "quadlet/") || strings.HasSuffix(key, "/"+render.ValuesFile) { // the values are judged above, not as a unit
 			continue
 		}
 		svc := strings.Split(key, "/")[1]

@@ -59,8 +59,57 @@ box_config() {
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
 }
+
+# OS updates without fear (#368). laib-cdi.service writes the CDI spec at
+# every boot, so a new driver never leaves the GPU services with a spec that
+# names the old one (ServiceBay generated it once, behind a done-marker).
+# laib-boot-check.service runs scripts/boot-check.sh, which proves a new
+# deployment or rolls it back once and reboots: that reboot is the boot
+# check's own, never this script's (#367). The check is a release asset,
+# verified against SHA256SUMS like the binaries, so it is written by the
+# install, not by --box-config. host_units <etc> <sudo or ""> <boot-check.sh>
+host_units() {
+  local etc="$1" s="$2" d="$1/systemd/system"
+  $s mkdir -p "$d" "$etc/laib"
+  $s tee "$d/laib-cdi.service" >/dev/null <<'UNIT'
+[Unit]
+Description=Laib: the NVIDIA CDI spec, regenerated at every boot (#368)
+ConditionPathExists=/usr/bin/nvidia-ctk
+After=systemd-modules-load.service
+Before=user@1000.service laib-boot-check.service
+
+[Service]
+Type=oneshot
+ExecStartPre=-/usr/sbin/modprobe nvidia
+ExecStart=/usr/bin/nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  # Type=exec: the check waits up to 15 minutes and must not hold up the boot
+  $s tee "$d/laib-boot-check.service" >/dev/null <<'UNIT'
+[Unit]
+Description=Laib: prove this OS deployment, or roll it back once (#368)
+After=laib-cdi.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /etc/laib/boot-check.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  # the boot check itself: the release's laib-boot-check.sh, verified with the binaries
+  $s install -m 0755 "$3" "$etc/laib/boot-check.sh"
+  [ -z "$s" ] || { sudo systemctl daemon-reload; sudo systemctl enable laib-cdi.service laib-boot-check.service >/dev/null; }
+}
 [ -z "${BOXCONF:-}" ] || { box_config; exit 0; }
 [ "$(id -un)" = "core" ] || { echo "run as the core user (rootless podman, user systemd)" >&2; exit 1; }
+# vm-install cuts the power on this line (the first boot's console), before
+# restic and the binaries: the resumed first boot starts over (#111)
+echo "install-box.sh: start"
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
 
@@ -177,16 +226,30 @@ done
 # SHA256SUMS is required: an unverified build is refused, release or --source (#37)
 curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || { echo "no SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
 [ -s "$TMPD/SHA256SUMS" ] || { echo "empty SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+# The boot check (#368) is part of a release when SHA256SUMS lists it; then it
+# must download and match. A release from before #368 has none: its binaries
+# install, and laib diag's boot-check probe stays red as the reminder.
+CHECK=""
+if grep -q " laib-boot-check.sh\$" "$TMPD/SHA256SUMS"; then
+  CHECK="$TMPD/laib-boot-check.sh"
+  u="$(asset_url laib-boot-check.sh)" && curl -fsSL "${get[@]}" -o "$CHECK" "$u" || { echo "$TAG lists laib-boot-check.sh but it does not download: refusing" >&2; exit 1; }
+else
+  echo "$TAG carries no boot check (laib-boot-check.sh, #368): installing without it; laib diag shows it missing"
+fi
 (cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
    want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
    [ -n "$want" ] || { echo "SHA256SUMS has no entry for $BIN" >&2; exit 1; }
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
- done)
+ done
+ [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
 # the previous binaries stay as *.prev: `laib self rollback` puts them back
 for BIN in laib laib-operator laib-lease; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
+if [ -n "$CHECK" ]; then
+  if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$CHECK"; else host_units "$LAIB_ETC" "" "$CHECK"; fi   # LAIB_ETC: the test harness only
+fi
 # vm-install cuts the power on this line (the first boot's console): the
 # binaries are in place, the first boot's marker is not (#37, #367)
 echo "binaries $TAG in /var/opt/laib"

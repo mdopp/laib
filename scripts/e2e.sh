@@ -78,6 +78,8 @@ chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH" SYSTEMCTL_LOG="$WORK/systemctl.log"
 export LAIB_HOME="$WORK/home" LAIB_QUADLET="$WORK/quadlet" LAIB_SYSTEMD="$WORK/systemd"
 export LAIB_ETC="$WORK/etc"; bash "$ROOT/scripts/install-box.sh" --box-config >/dev/null   # the box config as every box has it (#281); diag is red without it
+# the boot check the install writes beside the binaries (#368); these harnesses run no install
+mkdir -p "$LAIB_ETC/systemd/system" && : > "$LAIB_ETC/systemd/system/laib-boot-check.service"
 fail() { echo "FAIL: $*"; "$BIN" journal 2>/dev/null | tail -5; exit 1; }
 j() { "$BIN" journal --json | python3 -c "import sys,json; es=json.load(sys.stdin); $1"; }
 
@@ -308,7 +310,7 @@ if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Sign
 bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
-  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= \
+  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= DISCORD_ALLOWED_USERS= \
   "$@" ./post-deploy > "$WORK/bote-ch.out" 2>&1 ); }
 bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home ADMIN_MXID=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
   LAIB_SECRET_BOTE_MATRIX_TOKEN=mx_tok || fail "bote hook with Matrix only"
@@ -329,6 +331,15 @@ if bote_ch MATRIX_HOMESERVER=https://hs.e2e.home; then fail "Matrix without BOTE
 grep -q "BOTE_MATRIX_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Matrix token (#184)"
 if bote_ch TELEGRAM_ALLOWED_USERS=123456; then fail "Telegram without BOTE_TELEGRAM_TOKEN must fail the hook (#184)"; fi
 if bote_ch; then fail "a Bote without any channel must fail the hook (#184)"; fi
+# #421: Discord as the fourth channel, Hermes' names (plugins/platforms/discord/gateway_env.py)
+bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok || fail "bote hook with Discord only: $(cat "$WORK/bote-ch.out")"
+grep -qx "DISCORD_BOT_TOKEN=dc_tok" "$HOOKDIR/bote/hermes/.env" || fail "a Discord Bote's .env lacks its bot token (#421)"
+grep -qx "DISCORD_ALLOWED_USERS=112233445566778899" "$HOOKDIR/bote/hermes/.env" || fail "a Discord Bote's .env lacks who may talk (#421)"
+if grep -q "^SIGNAL_\|^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Discord-only Bote has other channels' entries (#421)"; fi
+grep -qx "DISCORD_BOT_TOKEN=dc_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-notify gets the Discord credentials (#421)"
+grep -q "über Discord nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL says Discord never approves (#421)"
+if bote_ch DISCORD_ALLOWED_USERS=112233445566778899; then fail "Discord without BOTE_DISCORD_TOKEN must fail the hook (#421)"; fi
+grep -q "BOTE_DISCORD_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Discord token (#421)"
 # #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
 mkdir -p "$WORK/render/persona/hal"
 printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"

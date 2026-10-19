@@ -96,6 +96,20 @@ loopback, which the drop does not touch: the Z-Wave JS integration's URL
 is `ws://localhost:3000` (or `:3001`), the Matter one's
 `ws://localhost:5580/ws`.
 
+## The Z-Wave stick under SELinux, and when it is red (#417)
+
+`home-assistant-zwave.container` passes the stick (`ZWAVE_DEVICE`) with
+`AddDevice=` and `SecurityLabelDisable=true`: under SELinux enforcing a
+`container_t` process may not open a USB serial device, and with the label
+on the stick gives `EACCES` while the node is `crw-rw-rw-`. ServiceBay ran
+this container privileged; disabling the label is the narrower switch.
+
+`home-assistant-check` asks zwave-js-ui's `/health/zwave` every 15
+minutes (and when someone looks). Without a ready controller it writes a
+red finding ("Z-Wave: kein Controller …") and the check unit fails, so
+`laib status` shows home-assistant red. Home Assistant answering 200 says
+nothing about the radio.
+
 ## Messages to people (#177, ADR 0022 §3)
 
 pre-start writes `packages/laib_mitteilung.yaml` with

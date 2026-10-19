@@ -13,6 +13,7 @@ routes:
     auth: none                     # ABS does its own login (OIDC via Authelia); forward-auth would break its apps
 secrets:
   - name: ABS_ROOT_PASSWORD
+    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
 oidc:
   clientId: audiobookshelf           # post-deploy writes the secret into ABS's settings on every apply (#255)
   redirectUris: ["https://hoerbuecher.${DOMAIN}/auth/openid/callback", "https://hoerbuecher.${DOMAIN}/auth/openid/mobile-redirect"]

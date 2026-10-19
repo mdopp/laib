@@ -173,6 +173,18 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config (docs/MIGRATION.md Schritt 1)"})
 		}
 	}
+	// #368: without the boot check a broken OS update stays broken until someone has SSH.
+	if _, err := os.Stat(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/system/laib-boot-check.service"); err != nil && only == "" {
+		out = append(out, Finding{Severity: "rot", Probe: "boot-check", Detail: "laib-boot-check.service fehlt: ein OS-Update, das die GPU oder Laib bricht, rollt nicht von selbst zurück", Fix: "install-box.sh --version <diese Version> (die Installation legt die Prüfung an)"})
+	}
+	if only == "" {
+		var fs syscall.Statfs_t
+		if syscall.Statfs("/boot", &fs) == nil {
+			if f := bootFinding(fs.Bavail*uint64(fs.Bsize), fs.Blocks*uint64(fs.Bsize)); f != nil {
+				out = append(out, *f)
+			}
+		}
+	}
 	// The outside watchdog (#57): without it, a dead box tells nobody.
 	if st.Box.Watchdog.URL == "" {
 		out = append(out, Finding{Severity: "gelb", Probe: "watchdog", Detail: "kein Wächter außerhalb der Box (box.yml watchdog.url): wenn die Box ausfällt, erfährt es niemand", Fix: "einen healthchecks-artigen Ping-URL eintragen (eigener Dienst oder ein freier Anbieter); laib serve meldet sich alle fünf Minuten, Stille wird draußen zum Push"})
@@ -258,6 +270,16 @@ func challengeFinding(domain, alias, cname string, err error) *Finding {
 		return &Finding{Severity: "rot", Probe: "acme", Detail: name + " zeigt auf " + cname + ", nicht auf " + alias + ": Caddy schreibt die Challenge dorthin, Let's Encrypt sucht sie hier, das Zertifikat erneuert sich nicht", Fix: fix}
 	}
 	return nil
+}
+
+// bootFinding: one kernel set (kernel and initramfs) is ~150 MiB on the
+// GPU box (#368); with less free, the next OS update does not fit.
+func bootFinding(free, size uint64) *Finding {
+	const need = 150 << 20
+	if size == 0 || free >= need {
+		return nil
+	}
+	return &Finding{Severity: "gelb", Probe: "boot", Detail: fmt.Sprintf("/boot hat %d MiB frei, ein Kernel-Satz braucht ~150 MiB: das nächste OS-Update passt nicht", free>>20), Fix: "erst wenn der jetzige Stand bewiesen ist (/etc/laib/boot-proven): sudo rpm-ostree cleanup -r räumt den Rückfall-Stand weg"}
 }
 
 func uniq(in []string) []string {

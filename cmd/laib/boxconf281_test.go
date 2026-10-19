@@ -56,3 +56,28 @@ func TestDiagIsRedWithoutTheBoxConfigAndInstallBoxClearsIt(t *testing.T) {
 		t.Error("usb/fedora-coreos.bu writes the box config too: two sources drift (#281)")
 	}
 }
+
+// #368: without laib-boot-check.service a broken OS update stays broken; diag
+// says so under its own probe (the install writes it, not --box-config).
+func TestDiagIsRedWithoutTheBootCheck(t *testing.T) {
+	c := newCbox(t)
+	etc := t.TempDir()
+	t.Setenv("LAIB_ETC", etc)
+	st, _ := cli.LoadState(c.env)
+	red := func() bool {
+		for _, f := range diag.Probes(context.Background(), c.env, st, "") {
+			if f.Probe == "boot-check" && f.Severity == "rot" {
+				return true
+			}
+		}
+		return false
+	}
+	if !red() {
+		t.Fatal("no boot check on the box, and diag is not red about it")
+	}
+	os.MkdirAll(filepath.Join(etc, "systemd", "system"), 0o755)
+	os.WriteFile(filepath.Join(etc, "systemd", "system", "laib-boot-check.service"), []byte("[Unit]\n"), 0o644)
+	if red() {
+		t.Fatal("still red with laib-boot-check.service in place")
+	}
+}
