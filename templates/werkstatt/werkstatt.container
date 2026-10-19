@@ -4,6 +4,8 @@ Description=Werkstatt — the one place where agents build (Claude Code, pi, rep
 [Container]
 Image=${IMAGE}
 PublishPort=${SSH_PORT}:22
+# pi in the browser (#384): the host's loopback only, Caddy and Authelia in front
+PublishPort=127.0.0.1:8791:8791
 # quoted: Quadlet splits Environment= on whitespace, and a public key has two spaces
 Environment="WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}"
 Environment=WERKSTATT_SSH_PASSWORD=${SSH_PASSWORD}
@@ -11,6 +13,10 @@ Environment=CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_TOKEN}
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=LAIB_MCP_URL=http://host.containers.internal:5900/mcp
 Environment=MODEL_URL=${MODEL_URL}
+Environment=MODEL_KEY=${MODEL_KEY}
+# the web pi (#384): its hand and the name it answers to
+Environment=LAIB_PI_TOKEN=${LAIB_PI_TOKEN}
+Environment=WERKSTATT_DOMAIN=${DOMAIN}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
 # dev's home (#241): ~/.claude, ~/.claude.json, dotfiles, history; ~/.cache
 # (npm, go, pip) is its own data path, not backed up; sshd's host keys, made once.

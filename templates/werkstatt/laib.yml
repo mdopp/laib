@@ -1,7 +1,14 @@
 name: werkstatt
 template: {registry: builtin, name: werkstatt, version: 1}
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
-routes: []                       # dev.<domain> (the pi-web surface) comes with Haus; today: SSH + autoloop
+# pi in the browser (#384), as ServiceBay's pi-web: pi-web-ui has no login of its
+# own, so Authelia (admins, two factors) is the whole gate, as ServiceBay's admins-only rule was
+routes:
+  - host: pi
+    port: 8791
+    exposure: public
+    auth: two_factor
+    group: admins
 provides: [werkstatt]
 secrets:
   - name: WERKSTATT_SSH_PASSWORD
@@ -24,3 +31,4 @@ data:
 health: {none: "a dev box with no server to probe; the unit state is the check"}
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password
+  - {port: 8791, lan: false}     # pi-web-ui, only through Caddy
