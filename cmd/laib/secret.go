@@ -81,14 +81,17 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		if _, ok := sec[name]; !ok {
 			return env.Fail(fmt.Errorf("no secret %s", name))
 		}
-		external := false
+		external, bound := false, false
 		for _, d := range render.SecretNames(st) {
-			if d.Name == name && d.External {
-				external = true
+			if d.Name == name {
+				external, bound = external || d.External, bound || d.DataBound
 			}
 		}
 		if external {
 			return env.Fail(fmt.Errorf("%s is external: obtain a new value and use `laib secret set`", name))
+		}
+		if bound { // nothing changes: the old value keeps working (#353)
+			return env.Fail(fmt.Errorf("%s is bound to its app's data: the app reads it only when it creates its data, so a new value here locks it out. Change it inside the app first (its admin page, or ALTER ROLE for a database), then `laib secret set %s` with that same value and `laib apply`", name, name))
 		}
 		sec[name] = secrets.Generate()
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {

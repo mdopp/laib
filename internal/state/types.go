@@ -256,6 +256,11 @@ type Secret struct {
 	External bool   `yaml:"external"`
 	Optional bool   `yaml:"optional"` // external and unset is fine: the unit gets an empty value (Caddy's DNS token without dns.provider)
 	Mint     string `yaml:"mint"`     // a Laib token for this hand (policy.yml hands, not human), minted on first add — no manual token mint + secret set
+	// DataBound: the app's data was made with it and the app reads it only
+	// when it creates that data (a database's password, an admin's first
+	// login), and no hook changes it inside the app: `laib secret rotate`
+	// refuses it, a new value would lock the app out (#353).
+	DataBound bool `yaml:"dataBound"`
 }
 
 // OIDC is the service's Authelia client.
