@@ -66,6 +66,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		for file, content := range svc.Assets {
 			out["quadlet/"+name+"/"+file] = content
 		}
+		out["quadlet/"+name+"/"+ValuesFile] = values(name, svc)
 	}
 	if uses(st, "PERSONA") {
 		// the packages a service mounts from /mnt/data/laib/render/persona (ADR 0020)
@@ -142,6 +143,24 @@ func BackupPaths(st *state.State, stateDir, journalDir string) []string {
 	}
 	sort.Strings(out[2:])
 	return out
+}
+
+// ValuesFile holds a service's values (#364): a value only a hook reads
+// changes no unit, and through this file it is still a change of the
+// service, so apply re-runs its hooks and restarts it. Quadlet ignores it.
+const ValuesFile = "values.laib"
+
+func values(name string, svc *state.Service) string {
+	var b strings.Builder
+	b.WriteString("# Rendered by laib: the values of " + name + " (#364); a secret by its name only.\n")
+	for _, k := range slices.Sorted(maps.Keys(svc.Values)) {
+		v := svc.Values[k].Literal
+		if s := svc.Values[k].Secret; s != "" {
+			v = "!secret " + s
+		}
+		b.WriteString(k + "=" + v + "\n")
+	}
+	return b.String()
 }
 
 func backupService() string {
