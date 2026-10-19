@@ -203,3 +203,31 @@ and sends the link; it never approves them.
 - The SOUL tells the Bote that these messages arrive in the chat, that it
   reads the state from laib rather than from memory, and that it sends
   the Inbox link for what the chat may not decide.
+
+## Amendment 2026-10-19 (#463): the owner's verdicts on Discord, read by the relay itself
+
+Owner decision (#441: non-destructive actions are approved in the chat;
+the owner talks to the Bote on Discord, #421). The relay now accepts a
+verdict on Discord under the same rule as Signal and Matrix: code that
+sees the sender decides, never Hermes or the model.
+
+- **How it sees the sender.** The relay reads the owner's direct chat
+  with the bot itself, polling Discord's REST API with the bot token. A
+  verdict counts only when Discord names the owner (`ADMIN_DISCORD_ID`) as
+  the author, in that one DM (`ADMIN_DISCORD_CHANNEL`). At start the relay
+  checks that the channel is a DM (type 1) with the owner alone. A bot
+  token can post as the bot and never as a person, so Hermes holding the
+  same token cannot forge the owner's verdict. Messages from before the
+  start, the bot's own messages and any other author never decide.
+- **What counts as verified.** Identity decision (proposed, for the owner):
+  the owner's Discord account, as Discord asserts it, counts as their
+  identity for **non-destructive** verdicts, the same weight as the Signal
+  number. Discord is a third party, so whoever holds the owner's Discord
+  session decides in the chat as them: the owner keeps two-factor login on
+  that account. The id must also be on the Bote's allowed list
+  (`DISCORD_ALLOWED_USERS`). pre-start refuses an owner id the Bote would
+  not even talk to. Destructive verdicts stay with the Inbox and the second
+  factor (#441); `laib approve` refuses them to the approver whatever the
+  channel.
+- Telegram still never decides. The same construction would work there
+  but has not been asked for.

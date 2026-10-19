@@ -16,7 +16,7 @@ and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
 | Signal | `SIGNAL_ACCOUNT` (the Bote's number) | none (linked device, QR) | `SIGNAL_ALLOWED_USERS` | `ADMIN_NUMBER` |
 | Matrix | `MATRIX_HOMESERVER` | `BOTE_MATRIX_TOKEN` | `MATRIX_ALLOWED_USERS` | `ADMIN_MXID` in `ADMIN_ROOM` |
 | Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | never |
-| Discord | `DISCORD_ALLOWED_USERS` | `BOTE_DISCORD_TOKEN` | `DISCORD_ALLOWED_USERS` | never |
+| Discord | `DISCORD_ALLOWED_USERS` | `BOTE_DISCORD_TOKEN` | `DISCORD_ALLOWED_USERS` | `ADMIN_DISCORD_ID` in `ADMIN_DISCORD_CHANNEL` (#463) |
 
 `bote-signal` runs only with Signal, `bote-relay` only with `ADMIN_NUMBER`
 or `ADMIN_MXID` (both empty in the example: set yours to approve in the
@@ -78,9 +78,14 @@ Copy User ID). A bot is public; the list keeps others out, and an
 unlisted user gets no answer. A person's Discord target in box.yml
 `people` is the id of their **DM channel** with the bot
 (`discord:<channel id>`; right-click the DM → Copy Channel ID), which
-exists once they wrote to it. Discord **never approves**: a bot token and
-a Discord account are not a verified identity (#48). Approvals stay on the
-Box page and in Haus. A bot token without `DISCORD_ALLOWED_USERS` leaves
+exists once they wrote to it. **Verdicts on Discord (#463)**: put your own
+user id into `ADMIN_DISCORD_ID` (it must be in `DISCORD_ALLOWED_USERS`) and
+your DM with the bot into `ADMIN_DISCORD_CHANNEL`. The relay then reads that
+DM itself through Discord's API, with the bot token, and acts only on a
+message Discord names you as the author of, in that DM alone. As on Signal,
+it acts only on what is not destructive (#441); the rest gets the Inbox link.
+Turn on two-factor login for your Discord account: whoever has it decides
+in the chat as you. A bot token without `DISCORD_ALLOWED_USERS` leaves
 Discord off (no line in `.env`), as with Telegram.
 
 **Signal without a second SIM.** The QR above links the Bote as a

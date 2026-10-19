@@ -1,5 +1,5 @@
 [Unit]
-Description=Bote: approval relay — the admin's number or Matrix ID decides, through Laib's approver token (#48, #184)
+Description=Bote: approval relay — the admin's number, Matrix ID or Discord id decides, through Laib's approver token (#48, #184, #463)
 # without Signal there is no bote-signal unit, and systemd ignores ordering on a missing one (#190)
 After=bote-signal.service
 
@@ -14,6 +14,10 @@ Environment=MATRIX_HOMESERVER=${MATRIX_HOMESERVER}
 Environment=MATRIX_ACCESS_TOKEN=${MATRIX_TOKEN}
 Environment=ADMIN_MXID=${ADMIN_MXID}
 Environment=ADMIN_ROOM=${ADMIN_ROOM}
+# Discord (#463): the owner's id decides only in their DM with the bot, which the relay reads itself with the bot token
+Environment=ADMIN_DISCORD_ID=${ADMIN_DISCORD_ID}
+Environment=ADMIN_DISCORD_CHANNEL=${ADMIN_DISCORD_CHANNEL}
+Environment=DISCORD_BOT_TOKEN=${DISCORD_TOKEN}
 Environment=LAIB_MCP_URL=${LAIB_MCP_URL}
 Environment=LAIB_TOKEN=${APPROVER_TOKEN}
 AutoUpdate=registry
