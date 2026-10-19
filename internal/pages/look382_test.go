@@ -58,7 +58,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 		t.Error("the status page is still a table")
 	}
 	// the journal: one row card per entry, the result as word and colour
-	j := journalBody([]journal.Entry{{T: time.Date(2026, 10, 19, 7, 30, 0, 0, time.UTC), Actor: "human:core", Verb: "apply", Service: "auth", Result: "red", Reason: "Session-Speicher"}}, nil)
+	j := journalBody([]journal.Entry{{T: time.Date(2026, 10, 19, 7, 30, 0, 0, time.UTC), Actor: "human:core", Verb: "apply", Service: "auth", Result: "red", Reason: "Session-Speicher"}})
 	if !strings.Contains(j, `class="card rot"`) || strings.Contains(j, "<table") || !strings.Contains(j, "Session-Speicher") {
 		t.Errorf("the journal is not rows of cards: %s", j)
 	}
