@@ -21,6 +21,8 @@ data:
   - path: ${DATA_DIR}/llama/lease
 health:
   http: http://127.0.0.1:11435/health
+status:                          # which roles of the modes nobody provides; laib-lease writes it at every start (#374)
+  file: ${DATA_DIR}/llama/lease/laib-status.json
 ports:
   - {port: 11434, lan: false}    # the router, loopback only
   - {port: 11436, lan: false}    # embeddings

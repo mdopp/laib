@@ -35,6 +35,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF="$HERE/$(basename "$0")"
 Q=${Q:-$HOME/.config/containers/systemd}
+UNITS=$HOME/.config/systemd/user   # ServiceBay's plain host units (solaris-llama-policy, #374)
 PARK=$HOME/servicebay-units
 MIG=${MIG_DIR:-$HOME/laib-migration}
 DATA=${DATA_DIR:-/mnt/data/stacks}
@@ -66,7 +67,8 @@ IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solar
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
   case $1 in
-    llama) echo "llama llama-embed";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
+    # solaris-llama-policy: a plain host unit on 11435, laib-lease's port (#374)
+    llama) echo "llama llama-embed solaris-llama-policy";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
     radicale) echo "radicale solaris-import-google";;   # #371: the Google import writes into radicale's data
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
     preflight|install|drafts|secrets|ignore) ;;
@@ -185,6 +187,7 @@ servicebay_out() {
     for f in "$Q/$u.kube" "$Q/$u.yml" "$Q/$u.container"; do
       if [ -e "$f" ]; then mv "$f" "$PARK/"; moved="$moved $(basename "$f")"; fi
     done
+    if [ -e "$UNITS/$u.service" ]; then systemctl --user disable --now "$u.service" && moved="$moved $u.service(disabled)"; fi
   done
   systemctl --user daemon-reload
   echo "ServiceBay's $*: stopped,${moved:- already} out of the Quadlet root (in $PARK)"
@@ -194,6 +197,7 @@ servicebay_back() {
   for u in "$@"; do for f in "$PARK/$u.kube" "$PARK/$u.yml" "$PARK/$u.container"; do if [ -e "$f" ]; then mv "$f" "$Q/"; fi; done; done
   systemctl --user daemon-reload
   for u in "$@"; do
+    if [ -e "$UNITS/$u.service" ]; then systemctl --user enable --now "$u.service" && echo "ServiceBay's $u.service runs again"; continue; fi
     [ -n "$(files_of "$u" | grep "^$Q/")" ] || continue
     systemctl --user start "$u.service" && echo "ServiceBay's $u.service runs again" || echo "ServiceBay's $u.service did not start: systemctl --user status $u.service"
   done

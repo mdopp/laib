@@ -146,7 +146,10 @@ file moves out.
       systemctl --user daemon-reload
       ```
       For `llama`, `llama-embed.service` is stopped and `llama-embed.container`
-      moved out with it.
+      moved out with it, and Solaris's policy proxy, the plain host unit
+      `solaris-llama-policy.service` on 11435 (laib-lease's port), is
+      disabled with `systemctl --user disable --now` (#374); a hand-back
+      enables it again.
    b. Carry its secrets over (#228) and, where "Data that moves into
       Laib's layout" lists it, `scripts/move-servicebay-data.sh <name>`
       (#229).

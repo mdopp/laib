@@ -151,10 +151,7 @@ func TestModesResolveThroughTheRealTemplates(t *testing.T) {
 	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "whisper-batch") || !strings.Contains(err.Error(), "stimme") {
 		t.Fatalf("a unit that does not exist must be refused at start, naming the service: %v", err)
 	}
-	cfg.Modes["full"] = Mode{Stops: []string{"stt/whisper"}}
-	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "stt") {
-		t.Fatalf("a role nobody provides must be refused at start: %v", err)
-	}
+	// a role nobody provides degrades the mode instead (#374, lease374_test.go)
 }
 
 // #42 (2): the lease API needs the token; GET and /health stay open.

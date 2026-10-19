@@ -62,3 +62,8 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   `LEASE_WARN_AFTER` (20 min) gets one yellow journal line.
 - **One port.** The lease answers on the proxy's port (`PORT`, 11435):
   `http://<gpu-box>:11435/api/model-lease`.
+- **A missing role degrades, it does not stop the lease (#374).** A mode
+  that stops a role nobody provides (`voice/whisper` before Stimme is on
+  the box) leaves it out; laib-lease names each one in its status file
+  (`lease/laib-status.json`, gelb in `laib status` and diag). A container
+  the providing service does not have is still refused at start.

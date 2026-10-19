@@ -85,6 +85,7 @@ echo "  laib add auth BASE_DN=dc=box,dc=test"
 echo "  laib add radicale"
 echo "  laib add mosquitto"
 echo "  laib add vaultwarden"
+echo "  laib add llama"
 ''')
 
     def tearDown(self):
@@ -243,6 +244,30 @@ echo "  laib add vaultwarden"
         self.assertIn("secret set AUTHELIA_SMTP_PASSWORD", self.calls_of("laib"))
         self.assertEqual((self.t / "secret-AUTHELIA_SMTP_PASSWORD").read_text(), "pw-n'ever \"printed")
         self.assertNotIn("never", r.stdout + r.stderr + self.calls.read_text())
+
+    def test_the_llama_step_takes_11435_from_solaris_llama_policy(self):
+        # #374: ServiceBay/Solaris's policy proxy is a plain host user unit, not a Quadlet file; it
+        # held 11435 after the llama step, so laib-lease could not listen. The step disables it, a
+        # hand-back enables it again.
+        for f, body in (("llama.kube", "[Kube]\nYaml=llama.yml\n"), ("llama.yml", "kind: Pod\n")):
+            (self.t / "q" / f).write_text(body)
+        units = self.t / "home" / ".config" / "systemd" / "user"
+        units.mkdir(parents=True)
+        (units / "solaris-llama-policy.service").write_text("[Service]\nExecStart=/x proxy\n")
+        r = self.run_md("--foreground", "--until", "llama")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        sysd = self.calls_of("systemctl")
+        self.assertIn("--user disable --now solaris-llama-policy.service", sysd)
+        lines = self.calls.read_text().splitlines()
+        self.assertLess(lines.index("systemctl --user disable --now solaris-llama-policy.service"), lines.index("laib add llama"),
+                        "laib-lease starts before the old proxy let go of 11435")
+        self.assertIn("solaris-llama-policy", r.stdout)
+        # the other steps' units stay claimed (a comment in sb_units once swallowed caddy's nginx)
+        st = self.run_md("--dry-run")
+        self.assertNotIn("nginx.kube", st.stdout + st.stderr)
+        r = self.run_md("rollback", "llama")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--user enable --now solaris-llama-policy.service", self.calls_of("systemctl"))
 
     def test_red_step_stops_and_hands_the_service_back(self):
         r = self.run_md("--foreground", "--until", "vaultwarden", FAKE_FAIL_ADD="radicale")
