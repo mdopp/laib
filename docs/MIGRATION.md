@@ -175,8 +175,12 @@ file moves out.
    sessions and SSH host keys are an open decision (below).
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
-   they go off in Phase 5 (#160). So do chronik's (above) and the Google
-   import's (`solaris-import-google`; `import.` is not needed, owner 2026-10-18, and `dopp.cloud` and `www.` redirect to `haus.`, #360). flutstunde and the
+   they go off in Phase 5 (#160). So do chronik's (above). The Google import
+   (`solaris-import-google`) does not stay: it writes the imported calendars
+   into `radicale/data`, a `KONFLIKT` as soon as radicale is Laib's, so it
+   goes off with radicale in step 4 (its importers become scripts,
+   SERVICES.md; #371). `import.` is not needed (owner 2026-10-18), and
+   `dopp.cloud` and `www.` redirect to `haus.` (#360). flutstunde and the
    inactive daggerheart-asteroids go with ServiceBay in step 7 (owner, #160).
 7. Disable `servicebay.service`. Keep its data dir for 30 days, then delete.
    Delete `auth/authelia-config/servicebay-clients.yml` (ServiceBay's own

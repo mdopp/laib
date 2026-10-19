@@ -67,7 +67,10 @@ esac
 exit 0
 ''')
         exe(b / "install-box", "#!/bin/bash\n" + RECORD)
-        exe(b / "carry", "#!/bin/bash\n" + RECORD)
+        exe(b / "carry", "#!/bin/bash\n" + RECORD + r'''
+[ "$1" = --login ] && [ "$2" = "${FAKE_LOGIN_RED:-}" ] && { echo "$2: its password meldet sich nicht an"; exit 1; }
+exit 0
+''')
         exe(b / "move", "#!/bin/bash\n" + RECORD + r'''
 dry=""; [ "$1" = --dry-run ] && { dry=1; shift; }
 [ -n "$dry" ] || { mkdir -p "$DATA_DIR/$1/laib-copy"; echo "$1: copy $DATA_DIR/$1/old -> $DATA_DIR/$1/laib-copy"; }
@@ -170,6 +173,21 @@ echo "  laib add vaultwarden"
             self.assertIn(want, out)
         self.changed_nothing()
 
+    def test_dry_run_names_the_os_preconditions(self):
+        # #367: a missing restic and a staged rpm-ostree deployment were no
+        # preconditions; the install layered restic and nearly rebooted the box
+        exe(self.t / "bin" / "rpm-ostree", "#!/bin/bash\n" + RECORD + '[ "$*" = "status --pending-exit-77" ] && exit 77\nexit 0\n')
+        r = self.run_md("--dry-run")
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)   # a WARN, not a RED: Laib's install no longer touches the OS
+        self.assertRegex(out, r"(ok|RED) +git ")
+        self.assertRegex(out, r"(ok|RED) +diff ")
+        self.assertRegex(out, r"(ok|WARN) +restic")
+        self.assertRegex(out, r"WARN +a staged rpm-ostree deployment")
+        self.assertIn("rpm-ostree cleanup --pending", out)
+        self.assertEqual([c for c in self.calls_of("rpm-ostree") if c != "status --pending-exit-77"], [])
+        self.changed_nothing()
+
     def test_refuses_inside_a_container(self):
         (self.t / "containerenv").write_text("")
         r = self.run_md("--dry-run", CONTAINERENV=str(self.t / "containerenv"))
@@ -198,6 +216,15 @@ echo "  laib add vaultwarden"
         self.assertFalse((self.t / "q" / "auth.kube").exists())
         self.assertTrue((self.t / "home" / "servicebay-units" / "auth.kube").exists())
         self.assertTrue((self.t / "q" / "radicale.kube").exists())   # not reached
+
+    def test_a_steps_images_are_pulled_before_servicebays_unit_stops(self):
+        # #370: AdGuard is the box's resolver; once ServiceBay's is stopped, no pull resolves
+        r = self.run_md("--foreground", "--until", "radicale")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        lines = self.calls.read_text().splitlines()
+        pull = lines.index("podman pull -q docker.io/tomsquest/docker-radicale:latest")
+        stop = lines.index("systemctl --user stop radicale.service")
+        self.assertLess(pull, stop, lines)
 
     def test_servicebays_mail_password_is_piped_into_laib(self):
         # #359: the password of notifications.email goes into AUTHELIA_SMTP_PASSWORD on stdin,
@@ -321,6 +348,51 @@ echo "  laib add vaultwarden"
         (self.t / "q" / "auth.kube.bak-old").write_text("")
         r = self.run_md("--dry-run")
         self.assertIn("claimed by no step and not in IGNORE: auth.kube.bak-old", r.stdout)
+
+    def importer(self, name):   # a ServiceBay unit that mounts radicale's data, as solaris-import-google does
+        (self.t / "q" / f"{name}.kube").write_text(f"[Kube]\nYaml={name}.yml\n")
+        (self.t / "q" / f"{name}.yml").write_text(
+            f"kind: Pod\nspec:\n  volumes:\n    - name: cal\n      hostPath:\n        path: {self.t}/data/radicale/data\n"
+            f"    - name: share\n      hostPath:\n        path: {self.t}/data/file-share/data\n")
+
+    def test_dry_run_reports_a_konflikt_with_a_unit_that_stays(self):
+        # #371: a unit that stays (IGNORE) and mounts radicale's data blocks radicale's laib add
+        self.importer("other-import")
+        r = self.run_md("--dry-run", IGNORE="other-import")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"RED   radicale: other-import.kube runs it too (data {self.t}/data/radicale/data)", r.stdout)
+        self.assertNotIn("file-share/data)", r.stdout)   # the shared tree is nobody's own (backup: false)
+        self.changed_nothing()
+        # the run refuses the step before it stops anything
+        r = self.run_md("--foreground", "--until", "radicale", IGNORE="other-import")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("radicale: laib add would refuse (KONFLIKT), nothing changed yet", r.stdout)
+        self.assertNotIn("--user stop radicale.service", self.calls_of("systemctl"))
+
+    def test_the_google_import_goes_off_with_radicale(self):
+        # #371, decided: solaris-import-google writes into radicale's data, so it leaves with radicale
+        self.importer("solaris-import-google")
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("runs it too", r.stdout)
+        r = self.run_md("--foreground", "--until", "radicale")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--user stop solaris-import-google.service", self.calls_of("systemctl"))
+        self.assertFalse((self.t / "q" / "solaris-import-google.kube").exists())
+
+    def test_dry_run_tries_the_carried_admin_logins(self):
+        # #373: HA's carried admin password, tried read-only against ServiceBay's running HA
+        for u in ("home-assistant", "adguard"):
+            (self.t / "q" / f"{u}.kube").write_text(f"[Kube]\nYaml={u}.yml\n")
+        r = self.run_md("--dry-run", FAKE_LOGIN_RED="home-assistant")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("RED   home-assistant: the carried administrator login", r.stdout)
+        self.assertIn("ok    adguard: the carried administrator login", r.stdout)
+        self.assertEqual([c for c in self.calls_of("carry") if c.startswith("--login")],
+                         ["--login home-assistant laib", "--login adguard admin"])
+        self.changed_nothing()
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_unknown_step_is_refused(self):
         r = self.run_md("--dry-run", "--until", "vaultwardn")

@@ -23,7 +23,15 @@
 3. **Immichs Admin-Adresse** nennen (Immich → Administration → Benutzer).
    ServiceBay hat sie auf dem Kraftwerk nicht gespeichert, ohne sie bleibt
    der Lauf beim Schritt `drafts` stehen.
-4. **Für die Werkstatt** (sie ersetzt claude-dev und pi-web): ein
+4. **Passwörter, die du in einer App geändert hast.** Laib übernimmt die
+   Admin-Passwörter, die ServiceBay gesetzt hat. Hast du das
+   Administrator-Passwort in Home Assistant (oder AdGuard) später in der App
+   geändert, kennt ServiceBay es nicht. Der Probelauf meldet sich damit bei
+   der laufenden App an, ohne etwas zu ändern, und zeigt `RED … meldet sich
+   nicht an`. Dann den Lauf bis `secrets` laufen lassen, das jetzige
+   Passwort mit `laib secret set HA_ADMIN_PASSWORD` (bzw.
+   `ADGUARD_ADMIN_PASSWORD`) setzen und mit `--resume` weitermachen (#373).
+5. **Für die Werkstatt** (sie ersetzt claude-dev und pi-web): ein
    Claude-OAuth-Token und zwei GitHub-Tokens bereithalten. Ohne sie bleibt
    der Lauf vor der Werkstatt stehen, ohne etwas zu ändern.
 
@@ -105,8 +113,10 @@ and `www.` redirect to `haus.` from Caddy's switch on (#360: the haus
 route's `redirectFrom`, no service), so the family's old entry point leads
 to Haus. ServiceBay's portal and its request form behind them are gone;
 residents are invited (`laib person invite`, Haus's Box card). `solaris-import-google`
-keeps running on its ServiceBay unit, ignored, and goes off with Solaris in
-phase 5 (its importers become scripts, SERVICES.md). Listed on
+goes off with radicale in phase 3: it writes into radicale's data, which
+`laib add radicale` refuses as a `KONFLIKT` (#371); its importers become
+scripts (SERVICES.md). The dry run lists every unit that stays and would be
+a `KONFLIKT` for a step, as `RED`. Listed on
 [#160](https://github.com/mdopp/laib/issues/160).
 
 ## Preconditions
@@ -134,6 +144,13 @@ On the box (the dry run checks each one and says which is red):
   carries this script; v0.6.0 itself does not. Until the next release, a
   checkout of `main` after #351 installs the v0.6.0 binary and matches.
 - python3 on the host (ServiceBay's agent needs it; it is there).
+- The carried administrator logins of Home Assistant and AdGuard work
+  against the apps ServiceBay runs (read-only: HA's login flow up to its
+  code, no token; AdGuard's API with basic auth; #373). A password changed in
+  the app after ServiceBay set it is red here: `--until secrets`, then
+  `laib secret set HA_ADMIN_PASSWORD` (or `ADGUARD_ADMIN_PASSWORD`) with the
+  app's password, then `--resume`. Immich and Jellyfin are not tried: their
+  login opens a session.
 
 ## The commands
 
@@ -262,7 +279,7 @@ Caddy's own; AdGuard's rewrites point at the box.
 
 After **phase 5**: `laib status` first line `0 gelb · 0 rot`; ServiceBay's
 container is gone and nothing answers on 5888; the Quadlet root has no
-ServiceBay file except the ignored ones (Solaris, chronik, the Google import);
+ServiceBay file except the ignored ones (Solaris, chronik);
 the Werkstatt answers on SSH 2222 (its host key is new, the app asks once).
 
 ## Known risks

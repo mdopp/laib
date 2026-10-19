@@ -46,6 +46,7 @@ INSTALL_BOX=${INSTALL_BOX:-$HERE/install-box.sh}
 MIGRATE_PY=${MIGRATE_PY:-$HERE/migrate-servicebay.py}
 CARRY=${CARRY:-$HERE/carry-servicebay-secrets.sh}
 MOVE=${MOVE:-$HERE/move-servicebay-data.sh}
+TEMPLATES=${TEMPLATES:-$HERE/../templates}
 PY=${PYTHON-python3}
 CONTAINERENV=${CONTAINERENV:-/run/.containerenv}
 SB_VERSION=${SB_VERSION:-5.44.3}
@@ -59,12 +60,14 @@ export LAIB_HOME=${LAIB_HOME:-/mnt/data/laib} LAIB_ACTOR=human:core LAIB=$LAIB_B
 # MIGRATION.md's order: step 1 (install, drafts, secrets), 3 (auth), 4, 4d (caddy), 5 (werkstatt), 6 (ignore), 7 (retire)
 STEPS="preflight install drafts secrets auth adguard llama radicale mosquitto file-share beets esphome usage-metrics immich paperless media home-assistant vaultwarden caddy werkstatt ignore retire"
 # what stays on its ServiceBay unit, ignored (MIGRATION.md step 6; #160): Solaris until Phase 5,
-# chronik until foundry-chronicle has its Laib template (foundry-chronicle#362), the Google import (undecided)
-IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solaris-wakeword-trainer daggerheart-chronik solaris-import-google}
+# chronik until foundry-chronicle has its Laib template (foundry-chronicle#362). The Google import
+# goes off with radicale: it writes into radicale's data, a KONFLIKT once radicale is Laib's (#371)
+IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solaris-wakeword-trainer daggerheart-chronik}
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
   case $1 in
     llama) echo "llama llama-embed";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
+    radicale) echo "radicale solaris-import-google";;   # #371: the Google import writes into radicale's data
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
     preflight|install|drafts|secrets|ignore) ;;
     *) echo "$1";;
@@ -135,6 +138,16 @@ preconditions() {
   v=$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)
   [ "$v" = yes ]; check $? "linger is on (the unit outlives the SSH session): ${v:-unknown}"
   command -v python3 >/dev/null; check $? "python3 on the host (migrate-servicebay.py)"
+  # what laib shells out to (#367); install-box.sh brings restic, never by layering
+  command -v git >/dev/null; check $? "git on the host (laib's state repo; in the CoreOS image)"
+  command -v diff >/dev/null; check $? "diff on the host (laib plan; in the CoreOS image)"
+  if command -v restic >/dev/null; then echo "  ok    restic on the host: $(restic version 2>/dev/null | cut -d' ' -f2)"
+  else echo "  WARN  restic is missing: install puts restic's static release in /usr/local/bin (checksum-pinned, no rpm-ostree)"; fi
+  # a staged deployment boots at the next reboot, a power cut included: mid-migration, into an old tree (#367)
+  if command -v rpm-ostree >/dev/null; then
+    rpm-ostree status --pending-exit-77 >/dev/null 2>&1
+    [ $? != 77 ] || echo "  WARN  a staged rpm-ostree deployment: any reboot boots it. Drop it first: sudo rpm-ostree cleanup --pending"
+  fi
   if backup_fresh | sed 's/^/        /'; [ "${PIPESTATUS[0]}" = 0 ]; then check 0 "a fresh off-box backup (at most $BACKUP_MAX_AGE_H h old)"
   elif [ -n "${NO_FRESH_BACKUP:-}" ]; then echo "  WARN  no fresh off-box backup: going on because the owner passed --no-fresh-backup"
   else check 1 "no fresh off-box backup (at most $BACKUP_MAX_AGE_H h old): run ServiceBay's backup to the NAS first, or pass --no-fresh-backup"; fi
@@ -320,12 +333,24 @@ carry_smtp() {
   echo "AUTHELIA_SMTP_PASSWORD set from ServiceBay's notifications.email (the settings go with laib add auth)"
 }
 
+# a step's images, pulled while ServiceBay's unit still runs: its AdGuard is the box's resolver,
+# and once it is stopped no pull resolves (#370). Best effort: the apply pulls again.
+prepull() {
+  local img
+  for img in $(sed -n 's/^[A-Z_]*IMAGE: *"\{0,1\}\([^" ]*\)"\{0,1\} *$/\1/p' "$TEMPLATES/$1/values.example.yml" 2>/dev/null); do
+    if podman pull -q "$img" >/dev/null; then echo "pulled $img"; else echo "WARN  pulling $img failed: laib apply tries again"; fi
+  done
+}
+
 step_service() {   # MIGRATION.md step 3 and 4, a–c
   local s=$1 miss
   say "4. $s"
   on_box "$s" || { echo "$s: ServiceBay does not run it here: skipped"; return 10; }
   miss=$(external_missing "$s")
   [ -z "$miss" ] || { echo "$s: set these first, nothing changed yet: $(for m in $miss; do printf 'laib secret set %s  ' "$m"; done)"; return 1; }
+  miss=$(konflikte | grep "at the $s step$" || true)
+  [ -z "$miss" ] || { echo "$miss"; echo "$s: laib add would refuse (KONFLIKT), nothing changed yet"; return 1; }
+  prepull "$s"
   # shellcheck disable=SC2046
   servicebay_out $(sb_units "$s")
   case "$s" in
@@ -344,6 +369,7 @@ step_service() {   # MIGRATION.md step 3 and 4, a–c
 step_caddy() {
   say "4d. Caddy replaces NPM"
   on_box caddy || { echo "no NPM here: skipped"; return 10; }
+  prepull caddy
   servicebay_out nginx
   laib_add caddy
   # every name of the state through Caddy: none answers 502
@@ -448,6 +474,80 @@ unclaimed() {   # Quadlet entries no step takes and IGNORE does not keep: the re
     echo "        retire stays red while they are there: move them out, or IGNORE=\"… them\" for laib ignore"; fi
 }
 
+# laib plan's KONFLIKT (internal/plan Conflicts, #227) ahead of the run (#371): at each step, the
+# services Laib holds by then against every ServiceBay unit still in the Quadlet root (IGNORE, not
+# claimed, or a later step's): the same host port, or a host path at, inside or above a backed-up
+# data path of the service's template (at or below a backup: false path is shared, not its own)
+konflikt_py='import os, re, sys
+q, data, tpl = sys.argv[1:4]
+yaml_re = re.compile(r"(?m)^Yaml=(.+)$")
+port_re = re.compile(r"""(?m)(?:^PublishPort=(?:\[[0-9a-fA-F:.]*\]:|[0-9.]+:)?(\d+):|hostPort:\s*["\x27]?(\d+))""")
+path_re = re.compile(r"""(?m)(?:^Volume=|^Mount=.*\b(?:source|src)=|hostPath:\s*\n\s*(?:type:.*\n\s*)?path:\s*["\x27]?)(/[^\s:,"\x27#]*)""")
+inside = lambda a, b: a == b or a.startswith(b.rstrip("/") + "/")
+def contract(s):
+    own, shared, ports, block, last = [], [], set(), "", None
+    for line in open(os.path.join(tpl, s, "laib.yml")):
+        line = line.split("#")[0].rstrip()
+        if re.match(r"^[a-z]", line): block = line.split(":")[0]
+        m = re.match(r"^\s*- path: *(\S+)", line)
+        if block == "data" and m: last = os.path.realpath(m.group(1).replace("${DATA_DIR}", data)); own.append(last)
+        elif block == "data" and re.match(r"^\s+backup: *false", line) and last: own.remove(last); shared.append(last); last = None
+        m = re.search(r"\bport: *(\d+)", line)
+        if block == "ports" and m: ports.add(m.group(1))
+    return own, shared, ports
+steps = [a.split("=") for a in sys.argv[4:]]
+held, taken, seen = [], set(), set()
+for step, units in steps:
+    held.append(step); taken |= set(units.split(","))
+    for f in sorted(os.listdir(q)):
+        base, ext = os.path.splitext(f)
+        if ext not in (".kube", ".container") or base in taken: continue
+        text = open(os.path.join(q, f)).read()
+        m = yaml_re.search(text)
+        if m:
+            y = m.group(1).strip()
+            try: text += open(y if os.path.isabs(y) else os.path.join(q, y)).read()
+            except OSError: pass
+        for s in held:
+            try: own, shared, ports = contract(s)
+            except OSError: continue
+            why = ["host port " + a + b for a, b in port_re.findall(text) if a + b in ports]
+            for p in path_re.findall(text):
+                h = os.path.realpath(p)
+                if any(inside(h, o) or inside(o, h) for o in own) and not any(inside(h, d) for d in shared): why.append("data " + p)
+            if why and (s, f) not in seen:
+                seen.add((s, f)); print("  RED   %s: %s runs it too (%s): it is still in the Quadlet root at the %s step" % (s, f, ", ".join(why), step))'
+konflikte() {   # konflikte: RED lines, none when every step can take its service
+  local s args=()
+  for s in $STEPS; do
+    service_step "$s" && on_box "$s" && args+=("$s=$(sb_units "$s" | tr ' ' ,)")
+  done
+  [ "${#args[@]}" -gt 0 ] || return 0
+  python3 -I -c "$konflikt_py" "$Q" "$DATA" "$TEMPLATES" "${args[@]}"
+}
+
+# the carried admin passwords the post-deploy logs in with, tried read-only against the app
+# ServiceBay still runs (#373): one changed inside the app after ServiceBay set it is red here,
+# not at the post-deploy after the move. <drafts.txt>
+logins() {
+  local s v pw user out lrc red=0
+  for s in home-assistant adguard; do
+    on_box "$s" || continue
+    case $s in home-assistant) v=HA_ADMIN_USER pw=HA_ADMIN_PASSWORD;; adguard) v=ADMIN_USER pw=ADGUARD_ADMIN_PASSWORD;; esac
+    user=$(sed -n "s/^.*laib add $s .*\b$v=\([^ ]*\).*$/\1/p" "$1" | head -1)
+    [ -n "$user" ] || user=$(sed -n "s/^$v: *\([^ #]*\).*/\1/p" "$TEMPLATES/$s/values.example.yml")
+    out=$("$CARRY" --login "$s" "$user" 2>&1); lrc=$?
+    case $lrc in
+      0) echo "  ok    $s: the carried administrator login works ($out)";;
+      1) echo "  RED   $s: the carried administrator login, user $user, meldet sich nicht an ($out)"
+         echo "        after the secrets step: laib secret set $pw with the password the app has now (--until secrets, set it, --resume)"
+         red=1;;
+      *) echo "  WARN  $s: the carried administrator login was not tried ($out)";;
+    esac
+  done
+  return "$red"
+}
+
 dry_run() {
   local s st rc=0 tmp
   say "dry run: nothing on this box changes"
@@ -470,6 +570,8 @@ dry_run() {
     printf '  %-15s %-40s %s\n' "$s" "${st:-pending}" "$d"
   done
   unclaimed
+  st=$(konflikte)
+  if [ -n "$st" ]; then echo "$st"; echo "        laib add refuses these (KONFLIKT): stop the unit with the step that takes the service, or drop its mount"; rc=1; fi
   if [ "$(last_status drafts)" != green ] && [ "$(podman container inspect -f '{{.State.Running}}' servicebay 2>/dev/null)" = true ]; then
     say "the drafts, into a scratch directory (what the drafts step will print)"
     tmp=$(mktemp -d)
@@ -478,6 +580,7 @@ dry_run() {
       echo "  RED   immich: set IMMICH_ADMIN_EMAIL=<Immich's admin address> (Immich → Administration → Users)"; rc=1
     fi
     on_box mosquitto && ! grep -q "laib add mosquitto.*MQTT_USER=" "$tmp/migration.txt" && echo "  note  mosquitto: MQTT_USER=$MQTT_USER goes on its line (the box's broker user)"
+    logins "$tmp/migration.txt" || rc=1
     rm -rf "$tmp"
   fi
   [ "$rc" = 0 ] && echo "dry run: every precondition holds" || echo "dry run: RED, see above"
@@ -525,7 +628,7 @@ launch() {   # the run, as a transient user unit that outlives the SSH session
   fi
   local v envs=()
   for v in PATH DOMAIN LAIB_VERSION SRC INSTALL_ARGS HOOKS MQTT_USER IMMICH_ADMIN_EMAIL SB_VERSION BACKUP_MAX_AGE_H MIN_FREE_GB MIG_DIR IGNORE RESTIC_REPOSITORY RESTIC_PASSWORD_FILE \
-           Q DATA_DIR SB_DATA LAIB_BIN LAIB_STATE OUT INSTALL_BOX MIGRATE_PY CARRY MOVE PYTHON CONTAINERENV MIG_USER; do
+           Q DATA_DIR SB_DATA LAIB_BIN LAIB_STATE OUT INSTALL_BOX MIGRATE_PY CARRY MOVE TEMPLATES PYTHON CONTAINERENV MIG_USER; do
     [ -n "${!v+x}" ] && envs+=("--setenv=$v=${!v}")
   done
   systemd-run --user --unit="$UNIT" --collect --same-dir "${envs[@]}" bash "$SELF" --foreground "${ARGS[@]}" || return 1
