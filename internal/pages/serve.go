@@ -244,6 +244,16 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		page(w, "Journal", b.String())
 	}))
 
+	// the network as the rendered config makes it (#439), one card per name
+	mux.HandleFunc("/net", guard(func(w http.ResponseWriter, r *http.Request) {
+		st, err := cli.LoadState(env)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		page(w, "Netz", nav+"<h1>Netz</h1>"+netBody(render.Net(st)))
+	}))
+
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return env.Fail(err)
@@ -285,7 +295,26 @@ func resultClass(r string) string {
 }
 
 // nav is the three pages' links, on top of each.
-const nav = `<nav><a href="/">Status</a><a href="/inbox">Inbox</a><a href="/journal">Journal</a></nav>`
+const nav = `<nav><a href="/">Status</a><a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a></nav>`
+
+func netBody(n render.NetMap) string {
+	var b strings.Builder
+	for _, r := range n.Names {
+		auth := "meldet sich selbst an"
+		if r.ForwardAuth {
+			auth = "Authelia vorab: " + strings.TrimSpace(r.Policy+" "+r.Subject)
+		}
+		fmt.Fprintf(&b, "<div class=card><b>%s</b><span class=state>%s</span><span class=note>%s · %s</span></div>\n", html.EscapeString(r.Name), r.Reach, html.EscapeString(auth), html.EscapeString(r.Upstream))
+	}
+	b.WriteString("<h2>Ports</h2>")
+	for _, p := range n.Ports {
+		fmt.Fprintf(&b, "<div class=card><b>%d</b><span class=state>%s</span><span class=note>%s</span></div>\n", p.Port, p.Reach, html.EscapeString(p.Service))
+	}
+	for _, l := range n.Links {
+		fmt.Fprintf(&b, "<p class=muted>%s → %s über host.containers.internal:%d</p>", html.EscapeString(l.From), html.EscapeString(l.To), l.Port)
+	}
+	return b.String()
+}
 
 //go:embed laib.css
 var css string
@@ -312,7 +341,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 			break
 		}
 	}
-	links := `<a href="/inbox">Inbox</a><a href="/journal">Journal</a>`
+	links := `<a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a>`
 	if bote {
 		links += `<a href="/bote/link">Bote verbinden (QR)</a>`
 	}
