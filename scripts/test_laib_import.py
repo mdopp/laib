@@ -1,4 +1,4 @@
-"""#456: scripts/laib-disk.py, the deterministic half of the disk import (the
+"""#456: scripts/laib-import.py, the deterministic half of the disk import (the
 Werkstatt skill is the judging half): scan an attached disk, classify, then
 copy one kind into its target, dry run by default. Never overwrites, verifies
 each copy by its sha256, skips what the target already has (by content, under
@@ -8,7 +8,7 @@ disk-import worker (packages/disk-import-worker) and the ones it missed."""
 import hashlib, json, os, subprocess, tempfile, unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent / "laib-disk.py"
+SCRIPT = Path(__file__).resolve().parent / "laib-import.py"
 
 
 def put(p, data):
@@ -16,7 +16,7 @@ def put(p, data):
     p.write_bytes(data if isinstance(data, bytes) else data.encode())
 
 
-class LaibDisk(unittest.TestCase):
+class LaibImport(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         t = self.t = Path(self.tmp.name)

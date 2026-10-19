@@ -1,12 +1,12 @@
 ---
 name: importing-an-old-disk
-description: "Importing an old disk: someone plugged a USB disk or an old drive into the box and wants its photos, documents and music in the household's apps (Immich, Paperless, the music folder, the file share). Read this before you copy anything: you judge what goes where and ask; scripts/laib-disk.py does the copying, dry run first."
+description: "Importing an old disk: someone plugged a USB disk or an old drive into the box and wants its photos, documents and music in the household's apps (Immich, Paperless, the music folder, the file share). Read this before you copy anything: you judge what goes where and ask; scripts/laib-import.py does the copying, dry run first."
 ---
 
 # Importing an old disk
 
 **Answer first:** you decide *what goes where* and ask the human where you
-are unsure; `scripts/laib-disk.py` does the copy, the same way every time:
+are unsure; `scripts/laib-import.py` does the copy, the same way every time:
 dry run first, never overwriting, every file checksum-verified, what the box
 already has skipped by content, one journal line per run. You never copy by
 hand (`cp`, `rsync`) and never without the dry run and the human's yes.
@@ -17,7 +17,7 @@ The tool runs **on the box's host, as core**, inside podman's user namespace
 (the share's folders belong to the containers' users):
 
 ```sh
-podman unshare python3 ~/laib/scripts/laib-disk.py …
+podman unshare python3 ~/laib/scripts/laib-import.py …
 ```
 
 In the Werkstatt you have no host shell. Then give the human each command in
@@ -37,7 +37,7 @@ Always `-o ro`: nothing may change on the old disk. NTFS and exFAT mount
 read-only like any other; if the mount refuses, say what it said, do not
 force it.
 
-**2. Look.** `laib-disk.py scan /var/mnt/import` lists, per kind, the files,
+**2. Look.** `laib-import.py scan /var/mnt/import` lists, per kind, the files,
 the size, the biggest folders and the target on this box:
 
 | Kind | Target | What happens there |
@@ -58,7 +58,7 @@ your recommendation first.
 **4. Dry run, per kind.** Without `--go` nothing is written:
 
 ```sh
-podman unshare python3 ~/laib/scripts/laib-disk.py copy /var/mnt/import/DCIM /mnt/data/stacks/file-share/data/photos/oma --kind photos
+podman unshare python3 ~/laib/scripts/laib-import.py copy /var/mnt/import/DCIM /mnt/data/stacks/file-share/data/photos/oma --kind photos
 ```
 
 It prints how many files it would copy, how many are already there (by

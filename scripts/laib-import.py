@@ -3,10 +3,10 @@
 `importing-an-old-disk` (werkstatt/guide/skills/): the agent judges what goes
 where and asks; this copies, the same way every time. Outside the kernel.
 
-  laib-disk.py scan <mounted disk> [--json]
+  laib-import.py scan <mounted disk> [--json]
       what is on it, by kind (photos, documents, music, other), what is skipped,
       and where each kind goes on this box
-  laib-disk.py copy <from> <to> [--kind photos|documents|music|other|all] [--go]
+  laib-import.py copy <from> <to> [--kind photos|documents|music|other|all] [--go]
       without --go a dry run (the default): what it would copy, skip, rename
 
 The copy never overwrites (a different file of the same name, also only in
@@ -24,7 +24,7 @@ than it: a full sha256, never a sampled fingerprint (a false match there left
 a photo silently on the disk); $RECYCLE.BIN and System Volume Information
 skipped; @eaDir matched in any case; sidecars (.xmp, .aae) and a Live Photo's
 video kept with their photo; symlinks reported, never followed.
-Stdlib only; runs on the host as core: `podman unshare python3 scripts/laib-disk.py …`.
+Stdlib only; runs on the host as core: `podman unshare python3 scripts/laib-import.py …`.
 """
 import argparse, hashlib, json, os, sys, time
 from pathlib import Path
