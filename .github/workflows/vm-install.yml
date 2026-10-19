@@ -254,44 +254,46 @@ jobs:
           f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
           f.write(json.dumps({"execute": "system_reset"}) + "\n"); f.flush(); print(f.readline().strip())
           PY
-          # #111: first a cut the moment the first boot starts. The resumed boot must
-          # get on with it: no five-minute stall on DNS, no extra reboot. Its binaries
-          # land within 240 s of the cut (they took 300-400 s before #111), and then
-          # the cut below hits the resumed boot in its own window.
-          # The cut lands 30 s after laib-firstboot started: install-box.sh is fetching (restic,
-          # the binaries). Since #367 it layers nothing, so rpm-ostree's cache (#206) is not in play.
-          early=no; act=""
+          # #111: first a cut the moment the first boot starts (laib-firstboot activating, before
+          # install-box.sh has its binaries). The resumed boot must get on with it: no five-minute
+          # stall on DNS, no extra reboot; its binaries land within 240 s of the cut (300-400 s
+          # before #111). Since #367 the whole first boot fits in under 30 s: a cut 30 s after
+          # the start landed after the marker, so this one is immediate, and checked below.
+          serial_after() { tail -c +"$(($1 + 1))" serial.log; }
+          from=$(stat -c %s serial.log); early=no
           for i in $(seq 1 900); do
-            if [ -z "$act" ] && [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then act=$(date +%s); fi
-            if [ -n "$act" ] && [ $(( $(date +%s) - act )) -ge 30 ]; then
-              python3 reset.py; early=yes; t0=$(date +%s)
-              echo "early power cut (hard reset) $i s into the first boot, $(( t0 - act )) s after laib-firstboot started (#111)"; break
+            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
+              python3 reset.py; early=yes; t0=$(date +%s); cut0=$(stat -c %s serial.log)
+              echo "early power cut (hard reset) $i s into the first boot, as laib-firstboot started (#111)"; break
             fi
             sleep 1
           done
           [ "$early" = yes ] || { echo "the early cut was not reached: laib-firstboot never ran"; exit 1; }
-          killed=no; stalled=no
-          for i in $(seq 1 900); do
-            if [ "$stalled" = no ] && [ $(( $(date +%s) - t0 )) -gt 240 ]; then
-              stalled=yes; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
-              echo "240 s after the early cut the resumed first boot has no binaries yet (#111); its journal so far:"
-              $SSH 'journalctl --no-pager --list-boots | tail -4; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40; systemctl status laib-firstboot systemd-resolved systemd-resolved-varlink.socket --no-pager -l | head -40; getent hosts api.github.com; getent passwd core systemd-resolve; sudo ls -la /etc/laib; journalctl --no-pager -b -p warning -o short-monotonic | tail -40' 2>&1 || echo "(no ssh: rebooting)"
+          if grep -aq "binaries .* in /var/opt/laib" <<<"$(serial_after "$from" | head -c "$((cut0 - from))")"; then
+            echo "the early cut came after the binaries had landed: it did not hit the start of the first boot (#111)"; exit 1
+          fi
+          # The second cut keys off the first boot's own console (laib-firstboot writes to
+          # journal+console, serial.log on the runner, read every 0.2 s), not an SSH poll for a
+          # window: a fast first boot slipped through the poll's 1-s steps.
+          # #37/#81: then a cut in the resumed boot after the binaries landed and before the
+          # marker: on install-box.sh's line "binaries <tag> in /var/opt/laib". After it the
+          # script still writes the unit, sleeps 1 s, applies and waits for /ready.
+          killed=no
+          for i in $(seq 1 4500); do
+            if grep -aq "binaries .* in /var/opt/laib" <<<"$(serial_after "$cut0")"; then
+              cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; took=$(( $(date +%s) - t0 ))
+              echo "after the early cut, the resumed first boot had its binaries in $took s; power cut (hard reset) on that line"
+              if [ "$took" -gt 240 ]; then echo "too slow after an early cut (#111): the resumed first boot stalled"; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"; fi
+              break
             fi
-            if $SSH 'test -f /var/opt/laib/laib && ! test -f /etc/laib/installed' 2>/dev/null; then
-              took=$(( $(date +%s) - t0 ))
-              echo "after the early cut, the resumed first boot had its binaries in $took s"
-              if [ "$took" -gt 240 ]; then
-                echo "too slow after an early cut (#111): the resumed first boot stalled"
-                $SSH 'journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -40' || true
-                echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"
-              fi
-              $SSH 'echo "before the cut: /boot/ignition.firstboot $(test -e /boot/ignition.firstboot && echo present || echo gone) for the kernel, $(grep -q ignition.firstboot <<<"$(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null)" && echo present || echo gone) for GRUB (no journal replay); up $(cut -d" " -f1 /proc/uptime) s"' || true
-              cut_at=$(stat -c %s serial.log); python3 reset.py; killed=yes; echo "power cut (hard reset) $i s into the first boot, after the binaries landed"; break
-            fi
-            if $SSH 'test -f /etc/laib/installed' 2>/dev/null; then echo "the first boot finished before a cut could be simulated"; break; fi
-            sleep 1
+            sleep 0.2
           done
-          [ "$killed" = yes ] || { echo "the resume path was not exercised: no window between the binaries and the marker within 900 s of the early cut"; [ "$stalled" = yes ] && echo "the resumed first boot stalled after the early cut (#111)"; $SSH 'journalctl --no-pager --list-boots | tail -5; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -60' 2>&1 || true; exit 1; }
+          [ "$killed" = yes ] || { echo "the resume path was not exercised: the resumed first boot never printed its binaries line within 900 s of the early cut"; echo "EARLYCUT_RED=1" >> "$GITHUB_ENV"; serial_after "$cut0" | grep -av "^\s*$" | tail -80; $SSH 'journalctl --no-pager --list-boots | tail -5; journalctl --no-pager -b -o short-monotonic -u laib-firstboot -u systemd-resolved | tail -60' 2>&1 || true; exit 1; }
+          # proof the cut was inside the window: install-box.sh's last lines (ready:, running:)
+          # come before the marker; none of them may be on the console before the cut
+          if grep -aqE "^(ready|running): |laib-firstboot.*(ready|running): " <<<"$(serial_after "$cut0" | head -c "$((cut_at - cut0))")"; then
+            echo "the cut came after install-box.sh finished: the resume path was not exercised"; exit 1
+          fi
           # the reset boots the installed disk (once=d applied to the first boot only)
           for i in $(seq 1 120); do
             if $SSH 'systemctl is-active --quiet laib-firstboot.service && test -f /etc/laib/installed && curl -fsS http://127.0.0.1:5900/ready' 2>/dev/null; then echo; echo "reinstalled, resumed after the cut, ready after $((i*10)) s"; break; fi
