@@ -61,6 +61,9 @@ box_config() {
 }
 [ -z "${BOXCONF:-}" ] || { box_config; exit 0; }
 [ "$(id -un)" = "core" ] || { echo "run as the core user (rootless podman, user systemd)" >&2; exit 1; }
+# vm-install cuts the power on this line (the first boot's console), before
+# restic and the binaries: the resumed first boot starts over (#111)
+echo "install-box.sh: start"
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
 
