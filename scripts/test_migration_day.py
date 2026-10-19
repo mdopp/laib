@@ -67,7 +67,10 @@ esac
 exit 0
 ''')
         exe(b / "install-box", "#!/bin/bash\n" + RECORD)
-        exe(b / "carry", "#!/bin/bash\n" + RECORD)
+        exe(b / "carry", "#!/bin/bash\n" + RECORD + r'''
+[ "$1" = --login ] && [ "$2" = "${FAKE_LOGIN_RED:-}" ] && { echo "$2: its password meldet sich nicht an"; exit 1; }
+exit 0
+''')
         exe(b / "move", "#!/bin/bash\n" + RECORD + r'''
 dry=""; [ "$1" = --dry-run ] && { dry=1; shift; }
 [ -n "$dry" ] || { mkdir -p "$DATA_DIR/$1/laib-copy"; echo "$1: copy $DATA_DIR/$1/old -> $DATA_DIR/$1/laib-copy"; }
@@ -361,6 +364,20 @@ echo "  laib add vaultwarden"
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("--user stop solaris-import-google.service", self.calls_of("systemctl"))
         self.assertFalse((self.t / "q" / "solaris-import-google.kube").exists())
+
+    def test_dry_run_tries_the_carried_admin_logins(self):
+        # #373: HA's carried admin password, tried read-only against ServiceBay's running HA
+        for u in ("home-assistant", "adguard"):
+            (self.t / "q" / f"{u}.kube").write_text(f"[Kube]\nYaml={u}.yml\n")
+        r = self.run_md("--dry-run", FAKE_LOGIN_RED="home-assistant")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("RED   home-assistant: the carried administrator login", r.stdout)
+        self.assertIn("ok    adguard: the carried administrator login", r.stdout)
+        self.assertEqual([c for c in self.calls_of("carry") if c.startswith("--login")],
+                         ["--login home-assistant laib", "--login adguard admin"])
+        self.changed_nothing()
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_unknown_step_is_refused(self):
         r = self.run_md("--dry-run", "--until", "vaultwardn")
