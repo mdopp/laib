@@ -327,3 +327,32 @@ own persona: Hermes shows the model the sender's profile name, the persona
 engine resolves it to the number through signal-cli's contacts in the pod,
 and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
 the house persona. That is a costume, never a right.
+
+## Speed (#470)
+
+On the Kraftwerk a one-line question took 15–30 s. The causes were measured
+in llama-server's log: a ~7k-token context of SOUL plus every MCP tool
+schema, one persona round per message, and Qwen thinking ~330 tokens before
+each answer. Since #470 the Bote's chat answers **without thinking** (a
+`custom_providers` entry `laib` with `chat_template_kwargs.enable_thinking:
+false`, the only place Hermes reads `extra_body` from). `/model denken`
+thinks, through its own entry `denken`. The owner measured "Wer bist du?"
+going from 18.4 s to 5.0 s, and "Wie spät ist es?" from 33.3 s to 0.8 s.
+Watch for two things without thinking: a raw tool call returned as the
+answer, and a guessed fact (the time). Both were seen once.
+
+Not changed yet, to measure first: the persona round per message (#471
+redesigns it), a narrower tool list per MCP server, and the model's prompt
+cache and slots.
+
+Measure before and after, the same three questions, each in a fresh
+session, through Hermes' API server (the key stays in a file, never on
+argv):
+
+    H=${DATA_DIR}/bote/hermes
+    printf 'Authorization: Bearer %s\n' "$(sed -n 's/^API_SERVER_KEY=//p' $H/.env)" > /tmp/bote.h; chmod 600 /tmp/bote.h
+    for q in "Wer bist du?" "Wie geht es der Box?" "Wie spät ist es?"; do
+      /usr/bin/time -f "%e s  $q" curl -s -o /dev/null -H @/tmp/bote.h -H 'Content-Type: application/json' \
+        -d "{\"model\":\"hermes-agent\",\"messages\":[{\"role\":\"user\",\"content\":\"$q\"}]}" http://127.0.0.1:8642/v1/chat/completions
+    done; rm /tmp/bote.h
+    journalctl --user -u llama -S -5min --no-pager | grep -E "prompt eval time|eval time" | tail -12   # tokens and t/s per call

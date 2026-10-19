@@ -115,8 +115,19 @@ model:
 model_aliases:
   denken:                          # "/model denken" or a cron with model: denken
     model: ${THINKING_MODEL}
-    provider: custom
+    provider: custom:denken        # its own entry below: the one that thinks
     base_url: ${MODEL_URL}
+# #470: Qwen thought ~10 s before every one-line answer (owner, measured on the Kraftwerk: "Wer bist
+# du?" 18.4 s → 5.0 s without). Hermes takes extra_body only from a custom_providers entry matched by
+# provider and base_url (agent/agent_init.py); the default (provider custom) falls back to the FIRST
+# entry with the URL, a named provider (custom:denken) only to its own.
+custom_providers:
+  - name: laib
+    base_url: ${MODEL_URL}
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}
+  - name: denken
+    base_url: ${MODEL_URL}
+    extra_body: {chat_template_kwargs: {enable_thinking: true}}
 mcp_servers:
   laib:
     url: ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}
