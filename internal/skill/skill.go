@@ -37,6 +37,12 @@ type Skill struct {
 	Context     string   `yaml:"context" json:"context"`     // box | usage
 	Output      string   `yaml:"output" json:"output"`       // note | report | propose
 	Prompt      string   `yaml:"prompt" json:"prompt"`
+	// The mechanics the Operator's runner enforces, never prompt prose
+	// (#376, CLAUDE.md rule 1): a cap per tool and session, and for an
+	// updates skill the one level it may propose (patch); the rest of the
+	// updates go into its note for a human.
+	Limits  map[string]int `yaml:"limits" json:"limits,omitempty"`
+	Updates string         `yaml:"updates" json:"updates,omitempty"`
 
 	Status  string            `yaml:"-" json:"status"` // active | paused | refused
 	Granted []string          `yaml:"-" json:"granted"`
@@ -132,6 +138,14 @@ func check(s *Skill) string {
 	}
 	if !slices.Contains(s.Tools, "note") {
 		return "tools braucht note: jede Sitzung endet mit einer Notiz"
+	}
+	for tool, n := range s.Limits {
+		if n < 1 || !slices.Contains(append(slices.Clone(s.Tools), s.More...), tool) {
+			return fmt.Sprintf("limits %s: %d ist keine Obergrenze für ein Werkzeug der Fähigkeit", tool, n)
+		}
+	}
+	if s.Updates != "" && (s.Updates != "patch" || !slices.Contains(s.Tools, "updates") || !slices.Contains(s.Tools, "propose")) {
+		return fmt.Sprintf("updates %q: nur patch, und tools braucht updates und propose", s.Updates)
 	}
 	if s.Context == "" {
 		s.Context = "box"

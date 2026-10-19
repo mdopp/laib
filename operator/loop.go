@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -100,6 +101,19 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 	}
+	// an updates skill (#376): the runner reads the updates, the model sees
+	// and may propose only the patch values, the rest goes into the note
+	offers, human := map[string]string{}, ""
+	if sk.Updates == "patch" {
+		var list string
+		list, human, offers = o.patches(ctx, &mcp)
+		if len(offers) == 0 {
+			s.Outcome, s.Note = "idle", strings.TrimSpace("Keine Patch-Versionen zum Vorschlagen. "+human)
+			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
+			return s, nil
+		}
+		ctxText = list + "\n" + ctxText
+	}
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
@@ -109,7 +123,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	textCalls := 0
 	noted := false
-	wished := 0
+	used := map[string]int{} // calls per tool, for the skill's limits (#376)
 	for pass := 0; pass <= max; pass++ {
 		reply, err := o.LLM.Chat(ctx, msgs, defs)
 		if err != nil {
@@ -137,6 +151,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				if note == "" {
 					note = "Sitzung ohne Notiz beendet."
 				}
+				note = strings.TrimSpace(note + " " + human)
 				kind := "watch"
 				if sk.Output == "report" {
 					kind = "report"
@@ -166,26 +181,42 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 			shown := shownArgs(args)
 			if mcpName == "laib_wish" {
-				// a suggestion becomes a ticket: three a week at most, and never a
-				// family member's sentence word for word (#270)
+				// a suggestion becomes a ticket: with numbers, and never a family
+				// member's sentence word for word (#270); the cap is the skill's limits
 				why := ""
 				if saw, ok := args["saw"].(string); ok && !strings.ContainsAny(saw, "0123456789") {
 					why = "saw braucht Zahlen — was hast du gezählt?"
 				} else if quotes(shown, sentences) {
 					why = "der Vorschlag zitiert einen Satz der Familie wörtlich — nenne Thema und Anzahl, nicht den Satz"
-				} else if wished >= 3 {
-					why = "höchstens drei Vorschläge pro Woche — schreib jetzt die Notiz"
 				}
 				if why != "" {
 					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
 					continue
 				}
-				wished++
+			}
+			if mcpName == "laib_propose" && sk.Updates == "patch" {
+				service, _ := args["service"].(string)
+				key, _ := args["key"].(string)
+				if v, _ := args["value"].(string); v == "" || offers[service+" "+key] != v {
+					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: vorschlagen kannst du nur die Patch-Versionen oben, service, key und value genau so"})
+					continue
+				}
+			}
+			if n := sk.Limits[strings.TrimPrefix(mcpName, "laib_")]; n > 0 && used[mcpName] >= n {
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
+				continue
+			}
+			if mcpName == "laib_note" && human != "" {
+				if t, ok := args["text"].(string); ok {
+					args["text"], human = strings.TrimSpace(t+" "+human), ""
+					shown = shownArgs(args)
+				}
 			}
 			if len(s.Calls) >= max {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
 				continue
 			}
+			used[mcpName]++
 			s.Calls = append(s.Calls, mcpName+" "+shown)
 			out, isErr, err := mcp.Call(ctx, mcpName, args)
 			if err != nil {
@@ -217,6 +248,33 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	s.Outcome = "red"
 	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
 	return s, nil
+}
+
+// patches reads laib updates for an updates skill (#376): the list the
+// model is shown, the note's lines for a human (minor versions, registry
+// errors) and the offers, "service key" → the one value it may propose.
+func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, offers map[string]string) {
+	offers = map[string]string{}
+	out, isErr, err := mcp.Call(ctx, "laib_updates", map[string]any{})
+	var ups []struct{ Service, Key, Image, Current, Patch, Minor, Error string }
+	if err != nil || isErr || json.Unmarshal([]byte(out), &ups) != nil {
+		return "", "Aktualisierungen nicht lesbar: " + firstLine(cmp.Or(out, fmt.Sprint(err))) + ".", offers
+	}
+	var b, h strings.Builder
+	b.WriteString("Patch-Versionen, die du vorschlagen kannst:\n")
+	for _, u := range ups {
+		if u.Patch != "" {
+			offers[u.Service+" "+u.Key] = u.Image + ":" + u.Patch
+			fmt.Fprintf(&b, "- service %s, key %s, value %s:%s (jetzt %s)\n", u.Service, u.Key, u.Image, u.Patch, u.Current)
+		}
+		if u.Minor != "" {
+			fmt.Fprintf(&h, " %s: Minor-Version %s (jetzt %s) für einen Menschen.", u.Service, u.Minor, u.Current)
+		}
+		if u.Error != "" {
+			fmt.Fprintf(&h, " %s: Registry nicht lesbar (%s).", u.Service, u.Error)
+		}
+	}
+	return b.String(), strings.TrimSpace(h.String()), offers
 }
 
 // SmallModel decides the interface (#286): OPERATOR_INTERFACE when set
