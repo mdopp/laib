@@ -983,7 +983,9 @@ jobs:
                 sudo systemctl daemon-reload
                 sudo rm -f /etc/laib/boot-proven /etc/laib/boot-rolled-back
                 sudo systemctl start laib-boot-check.service
-                for i in $(seq 1 30); do test -s /etc/laib/boot-proven && break; sleep 2; done
+                # a red box (the degraded mirror of the step before) is recorded only after the 120 s timeout
+                for i in $(seq 1 90); do test -s /etc/laib/boot-proven && break; sleep 2; done
+                test -s /etc/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
                 echo "proven: $(cat /etc/laib/boot-proven)"
                 # broken on purpose: its kernel line masks the core user manager, so laib never answers /ready
                 sudo rpm-ostree kargs --append=systemd.mask=user@1000.service >/dev/null || sudo rpm-ostree kargs --bypass-driver --append=systemd.mask=user@1000.service >/dev/null
