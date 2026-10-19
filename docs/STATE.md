@@ -343,6 +343,18 @@ before forward-auth (`order request_header first`), so the only
 gets none at all, and its app must not trust one (#231,
 `internal/render/auth231_test.go`).
 
+### Secrets the data was made with (#353)
+
+A contract secret with `dataBound: true` is read by its app only when the app
+creates its data: a database's password (Postgres at initdb), LLDAP's admin,
+Authelia's storage key, an app's first administrator. `laib secret rotate`
+refuses it and changes nothing, because a new value would lock the app out of
+its own data. To change one: change it inside the app first (its admin page,
+`ALTER ROLE` for a database), then `laib secret set <NAME>` with that same
+value and `laib apply`. A secret a hook sets inside the app on every apply
+(the LDAP read-only accounts, MQTT, Samba, HA's bote) is not data-bound and
+rotates.
+
 ### Secrets that may stay unset
 
 A contract secret with `external: true` must be in `secrets.age` before

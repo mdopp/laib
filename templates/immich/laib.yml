@@ -16,7 +16,9 @@ routes:
       }
 secrets:
   - name: IMMICH_DB_PASSWORD
+    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: IMMICH_ADMIN_PASSWORD      # the admin post-deploy signs up on a fresh Immich; on a box from ServiceBay, carried (#254)
+    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: IMMICH_API_KEY             # minted by post-deploy: system config only, so the family login is re-set on every apply (#254)
     external: true
     optional: true
