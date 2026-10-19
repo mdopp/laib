@@ -46,7 +46,7 @@ class Box:
             script = script.replace(p, str(self.root) + p)
         (self.root / "entrypoint.sh").write_text(script)
         self.env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", ARGV_LOG=str(self.log),
-                        LAIB_MCP_URL="http://host.containers.internal:5900/mcp")
+                        LAIB_MCP_URL="http://host.containers.internal:5900/mcp", WERKSTATT_SESSIONS_EVERY="0")
         for k in SECRETS:
             self.env.pop(k, None)
         self.home, self.keys = self.root / "home" / "dev", self.root / "etc" / "ssh" / "keys"
