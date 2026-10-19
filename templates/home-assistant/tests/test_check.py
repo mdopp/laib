@@ -81,6 +81,24 @@ class Check(unittest.TestCase):
         self.assertNotIn("OnCalendar=hourly", (SCRIPT.parent / "home-assistant-check.timer").read_text(),
                          "a dead Z-Wave network must not wait an hour to turn red")
 
+    def test_a_box_without_the_zwave_unit_checks_no_zwave(self):
+        # the VM and a box without a stick drop home-assistant-zwave.container: no ZWAVE_URL, no red
+        import re, subprocess, tempfile
+        unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
+        cmd = re.search(r"^ExecStart=/bin/sh -c '(.*)'$", unit, re.M).group(1)
+        with tempfile.TemporaryDirectory() as home:
+            fake = Path(home) / "podman"
+            fake.write_text('#!/bin/sh\necho "ZWAVE_URL=${ZWAVE_URL-unset}"\n')
+            fake.chmod(0o755)
+            run = lambda: subprocess.run(["/bin/sh", "-c", cmd.replace("%h", home).replace("/usr/bin/podman", str(fake))],
+                                         env={"PATH": "/usr/bin:/bin", "ZWAVE_URL": "http://127.0.0.1:8091"},
+                                         capture_output=True, text=True).stdout.strip()
+            self.assertEqual(run(), "ZWAVE_URL=unset")
+            d = Path(home) / ".config/containers/systemd/home-assistant"
+            d.mkdir(parents=True)
+            (d / "home-assistant-zwave.container").write_text("")
+            self.assertEqual(run(), "ZWAVE_URL=http://127.0.0.1:8091")
+
     def test_names_each_missing_integration(self):
         srv, h = fake_ha([{"domain": "wyoming", "title": "faster-whisper"}, {"domain": "mqtt", "title": "Mosquitto"}])
         r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
