@@ -80,7 +80,7 @@ state or the journal, not as web pages.
 - Learning proposals, the Hermes and Claude-dev modules, the chat embed.
 - The portal with access requests; onboarding is a Solaris card.
 - The Go TUI.
-- The Fritz!Box poller, the disk-import worker, the unmanaged bundle builder. They become scripts that call `laib`.
+- The Fritz!Box poller, the disk-import worker, the unmanaged bundle builder. The disk import is a Werkstatt skill (`importing-an-old-disk`) with `scripts/laib-import.py` for the copy (#456).
 - socket.io, email notifications, health-check CRUD. Health lives in the template; messages go through Solaris.
 - Multi-node operation and the SSH pool. Laib is one box (ADR 0003).
 - pi-web and claude-dev as separate templates, the laptop-side autoloop, the public MCP origin for Claude.
