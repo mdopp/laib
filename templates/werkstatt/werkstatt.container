@@ -10,7 +10,8 @@ PublishPort=127.0.0.1:8791:8791
 Environment="WERKSTATT_AUTHORIZED_KEY=${AUTHORIZED_KEY}"
 Environment=WERKSTATT_SSH_PASSWORD=${SSH_PASSWORD}
 Environment=CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_TOKEN}
-Environment=LAIB_TOKEN=${LAIB_TOKEN}
+# the werkstatt hand: each Claude session gets its own claude token with it (#380)
+Environment=LAIB_WERKSTATT_TOKEN=${WERKSTATT_TOKEN}
 Environment=LAIB_MCP_URL=http://host.containers.internal:5900/mcp
 Environment=MODEL_URL=${MODEL_URL}
 Environment=MODEL_KEY=${MODEL_KEY}

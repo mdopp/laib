@@ -73,6 +73,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_updates` | none |
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean) → `{user, mailed, link?, expires (RFC 3339), message}` (#360) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
+| `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
 `service` is an enum of the installed services, `key` a values.yml key
@@ -279,6 +280,14 @@ a human's. `laib init` ships the `approver` hand with exactly that: the
 Signal relay's token (#48) — it can decide and nothing else, and it acts
 only on the admin's verified number. Over MCP the tool list and every call
 honour the verb list.
+
+A hand may name another in `session:` (#380, ADR 0006 amendment). It may
+then get a token of that hand per session with `laib_session <name>`: the
+TTL is the named hand's (a session hand must have one), the mint is
+journaled (verb `session`), `laib token list` shows it as `session
+<caller>: <name>`, and expired ones are dropped from `tokens.json` on the
+next mint. `laib init` ships `werkstatt: {ceiling: read, verbs: [session],
+session: claude}`; the Werkstatt holds that token, never a claude one.
 
 ### The decision card (#58)
 

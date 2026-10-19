@@ -32,15 +32,29 @@ agree and lists the lease's real catalogue through the extension.
 
 **Tokens per container (#44).** Each container writes its own tokens to
 its own tmpfs `/run/laib` (`Tmpfs=` in both units): the dev container
-holds `LAIB_CLAUDE_TOKEN` (hand `claude`, the TTL `policy.yml` declares —
-`laib token mint claude --note werkstatt` again and `laib secret set
-LAIB_CLAUDE_TOKEN` when it runs out) and `WERKSTATT_GIT_TOKEN`; the
+holds `LAIB_WERKSTATT_TOKEN` and `WERKSTATT_GIT_TOKEN`; the
 autoloop holds `LAIB_PI_TOKEN` (hand `pi`) and `WERKSTATT_PI_GIT_TOKEN`, a
 fine-grained PAT limited to `AUTOLOOP_REPOS` (Contents rw for the branch
 push and the claim ref, Issues r, Pull requests rw). Nothing with a token
 touches the shared `/workspace` volume, so restarting the two in either
 order cannot swap hands; `laib journal` shows `pi` for the autoloop's notes
-and `claude` for the dev container's. Still open: LDAP logins; per-project
+and `claude` for the dev container's.
+
+**A short claude token per session (#380, ADR 0006 amendment).** No
+claude token is at rest. `laib add werkstatt` mints `LAIB_WERKSTATT_TOKEN`
+as the `werkstatt` hand (`policy.yml`: `{ceiling: read, verbs: [session],
+session: claude}`). That hand can do one thing: `laib_session <name>`
+returns a `claude` token with claude's TTL (8 h), journaled, and `laib
+token list` shows it as `session werkstatt: <name>`. Claude Code's laib MCP
+server has no fixed header. Its `headersHelper` is `laib --headers`, run
+on each connection, which hands out the session's own token from
+`/run/laib/sessions/<name>.json` (0600, tmpfs) and asks for a new one ten
+minutes before that one runs out. `werkstatt-sessions` names each window's
+session (`LAIB_SESSION=<checkout>`); a shell outside one is `shell`.
+`laib` in the container speaks with the same token. When a token expires,
+only that session loses access, and its next connection gets a new token
+without the owner. Revoking the werkstatt token ends new sessions.
+Still open: LDAP logins; per-project
 tokens.
 
 **Claude's sessions per checkout (#383).** As ServiceBay's `claude-dev`

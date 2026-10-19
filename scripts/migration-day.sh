@@ -219,7 +219,7 @@ move_logged() { mkdir -p "$MIG"; move "$1" 2>&1 | tee "$MIG/move-$1.log"; return
 
 # what only the owner can supply, set before the service goes in (laib secret set);
 # the other external secrets of the built-ins are seeded or minted by their hooks
-owner_secrets() { case $1 in werkstatt) echo "CLAUDE_CODE_OAUTH_TOKEN LAIB_CLAUDE_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN";; esac; }
+owner_secrets() { case $1 in werkstatt) echo "CLAUDE_CODE_OAUTH_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN";; esac; }
 external_missing() {
   local have s
   [ -n "$(owner_secrets "$1")" ] || return 0

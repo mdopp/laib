@@ -199,7 +199,7 @@ scripts/migration-day.sh --resume --until vaultwarden   # phase 3: adguard, llam
 scripts/migration-day.sh --resume --until caddy     # phase 4: Caddy replaces NPM
 #   the Werkstatt's tokens, now, with the owner (templates/werkstatt/README.md):
 #   laib secret set CLAUDE_CODE_OAUTH_TOKEN, WERKSTATT_GIT_TOKEN, WERKSTATT_PI_GIT_TOKEN (each value on stdin);
-#   laib token mint claude --note werkstatt, then laib secret set LAIB_CLAUDE_TOKEN; the same for pi (LAIB_PI_TOKEN)
+#   laib token mint pi --note werkstatt, then laib secret set LAIB_PI_TOKEN (the werkstatt hand is minted by laib add, #380)
 scripts/migration-day.sh --resume                   # phase 5: werkstatt, what stays ignored, ServiceBay off
 ```
 

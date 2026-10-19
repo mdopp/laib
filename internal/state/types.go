@@ -176,8 +176,9 @@ type Envelope struct {
 type Hand struct {
 	Ceiling string   `yaml:"ceiling"`
 	TTL     string   `yaml:"ttl"`
-	Verbs   []string `yaml:"verbs"` // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
-	Human   bool     `yaml:"human"` // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
+	Verbs   []string `yaml:"verbs"`   // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
+	Human   bool     `yaml:"human"`   // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
+	Session string   `yaml:"session"` // the hand this one may get a short token of, one per session: the Werkstatt's claude (#380)
 }
 
 // Approval says who may approve a tier.

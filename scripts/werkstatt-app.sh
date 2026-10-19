@@ -79,11 +79,10 @@ say "the Werkstatt, installed by laib with this commit's image"
 podman build -q -t "$REG/laib-werkstatt:e2e" "$ROOT/werkstatt" >/dev/null
 podman push -q "$REG/laib-werkstatt:e2e"
 tok() { L token mint "$1" --note "e2e #262" --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])'; }
-tok claude | L secret set LAIB_CLAUDE_TOKEN >/dev/null
 tok pi | L secret set LAIB_PI_TOKEN >/dev/null
 for s in CLAUDE_CODE_OAUTH_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do printf 'canary262-%s' "$s" | L secret set "$s" >/dev/null; done
 L add werkstatt "IMAGE=$REG/laib-werkstatt:e2e" "e2e #262" >/dev/null || fail "laib add werkstatt exit $?"
-for _ in $(seq 30); do podman exec systemd-werkstatt test -r /run/laib/token 2>/dev/null && break; sleep 2; done
+for _ in $(seq 30); do podman exec systemd-werkstatt test -r /run/laib/werkstatt-token 2>/dev/null && break; sleep 2; done
 podman cp "$ROOTCA" systemd-werkstatt:/tmp/caddy-root.crt && podman exec systemd-werkstatt chmod 644 /tmp/caddy-root.crt
 
 say "agent: the toolbox, the guide, Laib over MCP"
@@ -95,8 +94,16 @@ go version; podlet --version
 test -s /etc/claude-code/CLAUDE.md && grep -q "laib-app check" /etc/claude-code/CLAUDE.md   # Claude Code's managed CLAUDE.md
 grep -q "laib-app new" /opt/werkstatt/guide/apps.md
 laib status > /tmp/status.txt && head -3 /tmp/status.txt   # the claude hand reaches laib over host.containers.internal
+LAIB_SESSION=e2e laib --headers | python3 -c 'import sys,json; assert json.load(sys.stdin)["Authorization"].startswith("Bearer laib_claude_")'
 git config --global user.name "Werkstatt e2e"; git config --global user.email e2e@boot.test
 SH
+# #380: no claude token at rest; each session got its own, with claude's ttl, named in the token list
+L secret list > "$WORK/secrets.txt" 2>&1 || true
+if grep -q LAIB_CLAUDE_TOKEN "$WORK/secrets.txt"; then fail "a claude token is at rest in secrets.age"; fi
+L token list > "$WORK/tokens.txt"
+cat "$WORK/tokens.txt"
+grep -E '^[0-9a-f]+ +werkstatt ' "$WORK/tokens.txt" >/dev/null || fail "laib add werkstatt minted no werkstatt token"
+for s in shell e2e; do grep -E "^[0-9a-f]+ +claude .*expires [0-9].*session werkstatt: $s\$" "$WORK/tokens.txt" >/dev/null || fail "no claude token for the session $s with an expiry"; done
 
 say "agent: scaffold hallo, its tests, the template lint (guide steps 2-3)"
 agent <<'SH' || fail "scaffold, tests or lint"

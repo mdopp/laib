@@ -37,16 +37,21 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   echo 'if [ -r /run/laib/claude-token ]; then export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/laib/claude-token)"; fi' > /etc/profile.d/claude.sh
 fi
 if [ -n "${LAIB_TOKEN:-}" ]; then
-  # the token as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
+  # the autoloop's pi hand as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
   printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
-  # Every session of dev gets Laib as an MCP server, as the hand the token names.
-  # The header names the token and Claude Code expands it from the session's
-  # environment: on su's and claude's argv the host's ps would show it (#217).
-  # A login shell reads it from the 0600 file, so only dev's processes hold it.
-  echo 'if [ -r /run/laib/token ]; then export LAIB_TOKEN="$(cat /run/laib/token)"; fi' > /etc/profile.d/laib.sh
-  # the home is kept now: drop the entry a previous start wrote, so a new URL takes
+fi
+if [ -n "${LAIB_WERKSTATT_TOKEN:-}" ]; then
+  # The dev container holds no claude token (#380): only the werkstatt hand's,
+  # which can get one claude token per session. Every Claude session of dev
+  # gets Laib as an MCP server whose header comes from `laib --headers`
+  # (Claude Code's headersHelper, run on each connection): that session's
+  # token from /run/laib/sessions, or a new one when it runs out. Nothing
+  # with a token lands on argv (#217) or in ~/.claude.json.
+  printf '%s' "$LAIB_WERKSTATT_TOKEN" > /run/laib/werkstatt-token && chmod 600 /run/laib/werkstatt-token && chown dev:dev /run/laib/werkstatt-token
+  rm -f /etc/profile.d/laib.sh
+  # the home is kept: drop the entry a previous start wrote, so a new URL or form takes
   su dev -c "claude mcp remove -s user laib >/dev/null 2>&1 || true"
-  su dev -c "claude mcp add -s user --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer \${LAIB_TOKEN}' >/dev/null 2>&1 || true"
+  su dev -c "claude mcp add-json -s user laib '{\"type\":\"http\",\"url\":\"${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}\",\"headersHelper\":\"laib --headers\"}' >/dev/null 2>&1 || true"
 fi
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials

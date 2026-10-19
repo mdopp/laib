@@ -57,7 +57,7 @@ gpu: {present: false}
 laib: {listen: 0.0.0.0}
 YML
 # the external secrets, each a canary the home must never contain
-for s in CLAUDE_CODE_OAUTH_TOKEN LAIB_CLAUDE_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do
+for s in CLAUDE_CODE_OAUTH_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do
   printf 'canary241-%s' "$s" | LAIB_ACTOR=human:boot "$BIN" secret set "$s" >/dev/null
 done
 LAIB_ACTOR=human:boot "$BIN" add werkstatt IMAGE="$IMG:1" "boot test #241" || fail "laib add exit $?"
@@ -112,7 +112,8 @@ podman unshare test -f "$DATA/werkstatt/cache/scratch" || fail "~/.cache is not 
 podman unshare test ! -e "$DATA/werkstatt/home/.cache/scratch" || fail "~/.cache landed in the backed-up home"
 # no token in the home or the host keys; Claude Code's MCP header names the variable
 if podman unshare grep -rlF canary241 "$DATA/werkstatt/home" "$DATA/werkstatt/ssh-host-keys"; then fail "a token is in the persistent home"; fi
-podman unshare grep -qF 'Bearer ${LAIB_TOKEN}' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server in ~/.claude.json"
+podman unshare grep -qF '"headersHelper": "laib --headers"' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server with a per-session header in ~/.claude.json (#380)"
+if podman unshare grep -rlF laib_werkstatt_ "$DATA/werkstatt/home"; then fail "the werkstatt token is in the persistent home"; fi
 # the tokens' tmpfs (#44) is really one
 for c in systemd-werkstatt systemd-werkstatt-autoloop; do
   podman exec "$c" grep -q ' /run/laib tmpfs ' /proc/mounts || fail "$c: /run/laib, where the tokens go, is not a tmpfs (#44)"
