@@ -214,3 +214,17 @@ func TestTheBinariesLineOpensTheCutWindow(t *testing.T) {
 		t.Fatalf("install-box.sh must print \"binaries $TAG in /var/opt/laib\" after the binaries are moved in place and before `sleep 1` (placed %d, line %d, sleep %d)", placed, line, pause)
 	}
 }
+
+// #111, #367: vm-install's early power cut fires on install-box.sh's line
+// "install-box.sh: start", read from the first boot's console. The line must
+// come before restic and the binaries are fetched, so the cut hits the start.
+func TestTheStartLineComesBeforeAnyDownload(t *testing.T) {
+	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
+	s := string(src)
+	start := strings.Index(s, `echo "install-box.sh: start"`)
+	restic := strings.Index(s, `curl -fsSL -o "$TMPD/restic.bz2"`)
+	binaries := strings.Index(s, `curl -fsSL "${get[@]}" -o "$TMPD/$BIN"`)
+	if start < 0 || restic < 0 || binaries < 0 || start > restic || start > binaries {
+		t.Fatalf("install-box.sh must print \"install-box.sh: start\" before it fetches restic and the binaries (start %d, restic %d, binaries %d)", start, restic, binaries)
+	}
+}

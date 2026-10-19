@@ -254,27 +254,26 @@ jobs:
           f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
           f.write(json.dumps({"execute": "system_reset"}) + "\n"); f.flush(); print(f.readline().strip())
           PY
-          # #111: first a cut the moment the first boot starts (laib-firstboot activating, before
-          # install-box.sh has its binaries). The resumed boot must get on with it: no five-minute
+          # Both cuts key off the first boot's own console: laib-firstboot writes to
+          # journal+console, serial.log on the runner (QEMU starts it afresh), read every 0.2 s.
+          # An SSH poll is too slow for a first boot that takes seconds (#367, train 17).
+          # #111: first a cut the moment install-box.sh starts (its line "install-box.sh: start",
+          # before restic and the binaries). The resumed boot must get on with it: no five-minute
           # stall on DNS, no extra reboot; its binaries land within 240 s of the cut (300-400 s
-          # before #111). Since #367 the whole first boot fits in under 30 s: a cut 30 s after
-          # the start landed after the marker, so this one is immediate, and checked below.
+          # before #111). Where the cut landed is checked below.
           serial_after() { tail -c +"$(($1 + 1))" serial.log; }
           from=$(stat -c %s serial.log); early=no
-          for i in $(seq 1 900); do
-            if [ "$($SSH 'systemctl show -p ActiveState --value laib-firstboot.service' 2>/dev/null)" = activating ]; then
+          for i in $(seq 1 4500); do
+            if grep -aq "install-box.sh: start" <<<"$(serial_after "$from")"; then
               python3 reset.py; early=yes; t0=$(date +%s); cut0=$(stat -c %s serial.log)
-              echo "early power cut (hard reset) $i s into the first boot, as laib-firstboot started (#111)"; break
+              echo "early power cut (hard reset) $((i / 5)) s into the watch, on install-box.sh's start line (#111)"; break
             fi
-            sleep 1
+            sleep 0.2
           done
-          [ "$early" = yes ] || { echo "the early cut was not reached: laib-firstboot never ran"; exit 1; }
+          [ "$early" = yes ] || { echo "the early cut was not reached: install-box.sh never printed its start line within 900 s"; tail -c 4000 serial.log; exit 1; }
           if grep -aq "binaries .* in /var/opt/laib" <<<"$(serial_after "$from" | head -c "$((cut0 - from))")"; then
             echo "the early cut came after the binaries had landed: it did not hit the start of the first boot (#111)"; exit 1
           fi
-          # The second cut keys off the first boot's own console (laib-firstboot writes to
-          # journal+console, serial.log on the runner, read every 0.2 s), not an SSH poll for a
-          # window: a fast first boot slipped through the poll's 1-s steps.
           # #37/#81: then a cut in the resumed boot after the binaries landed and before the
           # marker: on install-box.sh's line "binaries <tag> in /var/opt/laib". After it the
           # script still writes the unit, sleeps 1 s, applies and waits for /ready.
