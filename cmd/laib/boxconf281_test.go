@@ -29,8 +29,8 @@ func TestDiagIsRedWithoutTheBoxConfigAndInstallBoxClearsIt(t *testing.T) {
 		}
 		return n, detail
 	}
-	if n, _ := box(); n != 3 {
-		t.Fatalf("a box without the journald drop-in, the containers.conf drop-in and the boot check (#368) must be red three times, got %d", n)
+	if n, _ := box(); n != 2 {
+		t.Fatalf("a box without the journald drop-in and the containers.conf drop-in must be red twice, got %d", n)
 	}
 	cmd := exec.Command("bash", "../../scripts/install-box.sh", "--box-config")
 	cmd.Env = append(os.Environ(), "LAIB_ETC="+etc, "LAIB_QUADLET="+c.env.Paths.Quadlet)
@@ -54,5 +54,30 @@ func TestDiagIsRedWithoutTheBoxConfigAndInstallBoxClearsIt(t *testing.T) {
 	bu, _ := os.ReadFile("../../usb/fedora-coreos.bu")
 	if strings.Contains(string(bu), "journald.conf.d") || strings.Contains(string(bu), "log_driver") {
 		t.Error("usb/fedora-coreos.bu writes the box config too: two sources drift (#281)")
+	}
+}
+
+// #368: without laib-boot-check.service a broken OS update stays broken; diag
+// says so under its own probe (the install writes it, not --box-config).
+func TestDiagIsRedWithoutTheBootCheck(t *testing.T) {
+	c := newCbox(t)
+	etc := t.TempDir()
+	t.Setenv("LAIB_ETC", etc)
+	st, _ := cli.LoadState(c.env)
+	red := func() bool {
+		for _, f := range diag.Probes(context.Background(), c.env, st, "") {
+			if f.Probe == "boot-check" && f.Severity == "rot" {
+				return true
+			}
+		}
+		return false
+	}
+	if !red() {
+		t.Fatal("no boot check on the box, and diag is not red about it")
+	}
+	os.MkdirAll(filepath.Join(etc, "systemd", "system"), 0o755)
+	os.WriteFile(filepath.Join(etc, "systemd", "system", "laib-boot-check.service"), []byte("[Unit]\n"), 0o644)
+	if red() {
+		t.Fatal("still red with laib-boot-check.service in place")
 	}
 }

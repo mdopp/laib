@@ -113,10 +113,13 @@ carries the DNS token in clear text when you gave one: keep the stick.
 
 Not on the stick (yet): the NVIDIA driver for the GPU box. The plan is a
 prebuilt image instead of ServiceBay's on-box layering (ADR 0024). What every
-box gets from `install-box.sh --box-config` already: `laib-cdi.service`
-(the CDI spec at every boot, skipped without `nvidia-ctk`) and
-`laib-boot-check.service`, which proves a new OS deployment or rolls it back
-once and pauses Zincati (ADR 0024).
+box gets from `install-box.sh` already (the install and every update, not
+`--box-config`): `laib-cdi.service` (the CDI spec at every boot, skipped
+without `nvidia-ctk`) and `laib-boot-check.service`, which runs
+`scripts/boot-check.sh` (a release asset, checked against `SHA256SUMS` like
+the binaries) to prove a new OS deployment or roll it back once, reboot and
+pause Zincati (ADR 0024). That reboot is the boot check's; installing Laib
+never reboots (#367).
 
 ## Before the first attempt (pre-flight, the NUC)
 

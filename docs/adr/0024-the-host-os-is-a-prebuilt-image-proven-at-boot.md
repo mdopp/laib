@@ -6,7 +6,7 @@ box, pause or resume Zincati, rebase a box, or wonder why an OS update
 rolled itself back.
 
 - **Status:** Proposed, 2026-10-19 (#368). Parts 2 and 3 are implemented
-  (`install-box.sh --box-config`); part 1 waits for the owner.
+  (`install-box.sh` writes the units, `scripts/boot-check.sh` is the check, a verified release asset); part 1 waits for the owner.
 - **Deciders:** the owner (mdopp); proposed by the #368 session.
 
 ## Context
