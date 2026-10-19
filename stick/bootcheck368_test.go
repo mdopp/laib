@@ -90,8 +90,9 @@ func rolledBack(log string) bool {
 }
 
 // runInstallTo runs install-box.sh --source against a build server served by
-// a curl shim: three dummy binaries, laib-boot-check.sh (bootCheck) and a
-// SHA256SUMS over the real files. The script stops later (no laib to init);
+// a curl shim: three dummy binaries, laib-boot-check.sh (bootCheck; "" = a
+// release from before #368, without the asset) and a SHA256SUMS over the
+// real files. The script stops later (no laib to init);
 // what is under test is what it wrote under LAIB_ETC before that.
 func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
 	t.Helper()
@@ -104,6 +105,9 @@ func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
 	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
 	sums := ""
 	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real)} {
+		if name == "laib-boot-check.sh" && bootCheck == "" {
+			continue // a release from before #368
+		}
 		sum := sha256.Sum256([]byte(body))
 		sums += hex.EncodeToString(sum[:]) + "  " + name + "\n"
 		if name == "laib-boot-check.sh" {
@@ -157,6 +161,28 @@ func TestInstallWritesTheCDIRefreshAndTheVerifiedBootCheck(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(etc, "laib", "boot-check.sh")); string(got) != string(real) {
 		t.Fatalf("/etc/laib/boot-check.sh is not scripts/boot-check.sh as released\n%s", out)
+	}
+}
+
+// train 18: `install-box.sh --version v0.7.0` (a release from before #368)
+// stopped with "has no asset laib-boot-check.sh". Such a release installs its
+// binaries, says once that it carries no boot check, and writes no boot-check
+// units; laib diag's boot-check probe stays the reminder.
+func TestAReleaseWithoutTheBootCheckStillInstalls(t *testing.T) {
+	etc, out := runInstallTo(t, "")
+	if !strings.Contains(out, "binaries abc1234 in /var/opt/laib") {
+		t.Fatalf("a release without laib-boot-check.sh did not install its binaries:\n%s", out)
+	}
+	if strings.Count(out, "carries no boot check") != 1 {
+		t.Errorf("the missing boot check must be said once:\n%s", out)
+	}
+	if strings.Contains(out, "blank argument") {
+		t.Errorf("curl got a blank URL:\n%s", out)
+	}
+	for _, f := range []string{"systemd/system/laib-boot-check.service", "systemd/system/laib-cdi.service", "laib/boot-check.sh"} {
+		if _, err := os.Stat(filepath.Join(etc, f)); err == nil {
+			t.Errorf("%s written without a verified boot check", f)
+		}
 	}
 }
 

@@ -223,23 +223,33 @@ sudo mkdir -p /var/opt/laib
 for BIN in laib laib-operator laib-lease; do
   curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
-curl -fsSL "${get[@]}" -o "$TMPD/laib-boot-check.sh" "$(asset_url laib-boot-check.sh)" || { echo "$TAG has no laib-boot-check.sh (#368)" >&2; exit 1; }
 # SHA256SUMS is required: an unverified build is refused, release or --source (#37)
 curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || { echo "no SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
 [ -s "$TMPD/SHA256SUMS" ] || { echo "empty SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+# The boot check (#368) is part of a release when SHA256SUMS lists it; then it
+# must download and match. A release from before #368 has none: its binaries
+# install, and laib diag's boot-check probe stays red as the reminder.
+CHECK=""
+if grep -q " laib-boot-check.sh\$" "$TMPD/SHA256SUMS"; then
+  CHECK="$TMPD/laib-boot-check.sh"
+  u="$(asset_url laib-boot-check.sh)" && curl -fsSL "${get[@]}" -o "$CHECK" "$u" || { echo "$TAG lists laib-boot-check.sh but it does not download: refusing" >&2; exit 1; }
+else
+  echo "$TAG carries no boot check (laib-boot-check.sh, #368): installing without it; laib diag shows it missing"
+fi
 (cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
    want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
    [ -n "$want" ] || { echo "SHA256SUMS has no entry for $BIN" >&2; exit 1; }
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
  done
- want="$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)"
- [ -n "$want" ] && [ "$want" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
+ [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
 # the previous binaries stay as *.prev: `laib self rollback` puts them back
 for BIN in laib laib-operator laib-lease; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
-if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$TMPD/laib-boot-check.sh"; else host_units "$LAIB_ETC" "" "$TMPD/laib-boot-check.sh"; fi   # LAIB_ETC: the test harness only
+if [ -n "$CHECK" ]; then
+  if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$CHECK"; else host_units "$LAIB_ETC" "" "$CHECK"; fi   # LAIB_ETC: the test harness only
+fi
 # vm-install cuts the power on this line (the first boot's console): the
 # binaries are in place, the first boot's marker is not (#37, #367)
 echo "binaries $TAG in /var/opt/laib"
