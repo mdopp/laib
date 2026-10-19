@@ -12,7 +12,7 @@ PORT=18555
 KEY=key261
 WORK="$(mktemp -d)"
 FAKE=""
-cleanup() { [ -z "$FAKE" ] || kill "$FAKE" 2>/dev/null || true; rm -rf "$WORK"; }
+cleanup() { [ -z "$FAKE" ] || kill "$FAKE" 2>/dev/null || true; podman rm -f werkstatt-piweb-test >/dev/null 2>&1 || true; rm -rf "$WORK"; }
 trap cleanup EXIT
 fail() { echo "FAIL: $*" >&2; echo "--- what reached the fake:" >&2; cat "$WORK/log.jsonl" >&2 || true; exit 1; }
 
@@ -123,3 +123,57 @@ assert not [e for e in log[give + 1:] if e["p"].startswith("/v1/")], "FAIL: pi t
 print(f"order ok: lease #{take}, catalogue #{cat}, chat #{chat}, release #{give}")
 PY
 echo "werkstatt model test ok: pi has the laib-llama provider, and the autoloop's run took the lease, used it and gave it back"
+
+# #384: pi in the browser. pi-web-ui in this image, started by its launcher
+# as the entrypoint starts it: it answers only to pi.<domain>, lists the
+# lease's catalogue through the laib-llama extension, and a chat over its
+# websocket reaches the box's model with the model key.
+: > "$WORK/log.jsonl"
+PW=18791
+podman run -d --name werkstatt-piweb-test --user dev --entrypoint "" -p "127.0.0.1:$PW:8791" \
+  -e HOME=/home/dev -e WERKSTATT_DOMAIN=boot.test -e MODEL_URL="$H/v1" -e MODEL_KEY="$KEY" -e LAIB_TOKEN=laib_pi_test \
+  -e PI_SKIP_VERSION_CHECK=1 -e WERKSTATT_PI_WEB_ENV=/nonexistent -e PI_WEB_CWD=/tmp "$IMG" werkstatt-pi-web >/dev/null
+piweb_fail() { podman logs --tail 40 werkstatt-piweb-test >&2 || true; fail "$@"; }
+for _ in $(seq 90); do curl -fsS -H 'Host: pi.boot.test' "http://127.0.0.1:$PW/api/health" >/dev/null 2>&1 && break; sleep 1; done
+curl -fsS -H 'Host: pi.boot.test' "http://127.0.0.1:$PW/api/health" > "$WORK/health.json" || piweb_fail "pi-web-ui does not answer for pi.boot.test"
+echo "pi-web-ui: $(cat "$WORK/health.json")"
+code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.test' "http://127.0.0.1:$PW/api/health")
+[ "$code" = 403 ] || piweb_fail "pi-web-ui answered $code for a foreign Host; only pi.<domain> may reach it"
+cat > "$WORK/chat.mjs" <<'JS'
+// one chat over pi-web-ui's websocket, as the browser does it: hello, the
+// model list, the household model, one prompt; every message is printed
+import { createRequire } from "node:module";
+const require = createRequire("/usr/local/lib/node_modules/pi-web-ui/");
+const WebSocket = require("ws");
+const ws = new WebSocket("ws://127.0.0.1:8791/ws");
+const done = setTimeout(() => { console.log(JSON.stringify({ type: "timeout" })); process.exit(0); }, 150000);
+let asked = false;
+ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "e2e384" })));
+ws.on("message", (data) => {
+  const text = data.toString();
+  console.log(text.slice(0, 4000));
+  let msg = {};
+  try { msg = JSON.parse(text); } catch {}
+  if (!asked && msg.type !== "ready" && text.includes("laib-llama")) {
+    asked = true;
+    ws.send(JSON.stringify({ type: "set_model", modelId: "laib-llama/gemma-4-e4b" }));
+    setTimeout(() => ws.send(JSON.stringify({ type: "prompt", text: "Sag hallo, mit einem Satz, ohne Werkzeuge." })), 2000);
+  }
+  if (msg.type === "ready") ws.send(JSON.stringify({ type: "list_models" }));
+  if (asked && text.includes("Hallo aus dem Laib") && /agent_end|turn_end|done|idle/.test(text)) { clearTimeout(done); setTimeout(() => process.exit(0), 500); }
+});
+JS
+podman cp "$WORK/chat.mjs" werkstatt-piweb-test:/tmp/chat.mjs
+podman exec werkstatt-piweb-test node /tmp/chat.mjs > "$WORK/chat.out" 2>&1 || piweb_fail "the websocket client exit $?: $(tail -5 "$WORK/chat.out")"
+grep -q 'laib-llama' "$WORK/chat.out" || piweb_fail "the web pi does not list the laib-llama provider: $(head -c 2000 "$WORK/chat.out")"
+grep -q 'Hallo aus dem Laib' "$WORK/chat.out" || piweb_fail "no answer from the household model reached the browser: $(tail -c 3000 "$WORK/chat.out")"
+python3 - "$WORK/log.jsonl" "$KEY" <<'PY'
+import json, sys
+log = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+chats = [e for e in log if e["m"] == "POST" and e["p"] == "/v1/chat/completions"]
+assert chats, f"FAIL: the web pi's chat never reached the model; log: {log}"
+assert chats[-1]["auth"] == "Bearer " + sys.argv[2], f"FAIL: the web pi's chat does not carry the model key: {chats[-1]}"
+assert chats[-1]["body"]["model"] == "gemma-4-e4b", chats[-1]
+print("pi in the browser: the household model answered, with the model key")
+PY
+echo "werkstatt pi-web test ok: pi.<domain> only, the lease's catalogue, a chat that reached the model"

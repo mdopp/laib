@@ -194,5 +194,18 @@ echo "logged in as core (family): $body"
 body="$(curl -fsS -H 'Remote-User: mallory' "http://127.0.0.1:$PORT/")"
 [ "$body" = "Hallo!" ] || fail "hallo trusts Remote-User without the proxy secret: $body"
 L journal --since 1h | grep -E 'propose|approve' | tail -6 || true
-echo "werkstatt app test ok: scaffolded, tested, linted, proposed, approved, routed through Caddy behind Authelia, checked"
+say "pi in the browser (#384): on the host's loopback, through Caddy only for admins with two factors"
+for _ in $(seq 60); do curl -fsS -H "Host: pi.$DOMAIN" http://127.0.0.1:8791/api/health >/dev/null 2>&1 && break; sleep 2; done
+curl -fsS -H "Host: pi.$DOMAIN" http://127.0.0.1:8791/api/health || fail "pi-web-ui does not answer on the host's loopback"
+echo
+LANIP="$(hostname -I | awk '{print $1}')"
+if curl -s -m 5 -o /dev/null -H "Host: pi.$DOMAIN" "http://$LANIP:8791/api/health"; then fail "pi-web-ui answers on $LANIP, past Caddy and Authelia"; fi
+RP=(--resolve "pi.$DOMAIN:443:127.0.0.1" --resolve "auth.$DOMAIN:443:127.0.0.1")
+code="$(curlc "${RP[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "https://pi.$DOMAIN/")"
+echo "pi without a login: $code"
+case "$code" in 30[23]\ https://auth.$DOMAIN/*) ;; *) fail "pi without a login: $code" ;; esac
+code="$(curlc "${RP[@]}" -b "$WORK/jar" -o /dev/null -w '%{http_code} %{redirect_url}' "https://pi.$DOMAIN/")"
+echo "pi with one factor only: $code"
+case "$code" in 30[23]\ https://auth.$DOMAIN/* | 403\ *) ;; *) fail "pi with one factor only: $code (the route wants two)" ;; esac
+echo "werkstatt app test ok: scaffolded, tested, linted, proposed, approved, routed through Caddy behind Authelia, checked; pi behind two factors"
 echo "simulated: GitHub (bare repo), the app's CI (podman build on the runner, local registry), Strato (fake DoH), Let's Encrypt (Caddy's internal CA)"

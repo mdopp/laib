@@ -40,8 +40,7 @@ fine-grained PAT limited to `AUTOLOOP_REPOS` (Contents rw for the branch
 push and the claim ref, Issues r, Pull requests rw). Nothing with a token
 touches the shared `/workspace` volume, so restarting the two in either
 order cannot swap hands; `laib journal` shows `pi` for the autoloop's notes
-and `claude` for the dev container's. Still open: the `dev.<domain>` web
-surface (pi-web's UI), which arrives with Haus; LDAP logins; per-project
+and `claude` for the dev container's. Still open: LDAP logins; per-project
 tokens.
 
 **Claude's sessions per checkout (#383).** As ServiceBay's `claude-dev`
@@ -65,6 +64,26 @@ default permission mode: unlike claude-dev, no
 the phone holds the apply-capable `claude` hand, not a read-only token.
 `scripts/boot-werkstatt.sh` checks the windows after the first start, a
 restart and an image update.
+
+**pi in the browser (#384).** As ServiceBay's `pi-web` did, the dev
+container serves pi-web-ui at `pi.<domain>`. The route is `exposure:
+public`, `auth: two_factor`, `group: admins`; pi-web-ui has no login of its
+own, so Authelia is the whole gate. Inside the container it listens on 8791,
+the host publishes that on its loopback only (`lan: false`), and pi-web-ui
+answers no Host but `pi.<domain>`. `werkstatt-pi-web` (werkstatt/piweb.sh)
+starts it as `dev` with its own agent dir `~/.pi/web`: the laib-llama
+extension in `settings.json` (the lease's catalogue, model choice in the web
+UI's picker), the guide as `APPEND_SYSTEM.md`, and Laib in `mcp.json` as
+the **pi** hand (`LAIB_PI_TOKEN`, also for `laib` in pi's shell). Only those
+keys are written; what the web UI saved stays. The sessions, settings and
+chats live in the kept home (`~/.pi/web`, `~/.pi-web`). The entrypoint
+restarts pi-web-ui when it ends. Compared with pi-web: sessions, model
+choice, files and terminal are there. Taking the GPU lease from the browser
+is not: a model the standing mode does not allow answers "Modell nicht
+erlaubt", and the coding preset stays the autoloop's. `pi` and the
+Claude sessions run under the same uid `dev`, so the hands are kept apart
+by environment, not by the kernel. The job `werkstatt-e2e/model` runs a
+chat through the web UI's websocket against a fake model.
 
 **The home is kept (#241).** `/home/dev` is the data path
 `${DATA_DIR}/werkstatt/home`: Claude Code's sessions and settings

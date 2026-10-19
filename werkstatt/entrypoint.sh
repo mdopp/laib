@@ -57,6 +57,20 @@ if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace
   exec su dev -c "python3 /opt/werkstatt/autoloop.py"
 fi
+# pi in the browser (#384, werkstatt-pi-web), on pi.<domain> behind Authelia.
+# Its values go to a 0600 file in this tmpfs, never on argv or into the
+# home: the domain, the model, and the pi hand (also for `laib` in pi's
+# shell). Kept running: a pi-web-ui that died must not leave pi.<domain> dark.
+if [ -n "${WERKSTATT_DOMAIN:-}" ] && [ -n "${LAIB_PI_TOKEN:-}" ]; then
+  printf '%s' "$LAIB_PI_TOKEN" > /run/laib/pi-token
+  printf 'WERKSTATT_DOMAIN=%q\nMODEL_URL=%q\nMODEL_KEY=%q\nLAIB_TOKEN=%q\n' "$WERKSTATT_DOMAIN" "${MODEL_URL:-}" "${MODEL_KEY:-}" "$LAIB_PI_TOKEN" > /run/laib/pi-web.env
+  chmod 600 /run/laib/pi-token /run/laib/pi-web.env && chown dev:dev /run/laib/pi-token /run/laib/pi-web.env
+  (while true; do
+    su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin bash -lc werkstatt-pi-web" \
+      || echo "werkstatt: WARNING: pi-web-ui ended, starting it again in 5s" >&2
+    sleep 5
+  done) &
+fi
 # Claude Code's Remote Control sessions, one per checkout with a CLAUDE.md
 # (#383, werkstatt-sessions): a pass now, then every WERKSTATT_SESSIONS_EVERY
 # seconds (0: only now), so a new checkout gets its session without a

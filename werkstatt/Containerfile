@@ -6,6 +6,7 @@
 FROM docker.io/library/node:22-bookworm-slim
 ARG PI_VERSION=latest
 ARG CLAUDE_VERSION=latest
+ARG PI_WEB_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git openssh-server tmux curl ca-certificates python3 jq less procps \
       build-essential python3-venv python3-pip vim-tiny nano ripgrep dnsutils openssl xz-utils \
@@ -13,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} \
+    && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION} pi-web-ui@${PI_WEB_VERSION} \
     && mv /usr/local/bin/pi /usr/local/bin/pi-upstream \
     && mkdir -p /run/sshd /workspace \
     && userdel -r node 2>/dev/null; useradd -m -u 1000 -s /bin/bash dev && chown dev:dev /workspace \
@@ -52,9 +53,11 @@ COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
 COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
 # one Claude Code Remote Control session per checkout (#383), in the tmux session `claude`
-COPY sessions.sh /usr/local/bin/werkstatt-sessions
+COPY sessions.sh /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
 COPY tmux.conf /etc/tmux.conf
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions
+# pi in the browser (#384): pi-web-ui with the Werkstatt's provider, guide and hand
+COPY piweb.sh /usr/local/bin/werkstatt-pi-web
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
