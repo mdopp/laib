@@ -11,9 +11,8 @@ order printed; its argv shows in ps to every user on the box (#214).
 
 Here the hooks image is this process's PATH with a podman that is not there,
 and the broker is a fake container: /mosquitto/config is the config data
-path, mosquitto_passwd -U hashes as the real one does (a line that is already
-a hash gets hashed again, and that login is broken), SIGHUP to PID 1 reloads
-the password file."""
+path, a line that is no $7$ hash stops it as eclipse-mosquitto 2.1.2 does
+(#432), and SIGHUP to PID 1 reloads the password file."""
 import base64, hashlib, os, stat, subprocess, tempfile, unittest
 from pathlib import Path
 
@@ -22,8 +21,13 @@ USER, PW = "homeassistant", "-mq_pw-Zz9"   # generated secrets are base64url: on
 CONTAINER = "systemd-mosquitto"            # mosquitto.container → mosquitto.service
 
 
-def fake_hash(pw):
-    return "$7$101$c2FsdA==$" + base64.b64encode(hashlib.sha512(pw.encode()).digest()).decode()
+def verifies(line_hash, pw):
+    """mosquitto's $7$: PBKDF2-SHA512, $7$<iterations>$<b64 salt>$<b64 hash> (#432)"""
+    parts = line_hash.split("$")
+    if len(parts) != 5 or parts[1] != "7":
+        return False
+    it, salt, h = int(parts[2]), base64.b64decode(parts[3]), base64.b64decode(parts[4])
+    return hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, it, len(h)) == h
 
 
 class Box:
@@ -68,11 +72,14 @@ class Box:
         self.load()
 
     def load(self):
+        # eclipse-mosquitto 2.1.2 terminates on a line that is no hash (#432):
+        # "Unable to decode line in password file", and the container is gone
         self.broker = {}
         for line in (self.cfg / "passwd").read_text().splitlines():
             u, _, h = line.partition(":")
-            if h.startswith("$7$"):   # mosquitto drops an entry that is no hash
-                self.broker[u] = h
+            if not h.startswith("$7$"):
+                raise AssertionError(f"mosquitto 2.1.2 terminates: unable to decode line {u}:… in the password file")
+            self.broker[u] = h
 
     def inside(self, p):
         if not p.startswith("/mosquitto/config/"):
@@ -87,15 +94,7 @@ class Box:
             raise AssertionError(f"MQTT_PASSWORD is on a process's argv, where ps shows it: {ps}")
         self.execs.append(argv[1:])
         cmd = argv[1:]
-        if cmd[:2] == ["mosquitto_passwd", "-U"] and len(cmd) == 3:
-            f = self.inside(cmd[2])
-            out = []
-            for line in f.read_text().splitlines():
-                u, _, pw = line.partition(":")
-                out.append(f"{u}:{fake_hash(pw)}")   # the real tool hashes what it finds, a hash too
-            f.write_text("".join(l + "\n" for l in out))
-            self.events.append("hashed")
-        elif cmd[0] == "chown" and len(cmd) == 3:
+        if cmd[0] == "chown" and len(cmd) == 3:
             self.inside(cmd[2])
             self.events.append("chown " + cmd[1])
         elif cmd == ["kill", "-HUP", "1"]:
@@ -118,8 +117,10 @@ class Hooks(unittest.TestCase):
 
     def assert_broker_takes_the_password(self):
         b = self.box
-        self.assertEqual(b.broker.get(USER), fake_hash(PW), f"the broker does not know {USER} with MQTT_PASSWORD: {b.broker} ({b.events})")
-        self.assertTrue("hashed" in b.events and b.events[-1] == "reloaded", f"the broker must reload after the file is hashed: {b.events}")
+        self.assertTrue(verifies(b.broker.get(USER, ""), PW), f"the broker does not know {USER} with MQTT_PASSWORD: {b.broker} ({b.events})")
+        self.assertEqual(b.events[-1:], ["reloaded"], f"the broker must reload after the file is written: {b.events}")
+        for line in (b.cfg / "passwd").read_text().splitlines():
+            self.assertTrue(line.partition(":")[2].startswith("$7$"), "a plain-text line stops mosquitto 2.1.2 (#432)")
         for f in b.cfg.rglob("*"):
             if f.is_file():
                 self.assertNotIn(PW, f.read_text(), f"{f.name} keeps the password in plain text")
@@ -130,10 +131,18 @@ class Hooks(unittest.TestCase):
         self.assertNotIn(PW, out)
         self.assert_broker_takes_the_password()
 
-    def test_an_apply_without_pre_start_does_not_hash_the_hash(self):
+    def test_an_apply_without_pre_start_keeps_a_matching_hash(self):
         self.box.apply(first=True)
+        before = (self.box.cfg / "passwd").read_text()
         self.box.events.clear()
         self.box.apply(first=False)   # nothing changed: post-deploy only
+        self.assert_broker_takes_the_password()
+        self.assertEqual((self.box.cfg / "passwd").read_text(), before, "a hash that still matches is rewritten")
+
+    def test_a_restart_at_any_moment_finds_only_hashes(self):
+        # #432: the broker may (re)start between the hook and its laib-exec lines
+        self.box.apply(first=True)
+        self.box.start()
         self.assert_broker_takes_the_password()
 
 

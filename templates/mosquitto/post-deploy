@@ -1,16 +1,44 @@
 #!/usr/bin/env bash
-# post-deploy (#221): the password file, hashed by the image's own
-# mosquitto_passwd inside the running broker. This hook has no podman: laib
-# runs the laib-exec lines below in the broker's container, in order, after
-# the hook exits. The password travels in the 0600 file, never on their argv,
-# where ps shows it to every user on the box (#214). The file is written in
-# plain text on every run, so -U never hashes a hash; SIGHUP to the broker
-# (PID 1) reloads it.
+# post-deploy (#221, #432): the password file, as mosquitto's own hash. The
+# file never holds a plain-text line: eclipse-mosquitto 2.1.2 terminates on
+# one ("Unable to decode line in password file"), so writing the password and
+# having the broker hash it (mosquitto_passwd -U) left no broker to hash in.
+# The hash is mosquitto's $7$ (PBKDF2-SHA512, 101 rounds, 12-byte salt),
+# computed here; a line that still matches the password is kept, so an apply
+# that changed nothing changes nothing. The password reaches python through
+# the environment, never argv (#214). SIGHUP to the broker (PID 1) reloads.
 set -euo pipefail
 C="$LAIB_DATA_DIR/mosquitto/config"
-(umask 077; printf '%s:%s\n' "$MQTT_USER" "$LAIB_SECRET_MQTT_PASSWORD" > "$C/passwd")
+(umask 077; python3 - "$C/passwd" <<'PY'
+import base64, hashlib, os, sys
+path, user, pw = sys.argv[1], os.environ["MQTT_USER"], os.environ["LAIB_SECRET_MQTT_PASSWORD"]
+
+def matches(h):
+    p = h.split("$")
+    if len(p) != 5 or p[1] != "7":
+        return False
+    salt, want = base64.b64decode(p[3]), base64.b64decode(p[4])
+    return hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, int(p[2]), len(want)) == want
+
+try:
+    old = open(path).read().splitlines()
+except FileNotFoundError:
+    old = []
+mine = [l for l in old if l.partition(":")[0] == user]
+if len(mine) == 1 and matches(mine[0].partition(":")[2]) and all(l.partition(":")[2].startswith("$7$") for l in old):
+    sys.exit(0)
+salt = os.urandom(12)
+h = hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, 101, 64)
+line = f"{user}:$7$101${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
+# other users' hashes stay; any line that is no hash goes (it would stop the broker)
+keep = [l for l in old if l.partition(":")[0] != user and l.partition(":")[2].startswith("$7$")]
+with open(path + ".tmp", "w") as f:
+    f.write("".join(l + "\n" for l in keep + [line]))
+os.replace(path + ".tmp", path)
+PY
+)
 chmod 600 "$C/passwd"
-echo "laib-exec: systemd-mosquitto mosquitto_passwd -U /mosquitto/config/passwd"
-echo "laib-exec: systemd-mosquitto chown mosquitto:mosquitto /mosquitto/config/passwd"
+# the broker's own user opens it (eclipse-mosquitto 2.1 drops to 1883, #248)
+chown 1883:1883 "$C/passwd"
 echo "laib-exec: systemd-mosquitto kill -HUP 1"
-echo "mosquitto passwd written for $MQTT_USER; the broker hashes and reloads it"
+echo "mosquitto passwd holds the hash for $MQTT_USER; the broker reloads it"
