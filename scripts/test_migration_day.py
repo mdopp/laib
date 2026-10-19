@@ -66,6 +66,7 @@ case "$1" in
 esac
 exit 0
 ''')
+        exe(b / "ip", "#!/bin/bash\n" + '[ -n "${FAKE_NO_ROUTE:-}" ] || echo "1.1.1.1 via 192.0.2.1 dev eth0 src 192.0.2.77 uid 1000"\n')
         exe(b / "install-box", "#!/bin/bash\n" + RECORD)
         exe(b / "carry", "#!/bin/bash\n" + RECORD + r'''
 [ "$1" = --login ] && [ "$2" = "${FAKE_LOGIN_RED:-}" ] && { echo "$2: its password meldet sich nicht an"; exit 1; }
@@ -105,7 +106,7 @@ echo "  laib add vaultwarden"
                  LAIB_BIN=str(t / "bin" / "laib"), LAIB_STATE=str(t / "state"), OUT=str(t / "out" / "migration"),
                  INSTALL_BOX=str(t / "bin" / "install-box"), MIGRATE_PY=str(t / "bin" / "migrate"), PYTHON="",
                  CARRY=str(t / "bin" / "carry"), MOVE=str(t / "bin" / "move"),
-                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION=VERSION, PUBLIC_DNS="http://127.0.0.1:9/resolve", MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
+                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION=VERSION, PUBLIC_DNS="http://127.0.0.1:9/resolve", LAN_IP="192.0.2.10", MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
         e.update(env)
         return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env=e, timeout=120)
 
@@ -323,11 +324,11 @@ echo "  laib add vaultwarden"
 
     def test_install_takes_the_release_or_the_ci_build(self):
         self.run_md("--foreground", "--until", "install")
-        self.assertEqual(self.calls_of("install-box"), [f"--version {VERSION} --domain box.test --gpu"])
+        self.assertEqual(self.calls_of("install-box"), [f"--version {VERSION} --domain box.test --lan-ip 192.0.2.10 --gpu"])
         (self.t / "mig" / "progress").unlink()
         self.calls.write_text("")
         self.run_md("--foreground", "--until", "install", SRC="http://10.0.2.2:8000", INSTALL_ARGS="--tls internal")
-        self.assertEqual(self.calls_of("install-box"), ["--source http://10.0.2.2:8000 --domain box.test --gpu --tls internal"])
+        self.assertEqual(self.calls_of("install-box"), ["--source http://10.0.2.2:8000 --domain box.test --lan-ip 192.0.2.10 --gpu --tls internal"])
 
     def test_dry_run_names_what_no_step_claims(self):
         (self.t / "q" / "auth.kube.bak-old").write_text("")
@@ -419,6 +420,36 @@ echo "  laib add vaultwarden"
         r = self.run_md("--dry-run")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("WARN  the public DNS records were not checked", r.stdout)
+
+    def test_haus_is_added_before_caddy(self):
+        # #379: dopp.cloud and www. redirect to haus. (its route's redirectFrom): without haus they go dark
+        r = self.run_md("steps")
+        steps = r.stdout.split()
+        self.assertEqual(steps.index("haus") + 1, steps.index("caddy"))
+        self.assertLess(steps.index("home-assistant"), steps.index("haus"))   # its HAUS_HA_TOKEN is minted by then
+        r = self.run_md("--foreground", "--until", "haus")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.progress()["haus"], "green")
+        self.assertIn("add haus", self.calls_of("laib"))
+
+    def test_dry_run_names_what_goes_dark_at_the_caddy_step(self):
+        # #379: computed from the state-to-be (the templates the run adds, haus with its redirects), not the doc
+        cfg = json.loads((self.t / "sb" / "config.json").read_text())
+        cfg["reverseProxy"]["hosts"] = [{"domain": d, "service": "x", "forwardPort": 1}
+                                        for d in ("box.test", "www.box.test", "auth.box.test", "chat.box.test", "import.box.test")]
+        (self.t / "sb" / "config.json").write_text(json.dumps(cfg))
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("note  NPM's names that go dark at the caddy step (no Laib route): chat.box.test import.box.test", r.stdout)
+
+    def test_dry_run_needs_the_lan_address(self):
+        # box.yml lanIp: AdGuard's rewrites and Haus's network-drive page need it (#379); install-box.sh --lan-ip
+        r = self.run_md("--dry-run", LAN_IP="")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("ok    the LAN address: 192.0.2.77", r.stdout)
+        r = self.run_md("--dry-run", LAN_IP="", FAKE_NO_ROUTE="1")
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("RED   the LAN address: none", r.stdout)
 
     def test_unknown_step_is_refused(self):
         r = self.run_md("--dry-run", "--until", "vaultwardn")
