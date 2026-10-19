@@ -101,7 +101,8 @@ type Updates struct {
 // Notify is the webhook Laib posts red results, proposals and readiness
 // changes to (#15). Empty means polling only.
 type Notify struct {
-	URL string `yaml:"url"`
+	URL  string `yaml:"url"`
+	Mail string `yaml:"mail"` // the owner's address for laib's mails (#393); empty: the sso service's OPERATOR_EMAIL
 }
 
 // Watchdog: the outside check and the family's contact (#57).
@@ -141,12 +142,21 @@ type GPU struct {
 type Backup struct {
 	Repo     string `yaml:"repo"`
 	Schedule string `yaml:"schedule"`
+	// Offsite is the second repo, off the data disk (#391): after each backup
+	// its new snapshots are copied there (restic copy), with the same password.
+	Offsite *Backup           `yaml:"offsite,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`     // the backend's settings (RCLONE_CONFIG_NAS_HOST …)
+	Secrets []string          `yaml:"secrets,omitempty"` // secrets.age names handed to restic as environment
+	Plain   bool              `yaml:"-"`                 // restic as core, not in podman unshare: a repo-to-repo copy reads no service files
 }
 
 // DNS is the ACME DNS-01 provider for Caddy (ADR 0007).
 type DNS struct {
 	Provider  string `yaml:"provider"`  // e.g. "cloudflare"; empty = HTTP-01
 	SecretRef string `yaml:"secretRef"` // name in secrets.age
+	// ChallengeAlias: where the TXT goes when _acme-challenge.<domain> is a
+	// CNAME into the provider's zone (the domain's own DNS has no API, #378)
+	ChallengeAlias string `yaml:"challengeAlias"`
 }
 
 // Policy is policy.yml.
@@ -176,8 +186,9 @@ type Envelope struct {
 type Hand struct {
 	Ceiling string   `yaml:"ceiling"`
 	TTL     string   `yaml:"ttl"`
-	Verbs   []string `yaml:"verbs"` // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
-	Human   bool     `yaml:"human"` // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
+	Verbs   []string `yaml:"verbs"`   // when set, the only verbs this hand may use (the approver: approve, reject, inbox, status, note)
+	Human   bool     `yaml:"human"`   // its verdicts count as a human's: the relay behind the admin's verified Signal number (#48)
+	Session string   `yaml:"session"` // the hand this one may get a short token of, one per session: the Werkstatt's claude (#380)
 }
 
 // Approval says who may approve a tier.

@@ -2,7 +2,13 @@
 {
 	email admin@example.home
 	order request_header first
-	acme_dns cloudflare {env.LAIB_DNS_TOKEN}
+	cert_issuer acme {
+		dns desec {
+			token {env.LAIB_DNS_TOKEN}
+		}
+		dns_challenge_override_domain example-acme.dedyn.io
+		resolvers 9.9.9.9 1.1.1.1
+	}
 }
 
 (authelia) {
@@ -22,6 +28,11 @@ laib.example.home {
 		}
 	}
 	respond 403
+}
+
+*.example.home {
+	request_header -Remote-*
+	abort
 }
 
 auth.example.home {

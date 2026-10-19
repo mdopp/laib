@@ -30,19 +30,96 @@ autoloop's and a person's over SSH (#261; npm's own binary is
 id once; the autoloop pins `laib-llama/<preset>` and a test checks both
 agree and lists the lease's real catalogue through the extension.
 
+**The guide and its skills (#394).** What ServiceBay's agent kit carried
+(an hourly git checkout in its data dir, mounted into claude-dev and
+pi-web) is the Werkstatt's own now: `werkstatt/guide/` with `AGENTS.md`
+and `skills/<name>/SKILL.md`, in the image, which is rebuilt on every push
+to main and taken by `AutoUpdate=registry` in the next update window. No
+release, no timer, one source. At every start `werkstatt-skills` links the
+skills for pi (`~/.pi/agent/skills/laib`, `~/.pi/web/skills/laib`) and
+Claude Code (`~/.claude/skills/<name>`). ServiceBay's own catalog stays
+readable in the checkout `/workspace/servicebay/assists`; its ADRs and
+CLI describe a system that is off and are not carried.
+
+**Laib's MCP in the sessions (#392).** Every Claude Code session of `dev`
+(over SSH, and the Remote Control sessions the Claude app opens) has Laib
+as the MCP server `laib` at `host.containers.internal:5900/mcp`, user
+scope, written by the entrypoint with the token as a header variable, never
+on argv. ServiceBay's entries (`servicebay`, `atHome-Servicebay`,
+`:5888/mcp`), carried over in the kept home, are dropped at every start by
+`werkstatt-mcp-tidy`; everything else in `~/.claude.json` stays. There is
+no claude.ai connector to the box: `admin.<domain>/mcp` answers only the
+LAN (`respond 403` otherwise), and the owner's Claude from outside is the
+Claude app attached to a Werkstatt session, which has `laib` already.
+
 **Tokens per container (#44).** Each container writes its own tokens to
 its own tmpfs `/run/laib` (`Tmpfs=` in both units): the dev container
-holds `LAIB_CLAUDE_TOKEN` (hand `claude`, the TTL `policy.yml` declares —
-`laib token mint claude --note werkstatt` again and `laib secret set
-LAIB_CLAUDE_TOKEN` when it runs out) and `WERKSTATT_GIT_TOKEN`; the
+holds `LAIB_WERKSTATT_TOKEN` and `WERKSTATT_GIT_TOKEN`; the
 autoloop holds `LAIB_PI_TOKEN` (hand `pi`) and `WERKSTATT_PI_GIT_TOKEN`, a
 fine-grained PAT limited to `AUTOLOOP_REPOS` (Contents rw for the branch
 push and the claim ref, Issues r, Pull requests rw). Nothing with a token
 touches the shared `/workspace` volume, so restarting the two in either
 order cannot swap hands; `laib journal` shows `pi` for the autoloop's notes
-and `claude` for the dev container's. Still open: the `dev.<domain>` web
-surface (pi-web's UI), which arrives with Haus; LDAP logins; per-project
+and `claude` for the dev container's.
+
+**A short claude token per session (#380, ADR 0006 amendment).** No
+claude token is at rest. `laib add werkstatt` mints `LAIB_WERKSTATT_TOKEN`
+as the `werkstatt` hand (`policy.yml`: `{ceiling: read, verbs: [session],
+session: claude}`). That hand can do one thing: `laib_session <name>`
+returns a `claude` token with claude's TTL (8 h), journaled, and `laib
+token list` shows it as `session werkstatt: <name>`. Claude Code's laib MCP
+server has no fixed header. Its `headersHelper` is `laib --headers`, run
+on each connection, which hands out the session's own token from
+`/run/laib/sessions/<name>.json` (0600, tmpfs) and asks for a new one ten
+minutes before that one runs out. `werkstatt-sessions` names each window's
+session (`LAIB_SESSION=<checkout>`); a shell outside one is `shell`.
+`laib` in the container speaks with the same token. When a token expires,
+only that session loses access, and its next connection gets a new token
+without the owner. Revoking the werkstatt token ends new sessions.
+Still open: LDAP logins; per-project
 tokens.
+
+**Claude's sessions per checkout (#383).** As ServiceBay's `claude-dev`
+did, the dev container starts one Claude Code session with Remote Control
+per checkout in `/workspace` that has a `CLAUDE.md`: a window in the tmux
+session `claude`, named after the checkout, running `claude --continue
+--remote-control <name>` (a fresh session where there is nothing to
+continue). They show up under the checkout's name in the Claude app and on
+claude.ai. `werkstatt-sessions` (werkstatt/sessions.sh) does one pass; the
+entrypoint runs it on every start and then every five minutes
+(`WERKSTATT_SESSIONS_EVERY`), so a new checkout gets its session without a
+restart, and a session that ended is started again. `werkstatt-sessions off
+<name>` switches one off with a marker in `~/.werkstatt/no-autostart/` (the
+kept home), so it stays off across restarts; `on <name>` brings it back.
+Over SSH, `tmux attach -t claude` shows them; a new checkout's first start
+may ask Claude Code's folder-trust question once in its window. The
+sessions run as `dev` in a clean login shell (the Claude and Laib tokens
+from `/run/laib`, no other variable of the container) and in Claude Code's
+default permission mode: unlike claude-dev, no
+`--allow-dangerously-skip-permissions`, because a session reachable from
+the phone holds the apply-capable `claude` hand, not a read-only token.
+`scripts/boot-werkstatt.sh` checks the windows after the first start, a
+restart and an image update.
+
+**pi in the browser (#384).** As ServiceBay's `pi-web` did, the dev
+container serves pi-web-ui at `pi.<domain>`. The route is `exposure:
+public`, `auth: two_factor`, `group: admins`; pi-web-ui has no login of its
+own, so Authelia is the whole gate. Inside the container it listens on 8791,
+the host publishes that on its loopback only (`lan: false`), and pi-web-ui
+answers no Host but `pi.<domain>`. `werkstatt-pi-web` (werkstatt/piweb.sh)
+starts it as `dev` with its own agent dir `~/.pi/web`: the laib-llama
+extension in `settings.json` (the lease's catalogue, model choice in the web
+UI's picker), the guide as `APPEND_SYSTEM.md`, and Laib in `mcp.json` as
+the **pi** hand (`LAIB_PI_TOKEN`, also for `laib` in pi's shell). Only those
+keys are written; what the web UI saved stays. The sessions, settings and
+chats live in the kept home (`~/.pi/web`, `~/.pi-web`). The entrypoint
+restarts pi-web-ui when it ends. Compared with pi-web: sessions, model
+choice, files and terminal are there. Taking the GPU lease from the browser
+is not: a model the standing mode does not allow answers "Modell nicht
+erlaubt", and the coding preset stays the autoloop's. `pi` and the
+Claude sessions run under the same uid `dev`, so the hands are kept apart
+by environment, not by the kernel. The job `werkstatt-e2e/model` runs a
+chat through the web UI's websocket against a fake model.
 
 **The home is kept (#241).** `/home/dev` is the data path
 `${DATA_DIR}/werkstatt/home`: Claude Code's sessions and settings

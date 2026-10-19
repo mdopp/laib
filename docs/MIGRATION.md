@@ -146,7 +146,10 @@ file moves out.
       systemctl --user daemon-reload
       ```
       For `llama`, `llama-embed.service` is stopped and `llama-embed.container`
-      moved out with it.
+      moved out with it, and Solaris's policy proxy, the plain host unit
+      `solaris-llama-policy.service` on 11435 (laib-lease's port), is
+      disabled with `systemctl --user disable --now` (#374); a hand-back
+      enables it again.
    b. Carry its secrets over (#228) and, where "Data that moves into
       Laib's layout" lists it, `scripts/move-servicebay-data.sh <name>`
       (#229).
@@ -241,6 +244,17 @@ members of `family` and `admins` in, maps `admins` to administrators, and
 keeps the libraries ServiceBay's configuration gave new users. The users
 Jellyfin made from LDAP logins stay. `laib add media BASE_DN=…` comes with
 the box's base DN from the printed line.
+
+A service that logged in to Jellyfin as some other LLDAP user loses that
+login: on the Kraftwerk Home Assistant's Jellyfin entry logged in as
+`solaris` (#375). Laib does not let it in by widening the filter. Home
+Assistant gets its own Jellyfin account, `homeassistant`: hidden, no
+administrator, the family's libraries, and not in LLDAP, so no person's
+login sits in HA and Authelia never sees it. Set its password with
+`laib secret set JELLYFIN_HA_PASSWORD` before `laib add media` (or
+`laib apply media` after), then re-enter HA's Jellyfin entry as
+`homeassistant` with the same password. migrate-servicebay.py names every
+HA Jellyfin entry that logs in as another account.
 
 **Immich's external libraries (#263, the owner's decision on #229).**
 ServiceBay mounted all of `file-share/data` at `/mnt/photos`; the built-in
@@ -433,3 +447,19 @@ wrote on): delete each target it printed (`copy … -> <target>`, e.g.
 runs again; it refuses a target that holds data. After step 7,
 rollback is a restore of the ServiceBay data dir, which is why it stays 30
 days.
+
+## Solaris until phase 5 (#396)
+
+Solaris runs on, ignored, until it retires (ADR 0015), but its links into
+ServiceBay break on migration day and would fail silently: the admin
+toolbox and its token mint (`SB_MCP_URL`, `SB_API_URL`, `SB_MINT_URL`;
+administration is Laib's and the Operator's), and the deadlines and
+contacts write-back into each resident's `solaris` calendar and address
+book (`DEADLINES_SYNC_URL…`, `CONTACTS_SYNC_URL…`), which needs Radicale
+rights ServiceBay's `radicale.yml` carried and Laib's Radicale
+(`owner_only`) does not grant. No shim is built for them:
+`scripts/solaris-links-off.py` switches them off explicitly (an empty value
+disables each in Solaris), disables `solaris-radicale-rights.timer` and
+restarts Solaris. What the write-back wrote stays in Radicale. Solaris's
+reading (`CALDAV_URL`, `CARDDAV_URL`, Home Assistant, llama) is untouched.
+`chat.` is dark (owner, 2026-10-18).

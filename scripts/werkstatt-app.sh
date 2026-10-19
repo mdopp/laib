@@ -52,7 +52,7 @@ say "the box: laib, Caddy (tls internal), Authelia + LLDAP"
 mkdir -p "$LAIB_QUADLET" "$(dirname "$REGCONF")" "$WORK/none"
 printf '[[registry]]\nlocation = "%s"\ninsecure = true\n' "$REG" > "$REGCONF"
 podman run -d --name laib-app-registry -p "$REG:5000" docker.io/library/registry:2 >/dev/null
-for img in ghcr.io/mdopp/laib-caddy:2 ghcr.io/mdopp/laib-hooks:latest docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable; do podman pull -q "$img" >/dev/null; done
+for img in ghcr.io/mdopp/laib-caddy:2 ghcr.io/mdopp/laib-hooks:latest docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/valkey/valkey:8-alpine; do podman pull -q "$img" >/dev/null; done
 L init --domain "$DOMAIN" --data-dir "$DATA" >/dev/null
 cat > "$LAIB_HOME/state/box.yml" <<YML
 domain: $DOMAIN
@@ -79,11 +79,10 @@ say "the Werkstatt, installed by laib with this commit's image"
 podman build -q -t "$REG/laib-werkstatt:e2e" "$ROOT/werkstatt" >/dev/null
 podman push -q "$REG/laib-werkstatt:e2e"
 tok() { L token mint "$1" --note "e2e #262" --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])'; }
-tok claude | L secret set LAIB_CLAUDE_TOKEN >/dev/null
 tok pi | L secret set LAIB_PI_TOKEN >/dev/null
 for s in CLAUDE_CODE_OAUTH_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do printf 'canary262-%s' "$s" | L secret set "$s" >/dev/null; done
 L add werkstatt "IMAGE=$REG/laib-werkstatt:e2e" "e2e #262" >/dev/null || fail "laib add werkstatt exit $?"
-for _ in $(seq 30); do podman exec systemd-werkstatt test -r /run/laib/token 2>/dev/null && break; sleep 2; done
+for _ in $(seq 30); do podman exec systemd-werkstatt test -r /run/laib/werkstatt-token 2>/dev/null && break; sleep 2; done
 podman cp "$ROOTCA" systemd-werkstatt:/tmp/caddy-root.crt && podman exec systemd-werkstatt chmod 644 /tmp/caddy-root.crt
 
 say "agent: the toolbox, the guide, Laib over MCP"
@@ -95,8 +94,16 @@ go version; podlet --version
 test -s /etc/claude-code/CLAUDE.md && grep -q "laib-app check" /etc/claude-code/CLAUDE.md   # Claude Code's managed CLAUDE.md
 grep -q "laib-app new" /opt/werkstatt/guide/apps.md
 laib status > /tmp/status.txt && head -3 /tmp/status.txt   # the claude hand reaches laib over host.containers.internal
+LAIB_SESSION=e2e laib --headers | python3 -c 'import sys,json; assert json.load(sys.stdin)["Authorization"].startswith("Bearer laib_claude_")'
 git config --global user.name "Werkstatt e2e"; git config --global user.email e2e@boot.test
 SH
+# #380: no claude token at rest; each session got its own, with claude's ttl, named in the token list
+L secret list > "$WORK/secrets.txt" 2>&1 || true
+if grep -q LAIB_CLAUDE_TOKEN "$WORK/secrets.txt"; then fail "a claude token is at rest in secrets.age"; fi
+L token list > "$WORK/tokens.txt"
+cat "$WORK/tokens.txt"
+grep -E '^[0-9a-f]+ +werkstatt ' "$WORK/tokens.txt" >/dev/null || fail "laib add werkstatt minted no werkstatt token"
+for s in shell e2e; do grep -E "^[0-9a-f]+ +claude .*expires [0-9].*session werkstatt: $s\$" "$WORK/tokens.txt" >/dev/null || fail "no claude token for the session $s with an expiry"; done
 
 say "agent: scaffold hallo, its tests, the template lint (guide steps 2-3)"
 agent <<'SH' || fail "scaffold, tests or lint"
@@ -194,5 +201,18 @@ echo "logged in as core (family): $body"
 body="$(curl -fsS -H 'Remote-User: mallory' "http://127.0.0.1:$PORT/")"
 [ "$body" = "Hallo!" ] || fail "hallo trusts Remote-User without the proxy secret: $body"
 L journal --since 1h | grep -E 'propose|approve' | tail -6 || true
-echo "werkstatt app test ok: scaffolded, tested, linted, proposed, approved, routed through Caddy behind Authelia, checked"
+say "pi in the browser (#384): on the host's loopback, through Caddy only for admins with two factors"
+for _ in $(seq 60); do curl -fsS -H "Host: pi.$DOMAIN" http://127.0.0.1:8791/api/health >/dev/null 2>&1 && break; sleep 2; done
+curl -fsS -H "Host: pi.$DOMAIN" http://127.0.0.1:8791/api/health || fail "pi-web-ui does not answer on the host's loopback"
+echo
+LANIP="$(hostname -I | awk '{print $1}')"
+if curl -s -m 5 -o /dev/null -H "Host: pi.$DOMAIN" "http://$LANIP:8791/api/health"; then fail "pi-web-ui answers on $LANIP, past Caddy and Authelia"; fi
+RP=(--resolve "pi.$DOMAIN:443:127.0.0.1" --resolve "auth.$DOMAIN:443:127.0.0.1")
+code="$(curlc "${RP[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "https://pi.$DOMAIN/")"
+echo "pi without a login: $code"
+case "$code" in 30[23]\ https://auth.$DOMAIN/*) ;; *) fail "pi without a login: $code" ;; esac
+code="$(curlc "${RP[@]}" -b "$WORK/jar" -o /dev/null -w '%{http_code} %{redirect_url}' "https://pi.$DOMAIN/")"
+echo "pi with one factor only: $code"
+case "$code" in 30[23]\ https://auth.$DOMAIN/* | 403\ *) ;; *) fail "pi with one factor only: $code (the route wants two)" ;; esac
+echo "werkstatt app test ok: scaffolded, tested, linted, proposed, approved, routed through Caddy behind Authelia, checked; pi behind two factors"
 echo "simulated: GitHub (bare repo), the app's CI (podman build on the runner, local registry), Strato (fake DoH), Let's Encrypt (Caddy's internal CA)"

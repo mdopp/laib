@@ -5,6 +5,11 @@ description: Einmal pro Woche — neuere Patch-Versionen der festgelegten Images
 trigger: {weekly: "Sa 10:00"}
 tools: [updates, propose, note]
 output: propose
+# the runner reads updates itself, offers only the patch values, refuses any
+# other proposal and puts the minor versions and the registry errors into
+# the note for a human (#376)
+updates: patch
+limits: {propose: 3}
 prompt: |
-  Auslöser: Wochenblick auf Aktualisierungen. Lies updates. Schlage für jeden Dienst mit einer neueren Patch-Version genau diesen Wert vor (propose mit service, key, value = Image:Patch-Tag und einem Grund: was vorher lief, was die Patch-Version bringt). Höchstens drei Vorschläge.
-  Minor-Versionen schlägst du nicht vor; nenne sie in der Notiz, damit ein Mensch entscheidet. Fehler beim Lesen einer Registry stehen in der Notiz, sonst nichts. Zum Schluss note mit kind watch.
+  Auslöser: Wochenblick auf Aktualisierungen. Unten stehen die Patch-Versionen, die du vorschlagen kannst. Schlage die vor, die es wert sind, mit propose (service, key, value genau wie unten) und einem Grund: was vorher lief und was die Patch-Version bringt.
+  Zum Schluss note mit kind watch: was du vorgeschlagen hast und warum.

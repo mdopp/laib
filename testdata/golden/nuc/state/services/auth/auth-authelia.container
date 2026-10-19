@@ -1,6 +1,6 @@
 [Unit]
 Description=Authelia — forward-auth and OIDC (laib role: sso)
-After=auth-lldap.service
+After=auth-lldap.service auth-sessions.service
 
 [Container]
 Image=${AUTHELIA_IMAGE}

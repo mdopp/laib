@@ -37,25 +37,63 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   echo 'if [ -r /run/laib/claude-token ]; then export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/laib/claude-token)"; fi' > /etc/profile.d/claude.sh
 fi
 if [ -n "${LAIB_TOKEN:-}" ]; then
-  # the token as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
+  # the autoloop's pi hand as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
   printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
-  # Every session of dev gets Laib as an MCP server, as the hand the token names.
-  # The header names the token and Claude Code expands it from the session's
-  # environment: on su's and claude's argv the host's ps would show it (#217).
-  # A login shell reads it from the 0600 file, so only dev's processes hold it.
-  echo 'if [ -r /run/laib/token ]; then export LAIB_TOKEN="$(cat /run/laib/token)"; fi' > /etc/profile.d/laib.sh
-  # the home is kept now: drop the entry a previous start wrote, so a new URL takes
-  su dev -c "claude mcp remove -s user laib >/dev/null 2>&1 || true"
-  su dev -c "claude mcp add -s user --transport http laib ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp} --header 'Authorization: Bearer \${LAIB_TOKEN}' >/dev/null 2>&1 || true"
 fi
+if [ -n "${LAIB_WERKSTATT_TOKEN:-}" ]; then
+  # The dev container holds no claude token (#380): only the werkstatt hand's,
+  # which can get one claude token per session. Every Claude session of dev
+  # gets Laib as an MCP server whose header comes from `laib --headers`
+  # (Claude Code's headersHelper, run on each connection): that session's
+  # token from /run/laib/sessions, or a new one when it runs out. Nothing
+  # with a token lands on argv (#217) or in ~/.claude.json.
+  printf '%s' "$LAIB_WERKSTATT_TOKEN" > /run/laib/werkstatt-token && chmod 600 /run/laib/werkstatt-token && chown dev:dev /run/laib/werkstatt-token
+  rm -f /etc/profile.d/laib.sh
+  # the home is kept: drop the entry a previous start wrote, so a new URL or form takes
+  su dev -c "claude mcp remove -s user laib >/dev/null 2>&1 || true"
+  su dev -c "claude mcp add-json -s user laib '{\"type\":\"http\",\"url\":\"${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}\",\"headersHelper\":\"laib --headers\"}' >/dev/null 2>&1 || true"
+fi
+# ServiceBay's MCP (:5888) is gone: its entries in the kept home fail every session start (#392)
+su dev -c "python3 /usr/local/bin/werkstatt-mcp-tidy" || true
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials
   chmod 600 /run/laib/git-credentials; chown dev:dev /run/laib/git-credentials
   su dev -c "git config --global credential.helper 'store --file /run/laib/git-credentials'"
 fi
+# the guide's skills where pi and Claude Code look, from this image (#394)
+su dev -c "werkstatt-skills" || echo "werkstatt-skills failed: the agents start without the guide's skills"
 if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace
   exec su dev -c "python3 /opt/werkstatt/autoloop.py"
+fi
+# pi in the browser (#384, werkstatt-pi-web), on pi.<domain> behind Authelia.
+# Its values go to a 0600 file in this tmpfs, never on argv or into the
+# home: the domain, the model, and the pi hand (also for `laib` in pi's
+# shell). Kept running: a pi-web-ui that died must not leave pi.<domain> dark.
+if [ -n "${WERKSTATT_DOMAIN:-}" ] && [ -n "${LAIB_PI_TOKEN:-}" ]; then
+  printf '%s' "$LAIB_PI_TOKEN" > /run/laib/pi-token
+  printf 'WERKSTATT_DOMAIN=%q\nMODEL_URL=%q\nMODEL_KEY=%q\nLAIB_TOKEN=%q\n' "$WERKSTATT_DOMAIN" "${MODEL_URL:-}" "${MODEL_KEY:-}" "$LAIB_PI_TOKEN" > /run/laib/pi-web.env
+  chmod 600 /run/laib/pi-token /run/laib/pi-web.env && chown dev:dev /run/laib/pi-token /run/laib/pi-web.env
+  (while true; do
+    su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin bash -lc werkstatt-pi-web" \
+      || echo "werkstatt: WARNING: pi-web-ui ended, starting it again in 5s" >&2
+    sleep 5
+  done) &
+fi
+# Claude Code's Remote Control sessions, one per checkout with a CLAUDE.md
+# (#383, werkstatt-sessions): a pass now, then every WERKSTATT_SESSIONS_EVERY
+# seconds (0: only now), so a new checkout gets its session without a
+# restart. As dev in a clean login shell: profile.d gives it the Claude and
+# Laib tokens from /run/laib, and none of the container's other variables
+# (the SSH password, the git token) reach a session.
+sessions() {
+  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash TERM=xterm-256color PATH=/usr/local/bin:/usr/bin:/bin bash -lc werkstatt-sessions" \
+    || echo "werkstatt: WARNING: the Claude sessions did not start (werkstatt-sessions)" >&2
+}
+sessions
+every="${WERKSTATT_SESSIONS_EVERY:-300}"
+if [ "$every" -gt 0 ] 2>/dev/null; then
+  (while sleep "$every"; do sessions; done) &
 fi
 # sshd's host keys live in their own data path (${DATA_DIR}/werkstatt/ssh-host-keys),
 # root's and 0600: made on the first start, then kept — the app trusts this key

@@ -15,17 +15,19 @@ import (
 // list, ADR 0023): the file plus the kernel's verdict — its status and the
 // tools it is granted. The Operator runs skills; it never widens them.
 type Skill struct {
-	Name        string       `json:"name"`
-	Source      string       `json:"source"`
-	Description string       `json:"description"`
-	Trigger     SkillTrigger `json:"trigger"`
-	Tools       []string     `json:"tools"`
-	More        []string     `json:"more"` // only for a capable model (#286)
-	Context     string       `json:"context"`
-	Output      string       `json:"output"`
-	Prompt      string       `json:"prompt"`
-	Status      string       `json:"status"`
-	Granted     []string     `json:"granted"`
+	Name        string         `json:"name"`
+	Source      string         `json:"source"`
+	Description string         `json:"description"`
+	Trigger     SkillTrigger   `json:"trigger"`
+	Tools       []string       `json:"tools"`
+	More        []string       `json:"more"` // only for a capable model (#286)
+	Context     string         `json:"context"`
+	Output      string         `json:"output"`
+	Prompt      string         `json:"prompt"`
+	Limits      map[string]int `json:"limits"`  // tool → calls per session (#376)
+	Updates     string         `json:"updates"` // patch: the runner reads updates and offers only those (#376)
+	Status      string         `json:"status"`
+	Granted     []string       `json:"granted"`
 }
 
 // SkillTrigger is when a skill runs: exactly one field is set.

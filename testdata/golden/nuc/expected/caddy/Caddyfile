@@ -2,7 +2,6 @@
 {
 	email admin@nuc.home
 	order request_header first
-	acme_dns cloudflare {env.LAIB_DNS_TOKEN}
 	local_certs
 }
 

@@ -79,7 +79,7 @@ class PreStart(unittest.TestCase):
         self.cfg.mkdir(parents=True)
         (self.render / "authelia").mkdir(parents=True)
         self.env = dict(os.environ, LAIB_DATA_DIR=str(d), LAIB_DOMAIN="vm.test", LAIB_RENDER_DIR=str(self.render),
-                        BASE_DN="dc=vm,dc=test", **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
+                        BASE_DN="dc=vm,dc=test", LAIB_START_URL="https://admin.vm.test/", **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
 
     def run_hook(self, *laib_ids):
         (self.render / "authelia" / "laib-clients.yml").write_text(laib_clients(*laib_ids))
@@ -173,6 +173,13 @@ class PreStart(unittest.TestCase):
         self.assertIn("filesystem:", notifier)
         self.assertIn("SMTP_FROM", status["findings"][0]["detail"])
         self.assertIn("SMTP_SECURITY", status["findings"][0]["detail"])
+
+    def test_a_login_without_rd_lands_on_the_start_url(self):
+        # #381: box.yml laib.host admin moved the box page; the default redirect followed laib.<domain>
+        (self.cfg / "oidc.pem").write_text(KEY)
+        _, _, conf = self.run_hook()
+        self.assertIn("default_redirection_url: 'https://admin.vm.test/'", conf)
+        self.assertNotIn("laib.vm.test", conf)
 
     def test_authelia_reads_the_one_list(self):
         unit = UNIT.read_text()

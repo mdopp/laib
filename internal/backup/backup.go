@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,17 +30,31 @@ import (
 // keep it with the age key.
 const ResticPassword = "RESTIC_PASSWORD"
 
+// RcloneImage serves restic's rclone backend (an off-box repo on the
+// Fritz!Box NAS, which speaks FTP and SMB, not sftp, #391): rclone as a
+// container, so the host needs no second binary.
+const RcloneImage = "docker.io/rclone/rclone:1.68.2"
+
+// keep is the retention of both repos.
+var keep = []string{"--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12", "--prune"}
+
 func restic(ctx context.Context, st *state.State, pw string, args ...string) (string, error) {
 	// inside podman's user namespace (rootless): the services' files belong
 	// to subuids of core (a database's pgdata, mode 0700) that core itself
 	// cannot read, and a restore must give them their owners back
 	// (vm-install run 38308352527). Without podman (a laptop) restic runs as is.
+	if strings.HasPrefix(st.Box.Backup.Repo, "rclone:") {
+		args = append([]string{"-o", "rclone.program=podman", "-o", "rclone.args=run --rm -i --network host --env RCLONE_* " + RcloneImage + " serve restic --stdio"}, args...)
+	}
 	name, argv := "restic", args
-	if _, err := exec.LookPath("podman"); err == nil {
+	if _, err := exec.LookPath("podman"); err == nil && !st.Box.Backup.Plain {
 		name, argv = "podman", append([]string{"unshare", "restic"}, args...)
 	}
 	cmd := exec.CommandContext(ctx, name, argv...)
-	cmd.Env = append(os.Environ(), "RESTIC_REPOSITORY="+st.Box.Backup.Repo, "RESTIC_PASSWORD="+pw)
+	cmd.Env = append(os.Environ(), "RESTIC_REPOSITORY="+st.Box.Backup.Repo, "RESTIC_PASSWORD="+pw, "RESTIC_FROM_PASSWORD="+pw)
+	for k, v := range st.Box.Backup.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
@@ -119,7 +134,14 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		return cli.Refused(env, env.Actor+" may not run a backup")
 	}
 	if len(args) > 0 && args[0] == "check" {
-		return backupCheck(ctx, env, st, pw)
+		rc := backupCheck(ctx, env, st, pw, "check")
+		if off, err := Offsite(env, st); err != nil || off != nil { // the off-box repo's restore test too (#391)
+			if err != nil {
+				return env.Fail(err)
+			}
+			rc = max(rc, backupCheck(ctx, env, off, pw, "check offsite"))
+		}
+		return rc
 	}
 	if _, err := ResticRun(ctx, st, pw, "cat", "config"); err != nil {
 		if _, err := ResticRun(ctx, st, pw, "init"); err != nil {
@@ -170,9 +192,10 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	entry.Result = "green"
 	journal.Append(env.Paths.Journal, entry)
-	if _, err := ResticRun(ctx, st, pw, "forget", "--tag", "laib", "--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12", "--prune"); err != nil {
+	if _, err := ResticRun(ctx, st, pw, append([]string{"forget", "--tag", "laib"}, keep...)...); err != nil {
 		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "backup", Result: "red", Detail: "forget: " + err.Error()})
 	}
+	offErr := copyOffsite(ctx, env, st, pw)
 	if env.JSON {
 		return cli.Emit(env, map[string]any{"paths": paths, "ms": entry.MS})
 	}
@@ -180,16 +203,77 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		fmt.Fprintf(env.W(), "angehalten für den Snapshot: %s (wieder gestartet)\n", strings.Join(quiesced, ", "))
 	}
 	fmt.Fprintf(env.W(), "grün · %d Pfade · %s\n", len(paths), cli.Tail(out, 200))
+	if offErr != nil {
+		return env.Fail(offErr)
+	}
 	return cli.ExitOK
+}
+
+// Offsite returns st with box.yml's off-box repo as its target, its secrets
+// resolved into the environment; nil when there is none.
+func Offsite(env *cli.Env, st *state.State) (*state.State, error) {
+	off := st.Box.Backup.Offsite
+	if off == nil || off.Repo == "" {
+		return nil, nil
+	}
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	if err != nil {
+		return nil, err
+	}
+	b := *off
+	b.Plain, b.Env = true, maps.Clone(off.Env)
+	if b.Env == nil {
+		b.Env = map[string]string{}
+	}
+	for _, name := range off.Secrets {
+		if sec[name] == "" {
+			return nil, fmt.Errorf("the off-box repo needs %s: laib secret set %s", name, name)
+		}
+		b.Env[name] = sec[name]
+	}
+	cp := *st
+	cp.Box.Backup = b
+	return &cp, nil
+}
+
+// copyOffsite: the new snapshots into the off-box repo (#391), created on the
+// first run with the local repo's chunker so both deduplicate alike. A journal
+// line, reason offsite, that diag and the box page read.
+func copyOffsite(ctx context.Context, env *cli.Env, st *state.State, pw string) error {
+	off, err := Offsite(env, st)
+	if off == nil && err == nil {
+		return nil
+	}
+	start, out := time.Now(), ""
+	if err == nil {
+		if _, e := ResticRun(ctx, off, pw, "cat", "config"); e != nil {
+			_, err = ResticRun(ctx, off, pw, "init", "--from-repo", st.Box.Backup.Repo, "--copy-chunker-params")
+		}
+	}
+	if err == nil {
+		out, err = ResticRun(ctx, off, pw, "copy", "--from-repo", st.Box.Backup.Repo, "--tag", "laib")
+	}
+	if err == nil {
+		_, err = ResticRun(ctx, off, pw, append([]string{"forget", "--tag", "laib"}, keep...)...)
+	}
+	entry := journal.Entry{Actor: env.Actor, Verb: "backup", Reason: "offsite", Result: "green", Detail: cli.Tail(out, 300), MS: time.Since(start).Milliseconds()}
+	if err != nil {
+		entry.Result, entry.Detail = "red", err.Error()
+		err = fmt.Errorf("Kopie außer Haus (%s): %w", st.Box.Backup.Offsite.Repo, err)
+	} else {
+		fmt.Fprintf(env.W(), "außer Haus: %s\n", st.Box.Backup.Offsite.Repo)
+	}
+	journal.Append(env.Paths.Journal, entry)
+	return err
 }
 
 // backupCheck is the monthly restore test (#40): restic verifies a sample of
 // the repo's data, and one service's first backed-up path is restored into
 // a scratch directory and compared with what is on disk. The result is a
 // journal line (verb backup, reason check) that diag and the box page read.
-func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw string) int {
+func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw, reason string) int {
 	start := time.Now()
-	entry := journal.Entry{Actor: env.Actor, Verb: "backup", Reason: "check"}
+	entry := journal.Entry{Actor: env.Actor, Verb: "backup", Reason: reason}
 	fail1 := func(what string, err error) int {
 		entry.Result, entry.Detail, entry.MS = "red", what+": "+err.Error(), time.Since(start).Milliseconds()
 		journal.Append(env.Paths.Journal, entry)
@@ -221,7 +305,7 @@ func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw string) 
 		// files only on disk are newer than the snapshot; a differing file is not
 		return fail1("compare "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
 	}
-	entry.Result, entry.Detail, entry.MS = "green", "restic check 5% ok; "+probe+" restored into a scratch dir and compared", time.Since(start).Milliseconds()
+	entry.Result, entry.Detail, entry.MS = "green", st.Box.Backup.Repo+": restic check 5% ok; "+probe+" restored into a scratch dir and compared", time.Since(start).Milliseconds()
 	journal.Append(env.Paths.Journal, entry)
 	fmt.Fprintln(env.W(), "grün ·", entry.Detail)
 	return cli.ExitOK

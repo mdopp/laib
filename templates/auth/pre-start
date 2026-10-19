@@ -135,10 +135,15 @@ session:
   expiration: '1M'
   inactivity: '1M'
   remember_me: '1M'
+  # in the pod's Valkey, on disk (auth-sessions.container): in memory, every
+  # restart of the pod logged the household out (#369)
+  redis:
+    host: '127.0.0.1'
+    port: 6379
   cookies:
     - domain: '{DOMAIN}'
       authelia_url: 'https://auth.{DOMAIN}'
-      default_redirection_url: 'https://laib.{DOMAIN}/'
+      default_redirection_url: '{E["LAIB_START_URL"]}'
 storage:
   encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'
   local:

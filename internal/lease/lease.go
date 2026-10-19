@@ -143,33 +143,37 @@ type Server struct {
 	voice   []string                       // resolved voice units
 }
 
-// resolve turns role/container refs into (service → unit names); a ref
-// nobody provides or a container the service does not have is an error,
-// so a stale presets.json stops the lease at start, not on the GPU.
-func (s *Server) resolve(refs []string) (map[string][]string, error) {
+// resolve turns role/container refs into (service → unit names). A
+// container the providing service does not have is an error, so a stale
+// presets.json stops the lease at start, not on the GPU. A role nobody
+// provides is left out and returned (#374): no unit of it runs, so there is
+// nothing to stop, and one missing service must not take the lease down.
+func (s *Server) resolve(refs []string) (map[string][]string, []string, error) {
 	out := map[string][]string{}
+	var missing []string
 	for _, ref := range refs {
 		role, container, ok := strings.Cut(ref, "/")
 		if !ok || role == "" || container == "" {
-			return nil, fmt.Errorf("presets.json: %q is not role/container", ref)
+			return nil, nil, fmt.Errorf("presets.json: %q is not role/container", ref)
 		}
 		if s.cfg.Units == nil {
-			return nil, errors.New("no unit resolver")
+			return nil, nil, errors.New("no unit resolver")
 		}
 		service, units := s.cfg.Units(role)
 		if service == "" {
-			return nil, fmt.Errorf("presets.json: no service provides %q (%s)", role, ref)
+			missing = append(missing, ref)
+			continue
 		}
 		want := service + "-" + container + ".service"
 		if container == service {
 			want = service + ".service"
 		}
 		if !slices.Contains(units, want) {
-			return nil, fmt.Errorf("presets.json: %s has no unit %s (%s); it has %s", service, want, ref, strings.Join(units, ", "))
+			return nil, nil, fmt.Errorf("presets.json: %s has no unit %s (%s); it has %s", service, want, ref, strings.Join(units, ", "))
 		}
 		out[service] = append(out[service], want)
 	}
-	return out, nil
+	return out, missing, nil
 }
 
 func flatten(m map[string][]string) []string {
@@ -207,19 +211,44 @@ func New(cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, proxy: httputil.NewSingleHostReverseProxy(u), client: &http.Client{Timeout: 10 * time.Minute}, units: map[string][]string{}, byMode: map[string]map[string][]string{}}
 	s.proxy.FlushInterval = -1 // token streams
-	for name, m := range cfg.Modes {
-		by, err := s.resolve(m.Stops)
+	type finding struct {
+		Severity string `json:"severity"`
+		Detail   string `json:"detail"`
+		Fix      string `json:"fix"`
+	}
+	findings := []finding{}
+	fix := func(ref string) string {
+		return "einen Dienst mit der Rolle „" + strings.Split(ref, "/")[0] + "“ installieren, oder " + ref + " aus presets.json nehmen"
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Modes)) {
+		by, missing, err := s.resolve(cfg.Modes[name].Stops)
 		if err != nil {
 			return nil, fmt.Errorf("mode %s: %w", name, err)
+		}
+		for _, ref := range missing {
+			findings = append(findings, finding{"gelb", fmt.Sprintf("Modus %s: %s stellt kein Dienst bereit; die Lease hält es nicht an", name, ref), fix(ref)})
 		}
 		s.byMode[name] = by
 		s.units[name] = flatten(by)
 	}
-	voice, err := s.resolve(cfg.VoiceUnits)
+	voice, missing, err := s.resolve(cfg.VoiceUnits)
 	if err != nil {
 		return nil, fmt.Errorf("voiceUnits: %w", err)
 	}
+	for _, ref := range missing {
+		findings = append(findings, finding{"gelb", ref + " stellt kein Dienst bereit; ein Wechsel des Sprachgeräts startet es nicht neu", fix(ref)})
+	}
 	s.voice = flatten(voice)
+	// the status file laib status and diag read (templates/llama status.file, #374)
+	detail := "alle Rollen der Modi sind da"
+	if len(findings) > 0 {
+		detail = fmt.Sprintf("%d Rolle(n) der Modi fehlen", len(findings))
+	}
+	b, _ := json.MarshalIndent(map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "detail": detail, "findings": findings}, "", "  ")
+	os.MkdirAll(cfg.LeaseDir, 0o755)
+	if err := boxfs.WriteAtomic(filepath.Join(cfg.LeaseDir, "laib-status.json.tmp"), filepath.Join(cfg.LeaseDir, "laib-status.json"), b, 0o644); err != nil {
+		return nil, err
+	}
 	go s.expiryLoop()
 	return s, nil
 }
@@ -745,7 +774,11 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 				holder = l.Holder
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
+			code := http.StatusConflict
+			if !s.knownPreset(model) {
+				code = http.StatusNotFound // a raw file id or a typo: no window ever allows it (#395)
+			}
+			w.WriteHeader(code)
 			json.NewEncoder(w).Encode(s.denial(model, mode, allowed, holder))
 			return
 		}
@@ -811,37 +844,48 @@ func (s *Server) denial(model, mode string, allowed []string, holder string) map
 			remedy = "„" + holder + "“ hat die Grafikkarte gerade; die Lease zeigt, bis wann."
 		}
 	}
-	return map[string]any{"error": map[string]any{"message": fmt.Sprintf("Modell %s ist im Modus %s nicht erlaubt. %s %s", model, mode, say, remedy), "mode": mode, "allowed": allowed}}
+	e := map[string]any{"message": fmt.Sprintf("Modell %s ist im Modus %s nicht erlaubt. %s %s", model, mode, say, remedy), "mode": mode, "allowed": allowed}
+	if !s.knownPreset(model) {
+		e["code"] = "model_not_found"
+	}
+	return map[string]any{"error": e}
 }
 
-// catalogue lists every preset the router knows, marked allowed_in_mode.
+// catalogue lists the presets, the household's first, marked
+// allowed_in_mode, with what the router says about each. Nothing else: the
+// router also lists every GGUF file in its models dir, and a client that
+// picks one of those is refused (#395).
 func (s *Server) catalogue(w http.ResponseWriter, r *http.Request) {
 	allowed, mode := s.Policy()
+	router := map[string]map[string]any{}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, strings.TrimRight(s.cfg.RouterURL, "/")+"/v1/models", nil)
-	resp, err := s.client.Do(req)
-	var listing map[string]any
-	if err == nil {
+	if resp, err := s.client.Do(req); err == nil {
 		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&listing)
-	}
-	if listing == nil {
-		listing = map[string]any{"object": "list", "data": []any{}}
-		var data []any
-		for _, p := range s.cfg.Presets {
-			data = append(data, map[string]any{"id": p.Alias, "object": "model"})
+		var listing struct {
+			Data []map[string]any `json:"data"`
 		}
-		listing["data"] = data
-	}
-	listing["mode"] = mode
-	if data, ok := listing["data"].([]any); ok {
-		for i, e := range data {
-			if m, ok := e.(map[string]any); ok {
-				id, _ := m["id"].(string)
-				m["allowed_in_mode"] = slices.Contains(allowed, id)
-				data[i] = m
+		json.NewDecoder(resp.Body).Decode(&listing)
+		for _, m := range listing.Data {
+			if id, _ := m["id"].(string); id != "" {
+				router[id] = m
 			}
 		}
 	}
+	presets := []string{s.cfg.Household}
+	for _, p := range s.cfg.Presets {
+		if p.Alias != s.cfg.Household {
+			presets = append(presets, p.Alias)
+		}
+	}
+	data := []any{}
+	for _, id := range presets {
+		m := router[id]
+		if m == nil {
+			m = map[string]any{"object": "model"}
+		}
+		m["id"], m["allowed_in_mode"] = id, slices.Contains(allowed, id)
+		data = append(data, m)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(listing)
+	json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data, "mode": mode})
 }

@@ -42,11 +42,22 @@ gpu:
   present: true
   owner: solaris                  # the service that holds the lease
 backup:
-  repo: sftp:nas:/backup/laib
+  repo: /mnt/data/backup/restic
   schedule: "03:00"
+  offsite:                        # the copy off the data disk (#391): restic copy after each backup
+    repo: rclone:nas:laib-restic  # rclone's backend, served by the rclone container (no host binary)
+    env: {RCLONE_CONFIG_NAS_TYPE: ftp, RCLONE_CONFIG_NAS_HOST: 192.168.178.1, RCLONE_CONFIG_NAS_USER: laib,
+          RCLONE_CONFIG_NAS_EXPLICIT_TLS: "true", RCLONE_CONFIG_NAS_NO_CHECK_CERTIFICATE: "true", RCLONE_CONFIG_NAS_CONCURRENCY: "2"}
+    secrets: [RCLONE_CONFIG_NAS_PASS]   # rclone obscure's output, in secrets.age
+dns:                              # DNS-01: one wildcard certificate *.<domain> (#378); absent = HTTP-01 per name
+  provider: desec                 # a module in ghcr.io/mdopp/laib-caddy (caddy/Containerfile)
+  secretRef: DNS_API_TOKEN        # laib secret set DNS_API_TOKEN (stdin)
+  challengeAlias: example-acme.dedyn.io   # only when _acme-challenge.<domain> is a CNAME into the provider's zone
 hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
 notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
+  mail: owner@example.home        # laib's mails (#393): red for 10 min, once a week the updates; empty: the sso
+                                  # service's OPERATOR_EMAIL. Sent with Authelia's SMTP_* values and AUTHELIA_SMTP_PASSWORD
 updates:
   days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
   time: "03:00"
@@ -148,7 +159,12 @@ An Operator skill (ADR 0023): `description` (German, one sentence),
 journal context inbox plan note escalate propose wish restart exec write
 apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
 the same way, #286), `context` (`box` or `usage`), `output` (`note`,
-`report`, `propose`) and `prompt`. A file with a built-in's name
+`report`, `propose`) and `prompt`. The mechanics are fields the Operator's
+runner enforces, never prompt prose (#376): `limits` (a cap per tool and
+session, `{propose: 3}`) and, for an updates skill, `updates: patch` (the
+runner reads `updates` itself, shows and allows only the patch values, and
+writes the minor versions and the registry errors into the note). The
+prompt keeps the judgment. A file with a built-in's name
 (`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
@@ -249,7 +265,8 @@ compose file does not know on its own that port 8000 must never reach the WLAN.
 
 An executable. Runs after `laib apply` verified the service green, in the
 service folder, with `LAIB_SERVICE`, `LAIB_DOMAIN`, `LAIB_DATA_DIR`,
-`LAIB_TZ`, `LAIB_LAN_IP`, every `values.yml` key (secrets resolved) and
+`LAIB_TZ`, `LAIB_LAN_IP`, `LAIB_START_URL` (where a login without a target
+lands: Haus once installed, else the box page, #381), every `values.yml` key (secrets resolved) and
 `LAIB_SECRET_<NAME>` for every declared secret in its environment. Ten-minute
 timeout. Its output is journaled with secrets redacted; a non-zero exit turns
 the apply red. A line `laib-secret: NAME=value` on stdout stores a credential
@@ -367,7 +384,8 @@ their last copy.
 snapshots before repairs and `laib restore` has something to restore, and it
 protects against mistakes and bad updates — not against the disk. `laib
 diag` says so until a NAS or second repo (or a mirror, `laib disk add`) is
-there. Point it at `sftp:nas:/backup/laib` when the NAS is ready.
+there. The copy off the disk is `backup.offsite` (docs/BACKUP.md, "The
+off-box copy").
 
 ### Secrets a template mints
 
@@ -382,3 +400,24 @@ does not reach (the NUC behind the Kraftwerk) or a domain whose DNS has no
 API (Strato). Trust `data/caddy/pki/authorities/local/root.crt` on the
 laptop and the phones. Empty = Let's Encrypt: HTTP-01 when `dns.provider`
 is empty (port 80 must reach the box, as today), DNS-01 otherwise.
+
+### `dns`: one wildcard certificate (#378)
+
+With `dns.provider` (and no `tls: internal`) Caddy gets **one** certificate
+for `*.<domain>` by DNS-01 and none per name: a new route has a valid
+certificate at once, needs no public DNS record (the LAN finds it through
+AdGuard's `*.<domain>` rewrite), and its name does not appear in the public
+certificate-transparency logs. A name with no route is closed (`abort`).
+The bare domain gets its own certificate only when a route uses it
+(`redirectFrom: ["@"]`); Caddy keeps one certificate per name, so apex and
+wildcard are two. A two-level name (`a.b.<domain>`) is not under the
+wildcard and gets its own certificate.
+
+`challengeAlias` is for a domain whose DNS has no API (Strato): there,
+`_acme-challenge.<domain>` is a CNAME to a name in a zone at the provider,
+and Caddy writes the TXT record at that name
+(`dns_challenge_override_domain`). Caddy asks public resolvers
+(`9.9.9.9`, `1.1.1.1`), not the box's AdGuard. `laib diag` checks the CNAME
+through the same resolvers: red when it points elsewhere, yellow when it
+does not resolve. The owner's steps: docs/INSTALL.md, "One wildcard
+certificate".

@@ -195,5 +195,31 @@ class Migrate(unittest.TestCase):
                 self.assertNotIn("__REDACTED__", f.read_text())
 
 
+class ServiceAccounts(unittest.TestCase):
+    """#375: HA's Jellyfin entry logged in as the LLDAP user solaris; Laib's
+    media lets only family and admins in through LDAP, so the migration names
+    every such login before it breaks, and the way out (Jellyfin's own
+    homeassistant account)."""
+
+    def test_has_jellyfin_entry_is_named(self):
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            cfg = json.loads((FIX / "config.json").read_text())
+            cfg["templateSettings"]["DATA_DIR"] = d
+            Path(d, "config.json").write_text(json.dumps(cfg))
+            st = Path(d, "home-assistant", "homeassistant", ".storage")
+            st.mkdir(parents=True)
+            st.joinpath("core.config_entries").write_text(json.dumps({"data": {"entries": [
+                {"domain": "jellyfin", "title": "Jellyfin", "data": {"url": "http://x:8096", "username": "solaris", "password": "not-read-0"}},
+                {"domain": "mqtt", "data": {"username": "mqtt"}}]}}))
+            p = subprocess.run([sys.executable, "-I", str(SCRIPT), "--config", str(Path(d, "config.json")),
+                                "--templates", str(FIX / "templates"), "--builtins", str(BUILTINS), "--out", str(Path(d, "out"))],
+                               capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertRegex(p.stdout, r"home-assistant: HA's jellyfin entry logs in as solaris, which media's LDAP filter \(family, admins\) refuses.*JELLYFIN_HA_PASSWORD.*homeassistant")
+        self.assertNotIn("not-read-0", p.stdout + p.stderr)
+        self.assertNotIn("as mqtt", p.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
