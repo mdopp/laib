@@ -1,9 +1,6 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -11,29 +8,19 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// #54 (6): linking the Bote's number is a QR from signal-cli's REST API,
-// fetched by laib so the Box page can show it — no terminal, no sgnl:// URI.
-func TestSignalLinkQRComesFromTheRESTAPI(t *testing.T) {
-	var seen string
-	signal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = r.URL.String()
-		if r.URL.Path != "/v1/qrcodelink" || r.URL.Query().Get("device_name") != "Bote" {
-			http.NotFound(w, r)
-			return
+// #469: signal-cli runs as its own daemon (Hermes and the relay speak it),
+// which has no QR endpoint, so the Box page tells the two ways to give the
+// Bote its number: registered on a number only it uses (a spare landline by
+// voice call, no second SIM — the Kraftwerk's way), or linked to a phone.
+func TestTheBoxPageTellsHowToGiveTheBoteItsNumber(t *testing.T) {
+	page := pages.BoteLinkPage("/mnt/data/stacks", "+4930123456")
+	for _, w := range []string{"register --voice", "verify", "setPin", "link -n Bote", "signal-cli-native", "+4930123456", "/mnt/data/stacks/bote/signal", "systemctl --user stop bote-signal"} {
+		if !strings.Contains(page, w) {
+			t.Errorf("the page lacks %q:\n%s", w, page)
 		}
-		w.Header().Set("Content-Type", "image/png")
-		w.Write([]byte("\x89PNG fake"))
-	}))
-	defer signal.Close()
-	png, err := pages.SignalLinkQR(context.Background(), signal.URL, "Bote")
-	if err != nil {
-		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(png), "\x89PNG") || !strings.Contains(seen, "device_name=Bote") {
-		t.Fatalf("%q %q", png, seen)
-	}
-	if _, err := pages.SignalLinkQR(context.Background(), "http://127.0.0.1:1", "Bote"); err == nil {
-		t.Fatal("a dead signal-cli must be an error, not an empty image")
+	if strings.Contains(page, "qrcodelink") || strings.Contains(page, "link.png") {
+		t.Error("the page still asks the REST API for a QR")
 	}
 }
 

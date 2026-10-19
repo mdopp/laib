@@ -68,7 +68,7 @@ data:
   - path: ${DATA_DIR}/bote/notify    # bote-notify's .env: the platform credentials only, written by post-deploy (#177)
     backup: false
 health:
-  http: http://127.0.0.1:8645/health # bote-notify, in every Bote; with Signal it asks signal-cli's /v1/about (#184)
+  http: http://127.0.0.1:8645/health # bote-notify, in every Bote; with Signal it asks signal-cli's daemon /api/v1/check (#184, #469)
 ports:
   - {port: 8085, lan: false, when: [SIGNAL_ACCOUNT]}  # signal-cli REST, loopback only (8080 is whoami, #46); first: the Box page's QR; without Signal neither declared nor published (#190)
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server, with BOTE_API_KEY; published beyond loopback for Haus's Sprechen field (#215)

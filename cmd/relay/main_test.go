@@ -42,6 +42,11 @@ func TestSignalApprovesWhileMatrixIsRefused(t *testing.T) {
 			io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
 			return
 		}
+		// signal-cli's own daemon (#469): the event stream is /api/v1/events for the Bote's account
+		if r.URL.Path != "/api/v1/events" || r.URL.Query().Get("account") != "+4915100000009" {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		fmt.Fprintf(w, "data: %s\n\n", `{"jsonrpc":"2.0","method":"receive","params":{"envelope":{"sourceNumber":"+4915100000001","dataMessage":{"message":"gib #17 frei"}}}}`)
 		w.(http.Flusher).Flush()

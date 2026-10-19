@@ -6,6 +6,17 @@
 set -euo pipefail
 H="$LAIB_DATA_DIR/bote/hermes"
 mkdir -p "$H"
+# signal-cli's data belongs to the image's user, uid 1000 (#469): laib makes the folder as
+# core, which is root in here and in the pod, and the daemon could not read its accounts
+if [ -n "${SIGNAL_ACCOUNT:-}" ] && [ "$(id -u)" = 0 ]; then
+  mkdir -p "$LAIB_DATA_DIR/bote/signal" && chown -R 1000:1000 "$LAIB_DATA_DIR/bote/signal"
+fi
+# laib's SOUL before Hermes' first start (#469): without one Hermes writes its stock
+# "You are Hermes Agent" and the Bote introduced itself as Hermes. post-deploy renders the
+# real one over anything with the marker; Hermes' stock text counts as replaceable.
+if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "^You are Hermes Agent"; then
+  printf '%s\n%s\n' "# rendered by laib pre-start; post-deploy writes the Bote's soul" "Du bist der Bote dieses Haushalts. Einen Moment, ich werde gerade eingerichtet." > "$H/SOUL.md"
+fi
 # The channels (#184): each optional, at least one; an unset one writes no
 # line, so Hermes starts no adapter for it. Names from Hermes' own config
 # (gateway/config_env.py, plugins/platforms/*/plugin.yaml, 2026-10-14).

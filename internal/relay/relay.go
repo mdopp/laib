@@ -18,6 +18,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -341,7 +342,7 @@ func (r *Relay) Run(ctx context.Context) {
 }
 
 func (r *Relay) listen(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(r.cfg.SignalURL, "/")+"/api/v1/events?account="+r.cfg.Account, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(r.cfg.SignalURL, "/")+"/api/v1/events?account="+url.QueryEscape(r.cfg.Account), nil) // a "+" unescaped is a space (#469)
 	if err != nil {
 		return err
 	}

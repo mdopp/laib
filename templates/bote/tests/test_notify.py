@@ -202,19 +202,24 @@ class Notify(unittest.TestCase):
         (self.src / ".env").write_text("SIGNAL_HTTP_URL=http://127.0.0.1:1\nSIGNAL_ACCOUNT=+491\n")
         self.assertEqual(health(), 503)
 
-        class About(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+        # #469: Hermes and the relay speak signal-cli's own daemon (daemon --http), whose
+        # health is /api/v1/check; bbernhard's REST API (/v1/about only) is not it
+        for path, want in (("/api/v1/check", 200), ("/v1/about", 503)):
+            class Daemon(http.server.BaseHTTPRequestHandler):
+                answers = path
 
-            def log_message(self, *a):
-                pass
-        about = http.server.HTTPServer(("127.0.0.1", 0), About)
-        threading.Thread(target=about.serve_forever, daemon=True).start()
-        try:
-            (self.src / ".env").write_text(f"SIGNAL_HTTP_URL=http://127.0.0.1:{about.server_port}\nSIGNAL_ACCOUNT=+491\n")
-            self.assertEqual(health(), 200)
-        finally:
-            about.shutdown(); about.server_close()
+                def do_GET(self):
+                    self.send_response(200 if self.path == self.answers else 404); self.end_headers(); self.wfile.write(b"{}")
+
+                def log_message(self, *a):
+                    pass
+            d = http.server.HTTPServer(("127.0.0.1", 0), Daemon)
+            threading.Thread(target=d.serve_forever, daemon=True).start()
+            try:
+                (self.src / ".env").write_text(f"SIGNAL_HTTP_URL=http://127.0.0.1:{d.server_port}\nSIGNAL_ACCOUNT=+491\n")
+                self.assertEqual(health(), want, path)
+            finally:
+                d.shutdown(); d.server_close()
         self.assertEqual(self.calls(), [])
 
 if __name__ == "__main__":

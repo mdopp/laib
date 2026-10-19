@@ -1,10 +1,14 @@
 [Unit]
-Description=Bote: signal-cli REST API (the phone number's linked device)
+Description=Bote: signal-cli's own HTTP daemon, the Bote's Signal account (#469)
 
 [Container]
 Image=${SIGNAL_IMAGE}
 Pod=bote.pod
-Environment=MODE=native
+# signal-cli's daemon, not the image's REST API: Hermes and the relay speak its
+# /api/v1/check, /api/v1/events and /api/v1/rpc (#469). The image runs as uid
+# 1000; pre-start gives it the data dir (a container in a pod has no user namespace of its own).
+Entrypoint=/usr/bin/signal-cli-native
+Exec=--config /home/.local/share/signal-cli -a ${SIGNAL_ACCOUNT} daemon --http 127.0.0.1:8080
 Volume=${DATA_DIR}/bote/signal:/home/.local/share/signal-cli:z
 AutoUpdate=registry
 
