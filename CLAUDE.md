@@ -17,7 +17,7 @@ them.
    cannot verify on the box, say so in those words.
 3. **KISS, and the kernel grows only on purpose.** Every program has a
    production-line cap in `scripts/loc.sh` with its reason next to the
-   number: the kernel 15,000, the Operator 3,000, and one for each program
+   number: the kernel 16,000 (raised 2026-10-19, #443), the Operator 3,000, and one for each program
    that left the kernel (ADR 0005 amendment #309, ADR 0023). Tests are not
    capped. At 95 % CI warns and opens the
    "Kern-Diät" issue; crossing a cap means raising it in the same PR, with
