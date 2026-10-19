@@ -51,6 +51,58 @@ laib token mint claude --ttl 8h # for a Claude session
 
 Nothing before step 3 changes a service; NPM stays the proxy until the services have moved, then Caddy replaces it (step 4d).
 
+## One wildcard certificate (DNS-01, the challenge delegated to deSEC)
+
+For a domain whose DNS has no API (`dopp.cloud` at Strato) and that should
+need no public record per name (#378, ADR 0007 amendment 2026-10-19). The
+domain and its records stay where they are; only the ACME challenge moves.
+`<name>` below is the deSEC name you register, e.g. `dopp-acme`.
+
+1. **deSEC account** (owner): sign up at <https://desec.io> with an email
+   address, confirm it. Free, no payment details.
+2. **The challenge zone** (owner): in the deSEC web UI "Domain Management" →
+   "+" → a dynDNS name `<name>.dedyn.io`. (Alternative: a zone of your own
+   such as `acme.dopp.cloud`, which needs NS records at Strato; the dedyn
+   name needs none.) Nothing else goes into it; Caddy writes and removes
+   one TXT record there per issuance.
+3. **The token** (owner): "Token Management" → "+" → name `laib caddy`,
+   no expiry. Copy it once, it is shown once. Restrict it (token policies,
+   "Edit policies"): a default policy without write permission, plus one
+   for domain `<name>.dedyn.io`, subname empty, type `TXT`, write
+   permission. The account then holds only this zone, and the token
+   writes only its TXT records.
+4. **The CNAME at Strato** (owner): `_acme-challenge` of `dopp.cloud`
+   (exists since 2026-10-19, pointing at `dopp.cloud`): change its target
+   to `<name>.dedyn.io.` Check from anywhere:
+   `dig +short CNAME _acme-challenge.dopp.cloud @9.9.9.9` answers
+   `<name>.dedyn.io.`
+5. **On the box** (core):
+
+   ```
+   laib secret set DNS_API_TOKEN          # paste the token, Enter, Ctrl-D: stdin, never argv
+   ```
+
+   then in `/mnt/data/laib/state/box.yml`:
+
+   ```yaml
+   dns:
+     provider: desec
+     secretRef: DNS_API_TOKEN
+     challengeAlias: <name>.dedyn.io
+   ```
+
+   `laib diag` shows no `acme` finding (the CNAME is right), then
+   `laib plan` (the Caddyfile: one `cert_issuer`, a `*.dopp.cloud` site)
+   and `laib apply`. Caddy fetches `*.dopp.cloud` within a minute:
+   `laib logs caddy` shows "certificate obtained successfully" for
+   `*.dopp.cloud`. The per-name certificates from HTTP-01 stay in
+   `${DATA_DIR}/caddy/data` until they expire; they are no longer renewed.
+6. **Proof**: a new route with no record at Strato answers in the LAN with a
+   valid Let's Encrypt certificate:
+   `curl -sv https://<new>.dopp.cloud 2>&1 | grep -E 'subject|issuer'`
+   shows `CN=*.dopp.cloud`. Names used from outside still need their
+   public CNAME at Strato (ADR 0013, class 3).
+
 ## Updating
 
 Re-run the install script with `--version vX.Y.Z` or without for latest. "Latest" is the newest release that has its binaries: they are built after the release's VM test, so for about an hour a fresh release is skipped, and the script says so.

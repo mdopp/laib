@@ -33,7 +33,7 @@ func TestDNS01RendersOneWildcardAndTheChallengeAlias(t *testing.T) {
 		"\tcert_issuer acme {\n\t\tdns desec {\n\t\t\ttoken {env.LAIB_DNS_TOKEN}\n\t\t}\n",
 		"\t\tdns_challenge_override_domain _acme-challenge.laib-acme.dedyn.io\n",
 		"\t\tresolvers 9.9.9.9 1.1.1.1\n",
-		"\n*.example.home {\n\tabort\n}\n",
+		"\n*.example.home {\n\trequest_header -Remote-*\n\tabort\n}\n",
 	} {
 		if !strings.Contains(cf, want) {
 			t.Errorf("missing %q in\n%s", want, cf)

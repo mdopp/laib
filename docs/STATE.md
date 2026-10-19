@@ -44,6 +44,10 @@ gpu:
 backup:
   repo: sftp:nas:/backup/laib
   schedule: "03:00"
+dns:                              # DNS-01: one wildcard certificate *.<domain> (#378); absent = HTTP-01 per name
+  provider: desec                 # a module in ghcr.io/mdopp/laib-caddy (caddy/Containerfile)
+  secretRef: DNS_API_TOKEN        # laib secret set DNS_API_TOKEN (stdin)
+  challengeAlias: example-acme.dedyn.io   # only when _acme-challenge.<domain> is a CNAME into the provider's zone
 hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
 notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
@@ -382,3 +386,24 @@ does not reach (the NUC behind the Kraftwerk) or a domain whose DNS has no
 API (Strato). Trust `data/caddy/pki/authorities/local/root.crt` on the
 laptop and the phones. Empty = Let's Encrypt: HTTP-01 when `dns.provider`
 is empty (port 80 must reach the box, as today), DNS-01 otherwise.
+
+### `dns`: one wildcard certificate (#378)
+
+With `dns.provider` (and no `tls: internal`) Caddy gets **one** certificate
+for `*.<domain>` by DNS-01 and none per name: a new route has a valid
+certificate at once, needs no public DNS record (the LAN finds it through
+AdGuard's `*.<domain>` rewrite), and its name does not appear in the public
+certificate-transparency logs. A name with no route is closed (`abort`).
+The bare domain gets its own certificate only when a route uses it
+(`redirectFrom: ["@"]`); Caddy keeps one certificate per name, so apex and
+wildcard are two. A two-level name (`a.b.<domain>`) is not under the
+wildcard and gets its own certificate.
+
+`challengeAlias` is for a domain whose DNS has no API (Strato): there,
+`_acme-challenge.<domain>` is a CNAME to a name in a zone at the provider,
+and Caddy writes the TXT record at that name
+(`dns_challenge_override_domain`). Caddy asks public resolvers
+(`9.9.9.9`, `1.1.1.1`), not the box's AdGuard. `laib diag` checks the CNAME
+through the same resolvers: red when it points elsewhere, yellow when it
+does not resolve. The owner's steps: docs/INSTALL.md, "One wildcard
+certificate".

@@ -147,6 +147,9 @@ type Backup struct {
 type DNS struct {
 	Provider  string `yaml:"provider"`  // e.g. "cloudflare"; empty = HTTP-01
 	SecretRef string `yaml:"secretRef"` // name in secrets.age
+	// ChallengeAlias: where the TXT goes when _acme-challenge.<domain> is a
+	// CNAME into the provider's zone (the domain's own DNS has no API, #378)
+	ChallengeAlias string `yaml:"challengeAlias"`
 }
 
 // Policy is policy.yml.
