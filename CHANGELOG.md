@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.8.0](https://github.com/mdopp/laib/compare/v0.7.0...v0.8.0) (2026-10-19)
+
+
+### Features
+
+* **backup:** a second restic repo off the box, filled by restic copy after each backup ([26f6735](https://github.com/mdopp/laib/commit/26f67357f4ae89d1685dbd583d3523789294901a)), closes [#391](https://github.com/mdopp/laib/issues/391)
+* **bote:** Discord as a channel, no second phone number needed ([#421](https://github.com/mdopp/laib/issues/421)) ([86b0c19](https://github.com/mdopp/laib/commit/86b0c194795e2d8c1e72a344f145cbb4a64387fb))
+* **host:** CDI spec at every boot, a boot check that rolls a bad OS deployment back once ([ec066db](https://github.com/mdopp/laib/commit/ec066dbec0d1785d0862be2b7c48b8c2586a9762))
+* **pages:** Laib's box, inbox and journal pages in the household look ([6ad9b48](https://github.com/mdopp/laib/commit/6ad9b4804ff1d180530b46d63de1141453bd14ba))
+* **pages:** mail the owner when something stays red, and weekly about updates ([28a923a](https://github.com/mdopp/laib/commit/28a923ac3f1b8c9efe8cf9a50232aaa1df932a68)), closes [#393](https://github.com/mdopp/laib/issues/393)
+* **radicale:** Haus's own account holds the household calendar, the family reads and writes it ([#418](https://github.com/mdopp/laib/issues/418)) ([20c5fa1](https://github.com/mdopp/laib/commit/20c5fa16435390c751a01da16f257c947fda9546))
+* **render:** one wildcard certificate via DNS-01, the challenge at box.yml dns.challengeAlias ([6ccaa0f](https://github.com/mdopp/laib/commit/6ccaa0f230de6a934ba1889877582550ec8069c1))
+* **scripts:** import a Google Takeout into a person's Radicale over CalDAV and CardDAV ([2916fc3](https://github.com/mdopp/laib/commit/2916fc3d3f59306810d4d7df3eda56295f4ba48e)), closes [#372](https://github.com/mdopp/laib/issues/372)
+* **skills:** limits and updates are skill fields the Operator enforces; the prompts keep judgment ([d33b921](https://github.com/mdopp/laib/commit/d33b9219839a4ab4d7f621994bcea3af9400c1c3))
+* **token:** a hand may get a short token of another per session, the werkstatt hand of claude ([#380](https://github.com/mdopp/laib/issues/380)) ([a1fca22](https://github.com/mdopp/laib/commit/a1fca2268d458333f22fe6272c446629a0b1f7fc))
+* **werkstatt:** Claude Code asks for its session's claude token, none at rest ([#380](https://github.com/mdopp/laib/issues/380)) ([5585f2c](https://github.com/mdopp/laib/commit/5585f2cef2af4870349c76a28499159bc71a7183))
+* **werkstatt:** Claude Remote Control sessions per checkout again, as claude-dev started them ([#383](https://github.com/mdopp/laib/issues/383)) ([fc730e6](https://github.com/mdopp/laib/commit/fc730e6c2c3cc24c7dd281588883adcd6eda5d33))
+* **werkstatt:** pi in the browser again at pi.&lt;domain&gt;, behind Authelia for admins ([#384](https://github.com/mdopp/laib/issues/384)) ([3509ce0](https://github.com/mdopp/laib/commit/3509ce0bffb542620502689212d807d0ced18f6d))
+
+
+### Bug Fixes
+
+* **apply:** a pull that fails for an image present locally is no red, and migration day pulls first ([ec1287f](https://github.com/mdopp/laib/commit/ec1287f45b09bfd095f26639f78a8ec44500f68f)), closes [#370](https://github.com/mdopp/laib/issues/370)
+* **home-assistant:** the check asks Z-Wave only where the zwave unit exists ([a0a8621](https://github.com/mdopp/laib/commit/a0a86212283a324ae88962e91087336f72563c72))
+* **host:** the boot check is scripts/boot-check.sh, a verified release asset ([9da39e1](https://github.com/mdopp/laib/commit/9da39e17134924e0fcfd22e21fe5e9c9bd0b29ab))
+* **install:** a release without the boot check still installs ([9dbbbe8](https://github.com/mdopp/laib/commit/9dbbbe8035fd975fd43d1e6dd6b4882f597ab742))
+* **install:** restic as its pinned static release, no layering, no reboot ([d9ee0e6](https://github.com/mdopp/laib/commit/d9ee0e674166f0b7190b8db5b0c54e650866451f)), closes [#367](https://github.com/mdopp/laib/issues/367)
+* **lease:** /v1/models lists the presets only, the household's first; a raw file id is a 404 ([1dd4e60](https://github.com/mdopp/laib/commit/1dd4e60f0a2cbed9cebffa58910c75ad8c1d3dca))
+* **llama:** laib-lease degrades on an unprovided role; the llama step disables solaris-llama-policy ([c77f5a3](https://github.com/mdopp/laib/commit/c77f5a377e1098a688bdd38efef7a2380811a95b))
+* **llama:** presets.ini writes spec-draft-n-max; the llama.cpp image is pinned by tag and digest ([a0e35c9](https://github.com/mdopp/laib/commit/a0e35c94bb66c4480895da5ab488b5eb340f6ec0))
+* **media:** Home Assistant logs in to Jellyfin with its own account, not an LLDAP person ([67468ee](https://github.com/mdopp/laib/commit/67468ee0ee03585c6d9730fcb9e721768621a1b0))
+* **migration-day:** resolve every route name publicly when the box uses HTTP-01 ([83ec664](https://github.com/mdopp/laib/commit/83ec664c23bc498be44172be5b506800cdd90d04)), closes [#377](https://github.com/mdopp/laib/issues/377)
+* **migration-day:** the dry run checks KONFLIKT against the units that stay; the Google import goes with radicale ([8e23e3e](https://github.com/mdopp/laib/commit/8e23e3e49a15f71be831d167ce783b015555cff5)), closes [#371](https://github.com/mdopp/laib/issues/371)
+* **migration:** switch Solaris's links into ServiceBay off explicitly ([ea2fc45](https://github.com/mdopp/laib/commit/ea2fc45deb4cc3ebb17075ec30e8ceb5d8dbfe63)), closes [#396](https://github.com/mdopp/laib/issues/396)
+* **migration:** the llama comment in sb_units swallowed caddy's and werkstatt's units ([c8b54c6](https://github.com/mdopp/laib/commit/c8b54c656d2c5a2b57279273f07deef5481633de))
+* **migration:** try the carried HA and AdGuard admin logins before anything moves ([d3faa11](https://github.com/mdopp/laib/commit/d3faa11c7437425d39b640c37dc1b1e596eee91f)), closes [#373](https://github.com/mdopp/laib/issues/373)
+* **plan:** a changed value is a change of its service, whoever reads it ([6b22f09](https://github.com/mdopp/laib/commit/6b22f0908d05e0a059ad331b963489dd0d9811da)), closes [#364](https://github.com/mdopp/laib/issues/364)
+* **secret:** rotate refuses a data-bound secret instead of locking its app out ([9b3f565](https://github.com/mdopp/laib/commit/9b3f5650ac5cd74fede56308c42bc13378454f1b)), closes [#353](https://github.com/mdopp/laib/issues/353)
+* **template:** Authelia keeps its sessions in a Valkey in the auth pod, on disk ([2dbc93a](https://github.com/mdopp/laib/commit/2dbc93a3a525f78c5127eafb06b424c354fb87f5))
+* **template:** Authelia's default redirect follows box.yml laib.host, or haus once installed ([ea3d30d](https://github.com/mdopp/laib/commit/ea3d30d8b6076fe462abb7c17fd18e76df27e9d4))
+* **template:** mosquitto's hook writes the password file as mosquitto's own hash ([7a31a54](https://github.com/mdopp/laib/commit/7a31a5416398634d2d3e069c1b2f2506a9721191))
+* **template:** the Z-Wave stick opens under SELinux; home-assistant is red while zwave has no controller ([adbca20](https://github.com/mdopp/laib/commit/adbca20673c34103ebd722f785d91223ac49d936))
+* **vm:** cut the first boot on its own console line, not a polled window ([af85690](https://github.com/mdopp/laib/commit/af85690f4bf584bbdd237c6239b2b5135b89ca42))
+* **vm:** the early power cut fires on install-box.sh's start line ([7100687](https://github.com/mdopp/laib/commit/71006876e9c398b4347cbfb610664d5cffe8d204))
+* **werkstatt:** copy werkstatt-sessions alone, pi-web's launcher has its own line ([#384](https://github.com/mdopp/laib/issues/384)) ([9076446](https://github.com/mdopp/laib/commit/9076446a72bf9cc3c36c6c2ce105e278aa0b7bca))
+* **werkstatt:** drop ServiceBay's dead MCP entries from the sessions; Laib's /mcp is theirs ([8406ad4](https://github.com/mdopp/laib/commit/8406ad42cc74dfa263ea03b7a4e5ff242c2273fc))
+* **werkstatt:** pi-web-ui in its own tree beside its SDK; the boot test's box has an sso role ([#384](https://github.com/mdopp/laib/issues/384)) ([b12d8e9](https://github.com/mdopp/laib/commit/b12d8e9299e1bf956120f38aaca6ec3d32c6c185))
+* **werkstatt:** the agent kit's home is the Werkstatt image; its skills are linked for pi and Claude ([47763eb](https://github.com/mdopp/laib/commit/47763eb122731bf6dd03ae13f3fa6650b337eace))
+* **werkstatt:** the empty session's window gives way to the first checkout's ([#383](https://github.com/mdopp/laib/issues/383)) ([cd5cb65](https://github.com/mdopp/laib/commit/cd5cb65704ddcd4f8f039a22990bd32ab3964ee6))
+
 ## [0.7.0](https://github.com/mdopp/laib/compare/v0.6.0...v0.7.0) (2026-10-18)
 
 
