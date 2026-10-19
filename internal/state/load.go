@@ -243,6 +243,9 @@ func (st *State) validate() []error {
 	st.Box.Laib.Port = cmp.Or(st.Box.Laib.Port, 5900)
 	st.Box.Laib.Listen = cmp.Or(st.Box.Laib.Listen, "127.0.0.1")
 	st.Box.Laib.Group = cmp.Or(st.Box.Laib.Group, "admins")
+	if st.Box.DNS.ChallengeAlias != "" && st.Box.DNS.Provider == "" {
+		fail("box.yml: dns.challengeAlias needs dns.provider (the API that writes the TXT there)")
+	}
 	if st.Box.Roles.Model != "" && !st.Box.GPU.Present {
 		fail("box.yml: roles.model is set but gpu.present is false")
 	}

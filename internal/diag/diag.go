@@ -8,6 +8,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -224,6 +226,16 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich"})
 		}
 	}
+	// The delegated ACME challenge (#378): a wrong CNAME fails every renewal, silently.
+	if a := st.Box.DNS.ChallengeAlias; a != "" && only == "" {
+		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, network, render.PublicResolvers[0]+":53")
+		}}
+		cname, err := r.LookupCNAME(ctx, "_acme-challenge."+st.Box.Domain)
+		if f := challengeFinding(st.Box.Domain, a, cname, err); f != nil {
+			out = append(out, *f)
+		}
+	}
 	// The data RAID: one member by design is yellow, a lost member red.
 	if _, members := disk.MarkerMembers(); members > 0 {
 		if b, err := os.ReadFile("/proc/mdstat"); err == nil {
@@ -233,6 +245,19 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })
 	return out
+}
+
+// challengeFinding judges what the public DNS answers for _acme-challenge.<domain>.
+func challengeFinding(domain, alias, cname string, err error) *Finding {
+	name := "_acme-challenge." + domain
+	fix := "beim DNS-Anbieter der Domain: " + name + " CNAME " + alias + " (docs/INSTALL.md, Wildcard-Zertifikat)"
+	if err != nil {
+		return &Finding{Severity: "gelb", Probe: "acme", Detail: name + " nicht auflösbar (" + err.Error() + "): ob das Zertifikat sich erneuern kann, ist offen", Fix: fix}
+	}
+	if !strings.EqualFold(strings.TrimSuffix(cname, "."), strings.TrimSuffix(alias, ".")) {
+		return &Finding{Severity: "rot", Probe: "acme", Detail: name + " zeigt auf " + cname + ", nicht auf " + alias + ": Caddy schreibt die Challenge dorthin, Let's Encrypt sucht sie hier, das Zertifikat erneuert sich nicht", Fix: fix}
+	}
+	return nil
 }
 
 func uniq(in []string) []string {

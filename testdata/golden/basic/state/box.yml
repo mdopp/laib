@@ -12,8 +12,9 @@ roles:
 gpu:
   present: false
 dns:
-  provider: cloudflare
+  provider: desec
   secretRef: DNS_API_TOKEN
+  challengeAlias: example-acme.dedyn.io   # _acme-challenge.example.home is a CNAME to it (#378)
 backup:
   repo: sftp:nas:/backup/laib
   schedule: "03:30"
