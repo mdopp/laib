@@ -243,3 +243,27 @@ func TestTheRelayReadsTheOwnersDiscordDM(t *testing.T) {
 		t.Errorf("an owner id without Discord must fail plan: %v", err)
 	}
 }
+
+// #469: bote-signal runs signal-cli's own HTTP daemon, which Hermes and the
+// relay speak (/api/v1/check, /api/v1/events, /api/v1/rpc), not
+// bbernhard's REST API; and pre-start gives its data dir to the image's
+// user (uid 1000): a container in a pod cannot take UserNS=.
+func TestBoteSignalRunsSignalCLIsDaemon(t *testing.T) {
+	out, err := boteBox(t, "", map[string]string{"ADMIN_NUMBER": "+4915198765432"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := out["quadlet/bote/bote-signal.container"]
+	for _, w := range []string{"Entrypoint=/usr/bin/signal-cli-native", "daemon --http 127.0.0.1:8080", "-a +4915112345678", "--config /home/.local/share/signal-cli"} {
+		if !strings.Contains(unit, w) {
+			t.Errorf("bote-signal lacks %q:\n%s", w, unit)
+		}
+	}
+	if strings.Contains(unit, "MODE=") || strings.Contains(unit, "UserNS=") {
+		t.Errorf("bote-signal still starts the REST API, or takes a user namespace a pod's container cannot:\n%s", unit)
+	}
+	pre, _ := os.ReadFile("../../templates/bote/pre-start")
+	if !strings.Contains(string(pre), "chown -R 1000:1000") {
+		t.Error("pre-start does not give the signal data dir to uid 1000")
+	}
+}
