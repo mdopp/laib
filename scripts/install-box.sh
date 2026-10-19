@@ -58,6 +58,15 @@ box_config() {
   fi
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
+  # OS updates (#368): Zincati stages an update and asks laib before it
+  # reboots (fleet_lock): laib grants it in the window after the backup,
+  # green and proven. 60- wins over ServiceBay's 55-servicebay-lock.toml;
+  # the pause files (90-, 95-: updates.enabled = false) still switch it off.
+  if [ -e /usr/lib/zincati ] || [ -d "$etc/zincati" ]; then
+    $s mkdir -p "$etc/zincati/config.d"
+    printf '[updates]\nstrategy = "fleet_lock"\n\n[updates.fleet_lock]\nbase_url = "http://127.0.0.1:5900/"\n' | $s tee "$etc/zincati/config.d/60-laib-updates.toml" >/dev/null
+    [ -z "$s" ] || sudo systemctl try-restart zincati.service
+  fi
   # One firewall mechanism (#445): Laib's nftables table (inet laib). uCore
   # enables firewalld (zone FedoraServer: ssh only), which blocked the
   # household from every port but SSH; masked, so no image brings it back.

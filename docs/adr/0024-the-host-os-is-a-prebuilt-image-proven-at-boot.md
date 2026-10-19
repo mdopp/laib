@@ -78,6 +78,22 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    units are disabled, because the data disk is mdadm with XFS and an
    import scan must not take a foreign disk. The checklist is in
    `docs/INSTALL.md` ("Rebasing a GPU box to uCore").
+7. **OS updates are the normal path, through laib's reboot lock** (#368).
+   Zincati keeps finding and staging updates; `install-box.sh` sets its
+   strategy to `fleet_lock` against laib on loopback
+   (`/etc/zincati/config.d/60-laib-updates.toml`, `/v1/pre-reboot`). laib
+   grants the reboot only in the update window, two to four hours after
+   `backup.schedule` (05:00–07:00 for the default 03:00), never while
+   `laib-backup.service` runs, never while laib is not green, and never
+   before the running deployment is proven by the boot check. A held reboot
+   is a 409 for Zincati, which asks again in a few minutes. The grant and
+   the arrival (`/v1/steady-state` after the boot) are journal lines
+   (`os-update`); `laib diag` says when an update is staged and when its
+   window is. The boot check stays the guard after the reboot. The pause
+   files (`90-…`, `95-laib-boot-check.toml`: `updates.enabled = false`)
+   still switch updates off entirely. Alternative in one line: Zincati's own
+   `periodic` strategy, a fixed weekly window that knows nothing of a red
+   laib or a running backup.
 
 ## Consequences
 
@@ -87,7 +103,9 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
 - Until part 1 lands, the Kraftwerk still builds its module on the box; the
   boot check then catches a failed build (no `nvidia-smi`) and rolls back,
   which is what makes lifting the hand-made Zincati pause safe at all.
-- Still open: the rebase itself (owner, on the box), the image pin and its
-  update proposal in Laib, a VM run of a deliberately broken deployment
-  (the VM has no GPU: the laib half only), and an update window that never
-  shares the backup slot (Zincati `[updates.periodic]` drop-in).
+- Lifting the hand-made Zincati pause is the owner's step, once the boot
+  check with the LAN probe (#445) has proven the running deployment
+  (`docs/INSTALL.md`, "OS updates").
+- Still open: the image pin and its update proposal in Laib, and a VM run
+  of a deliberately broken deployment (the VM has no GPU: the laib half
+  only).
