@@ -42,8 +42,13 @@ gpu:
   present: true
   owner: solaris                  # the service that holds the lease
 backup:
-  repo: sftp:nas:/backup/laib
+  repo: /mnt/data/backup/restic
   schedule: "03:00"
+  offsite:                        # the copy off the data disk (#391): restic copy after each backup
+    repo: rclone:nas:laib-restic  # rclone's backend, served by the rclone container (no host binary)
+    env: {RCLONE_CONFIG_NAS_TYPE: ftp, RCLONE_CONFIG_NAS_HOST: 192.168.178.1, RCLONE_CONFIG_NAS_USER: laib,
+          RCLONE_CONFIG_NAS_EXPLICIT_TLS: "true", RCLONE_CONFIG_NAS_NO_CHECK_CERTIFICATE: "true", RCLONE_CONFIG_NAS_CONCURRENCY: "2"}
+    secrets: [RCLONE_CONFIG_NAS_PASS]   # rclone obscure's output, in secrets.age
 hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
 notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
@@ -368,7 +373,8 @@ their last copy.
 snapshots before repairs and `laib restore` has something to restore, and it
 protects against mistakes and bad updates — not against the disk. `laib
 diag` says so until a NAS or second repo (or a mirror, `laib disk add`) is
-there. Point it at `sftp:nas:/backup/laib` when the NAS is ready.
+there. The copy off the disk is `backup.offsite` (docs/BACKUP.md, "The
+off-box copy").
 
 ### Secrets a template mints
 

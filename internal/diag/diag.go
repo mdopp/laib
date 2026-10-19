@@ -179,8 +179,11 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
 	all, _ := journal.Read(env.Paths.Journal, time.Time{})
 	var installed time.Time
-	var lastCheck time.Time
+	var lastCheck, lastOffsite time.Time
 	for _, e := range all {
+		if e.Verb == "backup" && e.Reason == "offsite" && e.Result == "green" {
+			lastOffsite = e.T
+		}
 		if e.Verb == "init" && installed.IsZero() {
 			installed = e.T
 		}
@@ -189,6 +192,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		}
 	}
 	switch repo := st.Box.Backup.Repo; {
+	case st.Box.Backup.Offsite != nil && repo != "":
+		if time.Since(lastOffsite) > 48*time.Hour { // #391: the copy off the data disk is the one a dead disk leaves
+			out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "keine frische Kopie außer Haus (" + st.Box.Backup.Offsite.Repo + ") seit mehr als 48 Stunden: ein Plattenausfall nähme alles mit", Fix: "laib journal --verb backup (reason offsite); NAS erreichbar? laib backup"})
+		}
 	case repo == "":
 		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
 	case strings.HasPrefix(repo, "/") && strings.HasPrefix(repo, filepath.Dir(st.Box.DataDir)):

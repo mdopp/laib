@@ -141,6 +141,12 @@ type GPU struct {
 type Backup struct {
 	Repo     string `yaml:"repo"`
 	Schedule string `yaml:"schedule"`
+	// Offsite is the second repo, off the data disk (#391): after each backup
+	// its new snapshots are copied there (restic copy), with the same password.
+	Offsite *Backup           `yaml:"offsite,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`     // the backend's settings (RCLONE_CONFIG_NAS_HOST …)
+	Secrets []string          `yaml:"secrets,omitempty"` // secrets.age names handed to restic as environment
+	Plain   bool              `yaml:"-"`                 // restic as core, not in podman unshare: a repo-to-repo copy reads no service files
 }
 
 // DNS is the ACME DNS-01 provider for Caddy (ADR 0007).
