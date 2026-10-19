@@ -155,7 +155,7 @@ YAML
 # the soul: who the Bote is. Rendered on every apply while it carries the
 # marker below, so it names exactly the tools wired above (#54); a SOUL.md
 # without the marker is the admin's own and stays.
-if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib"; then cat > "$H/SOUL.md" <<SOUL
+if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^You are Hermes Agent"; then cat > "$H/SOUL.md" <<SOUL
 # rendered by laib post-deploy; edit SOUL.md and remove this first line to make it yours
 $STYLE
 Gib jede Nachricht zuerst an das Werkzeug persona (eingabe: die Nachricht, sitzung: wer schreibt, so wie du die Person siehst, sprache: de oder en). Es weiß, wo die Person gerade steht. Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. Kommt "WEITER: <werkzeug>" mit einer PROMPT-Zeile zurück, beantworte die Nachricht selbst, im Kontext nur mit diesem Werkzeug (bei "-" mit jedem), und beginne mit der Prompt-Zeile. Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und frag noch einmal. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.

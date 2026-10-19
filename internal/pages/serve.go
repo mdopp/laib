@@ -114,24 +114,14 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		day, text := LastReport(env)
 		page(w, "Status", statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != ""))
 	}))
-	// the Bote's link QR from signal-cli (#54): scan it in Signal → Gekoppelte Geräte
+	// how the Bote gets its Signal number (#469): registered or linked, with signal-cli once
 	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
-		page(w, "Bote verbinden", `<h1>Bote verbinden</h1><p>Auf dem Telefon mit der Nummer des Boten: Signal → Einstellungen → Gekoppelte Geräte → Neues Gerät koppeln, dann diesen Code scannen. Der Code gilt einige Minuten; die Seite neu laden holt einen frischen.</p><p><img src="/bote/link.png" alt="QR zum Koppeln" width=320 height=320></p><p><a href="/">zurück</a></p>`)
-	}))
-	mux.HandleFunc("/bote/link.png", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		if err != nil || BoteSignalBase(st) == "" {
-			http.Error(w, "kein Bote auf dieser Box", http.StatusNotFound)
+			http.Error(w, "kein Bote mit Signal auf dieser Box", http.StatusNotFound)
 			return
 		}
-		png, err := SignalLinkQR(r.Context(), BoteSignalBase(st), "Bote")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Write(png)
+		page(w, "Bote verbinden", "<h1>Bote verbinden</h1><p>Der Bote braucht eine eigene Signal-Nummer, einmal auf der Box eingerichtet:</p><pre>"+BoteLinkPage(st.Box.DataDir, boteAccount(st))+"</pre><p><a href=\"/\">zurück</a></p>")
 	}))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(cli.InboxDir(env), true)
@@ -343,7 +333,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	}
 	links := `<a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a>`
 	if bote {
-		links += `<a href="/bote/link">Bote verbinden (QR)</a>`
+		links += `<a href="/bote/link">Bote verbinden</a>`
 	}
 	heard := rd.LastHeard
 	if len(heard) >= 19 {

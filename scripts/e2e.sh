@@ -535,7 +535,7 @@ C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true
 last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
 # --- 15. #184 (B1): a Bote switched from Signal to Matrix applies green with no hand edit: pre-start
 # renders the channel .env files before the units start, so neither Hermes nor the health check reads
-# the last Signal config. bote-notify serves the pod's health; a fake signal-cli answers while Signal is on.
+# the last Signal config. bote-notify serves the pod's health; a fake signal-cli daemon (/api/v1/check, #469) answers while Signal is on.
 B="$LAIB_HOME/state/services/bote"; mkdir -p "$B"
 cp "$ROOT"/templates/bote/* "$B/" 2>/dev/null || true; mv "$B/values.example.yml" "$B/values.yml"; rm -f "$B/README.md"
 grep -q "^laib:" "$LAIB_HOME/state/box.yml" || printf 'laib: {listen: 0.0.0.0}\n' >> "$LAIB_HOME/state/box.yml"
@@ -543,7 +543,7 @@ for s in BOTE_LAIB_TOKEN BOTE_APPROVER_TOKEN; do echo "tok_$s" | LAIB_ACTOR=huma
 python3 -c '
 import http.server
 class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(self): self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+    def do_GET(self): self.send_response(200 if self.path == "/api/v1/check" else 404); self.end_headers(); self.wfile.write(b"{}")
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()' & echo $! > "$WORK/signal.pid"
 NOTIFY_LISTEN=127.0.0.1:8645 NOTIFY_TOKEN=n NOTIFY_HERMES="$WORK/data/bote/notify" python3 "$ROOT/templates/bote/notify.py" >/dev/null & echo $! > "$WORK/notify.pid"
