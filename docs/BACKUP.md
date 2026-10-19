@@ -89,6 +89,42 @@ One tool, one declaration per service, one key.
 
 Issue #4 implements this.
 
+## The off-box copy (#391)
+
+The local repo sits on the disk it protects. `box.yml backup.offsite` names
+a second restic repo off the box; after every green `laib backup` its new
+snapshots are copied there (`restic copy --from-repo`, created on the first
+run with the local repo's chunker parameters), the same retention is applied,
+and a journal line with reason `offsite` records it. The services stop once,
+for the local snapshot; the copy reads only the local repo, so it runs as
+`core`, not in podman's namespace. Same password (`RESTIC_PASSWORD`): the
+recovery sheet opens both. `laib backup check` restore-tests both repos.
+
+- **Transport: rclone, as a container.** The Fritz!Box NAS speaks FTP and
+  SMB, not sftp (ServiceBay used FTP with `basic-ftp`: SMB is off by default
+  on the Fritz!Box and NTLM needs DES). restic's `rclone:` backend runs
+  `podman run … docker.io/rclone/rclone serve restic --stdio`; the host
+  needs no second binary. The backend's settings are `RCLONE_CONFIG_<NAME>_*`
+  in `backup.offsite.env`, its password a secret named in
+  `backup.offsite.secrets` (both reach restic and the container as
+  environment, never argv). The Fritz!Box limits FTP sessions:
+  `RCLONE_CONFIG_NAS_CONCURRENCY: "2"` (ServiceBay #2876).
+- **What it holds:** what the local repo holds: the state repo with
+  `secrets.age`, the journal, every declared path. That is the content
+  ServiceBay never sent off the box: Immich's upload and its database (a
+  quiesced copy), the photos folder, Paperless's documents and database,
+  notes and documents. Music, films and audiobooks stay out (`backup: false`,
+  bulk; the mirror template's job).
+- **Visible:** `laib backup` is red when the copy fails; the box page counts
+  two places only while the last copy is under 48 hours old; `laib diag` is
+  `rot` after 48 hours without one.
+- **Setting it up (the owner):** a Fritz!Box user with NAS access (Fritz!Box
+  → System → FRITZ!Box-Benutzer, "Zugang zu NAS-Inhalten"), FTP on (Heimnetz
+  → USB/Speicher → "Zugriff über FTP"), then on the box:
+  `podman run --rm -i docker.io/rclone/rclone:1.68.2 obscure - | laib secret set RCLONE_CONFIG_NAS_PASS`
+  (type the password, Ctrl-D), the `offsite` block in `box.yml`
+  (docs/STATE.md), `laib apply`, `laib backup`, `laib backup check`.
+
 ## Restic runs in podman's user namespace
 
 The services' files belong to the containers' users, which rootless podman

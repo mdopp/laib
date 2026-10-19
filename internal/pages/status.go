@@ -27,7 +27,7 @@ import (
 // LastBackup: the last successful backup and how many places hold it.
 type LastBackup struct {
 	At    string `json:"at,omitempty"` // RFC3339
-	Repos int    `json:"repos"`        // places: the configured repo counts one; off-box is the owner's second repo
+	Repos int    `json:"repos"`        // places: the configured repo counts one, the off-box repo a second while its copy is under 48 h old
 	OK    bool   `json:"ok"`
 }
 
@@ -189,15 +189,22 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 // last approved proposal from the inbox (haus#2).
 func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange) {
 	var lb LastBackup
+	var offsite time.Time
 	if es, err := journal.Read(env.Paths.Journal, time.Time{}); err == nil {
 		for _, e := range es {
 			if e.Verb == "backup" && e.Result == "green" && e.Reason == "" {
 				lb = LastBackup{At: e.T.UTC().Format(time.RFC3339), OK: true}
 			}
+			if e.Verb == "backup" && e.Result == "green" && e.Reason == "offsite" {
+				offsite = e.T
+			}
 		}
 	}
 	if st.Box.Backup.Repo != "" {
 		lb.Repos = 1
+		if st.Box.Backup.Offsite != nil && time.Since(offsite) < 48*time.Hour { // the second place counts while its copy is fresh (#391)
+			lb.Repos = 2
+		}
 	}
 	var lc LastChange
 	if ps, err := proposal.List(cli.InboxDir(env), false); err == nil {

@@ -82,6 +82,15 @@ func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 		t.Fatalf("a fresh off-box copy is no finding: %+v", *f)
 	}
 
+	// the monthly restore test reads from the NAS too
+	calls = nil
+	if rc := backup.Cmd(context.Background(), b.env, []string{"check"}); rc != cli.ExitOK {
+		t.Fatalf("backup check rc %d: %s", rc, strings.Join(calls, "\n"))
+	}
+	if !strings.Contains(strings.Join(calls, "\n"), "rclone:nas:laib-restic restore latest:") {
+		t.Fatalf("no restore test from the off-box repo:\n%s", strings.Join(calls, "\n"))
+	}
+
 	// the NAS does not answer: the run is red, the box page says one place, diag red after 48 h
 	offsiteFails = true
 	if rc := backup.Cmd(context.Background(), b.env, nil); rc == cli.ExitOK {
