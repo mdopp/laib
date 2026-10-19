@@ -301,6 +301,19 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
 if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:\|(ha:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
 grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
+# #470: the chat answers without thinking (Hermes reads extra_body only from a custom_providers entry
+# matched by provider and base_url: agent/agent_init.py), /model denken thinks, through its own named entry
+python3 - "$HOOKDIR/bote/hermes/config.yaml" <<'PY' || fail "the Bote's chat thinks before every answer, or denken does not (#470)"
+import re, sys
+t = open(sys.argv[1]).read()
+cp = t[t.index("\ncustom_providers:"):]
+first, second = cp.index("- name: laib\n"), cp.index("- name: denken\n")
+assert first < second, "laib's entry must come first: it is the default model's fallback"
+assert "enable_thinking: false" in cp[first:second], cp[first:second]
+assert "enable_thinking: true" in cp[second:second + 400], cp[second:second + 400]
+alias = t[t.index("model_aliases:"):t.index("mcp_servers:")]
+assert "provider: custom:denken" in alias, alias
+PY
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
 grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
