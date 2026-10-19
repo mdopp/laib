@@ -195,27 +195,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge
 	// for a week and red after it (#40) — a dead disk then takes the backup with it.
-	all, _ := journal.Read(env.Paths.Journal, time.Time{})
-	var installed time.Time
-	var lastCheck, lastGreen, lastOffsite time.Time
-	lastRun := ""
-	for _, e := range all {
-		if e.Verb == "backup" && e.Reason == "offsite" && e.Result == "green" {
-			lastOffsite = e.T
-		}
-		if e.Verb == "backup" && e.Reason == "" {
-			lastRun = e.Result
-			if e.Result == "green" {
-				lastGreen = e.T
-			}
-		}
-		if e.Verb == "init" && installed.IsZero() {
-			installed = e.T
-		}
-		if e.Verb == "backup" && e.Reason == "check" && e.Result == "green" && e.T.After(lastCheck) {
-			lastCheck = e.T
-		}
-	}
+	bf := backupFacts(env)
+	installed, lastCheck, lastGreen, lastOffsite, lastRun := bf.installed, bf.RestoreTest, bf.LastGreen, bf.Offsite, bf.Nightly.Result
 	switch repo := st.Box.Backup.Repo; {
 	case st.Box.Backup.Offsite != nil && repo != "":
 		if time.Since(lastOffsite) > 48*time.Hour { // #391: the copy off the data disk is the one a dead disk leaves
@@ -274,6 +255,66 @@ func diskFindings(ctx context.Context, hardware bool) []Finding {
 		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")"}}
 	}
 	return out
+}
+
+// BackupFacts is what the journal says the backups did (#441): the last
+// nightly run, the last green one, the last off-box copy and restore test.
+type BackupFacts struct {
+	Nightly                         journal.Entry `json:"nightly"`
+	LastGreen, Offsite, RestoreTest time.Time
+	Findings                        []Finding `json:"findings"`
+	installed                       time.Time
+}
+
+func backupFacts(env *cli.Env) BackupFacts {
+	var f BackupFacts
+	all, _ := journal.Read(env.Paths.Journal, time.Time{})
+	for _, e := range all {
+		switch {
+		case e.Verb == "init" && f.installed.IsZero():
+			f.installed = e.T
+		case e.Verb != "backup" || e.Result != "green" && e.Reason != "":
+		case e.Reason == "":
+			f.Nightly = e
+			if e.Result == "green" {
+				f.LastGreen = e.T
+			}
+		case e.Reason == "offsite":
+			f.Offsite = e.T
+		case e.Reason == "check" && e.T.After(f.RestoreTest):
+			f.RestoreTest = e.T
+		}
+	}
+	return f
+}
+
+// Backups is `laib backups` (read, #441): the backups as the chat hands see
+// them — what the journal records and diag's backup findings with their fix.
+func Backups(ctx context.Context, env *cli.Env, _ []string) int {
+	st, err := cli.LoadState(env)
+	if err != nil {
+		return env.Fail(err)
+	}
+	f := backupFacts(env)
+	for _, x := range Probes(ctx, env, st, "") {
+		if x.Probe == "backup" || x.Probe == "restore-test" || x.Probe == "recovery" {
+			f.Findings = append(f.Findings, x)
+		}
+	}
+	if env.JSON {
+		return cli.Emit(env, f)
+	}
+	when := func(t time.Time) string {
+		if t.IsZero() {
+			return "nie"
+		}
+		return t.Local().Format("02.01. 15:04") + fmt.Sprintf(" (vor %.0f h)", time.Since(t).Hours())
+	}
+	fmt.Fprintf(env.W(), "letzte Sicherung: %s %s %s\nletzte grüne:     %s\naußer Haus:       %s\nProbe-Restore:    %s\n", cmp.Or(f.Nightly.Result, "nie"), when(f.Nightly.T), f.Nightly.Detail, when(f.LastGreen), when(f.Offsite), when(f.RestoreTest))
+	for _, x := range f.Findings {
+		fmt.Fprintf(env.W(), "%-5s %s → %s\n", x.Severity, x.Detail, x.Fix)
+	}
+	return cli.ExitOK
 }
 
 // challengeFinding judges what the public DNS answers for _acme-challenge.<domain>.
