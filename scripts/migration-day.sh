@@ -58,7 +58,9 @@ PATH=$(dirname "$LAIB_BIN"):$PATH
 export LAIB_HOME=${LAIB_HOME:-/mnt/data/laib} LAIB_ACTOR=human:core LAIB=$LAIB_BIN PATH
 
 # MIGRATION.md's order: step 1 (install, drafts, secrets), 3 (auth), 4, 4d (caddy), 5 (werkstatt), 6 (ignore), 7 (retire)
-STEPS="preflight install drafts secrets auth adguard llama radicale mosquitto file-share beets esphome usage-metrics immich paperless media home-assistant vaultwarden caddy werkstatt ignore retire"
+# haus right before caddy (#379): its route's redirectFrom serves the apex and www., ServiceBay's
+# portal, and home-assistant has minted its HAUS_HA_TOKEN by then
+STEPS="preflight install drafts secrets auth adguard llama radicale mosquitto file-share beets esphome usage-metrics immich paperless media home-assistant vaultwarden haus caddy werkstatt ignore retire"
 # what stays on its ServiceBay unit, ignored (MIGRATION.md step 6; #160): Solaris until Phase 5,
 # chronik until foundry-chronicle has its Laib template (foundry-chronicle#362). The Google import
 # goes off with radicale: it writes into radicale's data, a KONFLIKT once radicale is Laib's (#371)
@@ -69,7 +71,7 @@ sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
     llama) echo "llama llama-embed";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
     radicale) echo "radicale solaris-import-google";;   # #371: the Google import writes into radicale's data
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
-    preflight|install|drafts|secrets|ignore) ;;
+    preflight|install|drafts|secrets|ignore|haus) ;;   # haus: new, no ServiceBay unit
     *) echo "$1";;
   esac
 }
@@ -90,6 +92,8 @@ import json, sys
 c = json.load(open(sys.argv[1]))
 if sys.argv[2] == "domain":
     print((c.get("reverseProxy") or {}).get("publicDomain", ""))
+elif sys.argv[2] == "hosts":   # NPM's names (reverseProxy.hosts)
+    print(" ".join(sorted({h.get("domain", "") for h in (c.get("reverseProxy") or {}).get("hosts") or []} - {""})))
 elif sys.argv[2] == "updates":
     print(bool((c.get("autoUpdate") or {}).get("enabled")), bool((c.get("updateWindow") or {}).get("enabled")))
 else:
@@ -151,6 +155,7 @@ preconditions() {
   read -r v free <<<"$(sbjson updates)"
   if [ "$v $free" != "False False" ]; then echo "  WARN  ServiceBay's auto-update ($v) or update window ($free) is on: switch both off for the weekend (ServiceBay → Settings), so nothing restarts a service mid-move"; fi
   [ -n "$DOMAIN" ]; check $? "the domain: ${DOMAIN:-none} (ServiceBay's reverseProxy.publicDomain)"
+  [ -n "$LAN_IP" ]; check $? "the LAN address: ${LAN_IP:-none} (box.yml lanIp: AdGuard's rewrites, Haus's network drive; LAN_IP=<it>)"
   free=$(df -P -BG "$(dirname "$DATA")" 2>/dev/null | awk 'NR == 2 {sub("G", "", $4); print $4}')
   [ "${free:-0}" -ge "$MIN_FREE_GB" ]; check $? "free on the data disk: ${free:-?} GiB (at least $MIN_FREE_GB)"
   if [ -z "${SRC:-}" ]; then
@@ -220,7 +225,7 @@ add_line() { sed -n "s/^  \(.*laib add $1\( .*\)\?\)$/\1/p" "$OUT.txt"; }
 laib_add() {
   local n=$1 line extra="" rc=0 c
   line=$(add_line "$n")
-  case "$n" in caddy|werkstatt) [ -n "$line" ] || line="laib add $n";; esac
+  case "$n" in caddy|werkstatt|haus) [ -n "$line" ] || line="laib add $n";; esac
   [ -n "$line" ] || { echo "migrate-servicebay.py printed no laib add line for $n ($OUT.txt)"; return 1; }
   # "One value goes with them" (MIGRATION.md, secrets that carry over)
   if [ "$n" = mosquitto ] && [[ "$line" != *MQTT_USER=* ]]; then extra=" MQTT_USER=$MQTT_USER"; fi
@@ -266,7 +271,7 @@ step_install() {
   local from=(--version "$LAIB_VERSION")
   [ -z "${SRC:-}" ] || from=(--source "$SRC")   # one build served over HTTP: the generalprobe
   # shellcheck disable=SC2086  # INSTALL_ARGS is a list of flags
-  bash "$INSTALL_BOX" "${from[@]}" --domain "$DOMAIN" --gpu ${INSTALL_ARGS:-}   # the Kraftwerk is the GPU box
+  bash "$INSTALL_BOX" "${from[@]}" --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} --gpu ${INSTALL_ARGS:-}   # the Kraftwerk is the GPU box
   if [ -n "${HOOKS:-}" ]; then   # this commit's hooks image (CI only; the box takes :latest)
     local b=$STATE/box.yml
     if grep -q "^laib:" "$b"; then sed -i "s|^laib:|laib:\n    hooksImage: $HOOKS|" "$b"; else printf "laib:\n    hooksImage: %s\n" "$HOOKS" >> "$b"; fi
@@ -356,6 +361,12 @@ step_service() {   # MIGRATION.md step 3 and 4, a–c
   npm_serves "$s"
 }
 
+step_haus() {   # #379: the family's entry point; the apex and www. redirect to it once Caddy serves
+  say "4e. Haus, the family's entry point: $DOMAIN and www. redirect to haus.$DOMAIN"
+  prepull haus
+  laib_add haus
+}
+
 step_caddy() {
   say "4d. Caddy replaces NPM"
   on_box caddy || { echo "no NPM here: skipped"; return 10; }
@@ -405,7 +416,7 @@ step_retire() {
 run_step() {
   case $1 in
     preflight) step_preflight;; install) step_install;; drafts) step_drafts;; secrets) step_secrets;;
-    caddy) step_caddy;; ignore) step_ignore;; retire) step_retire;;
+    caddy) step_caddy;; haus) step_haus;; ignore) step_ignore;; retire) step_retire;;
     *) step_service "$1";;
   esac
 }
@@ -583,7 +594,14 @@ public_dns() {   # public_dns <laib.yml …>: one ok, RED or WARN line; 1 when a
 }
 templates_of_steps() {   # the templates the run adds on this box
   local s
-  for s in $STEPS; do service_step "$s" && on_box "$s" && echo "$TEMPLATES/$s/laib.yml"; done
+  for s in $STEPS; do { [ "$s" = haus ] || { service_step "$s" && on_box "$s"; }; } && echo "$TEMPLATES/$s/laib.yml"; done
+}
+dark() {   # NPM's names no template of the run routes: they go dark at the caddy step (#379)
+  local h names left=""
+  # shellcheck disable=SC2046
+  names=" $(route_names $(templates_of_steps) | tr '\n' ' ') "
+  for h in $(sbjson hosts); do case "$names" in *" $h "*) ;; *) left="$left $h";; esac; done
+  [ -z "$left" ] || echo "  note  NPM's names that go dark at the caddy step (no Laib route):$left"
 }
 
 dry_run() {
@@ -597,10 +615,11 @@ dry_run() {
     if service_step "$s" && ! on_box "$s"; then st="${st:-skip: ServiceBay does not run it here}"; fi
     case $s in
       preflight) d="the preconditions above";;
-      install) d="install-box.sh $([ -n "${SRC:-}" ] && echo "--source $SRC" || echo "--version $LAIB_VERSION") --domain $DOMAIN --gpu ${INSTALL_ARGS:-}";;
+      install) d="install-box.sh $([ -n "${SRC:-}" ] && echo "--source $SRC" || echo "--version $LAIB_VERSION") --domain $DOMAIN${LAN_IP:+ --lan-ip $LAN_IP} --gpu ${INSTALL_ARGS:-}";;
       drafts) d="ServiceBay's templates out of its container, migrate-servicebay.py -> $OUT.txt";;
       secrets) d="carry-servicebay-secrets.sh, the line migrate-servicebay.py prints; ServiceBay's mail password (notifications.email)";;
       caddy) d="NPM out, laib add caddy, every name through Caddy";;
+      haus) d="laib add haus: the family's entry point, $DOMAIN and www. redirect to it";;
       ignore) d="laib ignore what stays: $IGNORE";;
       retire) d="out with ServiceBay: $(sb_units retire)";;
       *) d="ServiceBay's $(sb_units "$s") out, its data moved where MIGRATION.md says, its laib add line";;
@@ -610,6 +629,7 @@ dry_run() {
   unclaimed
   # shellcheck disable=SC2046
   public_dns $(templates_of_steps) || rc=1
+  dark
   st=$(konflikte)
   if [ -n "$st" ]; then echo "$st"; echo "        laib add refuses these (KONFLIKT): stop the unit with the step that takes the service, or drop its mount"; rc=1; fi
   if [ "$(last_status drafts)" != green ] && [ "$(podman container inspect -f '{{.State.Running}}' servicebay 2>/dev/null)" = true ]; then
@@ -667,7 +687,7 @@ launch() {   # the run, as a transient user unit that outlives the SSH session
     echo "$UNIT runs already: scripts/migration-day.sh status, or journalctl --user -u $UNIT -f" >&2; return 1
   fi
   local v envs=()
-  for v in PATH DOMAIN LAIB_VERSION SRC INSTALL_ARGS HOOKS MQTT_USER IMMICH_ADMIN_EMAIL SB_VERSION BACKUP_MAX_AGE_H MIN_FREE_GB MIG_DIR IGNORE RESTIC_REPOSITORY RESTIC_PASSWORD_FILE \
+  for v in PATH DOMAIN LAN_IP LAIB_VERSION SRC INSTALL_ARGS HOOKS MQTT_USER IMMICH_ADMIN_EMAIL SB_VERSION BACKUP_MAX_AGE_H MIN_FREE_GB MIG_DIR IGNORE RESTIC_REPOSITORY RESTIC_PASSWORD_FILE \
            Q DATA_DIR SB_DATA LAIB_BIN LAIB_STATE OUT INSTALL_BOX MIGRATE_PY CARRY MOVE TEMPLATES PYTHON CONTAINERENV MIG_USER; do
     [ -n "${!v+x}" ] && envs+=("--setenv=$v=${!v}")
   done
@@ -698,6 +718,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 DOMAIN=${DOMAIN:-$(sbjson domain)}
+# the box's LAN address (install-box.sh --lan-ip): the source address of its default route
+LAN_IP=${LAN_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')}
 if [ -z "${LAIB_VERSION:-}" ]; then
   if [ -n "${SRC:-}" ]; then LAIB_VERSION=$(curl -fsSL "$SRC/VERSION" 2>/dev/null); else LAIB_VERSION=v$(cat "$HERE/../version.txt"); fi
 fi

@@ -402,12 +402,13 @@ echo "  laib add vaultwarden"
 
     def test_dry_run_lists_route_names_without_a_public_record(self):
         # #377: HTTP-01 needs a public record per name; vault has none here
-        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test"})
+        haus = {"haus.box.test", "box.test", "www.box.test"}   # haus's route and its redirects (#379)
+        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test"} | haus)
         r = self.run_md("--dry-run", PUBLIC_DNS=doh)
         self.assertNotEqual(r.returncode, 0, r.stdout)
         self.assertIn("RED   öffentlicher DNS-Eintrag fehlt: vault.box.test", r.stdout)
         self.changed_nothing()
-        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test", "vault.box.test"})
+        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test", "vault.box.test"} | haus)
         r = self.run_md("--dry-run", PUBLIC_DNS=doh)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("ok    every route name has a public DNS record", r.stdout)

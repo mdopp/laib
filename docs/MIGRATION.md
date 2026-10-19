@@ -165,6 +165,11 @@ file moves out.
    token, one bot): `${DATA_DIR}/daggerheart` → `chronik/data`,
    `daggerheart-aufnahmen` → `chronik/aufnahmen`, copied, never moved. The
    Discord token carries over with `laib secret set CHRONIK_DISCORD_TOKEN`.
+   Then **Haus** (`laib add haus`, new, no ServiceBay unit): the family's
+   entry point, and the target of the apex and `www.` redirect (its route's
+   `redirectFrom`, #360), so it goes in before Caddy and after home-assistant,
+   whose post-deploy mints `HAUS_HA_TOKEN` (#379). Its network-drive page and
+   AdGuard's rewrites need `box.yml lanIp` (`install-box.sh --lan-ip`).
    d. When every routed service is Laib's: **Caddy replaces NPM.** NPM's
       unit out by a. (`nginx`), then `laib add caddy`; its routes are the
       state's, now the full list. Verify each name through Caddy (none

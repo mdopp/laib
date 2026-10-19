@@ -116,8 +116,9 @@ Link, don't re-ask. Each one was decided; asking again is noise.
 Decided 2026-10-18 (owner): `dopp.cloud`, `www.` and `import.` are not
 needed. `import.` goes dark with NPM and gets no Laib route; `dopp.cloud`
 and `www.` redirect to `haus.` from Caddy's switch on (#360: the haus
-route's `redirectFrom`, no service), so the family's old entry point leads
-to Haus. ServiceBay's portal and its request form behind them are gone;
+route's `redirectFrom`), so the family's old entry point leads to Haus. The
+redirect needs Haus itself: the `haus` step adds it right before `caddy`,
+after home-assistant has minted its `HAUS_HA_TOKEN` (#379). ServiceBay's portal and its request form behind them are gone;
 residents are invited (`laib person invite`, Haus's Box card). `solaris-import-google`
 goes off with radicale in phase 3: it writes into radicale's data, which
 `laib add radicale` refuses as a `KONFLIKT` (#371); its importers become
@@ -330,7 +331,9 @@ the Werkstatt answers on SSH 2222 (its host key is new, the app asks once).
   them: `chat.` (Solaris), `import.` (the Google import), `asteroids.` and
   `flut.` (go with ServiceBay, #160). `ws-test-2205.` is stale.
   `dopp.cloud` and `www.` (ServiceBay's portal; also the token mint URL
-  Solaris uses) do not go dark: Caddy redirects them to `haus.` (#360). The
+  Solaris uses) do not go dark: Caddy redirects them to `haus.` (#360),
+  which the `haus` step adds before `caddy` (#379). The dry run lists the
+  names that go dark, from the templates the run adds, not from this list. The
   owner does not need `import.` (2026-10-18); ask before phase 4 only
   whether `chat.` may go dark for the weekend.
 - **chronik** stays on its ServiceBay unit (ignored) until
