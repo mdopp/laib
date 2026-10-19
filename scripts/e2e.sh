@@ -20,6 +20,8 @@ echo "$@" >> "${SYSTEMCTL_LOG:-/dev/null}"
 for u in ${SHIM_FAIL_RESTART:-}; do
   case "$*" in *" restart $u"*) echo "Job for $u failed (shim)" >&2; exit 1;; esac
 done
+# a CoreOS box has no firewalld (#445): systemctl answers as for a unit that is not there
+case "$*" in *firewalld*) echo inactive; exit 4;; esac
 case "$*" in *is-active*)
   for u in ${SHIM_FAILED_UNITS:-}; do
     case "$*" in *"$u"*) echo failed; exit 3;; esac
