@@ -745,7 +745,11 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 				holder = l.Holder
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
+			code := http.StatusConflict
+			if !s.knownPreset(model) {
+				code = http.StatusNotFound // a raw file id or a typo: no window ever allows it (#395)
+			}
+			w.WriteHeader(code)
 			json.NewEncoder(w).Encode(s.denial(model, mode, allowed, holder))
 			return
 		}
@@ -811,37 +815,48 @@ func (s *Server) denial(model, mode string, allowed []string, holder string) map
 			remedy = "„" + holder + "“ hat die Grafikkarte gerade; die Lease zeigt, bis wann."
 		}
 	}
-	return map[string]any{"error": map[string]any{"message": fmt.Sprintf("Modell %s ist im Modus %s nicht erlaubt. %s %s", model, mode, say, remedy), "mode": mode, "allowed": allowed}}
+	e := map[string]any{"message": fmt.Sprintf("Modell %s ist im Modus %s nicht erlaubt. %s %s", model, mode, say, remedy), "mode": mode, "allowed": allowed}
+	if !s.knownPreset(model) {
+		e["code"] = "model_not_found"
+	}
+	return map[string]any{"error": e}
 }
 
-// catalogue lists every preset the router knows, marked allowed_in_mode.
+// catalogue lists the presets, the household's first, marked
+// allowed_in_mode, with what the router says about each. Nothing else: the
+// router also lists every GGUF file in its models dir, and a client that
+// picks one of those is refused (#395).
 func (s *Server) catalogue(w http.ResponseWriter, r *http.Request) {
 	allowed, mode := s.Policy()
+	router := map[string]map[string]any{}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, strings.TrimRight(s.cfg.RouterURL, "/")+"/v1/models", nil)
-	resp, err := s.client.Do(req)
-	var listing map[string]any
-	if err == nil {
+	if resp, err := s.client.Do(req); err == nil {
 		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&listing)
-	}
-	if listing == nil {
-		listing = map[string]any{"object": "list", "data": []any{}}
-		var data []any
-		for _, p := range s.cfg.Presets {
-			data = append(data, map[string]any{"id": p.Alias, "object": "model"})
+		var listing struct {
+			Data []map[string]any `json:"data"`
 		}
-		listing["data"] = data
-	}
-	listing["mode"] = mode
-	if data, ok := listing["data"].([]any); ok {
-		for i, e := range data {
-			if m, ok := e.(map[string]any); ok {
-				id, _ := m["id"].(string)
-				m["allowed_in_mode"] = slices.Contains(allowed, id)
-				data[i] = m
+		json.NewDecoder(resp.Body).Decode(&listing)
+		for _, m := range listing.Data {
+			if id, _ := m["id"].(string); id != "" {
+				router[id] = m
 			}
 		}
 	}
+	presets := []string{s.cfg.Household}
+	for _, p := range s.cfg.Presets {
+		if p.Alias != s.cfg.Household {
+			presets = append(presets, p.Alias)
+		}
+	}
+	data := []any{}
+	for _, id := range presets {
+		m := router[id]
+		if m == nil {
+			m = map[string]any{"object": "model"}
+		}
+		m["id"], m["allowed_in_mode"] = id, slices.Contains(allowed, id)
+		data = append(data, m)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(listing)
+	json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data, "mode": mode})
 }

@@ -60,5 +60,10 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   the reason in German: „Grafikkarte reserviert für bote („qwen3.6-35b-a3b“):
   Sprache läuft langsamer, bis 15:30“. A window older than
   `LEASE_WARN_AFTER` (20 min) gets one yellow journal line.
+- **The presets, nothing else.** `/v1/models` through the proxy lists the
+  presets, the household's first, each marked `allowed_in_mode`; the router
+  also lists every GGUF file in its models dir, and those are left out. A
+  request for a raw file id is a 404 (`model_not_found`) naming the
+  presets (#395).
 - **One port.** The lease answers on the proxy's port (`PORT`, 11435):
   `http://<gpu-box>:11435/api/model-lease`.
