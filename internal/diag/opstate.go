@@ -39,7 +39,7 @@ func OperatorState(f OpFacts) (string, *Finding) {
 	case !f.Enabled && f.ModelURL == "":
 		return "aus", nil // a box without a model: nothing to expect
 	case !f.Enabled:
-		return "aus", &Finding{Severity: "gelb", Probe: "operator", Detail: "Operator nicht aktiviert: niemand repariert nachts, kein Morgenbericht", Fix: "laib operator enable"}
+		return "aus", &Finding{Severity: "gelb", Probe: "operator", Detail: "Operator nicht aktiviert: niemand repariert nachts, kein Morgenbericht", Fix: "laib operator enable", Repair: []string{"operator", "enable"}}
 	case !f.UnitActive:
 		return "fehlt", &Finding{Severity: "rot", Probe: "operator", Detail: "Operator ist aktiviert, aber laib-operator.service läuft nicht", Fix: "journalctl --user -u laib-operator; laib operator enable"}
 	case !f.Answers:

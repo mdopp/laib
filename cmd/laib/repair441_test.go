@@ -139,7 +139,9 @@ func TestARepairFileWithAnotherCommandIsRefusedAtApproval(t *testing.T) {
 		t.Fatal("something ran for a repair laib does not offer")
 	}
 	es, _ := journal.Read(env.Paths.Journal, time.Time{})
-	if !slices.ContainsFunc(es, func(e journal.Entry) bool { return e.Verb == "repair" && e.Result == "red" && strings.Contains(e.Detail, "laib remove whoami") }) {
+	if !slices.ContainsFunc(es, func(e journal.Entry) bool {
+		return e.Verb == "repair" && e.Result == "red" && strings.Contains(e.Detail, "laib remove whoami")
+	}) {
 		t.Fatalf("the journal must say which command was refused: %+v", es)
 	}
 }
