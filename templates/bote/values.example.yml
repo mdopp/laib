@@ -1,4 +1,4 @@
-HERMES_IMAGE: docker.io/nousresearch/hermes-agent:latest
+HERMES_IMAGE: docker.io/nousresearch/hermes-agent:v0.22.2
 SIGNAL_IMAGE: docker.io/bbernhard/signal-cli-rest-api:latest
 # Channels (#184): each optional, at least one. A channel is on while its
 # first value is set; an empty one leaves no container and no Hermes entry.
