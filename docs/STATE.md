@@ -343,6 +343,14 @@ before forward-auth (`order request_header first`), so the only
 gets none at all, and its app must not trust one (#231,
 `internal/render/auth231_test.go`).
 
+### Secrets that are a human's login (#441)
+
+`login: {user, host, path?, note?}` on a contract secret marks it as a login
+a person uses. `user` is a literal or `${KEY}` of the service's values.yml,
+and `host` is a route host (the address becomes `https://<host>.<domain><path>`).
+`laib recovery-sheet` lists these logins, and `--vaultwarden <file>` exports
+them with their passwords for an import into Vaultwarden (docs/BACKUP.md).
+
 ### Secrets the data was made with (#353)
 
 A contract secret with `dataBound: true` is read by its app only when the app

@@ -53,6 +53,17 @@ One tool, one declaration per service, one key.
   without that page an off-box repo is useless. `laib init` and the stick
   say so; `laib diag` stays yellow until `laib recovery-sheet --confirm`.
   Humans at the console only, never over MCP.
+- **The logins Laib made** (#441). The sheet also lists every admin login a
+  template marks (`login:` on a secret): LLDAP's admin, your own first
+  password, AdGuard, Paperless, Immich, Jellyfin, Home Assistant, the
+  Vaultwarden admin token, Audiobookshelf, MQTT. It shows the user and the
+  address, never the password. `laib recovery-sheet --vaultwarden <file>`
+  writes them with their passwords as a Bitwarden JSON import file (mode
+  0600, never over an existing file, nothing on the terminal). In
+  Vaultwarden: Werkzeuge → Daten importieren → "Bitwarden (json)", then
+  `shred -u <file>`. The passwords stay in `secrets.age` as well: Laib needs
+  them to reconcile. ServiceBay instead handed each password over once, as a
+  CSV, and then forgot it.
 - **The password is never invented twice.** `backupPrep` generates
   `RESTIC_PASSWORD` only when the repo does not exist yet; an existing repo
   without the password in `secrets.age` asks for the sheet's

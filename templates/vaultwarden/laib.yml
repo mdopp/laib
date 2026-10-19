@@ -11,6 +11,7 @@ routes:
     auth: none
 secrets:
   - name: VAULTWARDEN_ADMIN_TOKEN
+    login: {user: admin, host: vault, path: /admin, note: "Vaultwardens Admin-Seite: nur das Token zählt"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
 oidc:
   clientId: vaultwarden
   redirectUris: ["https://vault.${DOMAIN}/identity/connect/oidc-signin"]

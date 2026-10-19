@@ -69,6 +69,7 @@ building a kernel under 15k lines beside it. One user, one migration
 - The Next.js dashboard: wizard, network map, backup page, browser terminal, YAML editor, registry browser, settings pages.
 - 28 JSON stores, the digital twin, the store version ledger.
 - Nginx Proxy Manager, its admin client, the rekey logic.
+- The credentials page and its Bitwarden CSV come back as the recovery sheet's list of logins and `laib recovery-sheet --vaultwarden <file>` (owner, mdopp, 2026-10-19, #441).
 - Credential self-heal and 36 diagnose probes with action buttons. About ten probe scripts remain.
 - 64 hand-written MCP tools and the in-code policy table.
 - Learning proposals, the Hermes and Claude-dev modules, the chat embed.
