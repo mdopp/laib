@@ -86,21 +86,33 @@ The list above was written at the founding commit without the owner. Each
 ServiceBay feature it dropped, or that vanished unnamed, now has a decision.
 Where a line here and the list above disagree, this one holds.
 
-**Back** (each built under its own issue, linked on #441):
+**The interface is the chat.** The owner, 2026-10-19 (#441): "Das Interface
+ist jetzt der Chat, das heißt aber nicht, dass die Daten deshalb falsch sein
+dürfen." What ServiceBay showed on web pages comes back as verbs and MCP
+tools the chat's hands call (pi, Claude, later the Bote), each with its tier,
+not as pages. **The rule:** a chat answer about the box comes from a Laib
+tool that reads the rendered or running state, never from templates or the
+model's guess; where no such tool exists, the hand says so instead of
+reconstructing. Which hand may call what is the owner's call (#392).
 
-- **Network map**: what reaches what, from the rendered config. Entscheidung: mdopp, 2026-10-19 — the agents guessed the network wrong without it. Done: `laib net`, `--mermaid`, the page `/net` (#440).
-- **Start and stop per service on the Box page**, for admins. Entscheidung: mdopp, 2026-10-19 — restarting in Haus is not enough when a service has to stay off for a while.
-- **Live logs in the browser**: the last lines per service on the Box page. Entscheidung: mdopp, 2026-10-19 — reading a red service's log should not need SSH.
-- **One-click repairs**: a diag finding's fix becomes an Inbox proposal a human approves. Entscheidung: mdopp, 2026-10-19 — the fix verb is known; turning it into a click keeps the human's approval without the typing.
-- **A backup section on the Box page**: the last backup, the off-box copy's age, the last restore test. Entscheidung: mdopp, 2026-10-19 — one line in Haus does not say whether the backup can be trusted.
+**Back, as verbs the chat calls:**
+
+- **Network map.** Entscheidung: mdopp, 2026-10-19 — the agents guessed the network wrong without it. Done: `laib net` and `--mermaid` (#440), read tier.
+- **Start and stop of a service.** Entscheidung: mdopp, 2026-10-19 — `restart` exists, but keeping a service off (and on again) had no verb.
+- **Live logs, status, inspect, look.** Entscheidung: mdopp, 2026-10-19 — they exist at the read tier (`laib logs`, `status`, `inspect`, `look`) and are the chat's way to read a service; a gap here is a missing verb, not a missing page.
+- **A shell.** Entscheidung: mdopp, 2026-10-19 — `laib look` (read) and `laib exec` (envelope) in a service's own container; a host shell stays out (ADR 0012).
+- **Backup status**: the last nightly backup, the off-box copy's age, the last restore test, in one answer. Entscheidung: mdopp, 2026-10-19 — one line "Letzte Sicherung" does not say whether the backup can be trusted.
+- **One-click repairs**: a diag finding's fix becomes a proposal. Entscheidung: mdopp, 2026-10-19 — the fix verb is known; the chat files it, a human approves it.
 - **Credentials handover**: the admin logins Laib holds go into Vaultwarden and onto the recovery sheet. Entscheidung: mdopp, 2026-10-19 — the household must reach its apps when the admin is not there.
 - **Disk import**, as a Werkstatt skill with a deterministic copy tool. Entscheidung: mdopp, 2026-10-19 — importing an old disk is a judgement (what goes where) plus mechanics (copy, verify, dedupe); the agent judges, the tool copies.
-- **Notifications through the Bote's channels, mail as the fallback.** This replaces ServiceBay's mail on a destructive action. Entscheidung: mdopp, 2026-10-19 — the owner reads Signal before mail; the mail of #393 stays for when no channel is set up.
+- **Notifications through the Bote's channels, mail as the fallback.** This replaces ServiceBay's mail on a destructive action. Entscheidung: mdopp, 2026-10-19 — the owner reads Signal before mail; the mail of #393 stays for when no channel answers.
+- **Who approves what from the chat.** Entscheidung: mdopp, 2026-10-19 — a destructive action is approved only in the Inbox, with two factors; the chat tells about it and sends the link. A non-destructive one may be approved in the chat.
 - **OS updates**, with the GPU surviving them. Entscheidung: mdopp, 2026-10-19 — an unpatched host is no option. Done (#368).
 
 **Dropped on purpose:**
 
-- **Web terminal.** Entscheidung: mdopp, 2026-10-19 — pi in the browser and Claude's Remote Control cover it.
+- **Web pages for the above** (a network page, start/stop buttons, a log viewer, a backup page). Entscheidung: mdopp, 2026-10-19 — the interface is the chat.
+- **Web terminal.** Entscheidung: mdopp, 2026-10-19 — pi in the browser and Claude's Remote Control cover it; a host shell stays out (ADR 0012).
 - **Health history graphs.** Entscheidung: mdopp, 2026-10-19 — the journal has the history.
 - **Settings, registry browser and setup pages.** Entscheidung: mdopp, 2026-10-19 — the state repo and the agents are the interface.
 - **Learning proposals** (`propose_learning`). Entscheidung: mdopp, 2026-10-19 — replaced by pull requests to the Werkstatt guide's skills (#394).
