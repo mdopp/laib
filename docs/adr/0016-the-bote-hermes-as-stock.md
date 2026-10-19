@@ -149,3 +149,18 @@ device's keys stay in `${DATA_DIR}/bote/signal` and in the backups that
 hold it. To remove them: unlink the device on the phone (Signal → Linked
 devices), delete the folder, and let the backup retention age the old
 snapshots out (or `restic forget` them).
+
+## Amendment 2026-10-19 (#421): Discord as a fourth channel
+
+The owner will not get a second phone number for the Bote, and the household
+already uses Discord. Discord joins Signal, Matrix and Telegram under the
+same rules: it is on while `DISCORD_ALLOWED_USERS` is set, the bot token is
+the external secret `BOTE_DISCORD_TOKEN`, an unset channel leaves no line,
+and users without the token fail plan. A person is reached on their DM
+channel id (`discord:<channel id>`). **Discord never approves.** As with
+Telegram, a bot token and a Discord account are not a verified identity
+(#48). It carries chat and messages only, and approvals stay on the Box
+page and in Haus. A token without users is not refused. It leaves Discord
+off, the same as Telegram. Signal without a second SIM is possible on a
+spare landline, registered with signal-cli as primary by voice call. The
+template README has the steps; the Box page does not do it.

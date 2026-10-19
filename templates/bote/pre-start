@@ -10,10 +10,12 @@ mkdir -p "$H"
 # line, so Hermes starts no adapter for it. Names from Hermes' own config
 # (gateway/config_env.py, plugins/platforms/*/plugin.yaml, 2026-10-14).
 SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" MATRIX_HOMESERVER="${MATRIX_HOMESERVER:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}"
+DISCORD_ALLOWED_USERS="${DISCORD_ALLOWED_USERS:-}"
 ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
-if [ -z "$SIGNAL_ACCOUNT$MATRIX_HOMESERVER$TELEGRAM_ALLOWED_USERS" ]; then echo "bote: kein Kanal (SIGNAL_ACCOUNT, MATRIX_HOMESERVER oder TELEGRAM_ALLOWED_USERS)" >&2; exit 1; fi
+if [ -z "$SIGNAL_ACCOUNT$MATRIX_HOMESERVER$TELEGRAM_ALLOWED_USERS$DISCORD_ALLOWED_USERS" ]; then echo "bote: kein Kanal (SIGNAL_ACCOUNT, MATRIX_HOMESERVER, TELEGRAM_ALLOWED_USERS oder DISCORD_ALLOWED_USERS)" >&2; exit 1; fi
 if [ -n "$MATRIX_HOMESERVER" ] && [ -z "${LAIB_SECRET_BOTE_MATRIX_TOKEN:-}" ]; then echo "bote: Matrix ohne Token: laib secret set BOTE_MATRIX_TOKEN" >&2; exit 1; fi
 if [ -n "$TELEGRAM_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_TELEGRAM_TOKEN:-}" ]; then echo "bote: Telegram ohne Token: laib secret set BOTE_TELEGRAM_TOKEN" >&2; exit 1; fi
+if [ -n "$DISCORD_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_DISCORD_TOKEN:-}" ]; then echo "bote: Discord ohne Token: laib secret set BOTE_DISCORD_TOKEN" >&2; exit 1; fi
 if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NUMBER braucht Signal (SIGNAL_ACCOUNT)" >&2; exit 1; fi
 if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
 {
@@ -36,6 +38,11 @@ if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]
   if [ -n "$TELEGRAM_ALLOWED_USERS" ]; then
     echo "TELEGRAM_BOT_TOKEN=$LAIB_SECRET_BOTE_TELEGRAM_TOKEN"
     echo "TELEGRAM_ALLOWED_USERS=$TELEGRAM_ALLOWED_USERS"
+  fi
+  if [ -n "$DISCORD_ALLOWED_USERS" ]; then
+    # Hermes' names (plugins/platforms/discord/gateway_env.py, #421); in a DM no mention is needed
+    echo "DISCORD_BOT_TOKEN=$LAIB_SECRET_BOTE_DISCORD_TOKEN"
+    echo "DISCORD_ALLOWED_USERS=$DISCORD_ALLOWED_USERS"
   fi
   echo "LAIB_TOKEN=${LAIB_SECRET_BOTE_LAIB_TOKEN}"
   echo "MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}"
