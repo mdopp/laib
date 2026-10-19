@@ -1,6 +1,6 @@
 """#44: the Werkstatt's wiring — provider id, tokens per container, retries
 before escalation, and work_ticket run for real against fakes."""
-import importlib.util, json, os, re, subprocess, sys, tempfile, unittest
+import importlib.util, json, os, re, stat, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent          # werkstatt/
@@ -43,9 +43,11 @@ class TokensPerContainer(unittest.TestCase):
         entry = (HERE / "entrypoint.sh").read_text()
         self.assertNotIn("/workspace/.laib", entry, "a token on the shared volume is the other container's token")
         self.assertIn("/run/laib/token", entry)
+        self.assertIn("/run/laib/werkstatt-token", entry)
         self.assertIn("/run/laib/git-credentials", entry)
         laibctl = (HERE / "laibctl.py").read_text()
-        self.assertIn('"/run/laib/token"', laibctl)
+        self.assertIn('"/run/laib"', laibctl)
+        self.assertIn('RUN + "/token"', laibctl)
         for unit in ("werkstatt.container", "werkstatt-autoloop.container"):
             text = (ROOT / "templates" / "werkstatt" / unit).read_text()
             self.assertRegex(text, r"(?m)^Tmpfs=/run/laib", unit + " needs its own tmpfs for the tokens")
@@ -64,7 +66,8 @@ class TokensPerContainer(unittest.TestCase):
         # #217: the container's processes show in the host's ps, argv and all.
         # entrypoint.sh runs with its absolute paths moved into a temp root and
         # su, claude, chown, git and python3 as fakes that record their argv.
-        tok = "lb_argv217secret"
+        # #380: the dev container holds the werkstatt hand, the autoloop pi's.
+        tok, pi = "lb_argv217secret", "lb_argv217pi"
         with tempfile.TemporaryDirectory() as root:
             r, bin_, log = Path(root), Path(root) / "bin", Path(root) / "argv.log"
             bin_.mkdir()
@@ -76,24 +79,26 @@ class TokensPerContainer(unittest.TestCase):
                 script = script.replace(p, root + p)
             (r / "etc" / "profile.d").mkdir(parents=True)
             (r / "entrypoint.sh").write_text(script)
-            env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", ARGV_LOG=str(log), LAIB_TOKEN=tok,
+            env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", ARGV_LOG=str(log), LAIB_WERKSTATT_TOKEN=tok, LAIB_TOKEN=pi,
                        LAIB_MCP_URL="http://host.containers.internal:5900/mcp", WERKSTATT_ROLE="autoloop")
             env.pop("WERKSTATT_GIT_TOKEN", None)
             p = subprocess.run(["bash", str(r / "entrypoint.sh")], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             argv = log.read_text()
-            self.assertNotIn(tok, argv, "LAIB_TOKEN is on a process's argv, where ps shows it")
+            for t in (tok, pi):
+                self.assertNotIn(t, argv, "a Laib token is on a process's argv, where ps shows it")
             add = [l for l in argv.splitlines() if l.startswith("claude mcp add")]
             self.assertEqual(len(add), 1, argv)
-            # every session of dev, wherever it starts: user scope; the header names the token
+            # every session of dev, wherever it starts: user scope; the header comes from laib --headers per connection
             self.assertRegex(add[0], r" (-s|--scope) user ")
-            self.assertIn("--header Authorization: Bearer ${LAIB_TOKEN}", add[0])
-            # and a login shell of dev has it, read from the 0600 file
-            got = subprocess.run(["bash", "-c", f'for f in {root}/etc/profile.d/*.sh; do . "$f"; done; printf %s "$LAIB_TOKEN"'],
-                                 env={"PATH": os.environ["PATH"]}, capture_output=True, text=True)
-            self.assertEqual(got.stdout, tok, got.stderr)
+            self.assertIn('"headersHelper":"laib --headers"', add[0])
             for f in (r / "etc" / "profile.d").iterdir():
-                self.assertNotIn(tok, f.read_text(), f"{f.name} is world-readable and carries the token")
+                for t in (tok, pi):
+                    self.assertNotIn(t, f.read_text(), f"{f.name} is world-readable and carries a token")
+            for name, t in (("werkstatt-token", tok), ("token", pi)):
+                f = r / "run" / "laib" / name
+                self.assertEqual(f.read_text(), t)
+                self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600)
 
 
 class FakeGitHub:

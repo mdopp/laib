@@ -100,13 +100,13 @@ class Wiring(unittest.TestCase):
     def test_no_claude_token_at_rest(self):
         contract = (TPL / "laib.yml").read_text()
         self.assertNotIn("LAIB_CLAUDE_TOKEN", contract)
-        self.assertRegex(contract, r"- name: LAIB_WERKSTATT_TOKEN\n(?:.*\n)*?    mint: werkstatt")
+        self.assertRegex(contract, r"- name: LAIB_WERKSTATT_TOKEN\b[^\n]*\n(?:.*\n)*?    mint: werkstatt")
         self.assertNotIn("LAIB_CLAUDE_TOKEN", (TPL / "values.example.yml").read_text())
         self.assertIn("Environment=LAIB_WERKSTATT_TOKEN=", (TPL / "werkstatt.container").read_text())
 
     def test_claude_code_asks_per_connection(self):
         entry = (HERE / "entrypoint.sh").read_text()
-        self.assertIn('"headersHelper":"laib --headers"', entry)
+        self.assertRegex(entry, r'headersHelper\\?":\\?"laib --headers')
         self.assertNotIn("Bearer \\${LAIB_TOKEN}", entry, "a fixed bearer in ~/.claude.json")
         self.assertIn("LAIB_SESSION=", (HERE / "sessions.sh").read_text(), "a session's windows must say which session asks")
 

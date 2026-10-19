@@ -14,8 +14,9 @@ secrets:
   - name: WERKSTATT_SSH_PASSWORD
   - name: CLAUDE_CODE_OAUTH_TOKEN
     external: true
-  - name: LAIB_CLAUDE_TOKEN
-    external: true               # laib token mint claude --note werkstatt (the TTL policy.yml declares; mint again when it runs out)
+  - name: LAIB_WERKSTATT_TOKEN   # minted on `laib add` as the werkstatt hand: it can only get a claude token per session (#380, ADR 0006)
+    external: true
+    mint: werkstatt
   - name: LAIB_PI_TOKEN
     external: true               # laib token mint pi --note werkstatt
   - name: WERKSTATT_GIT_TOKEN

@@ -43,7 +43,8 @@ start() { # start <name>
   local name="$1" path="$WS/$1" q cmd
   q=$(printf '%q' "$name")
   # in a checkout with no conversation yet --continue exits 1: start fresh
-  cmd="$CLAUDE --continue --remote-control $q || $CLAUDE --remote-control $q"
+  # LAIB_SESSION: the name this session's own claude token is asked for under (#380)
+  cmd="LAIB_SESSION=$q $CLAUDE --continue --remote-control $q || LAIB_SESSION=$q $CLAUDE --remote-control $q"
   # a checkout another uid made (a restore, a root clone): git refuses it otherwise
   git config --global --replace-all --fixed-value safe.directory "$path" "$path" 2>/dev/null || true
   if t has-session -t "=$S" 2>/dev/null; then
