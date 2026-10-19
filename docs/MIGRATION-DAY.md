@@ -31,7 +31,13 @@
    nicht an`. Dann den Lauf bis `secrets` laufen lassen, das jetzige
    Passwort mit `laib secret set HA_ADMIN_PASSWORD` (bzw.
    `ADGUARD_ADMIN_PASSWORD`) setzen und mit `--resume` weitermachen (#373).
-5. **Für die Werkstatt** (sie ersetzt claude-dev und pi-web): ein
+5. **Ein DNS-Eintrag für jeden neuen Namen.** Caddy holt seine Zertifikate
+   per HTTP-01, dafür braucht jeder Name einen öffentlichen Eintrag (bei
+   Strato: ein CNAME auf `dopp.cloud`). ServiceBay hatte nur Einträge für
+   seine eigenen Adressen; neue wie `beets` und `esphome` fehlen. Der
+   Probelauf zeigt sie als `RED öffentlicher DNS-Eintrag fehlt: …`. Vor
+   Phase 4 anlegen (#377).
+6. **Für die Werkstatt** (sie ersetzt claude-dev und pi-web): ein
    Claude-OAuth-Token und zwei GitHub-Tokens bereithalten. Ohne sie bleibt
    der Lauf vor der Werkstatt stehen, ohne etwas zu ändern.
 
@@ -151,6 +157,13 @@ On the box (the dry run checks each one and says which is red):
   `laib secret set HA_ADMIN_PASSWORD` (or `ADGUARD_ADMIN_PASSWORD`) with the
   app's password, then `--resume`. Immich and Jellyfin are not tried: their
   login opens a session.
+- Every route name of the state-to-be has a public DNS record, when the box
+  takes Let's Encrypt by HTTP-01 (no `--dns-provider`, not `--tls internal`):
+  resolved through DNS over HTTPS (`PUBLIC_DNS`, dns.google), not the box's
+  AdGuard, whose rewrites answer every name (#377). A new name needs a CNAME
+  to the apex before phase 4, or a `dns.provider` with a wildcard via DNS-01.
+  The caddy step checks the same before NPM goes, and stops with nothing
+  changed.
 
 ## The commands
 
