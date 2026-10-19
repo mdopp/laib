@@ -41,6 +41,17 @@ Claude Code (`~/.claude/skills/<name>`). ServiceBay's own catalog stays
 readable in the checkout `/workspace/servicebay/assists`; its ADRs and
 CLI describe a system that is off and are not carried.
 
+**Laib's MCP in the sessions (#392).** Every Claude Code session of `dev`
+(over SSH, and the Remote Control sessions the Claude app opens) has Laib
+as the MCP server `laib` at `host.containers.internal:5900/mcp`, user
+scope, written by the entrypoint with the token as a header variable, never
+on argv. ServiceBay's entries (`servicebay`, `atHome-Servicebay`,
+`:5888/mcp`), carried over in the kept home, are dropped at every start by
+`werkstatt-mcp-tidy`; everything else in `~/.claude.json` stays. There is
+no claude.ai connector to the box: `admin.<domain>/mcp` answers only the
+LAN (`respond 403` otherwise), and the owner's Claude from outside is the
+Claude app attached to a Werkstatt session, which has `laib` already.
+
 **Tokens per container (#44).** Each container writes its own tokens to
 its own tmpfs `/run/laib` (`Tmpfs=` in both units): the dev container
 holds `LAIB_WERKSTATT_TOKEN` and `WERKSTATT_GIT_TOKEN`; the
