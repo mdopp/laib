@@ -12,6 +12,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SCRIPT = HERE / "migration-day.sh"
+# the checkout's release: the script refuses a checkout that is not LAIB_VERSION
+VERSION = "v" + (HERE.parent / "version.txt").read_text().strip()
 
 
 def exe(path, body):
@@ -57,7 +59,7 @@ exit 0
         exe(b / "curl", "#!/bin/bash\n" + RECORD + 'echo 200\n')
         exe(b / "laib", "#!/bin/bash\n" + RECORD + r'''
 case "$1" in
-  version) echo "laib ${FAKE_LAIB_VERSION:-v0.6.0}";;
+  version) echo "laib ${FAKE_LAIB_VERSION:-$LAIB_VERSION}";;
   add) [ "$2" = "${FAKE_FAIL_ADD:-}" ] && { echo "apply: rot"; exit 1; }; mkdir -p "$LAIB_STATE/services/$2";;
   remove) rm -rf "$LAIB_STATE/services/$2";;
   secret) [ "$2" = list ] && printf '%s\n' ${FAKE_SECRETS:-}; [ "$2" = set ] && cat > "$FAKE/secret-$3";;
@@ -100,7 +102,7 @@ echo "  laib add vaultwarden"
                  LAIB_BIN=str(t / "bin" / "laib"), LAIB_STATE=str(t / "state"), OUT=str(t / "out" / "migration"),
                  INSTALL_BOX=str(t / "bin" / "install-box"), MIGRATE_PY=str(t / "bin" / "migrate"), PYTHON="",
                  CARRY=str(t / "bin" / "carry"), MOVE=str(t / "bin" / "move"),
-                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION="v0.6.0", MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
+                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION=VERSION, MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
         e.update(env)
         return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env=e, timeout=120)
 
@@ -324,7 +326,7 @@ echo "  laib add vaultwarden"
 
     def test_install_takes_the_release_or_the_ci_build(self):
         self.run_md("--foreground", "--until", "install")
-        self.assertEqual(self.calls_of("install-box"), ["--version v0.6.0 --domain box.test --gpu"])
+        self.assertEqual(self.calls_of("install-box"), [f"--version {VERSION} --domain box.test --gpu"])
         (self.t / "mig" / "progress").unlink()
         self.calls.write_text("")
         self.run_md("--foreground", "--until", "install", SRC="http://10.0.2.2:8000", INSTALL_ARGS="--tls internal")
