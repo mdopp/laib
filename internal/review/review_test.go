@@ -92,6 +92,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a new host unit", func(t *testing.T, d string) {
 			write(t, d, "services/whoami/whoami-helper.service", "[Service]\nExecStart=/usr/bin/true\n\n[Install]\nWantedBy=default.target\n", 0o644)
 		}, "läuft direkt auf der Box"},
+		{"the host OS image (#368)", func(t *testing.T, d string) {
+			write(t, d, "host/image", "# tag: stable-nvidia\nostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:b111\n", 0o644)
+		}, "Betriebssystem der Box"},
 		{"a skill for the Operator", func(t *testing.T, d string) {
 			write(t, d, "skills/gartenblick.yml", "description: x\n", 0o644)
 		}, "gibt dem Operator eine Fähigkeit"},

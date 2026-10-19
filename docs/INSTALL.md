@@ -217,6 +217,17 @@ deployment is proven (`/etc/laib/boot-proven`). `laib diag` shows a staged
 update (`os-update`), and the journal shows the grant and the arrival. After
 the reboot the boot check proves the new deployment or rolls it back once.
 
+The host image itself is pinned in the state: `host/image` holds `# tag:
+<tag>` and the rebase reference by digest. Laib's weekly update run proposes
+a newer digest of that tag. After a human approves it, `laib-host-image.timer`
+stages it with rpm-ostree, and the reboot goes through the same lock. To pin
+the image a box runs now (once):
+```
+cd /mnt/data/laib/state && mkdir -p host
+printf '# tag: %s\n%s\n' stable-nvidia "$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | ."container-image-reference"')" > host/image
+cat host/image && /var/opt/laib/laib updates | grep '^host'
+```
+
 Lifting a pause is the owner's step. Do it once the running deployment is
 proven with the LAN probe (#445):
 ```
