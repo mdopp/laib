@@ -1,6 +1,8 @@
 package stick
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,15 +10,17 @@ import (
 	"testing"
 )
 
-// #368: an OS update on the GPU box must be boring. install-box.sh
-// --box-config writes two host units on every box: laib-cdi.service
-// regenerates the CDI spec at every boot (no one-shot marker), and
-// laib-boot-check.service proves a new deployment (GPU visible, the CDI spec
-// names the loaded driver, laib answers with no more red than before) or
-// rolls it back once, pauses Zincati and tells the owner.
+// #368: an OS update on the GPU box must be boring. install-box.sh writes
+// two host units: laib-cdi.service regenerates the CDI spec at every boot (no
+// one-shot marker), and laib-boot-check.service runs scripts/boot-check.sh,
+// which proves a new deployment (GPU visible, the CDI spec names the loaded
+// driver, laib answers with no more red than before) or rolls it back once,
+// pauses Zincati and tells the owner. The boot check is its own file, a
+// release asset checked against SHA256SUMS like the binaries: the one reboot
+// is the boot check's, after a rollback; installing Laib never reboots (#367).
 
-// bootBox is a scratch box: install-box.sh --box-config has written its
-// host config under etc, and bin holds the stand-ins for the host's tools.
+// bootBox is a scratch box: etc holds the boot check as the install puts it,
+// and bin holds the stand-ins for the host's tools.
 type bootBox struct{ etc, bin, log string }
 
 const proven, fresh = "aaaa1111aaaa1111", "bbbb2222bbbb2222"
@@ -26,12 +30,13 @@ func newBootBox(t *testing.T) *bootBox {
 	root := t.TempDir()
 	b := &bootBox{etc: filepath.Join(root, "etc"), bin: filepath.Join(root, "bin"), log: filepath.Join(root, "shim.log")}
 	os.MkdirAll(b.bin, 0o755)
+	os.MkdirAll(filepath.Join(b.etc, "laib"), 0o755)
 	t.Setenv("SHIM_LOG", b.log)
-	cmd := exec.Command("bash", "../scripts/install-box.sh", "--box-config")
-	cmd.Env = append(os.Environ(), "LAIB_ETC="+b.etc, "LAIB_QUADLET="+filepath.Join(root, "home", ".config", "containers", "systemd"))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("install-box.sh --box-config: %v\n%s", err, out)
+	src, err := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	if err != nil {
+		t.Fatalf("the boot check is its own file: %v", err)
 	}
+	os.WriteFile(filepath.Join(b.etc, "laib", "boot-check.sh"), src, 0o755)
 	return b
 }
 
@@ -39,6 +44,12 @@ func newBootBox(t *testing.T) *bootBox {
 // runs the boot check. gpuDriver "" is a box without an NVIDIA card; cdiDriver
 // is the driver the CDI spec names; red is what /ready says ("" = laib down).
 func (b *bootBox) run(t *testing.T, booted, gpuDriver, cdiDriver, red string) (log, out string) {
+	t.Helper()
+	return b.runWith(t, booted, gpuDriver, cdiDriver, red, "exit 0")
+}
+
+// runWith is run with rpmOstree as the body of the rpm-ostree stand-in.
+func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOstree string) (log, out string) {
 	t.Helper()
 	os.WriteFile(b.log, nil, 0o644)
 	status := "* fedora-coreos " + booted + ".0\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
@@ -59,7 +70,7 @@ func (b *bootBox) run(t *testing.T, booted, gpuDriver, cdiDriver, red string) (l
 	} else {
 		shim(t, b.bin, "curl", "exit 7")
 	}
-	shim(t, b.bin, "rpm-ostree", "exit 0")
+	shim(t, b.bin, "rpm-ostree", rpmOstree)
 	shim(t, b.bin, "systemctl", "exit 0")
 	shim(t, b.bin, "runuser", "exit 0")
 	cmd := exec.Command("bash", filepath.Join(b.etc, "laib", "boot-check.sh"))
@@ -78,11 +89,54 @@ func rolledBack(log string) bool {
 	return strings.Contains(log, "rpm-ostree rollback") || strings.Contains(log, "systemctl reboot")
 }
 
-func TestBoxConfigWritesTheCDIRefreshAndTheBootCheck(t *testing.T) {
-	b := newBootBox(t)
-	cdi, err := os.ReadFile(filepath.Join(b.etc, "systemd", "system", "laib-cdi.service"))
+// runInstallTo runs install-box.sh --source against a build server served by
+// a curl shim: three dummy binaries, laib-boot-check.sh (bootCheck) and a
+// SHA256SUMS over the real files. The script stops later (no laib to init);
+// what is under test is what it wrote under LAIB_ETC before that.
+func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
+	t.Helper()
+	root := t.TempDir()
+	bin, home, fx := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(root, "fx")
+	etc = filepath.Join(root, "etc")
+	for _, d := range []string{bin, home, fx, etc} {
+		os.MkdirAll(d, 0o755)
+	}
+	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	sums := ""
+	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real)} {
+		sum := sha256.Sum256([]byte(body))
+		sums += hex.EncodeToString(sum[:]) + "  " + name + "\n"
+		if name == "laib-boot-check.sh" {
+			body = bootCheck
+		}
+		os.WriteFile(filepath.Join(fx, name), []byte(body), 0o644)
+	}
+	os.WriteFile(filepath.Join(fx, "SHA256SUMS"), []byte(sums), 0o644)
+	os.WriteFile(filepath.Join(fx, "VERSION"), []byte("abc1234"), 0o644)
+	shim(t, bin, "id", "echo core")
+	shim(t, bin, "sudo", installBoxSudo)
+	shim(t, bin, "sysctl", "echo 0")
+	shim(t, bin, "restic", "echo 'restic 0.19.1'")
+	shim(t, bin, "systemctl", "exit 0")
+	shim(t, bin, "curl", `o=""; prev=""
+for a in "$@"; do [ "$prev" = -o ] && o=$a; prev=$a; done
+u="${@: -1}"
+case "$u" in http://src.test/*) f="$FX/${u#http://src.test/}";; *) exit 22;; esac
+[ -f "$f" ] || exit 22
+if [ -n "$o" ]; then cp "$f" "$o"; else cat "$f"; fi`)
+	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+filepath.Join(root, "shim.log"), "FX="+fx, "HOME="+home,
+		"LAIB_ETC="+etc, "LAIB_QUADLET="+filepath.Join(home, ".config", "containers", "systemd"), "LAIB_RESTIC_BIN="+filepath.Join(root, "restic"), "LAIB_GH_TOKEN=")
+	b, _ := cmd.CombinedOutput()
+	return etc, string(b)
+}
+
+func TestInstallWritesTheCDIRefreshAndTheVerifiedBootCheck(t *testing.T) {
+	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	etc, out := runInstallTo(t, string(real))
+	cdi, err := os.ReadFile(filepath.Join(etc, "systemd", "system", "laib-cdi.service"))
 	if err != nil {
-		t.Fatalf("no laib-cdi.service: %v", err)
+		t.Fatalf("no laib-cdi.service: %v\n%s", err, out)
 	}
 	for _, want := range []string{"ExecStart=/usr/bin/nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml", "ConditionPathExists=/usr/bin/nvidia-ctk", "Before=user@1000.service laib-boot-check.service", "WantedBy=multi-user.target"} {
 		if !strings.Contains(string(cdi), want+"\n") {
@@ -92,17 +146,47 @@ func TestBoxConfigWritesTheCDIRefreshAndTheBootCheck(t *testing.T) {
 	if strings.Contains(string(cdi), "-done") || strings.Contains(string(cdi), "ConditionPathExists=!") {
 		t.Errorf("laib-cdi.service is a one-shot again: it must run at every boot\n%s", cdi)
 	}
-	chk, err := os.ReadFile(filepath.Join(b.etc, "systemd", "system", "laib-boot-check.service"))
+	chk, err := os.ReadFile(filepath.Join(etc, "systemd", "system", "laib-boot-check.service"))
 	if err != nil {
-		t.Fatalf("no laib-boot-check.service: %v", err)
+		t.Fatalf("no laib-boot-check.service: %v\n%s", err, out)
 	}
 	for _, want := range []string{"ExecStart=/bin/bash /etc/laib/boot-check.sh", "After=laib-cdi.service network-online.target", "WantedBy=multi-user.target"} {
 		if !strings.Contains(string(chk), want+"\n") {
 			t.Errorf("laib-boot-check.service lacks %q:\n%s", want, chk)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(b.etc, "laib", "boot-check.sh")); err != nil {
-		t.Fatal(err)
+	if got, _ := os.ReadFile(filepath.Join(etc, "laib", "boot-check.sh")); string(got) != string(real) {
+		t.Fatalf("/etc/laib/boot-check.sh is not scripts/boot-check.sh as released\n%s", out)
+	}
+}
+
+func TestABootCheckWithTheWrongChecksumIsRefused(t *testing.T) {
+	etc, out := runInstallTo(t, "#!/bin/bash\nsystemctl reboot\n")
+	if !strings.Contains(out, "checksum mismatch for laib-boot-check.sh") {
+		t.Fatalf("an unverified boot check was not refused by name:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(etc, "laib", "boot-check.sh")); err == nil {
+		t.Fatal("an unverified boot check was installed")
+	}
+}
+
+// The boot check's one reboot follows a successful rollback and nothing else:
+// a failed rollback ends without one, and no other path reboots.
+func TestTheBootCheckRebootsOnlyAfterARollback(t *testing.T) {
+	src, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	if n := strings.Count(string(src), "systemctl reboot"); n != 1 {
+		t.Fatalf("boot-check.sh has %d reboots, want exactly one (after the rollback)", n)
+	}
+	lines := strings.Split(strings.TrimRight(string(src), "\n"), "\n")
+	last, before := lines[len(lines)-1], lines[len(lines)-2]
+	if last != "sync; systemctl reboot" || !strings.HasPrefix(before, "rpm-ostree rollback || {") || !strings.Contains(before, "exit 1; }") {
+		t.Fatalf("the reboot must be the last line, right after `rpm-ostree rollback || { …; exit 1; }`:\n%s\n%s", before, last)
+	}
+	b := newBootBox(t)
+	b.prove(t, proven, "0")
+	log, out := b.runWith(t, fresh, "", "", "", "exit 1")
+	if !strings.Contains(log, "rpm-ostree rollback") || strings.Contains(log, "systemctl reboot") {
+		t.Fatalf("a failed rollback must not reboot:\n%s\n%s", log, out)
 	}
 }
 
