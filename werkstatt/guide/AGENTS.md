@@ -43,6 +43,17 @@ No podman: images are built by the repo's CI and published to ghcr.
 - **Laib itself** (kernel, built-in templates): the laib repo's
   `CLAUDE.md`, then `docs/DESIGN.md`, `docs/STATE.md`, `docs/adr/`.
 - **What the box runs now:** `laib status`, `laib context`, `laib template list`.
+- **How to check, measure and ask:** the skills in
+  `/opt/werkstatt/guide/skills/` (pi and Claude Code load them by their
+  description): a probe that cannot fail, a deployment you have looked at,
+  a measurement with its limits, a gate by place or effect, how to put a
+  decision to the owner.
+- **What ServiceBay did** (the old system; the comparison every
+  replacement owes, laib `CLAUDE.md`): its templates and its assist
+  catalog in the checkout `/workspace/servicebay` (`templates/`,
+  `/workspace/servicebay/assists`). Read them there, as a repo: nothing
+  delivers them any more (no checkout: `gh repo clone mdopp/servicebay
+  /workspace/servicebay`).
 
 This guide is `werkstatt/guide/` in github.com/mdopp/laib; it reaches the
 Werkstatt with the image. A gap or a wrong line here is an issue there.

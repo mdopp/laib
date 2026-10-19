@@ -30,6 +30,17 @@ autoloop's and a person's over SSH (#261; npm's own binary is
 id once; the autoloop pins `laib-llama/<preset>` and a test checks both
 agree and lists the lease's real catalogue through the extension.
 
+**The guide and its skills (#394).** What ServiceBay's agent kit carried
+(an hourly git checkout in its data dir, mounted into claude-dev and
+pi-web) is the Werkstatt's own now: `werkstatt/guide/` with `AGENTS.md`
+and `skills/<name>/SKILL.md`, in the image, which is rebuilt on every push
+to main and taken by `AutoUpdate=registry` in the next update window. No
+release, no timer, one source. At every start `werkstatt-skills` links the
+skills for pi (`~/.pi/agent/skills/laib`, `~/.pi/web/skills/laib`) and
+Claude Code (`~/.claude/skills/<name>`). ServiceBay's own catalog stays
+readable in the checkout `/workspace/servicebay/assists`; its ADRs and
+CLI describe a system that is off and are not carried.
+
 **Tokens per container (#44).** Each container writes its own tokens to
 its own tmpfs `/run/laib` (`Tmpfs=` in both units): the dev container
 holds `LAIB_CLAUDE_TOKEN` (hand `claude`, the TTL `policy.yml` declares —

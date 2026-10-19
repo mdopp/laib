@@ -53,6 +53,8 @@ if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   chmod 600 /run/laib/git-credentials; chown dev:dev /run/laib/git-credentials
   su dev -c "git config --global credential.helper 'store --file /run/laib/git-credentials'"
 fi
+# the guide's skills where pi and Claude Code look, from this image (#394)
+su dev -c "werkstatt-skills" || echo "werkstatt-skills failed: the agents start without the guide's skills"
 if [ "${WERKSTATT_ROLE:-ssh}" = "autoloop" ]; then
   # the second container of the pod: pi works tickets, same /workspace
   exec su dev -c "python3 /opt/werkstatt/autoloop.py"
