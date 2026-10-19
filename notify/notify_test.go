@@ -78,6 +78,7 @@ type fakeLaib struct {
 	mu       sync.Mutex
 	red      bool   // a red finding for whoami, and /ready red
 	updates  string // laib_updates' JSON
+	inbox    string // laib_inbox's JSON (#441)
 	notes    []string
 	bearer   []string
 	srv      *httptest.Server
@@ -85,7 +86,7 @@ type fakeLaib struct {
 }
 
 func newFakeLaib(t *testing.T) *fakeLaib {
-	f := &fakeLaib{updates: "[]"}
+	f := &fakeLaib{updates: "[]", inbox: "[]"}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -116,6 +117,8 @@ func newFakeLaib(t *testing.T) *fakeLaib {
 			}
 		case "laib_updates":
 			text = f.updates
+		case "laib_inbox":
+			text = f.inbox
 		case "laib_note":
 			f.notes = append(f.notes, fmt.Sprint(req.Params.Args["kind"], " ", req.Params.Args["text"]))
 			text = "notiert"
