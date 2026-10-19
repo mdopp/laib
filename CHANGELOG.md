@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.9.0](https://github.com/mdopp/laib/compare/v0.8.0...v0.9.0) (2026-10-19)
+
+
+### Features
+
+* **backup:** the recovery sheet lists Laib's logins, --vaultwarden exports them ([0f5a825](https://github.com/mdopp/laib/commit/0f5a825acef89bb4cc4c5f6bbbbfc2bfabb91a99)), closes [#441](https://github.com/mdopp/laib/issues/441)
+* **diag:** a finding's repair becomes an inbox proposal a human approves ([88f78d9](https://github.com/mdopp/laib/commit/88f78d901f224e893b1e3569d101ed91f1e923d1)), closes [#441](https://github.com/mdopp/laib/issues/441)
+* **envelope:** laib start and laib stop for a service, and laib backups as a read tool ([9c0b804](https://github.com/mdopp/laib/commit/9c0b80417f61120e9728657f6edc1da27714d744))
+* **host:** laib is Zincati's reboot lock — OS updates in the window after the backup, green and proven ([2bc31b8](https://github.com/mdopp/laib/commit/2bc31b81eb5174e1e53c077f659d5d3cb5d28ea8)), closes [#368](https://github.com/mdopp/laib/issues/368)
+* **notify:** Laib tells the owner through the Bote first, mail as fallback; the chat decides only what is not destructive (Refs [#441](https://github.com/mdopp/laib/issues/441)) ([0c06ef0](https://github.com/mdopp/laib/commit/0c06ef0180c718d2cb1dd76798e12a3ee36a3450))
+* **notify:** the watchdog ping and the owner's mail run as laib-notify, outside the kernel ([07dd2a7](https://github.com/mdopp/laib/commit/07dd2a7235cb0811a76a766222973221b011d114))
+* **relay:** the owner's non-destructive verdicts on Discord, read by the relay itself in their DM (Refs [#463](https://github.com/mdopp/laib/issues/463)) ([4bcbeb5](https://github.com/mdopp/laib/commit/4bcbeb51190f518bc662743cb43d8114a1f58b94))
+* **werkstatt:** disk import as a skill with a deterministic copy tool ([9be0578](https://github.com/mdopp/laib/commit/9be05786c6b059b2a6fbe4a564e3ba835b73f467)), closes [#456](https://github.com/mdopp/laib/issues/456)
+
+
+### Bug Fixes
+
+* **backup:** the box's own timers run as a hand that exists, and a refused backup is red ([7dbfc67](https://github.com/mdopp/laib/commit/7dbfc675d89185a1ad213ac5b93d622dfc856bde)), closes [#444](https://github.com/mdopp/laib/issues/444)
+* **bote:** the SOUL's new line names no tool the Bote may lack (Refs [#441](https://github.com/mdopp/laib/issues/441)) ([9fc8475](https://github.com/mdopp/laib/commit/9fc8475eb77d0aa4a054fd9b3dc193d41e605fb2))
+* **host:** prove the LAN reaches the box, one firewall mechanism ([b7b273a](https://github.com/mdopp/laib/commit/b7b273ae5f5788c2dc119c6c1c590e46f802231a)), closes [#445](https://github.com/mdopp/laib/issues/445)
+* **render:** host units carry no secret value; laib-notify and the Operator read theirs from a 0600 env file ([4ba6735](https://github.com/mdopp/laib/commit/4ba67350f7c99482b7ae525d92280f4696b5b67e))
+
 ## [0.8.0](https://github.com/mdopp/laib/compare/v0.7.0...v0.8.0) (2026-10-19)
 
 
