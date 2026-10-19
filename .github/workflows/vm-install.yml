@@ -454,7 +454,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
-                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/valkey/valkey:8-alpine docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD

@@ -27,11 +27,16 @@
    Claude-OAuth-Token und zwei GitHub-Tokens bereithalten. Ohne sie bleibt
    der Lauf vor der Werkstatt stehen, ohne etwas zu ändern.
 
-**Ein Zeitfenster ohne neue Anmeldung:** Vom Schritt `auth` bis Caddy
-übernimmt (Phase 2 bis 4), antwortet `auth.dopp.cloud` mit 502. Wer in der
-Zeit neu angemeldet werden müsste (Paperless, Immich, Home Assistant über
-Authelia, Vaultwarden), kommt nicht hinein. Deshalb laufen Phase 2 bis 4 an
-einem Stück, das sind einige Stunden. Die Alternative ist, ServiceBays
+**Ein Zeitfenster ohne Anmeldung:** Vom Schritt `auth` bis Caddy
+übernimmt (Phase 2 bis 4), antwortet `auth.dopp.cloud` mit 502. Mit dem
+Schritt `auth` enden alle Browser-Anmeldungen bei Apps hinter Authelia
+(Paperless, File Browser, …): Laibs Authelia übernimmt ServiceBays
+Sitzungen nicht, ServiceBay hielt sie nur im Speicher. Bis Phase 4 kommt
+dort niemand hinein, auch wer vorher angemeldet war. Apps mit eigener
+Anmeldung (die Immich- und die Home-Assistant-App, Jellyfin, Syncthing, der
+Kalender) bleiben angemeldet. Deshalb laufen Phase 2 bis 4 an einem Stück,
+das sind einige Stunden. Danach überstehen die Anmeldungen einen Neustart
+von Authelia (#369). Die Alternative ist, ServiceBays
 NPM-Einträge für `auth`, `vault` und `llama` für das Wochenende auf
 127.0.0.1 umzustellen: kein Ausfall, aber ein Eingriff in NPM. Die Sitzung
 fragt dich, welche Variante du willst.
@@ -233,11 +238,17 @@ nine carried secrets (`LLDAP_ADMIN_PASSWORD`, `AUTHELIA_STORAGE_KEY`,
 `SAMBA_PASSWORD`); `laib diag` is not `rot box`; every service still answers
 under its name.
 
-After **phase 2** (auth):
-- a family member logs in at `https://auth.dopp.cloud` with the old password
-  and the old second factor;
-- a wrong password is refused;
+After **phase 2** (auth), on the server side only, because `auth.` answers
+502 through NPM until phase 4 (Known risks):
+- Authelia opened its storage with the carried key (its log has no
+  `encryption key` error) and `curl -s http://127.0.0.1:9091/api/health`
+  is 200;
+- a wrong password is refused: `POST http://127.0.0.1:9091/api/firstfactor`
+  with a family user and a wrong password answers 401;
 - the apply printed which OIDC clients are still ServiceBay's.
+
+The family's login with the old password and second factor is checked after
+phase 4.
 
 After **phase 3** (the household services):
 - **Photos:** the albums are whole, a photo opens, the library photos are
@@ -256,8 +267,9 @@ After **phase 3** (the household services):
 - **Media:** Jellyfin lets a family member in with the LLDAP login.
 
 After **phase 4** (Caddy): every name of the state answers through Caddy
-(the script checks it; none answers 502); the family's login works at
-`https://auth.dopp.cloud` through Caddy; Let's Encrypt certificates, not
+(the script checks it; none answers 502); a family member logs in at
+`https://auth.dopp.cloud` through Caddy with the old password and the old
+second factor; Let's Encrypt certificates, not
 Caddy's own; AdGuard's rewrites point at the box.
 
 After **phase 5**: `laib status` first line `0 gelb · 0 rot`; ServiceBay's
@@ -292,7 +304,9 @@ the Werkstatt answers on SSH 2222 (its host key is new, the app asks once).
   proxy hosts for `auth.`, `vault.` and `llama.` forward to the LAN address,
   so those three answer 502 through NPM until Caddy serves them. NPM's
   forward-auth itself asks 127.0.0.1 and keeps working, but its login page is
-  `auth.`. So run phases 2 to 4 in one sitting. The owner may instead want
+  `auth.`, and every browser session of a forward-auth app ends at phase 2
+  (ServiceBay's Authelia kept them in memory; Laib's keeps them in the auth
+  pod's Valkey from then on, #369). So run phases 2 to 4 in one sitting. The owner may instead want
   NPM's three proxy hosts pointed at 127.0.0.1 for the weekend. That is not
   built: ask, with both options, before phase 2. The generalprobe found this
   (#350).
