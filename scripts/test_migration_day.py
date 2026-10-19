@@ -170,6 +170,21 @@ echo "  laib add vaultwarden"
             self.assertIn(want, out)
         self.changed_nothing()
 
+    def test_dry_run_names_the_os_preconditions(self):
+        # #367: a missing restic and a staged rpm-ostree deployment were no
+        # preconditions; the install layered restic and nearly rebooted the box
+        exe(self.t / "bin" / "rpm-ostree", "#!/bin/bash\n" + RECORD + '[ "$*" = "status --pending-exit-77" ] && exit 77\nexit 0\n')
+        r = self.run_md("--dry-run")
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)   # a WARN, not a RED: Laib's install no longer touches the OS
+        self.assertRegex(out, r"(ok|RED) +git ")
+        self.assertRegex(out, r"(ok|RED) +diff ")
+        self.assertRegex(out, r"(ok|WARN) +restic")
+        self.assertRegex(out, r"WARN +a staged rpm-ostree deployment")
+        self.assertIn("rpm-ostree cleanup --pending", out)
+        self.assertEqual([c for c in self.calls_of("rpm-ostree") if c != "status --pending-exit-77"], [])
+        self.changed_nothing()
+
     def test_refuses_inside_a_container(self):
         (self.t / "containerenv").write_text("")
         r = self.run_md("--dry-run", CONTAINERENV=str(self.t / "containerenv"))

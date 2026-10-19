@@ -92,7 +92,7 @@ func smartFindings(ctx context.Context, devices []string) []Finding {
 	for _, dev := range devices {
 		raw, err := sysd.Run(ctx, "sudo", "smartctl", "-H", "-A", "--json", dev)
 		if err != nil && (strings.Contains(raw, "command not found") || strings.Contains(raw, "No such file")) {
-			return []Finding{{Severity: "info", Probe: "smart", Detail: "smartctl fehlt: der Zustand der Platten ist unbekannt", Fix: "sudo rpm-ostree install smartmontools (ein Reboot später ist es da); install-box.sh legt es künftig mit git, restic und diff dazu"}}
+			return []Finding{{Severity: "info", Probe: "smart", Detail: "smartctl fehlt: der Zustand der Platten ist unbekannt", Fix: "sudo rpm-ostree install smartmontools (ein Reboot später ist es da; install-box.sh ändert das OS nicht, #367)"}}
 		}
 		var r smartReport
 		if i := strings.Index(raw, "{"); i >= 0 {
