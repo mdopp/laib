@@ -11,9 +11,8 @@ order printed; its argv shows in ps to every user on the box (#214).
 
 Here the hooks image is this process's PATH with a podman that is not there,
 and the broker is a fake container: /mosquitto/config is the config data
-path, mosquitto_passwd -U hashes as the real one does (a line that is already
-a hash gets hashed again, and that login is broken), SIGHUP to PID 1 reloads
-the password file."""
+path, a line that is no $7$ hash stops it as eclipse-mosquitto 2.1.2 does
+(#432), and SIGHUP to PID 1 reloads the password file."""
 import base64, hashlib, os, stat, subprocess, tempfile, unittest
 from pathlib import Path
 

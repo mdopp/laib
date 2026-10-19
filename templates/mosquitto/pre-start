@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pre-start (#221): mosquitto.conf before the broker's first start, and a
 # password file it can open (without one it refuses to start). post-deploy
-# fills that file and has the broker hash it. Rewritten on every apply.
+# writes the user's hash into it (#432). Rewritten on every apply.
 set -euo pipefail
 C="$LAIB_DATA_DIR/mosquitto/config"; mkdir -p "$C" "$LAIB_DATA_DIR/mosquitto/data"
 cat > "$C/mosquitto.conf" <<CFG
