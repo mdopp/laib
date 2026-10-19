@@ -234,6 +234,12 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d abgelehnt für %s: nur ein Mensch — %s", p.ID, env.Actor, why)})
 		return cli.ExitRefused
 	}
+	// the chat decides only what is not destructive (#441, ADR 0016): what the review marks
+	// for a human, a removal and every destroy are the Inbox's, behind the second factor
+	if approve && proposal.Hand(env.Actor) != "human" && (p.Tier == "destroy" || p.Class == "human" || p.Class == "remove") {
+		fmt.Fprintf(env.Errw(), "laib: #%d nur in der Inbox, mit dem zweiten Faktor: https://%s.%s/inbox\n", p.ID, st.Box.Laib.Host, st.Box.Domain)
+		return cli.ExitRefused
+	}
 	if !approve {
 		if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor); err != nil {
 			return env.Fail(err)

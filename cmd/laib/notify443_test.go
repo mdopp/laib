@@ -30,7 +30,7 @@ func TestTheNotifierRunsAsItsOwnProgramWithANarrowHand(t *testing.T) {
 		t.Fatalf("init rc %d", rc)
 	}
 	pol, _ := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
-	if !strings.Contains(string(pol), "notify: {ceiling: propose, verbs: [diag, updates, note]}") {
+	if !strings.Contains(string(pol), "notify: {ceiling: propose, verbs: [diag, updates, inbox, note]}") {
 		t.Errorf("laib init writes no notify hand:\n%s", pol)
 	}
 
@@ -44,8 +44,8 @@ func TestTheNotifierRunsAsItsOwnProgramWithANarrowHand(t *testing.T) {
 		tools = append(tools, tl["name"].(string))
 	}
 	slices.Sort(tools)
-	if strings.Join(tools, " ") != "laib_diag laib_note laib_updates" {
-		t.Fatalf("the notify hand reaches %v, want diag, note, updates and nothing else", tools)
+	if strings.Join(tools, " ") != "laib_diag laib_inbox laib_note laib_updates" {
+		t.Fatalf("the notify hand reaches %v, want diag, inbox (#441), note, updates and nothing else", tools)
 	}
 	if out, _ := render.Render(st, nil); out["systemd/laib-notify.service"] != "" {
 		t.Error("a box without a watchdog and without mail renders a notifier")

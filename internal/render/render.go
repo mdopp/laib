@@ -545,7 +545,8 @@ func autheliaAccess(st *state.State) string {
 	// Every rule Authelia has (#249): a list from a later config file replaces
 	// an earlier one instead of joining it, so the auth hook's config has none.
 	b.WriteString("# Rendered by laib: every access rule. Anything unlisted, the bare apex\n# included, is denied.\naccess_control:\n  default_policy: deny\n  rules:\n")
-	fmt.Fprintf(&b, "    - domain: %s\n      policy: one_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
+	// the Inbox decides what the chat may not (#441): behind the second factor
+	fmt.Fprintf(&b, "    - domain: %s\n      policy: two_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
 			policy := policyOf(r)
@@ -677,7 +678,9 @@ func mailTo(st *state.State) string {
 }
 
 // notifier: laib-notify runs when it has something to do (#443).
-func notifier(st *state.State) bool { return st.Box.Watchdog.URL != "" || mailTo(st) != "" }
+func notifier(st *state.State) bool {
+	return st.Box.Watchdog.URL != "" || mailTo(st) != "" || st.Box.Notify.Person != ""
+}
 
 // envFile is a host unit's secrets as its EnvironmentFile (#443): never in
 // the unit itself; apply writes *.env 0600. Values are double-quoted.
@@ -704,7 +707,14 @@ func notifyUnit(st *state.State, secrets map[string]string) (string, string) {
 	env("LAIB_HOME", "/mnt/data/laib")
 	env("LAIB_DOMAIN", st.Box.Domain)
 	env("WATCHDOG_URL", st.Box.Watchdog.URL)
+	env("LAIB_INBOX_URL", "https://"+fqdn(st, st.Box.Laib.Host)+"/inbox")
 	secret := []string{"LAIB_TOKEN", secretValue(secrets, NotifyToken)}
+	if p := st.Box.Notify.Person; p != "" {
+		// the Bote's channels first (#441): bote-notify on the host port templates/bote declares
+		env("NOTIFY_PERSON", p)
+		env("BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
+		secret = append(secret, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
+	}
 	if to := mailTo(st); to != "" {
 		v := st.Services[st.Box.Roles.SSO].Values
 		env("MAIL_TO", to)

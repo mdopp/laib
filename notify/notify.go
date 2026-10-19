@@ -1,11 +1,14 @@
 // Package notify is the program laib-notify (#443): what tells the owner
 // when the box cannot. Every five minutes (its timer, rendered by laib) it
 // pings the outside watchdog while laib's readiness is not red (#57), and it
-// mails the owner a red that stays ten minutes, once per incident, and the
-// pending image updates once a week (#393). It reads laib over MCP as the
-// notify hand (diag, updates, note) and /ready; it decides nothing and
-// imports nothing of the kernel. The mail settings are Authelia's, which
-// laib renders into the unit.
+// tells the owner a red that stays ten minutes, once per incident, the
+// pending image updates once a week (#393) and each new proposal (#441).
+// It tells them through the Bote's channels first (bote-notify, the person
+// in box.yml notify.person) and by mail only when no channel is reachable
+// (#441, ADR 0016). It reads laib over MCP as the notify hand (diag,
+// updates, inbox, note) and /ready; it decides nothing and imports nothing
+// of the kernel. The mail settings are Authelia's, which laib renders into
+// the unit.
 package notify
 
 import (
@@ -33,6 +36,46 @@ type Config struct {
 	WatchdogURL                                                        string
 	MailTo, Domain                                                     string
 	SMTPHost, SMTPPort, SMTPSecurity, SMTPUser, SMTPFrom, SMTPPassword string
+	BoteURL, BoteToken, Person, InboxURL                               string // the chat first (#441)
+}
+
+func (c Config) chat() bool { return c.BoteURL != "" && c.BoteToken != "" && c.Person != "" }
+func (c Config) mail() bool { return c.SMTPHost != "" && c.MailTo != "" }
+
+// tell is one message to the owner: through the Bote's channels first
+// (bote-notify picks the person's first reachable one), by mail only when
+// that fails or there is no Bote (#441).
+func tell(ctx context.Context, c Config, subject, body string) error {
+	var chatErr error
+	if c.chat() {
+		b, _ := json.Marshal(map[string]string{"an": c.Person, "text": subject + "\n\n" + body})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+"/mitteilung", bytes.NewReader(b))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+c.BoteToken)
+			var resp *http.Response
+			if resp, err = client.Do(req); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode/100 == 2 {
+					return nil
+				}
+				err = fmt.Errorf("Bote: %s", resp.Status)
+			}
+		}
+		chatErr = err
+	}
+	if !c.mail() {
+		return chatErr
+	}
+	return send(c, subject, body)
+}
+
+// whom names where a failed message was going, for the journal.
+func (c Config) whom() string {
+	if c.mail() {
+		return "mail an " + c.MailTo
+	}
+	return "mitteilung an " + c.Person
 }
 
 // RedFor is how long a finding stays red before it is mailed.
@@ -114,22 +157,26 @@ func Ping(ctx context.Context, c Config) bool {
 }
 
 type mailSeen struct {
-	Red     map[string]time.Time `json:"red"`
-	Mailed  map[string]bool      `json:"mailed"`
-	Updates time.Time            `json:"updates"`
+	Red       map[string]time.Time `json:"red"`
+	Mailed    map[string]bool      `json:"mailed"`
+	Updates   time.Time            `json:"updates"`
+	Proposals map[int]bool         `json:"proposals"` // announced once (#441)
 }
 
 // Sweep mails a red that stayed RedFor, once per incident, and once a week
 // the pending image updates (#393). A failed send is journaled (laib note)
 // and tried again on the next sweep.
 func Sweep(ctx context.Context, c Config, now time.Time) error {
-	if c.SMTPHost == "" || c.MailTo == "" {
+	if !c.chat() && !c.mail() {
 		return nil
 	}
 	path := filepath.Join(c.Home, "mail.json")
-	seen := mailSeen{Red: map[string]time.Time{}, Mailed: map[string]bool{}}
+	seen := mailSeen{Red: map[string]time.Time{}, Mailed: map[string]bool{}, Proposals: map[int]bool{}}
 	if b, err := os.ReadFile(path); err == nil {
 		json.Unmarshal(b, &seen)
+	}
+	if seen.Proposals == nil {
+		seen.Proposals = map[int]bool{}
 	}
 	text, err := call(ctx, c, "laib_diag", map[string]any{})
 	if err != nil {
@@ -166,7 +213,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
-		if err = send(c, "Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles."); err == nil {
+		if err = tell(ctx, c, "Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles."); err == nil {
 			for _, k := range keys {
 				seen.Mailed[k] = true
 			}
@@ -184,18 +231,75 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		}
 		seen.Updates = now
 		if len(ups) > 0 {
-			if e := send(c, "Laib: Updates verfügbar", "Neuere Images (laib updates):\n\n"+strings.Join(ups, "\n")+"\n"); e != nil {
+			if e := tell(ctx, c, "Laib: Updates verfügbar", "Neuere Images (laib updates):\n\n"+strings.Join(ups, "\n")+"\n"); e != nil {
 				seen.Updates, err = time.Time{}, e
 			}
 		}
 	}
+	if e := proposals(ctx, c, seen.Proposals); e != nil {
+		err = e
+	}
 	b, _ := json.Marshal(seen)
 	os.WriteFile(path, b, 0o600)
 	if err != nil {
-		// watch, not incident: a failed mail must not wake the Operator into a loop
-		call(ctx, c, "laib_note", map[string]any{"kind": "watch", "text": "mail an " + c.MailTo + ": " + err.Error()})
+		// watch, not incident: a failed message must not wake the Operator into a loop
+		call(ctx, c, "laib_note", map[string]any{"kind": "watch", "text": c.whom() + ": " + err.Error()})
 	}
 	return err
+}
+
+// proposals tells the owner each open proposal once (#441). One that is not
+// destructive says how to decide it in the chat (the relay acts on the
+// owner's verified identity); a destroy, a removal or what the review marks
+// for a human only links the Inbox, where Authelia asks for the second
+// factor: the chat never approves those (ADR 0016).
+func proposals(ctx context.Context, c Config, seen map[int]bool) error {
+	text, err := call(ctx, c, "laib_inbox", map[string]any{})
+	if err != nil {
+		return err
+	}
+	var open []struct {
+		ID                  int
+		Reason, Tier, Class string
+		Card                struct {
+			Summary    string
+			Impact     []string
+			Reversible string
+		}
+	}
+	if err := json.Unmarshal([]byte(text), &open); err != nil {
+		return fmt.Errorf("laib_inbox: %w", err)
+	}
+	isOpen := map[int]bool{}
+	for _, p := range open {
+		isOpen[p.ID] = true
+		if seen[p.ID] {
+			continue
+		}
+		// the decision line comes second: bote-notify cuts a long text at the end
+		body := cmp.Or(p.Card.Summary, p.Reason)
+		if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" {
+			body += "\nDas entscheidest du nur in der Inbox, mit dem zweiten Faktor: " + c.InboxURL
+		} else {
+			body += fmt.Sprintf("\nIm Chat: »gib #%d frei« oder »lehne #%d ab«. Oder in der Inbox: %s", p.ID, p.ID, c.InboxURL)
+		}
+		for _, i := range p.Card.Impact {
+			body += "\n- " + i
+		}
+		if p.Card.Reversible != "" {
+			body += "\nRückgängig: " + p.Card.Reversible
+		}
+		if e := tell(ctx, c, fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body); e != nil {
+			return e
+		}
+		seen[p.ID] = true
+	}
+	for id := range seen { // decided ones are forgotten, so the file stays small
+		if !isOpen[id] {
+			delete(seen, id)
+		}
+	}
+	return nil
 }
 
 // send: SMTP_SECURITY tls is implicit TLS (465); starttls and none upgrade

@@ -113,3 +113,22 @@ func TestParseSignalEvent(t *testing.T) {
 		t.Fatal("a receipt is not a message")
 	}
 }
+
+// #441: "zeig #N" offers the chat's verdict only for what the chat may
+// decide; a proposal only a human may allow, a removal or a destroy names
+// the Inbox and its second factor instead.
+func TestTheCardSendsWhatOnlyTheInboxDecidesToTheInbox(t *testing.T) {
+	inbox := &proposal{ID: 17, Class: "human"}
+	inbox.Card.Summary = "paperless aus dem Internet erreichbar"
+	if s := cardText(inbox); strings.Contains(s, "gib #17 frei") || !strings.Contains(s, "nur in der Inbox") {
+		t.Errorf("a human-class card offers the chat's verdict: %q", s)
+	}
+	gone := &proposal{ID: 18, Tier: "destroy"}
+	if s := cardText(gone); strings.Contains(s, "gib #18 frei") {
+		t.Errorf("a destroy card offers the chat's verdict: %q", s)
+	}
+	update := &proposal{ID: 19, Class: "template-update"}
+	if s := cardText(update); !strings.Contains(s, "gib #19 frei") {
+		t.Errorf("an update card must offer the chat's verdict: %q", s)
+	}
+}
