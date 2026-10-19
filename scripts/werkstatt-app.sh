@@ -52,7 +52,7 @@ say "the box: laib, Caddy (tls internal), Authelia + LLDAP"
 mkdir -p "$LAIB_QUADLET" "$(dirname "$REGCONF")" "$WORK/none"
 printf '[[registry]]\nlocation = "%s"\ninsecure = true\n' "$REG" > "$REGCONF"
 podman run -d --name laib-app-registry -p "$REG:5000" docker.io/library/registry:2 >/dev/null
-for img in ghcr.io/mdopp/laib-caddy:2 ghcr.io/mdopp/laib-hooks:latest docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable; do podman pull -q "$img" >/dev/null; done
+for img in ghcr.io/mdopp/laib-caddy:2 ghcr.io/mdopp/laib-hooks:latest docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/valkey/valkey:8-alpine; do podman pull -q "$img" >/dev/null; done
 L init --domain "$DOMAIN" --data-dir "$DATA" >/dev/null
 cat > "$LAIB_HOME/state/box.yml" <<YML
 domain: $DOMAIN

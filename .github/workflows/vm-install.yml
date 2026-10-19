@@ -451,7 +451,7 @@ jobs:
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core; L=lw; lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
                 podman pull -q "${{ env.HOOKS }}" >/dev/null; echo "hooks image pulled with the box'"'"'s own credentials"
                 # pre-pull, as the caddy step does: a unit start has 90 s and must not include the pull
-                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
+                for img in docker.io/authelia/authelia:4 docker.io/lldap/lldap:stable docker.io/valkey/valkey:8-alpine docker.io/adguard/adguardhome:latest docker.io/tomsquest/docker-radicale:latest mirror.gcr.io/library/busybox:stable; do podman pull -q "$img" >/dev/null; done; echo "service images pre-pulled"
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
@@ -653,6 +653,13 @@ jobs:
           case "$link" in https://auth.vm.test/reset-password/step2?token=*) ;; *) echo "no link back: $link"; exit 1;; esac
           grep -q '"expires": "20' /tmp/inv.json || { echo "no expiry"; exit 1; }
           first_password max "${link#*token=}" 'Max-Passwort-360!'
+          # #369: max's session survives a restart of the auth pod (Authelia's sessions in the pod's Valkey, on disk)
+          files() { curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -b /tmp/jar -o /dev/null -w "%{http_code}" https://files.vm.test/ || true; }
+          [ "$(files)" = 200 ] || { echo "max's session does not open files.vm.test: $(files)"; exit 1; }
+          systemctl --user restart auth-pod.service
+          for i in $(seq 1 60); do [ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9091/api/health || true)" = 200 ] && break; sleep 2; done
+          code=$(files); echo "files.vm.test with max's session after a restart of the auth pod -> HTTP $code"
+          [ "$code" = 200 ] || { echo "the restart logged max out (#369)"; podman logs --tail 20 systemd-auth-authelia; exit 1; }
           grep -q "person" <<<"$(lw journal --since 15m)" || { echo "the invites are not in the journal"; exit 1; }
           EOS
       - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
