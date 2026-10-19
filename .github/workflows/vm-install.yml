@@ -987,8 +987,10 @@ jobs:
                 printf "[Container]\nImage=\${IMAGE}\nEnvironment=POSTGRES_PASSWORD=vmtest\nVolume=\${DATA_DIR}/pgtest/pgdata:/var/lib/postgresql/data:z\nPublishPort=127.0.0.1:5432:5432\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n" > "$R/pgtest.container"
                 podman pull -q mirror.gcr.io/library/postgres:16-alpine >/dev/null
                 $L add caddy; $L add pgtest
-                for i in $(seq 1 30); do podman exec systemd-pgtest pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
-                podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);"
+                # postgres' first start runs initdb with a temporary server, stops it and starts the real one:
+                # pg_isready can answer in that gap, so the first write is retried until the real server takes it
+                ok=""; for i in $(seq 1 45); do podman exec systemd-pgtest psql -U postgres -c "create table t(x int); insert into t values (42);" && { ok=1; break; }; sleep 2; done
+                [ -n "$ok" ] || { echo "postgres never took the first write"; exit 1; }
                 echo "caddy marker for the recovery" > /mnt/data/stacks/caddy/data/vm-marker
                 $L backup | tee /tmp/backup.txt
                 grep -q "angehalten für den Snapshot: pgtest" /tmp/backup.txt || { echo "the database was not quiesced for the snapshot"; exit 1; }
