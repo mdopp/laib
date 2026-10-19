@@ -101,7 +101,8 @@ type Updates struct {
 // Notify is the webhook Laib posts red results, proposals and readiness
 // changes to (#15). Empty means polling only.
 type Notify struct {
-	URL string `yaml:"url"`
+	URL  string `yaml:"url"`
+	Mail string `yaml:"mail"` // the owner's address for laib's mails (#393); empty: the sso service's OPERATOR_EMAIL
 }
 
 // Watchdog: the outside check and the family's contact (#57).

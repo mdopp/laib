@@ -52,6 +52,8 @@ backup:
 hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
 notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
+  mail: owner@example.home        # laib's mails (#393): red for 10 min, once a week the updates; empty: the sso
+                                  # service's OPERATOR_EMAIL. Sent with Authelia's SMTP_* values and AUTHELIA_SMTP_PASSWORD
 updates:
   days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
   time: "03:00"
