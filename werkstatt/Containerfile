@@ -54,6 +54,8 @@ COPY pi /usr/local/bin/pi
 # the guide both agents read (#262): pi appends it to its system prompt, Claude Code reads it as the managed CLAUDE.md
 COPY guide /opt/werkstatt/guide
 COPY guide/AGENTS.md /etc/claude-code/CLAUDE.md
+# the guide's skills, linked for pi and Claude Code at every start (#394)
+COPY skills.sh /usr/local/bin/werkstatt-skills
 COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
 # one Claude Code Remote Control session per checkout (#383), in the tmux session `claude`
@@ -61,7 +63,7 @@ COPY sessions.sh /usr/local/bin/werkstatt-sessions
 COPY tmux.conf /etc/tmux.conf
 # pi in the browser (#384): pi-web-ui with the Werkstatt's provider, guide and hand
 COPY piweb.sh /usr/local/bin/werkstatt-pi-web
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
+RUN chmod +x /usr/local/bin/werkstatt-skills /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
