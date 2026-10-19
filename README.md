@@ -80,13 +80,14 @@ Nothing has run on a real box yet. What exists and how far it is proven:
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
 | 23 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
-The NUC trial (#23, #27) is the first real run; `docs/INSTALL.md` has the
-pre-flight. The Kraftwerk follows `docs/ZIELBILD.md`.
+The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
+pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what
+runs there and what is open is `docs/ZIELBILD.md`.
 
 ## Read first
 
-0. [`docs/ZIELBILD.md`](docs/ZIELBILD.md) — the end state (one box, the
-   Kraftwerk) and the five phases from the NUC trial to retiring ServiceBay.
+0. [`docs/ZIELBILD.md`](docs/ZIELBILD.md) — what we have: the Kraftwerk as it
+   runs, what moved out of ServiceBay and Solaris, what is dropped, what is open.
 1. [`docs/KONZEPT.md`](docs/KONZEPT.md) — the whole concept as decided:
    constructs, division of labour, interfaces by user group, models.
    [`docs/DESIGN.md`](docs/DESIGN.md) is the kernel's design underneath.

@@ -155,7 +155,7 @@ The end state is one box, the Kraftwerk (the GPU box). The Intel NUC is
 the proving ground for the kernel, the agents and Haus: no GPU, so
 `box.yml model.url` points at the Kraftwerk's model proxy; wiped after
 the trial. Two boxes with fixed roles would work (ADR 0018, parked) but
-are not the plan. The path is `docs/ZIELBILD.md`.
+are not the plan. What runs now is `docs/ZIELBILD.md`; the way there was #23 and #160.
 
 ## Three days in the life
 
