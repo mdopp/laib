@@ -84,8 +84,8 @@ func osJournal(t *testing.T, c *cbox) []journal.Entry {
 
 func TestTheRebootIsGrantedInTheWindowWhenAllIsGreen(t *testing.T) {
 	c := osBox(t)
-	if code := preReboot(t, c, at("05:30"), "127.0.0.1:41000"); code != http.StatusOK {
-		t.Fatalf("05:30, green, proven, no backup: want the lock (200), got %d", code)
+	if code := preReboot(t, c, at("06:00"), "127.0.0.1:41000"); code != http.StatusOK {
+		t.Fatalf("06:00, green, proven, no backup: want the lock (200), got %d", code)
 	}
 	if es := osJournal(t, c); len(es) != 1 || !strings.Contains(es[0].Detail, "44.20261101.3.0") {
 		t.Fatalf("the grant must be journalled with the version it lets through: %+v", es)
@@ -98,17 +98,17 @@ func TestTheRebootIsHeld(t *testing.T) {
 		"at midday":          func(c *cbox) (func() time.Time, string) { return at("12:00"), "127.0.0.1:1" },
 		"while the backup runs": func(c *cbox) (func() time.Time, string) {
 			delete(c.down, "laib-backup.service")
-			return at("05:30"), "127.0.0.1:1"
+			return at("06:00"), "127.0.0.1:1"
 		},
 		"while a service is red": func(c *cbox) (func() time.Time, string) {
 			c.down["whoami.service"] = true
-			return at("05:30"), "127.0.0.1:1"
+			return at("06:00"), "127.0.0.1:1"
 		},
 		"before the running deployment is proven": func(c *cbox) (func() time.Time, string) {
 			os.WriteFile(filepath.Join(os.Getenv("LAIB_ETC"), "laib", "boot-proven"), []byte("ca311262 0 0\n"), 0o644)
-			return at("05:30"), "127.0.0.1:1"
+			return at("06:00"), "127.0.0.1:1"
 		},
-		"from the LAN": func(c *cbox) (func() time.Time, string) { return at("05:30"), "192.168.1.20:5000" },
+		"from the LAN": func(c *cbox) (func() time.Time, string) { return at("06:00"), "192.168.1.20:5000" },
 	}
 	for name, setup := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -139,12 +139,29 @@ func TestTheArrivedUpdateIsJournalled(t *testing.T) {
 	}
 }
 
+func TestTheWindowFollowsTheBackupSchedule(t *testing.T) {
+	c := osBox(t)
+	st, _ := cli.LoadState(c.env)
+	for sched, want := range map[string]string{"03:00": "05:00–07:00", "23:30": "01:30–03:30", "": "05:00–07:00"} {
+		st.Box.Backup.Schedule = sched
+		if got := diag.WindowText(st); got != want {
+			t.Errorf("backup at %q: window %s, want %s", sched, got, want)
+		}
+	}
+	st.Box.Backup.Schedule = "23:30"
+	for hhmm, in := range map[string]bool{"23:45": false, "01:30": true, "03:29": true, "03:30": false} {
+		if diag.InWindow(st, at(hhmm)()) != in {
+			t.Errorf("backup at 23:30, %s: in window %v, want %v", hhmm, !in, in)
+		}
+	}
+}
+
 func TestDiagSaysAnOSUpdateWaits(t *testing.T) {
 	c := osBox(t)
 	st, _ := cli.LoadState(c.env)
 	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
 		if f.Probe == "os-update" {
-			if !strings.Contains(f.Detail, "44.20261101.3.0") || !strings.Contains(f.Detail, "05:00") {
+			if !strings.Contains(f.Detail, "44.20261101.3.0") || !strings.Contains(f.Detail, diag.WindowText(st)) {
 				t.Fatalf("the finding must name the version and the window: %+v", f)
 			}
 			return
