@@ -18,10 +18,10 @@ IMG="$REG/laib-werkstatt"
 DATA="$WORK/data"
 REGCONF="$HOME/.config/containers/registries.conf.d/laib-boot-werkstatt.conf"
 cleanup() {
-  systemctl --user stop werkstatt.service werkstatt-autoloop.service 2>/dev/null || true
+  systemctl --user stop werkstatt.service werkstatt-autoloop.service sso.service 2>/dev/null || true
   podman rm -f laib-boot-registry >/dev/null 2>&1 || true
   for s in $(podman secret ls --format '{{.Name}}' 2>/dev/null | grep '^laib\.werkstatt\.' || true); do podman secret rm "$s" >/dev/null || true; done
-  rm -rf "$LAIB_QUADLET/werkstatt" "$REGCONF"
+  rm -rf "$LAIB_QUADLET/werkstatt" "$LAIB_QUADLET/sso" "$REGCONF"
   podman unshare rm -rf "$WORK" 2>/dev/null || rm -rf "$WORK"
   systemctl --user daemon-reload 2>/dev/null || true
 }
@@ -42,15 +42,22 @@ for t in 1 2; do podman push -q "$IMG:$t"; done
 podman rmi "$IMG:2" >/dev/null   # the update is pulled, as on a box
 
 LAIB_ACTOR=human:boot "$BIN" init --domain boot.test --data-dir "$DATA" >/dev/null
+# the Werkstatt's pi.<domain> route wants a login (#384), so a box needs an sso
+# role: here a stub service in that role, no Authelia (werkstatt-e2e/app has the real one)
+mkdir -p "$LAIB_HOME/state/services/sso"
+printf 'name: sso\nprovides: [sso]\nroutes: []\nhealth: {none: "a stub for the role"}\n' > "$LAIB_HOME/state/services/sso/laib.yml"
+printf 'IMAGE: docker.io/library/registry:2\n' > "$LAIB_HOME/state/services/sso/values.yml"
+printf '[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n' > "$LAIB_HOME/state/services/sso/sso.container"
+git -C "$LAIB_HOME/state" add -A && git -C "$LAIB_HOME/state" -c user.name=boot -c user.email=boot@test commit -qm "an sso stub"
 cat > "$LAIB_HOME/state/box.yml" <<YML
 domain: boot.test
 dataDir: $DATA
-roles: {}
+roles: {sso: sso}
 gpu: {present: false}
 laib: {listen: 0.0.0.0}
 YML
 # the external secrets, each a canary the home must never contain
-for s in CLAUDE_CODE_OAUTH_TOKEN LAIB_CLAUDE_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do
+for s in CLAUDE_CODE_OAUTH_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN; do
   printf 'canary241-%s' "$s" | LAIB_ACTOR=human:boot "$BIN" secret set "$s" >/dev/null
 done
 LAIB_ACTOR=human:boot "$BIN" add werkstatt IMAGE="$IMG:1" "boot test #241" || fail "laib add exit $?"
@@ -67,6 +74,18 @@ ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null > "$WORK/known_hosts"
 podman exec -u dev systemd-werkstatt bash -c 'test -f ~/.bashrc' || fail "the image's dotfiles were not seeded into the empty home"
 podman exec -u dev systemd-werkstatt bash -c 'mkdir -p ~/.claude/projects/-workspace && echo "{\"session\":241}" > ~/.claude/projects/-workspace/s.jsonl && echo "# mine 241" >> ~/.bashrc && mkdir -p ~/.cache && echo x > ~/.cache/scratch'
 
+# #383: one Claude Remote Control session per checkout with a CLAUDE.md, a
+# switched-off one stays off, a content repo gets none — after every restart
+podman exec -u dev systemd-werkstatt bash -c 'for r in laib flut content; do mkdir -p /workspace/$r/.git; done; echo "# rules" > /workspace/laib/CLAUDE.md; echo "# rules" > /workspace/flut/CLAUDE.md'
+podman exec -u dev systemd-werkstatt bash -lc 'werkstatt-sessions off flut && werkstatt-sessions' || fail "werkstatt-sessions exit $?"
+sessions() {   # $1: when
+  local w
+  w="$(podman exec -u dev systemd-werkstatt tmux list-windows -t claude -F '#{window_name}' 2>&1 | sort | paste -sd' ')"
+  [ "$w" = laib ] || fail "$1: tmux session claude has windows '$w', want 'laib' ($(podman exec -u dev systemd-werkstatt tmux list-windows -a -F '#{window_name} dead=#{pane_dead} #{pane_current_command}' 2>&1))"
+  [[ "$(podman exec -u dev systemd-werkstatt tmux list-panes -t claude:laib -F '#{pane_start_command}')" == *"--remote-control laib"* ]] || fail "$1: the laib window does not run claude --remote-control laib"
+  echo "sessions ok after $1: $w"
+}
+sessions "the first pass"
 kept() {   # $1: what happened since the files were written
   local id; id="$(podman inspect systemd-werkstatt --format '{{.Id}}')"
   [ "$id" != "$LAST" ] || fail "$1: the container was not recreated, so this proves nothing"
@@ -75,6 +94,7 @@ kept() {   # $1: what happened since the files were written
   ssh "${SSHO[@]}" dev@127.0.0.1 true || fail "$1: SSH refused with the first host key (the key changed, or the login broke)"
   [ "$(ssh "${SSHO[@]}" dev@127.0.0.1 cat .claude/projects/-workspace/s.jsonl)" = '{"session":241}' ] || fail "$1: the Claude session in ~/.claude is gone"
   [ "$(ssh "${SSHO[@]}" dev@127.0.0.1 tail -1 .bashrc)" = "# mine 241" ] || fail "$1: the edited ~/.bashrc is gone"
+  sessions "$1"
   echo "kept after $1"
 }
 LAST="$(podman inspect systemd-werkstatt --format '{{.Id}}')"
@@ -92,7 +112,8 @@ podman unshare test -f "$DATA/werkstatt/cache/scratch" || fail "~/.cache is not 
 podman unshare test ! -e "$DATA/werkstatt/home/.cache/scratch" || fail "~/.cache landed in the backed-up home"
 # no token in the home or the host keys; Claude Code's MCP header names the variable
 if podman unshare grep -rlF canary241 "$DATA/werkstatt/home" "$DATA/werkstatt/ssh-host-keys"; then fail "a token is in the persistent home"; fi
-podman unshare grep -qF 'Bearer ${LAIB_TOKEN}' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server in ~/.claude.json"
+podman unshare grep -qF '"headersHelper": "laib --headers"' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server with a per-session header in ~/.claude.json (#380)"
+if podman unshare grep -rlF laib_werkstatt_ "$DATA/werkstatt/home"; then fail "the werkstatt token is in the persistent home"; fi
 # the tokens' tmpfs (#44) is really one
 for c in systemd-werkstatt systemd-werkstatt-autoloop; do
   podman exec "$c" grep -q ' /run/laib tmpfs ' /proc/mounts || fail "$c: /run/laib, where the tokens go, is not a tmpfs (#44)"

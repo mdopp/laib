@@ -95,3 +95,24 @@ plus `admins`, or `family` and `admins` where the route names none (the
 wildcard's audience, now per host). The hook's config has no access rules.
 A CI job judges the rendered rules with Authelia's binary from the pinned
 image, in both file orders.
+
+## Amendment 2026-10-19 (#378): one wildcard certificate, the challenge delegated to deSEC
+
+Migration day turned phase 4 red for two new names (#377): Strato has no
+API and no wildcard records, so every route name needed a hand-made CNAME
+for HTTP-01, and every name landed in the CT logs. ServiceBay had the same
+shape (NPM, one HTTP-01 certificate and one Strato record per host, and the
+acme-challenge collision footgun on forward-auth hosts).
+
+Decision (owner, variant 1): **ACME challenge delegation.** `dopp.cloud`
+and its records stay at Strato; `_acme-challenge.dopp.cloud` is a CNAME to a
+name in a deSEC zone, and Caddy writes the TXT there with a token limited to
+that zone (`box.yml dns.challengeAlias`, `dns_challenge_override_domain`).
+With any `dns.provider` the Caddyfile has one `cert_issuer acme` and a
+`*.<domain>` site, so Caddy (2.10+) manages one wildcard certificate and
+none per name. `acme_dns` is not used: it replaces the issuer's challenge
+config, the alias with it, and the desec module takes no positional token.
+The image pins Caddy (2.10.2) and the desec module. Alternatives not taken:
+moving the zone to an API provider (INWX, deSEC) — more to move for the
+same result; an NS delegation of a subzone (the 2026-10-11 amendment) —
+it changes the names.

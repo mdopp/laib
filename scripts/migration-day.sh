@@ -35,6 +35,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF="$HERE/$(basename "$0")"
 Q=${Q:-$HOME/.config/containers/systemd}
+UNITS=$HOME/.config/systemd/user   # ServiceBay's plain host units (solaris-llama-policy, #374)
 PARK=$HOME/servicebay-units
 MIG=${MIG_DIR:-$HOME/laib-migration}
 DATA=${DATA_DIR:-/mnt/data/stacks}
@@ -66,7 +67,8 @@ IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solar
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root
   case $1 in
-    llama) echo "llama llama-embed";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
+    # solaris-llama-policy: a plain host unit on 11435, laib-lease's port (#374)
+    llama) echo "llama llama-embed solaris-llama-policy";; caddy) echo nginx;; werkstatt) echo "claude-dev pi-web";;
     radicale) echo "radicale solaris-import-google";;   # #371: the Google import writes into radicale's data
     retire) echo "flutstunde daggerheart-asteroids servicebay";;   # #160: those two go with ServiceBay
     preflight|install|drafts|secrets|ignore) ;;
@@ -185,6 +187,7 @@ servicebay_out() {
     for f in "$Q/$u.kube" "$Q/$u.yml" "$Q/$u.container"; do
       if [ -e "$f" ]; then mv "$f" "$PARK/"; moved="$moved $(basename "$f")"; fi
     done
+    if [ -e "$UNITS/$u.service" ]; then systemctl --user disable --now "$u.service" && moved="$moved $u.service(disabled)"; fi
   done
   systemctl --user daemon-reload
   echo "ServiceBay's $*: stopped,${moved:- already} out of the Quadlet root (in $PARK)"
@@ -194,6 +197,7 @@ servicebay_back() {
   for u in "$@"; do for f in "$PARK/$u.kube" "$PARK/$u.yml" "$PARK/$u.container"; do if [ -e "$f" ]; then mv "$f" "$Q/"; fi; done; done
   systemctl --user daemon-reload
   for u in "$@"; do
+    if [ -e "$UNITS/$u.service" ]; then systemctl --user enable --now "$u.service" && echo "ServiceBay's $u.service runs again"; continue; fi
     [ -n "$(files_of "$u" | grep "^$Q/")" ] || continue
     systemctl --user start "$u.service" && echo "ServiceBay's $u.service runs again" || echo "ServiceBay's $u.service did not start: systemctl --user status $u.service"
   done
@@ -215,7 +219,7 @@ move_logged() { mkdir -p "$MIG"; move "$1" 2>&1 | tee "$MIG/move-$1.log"; return
 
 # what only the owner can supply, set before the service goes in (laib secret set);
 # the other external secrets of the built-ins are seeded or minted by their hooks
-owner_secrets() { case $1 in werkstatt) echo "CLAUDE_CODE_OAUTH_TOKEN LAIB_CLAUDE_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN";; esac; }
+owner_secrets() { case $1 in werkstatt) echo "CLAUDE_CODE_OAUTH_TOKEN LAIB_PI_TOKEN WERKSTATT_GIT_TOKEN WERKSTATT_PI_GIT_TOKEN";; esac; }
 external_missing() {
   local have s
   [ -n "$(owner_secrets "$1")" ] || return 0
@@ -370,6 +374,7 @@ step_caddy() {
   say "4d. Caddy replaces NPM"
   on_box caddy || { echo "no NPM here: skipped"; return 10; }
   prepull caddy
+  public_dns "$STATE"/services/*/laib.yml || { echo "caddy: NPM stays, nothing changed yet"; return 1; }
   servicebay_out nginx
   laib_add caddy
   # every name of the state through Caddy: none answers 502
@@ -548,6 +553,53 @@ logins() {
   return "$red"
 }
 
+# Let's Encrypt by HTTP-01 (no dns.provider, not Caddy's own CA) needs a public record per name (#377):
+# the route names of the state-to-be, resolved against a public resolver (DNS over HTTPS, JSON),
+# not the box's AdGuard, whose rewrites answer every name. PUBLIC_DNS overrides it.
+http01() {
+  if [ -f "$STATE/box.yml" ]; then
+    ! grep -Eq '^tls: *"?internal|^ +provider: *"?[a-z]' "$STATE/box.yml"
+  else
+    case " ${INSTALL_ARGS:-} " in *" --tls internal "*|*" --dns-provider "*) return 1;; esac
+  fi
+}
+route_names() {   # route_names <laib.yml …>: every host and redirectFrom name, as FQDNs ("@" is the apex)
+  sed -n -e 's/^ *- *{\{0,1\}host: *\([a-z0-9-]*\).*/\1/p' -e 's/^ *redirectFrom: *\[\(.*\)\].*/\1/p' "$@" 2>/dev/null |
+    tr ',' '\n' | tr -d ' "' | sed -e "s/^@$/$DOMAIN/" -e "/\./!s/\$/.$DOMAIN/" -e '/^\.\|^$/d' | sort -u
+}
+public_py='import json, sys, urllib.request
+doh, missing = sys.argv[1], []
+for n in sys.argv[2:]:
+    found = False
+    for t in ("A", "AAAA"):
+        r = urllib.request.Request(doh + "?name=" + n + "&type=" + t, headers={"Accept": "application/dns-json"})
+        try:
+            with urllib.request.urlopen(r, timeout=10) as f:
+                found = found or any(a.get("type") in (1, 28) for a in json.load(f).get("Answer") or [])
+        except (OSError, ValueError):
+            sys.exit(2)
+    if not found: missing.append(n)
+print(", ".join(missing)); sys.exit(1 if missing else 0)'
+public_dns() {   # public_dns <laib.yml …>: one ok, RED or WARN line; 1 when a name has no record
+  local names out rc
+  http01 || return 0
+  names=$(route_names "$@")
+  [ -n "$names" ] || return 0
+  # shellcheck disable=SC2086  # one name per word
+  out=$(python3 -I -c "$public_py" "${PUBLIC_DNS:-https://dns.google/resolve}" $names 2>/dev/null); rc=$?
+  case $rc in
+    0) echo "  ok    every route name has a public DNS record (HTTP-01): $(echo $names)";;
+    1) echo "  RED   öffentlicher DNS-Eintrag fehlt: $out"
+       echo "        Let's Encrypt's HTTP-01 needs one per name: a CNAME to $DOMAIN at the DNS provider before the caddy step, or box.yml dns.provider (DNS-01, a wildcard)"
+       return 1;;
+    *) echo "  WARN  the public DNS records were not checked (${PUBLIC_DNS:-https://dns.google/resolve} did not answer): check $(echo $names) by hand";;
+  esac
+}
+templates_of_steps() {   # the templates the run adds on this box
+  local s
+  for s in $STEPS; do service_step "$s" && on_box "$s" && echo "$TEMPLATES/$s/laib.yml"; done
+}
+
 dry_run() {
   local s st rc=0 tmp
   say "dry run: nothing on this box changes"
@@ -570,6 +622,8 @@ dry_run() {
     printf '  %-15s %-40s %s\n' "$s" "${st:-pending}" "$d"
   done
   unclaimed
+  # shellcheck disable=SC2046
+  public_dns $(templates_of_steps) || rc=1
   st=$(konflikte)
   if [ -n "$st" ]; then echo "$st"; echo "        laib add refuses these (KONFLIKT): stop the unit with the step that takes the service, or drop its mount"; rc=1; fi
   if [ "$(last_status drafts)" != green ] && [ "$(podman container inspect -f '{{.State.Running}}' servicebay 2>/dev/null)" = true ]; then

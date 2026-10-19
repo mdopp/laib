@@ -98,6 +98,25 @@ def smtp_values(cfg):
     return [shlex.quote(f"{k}={v}") for k, v in vals.items()]
 
 
+def service_logins(data_dir):
+    """#375: logins a service holds into Jellyfin. ServiceBay let any LLDAP
+    user into Jellyfin; Laib's media lets only family and admins in through
+    LDAP, so a service that logs in as an account like `solaris` gets 401.
+    Reads only the user names of Home Assistant's config entries."""
+    path = os.path.join(data_dir, "home-assistant", "homeassistant", ".storage", "core.config_entries")
+    try:
+        entries = json.load(open(path))["data"]["entries"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    out = []
+    for e in entries:
+        user = (e.get("data") or {}).get("username", "")
+        if e.get("domain") == "jellyfin" and user and user != "homeassistant":
+            out.append(f"home-assistant: HA's jellyfin entry logs in as {user}, which media's LDAP filter (family, admins) refuses; "
+                       "laib secret set JELLYFIN_HA_PASSWORD before laib add media, then re-enter HA's entry as homeassistant with it (docs/MIGRATION.md)")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -255,6 +274,7 @@ def main():
         vals = [f"{k}: {v}" if str(v).startswith("!secret ") else f"{k}: {json.dumps(str(v))}" for k, v in sorted(values.items())]
         written.append((name, builtin, len(routes), len(secrets), "\n".join(laib) + "\n", "\n".join(vals) + "\n"))
 
+    unmapped += service_logins(data_dir)
     for host, names in sorted(owners.items()):
         if len(names) > 1:
             unmapped.append(f"host {host} is claimed by {', '.join(names)}")

@@ -1,7 +1,8 @@
 name: auth
 template: {registry: builtin, name: auth, version: 1}
 provides: [sso, identity]
-# Authelia (forward-auth, OIDC) and LLDAP (users, groups) in one pod. Laib
+# Authelia (forward-auth, OIDC), LLDAP (users, groups) and Valkey
+# (Authelia's sessions, on disk: a restart logs nobody out, #369) in one pod. Laib
 # renders all of Authelia's access rules and the OIDC clients as fragments
 # (render/authelia/*.yml); the hook writes Authelia's own configuration.yml
 # (no access rules: a later file's list replaces it, #249), generates the
@@ -36,6 +37,8 @@ data:
   - path: ${DATA_DIR}/auth/lldap
   - path: ${DATA_DIR}/auth/authelia-config
   - path: ${DATA_DIR}/auth/authelia-data
+  - path: ${DATA_DIR}/auth/sessions          # Authelia's sessions in Valkey (#369)
+    backup: false                          # a restore must not bring back sessions logged out since
 health:
   http: http://127.0.0.1:9091/api/health
 status:                             # whether resets and invitations can be mailed (#359); pre-start writes it on every apply

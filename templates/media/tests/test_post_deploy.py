@@ -11,14 +11,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-LDAP_PW, ADMIN_PW = "-ldap-ro-pw-8K", "admin-pw-3J"
+LDAP_PW, ADMIN_PW, HA_PW = "-ldap-ro-pw-8K", "admin-pw-3J", "ha-svc-pw-7Q"
 PLUGIN = "958aad6637844d2ab89aa7b6fab6e25c"
 JF = {}
 
 
 def fresh():
     JF.clear()
-    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0,
+    JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
               config={"QuickConnectAvailable": False, "ServerName": "x"})
 
 
@@ -104,8 +104,20 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             JF["config"] = b
             return self.reply(204)
         if p == "/Users/New":
-            JF["users"][b["Name"]] = {"Name": b["Name"], "Id": "u-" + b["Name"], "pw": b["Password"]}
+            JF["created"] += 1
+            JF["users"][b["Name"]] = {"Name": b["Name"], "Id": "u-" + b["Name"], "pw": b["Password"],
+                                      "Policy": {"IsAdministrator": False, "EnableAllFolders": True, "EnabledFolders": [],
+                                                 "AuthenticationProviderId": "Default", "PasswordResetProviderId": "Default"}}
             return self.reply(200, JF["users"][b["Name"]])
+        if p.startswith("/Users/Password?userId="):   # Jellyfin 10.9+: an admin sets another user's password without the old one
+            u = next(u for u in JF["users"].values() if u["Id"] == p.split("=", 1)[1])
+            u["pw"] = b["NewPw"]
+            return self.reply(204)
+        if m := re.fullmatch(r"/Users/([^/]+)/Policy", p):
+            if not b.get("AuthenticationProviderId") or not b.get("PasswordResetProviderId"):
+                return self.reply(400, {"error": "a policy without its providers"})
+            next(u for u in JF["users"].values() if u["Id"] == m.group(1))["Policy"] = b
+            return self.reply(204)
         self.reply(404)
 
 
@@ -122,8 +134,8 @@ class PostDeploy(unittest.TestCase):
             (self.media / d).mkdir(parents=True)
         self.xml = Path(self.tmp.name, "media/jellyfin-config/plugins/configurations/LDAP-Auth.xml")
 
-    def run_hook(self):
-        env = dict(os.environ, JELLYFIN_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DATA_DIR=self.tmp.name,
+    def run_hook(self, **extra):
+        env = dict(os.environ, **extra, JELLYFIN_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DATA_DIR=self.tmp.name,
                    MEDIA_ROOT=str(self.media), BASE_DN="dc=vm,dc=test", ADMIN_USER="admin",
                    LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD=ADMIN_PW, LAIB_SECRET_JELLYFIN_LDAP_PASSWORD=LDAP_PW)
         return subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
@@ -161,6 +173,25 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("<string>sb-public-1</string>", x, "the libraries ServiceBay gave new users are gone")
         self.assertNotIn("sb-anna-1", x, "anna's private library is open to every new user")
         self.assertEqual((JF["installs"], JF["restarts"]), (0, 1), "a changed config must be loaded, an installed plugin not installed again")
+
+    def test_home_assistant_gets_its_own_account_not_a_family_login(self):
+        # #375: HA's Jellyfin entry logged in as the LLDAP user solaris, which the family/admins filter refuses.
+        # Its own account is Jellyfin's, hidden, no administrator, the family's libraries; not in LLDAP.
+        p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD=HA_PW)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        u = JF["users"].get("homeassistant")
+        self.assertIsNotNone(u, "no account for Home Assistant")
+        self.assertEqual(u["pw"], HA_PW)
+        self.assertFalse(u["Policy"]["IsAdministrator"])
+        self.assertTrue(u["Policy"].get("IsHidden"), "the service account shows on the TV's login screen")
+        self.assertEqual((u["Policy"]["EnableAllFolders"], u["Policy"]["EnabledFolders"]), (False, ["lib-1", "lib-2"]))
+        self.assertIn("homeassistant", p.stdout)
+        self.assertNotIn(HA_PW, p.stdout + p.stderr)
+        # the next apply changes nothing; a new secret is the account's new password
+        p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD=HA_PW)
+        self.assertEqual((p.returncode, JF["created"]), (0, 1), p.stdout + p.stderr)
+        p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD="ha-svc-pw-new")
+        self.assertEqual((p.returncode, JF["users"]["homeassistant"]["pw"]), (0, "ha-svc-pw-new"), p.stdout + p.stderr)
 
     def test_a_server_still_starting_behind_a_green_health_is_waited_for(self):
         JF["starting"], JF["wizard503"] = 3, 2

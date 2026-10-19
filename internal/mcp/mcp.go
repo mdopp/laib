@@ -29,7 +29,7 @@ var Mu sync.RWMutex
 var Allowed = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "skill": true, "updates": true,
-	"person_invite": true, "person_pending": true,
+	"person_invite": true, "person_pending": true, "session": true,
 }
 
 type rpcRequest struct {
@@ -176,7 +176,7 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", cli.ExitUsage
 	}
 	// reads run side by side; a verb that changes something runs alone (#289)
-	if v.Tier == "read" && verbName != "skill" && verbName != "template" {
+	if v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session" {
 		Mu.RLock()
 		defer Mu.RUnlock()
 	} else {

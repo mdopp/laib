@@ -413,6 +413,10 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
+// PublicResolvers answer what Let's Encrypt sees, not the LAN's rewrites:
+// Caddy's DNS-01 checks and diag's challenge probe ask them (#378).
+var PublicResolvers = []string{"9.9.9.9", "1.1.1.1"}
+
 const stripRemote = "\trequest_header -Remote-*\n"
 
 func caddyfile(st *state.State, secrets map[string]string) string {
@@ -422,8 +426,21 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	// before forward_auth, which runs first by default: every site strips the
 	// client's Remote-* and only Authelia's copy reaches an app (#231)
 	b.WriteString("\torder request_header first\n")
-	if st.Box.DNS.Provider != "" {
-		fmt.Fprintf(&b, "\tacme_dns %s {env.LAIB_DNS_TOKEN}\n", st.Box.DNS.Provider)
+	// DNS-01 (#378): one issuer for every name, the challenge at the alias if
+	// there is one. Not acme_dns: it replaces the issuer's challenge config.
+	// local_certs and cert_issuer exclude each other, so internal wins.
+	dns01 := st.Box.DNS.Provider != "" && st.Box.TLS != "internal"
+	if dns01 {
+		token := "{env.LAIB_DNS_TOKEN}"
+		if st.Box.DNS.Provider == "desec" { // its module takes no positional token
+			token = "{\n\t\t\ttoken {env.LAIB_DNS_TOKEN}\n\t\t}"
+		}
+		fmt.Fprintf(&b, "\tcert_issuer acme {\n\t\tdns %s %s\n", st.Box.DNS.Provider, token)
+		if a := st.Box.DNS.ChallengeAlias; a != "" {
+			fmt.Fprintf(&b, "\t\tdns_challenge_override_domain %s\n", a)
+		}
+		// public resolvers: the box's AdGuard rewrites *.<domain>, _acme-challenge too
+		fmt.Fprintf(&b, "\t\tresolvers %s\n\t}\n", strings.Join(PublicResolvers, " "))
 	}
 	if st.Box.TLS == "internal" {
 		b.WriteString("\tlocal_certs\n") // every host from Caddy's internal CA; trust data/caddy/pki/authorities/local/root.crt on the devices
@@ -440,6 +457,12 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 			b.WriteString("\t\timport authelia\n")
 		}
 		fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d {\n\t\t\theader_up X-Laib-Proxy %q\n\t\t}\n\t}\n\trespond 403\n}\n\n", st.Box.Laib.Port, secretValue(secrets, ProxySecret))
+	}
+	if dns01 {
+		// one wildcard certificate: Caddy (2.10+) then gets none per name, a
+		// new route has a certificate at once and no name reaches the CT logs;
+		// a name without a route is closed
+		fmt.Fprintf(&b, "*.%s {\n%s\tabort\n}\n\n", st.Box.Domain, stripRemote)
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]

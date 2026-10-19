@@ -3,12 +3,14 @@ package pages
 import (
 	"context"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html"
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -104,47 +106,12 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 				checking[name] = sysd.Active(r.Context(), svc.Contract.Status.Check) == "activating"
 			}
 		}
-		var b strings.Builder
-		for _, on := range checking {
-			if on {
-				b.WriteString(`<meta http-equiv=refresh content=10>`)
-				break
-			}
-		}
-		fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste · Operator %s · zuletzt gehört %s</h1>", rd.State, rd.Services, html.EscapeString(rd.Operator), rd.LastHeard[11:19])
-		if rd.Lock != "" {
-			fmt.Fprintf(&b, "<p>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
-		}
-		b.WriteString("<table>")
-		for _, row := range rows {
-			var bad []string
-			for u, a := range row.Units {
-				if a != "active" {
-					bad = append(bad, u+"="+a)
-				}
-			}
-			check := ""
-			if on, ok := checking[row.Name]; ok {
-				check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
-				if on {
-					check = "wird geprüft …"
-				}
-			}
-			fmt.Fprintf(&b, "<tr class=%s><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>", row.State, row.State, html.EscapeString(row.Name), html.EscapeString(strings.Join(bad, " ")), html.EscapeString(row.Detail), check)
-		}
-		b.WriteString("</table>")
+		last := ""
 		if e, ok := journal.Last(env.Paths.Journal); ok {
-			fmt.Fprintf(&b, "<p>Letzte Änderung %s · %s · %s %s · %s</p>", e.T.Local().Format("02.01. 15:04"), html.EscapeString(e.Actor), e.Verb, html.EscapeString(e.Service), html.EscapeString(e.Reason))
+			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 		}
-		if day, text := LastReport(env); day != "" {
-			fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(day), html.EscapeString(text))
-		}
-		b.WriteString(`<p><a href="/inbox">Inbox</a> · <a href="/journal">Journal</a>`)
-		if BoteSignalBase(st) != "" {
-			b.WriteString(` · <a href="/bote/link">Bote verbinden (QR)</a>`)
-		}
-		b.WriteString(`</p>`)
-		page(w, "Status", b.String())
+		day, text := LastReport(env)
+		page(w, "Status", statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != ""))
 	}))
 	// the Bote's link QR from signal-cli (#54): scan it in Signal → Gekoppelte Geräte
 	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +135,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(cli.InboxDir(env), true)
 		var b strings.Builder
-		b.WriteString("<h1>Inbox</h1>")
+		b.WriteString(nav + "<h1>Inbox</h1>")
 		if err != nil {
 			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
 		}
@@ -183,7 +150,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			// the decision card (#58): consequence, reversibility, who and why,
 			// a safe default — the diff only behind Details
 			c := proposal.Card(p, domain)
-			fmt.Fprintf(&b, "<h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
+			fmt.Fprintf(&b, "<section class=card><h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
 			b.WriteString("<ul>")
 			for _, i := range c.Impact {
 				cls := ""
@@ -200,8 +167,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			for _, w := range p.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
-			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve style=display:inline><button>Freigeben</button></form>", p.ID)
-			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject style=display:inline><button>Ablehnen</button></form>", p.ID)
+			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve><button class=go>Freigeben</button></form>", p.ID)
+			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><button>Ablehnen</button></form>", p.ID)
 			later := "<a href=\"/\"><button>Später</button></a>"
 			if c.Risky {
 				fmt.Fprintf(&b, "<p>%s %s %s</p>", later, approve, reject)
@@ -210,6 +177,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			}
 			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
 				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
+			b.WriteString("</section>")
 		}
 		// what was approved lately can be taken back (#41)
 		if all, err := proposal.List(cli.InboxDir(env), false); err == nil {
@@ -222,7 +190,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 					b.WriteString("<h2>Zuletzt freigegeben</h2>")
 				}
 				n++
-				fmt.Fprintf(&b, "<p>#%d · %s · von %s · freigegeben von %s <form method=post action=/inbox/%d/rollback style=display:inline><button>Zurücknehmen</button></form></p>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), p.ID)
+				fmt.Fprintf(&b, "<div class=card><span class=note>#%d · %s · von %s · freigegeben von %s</span><form method=post action=/inbox/%d/rollback><button>Zurücknehmen</button></form></div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), p.ID)
 			}
 			for _, p := range all {
 				if p.Status == "stale" {
@@ -230,7 +198,6 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 				}
 			}
 		}
-		b.WriteString("<p><a href=\"/\">Status</a> · <a href=\"/journal\">Journal</a></p>")
 		page(w, "Inbox", b.String())
 	}))
 	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -269,16 +236,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	mux.HandleFunc("/journal", guard(func(w http.ResponseWriter, r *http.Request) {
 		es, err := journal.Read(env.Paths.Journal, time.Now().Add(-7*24*time.Hour))
 		var b strings.Builder
-		b.WriteString("<h1>Journal · 7 Tage</h1>")
+		b.WriteString(nav + "<h1>Journal · 7 Tage</h1>")
 		if err != nil {
 			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
 		}
-		b.WriteString("<table>")
-		for i := len(es) - 1; i >= 0; i-- {
-			e := es[i]
-			fmt.Fprintf(&b, "<tr class=%s><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s %s</td></tr>", resultClass(e.Result), e.T.Local().Format("02.01. 15:04:05"), html.EscapeString(e.Actor), e.Verb, html.EscapeString(e.Service), e.Result, html.EscapeString(e.Reason), html.EscapeString(e.Detail))
-		}
-		b.WriteString("</table><p><a href=\"/\">Status</a></p>")
+		b.WriteString(journalBody(es))
 		page(w, "Journal", b.String())
 	}))
 
@@ -322,11 +284,79 @@ func resultClass(r string) string {
 	return "info"
 }
 
+// nav is the three pages' links, on top of each.
+const nav = `<nav><a href="/">Status</a><a href="/inbox">Inbox</a><a href="/journal">Journal</a></nav>`
+
+//go:embed laib.css
+var css string
+
 func page(w http.ResponseWriter, title, body string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Laib · %s</title><style>
-body{font:15px/1.5 system-ui,sans-serif;margin:1.5rem;max-width:60rem;color:#222;background:#faf8f3}
-h1{font-size:1.2rem}table{border-collapse:collapse}td{padding:.2rem .8rem .2rem 0;vertical-align:top}
-tr.grün td:first-child{color:#2a7}p.gelb{color:#c90}tr.gelb td:first-child{color:#c90}tr.rot td:first-child,p.rot{color:#c33}a{color:#246}
-</style></head><body>%s</body></html>`, html.EscapeString(title), body)
+	fmt.Fprint(w, pageHTML(title, body))
+}
+
+// pageHTML is a page in the household look (#382): the CSS inline from the
+// one embedded file, no request beyond the page itself.
+func pageHTML(title, body string) string {
+	return `<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Laib · ` +
+		html.EscapeString(title) + "</title><style>\n" + css + "</style></head><body>" + body + "</body></html>\n"
+}
+
+// statusBody is the status page: the box's line, one card per service with
+// its state and note, the last change, the morning report.
+func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, report [2]string, bote bool) string {
+	var b strings.Builder
+	for _, on := range checking {
+		if on {
+			b.WriteString(`<meta http-equiv=refresh content=10>`)
+			break
+		}
+	}
+	links := `<a href="/inbox">Inbox</a><a href="/journal">Journal</a>`
+	if bote {
+		links += `<a href="/bote/link">Bote verbinden (QR)</a>`
+	}
+	heard := rd.LastHeard
+	if len(heard) >= 19 {
+		heard = heard[11:19]
+	}
+	fmt.Fprintf(&b, "<nav>%s</nav><h1>Laib · %s · %d Dienste</h1><p class=muted>Operator %s · zuletzt gehört %s</p>", links, html.EscapeString(rd.State), rd.Services, html.EscapeString(rd.Operator), heard)
+	if rd.Lock != "" {
+		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
+	}
+	for _, row := range rows {
+		var bad []string
+		for u, a := range row.Units {
+			if a != "active" {
+				bad = append(bad, u+"="+a)
+			}
+		}
+		sort.Strings(bad)
+		note := strings.TrimSpace(strings.Join(bad, " ") + " " + row.Detail)
+		check := ""
+		if on, ok := checking[row.Name]; ok {
+			check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
+			if on {
+				check = "<span class=muted>wird geprüft …</span>"
+			}
+		}
+		fmt.Fprintf(&b, "<div class=\"card %s\"><b>%s</b><span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, html.EscapeString(row.Name), row.State, html.EscapeString(note), check)
+	}
+	if last != "" {
+		fmt.Fprintf(&b, "<p class=muted>Letzte Änderung %s</p>", html.EscapeString(last))
+	}
+	if report[0] != "" {
+		fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(report[0]), html.EscapeString(report[1]))
+	}
+	return b.String()
+}
+
+// journalBody is the journal's entries, newest first, one row card each.
+func journalBody(es []journal.Entry) string {
+	var b strings.Builder
+	for i := len(es) - 1; i >= 0; i-- {
+		e := es[i]
+		fmt.Fprintf(&b, "<div class=\"card %s\"><span class=muted>%s</span><b>%s %s</b><span class=state>%s</span><span class=note>%s · %s %s</span></div>\n", resultClass(e.Result), e.T.Local().Format("02.01. 15:04:05"), e.Verb, html.EscapeString(e.Service), e.Result, html.EscapeString(e.Actor), html.EscapeString(e.Reason), html.EscapeString(e.Detail))
+	}
+	return b.String()
 }

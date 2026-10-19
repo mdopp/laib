@@ -34,3 +34,28 @@ rekey logic to heal them.
   its own request. This is carried over from ServiceBay ADR 0009/0013 and
   stays.
 - Backups include `secrets.age`; losing the paper key loses the secrets.
+
+## Amendment 2026-10-19 (#380): how a long-running container holds a TTL hand
+
+`claude` has a TTL because it belongs to a session, not to a service. The
+Werkstatt is a long-running container whose Claude sessions come and go
+(#383), and it held `LAIB_CLAUDE_TOKEN` as a service secret in
+`secrets.age`: after 8 h every session lost Laib and the owner minted a new
+one by hand. A week-long token at rest was the workaround.
+
+Decision: a hand may name one other hand in `session:` in `policy.yml`.
+Its only power, through the verb `session`, is to get a token of that hand
+for one session. The token carries that hand's TTL (a session hand must
+have one, may not be `human`, and has no `session:` itself, so there is no
+chain), is journaled, and is listed with the session's name. `laib init`
+ships `werkstatt: {ceiling: read, verbs: [session], session: claude}`. The
+Werkstatt's `LAIB_WERKSTATT_TOKEN` is minted on `laib add` (`mint:
+werkstatt`). It is the one long-lived token there, and it can neither read
+the box nor change it. Each Claude session asks for its own `claude` token
+when it connects and keeps it in the container's tmpfs.
+
+This is the one exception to "no delegation chains, no request flow". It
+is one level deep, the target and its TTL are fixed in `policy.yml` (a
+human's file), and asking for a session is not asking for more: the
+session gets exactly the `claude` hand. Revoking the `werkstatt` token
+ends new sessions. Revoking one session token ends that session.

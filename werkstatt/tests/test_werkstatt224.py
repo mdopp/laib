@@ -22,7 +22,7 @@ class ClaudeToken(unittest.TestCase):
                 script = script.replace(p, root + p)
             (r / "etc" / "profile.d").mkdir(parents=True)
             (r / "entrypoint.sh").write_text(script)
-            env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", CLAUDE_CODE_OAUTH_TOKEN=tok)
+            env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", CLAUDE_CODE_OAUTH_TOKEN=tok, WERKSTATT_SESSIONS_EVERY="0")
             for k in ("LAIB_TOKEN", "WERKSTATT_GIT_TOKEN", "WERKSTATT_ROLE", "WERKSTATT_SSH_PASSWORD", "WERKSTATT_AUTHORIZED_KEY"):
                 env.pop(k, None)
             p = subprocess.run(["bash", str(r / "entrypoint.sh")], env=env, capture_output=True, text=True, timeout=30)

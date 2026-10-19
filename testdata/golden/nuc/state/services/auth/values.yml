@@ -1,5 +1,6 @@
 AUTHELIA_IMAGE: docker.io/authelia/authelia:4
 LLDAP_IMAGE: docker.io/lldap/lldap:stable
+SESSIONS_IMAGE: docker.io/valkey/valkey:8-alpine
 BASE_DN: dc=example,dc=home
 OPERATOR_USER: admin
 OPERATOR_EMAIL: admin@example.home

@@ -85,6 +85,7 @@ echo "  laib add auth BASE_DN=dc=box,dc=test"
 echo "  laib add radicale"
 echo "  laib add mosquitto"
 echo "  laib add vaultwarden"
+echo "  laib add llama"
 ''')
 
     def tearDown(self):
@@ -105,7 +106,7 @@ echo "  laib add vaultwarden"
                  LAIB_BIN=str(t / "bin" / "laib"), LAIB_STATE=str(t / "state"), OUT=str(t / "out" / "migration"),
                  INSTALL_BOX=str(t / "bin" / "install-box"), MIGRATE_PY=str(t / "bin" / "migrate"), PYTHON="",
                  CARRY=str(t / "bin" / "carry"), MOVE=str(t / "bin" / "move"),
-                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION=VERSION, MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
+                 CONTAINERENV=str(t / "no-containerenv"), LAIB_VERSION=VERSION, PUBLIC_DNS="http://127.0.0.1:9/resolve", MIN_FREE_GB="0", LAIB_RETRY_SLEEP="0")
         e.update(env)
         return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env=e, timeout=120)
 
@@ -243,6 +244,30 @@ echo "  laib add vaultwarden"
         self.assertIn("secret set AUTHELIA_SMTP_PASSWORD", self.calls_of("laib"))
         self.assertEqual((self.t / "secret-AUTHELIA_SMTP_PASSWORD").read_text(), "pw-n'ever \"printed")
         self.assertNotIn("never", r.stdout + r.stderr + self.calls.read_text())
+
+    def test_the_llama_step_takes_11435_from_solaris_llama_policy(self):
+        # #374: ServiceBay/Solaris's policy proxy is a plain host user unit, not a Quadlet file; it
+        # held 11435 after the llama step, so laib-lease could not listen. The step disables it, a
+        # hand-back enables it again.
+        for f, body in (("llama.kube", "[Kube]\nYaml=llama.yml\n"), ("llama.yml", "kind: Pod\n")):
+            (self.t / "q" / f).write_text(body)
+        units = self.t / "home" / ".config" / "systemd" / "user"
+        units.mkdir(parents=True)
+        (units / "solaris-llama-policy.service").write_text("[Service]\nExecStart=/x proxy\n")
+        r = self.run_md("--foreground", "--until", "llama")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        sysd = self.calls_of("systemctl")
+        self.assertIn("--user disable --now solaris-llama-policy.service", sysd)
+        lines = self.calls.read_text().splitlines()
+        self.assertLess(lines.index("systemctl --user disable --now solaris-llama-policy.service"), lines.index("laib add llama"),
+                        "laib-lease starts before the old proxy let go of 11435")
+        self.assertIn("solaris-llama-policy", r.stdout)
+        # the other steps' units stay claimed (a comment in sb_units once swallowed caddy's nginx)
+        st = self.run_md("--dry-run")
+        self.assertNotIn("nginx.kube", st.stdout + st.stderr)
+        r = self.run_md("rollback", "llama")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--user enable --now solaris-llama-policy.service", self.calls_of("systemctl"))
 
     def test_red_step_stops_and_hands_the_service_back(self):
         r = self.run_md("--foreground", "--until", "vaultwarden", FAKE_FAIL_ADD="radicale")
@@ -393,6 +418,47 @@ echo "  laib add vaultwarden"
         self.changed_nothing()
         r = self.run_md("--dry-run")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def public_dns(self, names):
+        """a DNS-over-HTTPS JSON resolver (dns.google/resolve's shape) that knows these names"""
+        import http.server, threading
+        from urllib.parse import urlparse, parse_qs
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+
+            def do_GET(self):
+                q = parse_qs(urlparse(self.path).query)
+                n, t = q["name"][0], q["type"][0]
+                ans = [{"name": n, "type": 1, "data": "203.0.113.7"}] if n in names and t == "A" else []
+                b = json.dumps({"Status": 0, "Answer": ans} if ans else {"Status": 3 if n not in names else 0}).encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        return f"http://127.0.0.1:{srv.server_address[1]}/resolve"
+
+    def test_dry_run_lists_route_names_without_a_public_record(self):
+        # #377: HTTP-01 needs a public record per name; vault has none here
+        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test"})
+        r = self.run_md("--dry-run", PUBLIC_DNS=doh)
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("RED   öffentlicher DNS-Eintrag fehlt: vault.box.test", r.stdout)
+        self.changed_nothing()
+        doh = self.public_dns({"auth.box.test", "ldap.box.test", "caldav.box.test", "vault.box.test"})
+        r = self.run_md("--dry-run", PUBLIC_DNS=doh)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("ok    every route name has a public DNS record", r.stdout)
+        # DNS-01 or Caddy's own CA need none
+        r = self.run_md("--dry-run", PUBLIC_DNS=self.public_dns(set()), INSTALL_ARGS="--tls internal")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("öffentlicher DNS-Eintrag", r.stdout)
+
+    def test_an_unreachable_public_resolver_is_a_warning(self):
+        r = self.run_md("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("WARN  the public DNS records were not checked", r.stdout)
 
     def test_unknown_step_is_refused(self):
         r = self.run_md("--dry-run", "--until", "vaultwardn")
