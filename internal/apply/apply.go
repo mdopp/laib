@@ -158,7 +158,13 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	// the images of new or re-imaged containers are pulled now
 	for _, image := range imagesToPull(p, previousImages) {
 		if out, err := sysd.Run(ctx, "podman", "pull", "-q", image); err != nil {
-			res.Checks = append(res.Checks, Check{Service: "laib", What: "pull " + image, OK: false, Detail: strings.TrimSpace(out)})
+			// an image present locally starts the unit, and verify judges it: no DNS while
+			// the dns role's own AdGuard is replaced is no red (#370)
+			_, missing := sysd.Run(ctx, "podman", "image", "exists", image)
+			if missing == nil {
+				out = "Image nicht aktualisiert, die lokale Kopie startet: " + out
+			}
+			res.Checks = append(res.Checks, Check{Service: "laib", What: "pull " + image, OK: missing == nil, Detail: strings.TrimSpace(out)})
 		}
 	}
 	if err := sysd.DaemonReload(ctx); err != nil {

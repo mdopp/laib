@@ -199,6 +199,15 @@ echo "  laib add vaultwarden"
         self.assertTrue((self.t / "home" / "servicebay-units" / "auth.kube").exists())
         self.assertTrue((self.t / "q" / "radicale.kube").exists())   # not reached
 
+    def test_a_steps_images_are_pulled_before_servicebays_unit_stops(self):
+        # #370: AdGuard is the box's resolver; once ServiceBay's is stopped, no pull resolves
+        r = self.run_md("--foreground", "--until", "radicale")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        lines = self.calls.read_text().splitlines()
+        pull = lines.index("podman pull -q docker.io/tomsquest/docker-radicale:latest")
+        stop = lines.index("systemctl --user stop radicale.service")
+        self.assertLess(pull, stop, lines)
+
     def test_servicebays_mail_password_is_piped_into_laib(self):
         # #359: the password of notifications.email goes into AUTHELIA_SMTP_PASSWORD on stdin,
         # never on argv or into the log; without a complete setting nothing is set
