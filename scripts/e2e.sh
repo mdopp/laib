@@ -254,8 +254,10 @@ LAIB_ACTOR=human:e2e "$BIN" operator enable --report-at 06:30 >/dev/null || fail
 grep -q "MODEL_URL=http://127.0.0.1:5977/v1" "$LAIB_SYSTEMD/laib-operator.service" || fail "model url not rendered into the unit"
 test -f "$LAIB_SYSTEMD/laib-operator.service" || fail "operator unit not rendered"
 grep -q "OPERATOR_REPORT_AT=06:30" "$LAIB_SYSTEMD/laib-operator.service" || fail "report time not rendered"
-grep -q "LAIB_TOKEN=laib_ops_" "$LAIB_SYSTEMD/laib-operator.service" || fail "ops token not in the unit"
-[ "$(stat -c %a "$LAIB_SYSTEMD/laib-operator.service")" = 600 ] || fail "unit with a secret is not 0600"
+# the token sits in the unit's env file, never in the unit (#443)
+grep -q 'LAIB_TOKEN="laib_ops_' "$LAIB_SYSTEMD/laib-operator.env" || fail "ops token not in the unit's env file"
+if grep -q "laib_ops_" "$LAIB_SYSTEMD/laib-operator.service"; then fail "the ops token is in the unit itself"; fi
+[ "$(stat -c %a "$LAIB_SYSTEMD/laib-operator.env")" = 600 ] || fail "the env file with the token is not 0600"
 grep -q "enable --now laib-operator.service" "$SYSTEMCTL_LOG" || fail "operator unit not enabled"
 if LAIB_ACTOR=ops "$BIN" operator disable >/dev/null 2>&1; then fail "ops disabled the operator"; fi
 

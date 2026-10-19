@@ -222,7 +222,11 @@ propose only because `note` is that tier; it proposes and decides nothing)
 and `/ready`, with a token apply mints. `laib init` writes the hand, and
 `state.Load` supplies it to an older `policy.yml`, like #444's `laib`. The
 texts and the cadence are the same; a failed mail is a `note` (kind watch)
-instead of a `notify` line, so it does not wake the Operator.
+instead of a `notify` line, so it does not wake the Operator. Its token
+and the SMTP password are in `laib-notify.env` (`EnvironmentFile=`), which
+apply writes 0600, never in the unit; the Operator's token, model key and
+usage-metrics token moved the same way into `laib-operator.env`, and a
+changed env file restarts its long-running unit.
 
 ### Tests are not capped (owner, 2026-10-18)
 

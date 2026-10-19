@@ -68,12 +68,16 @@ func TestTheNotifierRunsAsItsOwnProgramWithANarrowHand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit, timer := out["systemd/laib-notify.service"], out["systemd/laib-notify.timer"]
-	for _, w := range []string{"ExecStart=/var/opt/laib/laib-notify", `Environment="LAIB_TOKEN=tok-n"`, `Environment="WATCHDOG_URL=https://hc.example/ping/abc"`,
-		`Environment="SMTP_FROM=Die Box <box@example>"`, `Environment="SMTP_PASSWORD=p%%w\"x"`, `Environment="MAIL_TO=admin@example.home"`, "/ready", "/mcp"} {
+	unit, timer, envf := out["systemd/laib-notify.service"], out["systemd/laib-notify.timer"], out["systemd/laib-notify.env"]
+	for _, w := range []string{"ExecStart=/var/opt/laib/laib-notify", "EnvironmentFile=%h/.config/systemd/user/laib-notify.env", `Environment="WATCHDOG_URL=https://hc.example/ping/abc"`,
+		`Environment="SMTP_FROM=Die Box <box@example>"`, `Environment="MAIL_TO=admin@example.home"`, "/ready", "/mcp"} {
 		if !strings.Contains(unit, w) {
 			t.Errorf("the notifier's unit lacks %s:\n%s", w, unit)
 		}
+	}
+	// the secrets in the env file (apply writes it 0600), never in the unit
+	if strings.Contains(unit, "tok-n") || strings.Contains(unit, "p%w") || !strings.Contains(envf, `LAIB_TOKEN="tok-n"`) || !strings.Contains(envf, `SMTP_PASSWORD="p%w\"x"`) {
+		t.Errorf("unit:\n%s\nenv:\n%s", unit, envf)
 	}
 	if !strings.Contains(timer, "OnUnitActiveSec=5m") {
 		t.Errorf("not every five minutes:\n%s", timer)

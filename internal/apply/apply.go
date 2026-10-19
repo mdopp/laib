@@ -187,6 +187,16 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		}
 	}
 	for _, c := range p.Changes {
+		// a changed env file (#443: a host unit's secrets) restarts its long-running unit
+		if strings.HasPrefix(c.Path, "systemd/") && strings.HasSuffix(c.Path, ".env") && c.Kind != "delete" {
+			unit := strings.TrimSuffix(strings.TrimPrefix(c.Path, "systemd/"), ".env") + ".service"
+			if strings.Contains(p.Output["systemd/"+unit], "[Install]") && !slices.Contains(res.Restarted, unit) {
+				sysd.Restart(ctx, unit)
+				res.Restarted = append(res.Restarted, unit)
+			}
+		}
+	}
+	for _, c := range p.Changes {
 		if c.Path == "nftables/laib.nft" && c.Kind == "delete" {
 			// no port is dropped any more: the table goes too, or it keeps
 			// dropping until the next reboot (#102). Already gone is fine.
@@ -349,7 +359,7 @@ func writeAtomic(target, content string) error {
 	// Unit files carry rendered secrets (Environment=…), people.json the
 	// household's numbers (#177); keep them private.
 	mode := os.FileMode(0o644)
-	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") {
+	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") || strings.HasSuffix(target, ".env") {
 		mode = 0o600
 	}
 	return boxfs.WriteAtomic(target+".laib-tmp", target, []byte(content), mode)

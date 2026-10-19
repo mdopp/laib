@@ -103,10 +103,10 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["systemd/laib-backup-check.timer"] = "# Rendered by laib: once a month, a restore test.\n[Unit]\nDescription=Laib backup check timer\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Box.Operator.Enabled {
-		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
+		out["systemd/laib-operator.service"], out["systemd/laib-operator.env"] = operatorUnit(st, secrets)
 	}
 	if notifier(st) {
-		out["systemd/laib-notify.service"] = notifyUnit(st, secrets)
+		out["systemd/laib-notify.service"], out["systemd/laib-notify.env"] = notifyUnit(st, secrets)
 		out["systemd/laib-notify.timer"] = "# Rendered by laib: the watchdog ping and the owner's mail every five minutes (#443).\n[Unit]\nDescription=Laib notify timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=5m\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Policy.Autonomy["converge"] == "on" {
@@ -679,36 +679,47 @@ func mailTo(st *state.State) string {
 // notifier: laib-notify runs when it has something to do (#443).
 func notifier(st *state.State) bool { return st.Box.Watchdog.URL != "" || mailTo(st) != "" }
 
-// notifyUnit is laib-notify's oneshot: laib's MCP and /ready, the watchdog
-// URL and Authelia's mail settings, each value quoted for systemd.
-func notifyUnit(st *state.State, secrets map[string]string) string {
+// envFile is a host unit's secrets as its EnvironmentFile (#443): never in
+// the unit itself; apply writes *.env 0600. Values are double-quoted.
+func envFile(kv ...string) string {
 	var b strings.Builder
-	b.WriteString("# Rendered by laib: the watchdog ping and the owner's mail (#443).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib-notify\n")
+	for i := 0; i+1 < len(kv); i += 2 {
+		fmt.Fprintf(&b, "%s=\"%s\"\n", kv[i], strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", " ").Replace(kv[i+1]))
+	}
+	return b.String()
+}
+
+// notifyUnit is laib-notify's oneshot and its env file: laib's MCP and
+// /ready, the watchdog URL and Authelia's mail settings in the unit, each
+// value quoted for systemd; the token and the SMTP password in the env file.
+func notifyUnit(st *state.State, secrets map[string]string) (string, string) {
+	var b strings.Builder
+	b.WriteString("# Rendered by laib: the watchdog ping and the owner's mail (#443).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib-notify\nEnvironmentFile=%h/.config/systemd/user/laib-notify.env\n")
 	env := func(k, v string) {
 		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", k, strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(v))
 	}
 	base := fmt.Sprintf("http://127.0.0.1:%d", st.Box.Laib.Port)
 	env("LAIB_MCP_URL", base+"/mcp")
 	env("LAIB_READY_URL", base+"/ready")
-	env("LAIB_TOKEN", secretValue(secrets, NotifyToken))
 	env("LAIB_HOME", "/mnt/data/laib")
 	env("LAIB_DOMAIN", st.Box.Domain)
 	env("WATCHDOG_URL", st.Box.Watchdog.URL)
+	secret := []string{"LAIB_TOKEN", secretValue(secrets, NotifyToken)}
 	if to := mailTo(st); to != "" {
 		v := st.Services[st.Box.Roles.SSO].Values
 		env("MAIL_TO", to)
 		for _, k := range []string{"SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_FROM"} {
 			env(k, v[k].Literal)
 		}
-		env("SMTP_PASSWORD", secretValue(secrets, "AUTHELIA_SMTP_PASSWORD"))
+		secret = append(secret, "SMTP_PASSWORD", secretValue(secrets, "AUTHELIA_SMTP_PASSWORD"))
 	}
-	return b.String()
+	return b.String(), envFile(secret...)
 }
 
 // OperatorToken is the secret holding the operator's ops bearer.
 const OperatorToken = "OPERATOR_TOKEN"
 
-func operatorUnit(st *state.State, secrets map[string]string) string {
+func operatorUnit(st *state.State, secrets map[string]string) (string, string) {
 	model := cmp.Or(st.Box.Operator.Model, "qwen3.6-35b-a3b")
 	reportAt := cmp.Or(st.Box.Operator.ReportAt, "07:00")
 	tick := cmp.Or(st.Box.Operator.Tick, "10m")
@@ -724,8 +735,13 @@ func operatorUnit(st *state.State, secrets map[string]string) string {
 	usage := ""
 	for _, name := range st.ServiceNames() {
 		if c := st.Services[name].Contract; slices.Contains(c.Provides, "usage-metrics") && len(c.Ports) > 0 {
-			usage = "Environment=USAGE_METRICS_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\nEnvironment=USAGE_METRICS_TOKEN=" + secretValue(secrets, "USAGE_METRICS_TOKEN") + "\n"
+			usage = "Environment=USAGE_METRICS_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\n"
 		}
 	}
-	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=LAIB_TOKEN=" + secretValue(secrets, OperatorToken) + "\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_KEY=" + key + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
+	// the bearers in the env file (#443): the unit carries no secret value
+	sec := []string{"LAIB_TOKEN", secretValue(secrets, OperatorToken), "MODEL_KEY", key}
+	if usage != "" {
+		sec = append(sec, "USAGE_METRICS_TOKEN", secretValue(secrets, "USAGE_METRICS_TOKEN"))
+	}
+	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironmentFile=%h/.config/systemd/user/laib-operator.env\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n", envFile(sec...)
 }
