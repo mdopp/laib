@@ -106,6 +106,10 @@ class Sessions(unittest.TestCase):
     def test_an_empty_workspace_still_has_the_session(self):
         self.run_()
         self.assertEqual(len(self.windows()), 1)
+        # the first checkout replaces the empty window: one window per checkout
+        self.checkout("laib")
+        self.run_()
+        self.assertEqual(self.windows(), ["laib"])
 
     def test_names_that_would_break_a_target_are_refused(self):
         for bad in ("-x", "a:b", ".hidden", ""):

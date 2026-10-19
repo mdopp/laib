@@ -28,6 +28,7 @@ OFF="${WERKSTATT_SESSIONS_OFF:-$HOME/.werkstatt/no-autostart}"
 S="${WERKSTATT_TMUX_SESSION:-claude}"
 CLAUDE="${WERKSTATT_CLAUDE:-claude}"
 CONF="${WERKSTATT_TMUX_CONF:-/etc/tmux.conf}"
+EMPTY=".werkstatt"   # the empty session's window: a leading dot, which no checkout's name has (valid)
 t() { tmux -f "$CONF" "$@"; }
 
 # a checkout's name crosses into a shell command and a tmux target: no
@@ -67,8 +68,15 @@ pass() {
       echo "werkstatt: Claude session $name had ended, started again"
     fi
   done
-  # no checkout yet: still a session a login can attach to
-  t has-session -t "=$S" 2>/dev/null || t new-session -d -s "$S" -c "$WS"
+  # no checkout yet: still a session a login can attach to, with a window
+  # no checkout can be named; once a checkout has its window, it goes
+  # (unless somebody is attached and may be using it)
+  if ! t has-session -t "=$S" 2>/dev/null; then
+    t new-session -d -s "$S" -n "$EMPTY" -c "$WS"
+  elif [ "$(t list-windows -t "=$S" | wc -l)" -gt 1 ] && [ "$(t display-message -p -t "=$S:" '#{session_attached}')" = 0 ]; then
+    idx=$(window "$EMPTY")
+    [ -z "$idx" ] || t kill-window -t "=$S:$idx"
+  fi
 }
 
 case "${1:-}" in
