@@ -294,7 +294,8 @@ After **phase 3** (the household services):
   credentials.
 - **Files:** Syncthing's device ID is unchanged (nothing re-paired); File
   Browser shows the same users and shares.
-- **Media:** Jellyfin lets a family member in with the LLDAP login.
+- **Media:** Jellyfin lets a family member in with the LLDAP login; Home
+  Assistant's Jellyfin entry loads, logged in as `homeassistant` (#375).
 
 After **phase 4** (Caddy): every name of the state answers through Caddy
 (the script checks it; none answers 502); a family member logs in at

@@ -242,6 +242,17 @@ keeps the libraries ServiceBay's configuration gave new users. The users
 Jellyfin made from LDAP logins stay. `laib add media BASE_DN=…` comes with
 the box's base DN from the printed line.
 
+A service that logged in to Jellyfin as some other LLDAP user loses that
+login: on the Kraftwerk Home Assistant's Jellyfin entry logged in as
+`solaris` (#375). Laib does not let it in by widening the filter. Home
+Assistant gets its own Jellyfin account, `homeassistant`: hidden, no
+administrator, the family's libraries, and not in LLDAP, so no person's
+login sits in HA and Authelia never sees it. Set its password with
+`laib secret set JELLYFIN_HA_PASSWORD` before `laib add media` (or
+`laib apply media` after), then re-enter HA's Jellyfin entry as
+`homeassistant` with the same password. migrate-servicebay.py names every
+HA Jellyfin entry that logs in as another account.
+
 **Immich's external libraries (#263, the owner's decision on #229).**
 ServiceBay mounted all of `file-share/data` at `/mnt/photos`; the built-in
 mounts only `file-share/data/photos` there. The photos move into that

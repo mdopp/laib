@@ -21,6 +21,9 @@ secrets:
   - name: JELLYFIN_ADMIN_PASSWORD
   - name: JELLYFIN_LDAP_PASSWORD      # the read-only LLDAP account the plugin binds with, seeded by the auth template (#256)
     external: true
+  - name: JELLYFIN_HA_PASSWORD        # Home Assistant's own Jellyfin account `homeassistant` (#375), not an LLDAP login; laib secret set, the same in HA's entry; without it no account
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/media/jellyfin-config
   - path: ${DATA_DIR}/media/jellyfin-cache

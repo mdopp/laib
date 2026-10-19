@@ -12,7 +12,8 @@ was just installed.
 The plugin binds with the read-only LLDAP account `jellyfin` the auth
 template seeds (JELLYFIN_LDAP_PASSWORD), never the LLDAP admin (ServiceBay
 bound as the admin). Only members of family and admins may log in, as on
-Authelia's wildcard rule; the service accounts may not. A new user sees the
+Authelia's wildcard rule; the service accounts may not. Home Assistant gets
+a Jellyfin account of its own, `homeassistant`, not an LLDAP one (#375). A new user sees the
 libraries Laib made, plus the ones ServiceBay's configuration already gave
 new users — not anyone's private library."""
 import json, os, re, sys, time, urllib.parse, urllib.request, urllib.error
@@ -156,4 +157,38 @@ for _ in range(90):  # a fresh install shows up after the restart, first as "Res
     time.sleep(2)
 if not p or p.get("Status") != "Active":
     red(f"the LDAP-Authentication plugin is not active ({p and p.get('Status')}): the family cannot log in with their accounts")
+
+# 6. Home Assistant's own account (#375): a Jellyfin user, not an LLDAP one, so
+# the LDAP filter stays family and admins, and no person's login sits in HA.
+# Hidden from the login screen, no administrator, the family's libraries. Only
+# when the owner set JELLYFIN_HA_PASSWORD (the same password goes into HA's
+# Jellyfin entry); a new value is the account's new password.
+HA_USER, HA_PW = "homeassistant", E.get("LAIB_SECRET_JELLYFIN_HA_PASSWORD", "")
+
+
+def logs_in(user, pw):
+    try:
+        req("POST", "/Users/AuthenticateByName", {"Username": user, "Pw": pw})
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code != 401:
+            raise
+        return False
+
+
+if HA_PW:
+    u = next((u for u in req("GET", "/Users", token=token) if u["Name"] == HA_USER), None)
+    if not u:
+        u = req("POST", "/Users/New", {"Name": HA_USER, "Password": HA_PW}, token=token)
+        print("jellyfin account created:", HA_USER, "(Home Assistant's)")
+    elif not logs_in(HA_USER, HA_PW):
+        req("POST", f"/Users/Password?userId={u['Id']}", {"NewPw": HA_PW}, token=token)
+        print("jellyfin account", HA_USER, "has the password from JELLYFIN_HA_PASSWORD again")
+    pol = u.get("Policy") or {}
+    want = {**pol, "IsAdministrator": False, "IsHidden": True, "EnableAllFolders": False, "EnabledFolders": folders}
+    if want != pol:
+        req("POST", f"/Users/{u['Id']}/Policy", want, token=token)
+    if not logs_in(HA_USER, HA_PW):
+        red(f"the jellyfin account {HA_USER} does not log in with JELLYFIN_HA_PASSWORD: Home Assistant's entry gets 401")
+    print(f"jellyfin account {HA_USER} logs in: Home Assistant's Jellyfin entry uses it")
 print("jellyfin provisioned: the family logs in with LLDAP, Quick Connect on, local admin kept")
