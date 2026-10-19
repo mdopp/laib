@@ -21,7 +21,10 @@ import (
 
 // bootBox is a scratch box: etc holds the boot check as the install puts it,
 // and bin holds the stand-ins for the host's tools.
-type bootBox struct{ etc, bin, log string }
+type bootBox struct {
+	etc, bin, log string
+	listen        []string // the box's listening TCP sockets, as `ss -Hltn` prints them (#445)
+}
 
 const proven, fresh = "aaaa1111aaaa1111", "bbbb2222bbbb2222"
 
@@ -73,6 +76,14 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 	shim(t, b.bin, "rpm-ostree", rpmOstree)
 	shim(t, b.bin, "systemctl", "exit 0")
 	shim(t, b.bin, "runuser", "exit 0")
+	// #445: the LAN address is 127.0.0.2 here, and the probe namespace is this
+	// process's own: `ip netns exec <ns> cmd` runs cmd, the rest of ip is a no-op
+	ss := filepath.Join(b.etc, "..", "ss.out")
+	os.WriteFile(ss, []byte(strings.Join(b.listen, "\n")+"\n"), 0o644)
+	shim(t, b.bin, "ss", `cat "`+ss+`"`)
+	shim(t, b.bin, "ip", `case "$1 $2" in "netns exec") shift 3; exec "$@";; esac
+case "$*" in *"route get"*) echo "1.1.1.1 via 10.0.0.1 dev eth0 src 127.0.0.2 uid 0";; esac
+exit 0`)
 	cmd := exec.Command("bash", filepath.Join(b.etc, "laib", "boot-check.sh"))
 	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_BOOT_CHECK_TIMEOUT=1", "LAIB_BOOT_CHECK_INTERVAL=0.2")
 	o, _ := cmd.CombinedOutput()
@@ -262,7 +273,7 @@ func TestANewHealthyDeploymentBecomesProven(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("a healthy deployment was rolled back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 1\n" {
+	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 1 0\n" {
 		t.Fatalf("boot-proven = %q, want the new deployment with its red count", p)
 	}
 }
