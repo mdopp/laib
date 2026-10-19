@@ -91,7 +91,7 @@ func TestBoteCountsThroughAHermesPlugin(t *testing.T) {
 	if !strings.Contains(read(h, "plugins", "laib-nutzung", "plugin.yaml"), "name: laib-nutzung") {
 		t.Error("the plugin has no manifest naming it laib-nutzung")
 	}
-	if !regexp.MustCompile(`(?m)^plugins:\n  enabled: \[laib-nutzung\]$`).MatchString(read(h, "config.yaml")) {
+	if !regexp.MustCompile(`(?m)^plugins:\n  enabled: \[laib-persona, laib-nutzung\]$`).MatchString(read(h, "config.yaml")) {
 		t.Errorf("config.yaml does not enable laib-nutzung:\n%s", read(h, "config.yaml"))
 	}
 	if !strings.Contains(read(h, "SOUL.md"), "[unbeantwortet]") {

@@ -97,6 +97,11 @@ class PersonaPlugin(unittest.TestCase):
         _, out = self.turn("Ist das Licht in der Küche an?", "JOSHUA/GERÄTE>\nJa.", turn="t2")
         self.assertIsNone(out)                                                   # already there: the answer stays
 
+    def test_a_turn_the_bote_could_not_help_with_is_left_to_laib_nutzung(self):
+        # Hermes takes the first plugin's text: laib-nutzung must still strip its mark and count the turn
+        _, out = self.turn("Ist das Licht in der Küche an?", "[unbeantwortet] Das weiß ich nicht.")
+        self.assertIsNone(out)
+
     def test_a_chat_persona_comes_with_its_figure(self):
         ctx, _ = self.turn("Wer bist du?", "Ich bin Oma Erna.")
         self.assertIn("Oma Erna", ctx["context"])
