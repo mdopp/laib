@@ -49,7 +49,7 @@ func init() {
 		{Name: "restart", Tier: "apply", Help: "<service>: restart its units and verify, inside the envelope", Run: envelope.Restart},
 		{Name: "escalate", Tier: "propose", Help: "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", Run: envelope.Escalate},
 		{Name: "note", Tier: "propose", Help: "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", Run: cmdNote},
-		{Name: "repair", Tier: "propose", Help: "<probe> [service]: a diag finding's repair as a proposal; it runs once a human approves (#441)", Run: inbox.Repair},
+		{Name: "repair", Tier: "propose", Help: "<probe> [service]: a diag finding's repair as a proposal; it runs once a human approves (#441)", Run: diag.Repair},
 		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: inbox.Wish},
 		{Name: "net", Tier: "read", Help: "[--mermaid]: every name with its reach, Authelia and target, the direct ports, the host network, the pods' links — from the rendered config (#439)", Run: cmdNet},
 		{Name: "updates", Tier: "read", Help: "newer patch and minor releases of every pinned image, from the registry (#287)", Run: registry.Updates},
