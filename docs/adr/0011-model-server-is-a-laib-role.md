@@ -110,4 +110,4 @@ where `state` is one of `none`, `preparing`, `ready`.
 - A failed lease never stops the consumer's own work.
 
 **Who adapts:** foundry-chronicle, pi-web and anything else speak this
-when they move to Laib (Phase 4 of `docs/ZIELBILD.md`), not before.
+when they move to Laib (Phase 4, #160), not before.
