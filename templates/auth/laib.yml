@@ -28,6 +28,7 @@ secrets:
   - name: OPERATOR_PASSWORD           # the admin's own first password; change it in LLDAP afterwards
   - name: RADICALE_LDAP_PASSWORD      # the read-only LDAP account radicale binds with (#55): seeded here, used there
   - name: FILE_SHARE_LDAP_PASSWORD    # the read-only account file-share reads the family with (#296): seeded here, used there
+  - name: HAUS_RADICALE_PASSWORD      # Haus's account `haus` (#418), owner of the household's calendar in Radicale: seeded here, used there
   - name: JELLYFIN_LDAP_PASSWORD      # the read-only LDAP account Jellyfin's LDAP plugin binds with (#256): seeded here, used there
   - name: AUTHELIA_SMTP_PASSWORD      # the mail server's login (#359): laib secret set, carried from ServiceBay's notifications.email
     external: true
