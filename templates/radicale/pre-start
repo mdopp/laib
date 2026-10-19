@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# pre-start (#36): Radicale's config before the unit starts. LDAP auth against LLDAP in the auth pod; rights: every
-# user owns their own collections; the bind account is LLDAP's read-only
-# `radicale` user, seeded by the auth template (#55). Rewritten on every apply.
+# pre-start (#36): Radicale's config before the unit starts. LDAP auth against LLDAP in the auth pod; the bind
+# account is LLDAP's read-only `radicale` user, seeded by the auth template (#55). Rights (#418): every user owns
+# their own collections, as owner_only did, and every user reads and writes the entries of the household's
+# calendar and address book, which are Haus's account's (haus/haushalt, haus/haushalt-kontakte; the auth
+# template seeds `haus`). Rewritten on every apply.
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
 cat > "$C/config" <<CFG
@@ -17,11 +19,33 @@ ldap_secret = ${LAIB_SECRET_RADICALE_LDAP_PASSWORD}
 ldap_filter = (&(objectClass=person)(uid={0}))
 ldap_user_attribute = uid
 [rights]
-type = owner_only
+type = from_file
+file = /config/rights
 [storage]
 filesystem_folder = /data/collections
 [web]
 type = internal
 CFG
 chmod 644 "$C/config"
+# Radicale's from_file (#418): the first section whose user and collection match decides; {0} is the user's group.
+# Upper case is a plain collection, lower case a calendar or address book and its entries. The family gets r and w
+# on the Haushalt, never W: an entry may change, the calendar itself not.
+cat > "$C/rights" <<'RIGHTS'
+# rendered by laib pre-start (templates/radicale)
+[root]
+user: .+
+collection:
+permissions: R
+
+[owner]
+user: (.+)
+collection: {0}(/.*)?
+permissions: RrWw
+
+[haushalt]
+user: .+
+collection: haus/haushalt(-kontakte)?(/.*)?
+permissions: rw
+RIGHTS
+chmod 644 "$C/rights"
 echo "radicale config rendered"

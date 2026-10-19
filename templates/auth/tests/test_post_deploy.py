@@ -16,10 +16,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-STATE = {"users": [], "groups": []}
+STATE = {"users": [], "groups": [], "adds": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
-           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
 # "take", "swallow" (success, nothing stored) or "refuse" (insufficientAccessRights)
@@ -48,6 +48,7 @@ class FakeLLDAP(BaseHTTPRequestHandler):
             elif "user(userId" in q:
                 out = {"data": {"user": {"groups": []}}}
             else:
+                STATE["adds"].append(body.get("variables", {}).get("u"))
                 out = {"data": {"addUserToGroup": {"ok": True}}}
         data = json.dumps(out).encode()
         self.send_response(200)
@@ -139,7 +140,7 @@ class PostDeploy(unittest.TestCase):
 
     def run_hook(self, users, groups, ok=True, modify="take", op="core", **secrets):
         secrets = dict(SECRETS, **secrets)
-        STATE["users"], STATE["groups"] = users, groups
+        STATE["users"], STATE["groups"], STATE["adds"] = users, groups, []
         LDAP["pw"], LDAP["set"], LDAP["binds"], LDAP["modify"] = {ADMIN_DN: secrets["LLDAP_ADMIN_PASSWORD"]}, [], [], modify
         env = dict(os.environ, LAIB_DOMAIN="vm.test", BASE_DN=BASE_DN, OPERATOR_USER=op, OPERATOR_EMAIL="core@vm.test",
                    **{"LAIB_SECRET_" + k: v for k, v in secrets.items()})
@@ -169,6 +170,18 @@ class PostDeploy(unittest.TestCase):
         # and each account binds with it afterwards: a set that did not take is red, not "seeded"
         for uid in ("core", "radicale", "file-share", "jellyfin"):
             self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
+
+    def test_haus_gets_its_radicale_account(self):
+        # laib#418: Haus reads and writes the household calendar as its own
+        # LLDAP account, seeded here like radicale's reader, but no LDAP reader
+        self.run_hook([], [])
+        self.assertIn("haus", STATE["users"])
+        self.assertEqual(LDAP["pw"].get("uid=haus,ou=people," + BASE_DN), SECRETS["HAUS_RADICALE_PASSWORD"], LDAP)
+        self.assertIn(("uid=haus,ou=people," + BASE_DN, True), LDAP["binds"])
+        self.assertNotIn("haus", STATE["adds"], "Haus's calendar account must not read the directory (lldap_strict_readonly) or join a group")
+        # set again on every run, as a service secret (#209)
+        self.run_hook(["core", "haus"], ["admins", "family", "lldap_strict_readonly"])
+        self.assertIn("uid=haus,ou=people," + BASE_DN, LDAP["set"], LDAP)
 
     def test_radicales_password_is_set_again_when_the_account_exists(self):
         # a set that failed once (the account exists, the password does not) is not final:

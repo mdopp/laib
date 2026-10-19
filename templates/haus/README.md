@@ -19,8 +19,15 @@ generated `HAUS_HAUSHALT_TOKEN` as its bearer (ADR 0017). The Bote reaches it
 on the host's port 8650: Haus publishes 8650 beyond loopback, `lan: false`
 keeps the LAN out, and pages, `/napi` and `/mcp` each check their own secret
 (#170). Notes are Markdown files in the file share's `notes` folder.
-Calendar and reminders need a Radicale account: set `RADICALE_USER` and
-`laib secret set HAUS_RADICALE_PASSWORD`; without it those tools are absent.
+Calendar and reminders use the Radicale account `haus` (#418). The auth
+template seeds it in LLDAP with the generated `HAUS_RADICALE_PASSWORD`, and
+`RADICALE_USER: haus` is the default. Haus makes the household's calendar
+`Haushalt` (`/haus/haushalt/`) and address book (`/haus/haushalt-kontakte/`)
+in that account. Radicale's rights let every family account read and write
+their entries, but not delete the calendar. On a phone, add it in DAVx⁵ with
+your own login: Account → CalDAV → the collection URL
+`https://caldav.<domain>/haus/haushalt/`. Without the account the Kalender
+page says so in one sentence (haus, laib#418) instead of landing on Start.
 
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
