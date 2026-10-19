@@ -20,7 +20,6 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
-	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/mcp"
@@ -73,7 +72,7 @@ func init() {
 		{Name: "session", Tier: "read", Help: "[<name>]: a token of the hand policy.yml names in your session:, with its ttl, for one session (#380)", Run: cmdSession},
 		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] | list | revoke <id> (humans only)", Run: cmdToken},
 		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME>", Run: cmdSecret},
-		{Name: "disk", Tier: "apply", Help: "status | add <device>: the data RAID; add joins the mirror (humans only)", Run: disk.Cmd},
+		{Name: "disk", Tier: "apply", Help: "status | add <device>: the data RAID; add joins the mirror (humans only)", Run: cmdDisk},
 		{Name: "init", Tier: "apply", Help: "first setup: key, state repo skeleton", Run: cmdInit},
 		{Name: "serve", Tier: "read", Help: "daemon: /ready, the three pages", Run: pages.Serve},
 		{Name: "version", Tier: "read", Help: "print the version", Run: cmdVersion},
