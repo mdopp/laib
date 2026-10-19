@@ -57,7 +57,7 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 	os.WriteFile(filepath.Join(render, "laib-access.yml"), []byte(autheliaAccess(st)), 0o644)
 	os.WriteFile(filepath.Join(render, "laib-clients.yml"), []byte(autheliaClients(st, secrets)), 0o644)
 	hook := exec.Command("python3", "../../templates/auth/pre-start")
-	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=" + st.Box.Domain, "BASE_DN=dc=nuc,dc=home", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=" + st.Box.Domain, "BASE_DN=dc=nuc,dc=home", "LAIB_START_URL=https://" + fqdn(st, st.Box.Laib.Host) + "/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
 	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
 		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=a-test-value-that-is-long-enough-for-authelia-0123456789")
 	}
@@ -156,7 +156,7 @@ func TestAutheliaSMTPOnTheRealBinary(t *testing.T) {
 	os.WriteFile(filepath.Join(render, "laib-clients.yml"), []byte("# none\n"), 0o644)
 	os.WriteFile(filepath.Join(render, "laib-access.yml"), []byte("access_control:\n  default_policy: one_factor\n"), 0o644)
 	hook := exec.Command("python3", "../../templates/auth/pre-start")
-	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render"),
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://admin.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render"),
 		"SMTP_HOST=smtp.mail.test", "SMTP_PORT=587", "SMTP_SECURITY=starttls", "SMTP_USER=box@mail.test", "SMTP_FROM=Die Box <box@mail.test>", "SMTP_PASSWORD=set"}
 	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
 		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=a-test-value-that-is-long-enough-for-authelia-0123456789")
@@ -203,7 +203,7 @@ func TestAutheliaMailTemplates(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "render", "authelia"), 0o755)
 	hook := exec.Command("python3", "../../templates/auth/pre-start")
-	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://admin.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
 	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
 		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=x")
 	}

@@ -249,7 +249,8 @@ compose file does not know on its own that port 8000 must never reach the WLAN.
 
 An executable. Runs after `laib apply` verified the service green, in the
 service folder, with `LAIB_SERVICE`, `LAIB_DOMAIN`, `LAIB_DATA_DIR`,
-`LAIB_TZ`, `LAIB_LAN_IP`, every `values.yml` key (secrets resolved) and
+`LAIB_TZ`, `LAIB_LAN_IP`, `LAIB_START_URL` (where a login without a target
+lands: Haus once installed, else the box page, #381), every `values.yml` key (secrets resolved) and
 `LAIB_SECRET_<NAME>` for every declared secret in its environment. Ten-minute
 timeout. Its output is journaled with secrets redacted; a non-zero exit turns
 the apply red. A line `laib-secret: NAME=value` on stdout stores a credential
