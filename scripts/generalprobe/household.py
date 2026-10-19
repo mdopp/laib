@@ -787,10 +787,14 @@ def check_ha_tokens(f, s, phase):
             raise AssertionError("the Bote's token ran an admin-only command: whoever chats with the Bote is an administrator")
     finally:
         sh(*env, "remove", "gp-ha-tokens", check=False)
-    sh("systemctl", "--user", "start", "home-assistant-check.service")
+    # the VM has no Z-Wave stick: the check must say so and fail its unit (#417), and still list the integrations
+    rc = sh("systemctl", "--user", "start", "home-assistant-check.service", check=False).returncode
     status = json.load(open(os.path.join(f["data_dir"], "home-assistant/homeassistant/.laib-status.json")))
-    if any("antwortet nicht" in x["detail"] for x in status["findings"]) or not status.get("detail"):
+    rest = [x for x in status["findings"] if not x["detail"].startswith("Z-Wave:")]
+    if any("antwortet nicht" in x["detail"] for x in rest) or not status.get("detail"):
         raise AssertionError(f"the check does not list the integrations with HA_TOKEN: {status}")
+    if rc == 0 or not any(x["detail"].startswith("Z-Wave: kein Controller") and x["severity"] == "rot" for x in status["findings"]):
+        raise AssertionError(f"no stick, yet the check does not turn red for Z-Wave (#417): rc {rc}, {status}")
     return f"Haus's token reads {state['entity_id']}, the Bote's is refused config/auth/list, the check: {status['detail']}"
 
 
