@@ -199,6 +199,18 @@ imports no box chore. It also made the two seams (`inbox.Approved`,
 of small verbs (no `internal/hands`). The Bote's Signal QR stays in
 `internal/pages`.
 
+### The first Kern-Diät cut: laib-disk (2026-10-19, #443)
+
+At 14,387 of 15,000 the 95 % warning opened #443. The box chore
+`internal/disk` (the data RAID, `laib disk`) and diag's RAID, SMART and
+thermal probes moved into the program `disk/` (`laib-disk`, a release
+binary beside `laib`, budget 700): they read `/proc`, `lsblk`, `mdadm` and
+`smartctl` and need nothing of the kernel. The kernel keeps the verb `laib
+disk` (tier apply; the program refuses `add` to anyone but a human) and
+diag's call `laib-disk probe [--hardware]`, whose JSON findings it shows as
+before. They meet over a process and its output, never by import
+(`scripts/loc.sh`). Kernel 14,387 → 13,936.
+
 ### Tests are not capped (owner, 2026-10-18)
 
 "Tests may have more lines than code." The rule "test lines at most equal

@@ -1,4 +1,4 @@
-package diag
+package disk
 
 import (
 	"context"
@@ -10,9 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/sysd"
 )
 
 // Hardware health (#59): for a box in a cupboard the top risks are a
@@ -90,7 +87,7 @@ type smartReport struct {
 func smartFindings(ctx context.Context, devices []string) []Finding {
 	var out []Finding
 	for _, dev := range devices {
-		raw, err := sysd.Run(ctx, "sudo", "smartctl", "-H", "-A", "--json", dev)
+		raw, err := Run(ctx, "sudo", "smartctl", "-H", "-A", "--json", dev)
 		if err != nil && (strings.Contains(raw, "command not found") || strings.Contains(raw, "No such file")) {
 			return []Finding{{Severity: "info", Probe: "smart", Detail: "smartctl fehlt: der Zustand der Platten ist unbekannt", Fix: "sudo rpm-ostree install smartmontools (ein Reboot später ist es da; install-box.sh ändert das OS nicht, #367)"}}
 		}
@@ -100,7 +97,7 @@ func smartFindings(ctx context.Context, devices []string) []Finding {
 		}
 		if jerr := json.Unmarshal([]byte(raw), &r); jerr != nil {
 			if err != nil {
-				out = append(out, Finding{Severity: "gelb", Probe: "smart", Detail: dev + ": smartctl antwortet nicht lesbar (" + cli.Tail(strings.TrimSpace(raw), 120) + ")", Fix: "sudo smartctl -a " + dev})
+				out = append(out, Finding{Severity: "gelb", Probe: "smart", Detail: dev + ": smartctl antwortet nicht lesbar (" + tail(strings.TrimSpace(raw), 120) + ")", Fix: "sudo smartctl -a " + dev})
 			}
 			continue
 		}
@@ -157,9 +154,16 @@ func thermalFindings(root string) []Finding {
 	return nil
 }
 
-// hardwareFindings is the diag probe: devices from the array and the root.
+func tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "…" + s[len(s)-n:]
+}
+
+// hardwareFindings: devices from the array and the root.
 func hardwareFindings(ctx context.Context) []Finding {
-	root, _ := sysd.Run(ctx, "findmnt", "-n", "-o", "SOURCE", "/")
+	root, _ := Run(ctx, "findmnt", "-n", "-o", "SOURCE", "/")
 	root = strings.TrimSpace(root)
 	if !strings.HasPrefix(root, "/dev/") {
 		root = ""

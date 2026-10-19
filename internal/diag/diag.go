@@ -7,10 +7,12 @@ package diag
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,7 +20,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/disk"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/render"
@@ -163,10 +164,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	if _, f := OperatorState(OperatorFacts(ctx, env, st)); f != nil {
 		out = append(out, *f)
 	}
-	// The hardware (#59): disks by SMART, the box's temperature.
-	if only == "" {
-		out = append(out, hardwareFindings(ctx)...)
-	}
+	// The data RAID always; the hardware (#59: SMART, the box's temperature)
+	// for the whole box. Both are laib-disk's (#443).
+	out = append(out, diskFindings(ctx, only == "")...)
 	// The box's own config (#281): install-box.sh writes it on every box, stick or migrated.
 	for _, f := range []string{cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/journald.conf.d/50-laib.conf", filepath.Join(filepath.Dir(env.Paths.Quadlet), "containers.conf.d", "50-laib.conf")} {
 		if _, err := os.Stat(f); err != nil && only == "" {
@@ -249,14 +249,26 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, *f)
 		}
 	}
-	// The data RAID: one member by design is yellow, a lost member red.
-	if _, members := disk.MarkerMembers(); members > 0 {
-		if b, err := os.ReadFile("/proc/mdstat"); err == nil {
-			out = append(out, raidFindings(string(b), members)...)
-		}
-	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })
+	return out
+}
+
+// DiskBin is the program laib-disk (#443), beside laib.
+func DiskBin() string { return cmp.Or(os.Getenv("LAIB_DISK"), "/var/opt/laib/laib-disk") }
+
+// diskFindings: what laib-disk probe says, the program that holds the RAID,
+// SMART and thermal probes outside the kernel (#443).
+func diskFindings(ctx context.Context, hardware bool) []Finding {
+	args := []string{"probe"}
+	if hardware {
+		args = append(args, "--hardware")
+	}
+	b, err := exec.CommandContext(ctx, DiskBin(), args...).Output()
+	var out []Finding
+	if err != nil || json.Unmarshal(b, &out) != nil {
+		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")"}}
+	}
 	return out
 }
 
