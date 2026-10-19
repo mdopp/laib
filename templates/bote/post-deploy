@@ -8,7 +8,7 @@ H="$LAIB_DATA_DIR/bote/hermes"
 mkdir -p "$H"
 MODEL_URL="${MODEL_URL:?MODEL_URL builtin missing}"
 "$(dirname "$0")/pre-start"   # the channels and both .env files (#184)
-SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}"
+SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}" DISCORD_ALLOWED_USERS="${DISCORD_ALLOWED_USERS:-}"
 ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
 # Only MCP servers that answer are rendered (#54): a server Hermes cannot
 # reach would be a tool the model is told it has. Any HTTP answer counts
@@ -81,13 +81,16 @@ if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
   MITTEILUNG="
 Sagt jemand \"Sag mir Bescheid, wenn …\" (oder \"sag Mama Bescheid, wenn …\"), leg das mit automat als Automation an: der Auslöser ist das Ereignis, die Aktion ist rest_command.mitteilung mit data {an: <person>, text: <kurze Mitteilung>}. <person> ist, wer fragt, oder die genannte Person, und nur eine von: $PEOPLE. Ist unklar, wer gemeint ist, frag nach. Wie jede Automation: erst der Entwurf in Worten, geschrieben wird erst mit dem Code, den automat nennt."
 fi
-# Who approves (ADR 0016 §3, #184): the relay reads the admin's verified identities; Telegram never approves.
+# Who approves (ADR 0016 §3, #184): the relay reads the admin's verified identities; Telegram and Discord never approve (#421).
 WHO=""
 [ -z "$ADMIN_NUMBER" ] || WHO="von $ADMIN_NUMBER auf Signal"
 [ -z "$ADMIN_MXID" ] || WHO="${WHO:+$WHO und }von $ADMIN_MXID im Matrix-Raum $ADMIN_ROOM"
 if [ -n "$WHO" ]; then APPROVALS="\"gib #17 frei\" oder \"lehne #17 ab\" liest das Relais direkt, nur $WHO, und entscheidet"
 else APPROVALS="im Chat gibt es keine Freigaben, der Admin entscheidet auf der Box-Seite"; fi
-[ -z "$TELEGRAM_ALLOWED_USERS" ] || APPROVALS="$APPROVALS (über Telegram nie)"
+NIE=""
+[ -z "$TELEGRAM_ALLOWED_USERS" ] || NIE="Telegram"
+[ -z "$DISCORD_ALLOWED_USERS" ] || NIE="${NIE:+$NIE und }Discord"
+[ -z "$NIE" ] || APPROVALS="$APPROVALS (über $NIE nie)"
 # What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
 # turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
 # without its sender. The model marks that turn; the plugin strips the mark before anyone sees it.

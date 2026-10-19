@@ -7,7 +7,7 @@ configuration, that is the signal to build a lean Bote instead (ADR 0016 §2).
 
 ## Channels: a choice (#184)
 
-Signal, Matrix and Telegram are each optional; at least one is set. A
+Signal, Matrix, Telegram and Discord are each optional; at least one is set. A
 channel is on while its value is set, and an unset one leaves no container
 and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
 
@@ -16,13 +16,14 @@ and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
 | Signal | `SIGNAL_ACCOUNT` (the Bote's number) | none (linked device, QR) | `SIGNAL_ALLOWED_USERS` | `ADMIN_NUMBER` |
 | Matrix | `MATRIX_HOMESERVER` | `BOTE_MATRIX_TOKEN` | `MATRIX_ALLOWED_USERS` | `ADMIN_MXID` in `ADMIN_ROOM` |
 | Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | never |
+| Discord | `DISCORD_ALLOWED_USERS` | `BOTE_DISCORD_TOKEN` | `DISCORD_ALLOWED_USERS` | never |
 
 `bote-signal` runs only with Signal, `bote-relay` only with `ADMIN_NUMBER`
 or `ADMIN_MXID` (both empty in the example: set yours to approve in the
 chat). `laib plan` refuses, before anything restarts: a person in box.yml
 `people` with a target on a channel the Bote does not have, `ADMIN_NUMBER`
-without Signal, `ADMIN_MXID` without Matrix or `ADMIN_ROOM`, and Matrix or
-Telegram without its token (laib.yml `requires:`); it prints each container
+without Signal, `ADMIN_MXID` without Matrix or `ADMIN_ROOM`, and Matrix,
+Telegram or Discord without its token (laib.yml `requires:`); it prints each container
 it leaves off as `AUS:`. The `pre-start` hook writes Hermes' `.env` and
 bote-notify's copy before the containers start, so a channel switched off
 is gone before Hermes reads it; `post-deploy` renders the rest and runs
@@ -63,6 +64,43 @@ BOTE_TELEGRAM_TOKEN`, and list the numeric user ids that may talk to it in
 `TELEGRAM_ALLOWED_USERS` (a bot is public; the list is what keeps others
 out). A person's Telegram target is their chat id with the bot, which
 exists once they wrote to it.
+
+**Discord** (#421), once, without a phone number: in the Developer
+Portal (discord.com/developers) create an application, add a **Bot**,
+turn on **Message Content Intent** (Bot → Privileged Gateway Intents),
+and `laib secret set BOTE_DISCORD_TOKEN` with the bot's token. Invite it
+with the OAuth2 URL generator (scope `bot`, permissions Send Messages and
+Read Message History) to a server the family shares, or to none: people
+can message it directly once they share a server with it. List the
+numeric user ids that may talk to it in `DISCORD_ALLOWED_USERS`
+(Discord: Settings → Advanced → Developer Mode, then right-click a user →
+Copy User ID). A bot is public; the list keeps others out, and an
+unlisted user gets no answer. A person's Discord target in box.yml
+`people` is the id of their **DM channel** with the bot
+(`discord:<channel id>`; right-click the DM → Copy Channel ID), which
+exists once they wrote to it. Discord **never approves**: a bot token and
+a Discord account are not a verified identity (#48). Approvals stay on the
+Box page and in Haus. A bot token without `DISCORD_ALLOWED_USERS` leaves
+Discord off (no line in `.env`), as with Telegram.
+
+**Signal without a second SIM.** The QR above links the Bote as a
+*second device* of a number whose primary is a phone. Linking it to the
+admin's own number is not an option: the Bote would read every chat of
+that number. The alternative is a number that only the Bote uses,
+registered with signal-cli as the **primary** device: a spare landline
+number (a Fritz!Box MSN) works, because Signal verifies by voice call. It
+is supported by signal-cli and by Signal, and not wired into the Box page.
+Once, on the box, with the number in `SIGNAL_ACCOUNT` and a captcha token
+from signalcaptchas.org/registration/generate.html: `curl -s -X POST
+-H 'Content-Type: application/json' -d '{"use_voice": true, "captcha":
+"signalcaptcha://…"}' http://127.0.0.1:8085/v1/register/<number>` (Signal
+may want an SMS attempt first; repeat with `use_voice` after a minute),
+pick up the call, then `curl -s -X POST
+http://127.0.0.1:8085/v1/register/<number>/verify/<code>`. Then set a
+registration lock PIN, so nobody can take the number over by voice call.
+The account's keys live only in `${DATA_DIR}/bote/signal` (and the
+backups). Losing them means registering again on the landline. Without a
+landline, Discord or Matrix need no number at all.
 
 ## Once, by hand
 

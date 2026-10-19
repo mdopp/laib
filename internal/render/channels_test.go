@@ -197,7 +197,8 @@ func TestBoteWithoutSignalHasNoPort8085(t *testing.T) {
 // #421: Discord is a fourth channel, as Telegram (#184): on while
 // DISCORD_ALLOWED_USERS is set, no signal-cli and no relay for it (Discord
 // never approves), a person reached on their DM channel id, and plan refuses
-// users without the bot token and the bot token without users.
+// users without the bot token. A token without users is Discord off, as
+// with Telegram: pre-start writes no line, Hermes starts no adapter.
 func TestBoteOnDiscordOnly(t *testing.T) {
 	out, err := boteBox(t, "people: {papa: [\"discord:998877665544332211\"]}\n", merge(noSignal, discordOn))
 	if err != nil {
@@ -215,7 +216,7 @@ func TestBoteOnDiscordOnly(t *testing.T) {
 	if _, err := boteBoxSecrets(t, "", merge(noSignal, discordOn), map[string]string{"BOTE_APPROVER_TOKEN": "a"}); err == nil || !strings.Contains(err.Error(), "BOTE_DISCORD_TOKEN") {
 		t.Fatalf("Discord users without the bot token must fail plan: %v", err)
 	}
-	if _, err := boteBoxSecrets(t, "", nil, map[string]string{"BOTE_APPROVER_TOKEN": "a", "BOTE_DISCORD_TOKEN": "dc-tok"}); err == nil || !strings.Contains(err.Error(), "DISCORD_ALLOWED_USERS") {
-		t.Fatalf("a Discord bot token without users must fail plan: %v", err)
+	if _, err := boteBoxSecrets(t, "", nil, map[string]string{"BOTE_APPROVER_TOKEN": "a", "BOTE_DISCORD_TOKEN": "dc-tok"}); err != nil {
+		t.Fatalf("a Discord bot token without users is Discord off, not an error: %v", err)
 	}
 }
