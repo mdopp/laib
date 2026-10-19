@@ -52,7 +52,7 @@ for p in presets["presets"]:
     lines.append(f"[{p['alias']}]")
     lines.append(f"model = /models/{p['file']}")
     if p.get("draft"):
-        lines += [f"model-draft = /models/{p['draft']}", "spec-type = draft-mtp", f"draft-max = {p.get('draftMax', 4)}"]
+        lines += [f"model-draft = /models/{p['draft']}", "spec-type = draft-mtp", f"spec-draft-n-max = {p.get('draftMax', 4)}"]  # --draft-max is gone from llama.cpp (#423)
     if p.get("mmproj"):
         lines.append(f"mmproj = /models/{p['mmproj']}")
     lines.append(f"ctx-size = {p.get('ctx', 32768)}")

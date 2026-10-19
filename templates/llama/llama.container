@@ -12,7 +12,7 @@ Volume=${DATA_DIR}/llama/models:/models:z
 # names; the policy proxy in front decides which presets a mode allows.
 # Router mode: presets come from /models/presets.ini, written by the post-deploy hook from presets.json.
 Exec=--host 127.0.0.1 --port ${ROUTER_PORT} --models-dir /models --models-max 1 --models-preset /models/presets.ini
-AutoUpdate=registry
+# no AutoUpdate: the image is pinned by tag and digest (ADR 0019 §4, #423); a new llama.cpp build is a proposal
 
 [Service]
 Restart=always

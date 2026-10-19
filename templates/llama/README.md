@@ -65,6 +65,12 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   also lists every GGUF file in its models dir, and those are left out. A
   request for a raw file id is a 404 (`model_not_found`) naming the
   presets (#395).
+- **A pinned llama.cpp (#423).** `IMAGE` is a build tag with its digest
+  (`server-cuda-bNNNNN@sha256:…`), and the units have no `AutoUpdate`:
+  llama.cpp renames flags between builds (`--draft-max` became
+  `--spec-draft-n-max`), and a floating `server-cuda` took every drafter
+  preset down after an image update. A newer build is a proposal: set the
+  tag and digest, apply, and check that every preset loads.
 - **One port.** The lease answers on the proxy's port (`PORT`, 11435):
   `http://<gpu-box>:11435/api/model-lease`.
 - **A missing role degrades, it does not stop the lease (#374).** A mode
