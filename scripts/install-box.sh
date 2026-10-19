@@ -58,6 +58,12 @@ box_config() {
   fi
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
+  # One firewall mechanism (#445): Laib's nftables table (inet laib). uCore
+  # enables firewalld (zone FedoraServer: ssh only), which blocked the
+  # household from every port but SSH; masked, so no image brings it back.
+  if [ -n "$s" ] && { systemctl is-active --quiet firewalld.service || systemctl is-enabled --quiet firewalld.service; } 2>/dev/null; then
+    sudo systemctl mask --now firewalld.service >/dev/null && echo "firewalld: masked and stopped (Laib's nftables table is the one firewall, #445)"
+  fi
 }
 
 # OS updates without fear (#368). laib-cdi.service writes the CDI spec at

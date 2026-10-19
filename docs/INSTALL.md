@@ -173,6 +173,37 @@ the binaries) to prove a new OS deployment or roll it back once, reboot and
 pause Zincati (ADR 0024). That reboot is the boot check's; installing Laib
 never reboots (#367).
 
+### Rebasing a GPU box to uCore (once, ADR 0024)
+
+uCore is Fedora CoreOS plus the prebuilt NVIDIA driver, but it also turns
+on things plain CoreOS does not have. Handle them in the same session as
+the rebase. The Kraftwerk ran into the first one (#445):
+
+1. **Before the reboot: `sudo systemctl mask firewalld.service`.** uCore
+   enables firewalld with the zone `FedoraServer` (ssh, cockpit,
+   dhcpv6-client only). Next to Laib's own nftables table (`inet laib`) it
+   blocks DNS, 80/443, Samba, MQTT and the rest from the LAN, and lets only
+   SSH in. Laib has exactly one firewall mechanism, its table. A mask in
+   `/etc` carries over into the new deployment and wins over the image's
+   enablement. `install-box.sh` (and `--box-config`) masks a firewalld it
+   finds, and `laib diag` is red (`firewall`) while one runs.
+2. **After the boot, `rpm-ostreed-automatic.timer`:** uCore enables it,
+   and it stages updates by itself. On a box where Zincati drives the
+   updates, it is a second update driver that ignores Zincati's pause files
+   (the boot check's `95-laib-boot-check.toml` and any hand-made pause).
+   `sudo systemctl disable --now rpm-ostreed-automatic.timer`.
+3. **After the boot, the ZFS units** (`zfs-import-cache.service`,
+   `zfs-import-scan.service`, `zfs-mount.service`, `zfs-zed.service`,
+   `zfs.target`): Laib's data disk is an mdadm mirror with XFS and has no
+   pool. `zfs-import-scan` would import any pool it finds on a disk that
+   does not belong to Laib (the foreign-disk rule). Disable them:
+   `sudo systemctl disable --now zfs-import-cache.service zfs-import-scan.service zfs-mount.service zfs-zed.service zfs.target`.
+4. **The boot check** then proves the new deployment. Since #445 that
+   includes the LAN's view: every TCP port the box listens on outside
+   loopback is probed from a network namespace (as a LAN client's packets
+   arrive). More blocked ports than at the last proven boot means "not
+   proven", and the box rolls back once.
+
 ## Before the first attempt (pre-flight, the NUC)
 
 What makes or breaks the first boot is settled before the stick is built:

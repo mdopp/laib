@@ -1,8 +1,9 @@
 #!/bin/bash
 # laib-boot-check (#368), root, after every boot. A deployment is proven when
 # the GPU answers and the CDI spec names its driver (on a box with an NVIDIA
-# card), and laib's /ready answers with no more red services than the last
-# proven boot had. The first run only records the baseline. A new deployment
+# card), laib's /ready answers with no more red services than the last
+# proven boot had, and the LAN reaches the box (#445): no more of its
+# listening TCP ports blocked than at the last proven boot. The first run only records the baseline. A new deployment
 # that is not proven within LAIB_BOOT_CHECK_TIMEOUT seconds is rolled back to
 # the proven one, once: Zincati is paused, or it would stage the same update
 # again, and the owner gets an incident. Never on the proven one.
@@ -15,11 +16,43 @@ st="$(ostree admin status 2>/dev/null)"
 booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]*.*/\1/p' <<<"$st")"
 back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]* (rollback).*/\1/p' <<<"$st")"
 [ -n "$booted" ] || { say "not an ostree deployment: nothing to prove"; exit 0; }
-proven=""; base=0
-[ -f "$PROVEN" ] && read -r proven base <"$PROVEN"
+proven=""; base=0; base_blocked=0
+[ -f "$PROVEN" ] && read -r proven base base_blocked <"$PROVEN"
+base_blocked="${base_blocked:-0}"
 [ "$booted" != "$proven" ] || { say "deployment ${booted:0:12} is the proven one"; exit 0; }
 gpu=""; [ -z "$(lspci -n -d 10de: 2>/dev/null)" ] || gpu=1
-why=""; red=0
+why=""; red=0; blocked=0
+# #445: /ready over loopback says nothing about the LAN: a firewall lets
+# loopback through (uCore's firewalld blocked all but SSH for 2h20 while this
+# check was green). So every TCP port the box listens on outside loopback is
+# probed on the LAN address from a network namespace over a veth pair: the
+# packets arrive on an interface, as a LAN client's do. Laib's own table drops
+# lan: false ports on physical interfaces only (en*, eth*, wl*), so they
+# answer here too. A port that listens and does not answer is blocked; a
+# service that is down does not listen and is no blocked port.
+NS=laib-probe
+probe_down() { ip netns del "$NS" 2>/dev/null; ip link del laibp0 2>/dev/null; }
+probe_down
+probe=""
+if ip netns add "$NS" && ip link add laibp0 type veth peer name laibp1 netns "$NS" &&
+  ip addr add 169.254.254.1/30 dev laibp0 && ip link set laibp0 up &&
+  ip -n "$NS" addr add 169.254.254.2/30 dev laibp1 && ip -n "$NS" link set laibp1 up &&
+  ip -n "$NS" link set lo up && ip -n "$NS" route add default via 169.254.254.1; then
+  probe=1
+else
+  say "no probe namespace: reachability from the LAN is not checked this boot"
+fi
+trap probe_down EXIT
+lan="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')"
+reach() {   # blocked = how many listening ports do not answer on $lan; why names them
+  local p list=""
+  blocked=0
+  [ -n "$probe" ] && [ -n "$lan" ] || { blocked=$base_blocked; return 0; }
+  for p in $(ss -Hltn 2>/dev/null | awk -v ip="$lan" '{h=$4; sub(/:[^:]*$/, "", h); n=split($4, a, ":"); if (h == "0.0.0.0" || h == "*" || h == "[::]" || h == ip) print a[n]}' | sort -un); do
+    ip netns exec "$NS" timeout 3 bash -c "exec 3<>/dev/tcp/$lan/$p" 2>/dev/null || { blocked=$((blocked + 1)); list="$list $p"; }
+  done
+  [ "$blocked" -le "$base_blocked" ] || { why="aus dem LAN nicht erreichbar auf $lan: Port${list} (eine Firewall? systemctl status firewalld)"; return 1; }
+}
 check() {
   if [ -n "$gpu" ]; then
     local v; v="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
@@ -29,6 +62,7 @@ check() {
   local r; r="$(curl -fsS --max-time 5 http://127.0.0.1:5900/ready 2>/dev/null)" || { why="laib antwortet nicht auf /ready"; return 1; }
   red="$(sed -n 's/.*"red":\([0-9]*\).*/\1/p' <<<"$r")"; red="${red:-0}"
   [ "$red" -le "${base:-0}" ] || { why="$red Dienste rot, nach dem letzten bewiesenen Start ${base:-0}"; return 1; }
+  reach
 }
 end=$((SECONDS + ${LAIB_BOOT_CHECK_TIMEOUT:-900})); ok=""
 while :; do
@@ -37,7 +71,7 @@ while :; do
   sleep "${LAIB_BOOT_CHECK_INTERVAL:-10}"
 done
 if [ -n "$ok" ] || [ -z "$proven" ]; then
-  echo "$booted $red" >"$PROVEN"
+  echo "$booted $red $blocked" >"$PROVEN"
   if [ -n "$ok" ]; then say "deployment ${booted:0:12} proven"; note watch "OS-Stand ${booted:0:12} nach dem Start geprüft: grün"; exit 0; fi
   say "baseline ${booted:0:12} recorded although red: $why"
   note incident "OS-Stand ${booted:0:12} als Ausgangsstand gemerkt, aber nicht grün: $why"; exit 0
