@@ -29,8 +29,8 @@ func TestDiagIsRedWithoutTheBoxConfigAndInstallBoxClearsIt(t *testing.T) {
 		}
 		return n, detail
 	}
-	if n, _ := box(); n != 2 {
-		t.Fatalf("a box without the journald drop-in and the containers.conf drop-in must be red twice, got %d", n)
+	if n, _ := box(); n != 3 {
+		t.Fatalf("a box without the journald drop-in, the containers.conf drop-in and the boot check (#368) must be red three times, got %d", n)
 	}
 	cmd := exec.Command("bash", "../../scripts/install-box.sh", "--box-config")
 	cmd.Env = append(os.Environ(), "LAIB_ETC="+etc, "LAIB_QUADLET="+c.env.Paths.Quadlet)
