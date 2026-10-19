@@ -1,15 +1,39 @@
-package diag
+package disk
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/mdopp/laib/internal/disk"
+	"os"
 )
 
-// raidFindings is the diag probe: red when a member that was there is gone
+// Finding is one result of `laib-disk probe`, in diag's JSON shape (#443).
+type Finding struct {
+	Severity string `json:"severity"`
+	Probe    string `json:"probe"`
+	Service  string `json:"service,omitempty"`
+	Detail   string `json:"detail"`
+	Fix      string `json:"fix,omitempty"`
+}
+
+// Probe is what diag shows of the disks: the data RAID always, SMART and the
+// temperature when hardware is asked for (diag of the whole box).
+func Probe(ctx context.Context, hardware bool) []Finding {
+	out := []Finding{}
+	if _, members := MarkerMembers(); members > 0 {
+		if b, err := os.ReadFile(mdstatPath); err == nil {
+			out = append(out, raidFindings(string(b), members)...)
+		}
+	}
+	if hardware {
+		out = append(out, hardwareFindings(ctx)...)
+	}
+	return out
+}
+
+// raidFindings: red when a member that was there is gone
 // (or the array is missing), yellow when the mirror was never added.
 func raidFindings(mdstat string, expectedMembers int) []Finding {
-	arrays := disk.ParseMdstat(mdstat)
+	arrays := ParseMdstat(mdstat)
 	if expectedMembers == 0 {
 		return nil // no data disk on this box: nothing to say
 	}

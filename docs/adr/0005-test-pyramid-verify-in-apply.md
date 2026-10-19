@@ -199,6 +199,35 @@ imports no box chore. It also made the two seams (`inbox.Approved`,
 of small verbs (no `internal/hands`). The Bote's Signal QR stays in
 `internal/pages`.
 
+### The first Kern-Diät cut: laib-disk (2026-10-19, #443)
+
+At 14,387 of 15,000 the 95 % warning opened #443. The box chore
+`internal/disk` (the data RAID, `laib disk`) and diag's RAID, SMART and
+thermal probes moved into the program `disk/` (`laib-disk`, a release
+binary beside `laib`, budget 700): they read `/proc`, `lsblk`, `mdadm` and
+`smartctl` and need nothing of the kernel. The kernel keeps the verb `laib
+disk` (tier apply; the program refuses `add` to anyone but a human) and
+diag's call `laib-disk probe [--hardware]`, whose JSON findings it shows as
+before. They meet over a process and its output, never by import
+(`scripts/loc.sh`). Kernel 14,387 → 13,936.
+
+### The second cut: laib-notify (2026-10-19, #443)
+
+The owner's mail (#393) and the outside watchdog ping (#57) were two loops
+in `laib serve`. They are the program `notify/` (`laib-notify`, budget 400),
+a oneshot on a five-minute timer the kernel renders when there is a
+watchdog URL or Authelia has mail settings. It reads laib like the Operator
+does, over MCP as its own hand `notify` (`diag`, `updates`, `note`: ceiling
+propose only because `note` is that tier; it proposes and decides nothing)
+and `/ready`, with a token apply mints. `laib init` writes the hand, and
+`state.Load` supplies it to an older `policy.yml`, like #444's `laib`. The
+texts and the cadence are the same; a failed mail is a `note` (kind watch)
+instead of a `notify` line, so it does not wake the Operator. Its token
+and the SMTP password are in `laib-notify.env` (`EnvironmentFile=`), which
+apply writes 0600, never in the unit; the Operator's token, model key and
+usage-metrics token moved the same way into `laib-operator.env`, and a
+changed env file restarts its long-running unit.
+
 ### Tests are not capped (owner, 2026-10-18)
 
 "Tests may have more lines than code." The rule "test lines at most equal

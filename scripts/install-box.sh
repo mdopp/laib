@@ -58,6 +58,12 @@ box_config() {
   fi
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
+  # One firewall mechanism (#445): Laib's nftables table (inet laib). uCore
+  # enables firewalld (zone FedoraServer: ssh only), which blocked the
+  # household from every port but SSH; masked, so no image brings it back.
+  if [ -n "$s" ] && { systemctl is-active --quiet firewalld.service || systemctl is-enabled --quiet firewalld.service; } 2>/dev/null; then
+    sudo systemctl mask --now firewalld.service >/dev/null && echo "firewalld: masked and stopped (Laib's nftables table is the one firewall, #445)"
+  fi
 }
 
 # OS updates without fear (#368). laib-cdi.service writes the CDI spec at
@@ -242,8 +248,21 @@ fi
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
  done
  [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
+# the programs out of the kernel (#443): laib-disk (the data RAID and disk
+# health) and laib-notify (the watchdog ping, the owner's mail). A release from
+# before has them not; then laib diag says so
+EXTRA=""
+for P in laib-disk laib-notify; do
+  if grep -q " $P-linux-amd64\$" "$TMPD/SHA256SUMS"; then
+    curl -fsSL "${get[@]}" -o "$TMPD/$P" "$(asset_url "$P-linux-amd64")" || { echo "$TAG lists $P but it does not download: refusing" >&2; exit 1; }
+    [ "$(grep " $P-linux-amd64\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/$P" | cut -d' ' -f1)" ] || { echo "checksum mismatch for $P" >&2; exit 1; }
+    EXTRA="$EXTRA $P"
+  else
+    echo "$TAG carries no $P (#443): installing without it"
+  fi
+done
 # the previous binaries stay as *.prev: `laib self rollback` puts them back
-for BIN in laib laib-operator laib-lease; do
+for BIN in laib laib-operator laib-lease $EXTRA; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done

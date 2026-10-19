@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/mdopp/laib/internal/sysd"
 )
 
 // fakeDisk answers the commands inspectSpare runs, like the real tools would
@@ -40,9 +38,9 @@ func (f fakeDisk) run(_ context.Context, name string, args ...string) (string, e
 // back as two lines ("vdb" for the partition, "vdb1" for md127 on top of it).
 // The VM job caught `laib disk add` asking lsblk for "/dev/vdb\nvdb1" (#32).
 func TestMemberDiskBytesAsksForTheParentOnly(t *testing.T) {
-	saved := sysd.Run
-	defer func() { sysd.Run = saved }()
-	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) {
+	saved := Run
+	defer func() { Run = saved }()
+	Run = func(_ context.Context, name string, args ...string) (string, error) {
 		cmd := name + " " + strings.Join(args, " ")
 		switch cmd {
 		case "lsblk -no PKNAME /dev/vdb1":
@@ -100,10 +98,10 @@ func TestDiskAddRefusesWhatItWouldDestroy(t *testing.T) {
 		{"a filesystem, the wrong model named", fakeDisk{lsblk: qemu, children: "vdc", wipefs: "ext4 backup"}, "WD Elements", "not empty"},
 		{"too small, even when confirmed", fakeDisk{lsblk: `TYPE="disk" SIZE="1073741824" RM="0" TRAN="sata" MODEL="small"`, children: "sdx"}, "small", "smaller"},
 	}
-	saved := sysd.Run
-	defer func() { sysd.Run = saved }()
+	saved := Run
+	defer func() { Run = saved }()
 	for _, c := range cases {
-		sysd.Run = c.disk.run
+		Run = c.disk.run
 		s, err := inspectSpare(context.Background(), "/dev/vdc")
 		if err == nil {
 			err = s.refuse(min, c.wipe)

@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,39 +13,22 @@ import (
 	"github.com/mdopp/laib/internal/pages"
 )
 
-// #57 (1): while readiness is not red, serve pings the outside watchdog;
-// silence is the signal the outside turns into a push. Red boxes stay
-// silent on purpose.
-func TestServePingsTheWatchdogWhileNotRed(t *testing.T) {
+// #57 (1): laib-notify pings the outside watchdog (#443, notify/notify_test.go)
+// and stamps watchdog.last; readiness shows the last report from it.
+func TestReadinessShowsTheWatchdogsLastReport(t *testing.T) {
 	c := newCbox(t)
-	var pings int32
-	wd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { atomic.AddInt32(&pings, 1) }))
-	defer wd.Close()
 	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  url: "+wd.URL+"/ping/abc\n  contact: Martin, 0170 1234567\n")...), 0o644)
+	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  url: https://hc.example/ping/abc\n")...), 0o644)
 	st, err := cli.LoadState(c.env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !pages.WatchdogPing(context.Background(), c.env, st) {
-		t.Fatal("a green box must ping")
+	if r, _ := pages.CollectStatus(context.Background(), c.env, st); r.Watchdog != "noch nie gemeldet" {
+		t.Fatalf("before any ping: %q", r.Watchdog)
 	}
-	if atomic.LoadInt32(&pings) != 1 {
-		t.Fatalf("pings: %d", pings)
-	}
-	r, _ := pages.CollectStatus(context.Background(), c.env, st)
-	if r.Watchdog == "" || !strings.Contains(r.Watchdog, "zuletzt gemeldet") {
-		t.Fatalf("readiness must show the last report: %+v", r)
-	}
-	c.down["whoami.service"] = true
-	if pages.WatchdogPing(context.Background(), c.env, st) {
-		t.Fatal("a red box must not ping: silence is the alarm")
-	}
-	if atomic.LoadInt32(&pings) != 1 {
-		t.Fatalf("pinged while red: %d", pings)
-	}
-	if pages.WatchdogInterval < 4*time.Minute || pages.WatchdogInterval > 6*time.Minute {
-		t.Fatalf("every five minutes: %v", pages.WatchdogInterval)
+	os.WriteFile(filepath.Join(c.env.Paths.Home, "watchdog.last"), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
+	if r, _ := pages.CollectStatus(context.Background(), c.env, st); !strings.Contains(r.Watchdog, "zuletzt gemeldet") {
+		t.Fatalf("readiness must show the last report: %q", r.Watchdog)
 	}
 }
 
