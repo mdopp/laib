@@ -34,8 +34,10 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	dir := binDir()
 	bins := []string{"laib", "laib-operator", "laib-lease"}
-	if _, err := os.Stat(filepath.Join(dir, "laib-disk.prev")); err == nil {
-		bins = append(bins, "laib-disk") // since #443; a box from before has none to roll back
+	for _, b := range []string{"laib-disk", "laib-notify"} { // since #443; a box from before has none to roll back
+		if _, err := os.Stat(filepath.Join(dir, b+".prev")); err == nil {
+			bins = append(bins, b)
+		}
 	}
 	for _, b := range bins {
 		if _, err := os.Stat(filepath.Join(dir, b+".prev")); err != nil {

@@ -196,6 +196,11 @@ type Hand struct {
 // policy.yml without one, which may narrow it but not miss it.
 var BoxHand = Hand{Ceiling: "propose", Verbs: []string{"backup", "diag"}}
 
+// NotifyHand is laib-notify's (#443): it reads diag and the image updates and
+// journals a failed mail (note, tier propose); it proposes and decides nothing.
+// Supplied like BoxHand to a policy.yml without one.
+var NotifyHand = Hand{Ceiling: "propose", Verbs: []string{"diag", "updates", "note"}}
+
 // Approval says who may approve a tier.
 type Approval struct {
 	By       string `yaml:"by"`

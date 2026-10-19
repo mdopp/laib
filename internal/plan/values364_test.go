@@ -50,7 +50,14 @@ func TestAChangedValueIsAChangeOfItsService(t *testing.T) {
 	write(p, "")
 	st.Services["auth"].Values["SMTP_HOST"] = state.Value{Literal: "smtp.example.home"}
 	p, _ = Compute(context.Background(), st, secrets, paths, "")
-	if !slices.Equal(p.Services, []string{"auth"}) || len(p.Changes) != 1 || p.Changes[0].Kind != "change" {
+	// SMTP_HOST also turns on the owner's mail, laib-notify's unit and timer (#443)
+	var own []Change
+	for _, c := range p.Changes {
+		if c.Path != "systemd/laib-notify.service" && c.Path != "systemd/laib-notify.timer" {
+			own = append(own, c)
+		}
+	}
+	if !slices.Equal(p.Services, []string{"auth"}) || len(own) != 1 || own[0].Kind != "change" || len(p.Changes) != 3 {
 		t.Fatalf("a hook-only value must change its service: %+v %v", p.Changes, p.Services)
 	}
 }

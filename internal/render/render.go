@@ -105,6 +105,10 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Operator.Enabled {
 		out["systemd/laib-operator.service"] = operatorUnit(st, secrets)
 	}
+	if notifier(st) {
+		out["systemd/laib-notify.service"] = notifyUnit(st, secrets)
+		out["systemd/laib-notify.timer"] = "# Rendered by laib: the watchdog ping and the owner's mail every five minutes (#443).\n[Unit]\nDescription=Laib notify timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=5m\n\n[Install]\nWantedBy=timers.target\n"
+	}
 	if st.Policy.Autonomy["converge"] == "on" {
 		out["systemd/laib-converge.service"] = "# Rendered by laib: the converge loop (docs/DESIGN.md Repair).\n[Unit]\nDescription=Laib converge\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib converge\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 		out["systemd/laib-converge.timer"] = "# Rendered by laib: every ten minutes, and after boot.\n[Unit]\nDescription=Laib converge timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=10m\n\n[Install]\nWantedBy=timers.target\n"
@@ -211,6 +215,9 @@ func SecretNames(st *state.State) []state.Secret {
 	}
 	if st.Box.Operator.Enabled {
 		out = append(out, state.Secret{Name: OperatorToken, External: true}) // minted by laib operator enable
+	}
+	if notifier(st) {
+		out = append(out, state.Secret{Name: NotifyToken, External: true, Mint: "notify"}) // minted on apply
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
@@ -654,6 +661,48 @@ func PBKDF2SHA512(plain, saltSeed string) string {
 
 func ab64(b []byte) string {
 	return strings.ReplaceAll(base64.RawStdEncoding.EncodeToString(b), "+", ".")
+}
+
+// NotifyToken is laib-notify's bearer (#443), as the notify hand.
+const NotifyToken = "NOTIFY_TOKEN"
+
+// mailTo is the owner's address when Authelia has mail settings (#393): one
+// mail config on the box. Empty: no mail.
+func mailTo(st *state.State) string {
+	sso := st.Services[st.Box.Roles.SSO]
+	if sso == nil || !sso.Set("SMTP_HOST") {
+		return ""
+	}
+	return cmp.Or(st.Box.Notify.Mail, sso.Values["OPERATOR_EMAIL"].Literal)
+}
+
+// notifier: laib-notify runs when it has something to do (#443).
+func notifier(st *state.State) bool { return st.Box.Watchdog.URL != "" || mailTo(st) != "" }
+
+// notifyUnit is laib-notify's oneshot: laib's MCP and /ready, the watchdog
+// URL and Authelia's mail settings, each value quoted for systemd.
+func notifyUnit(st *state.State, secrets map[string]string) string {
+	var b strings.Builder
+	b.WriteString("# Rendered by laib: the watchdog ping and the owner's mail (#443).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib-notify\n")
+	env := func(k, v string) {
+		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", k, strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(v))
+	}
+	base := fmt.Sprintf("http://127.0.0.1:%d", st.Box.Laib.Port)
+	env("LAIB_MCP_URL", base+"/mcp")
+	env("LAIB_READY_URL", base+"/ready")
+	env("LAIB_TOKEN", secretValue(secrets, NotifyToken))
+	env("LAIB_HOME", "/mnt/data/laib")
+	env("LAIB_DOMAIN", st.Box.Domain)
+	env("WATCHDOG_URL", st.Box.Watchdog.URL)
+	if to := mailTo(st); to != "" {
+		v := st.Services[st.Box.Roles.SSO].Values
+		env("MAIL_TO", to)
+		for _, k := range []string{"SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_FROM"} {
+			env(k, v[k].Literal)
+		}
+		env("SMTP_PASSWORD", secretValue(secrets, "AUTHELIA_SMTP_PASSWORD"))
+	}
+	return b.String()
 }
 
 // OperatorToken is the secret holding the operator's ops bearer.

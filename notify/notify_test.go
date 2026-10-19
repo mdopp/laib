@@ -153,7 +153,7 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	if len(got) != 1 || !strings.Contains(got[0], "To: admin@example.home") || !strings.Contains(got[0], "- whoami: docker.io/traefik/whoami:v1.11 → v1.12") || strings.Contains(got[0], "- x:") {
 		t.Fatalf("the weekly updates mail to the operator's address: %q", got)
 	}
-	if !strings.Contains(got[0], "Laib: Updates verf") {
+	if !strings.Contains(got[0], "Laib:_Updates_verf=C3=BCgbar") || !strings.Contains(got[0], "Neuere Images (laib updates):") {
 		t.Errorf("the updates mail's subject changed: %q", got[0])
 	}
 	f.red = true

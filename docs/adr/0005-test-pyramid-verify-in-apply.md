@@ -211,6 +211,19 @@ diag's call `laib-disk probe [--hardware]`, whose JSON findings it shows as
 before. They meet over a process and its output, never by import
 (`scripts/loc.sh`). Kernel 14,387 → 13,936.
 
+### The second cut: laib-notify (2026-10-19, #443)
+
+The owner's mail (#393) and the outside watchdog ping (#57) were two loops
+in `laib serve`. They are the program `notify/` (`laib-notify`, budget 400),
+a oneshot on a five-minute timer the kernel renders when there is a
+watchdog URL or Authelia has mail settings. It reads laib like the Operator
+does, over MCP as its own hand `notify` (`diag`, `updates`, `note`: ceiling
+propose only because `note` is that tier; it proposes and decides nothing)
+and `/ready`, with a token apply mints. `laib init` writes the hand, and
+`state.Load` supplies it to an older `policy.yml`, like #444's `laib`. The
+texts and the cadence are the same; a failed mail is a `note` (kind watch)
+instead of a `notify` line, so it does not wake the Operator.
+
 ### Tests are not capped (owner, 2026-10-18)
 
 "Tests may have more lines than code." The rule "test lines at most equal

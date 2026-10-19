@@ -60,7 +60,8 @@ wrong.
 4. **Updates are proposals.** Images are pinned by tag and digest, an update
    is a proposal with a snapshot before, verify after, image and data
    rollback on red; backup and update never share the 03:00 slot (#77).
-5. **An outside watchdog and a paper card.** `laib serve` pings an outside
+5. **An outside watchdog and a paper card.** `laib serve` (since #443 its
+   program `laib-notify`, on a five-minute timer) pings an outside
    check while readiness is not red; silence becomes a push to the admin's
    phone; `laib family-card` prints "Wenn die Box nicht geht" and
    `laib recovery-sheet` the age key, the restic password, the repo and
