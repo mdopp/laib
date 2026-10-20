@@ -26,7 +26,7 @@ class Box:
         bin_ = self.root / "bin"
         bin_.mkdir()
         keygen = shutil.which("ssh-keygen")
-        fakes = {"su": 'shift 2; exec bash -c "$1"', "chown": "", "chpasswd": "cat >/dev/null", "claude": "", "git": "",
+        fakes = {"su": 'shift 2; exec bash -c "$1"', "chown": "", "gh": "", "chpasswd": "cat >/dev/null", "claude": "", "git": "",
                  "python3": "", "ssh-keygen": f'[ "$1" = -A ] && {{ echo "-A fills the image" >&2; exit 1; }}; exec {keygen} "$@"'}
         for name, body in fakes.items():
             (bin_ / name).write_text(f'#!/bin/bash\nprintf "%s\\n" "{name} $*" >> "$ARGV_LOG"\n{body}\n')

@@ -20,7 +20,11 @@ ServiceBay unit is stopped and its file moved out of the Quadlet root
                   whom Laib's unit maps onto radicale's uid (keep-id), #311
   werkstatt       the git checkouts of <D>/claude-dev/workspace and
                   <D>/pi-web/workspace -> <D>/werkstatt/workspace (pi-web's
-                  under pi-web-<name> where claude-dev has the same name)
+                  under pi-web-<name> where claude-dev has the same name);
+                  of claude-dev's home (its /workspace) -> <D>/werkstatt/home:
+                  .claude.json, .claude/{.credentials.json,history.jsonl},
+                  .claude/projects/-workspace-<checkout> for its checkouts,
+                  .config/gh/hosts.yml, .gitconfig (#498)
   immich          the external libraries ServiceBay's disk import made move
                   into Laib's photos layout (#263), one folder per library:
                   <D>/file-share/data/<user>/photos -> <D>/file-share/data/photos/<user>
@@ -63,6 +67,11 @@ from xml.sax.saxutils import escape
 ZWAVE_PORT = 3000          # zwave-js-ui's default; nothing on a Laib box holds it
 WERKSTATT_UID = 1000       # werkstatt/Containerfile: useradd -u 1000 dev
 SERVICEBAY_UNITS = {"werkstatt": ["claude-dev", "pi-web"]}
+# what of claude-dev's home (its /workspace) the Werkstatt's home takes (#498),
+# beside .claude/projects/<checkout>: onboarding and folder trust, the claude.ai
+# login Remote Control needs, the prompt history, gh's login, the git identity
+HOME_CARRIED = [".claude.json", ".claude/.credentials.json", ".claude/history.jsonl", ".config/gh/hosts.yml", ".gitconfig"]
+HOME_ROOTS = {".claude", ".claude.json", ".config", ".gitconfig"}
 RESERVE = 1 << 30          # a data disk filled to the last byte wedges every service on it
 # units that must not run either while a service moves (#263): Laib's own
 # Immich database, and both Syncthings, whose folders move with the photos
@@ -155,6 +164,26 @@ def copy(src, dst, uid=None, only=None):
     os.sync()
     os.replace(tmp, dst)        # an empty dst folder is replaced
     os.sync()
+
+
+def project_dir(path):
+    """Claude Code's folder for a project's conversations: ~/.claude/projects/<path, every other character a dash>"""
+    return re.sub(r"[^A-Za-z0-9]", "-", path)
+
+
+def home_dirs(home, rel):
+    """Make home/rel and every folder on the way the Werkstatt's dev's (0700 for
+    the credentials' folders), not root's: Claude Code and gh write in them."""
+    p = home
+    for part in [x for x in rel.split(os.sep) if x]:
+        p = os.path.join(p, part)
+        if not os.path.isdir(p):
+            os.makedirs(p, mode=0o700)
+            try:
+                os.lchown(p, WERKSTATT_UID, WERKSTATT_UID)
+            except PermissionError:
+                if os.geteuid() == 0:
+                    raise
 
 
 def edit_json(path, change):
@@ -259,6 +288,8 @@ def plan(service, d, volumes, a=None):
             src = os.path.join(d, old, "workspace")
             for n in sorted(os.listdir(src)) if os.path.isdir(src) else []:
                 p = os.path.join(src, n)
+                if old == "claude-dev" and n in HOME_ROOTS:
+                    continue            # carried into the home below, as far as it is the Werkstatt's
                 if not os.path.isdir(os.path.join(p, ".git")):
                     notes.append(f"stays behind: {p} (not a checkout)")
                     continue
@@ -268,6 +299,20 @@ def plan(service, d, volumes, a=None):
                 checkouts[name] = p
         for name, p in checkouts.items():
             steps.append((f"copy {p} -> {dst}/{name}", [p], lambda p=p, name=name: copy(p, os.path.join(dst, name), WERKSTATT_UID)))
+        # claude-dev's home was its /workspace (#498): Claude Code's state, its
+        # claude.ai login, the conversations of the checkouts that keep their
+        # name, gh's login and the git identity go into the Werkstatt's home
+        old_home, home = os.path.join(d, "claude-dev", "workspace"), os.path.join(d, "werkstatt", "home")
+        carried = list(HOME_CARRIED) + [os.path.join(".claude", "projects", project_dir("/workspace/" + n))
+                                        for n, p in checkouts.items() if p == os.path.join(old_home, n)]
+        for rel in carried:
+            src, tgt = os.path.join(old_home, rel), os.path.join(home, rel)
+            if not os.path.lexists(src):
+                continue
+            if has_data(tgt):
+                raise Refused(f"{tgt} already holds data; move it aside first")
+            steps.append((f"copy {src} -> {tgt}", [src],
+                          lambda src=src, tgt=tgt, rel=rel: (home_dirs(home, os.path.dirname(rel)), copy(src, tgt, WERKSTATT_UID))))
         if os.path.isdir(os.path.join(d, "pi-web", "data")):
             notes.append(f"stays behind: {d}/pi-web/data (pi-web's sessions)")
     else:

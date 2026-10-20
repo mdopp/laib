@@ -91,8 +91,11 @@ entrypoint runs it on every start and then every five minutes
 restart, and a session that ended is started again. `werkstatt-sessions off
 <name>` switches one off with a marker in `~/.werkstatt/no-autostart/` (the
 kept home), so it stays off across restarts; `on <name>` brings it back.
-Over SSH, `tmux attach -t claude` shows them; a new checkout's first start
-may ask Claude Code's folder-trust question once in its window. The
+Over SSH, `tmux attach -t claude` shows them. Nobody is at a window, so
+before a checkout's first start the pass answers Claude Code's first-run
+questions in `~/.claude.json` (#498): `hasCompletedOnboarding` and
+`projects["/workspace/<name>"].hasTrustDialogAccepted`, written only when
+missing, everything else in the file kept. The
 sessions run as `dev` in a clean login shell (the Claude and Laib tokens
 from `/run/laib`, no other variable of the container) and in Claude Code's
 default permission mode: unlike claude-dev, no
@@ -140,9 +143,30 @@ made on the first start and then kept, so the mobile app keeps trusting
 the box; the image carries none. Secrets stay in `/run/laib`; the
 entrypoint writes none into the home. What lands there in clear is what
 a person logs into themselves: Claude Code's own login after `claude
-/login` (`~/.claude/.credentials.json`; with `CLAUDE_CODE_OAUTH_TOKEN`
-set there is none), `gh auth login`'s token. The autoloop has no home of
-its own on disk: pi's hand stays apart (#44).
+/login` (`~/.claude/.credentials.json`), `gh auth login`'s token
+(`~/.config/gh/hosts.yml`); the entrypoint makes both dev's and 0600 at
+every start. The autoloop has no home of its own on disk: pi's hand stays
+apart (#44).
+
+**Which Claude login (#498).** Remote Control needs Claude Code's own
+claude.ai login. `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`) outranks
+that login and can only make model requests: no Remote Control, no
+claude.ai connectors (Claude Code's docs, "Authentication precedence" and
+"Generate a long-lived token"). So the login shells, and with them the
+sessions, get the token only while `~/.claude/.credentials.json` is
+missing: on a new box the sessions work at once, without Remote Control;
+after one `claude /login` over SSH, in any window, every session started
+from then on (the next pass, a restart) uses the login and has Remote
+Control. The login is kept in the home; Claude Code renews it while it is
+used. When it has lapsed for good, `/login` again; deleting the file falls
+back to the token. Leaving `CLAUDE_CODE_OAUTH_TOKEN` empty is fine too.
+
+**git and gh (#498).** With `WERKSTATT_GIT_TOKEN` set, git pushes with that
+PAT from `/run/laib`. Without it, and with gh logged in
+(`~/.config/gh/hosts.yml`, carried from claude-dev or made with `gh auth
+login`), the entrypoint runs `gh auth setup-git`, as claude-dev did, and
+git pushes with gh's login. `user.name` and `user.email` are in the kept
+`~/.gitconfig`.
 
 **Small programs (#262).** The Werkstatt builds the household's own small
 programs and deploys them under their own `<name>.<domain>`. Both agents
@@ -177,7 +201,13 @@ The owner's steps:
 `scripts/werkstatt-app.sh` (job `werkstatt-e2e/app`) walks the path in this
 image on a box on the runner.
 
-Migration from `claude-dev`: point `${DATA_DIR}/werkstatt/workspace` at the
-old `/workspace` volume for the checkouts; claude-dev's home and sessions
-and its SSH host keys are copied into `werkstatt/home` and
-`werkstatt/ssh-host-keys` once by the Kraftwerk move (docs/MIGRATION.md).
+Migration from `claude-dev`: `scripts/move-servicebay-data.sh werkstatt`
+copies the checkouts into `werkstatt/workspace` and, from claude-dev's home
+(its `/workspace`), into `werkstatt/home` (#498): `.claude.json`
+(onboarding, trust, the account), `.claude/.credentials.json` (the
+claude.ai login), `.claude/history.jsonl`,
+`.claude/projects/-workspace-<checkout>` for each checkout that kept its
+name (the conversations `--continue` picks up), `.config/gh/hosts.yml` and
+`.gitconfig`. claude-dev's `settings.json` (its hooks) stays behind. A box
+whose Werkstatt already started does the one-time import by hand
+(docs/MIGRATION.md, "The Werkstatt's sessions").

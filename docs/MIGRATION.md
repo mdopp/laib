@@ -229,6 +229,7 @@ start; sockets and FIFOs are left out, hardlinks become copies.
 | file-share | Samba's passdb `file-share/samba-private/smbpasswd`, one account per LLDAP user | the same path | in place, said by the script with the account names: every family member's and admin's account keeps its password (#296); one whose LLDAP user is in neither group goes at the first start. The POSIX side is made again on every start, and from then on each person sets a new password in Haus (`/netzlaufwerk`), an admin resets one there. The Kraftwerk's passdb holds one entry, by its size the shared account (read-only dry run, 2026-10-18; servicebay#3055): no family member has a per-person account to keep, so each one sets a first password in Haus after the move |
 | radicale | `radicale/data`, owned by the image's radicale user (2999) as ServiceBay's default user namespace maps it (a subuid) | the same path; Laib's unit maps the box's user onto 2999 | in place, handed to the box's user: otherwise Radicale cannot write its collections and restarts forever (#311). ServiceBay's image takes them back on its next start |
 | werkstatt | `claude-dev/workspace`, `pi-web/workspace` | `werkstatt/workspace` | the git checkouts copied, owned by the Werkstatt's `dev` (1000); pi-web's as `pi-web-<name>` where claude-dev has the same one |
+| werkstatt | claude-dev's home, its `/workspace`: `.claude.json`, `.claude/.credentials.json`, `.claude/history.jsonl`, `.claude/projects/-workspace-<checkout>`, `.config/gh/hosts.yml`, `.gitconfig` | `werkstatt/home`, the same names | copied, owned by `dev` (1000), #498: no onboarding dialog, `--continue` finds the conversations, Remote Control has its claude.ai login, git pushes with gh's. Only the conversations of checkouts that kept their name; claude-dev's `settings.json` (its hooks) stays behind |
 | immich | the libraries ServiceBay's disk import made: `file-share/data/<user>/photos` (`/mnt/photos/<user>/photos`), `file-share/data/photos` (Shared, `/mnt/photos/photos`) | `file-share/data/photos/<user>`, `file-share/data/photos/shared` (`/mnt/photos/<user>`, `/mnt/photos/shared`) | **moved**, and Immich's paths rewritten (below): albums, faces, favourites, descriptions and edits stay with their assets |
 | file-share | Syncthing folders on those paths | the same folders on the new paths | `config.xml` rewritten with the photos, folder and device IDs kept: the devices keep syncing, nothing is re-paired |
 
@@ -358,9 +359,27 @@ applies:
 - **The Werkstatt's sessions and SSH host keys.** ServiceBay kept them in
   claude-dev's `/workspace` (its home; host keys in `.ssh/host_keys`); the
   Werkstatt keeps its home in `werkstatt/home` and its host keys in
-  `werkstatt/ssh-host-keys` (#241). Copying claude-dev's into them is not
-  in `move-servicebay-data.py` yet. Until it is: sessions start fresh, and
-  the host key changes once (the app asks to trust it again).
+  `werkstatt/ssh-host-keys` (#241). The mover's `werkstatt` step copies the
+  sessions and logins (table above, #498); the host keys are not copied
+  yet: the host key changes once (the app asks to trust it again).
+  The mover runs before `laib add werkstatt`. A box whose Werkstatt already
+  started (the Kraftwerk, 2026-10-20) does it once by hand, as `core`, with
+  `D=/mnt/data/stacks` and per checkout `<x>` that came along:
+
+  ```sh
+  systemctl --user stop werkstatt.service
+  # the first start's empty conversations go, or --continue takes the newest, the empty one
+  podman unshare rm -rf $D/werkstatt/home/.claude/projects/-workspace-<x>
+  podman unshare mkdir -p $D/werkstatt/home/.claude/projects $D/werkstatt/home/.config/gh
+  podman unshare cp -a $D/claude-dev/workspace/.claude/projects/-workspace-<x> $D/werkstatt/home/.claude/projects/
+  podman unshare cp -a $D/claude-dev/workspace/.claude/.credentials.json $D/werkstatt/home/.claude/
+  podman unshare cp -a $D/claude-dev/workspace/.config/gh/hosts.yml $D/werkstatt/home/.config/gh/
+  podman unshare chown -R 1000:1000 $D/werkstatt/home/.claude $D/werkstatt/home/.config
+  systemctl --user start werkstatt.service
+  ```
+
+  Onboarding and folder trust need nothing: the sessions' pass answers them.
+  `CLAUDE_CODE_OAUTH_TOKEN` may stay set: it yields to the login.
 
 ## What does not move
 

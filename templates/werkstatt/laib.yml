@@ -12,7 +12,7 @@ routes:
 provides: [werkstatt]
 secrets:
   - name: WERKSTATT_SSH_PASSWORD
-  - name: CLAUDE_CODE_OAUTH_TOKEN
+  - name: CLAUDE_CODE_OAUTH_TOKEN   # claude setup-token: model requests only, no Remote Control; yields to a claude.ai login in the home (#498)
     external: true
   - name: LAIB_WERKSTATT_TOKEN   # minted on `laib add` as the werkstatt hand: it can only get a claude token per session (#380, ADR 0006)
     external: true
