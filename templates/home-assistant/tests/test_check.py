@@ -58,7 +58,8 @@ class Check(unittest.TestCase):
         # laib status stayed green. The check asks zwave-js-ui whether its driver is ready; when not, a
         # red finding and a failed unit, which laib status shows red.
         everything = [{"domain": d, "title": t} for d, t in [("wyoming", "whisper"), ("wyoming", "piper"), ("wyoming", "openwakeword"),
-                                                             ("caldav", ""), ("music_assistant", ""), ("mqtt", ""), ("mcp_server", "")]]
+                                                             ("caldav", ""), ("music_assistant", ""), ("mqtt", ""), ("mcp_server", ""),
+                                                             ("ollama", "http://127.0.0.1:8710")]]
         ha, _ = fake_ha(everything)
         zw, seen = fake_zwave(500)
         r = self.run_check("tok", f"http://127.0.0.1:{ha.server_port}", f"http://127.0.0.1:{zw.server_port}", rc=1)
@@ -100,7 +101,8 @@ class Check(unittest.TestCase):
             self.assertEqual(run(), "ZWAVE_URL=http://127.0.0.1:8091")
 
     def test_names_each_missing_integration(self):
-        srv, h = fake_ha([{"domain": "wyoming", "title": "faster-whisper"}, {"domain": "mqtt", "title": "Mosquitto"}])
+        srv, h = fake_ha([{"domain": "wyoming", "title": "faster-whisper"}, {"domain": "mqtt", "title": "Mosquitto"},
+                          {"domain": "ollama", "title": "http://127.0.0.1:8787/ollama"}])
         r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
         self.assertEqual(h.seen[0], ("/api/config/config_entries/entry", "Bearer tok"))
         missing = [f["detail"] for f in r["findings"]]
@@ -108,16 +110,19 @@ class Check(unittest.TestCase):
         self.assertIn("CalDAV: fehlt", missing)
         self.assertNotIn("Wyoming Whisper: fehlt", missing)
         self.assertNotIn("MQTT: fehlt", missing)
+        # #491: Frage's agent is the Ollama entry on 8710; Solaris's on 8787 is not it, and its fix says how
+        self.assertIn("Frage als Gesprächsagent: fehlt", missing)
+        self.assertIn("laib apply home-assistant", next(f["fix"] for f in r["findings"] if f["detail"].startswith("Frage")))
         self.assertTrue(all(f["severity"] == "gelb" for f in r["findings"]))
         self.assertTrue(r["at"].endswith("Z") and r["detail"].startswith("fehlt: "))
 
     def test_complete_and_unreachable_and_no_token(self):
         everything = [{"domain": d, "title": t} for _, d, t in
                       [("", "wyoming", "whisper"), ("", "wyoming", "piper"), ("", "wyoming", "openwakeword"), ("", "caldav", ""),
-                       ("", "music_assistant", ""), ("", "mqtt", ""), ("", "mcp_server", "")]]
+                       ("", "music_assistant", ""), ("", "mqtt", ""), ("", "mcp_server", ""), ("", "ollama", "http://127.0.0.1:8710")]]
         srv, _ = fake_ha(everything)
         r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
-        self.assertEqual((r["findings"], r["detail"]), ([], "alle 7 Integrationen eingerichtet"))
+        self.assertEqual((r["findings"], r["detail"]), ([], "alle 8 Integrationen eingerichtet"))
         srv, _ = fake_ha([], status=401)
         r = self.run_check("bad", f"http://127.0.0.1:{srv.server_port}")
         self.assertIn("antwortet nicht", r["findings"][0]["detail"])
