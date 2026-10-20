@@ -8,8 +8,15 @@
 # the proven one, once: Zincati is paused, or it would stage the same update
 # again, and the owner gets an incident. Never on the proven one.
 set -u
-ETC="${LAIB_ETC:-/etc}"; PROVEN="$ETC/laib/boot-proven"; ROLLED="$ETC/laib/boot-rolled-back"
-PAUSE="$ETC/zincati/config.d/95-laib-boot-check.toml"
+# /etc belongs to one deployment: what is written there while booted into a
+# new deployment is gone once the box rolls back. So the records live in
+# /var/lib/laib, which every deployment shares, and the Zincati pause is
+# written into the /etc of the deployment the box rolls back to (train 22).
+ETC="${LAIB_ETC:-/etc}"; VAR="${LAIB_VAR:-/var/lib/laib}"; ROOT="${LAIB_ROOT:-}"   # the test harness only
+PROVEN="$VAR/boot-proven"; ROLLED="$VAR/boot-rolled-back"
+PAUSE=zincati/config.d/95-laib-boot-check.toml
+mkdir -p "$VAR"
+[ -f "$PROVEN" ] || [ ! -f "$ETC/laib/boot-proven" ] || cp "$ETC/laib/boot-proven" "$PROVEN"   # from before: once
 say() { echo "laib-boot-check: $*"; }
 note() { runuser -u core -- env LAIB_HOME=/mnt/data/laib LAIB_ACTOR=laib /var/opt/laib/laib note --kind "$1" "$2" >/dev/null 2>&1 || true; }
 st="$(ostree admin status 2>/dev/null)"
@@ -86,7 +93,11 @@ if [ "$(cat "$ROLLED" 2>/dev/null)" = "$booted" ] || [ "$back" != "$proven" ]; t
 fi
 say "not proven within ${LAIB_BOOT_CHECK_TIMEOUT:-900}s: $why; rolling back to ${proven:0:12}"
 echo "$booted" >"$ROLLED"
-mkdir -p "$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$PAUSE"
-note incident "OS-Update ${booted:0:12} zurückgerollt auf ${proven:0:12}: $why. Zincati pausiert, bis $PAUSE entfernt ist."
+backetc="$ROOT/ostree/deploy/$(sed -n 's/^\* \([^ ]*\) .*/\1/p' <<<"$st")/deploy/$back/etc"
+[ -d "$backetc" ] || say "no /etc of $back at $backetc: Zincati is not paused there"
+for e in "$ETC" "$backetc"; do
+  [ -d "$e" ] && mkdir -p "$e/$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$e/$PAUSE"
+done
+note incident "OS-Update ${booted:0:12} zurückgerollt auf ${proven:0:12}: $why. Zincati pausiert, bis /etc/$PAUSE entfernt ist."
 rpm-ostree rollback || { say "rpm-ostree rollback failed"; exit 1; }
 sync; systemctl reboot

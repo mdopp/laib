@@ -981,16 +981,16 @@ jobs:
                 sudo mkdir -p /etc/systemd/system/laib-boot-check.service.d
                 printf "[Service]\nEnvironment=LAIB_BOOT_CHECK_TIMEOUT=120 LAIB_BOOT_CHECK_INTERVAL=5\n" | sudo tee /etc/systemd/system/laib-boot-check.service.d/vm.conf >/dev/null
                 sudo systemctl daemon-reload
-                sudo rm -f /etc/laib/boot-proven /etc/laib/boot-rolled-back
+                sudo rm -f /var/lib/laib/boot-proven /var/lib/laib/boot-rolled-back
                 sudo systemctl restart laib-boot-check.service   # the boot-time run still waits its 15 minutes: restart it with the short window
                 # a red box (the degraded mirror of the step before) is recorded only after the 120 s timeout
-                for i in $(seq 1 90); do test -s /etc/laib/boot-proven && break; sleep 2; done
-                test -s /etc/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
-                echo "proven: $(cat /etc/laib/boot-proven)"
+                for i in $(seq 1 90); do test -s /var/lib/laib/boot-proven && break; sleep 2; done
+                test -s /var/lib/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
+                echo "proven: $(cat /var/lib/laib/boot-proven)"
                 # broken on purpose: its kernel line masks the core user manager, so laib never answers /ready
                 sudo rpm-ostree kargs --append=systemd.mask=user@1000.service >/dev/null || sudo rpm-ostree kargs --bypass-driver --append=systemd.mask=user@1000.service >/dev/null
                 rpm-ostree status --json | jq -e ".deployments[] | select(.staged)" >/dev/null || { echo "no staged deployment"; rpm-ostree status; exit 1; }'
-          good=$($SSH 'cut -d" " -f1 /etc/laib/boot-proven')
+          good=$($SSH 'cut -d" " -f1 /var/lib/laib/boot-proven')
           $SSH 'sudo systemctl reboot' || true
           sleep 60
           # the broken boot: the check waits 120 s, rolls back and reboots; then laib on the proven deployment
@@ -999,7 +999,7 @@ jobs:
                 b=\$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | \"\\(.checksum).\\(.serial)\"')
                 [ \"\$b\" = '$good' ] || { echo \"booted \$b, want the proven $good back\"; rpm-ostree status; journalctl -b -1 -u laib-boot-check --no-pager | tail -20; exit 1; }
                 ! grep -q 'systemd.mask=user@1000.service' /proc/cmdline || { echo 'still the broken kernel line'; exit 1; }
-                test -s /etc/laib/boot-rolled-back || { echo 'no record of the rollback'; exit 1; }
+                test -s /var/lib/laib/boot-rolled-back || { echo 'no record of the rollback'; exit 1; }
                 grep -q 'enabled = false' /etc/zincati/config.d/95-laib-boot-check.toml || { echo 'Zincati is not paused'; exit 1; }
                 journalctl -b -1 -u laib-boot-check --no-pager | tail -4
                 echo 'the broken deployment rolled itself back once, Zincati paused'"

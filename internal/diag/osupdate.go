@@ -40,9 +40,13 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 	return o, true
 }
 
-// Proven: the boot check proved this deployment (/etc/laib/boot-proven).
+// Proven: the boot check proved this deployment (/var/lib/laib/boot-proven,
+// shared by every deployment; /etc/laib from before).
 func Proven(booted string) bool {
-	b, _ := os.ReadFile(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/laib/boot-proven")
+	b, err := os.ReadFile(cmp.Or(os.Getenv("LAIB_VAR"), "/var/lib/laib") + "/boot-proven")
+	if err != nil {
+		b, _ = os.ReadFile(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/laib/boot-proven")
+	}
 	f := strings.Fields(string(b))
 	return booted != "" && len(f) > 0 && strings.HasPrefix(booted, f[0])
 }
