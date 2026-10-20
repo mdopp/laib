@@ -52,3 +52,7 @@ health:
 ports:
   - {port: 8384, lan: false}
   - {port: 8088, lan: false}
+  # Samba and Syncthing listen in the host network for the LAN (#487)
+  - {port: 139, lan: true}
+  - {port: 445, lan: true}
+  - {port: 22000, lan: true}

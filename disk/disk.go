@@ -13,7 +13,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -29,7 +31,10 @@ var Run = func(ctx context.Context, name string, args ...string) (string, error)
 // add` brings the mirror. The diag probe tells "one member by design" from
 // "a member is gone".
 
-const dataDiskMarker = "/etc/laib/data-disk" // DEVICE=/dev/md127 MEMBERS=1, written by laib-data-disk.sh
+var (
+	dataDiskMarker = "/etc/laib/data-disk" // DEVICE=/dev/md127 MEMBERS=1, written by laib-data-disk.sh
+	mountsPath     = "/proc/self/mounts"
+)
 
 // Array is one line pair of /proc/mdstat.
 type Array struct {
@@ -40,6 +45,7 @@ type Array struct {
 	Status  string // U_ or UU
 	Resync  string // "recovery = 12.3%" when syncing
 	Members []string
+	Failed  []string // marked (F) by the kernel
 }
 
 var (
@@ -59,6 +65,9 @@ func ParseMdstat(text string) []Array {
 			for _, f := range strings.Fields(m[4]) {
 				if i := strings.IndexByte(f, '['); i > 0 {
 					cur.Members = append(cur.Members, f[:i])
+					if strings.HasSuffix(f, "(F)") {
+						cur.Failed = append(cur.Failed, f[:i])
+					}
 				}
 			}
 			continue
@@ -93,6 +102,30 @@ func MarkerMembers() (device string, members int) {
 		}
 	}
 	return
+}
+
+// DataArray is the array /mnt/data lives on and the members it should have.
+// laib-data-disk.sh records both; an array Laib did not create (ServiceBay's
+// on the Kraftwerk, #488) has no record: the mount names it, no count (0).
+func DataArray() (device string, members int) {
+	if device, members = MarkerMembers(); device != "" {
+		return strings.TrimPrefix(device, "none"), members
+	}
+	b, _ := os.ReadFile(mountsPath)
+	for _, line := range strings.Split(string(b), "\n") {
+		if f := strings.Fields(line); len(f) > 1 && (f[1] == "/mnt/data" || f[1] == "/var/mnt/data") && strings.HasPrefix(f[0], "/dev/md") {
+			return f[0], 0
+		}
+	}
+	return "", 0
+}
+
+// mdName: the array's name in /proc/mdstat (/dev/md/data → md127).
+func mdName(dev string) string {
+	if real, err := filepath.EvalSymlinks(dev); err == nil {
+		dev = real
+	}
+	return filepath.Base(dev)
 }
 
 // spareInfo is what `laib disk add` learns about a device before it wipes it.
@@ -204,19 +237,24 @@ func memberDiskBytes(ctx context.Context, member string) (int64, error) {
 // /dev/md/data and records the new member count.
 func Cmd(ctx context.Context, w io.Writer, actor string, jsonOut bool, args []string) error {
 	if len(args) == 0 || args[0] == "status" {
-		b, err := os.ReadFile("/proc/mdstat")
+		b, err := os.ReadFile(mdstatPath)
 		if err != nil {
 			return err
 		}
-		dev, members := MarkerMembers()
+		dev, members := DataArray()
 		if jsonOut {
 			return json.NewEncoder(w).Encode(map[string]any{"arrays": ParseMdstat(string(b)), "device": dev, "members": members})
 		}
 		for _, a := range ParseMdstat(string(b)) {
 			fmt.Fprintf(w, "%s %s %d/%d [%s] %s %s\n", a.Name, a.Level, a.Active, a.Slots, a.Status, strings.Join(a.Members, ","), a.Resync)
 		}
-		if members == 0 {
+		switch {
+		case dev == "":
 			fmt.Fprintln(w, "keine Datenplatte: /mnt/data liegt auf der OS-Platte")
+		case members == 0:
+			fmt.Fprintf(w, "Datenplatte: %s (/mnt/data; nicht von Laib angelegt, kein %s)\n", dev, dataDiskMarker)
+		default:
+			fmt.Fprintf(w, "Datenplatte: %s (/mnt/data, %d Platten gewollt)\n", dev, members)
 		}
 		return nil
 	}
@@ -232,22 +270,26 @@ func Cmd(ctx context.Context, w io.Writer, actor string, jsonOut bool, args []st
 		return errors.New("disk add: a human runs this (it wipes the device)")
 	}
 	dev := args[1]
-	dataDev, members := MarkerMembers()
-	if dataDev == "" || dataDev == "none" {
-		return errors.New("no data RAID on this box (/etc/laib/data-disk)")
+	dataDev, members := DataArray()
+	if dataDev == "" {
+		return errors.New("no data RAID on this box: /mnt/data is not on an md array")
 	}
 	if members >= 2 {
 		return errors.New("the array already has two members")
 	}
-	b, err := os.ReadFile("/proc/mdstat")
+	b, err := os.ReadFile(mdstatPath)
 	if err != nil {
 		return err
 	}
 	arrays := ParseMdstat(string(b))
-	if len(arrays) == 0 || len(arrays[0].Members) == 0 {
+	i := slices.IndexFunc(arrays, func(a Array) bool { return a.Name == mdName(dataDev) })
+	if i < 0 || len(arrays[i].Members) == 0 {
 		return errors.New("no active array in /proc/mdstat")
 	}
-	minBytes, err := memberDiskBytes(ctx, arrays[0].Members[0])
+	if arrays[i].Active >= arrays[i].Slots {
+		return errors.New("the array has all its members")
+	}
+	minBytes, err := memberDiskBytes(ctx, arrays[i].Members[0])
 	if err != nil {
 		return err
 	}
@@ -277,12 +319,12 @@ func Cmd(ctx context.Context, w io.Writer, actor string, jsonOut bool, args []st
 	if out, err := Run(ctx, "sudo", "mdadm", "--manage", dataDev, "--add", part); err != nil {
 		return fmt.Errorf("mdadm --add: %v: %s", err, out)
 	}
-	rec, err := os.ReadFile(dataDiskMarker)
-	if err != nil {
-		return err
-	}
-	if out, err := Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
-		return fmt.Errorf("marker: %v: %s", err, out)
+	// an array Laib did not create keeps having no record: the boot script
+	// would take one without the array's UUID for its own (#488)
+	if rec, err := os.ReadFile(dataDiskMarker); err == nil {
+		if out, err := Run(ctx, "sudo", "sh", "-c", `printf '%s\n' "$0" > `+dataDiskMarker, withMembers(string(rec), 2)); err != nil {
+			return fmt.Errorf("marker: %v: %s", err, out)
+		}
 	}
 	fmt.Fprintf(w, "%s joined %s; it syncs now — laib disk status shows the progress\n", part, dataDev)
 	return nil
