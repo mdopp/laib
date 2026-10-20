@@ -16,7 +16,12 @@ rewritten or dropped. Here the engine sees each message before the model:
   a chat persona's FIGUR) goes into the user turn. Inside a menu level or the
   games (JOSHUA/GERÄTE>, JOSHUA/SPIELE>) the answer starts with the prompt
   line; an ordinary answer at the top (JOSHUA>, a chat persona's HAL>) has
-  none (#510: "JOSHUA>" above "Bambi ist aus." was out of place).
+  none (#510: "JOSHUA>" above "Bambi ist aus." was out of place). With
+  nothing to route (any tool, the top level, no FIGUR) the plugin adds no
+  context: the user turn is the person's words alone (#520).
+- Hermes' steer frame ([OUT-OF-BAND USER MESSAGE …]) never reaches a person:
+  the model copied it from Hermes' system prompt (#520), and the plugin
+  takes it out of every answer.
 
 Without the engine (it does not answer) the turn is Hermes' as usual. A
 scheduled job is no person and is left alone. Stdlib only.
@@ -90,6 +95,11 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
             prompt = ""   # the terminal prompt belongs to menus and games, not to a free answer (#510)
         with _lock:
             _turns[key] = ("weiter", prompt, session)
+        if not prompt and tool in ("", "-") and not r.get("FIGUR"):
+            # #520: nothing to route, so the user turn stays the person's words alone. With a "Persona: …"
+            # paragraph under "Bambi aus" the turn was a message plus an instruction, and Qwen without
+            # thinking answered with Hermes' steer frame around the words instead of switching.
+            return None
         ctx = "Persona: Beantworte diese Nachricht selbst, %s." % where
         if prompt:
             ctx += " Beginne die Antwort mit der Zeile " + prompt
@@ -106,13 +116,27 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
     return {"context": "Persona: Der Person wird ein Bildschirm gezeigt, den Laib selbst schreibt. Antworte nur mit OK."}
 
 
+# Hermes' mid-turn steer marker (agent/prompt_builder.py STEER_MARKER_OPEN/CLOSE, v0.22.2). Hermes builds it
+# only for a /steer into a running turn, never for an API or chat message; its system prompt describes it,
+# and the model sometimes wrote it around the person's words (#520). Nobody is meant to read it.
+_FRAME = re.compile(r"[ \t]*\[/?OUT-OF-BAND USER MESSAGE[^\]\n]*\][ \t]*\n?")
+
+
+def _unframed(text):
+    """the text without Hermes' steer frame, or None when it had none (or carries laib-nutzung's mark:
+    Hermes takes the first plugin's text, and laib-nutzung must strip that one)"""
+    if not isinstance(text, str) or "OUT-OF-BAND USER MESSAGE" not in text or "[unbeantwortet]" in text:
+        return None
+    return _FRAME.sub("", text).strip()
+
+
 def on_output(response_text=None, session_id=None, turn_id=None, **_):
     with _lock:
         turn = _turns.pop(turn_id or session_id, None)
         if len(_turns) > 1000:
             _turns.clear()
     if turn is None:
-        return None
+        return _unframed(response_text)
     kind, payload, session = turn
     if kind == "screen":
         return _block(payload)
@@ -127,12 +151,15 @@ def on_output(response_text=None, session_id=None, turn_id=None, **_):
     # laib-nutzung's mark: Hermes takes the first plugin's text, and that one strips the mark
     if "[unbeantwortet]" in text:
         return None
+    clean = _unframed(text)
+    changed = clean is not None
+    text = clean if changed else text
     if not payload:
         # a free answer: a prompt line the model copied from earlier turns goes (#510)
         bare = re.sub(r"^\s*[A-ZÄÖÜ]+(/[A-ZÄÖÜ]+)*>[ \t]*\n+", "", text, count=1)
-        return bare if bare != text else None
+        return bare if bare != text or changed else None
     if text.lstrip().startswith(payload):
-        return None
+        return text if changed else None
     return payload + "\n" + text
 
 
