@@ -3,9 +3,12 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -26,15 +29,17 @@ func fakeLaib(t *testing.T, calls *[]string) *httptest.Server {
 		text, isErr := "", false
 		switch req.Params.Name {
 		case "laib_inbox":
-			text = `[{"id":17,"actor":"bote","reason":"paperless aus dem Internet erreichbar machen","tier":"apply","status":"open","class":"human","reasons":["macht paperless aus dem Internet erreichbar (docs.box.test)"],"files":["services/paperless/laib.yml"]}]`
+			text = `[{"id":17,"actor":"bote","reason":"paperless aus dem Internet erreichbar machen","tier":"apply","status":"open","class":"human","reasons":["macht paperless aus dem Internet erreichbar (docs.box.test)"],"files":["services/paperless/laib.yml"]},
+			         {"id":20,"actor":"ops","reason":"whoami auf v1.12","tier":"apply","status":"open","class":"template-update","card":{"summary":"whoami bekommt ein neues Image"}},
+			         {"id":21,"actor":"ops","reason":"paperless entfernen","tier":"apply","status":"open","class":"remove","card":{"summary":"Paperless wird entfernt"}}]`
 		case "laib_approve":
-			if req.Params.Args["args"] == "17" {
-				text = "approved #17, grün"
+			if a := req.Params.Args["args"]; a == "17" || a == "20" || a == "21" {
+				text = "approved #" + a + ", grün"
 			} else {
 				text, isErr = "no such proposal", true
 			}
 		case "laib_reject":
-			text = "rejected #17"
+			text = "rejected #" + req.Params.Args["args"]
 		case "laib_note":
 			text = "notiert"
 		default:
@@ -44,10 +49,18 @@ func fakeLaib(t *testing.T, calls *[]string) *httptest.Server {
 	}))
 }
 
-type sends struct{ to, text []string }
+type sends struct {
+	to, text []string
+	closed   []string
+}
 
 func (s *sends) Send(ctx context.Context, to, text string) error {
 	s.to, s.text = append(s.to, to), append(s.text, text)
+	return nil
+}
+
+func (s *sends) ClosePoll(ctx context.Context, to string, ts int64) error {
+	s.closed = append(s.closed, fmt.Sprintf("%s %d", to, ts))
 	return nil
 }
 
@@ -130,5 +143,112 @@ func TestTheCardSendsWhatOnlyTheInboxDecidesToTheInbox(t *testing.T) {
 	update := &proposal{ID: 19, Class: "template-update"}
 	if s := cardText(update); !strings.Contains(s, "gib #19 frei") {
 		t.Errorf("an update card must offer the chat's verdict: %q", s)
+	}
+}
+
+// #509: a vote on bote-notify's poll, or a 👍/👎 on it, decides like "gib #N
+// frei": only the admin's number, only on a poll of the Bote's that
+// umfragen.json knows, once, and never what only the Inbox may decide.
+func TestAPollVoteDecidesLikeTheWordsAndOnlyOnce(t *testing.T) {
+	var calls []string
+	lb := fakeLaib(t, &calls)
+	defer lb.Close()
+	polls := filepath.Join(t.TempDir(), "umfragen.json")
+	os.WriteFile(polls, []byte(`{"1792533068939":{"vorschlag":20},"1792533068950":{"vorschlag":21},"1792533068960":{"vorschlag":20}}`), 0o600)
+	out := &sends{}
+	const admin, bote = "+4915100000001", "+4915100000009"
+	r := New(Config{Admin: admin, Account: bote, Polls: polls, LaibURL: lb.URL, Token: "approver-token"}, out)
+	ctx := context.Background()
+	vote := func(from string, ts int64, author, choice string) Message {
+		return Message{Platform: "signal", From: from, Target: ts, TargetAuthor: author, Choice: choice}
+	}
+	approved := func() int { return strings.Count(strings.Join(calls, "\n"), "laib_approve") }
+
+	// a family member votes Freigeben: journaled, no effect, no answer
+	r.Handle(ctx, vote("+4915100000002", 1792533068939, bote, "frei"))
+	if approved() != 0 || len(out.text) != 0 || !strings.Contains(strings.Join(calls, "\n"), "laib_note") || !strings.Contains(strings.Join(calls, "\n"), "unbekannter Nummer") {
+		t.Fatalf("a foreign vote: %v / %v", calls, out.text)
+	}
+	// the admin's 👍 on a message the Bote did not poll, or on someone else's message with a known timestamp: Hermes' business
+	n := len(calls)
+	r.Handle(ctx, vote(admin, 1792533000000, bote, "frei"))
+	r.Handle(ctx, vote(admin, 1792533068939, admin, "frei"))
+	if len(calls) != n || len(out.text) != 0 {
+		t.Fatalf("a vote on an unknown message reached laib: %v / %v", calls[n:], out.text)
+	}
+	// Später: nothing decided, a short answer, the poll stays open
+	r.Handle(ctx, vote(admin, 1792533068939, bote, "später"))
+	if approved() != 0 || len(out.text) != 1 || !strings.Contains(out.text[0], "#20 bleibt offen") || len(out.closed) != 0 {
+		t.Fatalf("Später: %v / %v / %v", calls, out.text, out.closed)
+	}
+	// Freigeben: through laib with the approver token, one line back, the poll closed
+	r.Handle(ctx, vote(admin, 1792533068939, bote, "frei"))
+	if !strings.Contains(strings.Join(calls, "\n"), "laib_approve 20 as approver-token") {
+		t.Fatalf("the admin's vote did not reach laib: %v", calls)
+	}
+	if last := out.text[len(out.text)-1]; last != "Vorschlag #20 angewendet: whoami bekommt ein neues Image" || out.to[len(out.to)-1] != admin {
+		t.Fatalf("the answer: %q to %s", last, out.to[len(out.to)-1])
+	}
+	if len(out.closed) != 1 || out.closed[0] != admin+" 1792533068939" {
+		t.Fatalf("the poll is not closed: %v", out.closed)
+	}
+	// a second vote or a 👍 on the same poll: journaled, no effect
+	answers := len(out.text)
+	r.Handle(ctx, vote(admin, 1792533068939, bote, "frei"))
+	r.Handle(ctx, vote(admin, 1792533068939, bote, "ab"))
+	if approved() != 1 || strings.Contains(strings.Join(calls, "\n"), "laib_reject") || len(out.text) != answers || !strings.Contains(calls[len(calls)-1], "Doppelte Stimme") {
+		t.Fatalf("a duplicate vote had an effect: %v / %v", calls, out.text)
+	}
+	// a removal never gets decided by a vote, even on a poll in the file
+	r.Handle(ctx, vote(admin, 1792533068950, bote, "frei"))
+	if strings.Contains(strings.Join(calls, "\n"), "laib_approve 21") || !strings.Contains(out.text[len(out.text)-1], "nur in der Inbox") {
+		t.Fatalf("a destructive proposal was decided by a vote: %v / %v", calls, out.text)
+	}
+	// 👎 rejects
+	r.Handle(ctx, vote(admin, 1792533068960, bote, "ab"))
+	if !strings.Contains(strings.Join(calls, "\n"), "laib_reject 20 as approver-token") || out.text[len(out.text)-1] != "Vorschlag #20 abgelehnt." {
+		t.Fatalf("👎 did not reject: %v / %v", calls, out.text)
+	}
+}
+
+// signal-cli 0.14's events (#509, as seen on the Kraftwerk 2026-10-20).
+func TestParsePollVoteAndReaction(t *testing.T) {
+	env := func(dm string) []byte {
+		return []byte(`{"jsonrpc":"2.0","method":"receive","params":{"envelope":{"source":"+4915100000001","sourceNumber":"+4915100000001","timestamp":1792533099000,"dataMessage":` + dm + `},"account":"+4915100000009"}}`)
+	}
+	for _, c := range []struct {
+		dm, choice string
+		ok         bool
+	}{
+		{`{"timestamp":1,"pollVote":{"author":"+4915100000009","authorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"optionIndexes":[0],"voteCount":1}}`, "frei", true},
+		{`{"timestamp":1,"pollVote":{"authorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"optionIndexes":[2],"voteCount":2}}`, "später", true},
+		{`{"timestamp":1,"pollVote":{"authorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"optionIndexes":[],"voteCount":3}}`, "", false},
+		{`{"timestamp":1,"reaction":{"emoji":"👍","targetAuthorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"isRemove":false}}`, "frei", true},
+		{`{"timestamp":1,"reaction":{"emoji":"👎🏽","targetAuthorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"isRemove":false}}`, "ab", true},
+		{`{"timestamp":1,"reaction":{"emoji":"👍","targetAuthorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"isRemove":true}}`, "", false},
+		{`{"timestamp":1,"reaction":{"emoji":"❤️","targetAuthorNumber":"+4915100000009","targetSentTimestamp":1792533068939,"isRemove":false}}`, "", false},
+	} {
+		m, ok := ParseEvent(env(c.dm))
+		if ok != c.ok || ok && (m.Choice != c.choice || m.Target != 1792533068939 || m.TargetAuthor != "+4915100000009" || m.From != "+4915100000001" || m.Text != "") {
+			t.Errorf("%s: %+v %v", c.dm, m, ok)
+		}
+	}
+}
+
+// #509: the poll is closed with signal-cli's sendPollTerminate, to the admin, by its timestamp.
+func TestClosePollIsSendPollTerminate(t *testing.T) {
+	var got map[string]any
+	d := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"timestamp":1792533099999}}`))
+	}))
+	defer d.Close()
+	out := Senders{Signal: &SignalSender{URL: d.URL, Account: "+4915100000009"}}
+	if err := out.ClosePoll(context.Background(), "+4915100000001", 1792533068939); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := got["params"].(map[string]any)
+	if got["method"] != "sendPollTerminate" || p["account"] != "+4915100000009" || fmt.Sprint(p["recipient"]) != "[+4915100000001]" || p["pollTimestamp"] != float64(1792533068939) {
+		t.Fatalf("sent %v", got)
 	}
 }

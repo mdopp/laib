@@ -44,6 +44,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 		SignalURL: env("SIGNAL_HTTP_URL", "http://127.0.0.1:8080"),
 		LaibURL:   env("LAIB_MCP_URL", "http://host.containers.internal:5900/mcp"),
 		Token:     getenv("LAIB_TOKEN"),
+		Polls:     env("POLLS_FILE", "/umfragen/umfragen.json"), // bote-notify's polls (#509)
 	}
 	switch {
 	case cfg.Token == "" || cfg.Admin == "" && cfg.AdminMXID == "" && cfg.AdminDiscord == "":

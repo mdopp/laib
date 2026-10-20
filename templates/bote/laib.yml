@@ -67,6 +67,8 @@ data:
   - path: ${DATA_DIR}/bote/persona   # the persona engine's list of the Bote's tools, written by post-deploy
   - path: ${DATA_DIR}/bote/notify    # bote-notify's .env: the platform credentials only, written by post-deploy (#177)
     backup: false
+  - path: ${DATA_DIR}/bote/umfragen  # umfragen.json: bote-notify's poll timestamps → proposals, the relay reads it (#509)
+    backup: false
 health:
   http: http://127.0.0.1:8645/health # bote-notify, in every Bote; with Signal it asks signal-cli's daemon /api/v1/check (#184, #469)
 ports:

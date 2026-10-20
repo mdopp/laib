@@ -11,6 +11,12 @@ fails, within one deadline under Home Assistant's 60 s. Size-capped,
 rate-limited; the log names the person, the platform, the exit code and a
 short prefix of the text, never the target, Hermes' output or the whole
 text.
+
+A proposal the chat may decide (#509) comes with {"vorschlag": N, "frage":
+"…"}: when the message went out on Signal, a poll Freigeben / Ablehnen /
+Später follows it (signal-cli's sendPollCreate), and its timestamp is kept
+with N in umfragen.json, the only Bote messages the relay counts a vote or
+a 👍/👎 on. The text says "gib #N frei" too, so a failed poll loses nothing.
 Stdlib only: it runs in the stock Hermes image (templates/bote)."""
 import hmac, json, os, shutil, subprocess, sys, threading, time, urllib.request
 from dataclasses import dataclass, field
@@ -31,6 +37,8 @@ class Config:
     channel_timeout: float = 20            # one channel's hermes send
     deadline: float = 50                   # all channels together; HA's rest_command waits 60 s
     log: object = print
+    polls: str = "/umfragen/umfragen.json"  # timestamp → proposal, read by the relay (#509)
+    keep_polls: int = 50
 
 
 class Limiter:
@@ -88,6 +96,55 @@ def deliver(cfg, channels, text):
     return None
 
 
+def signal_env(cfg):
+    """SIGNAL_HTTP_URL and SIGNAL_ACCOUNT from the platform .env; empty without Signal."""
+    env = {}
+    try:
+        with open(os.path.join(cfg.hermes_src, ".env")) as f:
+            for l in f:
+                k, _, v = l.strip().partition("=")
+                if k in ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT"):
+                    env[k] = v
+    except OSError:
+        pass
+    return env.get("SIGNAL_HTTP_URL", ""), env.get("SIGNAL_ACCOUNT", "")
+
+
+_polls_lock = threading.Lock()
+
+
+def poll(cfg, number, vorschlag, frage):
+    """A poll after a proposal's message on Signal (#509); its timestamp → the
+    proposal in cfg.polls. False when there is no Signal or the daemon refused."""
+    url, account = signal_env(cfg)
+    if not url or not account:
+        return False
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "sendPollCreate", "params": {
+        "account": account, "recipient": [number], "question": frage[:200],
+        "option": ["Freigeben", "Ablehnen", "Später"], "noMulti": True}}).encode()
+    try:
+        req = urllib.request.Request(url.rstrip("/") + "/api/v1/rpc", data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ts = int(json.loads(r.read())["result"]["timestamp"])
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        cfg.log(f"umfrage: #{vorschlag} nicht gesendet: {type(e).__name__}")
+        return False
+    with _polls_lock:
+        try:
+            with open(cfg.polls) as f:
+                polls = json.load(f)
+        except (OSError, ValueError):
+            polls = {}
+        polls[str(ts)] = {"vorschlag": vorschlag}
+        polls = dict(sorted(polls.items(), key=lambda kv: int(kv[0]))[-cfg.keep_polls:])
+        tmp = cfg.polls + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(polls, f)
+        os.replace(tmp, cfg.polls)
+    cfg.log(f"umfrage: #{vorschlag} gesendet")
+    return True
+
+
 class Handler(BaseHTTPRequestHandler):
     timeout = 10  # seconds a client may take to send its request
 
@@ -104,12 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         (SIGNAL_HTTP_URL in its .env) signal-cli's daemon must answer /api/v1/check too (#469)."""
         if self.path != "/health":
             return self.reply(404, {"fehler": "unbekannter Pfad"})
-        url = ""
-        try:
-            with open(os.path.join(self.server.cfg.hermes_src, ".env")) as f:
-                url = next((l.split("=", 1)[1].strip() for l in f if l.startswith("SIGNAL_HTTP_URL=")), "")
-        except OSError:
-            pass
+        url = signal_env(self.server.cfg)[0]
         if url:
             try:
                 urllib.request.urlopen(url.rstrip("/") + "/api/v1/check", timeout=5).close()
@@ -158,7 +210,11 @@ class Handler(BaseHTTPRequestHandler):
         cfg.log(f"mitteilung: an={person} kanal={kanal or '-'} {'ok' if ch else 'fehlgeschlagen'} text={text[:12]!r}…")
         if not ch:
             return self.reply(502, {"fehler": "kein Kanal hat die Mitteilung angenommen"})
-        return self.reply(200, {"ok": True, "kanal": kanal})
+        out = {"ok": True, "kanal": kanal}
+        vorschlag, frage = msg.get("vorschlag"), msg.get("frage")
+        if kanal == "signal" and type(vorschlag) is int and isinstance(frage, str) and frage.strip():
+            out["umfrage"] = poll(cfg, ch.split(":", 1)[1], vorschlag, frage.strip())
+        return self.reply(200, out)
 
     def log_message(self, *a):
         pass  # one line per message from do_POST, no request lines
@@ -173,7 +229,7 @@ def server(cfg, addr):
 def main():
     host, _, port = os.environ.get("NOTIFY_LISTEN", "0.0.0.0:8645").rpartition(":")
     cfg = Config(token=os.environ.get("NOTIFY_TOKEN", ""), hermes_src=os.environ.get("NOTIFY_HERMES", "/hermes"),
-                 log=lambda m: print(m, flush=True))
+                 polls=os.environ.get("NOTIFY_POLLS", "/umfragen/umfragen.json"), log=lambda m: print(m, flush=True))
     if not cfg.token:
         print("bote-notify: NOTIFY_TOKEN ist leer, jede Mitteilung wird abgelehnt", file=sys.stderr, flush=True)
     print(f"bote-notify: {host}:{port}", flush=True)

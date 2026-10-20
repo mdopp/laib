@@ -20,6 +20,8 @@ Environment=ADMIN_DISCORD_CHANNEL=${ADMIN_DISCORD_CHANNEL}
 Environment=DISCORD_BOT_TOKEN=${DISCORD_TOKEN}
 Environment=LAIB_MCP_URL=${LAIB_MCP_URL}
 Environment=LAIB_TOKEN=${APPROVER_TOKEN}
+# a vote or 👍/👎 counts only on a poll bote-notify sent and kept here (#509)
+Volume=${DATA_DIR}/bote/umfragen:/umfragen:ro,z
 AutoUpdate=registry
 
 [Service]

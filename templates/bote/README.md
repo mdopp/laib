@@ -129,7 +129,13 @@ Without a number at all, Discord or Matrix work.
    stream and from the admin's Matrix room, acted on only when the sender
    is `ADMIN_NUMBER` on Signal or `ADMIN_MXID` in `ADMIN_ROOM` (#184),
    answered with the proposal's consequence. Anyone else trying it gets a
-   journal line and no reply; Telegram never approves. The Automat's writes and deletes execute only with
+   journal line and no reply; Telegram never approves. On Signal a
+   proposal the chat may decide also comes as a poll (Freigeben /
+   Ablehnen / Später, #509): bote-notify keeps its timestamp in
+   `bote/umfragen/umfragen.json`, and the relay counts the admin's vote,
+   or a 👍/👎 on the poll, by the same rules, once, then closes the poll.
+   Destructive proposals, removals and class `human` get no poll, only the
+   Inbox link with the second factor. The Automat's writes and deletes execute only with
    the four-digit code its first answer names; deleted automations are
    kept under `bote/automat/geloescht` for `automation_wiederherstellen`.
 3. Pairing: the first message from an unknown number yields a pairing code;

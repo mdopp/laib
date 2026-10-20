@@ -5,12 +5,14 @@
 // the admin's number or Matrix ID and only to "gib #N frei" / "lehne #N
 // ab", shows the proposal's consequence back, and calls Laib with a token
 // that can do nothing but decide. On Discord it reads the owner's DM with
-// the bot itself (#463). Telegram never decides (ADR 0016 §3).
+// the bot itself (#463). Telegram never decides (ADR 0016 §3). On Signal a
+// vote on bote-notify's poll or a 👍/👎 on it decides the same way (#509).
 package relay
 
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,7 +21,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,12 +39,17 @@ type Config struct {
 	Token                        string // the approver hand's token
 	SignalURL                    string // http://127.0.0.1:8080 — signal-cli daemon --http
 	Account                      string // the Bote's own number
+	Polls                        string // bote-notify's umfragen.json: poll timestamp → proposal (#509)
 }
 
 // Message is one incoming message. Platform is "signal", "matrix" or
 // "discord" (#463); any other, or none, never decides.
 type Message struct {
 	Platform, From, Room, Text string
+	// a vote on a poll or a reaction (#509): the message it targets, whose
+	// it is, and "frei", "ab" or "später"; Target 0 is a plain message
+	Target               int64
+	TargetAuthor, Choice string
 }
 
 // replyTo: a Matrix answer goes to the room, a Signal one to the number.
@@ -90,16 +99,30 @@ func (r *Relay) admin(m Message) bool {
 	return false // Telegram and anything else never decide
 }
 
+// PollCloser ends a Signal poll after its decision (#509).
+type PollCloser interface {
+	ClosePoll(ctx context.Context, to string, ts int64) error
+}
+
+// ClosePoll ends a poll on Signal.
+func (s Senders) ClosePoll(ctx context.Context, to string, ts int64) error {
+	if pc, ok := s.Signal.(PollCloser); ok {
+		return pc.ClosePoll(ctx, to, ts)
+	}
+	return errors.New("no Signal sender")
+}
+
 // Relay handles messages.
 type Relay struct {
-	cfg Config
-	out Sender
-	h   *http.Client
+	cfg     Config
+	out     Sender
+	h       *http.Client
+	decided map[int64]bool // polls already decided; only the Signal loop touches it (#509)
 }
 
 // New builds a relay.
 func New(cfg Config, out Sender) *Relay {
-	return &Relay{cfg: cfg, out: out, h: &http.Client{Timeout: 60 * time.Second}}
+	return &Relay{cfg: cfg, out: out, h: &http.Client{Timeout: 60 * time.Second}, decided: map[int64]bool{}}
 }
 
 var verdict = regexp.MustCompile(`(?i)^\s*(gib|lehne)\s+#?(\d+)\s+(frei|ab)\s*[.!]?\s*$`)
@@ -167,6 +190,12 @@ type proposal struct {
 	} `json:"card"`
 }
 
+// inboxOnly: a destroy, a removal or what only a human may allow is never
+// decided in the chat (#441), neither by words nor by a poll (#509).
+func (p *proposal) inboxOnly() bool {
+	return p.Tier == "destroy" || p.Class == "human" || p.Class == "remove"
+}
+
 // cardText renders the decision card for a chat (#58).
 func cardText(p *proposal) string {
 	var b strings.Builder
@@ -175,7 +204,7 @@ func cardText(p *proposal) string {
 		fmt.Fprintf(&b, "· %s\n", i)
 	}
 	fmt.Fprintf(&b, "%s\n%s\n", p.Card.Reversible, p.Card.Why)
-	if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" { // not in the chat (#441)
+	if p.inboxOnly() {
 		b.WriteString("Das entscheidest du nur in der Inbox, mit dem zweiten Faktor.")
 	} else if p.Card.Primary == "Später" {
 		fmt.Fprintf(&b, "Das kann warten — nichts tun ist sicher. Freigeben: „gib #%d frei“, ablehnen: „lehne #%d ab“.", p.ID, p.ID)
@@ -189,6 +218,10 @@ func cardText(p *proposal) string {
 // else; not a verdict → nothing; a verdict → the proposal's consequence is
 // looked up, Laib decides, the admin gets the outcome.
 func (r *Relay) Handle(ctx context.Context, m Message) {
+	if m.Target != 0 {
+		r.vote(ctx, m)
+		return
+	}
 	to := m.replyTo()
 	if sm := show.FindStringSubmatch(m.Text); sm != nil && r.admin(m) {
 		if p := r.open(ctx, sm[1]); p != nil {
@@ -203,12 +236,7 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 		return // plain chat is Hermes' business
 	}
 	if !r.admin(m) {
-		who := "unbekannter Nummer"
-		if m.Platform != "signal" {
-			who = "fremdem Absender (" + strings.TrimSpace(m.Platform+" "+m.Room) + ")"
-		}
-		clean := func(s string) string { return strings.ReplaceAll(s, "\"", "'") }
-		r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Freigabe von %s ignoriert: %s schrieb '%s'\"", clean(who), clean(m.From), clean(match[0])))
+		r.ignored(ctx, m, "schrieb '"+match[0]+"'")
 		return
 	}
 	id := match[2]
@@ -218,7 +246,32 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s ist nicht offen — nichts getan. `laib inbox` zeigt die offenen.", id))
 		return
 	}
-	what := p.Card.Summary
+	what, out, err := r.decide(ctx, p, approve)
+	switch {
+	case err != nil:
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s (%s): nicht %s — %v", id, what, map[bool]string{true: "freigegeben", false: "abgelehnt"}[approve], err))
+	case approve:
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s freigegeben: %s\n%s", id, what, tail(out, 300)))
+	default:
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s abgelehnt: %s", id, what))
+	}
+}
+
+// ignored journals what someone not the admin tried, and does nothing else.
+func (r *Relay) ignored(ctx context.Context, m Message, did string) {
+	who := "unbekannter Nummer"
+	if m.Platform != "signal" {
+		who = "fremdem Absender (" + strings.TrimSpace(m.Platform+" "+m.Room) + ")"
+	}
+	clean := func(s string) string { return strings.ReplaceAll(s, "\"", "'") }
+	r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Freigabe von %s ignoriert: %s %s\"", clean(who), clean(m.From), clean(did)))
+}
+
+// decide is the one verdict both the words and the poll reach: Laib
+// approves or rejects with the approver token, and its own gate refuses
+// what only the Inbox may allow (#48). It returns what the proposal does.
+func (r *Relay) decide(ctx context.Context, p *proposal, approve bool) (what, out string, err error) {
+	what = p.Card.Summary
 	if what == "" {
 		what = p.Reason
 	}
@@ -229,15 +282,74 @@ func (r *Relay) Handle(ctx context.Context, m Message) {
 	if !approve {
 		verb = "reject"
 	}
-	out, err := r.laib(ctx, verb, id)
-	switch {
-	case err != nil:
-		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s (%s): nicht %s — %v", id, what, map[bool]string{true: "freigegeben", false: "abgelehnt"}[approve], err))
-	case approve:
-		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s freigegeben: %s\n%s", id, what, tail(out, 300)))
-	default:
-		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%s abgelehnt: %s", id, what))
+	out, err = r.laib(ctx, verb, fmt.Sprint(p.ID))
+	return what, out, err
+}
+
+// vote is a vote on a poll or a 👍/👎 (#509). It counts only from the admin,
+// only on a poll bote-notify sent (the Bote's own message, its timestamp in
+// umfragen.json), once per poll, and only for what the chat may decide;
+// anything else from the admin is Hermes' business, and anyone else's is
+// journaled.
+func (r *Relay) vote(ctx context.Context, m Message) {
+	if !r.admin(m) {
+		r.ignored(ctx, m, fmt.Sprintf("stimmte '%s' auf Nachricht %d", m.Choice, m.Target))
+		return
 	}
+	id := r.pollFor(m)
+	if id == 0 {
+		return // a reaction on any other message
+	}
+	to := m.replyTo()
+	if r.decided[m.Target] {
+		r.laib(ctx, "note", fmt.Sprintf("--kind watch \"Doppelte Stimme '%s' zu Vorschlag #%d ignoriert: schon entschieden\"", m.Choice, id))
+		return
+	}
+	if m.Choice == "später" {
+		r.out.Send(ctx, to, fmt.Sprintf("Gut, Vorschlag #%d bleibt offen.", id))
+		return
+	}
+	p := r.open(ctx, fmt.Sprint(id))
+	switch {
+	case p == nil:
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%d ist nicht mehr offen — nichts getan.", id))
+	case p.inboxOnly():
+		r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%d entscheidest du nur in der Inbox, mit dem zweiten Faktor — nichts getan.", id))
+		return
+	default:
+		what, _, err := r.decide(ctx, p, m.Choice == "frei")
+		switch {
+		case err != nil: // the poll stays open: the admin may vote again
+			r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%d: Fehler — %v", id, err))
+			return
+		case m.Choice == "frei":
+			r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%d angewendet: %s", id, what))
+		default:
+			r.out.Send(ctx, to, fmt.Sprintf("Vorschlag #%d abgelehnt.", id))
+		}
+	}
+	r.decided[m.Target] = true
+	if pc, ok := r.out.(PollCloser); ok {
+		if err := pc.ClosePoll(ctx, to, m.Target); err != nil {
+			log.Printf("relay: poll %d not closed: %v", m.Target, err)
+		}
+	}
+}
+
+// pollFor: the proposal a poll of the Bote's stands for, 0 for any other message.
+func (r *Relay) pollFor(m Message) int {
+	if r.cfg.Polls == "" || m.TargetAuthor != r.cfg.Account {
+		return 0
+	}
+	b, err := os.ReadFile(r.cfg.Polls)
+	if err != nil {
+		return 0
+	}
+	var polls map[string]struct {
+		Vorschlag int `json:"vorschlag"`
+	}
+	json.Unmarshal(b, &polls)
+	return polls[strconv.FormatInt(m.Target, 10)].Vorschlag
 }
 
 // open looks one open proposal up through laib's inbox.
@@ -268,8 +380,15 @@ func tail(s string, n int) string {
 
 // ParseEvent reads a signal-cli daemon event (a JSON-RPC "receive"
 // notification) into a Message; receipts, typing and sync events are not
-// messages.
+// messages. A poll vote (options 0 Freigeben, 1 Ablehnen, 2 Später) and a
+// 👍/👎 reaction carry the message they target (#509); a withdrawn vote or
+// reaction and any other emoji are nothing.
 func ParseEvent(data []byte) (Message, bool) {
+	type target struct {
+		AuthorNumber        string `json:"authorNumber"`
+		TargetAuthorNumber  string `json:"targetAuthorNumber"`
+		TargetSentTimestamp int64  `json:"targetSentTimestamp"`
+	}
 	var ev struct {
 		Method string `json:"method"`
 		Params struct {
@@ -277,7 +396,16 @@ func ParseEvent(data []byte) (Message, bool) {
 				Source       string `json:"source"`
 				SourceNumber string `json:"sourceNumber"`
 				DataMessage  *struct {
-					Message string `json:"message"`
+					Message  string `json:"message"`
+					PollVote *struct {
+						target
+						OptionIndexes []int `json:"optionIndexes"`
+					} `json:"pollVote"`
+					Reaction *struct {
+						target
+						Emoji    string `json:"emoji"`
+						IsRemove bool   `json:"isRemove"`
+					} `json:"reaction"`
 				} `json:"dataMessage"`
 			} `json:"envelope"`
 		} `json:"params"`
@@ -285,15 +413,24 @@ func ParseEvent(data []byte) (Message, bool) {
 	if err := json.Unmarshal(data, &ev); err != nil || ev.Method != "receive" || ev.Params.Envelope.DataMessage == nil {
 		return Message{}, false
 	}
-	from := ev.Params.Envelope.SourceNumber
-	if from == "" {
-		from = ev.Params.Envelope.Source
+	m := Message{Platform: "signal", From: cmp.Or(ev.Params.Envelope.SourceNumber, ev.Params.Envelope.Source)}
+	dm := ev.Params.Envelope.DataMessage
+	switch {
+	case dm.PollVote != nil && len(dm.PollVote.OptionIndexes) == 1 && dm.PollVote.OptionIndexes[0] >= 0 && dm.PollVote.OptionIndexes[0] <= 2:
+		m.Target, m.TargetAuthor = dm.PollVote.TargetSentTimestamp, dm.PollVote.AuthorNumber // the poll's author
+		m.Choice = []string{"frei", "ab", "später"}[dm.PollVote.OptionIndexes[0]]
+	case dm.Reaction != nil && !dm.Reaction.IsRemove && (strings.HasPrefix(dm.Reaction.Emoji, "👍") || strings.HasPrefix(dm.Reaction.Emoji, "👎")):
+		m.Target, m.TargetAuthor = dm.Reaction.TargetSentTimestamp, dm.Reaction.TargetAuthorNumber
+		m.Choice = map[bool]string{true: "frei", false: "ab"}[strings.HasPrefix(dm.Reaction.Emoji, "👍")]
+	case dm.PollVote != nil || dm.Reaction != nil:
+		return Message{}, false
+	default:
+		m.Text = strings.TrimSpace(dm.Message)
 	}
-	text := strings.TrimSpace(ev.Params.Envelope.DataMessage.Message)
-	if from == "" || text == "" {
+	if m.From == "" || m.Text == "" && m.Target == 0 {
 		return Message{}, false
 	}
-	return Message{Platform: "signal", From: from, Text: text}, true
+	return m, true
 }
 
 // SignalSender sends through the daemon's JSON-RPC endpoint.
@@ -305,12 +442,20 @@ type SignalSender struct {
 
 // Send one text message.
 func (s *SignalSender) Send(ctx context.Context, to, text string) error {
+	return s.rpc(ctx, "send", map[string]any{"account": s.Account, "recipient": []string{to}, "message": text})
+}
+
+// ClosePoll ends a poll the Bote sent (#509).
+func (s *SignalSender) ClosePoll(ctx context.Context, to string, ts int64) error {
+	return s.rpc(ctx, "sendPollTerminate", map[string]any{"account": s.Account, "recipient": []string{to}, "pollTimestamp": ts})
+}
+
+func (s *SignalSender) rpc(ctx context.Context, method string, params map[string]any) error {
 	h := s.H
 	if h == nil {
 		h = &http.Client{Timeout: 30 * time.Second}
 	}
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "send",
-		"params": map[string]any{"account": s.Account, "recipient": []string{to}, "message": text}})
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(s.URL, "/")+"/api/v1/rpc", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -320,9 +465,18 @@ func (s *SignalSender) Send(ctx context.Context, to, text string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	var out struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out)
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("signal send: %s", resp.Status)
+		return fmt.Errorf("signal %s: %s", method, resp.Status)
+	}
+	if out.Error != nil {
+		return fmt.Errorf("signal %s: %s", method, out.Error.Message)
 	}
 	return nil
 }
