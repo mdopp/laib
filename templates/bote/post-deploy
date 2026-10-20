@@ -114,6 +114,10 @@ PLUGINS="plugins:
   enabled: [$ENABLED]"
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
+# Compression by token count (#502): Hermes drops a threshold_tokens that is no positive integer in
+# silence (agent/agent_init.py _positive_int), and the cap would be gone unseen; so the hook says no.
+COMPACT_TOKENS="${COMPACT_TOKENS:-32000}"
+case "$COMPACT_TOKENS" in ''|*[!0-9]*|0*) echo "bote: COMPACT_TOKENS ist keine positive ganze Zahl: $COMPACT_TOKENS" >&2; exit 1;; esac
 cat > "$H/config.yaml" <<YAML
 # rendered by laib post-deploy; do not edit by hand (ADR 0016)
 model:
@@ -176,6 +180,13 @@ platform_toolsets:
 tools:
   tool_search:
     enabled: "off"
+# Signal conversations run for days, and the box trail went into every call (#502). Hermes compresses
+# once a prompt passes the lower of this and its ratio threshold (75 % of the window below 512K,
+# agent/context_compressor.py). The gateway never runs Hermes' idle compaction (it resets the
+# idle clock each turn), so the count decides. 32000 by default: above the ~14k first prompt plus
+# Hermes' 10k lean tail, so a compressed conversation does not compress again on the next turn.
+compression:
+  threshold_tokens: ${COMPACT_TOKENS}
 non_interactive_hard_stop_enabled: true
 ${PLUGINS}
 YAML

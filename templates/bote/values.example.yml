@@ -20,6 +20,7 @@ ADMIN_DISCORD_ID: ""                      # the owner's Discord user id; needs D
 ADMIN_DISCORD_CHANNEL: ""                 # the owner's DM channel with the bot (Copy Channel ID on the DM)
 MODEL_NAME: qwen3.6-35b-a3b
 THINKING_MODEL: qwen3.6-35b-a3b
+COMPACT_TOKENS: 32000                     # Hermes compresses a conversation once a prompt passes this many tokens (#502, README "Speed")
 LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: http://host.containers.internal:8650/mcp/haushalt   # Haus's Haushalt (haus#11): calendar, notes, reminders; left out until Haus answers with the token (#170)

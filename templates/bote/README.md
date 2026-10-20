@@ -381,7 +381,17 @@ Not in the template: `compression.idle_compact_after_seconds`. Hermes acts on
 it in its TUI only; the gateway resets the idle clock at the start of every
 turn (`gateway/run.py` `_init_cached_agent_for_turn`), and a new agent starts
 it at "now", so for Signal, Matrix, Telegram, Discord and the API it never
-fires. Long conversations stay with Hermes' token-based compression.
+fires. Long conversations are compressed by token count instead:
+`compression.threshold_tokens` is `COMPACT_TOKENS` (values, default 32000).
+Hermes compresses once a prompt passes the lower of this and its own ratio
+threshold (75 % of the window below 512K tokens: ~24.5k on a 32k Gemma,
+~98k on the 131k Qwen). 32000 sits above the ~14k first prompt plus Hermes'
+10k lean tail, so a compressed conversation does not compress again on the
+next turn. To set it from the box: read a new conversation's first prompt
+in llama's log (`journalctl --user -u llama | grep "prompt eval time"`, the
+token count of the first call), keep `COMPACT_TOKENS` at least that plus
+12 000, then `laib apply bote`. A value that is no positive integer fails
+the hook (Hermes would drop it in silence).
 
 Not changed yet, to measure first: the persona round per message (#471
 redesigns it), a narrower tool list per MCP server, and the model's prompt

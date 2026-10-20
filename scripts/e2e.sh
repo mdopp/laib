@@ -322,6 +322,7 @@ t = open(sys.argv[1]).read()
 m = re.search(r"^tools:\n  tool_search:\n    enabled: (.*)$", t, re.M)
 assert m and m.group(1).strip().strip('"') == "off", m and m.group(1)
 PY
+grep -q "^  threshold_tokens: 32000$" "$HOOKDIR/bote/hermes/config.yaml" || fail "a long conversation is never compressed by token count (#502)"
 grep -qx "laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes" "$WORK/bote.out" || fail "Hermes' stock skills stay in the Bote (#502)"
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
