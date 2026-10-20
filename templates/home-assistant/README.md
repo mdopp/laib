@@ -3,8 +3,16 @@
 Home Assistant, Z-Wave JS UI and the Matter server on the host network.
 What belongs here from ADR 0015, configured in HA after install: the
 Wyoming integrations for Stimme (whisper, piper/Martin, openWakeWord), the
-CalDAV integration for Radicale, Music Assistant, MQTT for mosquitto, and
-Frage as the conversation agent fallback.
+CalDAV integration for Radicale, Music Assistant, MQTT for mosquitto. Frage
+as the conversation agent is not clicked together: post-deploy adds Home
+Assistant's Ollama integration on `FRAGE_URL` (default
+`http://127.0.0.1:8710`, Frage speaks Ollama's `/api/tags` and `/api/chat`)
+and its conversation agent "Frage" (model `frage`, no HA tools: HA's own
+intents answer commands), once Frage answers there (#491). HA 2026.10 has no
+built-in integration for an OpenAI server with its own URL; Solaris took the
+same path for `conversation.solaris`. Which Assist pipeline uses Frage stays
+the owner's choice. Without Frage the hook says so and stays green; `laib
+diag` lists „Frage als Gesprächsagent: fehlt“.
 
 ## The tokens Laib mints (#349)
 

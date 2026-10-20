@@ -167,8 +167,9 @@ func rolledBack(log string) bool {
 // a curl shim: three dummy binaries, laib-boot-check.sh (bootCheck; "" = a
 // release from before #368, without the asset) and a SHA256SUMS over the
 // real files. The script stops later (no laib to init);
-// what is under test is what it wrote under LAIB_ETC before that.
-func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
+// what is under test is what it wrote under LAIB_ETC before that. env is
+// more of the script's environment; rpm-ostree answers RPMOSTREE_JSON, if set.
+func runInstallTo(t *testing.T, bootCheck string, env ...string) (etc, out string) {
 	t.Helper()
 	root := t.TempDir()
 	bin, home, fx := filepath.Join(root, "bin"), filepath.Join(root, "home"), filepath.Join(root, "fx")
@@ -196,7 +197,8 @@ func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
 	shim(t, bin, "sudo", installBoxSudo)
 	shim(t, bin, "sysctl", "echo 0")
 	shim(t, bin, "restic", "echo 'restic 0.19.1'")
-	shim(t, bin, "systemctl", "exit 0")
+	shim(t, bin, "systemctl", `[ "$1 $2" != "--user enable" ] || exit 1`) // the end: laib's own unit, after the host's
+	shim(t, bin, "rpm-ostree", `[ -n "${RPMOSTREE_JSON:-}" ] && [ "$1 $2" = "status --json" ] || exit 1; echo "$RPMOSTREE_JSON"`)
 	shim(t, bin, "curl", `o=""; prev=""
 for a in "$@"; do [ "$prev" = -o ] && o=$a; prev=$a; done
 u="${@: -1}"
@@ -206,6 +208,7 @@ if [ -n "$o" ]; then cp "$f" "$o"; else cat "$f"; fi`)
 	cmd := exec.Command("bash", filepath.Join("..", "scripts", "install-box.sh"), "--domain", "vm.test", "--source", "http://src.test")
 	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHIM_LOG="+filepath.Join(root, "shim.log"), "FX="+fx, "HOME="+home,
 		"LAIB_ETC="+etc, "LAIB_QUADLET="+filepath.Join(home, ".config", "containers", "systemd"), "LAIB_RESTIC_BIN="+filepath.Join(root, "restic"), "LAIB_GH_TOKEN=")
+	cmd.Env = append(cmd.Env, env...)
 	b, _ := cmd.CombinedOutput()
 	return etc, string(b)
 }

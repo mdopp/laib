@@ -93,6 +93,7 @@ func (c Config) Summarise(ctx context.Context, q string, hits []Hit) (string, er
 	body, _ := json.Marshal(map[string]any{
 		"model":       c.ModelName,
 		"temperature": 0.2,
+		"max_tokens":  4096, // thinking included: a loop never holds a llama slot past this (#489)
 		"messages": []map[string]string{
 			{"role": "system", "content": system},
 			{"role": "user", "content": "Frage: " + q + "\n\nTreffer:\n" + b.String()},
@@ -146,8 +147,9 @@ func (c Config) Ask(ctx context.Context, q string) (Answer, error) {
 	return Answer{Question: q, Answer: text, Sources: hits, MS: time.Since(start).Milliseconds()}, nil
 }
 
-// Handler serves /ask (GET ?q= or POST {"q"}), /v1/chat/completions (the
-// last user message is the question) and /v1/models, /health.
+// Handler serves /ask (GET ?q= or POST {"q"}), /v1/chat/completions and
+// Ollama's /api/chat (the last user message is the question), /v1/models,
+// /api/tags, /api/version, /mcp and /health.
 func Handler(c Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, `{"frage":"bereit"}`) })
@@ -196,33 +198,78 @@ func Handler(c Config) http.Handler {
 		}},
 	}).Handler())
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Messages []struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
-			http.Error(w, "bad json", http.StatusBadRequest)
+		q, _, ok := lastQuestion(w, r)
+		if !ok {
 			return
-		}
-		q := ""
-		for i := len(in.Messages) - 1; i >= 0; i-- {
-			if in.Messages[i].Role == "user" {
-				q = in.Messages[i].Content
-				break
-			}
-		}
-		a, err := c.Ask(r.Context(), q)
-		text := a.Answer
-		if err != nil {
-			text = "Das konnte ich gerade nicht nachschlagen: " + err.Error()
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"id": "frage-" + fmt.Sprint(time.Now().UnixNano()), "object": "chat.completion", "model": "frage",
-			"choices": []map[string]any{{"index": 0, "finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": text}}},
+			"choices": []map[string]any{{"index": 0, "finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": c.spoken(r.Context(), q)}}},
 		})
 	})
+	// The Ollama API's few routes Home Assistant's Ollama integration uses
+	// (#491): HA has no conversation integration for an OpenAI server with
+	// its own URL, the Ollama one takes any URL — as Solaris's facade did.
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, `{"version":"frage"}`) })
+	mux.HandleFunc("GET /api/tags", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "frage", "model": "frage", "modified_at": "2026-01-01T00:00:00Z",
+			"size": 0, "digest": "frage", "details": map[string]string{"family": "frage", "format": "", "parameter_size": ""}}}})
+	})
+	mux.HandleFunc("POST /api/chat", func(w http.ResponseWriter, r *http.Request) {
+		q, stream, ok := lastQuestion(w, r)
+		if !ok {
+			return
+		}
+		chunk := func(text string, done bool) map[string]any {
+			m := map[string]any{"model": "frage", "created_at": time.Now().UTC().Format(time.RFC3339Nano), "message": map[string]string{"role": "assistant", "content": text}, "done": done}
+			if done {
+				m["done_reason"] = "stop"
+			}
+			return m
+		}
+		text := c.spoken(r.Context(), q)
+		if !stream {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(chunk(text, true))
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		enc := json.NewEncoder(w) // one object per line
+		enc.Encode(chunk(text, false))
+		enc.Encode(chunk("", true))
+	})
 	return mux
+}
+
+// spoken is Ask's answer, or a sentence about the failure: never silence on a speaker.
+func (c Config) spoken(ctx context.Context, q string) string {
+	a, err := c.Ask(ctx, q)
+	if err != nil {
+		return "Das konnte ich gerade nicht nachschlagen: " + err.Error()
+	}
+	return a.Answer
+}
+
+// lastQuestion reads a chat request (OpenAI's or Ollama's): the last user
+// message is the question; stream is Ollama's flag, true unless sent false.
+func lastQuestion(w http.ResponseWriter, r *http.Request) (q string, stream, ok bool) {
+	var in struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Stream *bool `json:"stream"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return "", false, false
+	}
+	for i := len(in.Messages) - 1; i >= 0; i-- {
+		if in.Messages[i].Role == "user" {
+			q = in.Messages[i].Content
+			break
+		}
+	}
+	return q, in.Stream == nil || *in.Stream, true
 }

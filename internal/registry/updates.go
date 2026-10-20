@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -31,6 +32,7 @@ type ImageUpdate struct {
 	Patch   string `json:"patch,omitempty"`
 	Minor   string `json:"minor,omitempty"`
 	Error   string `json:"error,omitempty"`
+	Paused  string `json:"paused,omitempty"` // the host row: the drop-in that pauses OS updates (#486)
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -104,6 +106,7 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 	}
 	if b, err := os.ReadFile(filepath.Join(st.Dir, "host", "image")); err == nil {
 		if u, ok := hostUpdate(ctx, string(b)); ok {
+			u.Paused = diag.OSPause()
 			out = append(out, u)
 		}
 	}
@@ -199,6 +202,19 @@ func hostUpdate(ctx context.Context, file string) (u ImageUpdate, ok bool) {
 	return u, true
 }
 
+// hostLine is the host row in words (#486): the pin by digest, whether its
+// tag moved, and a pause that holds every OS update.
+func hostLine(u ImageUpdate) string {
+	what := "aktuell (" + u.Key + ")"
+	if u.Patch != "" {
+		what = "neuer Digest von " + u.Key + ": " + u.Patch + " (der wöchentliche Lauf schlägt ihn vor)"
+	}
+	if u.Paused != "" {
+		what += "; OS-Updates pausiert durch " + u.Paused
+	}
+	return strings.TrimSpace(fmt.Sprintf("%-14s %s@%s  %s %s", u.Service, u.Image, u.Current, what, u.Error))
+}
+
 func Updates(ctx context.Context, env *cli.Env, _ []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -212,6 +228,10 @@ func Updates(ctx context.Context, env *cli.Env, _ []string) int {
 		return cli.Emit(env, ups)
 	}
 	for _, u := range ups {
+		if u.Service == "host" && u.Key != "" {
+			fmt.Fprintln(env.W(), hostLine(u))
+			continue
+		}
 		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)
 	}
 	return cli.ExitOK

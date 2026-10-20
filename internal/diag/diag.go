@@ -179,9 +179,12 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config (docs/MIGRATION.md Schritt 1)"})
 		}
 	}
-	// #368: an OS update Zincati staged waits for laib's reboot lock
-	if o, ok := OS(ctx); ok && o.Staged != "" && only == "" {
-		out = append(out, Finding{Severity: "info", Probe: "os-update", Detail: "OS-Update " + o.Staged + " bereitgestellt: der Neustart kommt im Fenster " + WindowText(st) + ", wenn alles grün und der laufende Stand bewiesen ist"})
+	// #368, #486: a staged OS update waits for laib's reboot lock; a pause, a
+	// uCore box without a pin, or Zincati asking a graph that has no update
+	if o, ok := OS(ctx); ok && only == "" {
+		_, err := os.Stat(filepath.Join(st.Dir, "host", "image"))
+		z, _ := sysd.Run(ctx, "systemctl", "is-active", "zincati.service")
+		out = append(out, osFindings(o, err == nil, strings.TrimSpace(z) == "active", OSPause(), WindowText(st))...)
 	}
 	// #368: without the boot check a broken OS update stays broken until someone has SSH.
 	if _, err := os.Stat(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/system/laib-boot-check.service"); err != nil && only == "" {

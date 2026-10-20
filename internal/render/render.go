@@ -594,33 +594,54 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	return b.String()
 }
 
+// accessRule is one of Authelia's rules: autheliaAccess writes them, Net
+// reads them, so the map shows the factor Authelia asks for (#487).
+type accessRule struct {
+	Domain, Policy string
+	Subjects       []string // groups
+	Resource       string   // a bypass of one path prefix
+}
+
+func accessRules(st *state.State) []accessRule {
+	// the Inbox decides what the chat may not (#441): behind the second factor
+	rules := []accessRule{{Domain: fqdn(st, st.Box.Laib.Host), Policy: "two_factor", Subjects: []string{st.Box.Laib.Group}}}
+	for _, name := range st.ServiceNames() {
+		for _, r := range st.Services[name].Contract.Routes {
+			for _, p := range r.Bypass {
+				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: strings.TrimSuffix(p, "/") + "/"})
+			}
+			rule := accessRule{Domain: fqdn(st, r.Host), Policy: policyOf(r)}
+			if rule.Policy != "bypass" {
+				rule.Subjects = subjects(r)
+			}
+			rules = append(rules, rule)
+		}
+	}
+	return rules
+}
+
 func autheliaAccess(st *state.State) string {
 	var b strings.Builder
 	// Every rule Authelia has (#249): a list from a later config file replaces
 	// an earlier one instead of joining it, so the auth hook's config has none.
 	b.WriteString("# Rendered by laib: every access rule. Anything unlisted, the bare apex\n# included, is denied.\naccess_control:\n  default_policy: deny\n  rules:\n")
-	// the Inbox decides what the chat may not (#441): behind the second factor
-	fmt.Fprintf(&b, "    - domain: %s\n      policy: two_factor\n      subject: \"group:%s\"\n", fqdn(st, st.Box.Laib.Host), st.Box.Laib.Group)
-	for _, name := range st.ServiceNames() {
-		for _, r := range st.Services[name].Contract.Routes {
-			policy := policyOf(r)
-			for _, p := range r.Bypass {
-				fmt.Fprintf(&b, "    - domain: %s\n      policy: bypass\n      resources: [\"^%s.*$\"]\n", fqdn(st, r.Host), strings.TrimSuffix(p, "/")+"/")
-			}
-			fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", fqdn(st, r.Host), policy)
-			// family and admins, never just any LLDAP account (radicale's bind
-			// account is one); admins reach what the family reaches
-			var groups []string
-			for _, g := range subjects(r) {
-				groups = append(groups, `"group:`+g+`"`)
-			}
-			subject := "[" + strings.Join(groups, ", ") + "]"
-			if len(groups) == 1 {
-				subject = groups[0]
-			}
-			if policy != "bypass" {
-				b.WriteString("      subject: " + subject + "\n")
-			}
+	for _, r := range accessRules(st) {
+		fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", r.Domain, r.Policy)
+		if r.Resource != "" {
+			fmt.Fprintf(&b, "      resources: [\"^%s.*$\"]\n", r.Resource)
+		}
+		// family and admins, never just any LLDAP account (radicale's bind
+		// account is one); admins reach what the family reaches
+		var groups []string
+		for _, g := range r.Subjects {
+			groups = append(groups, `"group:`+g+`"`)
+		}
+		switch len(groups) {
+		case 0:
+		case 1:
+			b.WriteString("      subject: " + groups[0] + "\n")
+		default:
+			b.WriteString("      subject: [" + strings.Join(groups, ", ") + "]\n")
 		}
 	}
 	return b.String()
@@ -662,17 +683,26 @@ func adguardRewrites(st *state.State) string {
 	return string(b) + "\n"
 }
 
-func nftables(st *state.State) string {
-	var ports []string
+// droppedPorts: what the nftables drop keeps off the LAN; Net reads it too (#487).
+func droppedPorts(st *state.State) []int {
+	var ports []int
 	if st.Box.Laib.Listen != "127.0.0.1" {
-		ports = append(ports, fmt.Sprint(st.Box.Laib.Port))
+		ports = append(ports, st.Box.Laib.Port)
 	}
 	for _, name := range st.ServiceNames() {
 		for _, p := range st.Services[name].Contract.Ports {
 			if !p.LAN {
-				ports = append(ports, fmt.Sprint(p.Port))
+				ports = append(ports, p.Port)
 			}
 		}
+	}
+	return ports
+}
+
+func nftables(st *state.State) string {
+	var ports []string
+	for _, p := range droppedPorts(st) {
+		ports = append(ports, fmt.Sprint(p))
 	}
 	if len(ports) == 0 {
 		return ""

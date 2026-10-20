@@ -26,8 +26,10 @@ EXPECTED = [
     ("Music Assistant", "music_assistant", ""),
     ("MQTT", "mqtt", ""),
     ("MCP Server", "mcp_server", ""),
+    ("Frage als Gesprächsagent", "ollama", ":8710"),  # post-deploy adds it once Frage answers (#491)
 ]
 FIX = "in Home Assistant unter Einstellungen → Integrationen einrichten (templates/home-assistant/README.md)"
+FIXES = {"Frage als Gesprächsagent": "laib add frage, dann laib apply home-assistant: die Ollama-Integration auf Frage (#491)"}
 
 
 def entries(base: str, token: str) -> list:
@@ -51,7 +53,7 @@ def report(token: str, base: str) -> dict:
     if not missing:
         return {"detail": f"alle {len(EXPECTED)} Integrationen eingerichtet", "findings": []}
     return {"detail": "fehlt: " + ", ".join(missing),
-            "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIX} for name in missing]}
+            "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIXES.get(name, FIX)} for name in missing]}
 
 
 def zwave(url: str) -> dict:

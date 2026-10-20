@@ -43,11 +43,15 @@ func TestRaidFindings(t *testing.T) {
 		{"one member by design", mdstatOne, 1, "gelb"},
 		{"mirror healthy", mdstatTwo, 2, ""},
 		{"a member failed", mdstatOne, 2, "rot"},
-		{"syncing", mdstatSync, 2, "info"},
+		{"syncing", mdstatSync, 2, "gelb"},
 		{"array gone", "Personalities : [raid1]\nunused devices: <none>\n", 1, "rot"},
 	}
 	for _, c := range cases {
-		f := raidFindings(c.mdstat, c.expected)
+		data := "md127"
+		if c.expected == 0 {
+			data = ""
+		}
+		f := raidFindings(c.mdstat, data, c.expected)
 		got := ""
 		if len(f) > 0 {
 			got = f[0].Severity

@@ -1,3 +1,5 @@
 [Pod]
+# every address: the Bote reaches Frage at host.containers.internal:8710;
+# lan: false (laib.yml) keeps the LAN out, as for Piper (#242, #490)
 PodName=frage
-PublishPort=127.0.0.1:8710:8710
+PublishPort=8710:8710
