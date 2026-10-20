@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/mdopp/laib/compare/v0.10.0...v0.10.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **boot-check:** connect under nsenter, and count only timeouts and refusals as blocked ([163f141](https://github.com/mdopp/laib/commit/163f141a6566bce83bb6f5f1c579d03814cd819c)), closes [#481](https://github.com/mdopp/laib/issues/481)
+* **boot-check:** the LAN probe compares blocked port sets, skips lan: false ports and rebuilds its path every round ([29a61f7](https://github.com/mdopp/laib/commit/29a61f7eb8681626eed117ce42519311787955de)), closes [#481](https://github.com/mdopp/laib/issues/481)
+
 ## [0.10.0](https://github.com/mdopp/laib/compare/v0.9.0...v0.10.0) (2026-10-20)
 
 
