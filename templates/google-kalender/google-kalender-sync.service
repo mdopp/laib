@@ -1,0 +1,18 @@
+# One run of the mirror (#495): google-kalender.py in a stock Python image,
+# fed on stdin (as home-assistant-check), the status and the last run's state
+# in the data path. The timer fires it every quarter of an hour; laib starts
+# it when someone looks at diag and the status is older than 30 min. The
+# accounts reach podman through the environment, never on argv. Google or
+# Radicale in trouble is a finding in the status, not a failed unit.
+[Unit]
+Description=Google-Kalender: Googles Termine nach Radicale spiegeln
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=GOOGLE_KALENDER_KONTEN=${KONTEN}
+Environment=RADICALE_URL=${RADICALE_URL}
+Environment=STALE_HOURS=${STALE_HOURS}
+StandardInput=file:%h/.config/containers/systemd/google-kalender/google-kalender.py
+ExecStart=/usr/bin/podman run --rm -i --name google-kalender-sync -e GOOGLE_KALENDER_KONTEN -e RADICALE_URL -e STALE_HOURS -v ${DATA_DIR}/google-kalender:/data:z ${IMAGE} python3 -
+TimeoutStartSec=10min
