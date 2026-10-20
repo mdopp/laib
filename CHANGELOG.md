@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/mdopp/laib/compare/v0.11.1...v0.12.0) (2026-10-20)
+
+
+### Features
+
+* **bote:** approve proposals by Signal poll or 👍/👎 reaction ([a4fd228](https://github.com/mdopp/laib/commit/a4fd2282480f9d4f8f746a17c018788d870ce746)), closes [#509](https://github.com/mdopp/laib/issues/509)
+* **template:** google-kalender mirrors Google calendars into Radicale, one way ([372b7b8](https://github.com/mdopp/laib/commit/372b7b84436c2ce5f8927406a20129b55dbbdb8d)), closes [#495](https://github.com/mdopp/laib/issues/495)
+
+
+### Bug Fixes
+
+* **apply:** hook changes plan, startup config before start, template update keeps owner lines ([8315bfe](https://github.com/mdopp/laib/commit/8315bfe456ba28a8994ea515e95b25d7b303a887))
+* **persona:** keep Joshua on track without thinking ([a118204](https://github.com/mdopp/laib/commit/a118204dd0e47e2d2dc0de49b5e81615da984cd6)), closes [#510](https://github.com/mdopp/laib/issues/510)
+* **werkstatt:** a switched-off session stays off, and off refuses to run as root ([6dc4618](https://github.com/mdopp/laib/commit/6dc4618b00b493b9540416483eb8d87bddf03d97)), closes [#498](https://github.com/mdopp/laib/issues/498)
+
 ## [0.11.1](https://github.com/mdopp/laib/compare/v0.11.0...v0.11.1) (2026-10-20)
 
 
