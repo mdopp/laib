@@ -99,3 +99,45 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   the box) leaves it out; laib-lease names each one in its status file
   (`lease/laib-status.json`, gelb in `laib status` and diag). A container
   the providing service does not have is still refused at start.
+
+## Prompt eval: the knobs and how to measure them (#525)
+
+Qwen 3.6 35B-A3B read prompts at ~270–410 t/s on the Kraftwerk's 16 GB
+card; the Bote's first turn is ~14,500 tokens. Each preset in
+`presets.json` may set, rendered into `presets.ini` by pre-start (an
+unset key keeps llama.cpp's default):
+
+| Key | presets.ini | What it changes |
+|---|---|---|
+| `batch` | `batch-size` | logical batch per prompt step |
+| `ubatch` | `ubatch-size` | physical batch: larger is faster prompt eval, costs compute buffer on the card |
+| `flashAttn` | `flash-attn` | `true`/`false`/`"auto"`; a quantized V cache (`cacheV`) needs it on |
+| `ngl` | `n-gpu-layers` | layers on the GPU; unset lets llama.cpp fit them to free memory |
+| `nCpuMoe` | `n-cpu-moe` | MoE expert layers kept on the CPU; `0` asks for all on the GPU |
+| `parallel` | `parallel` | slots; `ctx` is shared among them |
+
+The household preset ships `batch 4096, ubatch 2048, flashAttn true`.
+That is the starting point to measure, **not a measured result**: whether
+it is faster, and whether the larger compute buffer still fits next to
+the weights without pushing layers to the CPU, only the box can say. The
+target is ≥ 1,500 t/s (~10 s for the Bote's cold start).
+
+Measure on the box, same prompt before and after (`measure.py` is
+installed next to `presets.json`):
+
+```
+python3 ~/.config/containers/systemd/llama/measure.py --label before
+# change presets.json, laib apply llama (pre-start rewrites presets.ini, the router restarts)
+python3 ~/.config/containers/systemd/llama/measure.py --label after
+```
+
+It sends a ~14k-token prompt three times with `cache_prompt: false` and
+`max_tokens: 1` through the proxy, prints the router's own
+`prompt_per_second` per run, and the last llama log lines that say where
+the weights sit: `offloaded N/M layers to GPU`, the `CPU_Mapped` and
+`CUDA0` buffer sizes, `n_batch`, `n_ubatch`, `flash_attn`, `n_seq_max`.
+`offloaded` below M, or a large `CPU_Mapped` buffer, means layers or
+experts run on the CPU; try a smaller `ubatch`, fewer `parallel` slots, a
+smaller `ctx`, or `nCpuMoe` explicitly. The last line is JSON, so two
+runs compare side by side. The first run after a start includes the cold
+load in its wall time; `prompt_per_second` does not.
