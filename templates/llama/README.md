@@ -71,6 +71,13 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   `--spec-draft-n-max`), and a floating `server-cuda` took every drafter
   preset down after an image update. A newer build is a proposal: set the
   tag and digest, apply, and check that every preset loads.
+- **No thinking by default (#501).** Every preset renders `reasoning = off`
+  into `presets.ini` (llama.cpp's `--reasoning off`: the server's template
+  default becomes `enable_thinking=false`), so Frage, the Operator, pi and
+  Haus answer without a thinking pass none of them asked for. A preset
+  opts in with `"thinking": true` in `presets.json`. A request that wants
+  thinking says so: `chat_template_kwargs: {enable_thinking: true}`
+  overrides the server default per request (the Bote's `/model denken`).
 - **One port.** The lease answers on the proxy's port (`PORT`, 11435):
   `http://<gpu-box>:11435/api/model-lease`.
 - **A missing role degrades, it does not stop the lease (#374).** A mode

@@ -191,6 +191,45 @@ class Move(unittest.TestCase):
         self.assertEqual((self.d / "file-share/filebrowser/filebrowser.db").read_text(), "laib's own")
         self.assertFalse((self.d / "file-share/syncthing-config").exists(), "nothing of the service moved")
 
+    def test_werkstatt_takes_claude_devs_home_state_498(self):
+        # #498: the Kraftwerk's Werkstatt started with the onboarding dialog, no
+        # conversations, no claude.ai login for Remote Control and no gh login:
+        # all of it lay in claude-dev's home, its /workspace
+        old = self.d / "claude-dev/workspace"
+        write(old / ".claude.json", '{"hasCompletedOnboarding": true}')
+        write(old / ".claude/.credentials.json", "made-up")
+        write(old / ".claude/projects/-workspace-laib/s1.jsonl", "conversation")
+        write(old / ".claude/projects/-workspace-gone/s2.jsonl", "a checkout that did not come along")
+        write(old / ".claude/settings.json", "{}")
+        write(old / ".config/gh/hosts.yml", "made-up")
+        write(old / ".config/other/x", "")
+        write(old / ".gitconfig", "[user]\n\tname = anna\n")
+        p = self.run_script("werkstatt")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        home = self.d / "werkstatt/home"
+        self.assertEqual((home / ".claude.json").read_text(), '{"hasCompletedOnboarding": true}')
+        self.assertEqual((home / ".claude/.credentials.json").read_text(), "made-up")
+        self.assertEqual((home / ".claude/history.jsonl").read_text(), "session")
+        self.assertEqual((home / ".claude/projects/-workspace-laib/s1.jsonl").read_text(), "conversation")
+        self.assertEqual((home / ".config/gh/hosts.yml").read_text(), "made-up")
+        self.assertIn("anna", (home / ".gitconfig").read_text())
+        self.assertFalse((home / ".claude/projects/-workspace-gone").exists(), "only the moved checkouts' conversations")
+        self.assertFalse((home / ".claude/settings.json").exists(), "claude-dev's settings carry its hooks")
+        self.assertFalse((home / ".config/other").exists())
+        self.assertFalse((self.d / "werkstatt/workspace/.claude").exists(), "the home is not a checkout")
+        self.assertTrue((old / ".claude/.credentials.json").exists(), "ServiceBay's copy stays for a rollback")
+        self.assertNotIn("made-up", p.stdout)
+
+    def test_werkstatt_refuses_a_home_that_has_its_own_conversations(self):
+        # a Werkstatt that started already holds the empty conversation of its first
+        # start; --continue would pick the newest, so nothing is merged into it
+        write(self.d / "claude-dev/workspace/.claude/projects/-workspace-laib/s1.jsonl", "conversation")
+        write(self.d / "werkstatt/home/.claude/projects/-workspace-laib/empty.jsonl", "")
+        p = self.run_script("werkstatt")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("-workspace-laib", p.stderr + p.stdout)
+        self.assertFalse((self.d / "werkstatt/workspace").exists(), "refused before anything was written")
+
     def test_werkstatt_run_twice_copies_nothing_twice(self):
         import shutil
         shutil.rmtree(self.d / "pi-web/workspace/laib")     # no clash with claude-dev's names

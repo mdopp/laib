@@ -352,7 +352,7 @@ engine resolves it to the number through signal-cli's contacts in the pod,
 and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
 the house persona. That is a costume, never a right.
 
-## Speed (#470)
+## Speed (#470, #502)
 
 On the Kraftwerk a one-line question took 15–30 s. The causes were measured
 in llama-server's log: a ~7k-token context of SOUL plus every MCP tool
@@ -364,6 +364,34 @@ thinks, through its own entry `denken`. The owner measured "Wer bist du?"
 going from 18.4 s to 5.0 s, and "Wie spät ist es?" from 33.3 s to 0.8 s.
 Watch for two things without thinking: a raw tool call returned as the
 answer, and a guessed fact (the time). Both were seen once.
+
+Since #502 every tool is in the model's array. Behind Hermes' tool search
+(`tools.tool_search`, on by default) the model saw five tools, and one tool
+call took `tool_search`, `tool_describe` and `tool_call`: three extra model
+rounds, measured on the Kraftwerk (63 s for "Wie hoch ist die Zugspitze?"),
+and once the search picked `laib_look` for a question for Frage. Hermes
+v0.22.2 cannot keep one MCP server eager (an MCP tool is always deferrable,
+`defer` only adds tools), so `enabled: "off"`: ~7 000 tokens more in a new
+conversation's first call, cached after it. Hermes' 58 bundled skills are
+gone too: post-deploy runs Hermes' own `hermes skills opt-out --remove --yes`
+in the Hermes container, which stops the seeding and deletes the unmodified
+ones (an edited or added skill stays).
+
+Not in the template: `compression.idle_compact_after_seconds`. Hermes acts on
+it in its TUI only; the gateway resets the idle clock at the start of every
+turn (`gateway/run.py` `_init_cached_agent_for_turn`), and a new agent starts
+it at "now", so for Signal, Matrix, Telegram, Discord and the API it never
+fires. Long conversations are compressed by token count instead:
+`compression.threshold_tokens` is `COMPACT_TOKENS` (values, default 32000).
+Hermes compresses once a prompt passes the lower of this and its own ratio
+threshold (75 % of the window below 512K tokens: ~24.5k on a 32k Gemma,
+~98k on the 131k Qwen). 32000 sits above the ~14k first prompt plus Hermes'
+10k lean tail, so a compressed conversation does not compress again on the
+next turn. To set it from the box: read a new conversation's first prompt
+in llama's log (`journalctl --user -u llama | grep "prompt eval time"`, the
+token count of the first call), keep `COMPACT_TOKENS` at least that plus
+12 000, then `laib apply bote`. A value that is no positive integer fails
+the hook (Hermes would drop it in silence).
 
 Not changed yet, to measure first: the persona round per message (#471
 redesigns it), a narrower tool list per MCP server, and the model's prompt

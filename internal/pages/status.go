@@ -49,7 +49,7 @@ type Readiness struct {
 	LastHeard string   `json:"lastHeard"`
 	Lock      string   `json:"lock,omitempty"`
 	Drift     int      `json:"drift"`              // files on the box that differ from the state
-	Operator  string   `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | fehlt
+	Operator  string   `json:"operator"`           // aus | startet | läuft | stumm | antwortet nicht | abgewiesen | fehlt
 	Firewall  string   `json:"firewall,omitempty"` // geladen | fehlt — the rendered ruleset in the kernel (#37)
 	Paused    []string `json:"paused,omitempty"`   // services converge leaves alone: "<svc> von <wer> bis <wann>" (#39)
 	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
