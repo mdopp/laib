@@ -34,8 +34,20 @@ if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   # Claude Code reads it from the login shell's environment; profile.d is
   # readable by every user here, so it names the 0600 file, never the token (#224)
   printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN" > /run/laib/claude-token && chmod 600 /run/laib/claude-token && chown dev:dev /run/laib/claude-token
-  echo 'if [ -r /run/laib/claude-token ]; then export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/laib/claude-token)"; fi' > /etc/profile.d/claude.sh
+  # Only while dev has no claude.ai login of its own (#498): the token outranks
+  # the login, and it can only make model requests, no Remote Control
+  # (Claude Code's docs, "Generate a long-lived token"). With a login in the
+  # kept home the sessions use it; the token is the fallback before /login.
+  echo 'if [ -r /run/laib/claude-token ] && [ ! -s "$HOME/.claude/.credentials.json" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/laib/claude-token)"; fi' > /etc/profile.d/claude.sh
 fi
+# The logins dev made itself live in the kept home (#498): Claude Code's
+# (~/.claude/.credentials.json) and gh's (~/.config/gh/hosts.yml), carried
+# from claude-dev by the move or made with `claude /login` and `gh auth
+# login`. dev's alone, whoever wrote them (a root shell, the move), as
+# claude-dev's entrypoint held them.
+for f in /home/dev/.claude/.credentials.json /home/dev/.config/gh/hosts.yml; do
+  if [ -f "$f" ]; then chown dev:dev "$f" "$(dirname "$f")" && chmod 600 "$f" && chmod 700 "$(dirname "$f")"; fi
+done
 if [ -n "${LAIB_TOKEN:-}" ]; then
   # the autoloop's pi hand as a 0600 file: `laib` (laibctl) and pi read it from there, never from argv
   printf '%s' "$LAIB_TOKEN" > /run/laib/token && chmod 600 /run/laib/token && chown dev:dev /run/laib/token
@@ -59,6 +71,9 @@ if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials
   chmod 600 /run/laib/git-credentials; chown dev:dev /run/laib/git-credentials
   su dev -c "git config --global credential.helper 'store --file /run/laib/git-credentials'"
+elif [ -s /home/dev/.config/gh/hosts.yml ]; then
+  # no PAT for this container: git pushes with gh's own login, as claude-dev did (#498)
+  su dev -c "gh auth setup-git" || echo "werkstatt: WARNING: gh auth setup-git failed, git push asks for a user" >&2
 fi
 # the guide's skills where pi and Claude Code look, from this image (#394)
 su dev -c "werkstatt-skills" || echo "werkstatt-skills failed: the agents start without the guide's skills"

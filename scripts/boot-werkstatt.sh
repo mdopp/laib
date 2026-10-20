@@ -86,6 +86,9 @@ sessions() {   # $1: when
   echo "sessions ok after $1: $w"
 }
 sessions "the first pass"
+# #498: nobody is at the window, so the pass answered Claude Code's first-run questions
+podman exec -u dev systemd-werkstatt jq -e '.hasCompletedOnboarding == true and .projects["/workspace/laib"].hasTrustDialogAccepted == true' /home/dev/.claude.json >/dev/null \
+  || fail "~/.claude.json does not skip the onboarding and trust /workspace/laib: the session waits in its dialog (#498)"
 kept() {   # $1: what happened since the files were written
   local id; id="$(podman inspect systemd-werkstatt --format '{{.Id}}')"
   [ "$id" != "$LAST" ] || fail "$1: the container was not recreated, so this proves nothing"
@@ -114,6 +117,13 @@ podman unshare test ! -e "$DATA/werkstatt/home/.cache/scratch" || fail "~/.cache
 if podman unshare grep -rlF canary241 "$DATA/werkstatt/home" "$DATA/werkstatt/ssh-host-keys"; then fail "a token is in the persistent home"; fi
 podman unshare grep -qF '"headersHelper": "laib --headers"' "$DATA/werkstatt/home/.claude.json" || fail "laib is not Claude Code's MCP server with a per-session header in ~/.claude.json (#380)"
 if podman unshare grep -rlF laib_werkstatt_ "$DATA/werkstatt/home"; then fail "the werkstatt token is in the persistent home"; fi
+# #498: the setup token can make model requests only, no Remote Control, and it
+# outranks the claude.ai login: it is the sessions' credential only while there is none.
+# A clean login shell as werkstatt-sessions starts one: podman exec would hand on the unit's environment
+login_token() { podman exec -u dev systemd-werkstatt env -i HOME=/home/dev USER=dev PATH=/usr/local/bin:/usr/bin:/bin bash -lc 'echo ${CLAUDE_CODE_OAUTH_TOKEN:+set}'; }
+[ "$(login_token)" = set ] || fail "without a claude.ai login the sessions get no token"
+podman exec -u dev systemd-werkstatt bash -c 'echo "{\"claudeAiOauth\":{}}" > /home/dev/.claude/.credentials.json'
+[ -z "$(login_token)" ] || fail "CLAUDE_CODE_OAUTH_TOKEN displaces the claude.ai login, Remote Control fails (#498)"
 # the tokens' tmpfs (#44) is really one
 for c in systemd-werkstatt systemd-werkstatt-autoloop; do
   podman exec "$c" grep -q ' /run/laib tmpfs ' /proc/mounts || fail "$c: /run/laib, where the tokens go, is not a tmpfs (#44)"

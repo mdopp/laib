@@ -8,6 +8,9 @@
 # conversation up again. The entrypoint runs a pass on start and then every
 # five minutes, so a new checkout gets its session without a restart.
 #
+# Before a checkout's first start its onboarding and folder trust are
+# answered in ~/.claude.json (#498, settle below): nobody is at the window.
+#
 # The sessions run in Claude Code's default permission mode: a tool call
 # that needs a permission is asked for in the app. claude-dev also passed
 # --allow-dangerously-skip-permissions; a session reachable from the phone
@@ -28,6 +31,7 @@ OFF="${WERKSTATT_SESSIONS_OFF:-$HOME/.werkstatt/no-autostart}"
 S="${WERKSTATT_TMUX_SESSION:-claude}"
 CLAUDE="${WERKSTATT_CLAUDE:-claude}"
 CONF="${WERKSTATT_TMUX_CONF:-/etc/tmux.conf}"
+CLAUDE_JSON="${WERKSTATT_CLAUDE_JSON:-$HOME/.claude.json}"
 EMPTY=".werkstatt"   # the empty session's window: a leading dot, which no checkout's name has (valid)
 t() { tmux -f "$CONF" "$@"; }
 
@@ -55,11 +59,32 @@ start() { # start <name>
   fi
 }
 
+# Claude Code's first-run questions, answered for the checkouts (#498): the
+# onboarding (colour scheme, login hints) and the folder trust, both in
+# ~/.claude.json. Unanswered, a session started in its window waits for
+# somebody to answer and never reaches Remote Control. The file is written
+# only when something is missing, with its mode kept; one that is not JSON
+# is left alone. Everything else in it stays.
+settle() { # settle <path>
+  local f="$CLAUDE_JSON" tmp
+  command -v jq >/dev/null || { echo "werkstatt: WARNING: no jq, $1 keeps Claude Code's first-run questions" >&2; return 0; }
+  [ -s "$f" ] || { printf '{}\n' > "$f" && chmod 600 "$f"; }
+  jq -e --arg p "$1" '.hasCompletedOnboarding == true and .projects[$p].hasTrustDialogAccepted == true' "$f" >/dev/null 2>&1 && return 0
+  tmp="$f.werkstatt-$$"
+  if jq --arg p "$1" '.hasCompletedOnboarding = true | .projects[$p].hasTrustDialogAccepted = true' "$f" > "$tmp" 2>/dev/null; then
+    chmod --reference="$f" "$tmp" && mv -f "$tmp" "$f"
+  else
+    rm -f "$tmp"
+    echo "werkstatt: WARNING: $f is not JSON, left alone; $1 keeps Claude Code's first-run questions" >&2
+  fi
+}
+
 pass() {
   local d name idx
   for d in "$WS"/*/; do
     name=$(basename -- "$d")
     valid "$name" && [ -f "$d/CLAUDE.md" ] && [ ! -e "$OFF/$name" ] || continue
+    settle "$WS/$name"
     idx=$(window "$name")
     if [ -z "$idx" ]; then
       start "$name"
