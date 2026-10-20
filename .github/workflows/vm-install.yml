@@ -637,7 +637,7 @@ jobs:
             [ -n "$id" ] && break; sleep 2; done
           [ -n "$id" ] || { echo "no invitation reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
           curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
-          for w in "Hallo Lena Muster" "https://haus.vm.test/willkommen" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
+          for w in "Hallo Lena Muster" "Los geht es hier: https://laib.vm.test/" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
           tok=$(grep -o 'step2?token=[A-Za-z0-9._-]*' /tmp/mail.json | sed -n '1s/.*token=//p')
           [ -n "$tok" ] || { echo "no link in the mail"; exit 1; }
           first_password lena "$tok" 'Lena-Passwort-360!'
