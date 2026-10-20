@@ -150,9 +150,13 @@ UNIT
 }
 [ -z "${BOXCONF:-}" ] || { box_config; exit 0; }
 [ "$(id -un)" = "core" ] || { echo "run as the core user (rootless podman, user systemd)" >&2; exit 1; }
+# mark: a line vm-install cuts the power on. It goes to the journal and, via
+# /dev/kmsg, to the console in one piece: the journal's console copy can be
+# split by the serial getty's terminal reset (train 22: "binaries … in /var^[[!p…").
+mark() { echo "$1"; printf '<5>laib: %s\n' "$1" | sudo tee /dev/kmsg >/dev/null 2>&1 || true; }
 # vm-install cuts the power on this line (the first boot's console), before
 # restic and the binaries: the resumed first boot starts over (#111)
-echo "install-box.sh: start"
+mark "install-box.sh: start"
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
 
@@ -314,7 +318,7 @@ if [ -n "$CHECK" ]; then
 fi
 # vm-install cuts the power on this line (the first boot's console): the
 # binaries are in place, the first boot's marker is not (#37, #367)
-echo "binaries $TAG in /var/opt/laib"
+mark "binaries $TAG in /var/opt/laib"
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
 
 # The user unit, inline so a private repo needs no second fetch (dist/laib.service is the same text).
