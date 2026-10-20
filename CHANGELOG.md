@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/mdopp/laib/compare/v0.10.1...v0.11.0) (2026-10-20)
+
+
+### Features
+
+* **template:** Frage as Home Assistant's conversation agent over the Ollama API ([38f24cc](https://github.com/mdopp/laib/commit/38f24cc3c4ce0069a742fca39e3b6844ff9b694a)), closes [#491](https://github.com/mdopp/laib/issues/491)
+
+
+### Bug Fixes
+
+* **host:** on uCore the pinned host image is the one OS update path ([a5caf42](https://github.com/mdopp/laib/commit/a5caf42f8e749ec8953712daea6e0499409739d7)), closes [#486](https://github.com/mdopp/laib/issues/486) [#368](https://github.com/mdopp/laib/issues/368)
+* **net,disk:** the network map reads Authelia's rules and the nftables drop; diag finds a data array Laib did not create ([c4b77dc](https://github.com/mdopp/laib/commit/c4b77dcc954770a701c3eda951f1280b68113f93)), closes [#487](https://github.com/mdopp/laib/issues/487) [#488](https://github.com/mdopp/laib/issues/488)
+* **operator:** stream with max_tokens and close on timeout so llama frees the slot ([b49bafd](https://github.com/mdopp/laib/commit/b49bafdc773c0fe0d27e86c9d64ef5f668703a81)), closes [#489](https://github.com/mdopp/laib/issues/489)
+* **template:** frage's SearXNG port, settings.yml before the start, 8710 for pods ([7fbf0d7](https://github.com/mdopp/laib/commit/7fbf0d7ab23a022dbb217698e861ae964aede336)), closes [#490](https://github.com/mdopp/laib/issues/490)
+
 ## [0.10.1](https://github.com/mdopp/laib/compare/v0.10.0...v0.10.1) (2026-10-20)
 
 
