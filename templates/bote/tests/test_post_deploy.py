@@ -94,6 +94,24 @@ class PostDeploy(unittest.TestCase):
                 self.assertNotIn("Werkzeug persona", soul)
                 self.assertIn("Persona:", soul)
 
+    def test_the_tools_are_in_the_array_and_hermes_stock_skills_are_gone(self):
+        """#502, measured on the Kraftwerk: behind Hermes' tool search every tool call took
+        tool_search, tool_describe and tool_call, three extra model rounds, and the search
+        once picked laib_look for a question for Frage. Hermes v0.22.2 cannot keep one MCP
+        server eager (tools/tool_search.py: an mcp- toolset is always deferrable, the defer
+        list only adds), so the search is off and every wired tool is in the array. Hermes'
+        58 bundled skills do not fit a household: its own `hermes skills opt-out --remove`
+        drops them, in the Hermes container, on every apply."""
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                       MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok")
+            p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            conf = Path(d, "bote/hermes/config.yaml").read_text()
+        self.assertIn('tools:\n  tool_search:\n    enabled: "off"', conf, "the tools still hide behind tool_search")
+        self.assertIn("laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes", p.stdout.splitlines())
+        self.assertNotIn("idle_compact_after_seconds", conf, "a key the gateway never acts on (it resets the idle clock per turn)")
+
     def test_hermes_is_pinned(self):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()
