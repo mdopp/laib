@@ -107,7 +107,7 @@ func TestThePathBreakingDuringAProbeIsNoBlockedPort(t *testing.T) {
 			if got := provenRecord(t, b); got != fresh+".0 0 0\n" {
 				t.Fatalf("boot-proven = %q, want %q: every LAN port answers once the path carries packets\n%s", got, fresh+".0 0 0\n", out)
 			}
-			if !strings.Contains(out, "probe path") {
+			if !strings.Contains(out, "not measured") {
 				t.Errorf("a round that measured nothing must be said:\n%s", out)
 			}
 		})
@@ -143,5 +143,26 @@ func TestRecordsFromBeforeKeepTheirMeaning(t *testing.T) {
 				t.Fatalf("record %q, %d blocked (and a lan: false port): rolled back = %v, want %v\n%s\n%s", c.rec, c.blocked, rolledBack(log), c.rollback, log, out)
 			}
 		})
+	}
+}
+
+// The Kraftwerk's 26: every listening port failed from the service, while
+// the same probe by hand from an SSH shell reached 24 of them. A connect that
+// fails for any reason but "no answer" (timeout) or "refused" (the port, or a
+// firewall's reject) says nothing about the port: the round measured nothing.
+func TestAProbeThatFailsLocallyIsNoBlockedPort(t *testing.T) {
+	b := newBootBox(t)
+	b.listen = []string{ssLine("0.0.0.0", listening(t)), ssLine("0.0.0.0", listening(t))}
+	b.denied = true
+	b.timeout = "2"
+	log, out := b.run(t, fresh, "", "", "0")
+	if rolledBack(log) {
+		t.Fatalf("a baseline never rolls back:\n%s\n%s", log, out)
+	}
+	if got := provenRecord(t, b); got != fresh+".0 0 0\n" {
+		t.Fatalf("boot-proven = %q: a probe refused locally counted its ports as blocked\n%s", got, out)
+	}
+	if !strings.Contains(out, "Permission denied") || !strings.Contains(out, "not checked") {
+		t.Errorf("the probe's own error must be said, and that the LAN was not checked:\n%s", out)
 	}
 }

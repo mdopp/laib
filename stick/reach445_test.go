@@ -58,7 +58,7 @@ func TestABlockedLANPortIsNotProvenAndRollsBack(t *testing.T) {
 	if !strings.Contains(out, fmt.Sprint(shut)) || strings.Contains(out, fmt.Sprint(open)+",") {
 		t.Errorf("the reason must name the blocked port %d, not the open %d:\n%s", shut, open, out)
 	}
-	if !strings.Contains(log, "netns exec") {
+	if !strings.Contains(log, "nsenter --net=/run/netns/laib-probe") {
 		t.Errorf("the probe must come from the namespace (an interface, not loopback):\n%s", log)
 	}
 }
