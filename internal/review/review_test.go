@@ -167,6 +167,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a file Laib does not know", func(t *testing.T, d string) {
 			write(t, d, "services/whoami/notes.txt", "hallo\n", 0o644)
 		}, "Datei, die Laib nicht kennt"},
+		{"an executable base copy", func(t *testing.T, d string) {
+			write(t, d, "services/whoami/.template/post-deploy", "#!/bin/sh\n", 0o755)
+		}, "Datei, die Laib nicht kennt"},
 		{"a file outside the services", func(t *testing.T, d string) {
 			write(t, d, ".gitignore", "services/\n", 0o644)
 		}, "außerhalb der Dienste"},
@@ -183,6 +186,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		}, ""},
 		{"a new generated secret", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/laib.yml", "  - name: WHOAMI_TOKEN\n", "  - name: WHOAMI_TOKEN\n  - name: WHOAMI_SALT\n")
+		}, ""},
+		{"the template's base copy (#511)", func(t *testing.T, d string) {
+			write(t, d, "services/whoami/.template/post-deploy", "#!/bin/sh\necho eingerichtet\n", 0o644)
 		}, ""},
 		{"a README", func(t *testing.T, d string) {
 			write(t, d, "services/whoami/README.md", "# whoami\n", 0o644)

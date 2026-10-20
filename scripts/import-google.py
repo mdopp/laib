@@ -13,7 +13,8 @@ gave none (summary and start, or name and first mail/phone for a card); FN
 for a card that has only a number. Stdlib only.
 
   python3 scripts/import-google.py --url https://caldav.<domain> --user <uid> takeout.zip
-    [--calendar <name>]   one calendar for every .ics (default: each file's own name)
+    [--calendar <name>]   one calendar for every .ics (default: each file's own name);
+                          it lands in google-<name>, where templates/google-kalender mirrors it (#495)
     [--password-stdin]    the password from stdin; otherwise it is asked for
 """
 import argparse, base64, getpass, re, sys, urllib.error, urllib.parse, urllib.request, uuid, zipfile
@@ -121,6 +122,13 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")).strip("-") or "kalender"
 
 
+def collection(name):
+    """google-<kalender>, the collection templates/google-kalender mirrors the same calendar into (#495):
+    a Takeout imported first is replaced by the mirror, never doubled"""
+    s = slug(name)
+    return s if s == "google" or s.startswith("google-") else "google-" + s
+
+
 class Dav:
     def __init__(self, url, user, pw):
         self.base, self.user = url.rstrip("/"), user
@@ -180,7 +188,7 @@ def main():
         if name.lower().endswith(".ics"):
             calname, items = events(text)
             display = args.calendar or calname or Path(name).stem
-            col = slug(display) + "/"
+            col = collection(display) + "/"
             dav.collection(col, "calendar", display)
             for uid, item in items.items():
                 dav.put(col, uid, item, "text/calendar")

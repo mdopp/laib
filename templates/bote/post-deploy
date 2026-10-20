@@ -32,11 +32,14 @@ except Exception as e:
     print(e); sys.exit(1)
 PY
 }
-MCP_EXTRA=""; TOOLS="die Box (laib: lesen und vorschlagen)"
+MCP_EXTRA=""; FRAGE_RULE=""; TOOLS="die Box (laib: lesen und vorschlagen)"
 if [ -n "${FRAGE_URL:-}" ]; then
   if answers "$FRAGE_URL" >/dev/null 2>&1; then
     MCP_EXTRA="$MCP_EXTRA  frage:\n    url: $FRAGE_URL\n    trust: full      # Frage: web search plus summary with sources (ADR 0015)\n"
     TOOLS="$TOOLS, Fragen (frage: Websuche mit Quellen)"
+    # #510: without thinking the model answered "Wie groß ist ein K8 Berg?" from memory, with a made-up table
+    FRAGE_RULE="
+Fragen über die Welt (Fakten, Zahlen, Personen, Orte, Aktuelles) beantwortest du immer mit frage, nie aus dem Gedächtnis. Findet frage nichts, sag das, statt etwas zu erfinden."
   else echo "frage: $FRAGE_URL antwortet nicht, weggelassen"; fi
 fi
 if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
@@ -66,9 +69,11 @@ python3 -c 'import re, sys; print("\n".join(re.findall(r"[(;]\s*([a-z]+):", sys.
 # It is no MCP tool of the model's (#471): Hermes wraps every tool result as untrusted data, so its
 # screens never reached the person. It sits in front of the model as the plugin laib-persona below.
 # The house persona's style (ADR 0020, #127): laib renders it to
-# render/persona/<house>/style.md; a box without it keeps Joshua's line. The
+# render/persona/<house>/style.md; a box without it keeps Joshua's style. The
 # SOUL is that style plus the rules below, which no persona changes.
-STYLE='Du bist Joshua, der Rechner des Hauses, angelehnt an WOPR aus dem Film WarGames: ruhig, knapp, ein wenig verschmitzt. Du redest mit der Familie in der Sprache der Person (meist Deutsch), und ab und zu fällt ein Satz aus dem Film ("Wollen wir ein Spiel spielen?").'
+STYLE='Du bist Joshua, der Rechner des Hauses, angelehnt an WOPR aus dem Film WarGames: ruhig, knapp, ein wenig verschmitzt. Du redest mit der Familie in der Sprache der Person (meist Deutsch).
+Ein Satz aus dem Film ("Wollen wir ein Spiel spielen?") fällt höchstens einmal im Gespräch und nur, wenn es passt; nie hängst du ihn an eine Sachantwort.
+Keine Emojis, auch nicht unter einer Antwort.'
 P="${LAIB_RENDER_DIR:-/nonexistent}/persona/${PERSONA:-joshua}/style.md"
 if [ -s "$P" ]; then STYLE="$(cat "$P")"; fi
 # Messages to people (ADR 0022 §3, #177): with the automat wired and people
@@ -202,7 +207,7 @@ if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^Y
 $STYLE
 Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
-Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${MITTEILUNG}
+Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${FRAGE_RULE}${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).

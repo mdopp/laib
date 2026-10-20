@@ -4,7 +4,7 @@ checkout with a CLAUDE.md, named after it, `--continue` with a fresh start
 as fallback, a marker that keeps one off across restarts, new checkouts
 picked up by the next pass, a dead session started again. Real tmux, a
 fake claude; the real image under systemd is scripts/boot-werkstatt.sh."""
-import os, shutil, subprocess, tempfile, time, unittest
+import getpass, os, shutil, subprocess, tempfile, time, unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent          # werkstatt/
@@ -20,14 +20,17 @@ class Sessions(unittest.TestCase):
             d.mkdir()
         self.log = self.root / "claude.log"
         fake = self.root / "claude"
-        # records where it ran and how; stays up like a session, or fails when told to
+        # records where it ran and how; stays up like a session, fails when told to,
+        # or ends with an error later, as a session that ran for hours can (#498)
         fake.write_text('#!/bin/sh\nprintf "%s %s\\n" "$(basename "$PWD")" "$*" >> "$CLAUDE_LOG"\n'
-                        '[ -e "$CLAUDE_FAIL" ] && exit 1\nexec sleep 600\n')
+                        '[ -e "$CLAUDE_FAIL" ] && exit 1\n'
+                        'i=0; while [ $i -lt 6000 ]; do [ -e "$CLAUDE_STOP" ] && exit 1; sleep 0.1; i=$((i+1)); done\n')
         fake.chmod(0o755)
-        self.fail_flag = self.root / "fail"
+        self.fail_flag, self.stop_flag = self.root / "fail", self.root / "stop"
         self.env = dict(os.environ, HOME=str(self.home), TMUX_TMPDIR=str(sock), WERKSTATT_WORKSPACE=str(self.ws),
                         WERKSTATT_CLAUDE=str(fake), WERKSTATT_TMUX_CONF=str(HERE / "tmux.conf"),
-                        CLAUDE_LOG=str(self.log), CLAUDE_FAIL=str(self.fail_flag), GIT_CONFIG_GLOBAL=str(self.root / "gitconfig"))
+                        CLAUDE_LOG=str(self.log), CLAUDE_FAIL=str(self.fail_flag), CLAUDE_STOP=str(self.stop_flag),
+                        WERKSTATT_USER=getpass.getuser(), GIT_CONFIG_GLOBAL=str(self.root / "gitconfig"))
         self.env.pop("TMUX", None)
         self.addCleanup(shutil.rmtree, self.root, True)
         self.addCleanup(lambda: subprocess.run(["tmux", "kill-server"], env=self.env, capture_output=True))
@@ -91,6 +94,40 @@ class Sessions(unittest.TestCase):
         self.assertEqual(self.windows(), ["laib"], "the switched-off session came back after a restart")
         self.run_("on", "servicebay")
         self.assertEqual(self.windows(), ["laib", "servicebay"])
+
+    def test_a_switched_off_session_does_not_start_itself_fresh(self):
+        # #498: `off flut` at 15:31, and at 18:11 the window's own fallback
+        # started `claude --remote-control flut`: its --continue had ended
+        self.checkout("flut")
+        self.run_()
+        self.assertEqual(self.wait_log(1), ["flut --continue --remote-control flut"])
+        off = self.home / ".werkstatt" / "no-autostart"
+        off.mkdir(parents=True)
+        (off / "flut").write_text("")       # the marker, with the window still up
+        self.stop_flag.write_text("")       # its --continue ends with an error
+        time.sleep(1.5)
+        self.assertEqual(self.log.read_text().splitlines(), ["flut --continue --remote-control flut"],
+                         "a switched-off session started itself fresh")
+        self.run_()
+        self.assertEqual(self.log.read_text().splitlines(), ["flut --continue --remote-control flut"], "the pass started it")
+
+    def test_the_fresh_start_still_follows_a_failed_continue(self):
+        self.checkout("laib")
+        self.stop_flag.write_text("")       # --continue fails: no conversation yet
+        self.run_()
+        self.assertEqual(self.wait_log(2), ["laib --continue --remote-control laib", "laib --remote-control laib"])
+
+    def test_off_as_another_user_refuses_and_writes_no_marker(self):
+        # #498: as root, `off` wrote root's marker, killed nothing in root's
+        # tmux and said it had; the session went on
+        self.checkout("flut")
+        self.run_()
+        p = subprocess.run(["bash", str(SCRIPT), "off", "flut"], env=dict(self.env, WERKSTATT_USER="dev-" + getpass.getuser()),
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("podman exec -u dev-", p.stderr)
+        self.assertFalse((self.home / ".werkstatt" / "no-autostart" / "flut").exists())
+        self.assertEqual(self.windows(), ["flut"])
 
     def test_a_failed_session_stays_visible_and_is_started_again(self):
         self.checkout("laib")

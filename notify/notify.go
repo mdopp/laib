@@ -44,11 +44,15 @@ func (c Config) mail() bool { return c.SMTPHost != "" && c.MailTo != "" }
 
 // tell is one message to the owner: through the Bote's channels first
 // (bote-notify picks the person's first reachable one), by mail only when
-// that fails or there is no Bote (#441).
-func tell(ctx context.Context, c Config, subject, body string) error {
+// that fails or there is no Bote (#441). A poll rides along to bote-notify only (#509).
+func tell(ctx context.Context, c Config, subject, body string, poll map[string]any) error {
 	var chatErr error
 	if c.chat() {
-		b, _ := json.Marshal(map[string]string{"an": c.Person, "text": subject + "\n\n" + body})
+		msg := map[string]any{"an": c.Person, "text": subject + "\n\n" + body}
+		for k, v := range poll {
+			msg[k] = v
+		}
+		b, _ := json.Marshal(msg)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+"/mitteilung", bytes.NewReader(b))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -213,7 +217,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
-		if err = tell(ctx, c, "Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles."); err == nil {
+		if err = tell(ctx, c, "Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles.", nil); err == nil {
 			for _, k := range keys {
 				seen.Mailed[k] = true
 			}
@@ -231,7 +235,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		}
 		seen.Updates = now
 		if len(ups) > 0 {
-			if e := tell(ctx, c, "Laib: Updates verfügbar", "Neuere Images (laib updates):\n\n"+strings.Join(ups, "\n")+"\n"); e != nil {
+			if e := tell(ctx, c, "Laib: Updates verfügbar", "Neuere Images (laib updates):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
 				seen.Updates, err = time.Time{}, e
 			}
 		}
@@ -278,10 +282,12 @@ func proposals(ctx context.Context, c Config, seen map[int]bool) error {
 		}
 		// the decision line comes second: bote-notify cuts a long text at the end
 		body := cmp.Or(p.Card.Summary, p.Reason)
+		var poll map[string]any // on Signal, bote-notify adds Freigeben / Ablehnen / Später (#509)
 		if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" {
 			body += "\nDas entscheidest du nur in der Inbox, mit dem zweiten Faktor: " + c.InboxURL
 		} else {
 			body += fmt.Sprintf("\nIm Chat: »gib #%d frei« oder »lehne #%d ab«. Oder in der Inbox: %s", p.ID, p.ID, c.InboxURL)
+			poll = map[string]any{"vorschlag": p.ID, "frage": fmt.Sprintf("Vorschlag #%d: %s", p.ID, cmp.Or(p.Card.Summary, p.Reason))}
 		}
 		for _, i := range p.Card.Impact {
 			body += "\n- " + i
@@ -289,7 +295,7 @@ func proposals(ctx context.Context, c Config, seen map[int]bool) error {
 		if p.Card.Reversible != "" {
 			body += "\nRückgängig: " + p.Card.Reversible
 		}
-		if e := tell(ctx, c, fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body); e != nil {
+		if e := tell(ctx, c, fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body, poll); e != nil {
 			return e
 		}
 		seen[p.ID] = true

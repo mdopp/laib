@@ -97,6 +97,17 @@ class PersonaPlugin(unittest.TestCase):
         _, out = self.turn("Ist das Licht in der Küche an?", "JOSHUA/GERÄTE>\nJa.", turn="t2")
         self.assertIsNone(out)                                                   # already there: the answer stays
 
+    def test_a_free_answer_at_the_top_has_no_prompt_line(self):
+        # #510: "JOSHUA>" above "Bambi ist aus." was out of place; the prompt belongs to menus and games
+        ctx, out = self.turn("Mach Bambi aus", "Bambi ist aus.")
+        self.assertNotIn("Beginne die Antwort", ctx["context"])
+        self.assertIsNone(out)
+        _, out = self.turn("Mach Bambi aus", "JOSHUA>\nBambi ist aus.", turn="t2")   # copied from earlier turns
+        self.assertEqual(out, "Bambi ist aus.")
+        ctx, out = self.turn("Wer bist du?", "Ich bin Oma Erna.", turn="t3")
+        self.assertNotIn("Beginne die Antwort", ctx["context"])
+        self.assertIsNone(out)
+
     def test_a_turn_the_bote_could_not_help_with_is_left_to_laib_nutzung(self):
         # Hermes takes the first plugin's text: laib-nutzung must still strip its mark and count the turn
         _, out = self.turn("Ist das Licht in der Küche an?", "[unbeantwortet] Das weiß ich nicht.")

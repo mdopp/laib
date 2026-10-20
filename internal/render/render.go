@@ -67,6 +67,9 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			out["quadlet/"+name+"/"+file] = content
 		}
 		out["quadlet/"+name+"/"+ValuesFile] = values(name, svc)
+		if len(svc.Hooks) > 0 {
+			out["quadlet/"+name+"/"+HooksFile] = hooks(name, svc)
+		}
 	}
 	if uses(st, "PERSONA") {
 		// the packages a service mounts from /mnt/data/laib/render/persona (ADR 0020)
@@ -153,6 +156,19 @@ func BackupPaths(st *state.State, stateDir, journalDir string) []string {
 // changes no unit, and through this file it is still a change of the
 // service, so apply re-runs its hooks and restarts it. Quadlet ignores it.
 const ValuesFile = "values.laib"
+
+// HooksFile holds a hash of each hook (#496): a template update that only
+// changes pre-start or post-deploy changes no unit, and through this file
+// it is still a change of the service, so apply runs the new hook.
+const HooksFile = "hooks.laib"
+
+func hooks(name string, svc *state.Service) string {
+	b := "# Rendered by laib: the hooks of " + name + " (#496), by their hash.\n"
+	for _, h := range slices.Sorted(maps.Keys(svc.Hooks)) {
+		b += fmt.Sprintf("%s=sha256:%x\n", h, sha256.Sum256([]byte(svc.Hooks[h])))
+	}
+	return b
+}
 
 func values(name string, svc *state.Service) string {
 	var b strings.Builder

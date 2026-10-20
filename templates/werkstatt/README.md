@@ -90,7 +90,11 @@ entrypoint runs it on every start and then every five minutes
 (`WERKSTATT_SESSIONS_EVERY`), so a new checkout gets its session without a
 restart, and a session that ended is started again. `werkstatt-sessions off
 <name>` switches one off with a marker in `~/.werkstatt/no-autostart/` (the
-kept home), so it stays off across restarts; `on <name>` brings it back.
+kept home), so it stays off across restarts and no fresh start follows a
+`--continue` that ends; `on <name>` brings it back. It runs as dev
+(`podman exec -u dev systemd-werkstatt bash -lc 'werkstatt-sessions off
+<name>'`): as anyone else it refuses, since root's home and root's tmux are
+not the sessions' (#498).
 Over SSH, `tmux attach -t claude` shows them. Nobody is at a window, so
 before a checkout's first start the pass answers Claude Code's first-run
 questions in `~/.claude.json` (#498): `hasCompletedOnboarding` and

@@ -78,7 +78,7 @@ Nothing has run on a real box yet. What exists and how far it is proven:
 | Operator (admin agent), lease, Frage | `operator/`, `cmd/laib-lease`, `frage/` | e2e with a scripted model; never against a real model |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; the approval relay | `templates/bote`, `automat/`, `cmd/relay` | config rendered and checked against Hermes' source; automat and relay unit-tested against a fake HA and a fake homeserver |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
-| 23 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
+| 24 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what

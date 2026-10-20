@@ -348,3 +348,17 @@ func TestANameResolvesToItsNumbersPersona(t *testing.T) {
 		t.Fatalf("a number still works as is:\n%s", out)
 	}
 }
+
+// #510: the games' number in the directory is no games command; it showed
+// nothing and went to the Bote, which listed Laib's operator skills as games.
+func TestTheGamesNumberShowsTheList(t *testing.T) {
+	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, joshua())
+	j.Talk("anna", "de", "Menü")
+	out := j.Talk("anna", "de", "5")
+	if strings.HasPrefix(out, "WEITER") || !strings.Contains(out, "GLOBAL THERMONUCLEAR WAR") || !strings.HasSuffix(out, "JOSHUA/SPIELE>") {
+		t.Fatalf("the games number shows the games list:\n%s", out)
+	}
+	if out := j.Talk("anna", "de", "play tic-tac-toe"); !strings.Contains(out, "NUMBER OF PLAYERS") {
+		t.Fatalf("the games level takes its commands after the number:\n%s", out)
+	}
+}

@@ -24,7 +24,15 @@
 #
 # A window whose session ended with an error stays visible
 # (remain-on-exit failed, tmux.conf) and is started again on the next pass;
-# a session that was ended cleanly is started again too. Off is the marker.
+# a session that was ended cleanly is started again too. Off is the marker,
+# and every path that starts a session reads it: the pass, and the window's
+# own fresh start after `--continue` (#498: a `--continue` that ended after
+# hours started `claude --remote-control flut` again, marker or not).
+#
+# It runs as dev, whose kept home holds the markers and whose tmux server
+# runs the windows. As root (`podman exec` without `-u dev`) `off` wrote the
+# marker into root's home and killed nothing in root's empty tmux, and said
+# it had (#498): it refuses instead.
 set -euo pipefail
 WS="${WERKSTATT_WORKSPACE:-/workspace}"
 OFF="${WERKSTATT_SESSIONS_OFF:-$HOME/.werkstatt/no-autostart}"
@@ -34,6 +42,11 @@ CONF="${WERKSTATT_TMUX_CONF:-/etc/tmux.conf}"
 CLAUDE_JSON="${WERKSTATT_CLAUDE_JSON:-$HOME/.claude.json}"
 EMPTY=".werkstatt"   # the empty session's window: a leading dot, which no checkout's name has (valid)
 t() { tmux -f "$CONF" "$@"; }
+AS="${WERKSTATT_USER:-dev}"
+if [ "$(id -un)" != "$AS" ]; then
+  echo "werkstatt-sessions: runs as $AS, not as $(id -un): its markers are in $AS's home, its windows in $AS's tmux (podman exec -u $AS systemd-werkstatt bash -lc 'werkstatt-sessions …')" >&2
+  exit 2
+fi
 
 # a checkout's name crosses into a shell command and a tmux target: no
 # dot first (hidden, or . and ..), no dash first, no slash, no colon
@@ -45,11 +58,13 @@ window() { # window <name>: the window's index, or nothing
 }
 
 start() { # start <name>
-  local name="$1" path="$WS/$1" q cmd
+  local name="$1" path="$WS/$1" q off cmd
   q=$(printf '%q' "$name")
-  # in a checkout with no conversation yet --continue exits 1: start fresh
+  off=$(printf '%q' "$OFF/$name")
+  # in a checkout with no conversation yet --continue exits 1: start fresh,
+  # unless the session was switched off meanwhile (#498)
   # LAIB_SESSION: the name this session's own claude token is asked for under (#380)
-  cmd="LAIB_SESSION=$q $CLAUDE --continue --remote-control $q || LAIB_SESSION=$q $CLAUDE --remote-control $q"
+  cmd="LAIB_SESSION=$q $CLAUDE --continue --remote-control $q || { test -e $off || LAIB_SESSION=$q $CLAUDE --remote-control $q; }"
   # a checkout another uid made (a restore, a root clone): git refuses it otherwise
   git config --global --replace-all --fixed-value safe.directory "$path" "$path" 2>/dev/null || true
   if t has-session -t "=$S" 2>/dev/null; then
