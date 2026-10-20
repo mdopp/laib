@@ -79,7 +79,8 @@ assert mod is not None, "Hermes did not load laib-nutzung (plugins.enabled, plug
 mod.flush()
 for s in SEEN:
     print("sent:", s)
-assert (a, b) == ("Das weiß ich nicht.", "JOSHUA>\nErledigt."), (a, b)
+# #510: at the top level the prompt line the model copied is dropped
+assert (a, b) == ("Das weiß ich nicht.", "Erledigt."), (a, b)
 got = {body["event"]: body["count"] for path, body in SEEN if path == "/ingest"}
 assert got == {"werkzeug.haushalt.kalender": 2, "zug": 3, "unbeantwortet": 1}, got
 assert [body for path, body in SEEN if path == "/miss"] == [{"source": "bote", "text": "Wann kommt der Müll?", "day": SEEN[0][1]["day"]}], SEEN
