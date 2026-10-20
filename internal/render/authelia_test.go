@@ -203,7 +203,7 @@ func TestAutheliaMailTemplates(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "render", "authelia"), 0o755)
 	hook := exec.Command("python3", "../../templates/auth/pre-start")
-	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://admin.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://haus.vm.test/", "LAIB_HAUS_URL=https://haus.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
 	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
 		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=x")
 	}

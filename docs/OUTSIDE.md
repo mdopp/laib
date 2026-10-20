@@ -9,6 +9,12 @@ reads the gap as an oversight (issue #19).
 not open the router. ServiceBay talked to the Fritz!Box (gateway poller,
 port-forward edges in the network map); Laib does not know the router exists.
 
+Without the forward nothing changes for a LAN-only (`exposure: internal`)
+name: Caddy answers any source outside the private ranges with 403 before
+Authelia. What the person sees is a German page saying the name works only
+in the home WLAN, and a link to Haus, which works on the road (#480). Laib
+has no VPN; that is the "anything else" below.
+
 - Once per box: forward TCP 80 and 443 on the router to the box's LAN IP
   (`box.yml lanIp`). Certificates use HTTP-01 (ADR 0007, amendment
   2026-10-13), so port 80 must reach the box; a DNS provider with an API

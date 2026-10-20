@@ -5,10 +5,30 @@
 	local_certs
 }
 
+(lanonly) {
+	handle {
+		header Content-Type "text/html; charset=utf-8"
+		respond <<HTML
+			<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Nur zu Hause</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p></main></body></html>
+			HTML 403
+	}
+}
+
+(denied) {
+	header Content-Type "text/html; charset=utf-8"
+	respond <<HTML
+		<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Kein Zugang</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Kein Zugang mit diesem Konto</h1><p>Du bist angemeldet, aber dein Konto darf {http.request.host} nicht öffnen. Manche Seiten sind nur für die Admins der Box.</p><p><a href="https://auth.nuc.home/logout?rd=https://{http.request.host}/">Abmelden und mit einem anderen Konto anmelden</a></p></main></body></html>
+		HTML 403
+}
+
 (authelia) {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		@denied status 403
+		handle_response @denied {
+			import denied
+		}
 	}
 }
 
@@ -21,7 +41,7 @@ laib.nuc.home {
 			header_up X-Laib-Proxy "${secret:LAIB_PROXY_SECRET}"
 		}
 	}
-	respond 403
+	import lanonly
 }
 
 dns.nuc.home {
@@ -31,7 +51,7 @@ dns.nuc.home {
 		import authelia
 		reverse_proxy 127.0.0.1:8083
 	}
-	respond 403
+	import lanonly
 }
 
 auth.nuc.home {
@@ -45,7 +65,7 @@ ldap.nuc.home {
 	handle @lan {
 		reverse_proxy 127.0.0.1:17170
 	}
-	respond 403
+	import lanonly
 }
 
 whoami.nuc.home {
@@ -64,7 +84,7 @@ whoami.nuc.home {
 			header_up X-Whoami-Proxy "${secret:WHOAMI_TOKEN}"
 		}
 	}
-	respond 403
+	import lanonly
 }
 
 nuc.home, www.nuc.home {

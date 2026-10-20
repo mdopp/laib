@@ -155,8 +155,10 @@ storage:
 """
 # 2c. the reset mail in German (#360): the same mail sets a first password
 # (laib person invite) and a forgotten one, so it says both, and where the
-# family goes next. Authelia fills the {{ }}; the link lives 24 hours
-# (jwt_lifespan above), long enough to pass it on by Signal.
+# family goes next: Haus's welcome once Haus is installed, else the start page
+# (#480: never a name the box does not serve). Authelia fills the {{ }}; the
+# link lives 24 hours (jwt_lifespan above), long enough to pass it on by Signal.
+welcome = E["LAIB_HAUS_URL"] + "willkommen" if E.get("LAIB_HAUS_URL") else E["LAIB_START_URL"]
 tpl_dir = os.path.join(cfg_dir, "templates")
 os.makedirs(tpl_dir, exist_ok=True)
 TXT = """Hallo {{ .DisplayName }},
@@ -166,7 +168,7 @@ mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:
 {{ .LinkURL }}
 
 Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem
-Benutzernamen und dem Passwort an. Los geht es hier: https://haus.@DOMAIN@/willkommen
+Benutzernamen und dem Passwort an. Los geht es hier: @WELCOME@
 
 Hast du das nicht angefordert? Dann sperre den Link: {{ .RevocationLinkURL }}
 """
@@ -176,13 +178,13 @@ HTML = """<!DOCTYPE html>
 <p>mit diesem Link setzt du dein Passwort für @DOMAIN@, das erste oder ein neues:</p>
 <p><a href="{{ .LinkURL }}" style="font-size: 1.1em">Passwort setzen</a></p>
 <p>Der Link gilt 24 Stunden und nur einmal. Danach meldest du dich mit deinem Benutzernamen und dem Passwort an.
-Los geht es hier: <a href="https://haus.@DOMAIN@/willkommen">haus.@DOMAIN@</a></p>
+Los geht es hier: <a href="@WELCOME@">@WELCOME@</a></p>
 <p style="color: #666; font-size: 0.9em">Hast du das nicht angefordert? Dann <a href="{{ .RevocationLinkURL }}">sperre den Link</a>.</p>
 </body></html>
 """
 for ext, body in (("txt", TXT), ("html", HTML)):
     with open(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), "w") as f:
-        f.write(body.replace("@DOMAIN@", DOMAIN))
+        f.write(body.replace("@DOMAIN@", DOMAIN).replace("@WELCOME@", welcome))
     os.replace(os.path.join(tpl_dir, "IdentityVerificationJWT." + ext + ".tmp"), os.path.join(tpl_dir, "IdentityVerificationJWT." + ext))
 
 # 3. the OIDC clients, one list in one file (oidc-clients.yml): Laib's, rendered

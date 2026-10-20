@@ -9,6 +9,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -54,7 +55,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	guard := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !viaProxy(r) {
-				http.Error(w, "nur über laib.<domain> (Authelia)", http.StatusForbidden)
+				http.Error(w, "nur über die Box-Seite (Caddy und Authelia)", http.StatusForbidden)
 				return
 			}
 			h(w, r)
@@ -123,6 +124,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		page(w, "Bote verbinden", "<h1>Bote verbinden</h1><p>Der Bote braucht eine eigene Signal-Nummer, einmal auf der Box eingerichtet:</p><pre>"+BoteLinkPage(st.Box.DataDir, boteAccount(st))+"</pre><p><a href=\"/\">zurück</a></p>")
 	}))
+	mux.HandleFunc("/abmelden", Abmelden(env))
 	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
 		open, err := proposal.List(cli.InboxDir(env), true)
 		var b strings.Builder
@@ -284,8 +286,22 @@ func resultClass(r string) string {
 	return "info"
 }
 
+// Abmelden is the way out (#480): Authelia's logout, then the login for the
+// box page again, so another account can sign in.
+func Abmelden(env *cli.Env) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		st, err := cli.LoadState(env)
+		if err != nil {
+			http.Error(w, "State nicht lesbar: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		back := "https://" + st.Box.Laib.Host + "." + st.Box.Domain + "/"
+		http.Redirect(w, r, render.LogoutURL(st)+"?rd="+url.QueryEscape(back), http.StatusSeeOther)
+	}
+}
+
 // nav is the three pages' links, on top of each.
-const nav = `<nav><a href="/">Status</a><a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a></nav>`
+const nav = `<nav><a href="/">Status</a><a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a><a href="/abmelden">Abmelden</a></nav>`
 
 func netBody(n render.NetMap) string {
 	var b strings.Builder
@@ -335,6 +351,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	if bote {
 		links += `<a href="/bote/link">Bote verbinden</a>`
 	}
+	links += `<a href="/abmelden">Abmelden</a>`
 	heard := rd.LastHeard
 	if len(heard) >= 19 {
 		heard = heard[11:19]
