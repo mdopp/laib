@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.1](https://github.com/mdopp/laib/compare/v0.11.0...v0.11.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **llama:** no thinking by default per preset; a request still opts in ([ef632d5](https://github.com/mdopp/laib/commit/ef632d561ee2f91db23f842ddb7d79df259fca08)), closes [#501](https://github.com/mdopp/laib/issues/501)
+* **operator:** re-mint a revoked ops token on enable, show it in status ([d6f187a](https://github.com/mdopp/laib/commit/d6f187a6fdb6804cf2678f880066333848e1d0f1)), closes [#500](https://github.com/mdopp/laib/issues/500)
+* **werkstatt:** keep claude-dev's logins and conversations, let the login beat the setup token ([c309170](https://github.com/mdopp/laib/commit/c309170c169507d34d1affa7d037a29de7f83b63)), closes [#498](https://github.com/mdopp/laib/issues/498)
+
+
+### Performance Improvements
+
+* **bote:** compress a long conversation by token count ([983d331](https://github.com/mdopp/laib/commit/983d331d8451a757597e68831fb406b13ff0e76e)), closes [#502](https://github.com/mdopp/laib/issues/502)
+* **bote:** every tool in the array, Hermes' stock skills out ([84958c8](https://github.com/mdopp/laib/commit/84958c8e508178ce3c9c7088b0ea2b5f8bf24286)), closes [#502](https://github.com/mdopp/laib/issues/502)
+
 ## [0.11.0](https://github.com/mdopp/laib/compare/v0.10.1...v0.11.0) (2026-10-20)
 
 
