@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,8 +34,12 @@ func newFakeBote(t *testing.T) *fakeBote {
 			http.Error(w, `{"ok": false, "grund": "kein Kanal erreichbar"}`, http.StatusBadGateway)
 			return
 		}
-		var m map[string]string
-		json.NewDecoder(r.Body).Decode(&m)
+		var raw map[string]any
+		json.NewDecoder(r.Body).Decode(&raw)
+		m := map[string]string{}
+		for k, v := range raw {
+			m[k] = fmt.Sprint(v)
+		}
 		b.got = append(b.got, m)
 		w.Write([]byte(`{"ok": true, "kanal": "discord"}`))
 	}))
@@ -132,6 +137,11 @@ func TestProposalsReachTheChatOnceAndDestructiveOnesOnlyLinkTheInbox(t *testing.
 	}
 	if s := byID["#17"]; !strings.Contains(s, "whoami bekommt ein neues Image") || !strings.Contains(s, "gib #17 frei") || !strings.Contains(s, "lehne #17 ab") {
 		t.Errorf("a non-destructive proposal says how to decide it in the chat: %q", s)
+	}
+	for _, m := range got { // #509: bote-notify makes a poll on Signal only for what the chat may decide
+		if strings.Contains(m["text"], "Vorschlag #17") != (m["vorschlag"] == "17") || m["vorschlag"] == "17" && m["frage"] != "Vorschlag #17: whoami bekommt ein neues Image" {
+			t.Errorf("a poll only for the non-destructive #17: %v", m)
+		}
 	}
 	for _, id := range []string{"#18", "#19"} {
 		s := byID[id]

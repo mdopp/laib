@@ -19,6 +19,8 @@ Volume=./notify.py:/app/notify.py:ro,z
 Volume=/mnt/data/laib/render/people:/people:ro,z
 # the platform credentials only, written by post-deploy; never the Bote's HERMES_HOME
 Volume=${DATA_DIR}/bote/notify:/hermes:ro,z
+# a proposal's poll on Signal: its timestamp → the proposal, for the relay (#509)
+Volume=${DATA_DIR}/bote/umfragen:/umfragen:z
 AutoUpdate=registry
 
 [Service]
