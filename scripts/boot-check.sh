@@ -49,15 +49,13 @@ why=""; red=0; blocked=0
 # on purpose is blocked at the proven boot as well, and the record names it.
 # #481: the path into the namespace is built anew for every round and
 # checked before and after it: a round whose path did not carry packets
-# measured nothing, and its ports are not blocked ports. Built once and
-# trusted for the whole window, a path that stopped carrying packets made
-# every listening port read as blocked (the Kraftwerk's baseline "0 26").
+# measured nothing, and its ports are not blocked ports.
 # A port is blocked when the connect times out (dropped) or is refused; any
 # other failure is the probe's own, and the round measured nothing. The
-# connect runs under nsenter, in this service's own context: `ip netns exec`
-# runs it in ip's SELinux domain (ifconfig_t), whose connects are denied, so
-# from the service every port failed at once while the same probe by hand
-# from an SSH shell answered (#481).
+# connect runs under nsenter, in this service's own context: run through
+# `ip netns exec` from the service, every connect failed at once (the VM:
+# 22 and 5355 "blocked"; the Kraftwerk: all 26), while the same command by
+# hand from an SSH shell answered (#481).
 NS=laib-probe
 probe_down() { ip netns del "$NS" 2>/dev/null; ip link del laibp0 2>/dev/null; }
 probe_up() {

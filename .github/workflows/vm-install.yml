@@ -982,25 +982,11 @@ jobs:
                 printf "[Service]\nEnvironment=LAIB_BOOT_CHECK_TIMEOUT=120 LAIB_BOOT_CHECK_INTERVAL=5\n" | sudo tee /etc/systemd/system/laib-boot-check.service.d/vm.conf >/dev/null
                 sudo systemctl daemon-reload
                 sudo rm -f /var/lib/laib/boot-proven /var/lib/laib/boot-rolled-back
-                cat >/tmp/probe-diag.sh <<"DIAG"
-          lan=$(ip -4 route get 1.1.1.1 | sed -n "s/.* src \([0-9.]*\).*/\1/p")
-          ip netns del laib-probe 2>/dev/null; ip link del laibp0 2>/dev/null
-          ip netns add laib-probe; ip link add laibp0 type veth peer name laibp1 netns laib-probe
-          ip addr add 169.254.254.1/30 dev laibp0; ip link set laibp0 up
-          ip -n laib-probe addr add 169.254.254.2/30 dev laibp1; ip -n laib-probe link set laibp1 up; ip -n laib-probe link set lo up; ip -n laib-probe route add default via 169.254.254.1
-          echo "context: $(id -Z 2>&1)"
-          ip netns exec laib-probe timeout 3 bash -c "exec 3<>/dev/tcp/$lan/22" 2>&1 && echo "ip netns exec: open" || echo "ip netns exec: rc $?"
-          nsenter --net=/run/netns/laib-probe timeout 3 bash -c "exec 3<>/dev/tcp/$lan/22" 2>&1 && echo "nsenter: open" || echo "nsenter: rc $?"
-          ip netns del laib-probe; ip link del laibp0 2>/dev/null
-          DIAG
                 sudo systemctl restart laib-boot-check.service   # the boot-time run still waits its 15 minutes: restart it with the short window
                 # a red box (the degraded mirror of the step before) is recorded only after the 120 s timeout
                 for i in $(seq 1 90); do test -s /var/lib/laib/boot-proven && break; sleep 2; done
                 test -s /var/lib/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
                 echo "proven: $(cat /var/lib/laib/boot-proven)"
-                echo "--- the probe from a service:"; sudo systemd-run --quiet --wait --pipe bash /tmp/probe-diag.sh || true
-                echo "--- the probe from this shell:"; sudo bash /tmp/probe-diag.sh || true
-                sudo journalctl --no-pager -b _TRANSPORT=audit | grep -i "denied" | tail -5 || true
                 # #481: the LAN probe from the namespace reaches every LAN port on the VM; lan: false ports are no LAN ports
                 read -r _ _ n ports </var/lib/laib/boot-proven
                 [ "${n:-0}" = 0 ] || { echo "the baseline has $n blocked LAN ports (${ports:-}): the probe counts a port the LAN reaches, or a lan: false port"; journalctl --no-pager -u laib-boot-check | tail -20; sudo nft list ruleset; ss -Hltn; exit 1; }

@@ -56,9 +56,9 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    the LAN address from a network namespace over a veth pair (loopback
    passes any firewall), with no port blocked that was open at the last
    proven boot (the record names the blocked ports, #481; laib's own
-   `lan: false` ports are not probed, and the path into the namespace is
-   built and checked anew for every round, so a broken path measures
-   nothing rather than "everything blocked").
+   `lan: false` ports are not probed; only a timeout or a refusal is a
+   blocked port, any other failure of the probe measures nothing rather
+   than "everything blocked").
    Green: the deployment is
    recorded in `/var/lib/laib/boot-proven`. Not green: `rpm-ostree rollback`,
    reboot, Zincati paused with `/etc/zincati/config.d/95-laib-boot-check.toml`
