@@ -319,6 +319,9 @@ func (t *Terminal) Talk(sid, language, line string) string {
 			return fmt.Sprintf(w.connect, word(w.labels, s.ctx)) + "\n\n" + prompt(s)
 		case gamesOn(s.p) && (n == len(tools)+1 || in == "SPIELE" || has(in, "SPIELEN", "SPIELE ", "GAMES", "PLAY ", "TIC-TAC", "TICTACTOE", "THERMONUCLEAR")):
 			s.ctx = games
+			if n == len(tools)+1 { // the number is no games command: its screen is the list (#510)
+				return t.gamesList(s)
+			}
 		case n >= 0:
 			return t.directory(s, w)
 		default:

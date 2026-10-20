@@ -112,6 +112,23 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes", p.stdout.splitlines())
         self.assertNotIn("idle_compact_after_seconds", conf, "a key the gateway never acts on (it resets the idle clock per turn)")
 
+    def test_with_frage_the_world_is_asked_not_remembered(self):
+        """#510: without thinking the model answered "Wie groß ist ein K8 Berg?" from
+        memory, with a made-up table. With Frage wired the SOUL sends every question
+        about the world to frage; without it the SOUL names no tool it lacks."""
+        srv = HTTPServer(("127.0.0.1", 0), FakeHaushalt)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        for frage in ("", f"http://127.0.0.1:{srv.server_port}/mcp"):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                           MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok", FRAGE_URL=frage)
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                soul = Path(d, "bote/hermes/SOUL.md").read_text()
+            self.assertEqual("immer mit frage, nie aus dem Gedächtnis" in soul, bool(frage), soul)
+            self.assertIn("Keine Emojis", soul)
+
     def test_a_long_conversation_is_compressed_by_token_count(self):
         """#502, the owner's choice: Signal conversations run for days and drag the box trail into
         every call. Hermes' compression.threshold_tokens compresses once a prompt passes N tokens

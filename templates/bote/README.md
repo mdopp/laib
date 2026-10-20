@@ -332,8 +332,10 @@ is the answer, verbatim in a code block, through `transform_llm_output`,
 whatever the model wrote. A screen with **VALID:** asks the model to
 translate the person's words into one of the commands; the engine's answer
 to that command is what the person gets. **WEITER** (a request for one of
-the Bote's tools) goes to the model with the context and the prompt line,
-and the answer starts with that line. A chat persona's `FIGUR:` line rides
+the Bote's tools) goes to the model with the context; inside a menu level
+or the games (`JOSHUA/GERÄTE>`, `JOSHUA/SPIELE>`) the answer starts with
+the prompt line, an ordinary answer at the top has none (#510). A chat
+persona's `FIGUR:` line rides
 along. Without the engine the turn is Hermes' as usual; a cron job is left
 alone. Tests: `tests/test_persona_plugin.py` (the hooks against a fake
 engine) and `tests/hermes_plugin_proof.py` (Hermes' own loader, its
@@ -345,7 +347,9 @@ newer release; ci.yml proves the plugins in the pinned image.
 
 The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to
 `render/persona/<name>/`) plus the fixed rules: approvals, warnings and
-errors in plain words, no approvals by the Bote, the never-list. No persona
+errors in plain words, no approvals by the Bote, the never-list, and with
+Frage wired: questions about the world go to `frage`, never from memory
+(#510: without thinking the model made up a mountain table). No persona
 changes those (ADR 0020 §3). A number in box.yml `chatPersonas` talks to its
 own persona: Hermes shows the model the sender's profile name, the persona
 engine resolves it to the number through signal-cli's contacts in the pod,

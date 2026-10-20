@@ -13,8 +13,10 @@ rewritten or dropped. Here the engine sees each message before the model:
   asked to translate them into one of the commands, and the engine's answer
   to that command is what the person gets;
 - WEITER (a request for one of the Bote's tools): the routing (the context,
-  the prompt line, a chat persona's FIGUR) goes into the user turn, and the
-  answer starts with the prompt line.
+  a chat persona's FIGUR) goes into the user turn. Inside a menu level or the
+  games (JOSHUA/GERÄTE>, JOSHUA/SPIELE>) the answer starts with the prompt
+  line; an ordinary answer at the top (JOSHUA>, a chat persona's HAL>) has
+  none (#510: "JOSHUA>" above "Bambi ist aus." was out of place).
 
 Without the engine (it does not answer) the turn is Hermes' as usual. A
 scheduled job is no person and is left alone. Stdlib only.
@@ -83,10 +85,16 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
         r = _routing(answer)
         tool = r.get("WEITER", "-")
         where = "mit jedem deiner Werkzeuge" if tool in ("", "-") else "nur mit dem Werkzeug " + tool
-        prompt = r.get("PROMPT", "")
+        prompt = top = r.get("PROMPT", "")
+        if "/" not in prompt:
+            prompt = ""   # the terminal prompt belongs to menus and games, not to a free answer (#510)
         with _lock:
             _turns[key] = ("weiter", prompt, session)
-        ctx = "Persona: Beantworte diese Nachricht selbst, %s. Beginne die Antwort mit der Zeile %s" % (where, prompt)
+        ctx = "Persona: Beantworte diese Nachricht selbst, %s." % where
+        if prompt:
+            ctx += " Beginne die Antwort mit der Zeile " + prompt
+        elif top:
+            ctx += " Schreib keine Zeile %s davor." % top
         if r.get("FIGUR"):
             ctx += "\nFIGUR: " + r["FIGUR"]
         return {"context": ctx}
@@ -117,7 +125,13 @@ def on_output(response_text=None, session_id=None, turn_id=None, **_):
     # weiter: the prompt line first, once
     text = response_text if isinstance(response_text, str) else ""
     # laib-nutzung's mark: Hermes takes the first plugin's text, and that one strips the mark
-    if not payload or text.lstrip().startswith(payload) or "[unbeantwortet]" in text:
+    if "[unbeantwortet]" in text:
+        return None
+    if not payload:
+        # a free answer: a prompt line the model copied from earlier turns goes (#510)
+        bare = re.sub(r"^\s*[A-ZÄÖÜ]+(/[A-ZÄÖÜ]+)*>[ \t]*\n+", "", text, count=1)
+        return bare if bare != text else None
+    if text.lstrip().startswith(payload):
         return None
     return payload + "\n" + text
 
