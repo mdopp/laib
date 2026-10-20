@@ -983,21 +983,14 @@ jobs:
                 sudo systemctl daemon-reload
                 sudo rm -f /var/lib/laib/boot-proven /var/lib/laib/boot-rolled-back
                 cat >/tmp/probe-diag.sh <<"DIAG"
-          lan=$(ip -4 route get 1.1.1.1 | sed -n "s/.* src \([0-9.]*\).*/\1/p"); echo "lan=$lan"
+          lan=$(ip -4 route get 1.1.1.1 | sed -n "s/.* src \([0-9.]*\).*/\1/p")
           ip netns del laib-probe 2>/dev/null; ip link del laibp0 2>/dev/null
           ip netns add laib-probe; ip link add laibp0 type veth peer name laibp1 netns laib-probe
           ip addr add 169.254.254.1/30 dev laibp0; ip link set laibp0 up
           ip -n laib-probe addr add 169.254.254.2/30 dev laibp1; ip -n laib-probe link set laibp1 up; ip -n laib-probe link set lo up; ip -n laib-probe route add default via 169.254.254.1
-          for t in 0 1 2 4 8 15 30 45 60; do sleep $t
-            ip netns exec laib-probe timeout 3 bash -c "exec 3<>/dev/tcp/$lan/22" && r=open || r=no
-            echo "--- +$t s: port 22 $r; $(ip -br addr show laibp0 | tr -s " "); $(nmcli -t -f DEVICE,STATE,CONNECTION device status 2>/dev/null | grep laibp); neigh: $(ip neigh show dev laibp0 | tr "\n" " ")"
-          done
-          ip rule; ip route get 169.254.254.2; ip -n laib-probe route; ip -n laib-probe addr
-          sysctl net.ipv4.conf.all.rp_filter net.ipv4.conf.laibp0.rp_filter net.ipv4.conf.default.rp_filter net.ipv4.ip_forward
-          ls /usr/lib/udev/rules.d/ | grep -i nm; grep -h veth /usr/lib/udev/rules.d/*nm* /etc/NetworkManager/conf.d/* /usr/lib/NetworkManager/conf.d/* 2>/dev/null
-          journalctl --no-pager -b -u NetworkManager | grep -i laibp | tail -30
-          ip netns exec laib-probe ping -c2 -W1 169.254.254.1; ip netns exec laib-probe ping -c2 -W1 "$lan"
-          ip -s link show laibp0; ip netns exec laib-probe ip -s link show laibp1
+          echo "context: $(id -Z 2>&1)"
+          ip netns exec laib-probe timeout 3 bash -c "exec 3<>/dev/tcp/$lan/22" 2>&1 && echo "ip netns exec: open" || echo "ip netns exec: rc $?"
+          nsenter --net=/run/netns/laib-probe timeout 3 bash -c "exec 3<>/dev/tcp/$lan/22" 2>&1 && echo "nsenter: open" || echo "nsenter: rc $?"
           ip netns del laib-probe; ip link del laibp0 2>/dev/null
           DIAG
                 sudo systemctl restart laib-boot-check.service   # the boot-time run still waits its 15 minutes: restart it with the short window
@@ -1005,9 +998,12 @@ jobs:
                 for i in $(seq 1 90); do test -s /var/lib/laib/boot-proven && break; sleep 2; done
                 test -s /var/lib/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
                 echo "proven: $(cat /var/lib/laib/boot-proven)"
+                echo "--- the probe from a service:"; sudo systemd-run --quiet --wait --pipe bash /tmp/probe-diag.sh || true
+                echo "--- the probe from this shell:"; sudo bash /tmp/probe-diag.sh || true
+                sudo journalctl --no-pager -b _TRANSPORT=audit | grep -i "denied" | tail -5 || true
                 # #481: the LAN probe from the namespace reaches every LAN port on the VM; lan: false ports are no LAN ports
                 read -r _ _ n ports </var/lib/laib/boot-proven
-                [ "${n:-0}" = 0 ] || { echo "the baseline has $n blocked LAN ports (${ports:-}): the probe counts a port the LAN reaches, or a lan: false port"; journalctl --no-pager -u laib-boot-check | tail -20; sudo nft list ruleset; ss -Hltn; sudo bash /tmp/probe-diag.sh || true; exit 1; }
+                [ "${n:-0}" = 0 ] || { echo "the baseline has $n blocked LAN ports (${ports:-}): the probe counts a port the LAN reaches, or a lan: false port"; journalctl --no-pager -u laib-boot-check | tail -20; sudo nft list ruleset; ss -Hltn; exit 1; }
                 # broken on purpose: its kernel line masks the core user manager, so laib never answers /ready
                 sudo rpm-ostree kargs --append=systemd.mask=user@1000.service >/dev/null || sudo rpm-ostree kargs --bypass-driver --append=systemd.mask=user@1000.service >/dev/null
                 rpm-ostree status --json | jq -e ".deployments[] | select(.staged)" >/dev/null || { echo "no staged deployment"; rpm-ostree status; exit 1; }'

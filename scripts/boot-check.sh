@@ -52,6 +52,12 @@ why=""; red=0; blocked=0
 # measured nothing, and its ports are not blocked ports. Built once and
 # trusted for the whole window, a path that stopped carrying packets made
 # every listening port read as blocked (the Kraftwerk's baseline "0 26").
+# A port is blocked when the connect times out (dropped) or is refused; any
+# other failure is the probe's own, and the round measured nothing. The
+# connect runs under nsenter, in this service's own context: `ip netns exec`
+# runs it in ip's SELinux domain (ifconfig_t), whose connects are denied, so
+# from the service every port failed at once while the same probe by hand
+# from an SSH shell answered (#481).
 NS=laib-probe
 probe_down() { ip netns del "$NS" 2>/dev/null; ip link del laibp0 2>/dev/null; }
 probe_up() {
@@ -73,13 +79,16 @@ probe_up || { probe=""; say "no probe namespace: reachability from the LAN is no
 lan="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')"
 blocked=0; set=""
 reach() {   # 0: no newly blocked port; 1: why names them; 2: the path measured nothing
-  local p n=0 list="" new=""
+  local p e r n=0 list="" new=""
   [ -n "$probe" ] && [ -n "$lan" ] || { blocked=$base_blocked; set=$base_set; return 0; }
   local closed; closed=" $(sed -n '/tcp dport/{s/.*tcp dport//; s/drop.*//; s/[^0-9]/ /g; p}' "$NFT" 2>/dev/null | tr -s ' \n' '  ') "   # lan: false, as rendered
   probe_up && probe_ok || { why="the probe path into the namespace carried no packets: not measured"; say "$why"; return 2; }
   for p in $(ss -Hltn 2>/dev/null | awk -v ip="$lan" '{h=$4; sub(/:[^:]*$/, "", h); n=split($4, a, ":"); if (h == "0.0.0.0" || h == "*" || h == "[::]" || h == ip) print a[n]}' | sort -un); do
     case "$closed" in *" $p "*) continue ;; esac
-    ip netns exec "$NS" timeout 3 bash -c "exec 3<>/dev/tcp/$lan/$p" 2>/dev/null || { n=$((n + 1)); list="$list,$p"; }
+    e="$(nsenter --net="/run/netns/$NS" timeout 3 bash -c "exec 3<>/dev/tcp/$lan/$p" 2>&1)"; r=$?
+    [ "$r" != 0 ] || continue
+    if [ "$r" = 124 ] || [[ "$e" == *"Connection refused"* ]]; then n=$((n + 1)); list="$list,$p"; continue; fi
+    why="the probe of port $p failed in the probe itself (${e##*: }): not measured"; say "$why"; return 2
   done
   probe_ok || { why="the probe path into the namespace broke during the round: not measured"; say "$why"; return 2; }
   probe_down
