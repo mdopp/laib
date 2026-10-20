@@ -33,8 +33,12 @@ func newBootBox(t *testing.T) *bootBox {
 	t.Helper()
 	root := t.TempDir()
 	b := &bootBox{etc: filepath.Join(root, "etc"), bin: filepath.Join(root, "bin"), log: filepath.Join(root, "shim.log"), vardir: filepath.Join(root, "var", "lib", "laib"), root: root}
-	// the rollback deployment's own /etc: ostree keeps one per deployment
-	os.MkdirAll(filepath.Join(root, "ostree", "deploy", "fedora-coreos", "deploy", proven+".0", "etc"), 0o755)
+	// the rollback deployment's own /etc: ostree keeps one per deployment,
+	// on a read-only /sysroot (the mount shim opens it on remount rw)
+	backEtc := filepath.Join(root, "ostree", "deploy", "fedora-coreos", "deploy", proven+".0", "etc")
+	os.MkdirAll(backEtc, 0o755)
+	os.Chmod(backEtc, 0o555)
+	t.Cleanup(func() { os.Chmod(backEtc, 0o755); os.Chmod(filepath.Join(backEtc, "zincati"), 0o755); os.Chmod(filepath.Join(backEtc, "zincati", "config.d"), 0o755) })
 	os.MkdirAll(b.bin, 0o755)
 	os.MkdirAll(filepath.Join(b.etc, "laib"), 0o755)
 	t.Setenv("SHIM_LOG", b.log)
@@ -82,6 +86,12 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 	shim(t, b.bin, "rpm-ostree", rpmOstree)
 	shim(t, b.bin, "systemctl", "exit 0")
 	shim(t, b.bin, "runuser", "exit 0")
+	// Fedora CoreOS mounts /sysroot read-only: another deployment's /etc is
+	// writable only after a remount rw, in a private mount namespace as
+	// ostree itself does (train 22). Here the fake deploy tree is read-only
+	// until the boot check remounts; unshare runs its command.
+	shim(t, b.bin, "unshare", `while [ "${1#-}" != "$1" ]; do shift; done; exec "$@"`)
+	shim(t, b.bin, "mount", `case "$*" in *remount,rw*/sysroot*) chmod -R u+w "$LAIB_ROOT/ostree";; esac`)
 	// #445: the LAN address is 127.0.0.2 here, and the probe namespace is this
 	// process's own: `ip netns exec <ns> cmd` runs cmd, the rest of ip is a no-op
 	ss := filepath.Join(b.etc, "..", "ss.out")
