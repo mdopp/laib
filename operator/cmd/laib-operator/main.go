@@ -49,6 +49,8 @@ func main() {
 	} else {
 		log.Printf("context window unknown (%v): small budgets", err)
 	}
+	// a reply's token budget, thinking included (#489); 0 keeps the default
+	op.LLM.MaxTokens, _ = strconv.Atoi(env("OPERATOR_MAX_TOKENS", "0"))
 	op.Typed = operator.SmallModel(os.Getenv("OPERATOR_INTERFACE"), op.Window)
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
