@@ -25,9 +25,6 @@ func main() {
 	}
 	cfg.RouterURL = boxfs.Env("ROUTER_URL", "http://127.0.0.1:11434")
 	cfg.LeaseDir = boxfs.Env("LEASE_DIR", "/lease")
-	if d, err := time.ParseDuration(boxfs.Env("AUTO_IDLE", "30m")); err == nil {
-		cfg.AutoIdle = d
-	}
 	cfg.Token = os.Getenv("LEASE_TOKEN")
 	if d, err := time.ParseDuration(boxfs.Env("LEASE_RENEW", "10m")); err == nil {
 		cfg.Renew = d

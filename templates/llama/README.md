@@ -1,8 +1,8 @@
 # llama — the model role (ADR 0011)
 
 **Ported, not yet verified on the GPU box.** The policy proxy and the lease
-are `cmd/laib-lease` (Go, tested with a fake router: household, mode
-follows the request, a named holder, 409 with the holder named, the
+are `cmd/laib-lease` (Go, tested with a fake router: household only,
+a foreign preset refused without a lease, a named holder, 409 with the holder named, the
 catalogue marked, exclusive, release by holder). The pre-start hook
 writes the router's `presets.ini` from `presets.json` before every start
 (the router reads it only then, #512); the post-deploy hook fetches every
@@ -53,9 +53,22 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
 - **Renew or lose the card.** The answer carries `renew_after` (a third
   of the ttl, at most half of `LEASE_RENEW`, 10 min) and `expires_at` (the
   ttl asked for). A holder that misses two renewals is released, not after
-  four hours. The automatic window keeps its idle timeout and
-  is renewed only by requests that need it — a household request never
-  keeps a foreign window alive.
+  four hours.
+- **No window by request (#522).** Without a lease the proxy answers the
+  household model only; a request for another preset is a 409 that names
+  the household model and the lease API. Before, such a request took
+  `full` itself as holder `router`: one call from Solaris for Gemma
+  evicted Qwen (`--models-max 1`), stopped Whisper and put the voice on
+  the CPU for 45 minutes, and nothing said so. A preset outside the
+  household is a named holder's lease, which it renews and gives back. A
+  `router` window left in `lease.json` is given back when laib-lease starts.
+  Redirecting to the household model was the alternative; it was not
+  taken because the caller would get an answer from a model it did not
+  ask for and never learn that its configuration is wrong.
+- **A standing lease is yellow.** While any window other than the
+  household's stands, `lease/laib-status.json` carries a yellow finding
+  with the holder, the window, what it stopped and when it ends, so
+  `laib status` and `laib diag` say why Qwen has to reload.
 - **Starvation is visible.** Every service whose units the lease stops
   carries the pause marker (`laib status`, `/ready`, the Box page) with
   the reason in German: „Grafikkarte reserviert für bote („qwen3.6-35b-a3b“):
