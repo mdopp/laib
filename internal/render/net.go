@@ -50,6 +50,16 @@ func forwardAuth(st *state.State, svc string, r state.Route) bool {
 	return r.Auth != "none" && svc != st.Box.Roles.SSO
 }
 
+// rule: Authelia's rule for a name, the one without a path (#487)
+func rule(rules []accessRule, domain string) accessRule {
+	for _, r := range rules {
+		if r.Domain == domain && r.Resource == "" {
+			return r
+		}
+	}
+	return accessRule{}
+}
+
 func policyOf(r state.Route) string {
 	if r.Auth == "none" {
 		return "bypass"
@@ -71,17 +81,19 @@ func Net(st *state.State) NetMap {
 	var n NetMap
 	reach := map[string]string{"internal": "nur LAN"}
 	owner := map[int]string{st.Box.Laib.Port: "laib"}
+	rules, dropped := accessRules(st), droppedPorts(st)
 	if st.Box.Roles.Proxy != "" {
-		n.Names = append(n.Names, NetName{Name: fqdn(st, st.Box.Laib.Host), Reach: "nur LAN", ForwardAuth: st.Box.Roles.SSO != "", Policy: "one_factor", Subject: st.Box.Laib.Group, Upstream: fmt.Sprintf("laib 127.0.0.1:%d", st.Box.Laib.Port)})
+		r := rule(rules, fqdn(st, st.Box.Laib.Host))
+		n.Names = append(n.Names, NetName{Name: r.Domain, Reach: "nur LAN", ForwardAuth: st.Box.Roles.SSO != "", Policy: r.Policy, Subject: strings.Join(r.Subjects, ", "), Upstream: fmt.Sprintf("laib 127.0.0.1:%d", st.Box.Laib.Port)})
 	}
+	// Laib's own port: loopback, or for the pods too while nftables keeps the LAN out
+	n.Ports = append(n.Ports, NetPort{Service: "laib", Port: st.Box.Laib.Port, Reach: map[bool]string{true: "nur Box und Pods", false: "nur Box"}[slices.Contains(dropped, st.Box.Laib.Port)]})
 	for _, name := range st.ServiceNames() {
 		c := st.Services[name].Contract
 		for _, r := range c.Routes {
 			owner[r.Port] = name
-			nn := NetName{Name: fqdn(st, r.Host), Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: policyOf(r), Upstream: fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port), Bypass: r.Bypass}
-			if nn.Policy != "bypass" {
-				nn.Subject = strings.Join(subjects(r), ", ")
-			}
+			a := rule(rules, fqdn(st, r.Host))
+			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port), Bypass: r.Bypass}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
 				n.Names = append(n.Names, NetName{Name: strings.TrimPrefix(fqdn(st, h), "@."), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
@@ -89,7 +101,7 @@ func Net(st *state.State) NetMap {
 		}
 		for _, p := range c.Ports {
 			owner[p.Port] = name
-			n.Ports = append(n.Ports, NetPort{Service: name, Port: p.Port, Reach: map[bool]string{true: "LAN", false: "nur Box und Pods"}[p.LAN]})
+			n.Ports = append(n.Ports, NetPort{Service: name, Port: p.Port, Reach: map[bool]string{false: "LAN", true: "nur Box und Pods"}[slices.Contains(dropped, p.Port)]})
 		}
 		if c.HostNetwork {
 			n.HostNetwork = append(n.HostNetwork, name)
