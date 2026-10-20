@@ -21,9 +21,14 @@ for p in presets["presets"]:
     lines.append(f"ctx-size = {p.get('ctx', 32768)}")
     # #501: no thinking unless the preset opts in; a request's chat_template_kwargs.enable_thinking still wins (the Bote's /model denken)
     lines.append(f"reasoning = {'on' if p.get('thinking') else 'off'}")
-    for k, key in (("cacheK", "cache-type-k"), ("cacheV", "cache-type-v"), ("ubatch", "ubatch-size")):
-        if p.get(k):
+    # #525: prompt-eval knobs per preset, measured with measure.py; unset leaves llama.cpp's default
+    for k, key in (("cacheK", "cache-type-k"), ("cacheV", "cache-type-v"), ("batch", "batch-size"), ("ubatch", "ubatch-size"),
+                   ("ngl", "n-gpu-layers"), ("nCpuMoe", "n-cpu-moe"), ("parallel", "parallel")):
+        if p.get(k) is not None:
             lines.append(f"{key} = {p[k]}")
+    if p.get("flashAttn") is not None:  # true/false or "auto"
+        fa = p["flashAttn"]
+        lines.append(f"flash-attn = {fa if isinstance(fa, str) else ('on' if fa else 'off')}")
     lines.append("")
 part = os.path.join(MODELS, "presets.ini.part")
 with open(part, "w") as f:

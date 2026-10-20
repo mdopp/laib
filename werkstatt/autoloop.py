@@ -45,7 +45,8 @@ Four things carry the design:
     back a window an earlier run left behind. A window somebody else holds is
     a plain note and no run: the ticket keeps its label and no attempt is
     counted. A lease that cannot be had for other reasons never stops the
-    work; the proxy then takes the window itself, as for any request.
+    work; the run goes ahead, and the proxy refuses a preset outside the
+    household window with its reason (laib #522).
 
 The GitHub token is the Werkstatt's (`WERKSTATT_GIT_TOKEN`), which the
 entrypoint writes to a 0600 credential store on a tmpfs. Git
@@ -460,7 +461,8 @@ def take_lease(cfg: dict, preset: str, ttl_s: int, http, sleep=time.sleep) -> tu
 
     A note means somebody else holds the window: no run this pass. An empty
     note with renew_after 0 means no lease (none configured, or it failed for
-    another reason); the run goes ahead and the proxy takes the window itself.
+    another reason); the run goes ahead and the proxy refuses a preset outside
+    the household window with its reason (laib #522).
     """
     url = cfg.get("lease_url", "")
     if not url or not preset:
@@ -486,7 +488,7 @@ def take_lease(cfg: dict, preset: str, ttl_s: int, http, sleep=time.sleep) -> tu
         return "", 0
     if status == 200 and body.get("state") == "ready":
         return "", int(body.get("renew_after") or 0)
-    jlog("warn", "pi-autoloop:lease", "no lease; the proxy takes the window itself", status=status, reason=body.get("reason") or body.get("message"))
+    jlog("warn", "pi-autoloop:lease", "no lease; outside the household window the proxy refuses the preset", status=status, reason=body.get("reason") or body.get("message"))
     return "", 0
 
 

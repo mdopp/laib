@@ -56,32 +56,39 @@ func post(t *testing.T, url string, body string) (int, map[string]any) {
 	return resp.StatusCode, out
 }
 
-func TestHouseholdOnlyThenModeFollowsThenHeld(t *testing.T) {
+func TestHouseholdOnlyThenLeaseThenHeld(t *testing.T) {
 	s, srv, sysd := testServer(t)
 	defer srv.Close()
-	// household: the household preset passes, a foreign preset takes full itself
+	// household: the household preset passes, a foreign preset is refused (#522)
 	if code, _ := post(t, srv.URL+"/v1/chat/completions", `{"model":"gemma-4-e4b","messages":[]}`); code != 200 {
 		t.Fatal("household preset refused", code)
 	}
 	code, out := post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`)
-	if code != 200 || out["model"] != "qwen3.6-35b-a3b" {
-		t.Fatalf("mode did not follow: %d %v", code, out)
+	if msg, _ := out["error"].(map[string]any)["message"].(string); code != 409 || !strings.Contains(msg, "Haushaltsmodell gemma-4-e4b") || !strings.Contains(msg, "/api/model-lease") {
+		t.Fatalf("a foreign preset from the household must be refused naming the household model: %d %v", code, out)
 	}
-	l := s.read()
-	if l == nil || l.Holder != AutoHolder || l.Mode != "full" {
-		t.Fatalf("auto lease %+v", l)
+	if l := s.read(); l != nil || len(*sysd) != 0 {
+		t.Fatalf("a request opened a window: %+v %v", l, *sysd)
+	}
+	// full only by a named holder's lease
+	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"full","ttl_s":600,"holder":"bote"}`)
+	if code != 200 || out["model"] != "full" {
+		t.Fatalf("%d %v", code, out)
 	}
 	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
 		t.Fatalf("full did not stop its units: %v", *sysd)
 	}
-	// a named holder takes shared over from the automatic window
+	if code, _ := post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`); code != 200 {
+		t.Fatal("the lease's preset refused", code)
+	}
+	s.Release(context.Background(), "bote")
+	// units come back when the window is given back
+	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service") {
+		t.Fatalf("leaving full did not restart units: %v", *sysd)
+	}
 	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"shared","ttl_s":60,"holder":"foundry-chronicle"}`)
 	if code != 200 || out["state"] != "ready" || out["model"] != "shared" {
 		t.Fatalf("%d %v", code, out)
-	}
-	// units come back when leaving full for shared
-	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatalf("leaving full did not restart units: %v", *sysd)
 	}
 	// in shared, the large preset is refused with the holder named
 	code, out = post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`)

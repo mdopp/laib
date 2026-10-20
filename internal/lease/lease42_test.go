@@ -75,7 +75,6 @@ func config42(t *testing.T, router string) Config {
 		Units:      realUnits(t),
 		RouterURL:  router,
 		LeaseDir:   filepath.Join(home, "lease"),
-		AutoIdle:   time.Minute,
 		Token:      "lease-secret",
 		Renew:      10 * time.Minute,
 		WarnAfter:  20 * time.Minute,
@@ -210,28 +209,61 @@ func TestAcquireByPresetTakesTheNarrowestMode(t *testing.T) {
 	}
 }
 
-// #42 (3): a household request through the proxy must not keep a
-// foreign window alive; only a request that needs the window renews it.
-func TestHouseholdRequestsDoNotRenewTheForeignWindow(t *testing.T) {
-	s, srv, _, cfg := server42(t)
-	if code, _ := post42(t, srv.URL+"/v1/chat/completions", "", `{"model":"qwen3.6-35b-a3b","messages":[]}`); code != 200 {
-		t.Fatal("mode did not follow", code)
+// #522: a mode other than the household's is never silent. A standing
+// lease is yellow in the status file laib status and diag read, with its
+// holder, window and end; giving it back clears it.
+func TestAStandingLeaseIsYellowInTheStatusFile(t *testing.T) {
+	s, _, _, cfg := server42(t)
+	status := func() map[string]any {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(cfg.LeaseDir, "laib-status.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var f map[string]any
+		json.Unmarshal(b, &f)
+		return f
 	}
-	before := s.read()
-	if before == nil || before.Holder != AutoHolder {
-		t.Fatalf("%+v", before)
+	if f := status(); len(f["findings"].([]any)) != 0 {
+		t.Fatalf("the household has nothing to report: %v", f)
 	}
-	s.lastRen = time.Time{} // the renewal gate is open
-	if code, _ := post42(t, srv.URL+"/v1/chat/completions", "", `{"model":"`+cfg.Household+`","messages":[]}`); code != 200 {
-		t.Fatal(code)
+	if _, err := s.Acquire(context.Background(), "bote", "qwen3.6-35b-a3b", time.Hour); err != nil {
+		t.Fatal(err)
 	}
-	if after := s.read(); !after.Until.Equal(before.Until) {
-		t.Fatalf("a household request renewed the foreign window: %v → %v", before.Until, after.Until)
+	f := status()
+	got, _ := json.Marshal(f["findings"])
+	for _, want := range []string{`"severity":"gelb"`, "Modus full", "bote", "qwen3.6-35b-a3b", "stimme", "DELETE /api/model-lease"} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("the lease's finding lacks %q: %s", want, got)
+		}
 	}
-	s.lastRen = time.Time{}
-	post42(t, srv.URL+"/v1/chat/completions", "", `{"model":"qwen3.6-35b-a3b","messages":[]}`)
-	if after := s.read(); !after.Until.After(before.Until) {
-		t.Fatal("a request that needs the window renews it")
+	s.Release(context.Background(), "bote")
+	if f := status(); len(f["findings"].([]any)) != 0 {
+		t.Fatalf("a released lease still reported: %v", f)
+	}
+}
+
+// #522: the automatic window a request took before is given back at
+// start; voice returns to the GPU and its units start again.
+func TestAStaleRouterWindowIsReleasedAtStart(t *testing.T) {
+	var calls []string
+	Systemctl = func(_ context.Context, verb string, units []string) error {
+		calls = append(calls, verb+" "+strings.Join(units, ","))
+		return nil
+	}
+	cfg := config42(t, router42(t).URL)
+	os.MkdirAll(cfg.LeaseDir, 0o755)
+	stale, _ := json.Marshal(Lease{Holder: "router", Mode: "full", Since: time.Now(), Until: time.Now().Add(45 * time.Minute)})
+	os.WriteFile(filepath.Join(cfg.LeaseDir, "lease.json"), stale, 0o644)
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := s.read(); l != nil {
+		t.Fatalf("the router's window stands: %+v", l)
+	}
+	if env, _ := os.ReadFile(filepath.Join(cfg.LeaseDir, "voice-device.env")); !strings.Contains(string(env), "cuda") || !strings.Contains(strings.Join(calls, "\n"), "start ") {
+		t.Fatalf("voice not back on the GPU or units not started: %q %v", env, calls)
 	}
 }
 

@@ -10,9 +10,9 @@
 // shows the window; DELETE {"holder"} gives it back. `model` is a preset
 // (the lease takes the narrowest window that allows it) or a window name.
 // Every /v1 request names a model; outside the standing window it is
-// refused with 409, except that from the household (no lease) the proxy
-// takes the window that allows every preset itself (mode follows the
-// request, idle timeout).
+// refused with 409 naming what is allowed. The household window (no lease)
+// allows the household model only: another window is taken by a named
+// holder's lease, never by a request (#522).
 package lease
 
 import (
@@ -74,7 +74,6 @@ type Config struct {
 	Units     func(role string) (service string, units []string) `json:"-"`
 	RouterURL string                                             `json:"-"`
 	LeaseDir  string                                             `json:"-"`
-	AutoIdle  time.Duration                                      `json:"-"` // idle timeout of the automatic window
 	Token     string                                             `json:"-"` // bearer for POST/DELETE on the lease API (#42)
 	Renew     time.Duration                                      `json:"-"` // a holder renews within this, or loses the card
 	WarnAfter time.Duration                                      `json:"-"` // a foreign window older than this is journaled yellow
@@ -99,8 +98,9 @@ type Lease struct {
 	Warned      bool      `json:"warned,omitempty"` // the yellow journal line is written
 }
 
-// AutoHolder names the window the proxy takes itself.
-const AutoHolder = "router"
+// staleRouter is the holder of the automatic window the proxy took itself
+// before #522; a lease.json it left is released at start.
+const staleRouter = "router"
 
 // Exclusive is the window that takes the whole card: every window's units
 // stop and no preset answers. It is asked for by name, never implied.
@@ -132,15 +132,21 @@ var Systemctl = func(ctx context.Context, verb string, units []string) error {
 
 // Server holds the state.
 type Server struct {
-	cfg     Config
-	mu      sync.Mutex
-	lastRen time.Time
-	proxy   *httputil.ReverseProxy
-	client  *http.Client
-	warmed  sync.Map                       // preset → answered once: GET does not ask the router again
-	units   map[string][]string            // mode → resolved unit names, sorted
-	byMode  map[string]map[string][]string // mode → service → its units
-	voice   []string                       // resolved voice units
+	cfg    Config
+	mu     sync.Mutex
+	proxy  *httputil.ReverseProxy
+	client *http.Client
+	warmed sync.Map                       // preset → answered once: GET does not ask the router again
+	units  map[string][]string            // mode → resolved unit names, sorted
+	byMode map[string]map[string][]string // mode → service → its units
+	voice  []string                       // resolved voice units
+	roles  []statusFinding                // the modes' missing roles (#374)
+}
+
+type statusFinding struct {
+	Severity string `json:"severity"`
+	Detail   string `json:"detail"`
+	Fix      string `json:"fix"`
 }
 
 // resolve turns role/container refs into (service → unit names). A
@@ -190,9 +196,6 @@ func New(cfg Config) (*Server, error) {
 	if cfg.Household == "" || len(cfg.Presets) == 0 {
 		return nil, errors.New("presets.json needs household and presets")
 	}
-	if cfg.AutoIdle <= 0 {
-		cfg.AutoIdle = 30 * time.Minute
-	}
 	if cfg.Token == "" {
 		return nil, errors.New("the lease token (LEASE_TOKEN) is empty: the lease API would be open to the LAN (#42)")
 	}
@@ -211,12 +214,6 @@ func New(cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, proxy: httputil.NewSingleHostReverseProxy(u), client: &http.Client{Timeout: 10 * time.Minute}, units: map[string][]string{}, byMode: map[string]map[string][]string{}}
 	s.proxy.FlushInterval = -1 // token streams
-	type finding struct {
-		Severity string `json:"severity"`
-		Detail   string `json:"detail"`
-		Fix      string `json:"fix"`
-	}
-	findings := []finding{}
 	fix := func(ref string) string {
 		return "einen Dienst mit der Rolle „" + strings.Split(ref, "/")[0] + "“ installieren, oder " + ref + " aus presets.json nehmen"
 	}
@@ -226,7 +223,7 @@ func New(cfg Config) (*Server, error) {
 			return nil, fmt.Errorf("mode %s: %w", name, err)
 		}
 		for _, ref := range missing {
-			findings = append(findings, finding{"gelb", fmt.Sprintf("Modus %s: %s stellt kein Dienst bereit; die Lease hält es nicht an", name, ref), fix(ref)})
+			s.roles = append(s.roles, statusFinding{"gelb", fmt.Sprintf("Modus %s: %s stellt kein Dienst bereit; die Lease hält es nicht an", name, ref), fix(ref)})
 		}
 		s.byMode[name] = by
 		s.units[name] = flatten(by)
@@ -236,21 +233,42 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("voiceUnits: %w", err)
 	}
 	for _, ref := range missing {
-		findings = append(findings, finding{"gelb", ref + " stellt kein Dienst bereit; ein Wechsel des Sprachgeräts startet es nicht neu", fix(ref)})
+		s.roles = append(s.roles, statusFinding{"gelb", ref + " stellt kein Dienst bereit; ein Wechsel des Sprachgeräts startet es nicht neu", fix(ref)})
 	}
 	s.voice = flatten(voice)
-	// the status file laib status and diag read (templates/llama status.file, #374)
-	detail := "alle Rollen der Modi sind da"
-	if len(findings) > 0 {
-		detail = fmt.Sprintf("%d Rolle(n) der Modi fehlen", len(findings))
+	if l := s.read(); l != nil && l.Holder == staleRouter {
+		s.Release(context.Background(), staleRouter) // the window a request took before #522
 	}
-	b, _ := json.MarshalIndent(map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "detail": detail, "findings": findings}, "", "  ")
-	os.MkdirAll(cfg.LeaseDir, 0o755)
-	if err := boxfs.WriteAtomic(filepath.Join(cfg.LeaseDir, "laib-status.json.tmp"), filepath.Join(cfg.LeaseDir, "laib-status.json"), b, 0o644); err != nil {
+	if err := s.writeStatus(s.read()); err != nil {
 		return nil, err
 	}
 	go s.expiryLoop()
 	return s, nil
+}
+
+// writeStatus writes the status file laib status and diag read
+// (templates/llama status.file): the modes' missing roles (#374), and a
+// standing lease in yellow with its holder, window and end (#522), so a
+// mode other than the household's is never silent.
+func (s *Server) writeStatus(l *Lease) error {
+	findings := append([]statusFinding{}, s.roles...)
+	detail := "Haushalt: nur " + s.cfg.Household
+	if l != nil {
+		detail = "Modus " + l.Mode + " für " + l.Holder
+		cost := s.cfg.Household + " lädt danach neu"
+		if len(l.Paused) > 0 {
+			cost = "angehalten: " + strings.Join(l.Paused, ", ") + "; " + cost
+		}
+		findings = append(findings, statusFinding{"gelb",
+			fmt.Sprintf("Modus %s statt Haushalt: %s hält die Grafikkarte seit %s für „%s“ (%s)", l.Mode, l.Holder, l.Since.Local().Format("15:04"), cmp.Or(s.answering(l), l.Mode), cost),
+			fmt.Sprintf("endet um %s, wenn %s nicht erneuert; sofort: DELETE /api/model-lease mit dem Modellschlüssel", l.Until.Local().Format("15:04"), l.Holder)})
+	}
+	if len(s.roles) > 0 {
+		detail += fmt.Sprintf("; %d Rolle(n) der Modi fehlen", len(s.roles))
+	}
+	b, _ := json.MarshalIndent(map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "detail": detail, "findings": findings}, "", "  ")
+	os.MkdirAll(s.cfg.LeaseDir, 0o755)
+	return boxfs.WriteAtomic(filepath.Join(s.cfg.LeaseDir, "laib-status.json.tmp"), filepath.Join(s.cfg.LeaseDir, "laib-status.json"), b, 0o644)
 }
 
 func (s *Server) leasePath() string { return filepath.Join(s.cfg.LeaseDir, "lease.json") }
@@ -271,10 +289,16 @@ func (s *Server) read() *Lease {
 func (s *Server) write(l *Lease) error {
 	os.MkdirAll(s.cfg.LeaseDir, 0o755)
 	b, _ := json.MarshalIndent(l, "", "  ")
-	return boxfs.WriteAtomic(s.leasePath()+".tmp", s.leasePath(), b, 0o644)
+	if err := boxfs.WriteAtomic(s.leasePath()+".tmp", s.leasePath(), b, 0o644); err != nil {
+		return err
+	}
+	return s.writeStatus(l)
 }
 
-func (s *Server) clear() { os.Remove(s.leasePath()) }
+func (s *Server) clear() {
+	os.Remove(s.leasePath())
+	s.writeStatus(nil)
+}
 
 func (s *Server) knownPreset(alias string) bool {
 	for _, p := range s.cfg.Presets {
@@ -322,7 +346,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur := s.read()
-	if cur != nil && cur.Holder != holder && cur.Holder != AutoHolder {
+	if cur != nil && cur.Holder != holder {
 		return cur, ErrHeld
 	}
 	// a preset name implies the narrowest mode that allows it (#42): the
@@ -350,10 +374,10 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	now := time.Now()
 	if cur != nil && cur.Mode == mode && cur.Ready {
 		// a renewal: until moves one interval, the deadline stands (#42)
-		if cur.Holder != holder || cur.Deadline.IsZero() || holder == AutoHolder {
-			cur.Deadline = now.Add(ttl) // the automatic window is an idle timeout
+		if cur.Deadline.IsZero() {
+			cur.Deadline = now.Add(ttl)
 		}
-		cur.Holder, cur.Until = holder, s.until(holder, now, cur.Deadline)
+		cur.Until = s.until(now, cur.Deadline)
 		cur.LastRenewed, cur.RenewAfter = now, s.renewAfter(ttl)
 		if alias != "" {
 			cur.Alias = alias
@@ -369,7 +393,7 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 	}
 	m := s.cfg.Modes[mode]
 	l := &Lease{Holder: holder, Mode: mode, Alias: alias, Allowed: s.allowed(mode), Since: now, Deadline: now.Add(ttl), LastRenewed: now, RenewAfter: s.renewAfter(ttl)}
-	l.Until = s.until(holder, now, l.Deadline)
+	l.Until = s.until(now, l.Deadline)
 	if mode == Exclusive { // everything stops, nothing answers
 		l.Allowed = []string{}
 		if err := s.write(l); err != nil {
@@ -411,12 +435,8 @@ func (s *Server) renewAfter(ttl time.Duration) int {
 }
 
 // until is the next renewal deadline: one interval away, never past the
-// holder's deadline. The automatic window renews itself per request and
-// keeps its idle timeout.
-func (s *Server) until(holder string, now, deadline time.Time) time.Time {
-	if holder == AutoHolder {
-		return deadline
-	}
+// holder's deadline.
+func (s *Server) until(now, deadline time.Time) time.Time {
 	if u := now.Add(s.cfg.Renew); u.Before(deadline) {
 		return u
 	}
@@ -768,66 +788,22 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 	model := strings.TrimSpace(req.Model)
 	allowed, mode := s.Policy()
 	if model != "" && !slices.Contains(allowed, model) {
-		if !s.modeFollows(r.Context(), model) {
-			holder := ""
-			if l := s.read(); l != nil {
-				holder = l.Holder
-			}
-			w.Header().Set("Content-Type", "application/json")
-			code := http.StatusConflict
-			if !s.knownPreset(model) {
-				code = http.StatusNotFound // a raw file id or a typo: no window ever allows it (#395)
-			}
-			w.WriteHeader(code)
-			json.NewEncoder(w).Encode(s.denial(model, mode, allowed, holder))
-			return
+		// no window opens by request (#522): one call for a foreign preset
+		// evicted the household model and put the voice on the CPU for 45 min
+		holder := ""
+		if l := s.read(); l != nil {
+			holder = l.Holder
 		}
-	}
-	if model != "" && model != s.cfg.Household {
-		s.renewIfOurs(r.Context()) // a household request must not keep a foreign window alive (#42)
+		w.Header().Set("Content-Type", "application/json")
+		code := http.StatusConflict
+		if !s.knownPreset(model) {
+			code = http.StatusNotFound // a raw file id or a typo: no window ever allows it (#395)
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(s.denial(model, mode, allowed, holder))
+		return
 	}
 	s.proxy.ServeHTTP(w, r)
-}
-
-// modeFollows: from the household, a request for a preset the router
-// serves takes the window that allows every preset itself; a window a named holder has
-// stands.
-func (s *Server) modeFollows(ctx context.Context, want string) bool {
-	if !s.knownPreset(want) {
-		return false
-	}
-	if l := s.read(); l != nil {
-		return slices.Contains(l.Allowed, want)
-	}
-	auto, ok := s.autoMode()
-	if !ok {
-		return false
-	}
-	_, err := s.Acquire(ctx, AutoHolder, auto, s.cfg.AutoIdle*3/2)
-	s.lastRen = time.Now()
-	return err == nil
-}
-
-// autoMode is the mode that allows every preset, if one exists.
-func (s *Server) autoMode() (string, bool) {
-	for _, name := range s.sortedModes() {
-		if len(s.cfg.Modes[name].Presets) == 0 {
-			return name, true
-		}
-	}
-	return "", false
-}
-
-func (s *Server) renewIfOurs(ctx context.Context) {
-	if time.Since(s.lastRen) < time.Minute {
-		return
-	}
-	l := s.read()
-	if l == nil || l.Holder != AutoHolder {
-		return
-	}
-	s.Acquire(ctx, AutoHolder, l.Mode, s.cfg.AutoIdle*3/2)
-	s.lastRen = time.Now()
 }
 
 func (s *Server) denial(model, mode string, allowed []string, holder string) map[string]any {
@@ -840,7 +816,10 @@ func (s *Server) denial(model, mode string, allowed []string, holder string) map
 	default:
 		say = "Erlaubt ist: " + strings.Join(allowed, ", ") + "."
 		remedy = "Eines davon im Feld `model` angeben."
-		if holder != "" {
+		if holder == "" {
+			say = "Im Haushalt antwortet nur das Haushaltsmodell " + s.cfg.Household + "."
+			remedy = "Ein anderes Modell braucht eine Lease: POST /api/model-lease {model, holder}."
+		} else {
 			remedy = "„" + holder + "“ hat die Grafikkarte gerade; die Lease zeigt, bis wann."
 		}
 	}
