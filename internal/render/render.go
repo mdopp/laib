@@ -237,6 +237,8 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		"TZ":       st.Box.Timezone,
 		"SERVICE":  svc.Name,
 		"LAN_IP":   st.Box.LanIP,
+		// the box page, never a hard-coded laib.<domain> (#381)
+		"LAIB_PAGE_URL": "https://" + fqdn(st, st.Box.Laib.Host) + "/",
 	}
 	maps.Copy(vars, ModelVars(st, secrets))
 	if p := st.HousePersona(); p != nil {
@@ -439,6 +441,56 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
+// HausURL is the family's entry, Haus's first route, or "" without a
+// service that provides haus.
+func HausURL(st *state.State) string {
+	for _, name := range st.ServiceNames() {
+		if c := st.Services[name].Contract; slices.Contains(c.Provides, "haus") && len(c.Routes) > 0 {
+			return "https://" + fqdn(st, c.Routes[0].Host) + "/"
+		}
+	}
+	return ""
+}
+
+// StartURL is where a login without a target lands (#381): Haus once it is
+// installed, else the box page (box.yml laib.host). Both appear in
+// laib-access.yml, so a change to either reruns the sso hook that reads it.
+func StartURL(st *state.State) string {
+	return cmp.Or(HausURL(st), "https://"+fqdn(st, st.Box.Laib.Host)+"/")
+}
+
+// LogoutURL is Authelia's logout (#480); its rd, escaped, is where the
+// login afterwards returns to.
+func LogoutURL(st *state.State) string {
+	host := "auth"
+	if svc, ok := st.Services[st.Box.Roles.SSO]; ok && len(svc.Contract.Routes) > 0 {
+		host = svc.Contract.Routes[0].Host
+	}
+	return "https://" + fqdn(st, host) + "/logout"
+}
+
+// denyPage is a 403 a person can read (#480): German, the household look
+// (#382), the reason and the way out. Caddy fills {http.request.host}.
+func denyPage(indent, title, body string) string {
+	const css = `:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}` +
+		`body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}`
+	return indent + "header Content-Type \"text/html; charset=utf-8\"\n" + indent + "respond <<HTML\n" + indent + "\t<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><meta name=color-scheme content=\"dark light\"><title>" +
+		title + "</title><style>" + css + "</style></head><body><main>" + body + "</main></body></html>\n" + indent + "\tHTML 403\n"
+}
+
+// denySnippets are the two 403s as snippets: lanonly for a LAN-only name
+// reached from outside (after the unchanged LAN check, before Authelia),
+// denied for a login whose account may not open the name.
+func denySnippets(st *state.State) string {
+	home := ""
+	if u := HausURL(st); u != "" {
+		home = `<p><a href="` + u + `">Zur Startseite</a> <span class=muted>– die geht auch unterwegs</span></p>`
+	}
+	lan := "<h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p>" + home
+	deny := "<h1>Kein Zugang mit diesem Konto</h1><p>Du bist angemeldet, aber dein Konto darf {http.request.host} nicht öffnen. Manche Seiten sind nur für die Admins der Box.</p><p><a href=\"" + LogoutURL(st) + "?rd=https://{http.request.host}/\">Abmelden und mit einem anderen Konto anmelden</a></p>" + home
+	return "(lanonly) {\n\thandle {\n" + denyPage("\t\t", "Nur zu Hause", lan) + "\t}\n}\n\n(denied) {\n" + denyPage("\t", "Kein Zugang", deny) + "}\n\n"
+}
+
 // PublicResolvers answer what Let's Encrypt sees, not the LAN's rewrites:
 // Caddy's DNS-01 checks and diag's challenge probe ask them (#378).
 var PublicResolvers = []string{"9.9.9.9", "1.1.1.1"}
@@ -472,8 +524,10 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 		b.WriteString("\tlocal_certs\n") // every host from Caddy's internal CA; trust data/caddy/pki/authorities/local/root.crt on the devices
 	}
 	b.WriteString("}\n\n")
+	b.WriteString(denySnippets(st))
 	if st.Box.Roles.SSO != "" {
-		fmt.Fprintf(&b, "(authelia) {\n\tforward_auth 127.0.0.1:%d {\n\t\turi /api/authz/forward-auth\n\t\tcopy_headers Remote-User Remote-Groups Remote-Email Remote-Name\n\t}\n}\n\n", ssoPort(st))
+		// Authelia's 403 (signed in, but not this account's name) becomes the denied page
+		fmt.Fprintf(&b, "(authelia) {\n\tforward_auth 127.0.0.1:%d {\n\t\turi /api/authz/forward-auth\n\t\tcopy_headers Remote-User Remote-Groups Remote-Email Remote-Name\n\t\t@denied status 403\n\t\thandle_response @denied {\n\t\t\timport denied\n\t\t}\n\t}\n}\n\n", ssoPort(st))
 	}
 	if st.Box.Roles.Proxy != "" {
 		// Laib's own page: LAN only, Authelia, and a proxy secret so the pages
@@ -482,7 +536,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 		if st.Box.Roles.SSO != "" {
 			b.WriteString("\t\timport authelia\n")
 		}
-		fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d {\n\t\t\theader_up X-Laib-Proxy %q\n\t\t}\n\t}\n\trespond 403\n}\n\n", st.Box.Laib.Port, secretValue(secrets, ProxySecret))
+		fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d {\n\t\t\theader_up X-Laib-Proxy %q\n\t\t}\n\t}\n\timport lanonly\n}\n\n", st.Box.Laib.Port, secretValue(secrets, ProxySecret))
 	}
 	if dns01 {
 		// one wildcard certificate: Caddy (2.10+) then gets none per name, a
@@ -525,7 +579,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d\n", indent, r.Port)
 			}
 			if r.Exposure == "internal" {
-				b.WriteString("\t}\n\trespond 403\n")
+				b.WriteString("\t}\n\timport lanonly\n")
 			}
 			b.WriteString("}\n\n")
 			if len(r.RedirectFrom) > 0 {

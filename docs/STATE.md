@@ -86,6 +86,8 @@ people:                           # the household's people and their chat channe
   lena: ["matrix:!AbCdEf:example.org"]   # a room: the direct chat with the Bote
 ```
 
+Builtins for units: `${LAIB_PAGE_URL}` is the box page,
+`https://<laib.host>.<domain>/` (never a hard-coded `laib.<domain>`, #381).
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
 `model`. Units and hooks both read them inside a container, so the
