@@ -56,6 +56,8 @@ for p in presets["presets"]:
     if p.get("mmproj"):
         lines.append(f"mmproj = /models/{p['mmproj']}")
     lines.append(f"ctx-size = {p.get('ctx', 32768)}")
+    # #501: no thinking unless the preset opts in; a request's chat_template_kwargs.enable_thinking still wins (the Bote's /model denken)
+    lines.append(f"reasoning = {'on' if p.get('thinking') else 'off'}")
     for k, key in (("cacheK", "cache-type-k"), ("cacheV", "cache-type-v"), ("ubatch", "ubatch-size")):
         if p.get(k):
             lines.append(f"{key} = {p[k]}")
