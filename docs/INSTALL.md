@@ -203,8 +203,10 @@ the rebase. The Kraftwerk ran into the first one (#445):
 4. **The boot check** then proves the new deployment. Since #445 that
    includes the LAN's view: every TCP port the box listens on outside
    loopback is probed from a network namespace (as a LAN client's packets
-   arrive). More blocked ports than at the last proven boot means "not
-   proven", and the box rolls back once.
+   arrive). Ports laib closes itself (`lan: false`) are not probed. A port
+   blocked now that was not blocked at the last proven boot means "not
+   proven", and the box rolls back once; the record names the blocked ports
+   (#481), so a port another firewall closes on purpose stays allowed.
 
 ### OS updates (Zincati and laib's reboot lock, ADR 0024)
 
@@ -231,7 +233,7 @@ cat host/image && /var/opt/laib/laib updates | grep '^host'
 Lifting a pause is the owner's step. Do it once the running deployment is
 proven with the LAN probe (#445):
 ```
-cat /var/lib/laib/boot-proven                                # the booted deployment, "0 0" at the end
+cat /var/lib/laib/boot-proven                                # the booted deployment, red, blocked count, blocked ports: "0 0", or the ports another firewall closes on purpose
 ls /etc/zincati/config.d/                                   # 60-laib-updates.toml, and the pause files
 sudo rm /etc/zincati/config.d/55-servicebay-lock.toml       # ServiceBay's window, if it is still there
 sudo rm /etc/zincati/config.d/90-paused-nvidia-kmod.toml    # the hand-made pause (the driver is prebuilt now)
