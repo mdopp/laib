@@ -3,6 +3,7 @@ package stick
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,9 @@ type bootBox struct {
 	etc, bin, log string
 	vardir, root  string   // /var/lib/laib (the boot check's records, shared by every deployment) and / (the deployments' own /etc)
 	listen        []string // the box's listening TCP sockets, as `ss -Hltn` prints them (#445)
+	nft           string   // laib's rendered nftables table (lan: false ports), "" = none (#481)
+	breakAt       int      // the probe path breaks at this port probe of the first round, 0 = never (#481)
+	timeout       string   // LAIB_BOOT_CHECK_TIMEOUT, "" = 1 s
 }
 
 const proven, fresh = "aaaa1111aaaa1111", "bbbb2222bbbb2222"
@@ -38,7 +42,11 @@ func newBootBox(t *testing.T) *bootBox {
 	backEtc := filepath.Join(root, "ostree", "deploy", "fedora-coreos", "deploy", proven+".0", "etc")
 	os.MkdirAll(backEtc, 0o755)
 	os.Chmod(backEtc, 0o555)
-	t.Cleanup(func() { os.Chmod(backEtc, 0o755); os.Chmod(filepath.Join(backEtc, "zincati"), 0o755); os.Chmod(filepath.Join(backEtc, "zincati", "config.d"), 0o755) })
+	t.Cleanup(func() {
+		os.Chmod(backEtc, 0o755)
+		os.Chmod(filepath.Join(backEtc, "zincati"), 0o755)
+		os.Chmod(filepath.Join(backEtc, "zincati", "config.d"), 0o755)
+	})
 	os.MkdirAll(b.bin, 0o755)
 	os.MkdirAll(filepath.Join(b.etc, "laib"), 0o755)
 	t.Setenv("SHIM_LOG", b.log)
@@ -97,11 +105,44 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 	ss := filepath.Join(b.etc, "..", "ss.out")
 	os.WriteFile(ss, []byte(strings.Join(b.listen, "\n")+"\n"), 0o644)
 	shim(t, b.bin, "ss", `cat "`+ss+`"`)
-	shim(t, b.bin, "ip", `case "$1 $2" in "netns exec") shift 3; exec "$@";; esac
-case "$*" in *"route get"*) echo "1.1.1.1 via 10.0.0.1 dev eth0 src 127.0.0.2 uid 0";; esac
+	// #481: the path into the namespace can break while the check runs (a
+	// veth or route torn down under it): from the breakAt-th port probe of
+	// the first round on, nothing answers through it, until a new namespace
+	// is built. A converge reloads laib's table at the same moment.
+	ipst := filepath.Join(b.root, "ipstate")
+	os.MkdirAll(ipst, 0o755)
+	nft := filepath.Join(b.root, "render", "nftables", "laib.nft")
+	os.MkdirAll(filepath.Dir(nft), 0o755)
+	os.Remove(nft)
+	if b.nft != "" {
+		os.WriteFile(nft, []byte(b.nft), 0o644)
+	}
+	shim(t, b.bin, "ip", `d="$IPSTATE"
+case "$1 $2" in
+"netns add") rm -f "$d/down"; exit 0;;
+"netns exec")
+  [ -e "$d/down" ] && exit 1
+  n=$(( $(cat "$d/execs" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$d/execs"
+  if [ "$n" = "${IP_BREAK_AT:-0}" ]; then
+    : >"$d/down"
+    [ ! -f "$LAIB_NFT" ] || { c="$(cat "$LAIB_NFT")"; rm -f "$LAIB_NFT"; printf '%s\n' "$c" >"$LAIB_NFT.new"; mv "$LAIB_NFT.new" "$LAIB_NFT"; }
+    exit 1
+  fi
+  shift 3; exec "$@";;
+esac
+case "$*" in
+"-n laib-probe -4 route get "*) [ -e "$d/down" ] && exit 2; echo "$6 via 169.254.254.1 dev laibp1 src 169.254.254.2 uid 0";;
+*"route get 169.254.254.2"*) [ -e "$d/down" ] && exit 2; echo "169.254.254.2 dev laibp0 src 169.254.254.1 uid 0";;
+*"route get"*) echo "1.1.1.1 via 10.0.0.1 dev eth0 src 127.0.0.2 uid 0";;
+esac
 exit 0`)
+	to := b.timeout
+	if to == "" {
+		to = "1"
+	}
 	cmd := exec.Command("bash", filepath.Join(b.etc, "laib", "boot-check.sh"))
-	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_VAR="+b.vardir, "LAIB_ROOT="+b.root, "LAIB_BOOT_CHECK_TIMEOUT=1", "LAIB_BOOT_CHECK_INTERVAL=0.2")
+	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_VAR="+b.vardir, "LAIB_ROOT="+b.root, "LAIB_BOOT_CHECK_TIMEOUT="+to, "LAIB_BOOT_CHECK_INTERVAL=0.2",
+		"LAIB_NFT="+nft, "IPSTATE="+ipst, "IP_BREAK_AT="+fmt.Sprint(b.breakAt))
 	o, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(b.log)
 	return string(l), string(o)

@@ -87,13 +87,14 @@ func TestNoMoreBlockedThanTheProvenBootIsProven(t *testing.T) {
 
 func TestTheBaselineRecordsItsBlockedPorts(t *testing.T) {
 	b := newBootBox(t)
-	b.listen = []string{ssLine("0.0.0.0", blockedPort(t))}
+	shut := blockedPort(t)
+	b.listen = []string{ssLine("0.0.0.0", shut)}
 	log, out := b.run(t, fresh, "", "", "0")
 	if rolledBack(log) {
 		t.Fatalf("a baseline never rolls back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); string(p) != fresh+".0 0 1\n" {
-		t.Fatalf("boot-proven = %q, want the blocked port counted in the baseline", p)
+	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); string(p) != fmt.Sprintf("%s.0 0 1 %d\n", fresh, shut) {
+		t.Fatalf("boot-proven = %q, want the blocked port counted and named in the baseline (#481)", p)
 	}
 }
 
