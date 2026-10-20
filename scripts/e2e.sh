@@ -268,7 +268,7 @@ HOOKDIR="$WORK/hooks"; mkdir -p "$HOOKDIR"
 ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook"
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >"$WORK/bote.out" ) || fail "bote hook"
 if grep -q "HUMAN_TOKEN\|laib-admin" "$HOOKDIR/bote/hermes/config.yaml" "$HOOKDIR/bote/hermes/.env"; then fail "hermes holds a token that can approve (#48)"; fi
 grep -q "SIGNAL_ACCOUNT=+491" "$HOOKDIR/bote/hermes/.env" || fail "bote .env"
 # #178: inside the pod signal-cli listens on 8080; 8085 is only the host's side of PublishPort
@@ -314,6 +314,15 @@ assert "enable_thinking: true" in cp[second:second + 400], cp[second:second + 40
 alias = t[t.index("model_aliases:"):t.index("mcp_servers:")]
 assert "provider: custom:denken" in alias, alias
 PY
+# #502: every tool in the model's array (Hermes' tool search cost three rounds per tool call and
+# cannot exempt one MCP server), and Hermes' own opt-out drops its stock skills in its container
+python3 - "$HOOKDIR/bote/hermes/config.yaml" <<'PY' || fail "the Bote's tools still hide behind tool_search (#502)"
+import re, sys
+t = open(sys.argv[1]).read()
+m = re.search(r"^tools:\n  tool_search:\n    enabled: (.*)$", t, re.M)
+assert m and m.group(1).strip().strip('"') == "off", m and m.group(1)
+PY
+grep -qx "laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes" "$WORK/bote.out" || fail "Hermes' stock skills stay in the Bote (#502)"
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
 grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
