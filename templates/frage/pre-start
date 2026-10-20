@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# pre-start (#490): SearXNG's settings.yml before the unit starts, on every
+# apply. The image writes its own on the first start, without the JSON
+# format Frage reads (`suche: 403 Forbidden`); a post-deploy that skipped an
+# existing file left that one standing. Written only when it differs, so a
+# second apply changes nothing.
+set -euo pipefail
+D="$LAIB_DATA_DIR/frage/searxng"
+mkdir -p "$D"
+new="$D/settings.yml.new"
+cat > "$new" <<YAML
+# rendered by laib pre-start (templates/frage); do not edit by hand
+use_default_settings: true
+server:
+  secret_key: "${LAIB_SECRET_SEARX_SECRET}"
+  bind_address: "127.0.0.1"
+  port: 8888
+  limiter: false
+search:
+  formats: [html, json]
+  default_lang: de-DE
+YAML
+chmod 644 "$new"
+if cmp -s "$new" "$D/settings.yml"; then
+  rm -f "$new"
+else
+  mv "$new" "$D/settings.yml"
+  echo "searxng settings written"
+fi

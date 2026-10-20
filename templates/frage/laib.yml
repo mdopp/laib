@@ -3,7 +3,8 @@ template: {registry: builtin, name: frage, version: 1}
 provides: [frage]
 # "Was ist …": SearXNG + a model summary, as Assist's conversation agent
 # (/v1/chat/completions) and as the Bote's `frage` tool (/mcp, #54). Two
-# containers in one pod sharing loopback.
+# containers in one pod sharing loopback; pre-start writes SearXNG's
+# settings.yml before it starts (#490).
 routes: []
 secrets:
   - name: SEARX_SECRET
@@ -12,4 +13,4 @@ data:
 health:
   http: http://127.0.0.1:8710/health
 ports:
-  - {port: 8710, lan: false}
+  - {port: 8710, lan: false}       # on every address for pods (host.containers.internal), never the LAN (#490)

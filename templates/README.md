@@ -33,8 +33,10 @@ certificates (#45, the trial domain at deSEC), never `tls: internal`.
 Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`),
 (`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
 auth template), never as the admin. Home Assistant's integrations (three
-Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server, Frage as
-conversation agent) are set up by hand once; with `HA_TOKEN`, which
+Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server) are set up
+by hand once; Frage as conversation agent is added by home-assistant's
+post-deploy once Frage answers (HA's Ollama integration on Frage's Ollama
+API, #491); with `HA_TOKEN`, which
 home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 `laib diag` lists what is still missing.
 
@@ -46,7 +48,7 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |
 | werkstatt | — | v0 of the one dev container: Claude Code, pi, repos, sshd for the mobile app; Laib as MCP for every session |
 | bote | — | Hermes as stock with signal-cli: the agent you talk to; config rendered by the hook (ADR 0016) |
-| frage | — | "was ist …": SearXNG + model summary; /ask and an OpenAI-compatible endpoint for Assist and the Bote (ADR 0015) |
+| frage | — | "was ist …": SearXNG + model summary; /ask, /mcp for the Bote, an OpenAI-compatible endpoint, and Ollama's /api/chat for Assist (HA's Ollama integration, #491); pre-start writes SearXNG's settings.yml (ADR 0015) |
 | media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the local admin, registers libraries, logs the family in through LLDAP (read-only bind) with Quick Connect |
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
 | music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |

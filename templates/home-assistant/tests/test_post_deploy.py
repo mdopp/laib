@@ -23,7 +23,8 @@ HA = {}
 def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
-    HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0)
+    HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0,
+              entries=[], subentries={}, not_loaded=0)
     if onboarded:
         uid = add_user("Owner", admin=True, owner=True)
         HA["creds"][onboarded[0]] = (onboarded[1], uid)
@@ -98,7 +99,7 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path == "/api/":
             return self.reply(200, {"message": "API running."})
         if self.path == "/api/config/config_entries/entry":
-            return self.reply(200, [{"domain": "met", "title": "Home"}])   # every user may list them over REST, as in HA
+            return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home"}] + HA["entries"])   # every user may list them over REST, as in HA
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
         self.reply(404)
@@ -129,12 +130,48 @@ class FakeHA(BaseHTTPRequestHandler):
                 return self.reply(400, {"error": "invalid_request"})
             return self.reply(200, {"access_token": token_for(uid, False), "token_type": "Bearer", "refresh_token": "r", "expires_in": 1800})
         uid = self.user()
+        if self.path.startswith("/api/config/config_entries/"):
+            if uid is None or not is_admin(uid):
+                return self.reply(401 if uid is None else 403)
+            return self.config_flow(b)
         if self.path.startswith("/api/onboarding/"):
             step = self.path.rsplit("/", 1)[1]
             if uid is None or step in HA["onboarding"] or (step == "integration" and not b.get("redirect_uri")):
                 return self.reply(403 if uid else 401)
             HA["onboarding"].add(step)
             return self.reply(200, {})
+        self.reply(404)
+
+    def config_flow(self, b):
+        """HA's config flows over REST, the two the Ollama integration has (2026.10):
+        the entry (one step, url; title = the url) and its conversation subentry"""
+        if self.path == "/api/config/config_entries/flow":
+            if b.get("handler") != "ollama":
+                return self.reply(400, {"message": "Invalid handler specified"})
+            HA["flows"]["of1"] = "ollama"
+            return self.reply(200, {"type": "form", "flow_id": "of1", "handler": "ollama", "step_id": "user"})
+        if self.path == "/api/config/config_entries/flow/of1":
+            url = b["url"]
+            if any(e["domain"] == "ollama" and e["data"]["url"] == url for e in HA["entries"]):
+                return self.reply(200, {"type": "abort", "flow_id": "of1", "reason": "already_configured"})
+            e = {"entry_id": f"e-ollama-{len(HA['entries'])}", "domain": "ollama", "title": url, "data": {"url": url}}
+            HA["entries"].append(e)
+            return self.reply(200, {"type": "create_entry", "flow_id": "of1", "result": {k: e[k] for k in ("entry_id", "domain", "title")}})
+        if self.path == "/api/config/config_entries/subentries/flow":
+            eid, kind = b["handler"]
+            if kind != "conversation" or not any(e["entry_id"] == eid for e in HA["entries"]):
+                return self.reply(400, {"message": "Invalid handler specified"})
+            if HA["not_loaded"]:
+                HA["not_loaded"] -= 1
+                return self.reply(200, {"type": "abort", "flow_id": "sf0", "reason": "entry_not_loaded"})
+            HA["flows"]["sf1"] = eid
+            return self.reply(200, {"type": "form", "flow_id": "sf1", "handler": [eid, "conversation"], "step_id": "set_options"})
+        if self.path == "/api/config/config_entries/subentries/flow/sf1":
+            eid = HA["flows"].pop("sf1")
+            sub = {"subentry_id": f"s{len(HA['subentries'].get(eid, []))}", "subentry_type": "conversation", "title": b["name"],
+                   "unique_id": None, "data": {k: v for k, v in b.items() if k != "name"}}
+            HA["subentries"].setdefault(eid, []).append(sub)
+            return self.reply(200, {"type": "create_entry", "flow_id": "sf1", "title": b["name"]})
         self.reply(404)
 
     # --- the WebSocket API, as Home Assistant speaks it ---------------------
@@ -203,6 +240,8 @@ class FakeHA(BaseHTTPRequestHandler):
             name = username(m["user_id"])
             HA["creds"][name] = (m["password"], m["user_id"])
             return ok()
+        if t == "config_entries/subentries/list":
+            return ok([{k: v for k, v in sub.items() if k != "data"} for sub in HA["subentries"].get(m["entry_id"], [])])
         if t == "config/core/update":
             HA["core"].update({k: v for k, v in m.items() if k not in ("id", "type")})
             return ok()
@@ -231,15 +270,15 @@ class FakeHA(BaseHTTPRequestHandler):
         return json.loads(data)
 
 
-class PostDeploy(unittest.TestCase):
+class Hook(unittest.TestCase):
     def setUp(self):
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), FakeHA)
         self.srv.daemon_threads = True
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.shutdown)
 
-    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW):
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin",
+    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1"):
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1",
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         for name, value in (tokens or {}).items():
@@ -255,6 +294,9 @@ class PostDeploy(unittest.TestCase):
     def kind(self, token):
         uid = HA["tokens"].get(token)
         return None if uid is None else ("admin" if is_admin(uid) else "user")
+
+
+class PostDeploy(Hook):
 
     def test_a_fresh_home_assistant_is_onboarded_and_every_token_minted(self):
         fresh()
@@ -331,6 +373,71 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(handed, {})
         self.assertIn("laib secret set HA_ADMIN_PASSWORD", log)
         self.assertIn("HA_ADMIN_USER", log)
+
+
+def fake_frage():
+    """Frage's Ollama face (#491): the model list the integration's config flow reads"""
+    class F(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({"models": [{"name": "frage", "model": "frage"}]} if self.path == "/api/tags" else {}).encode()
+            self.send_response(200 if self.path == "/api/tags" else 404)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), F)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+class FrageAgent(Hook):
+    """#491: Frage as Assist's conversation agent. HA 2026.10 has no built-in
+    integration for an OpenAI server with its own URL; its Ollama integration
+    takes any URL, and Frage speaks Ollama's /api/tags and /api/chat — the
+    path Solaris's post-deploy took for conversation.solaris."""
+
+    def setUp(self):
+        super().setUp()
+        self.frage = fake_frage()
+        self.addCleanup(self.frage.shutdown)
+        self.url = f"http://127.0.0.1:{self.frage.server_port}"
+
+    def ollama(self):
+        return [e for e in HA["entries"] if e["domain"] == "ollama"]
+
+    def test_frage_is_wired_as_a_conversation_agent_once(self):
+        fresh()
+        HA["not_loaded"] = 1   # a fresh entry loads asynchronously: the subentry flow aborts until it has
+        p, handed, log = self.run_hook(frage=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual([e["data"]["url"] for e in self.ollama()], [self.url])
+        subs = HA["subentries"][self.ollama()[0]["entry_id"]]
+        self.assertEqual([(s["subentry_type"], s["title"], s["data"]["model"]) for s in subs], [("conversation", "Frage", "frage")])
+        self.assertNotIn("llm_hass_api", subs[0]["data"], "Frage runs no HA tools: HA's own intents answer commands")
+        HA["logins"].clear()
+        p, _, log = self.run_hook(tokens=handed, frage=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.ollama()), 1, "a second Ollama entry for Frage")
+        self.assertEqual(len(HA["subentries"][self.ollama()[0]["entry_id"]]), 1, "a second Frage agent")
+        self.assertEqual(HA["logins"], [], "logged in although every token works")
+
+    def test_an_entry_from_before_gets_its_agent(self):
+        # the owner added the Ollama integration for Frage by hand, without an agent
+        fresh()
+        HA["entries"].append({"entry_id": "e-hand", "domain": "ollama", "title": self.url, "data": {"url": self.url}})
+        p, _, log = self.run_hook(frage=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.ollama()), 1)
+        self.assertEqual([s["title"] for s in HA["subentries"]["e-hand"]], ["Frage"])
+
+    def test_without_frage_nothing_is_wired_and_the_apply_stays_green(self):
+        fresh()
+        p, _, log = self.run_hook()   # FRAGE_URL answers nothing
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.ollama(), [])
+        self.assertIn("laib add frage", log, "the hook does not say how Frage becomes the agent")
 
 
 if __name__ == "__main__":

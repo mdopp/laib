@@ -479,7 +479,7 @@ ha_hook
 [ "$(grep -c "^homeassistant:" "$HA_CFG/configuration.yaml")" = 1 ] || fail "a second homeassistant: key was appended (#177)"
 grep -q "^  packages: !include_dir_named packages" "$HA_CFG/configuration.yaml" || fail "the include goes under the existing homeassistant: block (#253)"
 grep -q "^  name: Haus" "$HA_CFG/configuration.yaml" || fail "the admin's homeassistant: block lost a key (#253)"
-( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./post-deploy >/dev/null ) || fail "frage hook"
+( cd "$ROOT/templates/frage" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SECRET_SEARX_SECRET=s3 ./pre-start >/dev/null ) || fail "frage hook"
 grep -q "formats: \[html, json\]" "$HOOKDIR/frage/searxng/settings.yml" || fail "frage searx json format"
 
 # --- 11b. a template with both hooks, added by the human (#36): pre-start runs in the hooks

@@ -19,6 +19,13 @@ Familienkonto); on a box from ServiceBay it is ServiceBay's admin, carried
 (scripts/carry-servicebay-secrets.sh). The Bote's password HA_BOTE_PASSWORD
 is generated; its token is minted by logging in as the Bote.
 
+Frage as Assist's conversation agent (#491): Home Assistant has no built-in
+integration for an OpenAI server with its own URL, its Ollama integration
+takes any URL, and Frage speaks Ollama's /api/tags and /api/chat (as
+Solaris's engine did for conversation.solaris). When Frage answers on
+FRAGE_URL, this hook adds that Ollama entry and its conversation agent
+"Frage" once; which pipeline uses it stays the owner's choice.
+
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
@@ -29,6 +36,8 @@ BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
 CLIENT = BASE + "/"  # HA's IndieAuth client id; the redirect is the same URL
 USER, PW = E.get("HA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_HA_ADMIN_PASSWORD", "")
 BOTE_PW = E.get("LAIB_SECRET_HA_BOTE_PASSWORD", "")
+FRAGE = E.get("FRAGE_URL", "http://127.0.0.1:8710").rstrip("/")  # HA is on the host network, Frage's pod publishes 8710
+RETRY = float(E.get("HA_RETRY_SECONDS", "3"))
 ADMIN = {"HA_TOKEN": "laib: home-assistant-check", "HAUS_HA_TOKEN": "laib: haus", "BOTE_AUTOMAT_HA_TOKEN": "laib: bote-automat"}
 
 
@@ -258,7 +267,62 @@ def main():
     print("home-assistant: tokens for the check, Haus, the Automat and the Bote work")
 
 
+def frage_agent():
+    """the Ollama entry for Frage and its conversation agent "Frage", each once (#491)"""
+    try:
+        with urllib.request.urlopen(FRAGE + "/api/tags", timeout=10) as r:
+            models = [m.get("name") for m in json.loads(r.read()).get("models", [])]
+    except (OSError, ValueError) as e:
+        models, why = [], type(e).__name__
+    else:
+        why = "no model frage in /api/tags"
+    if "frage" not in models:
+        print(f"home-assistant: Frage does not answer on {FRAGE} ({why}): no conversation agent Frage; "
+              "after laib add frage: laib apply home-assistant")
+        return
+    tok = admin_session()
+    find = lambda: next((e for e in call("GET", "/api/config/config_entries/entry", token=tok)[1] or []
+                         if e.get("domain") == "ollama" and e.get("title") == FRAGE), None)
+    entry = find()
+    if entry is None:
+        st, flow = call("POST", "/api/config/config_entries/flow", {"handler": "ollama"}, token=tok)
+        if st != 200 or not (flow or {}).get("flow_id"):
+            raise RuntimeError(f"the Ollama integration's flow did not start (HTTP {st})")
+        st, done = call("POST", "/api/config/config_entries/flow/" + flow["flow_id"], {"url": FRAGE}, token=tok)
+        if (done or {}).get("type") != "create_entry":
+            raise RuntimeError(f"the Ollama entry for {FRAGE} was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
+        entry = (done.get("result") or {}) if isinstance(done.get("result"), dict) else find()
+        print(f"home-assistant: Ollama integration for Frage added ({FRAGE})")
+    ws = WS(tok)
+    try:
+        subs = ws("config_entries/subentries/list", entry_id=entry["entry_id"])
+    finally:
+        ws.close()
+    if any(s.get("subentry_type") == "conversation" and s.get("title") == "Frage" for s in subs):
+        print("home-assistant: conversation agent Frage is there")
+        return
+    for _ in range(10):  # a fresh entry loads asynchronously; until then the subentry flow aborts
+        st, flow = call("POST", "/api/config/config_entries/subentries/flow", {"handler": [entry["entry_id"], "conversation"]}, token=tok)
+        if (flow or {}).get("reason") == "entry_not_loaded":
+            time.sleep(RETRY)
+            continue
+        if st != 200 or (flow or {}).get("type") != "form":
+            raise RuntimeError(f"the conversation agent's flow did not start: {(flow or {}).get('reason') or st}")
+        st, done = call("POST", "/api/config/config_entries/subentries/flow/" + flow["flow_id"],
+                        {"name": "Frage", "model": "frage", "prompt": "Antworte kurz, auf Deutsch, zum Vorlesen."}, token=tok)
+        if (done or {}).get("type") != "create_entry":
+            raise RuntimeError(f"the conversation agent Frage was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
+        print("home-assistant: conversation agent Frage added (Ollama integration, model frage); "
+              "an Assist pipeline uses it once the owner picks it")
+        return
+    raise RuntimeError("the Ollama entry for Frage did not load")
+
+
 try:
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
     red(f"{type(e).__name__}: {e}")
+try:
+    frage_agent()
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists the missing agent
+    print(f"home-assistant: conversation agent Frage NOT set up: {type(e).__name__}: {e}", file=sys.stderr)

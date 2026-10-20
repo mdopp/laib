@@ -6,6 +6,9 @@ Image=${SEARX_IMAGE}
 Pod=frage.pod
 Environment=SEARXNG_SECRET=${SEARX_SECRET}
 Environment=SEARXNG_BASE_URL=http://127.0.0.1:8888/
+# the port Frage asks, pod-local; the image's default moved to 8080 (#490)
+Environment=SEARXNG_PORT=8888
+Environment=GRANIAN_PORT=8888
 Volume=${DATA_DIR}/frage/searxng:/etc/searxng:z
 AutoUpdate=registry
 
