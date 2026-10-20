@@ -387,7 +387,13 @@ type Service struct {
 	Values   map[string]Value
 	Units    map[string]string // file name -> template content with ${VAR}
 	Assets   map[string]string // file name -> content copied as is (presets.json …)
+	Hooks    map[string]string // pre-start, post-deploy -> content; laib runs them, render hashes them (#496)
 }
+
+// BaseDir (services/<name>/.template) holds each template file as the last
+// add or update copied it in (#511): the base of the next update's
+// three-way merge. Nothing else reads it, and it is never run.
+const BaseDir = ".template"
 
 // State is the whole repo, loaded.
 type State struct {

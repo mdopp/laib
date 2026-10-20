@@ -98,8 +98,8 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 		if string(cur) == out[k] {
 			continue
 		}
-		if _, err := os.Stat(filepath.Dir(target)); err == nil && kind == "add" && strings.HasSuffix(k, "/"+render.ValuesFile) {
-			svc = "" // a service from before #364: the file is written, the service does not change for it
+		if _, err := os.Stat(filepath.Dir(target)); err == nil && kind == "add" && (strings.HasSuffix(k, "/"+render.ValuesFile) || strings.HasSuffix(k, "/"+render.HooksFile)) {
+			svc = "" // a service from before #364 (#496): the file is written, the service does not change for it
 		}
 		add(Change{
 			Path: k, Target: target, Service: svc, Kind: kind,

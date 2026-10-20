@@ -10,19 +10,15 @@ T = Path(__file__).resolve().parent.parent
 
 
 def render(presets):
-    """Runs the hook on presets (every weight already there: no download) and returns presets.ini."""
+    """Runs pre-start on presets and returns presets.ini."""
     with tempfile.TemporaryDirectory() as d:
         models = Path(d, "llama", "models")
         models.mkdir(parents=True)
-        for p in presets["presets"]:
-            for k in ("file", "draft", "mmproj"):
-                if p.get(k):
-                    (models / p[k]).write_text("x")
         hook = Path(d, "hook")
         hook.mkdir()
-        (hook / "post-deploy").write_text((T / "post-deploy").read_text())
+        (hook / "pre-start").write_text((T / "pre-start").read_text())
         (hook / "presets.json").write_text(json.dumps(presets))
-        r = subprocess.run([sys.executable, str(hook / "post-deploy")], env=dict(os.environ, LAIB_DATA_DIR=d), capture_output=True, text=True, timeout=60)
+        r = subprocess.run([sys.executable, str(hook / "pre-start")], env=dict(os.environ, LAIB_DATA_DIR=d), capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             raise AssertionError(r.stdout + r.stderr)
         return (models / "presets.ini").read_text()
@@ -38,7 +34,18 @@ def sections(ini):
     return out
 
 
-class PostDeploy(unittest.TestCase):
+class Presets(unittest.TestCase):
+    def test_presets_ini_is_written_before_the_router_starts(self):
+        """#512: post-deploy wrote presets.ini after apply had restarted llama,
+        so the router ran on the old file (thinking stayed on) until a second
+        restart. The router reads it only when it starts: pre-start writes
+        it, and post-deploy, which runs after the start, does not."""
+        self.assertIn("presets.ini", (T / "pre-start").read_text())
+        self.assertNotIn("presets.ini\"", (T / "post-deploy").read_text())
+        self.assertNotIn("open(os.path.join(MODELS, \"presets.ini", (T / "post-deploy").read_text())
+        self.assertTrue(os.access(T / "pre-start", os.X_OK), "pre-start must be executable")
+
+
     def test_presets_ini_names_the_current_drafter_flag(self):
         presets = json.loads((T / "presets.json").read_text())
         ini = render(presets)

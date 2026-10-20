@@ -85,7 +85,7 @@ func readYAML(path string, into any) error {
 }
 
 func loadService(dir string) (*Service, error) {
-	svc := &Service{Name: filepath.Base(dir), Dir: dir, Values: map[string]Value{}, Units: map[string]string{}, Assets: map[string]string{}}
+	svc := &Service{Name: filepath.Base(dir), Dir: dir, Values: map[string]Value{}, Units: map[string]string{}, Assets: map[string]string{}, Hooks: map[string]string{}}
 	if err := readYAML(filepath.Join(dir, "laib.yml"), &svc.Contract); err != nil {
 		return nil, fmt.Errorf("services/%s: %w", svc.Name, err)
 	}
@@ -134,6 +134,11 @@ func loadService(dir string) (*Service, error) {
 			continue
 		}
 		svc.Units[f.Name()] = string(b)
+	}
+	for _, h := range []string{"pre-start", "post-deploy"} {
+		if b, err := os.ReadFile(filepath.Join(dir, h)); err == nil {
+			svc.Hooks[h] = string(b)
+		}
 	}
 	if err := svc.applyWhen(); err != nil {
 		return nil, err
