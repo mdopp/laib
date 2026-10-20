@@ -112,6 +112,29 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes", p.stdout.splitlines())
         self.assertNotIn("idle_compact_after_seconds", conf, "a key the gateway never acts on (it resets the idle clock per turn)")
 
+    def test_a_long_conversation_is_compressed_by_token_count(self):
+        """#502, the owner's choice: Signal conversations run for days and drag the box trail into
+        every call. Hermes' compression.threshold_tokens compresses once a prompt passes N tokens
+        (the lower of N and the ratio threshold, agent/context_compressor.py). N is COMPACT_TOKENS,
+        32000 by default; a value Hermes would drop in silence (not a positive integer) fails the hook."""
+        def run(**values):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                           MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok", **values)
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                conf = Path(d, "bote/hermes/config.yaml")
+                return p, conf.read_text() if conf.exists() else ""
+        p, conf = run()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("compression:\n  threshold_tokens: 32000\n", conf)
+        p, conf = run(COMPACT_TOKENS="40000")
+        self.assertIn("compression:\n  threshold_tokens: 40000\n", conf)
+        for bad in ("24k", "0", "-5"):
+            p, _ = run(COMPACT_TOKENS=bad)
+            self.assertNotEqual(p.returncode, 0, bad)
+            self.assertIn("COMPACT_TOKENS", p.stderr)
+        self.assertIn("COMPACT_TOKENS: 32000", (HOOK.parent / "values.example.yml").read_text())
+
     def test_hermes_is_pinned(self):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()
