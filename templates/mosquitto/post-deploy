@@ -38,7 +38,8 @@ os.replace(path + ".tmp", path)
 PY
 )
 chmod 600 "$C/passwd"
-# the broker's own user opens it (eclipse-mosquitto 2.1 drops to 1883, #248)
-chown 1883:1883 "$C/passwd"
+# the broker's own user opens it (eclipse-mosquitto 2.1 drops to 1883, #248), group root as the
+# broker wants it (#524, pre-start)
+chown 1883:0 "$C/passwd"
 echo "laib-exec: systemd-mosquitto kill -HUP 1"
 echo "mosquitto passwd holds the hash for $MQTT_USER; the broker reloads it"

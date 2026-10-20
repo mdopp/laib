@@ -32,7 +32,7 @@ except Exception as e:
     print(e); sys.exit(1)
 PY
 }
-MCP_EXTRA=""; FRAGE_RULE=""; TOOLS="die Box (laib: lesen und vorschlagen)"
+MCP_EXTRA=""; FRAGE_RULE=""; HA_RULE=""; TOOLS="die Box (laib: lesen und vorschlagen)"
 if [ -n "${FRAGE_URL:-}" ]; then
   if answers "$FRAGE_URL" >/dev/null 2>&1; then
     MCP_EXTRA="$MCP_EXTRA  frage:\n    url: $FRAGE_URL\n    trust: full      # Frage: web search plus summary with sources (ADR 0015)\n"
@@ -57,6 +57,9 @@ fi
 if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/api/mcp/assist\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server, Assist API as the user bote: lights, switches, players, \"was ist an\"\n"
   TOOLS="$TOOLS, die Geräte (ha: Licht, Schalter, Musik, was gerade an ist)"
+  # #520: without thinking, "Bambi aus" read as a statement ("Bambi aus.") and nothing switched
+  HA_RULE="
+Kurze Sätze mit einem Gerät und an, aus, auf, zu oder einer Prozentzahl (\"Bambi aus\", \"Küche an\", \"Rollo zu\", \"Licht 30 Prozent\") sind Befehle: schalte sofort mit ha, ohne Rückfrage, dann ein Satz Bestätigung. Nur eine Frage (\"Ist Bambi an?\") liest den Stand."
 fi
 if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
@@ -123,6 +126,10 @@ MCP_EXTRA="$(printf "$MCP_EXTRA")"
 # silence (agent/agent_init.py _positive_int), and the cap would be gone unseen; so the hook says no.
 COMPACT_TOKENS="${COMPACT_TOKENS:-32000}"
 case "$COMPACT_TOKENS" in ''|*[!0-9]*|0*) echo "bote: COMPACT_TOKENS ist keine positive ganze Zahl: $COMPACT_TOKENS" >&2; exit 1;; esac
+# The Laib tools' trust is the owner's decision, a value (#524): untrusted asks in the chat before
+# propose, note and escalate; full does not (the hand bote can only propose either way, #48).
+LAIB_TOOLS_TRUST="${LAIB_TOOLS_TRUST:-untrusted}"
+case "$LAIB_TOOLS_TRUST" in untrusted|full) ;; *) echo "bote: LAIB_TOOLS_TRUST ist untrusted oder full, nicht: $LAIB_TOOLS_TRUST" >&2; exit 1;; esac
 cat > "$H/config.yaml" <<YAML
 # rendered by laib post-deploy; do not edit by hand (ADR 0016)
 model:
@@ -151,7 +158,7 @@ mcp_servers:
     url: ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}
     headers:
       Authorization: "Bearer \${LAIB_TOKEN}"
-    trust: untrusted      # reads freely; propose, note and escalate ask the person in the chat first (#48)
+    trust: ${LAIB_TOOLS_TRUST}      # LAIB_TOOLS_TRUST (#524); untrusted: propose, note and escalate ask the person in the chat first (#48)
 ${MCP_EXTRA}
 # the model acts only through the MCP tools above (#181): every Hermes platform gets the
 # same safe list, so no terminal, code, files, browser, delegation, cron or skills; Hermes
@@ -207,7 +214,7 @@ if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^Y
 $STYLE
 Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
-Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${FRAGE_RULE}${MITTEILUNG}
+Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${HA_RULE}${FRAGE_RULE}${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
