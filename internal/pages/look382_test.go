@@ -32,7 +32,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 	if err != nil || string(want) != got {
 		t.Errorf("the status page differs from %s (UPDATE_GOLDEN=1 rewrites it):\n%s", golden, got)
 	}
-	for _, w := range []string{"#070709", "#14141A", "#F97316", "prefers-color-scheme: light", "system-ui", `name=viewport`} {
+	for _, w := range []string{"#070709", "#14141a", "#f97316", "prefers-color-scheme: light", "system-ui", `name=viewport`} {
 		if !strings.Contains(got, w) {
 			t.Errorf("the page lacks %s", w)
 		}
@@ -40,7 +40,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 	if regexp.MustCompile(`(src|href)="?https?://|@import|url\(`).MatchString(got) {
 		t.Error("the page makes an external request (a font, a stylesheet)")
 	}
-	cards := regexp.MustCompile(`(?s)<div class="card (grün|gelb|rot)">.*?</div>`).FindAllString(got, -1)
+	cards := regexp.MustCompile(`(?s)<div class="card (grün|gelb|rot)" data-f>.*?</div>`).FindAllString(got, -1)
 	if len(cards) != 3 {
 		t.Fatalf("want one card per service, got %d:\n%s", len(cards), got)
 	}
@@ -59,7 +59,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 	}
 	// the journal: one row card per entry, the result as word and colour
 	j := journalBody([]journal.Entry{{T: time.Date(2026, 10, 19, 7, 30, 0, 0, time.UTC), Actor: "human:core", Verb: "apply", Service: "auth", Result: "red", Reason: "Session-Speicher"}})
-	if !strings.Contains(j, `class="card rot"`) || strings.Contains(j, "<table") || !strings.Contains(j, "Session-Speicher") {
+	if !strings.Contains(j, `class="card rot" data-f`) || strings.Contains(j, "<table") || !strings.Contains(j, "Session-Speicher") {
 		t.Errorf("the journal is not rows of cards: %s", j)
 	}
 }

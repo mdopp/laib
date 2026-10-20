@@ -1,24 +1,38 @@
-<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Laib · Status</title><style>
-/* Laib's pages in the household look (#382, mdopp/haus#35): the Solaris
-   palette, light or dark by the device, the system font, no request. */
-:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--line:rgba(255,255,255,.08);--accent:#F97316;--ok:#10B981;--warn:#FFC107;--bad:#EF4444}
-@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--line:rgba(15,23,42,.10);--accent:#EA580C;--ok:#059669;--warn:#B45309;--bad:#DC2626}}
-*{box-sizing:border-box}
-body{margin:0 auto;max-width:48rem;padding:1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-h1{font-size:1.15rem;margin:.5rem 0 1rem}h2{font-size:1rem;margin:1.5rem 0 .5rem}
-nav{display:flex;gap:1rem;margin-bottom:.5rem}a{color:var(--accent)}
-.card{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .75rem;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:12px;padding:.6rem .9rem;margin:.5rem 0}
-.card b{font-weight:600}.card .note{color:var(--muted);flex:1 1 12rem;min-width:0;overflow-wrap:anywhere}
+<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><meta name=theme-color content="#0c0c0e"><title>Laib · Status</title><style>
+/* Laib's pages in the household look (#382, #515, mdopp/haus#35): Haus's
+   palette and spacing, dark first, light when the device is, the system
+   font, no request. The nav is a bar at the bottom on the phone and a list
+   on the right on a wide screen (haus#67); cards stack under 600 px. */
+:root{color-scheme:dark;--bg:#070709;--panel:#0c0c0e;--card:#14141a;--edge:rgba(255,255,255,.12);--line:rgba(255,255,255,.07);--ink:#f2f2f5;--muted:#9aa0ae;--faint:#6b7280;--accent:#f97316;--accent-soft:rgba(249,115,22,.14);--ok:#10b981;--warn:#f59e0b;--bad:#ef5350}
+@media (prefers-color-scheme: light){:root{color-scheme:light;--bg:#f1f5f9;--panel:#ffffff;--card:#ffffff;--edge:rgba(15,23,42,.12);--line:rgba(15,23,42,.08);--ink:#0f172a;--muted:#64748b;--faint:#94a3b8;--accent:#ea580c;--accent-soft:rgba(234,88,12,.10);--ok:#059669;--warn:#b45309;--bad:#dc2626}}
+*{box-sizing:border-box}html{background:var(--bg)}[hidden]{display:none!important}
+body{margin:0 auto;max-width:40rem;padding:0 16px calc(88px + env(safe-area-inset-bottom));background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%;overflow-wrap:anywhere}
+h1{font-size:1.6rem;font-weight:700;letter-spacing:-.01em;line-height:1.2;margin:22px 0 4px}
+h2{font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:26px 2px 8px}
+p{margin:12px 0}a{color:var(--accent)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:2;display:flex;justify-content:center;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.tabs a{flex:1;max-width:7.5rem;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);text-decoration:none;font-size:.72rem}
+.tabs a[aria-current]{color:var(--accent)}.tabs svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.filter{display:block;width:100%;margin:16px 0 0;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--edge);border-radius:999px;padding:0 16px;min-height:44px}
+.liste{display:grid;gap:8px;margin:12px 0}.liste .card{margin:0}
+.card{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;background:var(--card);border:1px solid var(--edge);border-left:4px solid var(--faint);border-radius:14px;padding:11px 14px;margin:8px 0;min-width:0}
+.card b{font-weight:600}.card .note{color:var(--muted);font-size:.9rem;flex:1 1 12rem;min-width:0}
 .card.grün{border-left-color:var(--ok)}.card.gelb{border-left-color:var(--warn)}.card.rot{border-left-color:var(--bad)}
-.state{font-size:.85rem;font-weight:600}.grün .state,.grün>.state{color:var(--ok)}.gelb .state{color:var(--warn)}.rot .state{color:var(--bad)}
+.state{font-size:.85rem;font-weight:600}.grün .state{color:var(--ok)}.gelb .state{color:var(--warn)}.rot .state{color:var(--bad)}
 p.gelb,li.gelb{color:var(--warn)}p.rot{color:var(--bad)}.muted{color:var(--muted)}
-section.card{display:block}
-button{font:inherit;min-height:40px;padding:.35rem 1rem;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
-button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+section.card{display:block}section.card h2{font-size:1rem;letter-spacing:0;text-transform:none;color:var(--ink);margin:0 0 8px}
+button{font:inherit;font-size:.85rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border:0;border-radius:999px;padding:0 16px;min-height:40px;cursor:pointer;white-space:nowrap}
+button.go{background:var(--accent);color:#fff}
 form{display:inline;margin:0}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.75rem;font-size:.85rem}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:.8rem/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 details summary{cursor:pointer;color:var(--muted)}
-</style></head><body><nav><a href="/inbox">Inbox</a><a href="/journal">Journal</a><a href="/net">Netz</a><a href="/bote/link">Bote verbinden</a><a href="/abmelden">Abmelden</a></nav><h1>Laib · bereit · 3 Dienste</h1><p class=muted>Operator läuft · zuletzt gehört 07:41:05</p><div class="card grün"><b>auth</b><span class=state>grün</span><span class=note>Passwort-Mails über smtp.example · geprüft vor 3 min</span></div>
-<div class="card gelb"><b>home-assistant</b><span class=state>gelb</span><span class=note>fehlt: Jellyfin, Waschmaschine</span><form method=post action="/check/home-assistant"><button>jetzt prüfen</button></form></div>
-<div class="card rot"><b>llama</b><span class=state>rot</span><span class=note>llama-lease.service=activating</span></div>
-<p class=muted>Letzte Änderung 19.10. 07:30 · human:core · apply auth · Session-Speicher</p><h2>Morgenbericht 19.10.</h2><pre>Alles ruhig.</pre></body></html>
+@media (max-width:600px){.card .note{flex-basis:100%}}
+@media (min-width:900px){body{max-width:none;margin:0 15rem 0 0;padding:8px 32px 32px}
+.tabs{left:auto;top:0;width:13rem;flex-direction:column;justify-content:flex-start;gap:4px;padding:24px 12px;border-top:0;border-left:1px solid var(--line)}
+.tabs a{flex:none;max-width:none;min-height:44px;flex-direction:row;justify-content:flex-start;gap:12px;padding:0 14px;border-radius:999px;font-size:.95rem}
+.tabs a[aria-current]{background:var(--accent-soft);font-weight:600}.tabs a[href="/abmelden"]{margin-top:auto}
+.filter{max-width:32rem}.liste{grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))}}
+</style></head><body><nav class=tabs aria-label=Seiten><a href="/" aria-current=page><svg viewBox="0 0 24 24" aria-hidden=true><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M3 11h18M8 15h2"/></svg>Status</a><a href="/inbox"><svg viewBox="0 0 24 24" aria-hidden=true><path d="M4 13l2.5-8h11l2.5 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox</a><a href="/journal"><svg viewBox="0 0 24 24" aria-hidden=true><path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Journal</a><a href="/net"><svg viewBox="0 0 24 24" aria-hidden=true><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5.5M12 12l6 5.5"/></svg>Netz</a><a href="/abmelden"><svg viewBox="0 0 24 24" aria-hidden=true><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a></nav><h1>Laib · bereit · 3 Dienste</h1><p class=muted>Operator läuft · zuletzt gehört 07:41:05</p><p><a href="/bote/link">Bote verbinden</a></p><input type=search class=filter placeholder="Filtern, z. B. lan, immich, 8083" aria-label=Filtern oninput="const q=this.value.toLowerCase();document.querySelectorAll('[data-f]').forEach(e=>e.hidden=!e.textContent.toLowerCase().includes(q))"><div class=liste><div class="card grün" data-f><b>auth</b><span class=state>grün</span><span class=note>Passwort-Mails über smtp.example · geprüft vor 3 min</span></div>
+<div class="card gelb" data-f><b>home-assistant</b><span class=state>gelb</span><span class=note>fehlt: Jellyfin, Waschmaschine</span><form method=post action="/check/home-assistant"><button>jetzt prüfen</button></form></div>
+<div class="card rot" data-f><b>llama</b><span class=state>rot</span><span class=note>llama-lease.service=activating</span></div>
+</div><p class=muted>Letzte Änderung 19.10. 07:30 · human:core · apply auth · Session-Speicher</p><h2>Morgenbericht 19.10.</h2><pre>Alles ruhig.</pre></body></html>
