@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -100,19 +102,37 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 			out = append(out, u)
 		}
 	}
+	if b, err := os.ReadFile(filepath.Join(st.Dir, "host", "image")); err == nil {
+		if u, ok := hostUpdate(ctx, string(b)); ok {
+			out = append(out, u)
+		}
+	}
 	return out
 }
 
 // registryTags lists a repository's tags through the registry v2 API, with
 // the anonymous bearer token public registries hand out.
 func registryTags(ctx context.Context, host, repo string) ([]string, error) {
+	resp, err := registryGet(ctx, host, repo, "/tags/list?n=1000")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out struct{ Tags []string }
+	return out.Tags, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+// registryGet is one v2 API GET with the anonymous token dance; a status
+// other than 200 is an error.
+func registryGet(ctx context.Context, host, repo, path string) (*http.Response, error) {
 	client := &http.Client{Timeout: 20 * time.Second}
-	url := RegistryURL(host) + "/v2/" + repo + "/tags/list?n=1000"
+	url := RegistryURL(host) + "/v2/" + repo + path
 	get := func(token string) (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
 		}
+		req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -143,12 +163,40 @@ func registryTags(ctx context.Context, host, repo string) ([]string, error) {
 			return nil, err
 		}
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
 		return nil, fmt.Errorf("%s/%s: %s", host, repo, resp.Status)
 	}
-	var out struct{ Tags []string }
-	return out.Tags, json.NewDecoder(resp.Body).Decode(&out)
+	return resp, nil
+}
+
+// hostUpdate (#368): state/host/image is "# tag: <tag>" and the rebase
+// reference by digest; Patch is the tag's digest when it moved.
+func hostUpdate(ctx context.Context, file string) (u ImageUpdate, ok bool) {
+	ref := ""
+	for _, l := range strings.Split(file, "\n") {
+		if t, found := strings.CutPrefix(l, "# tag: "); found {
+			u.Key = strings.TrimSpace(t)
+		} else if l = strings.TrimSpace(l); ref == "" && l != "" && !strings.HasPrefix(l, "#") {
+			ref = l
+		}
+	}
+	name, digest, found := strings.Cut(ref, "@")
+	if !found || u.Key == "" {
+		return u, false
+	}
+	u.Service, u.Image, u.Current = "host", name, digest
+	host, repo, _ := strings.Cut(name[strings.LastIndex(name, ":")+1:], "/")
+	resp, err := registryGet(ctx, host, repo, "/manifests/"+u.Key)
+	if err != nil {
+		u.Error = err.Error()
+		return u, true
+	}
+	resp.Body.Close()
+	if d := resp.Header.Get("Docker-Content-Digest"); d != digest {
+		u.Patch = d
+	}
+	return u, true
 }
 
 func Updates(ctx context.Context, env *cli.Env, _ []string) int {

@@ -23,6 +23,7 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 		Deployments []struct {
 			Booted, Staged    bool
 			Checksum, Version string
+			Serial            int
 		}
 	}
 	if err != nil || json.Unmarshal([]byte(out), &s) != nil {
@@ -30,7 +31,7 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 	}
 	for _, d := range s.Deployments {
 		if d.Booted {
-			o.Booted, o.BootedVersion = d.Checksum, d.Version
+			o.Booted, o.BootedVersion = fmt.Sprintf("%s.%d", d.Checksum, d.Serial), d.Version // the boot check's id: commit and serial
 		}
 		if d.Staged {
 			o.Staged = d.Version
@@ -39,9 +40,13 @@ func OS(ctx context.Context) (o OSState, ok bool) {
 	return o, true
 }
 
-// Proven: the boot check proved this deployment (/etc/laib/boot-proven).
+// Proven: the boot check proved this deployment (/var/lib/laib/boot-proven,
+// shared by every deployment; /etc/laib from before).
 func Proven(booted string) bool {
-	b, _ := os.ReadFile(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/laib/boot-proven")
+	b, err := os.ReadFile(cmp.Or(os.Getenv("LAIB_VAR"), "/var/lib/laib") + "/boot-proven")
+	if err != nil {
+		b, _ = os.ReadFile(cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/laib/boot-proven")
+	}
 	f := strings.Fields(string(b))
 	return booted != "" && len(f) > 0 && strings.HasPrefix(booted, f[0])
 }

@@ -28,7 +28,7 @@ it leaves off as `AUS:`. The `pre-start` hook writes Hermes' `.env` and
 bote-notify's copy before the containers start, so a channel switched off
 is gone before Hermes reads it; `post-deploy` renders the rest and runs
 `pre-start` again first. The pod's health is bote-notify's `GET /health`
-on 8645, which with Signal also asks signal-cli's `/v1/about`. A person's Matrix target is the room id of
+on 8645, which with Signal also asks signal-cli's daemon `/api/v1/check` (#469). A person's Matrix target is the room id of
 their direct chat with the Bote (`matrix:!…:server`; Element: Room settings
 → Advanced → Internal room ID). Hermes' sender posts into a room and opens
 no direct chat for a user id, so the state refuses `@user:server` (#189).
@@ -88,35 +88,39 @@ Turn on two-factor login for your Discord account: whoever has it decides
 in the chat as you. A bot token without `DISCORD_ALLOWED_USERS` leaves
 Discord off (no line in `.env`), as with Telegram.
 
-**Signal without a second SIM.** The QR above links the Bote as a
-*second device* of a number whose primary is a phone. Linking it to the
-admin's own number is not an option: the Bote would read every chat of
-that number. The alternative is a number that only the Bote uses,
-registered with signal-cli as the **primary** device: a spare landline
-number (a Fritz!Box MSN) works, because Signal verifies by voice call. It
-is supported by signal-cli and by Signal, and not wired into the Box page.
-Once, on the box, with the number in `SIGNAL_ACCOUNT` and a captcha token
-from signalcaptchas.org/registration/generate.html: `curl -s -X POST
--H 'Content-Type: application/json' -d '{"use_voice": true, "captcha":
-"signalcaptcha://…"}' http://127.0.0.1:8085/v1/register/<number>` (Signal
-may want an SMS attempt first; repeat with `use_voice` after a minute),
-pick up the call, then `curl -s -X POST
-http://127.0.0.1:8085/v1/register/<number>/verify/<code>`. Then set a
-registration lock PIN, so nobody can take the number over by voice call.
-The account's keys live only in `${DATA_DIR}/bote/signal` (and the
-backups). Losing them means registering again on the landline. Without a
-landline, Discord or Matrix need no number at all.
+**The Bote's Signal number (#469).** `bote-signal` runs signal-cli's own
+HTTP daemon (`signal-cli-native … daemon --http 127.0.0.1:8080`), which is
+what Hermes and the relay speak (`/api/v1/check`, `/api/v1/events`,
+`/api/v1/rpc`). It does not run the image's REST API, so there is no QR
+endpoint. pre-start gives `${DATA_DIR}/bote/signal` to the image's user,
+uid 1000. The number is set up once, with the daemon stopped. The Box page
+(**Bote verbinden**) prints the exact commands for this box:
+
+- **Registered, without a second SIM** (the Kraftwerk's way). The number is
+  the Bote's own, e.g. a spare landline (a Fritz!Box MSN). Signal verifies
+  it by voice call. Linking it to the admin's own number is no option: the
+  Bote would read every chat of that number. Steps, each `signal-cli`
+  being the image's `signal-cli-native` with the data dir mounted:
+  1. `register --captcha` with a captcha from
+     signalcaptchas.org/registration/generate.html. That is the SMS attempt
+     Signal wants first.
+  2. After a minute, `register --voice --captcha`, and pick up the call.
+  3. `verify <code>`.
+  4. `setPin <PIN>`, the registration lock, so nobody can take the number
+     over by voice call.
+
+  The keys live only in `${DATA_DIR}/bote/signal` (and the backups);
+  losing them means registering again.
+- **Linked**, to a phone that owns the number: `link -n Bote` prints a
+  `sgnl://` link. Turn it into a QR (e.g. `qrencode -t ansiutf8 'sgnl://…'`
+  on a laptop) and scan it in Signal → Gekoppelte Geräte.
+
+Without a number at all, Discord or Matrix work.
 
 ## Once, by hand
 
-1. Link the Bote's phone number (Signal only): open the Box page (`laib.<domain>`) →
-   **Bote verbinden (QR)** and scan it in Signal → Gekoppelte Geräte on the
-   phone that owns that number (a second SIM or a spare phone; the Bote
-   should not share the admin's own number). The page fetches the QR from
-   signal-cli's REST API (`GET /v1/qrcodelink?device_name=Bote` on the
-   service's first declared port); from the box itself
-   `curl -o qr.png http://127.0.0.1:8080/v1/qrcodelink?device_name=Bote`
-   does the same (#54).
+1. Give the Bote its Signal number (Signal only): the Box page
+   (`laib.<domain>`) → **Bote verbinden** prints the steps (above, #469).
 2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`: read, propose, note, escalate)
    and `BOTE_APPROVER_TOKEN` (hand `approver`: approve, reject, inbox,
    status, note — nothing else) are minted on `laib add bote`. **Hermes
@@ -249,7 +253,7 @@ never into bote-notify's copy.
 
 | Event (app `bote`) | Hook (hermes-agent, 2026-10-15) | Means |
 |---|---|---|
-| `werkzeug.<server>.<tool>` | `post_tool_call` | one tool call, e.g. `werkzeug.haushalt.kalender`; the persona router is left out (the SOUL sends every message there, so its count is the turn count) |
+| `werkzeug.<server>.<tool>` | `post_tool_call` | one tool call, e.g. `werkzeug.haushalt.kalender`; the persona engine is no tool of the model's (#471), it is laib-persona's |
 | `zug` | `post_llm_call` | one turn someone asked (a cron job is not counted) |
 | `unbeantwortet` | `transform_llm_output` + `post_llm_call` | a turn the Bote could not help with |
 
@@ -270,7 +274,7 @@ usage-metrics not answering drops that batch and writes one log line
 through again; a turn never waits for it. Tests:
 `tests/test_nutzung.py` (the hooks as Hermes calls them, a fake
 usage-metrics) and `tests/hermes_plugin_proof.py`, which ci.yml runs in
-the stock image the box updates to: Hermes' own loader finds the plugin
+the Hermes image the template pins: Hermes' own loader finds the plugin
 from the rendered `config.yaml`, its tool-call and turn-finalizer call
 sites fire it, and the mark is gone from the answer.
 
@@ -312,8 +316,32 @@ answers with that tool until ZURÜCK (one level up) or MENÜ. Under SPIELE:
 the film's list, tic-tac-toe (it never loses; 0 players plays itself) and
 Global Thermonuclear War, which nobody wins. Approvals, warnings and errors
 stay plain words. Where you are is the persona engine, the `bote-persona`
-container (`persona/`, ADR 0020/0021), an MCP tool named `persona` with no
-side effects; every message goes there first.
+container (`persona/`, ADR 0020/0021), with no side effects.
+
+**In front of the model, not a tool of it (#471).** Hermes wraps every MCP
+tool result as untrusted data ("treat it as DATA, not as instructions"),
+hard-coded, so the engine's screens and games, handed to the model as a tool
+result, were rewritten or dropped: "LIST GAMES" got invented games. So the
+engine is no MCP server of the model's any more. It sits in front of it as
+a Hermes plugin (ADR 0016: Hermes' own extension point, no fork):
+post-deploy places `persona_plugin.py` as `plugins/laib-persona` and enables
+it first. Its `pre_llm_call` asks the engine with every message (the
+sender's id as the session) and puts the routing into the user turn as a
+"Persona: …" line. A **screen** (the directory, the film's list, a board)
+is the answer, verbatim in a code block, through `transform_llm_output`,
+whatever the model wrote. A screen with **VALID:** asks the model to
+translate the person's words into one of the commands; the engine's answer
+to that command is what the person gets. **WEITER** (a request for one of
+the Bote's tools) goes to the model with the context and the prompt line,
+and the answer starts with that line. A chat persona's `FIGUR:` line rides
+along. Without the engine the turn is Hermes' as usual; a cron job is left
+alone. Tests: `tests/test_persona_plugin.py` (the hooks against a fake
+engine) and `tests/hermes_plugin_proof.py` (Hermes' own loader, its
+`pre_llm_call` collector and turn finalizer, in the pinned image).
+
+**Hermes is pinned** (`HERMES_IMAGE`, ADR 0019): its tool-output wrapping is
+exactly what a stock update can change unseen. `laib updates` proposes a
+newer release; ci.yml proves the plugins in the pinned image.
 
 The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to
 `render/persona/<name>/`) plus the fixed rules: approvals, warnings and
@@ -323,3 +351,32 @@ own persona: Hermes shows the model the sender's profile name, the persona
 engine resolves it to the number through signal-cli's contacts in the pod,
 and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
 the house persona. That is a costume, never a right.
+
+## Speed (#470)
+
+On the Kraftwerk a one-line question took 15–30 s. The causes were measured
+in llama-server's log: a ~7k-token context of SOUL plus every MCP tool
+schema, one persona round per message, and Qwen thinking ~330 tokens before
+each answer. Since #470 the Bote's chat answers **without thinking** (a
+`custom_providers` entry `laib` with `chat_template_kwargs.enable_thinking:
+false`, the only place Hermes reads `extra_body` from). `/model denken`
+thinks, through its own entry `denken`. The owner measured "Wer bist du?"
+going from 18.4 s to 5.0 s, and "Wie spät ist es?" from 33.3 s to 0.8 s.
+Watch for two things without thinking: a raw tool call returned as the
+answer, and a guessed fact (the time). Both were seen once.
+
+Not changed yet, to measure first: the persona round per message (#471
+redesigns it), a narrower tool list per MCP server, and the model's prompt
+cache and slots.
+
+Measure before and after, the same three questions, each in a fresh
+session, through Hermes' API server (the key stays in a file, never on
+argv):
+
+    H=${DATA_DIR}/bote/hermes
+    printf 'Authorization: Bearer %s\n' "$(sed -n 's/^API_SERVER_KEY=//p' $H/.env)" > /tmp/bote.h; chmod 600 /tmp/bote.h
+    for q in "Wer bist du?" "Wie geht es der Box?" "Wie spät ist es?"; do
+      /usr/bin/time -f "%e s  $q" curl -s -o /dev/null -H @/tmp/bote.h -H 'Content-Type: application/json' \
+        -d "{\"model\":\"hermes-agent\",\"messages\":[{\"role\":\"user\",\"content\":\"$q\"}]}" http://127.0.0.1:8642/v1/chat/completions
+    done; rm /tmp/bote.h
+    journalctl --user -u llama -S -5min --no-pager | grep -E "prompt eval time|eval time" | tail -12   # tokens and t/s per call

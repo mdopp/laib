@@ -23,6 +23,7 @@ import (
 // and bin holds the stand-ins for the host's tools.
 type bootBox struct {
 	etc, bin, log string
+	vardir, root  string   // /var/lib/laib (the boot check's records, shared by every deployment) and / (the deployments' own /etc)
 	listen        []string // the box's listening TCP sockets, as `ss -Hltn` prints them (#445)
 }
 
@@ -31,7 +32,13 @@ const proven, fresh = "aaaa1111aaaa1111", "bbbb2222bbbb2222"
 func newBootBox(t *testing.T) *bootBox {
 	t.Helper()
 	root := t.TempDir()
-	b := &bootBox{etc: filepath.Join(root, "etc"), bin: filepath.Join(root, "bin"), log: filepath.Join(root, "shim.log")}
+	b := &bootBox{etc: filepath.Join(root, "etc"), bin: filepath.Join(root, "bin"), log: filepath.Join(root, "shim.log"), vardir: filepath.Join(root, "var", "lib", "laib"), root: root}
+	// the rollback deployment's own /etc: ostree keeps one per deployment,
+	// on a read-only /sysroot (the mount shim opens it on remount rw)
+	backEtc := filepath.Join(root, "ostree", "deploy", "fedora-coreos", "deploy", proven+".0", "etc")
+	os.MkdirAll(backEtc, 0o755)
+	os.Chmod(backEtc, 0o555)
+	t.Cleanup(func() { os.Chmod(backEtc, 0o755); os.Chmod(filepath.Join(backEtc, "zincati"), 0o755); os.Chmod(filepath.Join(backEtc, "zincati", "config.d"), 0o755) })
 	os.MkdirAll(b.bin, 0o755)
 	os.MkdirAll(filepath.Join(b.etc, "laib"), 0o755)
 	t.Setenv("SHIM_LOG", b.log)
@@ -55,7 +62,10 @@ func (b *bootBox) run(t *testing.T, booted, gpuDriver, cdiDriver, red string) (l
 func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOstree string) (log, out string) {
 	t.Helper()
 	os.WriteFile(b.log, nil, 0o644)
-	status := "* fedora-coreos " + booted + ".0\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
+	if !strings.Contains(booted, ".") {
+		booted += ".0" // the deployment's serial
+	}
+	status := "* fedora-coreos " + booted + "\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
 	shim(t, b.bin, "ostree", "cat <<'EOF'\n"+status+"EOF")
 	if gpuDriver != "" {
 		shim(t, b.bin, "lspci", `echo "01:00.0 0300: 10de:2204 (rev a1)"`)
@@ -76,6 +86,12 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 	shim(t, b.bin, "rpm-ostree", rpmOstree)
 	shim(t, b.bin, "systemctl", "exit 0")
 	shim(t, b.bin, "runuser", "exit 0")
+	// Fedora CoreOS mounts /sysroot read-only: another deployment's /etc is
+	// writable only after a remount rw, in a private mount namespace as
+	// ostree itself does (train 22). Here the fake deploy tree is read-only
+	// until the boot check remounts; unshare runs its command.
+	shim(t, b.bin, "unshare", `while [ "${1#-}" != "$1" ]; do shift; done; exec "$@"`)
+	shim(t, b.bin, "mount", `case "$*" in *remount,rw*/sysroot*) chmod -R u+w "$LAIB_ROOT/ostree";; esac`)
 	// #445: the LAN address is 127.0.0.2 here, and the probe namespace is this
 	// process's own: `ip netns exec <ns> cmd` runs cmd, the rest of ip is a no-op
 	ss := filepath.Join(b.etc, "..", "ss.out")
@@ -85,7 +101,7 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 case "$*" in *"route get"*) echo "1.1.1.1 via 10.0.0.1 dev eth0 src 127.0.0.2 uid 0";; esac
 exit 0`)
 	cmd := exec.Command("bash", filepath.Join(b.etc, "laib", "boot-check.sh"))
-	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_BOOT_CHECK_TIMEOUT=1", "LAIB_BOOT_CHECK_INTERVAL=0.2")
+	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_VAR="+b.vardir, "LAIB_ROOT="+b.root, "LAIB_BOOT_CHECK_TIMEOUT=1", "LAIB_BOOT_CHECK_INTERVAL=0.2")
 	o, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(b.log)
 	return string(l), string(o)
@@ -93,7 +109,8 @@ exit 0`)
 
 func (b *bootBox) prove(t *testing.T, id, red string) {
 	t.Helper()
-	os.WriteFile(filepath.Join(b.etc, "laib", "boot-proven"), []byte(id+" "+red+"\n"), 0o644)
+	os.MkdirAll(b.vardir, 0o755)
+	os.WriteFile(filepath.Join(b.vardir, "boot-proven"), []byte(id+" "+red+"\n"), 0o644)
 }
 
 func rolledBack(log string) bool {
@@ -114,9 +131,10 @@ func runInstallTo(t *testing.T, bootCheck string) (etc, out string) {
 		os.MkdirAll(d, 0o755)
 	}
 	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	follow, _ := os.ReadFile(filepath.Join("..", "scripts", "host-image.sh"))
 	sums := ""
-	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real)} {
-		if name == "laib-boot-check.sh" && bootCheck == "" {
+	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real), "laib-host-image.sh": string(follow)} {
+		if (name == "laib-boot-check.sh" || name == "laib-host-image.sh") && bootCheck == "" {
 			continue // a release from before #368
 		}
 		sum := sha256.Sum256([]byte(body))
@@ -233,8 +251,8 @@ func TestTheFirstBootCheckIsTheBaselineAndNeverRollsBack(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("no proven deployment yet, but the check rolled back:\n%s\n%s", log, out)
 	}
-	p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven"))
-	if !strings.HasPrefix(string(p), fresh+" ") {
+	p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven"))
+	if !strings.HasPrefix(string(p), fresh+".0 ") {
 		t.Fatalf("the baseline is not recorded: %q\n%s", p, out)
 	}
 	if !strings.Contains(log, "note --kind incident") {
@@ -252,11 +270,16 @@ func TestANewDeploymentWithAStaleCDISpecRollsBackOnceAndPausesZincati(t *testing
 	if !strings.Contains(log, "note --kind incident") || !strings.Contains(out, "610.43.02") {
 		t.Errorf("the rollback must say why and reach the owner:\n%s\n%s", log, out)
 	}
-	z, err := os.ReadFile(filepath.Join(b.etc, "zincati", "config.d", "95-laib-boot-check.toml"))
+	// /etc is per deployment: the pause goes into the /etc of the deployment
+	// the box rolls back to, or it is gone after the reboot (train 22)
+	z, err := os.ReadFile(filepath.Join(b.root, "ostree", "deploy", "fedora-coreos", "deploy", proven+".0", "etc", "zincati", "config.d", "95-laib-boot-check.toml"))
 	if err != nil || !strings.Contains(string(z), "[updates]\nenabled = false\n") {
 		t.Fatalf("Zincati must be paused after a rollback, or it stages the same update again: %v %q", err, z)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); !strings.HasPrefix(string(p), proven+" ") {
+	if r, _ := os.ReadFile(filepath.Join(b.vardir, "boot-rolled-back")); strings.TrimSpace(string(r)) != fresh+".0" {
+		t.Fatalf("the rollback record must be in /var/lib/laib, which every deployment shares: %q", r)
+	}
+	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); !strings.HasPrefix(string(p), proven+" ") {
 		t.Errorf("a failed deployment became proven: %q", p)
 	}
 	// booted into the same deployment again (the owner deployed it once more): never a second rollback
@@ -273,7 +296,7 @@ func TestANewHealthyDeploymentBecomesProven(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("a healthy deployment was rolled back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 1 0\n" {
+	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); string(p) != fresh+".0 1 0\n" {
 		t.Fatalf("boot-proven = %q, want the new deployment with its red count", p)
 	}
 }
@@ -303,5 +326,32 @@ func TestNoGPUNoGPUCheck(t *testing.T) {
 	b.prove(t, proven, "0")
 	if log, out := b.run(t, fresh, "", "", "0"); rolledBack(log) {
 		t.Fatalf("a box without a GPU was rolled back for its GPU:\n%s\n%s", log, out)
+	}
+}
+
+// A kernel-argument change is a new deployment of the same commit (serial
+// .1 beside .0), and it can break the box as well: it is checked and rolled
+// back like a new commit. A boot-proven from before the serial (the bare
+// commit) still names its .0 deployment.
+func TestANewDeploymentOfTheSameCommitIsChecked(t *testing.T) {
+	b := newBootBox(t)
+	b.prove(t, proven+".0", "0")
+	if log, out := b.run(t, proven+".1", "", "", ""); !strings.Contains(log, "rpm-ostree rollback") {
+		t.Fatalf("a kernel-argument deployment with laib down was not rolled back:\n%s\n%s", log, out)
+	}
+	b = newBootBox(t)
+	b.prove(t, proven, "0") // the old format: the bare commit
+	if log, out := b.run(t, proven+".0", "", "", ""); rolledBack(log) || !strings.Contains(out, "is the proven one") {
+		t.Fatalf("an old boot-proven must still name its deployment:\n%s\n%s", log, out)
+	}
+}
+
+// train 22: a boot-proven in /etc/laib from before is read once; the records
+// live in /var/lib/laib from then on.
+func TestAnOldBootProvenInEtcIsStillRead(t *testing.T) {
+	b := newBootBox(t)
+	os.WriteFile(filepath.Join(b.etc, "laib", "boot-proven"), []byte(proven+".0 0 0\n"), 0o644)
+	if log, out := b.run(t, proven+".0", "", "", ""); rolledBack(log) || !strings.Contains(out, "is the proven one") {
+		t.Fatalf("the proven deployment from /etc/laib/boot-proven was not recognised:\n%s\n%s", log, out)
 	}
 }

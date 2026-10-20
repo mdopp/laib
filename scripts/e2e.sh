@@ -301,10 +301,24 @@ grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
 if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:\|(ha:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
 grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
+# #470: the chat answers without thinking (Hermes reads extra_body only from a custom_providers entry
+# matched by provider and base_url: agent/agent_init.py), /model denken thinks, through its own named entry
+python3 - "$HOOKDIR/bote/hermes/config.yaml" <<'PY' || fail "the Bote's chat thinks before every answer, or denken does not (#470)"
+import re, sys
+t = open(sys.argv[1]).read()
+cp = t[t.index("\ncustom_providers:"):]
+first, second = cp.index("- name: laib\n"), cp.index("- name: denken\n")
+assert first < second, "laib's entry must come first: it is the default model's fallback"
+assert "enable_thinking: false" in cp[first:second], cp[first:second]
+assert "enable_thinking: true" in cp[second:second + 400], cp[second:second + 400]
+alias = t[t.index("model_aliases:"):t.index("mcp_servers:")]
+assert "provider: custom:denken" in alias, alias
+PY
 # #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
 # and approvals, warnings and errors are plain words, not role-play
 grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
-grep -q "jede Nachricht zuerst an das Werkzeug persona" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the persona tool first (#122, #133)"
+grep -q "Laibs Persona sieht jede Nachricht vor dir" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the persona engine first (#122, #133, #471)"
+test -s "$HOOKDIR/bote/hermes/plugins/laib-persona/__init__.py" && grep -q "enabled: \[laib-persona" "$HOOKDIR/bote/hermes/config.yaml" || fail "the persona engine is the plugin laib-persona in front of the model (#471)"
 grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warnings stay plain words (#122)"
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
 grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
@@ -361,7 +375,7 @@ printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/
   LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
 grep -q "Du bist HAL, ruhig und höflich" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks as the house persona's style.md (#127)"
 if grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "another house persona still says Joshua (#127)"; fi
-for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "jede Nachricht zuerst an das Werkzeug persona" "FIGUR"; do
+for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "Laibs Persona sieht jede Nachricht vor dir" "FIGUR"; do
   grep -q "$rule" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the rules are in every persona's SOUL: $rule (#127)"
 done
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
@@ -535,7 +549,7 @@ C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true
 last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
 # --- 15. #184 (B1): a Bote switched from Signal to Matrix applies green with no hand edit: pre-start
 # renders the channel .env files before the units start, so neither Hermes nor the health check reads
-# the last Signal config. bote-notify serves the pod's health; a fake signal-cli answers while Signal is on.
+# the last Signal config. bote-notify serves the pod's health; a fake signal-cli daemon (/api/v1/check, #469) answers while Signal is on.
 B="$LAIB_HOME/state/services/bote"; mkdir -p "$B"
 cp "$ROOT"/templates/bote/* "$B/" 2>/dev/null || true; mv "$B/values.example.yml" "$B/values.yml"; rm -f "$B/README.md"
 grep -q "^laib:" "$LAIB_HOME/state/box.yml" || printf 'laib: {listen: 0.0.0.0}\n' >> "$LAIB_HOME/state/box.yml"
@@ -543,7 +557,7 @@ for s in BOTE_LAIB_TOKEN BOTE_APPROVER_TOKEN; do echo "tok_$s" | LAIB_ACTOR=huma
 python3 -c '
 import http.server
 class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(self): self.send_response(200 if self.path == "/v1/about" else 404); self.end_headers(); self.wfile.write(b"{}")
+    def do_GET(self): self.send_response(200 if self.path == "/api/v1/check" else 404); self.end_headers(); self.wfile.write(b"{}")
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()' & echo $! > "$WORK/signal.pid"
 NOTIFY_LISTEN=127.0.0.1:8645 NOTIFY_TOKEN=n NOTIFY_HERMES="$WORK/data/bote/notify" python3 "$ROOT/templates/bote/notify.py" >/dev/null & echo $! > "$WORK/notify.pid"

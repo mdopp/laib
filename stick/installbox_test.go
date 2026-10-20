@@ -208,7 +208,7 @@ func TestTheBinariesLineOpensTheCutWindow(t *testing.T) {
 	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
 	s := string(src)
 	placed := strings.Index(s, `sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"`)
-	line := strings.Index(s, `echo "binaries $TAG in /var/opt/laib"`)
+	line := strings.Index(s, `mark "binaries $TAG in /var/opt/laib"`)
 	pause := strings.Index(s, "\nsleep 1\n")
 	if placed < 0 || line < 0 || pause < 0 || !(placed < line && line < pause) {
 		t.Fatalf("install-box.sh must print \"binaries $TAG in /var/opt/laib\" after the binaries are moved in place and before `sleep 1` (placed %d, line %d, sleep %d)", placed, line, pause)
@@ -221,10 +221,26 @@ func TestTheBinariesLineOpensTheCutWindow(t *testing.T) {
 func TestTheStartLineComesBeforeAnyDownload(t *testing.T) {
 	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
 	s := string(src)
-	start := strings.Index(s, `echo "install-box.sh: start"`)
+	start := strings.Index(s, `mark "install-box.sh: start"`)
 	restic := strings.Index(s, `curl -fsSL -o "$TMPD/restic.bz2"`)
 	binaries := strings.Index(s, `curl -fsSL "${get[@]}" -o "$TMPD/$BIN"`)
 	if start < 0 || restic < 0 || binaries < 0 || start > restic || start > binaries {
 		t.Fatalf("install-box.sh must print \"install-box.sh: start\" before it fetches restic and the binaries (start %d, restic %d, binaries %d)", start, restic, binaries)
+	}
+}
+
+// train 22: the journal's console copy of the binaries line was split by the
+// serial getty's terminal reset ("binaries ef43017 in /var^[[!p…"), and the
+// cut never fired. A mark goes to the journal and through the kernel's log
+// as well: the kernel prints a message on the console in one piece.
+func TestAMarkReachesTheConsoleInOnePiece(t *testing.T) {
+	src, _ := os.ReadFile(filepath.Join("..", "scripts", "install-box.sh"))
+	s := string(src)
+	def := strings.Index(s, "\nmark() {")
+	if def < 0 || !strings.Contains(s[def:def+200], "/dev/kmsg") {
+		t.Fatalf("install-box.sh must define mark(), writing the line to the journal and to /dev/kmsg")
+	}
+	if strings.Contains(s, `echo "binaries $TAG in /var/opt/laib"`) || strings.Contains(s, `echo "install-box.sh: start"`) {
+		t.Fatal("a cut marker is printed with a bare echo: the console can split it")
 	}
 }

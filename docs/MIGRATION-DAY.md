@@ -114,7 +114,7 @@ Link, don't re-ask. Each one was decided; asking again is noise.
 | flutstunde (asteroids) and the inactive daggerheart-asteroids do not move, they go with ServiceBay; daggerheart-chronik and usage-metrics get Laib templates | [#160](https://github.com/mdopp/laib/issues/160#issuecomment-6213514058) |
 | Qwen 3.x is the household model and the default preset for everyone | [#285](https://github.com/mdopp/laib/issues/285#issuecomment-6233774062) |
 | A capable model may run `apply` itself, within the budget (envelope, snapshot first, automatic rollback) | [#286](https://github.com/mdopp/laib/issues/286#issuecomment-6233774202) |
-| The kernel's cap is 15,000 production lines, a warning at 95 %, raised only on purpose with the owner's approval; the lease and the relay stay in the kernel | [#309](https://github.com/mdopp/laib/issues/309), [#315](https://github.com/mdopp/laib/pull/315) |
+| The kernel's cap is 15,000 production lines (raised to 16,000 on 2026-10-19, #443), a warning at 95 %, raised only on purpose with the owner's approval; the lease and the relay stay in the kernel | [#309](https://github.com/mdopp/laib/issues/309), [#315](https://github.com/mdopp/laib/pull/315) |
 | Tests are not capped: "Tests may have more lines than code" | [ADR 0005, amendment 2026-10-18](adr/0005-test-pyramid-verify-in-apply.md) |
 | The first precondition of migration day is a fresh off-box backup, refused without one unless `--no-fresh-backup` | [#350](https://github.com/mdopp/laib/issues/350) |
 

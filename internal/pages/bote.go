@@ -1,42 +1,45 @@
 package pages
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
+	"html"
+	"slices"
+	"strings"
 
 	"github.com/mdopp/laib/internal/state"
 )
 
-// SignalLinkQR fetches the QR that links the Bote's number from signal-cli's
-// REST API (GET /v1/qrcodelink?device_name=…), so the Box page can show it
-// (#54): no terminal, no sgnl:// URI to copy.
-func SignalLinkQR(ctx context.Context, base, device string) ([]byte, error) {
-	u := base + "/v1/qrcodelink?device_name=" + url.QueryEscape(device)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
+// BoteLinkPage tells how the Bote gets its Signal number (#469). signal-cli
+// runs as its own daemon, which has no QR endpoint: the number is either
+// registered as the Bote's own (a spare landline by voice call, no second
+// SIM, the Kraftwerk's way) or linked to a phone that has it. Both run the
+// image's signal-cli once, with the daemon stopped.
+func BoteLinkPage(dataDir, account string) string {
+	run := "podman run --rm -it -v " + dataDir + "/bote/signal:/home/.local/share/signal-cli:z --entrypoint /usr/bin/signal-cli-native docker.io/bbernhard/signal-cli-rest-api --config /home/.local/share/signal-cli -a " + account
+	return html.EscapeString(`Auf der Box, als core:
+systemctl --user stop bote-signal
+
+Eigene Nummer (z. B. ein Festnetz-Anschluss, ohne zweite SIM):
+` + run + ` register --captcha 'signalcaptcha://…'      (Captcha: signalcaptchas.org/registration/generate.html; erst SMS)
+` + run + ` register --voice --captcha 'signalcaptcha://…'   (nach einer Minute: Anruf)
+` + run + ` verify <Code>
+` + run + ` setPin <PIN>      (Registrierungssperre)
+
+Oder als Gerät eines Telefons mit dieser Nummer:
+` + strings.Replace(run, " -a "+account, "", 1) + ` link -n Bote      (den sgnl://-Link als QR in Signal → Gekoppelte Geräte scannen)
+
+podman unshare chown -R 1000:1000 ` + dataDir + `/bote/signal
+systemctl --user start bote-signal`)
+}
+
+// boteAccount is the Bote's own Signal number, from the service providing `bote`.
+func boteAccount(st *state.State) string {
+	for _, name := range st.ServiceNames() {
+		if svc := st.Services[name]; slices.Contains(svc.Contract.Provides, "bote") {
+			return svc.Values[svc.Contract.Channels["signal"]].Literal
+		}
 	}
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("signal-cli antwortet nicht (%s): %w", base, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
-		return nil, fmt.Errorf("signal-cli: HTTP %d: %s", resp.StatusCode, body)
-	}
-	png, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return nil, err
-	}
-	if len(png) < 8 || string(png[:4]) != "\x89PNG" {
-		return nil, fmt.Errorf("signal-cli: kein PNG (%d Bytes)", len(png))
-	}
-	return png, nil
+	return ""
 }
 
 // BoteSignalBase is signal-cli's REST address on this box: the first port

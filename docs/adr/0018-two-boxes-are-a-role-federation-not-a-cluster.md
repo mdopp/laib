@@ -38,4 +38,4 @@ what" and "say so when something is missing", not rescheduling.
   `MODEL_LEASE` (done); route exchange and remote roles are issue #22.
 - Stimme templates choose CPU variants when `gpu.present` is false.
 - The NUC trial is the first federation member; the GPU box becomes the
-  second when ServiceBay is retired (`docs/ZIELBILD.md`).
+  second when ServiceBay is retired (#160; it stayed one box, `docs/ZIELBILD.md`).

@@ -56,14 +56,23 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    the LAN address from a network namespace over a veth pair (loopback
    passes any firewall), with no more blocked than at the last proven boot.
    Green: the deployment is
-   recorded in `/etc/laib/boot-proven`. Not green: `rpm-ostree rollback`,
+   recorded in `/var/lib/laib/boot-proven`. Not green: `rpm-ostree rollback`,
    reboot, Zincati paused with `/etc/zincati/config.d/95-laib-boot-check.toml`
    (otherwise it stages the same update again), and an incident note in
    laib's journal, which reaches the owner. Never twice from the same
    deployment, never on the proven one, never when the rollback deployment
    is not the proven one. The first run records a baseline and never rolls
    back. "No more red than before" rather than "no red", so an app that was
-   already red does not block every OS update.
+   already red does not block every OS update. `/etc` belongs to one deployment, so
+   what the check writes while booted into the new one would be gone after
+   the rollback (found by vm-install, train 22). The records
+   (`boot-proven`, `boot-rolled-back`) therefore live in `/var/lib/laib`,
+   which every deployment shares, and the pause is written into the `/etc`
+   of the deployment the box rolls back to
+   (`/ostree/deploy/<os>/deploy/<id>/etc`). Zincati reads it there from the
+   first second of that boot, so there is no window in which it could stage
+   the broken update again. Writing the pause later, from the check on the
+   rolled-back boot, would race with Zincati's start.
 4. **`/boot` is measured.** `laib diag` is yellow when `/boot` has less free
    than one kernel set (~150 MiB).
 5. **No layering on an existing box** (#367): `install-box.sh` never layers
@@ -95,6 +104,22 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    `periodic` strategy, a fixed weekly window that knows nothing of a red
    laib or a running backup.
 
+8. **The host image is pinned in the state and moves by proposal** (#368).
+   `host/image` in the state repo holds two lines: `# tag: <tag>` (the tag
+   it follows, e.g. `stable-nvidia`) and the rebase reference by digest
+   (`ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:…`).
+   `laib updates` has a `host` row when the tag points to a newer digest.
+   The Operator's weekly `aktualisierung` runner proposes it itself, as a
+   patch to `host/image` (the model never sees it as an offer); the review
+   makes it a human's call. Once approved, `laib-host-image.timer` (root,
+   every 15 minutes, `scripts/host-image.sh`, a release asset checked like
+   the boot check) stages the pinned image with `rpm-ostree rebase
+   --bypass-driver` (Zincati is the update driver) and reboots into it only
+   when laib's reboot lock (7.) says yes. The boot check proves the new
+   deployment after that. A pause file holds the follower as well. The boot
+   check names a deployment by its commit and serial, so a deployment that
+   changes only kernel arguments is checked too.
+
 ## Consequences
 
 - An OS update that breaks the GPU or laib costs one reboot and an incident,
@@ -106,6 +131,7 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
 - Lifting the hand-made Zincati pause is the owner's step, once the boot
   check with the LAN probe (#445) has proven the running deployment
   (`docs/INSTALL.md`, "OS updates").
-- Still open: the image pin and its update proposal in Laib, and a VM run
-  of a deliberately broken deployment (the VM has no GPU: the laib half
-  only).
+- vm-install (part `disks`) boots a deliberately broken deployment: its
+  kernel line masks the core user manager, so laib never answers. It proves
+  the rollback, the record of it and the Zincati pause (the laib half; the
+  VM has no GPU).

@@ -111,6 +111,21 @@ declares `channels` (below), every target must be on a platform one of them
 has set; a `matrix:` target on a box whose Bote has no Matrix fails plan,
 naming the value that would switch it on (#184).
 
+## host/image (optional, #368)
+
+The host OS image, in two lines: `# tag: <tag>`, the tag it follows, then the
+rebase reference by digest. For example:
+
+```
+# tag: stable-nvidia
+ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:a287759b…
+```
+
+`laib updates` reads it, and the Operator's weekly run proposes a newer digest
+as a patch to this file. A change here is a human's call (the review).
+`laib-host-image.timer` on the box stages the pinned image, and the reboot
+goes through laib's reboot lock (ADR 0024).
+
 ## personas/<name>/ (optional)
 
 A persona package (ADR 0020): `persona.yml` (name, display, languages,

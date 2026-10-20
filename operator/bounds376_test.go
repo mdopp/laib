@@ -93,3 +93,37 @@ func TestTheMechanicsLeftThePrompts(t *testing.T) {
 		}
 	}
 }
+
+// #368: a newer digest of the host image's tag is proposed by the runner
+// itself, not by the model: one patch to host/image, the reason with both
+// digests. A human approves it (the review), and the box stages and reboots
+// through the fleet lock. The model never sees it as an offer.
+func TestAktualisierungProposesTheHostImageItself(t *testing.T) {
+	updates := `[{"service":"host","key":"stable-nvidia","image":"ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal","current":"sha256:a287","patch":"sha256:b111"}]`
+	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates})
+	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "fertig"}})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	sk := skillFor(t, Trigger{}, "aktualisierung")
+	s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proposed []string
+	for _, c := range *calls {
+		if strings.HasPrefix(c, "laib_propose") {
+			proposed = append(proposed, c)
+		}
+	}
+	want := []string{"host/image", "# tag: stable-nvidia", "-ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:a287", "+ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:b111"}
+	if len(proposed) != 1 {
+		t.Fatalf("want one host proposal by the runner, got %q", proposed)
+	}
+	for _, w := range want {
+		if !strings.Contains(strings.ReplaceAll(proposed[0], `\n`, "\n"), w) {
+			t.Fatalf("the host proposal lacks %q: %s", w, proposed[0])
+		}
+	}
+	if !strings.Contains(s.Note, "sha256:b111") {
+		t.Errorf("the note must say what was proposed: %q", s.Note)
+	}
+}

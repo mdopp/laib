@@ -13,7 +13,8 @@ mkdir -p dist
 for b in laib laib-operator laib-lease laib-disk laib-notify; do src=./cmd/$b; [ $b = laib-operator ] && src=./operator/cmd/$b; [ $b = laib-disk ] && src=./disk/cmd/$b; [ $b = laib-notify ] && src=./notify/cmd/$b; CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=$v" -o dist/$b-linux-amd64 $src; done
 cp scripts/install-box.sh dist/install-box.sh
 cp scripts/boot-check.sh dist/laib-boot-check.sh
-(cd dist && sha256sum laib-*-amd64 laib-boot-check.sh > SHA256SUMS && cat SHA256SUMS)
+cp scripts/host-image.sh dist/laib-host-image.sh
+(cd dist && sha256sum laib-*-amd64 laib-boot-check.sh laib-host-image.sh > SHA256SUMS && cat SHA256SUMS)
 printf '%s' "$v" > dist/VERSION
 fi
 [ "$mode" != build ] || exit 0

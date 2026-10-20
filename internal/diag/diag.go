@@ -347,7 +347,7 @@ func bootFinding(free, size uint64) *Finding {
 	if size == 0 || free >= need {
 		return nil
 	}
-	return &Finding{Severity: "gelb", Probe: "boot", Detail: fmt.Sprintf("/boot hat %d MiB frei, ein Kernel-Satz braucht ~150 MiB: das nächste OS-Update passt nicht", free>>20), Fix: "erst wenn der jetzige Stand bewiesen ist (/etc/laib/boot-proven): sudo rpm-ostree cleanup -r räumt den Rückfall-Stand weg"}
+	return &Finding{Severity: "gelb", Probe: "boot", Detail: fmt.Sprintf("/boot hat %d MiB frei, ein Kernel-Satz braucht ~150 MiB: das nächste OS-Update passt nicht", free>>20), Fix: "erst wenn der jetzige Stand bewiesen ist (/var/lib/laib/boot-proven): sudo rpm-ostree cleanup -r räumt den Rückfall-Stand weg"}
 }
 
 func uniq(in []string) []string {

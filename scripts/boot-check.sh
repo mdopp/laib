@@ -8,16 +8,27 @@
 # the proven one, once: Zincati is paused, or it would stage the same update
 # again, and the owner gets an incident. Never on the proven one.
 set -u
-ETC="${LAIB_ETC:-/etc}"; PROVEN="$ETC/laib/boot-proven"; ROLLED="$ETC/laib/boot-rolled-back"
-PAUSE="$ETC/zincati/config.d/95-laib-boot-check.toml"
+# /etc belongs to one deployment: what is written there while booted into a
+# new deployment is gone once the box rolls back. So the records live in
+# /var/lib/laib, which every deployment shares, and the Zincati pause is
+# written into the /etc of the deployment the box rolls back to (train 22).
+ETC="${LAIB_ETC:-/etc}"; VAR="${LAIB_VAR:-/var/lib/laib}"; ROOT="${LAIB_ROOT:-}"   # the test harness only
+PROVEN="$VAR/boot-proven"; ROLLED="$VAR/boot-rolled-back"
+PAUSE=zincati/config.d/95-laib-boot-check.toml
+mkdir -p "$VAR"
+[ -f "$PROVEN" ] || [ ! -f "$ETC/laib/boot-proven" ] || cp "$ETC/laib/boot-proven" "$PROVEN"   # from before: once
 say() { echo "laib-boot-check: $*"; }
 note() { runuser -u core -- env LAIB_HOME=/mnt/data/laib LAIB_ACTOR=laib /var/opt/laib/laib note --kind "$1" "$2" >/dev/null 2>&1 || true; }
 st="$(ostree admin status 2>/dev/null)"
-booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]*.*/\1/p' <<<"$st")"
-back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\)\.[0-9]* (rollback).*/\1/p' <<<"$st")"
+# a deployment is its commit and its serial: a kernel-argument change is a new
+# deployment of the same commit, and can break the box as well
+booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\).*/\1/p' <<<"$st")"
+back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\) (rollback).*/\1/p' <<<"$st")"
 [ -n "$booted" ] || { say "not an ostree deployment: nothing to prove"; exit 0; }
 proven=""; base=0; base_blocked=0
 [ -f "$PROVEN" ] && read -r proven base base_blocked <"$PROVEN"
+# a boot-proven from before the serial names the bare commit: it meant that commit's deployment
+case "$proven" in *.* | "") ;; *) for d in "$booted" "$back"; do [ "${d%.*}" != "$proven" ] || { proven=$d; break; }; done ;; esac
 base_blocked="${base_blocked:-0}"
 [ "$booted" != "$proven" ] || { say "deployment ${booted:0:12} is the proven one"; exit 0; }
 gpu=""; [ -z "$(lspci -n -d 10de: 2>/dev/null)" ] || gpu=1
@@ -82,7 +93,13 @@ if [ "$(cat "$ROLLED" 2>/dev/null)" = "$booted" ] || [ "$back" != "$proven" ]; t
 fi
 say "not proven within ${LAIB_BOOT_CHECK_TIMEOUT:-900}s: $why; rolling back to ${proven:0:12}"
 echo "$booted" >"$ROLLED"
-mkdir -p "$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$PAUSE"
-note incident "OS-Update ${booted:0:12} zurückgerollt auf ${proven:0:12}: $why. Zincati pausiert, bis $PAUSE entfernt ist."
+# the rollback deployment's /etc is /ostree/deploy/<os>/deploy/<id>/etc, on
+# /sysroot, which Fedora CoreOS mounts read-only: written in a private mount
+# namespace with /sysroot remounted rw, as ostree itself does, and checked
+backetc="$ROOT/ostree/deploy/$(sed -n 's/^\* \([^ ]*\) .*/\1/p' <<<"$st")/deploy/$back/etc"
+mkdir -p "$ETC/$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$ETC/$PAUSE"
+unshare --mount -- sh -c 'mount -o remount,rw "$1/sysroot" && mkdir -p "$2/zincati/config.d" && printf "[updates]\nenabled = false\n" >"$2/$3"' _ "$ROOT" "$backetc" "$PAUSE"
+[ -s "$backetc/$PAUSE" ] || say "could not pause Zincati in $backetc: it may stage the same update again"
+note incident "OS-Update ${booted:0:12} zurückgerollt auf ${proven:0:12}: $why. Zincati pausiert, bis /etc/$PAUSE entfernt ist."
 rpm-ostree rollback || { say "rpm-ostree rollback failed"; exit 1; }
 sync; systemctl reboot

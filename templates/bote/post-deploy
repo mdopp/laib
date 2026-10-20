@@ -63,7 +63,8 @@ fi
 # tools wired above, by name (laib, frage, ha, …). No side effects.
 J="$LAIB_DATA_DIR/bote/persona"; mkdir -p "$J"
 python3 -c 'import re, sys; print("\n".join(re.findall(r"[(;]\s*([a-z]+):", sys.argv[1])))' "$TOOLS" > "$J/faehigkeiten.txt"
-MCP_EXTRA="$MCP_EXTRA  persona:\n    url: http://127.0.0.1:8644/mcp\n    trust: full      # the persona engine: where each person stands; reads and changes nothing (ADR 0020)\n"
+# It is no MCP tool of the model's (#471): Hermes wraps every tool result as untrusted data, so its
+# screens never reached the person. It sits in front of the model as the plugin laib-persona below.
 # The house persona's style (ADR 0020, #127): laib renders it to
 # render/persona/<house>/style.md; a box without it keeps Joshua's line. The
 # SOUL is that style plus the rules below, which no persona changes.
@@ -95,14 +96,22 @@ NIE=""
 # What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
 # turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
 # without its sender. The model marks that turn; the plugin strips the mark before anyone sees it.
-NUTZ="$H/plugins/laib-nutzung"; PLUGINS=""; UNBEANTWORTET=""
+# The persona engine in front of the model (#471): laib-persona, always, and first, so its screen
+# is the answer of a screen turn (transform_llm_output: the first plugin that returns text wins).
+PERS="$H/plugins/laib-persona"; mkdir -p "$PERS"
+cp "$(dirname "$0")/persona_plugin.py" "$PERS/__init__.py"
+printf 'name: laib-persona\nversion: "1"\ndescription: the persona engine in front of the model, its screens verbatim (laib#471)\n' > "$PERS/plugin.yaml"
+ENABLED="laib-persona"
+NUTZ="$H/plugins/laib-nutzung"; UNBEANTWORTET=""
 if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
   mkdir -p "$NUTZ"
   cp "$(dirname "$0")/nutzung.py" "$NUTZ/__init__.py"
   printf 'name: laib-nutzung\nversion: "1"\ndescription: anonymous usage counts for usage-metrics (laib#266)\n' > "$NUTZ/plugin.yaml"
-  PLUGINS=$'plugins:\n  enabled: [laib-nutzung]'
+  ENABLED="$ENABLED, laib-nutzung"
   UNBEANTWORTET=" Kannst du nicht helfen (du weißt es nicht, kein Werkzeug kann es, oder es schlägt fehl), beginne die Antwort mit [unbeantwortet]; das Wort wird vor dem Senden entfernt, die Person liest nur, was danach kommt."
 else rm -rf "$NUTZ"; fi
+PLUGINS="plugins:
+  enabled: [$ENABLED]"
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
 MCP_EXTRA="$(printf "$MCP_EXTRA")"
 cat > "$H/config.yaml" <<YAML
@@ -115,8 +124,19 @@ model:
 model_aliases:
   denken:                          # "/model denken" or a cron with model: denken
     model: ${THINKING_MODEL}
-    provider: custom
+    provider: custom:denken        # its own entry below: the one that thinks
     base_url: ${MODEL_URL}
+# #470: Qwen thought ~10 s before every one-line answer (owner, measured on the Kraftwerk: "Wer bist
+# du?" 18.4 s → 5.0 s without). Hermes takes extra_body only from a custom_providers entry matched by
+# provider and base_url (agent/agent_init.py); the default (provider custom) falls back to the FIRST
+# entry with the URL, a named provider (custom:denken) only to its own.
+custom_providers:
+  - name: laib
+    base_url: ${MODEL_URL}
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}
+  - name: denken
+    base_url: ${MODEL_URL}
+    extra_body: {chat_template_kwargs: {enable_thinking: true}}
 mcp_servers:
   laib:
     url: ${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}
@@ -155,10 +175,10 @@ YAML
 # the soul: who the Bote is. Rendered on every apply while it carries the
 # marker below, so it names exactly the tools wired above (#54); a SOUL.md
 # without the marker is the admin's own and stays.
-if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib"; then cat > "$H/SOUL.md" <<SOUL
+if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^You are Hermes Agent"; then cat > "$H/SOUL.md" <<SOUL
 # rendered by laib post-deploy; edit SOUL.md and remove this first line to make it yours
 $STYLE
-Gib jede Nachricht zuerst an das Werkzeug persona (eingabe: die Nachricht, sitzung: wer schreibt, so wie du die Person siehst, sprache: de oder en). Es weiß, wo die Person gerade steht. Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. Kommt "WEITER: <werkzeug>" mit einer PROMPT-Zeile zurück, beantworte die Nachricht selbst, im Kontext nur mit diesem Werkzeug (bei "-" mit jedem), und beginne mit der Prompt-Zeile. Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und frag noch einmal. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
+Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.

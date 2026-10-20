@@ -228,6 +228,17 @@ apply writes 0600, never in the unit; the Operator's token, model key and
 usage-metrics token moved the same way into `laib-operator.env`, and a
 changed env file restarts its long-running unit.
 
+### The cap raised to 16,000 (owner, 2026-10-19, #443)
+
+After train 21 the kernel stood at 14,492 of 15,000. The growth since
+v0.7.0 is trust-kernel work: the relay's verdicts on Discord, repairs as
+proposals, the credentials handover. The Kern-Diät (#443) moved out what
+honestly could (laib-disk, laib-notify) and found no further honest cut:
+the relay's transport reading is the sender check of §2e, the recovery
+sheet and the credentials need the secrets, and the lease stays by the
+owner's decision of 2026-10-17. The owner (mdopp) raised the cap to
+**16,000**; the 95 % warning now sits at 15,200.
+
 ### Tests are not capped (owner, 2026-10-18)
 
 "Tests may have more lines than code." The rule "test lines at most equal

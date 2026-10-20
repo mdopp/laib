@@ -101,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """The pod's health (#184): bote-notify is in every Bote; with Signal
-        (SIGNAL_HTTP_URL in its .env) signal-cli must answer /v1/about too."""
+        (SIGNAL_HTTP_URL in its .env) signal-cli's daemon must answer /api/v1/check too (#469)."""
         if self.path != "/health":
             return self.reply(404, {"fehler": "unbekannter Pfad"})
         url = ""
@@ -112,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
         if url:
             try:
-                urllib.request.urlopen(url.rstrip("/") + "/v1/about", timeout=5).close()
+                urllib.request.urlopen(url.rstrip("/") + "/api/v1/check", timeout=5).close()
             except (OSError, ValueError):
                 return self.reply(503, {"fehler": "signal-cli antwortet nicht"})
         return self.reply(200, {"ok": True})

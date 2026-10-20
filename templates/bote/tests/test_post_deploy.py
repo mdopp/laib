@@ -73,6 +73,32 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("automat:", conf)
         self.assertNotIn("api/mcp/assist", conf)
 
+    def test_the_persona_engine_is_a_plugin_in_front_of_the_model_not_a_tool(self):
+        """#471: Hermes wraps every MCP result as untrusted data, so the engine's
+        screens never reached the person. It runs as the plugin laib-persona
+        (always, first), and is no MCP server the model calls any more."""
+        for usage in ("", "um-tok"):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                           MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok")
+                if usage:
+                    env["LAIB_SECRET_USAGE_METRICS_TOKEN"] = usage
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                h = Path(d, "bote/hermes")
+                conf, soul = (h / "config.yaml").read_text(), (h / "SOUL.md").read_text()
+                self.assertNotIn("8644", conf, "the persona engine is still an MCP server the model calls")
+                self.assertIn("enabled: [laib-persona" + (", laib-nutzung]" if usage else "]"), conf)
+                self.assertEqual((h / "plugins/laib-persona/__init__.py").read_text(), (HOOK.parent / "persona_plugin.py").read_text())
+                self.assertIn("name: laib-persona", (h / "plugins/laib-persona/plugin.yaml").read_text())
+                self.assertNotIn("Werkzeug persona", soul)
+                self.assertIn("Persona:", soul)
+
+    def test_hermes_is_pinned(self):
+        """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
+        vals = (HOOK.parent / "values.example.yml").read_text()
+        self.assertIn("HERMES_IMAGE: docker.io/nousresearch/hermes-agent:v0.22.2", vals)
+
 
 if __name__ == "__main__":
     unittest.main()

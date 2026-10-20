@@ -1,144 +1,167 @@
-# Laib — the target picture and the way there
+# Laib — what we have
 
-2026-10-10, phases reshaped 2026-10-13 after ADR 0019 (calm before
-autonomy), ADR 0020 (personas) and ADR 0021 (names). The concept is
-`docs/KONZEPT.md`; this is the end state in one picture and the ordered
-path, with the NUC as the trial box.
+Rewritten 2026-10-19 as "what we have" (#160, Phase 5's last line). Until
+then this file was the target picture and the phased way there; that plan
+is done or decided, and the history is in Git and in #23 and #160. Every
+statement below comes from this repo or its issues. What only the box can
+answer says **auf der Box zu prüfen**. The concept is still
+`docs/KONZEPT.md`. What each piece is and why is in `docs/DESIGN.md`.
 
-## The end state
+## The box
 
-**One box: the Kraftwerk** (the GPU box that runs ServiceBay today),
-running everything in `docs/KONZEPT.md`: Laib with all roles including
-the model, the Operator, the Bote, Haus, Frage, Home Assistant with
-Stimme, the household services, the Werkstatt. One state repo, one
-restic repo on the NAS, one Laib.
+**One box: the Kraftwerk**, the GPU box that ran ServiceBay. It runs Laib
+and nothing else manages it. The Intel NUC was the proving ground (#23).
+ServiceBay moved to Laib on migration day, 2026-10-18/19
+(`docs/MIGRATION-DAY.md`, `scripts/migration-day.sh`, #160).
 
-The Intel NUC is a **proving ground only**: it has no GPU, so it uses the
-Kraftwerk's model proxy over the LAN (`box.yml model.url`), and it is
-wiped when the trial is over. Nothing stays on it. (Two boxes with fixed
-roles would work — ADR 0018 keeps the design as a parked option — but it
-is not the plan.)
+- **Host OS:** Universal Blue's uCore, `ucore-minimal:stable-nvidia`,
+  pinned by digest (`@sha256:a287759b…`). It is Fedora CoreOS 44, kernel
+  7.2.7, with the open NVIDIA module 615.78 prebuilt (ADR 0024). The box
+  was rebased on 2026-10-19 and the boot check proved that deployment
+  (#368). The previous proven deployment stays as the rollback.
+  firewalld, which uCore turns on, is masked: Laib's nftables table is the
+  one firewall (#445).
+- **Laib:** release v0.9.0 (`version.txt`). Its rollout on the box is
+  checked item by item in #436; which binary runs now: auf der Box zu
+  prüfen.
+- **State and journal:** `/mnt/data/laib/state`, `/mnt/data/laib/journal`
+  (`docs/STATE.md`). The data disk is an mdadm RAID1 with XFS. It runs with
+  one member, which `laib diag` reports (`docs/BACKUP.md`).
 
-## The way there
+## The services
 
-The NUC is the proving ground: nothing on the GPU box changes until the
-NUC runs the whole household side against the GPU box's model. The one
-exception is the trial's certificates. The house's port 80 reaches the
-Kraftwerk, so its NPM gets one HTTP-only proxy host per NUC name, removed
-when the trial ends (ADR 0007, amendment 2026-10-13).
+The built-ins in `templates/` replace every unit ServiceBay ran
+(`docs/SERVICES.md`). On the box, migration day's `migration-day.sh`
+moved them in this order:
 
-### Phase 1 — calm: Laib on the NUC (no GPU, remote model)
+- the platform roles: `auth` (Authelia + LLDAP), `adguard`, `llama` (the
+  model role, with `laib-lease`), `caddy` (in place of NPM);
+- the household: `radicale`, `mosquitto`, `file-share`, `beets`,
+  `esphome`, `usage-metrics`, `immich`, `paperless`, `media`,
+  `home-assistant`, `vaultwarden`.
 
-ADR 0019 §1: the first phase is only what "alles läuft" depends on.
+The boot check after the rebase saw 17 of 17 services green (#368, 2026-10-19).
+Which services the state holds today, `laib status` says: auf der Box zu
+prüfen. Solaris' units still run on their ServiceBay units, ignored
+(`laib ignore`), until Phase 5 turns them off. Its links into ServiceBay
+are switched off explicitly (#396). ServiceBay itself is off; its data dir
+stays 30 days (`docs/MIGRATION.md`, step 7).
 
-1. Fedora CoreOS on the NUC from the stick: `laib-stick --domain nuc.dopp.cloud --lan-ip <nuc> --model-url http://<gpu-box>:11435/v1`.
-   - Certificates come by HTTP-01 through the Kraftwerk (ADR 0007, amendment 2026-10-13): one Strato CNAME per NUC host and one HTTP-only proxy host per name on the Kraftwerk's NPM (#30). The certificates are real, so the phones in Phase 3 need no root CA. The fallback is the deSEC delegation with `--dns-provider desec`.
-   - No `--model-lease`: nothing on the NUC takes the GPU lease.
-   - No GitHub token: the repo, the releases and the images are public (#94).
-2. `laib add caddy`, `auth` (Authelia + LLDAP), `adguard`, `whoami`; `laib status` green; `laib.<domain>` behind Authelia.
-3. Backup on the box and off it (the NAS), `laib recovery-sheet` printed, `laib family-card` on the fridge, the outside watchdog pinged (#57).
-4. `laib add haus`: the start page with the three guarantees ("Alles läuft · Letzte Sicherung · Letzte Änderung — Rückgängig", ADR 0019 §3), in the house persona (Joshua unless `box.yml persona:` says otherwise).
-5. The Operator as a diagnostician only: `diag`, `inspect`, `logs`, `note`, `escalate`, `propose` (ADR 0019 §1).
+## What the family and the admin use
 
-Gate: one month of real use, with the VM's fault injection repeated on
-the hardware (reboot, power cut, reinstall from the stick, restore,
-update), and nothing red that a human had to touch.
+- **Haus** (`mdopp/haus`) is the family's surface: the pages at
+  `haus.<domain>` and the Haus app. `dopp.cloud` and `www.` redirect to it
+  (#360). It was added by hand after migration day (#379).
+- **The Bote** (Hermes, ADR 0016) is the text agent on Signal and behind
+  Haus's Sprechen field. It is installed on the Kraftwerk with Signal
+  registered on a spare landline number, with hand fixes in the state
+  (#469).
+- **The Werkstatt** (pi, Claude Code, the autoloop) replaces `claude-dev`
+  and `pi-web`. It is built (#402, #405, #407) but rolled back on the box;
+  until it runs, claude-dev and pi-web stay on their ServiceBay units as
+  bridges (#160, #436).
+- **The chat is the interface** (owner, 2026-10-19, #441): "Das Interface
+  ist jetzt der Chat, das heißt aber nicht, dass die Daten deshalb falsch
+  sein dürfen." What ServiceBay showed on web pages comes back as Laib
+  verbs and MCP tools that pi, Claude and the Bote call. Each answer comes
+  from the rendered or running state (`laib status`, `logs`, `inspect`,
+  `look`, `net`, `diag`), never from a guess. A destructive action is
+  approved only in Laib's Inbox with two factors; the chat tells about it
+  and sends the link. The decisions per feature are in `docs/DESIGN.md`,
+  "ServiceBay's features, decided".
+- **Laib's own pages** (`admin.<domain>`: Status, Inbox, Journal, Netz)
+  are the admins' and the one place where approvals happen (ADR 0012).
+- **Mail to the owner** for a service red for ten minutes, a failed or
+  stale backup, and the weekly image updates goes out with Authelia's SMTP
+  settings (#393). Routing through the Bote's channels, with mail as the
+  fallback, is being built (#457).
 
-### Phase 2 — the agents on the NUC
+## Backup
 
-6. The Operator's `write`, `exec` and `restart`, granted per action type
-   once the eval (`werkstatt/evals`, #82) shows no wrong mutating action.
-7. The Bote: Hermes as stock (ADR 0016) on Signal, in the house persona,
-   with the tools `laib`, `ha` (the GPU box's Home Assistant for now),
-   `frage`, `automat`, `persona` (ADR 0021); approvals only through the
-   relay on the admin's verified number (ADR 0019 §2e). `chatPersonas`
-   gives a number its own persona.
-8. Frage: SearXNG + summary; registered as Assist's conversation agent on
-   the GPU box's HA (check 2 of ADR 0015).
-9. The Werkstatt and its autoloop (ADR 0019: second phase, outside the
-   first gate).
+- **On the box:** restic in `/mnt/data/backup/restic`, every night, plus a
+  monthly restore test (`docs/BACKUP.md`). Until v0.9.0 the nightly run
+  was refused on every box, so it never ran on the Kraftwerk (#444).
+  Whether a snapshot exists now: auf der Box zu prüfen (#436).
+- **Off the box:** a second restic repo on the Fritz!Box NAS, filled by
+  `restic copy` after each backup (`backup.offsite`, #391). It needs the
+  owner's step: a NAS user, FTP on, the password as a Laib secret, the
+  block in `box.yml`. Done or not: auf der Box zu prüfen (#436).
+- **The recovery sheet** (`laib recovery-sheet`) holds the age key and the
+  restic password. Without it, an off-box repo is unreadable.
 
-Gate: "was gibt's Neues" on Signal answers with the morning report; "gib
-#n frei" from the admin's number applies a proposal, and from any other
-number does not.
+## OS updates
 
-### Phase 3 — Haus on the NUC
+ADR 0024. The driver is built in CI (uCore), not on the box. `laib-cdi`
+regenerates the CDI spec at every boot. `laib-boot-check` proves every new
+deployment within 15 minutes (GPU, CDI, `/ready`, the LAN's view of the
+ports) or rolls back once and pauses Zincati.
 
-10. The new Haus app, a widget client (ADR 0022), paired with the NUC's
-    Haus; its widgets stay current through the live stream while the
-    screen is on. Haus carries nothing of the Solaris app: no bridge, no
-    old names.
-11. Messages to people (ADR 0022): an automation made by voice with the
-    Bote's `automat` tool sends "Waschmaschine fertig" to a person's chat
-    channel, through the Bote.
-12. The Haushalt MCP source (ADR 0017, haus#11): calendar and contacts
-    from Radicale on the NUC, notes from the file share, documents from
-    Paperless.
-13. The pages one by one (haus#12): Start, Räume, Energie, Medien,
-    Notizen, Kalender; the Sprechen field talks to the Bote. The memory
-    library moves out of Solaris into Haus (haus#13).
+Zincati stages updates and asks Laib before each reboot (`fleet_lock`
+against laib on loopback). Laib grants the reboot only in the window two to
+four hours after the backup, never during a backup, only while green and
+only from a proven deployment (`docs/INSTALL.md`, "OS updates").
 
-Gate: the family uses Haus and the widgets for a week without opening the
-old Solaris PWA.
+The hand-made Zincati pauses (`55-servicebay-lock.toml`,
+`90-paused-nvidia-kmod.toml`) stay until the owner lifts them after #445.
+Whether they are gone: auf der Box zu prüfen.
 
-### Phase 4 — the Kraftwerk gets Laib (docs/MIGRATION.md)
+## What moved out of ServiceBay and Solaris
 
-14. Laib installed on the GPU box beside ServiceBay with `--gpu`;
-    ServiceBay's units ignored; NPM stays the proxy until Caddy replaces it
-    (step 4d of MIGRATION.md); auth, adguard, llama as the model role (issue #18).
-15. The household services adopted one by one from ServiceBay: Radicale,
-    Paperless, Vaultwarden, file share, Home Assistant, media, Immich,
-    foundry-chronicle; each `laib plan`, `laib apply`, verify, old unit
-    off. Stimme with the GPU variants; its trainer trains the house
-    persona's wake word on the GPU (ADR 0020, #128).
-16. Operator, Bote, Frage and Haus move from the NUC to the Kraftwerk:
-    the same templates, `model.url` replaced by the local role, Haus's
-    data restored from the NUC's restic repo.
+- **ServiceBay's control plane** became Laib: the state repo instead of 28
+  JSON stores, plan/apply with snapshot and rollback, Caddy instead of NPM,
+  one secrets file, restic, the journal (`docs/DESIGN.md`).
+- **Its migration** is a script and a runbook (`docs/MIGRATION.md`,
+  `docs/MIGRATION-DAY.md`). The secrets the data was made with were
+  carried over (`scripts/carry-servicebay-secrets.sh`). The data moved
+  into Laib's layout (`scripts/move-servicebay-data.sh`).
+- **Its assist catalog:** the general checklists became Werkstatt skills
+  (`werkstatt/guide/skills/`, #394). The rest stays behind. There is no
+  `laib migrate assists` (#160).
+- **Its disk import** is a Werkstatt skill with `scripts/laib-import.py`
+  (#456). Its Google import is `scripts/import-google.py` (#372).
+- **Solaris the agent retires** (ADR 0015). Voice is Home Assistant Assist
+  with Stimme and Frage. Its pages, cards and companion API went to Haus.
+  The household chat is the Bote.
 
-Gate: ServiceBay disabled; `laib status` green; the Bote reports from the
-Kraftwerk; the NUC is wiped.
+## What is dropped on purpose
 
-### Phase 5 — voice and retire
+`docs/DESIGN.md`, "Features that are dropped" and, decided by the owner on
+2026-10-19 (#441), "ServiceBay's features, decided". Dropped there:
 
-17. Assist sentences for timers and media (check 1 of ADR 0015), Music
-    Assistant with Jellyfin and radio; the Voice PE satellites flashed
-    once with the persona's microWakeWord model (by hand in ESPHome,
-    `templates/stimme/README.md`); Solaris the agent off; solarisbay
-    archived. The Solaris app is gone; the new Haus app replaced it in
-    Phase 3 (ADR 0022).
-18. ServiceBay's data dir kept 30 days, then deleted. This page rewritten
-    as "what we have".
+- web pages in place of chat verbs
+- the web terminal
+- health graphs
+- the settings, registry and setup pages
+- learning proposals
+- the Fritz!Box TR-064 integration
+- the `:dev` canary
+- multi-node
+- the factory-reset assistant
 
-## What the trial proves, and what it does not
+## What is still open
 
-Proves: the kernel on real hardware, real certificates (HTTP-01) and SSO, the Operator with a
-remote model, the Bote on Signal, Haus against a real family, all
-without touching the GPU box. Does not prove: the GPU role, the lease,
-media transcoding, the wake-word training. Those are Phase 4 on the
-Kraftwerk itself, which is why that box is migrated last and nothing on
-it changes before.
+From #160:
 
-## Stand 2026-10-13
+- the household services' adoption and Stimme with its first wake-word
+  training (#128);
+- the Werkstatt on the box (#436);
+- the Operator, Frage and Haus's data from the NUC;
+- ADR 0015's check 1 (Assist sentences);
+- the Voice PE satellites (#30);
+- Solaris the agent off;
+- ServiceBay's data dir deleted after 30 days.
 
-Built and proven in CI without a box (vm-install, a KVM guest on Fedora
-CoreOS, green on every release since v0.4.2):
-- the stick;
-- the first install of the commit under test;
-- the data disk as RAID1 chosen by identity;
-- a reinstall that keeps the data, and a stick left in that does nothing;
-- a power cut during the first boot;
-- reboot with the firewall and registry login intact;
-- hooks in the hooks image (auth, adguard, radicale);
-- backup and restore, and disaster recovery from the sheet alone;
-- the update path;
-- remove.
+Elsewhere:
 
-Unit-tested and wired, not yet on hardware:
-- the trust kernel (ADR 0019 §2);
-- the Bote with persona, relay, `ha`, `automat` and `frage`;
-- Haus with the Box page, the guarantees, pairing, the companion keys and the persona;
-- Stimme's trainer.
-
-Phase 1 on the NUC is next and is the first real run (#23, owner actions
-in #30). Phases 4 and 5 are tracked in #160. Nothing on the Kraftwerk has
-changed yet.
+- **#368:** the host image pin and its update proposal in Laib. The digest
+  lives in the state, and moving it is a proposal like a service image
+  (ADR 0024, part 1). Also a VM run of a deliberately broken deployment.
+- **#469:** the Bote's Signal container runs the REST API instead of
+  signal-cli's daemon; the template needs the box's hand fixes.
+- **#470:** the Bote answers slowly (a 7k-token context, a persona round
+  per message, thinking before every reply).
+- **#471:** Hermes wraps every MCP result as untrusted, so Joshua's persona
+  screens and games never reach the person verbatim.
+- **#436:** every issue closed since v0.7.0 is checked on the box, and the
+  night's bridges and hand edits are removed. An issue closes only after
+  its check there.

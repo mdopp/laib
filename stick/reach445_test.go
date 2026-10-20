@@ -71,7 +71,7 @@ func TestAReachableBoxIsProvenWithItsBlockedCount(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("every LAN port answers (the loopback-only one is not a LAN port), but it rolled back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 0 0\n" {
+	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); string(p) != fresh+".0 0 0\n" {
 		t.Fatalf("boot-proven = %q, want the deployment, its red and its blocked count", p)
 	}
 }
@@ -92,7 +92,7 @@ func TestTheBaselineRecordsItsBlockedPorts(t *testing.T) {
 	if rolledBack(log) {
 		t.Fatalf("a baseline never rolls back:\n%s\n%s", log, out)
 	}
-	if p, _ := os.ReadFile(filepath.Join(b.etc, "laib", "boot-proven")); string(p) != fresh+" 0 1\n" {
+	if p, _ := os.ReadFile(filepath.Join(b.vardir, "boot-proven")); string(p) != fresh+".0 0 1\n" {
 		t.Fatalf("boot-proven = %q, want the blocked port counted in the baseline", p)
 	}
 }

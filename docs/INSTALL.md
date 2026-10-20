@@ -213,14 +213,25 @@ Zincati finds and stages OS updates. With `install-box.sh`'s
 laib before every reboot. laib says yes only in the window two to four hours
 after the backup (05:00–07:00 for `backup.schedule: "03:00"`), only while the
 backup is not running, only while laib is green, and only once the running
-deployment is proven (`/etc/laib/boot-proven`). `laib diag` shows a staged
+deployment is proven (`/var/lib/laib/boot-proven`). `laib diag` shows a staged
 update (`os-update`), and the journal shows the grant and the arrival. After
 the reboot the boot check proves the new deployment or rolls it back once.
+
+The host image itself is pinned in the state: `host/image` holds `# tag:
+<tag>` and the rebase reference by digest. Laib's weekly update run proposes
+a newer digest of that tag. After a human approves it, `laib-host-image.timer`
+stages it with rpm-ostree, and the reboot goes through the same lock. To pin
+the image a box runs now (once):
+```
+cd /mnt/data/laib/state && mkdir -p host
+printf '# tag: %s\n%s\n' stable-nvidia "$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | ."container-image-reference"')" > host/image
+cat host/image && /var/opt/laib/laib updates | grep '^host'
+```
 
 Lifting a pause is the owner's step. Do it once the running deployment is
 proven with the LAN probe (#445):
 ```
-cat /etc/laib/boot-proven                                   # the booted deployment, "0 0" at the end
+cat /var/lib/laib/boot-proven                                # the booted deployment, "0 0" at the end
 ls /etc/zincati/config.d/                                   # 60-laib-updates.toml, and the pause files
 sudo rm /etc/zincati/config.d/55-servicebay-lock.toml       # ServiceBay's window, if it is still there
 sudo rm /etc/zincati/config.d/90-paused-nvidia-kmod.toml    # the hand-made pause (the driver is prebuilt now)

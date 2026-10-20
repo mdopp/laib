@@ -119,12 +119,44 @@ UNIT
   # the boot check itself: the release's laib-boot-check.sh, verified with the binaries
   $s install -m 0755 "$3" "$etc/laib/boot-check.sh"
   [ -z "$s" ] || { sudo systemctl daemon-reload; sudo systemctl enable laib-cdi.service laib-boot-check.service >/dev/null; }
+  [ -n "${4:-}" ] || return 0
+  # the host OS follows state/host/image (#368): staged by rpm-ostree, the
+  # reboot through laib's lock; scripts/host-image.sh, verified the same way
+  $s tee "$d/laib-host-image.service" >/dev/null <<'UNIT'
+[Unit]
+Description=Laib: the host OS follows the image pinned in the state (#368)
+ConditionPathExists=/mnt/data/laib/state/host/image
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /etc/laib/host-image.sh
+TimeoutStartSec=2h
+UNIT
+  $s tee "$d/laib-host-image.timer" >/dev/null <<'UNIT'
+[Unit]
+Description=Laib: look at the pinned host image every 15 minutes (#368)
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+UNIT
+  $s install -m 0755 "$4" "$etc/laib/host-image.sh"
+  [ -z "$s" ] || { sudo systemctl daemon-reload; sudo systemctl enable --now laib-host-image.timer >/dev/null; }
 }
 [ -z "${BOXCONF:-}" ] || { box_config; exit 0; }
 [ "$(id -un)" = "core" ] || { echo "run as the core user (rootless podman, user systemd)" >&2; exit 1; }
+# mark: a line vm-install cuts the power on. It goes to the journal and, via
+# /dev/kmsg, to the console in one piece: the journal's console copy can be
+# split by the serial getty's terminal reset (train 22: "binaries … in /var^[[!p…").
+mark() { echo "$1"; printf '<5>laib: %s\n' "$1" | sudo tee /dev/kmsg >/dev/null 2>&1 || true; }
 # vm-install cuts the power on this line (the first boot's console), before
 # restic and the binaries: the resumed first boot starts over (#111)
-echo "install-box.sh: start"
+mark "install-box.sh: start"
 REPO="mdopp/laib"
 API="https://api.github.com/repos/$REPO"
 
@@ -251,12 +283,18 @@ if grep -q " laib-boot-check.sh\$" "$TMPD/SHA256SUMS"; then
 else
   echo "$TAG carries no boot check (laib-boot-check.sh, #368): installing without it; laib diag shows it missing"
 fi
+FOLLOW=""   # the host image follower (#368), only with the boot check that guards it
+if [ -n "$CHECK" ] && grep -q " laib-host-image.sh\$" "$TMPD/SHA256SUMS"; then
+  FOLLOW="$TMPD/laib-host-image.sh"
+  u="$(asset_url laib-host-image.sh)" && curl -fsSL "${get[@]}" -o "$FOLLOW" "$u" || { echo "$TAG lists laib-host-image.sh but it does not download: refusing" >&2; exit 1; }
+fi
 (cd "$TMPD" && for BIN in laib laib-operator laib-lease; do
    want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
    [ -n "$want" ] || { echo "SHA256SUMS has no entry for $BIN" >&2; exit 1; }
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
  done
- [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; })
+ [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; }
+ [ -z "$FOLLOW" ] || [ "$(grep " laib-host-image.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-host-image.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-host-image.sh" >&2; exit 1; })
 # the programs out of the kernel (#443): laib-disk (the data RAID and disk
 # health) and laib-notify (the watchdog ping, the owner's mail). A release from
 # before has them not; then laib diag says so
@@ -276,11 +314,11 @@ for BIN in laib laib-operator laib-lease $EXTRA; do
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
 if [ -n "$CHECK" ]; then
-  if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$CHECK"; else host_units "$LAIB_ETC" "" "$CHECK"; fi   # LAIB_ETC: the test harness only
+  if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$CHECK" "$FOLLOW"; else host_units "$LAIB_ETC" "" "$CHECK" "$FOLLOW"; fi   # LAIB_ETC: the test harness only
 fi
 # vm-install cuts the power on this line (the first boot's console): the
 # binaries are in place, the first boot's marker is not (#37, #367)
-echo "binaries $TAG in /var/opt/laib"
+mark "binaries $TAG in /var/opt/laib"
 sudo mkdir -p /mnt/data/laib && sudo chown core:core /mnt/data/laib
 
 # The user unit, inline so a private repo needs no second fetch (dist/laib.service is the same text).
