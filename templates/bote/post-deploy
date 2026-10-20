@@ -169,9 +169,20 @@ platform_toolsets:
   webhook: [todo, memory, session_search, clarify]
   api_server: [todo, memory, session_search, clarify]
   cron: [todo, memory, session_search, clarify]
+# #502 (measured on the Kraftwerk): behind Hermes' tool search a tool call took tool_search,
+# tool_describe and tool_call, three extra model rounds, and the search once picked laib_look for a
+# question for Frage. v0.22.2 cannot keep one MCP server eager (tools/tool_search.py: an mcp- toolset
+# is always deferrable, defer only adds), so the search is off and every tool above is in the array.
+tools:
+  tool_search:
+    enabled: "off"
 non_interactive_hard_stop_enabled: true
 ${PLUGINS}
 YAML
+# Hermes' 58 bundled skills (apple, devops, social-media, …) do not fit a household (#502): Hermes' own
+# opt-out, in its container, writes .no-bundled-skills (no more seeding on start) and deletes the
+# unmodified ones; an edited or added skill stays. Idempotent; laib runs it with podman exec.
+echo "laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes"
 # the soul: who the Bote is. Rendered on every apply while it carries the
 # marker below, so it names exactly the tools wired above (#54); a SOUL.md
 # without the marker is the admin's own and stays.
