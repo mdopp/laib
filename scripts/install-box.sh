@@ -13,6 +13,7 @@
 # or mirror exports LAIB_GH_TOKEN (Contents: read, Packages: read); never as a
 # flag: ps shows every argv on the box to every local user (#217).
 set -euo pipefail
+STATE="${LAIB_STATE:-/mnt/data/laib/state}"   # LAIB_STATE: the test harness only
 VERSION="latest"; DOMAIN=""; LAN_IP=""; MODEL_URL=""; MODEL_LEASE=""; GPU=""; TOKEN="${LAIB_GH_TOKEN:-}"; SOURCE=""
 DNS_PROVIDER=""; DNS_TOKEN="${LAIB_DNS_TOKEN:-}"; TLS=""   # certificates (#45): DNS-01 via the provider's API, or Caddy's own CA
 while [ $# -gt 0 ]; do
@@ -31,6 +32,12 @@ while [ $# -gt 0 ]; do
     *) echo "unknown flag $1" >&2; exit 1;;
   esac
 done
+
+# The booted deployment's container image (#486): "<reference> <digest>",
+# empty on a box without rpm-ostree or one booted from a plain ostree commit.
+os_image() {
+  rpm-ostree status --json 2>/dev/null | jq -r '.deployments[] | select(.booted) | select(."container-image-reference") | "\(."container-image-reference") \(."container-image-reference-digest" // "")"' 2>/dev/null || true
+}
 
 # The box's own config (#257, #281), one source for every box: the stick's
 # first boot runs this script, a migrated box runs it in step 1
@@ -62,11 +69,29 @@ box_config() {
   # reboots (fleet_lock): laib grants it in the window after the backup,
   # green and proven. 60- wins over ServiceBay's 55-servicebay-lock.toml;
   # the pause files (90-, 95-: updates.enabled = false) still switch it off.
-  if [ -e /usr/lib/zincati ] || [ -d "$etc/zincati" ]; then
-    $s mkdir -p "$etc/zincati/config.d"
-    printf '[updates]\nstrategy = "fleet_lock"\n\n[updates.fleet_lock]\nbase_url = "http://127.0.0.1:5900/"\n' | $s tee "$etc/zincati/config.d/60-laib-updates.toml" >/dev/null
-    [ -z "$s" ] || sudo systemctl try-restart zincati.service
-  fi
+  # #486: a box booted from an image Fedora's update graph does not know
+  # (uCore) gets no update from Zincati, only "not found in the update
+  # graph" at every poll, and rpm-ostree's own timer is a second driver that
+  # ignores the pin and the pauses. There laib-host-image is the one update
+  # path (state/host/image, the reboot through the same lock): both are
+  # masked, so no image brings them back. The pause files stay the one
+  # pause; laib-host-image reads them as Zincati does.
+  case "$(os_image)" in
+    "" | *quay.io/fedora/fedora-coreos*)
+      if [ -e /usr/lib/zincati ] || [ -d "$etc/zincati" ]; then
+        $s mkdir -p "$etc/zincati/config.d"
+        printf '[updates]\nstrategy = "fleet_lock"\n\n[updates.fleet_lock]\nbase_url = "http://127.0.0.1:5900/"\n' | $s tee "$etc/zincati/config.d/60-laib-updates.toml" >/dev/null
+        [ -z "$s" ] || sudo systemctl try-restart zincati.service
+      fi ;;
+    *)
+      for u in zincati.service rpm-ostreed-automatic.timer; do
+        [ -n "$s" ] || break
+        case "$(systemctl is-enabled "$u" 2>/dev/null || true)" in
+          masked* | "") ;;
+          *) sudo systemctl mask --now "$u" >/dev/null && echo "$u: masked (this image's OS updates come from laib-host-image, #486)" ;;
+        esac
+      done ;;
+  esac
   # One firewall mechanism (#445): Laib's nftables table (inet laib). uCore
   # enables firewalld (zone FedoraServer: ssh only), which blocked the
   # household from every port but SSH; masked, so no image brings it back.
@@ -342,7 +367,7 @@ UNIT
 systemctl --user daemon-reload
 loginctl enable-linger core >/dev/null 2>&1 || sudo loginctl enable-linger core
 
-if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
+if [ -n "$DOMAIN" ] && [ ! -f "$STATE/box.yml" ]; then
   LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib init --domain "$DOMAIN" ${LAN_IP:+--lan-ip "$LAN_IP"} ${MODEL_URL:+--model-url "$MODEL_URL"} ${MODEL_LEASE:+--model-lease "$MODEL_LEASE"} ${DNS_PROVIDER:+--dns-provider "$DNS_PROVIDER"} ${TLS:+--tls "$TLS"} $GPU
   if [ -n "$DNS_PROVIDER" ]; then
     [ -n "$DNS_TOKEN" ] || { echo "--dns-provider $DNS_PROVIDER without a token: export LAIB_DNS_TOKEN" >&2; exit 1; }
@@ -350,6 +375,26 @@ if [ -n "$DOMAIN" ] && [ ! -f /mnt/data/laib/state/box.yml ]; then
     echo "DNS_API_TOKEN set for $DNS_PROVIDER (DNS-01 from the first laib add caddy)"
   fi
 fi
+# The host OS follows state/host/image (#486). On a box booted from an image
+# Zincati does not serve, a state without a pin gets the booted one: the tag
+# it was rebased to, and the digest it runs. Booted by digest, the tag it
+# follows is unknown, and the pin is the owner's (docs/INSTALL.md).
+pin_host_image() {
+  local img ref dig name tag
+  img="$(os_image)"; ref="${img%% *}"; dig="${img#* }"
+  case "$ref" in "" | *quay.io/fedora/fedora-coreos*) return 0 ;; esac
+  [ -d "$STATE" ] && [ ! -e "$STATE/host/image" ] || return 0
+  if [[ "$ref" == *@* ]] || [ -z "$dig" ]; then
+    echo "host/image: not pinned: the box runs $ref, and the tag it follows is not known; pin it by hand (docs/INSTALL.md, OS updates)" >&2; return 0
+  fi
+  tag="${ref##*:}"; name="${ref%:*}"
+  case "$tag" in */*) tag=latest; name="$ref" ;; esac
+  mkdir -p "$STATE/host" && printf '# tag: %s\n%s@%s\n' "$tag" "$name" "$dig" >"$STATE/host/image"
+  git -C "$STATE" add host/image && git -C "$STATE" -c user.name=laib -c user.email=laib@localhost commit -qm "host: pin the booted image (#486)" -- host/image >/dev/null ||
+    echo "host/image written but not committed: git -C $STATE status" >&2
+  echo "host/image: pinned $name@$dig (tag $tag): laib-host-image follows it, laib updates shows a newer digest"
+}
+pin_host_image
 systemctl --user enable --now laib.service
 # enable --now does not restart a running service: an update would keep the old
 # code running until the next reboot. try-restart touches only what runs (#37).

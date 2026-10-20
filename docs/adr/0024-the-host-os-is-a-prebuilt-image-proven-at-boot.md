@@ -2,11 +2,12 @@
 
 Applies when you are about to touch the host OS of a box: layer a package
 with rpm-ostree, change how the NVIDIA driver or its CDI spec gets onto the
-box, pause or resume Zincati, rebase a box, or wonder why an OS update
-rolled itself back.
+box, pause or resume Zincati or OS updates, rebase a box, wonder why an OS
+update rolled itself back, or why a uCore box never gets one.
 
 - **Status:** Proposed, 2026-10-19 (#368). Parts 2 and 3 are implemented
   (`install-box.sh` writes the units, `scripts/boot-check.sh` is the check, a verified release asset); part 1 waits for the owner.
+  Part 9 added 2026-10-20 (#486).
 - **Deciders:** the owner (mdopp); proposed by the #368 session.
 
 ## Context
@@ -86,8 +87,8 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    `FedoraServer`, ssh only) blocked the household for 2h20 after the
    Kraftwerk's rebase. `install-box.sh` masks it and `laib diag` is red
    while it runs. Two more things uCore turns on are handled with the
-   rebase: `rpm-ostreed-automatic.timer` is disabled, because Zincati is the
-   one update driver and the boot check's pause is a Zincati file; the ZFS
+   rebase: `rpm-ostreed-automatic.timer` is masked, because it is a second
+   update driver that ignores the pin and the pause files (9.); the ZFS
    units are disabled, because the data disk is mdadm with XFS and an
    import scan must not take a foreign disk. The checklist is in
    `docs/INSTALL.md` ("Rebasing a GPU box to uCore").
@@ -122,7 +123,42 @@ modules was NVIDIA's recommendation for Turing and newer, which stays true.
    when laib's reboot lock (7.) says yes. The boot check proves the new
    deployment after that. A pause file holds the follower as well. The boot
    check names a deployment by its commit and serial, so a deployment that
-   changes only kernel arguments is checked too.
+   changes only kernel arguments is checked too. A deployment runs the pin
+   when its reference is the pin or its digest is the pin's, so a box
+   rebased by tag is not rebased again to the same image by digest.
+
+9. **One update path per box; on uCore it is the host image** (#486).
+   Zincati's Cincinnati graph serves Fedora CoreOS's own image only. On the
+   Kraftwerk (uCore) it reached steady state against laib's lock and said
+   `booted deployment … not found in the update graph` at every poll: no
+   update would ever come from it, and everything else stayed green.
+   So on a box booted from a container image other than
+   `quay.io/fedora/fedora-coreos`, `laib-host-image` (8.) is the one
+   update path, and `install-box.sh` masks `zincati.service` and
+   `rpm-ostreed-automatic.timer` there (masked, so no image brings them
+   back, as with firewalld in 6.). A Fedora CoreOS box keeps Zincati (7.).
+   Both paths reboot only through laib's lock. `install-box.sh` pins the
+   booted image in `host/image` when the state has none and the box was
+   rebased by tag (the tag, and the digest it runs; committed); booted by
+   digest, the tag is not known and the pin is the owner's. **The pause
+   stays one mechanism**, Zincati's drop-ins (`updates.enabled = false` in
+   `/etc/zincati/config.d/*.toml`), read as Zincati reads them: in name
+   order, the last file that sets `enabled` decides. `laib-host-image`
+   reads them the same way, also where Zincati is masked, so the boot check's
+   `95-laib-boot-check.toml` holds both paths after a rollback, and
+   ServiceBay's `55-servicebay-lock.toml` is a pause as it was there.
+   `laib diag` (`os-update`) says when updates are paused and by which file
+   (info; yellow for the boot check's), when a uCore box has no pin (yellow:
+   no OS update at all) and when Zincati still runs on one (yellow);
+   `laib updates` says on the `host` row whether the tag has a newer digest
+   and whether a pause holds it. What ServiceBay had: Zincati only, a
+   window or a lock file in `config.d`, and a probe that reports a pause
+   as information, not a fault (`osUpdateStuck.ts`); kept: the pause file
+   and its reading as information. Alternatives in one line: a local
+   Cincinnati endpoint for Zincati (Laib would serve an update graph for one
+   image: more to own than the follower, and the lock and pause are the same
+   either way); keeping Zincati running and explaining the warning in diag
+   (a daemon that cannot do its job, on every box, forever).
 
 ## Consequences
 

@@ -126,7 +126,9 @@ ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:a287759b…
 `laib updates` reads it, and the Operator's weekly run proposes a newer digest
 as a patch to this file. A change here is a human's call (the review).
 `laib-host-image.timer` on the box stages the pinned image, and the reboot
-goes through laib's reboot lock (ADR 0024).
+goes through laib's reboot lock (ADR 0024). On a uCore box it is the one OS
+update path; `install-box.sh` writes the file from the booted deployment when
+it is missing and the box was rebased by tag (#486).
 
 ## personas/<name>/ (optional)
 

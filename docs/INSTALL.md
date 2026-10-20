@@ -189,11 +189,17 @@ the rebase. The Kraftwerk ran into the first one (#445):
    `/etc` carries over into the new deployment and wins over the image's
    enablement. `install-box.sh` (and `--box-config`) masks a firewalld it
    finds, and `laib diag` is red (`firewall`) while one runs.
-2. **After the boot, `rpm-ostreed-automatic.timer`:** uCore enables it,
-   and it stages updates by itself. On a box where Zincati drives the
-   updates, it is a second update driver that ignores Zincati's pause files
-   (the boot check's `95-laib-boot-check.toml` and any hand-made pause).
-   `sudo systemctl disable --now rpm-ostreed-automatic.timer`.
+2. **After the boot, Zincati and `rpm-ostreed-automatic.timer`** (#486):
+   Zincati asks Fedora's update graph, which does not know the uCore image
+   (`booted deployment … not found in the update graph`): it never finds an
+   update. uCore's `rpm-ostreed-automatic.timer` is a second update driver
+   that ignores the pin and the pause files. On uCore the one update path
+   is `laib-host-image` (below). `install-box.sh` (and `--box-config`)
+   masks both on a box booted from a container image other than Fedora
+   CoreOS's own, and `laib diag` is yellow (`os-update`) while Zincati
+   runs there. Rebase by tag
+   (`rpm-ostree rebase ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal:stable-nvidia`),
+   then the next `install-box.sh` pins the booted digest itself.
 3. **After the boot, the ZFS units** (`zfs-import-cache.service`,
    `zfs-import-scan.service`, `zfs-mount.service`, `zfs-zed.service`,
    `zfs.target`): Laib's data disk is an mdadm mirror with XFS and has no
@@ -208,9 +214,14 @@ the rebase. The Kraftwerk ran into the first one (#445):
    proven", and the box rolls back once; the record names the blocked ports
    (#481), so a port another firewall closes on purpose stays allowed.
 
-### OS updates (Zincati and laib's reboot lock, ADR 0024)
+### OS updates (laib's reboot lock, ADR 0024)
 
-Zincati finds and stages OS updates. With `install-box.sh`'s
+One update path per box, and both reboot through laib's lock. On plain
+Fedora CoreOS, Zincati finds and stages OS updates. On a box booted from
+another container image (uCore), `laib-host-image.timer` follows the image
+pinned in the state, and Zincati is masked (#486).
+
+On Fedora CoreOS: with `install-box.sh`'s
 `/etc/zincati/config.d/60-laib-updates.toml` (strategy `fleet_lock`), it asks
 laib before every reboot. laib says yes only in the window two to four hours
 after the backup (05:00–07:00 for `backup.schedule: "03:00"`), only while the
@@ -219,16 +230,33 @@ deployment is proven (`/var/lib/laib/boot-proven`). `laib diag` shows a staged
 update (`os-update`), and the journal shows the grant and the arrival. After
 the reboot the boot check proves the new deployment or rolls it back once.
 
-The host image itself is pinned in the state: `host/image` holds `# tag:
-<tag>` and the rebase reference by digest. Laib's weekly update run proposes
-a newer digest of that tag. After a human approves it, `laib-host-image.timer`
-stages it with rpm-ostree, and the reboot goes through the same lock. To pin
-the image a box runs now (once):
+On uCore: `host/image` in the state holds `# tag: <tag>` and the rebase
+reference by digest. `install-box.sh` writes it from the booted deployment
+when the state has none and the box was rebased by tag (the tag, and the
+digest it runs), and commits it. Laib's weekly update run proposes a newer
+digest of that tag; `laib updates` shows it on the `host` row ("neuer
+Digest von …"). After a human approves it, `laib-host-image.timer` (every 15
+minutes) stages it with `rpm-ostree rebase`, asks the same lock
+(`/v1/pre-reboot`), and reboots only on its yes; the boot check proves the
+new deployment or rolls it back once. A box rebased by digest does not say
+which tag it follows: pin it once by hand, then check:
 ```
 cd /mnt/data/laib/state && mkdir -p host
 printf '# tag: %s\n%s\n' stable-nvidia "$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | ."container-image-reference"')" > host/image
+git add host/image && git commit -qm "host: pin the running image"
 cat host/image && /var/opt/laib/laib updates | grep '^host'
 ```
+`laib diag` is yellow (`os-update`) on a uCore box without the pin: it gets
+no OS update at all.
+
+**The pause is one mechanism for both paths**: a drop-in in
+`/etc/zincati/config.d/` with `[updates]` `enabled = false`, read in name
+order, the last file that sets `enabled` decides (as Zincati reads them;
+`laib-host-image` reads them the same way, also where Zincati is masked).
+The boot check writes `95-laib-boot-check.toml` after a rollback, so the
+rolled-back update is not staged again. `laib diag` says which file pauses
+(`os-update`, yellow for the boot check's), and so does `laib updates` on
+the `host` row.
 
 Lifting a pause is the owner's step. Do it once the running deployment is
 proven with the LAN probe (#445):
@@ -237,8 +265,13 @@ cat /var/lib/laib/boot-proven                                # the booted deploy
 ls /etc/zincati/config.d/                                   # 60-laib-updates.toml, and the pause files
 sudo rm /etc/zincati/config.d/55-servicebay-lock.toml       # ServiceBay's window, if it is still there
 sudo rm /etc/zincati/config.d/90-paused-nvidia-kmod.toml    # the hand-made pause (the driver is prebuilt now)
+/var/opt/laib/laib diag | grep os-update                     # no "pausiert" left
+# Fedora CoreOS: Zincati picks it up
 sudo systemctl restart zincati.service
 journalctl -u zincati -n 20 --no-pager                      # "fleet_lock" and "reached steady state"
+# uCore: the follower picks it up at its next run, or now
+sudo systemctl start laib-host-image.service
+journalctl -u laib-host-image -n 5 --no-pager               # nothing to do, "staging …", or "the reboot lock says not now"
 ```
 `95-laib-boot-check.toml` appears only after an automatic rollback. Delete
 it only once the cause is understood.

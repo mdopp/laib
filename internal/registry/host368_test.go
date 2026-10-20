@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mdopp/laib/internal/state"
@@ -48,5 +49,36 @@ func TestUpdatesSeeANewerHostImageDigest(t *testing.T) {
 	pin("sha256:b111")
 	if ups := ImageUpdates(context.Background(), st); len(ups) != 1 || ups[0].Patch != "" {
 		t.Fatalf("the pinned digest is the tag's: no update, got %+v", ups)
+	}
+}
+
+// #486: laib updates says it in words: a newer digest, or the pin is current,
+// and that the OS updates are paused (by which file).
+func TestTheHostLineSaysNewerAndPaused(t *testing.T) {
+	u := ImageUpdate{Service: "host", Key: "stable-nvidia", Image: "ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal", Current: "sha256:a287"}
+	if l := hostLine(u); !strings.Contains(l, "ucore-minimal@sha256:a287") || !strings.Contains(l, "aktuell") {
+		t.Errorf("the pinned reference, by digest, and current: %q", l)
+	}
+	u.Patch, u.Paused = "sha256:b111", "/etc/zincati/config.d/90-paused-by-hand.toml"
+	if l := hostLine(u); !strings.Contains(l, "neuer Digest") || !strings.Contains(l, "sha256:b111") || !strings.Contains(l, "pausiert") || !strings.Contains(l, "90-paused-by-hand.toml") {
+		t.Errorf("a newer digest, and the pause by its file: %q", l)
+	}
+}
+
+func TestTheHostRowCarriesThePause(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("Docker-Content-Digest", "sha256:a287") }))
+	t.Cleanup(srv.Close)
+	real := RegistryURL
+	RegistryURL = func(string) string { return srv.URL }
+	t.Cleanup(func() { RegistryURL = real })
+	etc, dir := t.TempDir(), t.TempDir()
+	t.Setenv("LAIB_ETC", etc)
+	os.MkdirAll(filepath.Join(etc, "zincati", "config.d"), 0o755)
+	os.WriteFile(filepath.Join(etc, "zincati", "config.d", "95-laib-boot-check.toml"), []byte("[updates]\nenabled = false\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "host"), 0o755)
+	os.WriteFile(filepath.Join(dir, "host", "image"), []byte("# tag: stable-nvidia\nostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:a287\n"), 0o644)
+	ups := ImageUpdates(context.Background(), &state.State{Dir: dir, Services: map[string]*state.Service{}})
+	if len(ups) != 1 || !strings.HasSuffix(ups[0].Paused, "95-laib-boot-check.toml") {
+		t.Fatalf("the host row names the pause: %+v", ups)
 	}
 }
