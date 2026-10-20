@@ -8,6 +8,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
@@ -18,8 +19,9 @@ import (
 )
 
 // cmdOperator: `laib operator enable|disable|status`. enable mints the ops
-// token (humans only), stores it as OPERATOR_TOKEN in secrets.age, sets
-// box.yml operator.enabled and applies, which renders and starts the unit.
+// token (humans only) unless the stored one is still live (#500), stores it
+// as OPERATOR_TOKEN in secrets.age, sets box.yml operator.enabled and
+// applies, which renders and starts the unit.
 func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
 		return env.Fail(errors.New("usage: laib operator enable [--model alias] [--report-at 07:00] | disable | status"))
@@ -61,7 +63,9 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 			if err != nil {
 				return env.Fail(err)
 			}
-			if _, ok := sec[render.OperatorToken]; !ok {
+			// a stored token that no longer opens MCP — revoked by disable or
+			// by hand — is replaced, not reused (#500)
+			if !diag.OperatorTokenValid(env) {
 				store, err := token.Load(cli.TokenPath(env))
 				if err != nil {
 					return env.Fail(err)

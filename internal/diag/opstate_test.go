@@ -21,6 +21,7 @@ func TestOperatorState(t *testing.T) {
 		{"fresh, no note yet", OpFacts{Enabled: true, UnitActive: true, Answers: true, Now: now, Tick: tick}, "startet", ""},
 		{"recent note", OpFacts{Enabled: true, UnitActive: true, Answers: true, LastNote: now.Add(-5 * time.Minute), Now: now, Tick: tick}, "läuft", ""},
 		{"stale note", OpFacts{Enabled: true, UnitActive: true, Answers: true, LastNote: now.Add(-45 * time.Minute), Now: now, Tick: tick}, "stumm", "gelb"},
+		{"token refused (#500)", OpFacts{Enabled: true, UnitActive: true, Answers: true, Unauthorized: true, LastNote: now.Add(-5 * time.Minute), Now: now, Tick: tick}, "abgewiesen", "rot"},
 	}
 	for _, c := range cases {
 		state, f := OperatorState(c.f)

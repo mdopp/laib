@@ -8,8 +8,11 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
+	"github.com/mdopp/laib/internal/token"
 )
 
 // The Operator's heartbeat. Silence is the failure mode nobody notices:
@@ -18,18 +21,20 @@ import (
 // in `laib operator status`, which nobody runs when all seems fine.
 //
 // Inputs: box.yml says enabled; the user unit is active; /ready on the
-// operator's port answers; the newest journal note by ops (every tick ends
+// operator's port answers; its stored bearer still opens MCP (#500); the newest journal note by ops (every tick ends
 // with one) is younger than three ticks.
 
 type OpFacts struct {
 	Enabled    bool
 	ModelURL   string
 	UnitActive bool
-	Answers    bool
-	LastNote   time.Time
-	EnabledAt  time.Time // the last `operator enable` in the journal
-	Tick       time.Duration
-	Now        time.Time
+	// the stored OPERATOR_TOKEN is no live ops token: every MCP call gets 401 (#500)
+	Unauthorized bool
+	Answers      bool
+	LastNote     time.Time
+	EnabledAt    time.Time // the last `operator enable` in the journal
+	Tick         time.Duration
+	Now          time.Time
 }
 
 // OperatorState turns the facts into one word for the readiness line and
@@ -42,6 +47,8 @@ func OperatorState(f OpFacts) (string, *Finding) {
 		return "aus", &Finding{Severity: "gelb", Probe: "operator", Detail: "Operator nicht aktiviert: niemand repariert nachts, kein Morgenbericht", Fix: "laib operator enable", Repair: []string{"operator", "enable"}}
 	case !f.UnitActive:
 		return "fehlt", &Finding{Severity: "rot", Probe: "operator", Detail: "Operator ist aktiviert, aber laib-operator.service läuft nicht", Fix: "journalctl --user -u laib-operator; laib operator enable"}
+	case f.Unauthorized:
+		return "abgewiesen", &Finding{Severity: "rot", Probe: "operator", Detail: "Der Operator läuft mit einem widerrufenen oder fehlenden ops-Token: jeder Aufruf an laib endet mit 401", Fix: "laib operator enable (prägt ein neues Token)", Repair: []string{"operator", "enable"}}
 	case !f.Answers:
 		return "antwortet nicht", &Finding{Severity: "rot", Probe: "operator", Detail: "laib-operator.service läuft, aber der Operator antwortet nicht auf 127.0.0.1:5901", Fix: "journalctl --user -u laib-operator"}
 	case f.LastNote.IsZero() && !f.EnabledAt.IsZero() && f.Now.Sub(f.EnabledAt) > 3*f.Tick:
@@ -66,6 +73,7 @@ func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
 		return f
 	}
 	f.UnitActive = sysd.Active(ctx, "laib-operator.service") == "active"
+	f.Unauthorized = !OperatorTokenValid(env)
 	c := &http.Client{Timeout: 2 * time.Second}
 	if resp, err := c.Get("http://127.0.0.1:5901/ready"); err == nil {
 		resp.Body.Close()
@@ -82,4 +90,19 @@ func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
 		}
 	}
 	return f
+}
+
+// OperatorTokenValid reports whether OPERATOR_TOKEN in secrets.age is a live
+// ops token in the store — what the MCP handler checks on every call.
+func OperatorTokenValid(env *cli.Env) bool {
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	if err != nil || sec[render.OperatorToken] == "" {
+		return false
+	}
+	store, err := token.Load(cli.TokenPath(env))
+	if err != nil {
+		return false
+	}
+	rec, ok := store.Lookup(sec[render.OperatorToken], time.Now())
+	return ok && rec.Hand == "ops"
 }
