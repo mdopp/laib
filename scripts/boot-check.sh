@@ -93,11 +93,13 @@ if [ "$(cat "$ROLLED" 2>/dev/null)" = "$booted" ] || [ "$back" != "$proven" ]; t
 fi
 say "not proven within ${LAIB_BOOT_CHECK_TIMEOUT:-900}s: $why; rolling back to ${proven:0:12}"
 echo "$booted" >"$ROLLED"
+# the rollback deployment's /etc is /ostree/deploy/<os>/deploy/<id>/etc, on
+# /sysroot, which Fedora CoreOS mounts read-only: written in a private mount
+# namespace with /sysroot remounted rw, as ostree itself does, and checked
 backetc="$ROOT/ostree/deploy/$(sed -n 's/^\* \([^ ]*\) .*/\1/p' <<<"$st")/deploy/$back/etc"
-[ -d "$backetc" ] || say "no /etc of $back at $backetc: Zincati is not paused there"
-for e in "$ETC" "$backetc"; do
-  [ -d "$e" ] && mkdir -p "$e/$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$e/$PAUSE"
-done
+mkdir -p "$ETC/$(dirname "$PAUSE")" && printf '[updates]\nenabled = false\n' >"$ETC/$PAUSE"
+unshare --mount -- sh -c 'mount -o remount,rw "$1/sysroot" && mkdir -p "$2/zincati/config.d" && printf "[updates]\nenabled = false\n" >"$2/$3"' _ "$ROOT" "$backetc" "$PAUSE"
+[ -s "$backetc/$PAUSE" ] || say "could not pause Zincati in $backetc: it may stage the same update again"
 note incident "OS-Update ${booted:0:12} zurückgerollt auf ${proven:0:12}: $why. Zincati pausiert, bis /etc/$PAUSE entfernt ist."
 rpm-ostree rollback || { say "rpm-ostree rollback failed"; exit 1; }
 sync; systemctl reboot
