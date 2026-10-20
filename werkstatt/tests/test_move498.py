@@ -7,7 +7,7 @@ git and both logins are dev's alone, and a session pass answers the
 onboarding and the folder trust for each checkout in ~/.claude.json. The
 mover's half (claude-dev's home into werkstatt/home) is
 scripts/test_move_servicebay_data.py."""
-import json, os, shutil, stat, subprocess, sys, tempfile, unittest
+import getpass, json, os, shutil, stat, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -83,7 +83,7 @@ class FirstRun(unittest.TestCase):
         fake.chmod(0o755)
         self.env = dict(os.environ, HOME=str(self.home), TMUX_TMPDIR=str(sock), WERKSTATT_WORKSPACE=str(self.ws),
                         WERKSTATT_CLAUDE=str(fake), WERKSTATT_TMUX_CONF=str(HERE / "tmux.conf"),
-                        GIT_CONFIG_GLOBAL=str(self.root / "gitconfig"))
+                        WERKSTATT_USER=getpass.getuser(), GIT_CONFIG_GLOBAL=str(self.root / "gitconfig"))
         self.env.pop("TMUX", None)
         self.cfg = self.home / ".claude.json"
         self.addCleanup(shutil.rmtree, self.root, True)
