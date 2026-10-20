@@ -569,20 +569,6 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 // builtins, every value and LAIB_SECRET_<NAME> for the service's declared
 // secrets in a 0600 env file (cleanup removes it), the service folder and
 // the render folder read-only, the data paths read-write.
-// startURL is where a login without a target lands (#381): the family's
-// entry, Haus's first route, once a service provides haus, else the box page
-// (box.yml laib.host). Both appear in laib-access.yml, so a change to either
-// reruns the sso hook that reads this.
-func startURL(st *state.State) string {
-	host := st.Box.Laib.Host
-	for _, name := range st.ServiceNames() {
-		if c := st.Services[name].Contract; slices.Contains(c.Provides, "haus") && len(c.Routes) > 0 {
-			host = c.Routes[0].Host
-		}
-	}
-	return "https://" + host + "." + st.Box.Domain + "/"
-}
-
 func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string) (HookSpec, func(), error) {
 	model := render.ModelVars(st, secrets) // as a unit gets them (#200)
 	var env []string
@@ -590,7 +576,7 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 		"LAIB_SERVICE="+svc.Name, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
 		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
 		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
-		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+startURL(st))
+		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HAUS_URL="+render.HausURL(st))
 	for k, v := range svc.Values {
 		val := v.Literal
 		if v.Secret != "" {

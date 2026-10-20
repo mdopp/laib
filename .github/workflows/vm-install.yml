@@ -637,7 +637,7 @@ jobs:
             [ -n "$id" ] && break; sleep 2; done
           [ -n "$id" ] || { echo "no invitation reached the sink"; podman logs --tail 40 systemd-auth-authelia; exit 1; }
           curl -fsS "http://127.0.0.1:8025/api/v1/message/$id" > /tmp/mail.json
-          for w in "Hallo Lena Muster" "https://haus.vm.test/willkommen" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
+          for w in "Hallo Lena Muster" "Los geht es hier: https://laib.vm.test/" "24 Stunden"; do grep -qF "$w" /tmp/mail.json || { echo "the mail does not say: $w"; head -c 3000 /tmp/mail.json; exit 1; }; done
           tok=$(grep -o 'step2?token=[A-Za-z0-9._-]*' /tmp/mail.json | sed -n '1s/.*token=//p')
           [ -n "$tok" ] || { echo "no link in the mail"; exit 1; }
           first_password lena "$tok" 'Lena-Passwort-360!'
@@ -987,6 +987,9 @@ jobs:
                 for i in $(seq 1 90); do test -s /var/lib/laib/boot-proven && break; sleep 2; done
                 test -s /var/lib/laib/boot-proven || { echo "the boot check recorded no baseline"; journalctl --no-pager -u laib-boot-check | tail -20; exit 1; }
                 echo "proven: $(cat /var/lib/laib/boot-proven)"
+                # #481: the LAN probe from the namespace reaches every LAN port on the VM; lan: false ports are no LAN ports
+                read -r _ _ n ports </var/lib/laib/boot-proven
+                [ "${n:-0}" = 0 ] || { echo "the baseline has $n blocked LAN ports (${ports:-}): the probe counts a port the LAN reaches, or a lan: false port"; journalctl --no-pager -u laib-boot-check | tail -20; sudo nft list ruleset; ss -Hltn; exit 1; }
                 # broken on purpose: its kernel line masks the core user manager, so laib never answers /ready
                 sudo rpm-ostree kargs --append=systemd.mask=user@1000.service >/dev/null || sudo rpm-ostree kargs --bypass-driver --append=systemd.mask=user@1000.service >/dev/null
                 rpm-ostree status --json | jq -e ".deployments[] | select(.staged)" >/dev/null || { echo "no staged deployment"; rpm-ostree status; exit 1; }'

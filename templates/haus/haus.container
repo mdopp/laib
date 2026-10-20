@@ -9,7 +9,7 @@ Environment=HAUS_LISTEN=0.0.0.0:8650
 Environment=LAIB_URL=http://host.containers.internal:5900
 Environment=LAIB_TOKEN=${LAIB_TOKEN}
 Environment=HAUS_PROXY_SECRET=${PROXY_SECRET}
-Environment=LAIB_PUBLIC_URL=https://laib.${DOMAIN}
+Environment=LAIB_PUBLIC_URL=${LAIB_PAGE_URL}
 # the house paths from Home Assistant (haus#10); without the token Haus serves none of them
 Environment=HAUS_HA_URL=${HA_URL}
 Environment=HAUS_HA_TOKEN=${HA_TOKEN}
