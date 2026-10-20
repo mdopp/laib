@@ -409,6 +409,11 @@ container). A `laib-exec` line that carries a secret is refused: ps shows
 every argv on the box to every user (#214), so a secret travels on stdin,
 in a file only its reader can read, or over the service's own socket.
 `box.yml laib.hooksImage` names the image.
+A hook is part of its service's plan: render writes each hook's hash to
+`hooks.laib` next to the units, so a changed hook alone re-runs the hooks
+and restarts the service (#496). A file the program reads only when it
+starts (llama's `presets.ini`) is written in `pre-start`, never in
+`post-deploy`, which runs after the restart (#512).
 
 ### The Operator and the MCP surface (#43)
 

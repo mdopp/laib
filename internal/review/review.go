@@ -164,6 +164,8 @@ func Dirs(base, changed string) Result {
 			default:
 				say("ändert eine Datei, die Laib nicht kennt: %s", p)
 			}
+		case parts[0] == "services" && len(parts) == 4 && parts[2] == state.BaseDir && !a.exec:
+			// the template as copied in (#511): only the next update's merge reads it
 		case parts[0] == "repairs" && len(parts) == 2:
 			say("eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus", p)
 		case p == "host/image":
@@ -229,7 +231,7 @@ func Dirs(base, changed string) Result {
 	}
 	before2 := len(r.Human)
 	for key, text := range aout {
-		if !strings.HasPrefix(key, "quadlet/") || strings.HasSuffix(key, "/"+render.ValuesFile) { // the values are judged above, not as a unit
+		if !strings.HasPrefix(key, "quadlet/") || strings.HasSuffix(key, ".laib") { // values and hook hashes are judged above, not as a unit
 			continue
 		}
 		svc := strings.Split(key, "/")[1]

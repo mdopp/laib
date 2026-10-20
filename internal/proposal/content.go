@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -131,8 +133,9 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 	}
+	var updateWarnings []string
 	if e.Update != nil {
-		if err := updateService(wt, e.Update); err != nil {
+		if updateWarnings, err = updateService(wt, e.Update); err != nil {
 			return fail(err)
 		}
 	}
@@ -140,7 +143,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if err != nil {
 		return fail(fmt.Errorf("the proposed state does not load:\n%w", err))
 	}
-	warnings := proposed.Warnings
+	warnings := append(proposed.Warnings, updateWarnings...)
 	var verdict Verdict
 	if judge != nil {
 		verdict, err = judge(repo, wt)
@@ -152,7 +155,12 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		return fail(err)
 	}
 	status, _ := git(ctx, wt, "status", "--porcelain")
-	if strings.TrimSpace(status) == "" {
+	// only the base copies (#511): the service is as the template has it, and that alone
+	// is no proposal; the base is recorded with the next real change
+	onlyBase := e.Update != nil && !slices.ContainsFunc(strings.Split(strings.TrimSpace(status), "\n"), func(l string) bool {
+		return !strings.Contains(l, "services/"+e.Update.Name+"/"+state.BaseDir+"/")
+	})
+	if strings.TrimSpace(status) == "" || onlyBase {
 		return fail(errors.New("nothing to propose: the edit changes nothing"))
 	}
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
@@ -251,6 +259,11 @@ func addService(wt string, a *AddService) error {
 		if isHook(name) {
 			mode = 0o755
 		}
+		if name != "values.yml" && name != "README.md" {
+			if err := writeBase(dst, name, b); err != nil {
+				return err
+			}
+		}
 		if err := os.WriteFile(filepath.Join(dst, name), b, mode); err != nil {
 			return err
 		}
@@ -263,19 +276,24 @@ func addService(wt string, a *AddService) error {
 	return nil
 }
 
-// updateService copies every template file except values.example.yml over
+// updateService brings every template file except values.example.yml to
 // services/<name>, removes unit files the new template no longer ships, and
 // keeps values.yml, adding the example's new keys (newValues). The
-// contract's name line follows the service name.
-func updateService(wt string, u *UpdateService) error {
+// contract's name line follows the service name. A file the owner changed
+// on the box keeps that change (#511): the box's file, the template as it
+// was copied in last (state.BaseDir) and the new template are merged three ways.
+// Where that cannot be told or the two change the same lines, the template
+// wins and the returned warning names the file.
+func updateService(wt string, u *UpdateService) ([]string, error) {
 	dst := filepath.Join(wt, "services", u.Name)
 	if _, err := os.Stat(filepath.Join(dst, "laib.yml")); err != nil {
-		return fmt.Errorf("services/%s does not exist", u.Name)
+		return nil, fmt.Errorf("services/%s does not exist", u.Name)
 	}
 	entries, err := fs.ReadDir(u.Template, ".")
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var noBase, conflicts []string
 	shipped := map[string]bool{}
 	for _, e := range entries {
 		if e.IsDir() || e.Name() == "values.example.yml" || e.Name() == "README.md" {
@@ -283,7 +301,7 @@ func updateService(wt string, u *UpdateService) error {
 		}
 		b, err := fs.ReadFile(u.Template, e.Name())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if e.Name() == "laib.yml" {
 			lines := strings.Split(string(b), "\n")
@@ -294,18 +312,35 @@ func updateService(wt string, u *UpdateService) error {
 			}
 			b = []byte(strings.Join(lines, "\n"))
 		}
+		file := b
+		cur, curErr := os.ReadFile(filepath.Join(dst, e.Name()))
+		base, baseErr := os.ReadFile(filepath.Join(dst, state.BaseDir, e.Name()))
+		switch {
+		case curErr != nil || string(cur) == string(b) || baseErr == nil && string(cur) == string(base):
+		case baseErr != nil: // a service from before #511: nothing says which lines were the owner's
+			noBase = append(noBase, e.Name())
+		default:
+			if merged, ok := merge3(cur, base, b); ok {
+				file = merged
+			} else {
+				conflicts = append(conflicts, e.Name())
+			}
+		}
+		if err := writeBase(dst, e.Name(), b); err != nil {
+			return nil, err
+		}
 		mode := fs.FileMode(0o644)
 		if isHook(e.Name()) {
 			mode = 0o755
 		}
-		if err := os.WriteFile(filepath.Join(dst, e.Name()), b, mode); err != nil {
-			return err
+		if err := os.WriteFile(filepath.Join(dst, e.Name()), file, mode); err != nil {
+			return nil, err
 		}
 		shipped[e.Name()] = true
 	}
 	if ex, err := fs.ReadFile(u.Template, "values.example.yml"); err == nil {
 		if err := newValues(filepath.Join(dst, "values.yml"), ex); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	old, _ := os.ReadDir(dst)
@@ -317,7 +352,44 @@ func updateService(wt string, u *UpdateService) error {
 			os.Remove(filepath.Join(dst, e.Name()))
 		}
 	}
-	return nil
+	bases, _ := os.ReadDir(filepath.Join(dst, state.BaseDir))
+	for _, e := range bases {
+		if !shipped[e.Name()] {
+			os.Remove(filepath.Join(dst, state.BaseDir, e.Name()))
+		}
+	}
+	var warn []string
+	if len(noBase) > 0 {
+		warn = append(warn, fmt.Sprintf("services/%s: %s weichen von der Vorlage ab, und Laib kennt den Stand der Vorlage von vorher nicht (vor #511). Die Vorlage gilt: prüfe im Diff, ob dabei eine Änderung des Besitzers verloren geht.", u.Name, strings.Join(noBase, ", ")))
+	}
+	if len(conflicts) > 0 {
+		warn = append(warn, fmt.Sprintf("services/%s: in %s ändern die Box und die Vorlage dieselben Zeilen. Die Vorlage gilt: prüfe im Diff, ob dabei eine Änderung des Besitzers verloren geht.", u.Name, strings.Join(conflicts, ", ")))
+	}
+	return warn, nil
+}
+
+func writeBase(dst, name string, b []byte) error {
+	if err := os.MkdirAll(filepath.Join(dst, state.BaseDir), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dst, state.BaseDir, name), b, 0o644)
+}
+
+// merge3 merges base→theirs into cur, line by line (git merge-file); false
+// when both changed the same lines.
+func merge3(cur, base, theirs []byte) ([]byte, bool) {
+	dir, err := os.MkdirTemp("", "laib-merge")
+	if err != nil {
+		return nil, false
+	}
+	defer os.RemoveAll(dir)
+	args := []string{"merge-file", "-p"}
+	for i, b := range [][]byte{cur, base, theirs} {
+		args = append(args, filepath.Join(dir, []string{"box", "base", "template"}[i]))
+		os.WriteFile(args[len(args)-1], b, 0o600)
+	}
+	out, err := exec.Command("git", args...).Output()
+	return out, err == nil
 }
 
 // newValues appends to values.yml each key the template's example has and

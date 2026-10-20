@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""llama post-deploy: fetch every preset's weights idempotently and write the
-router's presets.ini from presets.json. A download is streamed to a .part
+"""llama post-deploy: fetch every preset's weights idempotently. presets.ini
+is pre-start's: the router reads it when it starts (#512). A download is streamed to a .part
 file and renamed only when complete, so a half file is never mistaken for
 a model. Stalls abort after LLAMA_DOWNLOAD_STALL_SECONDS without progress."""
 import json, os, sys, time, urllib.request
@@ -40,7 +40,6 @@ def fetch(repo, name):
         return False
 
 ok = True
-lines = []
 for p in presets["presets"]:
     files = [(p["repo"], p["file"])]
     if p.get("draft"):
@@ -49,20 +48,5 @@ for p in presets["presets"]:
         files.append((p["repo"], p["mmproj"]))
     for repo, name in files:
         ok = fetch(repo, name) and ok
-    lines.append(f"[{p['alias']}]")
-    lines.append(f"model = /models/{p['file']}")
-    if p.get("draft"):
-        lines += [f"model-draft = /models/{p['draft']}", "spec-type = draft-mtp", f"spec-draft-n-max = {p.get('draftMax', 4)}"]  # --draft-max is gone from llama.cpp (#423)
-    if p.get("mmproj"):
-        lines.append(f"mmproj = /models/{p['mmproj']}")
-    lines.append(f"ctx-size = {p.get('ctx', 32768)}")
-    # #501: no thinking unless the preset opts in; a request's chat_template_kwargs.enable_thinking still wins (the Bote's /model denken)
-    lines.append(f"reasoning = {'on' if p.get('thinking') else 'off'}")
-    for k, key in (("cacheK", "cache-type-k"), ("cacheV", "cache-type-v"), ("ubatch", "ubatch-size")):
-        if p.get(k):
-            lines.append(f"{key} = {p[k]}")
-    lines.append("")
-with open(os.path.join(MODELS, "presets.ini"), "w") as f:
-    f.write("\n".join(lines))
-print(f"presets.ini written for {len(presets['presets'])} presets; weights complete: {ok}")
+print(f"weights for {len(presets['presets'])} presets complete: {ok}")
 sys.exit(0 if ok else 1)

@@ -13,6 +13,8 @@ services/
     values.yml        the variables
     *.container       Quadlet units with ${VAR} placeholders (from the template)
     *.pod
+    pre-start, post-deploy   hooks (from the template)
+    .template/        the template's files as the last add or update copied them in (#511)
     rendered/         written only by laib: the files as they are on the box
 skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
@@ -322,6 +324,16 @@ template update keeps it and appends each key the new example has and
 values.yml lacks, as the example's line writes it (#215); a value already
 there is never changed. So a template that brings a new placeholder never
 leaves an install with `${KEY} has no value`. A new key must be one line.
+
+The other files a template update brings are merged three ways (#511):
+the file on the box, the template as it was copied in last
+(`services/<name>/.template/`) and the new template, line by line
+(`git merge-file`). A line the owner changed keeps the owner's value. Where
+the owner and the template changed the same lines, or a service from before
+#511 has no `.template/` yet, the template's file is taken and the
+proposal carries a warning that names the files, so nothing auto-approves
+it and the diff shows what an approve would undo. A proposal that would
+only record `.template/` is not made.
 
 Without secrets (`laib template lint`, a review) a secret renders as
 `${secret:NAME}`. Plan and apply render with the real values, and journal
