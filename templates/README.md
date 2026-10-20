@@ -53,6 +53,7 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
 | music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |
 | radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |
+| google-kalender | — | the family's Google calendars mirrored one way into each person's Radicale collection `google-<kalender>` every 15 min, over CalDAV as the person (#495); a timer, no daemon; findings in diag; setup in its README (German) |
 | vaultwarden | — | Passwörter with SSO through Authelia's OIDC client |
 | mosquitto | — | MQTT broker; password file by the hook; 1883 open to the LAN for devices |
 | esphome | — | ESPHome dashboard and OTA, host network for discovery |

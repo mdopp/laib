@@ -1,0 +1,10 @@
+[Unit]
+Description=Google-Kalender: alle 15 Minuten spiegeln
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

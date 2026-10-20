@@ -131,8 +131,8 @@ class ImportGoogle(unittest.TestCase):
     def test_events_and_cards_land_in_the_persons_collections(self):
         r = self.run_it(str(self.zip))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(self.dav.cols["/lea/familie/"][0], "calendar")
-        self.assertIn("Familie", self.dav.cols["/lea/familie/"][1])
+        self.assertEqual(self.dav.cols["/lea/google-familie/"][0], "calendar")
+        self.assertIn("Familie", self.dav.cols["/lea/google-familie/"][1])
         self.assertEqual(self.dav.cols["/lea/google-kontakte/"][0], "addressbook")
         events = self.items(".ics")
         self.assertEqual(len(events), 3, list(events))       # the override goes with its series
