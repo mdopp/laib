@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.0](https://github.com/mdopp/laib/compare/v0.9.0...v0.10.0) (2026-10-20)
+
+
+### Features
+
+* **host:** the host image pinned in the state, proposed weekly, staged and rebooted through the lock ([26e05a6](https://github.com/mdopp/laib/commit/26e05a6afc29b5e5c18ea80f8d08580663ea7e05)), closes [#368](https://github.com/mdopp/laib/issues/368)
+
+
+### Bug Fixes
+
+* **bote:** Signal runs signal-cli's own daemon, its data is uid 1000's, and laib's SOUL is there before Hermes starts (Refs [#469](https://github.com/mdopp/laib/issues/469)) ([d6da947](https://github.com/mdopp/laib/commit/d6da9473adb74fc7e012eec819e5734cb8675920))
+* **bote:** the persona engine sits in front of the model, its screens verbatim; Hermes pinned ([8f43d5a](https://github.com/mdopp/laib/commit/8f43d5ae99f1b5263a173ef1d6782d483948dca1)), closes [#471](https://github.com/mdopp/laib/issues/471)
+* **host:** pause Zincati in the rollback deployment's /etc through a private rw remount of /sysroot ([08528c2](https://github.com/mdopp/laib/commit/08528c20dc239ff00791cb010f36fbb59c9088d7)), closes [#368](https://github.com/mdopp/laib/issues/368)
+* **host:** the boot check keeps its records in /var and pauses the deployment it rolls back to ([dc37194](https://github.com/mdopp/laib/commit/dc3719459fe71150885976cdbcf9c3c22739b430)), closes [#368](https://github.com/mdopp/laib/issues/368)
+* **install:** the cut markers go through /dev/kmsg too, so the console has them in one piece ([42ee042](https://github.com/mdopp/laib/commit/42ee0423d010a92b78d12cf587bc9301d0a64dac)), closes [#367](https://github.com/mdopp/laib/issues/367)
+
+
+### Performance Improvements
+
+* **bote:** the chat answers without thinking, /model denken thinks (Refs [#470](https://github.com/mdopp/laib/issues/470)) ([6959a9f](https://github.com/mdopp/laib/commit/6959a9f6a6ae2f09a53ec642b56de645bb0d6b33))
+
 ## [0.9.0](https://github.com/mdopp/laib/compare/v0.8.0...v0.9.0) (2026-10-19)
 
 
