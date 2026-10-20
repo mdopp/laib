@@ -40,7 +40,10 @@ func osBox(t *testing.T) *cbox {
 	etc := t.TempDir()
 	t.Setenv("LAIB_ETC", etc)
 	os.MkdirAll(filepath.Join(etc, "laib"), 0o755)
-	os.WriteFile(filepath.Join(etc, "laib", "boot-proven"), []byte(bootedSum+" 0 0\n"), 0o644)
+	// the boot check's records live in /var/lib/laib, shared by every deployment (train 22)
+	vardir := t.TempDir()
+	t.Setenv("LAIB_VAR", vardir)
+	os.WriteFile(filepath.Join(vardir, "boot-proven"), []byte(bootedSum+" 0 0\n"), 0o644)
 	c.down["laib-backup.service"] = true
 	prev := sysd.Run
 	t.Cleanup(func() { sysd.Run = prev })
@@ -105,7 +108,7 @@ func TestTheRebootIsHeld(t *testing.T) {
 			return at("06:00"), "127.0.0.1:1"
 		},
 		"before the running deployment is proven": func(c *cbox) (func() time.Time, string) {
-			os.WriteFile(filepath.Join(os.Getenv("LAIB_ETC"), "laib", "boot-proven"), []byte("ca311262 0 0\n"), 0o644)
+			os.WriteFile(filepath.Join(os.Getenv("LAIB_VAR"), "boot-proven"), []byte("ca311262 0 0\n"), 0o644)
 			return at("06:00"), "127.0.0.1:1"
 		},
 		"from the LAN": func(c *cbox) (func() time.Time, string) { return at("06:00"), "192.168.1.20:5000" },
