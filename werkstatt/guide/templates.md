@@ -69,6 +69,17 @@ after: [auth]                  # started and verified after these services
 
 ## Who logs in, and how
 
+**A service is usable after `laib add` without filling a form.** Logins
+come from LLDAP/Authelia (directly, via OIDC or via Home Assistant);
+service accounts are minted by Laib. A first-run wizard, an app's own
+admin account, a source or integration that needs a login: the template's
+`post-deploy` does it through the app's API, with a generated secret or a
+token another service's hook hands back (`laib-secret:`, STATE.md). The
+admin it creates is break-glass, never the family's login. Examples:
+`media` (Jellyfin's wizard, LDAP login), `home-assistant` (onboarding, the
+tokens it mints), `music-assistant` (onboarding, a Jellyfin service
+account, login through Home Assistant, #526).
+
 The owner's rule, in this order:
 
 1. **Native OIDC against Authelia** when the app supports it (Immich,

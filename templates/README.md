@@ -33,10 +33,11 @@ certificates (#45, the trial domain at deSEC), never `tls: internal`.
 Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`),
 (`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
 auth template), never as the admin. Home Assistant's integrations (three
-Wyoming services, CalDAV, Music Assistant, MQTT, the MCP Server) are set up
+Wyoming services, CalDAV, MQTT, the MCP Server) are set up
 by hand once; Frage as conversation agent is added by home-assistant's
 post-deploy once Frage answers (HA's Ollama integration on Frage's Ollama
-API, #491); with `HA_TOKEN`, which
+API, #491), Music Assistant once music-assistant's post-deploy handed it a
+token (#526); with `HA_TOKEN`, which
 home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 `laib diag` lists what is still missing.
 
@@ -51,7 +52,7 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | frage | — | "was ist …": SearXNG + model summary; /ask, /mcp for the Bote, an OpenAI-compatible endpoint, and Ollama's /api/chat for Assist (HA's Ollama integration, #491); pre-start writes SearXNG's settings.yml (ADR 0015) |
 | media | — | Jellyfin for music and video with GPU; the hook finishes the wizard, creates the local admin, registers libraries, logs the family in through LLDAP (read-only bind) with Quick Connect |
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
-| music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery |
+| music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery; the hook onboards it, adds Jellyfin (its own account `musicassistant`) and Radio Browser, and the family signs in through Home Assistant (#526) |
 | radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |
 | google-kalender | — | the family's Google calendars mirrored one way into each person's Radicale collection `google-<kalender>` every 15 min, over CalDAV as the person (#495); a timer, no daemon; findings in diag; setup in its README (German) |
 | vaultwarden | — | Passwörter with SSO through Authelia's OIDC client |

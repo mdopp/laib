@@ -4,14 +4,29 @@ provides: [music-players]
 # Music Assistant: the house's player brain for Home Assistant Assist —
 # "spiele Einslive", playlists, podcasts on the speakers (ADR 0015). Host
 # network for player discovery (mDNS, Chromecast, DLNA); Jellyfin is its
-# music provider, Radio Browser its radio provider.
+# music provider, Radio Browser its radio provider. Usable after `laib add`
+# without a form (#526): post-deploy onboards it with Laib's administrator,
+# adds both sources (Jellyfin through its own account `musicassistant`) and
+# hands Home Assistant a token; Home Assistant's post-deploy then adds the
+# "Music Assistant" integration and MA's Home Assistant plugin, through which
+# the family signs in (Authelia → Home Assistant → Music Assistant).
 hostNetwork: true
 routes:
   - host: musik
     port: 8095
     exposure: internal
     auth: one_factor
-secrets: []
+secrets:
+  - name: MA_ADMIN_PASSWORD          # MA_ADMIN_USER's, the break-glass login: post-deploy onboards a fresh Music Assistant with it
+    login: {user: "${MA_ADMIN_USER}", host: musik, note: "Music-Assistant-Admin (Notzugang; die Familie meldet sich über Home Assistant an)"}
+    dataBound: true                  # MA keeps only its hash: laib secret rotate refuses it (#353)
+  - name: JELLYFIN_MA_PASSWORD       # the Jellyfin account `musicassistant` (#526, as homeassistant in #375): post-deploy sets it on every apply
+  - name: JELLYFIN_ADMIN_PASSWORD    # media's: post-deploy makes the account musicassistant with it; without media no Jellyfin source
+    external: true
+    optional: true
+  - name: HA_MUSIC_ASSISTANT_TOKEN   # minted here (an administrator's long-lived MA token), for Home Assistant's integration and its check
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/music-assistant/data
 health:
