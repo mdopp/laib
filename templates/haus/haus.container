@@ -15,6 +15,8 @@ Environment=HAUS_HA_URL=${HA_URL}
 Environment=HAUS_HA_TOKEN=${HA_TOKEN}
 Environment=HAUS_ENERGY_FLOW=${ENERGY_FLOW}
 Environment=HAUS_ENERGY_TOTALS=${ENERGY_TOTALS}
+Environment=HAUS_STT_PROVIDER=${STT_PROVIDER}
+Environment=HAUS_STT_LANGUAGE=${STT_LANGUAGE}
 # the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder
 Environment=HAUS_HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
 Environment=HAUS_RADICALE_URL=${RADICALE_URL}

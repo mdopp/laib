@@ -6,6 +6,8 @@ HA_URL: http://host.containers.internal:8123             # Home Assistant; used 
 HA_TOKEN: !secret HAUS_HA_TOKEN
 ENERGY_FLOW: ""                                          # pv=sensor.…,house=…,grid=…,battery=…; empty: Haus matches HA's friendly names
 ENERGY_TOTALS: ""                                        # label=sensor.…,…; empty: the friendly-name fallback
+STT_PROVIDER: ""                                         # HA speech-to-text entity for the microphone (haus#63), e.g. stt.faster_whisper; empty: no button
+STT_LANGUAGE: de                                         # the language Haus asks HA's STT for
 RADICALE_URL: http://host.containers.internal:5232     # the Haushalt's calendar (haus#11)
 RADICALE_USER: haus                                    # the account Haus writes with (#418): `haus`, seeded by the auth template; empty: no calendar tools
 RADICALE_PASSWORD: !secret HAUS_RADICALE_PASSWORD
