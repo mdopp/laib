@@ -66,6 +66,7 @@ notify:
 updates:
   days: [Sat, Sun]                # laib-images.timer's nights (#528); empty = every night
   time: "04:30"                   # default: 90 minutes after backup.schedule
+  laib: auto                      # Laib's own update in the same night, before the images (#547): auto, off, or v0.16.0 to hold
 model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API

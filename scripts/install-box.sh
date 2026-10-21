@@ -346,6 +346,13 @@ for BIN in laib laib-operator laib-lease $EXTRA; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
+# Laib's own update (#547): laib-images.service runs it before the nightly
+# image run. A release from before has none; then laib diag says so
+if grep -q " laib-self-update.sh\$" "$TMPD/SHA256SUMS"; then
+  curl -fsSL "${get[@]}" -o "$TMPD/self-update.sh" "$(asset_url laib-self-update.sh)" || { echo "$TAG lists laib-self-update.sh but it does not download: refusing" >&2; exit 1; }
+  [ "$(grep " laib-self-update.sh\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/self-update.sh" | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-self-update.sh" >&2; exit 1; }
+  sudo install -m 0755 "$TMPD/self-update.sh" /var/opt/laib/self-update.sh.new && sudo mv /var/opt/laib/self-update.sh.new /var/opt/laib/self-update.sh
+fi
 if [ -n "$CHECK" ]; then
   if [ -z "${LAIB_ETC:-}" ]; then host_units /etc sudo "$CHECK" "$FOLLOW"; else host_units "$LAIB_ETC" "" "$CHECK" "$FOLLOW"; fi   # LAIB_ETC: the test harness only
 fi
@@ -412,7 +419,13 @@ done
 sleep 1
 # Laib's own units (converge loop, auto-update verify) come from the state too:
 # one apply, so the box is not "eingeschränkt" by its own drift on day one.
-LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib apply >/dev/null || echo "first apply red: /var/opt/laib/laib plan shows why" >&2
+# A self-update (#547, self-update.sh) has no human to act for: laib's own
+# converge brings the box to the state the new release renders.
+if [ -n "${LAIB_SELF_UPDATE:-}" ]; then
+  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=laib /var/opt/laib/laib converge --force >/dev/null || echo "converge red: /var/opt/laib/laib plan shows why" >&2
+else
+  LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib apply >/dev/null || echo "first apply red: /var/opt/laib/laib plan shows why" >&2
+fi
 echo "installed $TAG: $(/var/opt/laib/laib version)"
 # the version the RUNNING service reports, not the file on disk
 ready=""

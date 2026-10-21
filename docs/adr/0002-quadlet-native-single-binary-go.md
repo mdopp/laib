@@ -3,7 +3,7 @@
 Applies when you are about to call `podman run`, add a supervisor, put Laib in
 a container, or pick a language for anything in `cmd/` or `internal/`.
 
-- **Status:** Accepted, 2026-10-08; amended 2026-10-21 (#528: images update through laib)
+- **Status:** Accepted, 2026-10-08; amended 2026-10-21 (#528: images update through laib; #547: Laib updates itself)
 
 ## Context
 
@@ -88,3 +88,36 @@ Laib's own images carry it). The kernel grew about 275 lines for it. A
 data service's update needs a person's yes every time, which is the point.
 The registry digest of a multi-arch tag is its index digest; that podman
 keeps it among a pulled image's RepoDigests is what the box confirms.
+
+## Amendment 2026-10-21 (#547): Laib updates itself, in the same night
+
+**Context.** Everything on the box had an update path but Laib: its
+binaries changed only when a person ran `install-box.sh`. The Kraftwerk ran
+v0.11.1 while v0.16.0 was out, five releases of fixes, and neither `laib
+updates` nor `laib diag` said so.
+
+**Decision.** `laib-images.service` runs `scripts/self-update.sh` (a release
+asset, verified against `SHA256SUMS` and put in place by `install-box.sh`)
+before the image run, as core, in the image run's window. Its target is the
+newest release that has its binaries, or the version box.yml
+`updates.laib` holds; `off` only looks. It installs through that release's
+own `install-box.sh` (`laib-install-box.sh`, in `SHA256SUMS` too), only
+while no backup runs, nobody holds the lock and `/ready` is green; with
+`LAIB_SELF_UPDATE` the installer's closing apply is laib's own `converge
+--force`, so no human is claimed. After it `/ready` must report the new
+version green within three minutes; else the binaries that ran before (kept
+by the script, not `*.prev`, which can be older) come back and are
+restarted, the journal gets an incident, and that release is not tried
+again, a newer one is. Every run leaves `/mnt/data/laib/self-update.json`;
+`laib updates` shows a `laib` row from it (as `latest`, never `patch` or
+`digest`: the Operator proposes those, and this is no proposal), `laib
+diag` is yellow when the script is missing, a release was rolled back,
+`off` leaves the box behind, or nobody looked for eight days.
+
+**Consequences.** One night, one order: Laib first, then the images, both
+after the backup and under the same checks. A failed self-update never
+stops the image run (`ExecStartPre=-`). A rollback puts back the binaries,
+not the host units and scripts the new installer wrote (boot check, host
+image follower); the next release or a manual install replaces them. A box from before #547 has no `self-update.sh`: one update
+by hand, then it follows. What is installed is decided by the release and
+its checksums, never by an agent (ADR 0019 §2a).

@@ -73,7 +73,9 @@ func (s *selfBox) ready(version, state string, red int) {
 	os.WriteFile(filepath.Join(s.fx, "ready"), b, 0o644)
 }
 
-func (s *selfBox) releases(body string) { os.WriteFile(filepath.Join(s.fx, "releases"), []byte(body), 0o644) }
+func (s *selfBox) releases(body string) {
+	os.WriteFile(filepath.Join(s.fx, "releases"), []byte(body), 0o644)
+}
 
 // release publishes tag's install-box.sh (body) and its SHA256SUMS; sum
 // overrides the listed checksum ("" lists the real one).

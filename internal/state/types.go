@@ -96,6 +96,10 @@ type Registry struct {
 type Updates struct {
 	Days []string `yaml:"days"` // Sat, Sun …
 	Time string   `yaml:"time"` // "03:00"
+	// Laib is Laib's own update in the same night, before the images (#547):
+	// auto (the default: the newest release with binaries), off, or the
+	// version to hold.
+	Laib string `yaml:"laib"`
 }
 
 // Notify is the webhook Laib posts red results, proposals and readiness

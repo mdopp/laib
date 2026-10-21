@@ -127,7 +127,8 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	// stays masked (ADR 0002 amendment).
 	bt, _ := time.Parse("15:04", cmp.Or(st.Box.Backup.Schedule, "03:00"))
 	at := strings.TrimSpace(strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + cmp.Or(st.Box.Updates.Time, bt.Add(90*time.Minute).Format("15:04")) + ":00")
-	out["systemd/laib-images.service"] = "# Rendered by laib (#528): pull the images laib keeps current, verify, the previous one back on red.\n[Unit]\nDescription=Laib images\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib updates --run\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+	// #547: Laib itself first (box.yml updates.laib); a failed self-update never stops the image run
+	out["systemd/laib-images.service"] = "# Rendered by laib (#528, #547): Laib's own update, then the images laib keeps current, verify, the previous one back on red.\n[Unit]\nDescription=Laib images\n\n[Service]\nType=oneshot\nExecStartPre=-/bin/bash /var/opt/laib/self-update.sh\nExecStart=/var/opt/laib/laib updates --run\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\nEnvironment=LAIB_UPDATE=" + cmp.Or(st.Box.Updates.Laib, "auto") + "\n"
 	out["systemd/laib-images.timer"] = "# Rendered by laib from box.yml updates and backup.schedule (#528).\n[Unit]\nDescription=Laib images timer\n\n[Timer]\nOnCalendar=" + at + "\nRandomizedDelaySec=15m\n\n[Install]\nWantedBy=timers.target\n"
 	return out, nil
 }

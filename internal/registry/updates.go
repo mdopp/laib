@@ -40,6 +40,8 @@ type ImageUpdate struct {
 	Paused  string `json:"paused,omitempty"` // the host row: the drop-in that pauses OS updates (#486)
 	Digest  string `json:"digest,omitempty"` // a floating tag or a digest pin: the registry's digest, when the box has another (#528)
 	Auto    bool   `json:"auto,omitempty"`   // the nightly run takes it (apply.AutoImage); else it is a proposal
+	Latest  string `json:"latest,omitempty"` // the laib row (#547): the newest release; never patch or digest, it is no proposal
+	At      string `json:"at,omitempty"`     // the laib row: when self-update.sh last looked
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -242,6 +244,37 @@ func hostLine(u ImageUpdate) string {
 	return strings.TrimSpace(fmt.Sprintf("%-14s %s@%s  %s %s", u.Service, u.Image, u.Current, what, u.Error))
 }
 
+// laibRow (#547): Laib itself, from self-update.sh's last run; none before it.
+func laibRow(home, running string) (ImageUpdate, bool) {
+	r, ok := diag.ReadSelfUpdate(home)
+	if !ok {
+		return ImageUpdate{}, false
+	}
+	u := ImageUpdate{Service: "laib", Image: "laib", Current: running, Auto: r.Result != "off", At: r.At.Local().Format("02.01. 15:04")}
+	if r.Latest != running {
+		u.Latest = r.Latest
+	}
+	if r.Result == "failed" || r.Result == "skipped" {
+		u.Error = r.Detail
+	}
+	if r.Result == "failed" {
+		u.Error = r.Latest + " zurückgenommen: " + r.Detail
+	}
+	return u, true
+}
+
+// laibLine is the laib row in words.
+func laibLine(u ImageUpdate) string {
+	what := "aktuell"
+	switch {
+	case u.Latest != "" && u.Auto:
+		what = "neu: " + u.Latest + " (nachts automatisch)"
+	case u.Latest != "":
+		what = "neu: " + u.Latest + " (aus: box.yml updates.laib)"
+	}
+	return strings.TrimSpace(fmt.Sprintf("%-14s %s  %s, geprüft %s  %s", u.Service, u.Current, what, u.At, u.Error))
+}
+
 func Updates(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -252,9 +285,12 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		code = apply.ImageRun(ctx, env, st) // laib-images.timer's nightly run (#528)
 	}
 	ups := ImageUpdates(ctx, st)
+	if u, ok := laibRow(env.Paths.Home, cli.Version); ok {
+		ups = append(ups, u)
+	}
 	behind := map[string]string{} // the 30-day yellow in diag (#528): images only
 	for _, u := range ups {
-		if w := cmp.Or(u.Digest, u.Patch); u.Service != "host" && w != "" {
+		if w := cmp.Or(u.Digest, u.Patch); u.Service != "host" && u.Service != "laib" && w != "" {
 			behind[u.Service+" "+u.Key] = w
 		}
 	}
@@ -269,6 +305,10 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 	for _, u := range ups {
 		if u.Service == "host" && u.Key != "" {
 			fmt.Fprintln(env.W(), hostLine(u))
+			continue
+		}
+		if u.Service == "laib" {
+			fmt.Fprintln(env.W(), laibLine(u))
 			continue
 		}
 		if u.Digest != "" || !semverTag.MatchString(u.Current) {

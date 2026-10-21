@@ -14,7 +14,8 @@ for b in laib laib-operator laib-lease laib-disk laib-notify; do src=./cmd/$b; [
 cp scripts/install-box.sh dist/install-box.sh
 cp scripts/boot-check.sh dist/laib-boot-check.sh
 cp scripts/host-image.sh dist/laib-host-image.sh
-(cd dist && sha256sum laib-*-amd64 laib-boot-check.sh laib-host-image.sh > SHA256SUMS && cat SHA256SUMS)
+cp scripts/self-update.sh dist/laib-self-update.sh   # #547
+(cd dist && sha256sum laib-*-amd64 laib-boot-check.sh laib-host-image.sh laib-self-update.sh > SHA256SUMS && cat SHA256SUMS)
 printf '%s' "$v" > dist/VERSION
 fi
 [ "$mode" != build ] || exit 0
