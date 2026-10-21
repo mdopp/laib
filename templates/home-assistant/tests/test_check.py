@@ -43,13 +43,51 @@ def fake_zwave(code):
     return srv, Z
 
 
+def fake_ma(onboarded=True, jellyfin="loaded", hass="loaded", tracks=1200, players=2):
+    """Music Assistant 2.10's /info and the JSON-RPC commands the check asks (#526)"""
+    class M(BaseHTTPRequestHandler):
+        seen = []
+
+        def do_GET(self):
+            self.answer(200, {"onboard_done": onboarded, "schema_version": 28})
+
+        def do_POST(self):
+            b = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            M.seen.append((b["command"], self.headers.get("Authorization")))
+            if self.headers.get("Authorization") != "Bearer ma-tok":
+                return self.answer(401, "Authentication required")
+            status = {"jellyfin": jellyfin, "hass": hass}
+            r = {"music/tracks/count": tracks, "players/all": [{"player_id": f"p{i}"} for i in range(players)],
+                 "config/providers": [{"domain": d, "status": status[d]} for d in [b["args"].get("provider_domain")] if status.get(d)]}
+            self.answer(200, r[b["command"]])
+
+        def answer(self, code, body):
+            data = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), M)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, M
+
+
+EVERYTHING = [{"domain": d, "title": t} for d, t in [("wyoming", "whisper"), ("wyoming", "piper"), ("wyoming", "openwakeword"),
+                                                     ("caldav", ""), ("music_assistant", ""), ("mqtt", ""), ("mcp_server", ""),
+                                                     ("ollama", "http://127.0.0.1:8710")]]
+
+
 class Check(unittest.TestCase):
-    def run_check(self, token, url, zwave="", rc=0):
+    def run_check(self, token, url, zwave="", rc=0, ma_token="", ma_url="http://127.0.0.1:1"):
         d = tempfile.mkdtemp()
         out = os.path.join(d, ".laib-status.json")
         # the unit feeds the script on stdin, as `podman exec -i … python3 -` does
         p = subprocess.run([sys.executable, "-"], stdin=open(SCRIPT), capture_output=True, text=True,
-                           env=dict(os.environ, HA_TOKEN=token, HA_URL=url, LAIB_STATUS_FILE=out, ZWAVE_URL=zwave))
+                           env=dict(os.environ, HA_TOKEN=token, HA_URL=url, LAIB_STATUS_FILE=out, ZWAVE_URL=zwave,
+                                    MA_TOKEN=ma_token, MA_URL=ma_url))
         self.assertEqual(p.returncode, rc, p.stdout + p.stderr)
         return json.loads(Path(out).read_text())
 
@@ -166,6 +204,33 @@ class Check(unittest.TestCase):
         self.assertIn("https://github.com/x/senec/releases/tag/2026.10.0", offer[0]["detail"], "the proposal carries the release notes")
         self.assertNotIn("firmware", offer[0]["fix"])
         self.assertFalse([f for f in r["findings"] if "hacs" in f["detail"].lower()], "an extension that is current is no finding")
+
+    def test_music_assistant_is_green_only_set_up_with_titles_and_players(self):
+        # #526: the integration's entry in HA was the whole check; Music Assistant stood on SETUP REQUIRED behind it
+        ha, _ = fake_ha(EVERYTHING)
+        base = f"http://127.0.0.1:{ha.server_port}"
+        ma, seen = fake_ma()
+        r = self.run_check("tok", base, ma_token="ma-tok", ma_url=f"http://127.0.0.1:{ma.server_port}")
+        self.assertEqual(r["findings"], [])
+        self.assertIn("Music Assistant: 1200 Titel, 2 Lautsprecher", r["detail"])
+        self.assertIn(("music/tracks/count", "Bearer ma-tok"), seen.seen)
+        for kw, want in ((dict(onboarded=False), "nicht eingerichtet"), (dict(jellyfin=None), "keine Jellyfin-Quelle"),
+                         (dict(jellyfin="auth_required"), "keine Jellyfin-Quelle"), (dict(tracks=0), "keine Titel"),
+                         (dict(players=0), "kennt keine Lautsprecher"), (dict(hass="error"), "Anmeldung über Home Assistant")):
+            ma, _ = fake_ma(**kw)
+            r = self.run_check("tok", base, ma_token="ma-tok", ma_url=f"http://127.0.0.1:{ma.server_port}")
+            self.assertEqual([f["severity"] for f in r["findings"]], ["gelb"], (kw, r))
+            self.assertIn(want, r["findings"][0]["detail"], kw)
+            self.assertIn("Music Assistant unvollständig", r["detail"])
+        r = self.run_check("tok", base, ma_token="refused", ma_url=f"http://127.0.0.1:{ma.server_port}")
+        self.assertIn("antwortet nicht", r["findings"][0]["detail"])
+        r = self.run_check("tok", base)   # no Music Assistant on the box: nothing to say about it
+        self.assertEqual((r["findings"], r["detail"]), ([], "alle 8 Integrationen eingerichtet"))
+
+    def test_the_unit_hands_the_check_music_assistants_token(self):
+        unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
+        self.assertIn("Environment=MA_TOKEN=${MA_TOKEN}", unit)
+        self.assertIn("-e MA_TOKEN", unit)
 
 
 if __name__ == "__main__":

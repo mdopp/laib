@@ -40,6 +40,12 @@ secrets:
   - name: BOTE_AUTOMAT_HA_TOKEN      # minted, administrator: the Bote's Automat (HA's automation config API is admin-only)
     external: true
     optional: true
+  - name: MUSIC_ASSISTANT_HA_TOKEN   # minted once Music Assistant is there (#526), administrator: MA's Home Assistant plugin, the family's login into MA
+    external: true
+    optional: true
+  - name: HA_MUSIC_ASSISTANT_TOKEN   # minted by music-assistant's post-deploy (#526): the Music Assistant integration and the check; without MA none
+    external: true
+    optional: true
 oidc:                                # the family's login through Authelia (auth_oidc, #253); HA's own login stays
   clientId: homeassistant            # ServiceBay's client id: on a migrated box the linked users stay linked
   redirectUris: ["https://home.${DOMAIN}/auth/oidc/callback"]

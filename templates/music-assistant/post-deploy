@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""music-assistant post-deploy (#526): usable right after `laib add`, nothing
+typed into a form. Against Music Assistant 2.10's own API (POST /setup, POST
+/auth/login, the JSON-RPC endpoint POST /api, the provider setup flows):
+
+1. Onboarding: the first and only built-in account is Laib's administrator
+   MA_ADMIN_USER (default `laib`) with the generated MA_ADMIN_PASSWORD, the
+   break-glass login. The family never gets a Music Assistant account of its
+   own: once Home Assistant's post-deploy has connected MA's Home Assistant
+   plugin (it mints the HA token for it, #349), MA offers "Mit Home
+   Assistant anmelden" (HomeAssistantOAuthProvider), Home Assistant signs the
+   family in through Authelia/LLDAP (Familienkonto, #253), and MA creates the
+   user on the first login (self-registration; HA administrators become MA
+   administrators). The External URL is https://musik.<domain>, so that sign-in
+   comes back to the address the browser used.
+2. Jellyfin as the music source: a Jellyfin-local account `musicassistant`
+   (not an LLDAP login, as Home Assistant's `homeassistant`, #375), hidden,
+   no administrator, the music library only, with the generated
+   JELLYFIN_MA_PASSWORD. This hook creates it with Jellyfin's admin login,
+   because media's post-deploy runs only when media changes: `laib add
+   music-assistant` must not wait for it. MA's Jellyfin provider then logs in
+   on http://127.0.0.1:8096 as that account.
+3. Radio Browser as the second source.
+4. A long-lived MA token for Home Assistant's "Music Assistant" integration,
+   handed back as HA_MUSIC_ASSISTANT_TOKEN; Home Assistant declares it, so the
+   same apply re-applies Home Assistant and its post-deploy adds the
+   integration and MA's Home Assistant plugin (#491's pattern).
+
+Idempotent: an account that logs in, a provider that is loaded, a token that
+works are kept. Passwords and tokens appear only on the laib-secret line,
+never on argv or in another line of output (#214). Python's standard
+library only (the hooks image)."""
+import json, os, sys, time, urllib.error, urllib.parse, urllib.request
+
+E = os.environ
+MA = E.get("MA_URL", "http://127.0.0.1:8095").rstrip("/")
+JF = E.get("JELLYFIN_URL", "http://127.0.0.1:8096").rstrip("/")
+PUBLIC = E.get("MA_PUBLIC_URL") or (f"https://musik.{E['LAIB_DOMAIN']}" if E.get("LAIB_DOMAIN") else "")
+ADMIN, ADMIN_PW = E.get("MA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_MA_ADMIN_PASSWORD", "")
+JF_ADMIN, JF_ADMIN_PW = E.get("JELLYFIN_ADMIN_USER") or "admin", E.get("LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD", "")
+JF_USER, JF_PW = "musicassistant", E.get("LAIB_SECRET_JELLYFIN_MA_PASSWORD", "")
+HA_TOKEN = E.get("LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN", "")
+TOKEN_NAME = "Home Assistant (laib)"
+WAIT = float(E.get("MA_WAIT_SECONDS", "2"))
+# Jellyfin 12 reads the client id from Authorization only (ServiceBay #3048), as templates/media does
+JF_CLIENT = 'MediaBrowser Client="laib", Device="laib", DeviceId="laib-music-assistant", Version="1"'
+
+
+def red(msg):
+    print("music-assistant: " + msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def http(method, url, body=None, headers=None):
+    """(status, json or text or None); never raises on an HTTP status"""
+    h = dict(headers or {})
+    data = None
+    if body is not None:
+        data, h["Content-Type"] = json.dumps(body).encode(), "application/json"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=h, method=method), timeout=150) as r:
+            raw, st = r.read(), r.status
+    except urllib.error.HTTPError as e:
+        raw, st = e.read(), e.code
+    try:
+        return st, json.loads(raw) if raw else None
+    except ValueError:
+        return st, raw.decode(errors="replace")
+
+
+def cmd(token, command, **args):
+    """one command on MA's JSON-RPC API; its refusal as a RuntimeError (MA's words, never a value)"""
+    st, b = http("POST", MA + "/api", {"message_id": "laib", "command": command, "args": args}, {"Authorization": "Bearer " + token})
+    if st != 200:
+        raise RuntimeError(f"{command}: HTTP {st} {str(b)[:200]}")
+    return b
+
+
+def flow(token, step, values):
+    """drive a provider setup flow (2.10's config/providers/setup|reconfigure) with values; the
+    result of its FINISH step, None for "already configured"; a form it shows again with errors,
+    an abort or a step that wants a browser is a RuntimeError"""
+    submitted = None
+    for _ in range(90):
+        t = step.get("type")
+        if t == "finish":
+            return step.get("result") or {}
+        if t == "abort":
+            if step.get("reason") == "already_configured":
+                return None
+            raise RuntimeError(f"setup aborted: {step.get('reason')}")
+        if t == "form":
+            if submitted == step.get("step_id") and step.get("errors"):
+                raise RuntimeError(f"setup refused: {step.get('errors')}")
+            keys = {e.get("key") for e in step.get("entries") or []}
+            submitted = step.get("step_id")
+            step = cmd(token, "config/flows/submit", flow_id=step["flow_id"], values={k: v for k, v in values.items() if k in keys})
+            continue
+        if t == "progress":
+            time.sleep(WAIT)
+            step = cmd(token, "config/flows/get", flow_id=step["flow_id"])
+            continue
+        raise RuntimeError(f"setup wants a step Laib cannot take: {t} {step.get('step_id')}")
+    raise RuntimeError("setup did not finish")
+
+
+def session():
+    """an administrator's session: Laib's built-in account, onboarded first on a fresh Music Assistant"""
+    if not ADMIN_PW:
+        red("MA_ADMIN_PASSWORD is empty")
+    creds = {"username": ADMIN, "password": ADMIN_PW}
+    st, b = http("POST", MA + "/auth/login", {"provider_id": "builtin", "credentials": creds, "device_name": "laib post-deploy"})
+    if st == 200 and (b or {}).get("success") and b.get("token"):
+        return b["token"]
+    if st == 403:  # "Setup required": no user yet
+        st, b = http("POST", MA + "/setup", dict(creds, device_name="laib post-deploy"))
+        if st == 200 and (b or {}).get("success") and b.get("token"):
+            print(f"music-assistant: onboarded, administrator {ADMIN} (the family signs in with Home Assistant)")
+            return b["token"]
+        red(f"onboarding the administrator {ADMIN} was refused (HTTP {st}): {(b or {}).get('error') if isinstance(b, dict) else ''}")
+    red(f"{ADMIN} cannot log in (HTTP {st}). Music Assistant was onboarded by hand: set MA_ADMIN_USER (values.yml) "
+        "to its administrator and `laib secret set MA_ADMIN_PASSWORD`, then laib apply music-assistant")
+
+
+def jf(method, path, body=None, token=None):
+    return http(method, JF + path, body, {"Authorization": JF_CLIENT + (f', Token="{token}"' if token else "")})
+
+
+def jf_login(user, pw):
+    st, b = jf("POST", "/Users/AuthenticateByName", {"Username": user, "Pw": pw})
+    return b.get("AccessToken") if st == 200 and isinstance(b, dict) else None
+
+
+def jellyfin_account():
+    """True once `musicassistant` logs in to Jellyfin; False when there is no Jellyfin on JF"""
+    try:
+        st, _ = jf("GET", "/System/Info/Public")
+    except OSError:
+        st = None
+    if st != 200:
+        print(f"music-assistant: Jellyfin does not answer on {JF}: no Jellyfin source (after laib add media: laib apply music-assistant)")
+        return False
+    if not JF_ADMIN_PW:
+        if jf_login(JF_USER, JF_PW):
+            return True
+        raise RuntimeError("JELLYFIN_ADMIN_PASSWORD is empty: the Jellyfin account musicassistant cannot be made")
+    admin = jf_login(JF_ADMIN, JF_ADMIN_PW)
+    if not admin:
+        raise RuntimeError(f"Jellyfin's administrator {JF_ADMIN} does not log in with JELLYFIN_ADMIN_PASSWORD: set JELLYFIN_ADMIN_USER "
+                           "(values.yml) to media's ADMIN_USER")
+    st, users = jf("GET", "/Users", token=admin)
+    u = next((u for u in users or [] if u.get("Name") == JF_USER), None) if st == 200 else None
+    if u is None:
+        st, u = jf("POST", "/Users/New", {"Name": JF_USER, "Password": JF_PW}, token=admin)
+        if st != 200:
+            raise RuntimeError(f"Jellyfin refused the account {JF_USER} (HTTP {st})")
+        print(f"music-assistant: Jellyfin account {JF_USER} created (Music Assistant's, no LLDAP login)")
+    elif not jf_login(JF_USER, JF_PW):
+        jf("POST", f"/Users/Password?userId={u['Id']}", {"NewPw": JF_PW}, token=admin)
+        print(f"music-assistant: Jellyfin account {JF_USER} has the password from JELLYFIN_MA_PASSWORD again")
+    st, folders = jf("GET", "/Library/VirtualFolders", token=admin)
+    music = [f["ItemId"] for f in folders or [] if f.get("CollectionType") == "music" or f.get("Name") == "Musik"] if st == 200 else []
+    pol = u.get("Policy") or {}
+    want = {**pol, "IsAdministrator": False, "IsHidden": True, "EnableAllFolders": False, "EnabledFolders": music}
+    if want != pol:
+        jf("POST", f"/Users/{u['Id']}/Policy", want, token=admin)
+    if not jf_login(JF_USER, JF_PW):
+        raise RuntimeError(f"the Jellyfin account {JF_USER} does not log in with JELLYFIN_MA_PASSWORD")
+    if not music:
+        print("music-assistant: Jellyfin has no music library yet: the source stays empty until media made one (laib apply media)")
+    return True
+
+
+def provider(token, domain, values, label):
+    """one instance of an MA provider: kept when loaded, set up again when it failed, else added"""
+    have = cmd(token, "config/providers", provider_domain=domain)
+    if any(p.get("status") == "loaded" for p in have):
+        return
+    broken = next((p for p in have if p.get("status") in ("auth_required", "error")), None)
+    if broken:
+        flow(token, cmd(token, "config/providers/reconfigure", instance_id=broken["instance_id"]), values)
+        print(f"music-assistant: {label} set up again (it was {broken['status']})")
+    elif not have:
+        flow(token, cmd(token, "config/providers/setup", provider_domain=domain), values)
+        print(f"music-assistant: {label} added")
+
+
+def ha_token(token):
+    """HA_MUSIC_ASSISTANT_TOKEN: kept while it works, else a new long-lived one, the old ones of its name revoked"""
+    if HA_TOKEN:
+        st, _ = http("POST", MA + "/api", {"message_id": "laib", "command": "auth/me", "args": {}}, {"Authorization": "Bearer " + HA_TOKEN})
+        if st == 200:
+            return
+    for t in cmd(token, "auth/tokens") or []:
+        if t.get("name") == TOKEN_NAME:
+            cmd(token, "auth/token/revoke", token_id=t["token_id"])
+    new = cmd(token, "auth/token/create", name=TOKEN_NAME)
+    if not isinstance(new, str) or not new:
+        raise RuntimeError("auth/token/create answered no token")
+    print(f"laib-secret: HA_MUSIC_ASSISTANT_TOKEN={new}")
+    print("music-assistant: HA_MUSIC_ASSISTANT_TOKEN minted (" + ("replaces one Music Assistant refuses" if HA_TOKEN else "new")
+          + "): Home Assistant's integration; Laib re-applies Home Assistant, which connects both ways")
+
+
+for _ in range(150):  # the server, its config and auth loaded: /info answers once the webserver serves
+    try:
+        st, info = http("GET", MA + "/info")
+        if st == 200 and isinstance(info, dict):
+            break
+    except OSError:
+        pass
+    time.sleep(WAIT)
+else:
+    red(f"Music Assistant does not answer on {MA}/info")
+
+token = session()
+failed = []
+try:
+    if PUBLIC:  # where the Home Assistant sign-in returns the browser to (auth.py _get_oauth_callback_base_url)
+        cmd(token, "config/core/save", domain="webserver", values={"external_url": PUBLIC})
+    try:
+        provider(token, "radiobrowser", {}, "Radio Browser")
+    except (RuntimeError, OSError) as e:
+        failed.append(f"Radio Browser: {e}")
+    try:
+        if jellyfin_account():
+            provider(token, "jellyfin", {"url": JF, "username": JF_USER, "password": JF_PW, "verify_ssl": False},
+                     f"Jellyfin source ({JF}, account {JF_USER})")
+    except (RuntimeError, OSError) as e:
+        failed.append(f"Jellyfin: {e}")
+    st, info = http("GET", MA + "/info")
+    if not (info or {}).get("onboard_done"):  # adding a provider completes it; without one, say so explicitly
+        cmd(token, "config/onboard_complete")
+    ha_token(token)
+except (RuntimeError, OSError, ValueError) as e:
+    failed.append(f"{type(e).__name__}: {e}")
+finally:
+    http("POST", MA + "/auth/logout", None, {"Authorization": "Bearer " + token})
+if failed:
+    red("; ".join(failed))
+print("music-assistant: onboarded, Jellyfin and Radio Browser are its sources; the family signs in through Home Assistant")

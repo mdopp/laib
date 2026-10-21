@@ -18,13 +18,16 @@ ADMIN_PW = "-ha-admin-pw-9q"
 BOTE_PW = "-ha-bote-pw-3x"
 ADMIN_SECRETS = ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
 HA = {}
+MA = {}
 
 
 def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0,
-              entries=[], subentries={}, not_loaded=0, states={}, calls=[])
+              entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False)
+    MA.clear()
+    MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
         uid = add_user("Owner", admin=True, owner=True)
         HA["creds"][onboarded[0]] = (onboarded[1], uid)
@@ -99,7 +102,8 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path == "/api/":
             return self.reply(200, {"message": "API running."})
         if self.path == "/api/config/config_entries/entry":
-            return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home"}] + HA["entries"])   # every user may list them over REST, as in HA
+            return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home", "state": "loaded"}]
+                              + [{k: v for k, v in e.items() if k not in ("data", "token")} for e in HA["entries"]])   # every user may list them over REST, as in HA
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
         if self.path.startswith("/api/states/update."):
@@ -155,7 +159,10 @@ class FakeHA(BaseHTTPRequestHandler):
 
     def config_flow(self, b):
         """HA's config flows over REST, the two the Ollama integration has (2026.10):
-        the entry (one step, url; title = the url) and its conversation subentry"""
+        the entry (one step, url; title = the url) and its conversation subentry;
+        and Music Assistant's (#526)"""
+        if b.get("handler") == "music_assistant" or self.path.startswith("/api/config/config_entries/flow/m"):
+            return self.ma_flow(b)
         if self.path == "/api/config/config_entries/flow":
             if b.get("handler") != "ollama":
                 return self.reply(400, {"message": "Invalid handler specified"})
@@ -183,6 +190,41 @@ class FakeHA(BaseHTTPRequestHandler):
                    "unique_id": None, "data": {k: v for k, v in b.items() if k != "name"}}
             HA["subentries"].setdefault(eid, []).append(sub)
             return self.reply(200, {"type": "create_entry", "flow_id": "sf1", "title": b["name"]})
+        self.reply(404)
+
+    def ma_flow(self, b):
+        """homeassistant/components/music_assistant/config_flow.py (2026.10): user (url) → the browser
+        step auth (with `my` loaded, default_config) → the code MA's login returns → finish_auth,
+        which exchanges it for HA's own long-lived MA token; a reauth goes the same way"""
+        if self.path == "/api/config/config_entries/flow":
+            HA["flows"]["mf1"] = "user"
+            return self.reply(200, {"type": "form", "flow_id": "mf1", "handler": "music_assistant", "step_id": "user"})
+        fid = self.path.rsplit("/", 1)[1]
+        step = HA["flows"].get(fid)
+        if step in ("user",):
+            if b.get("url") != HA["ma_url"]:
+                return self.reply(200, {"type": "form", "flow_id": fid, "step_id": "user", "errors": {"base": "cannot_connect"}})
+            if any(e["domain"] == "music_assistant" for e in HA["entries"]):
+                return self.reply(200, {"type": "abort", "flow_id": fid, "reason": "already_configured"})
+        if step in ("user", "reauth_confirm"):
+            HA["flows"][fid] = "auth"
+            return self.reply(200, {"type": "external", "flow_id": fid, "step_id": "auth", "url": HA["ma_url"] + "/login?return_url=x"})
+        if step == "auth":
+            if b.get("code") not in MA["tokens"]:
+                return self.reply(200, {"type": "abort", "flow_id": fid, "reason": "auth_error"})
+            HA["flows"][fid] = ("finish_auth", b["code"])
+            return self.reply(200, {"type": "external_done", "flow_id": fid, "step_id": "finish_auth"})
+        if isinstance(step, tuple):
+            del HA["flows"][fid]
+            MA["n"] += 1
+            own = f"ma-ha-{MA['n']}"   # HA's own long-lived MA token, made with the code (create_long_lived_token)
+            MA["tokens"][own] = MA["tokens"][step[1]]
+            if fid == "mr1":
+                HA["ma_reauth"] = False
+                next(e for e in HA["entries"] if e["domain"] == "music_assistant").update(state="loaded", token=own)
+                return self.reply(200, {"type": "abort", "flow_id": fid, "reason": "reauth_successful"})
+            HA["entries"].append({"entry_id": "e-ma", "domain": "music_assistant", "title": "Music Assistant", "state": "loaded", "token": own})
+            return self.reply(200, {"type": "create_entry", "flow_id": fid, "result": {"entry_id": "e-ma"}})
         self.reply(404)
 
     # --- the WebSocket API, as Home Assistant speaks it ---------------------
@@ -251,6 +293,9 @@ class FakeHA(BaseHTTPRequestHandler):
             name = username(m["user_id"])
             HA["creds"][name] = (m["password"], m["user_id"])
             return ok()
+        if t == "config_entries/flow/progress":
+            return ok([{"flow_id": "mr1", "handler": "music_assistant", "step_id": "reauth_confirm", "context": {"source": "reauth"}}]
+                      if HA.get("ma_reauth") else [])
         if t == "config_entries/subentries/list":
             return ok([{k: v for k, v in sub.items() if k != "data"} for sub in HA["subentries"].get(m["entry_id"], [])])
         if t == "config/core/update":
@@ -288,8 +333,10 @@ class Hook(unittest.TestCase):
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.shutdown)
 
-    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install=""):
+    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1"):
+        HA["ma_url"] = ma
         env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
+               "MA_URL": ma,
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         for name, value in (tokens or {}).items():
@@ -465,6 +512,125 @@ class FrageAgent(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(self.ollama(), [])
         self.assertIn("laib add frage", log, "the hook does not say how Frage becomes the agent")
+
+
+class FakeMA(BaseHTTPRequestHandler):
+    """Music Assistant 2.10.7's JSON-RPC API, the part HA's hook speaks: its Home Assistant
+    plugin (providers/hass/setup_flow.py: one form, url, verify_ssl, token)"""
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):
+        pass
+
+    def reply(self, code, body=None):
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        b = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+        if MA["tokens"].get((self.headers.get("Authorization") or "")[7:]) is None:
+            return self.reply(401, "Authentication required")
+        c, a = b["command"], b.get("args") or {}
+        form = lambda fid: {"flow_id": fid, "type": "form", "step_id": "user", "errors": {},
+                            "entries": [{"key": "url"}, {"key": "verify_ssl"}, {"key": "token"}]}
+        if c == "auth/me":
+            return self.reply(200, {"username": "laib"})
+        if c == "config/providers":
+            return self.reply(200, [p for p in MA["providers"].values() if p["domain"] == a.get("provider_domain")])
+        if c == "config/providers/setup" and a["provider_domain"] == "hass":
+            MA["flows"]["h1"] = None
+            return self.reply(200, form("h1"))
+        if c == "config/providers/reconfigure":
+            MA["flows"]["h2"] = a["instance_id"]
+            return self.reply(200, form("h2"))
+        if c == "config/flows/submit":
+            v, iid = a["values"], MA["flows"].pop(a["flow_id"])
+            uid = HA["tokens"].get(v.get("token"))
+            if uid is None or not is_admin(uid):   # MA reads HA's users (config/auth/list): an administrator's token
+                return self.reply(200, dict(form(a["flow_id"]), errors={"base": "auth_failed"}))
+            iid = iid or "hass"
+            MA["providers"][iid] = {"instance_id": iid, "domain": "hass", "status": "loaded", "url": v["url"], "token": v["token"]}
+            return self.reply(200, {"flow_id": a["flow_id"], "type": "finish", "step_id": "finish", "result": {"instance_id": iid}})
+        self.reply(400, f"Invalid Command: {c}")
+
+
+class MusicAssistant(Hook):
+    """#526: Home Assistant's post-deploy connects Music Assistant both ways once MA's
+    post-deploy handed it a token: MA's Home Assistant plugin (the family's login into
+    MA) and HA's Music Assistant integration, whose browser step the hook answers with
+    that token, as MA's /login would."""
+
+    def setUp(self):
+        super().setUp()
+        self.ma = ThreadingHTTPServer(("127.0.0.1", 0), FakeMA)
+        self.ma.daemon_threads = True
+        threading.Thread(target=self.ma.serve_forever, daemon=True).start()
+        self.addCleanup(self.ma.server_close)
+        self.addCleanup(self.ma.shutdown)
+        self.url = f"http://127.0.0.1:{self.ma.server_port}"
+
+    def entries(self):
+        return [e for e in HA["entries"] if e["domain"] == "music_assistant"]
+
+    def test_music_assistant_is_connected_both_ways_once(self):
+        fresh()
+        p, handed, log = self.run_hook(tokens={"HA_MUSIC_ASSISTANT_TOKEN": "ma-tok"}, ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("MUSIC_ASSISTANT_HA_TOKEN", handed)
+        self.assertEqual(self.kind(handed["MUSIC_ASSISTANT_HA_TOKEN"]), "admin", "MA reads HA's users: an administrator's token")
+        self.assertEqual(HA["names"][handed["MUSIC_ASSISTANT_HA_TOKEN"]][1], "laib: music-assistant")
+        (plug,) = MA["providers"].values()
+        self.assertEqual((plug["url"], plug["token"]), ("https://home.box.test", handed["MUSIC_ASSISTANT_HA_TOKEN"]),
+                         "MA sends the browser to the plugin's URL to sign in: 127.0.0.1 would be the phone itself")
+        (entry,) = self.entries()
+        self.assertEqual(MA["tokens"][entry["token"]], "laib")
+        self.assertNotIn("NOT connected", log)
+        HA["logins"].clear()
+        p, again, log = self.run_hook(tokens=dict(handed, HA_MUSIC_ASSISTANT_TOKEN="ma-tok"), ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(again, {}, "a working token was replaced")
+        self.assertEqual(len(self.entries()), 1, "a second Music Assistant entry")
+        self.assertEqual(list(MA["providers"].values())[0]["token"], handed["MUSIC_ASSISTANT_HA_TOKEN"])
+        self.assertEqual(HA["logins"], [], "logged in although every token works")
+
+    def test_a_plugin_whose_token_ha_revoked_gets_a_new_one(self):
+        fresh()
+        _, handed, _ = self.run_hook(tokens={"HA_MUSIC_ASSISTANT_TOKEN": "ma-tok"}, ma=self.url)
+        del HA["tokens"][handed["MUSIC_ASSISTANT_HA_TOKEN"]]
+        MA["providers"]["hass"]["status"] = "auth_required"
+        p, again, log = self.run_hook(tokens=dict(handed, HA_MUSIC_ASSISTANT_TOKEN="ma-tok"), ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.kind(again["MUSIC_ASSISTANT_HA_TOKEN"]), "admin")
+        self.assertEqual(MA["providers"]["hass"]["token"], again["MUSIC_ASSISTANT_HA_TOKEN"], "the plugin keeps the revoked token")
+
+    def test_an_integration_asking_to_sign_in_again_gets_the_token(self):
+        fresh()
+        _, handed, _ = self.run_hook(tokens={"HA_MUSIC_ASSISTANT_TOKEN": "ma-tok"}, ma=self.url)
+        (entry,) = self.entries()
+        del MA["tokens"][entry["token"]]   # HA's MA token expired (MA's long-lived tokens last a year)
+        entry["state"], HA["ma_reauth"], HA["flows"]["mr1"] = "setup_error", True, "reauth_confirm"
+        p, _, log = self.run_hook(tokens=dict(handed, HA_MUSIC_ASSISTANT_TOKEN="ma-tok"), ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(entry["state"], "loaded")
+        self.assertIn(entry["token"], MA["tokens"])
+
+    def test_without_music_assistant_nothing_is_wired(self):
+        fresh()
+        p, handed, log = self.run_hook(ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertNotIn("MUSIC_ASSISTANT_HA_TOKEN", handed, "an administrator token for a Music Assistant that is not there")
+        self.assertEqual((self.entries(), MA["providers"]), ([], {}))
+        self.assertIn("laib add music-assistant", log)
+
+    def test_a_music_assistant_that_refuses_its_token_leaves_the_apply_green(self):
+        fresh()
+        p, handed, log = self.run_hook(tokens={"HA_MUSIC_ASSISTANT_TOKEN": "revoked"}, ma=self.url)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("Music Assistant NOT connected", log)
+        self.assertEqual(self.entries(), [])
 
 
 if __name__ == "__main__":

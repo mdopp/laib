@@ -26,6 +26,16 @@ Solaris's engine did for conversation.solaris). When Frage answers on
 FRAGE_URL, this hook adds that Ollama entry and its conversation agent
 "Frage" once; which pipeline uses it stays the owner's choice.
 
+Music Assistant, both ways (#526): with the token music-assistant's
+post-deploy hands back (HA_MUSIC_ASSISTANT_TOKEN), this hook adds Home
+Assistant's "Music Assistant" integration (its config flow's browser step
+takes that token as the code MA's login would return), and connects MA's
+Home Assistant plugin with an administrator token minted here
+(MUSIC_ASSISTANT_HA_TOKEN, "laib: music-assistant"; MA reads HA's users with
+it). That plugin is what offers "Mit Home Assistant anmelden" in Music
+Assistant, so its URL is the one a browser reaches, https://home.<domain>:
+MA sends the browser there to sign in.
+
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
@@ -38,6 +48,9 @@ USER, PW = E.get("HA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_HA_ADMIN_PASSWOR
 BOTE_PW = E.get("LAIB_SECRET_HA_BOTE_PASSWORD", "")
 FRAGE = E.get("FRAGE_URL", "http://127.0.0.1:8710").rstrip("/")  # HA is on the host network, Frage's pod publishes 8710
 RETRY = float(E.get("HA_RETRY_SECONDS", "3"))
+MA = E.get("MA_URL", "http://127.0.0.1:8095").rstrip("/")  # both on the host network
+MA_TOKEN = E.get("LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN", "")
+HA_PUBLIC = E.get("HA_PUBLIC_URL") or f"https://home.{E.get('LAIB_DOMAIN', '')}"
 ADMIN = {"HA_TOKEN": "laib: home-assistant-check", "HAUS_HA_TOKEN": "laib: haus", "BOTE_AUTOMAT_HA_TOKEN": "laib: bote-automat"}
 
 
@@ -341,6 +354,110 @@ def install_updates():
         print("home-assistant: installiert: " + ", ".join(installed) + "; Home Assistant startet neu")
 
 
+def ma(command, **args):
+    """one command on Music Assistant's JSON-RPC API with HA_MUSIC_ASSISTANT_TOKEN"""
+    req = urllib.request.Request(MA + "/api", data=json.dumps({"message_id": "laib", "command": command, "args": args}).encode(),
+                                 headers={"Authorization": "Bearer " + MA_TOKEN, "Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=150) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Music Assistant {command}: HTTP {e.code}")
+    return json.loads(raw) if raw else None
+
+
+def ma_flow(step, values):
+    """a Music Assistant provider setup flow, its form filled with values, to its FINISH step"""
+    submitted = None
+    for _ in range(60):
+        t = step.get("type")
+        if t == "finish":
+            return
+        if t == "form" and not (submitted == step.get("step_id") and step.get("errors")):
+            keys = {e.get("key") for e in step.get("entries") or []}
+            submitted = step.get("step_id")
+            step = ma("config/flows/submit", flow_id=step["flow_id"], values={k: v for k, v in values.items() if k in keys})
+        elif t == "progress":
+            time.sleep(RETRY)
+            step = ma("config/flows/get", flow_id=step["flow_id"])
+        else:
+            raise RuntimeError(f"Music Assistant's Home Assistant plugin was refused: {step.get('reason') or step.get('errors') or t}")
+    raise RuntimeError("Music Assistant's Home Assistant plugin did not finish its setup")
+
+
+def ha_flow(tok, flow):
+    """Home Assistant's music_assistant config flow (2026.10, config_flow.py) to its end: the url,
+    then the browser step (or the token form without one) with MA's token as the code"""
+    answer = {"user": {"url": MA}, "auth_manual": {"token": MA_TOKEN}, "reauth_confirm": {}}
+    for _ in range(8):
+        t, sid = flow.get("type"), flow.get("step_id")
+        if t == "create_entry":
+            return "added"
+        if t == "abort":
+            if flow.get("reason") in ("already_configured", "reauth_successful"):
+                return flow["reason"]
+            raise RuntimeError(f"the Music Assistant integration was refused: {flow.get('reason')}")
+        if t == "form" and sid in answer and not flow.get("errors"):
+            body = answer[sid]
+        elif t == "external" and sid == "auth":
+            body = {"code": MA_TOKEN}  # what MA's /login sends back to HA's callback (config_flow.py async_step_auth)
+        elif t == "external_done":
+            body = {}
+        else:
+            raise RuntimeError(f"the Music Assistant integration stopped at {t} {sid}: {flow.get('errors') or ''}")
+        st, flow = call("POST", "/api/config/config_entries/flow/" + flow["flow_id"], body, token=tok)
+        if st != 200 or not isinstance(flow, dict):
+            raise RuntimeError(f"the Music Assistant integration's flow answered HTTP {st}")
+    raise RuntimeError("the Music Assistant integration's flow did not end")
+
+
+def music_assistant():
+    """MA's Home Assistant plugin and HA's Music Assistant integration, each once (#526)"""
+    if not MA_TOKEN:
+        print("home-assistant: Music Assistant is not installed: no integration (laib add music-assistant connects it)")
+        return
+    ma("auth/me")  # MA answers and takes its token, or the error says which
+    tok = admin_session()
+    # 1. Music Assistant's Home Assistant plugin: HA's users for MA's login, with an administrator token
+    plug = E.get("LAIB_SECRET_MUSIC_ASSISTANT_HA_TOKEN", "")
+    minted = kind(plug) != "admin"
+    if minted:
+        plug = mint(tok, "laib: music-assistant")
+        if kind(plug) != "admin":
+            raise RuntimeError("the token minted for MUSIC_ASSISTANT_HA_TOKEN is not an administrator's")
+        print(f"laib-secret: MUSIC_ASSISTANT_HA_TOKEN={plug}")
+        print("home-assistant: MUSIC_ASSISTANT_HA_TOKEN minted (Music Assistant's Home Assistant plugin)")
+    values = {"url": HA_PUBLIC, "verify_ssl": True, "token": plug}
+    have = ma("config/providers", provider_domain="hass") or []
+    if not have:
+        ma_flow(ma("config/providers/setup", provider_domain="hass"), values)
+        print(f"home-assistant: Music Assistant's Home Assistant plugin connected ({HA_PUBLIC}): the family signs in to MA with Home Assistant")
+    elif minted or have[0].get("status") in ("auth_required", "error"):
+        ma_flow(ma("config/providers/reconfigure", instance_id=have[0]["instance_id"]), values)
+        print(f"home-assistant: Music Assistant's Home Assistant plugin connected again ({HA_PUBLIC}, it was {have[0].get('status')})")
+    # 2. Home Assistant's Music Assistant integration
+    entry = next((e for e in call("GET", "/api/config/config_entries/entry", token=tok)[1] or [] if e.get("domain") == "music_assistant"), None)
+    if entry is None:
+        st, flow = call("POST", "/api/config/config_entries/flow", {"handler": "music_assistant"}, token=tok)
+        if st != 200 or not isinstance(flow, dict):
+            raise RuntimeError(f"the Music Assistant integration's flow did not start (HTTP {st})")
+        print(f"home-assistant: Music Assistant integration {ha_flow(tok, flow)} ({MA})")
+        return
+    if entry.get("state") == "loaded":
+        print("home-assistant: Music Assistant integration is there")
+        return
+    ws = WS(tok)
+    try:
+        flows = [f for f in ws("config_entries/flow/progress") or []
+                 if f.get("handler") == "music_assistant" and (f.get("context") or {}).get("source") == "reauth"]
+    finally:
+        ws.close()
+    if not flows:
+        print(f"home-assistant: Music Assistant integration is {entry.get('state')}, no sign-in asked: left as it is", file=sys.stderr)
+        return
+    print(f"home-assistant: Music Assistant integration signed in again ({ha_flow(tok, dict(flows[0], type='form'))})")
+
+
 try:
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
@@ -353,3 +470,7 @@ try:
     frage_agent()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists the missing agent
     print(f"home-assistant: conversation agent Frage NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
+try:
+    music_assistant()
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists what Music Assistant lacks
+    print(f"home-assistant: Music Assistant NOT connected: {type(e).__name__}: {e}", file=sys.stderr)

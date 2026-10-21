@@ -12,9 +12,11 @@ Type=oneshot
 Environment=HA_TOKEN=${HA_TOKEN}
 # the service's name for the HA_INSTALL proposal its update findings carry (#528)
 Environment=LAIB_SERVICE=${SERVICE}
+# Music Assistant set up, with Jellyfin's titles and players (#526); empty without Music Assistant
+Environment=MA_TOKEN=${MA_TOKEN}
 # zwave-js-ui's driver health (#417): not ready fails this unit, and laib status shows home-assistant red
 Environment=ZWAVE_URL=http://127.0.0.1:8091
 StandardInput=file:%h/.config/containers/systemd/home-assistant/home-assistant-check.py
 # only where the box runs Z-Wave JS: a template without the zwave unit (no stick) checks no Z-Wave
-ExecStart=/bin/sh -c 'test -f %h/.config/containers/systemd/home-assistant/home-assistant-zwave.container || unset ZWAVE_URL; exec /usr/bin/podman exec -i -e HA_TOKEN -e LAIB_SERVICE -e ZWAVE_URL systemd-home-assistant python3 -'
+ExecStart=/bin/sh -c 'test -f %h/.config/containers/systemd/home-assistant/home-assistant-zwave.container || unset ZWAVE_URL; exec /usr/bin/podman exec -i -e HA_TOKEN -e LAIB_SERVICE -e MA_TOKEN -e ZWAVE_URL systemd-home-assistant python3 -'
 TimeoutStartSec=60
