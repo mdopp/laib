@@ -183,3 +183,16 @@ func TestAValueThatIsNeitherTextNorSecretFailsTheLoad(t *testing.T) {
 		}
 	}
 }
+
+// #547: box.yml updates.laib is how Laib updates itself: auto (the default),
+// off, or the version to hold. Anything else is a typo that would leave the
+// box on the newest release while the owner thinks it is held.
+func TestUpdatesLaibIsAutoOffOrAVersion(t *testing.T) {
+	for v, ok := range map[string]bool{"": true, "auto": true, "off": true, "v0.16.0": true, "0.16.0": false, "latest": false, "aus": false} {
+		dir := minimal(t)
+		write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\nroles: {sso: auth}\nupdates: {laib: \""+v+"\"}\n")
+		if _, err := Load(dir); (err == nil) != ok {
+			t.Errorf("updates.laib %q: err %v", v, err)
+		}
+	}
+}
