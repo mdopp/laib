@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.14.0](https://github.com/mdopp/laib/compare/v0.13.0...v0.14.0) (2026-10-21)
+
+
+### Features
+
+* **apply:** laib keeps the images current, podman auto-update stays masked ([#528](https://github.com/mdopp/laib/issues/528)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+* **haus:** HA_PUBLIC_URL, ENERGY_STATS, COVER_INVERTED for Haus' devices and energy (haus[#64](https://github.com/mdopp/laib/issues/64), haus[#65](https://github.com/mdopp/laib/issues/65)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+* **template:** documents by mail, by the Bote and from Haus ([#521](https://github.com/mdopp/laib/issues/521)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+* **template:** kalender mirrors secret iCal addresses and public ICS into Radicale ([#495](https://github.com/mdopp/laib/issues/495)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+* **template:** music-assistant usable after laib add, login through Home Assistant ([#526](https://github.com/mdopp/laib/issues/526)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+
+
+### Bug Fixes
+
+* **paperless:** the mail hook asks no API without an inbox, a refused admin is a finding ([#521](https://github.com/mdopp/laib/issues/521)) ([0b45404](https://github.com/mdopp/laib/commit/0b4540482097451efb0f37f7b289c90b1d3de5c7))
+
 ## [0.13.0](https://github.com/mdopp/laib/compare/v0.12.0...v0.13.0) (2026-10-21)
 
 
