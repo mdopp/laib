@@ -142,36 +142,10 @@ func envelope(ctx context.Context, env *cli.Env, st *state.State, svc *state.Ser
 		fmt.Fprintf(env.Errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
 		return cli.ExitRefused
 	}
-	paths := state.SnapshotPaths(st, svc)
-	optional := st.Policy.Envelope.Snapshot == "optional"
-	if snapped || len(paths) == 0 {
+	if snapped {
 		return cli.ExitOK
 	}
-	if st.Box.Backup.Repo == "" {
-		if optional {
-			return cli.ExitOK
-		}
-		fmt.Fprintf(env.Errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
-		return cli.ExitRefused
-	}
-	_, pw, err := backup.Prep(env)
-	if err == nil {
-		_, err = backup.ResticRun(ctx, st, pw, append([]string{"backup", "--tag", "pre-repair", "--tag", svc.Name, "--exclude-caches"}, paths...)...)
-	}
-	if err != nil {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: err.Error()})
-		if optional {
-			return cli.ExitOK
-		}
-		fmt.Fprintf(env.Errw(), "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
-		return cli.ExitRefused
-	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: "pre-repair: " + strings.Join(paths, " ")})
-	// pre-repair snapshots are for the next hours, not for the archive
-	if _, err := backup.ResticRun(ctx, st, pw, "forget", "--tag", "pre-repair", "--keep-within", "7d", "--prune"); err != nil {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: "forget pre-repair: " + err.Error()})
-	}
-	return cli.ExitOK
+	return backup.Pre(ctx, env, st, svc, verb, "pre-repair", false)
 }
 
 func Inspect(ctx context.Context, env *cli.Env, args []string) int {

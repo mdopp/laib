@@ -79,6 +79,7 @@ class Check(unittest.TestCase):
         unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
         self.assertIn("ZWAVE_URL=http://127.0.0.1:8091", unit)
         self.assertIn("-e ZWAVE_URL", unit)
+        self.assertIn("-e LAIB_SERVICE", unit)   # #528: the HA_INSTALL proposal names the service
         self.assertNotIn("OnCalendar=hourly", (SCRIPT.parent / "home-assistant-check.timer").read_text(),
                          "a dead Z-Wave network must not wait an hour to turn red")
 
@@ -128,6 +129,43 @@ class Check(unittest.TestCase):
         self.assertIn("antwortet nicht", r["findings"][0]["detail"])
         r = self.run_check("", "http://127.0.0.1:1")
         self.assertEqual((r["findings"], r["detail"]), ([], ""))
+
+    def test_updates_are_reported_and_the_extensions_offered_as_one_proposal(self):
+        # #528: "Einige Plugins in Home Assistant sind schon 4 Monate alt." HA's update entities that are
+        # on: the extensions as "Update: …" with their release notes, the installable ones as one HA_INSTALL
+        # proposal (the fix the Operator files as it stands), the firmware as "Firmware: …", only reported.
+        upd = lambda eid, title, old, new, feat=1, cls=None, url=None: {"entity_id": eid, "state": "on", "attributes": {
+            "title": title, "installed_version": old, "latest_version": new, "supported_features": feat, "device_class": cls, "release_url": url}}
+        states = [upd("update.senec_update", "SENEC.Home", "2026.6.3", "2026.10.0", url="https://github.com/x/senec/releases/tag/2026.10.0"),
+                  upd("update.meross_lan_update", "Meross LAN", "5.3.0", "5.4.1"),
+                  upd("update.plug_firmware", "Steckdose", "9.5.52", "9.5.60", cls="firmware"),
+                  upd("update.no_install", "Nur Anzeige", "1", "2", feat=0),
+                  {"entity_id": "update.hacs_update", "state": "off", "attributes": {"installed_version": "2.0", "latest_version": "2.0"}},
+                  {"entity_id": "sun.sun", "state": "above_horizon", "attributes": {}}]
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps(states if self.path == "/api/states" else []).encode()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
+        by = {f["detail"]: f for f in r["findings"] if f["severity"] == "info"}
+        self.assertIn("Update: SENEC.Home 2026.6.3 → 2026.10.0 · https://github.com/x/senec/releases/tag/2026.10.0", by)
+        self.assertIn("Update: Meross LAN 5.3.0 → 5.4.1", by)
+        self.assertIn("Firmware: Steckdose 9.5.52 → 9.5.60 (nur gemeldet)", by)
+        self.assertIn("Update: Nur Anzeige 1 → 2", by)
+        offer = [f for f in r["findings"] if f["fix"].startswith("laib propose")]
+        self.assertEqual(len(offer), 1, r)
+        self.assertEqual(offer[0]["fix"], "laib propose --set services/home-assistant/values.yml:HA_INSTALL=update.senec_update=2026.10.0,update.meross_lan_update=5.4.1")
+        self.assertIn("https://github.com/x/senec/releases/tag/2026.10.0", offer[0]["detail"], "the proposal carries the release notes")
+        self.assertNotIn("firmware", offer[0]["fix"])
+        self.assertFalse([f for f in r["findings"] if "hacs" in f["detail"].lower()], "an extension that is current is no finding")
 
 
 if __name__ == "__main__":

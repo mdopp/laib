@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -208,6 +209,57 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	fmt.Fprintf(env.W(), "grün · %d Pfade · %s\n", len(paths), cli.Tail(out, 200))
 	if offErr != nil {
 		return env.Fail(offErr)
+	}
+	return cli.ExitOK
+}
+
+// Pre is the snapshot before an intervention: the service's backed-up
+// paths, tagged (pre-repair before a hand's repair, pre-update before an
+// approved change to a service with data, #528) and kept a week. quiesce
+// stops the service's units while a database is copied (#40) and starts
+// them again. It fails closed — no target or a failed snapshot refuse verb
+// — unless policy.yml says `envelope.snapshot: optional` (#35).
+func Pre(ctx context.Context, env *cli.Env, st *state.State, svc *state.Service, verb, tag string, quiesce bool) int {
+	paths := state.SnapshotPaths(st, svc)
+	optional := st.Policy.Envelope.Snapshot == "optional"
+	if len(paths) == 0 {
+		return cli.ExitOK
+	}
+	if st.Box.Backup.Repo == "" {
+		if optional {
+			return cli.ExitOK
+		}
+		fmt.Fprintf(env.Errw(), "laib: kein %s ohne Sicherung: box.yml hat kein backup.repo, also keinen Snapshot vor dem Eingriff (policy.yml envelope.snapshot: optional hebt das auf)\n", verb)
+		return cli.ExitRefused
+	}
+	_, pw, err := Prep(env)
+	if quiesce = quiesce && slices.ContainsFunc(svc.Contract.Data, func(d state.DataPath) bool { return d.Quiesce }); quiesce && err == nil {
+		apply.WritePause(env.Paths, apply.Pause{Service: svc.Name, By: tag + ":" + env.Actor, Until: time.Now().Add(time.Hour).UTC(), Reason: "quiesce"})
+		for _, u := range svc.UnitNames() {
+			sysd.Stop(ctx, u)
+		}
+	}
+	if err == nil {
+		_, err = ResticRun(ctx, st, pw, append([]string{"backup", "--tag", tag, "--tag", svc.Name, "--exclude-caches"}, paths...)...)
+	}
+	if quiesce {
+		for _, u := range svc.UnitNames() {
+			sysd.Run(ctx, "systemctl", "--user", "start", u)
+		}
+		apply.Resume(env.Paths, svc.Name)
+	}
+	if err != nil {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: err.Error()})
+		if optional {
+			return cli.ExitOK
+		}
+		fmt.Fprintf(env.Errw(), "laib: kein %s, der Snapshot vorher ist fehlgeschlagen: %v\n", verb, err)
+		return cli.ExitRefused
+	}
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "info", Detail: tag + ": " + strings.Join(paths, " ")})
+	// these snapshots are for the next days, not for the archive
+	if _, err := ResticRun(ctx, st, pw, "forget", "--tag", tag, "--keep-within", "7d", "--prune"); err != nil {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "snapshot", Service: svc.Name, Result: "red", Detail: "forget " + tag + ": " + err.Error()})
 	}
 	return cli.ExitOK
 }

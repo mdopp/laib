@@ -70,7 +70,7 @@ func TestTheRenderedTimersRunAsTheirActor(t *testing.T) {
 			}
 			return "", nil
 		}
-		for _, unit := range []string{"systemd/laib-backup.service", "systemd/podman-auto-update.service.d/laib.conf"} {
+		for _, unit := range []string{"systemd/laib-backup.service"} {
 			text := out[unit]
 			actor := regexp.MustCompile(`(?m)^Environment=LAIB_ACTOR=(.*)$`).FindStringSubmatch(text)
 			cmd := regexp.MustCompile(`(?m)^Exec(?:Start|StartPre)=/var/opt/laib/laib (backup.*)$`).FindStringSubmatch(text)
@@ -82,6 +82,12 @@ func TestTheRenderedTimersRunAsTheirActor(t *testing.T) {
 			if rc := runArgs(strings.Fields(cmd[1])); rc != cli.ExitOK || len(snapshots) != 1 || snapshots[0] != st.Box.Backup.Repo {
 				t.Fatalf("before444=%v %s as %s: rc %d, snapshots %v", before444, unit, actor[1], rc, snapshots)
 			}
+		}
+		// the nightly image run (#528, which replaced podman auto-update's drop-in) as its actor
+		if run := regexp.MustCompile(`(?m)^ExecStart=/var/opt/laib/laib (updates --run)$`).FindStringSubmatch(out["systemd/laib-images.service"]); run == nil || !strings.Contains(out["systemd/laib-images.service"], "LAIB_ACTOR=laib\n") {
+			t.Fatalf("laib-images.service: %s", out["systemd/laib-images.service"])
+		} else if rc := runArgs(strings.Fields(run[1])); rc != cli.ExitOK {
+			t.Fatalf("before444=%v: laib updates --run as laib: rc %d", before444, rc)
 		}
 		// the monthly restore test runs as the same actor
 		t.Setenv("LAIB_ACTOR", "laib")
@@ -95,8 +101,8 @@ func TestTheRenderedTimersRunAsTheirActor(t *testing.T) {
 				green++
 			}
 		}
-		if green != 3 {
-			t.Fatalf("before444=%v: two snapshots and a check, journaled green as laib: %+v", before444, es)
+		if green != 2 {
+			t.Fatalf("before444=%v: a snapshot and a check, journaled green as laib: %+v", before444, es)
 		}
 	}
 }

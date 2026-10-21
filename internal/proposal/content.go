@@ -36,6 +36,8 @@ type Verdict struct {
 	Mints []string // hands the change mints Laib tokens for
 	Added []string // services the change adds
 	Facts []string // plain facts for the decision card (#58)
+	Ask   []string // a person decides, not the dial (#528): a warning
+	Snap  []string // services snapshotted before the approved change applies (#528)
 }
 
 // Judge reads the change — a checkout of main and one of the change — and
@@ -143,7 +145,6 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if err != nil {
 		return fail(fmt.Errorf("the proposed state does not load:\n%w", err))
 	}
-	warnings := append(proposed.Warnings, updateWarnings...)
 	var verdict Verdict
 	if judge != nil {
 		verdict, err = judge(repo, wt)
@@ -151,6 +152,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 	}
+	warnings := slices.Concat(proposed.Warnings, updateWarnings, verdict.Ask)
 	if _, err := git(ctx, wt, "add", "-A"); err != nil {
 		return fail(err)
 	}
@@ -167,7 +169,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		return fail(err)
 	}
 	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings,
-		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts}
+		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])

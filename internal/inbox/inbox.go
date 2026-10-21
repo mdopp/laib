@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/templates"
 
@@ -160,7 +161,7 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
-		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts}, nil
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot}, nil
 	}
 }
 
@@ -254,6 +255,13 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	}
 	release := sync.OnceFunc(unlock)
 	defer release()
+	for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the merge, fail closed
+		if svc := st.Services[name]; svc != nil {
+			if code := backup.Pre(ctx, env, st, svc, "approve", "pre-update", true); code != cli.ExitOK {
+				return code
+			}
+		}
+	}
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(env.Errw(), "laib:", err)

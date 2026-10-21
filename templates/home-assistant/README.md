@@ -76,6 +76,22 @@ with its age ("geprüft vor 12 min"). Looking at either re-checks a result
 older than five minutes in the background, the Box page has "jetzt prüfen",
 and a timer re-checks once an hour so the morning report reads a fresh one.
 
+## Updates: extensions and firmware (#528)
+
+The same check reads Home Assistant's `update.*` entities that are on.
+Each extension (HACS, a custom integration) is an info finding `Update:
+<name> <installed> → <latest>` with its release notes; the installable ones
+together are one finding whose fix is a value proposal, `HA_INSTALL=
+update.x=<version>,…`. The Operator's weekly `aktualisierung` files it as it
+stands; the review makes it a person's decision (a service with a
+database), Laib snapshots Home Assistant before the approval applies, and
+post-deploy installs each extension still offered at that version, then
+restarts Home Assistant once. Device firmware is `Firmware: …`, reported
+only: a failed flash can brick a device, so it is installed only on an
+explicit yes, by hand in Home Assistant. Both appear in laib-notify's weekly
+"Was ist veraltet". Home Assistant's own image (`stable`) moves by a
+proposal pinned to the registry's digest (`laib updates`).
+
 ## The family's login (#253)
 
 "Login with Familienkonto" signs a family member in through Authelia with
