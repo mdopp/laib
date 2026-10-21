@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.16.0](https://github.com/mdopp/laib/compare/v0.15.0...v0.16.0) (2026-10-21)
+
+
+### Features
+
+* **diag:** name a skill the policy keeps from its job, count the Operator's last look ([16cd0eb](https://github.com/mdopp/laib/commit/16cd0eb28b09ba4d6792772d353c6dc03de204e7)), closes [#543](https://github.com/mdopp/laib/issues/543)
+* **operator:** a look that finds nothing new is silent, a repair verb is one proposal ([ccfba1e](https://github.com/mdopp/laib/commit/ccfba1e3e0ba3a901313f5f2fac18fcd13c5a2a6)), closes [#543](https://github.com/mdopp/laib/issues/543)
+* **operator:** a proposal carries its anchor, laib records what came of it ([5705d54](https://github.com/mdopp/laib/commit/5705d54fb13be3ba6fc9535db6b46dccf2998a5a)), closes [#544](https://github.com/mdopp/laib/issues/544)
+* **operator:** a solved incident becomes a lesson the owner lets in ([98e1dab](https://github.com/mdopp/laib/commit/98e1dab1d0416effdf5bfb5af40349b8ea03cdd8)), closes [#544](https://github.com/mdopp/laib/issues/544)
+* **operator:** read the web through Frage's SearXNG, entry points first, never next to acting ([1536665](https://github.com/mdopp/laib/commit/15366652c0ce3ddc1d63e9701afb4e0c2424d676)), closes [#544](https://github.com/mdopp/laib/issues/544)
+
+
+### Bug Fixes
+
+* **operator:** drop an empty sources list, and document real rejections as eval cases ([c810662](https://github.com/mdopp/laib/commit/c8106620dbb135328485af78cabe59e594ec7fa4)), closes [#544](https://github.com/mdopp/laib/issues/544)
+
 ## [0.15.0](https://github.com/mdopp/laib/compare/v0.14.0...v0.15.0) (2026-10-21)
 
 
