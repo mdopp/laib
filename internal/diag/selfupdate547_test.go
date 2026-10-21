@@ -41,6 +41,7 @@ func TestDiagIsYellowWhenLaibDoesNotKeepItselfCurrent(t *testing.T) {
 		"off behind":  {true, &SelfUpdate{At: now, Running: "v0.11.1", Latest: "v0.16.0", Result: "off"}, "updates.laib: off"},
 		"off current": {true, &SelfUpdate{At: now, Running: "v0.16.0", Latest: "v0.16.0", Result: "off"}, ""},
 		"stale":       {true, &SelfUpdate{At: now.Add(-9 * 24 * time.Hour), Running: "v0.16.0", Latest: "v0.16.0", Result: "current"}, "seit 9 Tagen"},
+		"long behind": {true, &SelfUpdate{At: now, Running: "v0.11.1", Latest: "v0.16.0", Result: "skipped", Detail: "laib ist nicht grün", BehindSince: now.Add(-15 * 24 * time.Hour)}, "seit 15 Tagen hinter v0.16.0"},
 	} {
 		home, bin := box(c.script, c.rec)
 		got := selfUpdateFindings(home, bin, now)
@@ -53,5 +54,21 @@ func TestDiagIsYellowWhenLaibDoesNotKeepItselfCurrent(t *testing.T) {
 		if len(got) != 1 || got[0].Severity != "gelb" || got[0].Probe != "self-update" || !strings.Contains(got[0].Detail, c.want) || got[0].Fix == "" {
 			t.Errorf("%s: want one yellow self-update finding with %q: %+v", name, c.want, got)
 		}
+	}
+}
+
+// a self-update.sh that never leaves a record (it exits early, hangs, jq is
+// gone) is silent no longer once it has had eight nights.
+func TestDiagIsYellowWhenSelfUpdateNeverReports(t *testing.T) {
+	home, bin := t.TempDir(), t.TempDir()
+	script := filepath.Join(bin, "self-update.sh")
+	os.WriteFile(script, []byte("#!/bin/bash\n"), 0o755)
+	if got := selfUpdateFindings(home, bin, time.Now()); len(got) != 0 {
+		t.Fatalf("a fresh script has its first night ahead: %+v", got)
+	}
+	old := time.Now().Add(-9 * 24 * time.Hour)
+	os.Chtimes(script, old, old)
+	if got := selfUpdateFindings(home, bin, time.Now()); len(got) != 1 || !strings.Contains(got[0].Detail, "nie berichtet") {
+		t.Fatalf("eight nights without a record must be yellow: %+v", got)
 	}
 }

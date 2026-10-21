@@ -59,13 +59,22 @@ esac`)
 	return s
 }
 
-// laib is the binary in the bin dir: version and note, nothing else.
-func (s *selfBox) laib(version string) {
-	os.WriteFile(filepath.Join(s.opt, "laib"), []byte(`#!/bin/sh
-echo "laib $*" >> "$SHIM_LOG"
-[ "$1" = version ] && echo '{"version": "`+version+`"}'
+// laibBin is a laib binary as the real one answers version: plain text,
+// JSON only with --json (cmd/laib cmdVersion). It logs every call with its
+// own version, so a test sees which binary ran converge.
+func laibBin(version string) string {
+	return `#!/bin/sh
+echo "laib[` + version + `] $*" >> "$SHIM_LOG"
+if [ "$1" = version ]; then
+  if [ "${2:-}" = --json ]; then printf '{\n  "version": "` + version + `"\n}\n'; else echo "laib ` + version + `"; fi
+fi
 exit 0
-`), 0o755)
+`
+}
+
+// laib puts that binary in the bin dir; the release's binary waits in fx.
+func (s *selfBox) laib(version string) {
+	os.WriteFile(filepath.Join(s.opt, "laib"), []byte(laibBin(version)), 0o755)
 }
 
 func (s *selfBox) ready(version, state string, red int) {
@@ -95,8 +104,9 @@ func (s *selfBox) release(tag, body, sum string) {
 // version and state it would.
 func (s *selfBox) installer(version, state string) string {
 	b, _ := json.Marshal(map[string]any{"state": state, "red": 0, "version": version})
+	os.WriteFile(filepath.Join(s.fx, "laib-"+version), []byte(laibBin(version)), 0o755)
 	return `echo "install-box.sh $* LAIB_SELF_UPDATE=$LAIB_SELF_UPDATE" >> "$SHIM_LOG"
-printf '#!/bin/sh\necho "laib $*" >> "$SHIM_LOG"\n[ "$1" = version ] && echo '"'"'{"version": "` + version + `"}'"'"'\nexit 0\n' > "$LAIB_BIN_DIR/laib"
+cp "$FX/laib-` + version + `" "$LAIB_BIN_DIR/laib"
 echo "#!/bin/sh" > "$LAIB_BIN_DIR/laib-operator"
 echo '` + string(b) + `' > "$FX/ready"
 `
@@ -141,7 +151,7 @@ func TestSelfUpdateTakesTheNewestReleaseAndProvesIt(t *testing.T) {
 	if rec["result"] != "updated" || rec["running"] != "v0.11.1" || rec["latest"] != "v0.16.0" {
 		t.Errorf("the record must say v0.11.1 → v0.16.0, updated: %v\n%s", rec, out)
 	}
-	if !strings.Contains(log, "laib note --kind watch") || !strings.Contains(log, "v0.11.1 → v0.16.0") {
+	if !strings.Contains(log, "] note --kind watch") || !strings.Contains(log, "v0.11.1 → v0.16.0") {
 		t.Errorf("the journal must carry the update:\n%s", log)
 	}
 }
@@ -156,19 +166,31 @@ func TestSelfUpdateRollsBackARedReleaseAndDoesNotRetryIt(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(s.opt, "laib-operator")); !strings.Contains(string(b), "old laib-operator") {
 		t.Errorf("the operator that ran before is not back:\n%s", b)
 	}
-	if b, _ := exec.Command(filepath.Join(s.opt, "laib"), "version").Output(); !strings.Contains(string(b), "v0.11.1") {
+	if b, _ := exec.Command(filepath.Join(s.opt, "laib"), "version").Output(); string(b) != "laib v0.11.1\n" {
 		t.Errorf("laib is not back on v0.11.1: %s\n%s", b, out)
 	}
 	if !strings.Contains(log, "systemctl --user try-restart laib.service") {
 		t.Errorf("the restored binaries were not restarted:\n%s", log)
 	}
-	if rec["result"] != "failed" || rec["latest"] != "v0.16.0" || !strings.Contains(log, "laib note --kind incident") {
+	// the new release's converge rendered its files; the old laib renders its own back
+	if i, j := strings.Index(log, "laib[v0.16.0] converge"), strings.LastIndex(log, "laib[v0.11.1] converge --force"); j < 0 || j < i {
+		t.Errorf("after the rollback the old laib must converge the box back to its own rendering:\n%s", log)
+	}
+	if rec["result"] != "failed" || rec["latest"] != "v0.16.0" || !strings.Contains(log, "] note --kind incident") {
 		t.Errorf("a rollback must be recorded and journaled as an incident: %v\n%s", rec, log)
 	}
 	s.ready("v0.11.1", "bereit", 0)
 	log, out, rec = s.run(t)
 	if installed(log) || rec["result"] != "failed" {
 		t.Fatalf("a rolled-back release was tried again: %v\n%s\n%s", rec, log, out)
+	}
+	// a night the releases cannot be read keeps the mark
+	keep := s.releases
+	keep(`not json`)
+	s.run(t)
+	keep(`[{"tag_name":"v0.16.0","draft":false,"prerelease":false,"assets":[{"name":"laib-linux-amd64"}]}]`)
+	if log, out, rec = s.run(t); installed(log) || rec["failed"] != "v0.16.0" {
+		t.Fatalf("a night without the releases list erased the rollback's mark: %v\n%s\n%s", rec, log, out)
 	}
 	s.releases(`[{"tag_name":"v0.16.1","draft":false,"prerelease":false,"assets":[{"name":"laib-linux-amd64"}]}]`)
 	s.release("v0.16.1", s.installer("v0.16.1", "bereit"), "")
@@ -227,5 +249,55 @@ func TestInstallPutsTheVerifiedSelfUpdateInPlace(t *testing.T) {
 	log, _ := os.ReadFile(filepath.Join(filepath.Dir(etc), "shim.log"))
 	if !strings.Contains(string(log), "sudo mv /var/opt/laib/self-update.sh.new /var/opt/laib/self-update.sh\n") {
 		t.Fatalf("install-box.sh did not put the release's self-update.sh in place:\n%s\n%s", log, out)
+	}
+}
+
+// the installer can stop before it touched a binary (a download, restic, a
+// stalled connection): that is no verdict on the release. Nothing comes
+// back, nothing is marked, the next night tries again.
+func TestSelfUpdateRetriesAReleaseWhoseInstallStoppedEarly(t *testing.T) {
+	for name, body := range map[string]string{
+		"fails":  `echo "install-box.sh $*" >> "$SHIM_LOG"; echo "cannot download restic" >&2; exit 1`,
+		"stalls": `echo "install-box.sh $*" >> "$SHIM_LOG"; /bin/sleep 30`,
+	} {
+		s := newSelfBox(t)
+		s.release("v0.16.0", body, "")
+		log, out, rec := s.run(t, "LAIB_SELF_UPDATE_TIMEOUT=1")
+		if !installed(log) || rec["result"] != "skipped" || rec["failed"] != "" || strings.Contains(log, "try-restart") {
+			t.Fatalf("%s: an install that never reached the binaries is skipped, not rolled back or marked: %v\n%s\n%s", name, rec, log, out)
+		}
+		s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
+		if log, out, rec = s.run(t); !installed(log) || rec["result"] != "updated" {
+			t.Fatalf("%s: the next night must try it again: %v\n%s\n%s", name, rec, log, out)
+		}
+	}
+}
+
+// auto never goes back: a box on a build newer than the newest release (the
+// VM job's --source, a hand-installed fix) stays on it.
+func TestSelfUpdateNeverDowngradesInAuto(t *testing.T) {
+	s := newSelfBox(t)
+	s.laib("v0.17.0")
+	s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
+	if log, out, rec := s.run(t); installed(log) || rec["result"] != "current" {
+		t.Fatalf("auto went from v0.17.0 back to v0.16.0: %v\n%s\n%s", rec, log, out)
+	}
+}
+
+// behindSince: since when the box runs older than the newest release, kept
+// across skipped nights, so diag can say a box that never gets its calm
+// night (a red service that stays red) has stopped following.
+func TestSelfUpdateKeepsSinceWhenItIsBehind(t *testing.T) {
+	s := newSelfBox(t)
+	s.ready("v0.11.1", "bereit", 1)
+	s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
+	_, _, first := s.run(t)
+	_, _, second := s.run(t)
+	if first["behindSince"] == "" || second["behindSince"] != first["behindSince"] {
+		t.Fatalf("behindSince must be set once and kept: %v then %v", first, second)
+	}
+	s.ready("v0.11.1", "bereit", 0)
+	if _, _, rec := s.run(t); rec["result"] != "updated" || rec["behindSince"] != "" {
+		t.Fatalf("an updated box is not behind: %v", rec)
 	}
 }

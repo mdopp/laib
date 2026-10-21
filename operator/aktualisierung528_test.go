@@ -47,3 +47,24 @@ func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 		}
 	}
 }
+
+// #547: laib updates carries a laib row (Laib's own update, self-update.sh's):
+// no proposal, and its detail is no registry error in the note.
+func TestAktualisierungLeavesLaibsOwnRowAlone(t *testing.T) {
+	updates := `[{"service":"laib","image":"laib","current":"v0.11.1","latest":"v0.16.0","error":"v0.16.0 zurückgenommen: nach dem Update nicht grün","auto":true}]`
+	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates, "laib_diag": `[]`, "laib_inbox": `[]`})
+	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "fertig"}})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	s, err := op.Run(context.Background(), skillFor(t, Trigger{}, "aktualisierung"), Trigger{Kind: "tick"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range *calls {
+		if strings.HasPrefix(c, "laib_propose") {
+			t.Fatalf("Laib's own row became a proposal: %s", c)
+		}
+	}
+	if strings.Contains(s.Note, "Registry nicht lesbar") {
+		t.Fatalf("the laib row's detail reads as a registry error: %s", s.Note)
+	}
+}
