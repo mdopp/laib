@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ type Session struct {
 	Note     string    `json:"note"`
 	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
 	Duration int64     `json:"ms"`
+	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 }
 
 // Operator holds the clients and the limits.
@@ -139,6 +141,13 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 	}
+	// the record (#544): what came of its last proposals, for every session;
+	// the morning report also carries the month's rate
+	all := o.history(ctx)
+	ctxText = Record(all) + ctxText
+	if sk.Output == "report" {
+		human = strings.TrimSpace(human + " " + Rate(all, now()))
+	}
 	// an updates skill (#376): the runner reads the updates, the model sees
 	// and may propose only the patch values, the rest goes into the note
 	offers := map[string]string{}
@@ -233,6 +242,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					continue
 				}
 			}
+			if why := unanchored(sk, mcpName, args); why != "" {
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
+				continue
+			}
 			if mcpName == "laib_propose" && sk.Updates == "patch" {
 				service, _ := args["service"].(string)
 				key, _ := args["key"].(string)
@@ -260,6 +273,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			out, isErr, err := mcp.Call(ctx, mcpName, args)
 			if err != nil {
 				out, isErr = err.Error(), true
+			}
+			if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && (mcpName == "laib_propose" || mcpName == "laib_repair") {
+				n, _ := strconv.Atoi(m[1])
+				s.Proposed = append(s.Proposed, n)
 			}
 			if fs, raw, ok := parseDiag(out); mcpName == "laib_diag" && !isErr && ok {
 				out = news(fs, raw, mem.Seen[sk.Name])
@@ -291,6 +308,22 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	s.Outcome = "red"
 	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
 	return s, nil
+}
+
+// unanchored says why a model's proposal may not be filed (#544): in a
+// session that reads diag, a proposal names the finding it answers, what
+// was seen and how it is undone, so laib can measure it afterwards. The
+// updates skill's patch versions answer an update, not a finding.
+func unanchored(sk Skill, tool string, args map[string]any) string {
+	if tool != "laib_propose" || sk.Updates == "patch" || !slices.Contains(sk.Granted, "diag") {
+		return ""
+	}
+	for _, k := range []string{"finding", "evidence", "undo"} {
+		if v, _ := args[k].(string); strings.TrimSpace(v) == "" {
+			return "ein Vorschlag nennt finding (probe und Dienst eines Befunds aus laib diag), evidence (was du gesehen hast) und undo (wie man ihn zurücknimmt); laib misst danach, ob der Befund weg ist. Gibt diag keinen Befund dafür her: escalate"
+		}
+	}
+	return ""
 }
 
 // patches reads laib updates for an updates skill (#376): the list the

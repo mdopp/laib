@@ -39,6 +39,62 @@ type Proposal struct {
 	Adds        []string  `json:"adds,omitempty"`        // services the change adds
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
+	Anchor
+	// what came of it (#544), recorded by laib, never by the proposer:
+	// effective | no-effect | rolled-back | rejected | later | applied
+	Outcome      string    `json:"outcome,omitempty"`
+	RejectReason string    `json:"rejectReason,omitempty"` // the owner's short reason for a no
+	Settled      time.Time `json:"settled,omitempty"`
+}
+
+// Anchor is what a proposal answers (#544): the diag finding it should make
+// go away ("<probe> <service>"), its evidence, how it is undone, and the
+// outside sources it rests on. A source makes it class human.
+type Anchor struct {
+	Finding  string   `json:"finding,omitempty"`
+	Evidence string   `json:"evidence,omitempty"`
+	Undo     string   `json:"undo,omitempty"`
+	Sources  []string `json:"sources,omitempty"`
+}
+
+// Window is how long an approved proposal's finding has to go away (#544).
+const Window = 2 * time.Hour
+
+// Later: a no that only means "not now" (#544) — free, never counted
+// against the proposer.
+func Later(reason string) bool {
+	r := strings.ToLower(strings.Trim(strings.TrimSpace(reason), ".!"))
+	return r == "nicht jetzt" || r == "später" || r == "spaeter"
+}
+
+// Settle records what came of every approved proposal not yet settled
+// (#544): its finding gone from diag is effective, still there Window after
+// the approval is no effect; one without a finding is applied, nothing to
+// measure. present says whether diag shows a finding now. It returns the
+// proposals it measured, for the journal.
+func Settle(inbox string, present func(finding string) bool, now time.Time) []*Proposal {
+	all, _ := List(inbox, false)
+	var out []*Proposal
+	for _, p := range all {
+		if p.Status != "approved" || p.Outcome != "" {
+			continue
+		}
+		switch {
+		case p.Finding == "":
+			p.Outcome = "applied"
+		case !present(p.Finding):
+			p.Outcome = "effective"
+		case now.Sub(p.Decided) > Window:
+			p.Outcome = "no-effect"
+		default:
+			continue
+		}
+		p.Settled = now
+		if Save(inbox, p) == nil && p.Finding != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
@@ -181,7 +237,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge)
 			}
 		}
 	}
-	return p, save(inbox, p)
+	return p, Save(inbox, p)
 }
 
 // Diff returns the proposal's diff against main. values.yml carries secret
@@ -229,7 +285,7 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 	}
 	stale := func(reason string) error {
 		p.Status, p.StaleReason, p.Decided, p.DecidedBy = "stale", reason, time.Now().UTC(), by
-		save(inbox, p)
+		Save(inbox, p)
 		return fmt.Errorf("Vorschlag #%d ist veraltet — neu vorschlagen: %s", p.ID, reason)
 	}
 	if out, err := git(ctx, wt, "merge", "-q", "--no-ff", "-m", fmt.Sprintf("approve #%d by %s: %s", p.ID, by, p.Reason), p.Branch); err != nil {
@@ -252,17 +308,21 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 	}
 	git(ctx, repo, "branch", "-q", "-D", p.Branch)
 	p.Status, p.Decided, p.DecidedBy = "approved", time.Now().UTC(), by
-	return save(inbox, p)
+	return Save(inbox, p)
 }
 
-// Reject drops the branch.
-func Reject(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
+// Reject drops the branch and keeps the owner's reason (#544).
+func Reject(ctx context.Context, repo, inbox string, p *Proposal, by, reason string) error {
 	if p.Status != "open" {
 		return fmt.Errorf("proposal %d is %s", p.ID, p.Status)
 	}
 	git(ctx, repo, "branch", "-q", "-D", p.Branch)
 	p.Status, p.Decided, p.DecidedBy = "rejected", time.Now().UTC(), by
-	return save(inbox, p)
+	p.Outcome, p.RejectReason, p.Settled = "rejected", strings.TrimSpace(reason), p.Decided
+	if Later(reason) {
+		p.Outcome = "later"
+	}
+	return Save(inbox, p)
 }
 
 // Get loads one proposal.
@@ -311,7 +371,8 @@ func nextID(inbox string) (int, error) {
 	return all[0].ID + 1, nil
 }
 
-func save(inbox string, p *Proposal) error {
+// Save writes one inbox entry.
+func Save(inbox string, p *Proposal) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err

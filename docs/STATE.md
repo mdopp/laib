@@ -358,6 +358,10 @@ regenerated.
 
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
+`"verb":"outcome"` (actor `laib`, #544) is what came of an approved
+proposal that named a finding: `#N von ops wirksam: der Befund ist weg
+(unit jellyfin)` or `… ohne Wirkung: der Befund ist noch da (…)`, once per
+proposal; a `reject` line carries the owner's reason after the colon.
 
 ### Routes that trust only the proxy
 

@@ -89,6 +89,7 @@ func init() {
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
 	}
+	inbox.Present = diag.Present
 	inbox.RunVerb = func(ctx context.Context, env *cli.Env, argv []string) int {
 		for _, v := range mcp.Verbs {
 			if v.Name == argv[0] {

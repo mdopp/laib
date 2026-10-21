@@ -50,6 +50,9 @@ func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(c.env.Paths.State, "services", "echo2")); err == nil {
 		t.Fatal("echo2 still in the state after the rollback")
 	}
+	if p, _ := proposal.Get(cli.InboxDir(c.env), id); p.Outcome != "rolled-back" { // what came of it (#544)
+		t.Fatalf("outcome %q after a rollback, want rolled-back", p.Outcome)
+	}
 	if _, err := os.Stat(filepath.Join(c.env.Paths.Quadlet, "echo2")); err == nil {
 		t.Fatal("echo2's unit files still on the box: a removed service keeps running")
 	}

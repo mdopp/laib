@@ -46,12 +46,29 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		return cli.Refused(env, env.Actor+" may not propose")
 	}
 	var edit proposal.Edit
+	var anchor proposal.Anchor
 	var words []string
 	usePatch := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--patch":
 			usePatch = true
+		case "--finding", "--evidence", "--undo", "--source": // the anchor (#544)
+			if i+1 >= len(args) {
+				return env.Fail(fmt.Errorf("%s wants a value", args[i]))
+			}
+			v := strings.TrimSpace(args[i+1])
+			switch args[i] {
+			case "--finding":
+				anchor.Finding = strings.Join(strings.Fields(v), " ")
+			case "--evidence":
+				anchor.Evidence = v
+			case "--undo":
+				anchor.Undo = v
+			default:
+				anchor.Sources = append(anchor.Sources, v)
+			}
+			i++
 		case "--set":
 			if i+1 >= len(args) {
 				return env.Fail(errors.New("--set wants path:KEY=VALUE"))
@@ -101,6 +118,10 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	if reason == "" {
 		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]] \"<grund>\""))
 	}
+	// the finding a proposal answers is one diag shows now, or laib measures nothing (#544)
+	if anchor.Finding != "" && Present != nil && !Present(ctx, env, st, anchor.Finding) {
+		return env.Fail(fmt.Errorf("Befund %q steht nicht in laib diag: nenne probe und Dienst eines Befunds, den diag jetzt zeigt", anchor.Finding))
+	}
 	var p *proposal.Proposal
 	if edit.Patch == "" && edit.Set == nil && edit.Add == nil {
 		if env.MCP {
@@ -111,6 +132,9 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		p, err = proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, edit, JudgeFor(st, env.Actor))
 	}
 	if err != nil {
+		return env.Fail(err)
+	}
+	if err := Anchor(cli.InboxDir(env), p, anchor); err != nil {
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
@@ -165,6 +189,24 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 	}
 }
 
+// Present says whether laib diag shows a finding ("<probe> <service>")
+// now; main sets it to the diag chore's probes (#544).
+var Present func(ctx context.Context, env *cli.Env, st *state.State, finding string) bool
+
+// Anchor stores what a proposal answers (#544). A proposal that rests on an
+// outside source is class human: what the web says, a person checks.
+func Anchor(inbox string, p *proposal.Proposal, a proposal.Anchor) error {
+	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && len(a.Sources) == 0 {
+		return nil
+	}
+	p.Anchor = a
+	if len(a.Sources) > 0 {
+		p.Class = "human"
+		p.Reasons = append(p.Reasons, "stützt sich auf eine Quelle aus dem Netz: "+strings.Join(a.Sources, ", "))
+	}
+	return proposal.Save(inbox, p)
+}
+
 func reasonsSuffix(p *proposal.Proposal) string {
 	if len(p.Reasons) == 0 {
 		return ""
@@ -208,8 +250,8 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 }
 
 func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int {
-	if len(args) != 1 {
-		return env.Fail(errors.New("usage: laib approve|reject <id>"))
+	if len(args) < 1 || approve && len(args) > 1 {
+		return env.Fail(errors.New("usage: laib approve <id> · laib reject <id> [\"<grund>\"]"))
 	}
 	id, err := strconv.Atoi(strings.TrimPrefix(args[0], "#"))
 	if err != nil {
@@ -242,10 +284,12 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		return cli.ExitRefused
 	}
 	if !approve {
-		if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor); err != nil {
+		// the owner's reason is the Operator's strongest lesson (#544); "nicht jetzt" is free
+		why := strings.Join(args[1:], " ")
+		if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, why); err != nil {
 			return env.Fail(err)
 		}
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: strings.TrimSuffix(fmt.Sprintf("#%d von %s: %s", p.ID, p.Actor, why), ": ")})
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
 	}

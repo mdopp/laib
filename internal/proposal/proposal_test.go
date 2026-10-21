@@ -69,7 +69,7 @@ func TestProposeApproveReject(t *testing.T) {
 	if p2.ID != 2 {
 		t.Fatal(p2.ID)
 	}
-	if err := Reject(ctx, repo, inbox, p2, "human:mdopp"); err != nil {
+	if err := Reject(ctx, repo, inbox, p2, "human:mdopp", ""); err != nil {
 		t.Fatal(err)
 	}
 	open, _ := List(inbox, true)

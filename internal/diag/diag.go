@@ -62,6 +62,9 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	if findings == nil {
 		findings = []Finding{} // JSON [] rather than null for callers
 	}
+	if only == "" {
+		settle(env, st, findings)
+	}
 	if toJournal {
 		// #13: after an auto-update. Red findings become red journal lines
 		// and reach the webhook; a clean run is one green line.

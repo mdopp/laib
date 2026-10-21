@@ -73,7 +73,13 @@ func Card(p *Proposal, domain string) Decision {
 	default:
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): die Dateien von vorher kommen zurück, Daten bleiben."
 	}
+	if p.Undo != "" { // what the proposer says undoes it (#544), next to laib's own way back
+		d.Reversible += " Laut Vorschlag: " + p.Undo
+	}
 	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", p.Actor, p.Reason)
+	if p.Evidence != "" {
+		d.Why += " — gesehen: " + p.Evidence
+	}
 	d.Risky = p.Class == "human" || len(p.Adds) > 0 || len(p.Mints) > 0
 	d.Primary = "Freigeben"
 	if d.Risky {

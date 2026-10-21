@@ -50,7 +50,11 @@ var mcpParams = map[string][]mcpParam{
 	"propose": {{name: "reason", typ: "string", desc: "ein Satz: warum", required: true},
 		{name: "service", typ: "string", desc: "der Dienst, dessen values.yml sich ändert"},
 		{name: "key", typ: "string", desc: "der Schlüssel in values.yml, z. B. IMAGE"},
-		{name: "value", typ: "string", desc: "der neue Wert, eine Zeile"}},
+		{name: "value", typ: "string", desc: "der neue Wert, eine Zeile"},
+		{name: "finding", typ: "string", desc: "der Befund aus laib diag, den der Vorschlag beheben soll: probe und Dienst, z. B. unit jellyfin; laib misst danach, ob er weg ist"},
+		{name: "evidence", typ: "string", desc: "was du gesehen hast: die Zeile aus diag oder dem Log"},
+		{name: "undo", typ: "string", desc: "wie man es rückgängig macht, ein Satz"},
+		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"}},
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true},
 		{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen"},
 		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"}},
@@ -195,6 +199,14 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 				return nil, "", fmt.Errorf("service, key und value gehören zusammen")
 			}
 			argv = append(argv, "--set", "services/"+val["service"]+"/values.yml:"+val["key"]+"="+val["value"])
+		}
+		for _, k := range []string{"finding", "evidence", "undo"} {
+			if val[k] != "" {
+				argv = append(argv, "--"+k, val[k])
+			}
+		}
+		for _, src := range rest {
+			argv = append(argv, "--source", src)
 		}
 		if a["patch"] != nil {
 			argv = append([]string{"--patch"}, argv...)

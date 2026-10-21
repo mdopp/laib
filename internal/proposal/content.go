@@ -176,7 +176,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		}
 	}
 	git(ctx, repo, "worktree", "remove", "--force", wt)
-	return p, save(inbox, p)
+	return p, Save(inbox, p)
 }
 
 // setValue edits one key of a values.yml, keeping comments and the !secret

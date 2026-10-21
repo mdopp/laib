@@ -8,7 +8,8 @@ check about an agent's task before it runs.
 - **Status:** Accepted, 2026-10-16 (#267); amended 2026-10-17 (#286):
   `more:` tools for a capable model, `plan` and `apply` in the vocabulary;
   amended 2026-10-21 (#543): a look that finds nothing new asks no model,
-  `routineblick` files repairs
+  `routineblick` files repairs; amended 2026-10-21 (#544): a proposal is
+  judged by what happened
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -310,3 +311,48 @@ morning report — instead of within three ticks; whatever the family would
 notice is a change and runs a session. ServiceBay's diagnose offered the
 fix beside the probe and a human clicked it; the proposal is that click,
 filed by the box.
+
+## Amendment 2026-10-21 — a proposal is judged by what happened (#544)
+
+The owner, on #544: the Operator should get better from solved incidents
+and be anchored on what makes a proposal good or bad. Until now nothing
+measured that: approved, rejected or rolled back, the Operator never heard
+the outcome, and neither did the evals. What changes:
+
+- **A proposal carries its anchor** (`proposal.Anchor`): the diag finding
+  it answers (`<probe> <service>`), what was seen, how it is undone, and
+  the outside sources it rests on. `laib propose --finding` is refused
+  when diag does not show that finding now, so an anchor cannot be made
+  up; `laib repair` anchors itself. A source makes the proposal class
+  `human`. The runner refuses a model's `laib_propose` without finding,
+  evidence and undo in every session that reads diag (the updates
+  skill's patch versions answer an update, not a finding, and are exempt);
+  without a finding diag shows, the model escalates.
+- **The kernel records the outcome**, never the proposer: a whole-box
+  `laib diag` settles each approved proposal — its finding gone is
+  `effective`, still there two hours after the approval `no-effect`, one
+  without a finding `applied` — and journals the measured ones once
+  (verb `outcome`); `laib rollback #N` makes it `rolled-back`; a reject
+  keeps the owner's short reason (`rejected`), and „nicht jetzt“ is
+  `later`, free and counted against nobody. The Inbox page asks for the
+  reason; „Später“ still decides nothing.
+- **Every session hears its record.** The runner reads the inbox with the
+  ops hand's own token and puts the last ten measured proposals before the
+  context ("7 wirksam, 2 abgelehnt (#12 „…“), 1 zurückgenommen"); the
+  morning report's note ends with the month's rate. Code, not prompt.
+- **Real rejections become eval cases.** `werkstatt/evals/rejections.py`
+  turns the Operator's anchored, rejected proposals (`laib inbox --all
+  --json`) into draft incidents whose expectation is `calls_lack` — the
+  same finding not proposed again, with the record in the replies. A
+  human reads the reason and keeps or sharpens each draft.
+
+Weighed against before (#246) and against ServiceBay, which had the assist
+catalog as curated know-how and `propose_learning` (dropped without an
+owner decision, #441): there, an agent's "learning" was its own claim.
+Here the measure is the box — the finding went away or did not — and the
+owner's no, in his words. Maintenance gets easier: the owner sees in one
+line whether the Operator's proposals are worth reading, and a bad habit
+shows up as a rate, not as a feeling. Nothing is worse for the family:
+nothing is applied that was not before; a reject gains an optional text
+field. What it costs: about 170 kernel lines (the anchor, the settle in
+diag, the reason) and one MCP read per session.
