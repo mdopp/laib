@@ -8,6 +8,9 @@ ENERGY_FLOW: ""                                          # pv=sensor.…,house=�
 ENERGY_TOTALS: ""                                        # label=sensor.…,…; empty: the friendly-name fallback
 STT_PROVIDER: ""                                         # HA speech-to-text entity for the microphone (haus#63), e.g. stt.faster_whisper; empty: no button
 STT_LANGUAGE: de                                         # the language Haus asks HA's STT for
+HA_PUBLIC_URL: https://home.${DOMAIN}                     # "In Home Assistant öffnen" (haus#64)
+ENERGY_STATS: ""                                         # bezug=sensor.…,einspeisung=…,solar=…: HA long-term statistics for the history (haus#65); empty: the counters Haus finds
+COVER_INVERTED: ""                                       # cover.…,…: covers wired the wrong way round, shown and set turned over (haus#64)
 RADICALE_URL: http://host.containers.internal:5232     # the Haushalt's calendar (haus#11)
 RADICALE_USER: haus                                    # the account Haus writes with (#418): `haus`, seeded by the auth template; empty: no calendar tools
 RADICALE_PASSWORD: !secret HAUS_RADICALE_PASSWORD
