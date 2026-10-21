@@ -1,5 +1,5 @@
 [Unit]
-Description=Google-Kalender: alle 15 Minuten spiegeln
+Description=Kalender: alle 15 Minuten abgleichen
 
 [Timer]
 OnCalendar=*:0/15

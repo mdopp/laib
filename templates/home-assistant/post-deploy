@@ -36,6 +36,12 @@ it). That plugin is what offers "Mit Home Assistant anmelden" in Music
 Assistant, so its URL is the one a browser reaches, https://home.<domain>:
 MA sends the browser there to sign in.
 
+The family's calendars (#495): Home Assistant reads Radicale as its own
+account `homeassistant` (seeded by auth, HA_RADICALE_PASSWORD), whose home
+templates/kalender fills with copies of the family's calendars. This hook adds
+that CalDAV entry once, so nobody types a password into HA (it replaces the
+hand-made ~/ha-caldav.sh).
+
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
@@ -46,6 +52,8 @@ BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
 CLIENT = BASE + "/"  # HA's IndieAuth client id; the redirect is the same URL
 USER, PW = E.get("HA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_HA_ADMIN_PASSWORD", "")
 BOTE_PW = E.get("LAIB_SECRET_HA_BOTE_PASSWORD", "")
+RADICALE = E.get("RADICALE_URL", "http://127.0.0.1:5232/")   # HA is on the host network, Radicale publishes 5232
+CAL_USER, CAL_PW = "homeassistant", E.get("LAIB_SECRET_HA_RADICALE_PASSWORD", "")
 FRAGE = E.get("FRAGE_URL", "http://127.0.0.1:8710").rstrip("/")  # HA is on the host network, Frage's pod publishes 8710
 RETRY = float(E.get("HA_RETRY_SECONDS", "3"))
 MA = E.get("MA_URL", "http://127.0.0.1:8095").rstrip("/")  # both on the host network
@@ -462,6 +470,32 @@ try:
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
     red(f"{type(e).__name__}: {e}")
+def caldav_entry():
+    """the CalDAV entry as HA's own Radicale account, once (#495)"""
+    if not CAL_PW:
+        print("home-assistant: no HA_RADICALE_PASSWORD (laib apply auth seeds it): no CalDAV entry")
+        return
+    tok = admin_session()
+    if any(e.get("domain") == "caldav" and e.get("title") == CAL_USER for e in call("GET", "/api/config/config_entries/entry", token=tok)[1] or []):
+        print("home-assistant: CalDAV entry homeassistant is there")
+        return
+    st, flow = call("POST", "/api/config/config_entries/flow", {"handler": "caldav"}, token=tok)
+    if st != 200 or not (flow or {}).get("flow_id"):
+        raise RuntimeError(f"the CalDAV integration's flow did not start (HTTP {st})")
+    st, done = call("POST", "/api/config/config_entries/flow/" + flow["flow_id"],
+                    {"url": RADICALE, "username": CAL_USER, "password": CAL_PW, "verify_ssl": False}, token=tok)
+    if (done or {}).get("reason") == "already_configured":   # an entry under another title, same url and user
+        print("home-assistant: CalDAV entry homeassistant is there")
+        return
+    if (done or {}).get("type") != "create_entry":
+        raise RuntimeError(f"the CalDAV entry was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
+    print(f"home-assistant: CalDAV entry homeassistant added ({RADICALE}); the old one with a person's login can go")
+
+
+try:
+    caldav_entry()
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; the calendars come with the next apply
+    print(f"home-assistant: CalDAV entry NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     install_updates()
 except (RuntimeError, OSError, ValueError) as e:
