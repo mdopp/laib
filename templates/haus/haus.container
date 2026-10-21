@@ -25,6 +25,10 @@ Environment=HAUS_RADICALE_ADDRESSBOOK=${RADICALE_ADDRESSBOOK}
 Environment=HAUS_PAPERLESS_URL=${PAPERLESS_URL}
 Environment=HAUS_PAPERLESS_TOKEN=${PAPERLESS_TOKEN}
 Environment=HAUS_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
+# the Dokumente page (haus#68, #521): the address mail is filed from (Paperless fetches it), and
+# whether Paperless opens only at home (its route is internal: from outside, a word instead of the link)
+Environment=HAUS_DOCUMENTS_MAIL=${DOCUMENTS_MAIL}
+Environment=HAUS_PAPERLESS_LAN_ONLY=${PAPERLESS_LAN_ONLY}
 # the Box page's Werkstatt card (haus#15)
 Environment=HAUS_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 Environment=HAUS_NOTES_DIR=/notes

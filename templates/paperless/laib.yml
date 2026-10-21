@@ -6,7 +6,9 @@ provides: [documents]
 # Paperless apps keep working with a token, which forward-auth on the route
 # would break. The admin from the secrets stays as break-glass. The
 # consume folder is the file share's paperless-consume, so a scan dropped
-# there is filed. Postgres and Redis in the pod.
+# there is filed. Postgres and Redis in the pod. The mail inbox (#521):
+# post-deploy makes Paperless' IMAP account and rule from PAPERLESS_MAIL_*,
+# paperless-check.service says in diag when Paperless cannot get in.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless
@@ -27,6 +29,11 @@ secrets:
   - name: PAPERLESS_ADMIN_PASSWORD
     login: {user: "${ADMIN_USER}", host: paperless, note: "Paperless-Admin"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+  - name: PAPERLESS_MAIL_PASSWORD   # the mailbox's password (#521); the owner sets it: laib secret set PAPERLESS_MAIL_PASSWORD, on stdin
+    external: true
+    optional: true                  # no mail inbox without PAPERLESS_MAIL_HOST
+requires:                           # a mail inbox needs its user, recipient and password: refused at plan, before anything restarts (#184)
+  PAPERLESS_MAIL_HOST: [PAPERLESS_MAIL_USER, PAPERLESS_MAIL_PASSWORD]
 data:
   - path: ${DATA_DIR}/paperless/data
   - path: ${DATA_DIR}/paperless/media
@@ -34,5 +41,9 @@ data:
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
 health:
   http: http://127.0.0.1:8000/accounts/login/   # 200 without a login; /api/ challenges (#288)
+status:                             # the mail inbox (#521): whether Paperless gets into the mailbox, in laib diag
+  file: ${DATA_DIR}/paperless/data/laib-status.json
+  check: paperless-check.service
+  stale: 30m                        # the timer runs hourly; a look starts a check when it is older
 ports:
   - {port: 8000, lan: false}

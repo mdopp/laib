@@ -1,4 +1,4 @@
-"""#266, #471: laib-nutzung and laib-persona under Hermes' own plugin loader,
+"""#266, #471, #521: laib-nutzung, laib-persona and laib-ablage under Hermes' own plugin loader,
 pre_llm_call collector and turn finalizer, not a fake: run with the image's
 Python and HERMES_HOME pointing at what post-deploy rendered (config.yaml
 enabling both plugins, plugins/laib-*). argv[1]: Hermes' source dir
@@ -85,4 +85,51 @@ got = {body["event"]: body["count"] for path, body in SEEN if path == "/ingest"}
 assert got == {"werkzeug.haushalt.kalender": 2, "zug": 3, "unbeantwortet": 1}, got
 assert [body for path, body in SEEN if path == "/miss"] == [{"source": "bote", "text": "Wann kommt der Müll?", "day": SEEN[0][1]["day"]}], SEEN
 assert "Anna" not in json.dumps(SEEN, ensure_ascii=False) and "s-9" not in json.dumps(SEEN)
+# #521: laib-ablage under Hermes' own gateway hooks: pre_gateway_dispatch marks a PDF sent with
+# "ablegen", post_gateway_admission (after Hermes' sender check) files it and answers, so a hook
+# Hermes renames or a payload it narrows shows up here, not as documents that never arrive.
+import asyncio  # noqa: E402
+from gateway.config import Platform  # noqa: E402
+from gateway.platforms.event import MessageEvent  # noqa: E402
+from gateway.run_inbound import GatewayInboundMixin  # noqa: E402
+from gateway.run_inbound_consumer import run_post_admission_hook  # noqa: E402
+from gateway.session import SessionSource  # noqa: E402
+
+FILED = []
+
+
+class FakeAblage(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        FILED.append((self.path, self.headers.get("Authorization"), json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+        body = json.dumps({"ok": True, "titel": "Stromrechnung"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+asrv = HTTPServer(("127.0.0.1", 0), FakeAblage)
+threading.Thread(target=asrv.serve_forever, daemon=True).start()
+os.environ["ABLAGE_URL"] = "http://127.0.0.1:%d/ablage" % asrv.server_port
+os.environ["NOTIFY_TOKEN"] = "notify-proof"
+pdf = os.path.join(os.environ["HERMES_HOME"], "doc_proof.pdf")
+with open(pdf, "wb") as f:
+    f.write(b"%PDF-1.7 proof")
+source = SessionSource(platform=Platform.SIGNAL, chat_id="+4917000", user_id="+4917000", user_name="Anna")
+
+
+async def ablegen(text):
+    event = MessageEvent(text=text, source=source, media_urls=[pdf], media_types=["application/pdf"])
+    event = await GatewayInboundMixin._hm_pre_gateway_dispatch_hook(types.SimpleNamespace(), event, source)
+    return await run_post_admission_hook(types.SimpleNamespace(), event, source, "proof-key")
+
+
+assert asyncio.run(ablegen("Was steht da drin?")) == (False, None), "laib-ablage took a message without the word"
+assert not FILED
+handled, reply = asyncio.run(ablegen("Stromrechnung ablegen"))
+assert handled and reply.startswith("Liegt in Paperless, Titel „Stromrechnung“"), (handled, reply)
+assert [(p, a, b["titel"], b["absender"]) for p, a, b in FILED] == [("/ablage", "Bearer notify-proof", "Stromrechnung", "+4917000")], FILED
 print("hermes plugin proof ok")

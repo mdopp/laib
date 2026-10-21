@@ -115,6 +115,31 @@ if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
   ENABLED="$ENABLED, laib-nutzung"
   UNBEANTWORTET=" Kannst du nicht helfen (du weißt es nicht, kein Werkzeug kann es, oder es schlägt fehl), beginne die Antwort mit [unbeantwortet]; das Wort wird vor dem Senden entfernt, die Person liest nur, was danach kommt."
 else rm -rf "$NUTZ"; fi
+# Filing into Paperless (#521): a photo or PDF with "ablegen"/"archivieren" goes into its consume
+# folder by code (laib-ablage, before the model; bote-notify writes it), only while Paperless answers:
+# otherwise the Bote would say "liegt in Paperless" about a folder nobody reads.
+ABL="$H/plugins/laib-ablage"; ABLAGE=""
+paperless_answers() { python3 - "$1" <<'PY'
+import sys, urllib.request, urllib.error
+try:
+    urllib.request.urlopen(sys.argv[1].rstrip("/") + "/api/", timeout=3)
+except urllib.error.HTTPError:
+    pass                  # 401 without a token is an answer
+except Exception as e:
+    print(e); sys.exit(1)
+PY
+}
+if [ -n "${PAPERLESS_URL:-}" ] && paperless_answers "$PAPERLESS_URL" >/dev/null 2>&1; then
+  mkdir -p "$ABL"
+  cp "$(dirname "$0")/ablage_plugin.py" "$ABL/__init__.py"
+  printf 'name: laib-ablage\nversion: "1"\ndescription: a photo or PDF sent with ablegen, into Paperless (laib#521)\n' > "$ABL/plugin.yaml"
+  ENABLED="$ENABLED, laib-ablage"
+  ABLAGE="
+Fotos und PDFs, die jemand mit dem Wort \"ablegen\" oder \"archivieren\" schickt, legt Laib selbst in Paperless ab; du siehst sie nicht. Schickt jemand ein Foto oder PDF ohne das Wort und will es aufheben, sag ihm, er soll es mit \"ablegen\" noch einmal schicken."
+else
+  rm -rf "$ABL"
+  [ -z "${PAPERLESS_URL:-}" ] || echo "ablage: Paperless ($PAPERLESS_URL) antwortet nicht, weggelassen"
+fi
 PLUGINS="plugins:
   enabled: [$ENABLED]"
 HAUSHALT_HINT=""; case "$TOOLS" in *haushalt*) HAUSHALT_HINT=", und lege es im Haushalt ab (Notiz oder Kalender)";; esac
@@ -213,7 +238,7 @@ Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und jeden neuen Vorschlag mit seiner Nummer. Fragt der Admin dazu, lies den Stand mit laib (laib inbox, laib diag, laib status), statt ihn zu raten, und erklär die Möglichkeiten und ihre Folgen. Entscheiden tut er selbst: was nicht zerstört, mit "gib #N frei" im Chat; Löschen, Entfernen und was nur ein Mensch erlauben darf nur in der Inbox, mit dem zweiten Faktor. Schick ihm dann den Link aus der Mitteilung.
-Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}
+Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}${ABLAGE}
 SOUL
 fi
 echo "hermes config rendered: $H/.env, $H/config.yaml"

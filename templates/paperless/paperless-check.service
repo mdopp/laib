@@ -1,0 +1,21 @@
+# laib's look at Paperless' mail inbox (#521): paperless-mail.py check runs
+# inside the running Paperless container, as Paperless' own admin from its
+# environment, and writes the status file laib.yml declares. laib starts it
+# when someone looks at diag or the Box page and the file is older than its
+# stale; the timer once an hour, so the morning report reads a fresh one.
+# Without PAPERLESS_MAIL_HOST it writes an empty status.
+[Unit]
+Description=Paperless: check the mail inbox for laib's status
+After=paperless.service
+
+[Service]
+Type=oneshot
+Environment=PAPERLESS_MAIL_HOST=${PAPERLESS_MAIL_HOST}
+Environment=PAPERLESS_MAIL_PORT=${PAPERLESS_MAIL_PORT}
+Environment=PAPERLESS_MAIL_SECURITY=${PAPERLESS_MAIL_SECURITY}
+Environment=PAPERLESS_MAIL_USER=${PAPERLESS_MAIL_USER}
+Environment=PAPERLESS_MAIL_FILTER_TO=${PAPERLESS_MAIL_FILTER_TO}
+Environment=PAPERLESS_MAIL_FOLDER=${PAPERLESS_MAIL_FOLDER}
+StandardInput=file:%h/.config/containers/systemd/paperless/paperless-mail.py
+ExecStart=/usr/bin/podman exec -i -e PAPERLESS_MAIL_HOST -e PAPERLESS_MAIL_PORT -e PAPERLESS_MAIL_SECURITY -e PAPERLESS_MAIL_USER -e PAPERLESS_MAIL_FILTER_TO -e PAPERLESS_MAIL_FOLDER systemd-paperless python3 - check
+TimeoutStartSec=90

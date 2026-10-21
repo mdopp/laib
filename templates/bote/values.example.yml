@@ -25,6 +25,7 @@ LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: http://host.containers.internal:8650/mcp/haushalt   # Haus's Haushalt (haus#11): calendar, notes, reminders; left out until Haus answers with the token (#170)
 FRAGE_URL: http://host.containers.internal:8710/mcp         # Frage as an MCP tool (templates/frage serves /mcp); left out when it does not answer
+PAPERLESS_URL: http://host.containers.internal:8000   # "ablegen" with a photo or PDF files it into Paperless (#521); left out when Paperless does not answer
 HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` tool and the Automat (used once its tokens are minted)
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_AUTOMAT_HA_TOKEN
 HA_TOKEN: !secret BOTE_HA_TOKEN                 # minted by Home Assistant's post-deploy (#349): the non-admin user bote

@@ -62,5 +62,5 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
 | file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Haus, the shared `SHARE_USER` as fallback (#296) |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
-| paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share |
+| paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share; a mail inbox from `PAPERLESS_MAIL_*` (README.md) |
 | usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |
