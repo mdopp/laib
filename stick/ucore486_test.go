@@ -96,7 +96,7 @@ func TestBoxConfigLeavesAMaskedZincatiAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a second --box-config on a uCore box fails: %v\n%s", err, out)
 	}
-	if strings.Contains(log, "mask --now") || strings.Contains(out, "masked") {
+	if strings.Contains(log, "mask --now zincati") || strings.Contains(log, "mask --now rpm-ostreed") || strings.Contains(out, "zincati.service: masked") || strings.Contains(out, "timer: masked (this image") {
 		t.Errorf("already masked: nothing to do, nothing to say\nshims:\n%s\noutput:\n%s", log, out)
 	}
 }

@@ -63,8 +63,8 @@ notify:
   person: martin                  # the owner in people (#441): laib-notify tells them through the Bote first (incidents,
                                   # updates, each new proposal); mail only when no channel is reachable
 updates:
-  days: [Sat, Sun]                # podman auto-update window (#13); empty = podman's daily
-  time: "03:00"
+  days: [Sat, Sun]                # laib-images.timer's nights (#528); empty = every night
+  time: "04:30"                   # default: 90 minutes after backup.schedule
 model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API

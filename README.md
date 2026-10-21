@@ -18,7 +18,8 @@ layer (ADR 0010).
   box; `laib apply` snapshots, writes, reloads, restarts and **verifies**. An
   apply whose verify is red is not a success.
 - **systemd runs the containers**, not Laib. Laib renders Podman Quadlet files
-  and reloads systemd. Restart policy, timers and auto-update are systemd's.
+  and reloads systemd. Restart policy and timers are systemd's; image updates
+  are laib's own nightly run, verified, with the previous image back on red (#528).
 - **The agent is the operator; Laib is its hands, memory and safety net.**
   Laib has no LLM code. The household agent (Solaris) watches, looks inside
   containers, corrects and reports; the coding agents in the Werkstatt (pi,

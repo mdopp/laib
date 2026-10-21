@@ -91,8 +91,8 @@ type Registry struct {
 	Ref  string `yaml:"ref"` // branch or tag; default main
 }
 
-// Updates is the window for podman auto-update (#13). Empty days keep
-// podman's daily timer; laib diag --journal runs after every update either way.
+// Updates is the window of laib-images.timer, the nightly image run (#528):
+// empty days are every night, an empty time 90 minutes after the backup.
 type Updates struct {
 	Days []string `yaml:"days"` // Sat, Sun …
 	Time string   `yaml:"time"` // "03:00"

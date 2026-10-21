@@ -194,8 +194,10 @@ the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per
 hour after which it stops and tells a human through the journal and the
 webhook. A service that needs more is flapping, and flapping is a finding,
-not a chore. `podman auto-update` keeps images current inside the window;
-`laib diag --journal` checks afterwards.
+not a chore. Images change in two ways (ADR 0002 amendment, #528): those
+of services without data nightly by `laib-images.timer` after the backup,
+verified, the previous image back on red; those with data by a proposal a
+person approves, snapshotted first. podman auto-update stays masked.
 
 **Understanding, by the dial.** When converge cannot help (a unit that fails
 on every start, a red health, an upstream that changed its config format),

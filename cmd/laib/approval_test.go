@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/mcp"
@@ -18,6 +22,7 @@ import (
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 	"github.com/mdopp/laib/internal/token"
 )
@@ -60,7 +65,7 @@ func testBox(t *testing.T) (env *cliEnv, dataDir string) {
 	for name, content := range map[string]string{
 		"laib.yml":         "name: whoami\nsecrets:\n  - name: WHOAMI_TOKEN\n",
 		"values.yml":       "IMAGE: docker.io/traefik/whoami:v1.10\nTOKEN: !secret WHOAMI_TOKEN\n",
-		"whoami.container": "[Container]\nImage=${IMAGE}\nEnvironment=TOKEN=${TOKEN}\n\n[Install]\nWantedBy=default.target\n",
+		"whoami.container": "[Container]\nImage=${IMAGE}\nEnvironment=TOKEN=${TOKEN}\nAutoUpdate=registry\n\n[Install]\nWantedBy=default.target\n",
 	} {
 		if err := os.WriteFile(filepath.Join(svc, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -235,5 +240,67 @@ func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
 	}
 	if len(hooks) != 1 || !strings.HasSuffix(hooks[0], "services/whoami/post-deploy") {
 		t.Fatalf("the approved script must run once, in the hooks image: %v", hooks)
+	}
+}
+
+// #528: a new image of a service with data (its container lacks
+// AutoUpdate=registry, its data has a database) is never the dial's: the
+// proposal waits for a person — inbox and Signal, it is no "human" class —
+// and its approval takes a pre-update snapshot of the service before the
+// merge; a snapshot that fails refuses the approval and main stays.
+func TestANewImageOfAServiceWithDataWaitsAndIsSnapshottedFirst(t *testing.T) {
+	ctx := context.Background()
+	env, _ := testBox(t)
+	svc := filepath.Join(env.Paths.State, "services", "vault")
+	os.MkdirAll(svc, 0o755)
+	for name, content := range map[string]string{
+		"laib.yml":        "name: vault\ndata:\n  - path: ${DATA_DIR}/vault\n    quiesce: true\n",
+		"values.yml":      "IMAGE: docker.io/vaultwarden/server:latest\n",
+		"vault.container": "[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n",
+	} {
+		os.WriteFile(filepath.Join(svc, name), []byte(content), 0o644)
+	}
+	if err := proposal.CommitDirty(ctx, env.Paths.State, "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := cli.LoadState(env)
+	pin := "docker.io/vaultwarden/server:latest@sha256:b2"
+	if out, code := mcp.Call(ctx, env, st, "ops", "laib_propose", map[string]any{"reason": "vault: neues Image", "service": "vault", "key": "IMAGE", "value": pin}); code != cli.ExitOK {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	all, _ := proposal.List(cli.InboxDir(env), false)
+	if len(all) != 1 || all[0].Status != "open" || all[0].Class == "human" || len(all[0].Warnings) != 1 || !strings.Contains(all[0].Warnings[0], "vorher sichert Laib vault") || !slices.Equal(all[0].Snapshot, []string{"vault"}) {
+		t.Fatalf("the dial approved a data service's image, or the person is not told: %+v", all)
+	}
+	realRestic := backup.ResticRun
+	t.Cleanup(func() { backup.ResticRun = realRestic })
+	var snaps []string
+	fail := true
+	backup.ResticRun = func(_ context.Context, _ *state.State, _ string, args ...string) (string, error) {
+		if args[0] == "backup" {
+			b, _ := os.ReadFile(filepath.Join(svc, "values.yml"))
+			snaps = append(snaps, strings.Join(args, " ")+" | main: "+string(b))
+			if fail {
+				return "", errors.New("repo locked")
+			}
+		}
+		return "", nil
+	}
+	id := fmt.Sprint(all[0].ID)
+	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: io.Discard}, []string{id}, true); code != cli.ExitRefused {
+		t.Fatalf("a failed snapshot must refuse the approval: %d", code)
+	}
+	if p, _ := proposal.Get(cli.InboxDir(env), all[0].ID); p.Status != "open" {
+		t.Fatalf("refused, but %s", p.Status)
+	}
+	fail = false
+	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}, true); code != cli.ExitOK {
+		t.Fatalf("approval: %d", code)
+	}
+	if len(snaps) != 2 || !strings.Contains(snaps[1], "--tag pre-update --tag vault") || !strings.Contains(snaps[1], "main: IMAGE: docker.io/vaultwarden/server:latest\n") {
+		t.Fatalf("the snapshot is not taken before the merge: %q", snaps)
+	}
+	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "vault", "vault.container")); !strings.Contains(string(b), pin) {
+		t.Fatalf("not applied: %s", b)
 	}
 }

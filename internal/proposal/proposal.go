@@ -31,6 +31,7 @@ type Proposal struct {
 	DecidedBy   string    `json:"decidedBy,omitempty"`
 	Files       []string  `json:"files"`
 	Warnings    []string  `json:"warnings,omitempty"`    // e.g. a second service for one purpose
+	Snapshot    []string  `json:"snapshot,omitempty"`    // services laib snapshots before it applies the approved change (#528)
 	Class       string    `json:"class"`                 // what the dial is keyed by: values | new-service | template-update | patch | tree | human
 	Kind        string    `json:"kind,omitempty"`        // the edit's shape: tree | values | new-service | template-update | patch
 	Reasons     []string  `json:"reasons,omitempty"`     // why only a human may allow it (class human), plain German

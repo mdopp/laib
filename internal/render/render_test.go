@@ -102,24 +102,37 @@ func mustLoad(t *testing.T) *state.State {
 	return st
 }
 
-// #46: podman auto-update takes a snapshot first and never runs at the
-// backup's hour by default.
-func TestAutoUpdateSnapshotsFirstAndAvoidsTheBackupHour(t *testing.T) {
+// #528 (before: #46's podman auto-update drop-ins): laib-images.timer runs
+// the nightly image run after the backup — 90 minutes after
+// backup.schedule by default, box.yml updates' days and time when set — and
+// podman's own timer gets no drop-in: it stays masked.
+func TestTheImageRunFollowsTheBackupAndTheUpdateWindow(t *testing.T) {
 	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	st.Box.Updates.Days = []string{"Sat", "Sun"}
-	st.Box.Updates.Time = ""
-	out, err := Render(st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out["systemd/podman-auto-update.service.d/laib.conf"], "ExecStartPre=/var/opt/laib/laib backup") {
-		t.Fatalf("no snapshot before the image update:\n%s", out["systemd/podman-auto-update.service.d/laib.conf"])
-	}
-	if !strings.Contains(out["systemd/podman-auto-update.timer.d/laib.conf"], " 04:30:00") {
-		t.Fatalf("the default update time must not be the backup's 03:00:\n%s", out["systemd/podman-auto-update.timer.d/laib.conf"])
+	for _, c := range []struct {
+		backup, time string
+		days         []string
+		want         string
+	}{
+		{"", "", nil, "OnCalendar=*-*-* 04:30:00\n"},
+		{"01:45", "", nil, "OnCalendar=*-*-* 03:15:00\n"},
+		{"", "05:10", []string{"Sat", "Sun"}, "OnCalendar=Sat,Sun *-*-* 05:10:00\n"},
+	} {
+		st.Box.Backup.Schedule, st.Box.Updates.Time, st.Box.Updates.Days = c.backup, c.time, c.days
+		out, err := Render(st, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out["systemd/laib-images.timer"], c.want) || !strings.Contains(out["systemd/laib-images.service"], "ExecStart=/var/opt/laib/laib updates --run\n") {
+			t.Fatalf("%+v: want %q:\n%s%s", c, c.want, out["systemd/laib-images.timer"], out["systemd/laib-images.service"])
+		}
+		for p := range out {
+			if strings.Contains(p, "podman-auto-update") {
+				t.Fatalf("%s rendered: podman auto-update stays masked, laib-images replaces it", p)
+			}
+		}
 	}
 }
 

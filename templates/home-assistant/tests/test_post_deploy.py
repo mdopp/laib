@@ -24,7 +24,7 @@ def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0,
-              entries=[], subentries={}, not_loaded=0)
+              entries=[], subentries={}, not_loaded=0, states={}, calls=[])
     if onboarded:
         uid = add_user("Owner", admin=True, owner=True)
         HA["creds"][onboarded[0]] = (onboarded[1], uid)
@@ -102,10 +102,21 @@ class FakeHA(BaseHTTPRequestHandler):
             return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home"}] + HA["entries"])   # every user may list them over REST, as in HA
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
+        if self.path.startswith("/api/states/update."):
+            s = HA["states"].get(self.path[len("/api/states/"):])
+            return self.reply(200, s) if s else self.reply(404)
         self.reply(404)
 
     def do_POST(self):
         b = self.body()
+        if self.path.startswith("/api/services/"):   # #528: update.install, homeassistant.restart
+            if self.user() is None or not is_admin(self.user()):
+                return self.reply(401)
+            HA["calls"].append((self.path, b))
+            if self.path == "/api/services/update/install":
+                st = HA["states"][b["entity_id"]]
+                st["state"], st["attributes"]["installed_version"] = "off", st["attributes"]["latest_version"]
+            return self.reply(200, [])
         if self.path == "/api/onboarding/users":
             if "user" in HA["onboarding"]:
                 return self.reply(403, {"message": "User step already done"})
@@ -277,8 +288,8 @@ class Hook(unittest.TestCase):
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.shutdown)
 
-    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1"):
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1",
+    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install=""):
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         for name, value in (tokens or {}).items():
@@ -297,6 +308,22 @@ class Hook(unittest.TestCase):
 
 
 class PostDeploy(Hook):
+
+    def test_an_approved_extension_is_installed_once_and_ha_restarts(self):
+        # #528: the Operator proposed HA_INSTALL from the check's finding; a person approved it.
+        # Installed only while HA offers exactly that version; firmware a person did not name stays.
+        fresh()
+        upd = lambda old, new, cls=None: {"state": "on", "attributes": {"installed_version": old, "latest_version": new, "device_class": cls}}
+        HA["states"].update({"update.senec": upd("2026.6.3", "2026.10.0"), "update.meross": upd("1.0", "1.2"),
+                             "update.plug_firmware": upd("9.5.52", "9.5.60", "firmware")})
+        p, _, log = self.run_hook(install="update.senec=2026.10.0,update.meross=1.1")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["calls"], [("/api/services/update/install", {"entity_id": "update.senec"}), ("/api/services/homeassistant/restart", {})], log)
+        self.assertIn("update.meross 1.1: nichts zu installieren", log)
+        self.assertEqual(HA["states"]["update.plug_firmware"]["state"], "on")
+        HA["calls"].clear()
+        p, _, log = self.run_hook(install="update.senec=2026.10.0")
+        self.assertEqual((p.returncode, HA["calls"]), (0, []), "installed is installed: no second install, no restart")
 
     def test_a_fresh_home_assistant_is_onboarded_and_every_token_minted(self):
         fresh()

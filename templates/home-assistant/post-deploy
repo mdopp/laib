@@ -318,10 +318,37 @@ def frage_agent():
     raise RuntimeError("the Ollama entry for Frage did not load")
 
 
+def install_updates():
+    """HA_INSTALL (#528): the extensions a person approved, "update.a=1.2,update.b=3.0"
+    as the Operator proposed them from home-assistant-check.py (laib snapshotted
+    Home Assistant before this apply). Each is installed only while Home
+    Assistant still offers exactly that version; then Home Assistant restarts
+    once, as a custom integration needs. Device firmware is never proposed."""
+    want = [w.split("=", 1) for w in E.get("HA_INSTALL", "").split(",") if "=" in w]
+    installed = []
+    for eid, ver in want:
+        st, s = call("GET", "/api/states/" + eid, token=admin_session())
+        a = (s or {}).get("attributes") or {}
+        if st != 200 or (s or {}).get("state") != "on" or a.get("latest_version") != ver:
+            print(f"home-assistant: {eid} {ver}: nichts zu installieren (installiert: {a.get('installed_version')}, angeboten: {a.get('latest_version')})")
+            continue
+        st, _ = call("POST", "/api/services/update/install", {"entity_id": eid}, token=admin_session())
+        if st != 200:
+            raise RuntimeError(f"update.install {eid} {ver}: HTTP {st}")
+        installed.append(f"{eid} {ver}")
+    if installed:
+        call("POST", "/api/services/homeassistant/restart", {}, token=admin_session())
+        print("home-assistant: installiert: " + ", ".join(installed) + "; Home Assistant startet neu")
+
+
 try:
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
     red(f"{type(e).__name__}: {e}")
+try:
+    install_updates()
+except (RuntimeError, OSError, ValueError) as e:
+    red(f"HA_INSTALL: {type(e).__name__}: {e}")
 try:
     frage_agent()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists the missing agent

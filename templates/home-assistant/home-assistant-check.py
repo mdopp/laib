@@ -56,6 +56,44 @@ def report(token: str, base: str) -> dict:
             "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIXES.get(name, FIX)} for name in missing]}
 
 
+def offers(base: str, token: str, service: str) -> list:
+    """#528: Home Assistant's update entities that have something newer —
+    HACS and the custom integrations, the devices' firmware. Each is an info
+    finding ("Update: …" / "Firmware: …", laib-notify's weekly "Was ist
+    veraltet" picks them up by these words); the installable extensions are
+    also one finding whose fix is a single value proposal, HA_INSTALL, which
+    the Operator's weekly aktualisierung files as it stands and post-deploy
+    installs once a person approved it. Firmware is only reported: a failed
+    flash can brick a device."""
+    if not token:
+        return []
+    try:
+        req = urllib.request.Request(base.rstrip("/") + "/api/states", headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            states = json.load(resp)
+    except Exception:  # the integrations finding above says HA does not answer
+        return []
+    out, install = [], []
+    for s in states:
+        a = s.get("attributes") or {}
+        old, new = a.get("installed_version"), a.get("latest_version")
+        if not str(s.get("entity_id", "")).startswith("update.") or s.get("state") != "on" or not old or not new:
+            continue
+        name = a.get("title") or a.get("friendly_name") or s["entity_id"]
+        if a.get("device_class") == "firmware":
+            out.append({"severity": "info", "detail": f"Firmware: {name} {old} → {new} (nur gemeldet)",
+                        "fix": "einspielen nur auf ein ausdrückliches Ja: Home Assistant → Einstellungen → Updates, wenn das Gerät gerade entbehrlich ist"})
+            continue
+        notes = f" · {a['release_url']}" if a.get("release_url") else ""
+        out.append({"severity": "info", "detail": f"Update: {name} {old} → {new}{notes}", "fix": "der Operator schlägt es samstags vor (HA_INSTALL)"})
+        if int(a.get("supported_features") or 0) & 1 and not any(c in s["entity_id"] + new for c in " ,="):
+            install.append((f"{s['entity_id']}={new}", f"{name} {new}{notes}"))
+    if install:
+        out.append({"severity": "info", "detail": "Erweiterungen installieren: " + "; ".join(w for _, w in install),
+                    "fix": f"laib propose --set services/{service}/values.yml:HA_INSTALL=" + ",".join(v for v, _ in install)})
+    return out
+
+
 def zwave(url: str) -> dict:
     """#417: zwave-js-ui's own health of its driver: 200 once the stick's
     controller is ready. Without it every Z-Wave device is unavailable while
@@ -82,6 +120,7 @@ def write(path: str, r: dict) -> None:
 
 if __name__ == "__main__":
     r = report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123"))
+    r["findings"] += offers(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("LAIB_SERVICE", "home-assistant"))
     z = zwave(os.environ["ZWAVE_URL"]) if os.environ.get("ZWAVE_URL") else {}
     if z:   # first, and the unit fails: laib status shows home-assistant red (#417)
         r["findings"].insert(0, z)
