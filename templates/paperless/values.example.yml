@@ -8,3 +8,13 @@ DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD
 SECRET_KEY: !secret PAPERLESS_SECRET_KEY
 ADMIN_PW: !secret PAPERLESS_ADMIN_PASSWORD
 OIDC_SECRET: !secret OIDC_PAPERLESS_SECRET
+# the mail inbox (#521): Paperless fetches this mailbox every 10 minutes and files the attachments
+# of mail to PAPERLESS_MAIL_FILTER_TO (title: the subject), then flags the mail. Empty host: no inbox.
+# The password: laib secret set PAPERLESS_MAIL_PASSWORD (on stdin, never in this file)
+PAPERLESS_MAIL_HOST: ""                 # e.g. imap.strato.de
+PAPERLESS_MAIL_PORT: "993"
+PAPERLESS_MAIL_SECURITY: ssl            # ssl | starttls | none
+PAPERLESS_MAIL_USER: ""                 # the mailbox's login, e.g. webmaster@example.org
+PAPERLESS_MAIL_FILTER_TO: ""            # only mail to this address (an alias of the mailbox); empty: every mail in the folder
+PAPERLESS_MAIL_FOLDER: INBOX
+PAPERLESS_MAIL_PASSWORD: !secret PAPERLESS_MAIL_PASSWORD

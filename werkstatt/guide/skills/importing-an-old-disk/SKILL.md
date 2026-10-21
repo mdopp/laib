@@ -43,7 +43,7 @@ the size, the biggest folders and the target on this box:
 | Kind | Target | What happens there |
 |---|---|---|
 | photos (with their .xmp/.aae and a Live Photo's video) | `file-share/data/photos` | Immich's external library; it shows them after its library scan |
-| documents (pdf, office, text) | `file-share/data/paperless-consume` | Paperless files them and **removes them from the folder** |
+| documents (pdf, office, text) | `file-share/data/paperless-consume` | Paperless files them and **removes them from the folder**; each folder name on the way becomes a tag (`Steuer/2019/x.pdf`: Steuer, 2019) |
 | music | `file-share/data/music` | beets tags and sorts it |
 | other | `file-share/data/documents` | the share's documents folder, backed up |
 

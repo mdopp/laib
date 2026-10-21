@@ -17,8 +17,13 @@ A proposal the chat may decide (#509) comes with {"vorschlag": N, "frage":
 Später follows it (signal-cli's sendPollCreate), and its timestamp is kept
 with N in umfragen.json, the only Bote messages the relay counts a vote or
 a 👍/👎 on. The text says "gib #N frei" too, so a failed poll loses nothing.
+POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
+sends a photo or PDF someone sent with "ablegen", with the same bearer, and
+this writes it into Paperless' consume folder as Bote/<sender>/<title>.<ext>
+(Paperless makes the folders tags). Hermes runs as uid 10000 and may not
+write into the share; this container is the box's user, as Haus is.
 Stdlib only: it runs in the stock Hermes image (templates/bote)."""
-import hmac, json, os, shutil, subprocess, sys, threading, time, urllib.request
+import base64, hmac, json, os, re, shutil, subprocess, sys, threading, time, urllib.request
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -39,6 +44,9 @@ class Config:
     log: object = print
     polls: str = "/umfragen/umfragen.json"  # timestamp → proposal, read by the relay (#509)
     keep_polls: int = 50
+    consume: str = "/consume"              # Paperless' consume folder (#521); missing: /ablage answers 503
+    max_file: int = 25 << 20               # one document, as Haus' upload (haus#10)
+    owner: tuple = (1000, 1000)            # Paperless' user (paperless.container USERMAP_UID): it removes what it filed
 
 
 class Limiter:
@@ -145,6 +153,71 @@ def poll(cfg, number, vorschlag, frage):
     return True
 
 
+# what Paperless files and the Bote takes, by its first bytes, with the extension it gets
+KINDS = [(b"%PDF-", ".pdf"), (b"\xff\xd8\xff", ".jpg"), (b"\x89PNG\r\n\x1a\n", ".png"), (b"GIF8", ".gif")]
+_file_lock = threading.Lock()
+
+
+def kind(data):
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return next((ext for magic, ext in KINDS if data.startswith(magic)), None)
+
+
+def plain(name, fallback):
+    """a name as a folder or file name: letters, digits, space and ._- (anything else '_'), never hidden, at most 80"""
+    name = re.sub(r"[^\w .-]", "_", name or "").strip(" ._-")[:80].strip(" ._-")
+    return name or fallback
+
+
+def sender(cfg, platform, who, name):
+    """the person from people.json whose channel this is, else the chat's name for them"""
+    try:
+        with open(cfg.people) as f:
+            for person, channels in json.load(f).items():
+                if f"{platform}:{who}" in channels:
+                    return person.capitalize()
+    except (OSError, ValueError, AttributeError):
+        pass
+    return plain(name, "Unbekannt")
+
+
+def file_in(cfg, data, title, person):
+    """writes data into the consume folder, whole or not at all: staged under ._* (Paperless
+    ignores it), then renamed to a free name; the title it got"""
+    ext = kind(data)
+    if ext is None:
+        raise ValueError("nur Fotos (JPG, PNG, GIF, WebP) und PDFs")
+    if not os.path.isdir(cfg.consume):
+        raise FileNotFoundError(cfg.consume)
+    folder = os.path.join(cfg.consume, "Bote", person)
+    with _file_lock:
+        for d in (os.path.join(cfg.consume, "Bote"), folder):
+            if not os.path.isdir(d):
+                os.mkdir(d, 0o755)
+                try:
+                    os.chown(d, *cfg.owner)
+                except OSError:
+                    pass
+        stage = os.path.join(folder, "._bote-%d.part" % time.monotonic_ns())
+        with open(stage, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.chown(stage, *cfg.owner)
+        except OSError:
+            pass
+        for n in range(1, 100):
+            got = title if n == 1 else f"{title} ({n})"
+            final = os.path.join(folder, got + ext)
+            if not os.path.exists(final):
+                os.rename(stage, final)
+                return got
+        os.remove(stage)
+        raise FileExistsError(title)
+
+
 class Handler(BaseHTTPRequestHandler):
     timeout = 10  # seconds a client may take to send its request
 
@@ -171,11 +244,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         cfg = self.server.cfg
-        if self.path != "/mitteilung":
+        if self.path not in ("/mitteilung", "/ablage"):
             return self.reply(404, {"fehler": "unbekannter Pfad"})
         got = self.headers.get("Authorization", "")
         if not cfg.token or not hmac.compare_digest(got.encode(), ("Bearer " + cfg.token).encode()):
             return self.reply(401, {"fehler": "kein gültiger Token"})
+        if self.path == "/ablage":
+            return self.ablage(cfg)
         try:
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -216,6 +291,37 @@ class Handler(BaseHTTPRequestHandler):
             out["umfrage"] = poll(cfg, ch.split(":", 1)[1], vorschlag, frage.strip())
         return self.reply(200, out)
 
+    def ablage(self, cfg):
+        """{titel, plattform, absender, name, daten: base64} → {ok, titel} (#521)"""
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            n = -1
+        if n < 0 or n > cfg.max_file * 4 // 3 + 4096:
+            return self.reply(413, {"fehler": "zu groß (höchstens 25 MB)"})
+        try:
+            msg = json.loads(self.rfile.read(n) or b"null")
+            data = base64.b64decode(msg["daten"], validate=True)
+            platform, who = str(msg.get("plattform", "")), str(msg.get("absender", ""))
+        except (ValueError, TypeError, KeyError):
+            return self.reply(400, {"fehler": "erwartet: {titel, plattform, absender, name, daten}"})
+        if not data or len(data) > cfg.max_file:
+            return self.reply(413, {"fehler": "leer oder zu groß (höchstens 25 MB)"})
+        person = sender(cfg, platform, who, str(msg.get("name", "")))
+        title = plain(str(msg.get("titel", "")), "Dokument von %s %s" % (person, time.strftime("%Y-%m-%d %H-%M")))
+        try:
+            got = file_in(cfg, data, title, person)
+        except ValueError as e:
+            return self.reply(415, {"fehler": str(e)})
+        except FileNotFoundError:
+            cfg.log("ablage: kein Einwurf-Ordner %s" % cfg.consume)
+            return self.reply(503, {"fehler": "Paperless' Einwurf-Ordner fehlt"})
+        except OSError as e:
+            cfg.log(f"ablage: von={person} nicht geschrieben: {type(e).__name__}")
+            return self.reply(500, {"fehler": "der Einwurf-Ordner nimmt nichts an"})
+        cfg.log(f"ablage: von={person} {len(data)} Bytes abgelegt")  # never the title: it may say what the letter is
+        return self.reply(200, {"ok": True, "titel": got})
+
     def log_message(self, *a):
         pass  # one line per message from do_POST, no request lines
 
@@ -229,6 +335,7 @@ def server(cfg, addr):
 def main():
     host, _, port = os.environ.get("NOTIFY_LISTEN", "0.0.0.0:8645").rpartition(":")
     cfg = Config(token=os.environ.get("NOTIFY_TOKEN", ""), hermes_src=os.environ.get("NOTIFY_HERMES", "/hermes"),
+                 consume=os.environ.get("NOTIFY_CONSUME", "/consume"),
                  polls=os.environ.get("NOTIFY_POLLS", "/umfragen/umfragen.json"), log=lambda m: print(m, flush=True))
     if not cfg.token:
         print("bote-notify: NOTIFY_TOKEN ist leer, jede Mitteilung wird abgelehnt", file=sys.stderr, flush=True)

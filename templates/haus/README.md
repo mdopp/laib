@@ -85,6 +85,15 @@ export does nothing and the library is the notes. The folder is a cache
 (Paperless is the documents' home), not backed up, and beside
 `${DATA_DIR}/haus` and `haus-qmd`, mounted `:z` since both containers use it.
 
+The Dokumente page (haus#68, #521): `haus.<domain>/dokumente` shows the
+ways into Paperless. *Per E-Mail ablegen* is a mailto to `DOCUMENTS_MAIL`,
+the address paperless fetches (its `PAPERLESS_MAIL_FILTER_TO`; empty: no
+button). *Dokument ablegen* stores into the consume folder as the app's
+upload does (`HAUS_UPLOAD_DIR`). *In Paperless öffnen* goes to
+`PAPERLESS_PUBLIC_URL`; `PAPERLESS_LAN_ONLY: "true"` (paperless' route is
+internal) adds "nur zu Hause im WLAN" and, from outside the house, a
+sentence in place of the link.
+
 The house model (#198): with a model on the box (the `model` role, or
 `box.yml model.url`) Haus gets `HAUS_LLM_URL` (the proxy's OpenAI base
 as the pod reaches it, `${MODEL_URL}`), `HAUS_LLM_MODEL=qwen3.6-35b-a3b` and
