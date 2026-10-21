@@ -1,0 +1,20 @@
+# One run of the mirror (#495): kalender.py in a stock Python image, fed on
+# stdin (as home-assistant-check), the status and the last run's state in the
+# data path. The timer fires it every quarter of an hour; laib starts it when
+# someone looks at diag and the status is older than 30 min. The addresses
+# and the password reach podman through the environment, never on argv. A
+# source or Radicale in trouble is a finding in the status, not a failed unit.
+[Unit]
+Description=Kalender: Abos und Google-Kalender nach Radicale spiegeln
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=KALENDER_ABOS=${ABOS}
+Environment=RADICALE_PASSWORD=${RADICALE_PASSWORD}
+Environment=RADICALE_URL=${RADICALE_URL}
+Environment=HA_USER=${HA_USER}
+Environment=STALE_HOURS=${STALE_HOURS}
+StandardInput=file:%h/.config/containers/systemd/kalender/kalender.py
+ExecStart=/usr/bin/podman run --rm -i --name kalender-abgleich -e KALENDER_ABOS -e RADICALE_PASSWORD -e RADICALE_URL -e RADICALE_USER=kalender -e HA_USER -e STALE_HOURS -v ${DATA_DIR}/kalender:/data:z ${IMAGE} python3 -
+TimeoutStartSec=10min

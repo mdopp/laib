@@ -1,0 +1,30 @@
+name: kalender
+template: {registry: builtin, name: kalender, version: 1}
+provides: [calendar-mirror]
+# Calendars from outside into Radicale, one way (#495; the owner, 2026-10-21:
+# "ich will das alles an einem Ort"). A Google calendar's secret iCal address
+# or a public ICS, entered in Haus (haus#66) and kept by laib in secrets.age
+# (`laib calendar subscribe`, KALENDER_ABOS). A timer, no daemon: every
+# quarter of an hour kalender.py fetches each and mirrors it into the
+# person's read-only collection <person>/google-<name> or <person>/abo-<name>,
+# as Radicale's service account `kalender` over CalDAV (never into Radicale's
+# files, #371), and copies the family's calendars into Home Assistant's own
+# account. Item paths are scripts/import-google.py's (#414). README.md.
+after: [radicale]
+routes: []
+secrets:
+  - name: KALENDER_ABOS                # written by `laib calendar` only (Haus's "Kalender hinzufügen"): the addresses are secrets
+    external: true
+    optional: true                     # nothing connected yet: the run says so, nothing is fetched
+  - name: KALENDER_RADICALE_PASSWORD   # the Radicale account `kalender`, seeded by the auth template: seeded there, used here
+    external: true
+data:
+  - path: ${DATA_DIR}/kalender         # the status file and the last run's state; a mirror, the source is outside
+    backup: false
+health:
+  none: "a timer, no daemon: each run writes laib-status.json, a failed run fails kalender-abgleich.service"
+status:                                # the last run, in laib diag: a calendar not mirrored for STALE_HOURS, Google's 404, a refused account
+  file: ${DATA_DIR}/kalender/laib-status.json
+  check: kalender-abgleich.service
+  stale: 30m                           # the timer runs every 15 min: older means it stopped, and a look starts a run
+ports: []

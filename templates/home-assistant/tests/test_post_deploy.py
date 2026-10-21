@@ -145,6 +145,15 @@ class FakeHA(BaseHTTPRequestHandler):
     def config_flow(self, b):
         """HA's config flows over REST, the two the Ollama integration has (2026.10):
         the entry (one step, url; title = the url) and its conversation subentry"""
+        if self.path == "/api/config/config_entries/flow" and b.get("handler") == "caldav":
+            HA["flows"]["cf1"] = "caldav"
+            return self.reply(200, {"type": "form", "flow_id": "cf1", "handler": "caldav", "step_id": "user"})
+        if self.path == "/api/config/config_entries/flow/cf1":   # HA's caldav flow: url, username, password, verify_ssl; title = username
+            if HA.get("radicale_pw") != b.get("password"):
+                return self.reply(200, {"type": "form", "flow_id": "cf1", "errors": {"base": "invalid_auth"}})
+            e = {"entry_id": f"e-caldav-{len(HA['entries'])}", "domain": "caldav", "title": b["username"], "data": b}
+            HA["entries"].append(e)
+            return self.reply(200, {"type": "create_entry", "flow_id": "cf1", "result": {k: e[k] for k in ("entry_id", "domain", "title")}})
         if self.path == "/api/config/config_entries/flow":
             if b.get("handler") != "ollama":
                 return self.reply(400, {"message": "Invalid handler specified"})
@@ -438,6 +447,25 @@ class FrageAgent(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(self.ollama(), [])
         self.assertIn("laib add frage", log, "the hook does not say how Frage becomes the agent")
+
+    def test_the_calendars_come_in_as_has_own_radicale_account_once(self):   # #495
+        fresh()
+        HA["radicale_pw"] = "-ha-cal-pw"
+        p, handed, log = self.run_hook(tokens={"HA_RADICALE_PASSWORD": "-ha-cal-pw"})
+        self.assertEqual(p.returncode, 0, log)
+        cal = [e for e in HA["entries"] if e["domain"] == "caldav"]
+        self.assertEqual([(e["title"], e["data"]["url"]) for e in cal], [("homeassistant", "http://127.0.0.1:5232/")], log)
+        p, _, log = self.run_hook(tokens=dict(handed, HA_RADICALE_PASSWORD="-ha-cal-pw"))
+        self.assertEqual(len([e for e in HA["entries"] if e["domain"] == "caldav"]), 1, "a second CalDAV entry")
+        HA["radicale_pw"] = "other"
+        HA["entries"].clear()
+        p, _, log = self.run_hook(tokens={"HA_RADICALE_PASSWORD": "-ha-cal-pw"})
+        self.assertEqual(p.returncode, 0, "a refused CalDAV entry fails the apply: " + log)
+        self.assertIn("CalDAV entry NOT set up", log)
+        fresh()
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("no HA_RADICALE_PASSWORD", log)
 
 
 if __name__ == "__main__":

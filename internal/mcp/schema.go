@@ -64,7 +64,10 @@ var mcpParams = map[string][]mcpParam{
 		{name: "group", typ: "string", flag: "--group", enum: []string{"family", "admins"}, desc: "neu: family, wenn leer; beim erneuten Senden bleibt die Gruppe"},
 		{name: "resend", typ: "boolean", flag: "--resend", desc: "den Link für einen eingeladenen Benutzer noch einmal schicken"}},
 	"person_pending": {},
-	"skill":          {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
+	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer, haus für die Familie)"},
+		{name: "name", typ: "string", desc: "kurz, klein, a-z 0-9 -"}, {name: "kind", typ: "string", enum: []string{"google", "abo"}, desc: "google: Googles geheime iCal-Adresse; abo: ein öffentlicher Kalender"},
+		{name: "title", typ: "string", desc: "der Name, den die Familie sieht"}},
+	"skill": {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 
 var (
@@ -102,6 +105,9 @@ func mcpSchema(st *state.State, verb string) map[string]any {
 	}
 	if verb == "write" {
 		props["stdin"] = map[string]any{"type": "string", "description": "der Inhalt der Datei"}
+	}
+	if verb == "calendar" {
+		props["stdin"] = map[string]any{"type": "string", "description": "subscribe: die Kalender-Adresse (https:// oder webcal://); sie kommt in keiner Antwort vor"}
 	}
 	return map[string]any{"type": "object", "properties": props, "required": required}
 }

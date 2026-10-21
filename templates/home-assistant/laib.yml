@@ -40,6 +40,9 @@ secrets:
   - name: BOTE_AUTOMAT_HA_TOKEN      # minted, administrator: the Bote's Automat (HA's automation config API is admin-only)
     external: true
     optional: true
+  - name: HA_RADICALE_PASSWORD       # HA's own Radicale account `homeassistant` (#495), seeded by auth; post-deploy adds the CalDAV entry with it
+    external: true
+    optional: true
 oidc:                                # the family's login through Authelia (auth_oidc, #253); HA's own login stays
   clientId: homeassistant            # ServiceBay's client id: on a migrated box the linked users stay linked
   redirectUris: ["https://home.${DOMAIN}/auth/oidc/callback"]

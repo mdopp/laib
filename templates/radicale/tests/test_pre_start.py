@@ -59,6 +59,40 @@ class Rights(unittest.TestCase):
         self.assertEqual(allowed(self.rules, "anna", "haus/privat"), "")
         self.assertEqual(allowed(self.rules, "anna", "haus"), "")
 
+    def test_the_mirrors_are_written_only_by_the_kalender_account_and_read_by_their_person(self):   # #495
+        for coll in ("anna/google-familie", "anna/google-familie/x.ics", "anna/abo-feiertage", "haus/abo-muell/y.ics"):
+            self.assertIn("w", allowed(self.rules, "kalender", coll), coll)
+            self.assertIn("r", allowed(self.rules, "haus", coll), f"the Haushalt's Termine leave out {coll}")
+        for who, coll in (("anna", "anna/google-familie"), ("anna", "anna/abo-feiertage/x.ics"), ("ben", "haus/abo-muell"), ("anna", "haus/abo-muell/y.ics")):
+            p = allowed(self.rules, who, coll)
+            self.assertIn("r", p, (who, coll))
+            self.assertNotIn("w", p, f"{who} could write into the mirror {coll}: the next run would undo it")
+        self.assertEqual(allowed(self.rules, "ben", "anna/google-familie"), "", "another person's Google calendar is theirs")
+        self.assertIn("w", allowed(self.rules, "anna", "anna/google-kontakte/x.vcf"), "a Takeout's address book stays the person's own")
+        self.assertEqual(allowed(self.rules, "kalender", "anna/google-kontakte"), "")
+        for coll in ("anna/kalender", "anna", "haus/privat", "auth"):
+            self.assertNotIn("w", allowed(self.rules, "kalender", coll), f"kalender may write {coll}")
+        self.assertNotIn("w", allowed(self.rules, "kalender", "haus/haushalt/x.ics"), "the Haushalt is copied for HA, never written")
+        self.assertIn("r", allowed(self.rules, "kalender", "haus/haushalt"))
+        self.assertIn("R", allowed(self.rules, "kalender", "haus"), "it lists Haus's calendars to copy them")
+        self.assertIn("W", allowed(self.rules, "kalender", "homeassistant"), "it makes HA's home")
+
+    def test_home_assistant_reads_its_copies_and_nothing_else(self):   # #495
+        self.assertIn("r", allowed(self.rules, "homeassistant", "homeassistant/haus-haushalt/x.ics"))
+        self.assertNotIn("w", allowed(self.rules, "homeassistant", "homeassistant/haus-haushalt/x.ics"))
+        self.assertNotIn("W", allowed(self.rules, "homeassistant", "homeassistant"))
+        self.assertEqual(allowed(self.rules, "homeassistant", "anna/kalender"), "")
+
+    def test_haus_makes_a_calendar_for_one_person_or_the_family_and_nothing_else_of_theirs(self):   # haus#66
+        self.assertIn("w", allowed(self.rules, "haus", "anna/privat-sport"))
+        self.assertIn("w", allowed(self.rules, "anna", "anna/privat-sport"), "the person owns it")
+        self.assertEqual(allowed(self.rules, "ben", "anna/privat-sport"), "", "nur für mich")
+        self.assertIn("R", allowed(self.rules, "haus", "anna"), "Haus lists the person's calendars")
+        self.assertEqual(allowed(self.rules, "haus", "anna/kalender"), "", "the person's own calendars stay theirs")
+        for who in ("anna", "ben"):
+            self.assertIn("w", allowed(self.rules, who, "haus/familie-geburtstage/x.ics"))
+            self.assertNotIn("W", allowed(self.rules, who, "haus/familie-geburtstage"))
+
 
 if __name__ == "__main__":
     unittest.main()
