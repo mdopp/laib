@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,8 +30,9 @@ type Session struct {
 	Trigger  Trigger   `json:"trigger"`
 	Calls    []string  `json:"calls"`
 	Note     string    `json:"note"`
-	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error
+	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
 	Duration int64     `json:"ms"`
+	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 }
 
 // Operator holds the clients and the limits.
@@ -46,6 +49,12 @@ type Operator struct {
 	// /props or OPERATOR_CONTEXT_WINDOW; 0 = unknown, the small budgets
 	Window int
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
+	Web    *Web   // Frage's search, for a session that only proposes (#544)
+	// Looked is the unix time of the last session or look that ended
+	// without an error; /ready says it, the kernel's heartbeat reads it,
+	// since a look that found nothing new writes no note (#543)
+	Looked  atomic.Int64
+	failing bool // the last session ended in an error: no look is skipped
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -58,10 +67,41 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		now = o.Now
 	}
 	s = Session{Started: now().UTC(), Skill: sk.Name, Trigger: tr, Outcome: "error"}
-	defer func() { s.Duration = time.Since(s.Started).Milliseconds(); o.record(s) }()
+	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
+	defer func() {
+		s.Duration = time.Since(s.Started).Milliseconds()
+		if o.failing = s.Outcome == "error"; !o.failing {
+			o.Looked.Store(now().Unix())
+		}
+		if saw != nil && !o.failing && s.Outcome != "unchanged" {
+			mem.Seen[sk.Name] = saw
+			o.remember(mem)
+		}
+		if s.Outcome != "unchanged" {
+			o.record(s)
+		}
+	}()
 
 	mcp := *o.MCP
 	mcp.Skill = sk.Name
+	// a look skill (#543) — an interval skill that reads diag — asks no
+	// model and writes no note while diag says what its last session saw;
+	// a finding diag offers a repair for becomes a proposal first
+	human := ""
+	if sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag") {
+		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
+		if fs, _, ok := parseDiag(text); ok && err == nil && !isErr {
+			last, had := mem.Seen[sk.Name]
+			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
+				s.Outcome = "unchanged"
+				return s, nil
+			}
+			saw = ids(fs)
+			if slices.Contains(sk.Granted, "repair") {
+				human = o.repairs(ctx, &mcp, fs, mem)
+			}
+		}
+	}
 	tools, err := mcp.Tools(ctx)
 	if err != nil {
 		return s, fmt.Errorf("tools: %w", err)
@@ -81,6 +121,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	// the kernel's typed schemas (#290) are the menu: no second one here
 	defs := Defs(mine)
+	// the web (#544, ADR 0025): only in a session that proposes and cannot act
+	var web *webSession
+	if o.offersWeb(sk) {
+		defs, web = append(defs, webDef()), &webSession{web: o.Web}
+	}
 	offered := map[string]bool{}
 	for _, d := range defs {
 		offered[d.Function.Name] = true
@@ -101,13 +146,30 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
+		if web != nil {
+			web.upstream = upstreamOf(ctxText)
+		}
+	}
+	// the record (#544): what came of its last proposals, for every session;
+	// the morning report also carries the month's rate
+	all := o.history(ctx)
+	ctxText = Record(all) + ctxText
+	if sk.Output == "report" {
+		human = strings.TrimSpace(human + " " + Rate(all, now()) + " " + Stale(all))
+	}
+	// a lessons skill (#544) asks no model: the runner files the lessons
+	if sk.Lessons == "vorfall" {
+		s.Outcome, s.Note = "idle", cmp.Or(o.lessons(ctx, &mcp, all), "Keine neue Lehre: kein Vorfall, dessen Befund seitdem weg ist.")
+		mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
+		return s, nil
 	}
 	// an updates skill (#376): the runner reads the updates, the model sees
 	// and may propose only the patch values, the rest goes into the note
-	offers, human := map[string]string{}, ""
+	offers := map[string]string{}
 	if sk.Updates == "patch" {
-		var list string
-		list, human, offers = o.patches(ctx, &mcp)
+		var list, h string
+		list, h, offers = o.patches(ctx, &mcp)
+		human = strings.TrimSpace(human + " " + h)
 		if len(offers) == 0 {
 			s.Outcome, s.Note = "idle", strings.TrimSpace("Keine Patch-Versionen zum Vorschlagen. "+human)
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
@@ -152,7 +214,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				if note == "" {
 					note = "Sitzung ohne Notiz beendet."
 				}
-				note = strings.TrimSpace(note + " " + human)
+				note = strings.TrimSpace(note + " " + human + " " + web.tell())
 				kind := "watch"
 				if sk.Output == "report" {
 					kind = "report"
@@ -195,6 +257,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					continue
 				}
 			}
+			if why := unanchored(sk, mcpName, args); why != "" {
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
+				continue
+			}
 			if mcpName == "laib_propose" && sk.Updates == "patch" {
 				service, _ := args["service"].(string)
 				key, _ := args["key"].(string)
@@ -207,11 +273,18 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
 				continue
 			}
-			if mcpName == "laib_note" && human != "" {
-				if t, ok := args["text"].(string); ok {
-					args["text"], human = strings.TrimSpace(t+" "+human), ""
+			if t, ok := args["text"].(string); mcpName == "laib_note" && ok {
+				if extra := strings.TrimSpace(human + " " + web.tell()); extra != "" {
+					args["text"], human = strings.TrimSpace(t+" "+extra), ""
 					shown = shownArgs(args)
 				}
+			}
+			if l, ok := args["sources"].([]any); ok && len(l) == 0 {
+				delete(args, "sources") // the kernel takes a list with something in it
+			}
+			if src := web.sources(args["sources"]); mcpName == "laib_propose" && src != nil {
+				args["sources"] = src // what it rests on is named, and a human decides (#544)
+				shown = shownArgs(args)
 			}
 			if len(s.Calls) >= max {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
@@ -219,9 +292,22 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 			used[mcpName]++
 			s.Calls = append(s.Calls, mcpName+" "+shown)
-			out, isErr, err := mcp.Call(ctx, mcpName, args)
-			if err != nil {
+			var out string
+			var isErr bool
+			if mcpName == "websuche" {
+				q, _ := args["frage"].(string)
+				svc, _ := args["dienst"].(string)
+				out = web.search(ctx, q, svc)
+			} else if out, isErr, err = mcp.Call(ctx, mcpName, args); err != nil {
 				out, isErr = err.Error(), true
+			}
+			if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && (mcpName == "laib_propose" || mcpName == "laib_repair") {
+				n, _ := strconv.Atoi(m[1])
+				s.Proposed = append(s.Proposed, n)
+			}
+			if fs, raw, ok := parseDiag(out); mcpName == "laib_diag" && !isErr && ok {
+				out = news(fs, raw, mem.Seen[sk.Name])
+				saw = ids(fs, saw...)
 			}
 			_, limit := o.budgets()
 			if len(out) > limit {
@@ -249,6 +335,22 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	s.Outcome = "red"
 	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
 	return s, nil
+}
+
+// unanchored says why a model's proposal may not be filed (#544): in a
+// session that reads diag, a proposal names the finding it answers, what
+// was seen and how it is undone, so laib can measure it afterwards. The
+// updates skill's patch versions answer an update, not a finding.
+func unanchored(sk Skill, tool string, args map[string]any) string {
+	if tool != "laib_propose" || sk.Updates == "patch" || !slices.Contains(sk.Granted, "diag") {
+		return ""
+	}
+	for _, k := range []string{"finding", "evidence", "undo"} {
+		if v, _ := args[k].(string); strings.TrimSpace(v) == "" {
+			return "ein Vorschlag nennt finding (probe und Dienst eines Befunds aus laib diag), evidence (was du gesehen hast) und undo (wie man ihn zurücknimmt); laib misst danach, ob der Befund weg ist. Gibt diag keinen Befund dafür her: escalate"
+		}
+	}
+	return ""
 }
 
 // patches reads laib updates for an updates skill (#376): the list the

@@ -121,7 +121,7 @@ func TestAnAddedSkillRunsOnItsTrigger(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	for _, c := range *calls {
-		if c != "gartenblick laib_note" && c != " laib_context" { // the starter bundle is read as the hand, before the session
+		if c != "gartenblick laib_note" && c != " laib_context" && c != " laib_inbox" { // the starter bundle and the record (#544) are read as the hand, before the session
 			t.Fatalf("a call not made in the skill's name: %q in %v", c, *calls)
 		}
 	}

@@ -1,6 +1,7 @@
 name: esphome
 template: {registry: builtin, name: esphome, version: 1}
 provides: [esphome]
+upstream: [https://github.com/esphome/esphome, https://esphome.io/]   # where the Operator's web search looks first (#544)
 # ESPHome dashboard and OTA for the Voice PE devices and other ESP boards.
 # Host network for mDNS discovery and OTA (carve-out).
 hostNetwork: true

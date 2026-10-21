@@ -1,6 +1,7 @@
 name: immich
 template: {registry: builtin, name: immich, version: 1}
 provides: [photos]
+upstream: [https://github.com/immich-app/immich, https://immich.app/docs/]   # where the Operator's web search looks first (#544)
 # Immich: server, machine learning (GPU), Postgres with vectors, Redis in
 # one pod. Only the server is published. Photos uploaded by the apps live
 # in the upload volume; external libraries are read-only mounts.

@@ -26,6 +26,7 @@ type Skill struct {
 	Prompt      string         `json:"prompt"`
 	Limits      map[string]int `json:"limits"`  // tool → calls per session (#376)
 	Updates     string         `json:"updates"` // patch: the runner reads updates and offers only those (#376)
+	Lessons     string         `json:"lessons"` // vorfall: the runner proposes lessons, no model (#544)
 	Status      string         `json:"status"`
 	Granted     []string       `json:"granted"`
 }

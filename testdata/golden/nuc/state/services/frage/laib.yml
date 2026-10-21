@@ -1,0 +1,13 @@
+name: frage
+template: {registry: builtin, name: frage, version: 1}
+provides: [frage]
+# "Was ist …" and the Operator's web search (#544): SearXNG behind Frage;
+# the port is for pods and the host, never the LAN
+upstream: [https://github.com/searxng/searxng, https://docs.searxng.org/]
+routes: []
+secrets: []
+data: []
+health:
+  http: http://127.0.0.1:8710/health
+ports:
+  - {port: 8710, lan: false}

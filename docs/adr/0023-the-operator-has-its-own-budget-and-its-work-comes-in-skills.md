@@ -6,7 +6,10 @@ code counts against the kernel's 16k lines, or decide what the kernel must
 check about an agent's task before it runs.
 
 - **Status:** Accepted, 2026-10-16 (#267); amended 2026-10-17 (#286):
-  `more:` tools for a capable model, `plan` and `apply` in the vocabulary
+  `more:` tools for a capable model, `plan` and `apply` in the vocabulary;
+  amended 2026-10-21 (#543): a look that finds nothing new asks no model,
+  `routineblick` files repairs; amended 2026-10-21 (#544): a proposal is
+  judged by what happened
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -178,7 +181,7 @@ tier) is how the Operator and, later, Haus's Box page see the registry.
 
 | Skill | Trigger | Tools | Output | Today |
 |---|---|---|---|---|
-| `routineblick` | `every: ${TICK}` | status, diag, note | note | the tick |
+| `routineblick` | `every: ${TICK}` | status, diag, repair, note (#543) | note | the tick |
 | `morgenbericht` | `daily: ${REPORT_AT}` | status, diag, journal, note | report | the report hour |
 | `vorfall` | `event: red` | diag, logs, inspect, restart, propose, escalate, note | note | the red event |
 | `nutzung` (new, #270) | `weekly: "Mo 08:00"` | wish, note | propose | — |
@@ -257,3 +260,113 @@ within the budget"** (ADR 0019, amended the same day). For skills:
   service it touches (ADR 0019 amendment). `approve`, `rollback`,
   `restore`, `remove`, `token`, `secret` stay outside it.
 
+## Amendment 2026-10-21 — a look that finds nothing new is silent; a repair is a proposal (#543)
+
+On the Kraftwerk the Operator wrote 131 notes in 72 hours, every one
+repeating the same yellow findings, and not one proposal: `routineblick`
+only described, `vorfall` runs only on a red, and the restore test diag
+offered a repair for (`repair: [backup, check]`) was noted every ten
+minutes for 35 days. `policy.yml` kept `sicherung` from `backup`, and only
+`laib skill list` said so. What changes, all of it code, never prompt:
+
+- **The runner looks first.** An interval skill granted `diag` starts with
+  one `laib_diag` call of its own. When the findings are the ones its last
+  session saw that ended without an error, the tick asks no model and
+  writes no note (outcome `unchanged`, not in `incidents.jsonl`). A
+  finding's identity is its severity, probe, service and detail with the
+  numbers taken out, so an age or a percentage moving on is not news.
+  Memory: `OPERATOR_HOME/findings.json`.
+- **A repair verb becomes one proposal.** When such a skill is granted
+  `repair`, the runner files `laib repair <probe> [service]` for every
+  finding that is not red and carries a repair verb, before the model
+  runs, and appends the outcome to the note. It files a finding once: not
+  again while the proposal is open, nor after a no, until the finding
+  changes or goes away. Red stays `vorfall`'s, which runs on the red
+  event and has `repair` in `more:`. `routineblick` gains `repair`
+  (tier `propose`): what it proposes still waits for a human (#441).
+- **The model sees news.** In every skill session, the runner rewrites a
+  `laib_diag` result: what the skill's last good session already saw is a
+  count, red excepted, plus a line for what is gone. The owner's own items
+  — the RAID mirror, the watchdog, the NAS — appear in one routine note and
+  one morning report, not in every one.
+- **The heartbeat no longer needs a note per tick.** The Operator's
+  `/ready` carries `looked`, the time its last session or look ended
+  without an error; the kernel's heartbeat (`diag/opstate.go`) counts it
+  like a note. After a failed session the runner skips no look, so a model
+  that stops answering is `stumm` after three ticks, as before.
+- **diag names a skill the policy keeps from its job.** For each active
+  skill whose own `tools:` the ops hand's ceiling or verb list refuses,
+  `laib diag` has one yellow finding (probe `skill`) for the owner, whose
+  choice the fix names: grant the verb in `policy.yml`, `laib skill pause
+  <name>`, or a state-repo file without that tool. `more:` tools are a
+  capable model's extras and never a finding.
+
+Weighed against before (#246): maintenance gets easier — a finding diag
+can fix reaches the Inbox once instead of the journal 144 times a day, and
+a skill the policy starves says so in diag. The family is not worse off:
+nothing is applied without a human, red is handled as before, and the
+morning report still leads with red. What it costs: a model outage while
+nothing changes is noticed at the next session — a change, an event or the
+morning report — instead of within three ticks; whatever the family would
+notice is a change and runs a session. ServiceBay's diagnose offered the
+fix beside the probe and a human clicked it; the proposal is that click,
+filed by the box.
+
+## Amendment 2026-10-21 — a proposal is judged by what happened (#544)
+
+The owner, on #544: the Operator should get better from solved incidents
+and be anchored on what makes a proposal good or bad. Until now nothing
+measured that: approved, rejected or rolled back, the Operator never heard
+the outcome, and neither did the evals. What changes:
+
+- **A proposal carries its anchor** (`proposal.Anchor`): the diag finding
+  it answers (`<probe> <service>`), what was seen, how it is undone, and
+  the outside sources it rests on. `laib propose --finding` is refused
+  when diag does not show that finding now, so an anchor cannot be made
+  up; `laib repair` anchors itself. A source makes the proposal class
+  `human`. The runner refuses a model's `laib_propose` without finding,
+  evidence and undo in every session that reads diag (the updates
+  skill's patch versions answer an update, not a finding, and are exempt);
+  without a finding diag shows, the model escalates.
+- **The kernel records the outcome**, never the proposer: a whole-box
+  `laib diag` settles each approved proposal — its finding gone is
+  `effective`, still there two hours after the approval `no-effect`, one
+  without a finding `applied` — and journals the measured ones once
+  (verb `outcome`); `laib rollback #N` makes it `rolled-back`; a reject
+  keeps the owner's short reason (`rejected`), and „nicht jetzt“ is
+  `later`, free and counted against nobody. The Inbox page asks for the
+  reason; „Später“ still decides nothing.
+- **Every session hears its record.** The runner reads the inbox with the
+  ops hand's own token and puts the last ten measured proposals before the
+  context ("7 wirksam, 2 abgelehnt (#12 „…“), 1 zurückgenommen"); the
+  morning report's note ends with the month's rate. Code, not prompt.
+- **Real rejections become eval cases.** `werkstatt/evals/rejections.py`
+  turns the Operator's anchored, rejected proposals (`laib inbox --all
+  --json`) into draft incidents whose expectation is `calls_lack` — the
+  same finding not proposed again, with the record in the replies. A
+  human reads the reason and keeps or sharpens each draft.
+
+- **A solved incident becomes a proposed lesson.** The built-in skill
+  `lehre` (daily at the report hour, `lessons: vorfall`, no model) looks
+  at the `vorfall` sessions whose proposal laib measured as effective and
+  proposes, once per finding, `lessons/<probe>-<service>.md` in the state
+  repo: the finding, the cause the session saw, what fixed it. It is a
+  file outside the services, so the review makes it class `human` (§3):
+  only the owner lets it in. `laib context` then carries every lesson
+  into every session. A lesson whose finding the Operator has since
+  proposed for twice without success (no effect, rolled back, rejected)
+  is named in the morning report for removal. A lesson is text the model
+  reads, never a tool or a rule the kernel enforces; a skill
+  (`skills/<name>.yml`) stays the way to change what a session may do,
+  and an agent may propose one as before.
+
+Weighed against before (#246) and against ServiceBay, which had the assist
+catalog as curated know-how and `propose_learning` (dropped without an
+owner decision, #441): there, an agent's "learning" was its own claim.
+Here the measure is the box — the finding went away or did not — and the
+owner's no, in his words. Maintenance gets easier: the owner sees in one
+line whether the Operator's proposals are worth reading, and a bad habit
+shows up as a rate, not as a feeling. Nothing is worse for the family:
+nothing is applied that was not before; a reject gains an optional text
+field. What it costs: about 200 kernel lines (the anchor, the settle in
+diag, the reason, the lessons in context) and one MCP read per session.

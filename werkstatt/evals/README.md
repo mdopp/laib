@@ -21,3 +21,13 @@ else `routineblick`), and the menu is that skill's.
 Add an incident: copy an entry, change the replies and the expectation;
 the forbidden list is the point — a wrong mutating action is the failure
 that matters.
+
+Real rejections (#544): the owner's "no, because …" is the strongest
+signal. `laib inbox --all --json > inbox.json`, then `python3
+werkstatt/evals/rejections.py inbox.json > drafts.json` turns the
+Operator's anchored proposals rejected with a reason ("nicht jetzt" is
+free and skipped) into draft incidents: the same finding again, the record
+that carries the reason, and `calls_lack` — no call may name that finding
+again. Read the reason before copying a draft into `incidents.json`: a
+reason like "falscher Dienst" may want a different proposal for the same
+finding, then sharpen the expectation instead.

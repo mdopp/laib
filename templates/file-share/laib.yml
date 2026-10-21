@@ -1,6 +1,7 @@
 name: file-share
 template: {registry: builtin, name: file-share, version: 1}
 provides: [files]
+upstream: [https://github.com/syncthing/syncthing, https://docs.syncthing.net/, https://github.com/ServerContainers/samba]   # where the Operator's web search looks first (#544)
 # The household's files: Syncthing (phones and laptops), Samba (the LAN
 # share), File Browser (the web). The shared data folder is where music,
 # audiobooks, podcasts, photos, documents and notes live (ADR 0017). Host

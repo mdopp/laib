@@ -1,6 +1,7 @@
 name: vaultwarden
 template: {registry: builtin, name: vaultwarden, version: 1}
 provides: [passwords]
+upstream: [https://github.com/dani-garcia/vaultwarden, https://github.com/dani-garcia/vaultwarden/wiki]   # where the Operator's web search looks first (#544)
 # Vaultwarden with SSO through Authelia (OIDC client rendered by laib).
 # The app does its own login; forward-auth would break the clients.
 after: [auth]

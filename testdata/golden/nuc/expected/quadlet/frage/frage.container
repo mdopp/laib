@@ -1,0 +1,13 @@
+[Unit]
+Description=Frage: search + summary
+
+[Container]
+Image=ghcr.io/mdopp/laib-frage:latest
+PublishPort=8710:8710
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

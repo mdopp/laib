@@ -232,7 +232,7 @@ req = urllib.request.Request("http://127.0.0.1:5976/mcp", json.dumps({"jsonrpc":
 print(json.dumps(json.load(urllib.request.urlopen(req))["result"]))
 PY3
 }
-mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] for t in json.load(sys.stdin)["tools"]]; assert n==["laib_status","laib_diag","laib_note"], n' || fail "routineblick sees more than its tools"
+mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] for t in json.load(sys.stdin)["tools"]]; assert n==["laib_status","laib_diag","laib_note","laib_repair"], n' || fail "routineblick sees more than its tools"
 mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
 mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true

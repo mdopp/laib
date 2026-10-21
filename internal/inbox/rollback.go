@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
@@ -129,6 +130,10 @@ func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int) 
 			g("add", "-A")
 			g("commit", "-q", "-m", fmt.Sprintf("rollback #%d: secrets of removed services dropped", id))
 		}
+	}
+	if p, err := proposal.Get(cli.InboxDir(env), id); err == nil { // what came of it (#544)
+		p.Outcome, p.Settled = "rolled-back", time.Now().UTC()
+		proposal.Save(cli.InboxDir(env), p)
 	}
 	subject := fmt.Sprintf("#%d zurückgenommen", id)
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})

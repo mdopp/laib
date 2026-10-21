@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0025**. Each file's first paragraph after the title says *in which
+number: **0026**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -30,3 +30,4 @@ situation* it applies, so an agent can self-select.
 | [0022](0022-the-app-is-a-widget-client-messages-go-through-chat.md) | The app is a widget client, built new; widgets stay current through a lean live stream while the screen is on; messages go to a person through their chat channel via the Bote; nothing of the Solaris app is carried |
 | [0023](0023-the-operator-has-its-own-budget-and-its-work-comes-in-skills.md) | The Operator has its own line budget (3,000, outside the kernel's cap, 15k since #309); its work comes in skills — declared files, active or paused in `policy.yml`, rights checked by the kernel |
 | [0024](0024-the-host-os-is-a-prebuilt-image-proven-at-boot.md) | Proposed: the host OS is a prebuilt image (the NVIDIA module built in CI, not on the box); the CDI spec at every boot; every new deployment proven or rolled back once |
+| [0025](0025-the-operator-reads-the-web-and-never-acts-on-it.md) | The Operator reads the web through the box's own search (Frage's SearXNG), entry points first, only in sessions that can only propose; a proposal resting on it is a human's |

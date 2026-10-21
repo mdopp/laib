@@ -34,6 +34,8 @@ func main() {
 		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 		// rendered into the unit when the box runs usage-metrics (#270)
 		Usage: &operator.Usage{URL: os.Getenv("USAGE_METRICS_URL"), Token: os.Getenv("USAGE_METRICS_TOKEN")},
+		// rendered into the unit when the box runs Frage (#544): the web, read through its SearXNG
+		Web: &operator.Web{URL: os.Getenv("FRAGE_URL")},
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")
@@ -141,7 +143,13 @@ func main() {
 		gather.Add(e.Service, e.Verb+": "+e.Detail)
 	})
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"operator":"bereit"}`)
+		// looked: the last look that ended without an error, the heartbeat
+		// when nothing new was worth a note (#543)
+		ready := map[string]any{"operator": "bereit"}
+		if t := op.Looked.Load(); t > 0 {
+			ready["looked"] = time.Unix(t, 0).UTC()
+		}
+		json.NewEncoder(w).Encode(ready)
 	})
 	srv := &http.Server{Addr: env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {

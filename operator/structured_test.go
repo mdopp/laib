@@ -34,7 +34,7 @@ func TestStructuredArgumentsPassThrough(t *testing.T) {
 				Args json.RawMessage `json:"arguments"`
 			}
 			json.Unmarshal(req.Params, &p)
-			if p.Name != "laib_context" {
+			if p.Name != "laib_context" && p.Name != "laib_inbox" { // the starter bundle and the record (#544)
 				got = append(got, p.Name+" "+string(p.Args))
 			}
 			res["content"] = []map[string]string{{"type": "text", "text": "ok"}}

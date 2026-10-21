@@ -18,6 +18,7 @@ services/
     rendered/         written only by laib: the files as they are on the box
 skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
+lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
 ignore.yml            units on the box that are deliberately unmanaged
 ```
 
@@ -188,9 +189,14 @@ the same way, #286), `context` (`box` or `usage`), `output` (`note`,
 runner enforces, never prompt prose (#376): `limits` (a cap per tool and
 session, `{propose: 3}`) and, for an updates skill, `updates: patch` (the
 runner reads `updates` itself, shows and allows only the patch values, and
-writes the minor versions and the registry errors into the note). The
-prompt keeps the judgment. A file with a built-in's name
-(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`) replaces it. The
+writes the minor versions and the registry errors into the note), and
+`lessons: vorfall` (#544: the runner proposes a lesson for each incident
+session whose proposal laib measured as effective; no model runs). An
+interval skill granted `diag` is a look (#543): the runner reads diag
+first, asks no model while the findings are the ones its last good session
+saw, and, granted `repair`, proposes each non-red finding's repair once
+until it changes. The prompt keeps the judgment. A file with a built-in's name
+(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`, `lehre`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
 changing one is class `human` in the review.
@@ -233,6 +239,7 @@ ports:
   - { port: 8025, lan: false, when: [MAIL_HOST] }   # only while MAIL_HOST is set (#190)
 gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
+upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # repo, release notes, docs: where the Operator's web search looks first (#544); absent: the template's
 after: [authelia]                # restarted and verified before this one
 when:                            # a unit exists only while one of its values is set (#184)
   paperless-mail.container: [MAIL_HOST]
@@ -355,6 +362,10 @@ regenerated.
 
 Actors: `human:<user>`, `resident`, `ops`, `pi`, `claude`, `laib` (timers,
 boot). A failed verify is `"result":"red"` with a `detail` field.
+`"verb":"outcome"` (actor `laib`, #544) is what came of an approved
+proposal that named a finding: `#N von ops wirksam: der Befund ist weg
+(unit jellyfin)` or `… ohne Wirkung: der Befund ist noch da (…)`, once per
+proposal; a `reject` line carries the owner's reason after the colon.
 
 ### Routes that trust only the proxy
 

@@ -161,7 +161,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
 			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve><button class=go>Freigeben</button></form>", p.ID)
-			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><button>Ablehnen</button></form>", p.ID)
+			// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
+			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
 			later := "<a href=\"/\"><button>Später</button></a>"
 			if c.Risky {
 				fmt.Fprintf(&b, "<p>%s %s %s</p>", later, approve, reject)
@@ -204,7 +205,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		if r.PathValue("decision") == "rollback" {
 			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
 		} else {
-			code = inbox.Decide(r.Context(), webEnv, []string{r.PathValue("id")}, r.PathValue("decision") == "approve")
+			argv := []string{r.PathValue("id")}
+			if why := strings.TrimSpace(r.FormValue("grund")); why != "" && r.PathValue("decision") == "reject" {
+				argv = append(argv, why)
+			}
+			code = inbox.Decide(r.Context(), webEnv, argv, r.PathValue("decision") == "approve")
 		}
 		if code != cli.ExitOK && code != cli.ExitRed {
 			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))

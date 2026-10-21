@@ -187,6 +187,8 @@ func Dirs(base, changed string) Result {
 			say("das Betriebssystem der Box (%s): nach der Freigabe wird das Image bereitgestellt, der Neustart kommt im Update-Fenster (#368)", p)
 		case parts[0] == "wishes" && len(parts) == 2:
 			say("ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket", p)
+		case parts[0] == "lessons" && len(parts) == 2:
+			say("eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)", p)
 		case parts[0] == "skills" && len(parts) == 2:
 			say("gibt dem Operator eine Fähigkeit oder ändert eine (%s): was er tun darf, entscheidet ein Mensch (ADR 0023)", p)
 		default:

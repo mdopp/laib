@@ -6,6 +6,7 @@ package frage
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -147,7 +148,7 @@ func (c Config) Ask(ctx context.Context, q string) (Answer, error) {
 	return Answer{Question: q, Answer: text, Sources: hits, MS: time.Since(start).Milliseconds()}, nil
 }
 
-// Handler serves /ask (GET ?q= or POST {"q"}), /v1/chat/completions and
+// Handler serves /ask (GET ?q= or POST {"q"}), /search (GET ?q=&lang=, the hits), /v1/chat/completions and
 // Ollama's /api/chat (the last user message is the question), /v1/models,
 // /api/tags, /api/version, /mcp and /health.
 func Handler(c Config) http.Handler {
@@ -155,6 +156,20 @@ func Handler(c Config) http.Handler {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, `{"frage":"bereit"}`) })
 	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": []map[string]any{{"id": "frage", "object": "model", "owned_by": "laib"}}})
+	})
+	// /search: the hits alone, no summary (#544) — the Operator reads the web
+	// through the box's own SearXNG; lang=all for upstream docs in English
+	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
+		sc := c
+		sc.Language, sc.Results = cmp.Or(r.URL.Query().Get("lang"), c.Language), 8
+		hits, err := sc.Search(r.Context(), r.URL.Query().Get("q"))
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(append([]Hit{}, hits...))
 	})
 	mux.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("q")

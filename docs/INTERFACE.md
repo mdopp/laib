@@ -32,7 +32,11 @@ laib propose "<reason>"              human with a shell: commit the working tree
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
 laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
 laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property); validated in a worktree
-laib approve <id> | laib reject <id> merge or drop a proposal (tier check from policy.yml)
+laib propose … [--finding "<probe> <service>"] [--evidence …] [--undo …] [--source <url>]…
+                                     the anchor (#544): the diag finding it answers (diag must show it now),
+                                     what was seen, the way back; a --source makes it class human
+laib approve <id> | laib reject <id> ["<grund>"]  merge or drop a proposal (tier check from policy.yml);
+                                     a reject keeps the reason, "nicht jetzt" is free (#544)
 laib backup                          restic snapshot of state, journal and declared data paths
 laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply
 laib context [--since 24h]           starter bundle for an agent session
@@ -71,7 +75,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
 | `laib_journal`, `laib_context` | `since?` |
-| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch` |
+| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
@@ -104,12 +108,22 @@ dropped from its reply. The built-in skills' menus:
 
 | Skill | Trigger | Menu |
 |---|---|---|
-| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_note` |
+| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543) |
 | `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
+| `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
+
+Every session starts with its record (#544): the runner reads `laib inbox
+--all` as the ops hand and puts the last ten measured proposals before the
+context — how many were effective, without effect, rolled back, rejected,
+with the owner's reasons; the morning report's note ends with the month's
+rate and names each lesson whose finding has since failed twice, for
+removal. `laib context` carries the lessons the owner let in (`lessons`,
+at most 4000 bytes). In a session that reads diag, a model's `laib_propose` without
+`finding`, `evidence` and `undo` is not filed.
 
 Reds within a minute (`OPERATOR_EVENT_GATHER`, default 60s) are one
 incident session (#287): a cascade — lldap, then Authelia, then Caddy —
@@ -124,6 +138,21 @@ refuses a fourth wish in a session, one whose `saw` has no number, and one
 that quotes an unanswered sentence word for word (they are kept 30 days
 without names, for admins only; the intake repo may be public). Without
 usage-metrics the skill writes one note and asks no model.
+
+**The web, read, never acted on** (#544, ADR 0025). A session whose output
+is proposals, that may `propose` and that has none of `apply`, `restart`,
+`exec`, `write` granted (today `aktualisierung`) is offered one more tool,
+`websuche` (`frage`, `dienst?`): Operator code, not a kernel verb. It asks
+Frage's `/search` (`FRAGE_URL`, rendered into the Operator's unit when the
+box runs Frage — SearXNG behind it, no model, no page fetched): first the
+service's upstream (`laib context` → `upstream`, from its laib.yml or its
+template), then the general entry points in `operator/websources.json`
+(Home Assistant, podman, systemd, Fedora CoreOS, uCore), the open web only
+when they give fewer than three hits. The answer is excerpts with their
+address, marked as untrusted text. At most four requests and 64 KiB per
+session; the note says how many and which addresses. A proposal filed
+after a search carries `sources` — the addresses the model names that the
+search returned, else all of them — so laib makes it class human.
 
 A tool is in the menu only if the skill is granted its verb (`ops` at
 ceiling `propose` gets no `restart`). `approve`, `reject`, `restore`,
@@ -277,10 +306,29 @@ verdicts stay the admin's (`laib token mint human`).
 
 The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
 the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
-`läuft`, `stumm` (running but no note for three ticks: model unreachable or a
-tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
-diag` turns the last four into findings. An enabled operator that does
-nothing is never silent.
+`läuft`, `stumm` (running but neither a note nor a look for three ticks:
+model unreachable or a tick hangs), `antwortet nicht`, `fehlt` (enabled but
+the unit is down). `laib diag` turns the last four into findings. A look
+that found nothing new writes no note (#543); the Operator's own `/ready`
+(`{"looked": …}`) says when its last session or look ended without an
+error, and that counts like a note. After a failed session no look is
+skipped, so a model that stops answering still turns the state `stumm`. An
+enabled operator that does nothing is never silent.
+
+What a skill session's `laib_diag` shows the model (#543): findings its
+last good session already saw come as one line with their count, red
+excepted, plus what is no longer there — the owner's own items (the RAID
+mirror, the watchdog, the NAS) are in one note and one morning report, not
+in every one. The runner keeps this under `OPERATOR_HOME/findings.json`; a
+finding's identity is its severity, probe, service and detail without its
+numbers (an age or a percentage is not a new finding).
+
+`laib diag` says when an active skill cannot do its job because the ops
+hand's ceiling or verb list refuses one of its `tools:` (probe `skill`,
+#543): "Fähigkeit sicherung läuft ohne backup, ihre Aufgabe bleibt liegen
+…", with the owner's choice as the fix — grant the verb in `policy.yml`,
+`laib skill pause <name>`, or a state-repo `skills/<name>.yml` without it.
+A capable model's `more:` tools are extras and never a finding.
 
 ### Hands with a verb list, and the approver
 
@@ -312,7 +360,21 @@ data stays; a new service is stopped and removed, its data stays), **who
 proposed it and why** (quoted), and **the safe default**: for a risky
 class (human, a new service, a minted token) the first button is „Später“
 and the diff sits behind „Details“. The card is built mechanically from
-the classified change (`proposal.Card`), never by a model.
+the classified change (`proposal.Card`), never by a model. What the
+proposer saw (`evidence`) follows its reason, and its way back (`undo`)
+follows laib's own.
+
+**What came of it** (#544) is recorded by laib, never by the proposer,
+on the inbox entry (`outcome`) and, when measured, as a journal line with
+verb `outcome`: a whole-box `laib diag` settles every approved proposal
+that names a `finding` — the finding gone is `effective`, still there two
+hours after the approval (`proposal.Window`) is `no-effect`; a proposal
+without one is `applied`. `laib rollback #N` makes it `rolled-back`, and
+`laib reject <id> "<grund>"` `rejected` with the owner's reason
+(`rejectReason`) — „nicht jetzt“ or „später“ is `later`, a free no that
+counts against nobody. The Inbox page asks for the reason next to
+„Ablehnen“; „Später“ stays a link that decides nothing. The Operator
+reads this record (ADR 0023, amendment #544).
 
 ### `laib look <service> [--container c] -- <command>`
 

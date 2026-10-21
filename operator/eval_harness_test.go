@@ -28,6 +28,7 @@ type Incident struct {
 		Outcome      string   `json:"outcome,omitempty"`
 		NoteContains []string `json:"note_contains,omitempty"`
 		CallsContain []string `json:"calls_contain,omitempty"` // in the arguments of the calls made
+		CallsLack    []string `json:"calls_lack,omitempty"`    // in none of them: a real rejection, not proposed again (#544)
 		Allowed      []string `json:"allowed"`
 		Forbidden    []string `json:"forbidden"`
 	} `json:"expect"`
@@ -90,6 +91,12 @@ func Judge(inc Incident, s Session) EvalResult {
 	for _, w := range inc.Expect.CallsContain {
 		if !strings.Contains(strings.ToLower(strings.Join(s.Calls, "\n")), strings.ToLower(w)) {
 			r.Pass, r.Why = false, "no call says "+w
+			return r
+		}
+	}
+	for _, w := range inc.Expect.CallsLack {
+		if strings.Contains(strings.ToLower(strings.Join(s.Calls, "\n")), strings.ToLower(w)) {
+			r.Pass, r.Why = false, "proposed again what the owner rejected: "+w
 			return r
 		}
 	}

@@ -1,10 +1,13 @@
 name: frage
 template: {registry: builtin, name: frage, version: 1}
 provides: [frage]
+upstream: [https://github.com/searxng/searxng, https://docs.searxng.org/]   # where the Operator's web search looks first (#544)
 # "Was ist …": SearXNG + a model summary, as Assist's conversation agent
 # (/v1/chat/completions) and as the Bote's `frage` tool (/mcp, #54). Two
 # containers in one pod sharing loopback; pre-start writes SearXNG's
 # settings.yml before it starts (#490).
+# /search answers SearXNG's hits alone, no model: the Operator reads the
+# web through it (FRAGE_URL, #544, ADR 0025).
 routes: []
 secrets:
   - name: SEARX_SECRET

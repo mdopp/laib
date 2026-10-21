@@ -2,7 +2,9 @@ package diag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -21,8 +23,8 @@ import (
 // in `laib operator status`, which nobody runs when all seems fine.
 //
 // Inputs: box.yml says enabled; the user unit is active; /ready on the
-// operator's port answers; its stored bearer still opens MCP (#500); the newest journal note by ops (every tick ends
-// with one) is younger than three ticks.
+// operator's port answers; its stored bearer still opens MCP (#500); the newest journal note by ops, or the
+// last look /ready reports (a look that found nothing new writes no note, #543), is younger than three ticks.
 
 type OpFacts struct {
 	Enabled    bool
@@ -32,6 +34,7 @@ type OpFacts struct {
 	Unauthorized bool
 	Answers      bool
 	LastNote     time.Time
+	Looked       time.Time // /ready's last look without an error (#543)
 	EnabledAt    time.Time // the last `operator enable` in the journal
 	Tick         time.Duration
 	Now          time.Time
@@ -40,6 +43,9 @@ type OpFacts struct {
 // OperatorState turns the facts into one word for the readiness line and
 // at most one diag finding.
 func OperatorState(f OpFacts) (string, *Finding) {
+	if f.Looked.After(f.LastNote) {
+		f.LastNote = f.Looked
+	}
 	switch {
 	case !f.Enabled && f.ModelURL == "":
 		return "aus", nil // a box without a model: nothing to expect
@@ -57,7 +63,7 @@ func OperatorState(f OpFacts) (string, *Finding) {
 	case f.LastNote.IsZero():
 		return "startet", nil // no note yet: right after enable; the next tick decides
 	case f.Now.Sub(f.LastNote) > 3*f.Tick:
-		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber die letzte Notiz ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator | journalctl --user -u laib-operator"}
+		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator | journalctl --user -u laib-operator"}
 	}
 	return "läuft", nil
 }
@@ -76,8 +82,10 @@ func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
 	f.Unauthorized = !OperatorTokenValid(env)
 	c := &http.Client{Timeout: 2 * time.Second}
 	if resp, err := c.Get("http://127.0.0.1:5901/ready"); err == nil {
+		var ready struct{ Looked time.Time }
+		json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&ready)
 		resp.Body.Close()
-		f.Answers = resp.StatusCode < 500
+		f.Answers, f.Looked = resp.StatusCode < 500, ready.Looked
 	}
 	if es, err := journal.Read(env.Paths.Journal, f.Now.Add(-24*time.Hour)); err == nil {
 		for _, e := range es {

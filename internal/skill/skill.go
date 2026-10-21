@@ -43,6 +43,9 @@ type Skill struct {
 	// updates go into its note for a human.
 	Limits  map[string]int `yaml:"limits" json:"limits,omitempty"`
 	Updates string         `yaml:"updates" json:"updates,omitempty"`
+	// Lessons: vorfall — the runner proposes a lesson for each incident
+	// session whose proposal made its finding go away (#544), no model
+	Lessons string `yaml:"lessons" json:"lessons,omitempty"`
 
 	Status  string            `yaml:"-" json:"status"` // active | paused | refused
 	Granted []string          `yaml:"-" json:"granted"`
@@ -146,6 +149,9 @@ func check(s *Skill) string {
 	}
 	if s.Updates != "" && (s.Updates != "patch" || !slices.Contains(s.Tools, "updates") || !slices.Contains(s.Tools, "propose")) {
 		return fmt.Sprintf("updates %q: nur patch, und tools braucht updates und propose", s.Updates)
+	}
+	if s.Lessons != "" && (s.Lessons != "vorfall" || !slices.Contains(s.Tools, "propose")) {
+		return fmt.Sprintf("lessons %q: nur vorfall, und tools braucht propose", s.Lessons)
 	}
 	if s.Context == "" {
 		s.Context = "box"

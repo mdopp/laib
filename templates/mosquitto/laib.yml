@@ -1,6 +1,7 @@
 name: mosquitto
 template: {registry: builtin, name: mosquitto, version: 1}
 provides: [mqtt]
+upstream: [https://github.com/eclipse/mosquitto, https://mosquitto.org/documentation/]   # where the Operator's web search looks first (#544)
 # MQTT broker for devices and Home Assistant. mosquitto.conf from pre-start,
 # the password file from post-deploy, hashed in the broker (#221).
 # 1883 is open to the LAN on purpose: devices on Wi-Fi publish into it.

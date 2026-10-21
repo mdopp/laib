@@ -1,5 +1,6 @@
 name: llama
 provides: [model]
+upstream: [https://github.com/ggml-org/llama.cpp]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: llama, version: 1}
 # The model role (ADR 0011): llama-server in router mode behind the policy
 # proxy that also serves the GPU lease. Host network (carve-out) so the

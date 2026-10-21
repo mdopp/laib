@@ -1,6 +1,7 @@
 name: stimme
 template: {registry: builtin, name: stimme, version: 1}
 provides: [voice]
+upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/wyoming-faster-whisper, https://github.com/rhasspy/wyoming-openwakeword]   # where the Operator's web search looks first (#544)
 # The Wyoming set Home Assistant Assist speaks (ADR 0015): Whisper (STT),
 # Piper (TTS, German voice), openWakeWord (the trained wake word), and the
 # wake-word trainer. Host network so HA finds them at 127.0.0.1. On the
