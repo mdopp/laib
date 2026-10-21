@@ -146,7 +146,13 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	all := o.history(ctx)
 	ctxText = Record(all) + ctxText
 	if sk.Output == "report" {
-		human = strings.TrimSpace(human + " " + Rate(all, now()))
+		human = strings.TrimSpace(human + " " + Rate(all, now()) + " " + Stale(all))
+	}
+	// a lessons skill (#544) asks no model: the runner files the lessons
+	if sk.Lessons == "vorfall" {
+		s.Outcome, s.Note = "idle", cmp.Or(o.lessons(ctx, &mcp, all), "Keine neue Lehre: kein Vorfall, dessen Befund seitdem weg ist.")
+		mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
+		return s, nil
 	}
 	// an updates skill (#376): the runner reads the updates, the model sees
 	// and may propose only the patch values, the rest goes into the note

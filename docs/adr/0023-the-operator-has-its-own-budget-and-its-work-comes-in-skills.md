@@ -346,6 +346,20 @@ the outcome, and neither did the evals. What changes:
   same finding not proposed again, with the record in the replies. A
   human reads the reason and keeps or sharpens each draft.
 
+- **A solved incident becomes a proposed lesson.** The built-in skill
+  `lehre` (daily at the report hour, `lessons: vorfall`, no model) looks
+  at the `vorfall` sessions whose proposal laib measured as effective and
+  proposes, once per finding, `lessons/<probe>-<service>.md` in the state
+  repo: the finding, the cause the session saw, what fixed it. It is a
+  file outside the services, so the review makes it class `human` (§3):
+  only the owner lets it in. `laib context` then carries every lesson
+  into every session. A lesson whose finding the Operator has since
+  proposed for twice without success (no effect, rolled back, rejected)
+  is named in the morning report for removal. A lesson is text the model
+  reads, never a tool or a rule the kernel enforces; a skill
+  (`skills/<name>.yml`) stays the way to change what a session may do,
+  and an agent may propose one as before.
+
 Weighed against before (#246) and against ServiceBay, which had the assist
 catalog as curated know-how and `propose_learning` (dropped without an
 owner decision, #441): there, an agent's "learning" was its own claim.
@@ -354,5 +368,5 @@ owner's no, in his words. Maintenance gets easier: the owner sees in one
 line whether the Operator's proposals are worth reading, and a bad habit
 shows up as a rate, not as a feeling. Nothing is worse for the family:
 nothing is applied that was not before; a reject gains an optional text
-field. What it costs: about 170 kernel lines (the anchor, the settle in
-diag, the reason) and one MCP read per session.
+field. What it costs: about 200 kernel lines (the anchor, the settle in
+diag, the reason, the lessons in context) and one MCP read per session.

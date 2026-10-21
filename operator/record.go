@@ -46,11 +46,11 @@ func (o *Operator) history(ctx context.Context) []past {
 	return all
 }
 
-// mine: the Operator's own proposals, newest first.
+// mine: the Operator's own proposals, lessons excepted, newest first.
 func mine(all []past) []past {
 	var out []past
 	for _, p := range all {
-		if strings.SplitN(p.Actor, ":", 2)[0] == "ops" {
+		if strings.SplitN(p.Actor, ":", 2)[0] == "ops" && !p.lesson() {
 			out = append(out, p)
 		}
 	}

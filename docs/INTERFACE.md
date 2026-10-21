@@ -113,13 +113,16 @@ dropped from its reply. The built-in skills' menus:
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
+| `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
 --all` as the ops hand and puts the last ten measured proposals before the
 context — how many were effective, without effect, rolled back, rejected,
 with the owner's reasons; the morning report's note ends with the month's
-rate. In a session that reads diag, a model's `laib_propose` without
+rate and names each lesson whose finding has since failed twice, for
+removal. `laib context` carries the lessons the owner let in (`lessons`,
+at most 4000 bytes). In a session that reads diag, a model's `laib_propose` without
 `finding`, `evidence` and `undo` is not filed.
 
 Reds within a minute (`OPERATOR_EVENT_GATHER`, default 60s) are one
