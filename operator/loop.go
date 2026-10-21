@@ -279,6 +279,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					shown = shownArgs(args)
 				}
 			}
+			if l, ok := args["sources"].([]any); ok && len(l) == 0 {
+				delete(args, "sources") // the kernel takes a list with something in it
+			}
 			if src := web.sources(args["sources"]); mcpName == "laib_propose" && src != nil {
 				args["sources"] = src // what it rests on is named, and a human decides (#544)
 				shown = shownArgs(args)
