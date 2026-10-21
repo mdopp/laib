@@ -141,7 +141,13 @@ func main() {
 		gather.Add(e.Service, e.Verb+": "+e.Detail)
 	})
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, `{"operator":"bereit"}`)
+		// looked: the last look that ended without an error, the heartbeat
+		// when nothing new was worth a note (#543)
+		ready := map[string]any{"operator": "bereit"}
+		if t := op.Looked.Load(); t > 0 {
+			ready["looked"] = time.Unix(t, 0).UTC()
+		}
+		json.NewEncoder(w).Encode(ready)
 	})
 	srv := &http.Server{Addr: env("OPERATOR_LISTEN", "127.0.0.1:5901"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {

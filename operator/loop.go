@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,7 +29,7 @@ type Session struct {
 	Trigger  Trigger   `json:"trigger"`
 	Calls    []string  `json:"calls"`
 	Note     string    `json:"note"`
-	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error
+	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
 	Duration int64     `json:"ms"`
 }
 
@@ -46,6 +47,11 @@ type Operator struct {
 	// /props or OPERATOR_CONTEXT_WINDOW; 0 = unknown, the small budgets
 	Window int
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
+	// Looked is the unix time of the last session or look that ended
+	// without an error; /ready says it, the kernel's heartbeat reads it,
+	// since a look that found nothing new writes no note (#543)
+	Looked  atomic.Int64
+	failing bool // the last session ended in an error: no look is skipped
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -58,10 +64,41 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		now = o.Now
 	}
 	s = Session{Started: now().UTC(), Skill: sk.Name, Trigger: tr, Outcome: "error"}
-	defer func() { s.Duration = time.Since(s.Started).Milliseconds(); o.record(s) }()
+	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
+	defer func() {
+		s.Duration = time.Since(s.Started).Milliseconds()
+		if o.failing = s.Outcome == "error"; !o.failing {
+			o.Looked.Store(now().Unix())
+		}
+		if saw != nil && !o.failing && s.Outcome != "unchanged" {
+			mem.Seen[sk.Name] = saw
+			o.remember(mem)
+		}
+		if s.Outcome != "unchanged" {
+			o.record(s)
+		}
+	}()
 
 	mcp := *o.MCP
 	mcp.Skill = sk.Name
+	// a look skill (#543) — an interval skill that reads diag — asks no
+	// model and writes no note while diag says what its last session saw;
+	// a finding diag offers a repair for becomes a proposal first
+	human := ""
+	if sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag") {
+		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
+		if fs, _, ok := parseDiag(text); ok && err == nil && !isErr {
+			last, had := mem.Seen[sk.Name]
+			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
+				s.Outcome = "unchanged"
+				return s, nil
+			}
+			saw = ids(fs)
+			if slices.Contains(sk.Granted, "repair") {
+				human = o.repairs(ctx, &mcp, fs, mem)
+			}
+		}
+	}
 	tools, err := mcp.Tools(ctx)
 	if err != nil {
 		return s, fmt.Errorf("tools: %w", err)
@@ -104,10 +141,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	// an updates skill (#376): the runner reads the updates, the model sees
 	// and may propose only the patch values, the rest goes into the note
-	offers, human := map[string]string{}, ""
+	offers := map[string]string{}
 	if sk.Updates == "patch" {
-		var list string
-		list, human, offers = o.patches(ctx, &mcp)
+		var list, h string
+		list, h, offers = o.patches(ctx, &mcp)
+		human = strings.TrimSpace(human + " " + h)
 		if len(offers) == 0 {
 			s.Outcome, s.Note = "idle", strings.TrimSpace("Keine Patch-Versionen zum Vorschlagen. "+human)
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
@@ -222,6 +260,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			out, isErr, err := mcp.Call(ctx, mcpName, args)
 			if err != nil {
 				out, isErr = err.Error(), true
+			}
+			if fs, raw, ok := parseDiag(out); mcpName == "laib_diag" && !isErr && ok {
+				out = news(fs, raw, mem.Seen[sk.Name])
+				saw = ids(fs, saw...)
 			}
 			_, limit := o.budgets()
 			if len(out) > limit {

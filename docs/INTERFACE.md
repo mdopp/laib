@@ -104,7 +104,7 @@ dropped from its reply. The built-in skills' menus:
 
 | Skill | Trigger | Menu |
 |---|---|---|
-| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_note` |
+| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543) |
 | `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
@@ -277,10 +277,29 @@ verdicts stay the admin's (`laib token mint human`).
 
 The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
 the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
-`läuft`, `stumm` (running but no note for three ticks: model unreachable or a
-tick hangs), `antwortet nicht`, `fehlt` (enabled but the unit is down). `laib
-diag` turns the last four into findings. An enabled operator that does
-nothing is never silent.
+`läuft`, `stumm` (running but neither a note nor a look for three ticks:
+model unreachable or a tick hangs), `antwortet nicht`, `fehlt` (enabled but
+the unit is down). `laib diag` turns the last four into findings. A look
+that found nothing new writes no note (#543); the Operator's own `/ready`
+(`{"looked": …}`) says when its last session or look ended without an
+error, and that counts like a note. After a failed session no look is
+skipped, so a model that stops answering still turns the state `stumm`. An
+enabled operator that does nothing is never silent.
+
+What a skill session's `laib_diag` shows the model (#543): findings its
+last good session already saw come as one line with their count, red
+excepted, plus what is no longer there — the owner's own items (the RAID
+mirror, the watchdog, the NAS) are in one note and one morning report, not
+in every one. The runner keeps this under `OPERATOR_HOME/findings.json`; a
+finding's identity is its severity, probe, service and detail without its
+numbers (an age or a percentage is not a new finding).
+
+`laib diag` says when an active skill cannot do its job because the ops
+hand's ceiling or verb list refuses one of its `tools:` (probe `skill`,
+#543): "Fähigkeit sicherung läuft ohne backup, ihre Aufgabe bleibt liegen
+…", with the owner's choice as the fix — grant the verb in `policy.yml`,
+`laib skill pause <name>`, or a state-repo `skills/<name>.yml` without it.
+A capable model's `more:` tools are extras and never a finding.
 
 ### Hands with a verb list, and the approver
 

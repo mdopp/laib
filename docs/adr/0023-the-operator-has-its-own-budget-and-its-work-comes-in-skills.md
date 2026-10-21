@@ -6,7 +6,9 @@ code counts against the kernel's 16k lines, or decide what the kernel must
 check about an agent's task before it runs.
 
 - **Status:** Accepted, 2026-10-16 (#267); amended 2026-10-17 (#286):
-  `more:` tools for a capable model, `plan` and `apply` in the vocabulary
+  `more:` tools for a capable model, `plan` and `apply` in the vocabulary;
+  amended 2026-10-21 (#543): a look that finds nothing new asks no model,
+  `routineblick` files repairs
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -178,7 +180,7 @@ tier) is how the Operator and, later, Haus's Box page see the registry.
 
 | Skill | Trigger | Tools | Output | Today |
 |---|---|---|---|---|
-| `routineblick` | `every: ${TICK}` | status, diag, note | note | the tick |
+| `routineblick` | `every: ${TICK}` | status, diag, repair, note (#543) | note | the tick |
 | `morgenbericht` | `daily: ${REPORT_AT}` | status, diag, journal, note | report | the report hour |
 | `vorfall` | `event: red` | diag, logs, inspect, restart, propose, escalate, note | note | the red event |
 | `nutzung` (new, #270) | `weekly: "Mo 08:00"` | wish, note | propose | — |
@@ -257,3 +259,54 @@ within the budget"** (ADR 0019, amended the same day). For skills:
   service it touches (ADR 0019 amendment). `approve`, `rollback`,
   `restore`, `remove`, `token`, `secret` stay outside it.
 
+## Amendment 2026-10-21 — a look that finds nothing new is silent; a repair is a proposal (#543)
+
+On the Kraftwerk the Operator wrote 131 notes in 72 hours, every one
+repeating the same yellow findings, and not one proposal: `routineblick`
+only described, `vorfall` runs only on a red, and the restore test diag
+offered a repair for (`repair: [backup, check]`) was noted every ten
+minutes for 35 days. `policy.yml` kept `sicherung` from `backup`, and only
+`laib skill list` said so. What changes, all of it code, never prompt:
+
+- **The runner looks first.** An interval skill granted `diag` starts with
+  one `laib_diag` call of its own. When the findings are the ones its last
+  session saw that ended without an error, the tick asks no model and
+  writes no note (outcome `unchanged`, not in `incidents.jsonl`). A
+  finding's identity is its severity, probe, service and detail with the
+  numbers taken out, so an age or a percentage moving on is not news.
+  Memory: `OPERATOR_HOME/findings.json`.
+- **A repair verb becomes one proposal.** When such a skill is granted
+  `repair`, the runner files `laib repair <probe> [service]` for every
+  finding that is not red and carries a repair verb, before the model
+  runs, and appends the outcome to the note. It files a finding once: not
+  again while the proposal is open, nor after a no, until the finding
+  changes or goes away. Red stays `vorfall`'s, which runs on the red
+  event and has `repair` in `more:`. `routineblick` gains `repair`
+  (tier `propose`): what it proposes still waits for a human (#441).
+- **The model sees news.** In every skill session, the runner rewrites a
+  `laib_diag` result: what the skill's last good session already saw is a
+  count, red excepted, plus a line for what is gone. The owner's own items
+  — the RAID mirror, the watchdog, the NAS — appear in one routine note and
+  one morning report, not in every one.
+- **The heartbeat no longer needs a note per tick.** The Operator's
+  `/ready` carries `looked`, the time its last session or look ended
+  without an error; the kernel's heartbeat (`diag/opstate.go`) counts it
+  like a note. After a failed session the runner skips no look, so a model
+  that stops answering is `stumm` after three ticks, as before.
+- **diag names a skill the policy keeps from its job.** For each active
+  skill whose own `tools:` the ops hand's ceiling or verb list refuses,
+  `laib diag` has one yellow finding (probe `skill`) for the owner, whose
+  choice the fix names: grant the verb in `policy.yml`, `laib skill pause
+  <name>`, or a state-repo file without that tool. `more:` tools are a
+  capable model's extras and never a finding.
+
+Weighed against before (#246): maintenance gets easier — a finding diag
+can fix reaches the Inbox once instead of the journal 144 times a day, and
+a skill the policy starves says so in diag. The family is not worse off:
+nothing is applied without a human, red is handled as before, and the
+morning report still leads with red. What it costs: a model outage while
+nothing changes is noticed at the next session — a change, an event or the
+morning report — instead of within three ticks; whatever the family would
+notice is a change and runs a session. ServiceBay's diagnose offered the
+fix beside the probe and a human clicked it; the proposal is that click,
+filed by the box.

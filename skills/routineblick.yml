@@ -1,7 +1,12 @@
 # The ten-minute look (ADR 0023 §6): what the tick did before skills.
-description: Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn alles grün ist.
+# #543: the runner reads diag first. Unchanged since the last look: no
+# model, no note. A finding diag offers a repair for (and that is not red,
+# red is vorfall's) becomes one repair proposal, filed once until it
+# changes; findings already noted reach the model only as a count.
+description: Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn sich etwas geändert hat.
 trigger: {every: "${TICK}"}
-tools: [status, diag, note]
+tools: [status, diag, repair, note]
 output: note
 prompt: |
-  Auslöser: Routineblick. Prüfe status und diagnose. Wenn alles grün ist, note mit kind watch in einem Satz; sonst beschreibe in der Notiz, was gelb oder rot ist.
+  Auslöser: Routineblick. Prüfe status und diagnose. Wenn alles grün ist, note mit kind watch in einem Satz; sonst beschreibe in der Notiz, was neu gelb oder rot ist oder nicht mehr da ist.
+  Was diagnose als schon gemeldet zusammenfasst, wiederholst du nicht. Reparaturen, die diagnose anbietet, sind schon vorgeschlagen; das hängt laib selbst an deine Notiz an.
