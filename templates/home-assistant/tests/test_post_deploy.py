@@ -9,7 +9,7 @@ when it has no administrator token that works, mints one token per consumer
 and hands each back (`laib-secret:`): Haus and the check get administrator
 tokens, the Automat too (HA's automation config API is admin-only), and the
 Bote's `ha` tool a token of a separate non-admin user "bote"."""
-import base64, hashlib, json, os, struct, subprocess, threading, unittest, urllib.parse
+import base64, hashlib, json, os, socket, struct, subprocess, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -25,7 +25,8 @@ def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0,
-              entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False)
+              entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
+              registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None)
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -55,6 +56,14 @@ def token_for(uid, long_lived, name=None):
 
 def is_admin(uid):
     return "system-admin" in HA["users"][uid]["group_ids"]
+
+
+def save():
+    """HA's .storage/core.config_entries, the data of every entry (#540: the hook finds Wyoming's host and port there)"""
+    if HA["storage"]:
+        Path(HA["storage"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(HA["storage"]).write_text(json.dumps({"version": 1, "minor_version": 5, "key": "core.config_entries",
+                                                   "data": {"entries": [{k: v for k, v in e.items() if k != "state"} for e in HA["entries"]]}}))
 
 
 def username(uid):
@@ -104,6 +113,8 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path == "/api/config/config_entries/entry":
             return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home", "state": "loaded"}]
                               + [{k: v for k, v in e.items() if k not in ("data", "token")} for e in HA["entries"]])   # every user may list them over REST, as in HA
+        if self.path == "/api/states":   # every entity's state, as HA lists them (#540)
+            return self.reply(200, [dict(v, entity_id=k) for k, v in HA["states"].items()])
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
         if self.path.startswith("/api/states/update."):
@@ -148,6 +159,18 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path.startswith("/api/config/config_entries/"):
             if uid is None or not is_admin(uid):
                 return self.reply(401 if uid is None else 403)
+            if self.path.endswith("/reload"):   # #540: an entry set up again, synchronously, as HA does
+                eid = self.path.split("/")[-2]
+                e = next((e for e in HA["entries"] if e["entry_id"] == eid), None)
+                if e is None:
+                    return self.reply(404)
+                HA["reloads"].append(eid)
+                up = e["domain"] == "wyoming" and e["data"]["port"] in HA["wyoming_up"]
+                e["state"] = "loaded" if up else "setup_retry"
+                for reg in HA["registry"]:
+                    if reg["config_entry_id"] == eid:
+                        HA["states"][reg["entity_id"]] = {"state": "unknown" if up else "unavailable"}
+                return self.reply(200, {"require_restart": False})
             return self.config_flow(b)
         if self.path.startswith("/api/onboarding/"):
             step = self.path.rsplit("/", 1)[1]
@@ -172,6 +195,8 @@ class FakeHA(BaseHTTPRequestHandler):
             return self.reply(200, {"type": "create_entry", "flow_id": "cf1", "result": {k: e[k] for k in ("entry_id", "domain", "title")}})
         if b.get("handler") == "music_assistant" or self.path.startswith("/api/config/config_entries/flow/m"):
             return self.ma_flow(b)
+        if b.get("handler") == "wyoming" or self.path.startswith("/api/config/config_entries/flow/w"):
+            return self.wyoming_flow(b)
         if self.path == "/api/config/config_entries/flow":
             if b.get("handler") != "ollama":
                 return self.reply(400, {"message": "Invalid handler specified"})
@@ -198,8 +223,33 @@ class FakeHA(BaseHTTPRequestHandler):
             sub = {"subentry_id": f"s{len(HA['subentries'].get(eid, []))}", "subentry_type": "conversation", "title": b["name"],
                    "unique_id": None, "data": {k: v for k, v in b.items() if k != "name"}}
             HA["subentries"].setdefault(eid, []).append(sub)
+            ent = "conversation." + b["name"].lower()   # the agent is an entity of the entry (#540: a pipeline names it)
+            HA["registry"].append({"entity_id": ent, "config_entry_id": eid, "platform": "ollama", "disabled_by": None})
+            HA["states"][ent] = {"state": "unknown"}
             return self.reply(200, {"type": "create_entry", "flow_id": "sf1", "title": b["name"]})
         self.reply(404)
+
+    def wyoming_flow(self, b):
+        """homeassistant/components/wyoming/config_flow.py (2026.10): one step, host and port; the title is the
+        server's first program (data.py get_name); no abort for a server HA has already: a second entry"""
+        if self.path == "/api/config/config_entries/flow":
+            fid = f"wf{len(HA['flows'])}"
+            HA["flows"][fid] = "wyoming"
+            return self.reply(200, {"type": "form", "flow_id": fid, "handler": "wyoming", "step_id": "user"})
+        fid = self.path.rsplit("/", 1)[1]
+        if HA["flows"].pop(fid, None) != "wyoming":
+            return self.reply(404)
+        title = HA["wyoming_up"].get(b.get("port")) if b.get("host") == "127.0.0.1" else None
+        if title is None:
+            return self.reply(200, {"type": "form", "flow_id": fid, "step_id": "user", "errors": {"base": "cannot_connect"}})
+        e = {"entry_id": f"e-wy-{len(HA['entries'])}", "domain": "wyoming", "title": title, "state": "loaded",
+             "data": {"host": b["host"], "port": b["port"]}}
+        HA["entries"].append(e)
+        ent = {"faster-whisper": "stt.faster_whisper", "piper": "tts.piper", "openwakeword": "wake_word.openwakeword"}[title]
+        HA["registry"].append({"entity_id": ent, "config_entry_id": e["entry_id"], "platform": "wyoming", "disabled_by": None})
+        HA["states"][ent] = {"state": "unknown"}
+        save()
+        return self.reply(200, {"type": "create_entry", "flow_id": fid, "title": title, "result": {k: e[k] for k in ("entry_id", "domain", "title")}})
 
     def ma_flow(self, b):
         """homeassistant/components/music_assistant/config_flow.py (2026.10): user (url) → the browser
@@ -307,6 +357,23 @@ class FakeHA(BaseHTTPRequestHandler):
                       if HA.get("ma_reauth") else [])
         if t == "config_entries/subentries/list":
             return ok([{k: v for k, v in sub.items() if k != "data"} for sub in HA["subentries"].get(m["entry_id"], [])])
+        if t == "config/entity_registry/list":
+            return ok(HA["registry"])
+        if t == "assist_pipeline/pipeline/list":
+            return ok({"pipelines": HA["pipelines"], "preferred_pipeline": HA["pipelines"][0]["id"] if HA["pipelines"] else None})
+        if t == "assist_pipeline/pipeline/update":   # PIPELINE_FIELDS, every one required as in HA
+            fields = {k: v for k, v in m.items() if k not in ("id", "type", "pipeline_id")}
+            p = next((p for p in HA["pipelines"] if p["id"] == m["pipeline_id"]), None)
+            if p is None or set(fields) != set(p) - {"id"}:
+                return err("invalid_format", f"fields {sorted(fields)}")
+            p.update(fields)
+            HA["pipeline_updates"].append(m["pipeline_id"])
+            return ok(p)
+        if t in ("stt/engine/list", "tts/engine/list"):
+            kind = t.split("/")[0]
+            lang = m.get("language") or ""
+            return ok({"providers": [dict(x, supported_languages=[l for l in x["supported_languages"] if l.split("_")[0].split("-")[0] == lang])
+                                     for x in HA["engines"][kind]]})
         if t == "config/core/update":
             HA["core"].update({k: v for k, v in m.items() if k not in ("id", "type")})
             return ok()
@@ -342,10 +409,12 @@ class Hook(unittest.TestCase):
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.shutdown)
 
-    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1"):
+    def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
+                 stimme=(1, 1, 1), data_dir=""):
         HA["ma_url"] = ma
         env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
-               "MA_URL": ma,
+               "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
+               "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         for name, value in (tokens or {}).items():
@@ -540,6 +609,104 @@ class FrageAgent(Hook):
         p, _, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
         self.assertIn("no HA_RADICALE_PASSWORD", log)
+
+
+class Stimme(Hook):
+    """#540: Solaris off, Stimme on. HA's post-deploy adds Stimme's Wyoming entries once, found by
+    host and port in HA's .storage (the REST list has no data), takes over the one Solaris' Whisper
+    left on 10300, and moves a pipeline part whose engine is gone to Stimme or Frage; a part that
+    works, or a legacy provider, stays the owner's choice."""
+
+    def setUp(self):
+        super().setUp()
+        self.socks = []
+        for _ in range(3):   # Stimme's three Wyoming servers: a port that answers
+            sk = socket.socket()
+            sk.bind(("127.0.0.1", 0))
+            sk.listen(8)
+            self.socks.append(sk)
+            self.addCleanup(sk.close)
+        self.ports = tuple(sk.getsockname()[1] for sk in self.socks)
+        self.frage = fake_frage()
+        self.addCleanup(self.frage.shutdown)
+        self.url = f"http://127.0.0.1:{self.frage.server_port}"
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def kraftwerk(self):
+        """the Kraftwerk after its Solaris units went (#540): Solaris' Whisper entry on 10300 (now Stimme's port)
+        waits in setup_retry, its TTS on 10203 and its Ollama facade on 8787 are gone, the pipeline used them"""
+        fresh()
+        HA["storage"] = os.path.join(self.tmp.name, "home-assistant", "homeassistant", ".storage", "core.config_entries")
+        w, pi, ww = self.ports
+        HA["wyoming_up"] = {w: "faster-whisper", pi: "piper", ww: "openwakeword"}
+        HA["entries"] += [{"entry_id": "e-sol-whisper", "domain": "wyoming", "title": "faster-whisper", "state": "setup_retry", "data": {"host": "localhost", "port": w}},
+                          {"entry_id": "e-sol-tts", "domain": "wyoming", "title": "Solaris TTS", "state": "setup_retry", "data": {"host": "127.0.0.1", "port": 10203}},
+                          {"entry_id": "e-sol", "domain": "ollama", "title": "http://127.0.0.1:8787/ollama", "state": "setup_retry", "data": {"url": "http://127.0.0.1:8787/ollama"}}]
+        HA["registry"] += [{"entity_id": "stt.faster_whisper", "config_entry_id": "e-sol-whisper", "platform": "wyoming", "disabled_by": None},
+                           {"entity_id": "tts.solaris_tts", "config_entry_id": "e-sol-tts", "platform": "wyoming", "disabled_by": None},
+                           {"entity_id": "conversation.solaris", "config_entry_id": "e-sol", "platform": "ollama", "disabled_by": None}]
+        HA["states"].update({"stt.faster_whisper": {"state": "unavailable"}, "tts.solaris_tts": {"state": "unavailable"},
+                             "conversation.solaris": {"state": "unavailable"}, "tts.google_translate_de": {"state": "unknown"},
+                             "conversation.home_assistant": {"state": "unknown"}})
+        HA["engines"] = {"stt": [{"engine_id": "stt.faster_whisper", "supported_languages": ["de", "en"]}],
+                         "tts": [{"engine_id": "tts.piper", "supported_languages": ["de_DE"]}, {"engine_id": "tts.google_translate_de", "supported_languages": ["de"]}]}
+        pipe = lambda i, name, stt, tts, conv: {"id": i, "name": name, "language": "de", "stt_engine": stt, "stt_language": "de", "tts_engine": tts,
+                                                "tts_language": "de", "tts_voice": "martin", "conversation_engine": conv, "conversation_language": "de",
+                                                "wake_word_entity": None, "wake_word_id": None, "prefer_local_intents": True}
+        HA["pipelines"] = [pipe("p-sol", "Solaris", "stt.faster_whisper", "tts.solaris_tts", "conversation.solaris"),
+                           pipe("p-own", "Eigene", "cloud", "tts.google_translate_de", "conversation.home_assistant")]
+        save()
+
+    def wyoming(self):
+        return sorted((e["data"]["port"], e["title"]) for e in HA["entries"] if e["domain"] == "wyoming")
+
+    def test_stimme_is_wired_once_and_a_pipeline_whose_engines_went_follows(self):
+        self.kraftwerk()
+        w, pi, ww = self.ports
+        p, handed, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.wyoming(), sorted([(w, "faster-whisper"), (10203, "Solaris TTS"), (pi, "piper"), (ww, "openwakeword")]),
+                         "Solaris' Whisper entry on Stimme's port is Stimme's; nothing deleted, nothing twice")
+        self.assertEqual(HA["reloads"], ["e-sol-whisper"], "the entry that gave up while 10300 was dark was not set up again")
+        sol, own = HA["pipelines"]
+        self.assertEqual((sol["stt_engine"], sol["tts_engine"], sol["tts_language"], sol["tts_voice"], sol["conversation_engine"]),
+                         ("stt.faster_whisper", "tts.piper", "de_DE", None, "conversation.frage"), log)
+        self.assertIn('Assist pipeline "Solaris"', log)
+        self.assertEqual(own["stt_engine"], "cloud", "a legacy provider was replaced")
+        self.assertEqual((own["tts_engine"], own["conversation_engine"]), ("tts.google_translate_de", "conversation.home_assistant"),
+                         "a part that works is the owner's choice")
+        self.assertEqual(HA["pipeline_updates"], ["p-sol"])
+        HA["reloads"].clear()
+        p, _, log = self.run_hook(tokens=handed, frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.wyoming()), 4, "a second run added a Wyoming entry")
+        self.assertEqual((HA["pipeline_updates"], HA["reloads"]), (["p-sol"], []), "a second run changed something")
+        self.assertIn("Stimme's Wyoming entries are there", log)
+
+    def test_without_stimme_nothing_is_wired_and_the_apply_stays_green(self):
+        self.kraftwerk()
+        p, _, log = self.run_hook(data_dir=self.tmp.name)   # Stimme's ports answer nothing, no Frage
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.wyoming()), 2)
+        self.assertEqual(HA["pipeline_updates"], [], "a pipeline moved to nothing")
+        self.assertIn("after laib add stimme: laib apply home-assistant", log)
+
+    def test_unreadable_storage_adds_no_entry_it_might_have_twice(self):
+        self.kraftwerk()
+        p, _, log = self.run_hook(stimme=self.ports)   # LAIB_DATA_DIR without HA's .storage
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.wyoming()), 2)
+        self.assertIn("Wyoming for Stimme NOT set up", log)
+
+    def test_a_stimme_that_does_not_speak_the_language_leaves_the_part(self):
+        self.kraftwerk()
+        HA["engines"]["tts"] = [{"engine_id": "tts.piper", "supported_languages": ["en_US"]}]
+        p, _, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        sol = HA["pipelines"][0]
+        self.assertEqual((sol["tts_engine"], sol["conversation_engine"]), ("tts.solaris_tts", "conversation.frage"))
+        self.assertIn("tts.piper speaks no de", log)
 
 
 class FakeMA(BaseHTTPRequestHandler):

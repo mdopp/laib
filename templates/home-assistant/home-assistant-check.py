@@ -30,7 +30,13 @@ EXPECTED = [
     ("Frage als Gesprächsagent", "ollama", ":8710"),  # post-deploy adds it once Frage answers (#491)
 ]
 FIX = "in Home Assistant unter Einstellungen → Integrationen einrichten (templates/home-assistant/README.md)"
-FIXES = {"Frage als Gesprächsagent": "laib add frage, dann laib apply home-assistant: die Ollama-Integration auf Frage (#491)"}
+STIMME_FIX = "laib add stimme, dann laib apply home-assistant: die Wyoming-Einträge kommen von selbst (#540)"
+FIXES = {"Frage als Gesprächsagent": "laib add frage, dann laib apply home-assistant: die Ollama-Integration auf Frage (#491)",
+         "Wyoming Whisper": STIMME_FIX, "Wyoming Piper": STIMME_FIX, "Wyoming openWakeWord": STIMME_FIX}
+# an entry Home Assistant could not set up: it counts for no row. Of the voice's domains it is a
+# finding of its own, the server behind it is gone (Solaris' after Phase 5, #540)
+BROKEN = ("setup_error", "setup_retry", "migration_error", "failed_unload")
+VOICE = ("wyoming", "ollama")
 
 
 def entries(base: str, token: str) -> list:
@@ -50,11 +56,16 @@ def report(token: str, base: str) -> dict:
             "severity": "gelb", "detail": f"Home Assistant antwortet nicht auf die Integrationsliste: {err}",
             "fix": "laib apply home-assistant (ersetzt einen HA_TOKEN, den Home Assistant ablehnt, #349)"}]}
     missing = [name for name, domain, title in EXPECTED
-               if not any(e.get("domain") == domain and (not title or title in (e.get("title") or "").lower()) for e in got)]
-    if not missing:
-        return {"detail": f"alle {len(EXPECTED)} Integrationen eingerichtet", "findings": []}
-    return {"detail": "fehlt: " + ", ".join(missing),
-            "findings": [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIXES.get(name, FIX)} for name in missing]}
+               if not any(e.get("domain") == domain and e.get("state") not in BROKEN and (not title or title in (e.get("title") or "").lower())
+                          for e in got)]
+    dead = [e for e in got if e.get("domain") in VOICE and e.get("state") in BROKEN]
+    findings = [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIXES.get(name, FIX)} for name in missing]
+    findings += [{"severity": "gelb", "detail": f"„{e.get('title')}“ ({e.get('domain')}) antwortet nicht",
+                  "fix": "der Dienst dahinter läuft nicht: starten, oder den Eintrag in Home Assistant löschen (Einstellungen → "
+                         "Geräte & Dienste); was von Solaris übrig ist, listet scripts/solaris-off.py (#540)"} for e in dead]
+    detail = ["fehlt: " + ", ".join(missing)] if missing else []
+    detail += [f"{len(dead)} Sprach-Integration{'en' if len(dead) > 1 else ''} ohne Dienst"] if dead else []
+    return {"detail": " · ".join(detail) or f"alle {len(EXPECTED)} Integrationen eingerichtet", "findings": findings}
 
 
 def offers(base: str, token: str, service: str) -> list:

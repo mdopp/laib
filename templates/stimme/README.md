@@ -1,8 +1,14 @@
 # stimme — the Wyoming set for Home Assistant Assist (ADR 0015)
 
 Whisper on 10300, Piper on 10200, openWakeWord on 10400, all on the host
-network so Home Assistant adds them as Wyoming integrations at
-`127.0.0.1`. Piper also answers pods on the box at
+network so Home Assistant reaches them at `127.0.0.1`. Nobody adds them in
+HA by hand: home-assistant's post-deploy adds a Wyoming entry for each
+server that answers, once, found by host and port, and points an Assist
+pipeline part whose engine is gone at Stimme (#540). After `laib add
+stimme`, `laib apply home-assistant` runs that hook (`laib diag` names a
+missing Wyoming row until then). On the box that ran the old voice
+stack, its Whisper and openWakeWord hold 10300 and 10400: Phase 5's script
+takes it off and does both steps (docs/MIGRATION.md, Phase 5, #540). Piper also answers pods on the box at
 `host.containers.internal:10200` (it binds `0.0.0.0`, the port is `lan:
 false`): foundry-chronicle's `chronik` speaks its consent announcement
 through it (#242). Piper speaks with the house persona's voice (`PERSONA_VOICE`,

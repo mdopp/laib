@@ -155,6 +155,28 @@ class Check(unittest.TestCase):
         self.assertTrue(all(f["severity"] == "gelb" for f in r["findings"]))
         self.assertTrue(r["at"].endswith("Z") and r["detail"].startswith("fehlt: "))
 
+    def test_stimmes_entries_count_and_solaris_dead_ones_are_named(self):
+        # #540: HA titles a Wyoming entry with the server's first program (wyoming/data.py get_name):
+        # faster-whisper, piper, openwakeword for Stimme's images. Solaris' entries stay after its units
+        # went, in setup_retry: they count for no row, and each is a finding of its own.
+        ok = lambda d, t: {"domain": d, "title": t, "state": "loaded"}
+        got = [ok("wyoming", "faster-whisper"), ok("wyoming", "piper"), ok("wyoming", "openwakeword"), ok("caldav", "homeassistant"),
+               ok("music_assistant", "Music Assistant"), ok("mqtt", "Mosquitto"), ok("mcp_server", "Assist"),
+               ok("ollama", "http://127.0.0.1:8710")]
+        srv, _ = fake_ha(got)
+        r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
+        self.assertEqual((r["findings"], r["detail"]), ([], "alle 8 Integrationen eingerichtet"))
+        dead = [{"domain": "wyoming", "title": "piper", "state": "setup_retry"}, {"domain": "ollama", "title": "http://127.0.0.1:8787/ollama", "state": "setup_retry"}]
+        srv, _ = fake_ha([e for e in got if e["title"] != "piper"] + dead)
+        r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}")
+        details = [f["detail"] for f in r["findings"]]
+        self.assertIn("Wyoming Piper: fehlt", details, "a Wyoming entry whose server is gone counted as Piper")
+        self.assertIn("laib add stimme", next(f["fix"] for f in r["findings"] if f["detail"] == "Wyoming Piper: fehlt"))
+        self.assertIn("„piper“ (wyoming) antwortet nicht", details)
+        self.assertIn("„http://127.0.0.1:8787/ollama“ (ollama) antwortet nicht", details)
+        self.assertIn("solaris-off", r["findings"][-1]["fix"])
+        self.assertEqual(r["detail"], "fehlt: Wyoming Piper · 2 Sprach-Integrationen ohne Dienst")
+
     def test_complete_and_unreachable_and_no_token(self):
         everything = [{"domain": d, "title": t} for _, d, t in
                       [("", "wyoming", "whisper"), ("", "wyoming", "piper"), ("", "wyoming", "openwakeword"), ("", "caldav", ""),
