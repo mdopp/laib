@@ -49,6 +49,7 @@ type Operator struct {
 	// /props or OPERATOR_CONTEXT_WINDOW; 0 = unknown, the small budgets
 	Window int
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
+	Web    *Web   // Frage's search, for a session that only proposes (#544)
 	// Looked is the unix time of the last session or look that ended
 	// without an error; /ready says it, the kernel's heartbeat reads it,
 	// since a look that found nothing new writes no note (#543)
@@ -120,6 +121,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	// the kernel's typed schemas (#290) are the menu: no second one here
 	defs := Defs(mine)
+	// the web (#544, ADR 0025): only in a session that proposes and cannot act
+	var web *webSession
+	if o.offersWeb(sk) {
+		defs, web = append(defs, webDef()), &webSession{web: o.Web}
+	}
 	offered := map[string]bool{}
 	for _, d := range defs {
 		offered[d.Function.Name] = true
@@ -140,6 +146,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
+		if web != nil {
+			web.upstream = upstreamOf(ctxText)
+		}
 	}
 	// the record (#544): what came of its last proposals, for every session;
 	// the morning report also carries the month's rate
@@ -205,7 +214,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				if note == "" {
 					note = "Sitzung ohne Notiz beendet."
 				}
-				note = strings.TrimSpace(note + " " + human)
+				note = strings.TrimSpace(note + " " + human + " " + web.tell())
 				kind := "watch"
 				if sk.Output == "report" {
 					kind = "report"
@@ -264,11 +273,15 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
 				continue
 			}
-			if mcpName == "laib_note" && human != "" {
-				if t, ok := args["text"].(string); ok {
-					args["text"], human = strings.TrimSpace(t+" "+human), ""
+			if t, ok := args["text"].(string); mcpName == "laib_note" && ok {
+				if extra := strings.TrimSpace(human + " " + web.tell()); extra != "" {
+					args["text"], human = strings.TrimSpace(t+" "+extra), ""
 					shown = shownArgs(args)
 				}
+			}
+			if src := web.sources(args["sources"]); mcpName == "laib_propose" && src != nil {
+				args["sources"] = src // what it rests on is named, and a human decides (#544)
+				shown = shownArgs(args)
 			}
 			if len(s.Calls) >= max {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
@@ -276,8 +289,13 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 			used[mcpName]++
 			s.Calls = append(s.Calls, mcpName+" "+shown)
-			out, isErr, err := mcp.Call(ctx, mcpName, args)
-			if err != nil {
+			var out string
+			var isErr bool
+			if mcpName == "websuche" {
+				q, _ := args["frage"].(string)
+				svc, _ := args["dienst"].(string)
+				out = web.search(ctx, q, svc)
+			} else if out, isErr, err = mcp.Call(ctx, mcpName, args); err != nil {
 				out, isErr = err.Error(), true
 			}
 			if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && (mcpName == "laib_propose" || mcpName == "laib_repair") {

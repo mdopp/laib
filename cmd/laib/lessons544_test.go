@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,5 +42,20 @@ func TestALessonIsAHumansAndThenInEveryContext(t *testing.T) {
 	out, code := mcp.Call(ctx, env, st, "ops", "laib_context", map[string]any{})
 	if code != cli.ExitOK || !strings.Contains(out, `"lessons"`) || !strings.Contains(out, `"# Lehre: unit whoami\n- Was half: zurück auf v1.10\n"`) {
 		t.Fatalf("the context does not carry the lesson: %s", out)
+	}
+}
+
+// #544: laib context names where each service's upstream lives — its
+// laib.yml's upstream, or, for a service added before its template named
+// one, the template's — for the Operator's web search to look first.
+func TestTheContextNamesEachServicesUpstream(t *testing.T) {
+	ctx := context.Background()
+	env, _ := testBox(t)
+	// whoami as the built-in template made it, before the template named its upstream
+	os.WriteFile(filepath.Join(env.Paths.State, "services", "whoami", "laib.yml"), []byte("name: whoami\ntemplate: {registry: builtin, name: whoami, version: 1}\nsecrets:\n  - name: WHOAMI_TOKEN\n"), 0o644)
+	st, _ := cli.LoadState(env)
+	out, code := mcp.Call(ctx, env, st, "ops", "laib_context", map[string]any{})
+	if code != cli.ExitOK || !strings.Contains(out, `"upstream"`) || !strings.Contains(out, `"https://github.com/traefik/whoami"`) {
+		t.Fatalf("whoami's upstream from its template: %s", out)
 	}
 }

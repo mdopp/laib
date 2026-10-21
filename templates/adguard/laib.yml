@@ -1,6 +1,7 @@
 name: adguard
 template: {registry: builtin, name: adguard, version: 1}
 provides: [dns]
+upstream: [https://github.com/AdguardTeam/AdGuardHome, https://github.com/AdguardTeam/AdGuardHome/wiki]   # where the Operator's web search looks first (#544)
 # AdGuard Home as the LAN DNS (ServiceBay ADR 0005, Pattern A: the router
 # hands out this box as DNS). Host network for 53/udp+tcp and mDNS. Laib
 # renders render/adguard/rewrites.json (*.domain and the apex → this box);

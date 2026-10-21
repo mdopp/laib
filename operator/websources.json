@@ -1,0 +1,12 @@
+{
+  "_": "Where the Operator's web search looks after a service's own upstream (#544, ADR 0025): data, not prompt. A service's upstream comes from its template (laib.yml upstream:). The open web only after these.",
+  "general": [
+    "https://www.home-assistant.io/docs/",
+    "https://docs.podman.io/",
+    "https://github.com/containers/podman",
+    "https://www.freedesktop.org/software/systemd/man/",
+    "https://github.com/systemd/systemd",
+    "https://docs.fedoraproject.org/en-US/fedora-coreos/",
+    "https://github.com/ublue-os/ucore"
+  ]
+}

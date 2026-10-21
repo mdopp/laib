@@ -34,6 +34,8 @@ func main() {
 		Home: env("OPERATOR_HOME", "/mnt/data/laib/operator"),
 		// rendered into the unit when the box runs usage-metrics (#270)
 		Usage: &operator.Usage{URL: os.Getenv("USAGE_METRICS_URL"), Token: os.Getenv("USAGE_METRICS_TOKEN")},
+		// rendered into the unit when the box runs Frage (#544): the web, read through its SearXNG
+		Web: &operator.Web{URL: os.Getenv("FRAGE_URL")},
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")

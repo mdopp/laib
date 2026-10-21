@@ -1,6 +1,7 @@
 name: home-assistant
 template: {registry: builtin, name: home-assistant, version: 1}
 provides: [home, voice]
+upstream: [https://github.com/home-assistant/core, https://www.home-assistant.io/docs/]   # where the Operator's web search looks first (#544)
 # Home Assistant is the house brain and, with Assist, the voice brain
 # (ADR 0015). Host network for discovery, Matter, Z-Wave and the Voice PE
 # devices. Three containers: Home Assistant, Z-Wave JS UI, the Matter

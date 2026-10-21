@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/pages"
 )
@@ -20,8 +24,18 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 	r, rows := pages.CollectStatus(ctx, env, st)
 	es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
 	lessons := lessonsOf(env.Paths.State)
+	upstream := map[string][]string{} // where each service's upstream lives (#544)
+	for name, svc := range st.Services {
+		up := svc.Contract.Upstream
+		if len(up) == 0 {
+			up = templateUpstream(env, svc.Contract.Template.Name)
+		}
+		if len(up) > 0 {
+			upstream[name] = up
+		}
+	}
 	if env.JSON {
-		return cli.Emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain, "lessons": lessons})
+		return cli.Emit(env, map[string]any{"ready": r, "services": rows, "journal": es, "domain": st.Box.Domain, "lessons": lessons, "upstream": upstream})
 	}
 	fmt.Fprintf(env.W(), "# Laib context · %s · %s\n\n", st.Box.Domain, r.State)
 	fmt.Fprintln(env.W(), "## Services")
@@ -55,4 +69,15 @@ func lessonsOf(state string) []string {
 		out = append(out, string(b))
 	}
 	return out
+}
+
+// templateUpstream: a service added before its template named its upstream
+// (#544) reads it from the template, so no template update is needed.
+func templateUpstream(env *cliEnv, name string) []string {
+	var c struct{ Upstream []string }
+	if tpl, err := inbox.TemplateFS(env, name); err == nil {
+		b, _ := fs.ReadFile(tpl, "laib.yml")
+		yaml.Unmarshal(b, &c)
+	}
+	return c.Upstream
 }

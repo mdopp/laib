@@ -1,6 +1,7 @@
 name: music-assistant
 template: {registry: builtin, name: music-assistant, version: 1}
 provides: [music-players]
+upstream: [https://github.com/music-assistant/server, https://music-assistant.io/]   # where the Operator's web search looks first (#544)
 # Music Assistant: the house's player brain for Home Assistant Assist —
 # "spiele Einslive", playlists, podcasts on the speakers (ADR 0015). Host
 # network for player discovery (mDNS, Chromecast, DLNA); Jellyfin is its

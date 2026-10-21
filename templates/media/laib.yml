@@ -1,6 +1,7 @@
 name: media
 template: {registry: builtin, name: media, version: 1}
 provides: [music, video]
+upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   # where the Operator's web search looks first (#544)
 # Jellyfin for music and video. Audiobooks and podcasts are NOT here any
 # more (docs/SERVICES.md, the Symfonium finding): they live in
 # audiobookshelf, so a phone player that syncs Jellyfin's audio sees music

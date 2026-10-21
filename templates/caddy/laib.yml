@@ -1,5 +1,6 @@
 name: caddy
 provides: [proxy]
+upstream: [https://github.com/caddyserver/caddy, https://caddyserver.com/docs/]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: caddy, version: 1}
 hostNetwork: true
 routes: []

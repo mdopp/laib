@@ -850,10 +850,17 @@ func operatorUnit(st *state.State, secrets map[string]string) (string, string) {
 			usage = "Environment=USAGE_METRICS_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\n"
 		}
 	}
+	// the web search reads through Frage's SearXNG (#544), on the host port
+	web := ""
+	for _, name := range st.ServiceNames() {
+		if c := st.Services[name].Contract; slices.Contains(c.Provides, "frage") && len(c.Ports) > 0 {
+			web = "Environment=FRAGE_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\n"
+		}
+	}
 	// the bearers in the env file (#443): the unit carries no secret value
 	sec := []string{"LAIB_TOKEN", secretValue(secrets, OperatorToken), "MODEL_KEY", key}
 	if usage != "" {
 		sec = append(sec, "USAGE_METRICS_TOKEN", secretValue(secrets, "USAGE_METRICS_TOKEN"))
 	}
-	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironmentFile=%h/.config/systemd/user/laib-operator.env\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n", envFile(sec...)
+	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironmentFile=%h/.config/systemd/user/laib-operator.env\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + web + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n", envFile(sec...)
 }

@@ -1,5 +1,6 @@
 name: whoami
 provides: [demo]
+upstream: [https://github.com/traefik/whoami]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: whoami, version: 1}
 routes:
   - host: whoami

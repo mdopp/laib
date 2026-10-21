@@ -16,6 +16,7 @@ Environment=OPERATOR_TICK=5m
 Environment=OPERATOR_REPORT_AT=06:30
 Environment=OPERATOR_CONTEXT_WINDOW=131072
 Environment=USAGE_METRICS_URL=http://127.0.0.1:8094
+Environment=FRAGE_URL=http://127.0.0.1:8710
 Restart=always
 RestartSec=5
 

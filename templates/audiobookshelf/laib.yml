@@ -1,6 +1,7 @@
 name: audiobookshelf
 template: {registry: builtin, name: audiobookshelf, version: 1}
 provides: [audiobooks, podcasts]
+upstream: [https://github.com/advplyr/audiobookshelf, https://www.audiobookshelf.org/docs]   # where the Operator's web search looks first (#544)
 # Hörbücher und Podcasts: Audiobookshelf fetches podcast episodes itself
 # (RSS, auto-download, retention), keeps progress and chapters, has its own
 # apps. This replaces the hand-rolled sync_podcasts.py and takes audiobooks

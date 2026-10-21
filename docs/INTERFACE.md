@@ -139,6 +139,21 @@ that quotes an unanswered sentence word for word (they are kept 30 days
 without names, for admins only; the intake repo may be public). Without
 usage-metrics the skill writes one note and asks no model.
 
+**The web, read, never acted on** (#544, ADR 0025). A session whose output
+is proposals, that may `propose` and that has none of `apply`, `restart`,
+`exec`, `write` granted (today `aktualisierung`) is offered one more tool,
+`websuche` (`frage`, `dienst?`): Operator code, not a kernel verb. It asks
+Frage's `/search` (`FRAGE_URL`, rendered into the Operator's unit when the
+box runs Frage — SearXNG behind it, no model, no page fetched): first the
+service's upstream (`laib context` → `upstream`, from its laib.yml or its
+template), then the general entry points in `operator/websources.json`
+(Home Assistant, podman, systemd, Fedora CoreOS, uCore), the open web only
+when they give fewer than three hits. The answer is excerpts with their
+address, marked as untrusted text. At most four requests and 64 KiB per
+session; the note says how many and which addresses. A proposal filed
+after a search carries `sources` — the addresses the model names that the
+search returned, else all of them — so laib makes it class human.
+
 A tool is in the menu only if the skill is granted its verb (`ops` at
 ceiling `propose` gets no `restart`). `approve`, `reject`, `restore`,
 `rollback`, `converge`, `template`, `adopt`, `apply`, `remove` are in no

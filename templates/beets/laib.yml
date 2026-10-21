@@ -1,6 +1,7 @@
 name: beets
 template: {registry: builtin, name: beets, version: 1}
 provides: [music-tagging]
+upstream: [https://github.com/beetbox/beets, https://beets.readthedocs.io/]   # where the Operator's web search looks first (#544)
 # beets tags and sorts the music folder the file share holds. Admin tool.
 after: [file-share]              # its folders are mounted here (#36)
 routes:

@@ -1,6 +1,7 @@
 name: auth
 template: {registry: builtin, name: auth, version: 1}
 provides: [sso, identity]
+upstream: [https://github.com/authelia/authelia, https://www.authelia.com/, https://github.com/lldap/lldap]   # where the Operator's web search looks first (#544)
 # Authelia (forward-auth, OIDC), LLDAP (users, groups) and Valkey
 # (Authelia's sessions, on disk: a restart logs nobody out, #369) in one pod. Laib
 # renders all of Authelia's access rules and the OIDC clients as fragments

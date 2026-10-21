@@ -239,6 +239,7 @@ ports:
   - { port: 8025, lan: false, when: [MAIL_HOST] }   # only while MAIL_HOST is set (#190)
 gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
+upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # repo, release notes, docs: where the Operator's web search looks first (#544); absent: the template's
 after: [authelia]                # restarted and verified before this one
 when:                            # a unit exists only while one of its values is set (#184)
   paperless-mail.container: [MAIL_HOST]

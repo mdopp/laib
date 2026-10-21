@@ -232,6 +232,9 @@ type Contract struct {
 	// Channels: the people platforms this service delivers on, each on while
 	// its value is set (ADR 0022 §3, #184).
 	Channels map[string]string `yaml:"channels"`
+	// Upstream: where the service's upstream lives — repo, release notes,
+	// docs; the Operator's web search reads these first (#544)
+	Upstream []string `yaml:"upstream"`
 }
 
 // TemplateRef says where a service's files came from.
