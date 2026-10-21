@@ -228,7 +228,7 @@ file yours and stop the hook from rewriting it.
 
 | Server | When | Tools |
 |---|---|---|
-| `laib` | always | 16 (hand `bote`: read, propose, note, escalate) |
+| `laib` | always, `trust:` is `LAIB_TOOLS_TRUST` (#524) | 16 (hand `bote`: read, propose, note, escalate) |
 | `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
 | `haushalt` | Haus is installed (it generates `HAUS_HAUSHALT_TOKEN`) **and** answers with that token at `HAUSHALT_MCP_URL` (default: Haus on the host's port 8650, haus#11, #170) | calendar, reminders, notes |
 | `ha` | `BOTE_HA_TOKEN` minted (Home Assistant installed, #349) | Home Assistant's Assist tools (depends on the exposed domains) |
@@ -240,6 +240,14 @@ verified config (2026-10), so the HA set is bounded only by what you
 expose in Home Assistant (Settings → Voice assistants → Expose) — keep it
 to the domains the family touches. The SOUL tells the model to take
 `/model denken` for long multi-tool tasks (#53).
+
+**How much the Laib tools are trusted is a value** (#524), `LAIB_TOOLS_TRUST`
+in `values.yml`: `untrusted` (the default) has Hermes ask the person in the
+chat before `propose`, `note` and `escalate`; `full` does not. Either way
+the hand `bote` can only propose, and approving stays the Inbox's or the
+relay's (#48). Before #524 the hook wrote `untrusted` itself, so every
+template update undid an owner's `full`; a template update keeps a value
+(docs/STATE.md). Any other word fails the hook.
 
 **Memory:** nothing is configured. The SOUL says so in plain words — the
 Bote remembers nothing beyond a conversation and says so when asked to —
@@ -342,7 +350,9 @@ the Bote's tools) goes to the model with the context; inside a menu level
 or the games (`JOSHUA/GERÄTE>`, `JOSHUA/SPIELE>`) the answer starts with
 the prompt line, an ordinary answer at the top has none (#510). A chat
 persona's `FIGUR:` line rides
-along. Without the engine the turn is Hermes' as usual; a cron job is left
+along. With nothing to route (any tool, the top level, no `FIGUR:`) the
+plugin adds no line at all: the user turn is the person's words alone
+(#520, below). Without the engine the turn is Hermes' as usual; a cron job is left
 alone. Tests: `tests/test_persona_plugin.py` (the hooks against a fake
 engine) and `tests/hermes_plugin_proof.py` (Hermes' own loader, its
 `pre_llm_call` collector and turn finalizer, in the pinned image).
@@ -361,6 +371,56 @@ own persona: Hermes shows the model the sender's profile name, the persona
 engine resolves it to the number through signal-cli's contacts in the pod,
 and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
 the house persona. That is a costume, never a right.
+
+## Switch commands (#520)
+
+Over Haus's Sprechen field "Bambi aus" came back as "Bambi aus." or, once,
+as Hermes' steer frame around the words (`[OUT-OF-BAND USER MESSAGE — …]
+Bambi aus [/OUT-OF-BAND USER MESSAGE]`), and nothing switched; over Signal
+the same Bote switched. From the source of the pinned v0.22.2: Hermes
+builds that frame only for a `/steer` into a running turn
+(`agent/prompt_builder.py` `format_steer_marker`, delivered after the newest
+tool result, `agent/turn_iteration_prep.py`). The API server's
+`/v1/chat/completions` makes a new agent per request and never steers
+(`gateway/platforms/api_server.py` `_run_agent`); only `/v1/runs/{id}/steer`
+does. But every system prompt with tools describes the frame
+(`STEER_CHANNEL_NOTE`), and the plugin's `pre_llm_call` context is appended
+to the user message (`agent/turn_context.py`): "Bambi aus", a blank line,
+"Persona: Beantworte diese Nachricht selbst, …". Qwen without thinking
+(#501) took that turn for a message plus an instruction and wrote the frame
+it had been shown. So:
+
+- the plugin adds nothing to a turn with nothing to route: "Bambi aus" is
+  the user turn, alone;
+- `transform_llm_output` takes the frame out of every answer, engine or not
+  (a backstop; over a streamed answer the raw text has already gone out,
+  Hermes appends a rewrite after it);
+- with `ha` wired the SOUL says: a short sentence with a device and an,
+  aus, auf, zu or a percentage is a command, switched at once with `ha`,
+  then one sentence of confirmation; only a question reads the state.
+
+**The test set** belongs to every Bote or llama update, over the API (what
+Haus uses) and over Signal. `scripts/bote-schalttest.py` (stdlib, in the
+laib repo) sends each sentence in its own session to Hermes' API server,
+streamed, and checks that a Home Assistant tool ran, that the answer is no
+echo of the sentence and carries no steer frame. Pairs switch back, so the
+house ends as it was. On the box (the key stays in a file, never on argv):
+
+    H=${DATA_DIR}/bote/hermes
+    python3 scripts/bote-schalttest.py --key-file $H/.env --licht Bambi --jalousie "Rollo Wohnzimmer"
+
+`--licht` is a dimmable light's name as Home Assistant shows it,
+`--jalousie` a cover's (left out, the blind cases are skipped);
+`--url` is `http://127.0.0.1:8642/v1` by default. Exit 0: every case
+switched; 1: one did not (the table says which and what came back); 2: the
+API did not answer, nothing was measured. `--list` prints the sentences
+only.
+
+Over Signal there is no script (the Bote cannot send as a person): print
+the sentences with `--list`, send each from the admin's phone in the Bote's
+chat, one at a time, and watch the device and the answer, the same three
+checks: it switched, the answer is one sentence of confirmation, no frame
+and no film quote under it.
 
 ## Speed (#470, #502)
 

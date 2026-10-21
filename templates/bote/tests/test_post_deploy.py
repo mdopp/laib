@@ -152,6 +152,42 @@ class PostDeploy(unittest.TestCase):
             self.assertIn("COMPACT_TOKENS", p.stderr)
         self.assertIn("COMPACT_TOKENS: 32000", (HOOK.parent / "values.example.yml").read_text())
 
+    def hook(self, **values):
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                       MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok", **values)
+            p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+            h = Path(d, "bote/hermes")
+            read = lambda f: (h / f).read_text() if (h / f).exists() else ""
+            return p, read("config.yaml"), read("SOUL.md")
+
+    def test_the_laib_tools_trust_is_the_owners_value(self):
+        """#524: the hook wrote trust: untrusted itself, so every template update undid the owner's
+        trust: full. It is LAIB_TOOLS_TRUST now (a template update keeps a value), untrusted by default;
+        any other word fails the hook rather than reach Hermes."""
+        laib = lambda conf: conf.split("mcp_servers:\n  laib:\n", 1)[1].split("\n  ", 4)[:4]
+        p, conf, _ = self.hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(any(l.strip().startswith("trust: untrusted ") for l in laib(conf)), laib(conf))
+        p, conf, _ = self.hook(LAIB_TOOLS_TRUST="full")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue(any(l.strip().startswith("trust: full ") for l in laib(conf)), laib(conf))
+        for bad in ("Full", "ja", "untrusted full"):
+            p, _, _ = self.hook(LAIB_TOOLS_TRUST=bad)
+            self.assertNotEqual(p.returncode, 0, bad)
+            self.assertIn("LAIB_TOOLS_TRUST", p.stderr)
+        self.assertIn("\nLAIB_TOOLS_TRUST: untrusted ", (HOOK.parent / "values.example.yml").read_text())
+
+    def test_a_short_sentence_with_a_device_is_a_command(self):
+        """#520: without thinking, "Bambi aus" read as a statement and nothing switched. With ha wired
+        the SOUL makes it a command; without ha it names no tool the Bote lacks (#54)."""
+        p, _, soul = self.hook(LAIB_SECRET_BOTE_HA_TOKEN="bote-user-tok")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn('sind Befehle: schalte sofort mit ha, ohne Rückfrage, dann ein Satz Bestätigung', soul)
+        self.assertIn('"Bambi aus"', soul)
+        _, _, soul = self.hook()
+        self.assertNotIn("schalte sofort", soul)
+
     def test_hermes_is_pinned(self):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()

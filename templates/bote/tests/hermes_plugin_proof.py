@@ -29,7 +29,7 @@ class FakePersona(BaseHTTPRequestHandler):
     def do_POST(self):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         line = req["params"]["arguments"]["eingabe"]
-        text = "WOPR\n\n1 SPIELE\n\nJOSHUA>" if line == "Menü" else "WEITER: -\nPROMPT: JOSHUA>"
+        text = {"Menü": "WOPR\n\n1 SPIELE\n\nJOSHUA>", "Ist das Licht an?": "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>"}.get(line, "WEITER: -\nPROMPT: JOSHUA>")
         body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": text}]}}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
@@ -49,6 +49,7 @@ from hermes_cli import plugins  # noqa: E402
 from model_tools import _emit_post_tool_call_hook  # noqa: E402  the call site of every tool call
 from agent.turn_finalizer import _apply_output_hooks  # noqa: E402  transform_llm_output, then post_llm_call
 from agent.turn_context import _collect_pre_llm_call_context  # noqa: E402  pre_llm_call's context into the user turn
+from agent.prompt_builder import format_steer_marker  # noqa: E402  Hermes' own steer frame, as it writes it (#520)
 
 plugins.discover_plugins(force=True)
 for name in ["mcp__haushalt__kalender", "mcp__persona__eingabe", "mcp__haushalt__kalender"]:
@@ -66,7 +67,9 @@ def pre(turn_id, message):
     return _collect_pre_llm_call_context(agent, effective_task_id="task", turn_id=turn_id, original_user_message=message, messages=[], conversation_history=[])
 
 
-assert pre("t1", "[Anna] Wann kommt der Müll?").startswith("Persona:"), "laib-persona's routing did not reach the user turn"
+# #520: at the top level nothing is routed, so the user turn is the person's words alone
+assert pre("t1", "[Anna] Wann kommt der Müll?") == "", "laib-persona added context to a turn with nothing to route"
+assert pre("t4", "Ist das Licht an?").startswith("Persona:"), "laib-persona's routing did not reach the user turn"
 a = turn("t1", "[Anna] Wann kommt der Müll?", "[unbeantwortet] Das weiß ich nicht.")
 pre("t2", "Licht an")
 b = turn("t2", "Licht an", "JOSHUA>\nErledigt.")
@@ -74,6 +77,10 @@ b = turn("t2", "Licht an", "JOSHUA>\nErledigt.")
 assert "Bildschirm" in pre("t3", "Menü")
 c = turn("t3", "Menü", "Hier ist das Menü: 1. Spiele, 2. Geräte")
 assert c == "```\nWOPR\n\n1 SPIELE\n\nJOSHUA>\n```", c
+# #520: Hermes' steer frame, copied by the model around the person's words, never reaches the person
+pre("t5", "Bambi aus")
+d = turn("t5", "Bambi aus", "Bambi ist aus." + format_steer_marker("Bambi aus"))
+assert d == "Bambi ist aus.\n\nBambi aus", repr(d)
 mod = next((m for m in list(sys.modules.values()) if getattr(m, "MARK", None) == "[unbeantwortet]"), None)
 assert mod is not None, "Hermes did not load laib-nutzung (plugins.enabled, plugins/laib-nutzung)"
 mod.flush()
@@ -82,7 +89,7 @@ for s in SEEN:
 # #510: at the top level the prompt line the model copied is dropped
 assert (a, b) == ("Das weiß ich nicht.", "Erledigt."), (a, b)
 got = {body["event"]: body["count"] for path, body in SEEN if path == "/ingest"}
-assert got == {"werkzeug.haushalt.kalender": 2, "zug": 3, "unbeantwortet": 1}, got
+assert got == {"werkzeug.haushalt.kalender": 2, "zug": 4, "unbeantwortet": 1}, got
 assert [body for path, body in SEEN if path == "/miss"] == [{"source": "bote", "text": "Wann kommt der Müll?", "day": SEEN[0][1]["day"]}], SEEN
 assert "Anna" not in json.dumps(SEEN, ensure_ascii=False) and "s-9" not in json.dumps(SEEN)
 print("hermes plugin proof ok")

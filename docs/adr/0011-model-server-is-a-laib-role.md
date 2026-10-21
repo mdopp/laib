@@ -111,3 +111,16 @@ where `state` is one of `none`, `preparing`, `ready`.
 
 **Who adapts:** foundry-chronicle, pi-web and anything else speak this
 when they move to Laib (Phase 4, #160), not before.
+
+## Amendment 2026-10-20 (#522): no window by request
+
+The proxy no longer takes a window itself. From the household (no lease)
+it answers the household model only; a request for another preset is a
+409 that names the household model and the lease API. One request for a
+foreign preset had taken `full` as holder `router`, evicted the household
+model, stopped Whisper and moved the voice to the CPU for 45 minutes,
+silently. Every window is a named holder's lease, and while one stands
+the llama status file reports it yellow (holder, window, end). Refusing
+was chosen over redirecting to the household model: a redirected caller
+gets an answer from a model it did not ask for and never learns its
+configuration is wrong.

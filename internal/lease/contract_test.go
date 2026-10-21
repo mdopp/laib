@@ -30,7 +30,7 @@ func shippedConfig(t *testing.T, router string) Config {
 	}
 	home := t.TempDir()
 	cfg.Units, cfg.RouterURL, cfg.LeaseDir = realUnits(t), router, filepath.Join(home, "lease")
-	cfg.AutoIdle, cfg.Token, cfg.Renew, cfg.WarnAfter = time.Minute, "lease-secret", 10*time.Minute, 20*time.Minute
+	cfg.Token, cfg.Renew, cfg.WarnAfter = "lease-secret", 10*time.Minute, 20*time.Minute
 	cfg.Paths.Home, cfg.Paths.Journal = home, filepath.Join(home, "journal")
 	return cfg
 }

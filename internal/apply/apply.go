@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -444,22 +445,49 @@ func imageOf(unit string) string {
 }
 
 // imagesToPull: the images of added containers and of containers whose
-// Image= changed, each once.
+// Image= changed, and the floating images (AutoUpdate=registry, :latest or
+// no tag, no digest) of every service the plan restarts: a template update
+// keeps the tag, and the restart would start the old local copy (#523).
+// Each once.
 func imagesToPull(p *plan.Plan, previous map[string]string) []string {
 	var out []string
 	seen := map[string]bool{}
+	add := func(img string) {
+		if img != "" && !strings.Contains(img, "${") && !seen[img] {
+			seen[img] = true
+			out = append(out, img)
+		}
+	}
 	for _, c := range p.Changes {
 		if c.Kind == "delete" || !strings.HasSuffix(c.Path, ".container") {
 			continue
 		}
-		img := imageOf(p.Output[c.Path])
-		if img == "" || strings.Contains(img, "${") || seen[img] || (c.Kind == "change" && previous[c.Path] == img) {
+		if img := imageOf(p.Output[c.Path]); c.Kind != "change" || previous[c.Path] != img {
+			add(img)
+		}
+	}
+	for _, path := range slices.Sorted(maps.Keys(p.Output)) {
+		if !strings.HasSuffix(path, ".container") || !slices.Contains(p.Services, plan.ServiceOf(path)) {
 			continue
 		}
-		seen[img] = true
-		out = append(out, img)
+		if img := imageOf(p.Output[path]); floats(p.Output[path], img) {
+			add(img)
+		}
 	}
 	return out
+}
+
+// floats: the image's tag moves under it (AutoUpdate=registry, :latest or no
+// tag); a digest never does.
+func floats(unit, img string) bool {
+	if strings.Contains(img, "@") {
+		return false
+	}
+	if strings.Contains(unit, "\nAutoUpdate=registry") {
+		return true
+	}
+	_, tag, ok := strings.Cut(img[strings.LastIndex(img, "/")+1:], ":")
+	return !ok || tag == "latest"
 }
 
 // DefaultHooksImage is where hooks run when box.yml names none.

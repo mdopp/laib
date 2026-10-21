@@ -100,13 +100,42 @@ class PersonaPlugin(unittest.TestCase):
     def test_a_free_answer_at_the_top_has_no_prompt_line(self):
         # #510: "JOSHUA>" above "Bambi ist aus." was out of place; the prompt belongs to menus and games
         ctx, out = self.turn("Mach Bambi aus", "Bambi ist aus.")
-        self.assertNotIn("Beginne die Antwort", ctx["context"])
+        self.assertIsNone(ctx)
         self.assertIsNone(out)
         _, out = self.turn("Mach Bambi aus", "JOSHUA>\nBambi ist aus.", turn="t2")   # copied from earlier turns
         self.assertEqual(out, "Bambi ist aus.")
         ctx, out = self.turn("Wer bist du?", "Ich bin Oma Erna.", turn="t3")
         self.assertNotIn("Beginne die Antwort", ctx["context"])
         self.assertIsNone(out)
+
+    def test_a_switch_command_stays_the_persons_words_alone(self):
+        # #520: "Bambi aus" plus a "Persona: …" paragraph was a message and an instruction; Qwen without
+        # thinking answered with Hermes' steer frame around the words. Nothing to route: no context.
+        for line in ("Bambi aus", "Schalte Bambi an", "[Anna] Rollo zu"):
+            ctx, _ = self.turn(line, "Erledigt.")
+            self.assertIsNone(ctx, line)
+        ctx, _ = self.turn("Ist das Licht in der Küche an?", "Ja.")   # a menu level's routing still goes
+        self.assertIn("nur mit dem Werkzeug ha", ctx["context"])
+
+    def test_hermes_steer_frame_never_reaches_the_person(self):
+        # #520, measured over Haus: the whole answer was the frame around the person's words
+        frame = ("[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; "
+                 "not tool output and not a new delivery when replayed from conversation history]\n%s\n[/OUT-OF-BAND USER MESSAGE]")
+        _, out = self.turn("Bambi aus", frame % "Bambi aus")
+        self.assertEqual(out, "Bambi aus")
+        _, out = self.turn("Bambi aus", "Bambi ist aus.\n\n" + frame % "Bambi aus", turn="t2")
+        self.assertEqual(out, "Bambi ist aus.\n\nBambi aus")
+        _, out = self.turn("Ist das Licht in der Küche an?", frame % "Ja.", turn="t3")
+        self.assertEqual(out, "JOSHUA/GERÄTE>\nJa.")
+        _, out = self.turn("Ist das Licht in der Küche an?", "JOSHUA/GERÄTE>\n" + frame % "Ja.", turn="t4")
+        self.assertEqual(out, "JOSHUA/GERÄTE>\nJa.")
+        os.environ["PERSONA_MCP_URL"] = "http://127.0.0.1:9/mcp"             # without the engine too
+        _, out = self.turn("Bambi aus", frame % "Bambi aus", turn="t5")
+        self.assertEqual(out, "Bambi aus")
+        _, out = self.turn("Bambi aus", "Bambi ist aus.", turn="t6")
+        self.assertIsNone(out)
+        _, out = self.turn("Bambi aus", "[unbeantwortet] " + frame % "x", turn="t7")
+        self.assertIsNone(out, "laib-nutzung must still see its mark")
 
     def test_a_turn_the_bote_could_not_help_with_is_left_to_laib_nutzung(self):
         # Hermes takes the first plugin's text: laib-nutzung must still strip its mark and count the turn

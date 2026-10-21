@@ -88,6 +88,67 @@ class Presets(unittest.TestCase):
         for unit in ("llama.container", "llama-embed.container"):
             self.assertNotIn("AutoUpdate=registry", (T / unit).read_text(), f"{unit}: a pinned image is changed by proposal, not by auto-update")
 
+    def test_prompt_eval_knobs_are_per_preset(self):
+        """#525: Qwen 35B-A3B read prompts at ~300-400 t/s on the 16 GB card.
+        batch, ubatch, flash-attn, n-gpu-layers, n-cpu-moe and the slots are
+        presets.json keys the box can measure and pick; an unset key leaves
+        llama.cpp's default, so the other presets do not change."""
+        one = {"household": "a", "presets": [
+            {"alias": "a", "repo": "r", "file": "a.gguf", "batch": 4096, "ubatch": 2048, "flashAttn": True, "ngl": 99, "nCpuMoe": 0, "parallel": 2},
+            {"alias": "b", "repo": "r", "file": "b.gguf", "flashAttn": "auto"}]}
+        got = sections(render(one))
+        self.assertEqual({k: got["a"][k] for k in ("batch-size", "ubatch-size", "flash-attn", "n-gpu-layers", "n-cpu-moe", "parallel")},
+                         {"batch-size": "4096", "ubatch-size": "2048", "flash-attn": "on", "n-gpu-layers": "99", "n-cpu-moe": "0", "parallel": "2"})
+        self.assertEqual(got["b"]["flash-attn"], "auto")
+        self.assertFalse({"batch-size", "n-gpu-layers", "n-cpu-moe", "parallel"} & set(got["b"]), got["b"])
+        shipped = json.loads((T / "presets.json").read_text())
+        q = sections(render(shipped))[shipped["household"]]
+        self.assertEqual((q.get("batch-size"), q.get("ubatch-size"), q.get("flash-attn")), ("4096", "2048", "on"), q)
+
+
+class Measure(unittest.TestCase):
+    """#525: measure.py is how the box compares a preset before and after."""
+
+    def setUp(self):
+        sys.path.insert(0, str(T))
+        import measure
+        self.m = measure
+
+    def test_reads_where_the_weights_sit_from_the_llama_log(self):
+        log = "\n".join([
+            "load_tensors: offloaded 30/41 layers to GPU",
+            "load_tensors:   CPU_Mapped model buffer size =  4100.50 MiB",
+            "load_tensors:        CUDA0 model buffer size =  9000.00 MiB",
+            "llama_context: n_batch       = 2048", "llama_context: n_ubatch      = 512",
+            "llama_context: flash_attn    = auto", "llama_context: n_seq_max     = 4",
+            "load_tensors: offloaded 41/41 layers to GPU"])
+        got = self.m.from_log(log)
+        self.assertEqual(got["offloaded"], "41/41", "the last load counts")
+        self.assertEqual((got["cpu_mapped"], got["n_ubatch"], got["flash_attn"], got["n_seq_max"]), ("4100.50 MiB", "512", "auto", "4"))
+
+    def test_one_run_is_prompt_eval_only(self):
+        import http.server, threading
+        seen = {}
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                seen.update(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+                b = json.dumps({"timings": {"prompt_n": 14000, "prompt_ms": 7000.0, "prompt_per_second": 2000.0}}).encode()
+                self.send_response(200); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            r = self.m.once(f"http://127.0.0.1:{srv.server_port}", "qwen", self.m.prompt(14000))
+        finally:
+            srv.shutdown()
+        self.assertEqual((seen["max_tokens"], seen["cache_prompt"], seen["model"]), (1, False, "qwen"))
+        self.assertEqual(r["prompt_per_second"], 2000.0)
+        self.assertGreater(len(seen["messages"][0]["content"].split()), 5000)
+
 
 if __name__ == "__main__":
     unittest.main()

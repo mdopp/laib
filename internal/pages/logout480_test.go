@@ -15,9 +15,8 @@ import (
 // admin can sign in with another account. The link stays on the page's own
 // host; /abmelden knows where Authelia lives.
 func TestTheBoxPageCanLogOut(t *testing.T) {
-	body := statusBody(Readiness{State: "bereit"}, nil, nil, "", [2]string{}, false)
-	for _, page := range []string{body, nav} {
-		if !strings.Contains(page, `<a href="/abmelden">Abmelden</a>`) {
+	for _, title := range []string{"Status", "Inbox", "Journal", "Netz", "Bote verbinden"} {
+		if page := pageHTML(title, ""); !strings.Contains(page, `<a href="/abmelden">`) || !strings.Contains(page, "</svg>Abmelden</a>") {
 			t.Errorf("no Abmelden link in %s", page)
 		}
 	}
