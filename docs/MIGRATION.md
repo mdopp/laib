@@ -178,7 +178,8 @@ file moves out.
    sessions and SSH host keys are an open decision (below).
 6. **Solaris does not move** (it retires, ADR 0015). Its units stay
    ignored (`laib ignore`) while Haus's bridge still needs them (haus#10);
-   they go off in Phase 5 (#160). So do chronik's (above). The Google import
+   they go off in Phase 5 (#160) with `scripts/solaris-off.py` ("Phase 5:
+   Solaris off", below), which also takes their ignore.yml lines out. So do chronik's (above). The Google import
    (`solaris-import-google`) does not stay: it writes the imported calendars
    into `radicale/data`, a `KONFLIKT` as soon as radicale is Laib's, so it
    goes off with radicale in step 4 (its importers become scripts,
@@ -469,7 +470,7 @@ days.
 
 ## Solaris until phase 5 (#396)
 
-Solaris runs on, ignored, until it retires (ADR 0015), but its links into
+Phase 5 is below (#540); this is how Solaris ran until then. Solaris runs on, ignored, until it retires (ADR 0015), but its links into
 ServiceBay break on migration day and would fail silently: the admin
 toolbox and its token mint (`SB_MCP_URL`, `SB_API_URL`, `SB_MINT_URL`;
 administration is Laib's and the Operator's), and the deadlines and
@@ -482,3 +483,50 @@ disables each in Solaris), disables `solaris-radicale-rights.timer` and
 restarts Solaris. What the write-back wrote stays in Radicale. Solaris's
 reading (`CALDAV_URL`, `CARDDAV_URL`, Home Assistant, llama) is untouched.
 `chat.` is dark (owner, 2026-10-18).
+
+## Phase 5: Solaris off (#540)
+
+Solaris retires (ADR 0015); Stimme takes the voice, Frage the sentences no
+intent matched. Its units cannot stay beside Stimme: its Whisper and
+openWakeWord hold 10300 and 10400. One script does it, on the box (the
+host, not the Werkstatt), as core:
+
+```sh
+python3 -I scripts/solaris-off.py          # what is left; changes nothing
+python3 -I scripts/solaris-off.py --do     # Solaris off, Stimme on; then what is left
+```
+
+`--do` stops Solaris' units (`solaris`, `solaris-*` in the Quadlet root, a
+Laib service of that name never) and moves their files into
+`~/solaris-off/<date>/`, disables its plain host units
+(`solaris-radicale-rights.timer`, `solaris-llama-policy.service`) and parks
+them there too, takes ignore.yml's lines for them out (one commit in the
+state repo as the human who runs it: what `laib ignore` added, taken back;
+an agent cannot run this, it needs core's shell), then `laib add stimme`
+once Stimme's ports are free and `laib apply home-assistant`. Home
+Assistant's post-deploy adds Stimme's three Wyoming entries itself, found by
+host and port, and keeps the one Solaris' Whisper left on 10300 (Stimme's
+port now). An Assist pipeline part whose engine went with Solaris (its TTS,
+its conversation agent) moves to Stimme's Piper or to Frage; a part that
+works stays the owner's choice. A second run changes nothing.
+
+What stays the owner's step, listed by the script with the reason: Home
+Assistant entries that still point at Solaris (its Wyoming servers on
+10203 and 10700, "Sol", "Solaris", the Ollama entry on `:8787`,
+openai-streaming, solilos-gatekeeper-asr; deleted in Home Assistant under
+Einstellungen → Geräte & Dienste, because an automation that names one of
+their entities breaks with it and only a person knows which), the
+`notify.solaris` block in `configuration.yaml` and a `notify.url` on
+`:8787` in box.yml. Exit 0 means nothing of Solaris is left, 1 something is
+left or a step was red, 2 it could not check. `laib diag` names a voice
+entry whose server is gone („… antwortet nicht“) until it is deleted.
+
+**Rollback within 30 days:** `bash ~/solaris-off/<date>/rollback.sh`
+(the script prints it): `laib remove stimme`, the files back, daemon-reload,
+the units started and the timer enabled as they were, the ignore.yml lines
+back with `laib ignore`. A pipeline the hook moved stays moved; the owner
+picks Solaris' engines again in HA.
+
+**Solaris' data stays 30 days**, as ServiceBay's did (step 7):
+`${DATA_DIR}/solaris*`. Deleting it is the owner's step; the script prints
+the date and the `podman unshare rm -rf` lines.

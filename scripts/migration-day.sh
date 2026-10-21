@@ -62,7 +62,11 @@ export LAIB_HOME=${LAIB_HOME:-/mnt/data/laib} LAIB_ACTOR=human:core LAIB=$LAIB_B
 STEPS="preflight install drafts secrets auth adguard llama radicale mosquitto file-share beets esphome usage-metrics immich paperless media home-assistant vaultwarden caddy werkstatt ignore retire"
 # what stays on its ServiceBay unit, ignored (MIGRATION.md step 6; #160): Solaris until Phase 5,
 # chronik until foundry-chronicle has its Laib template (foundry-chronicle#362). The Google import
-# goes off with radicale: it writes into radicale's data, a KONFLIKT once radicale is Laib's (#371)
+# goes off with radicale: it writes into radicale's data, a KONFLIKT once radicale is Laib's (#371).
+# Phase 5 (#540) is scripts/solaris-off.py --do after this run: Solaris' units off, these lines out of
+# ignore.yml, Stimme added (it needs Solaris' 10300 and 10400), Home Assistant wired to it. They stay in
+# this list because retire is red on a unit nobody claims, and taking Solaris off here would leave Home
+# Assistant without a voice until Stimme is there; a migration today runs solaris-off.py right after.
 IGNORE=${IGNORE:-solaris solaris-tts solaris-whisper solaris-whisper-batch solaris-wakeword-trainer daggerheart-chronik}
 
 sb_units() {   # the ServiceBay units a step takes out of the Quadlet root

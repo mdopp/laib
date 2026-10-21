@@ -42,9 +42,13 @@ moved them in this order:
 
 The boot check after the rebase saw 17 of 17 services green (#368, 2026-10-19).
 Which services the state holds today, `laib status` says: auf der Box zu
-prüfen. Solaris' units still run on their ServiceBay units, ignored
-(`laib ignore`), until Phase 5 turns them off. Its links into ServiceBay
-are switched off explicitly (#396). ServiceBay itself is off; its data dir
+prüfen. Solaris' units ran on as ServiceBay units, ignored (`laib
+ignore`), until Phase 5: `scripts/solaris-off.py --do` stops and parks
+them, takes their ignore.yml lines out, adds Stimme and lets Home
+Assistant's post-deploy wire Stimme's Wyoming entries (#540,
+`docs/MIGRATION.md`, "Phase 5: Solaris off"); their data stays 30 days.
+Whether it ran: auf der Box zu prüfen. Its links into ServiceBay were
+switched off explicitly before (#396). ServiceBay itself is off; its data dir
 stays 30 days (`docs/MIGRATION.md`, step 7).
 
 ## What the family and the admin use
@@ -148,7 +152,8 @@ From #160:
 - the Operator, Frage and Haus's data from the NUC;
 - ADR 0015's check 1 (Assist sentences);
 - the Voice PE satellites (#30);
-- Solaris the agent off;
+- Solaris the agent off (`scripts/solaris-off.py`, #540) and its data
+  deleted 30 days later;
 - ServiceBay's data dir deleted after 30 days.
 
 Elsewhere:
