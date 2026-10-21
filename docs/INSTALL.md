@@ -112,8 +112,9 @@ Laib updates itself (#547): `laib-images.service` runs
 (box.yml `updates`). It takes the newest release with binaries (or the
 version `updates.laib` holds; `off` only looks) through that release's own
 verified `install-box.sh`, only while no backup runs, the lock is free and
-laib is green, and puts the previous binaries back when `/ready` is not
-green on the new version within three minutes. `laib updates` shows the
+laib is green (never back to an older version), and puts the previous
+binaries back, converged, when `/ready` is not green on the new version
+within three minutes; that release is then skipped until a newer one. `laib updates` shows the
 `laib` row, `laib diag` the `self-update` probe, the log is
 `/mnt/data/laib/self-update.log`. A box installed before #547 needs the
 manual run below once. To try it now: `systemctl --user start laib-images.service`.

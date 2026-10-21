@@ -100,19 +100,26 @@ updates` nor `laib diag` said so.
 asset, verified against `SHA256SUMS` and put in place by `install-box.sh`)
 before the image run, as core, in the image run's window. Its target is the
 newest release that has its binaries, or the version box.yml
-`updates.laib` holds; `off` only looks. It installs through that release's
+`updates.laib` holds (`off` only looks); `auto` never goes back to an older
+version. It installs through that release's
 own `install-box.sh` (`laib-install-box.sh`, in `SHA256SUMS` too), only
 while no backup runs, nobody holds the lock and `/ready` is green; with
 `LAIB_SELF_UPDATE` the installer's closing apply is laib's own `converge
 --force`, so no human is claimed. After it `/ready` must report the new
 version green within three minutes; else the binaries that ran before (kept
 by the script, not `*.prev`, which can be older) come back and are
-restarted, the journal gets an incident, and that release is not tried
-again, a newer one is. Every run leaves `/mnt/data/laib/self-update.json`;
+restarted, the old laib converges the box back to its own rendering, the
+journal gets an incident, and that release is not tried again, a newer one
+is. An install that stops before it changed a binary (a download, a stall:
+the installer runs under a 20-minute timeout) is no verdict on the
+release: the night is skipped and the next one tries again. The reboot lock
+waits while `laib-images.service` runs, so an OS update never cuts it. Every run leaves `/mnt/data/laib/self-update.json`;
 `laib updates` shows a `laib` row from it (as `latest`, never `patch` or
 `digest`: the Operator proposes those, and this is no proposal), `laib
-diag` is yellow when the script is missing, a release was rolled back,
-`off` leaves the box behind, or nobody looked for eight days.
+diag` is yellow when the script is missing or never reported, a release
+was rolled back, `off` leaves the box behind, the box has been behind for
+two weeks of nights that were never calm (a service that stays red), or
+nobody looked for eight days.
 
 **Consequences.** One night, one order: Laib first, then the images, both
 after the backup and under the same checks. A failed self-update never

@@ -27,6 +27,10 @@ var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".co
 
 // Load reads and validates a state repo. All validation errors are joined so
 // an agent sees every problem at once.
+// releaseTag is a Laib release, the only thing box.yml updates.laib may hold
+// besides auto and off (#547): it lands in a unit and a download URL.
+var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
+
 func Load(dir string) (*State, error) {
 	st := &State{Dir: dir, Services: map[string]*Service{}}
 	var errs []error
@@ -256,7 +260,7 @@ func (st *State) validate() []error {
 	st.Box.Laib.Port = cmp.Or(st.Box.Laib.Port, 5900)
 	st.Box.Laib.Listen = cmp.Or(st.Box.Laib.Listen, "127.0.0.1")
 	st.Box.Laib.Group = cmp.Or(st.Box.Laib.Group, "admins")
-	if u := st.Box.Updates.Laib; u != "" && u != "auto" && u != "off" && !strings.HasPrefix(u, "v") {
+	if u := st.Box.Updates.Laib; u != "" && u != "auto" && u != "off" && !releaseTag.MatchString(u) {
 		fail("box.yml: updates.laib must be auto, off or a version like v0.16.0, not %q", u)
 	}
 	if st.Box.DNS.ChallengeAlias != "" && st.Box.DNS.Provider == "" {
