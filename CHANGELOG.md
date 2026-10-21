@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.0](https://github.com/mdopp/laib/compare/v0.12.0...v0.13.0) (2026-10-21)
+
+
+### Features
+
+* **haus:** STT_PROVIDER/STT_LANGUAGE for Haus' microphone (haus[#63](https://github.com/mdopp/laib/issues/63)) ([55d501f](https://github.com/mdopp/laib/commit/55d501f8a5adbb606842413ff6cfeca075d67023))
+* **llama:** prompt-eval knobs per preset and a measurement script ([f0581ee](https://github.com/mdopp/laib/commit/f0581eebbd85c18197e1033a38bb3b233d0d6277)), closes [#525](https://github.com/mdopp/laib/issues/525)
+* **pages:** the box pages work on the phone like Haus ([7c9991e](https://github.com/mdopp/laib/commit/7c9991e80f7340100e6a43f40148c7a688e6f73d)), closes [#515](https://github.com/mdopp/laib/issues/515)
+
+
+### Bug Fixes
+
+* **apply:** pull floating images of the services the plan restarts ([f0f27ef](https://github.com/mdopp/laib/commit/f0f27ef58092ec4141e82ebb935ea935c254a62f)), closes [#523](https://github.com/mdopp/laib/issues/523)
+* **lease:** no window by request; a standing lease is yellow ([0a0a7a4](https://github.com/mdopp/laib/commit/0a0a7a4704108242e4d27c0ae058625c11bdf532)), closes [#522](https://github.com/mdopp/laib/issues/522)
+* **template:** switch commands stay a plain user turn, the Laib tools' trust is a value, mosquitto's passwd group ([c042ec8](https://github.com/mdopp/laib/commit/c042ec8418c14151627b6c9a77f83e7e7e998d77))
+
 ## [0.12.0](https://github.com/mdopp/laib/compare/v0.11.1...v0.12.0) (2026-10-20)
 
 
