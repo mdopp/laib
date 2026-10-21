@@ -44,7 +44,11 @@ the alias, and nothing else in that mailbox is touched.
 post-deploy makes the account and the rule through Paperless' API on every
 apply, from the values (`paperless-mail.py setup`), and takes over an
 account and rule made by hand for the same mailbox and address. With
-`PAPERLESS_MAIL_HOST` empty it changes nothing in Paperless.
+`PAPERLESS_MAIL_HOST` empty it changes nothing in Paperless and does not
+ask its API at all. It logs in as `ADMIN_USER`; after a move from
+ServiceBay the database keeps ServiceBay's administrator (Paperless makes
+`ADMIN_USER` only in an empty one), so a refused login is a red finding in
+diag with the fix, not a red apply: Paperless runs, only the inbox waits.
 
 Once, as the owner, on the box:
 

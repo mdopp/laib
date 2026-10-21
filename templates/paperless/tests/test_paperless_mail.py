@@ -134,6 +134,39 @@ class PaperlessMail(unittest.TestCase):
         self.assertEqual(fake.writes(), [])
         self.assertEqual(self.status(), {**self.status(), "detail": "", "findings": []})
 
+    def test_without_a_host_the_api_is_not_asked(self):
+        # a box moved from ServiceBay keeps ServiceBay's admin: without an inbox the apply must not
+        # depend on the one laib knows (the rehearsal's paperless step, train 28)
+        fake = Fake()
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(fake.calls, [])
+        env = {"PATH": os.environ["PATH"], "PAPERLESS_API": fake.url, "ADMIN_USER": "admin", "LAIB_DATA_DIR": self.tmp,
+               "LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD": "wrong"}
+        r = subprocess.run([sys.executable, str(SCRIPT), "setup"], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.status()["findings"], [])
+
+    def test_a_refused_admin_is_a_finding_not_a_red_apply(self):
+        fake = Fake()
+        env = {"PATH": os.environ["PATH"], "PAPERLESS_API": fake.url, "ADMIN_USER": "admin", "LAIB_DATA_DIR": self.tmp,
+               "LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD": "wrong", "LAIB_SECRET_PAPERLESS_MAIL_PASSWORD": "mailpw", **MAIL}
+        r = subprocess.run([sys.executable, str(SCRIPT), "setup"], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)   # Paperless runs; only the inbox waits
+        st = self.status()
+        self.assertEqual(st["findings"][0]["severity"], "rot")
+        self.assertIn("lehnt den Admin admin ab (401)", st["findings"][0]["detail"])
+        self.assertIn("laib secret set PAPERLESS_ADMIN_PASSWORD", st["findings"][0]["fix"])
+        self.assertNotIn("wrong", r.stdout + r.stderr + json.dumps(st))
+        # the check inside the container says the same, not "antwortet nicht"
+        out = os.path.join(self.tmp, "st.json")
+        env = {"PATH": os.environ["PATH"], "PAPERLESS_API": fake.url, "PAPERLESS_ADMIN_USER": "admin", "PAPERLESS_ADMIN_PASSWORD": "wrong",
+               "LAIB_STATUS_FILE": out, **MAIL}
+        r = subprocess.run([sys.executable, "-", "check"], input=SCRIPT.read_text(), env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(out) as f:
+            self.assertIn("lehnt den Admin admin ab", json.load(f)["findings"][0]["detail"])
+
     def test_a_host_without_a_password_is_refused(self):
         r = self.run_setup(Fake(), MAIL, password="")
         self.assertNotEqual(r.returncode, 0)

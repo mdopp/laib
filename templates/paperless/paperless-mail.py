@@ -132,6 +132,11 @@ def check(api):
     who = account["username"] + " auf " + account["imap_server"]
     try:
         acc, rul = find(api, account, rule)
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return refused(e.code)
+        return {"detail": "E-Mail-Eingang nicht geprüft", "findings": [{"severity": "gelb",
+                "detail": "Paperless antwortet nicht auf die Mailkonten: %s" % e, "fix": "laib logs paperless"}]}
     except (OSError, ValueError) as e:
         return {"detail": "E-Mail-Eingang nicht geprüft", "findings": [{"severity": "gelb",
                 "detail": "Paperless antwortet nicht auf die Mailkonten: %s" % e, "fix": "laib logs paperless"}]}
@@ -165,13 +170,26 @@ def write(path, r):
     os.replace(tmp, path)
 
 
+def refused(code):
+    """the admin laib knows is not one Paperless takes: after a move from ServiceBay its
+    database keeps ServiceBay's administrator, and Paperless makes ADMIN_USER only in an
+    empty one. A finding, not a red apply: Paperless itself runs, only the inbox waits."""
+    user = E.get("ADMIN_USER") or E.get("PAPERLESS_ADMIN_USER") or "admin"
+    return {"detail": "E-Mail-Eingang nicht eingerichtet", "findings": [{"severity": "rot",
+            "detail": "Paperless lehnt den Admin %s ab (%d): Mailkonto und Regel werden nicht angelegt" % (user, code),
+            "fix": "ADMIN_USER und PAPERLESS_ADMIN_PASSWORD auf einen Paperless-Administrator setzen "
+                   "(laib secret set PAPERLESS_ADMIN_PASSWORD über stdin), dann laib apply paperless"}]}
+
+
 def up(api):
+    """None when the API takes the admin, else the status that says why not"""
     for _ in range(60):
         try:
-            return api("GET", "/api/mail_accounts/?page_size=1")
+            api("GET", "/api/mail_accounts/?page_size=1")
+            return None
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
-                raise SystemExit("paperless: die API lehnt den Admin ab (%d): PAPERLESS_ADMIN_PASSWORD passt nicht mehr" % e.code)
+                return refused(e.code)
             time.sleep(5)
         except OSError:
             time.sleep(5)
@@ -183,12 +201,18 @@ if __name__ == "__main__":
     if mode == "setup":   # post-deploy, in the hooks image on the host network
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD"])
         status = os.path.join(E["LAIB_DATA_DIR"], "paperless", "data", "laib-status.json")
-        up(api)
-        setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
+        if want() is None:   # no inbox: Paperless' API is not asked at all
+            setup(api, "")
+            r = None
+        else:
+            r = up(api)
+            if r is None:
+                setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
     else:                 # inside the Paperless container: its own admin from its environment
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
         status = E.get("LAIB_STATUS_FILE", "/usr/src/paperless/data/laib-status.json")
-    r = check(api)
+        r = None
+    r = r or check(api)
     write(status, r)
     for f in r["findings"]:
         print("%s: %s" % (f["severity"], f["detail"]))
