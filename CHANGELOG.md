@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/mdopp/laib/compare/v0.14.0...v0.15.0) (2026-10-21)
+
+
+### Features
+
+* **migration:** scripts/solaris-off.py takes Solaris off, Stimme on ([df474ce](https://github.com/mdopp/laib/commit/df474ceb7380809bd6a8b83a501e9aaf8d944205)), closes [#540](https://github.com/mdopp/laib/issues/540)
+* **template:** home-assistant wires Stimme's Wyoming entries without a form ([4a2b8ea](https://github.com/mdopp/laib/commit/4a2b8ea6de3f82560d9ee5497e181a163cf74ba6)), closes [#540](https://github.com/mdopp/laib/issues/540)
+
 ## [0.14.0](https://github.com/mdopp/laib/compare/v0.13.0...v0.14.0) (2026-10-21)
 
 
