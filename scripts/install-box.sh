@@ -92,6 +92,14 @@ box_config() {
         esac
       done ;;
   esac
+  # One update path for the images (#528, ADR 0002 amendment): laib-images.timer
+  # (laib updates --run) pulls, verifies and rolls back under laib's lock.
+  # podman's own timer would restart units beside it and judge an image only
+  # by its start: masked, so no image brings it back.
+  case "$(systemctl --user is-enabled podman-auto-update.timer 2>/dev/null || true)" in
+    masked*) ;;
+    *) systemctl --user mask --now podman-auto-update.timer >/dev/null 2>&1 && echo "podman-auto-update.timer: masked (laib-images.timer updates the images, #528)" ;;
+  esac
   # One firewall mechanism (#445): Laib's nftables table (inet laib). uCore
   # enables firewalld (zone FedoraServer: ssh only), which blocked the
   # household from every port but SSH; masked, so no image brings it back.

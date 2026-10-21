@@ -253,6 +253,30 @@ template update undid an owner's `full`; a template update keeps a value
 Bote remembers nothing beyond a conversation and says so when asked to —
 and points to the Haushalt (calendar, notes) once Haus serves it.
 
+## Filing into Paperless: "ablegen" (#521)
+
+A photo or a PDF sent to the Bote with the word "ablegen" or "archivieren"
+("Stromrechnung ablegen") goes into Paperless, by code and not by the model:
+the plugin `laib-ablage` (`ablage_plugin.py`) marks such a message in
+Hermes' `pre_gateway_dispatch`, and once Hermes let the sender in
+(`post_gateway_admission`) hands each file to bote-notify's `POST /ablage`
+on the pod's loopback, with notify's bearer. bote-notify writes it into
+Paperless' consume folder as `Bote/<sender>/<title>.<ext>` (Hermes runs as
+uid 10000 and may not write into the share), and Paperless makes the two
+folders tags. The sender is the person from box.yml `people` whose channel
+it came on, else their chat name; the title is what they wrote besides the
+word, else sender and time. The person reads "Liegt in Paperless, Titel
+„Stromrechnung“"; the model never sees the message. Only photos (JPG, PNG,
+GIF, WebP) and PDFs, up to 25 MB, as Haus' upload.
+
+post-deploy turns the plugin on only while Paperless answers on
+`PAPERLESS_URL`; otherwise the Bote would say "liegt in Paperless" about a
+folder nobody reads. Paperless installed after the Bote: `laib apply bote`.
+CI runs the plugin under the pinned Hermes' own gateway hooks
+(`tests/hermes_plugin_proof.py`). Not verified there: Signal's attachment
+download (Hermes' adapter) and Paperless consuming the file, which only the
+box shows.
+
 ## What the Bote is used for: counts, and what it could not answer (#266)
 
 With usage-metrics installed (its token `USAGE_METRICS_TOKEN` set), the

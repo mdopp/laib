@@ -1,9 +1,14 @@
 # Patch updates as proposals (#287): what the registry has that is newer
 # than a pinned image, proposed one service at a time; the dial and the
 # content review decide whether laib applies it (ADR 0019 §4).
+# #528: the runner itself proposes, once while open, a service with data's
+# new image by digest (an image without data the nightly laib-images.timer
+# takes) and the value a status file offers (Home Assistant's extensions,
+# with their release notes); firmware it only reports. inbox and diag are
+# what it reads for that.
 description: Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund.
 trigger: {weekly: "Sa 10:00"}
-tools: [updates, propose, note]
+tools: [updates, propose, note, inbox, diag]
 output: propose
 # the runner reads updates itself, offers only the patch values, refuses any
 # other proposal and puts the minor versions and the registry errors into

@@ -69,6 +69,8 @@ data:
     backup: false
   - path: ${DATA_DIR}/bote/umfragen  # umfragen.json: bote-notify's poll timestamps → proposals, the relay reads it (#509)
     backup: false
+  - path: ${DATA_DIR}/file-share/data/paperless-consume   # Paperless' consume folder: bote-notify files what was sent with "ablegen" (#521); transient
+    backup: false
 health:
   http: http://127.0.0.1:8645/health # bote-notify, in every Bote; with Signal it asks signal-cli's daemon /api/v1/check (#184, #469)
 ports:

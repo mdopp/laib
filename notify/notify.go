@@ -1,9 +1,9 @@
 // Package notify is the program laib-notify (#443): what tells the owner
 // when the box cannot. Every five minutes (its timer, rendered by laib) it
 // pings the outside watchdog while laib's readiness is not red (#57), and it
-// tells the owner a red that stays ten minutes, once per incident, the
-// pending image updates once a week (#393) and each new proposal (#441).
-// It tells them through the Bote's channels first (bote-notify, the person
+// tells the owner a red that stays ten minutes, once per incident, what is
+// behind once a week (#393, "Was ist veraltet" #528) and each new proposal
+// (#441). It tells them through the Bote's channels first (bote-notify, the person
 // in box.yml notify.person) and by mail only when no channel is reachable
 // (#441, ADR 0016). It reads laib over MCP as the notify hand (diag,
 // updates, inbox, note) and /ready; it decides nothing and imports nothing
@@ -224,18 +224,26 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		}
 	}
 	if now.Sub(seen.Updates) >= 7*24*time.Hour {
+		// "Was ist veraltet" (#528): the images by tag, pin or digest and the
+		// host, then what diag sees 30 days behind and what a service reports
+		// itself (its extensions, the devices' firmware)
 		var ups []string
-		var list []struct{ Service, Image, Current, Patch, Minor string }
+		var list []struct{ Service, Image, Current, Patch, Minor, Digest string }
 		if text, e := call(ctx, c, "laib_updates", map[string]any{}); e == nil && json.Unmarshal([]byte(text), &list) == nil {
 			for _, u := range list {
-				if u.Patch != "" || u.Minor != "" {
-					ups = append(ups, fmt.Sprintf("- %s: %s:%s → %s", u.Service, u.Image, u.Current, cmp.Or(u.Patch, u.Minor)))
+				if w := cmp.Or(u.Patch, u.Minor, u.Digest); w != "" {
+					ups = append(ups, fmt.Sprintf("- %s: %s:%s → %s", u.Service, u.Image, u.Current, w))
 				}
+			}
+		}
+		for _, f := range findings {
+			if f.Probe == "updates" && f.Service != "" || f.Probe == "status" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")) {
+				ups = append(ups, "- "+f.Service+": "+f.Detail)
 			}
 		}
 		seen.Updates = now
 		if len(ups) > 0 {
-			if e := tell(ctx, c, "Laib: Updates verfügbar", "Neuere Images (laib updates):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
+			if e := tell(ctx, c, "Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
 				seen.Updates, err = time.Time{}, e
 			}
 		}

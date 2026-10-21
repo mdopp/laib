@@ -78,6 +78,7 @@ type fakeLaib struct {
 	mu       sync.Mutex
 	red      bool   // a red finding for whoami, and /ready red
 	updates  string // laib_updates' JSON
+	diag     string // laib_diag's JSON while nothing is red (#528)
 	inbox    string // laib_inbox's JSON (#441)
 	notes    []string
 	bearer   []string
@@ -86,7 +87,7 @@ type fakeLaib struct {
 }
 
 func newFakeLaib(t *testing.T) *fakeLaib {
-	f := &fakeLaib{updates: "[]", inbox: "[]"}
+	f := &fakeLaib{updates: "[]", inbox: "[]", diag: "[]"}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -111,7 +112,7 @@ func newFakeLaib(t *testing.T) *fakeLaib {
 		text := ""
 		switch req.Params.Name {
 		case "laib_diag":
-			text = "[]"
+			text = f.diag
 			if f.red {
 				text = `[{"severity":"rot","probe":"unit","service":"whoami","detail":"whoami.service ist inactive","fix":"laib logs whoami"},{"severity":"gelb","probe":"watchdog","detail":"x"}]`
 			}
@@ -143,7 +144,8 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	f := newFakeLaib(t)
 	addr, mails := fakeSMTP(t)
 	c := f.config(t, addr)
-	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"}]`
+	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"},{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:b2"}]`
+	f.diag = `[{"severity":"info","probe":"status","service":"home-assistant","detail":"Update: SENEC 2026.6.3 → 2026.10.0 · https://x/r"},{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Stecker 9.5.52 → 9.5.60 (nur gemeldet)"},{"severity":"gelb","probe":"updates","service":"media","detail":"IMAGE liegt seit 31 Tagen hinter seinem Kanal (sha256:c3)"},{"severity":"info","probe":"status","service":"home-assistant","detail":"alles andere"}]`
 	now := time.Now()
 	sweep := func(at time.Time) {
 		t.Helper()
@@ -156,8 +158,11 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	if len(got) != 1 || !strings.Contains(got[0], "To: admin@example.home") || !strings.Contains(got[0], "- whoami: docker.io/traefik/whoami:v1.11 → v1.12") || strings.Contains(got[0], "- x:") {
 		t.Fatalf("the weekly updates mail to the operator's address: %q", got)
 	}
-	if !strings.Contains(got[0], "Laib:_Updates_verf=C3=BCgbar") || !strings.Contains(got[0], "Neuere Images (laib updates):") {
-		t.Errorf("the updates mail's subject changed: %q", got[0])
+	// #528: "Was ist veraltet" — a floating tag's newer digest too
+	if !strings.Contains(got[0], "Subject: Laib: Was ist veraltet") || !strings.Contains(got[0], "Was ist veraltet (laib updates, laib diag):") || !strings.Contains(got[0], "- vaultwarden: docker.io/vaultwarden/server:latest → sha256:b2") ||
+		!strings.Contains(got[0], "- home-assistant: Update: SENEC 2026.6.3 → 2026.10.0 · https://x/r") || !strings.Contains(got[0], "- home-assistant: Firmware: Stecker") ||
+		!strings.Contains(got[0], "- media: IMAGE liegt seit 31 Tagen") || strings.Contains(got[0], "alles andere") {
+		t.Errorf("the weekly mail: %q", got[0])
 	}
 	f.red = true
 	sweep(now.Add(5 * time.Minute))

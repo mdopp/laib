@@ -22,7 +22,7 @@ laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue 
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the approver; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
-laib updates                         newer patch and minor releases of every pinned image, from the registry (#287)
+laib updates [--run]                 what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
@@ -79,6 +79,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_updates` | none |
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean) → `{user, mailed, link?, expires (RFC 3339), message}` (#360) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
+| `laib_calendar` | `action` (`subscribe`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
@@ -107,7 +108,7 @@ dropped from its reply. The built-in skills' menus:
 | `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
-| `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287) |
+| `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Reds within a minute (`OPERATOR_EVENT_GATHER`, default 60s) are one
@@ -393,10 +394,14 @@ container that silently cannot reach laib. Apply pulls the images of new
 or re-imaged containers before the units start, so the first start never
 includes the pull. Services with a database (immich, paperless,
 vaultwarden, Home Assistant, auth, radicale, audiobookshelf, media, beets)
-no longer carry `AutoUpdate=registry` — podman's rollback restores an
-image, not migrated data; their images change by proposal. Where
-auto-update stays, `podman-auto-update.service` takes a `laib backup`
-first and the default window is 04:30, never the backup's 03:00.
+no longer carry `AutoUpdate=registry` — a rollback restores an image, not
+migrated data; their images change by proposal, snapshotted before the
+approval applies (#528). The mark is what `laib-images.timer` keys on: it
+runs `laib updates --run` nightly, 90 minutes after `backup.schedule`
+(box.yml `updates` narrows the days and the time), pulls the floating
+images of marked containers, restarts and verifies a service whose image
+moved and tags the previous image back on red. `podman-auto-update.timer`
+stays masked (ADR 0002 amendment).
 ### Hooks: `pre-start` and `post-deploy`
 
 Both run in the hooks image (ADR 0004 amendment), never on the host:

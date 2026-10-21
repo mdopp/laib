@@ -174,7 +174,8 @@ anmelden mit dem Familien-Login.“
 ## 8. Changes later
 
 - **Code:** a PR as in step 4. With `:latest` and `AutoUpdate=registry`
-  the box picks the new image up in its update window; an app with a
+  the box picks the new image up the next night (laib-images.timer, #528),
+  verified, the previous image back on red; an app with a
   database pins `IMAGE: ghcr.io/<owner>/<name>:<sha>` and moves by
   `laib propose --set services/<name>/values.yml:IMAGE=… "<grund>"`.
 - **Template** (route, secret, data): a PR, then `laib template sync`

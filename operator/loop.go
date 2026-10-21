@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -256,12 +257,48 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, offers map[string]string) {
 	offers = map[string]string{}
 	out, isErr, err := mcp.Call(ctx, "laib_updates", map[string]any{})
-	var ups []struct{ Service, Key, Image, Current, Patch, Minor, Error string }
+	var ups []struct {
+		Service, Key, Image, Current, Patch, Minor, Error, Digest string
+		Auto                                                      bool
+	}
 	if err != nil || isErr || json.Unmarshal([]byte(out), &ups) != nil {
 		return "", "Aktualisierungen nicht lesbar: " + firstLine(cmp.Or(out, fmt.Sprint(err))) + ".", offers
 	}
 	var b, h strings.Builder
 	b.WriteString("Patch-Versionen, die du vorschlagen kannst:\n")
+	// the runner's own proposals (#528), each once while it is open: a new
+	// image of a service with data (pinned by its digest; the review asks a
+	// person and laib snapshots first), and what a service's status offers
+	// as one value (Home Assistant's extensions); firmware is only reported
+	var open []struct{ Reason string }
+	if text, _, err := mcp.Call(ctx, "laib_inbox", map[string]any{}); err == nil {
+		json.Unmarshal([]byte(text), &open)
+	}
+	propose := func(what string, args map[string]any) {
+		if slices.ContainsFunc(open, func(p struct{ Reason string }) bool { return p.Reason == args["reason"] }) {
+			fmt.Fprintf(&h, " %s: der Vorschlag ist noch offen.", what)
+		} else if out, isErr, err := mcp.Call(ctx, "laib_propose", args); err != nil || isErr {
+			fmt.Fprintf(&h, " %s ließ sich nicht vorschlagen: %s.", what, firstLine(cmp.Or(out, fmt.Sprint(err))))
+		} else {
+			fmt.Fprintf(&h, " %s vorgeschlagen, für einen Menschen.", what)
+		}
+	}
+	for _, u := range ups {
+		if u.Digest != "" && !u.Auto {
+			what := fmt.Sprintf("%s: neues Image %s:%s", u.Service, u.Image, u.Current)
+			propose(what, map[string]any{"reason": what + " (" + u.Digest + ")", "service": u.Service, "key": u.Key, "value": u.Image + ":" + u.Current + "@" + u.Digest})
+		}
+	}
+	diagText, _, _ := mcp.Call(ctx, "laib_diag", map[string]any{})
+	var findings []struct{ Probe, Service, Detail, Fix string }
+	json.Unmarshal([]byte(diagText), &findings)
+	for _, f := range findings {
+		if m := offerFix.FindStringSubmatch(f.Fix); f.Probe == "status" && m != nil && m[1] == f.Service {
+			propose(f.Service+": "+f.Detail, map[string]any{"reason": f.Service + ": " + f.Detail, "service": m[1], "key": m[2], "value": m[3]})
+		} else if f.Probe == "status" && strings.HasPrefix(f.Detail, "Firmware: ") {
+			fmt.Fprintf(&h, " %s: %s.", f.Service, f.Detail)
+		}
+	}
 	for _, u := range ups {
 		if u.Service == "host" && u.Patch != "" {
 			// the host image (#368): the runner proposes it itself, a human approves
@@ -287,6 +324,11 @@ func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, o
 	}
 	return b.String(), strings.TrimSpace(h.String()), offers
 }
+
+// offerFix is a status finding's fix that is one value proposal (#528), the
+// runner files it as it stands: Home Assistant's check names the extensions
+// to install this way (templates/home-assistant/home-assistant-check.py).
+var offerFix = regexp.MustCompile(`^laib propose --set services/([a-z0-9-]+)/values\.yml:([A-Z][A-Z0-9_]*)=(\S+)$`)
 
 // SmallModel decides the interface (#286): OPERATOR_INTERFACE when set
 // (typed = small, cli = capable), else the window — up to 32k tokens a

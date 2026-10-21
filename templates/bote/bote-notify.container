@@ -21,6 +21,11 @@ Volume=/mnt/data/laib/render/people:/people:ro,z
 Volume=${DATA_DIR}/bote/notify:/hermes:ro,z
 # a proposal's poll on Signal: its timestamp → the proposal, for the relay (#509)
 Volume=${DATA_DIR}/bote/umfragen:/umfragen:z
+# the Bote's filing (#521): POST /ablage writes into Paperless' consume folder, Bote/<sender>/;
+# the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry
+# core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/file-share/data/paperless-consume:/consume
 AutoUpdate=registry
 
 [Service]

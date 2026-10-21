@@ -16,6 +16,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -120,13 +121,14 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["systemd/laib-template-sync.service"] = "# Rendered by laib: pull registries and propose template updates.\n[Unit]\nDescription=Laib template sync\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib template sync --propose\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 		out["systemd/laib-template-sync.timer"] = "# Rendered by laib: weekly, inside the update window's day when one is set.\n[Unit]\nDescription=Laib template sync timer\n\n[Timer]\nOnCalendar=Sat *-*-* 04:00:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 	}
-	// After every podman auto-update, diag writes red findings to the journal
-	// (and the webhook); the timer follows the update window when one is set.
-	out["systemd/podman-auto-update.service.d/laib.conf"] = "# Rendered by laib (#13, #46): a snapshot before, a verify after an image update.\n[Service]\nExecStartPre=/var/opt/laib/laib backup\nExecStartPost=/var/opt/laib/laib diag --journal\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
-	if len(st.Box.Updates.Days) > 0 {
-		t := cmp.Or(st.Box.Updates.Time, "04:30") // never the backup's 03:00 (#46)
-		out["systemd/podman-auto-update.timer.d/laib.conf"] = "# Rendered by laib from box.yml updates.\n[Timer]\nOnCalendar=\nOnCalendar=" + strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + t + ":00\nRandomizedDelaySec=15m\n"
-	}
+	// #528: the images of the services without data, nightly after the
+	// backup (box.yml updates: days and time; default every night, 90 minutes
+	// after backup.schedule). It replaces podman auto-update, whose timer
+	// stays masked (ADR 0002 amendment).
+	bt, _ := time.Parse("15:04", cmp.Or(st.Box.Backup.Schedule, "03:00"))
+	at := strings.TrimSpace(strings.Join(st.Box.Updates.Days, ",") + " *-*-* " + cmp.Or(st.Box.Updates.Time, bt.Add(90*time.Minute).Format("15:04")) + ":00")
+	out["systemd/laib-images.service"] = "# Rendered by laib (#528): pull the images laib keeps current, verify, the previous one back on red.\n[Unit]\nDescription=Laib images\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib updates --run\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
+	out["systemd/laib-images.timer"] = "# Rendered by laib from box.yml updates and backup.schedule (#528).\n[Unit]\nDescription=Laib images timer\n\n[Timer]\nOnCalendar=" + at + "\nRandomizedDelaySec=15m\n\n[Install]\nWantedBy=timers.target\n"
 	return out, nil
 }
 

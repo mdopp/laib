@@ -19,7 +19,8 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": [], "adds": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
-           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw",
+           "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
 # "take", "swallow" (success, nothing stored) or "refuse" (insufficientAccessRights)
@@ -182,6 +183,15 @@ class PostDeploy(unittest.TestCase):
         # set again on every run, as a service secret (#209)
         self.run_hook(["core", "haus"], ["admins", "family", "lldap_strict_readonly"])
         self.assertIn("uid=haus,ou=people," + BASE_DN, LDAP["set"], LDAP)
+
+    def test_the_calendar_mirror_and_home_assistant_get_their_radicale_accounts(self):
+        # laib#495: the mirror writes as `kalender`, Home Assistant reads as `homeassistant`: nobody's password
+        self.run_hook([], [])
+        for uid, secret in (("kalender", "KALENDER_RADICALE_PASSWORD"), ("homeassistant", "HA_RADICALE_PASSWORD")):
+            self.assertIn(uid, STATE["users"])
+            self.assertEqual(LDAP["pw"].get(f"uid={uid},ou=people," + BASE_DN), SECRETS[secret], LDAP)
+            self.assertIn((f"uid={uid},ou=people," + BASE_DN, True), LDAP["binds"])
+            self.assertNotIn(uid, STATE["adds"], f"{uid} must not read the directory or join a group")
 
     def test_radicales_password_is_set_again_when_the_account_exists(self):
         # a set that failed once (the account exists, the password does not) is not final:

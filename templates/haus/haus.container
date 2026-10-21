@@ -17,6 +17,9 @@ Environment=HAUS_ENERGY_FLOW=${ENERGY_FLOW}
 Environment=HAUS_ENERGY_TOTALS=${ENERGY_TOTALS}
 Environment=HAUS_STT_PROVIDER=${STT_PROVIDER}
 Environment=HAUS_STT_LANGUAGE=${STT_LANGUAGE}
+Environment=HAUS_HA_PUBLIC_URL=${HA_PUBLIC_URL}
+Environment=HAUS_ENERGY_STATS=${ENERGY_STATS}
+Environment=HAUS_COVER_INVERTED=${COVER_INVERTED}
 # the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder
 Environment=HAUS_HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
 Environment=HAUS_RADICALE_URL=${RADICALE_URL}
@@ -24,9 +27,15 @@ Environment=HAUS_RADICALE_USER=${RADICALE_USER}
 Environment=HAUS_RADICALE_PASSWORD=${RADICALE_PASSWORD}
 Environment=HAUS_RADICALE_CALENDAR=${RADICALE_CALENDAR}
 Environment=HAUS_RADICALE_ADDRESSBOOK=${RADICALE_ADDRESSBOOK}
+# Haushalt/Kalender (haus#66): "Kalender in Radicale öffnen" and each calendar's address for the phone
+Environment=HAUS_RADICALE_PUBLIC_URL=${RADICALE_PUBLIC_URL}
 Environment=HAUS_PAPERLESS_URL=${PAPERLESS_URL}
 Environment=HAUS_PAPERLESS_TOKEN=${PAPERLESS_TOKEN}
 Environment=HAUS_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
+# the Dokumente page (haus#68, #521): the address mail is filed from (Paperless fetches it), and
+# whether Paperless opens only at home (its route is internal: from outside, a word instead of the link)
+Environment=HAUS_DOCUMENTS_MAIL=${DOCUMENTS_MAIL}
+Environment=HAUS_PAPERLESS_LAN_ONLY=${PAPERLESS_LAN_ONLY}
 # the Box page's Werkstatt card (haus#15)
 Environment=HAUS_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 Environment=HAUS_NOTES_DIR=/notes

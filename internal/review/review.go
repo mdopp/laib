@@ -30,6 +30,11 @@ type Result struct {
 	Mints []string // hands a newly declared secret mints a Laib token for
 	Added []string // services the change adds
 	Facts []string // plain facts for the decision card (#58): where a new service is reachable …
+	// Ask and Snapshot (#528): a change to a service with data a new image
+	// or setting may migrate — a person decides, not the dial (a warning),
+	// and laib snapshots these services before the approved change applies.
+	Ask      []string
+	Snapshot []string
 
 	domain string // the box's domain, for the facts
 }
@@ -77,6 +82,16 @@ func tree(dir string) (map[string]file, error) {
 		return nil
 	})
 	return out, err
+}
+
+// data marks a change to a service with data (#528): "Zurücknehmen" with
+// laib rollback brings the image back, the data before it come from the
+// snapshot laib takes first (laib restore <Snapshot> <Dienst>).
+func (r *Result) data(svc, why string) {
+	if !slices.Contains(r.Snapshot, svc) {
+		r.Ask = append(r.Ask, why+": vorher sichert Laib "+svc+"; Zurücknehmen mit laib rollback, die Daten von vorher mit laib restore")
+		r.Snapshot = append(r.Snapshot, svc)
+	}
 }
 
 // knownUnit says whether a file in a service folder is one Laib renders.
@@ -211,6 +226,9 @@ func Dirs(base, changed string) Result {
 		}
 		r.contract(name, bc, a.Contract, existed, mints)
 		r.values(name, ast, b, a, existed)
+		if existed && !maps.Equal(b.Values, a.Values) && slices.ContainsFunc(a.Contract.Data, func(d state.DataPath) bool { return d.Quiesce }) {
+			r.data(name, "ändert die Werte (ein Image, eine Einstellung) von "+name+", einem Dienst mit Datenbank")
+		}
 	}
 	for h := range mints {
 		r.Mints = append(r.Mints, h)
@@ -237,7 +255,7 @@ func Dirs(base, changed string) Result {
 		svc := strings.Split(key, "/")[1]
 		added, removed := diffUnits(parseUnit(bout[key]), parseUnit(text))
 		_, existedUnit := bout[key]
-		r.units(svc, key, ast, added, removed, existedUnit, !slices.Contains(r.Added, svc))
+		r.units(svc, key, ast, added, removed, existedUnit, !slices.Contains(r.Added, svc), strings.Contains(text, "\nAutoUpdate=registry"))
 	}
 	// rendered platform files (Caddy, Authelia, AdGuard, nftables, host units)
 	// that changed without a reason above: not understood, so a human
@@ -476,7 +494,8 @@ var commandKeys = set("ExecStart", "ExecStartPre", "ExecStartPost", "ExecStop", 
 var privilegeKeys = set("PodmanArgs", "GlobalArgs", "AddCapability", "AddDevice", "SecurityLabelDisable", "SecurityLabelType", "SecurityLabelLevel", "SecurityLabelFileType", "SeccompProfile", "UserNS", "Sysctl", "Mask", "Unmask", "Ulimit", "CgroupsMode", "User", "Group", "GIDMap", "UIDMap", "SubGIDMap", "SubUIDMap", "Rootfs", "EnvironmentHost", "EnvironmentFile", "ContainersConfModule", "Module", "Driver", "Device", "Options", "Yaml", "KubeDownForce")
 
 // units judges the entries added to and removed from one rendered unit.
-func (r *Result) units(svc, key string, st *state.State, added, removed []entry, existedUnit, existedService bool) {
+// auto: the unit carries AutoUpdate=registry, no data a new image migrates (#528).
+func (r *Result) units(svc, key string, st *state.State, added, removed []entry, existedUnit, existedService, auto bool) {
 	say := func(format string, x ...any) { r.Human = append(r.Human, fmt.Sprintf(format, x...)) }
 	unit := strings.TrimPrefix(key, "quadlet/")
 	var dataDirs []string
@@ -505,6 +524,8 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 		case e.Key == "Image":
 			if existedUnit && imageRepo(e.Value) != imageRepo(oldImage) {
 				say("startet ein anderes Programm in %s (%s statt %s)", svc, e.Value, oldImage)
+			} else if existedUnit && !auto {
+				r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, oldImage, e.Value))
 			} else if !existedUnit && existedService {
 				say("startet ein neues Programm in %s (%s)", svc, e.Value)
 			}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Paperless: laib's check of the mail inbox once an hour (#521)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

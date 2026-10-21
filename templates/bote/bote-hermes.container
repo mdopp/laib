@@ -11,6 +11,10 @@ Environment=HERMES_HOME=/opt/data
 # the user bote's Home Assistant token (#349): in .env for the ha tool; here too, so a newly
 # minted one is a change of this unit, and the apply that minted it restarts the Bote with it
 Environment=HA_TOKEN=${HA_TOKEN}
+# laib-ablage (#521): "ablegen" with a photo or PDF goes to bote-notify's /ablage on the pod's
+# loopback with notify's bearer; the plugin is there only while Paperless answers (post-deploy)
+Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+Environment=ABLAGE_URL=http://127.0.0.1:8645/ablage
 Exec=gateway run
 AutoUpdate=registry
 

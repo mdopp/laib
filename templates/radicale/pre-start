@@ -3,7 +3,7 @@
 # account is LLDAP's read-only `radicale` user, seeded by the auth template (#55). Rights (#418): every user owns
 # their own collections, as owner_only did, and every user reads and writes the entries of the household's
 # calendar and address book, which are Haus's account's (haus/haushalt, haus/haushalt-kontakte; the auth
-# template seeds `haus`). Rewritten on every apply.
+# template seeds `haus`); the calendar mirrors (#495) belong to the account `kalender`. Rewritten on every apply.
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
 cat > "$C/config" <<CFG
@@ -30,6 +30,12 @@ chmod 644 "$C/config"
 # Radicale's from_file (#418): the first section whose user and collection match decides; {0} is the user's group.
 # Upper case is a plain collection, lower case a calendar or address book and its entries. The family gets r and w
 # on the Haushalt, never W: an entry may change, the calendar itself not.
+# The mirrors (#495, templates/kalender): <person>/google-<name> and <person>/abo-<name> are written only by the
+# service account `kalender`; the person, Haus and (for haus/abo-*) the family read them. google-kontakte is a
+# Takeout's address book (scripts/import-google.py), the person's own. Home Assistant's account `homeassistant`
+# reads its home, where `kalender` copies the family's calendars: a CalDAV client finds only its own home.
+# Haus (`haus`) lists each person's home and makes a calendar "nur für mich" there as privat-<name>, nothing else
+# of theirs; "für die Familie" is haus/familie-<name>, which everyone reads and writes like the Haushalt.
 cat > "$C/rights" <<'RIGHTS'
 # rendered by laib pre-start (templates/radicale)
 [root]
@@ -37,14 +43,54 @@ user: .+
 collection:
 permissions: R
 
+[kalender-mirrors]
+user: kalender
+collection: [^/]+/(google-(?!kontakte(/|$))|abo-)[^/]+(/.*)?
+permissions: rw
+
+[kalender-ha]
+user: kalender
+collection: homeassistant(/.*)?
+permissions: RrWw
+
+[kalender-haus]
+user: kalender
+collection: haus(/(haushalt|familie-[^/]+)(/.*)?)?
+permissions: Rr
+
+[homeassistant]
+user: homeassistant
+collection: homeassistant(/.*)?
+permissions: Rr
+
+[mirrors-haus]
+user: haus
+collection: [^/]+/(google-(?!kontakte(/|$))|abo-)[^/]+(/.*)?
+permissions: r
+
+[mirrors-own]
+user: (.+)
+collection: {0}/(google-(?!kontakte(/|$))|abo-)[^/]+(/.*)?
+permissions: r
+
+[abo-family]
+user: .+
+collection: haus/abo-[^/]+(/.*)?
+permissions: r
+
 [owner]
 user: (.+)
 collection: {0}(/.*)?
 permissions: RrWw
 
+[haus-privat]
+user: haus
+collection: [^/]+(/privat-[^/]+(/.*)?)?
+permissions: Rrw
+
 [haushalt]
 user: .+
-collection: haus/haushalt(-kontakte)?(/.*)?
+collection: haus/(haushalt(-kontakte)?|familie-[^/]+)(/.*)?
 permissions: rw
 RIGHTS
 chmod 644 "$C/rights"

@@ -9,20 +9,25 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // laib updates (#287): for every pinned image in the services' values, the
 // newest patch release (same major.minor) and the newest minor release
-// (same major) the registry has, the tag's shape kept. A floating tag
-// (latest, a bare major) is podman auto-update's business, not a proposal.
-// Reading only; the Operator's aktualisierung skill proposes from it.
+// (same major) the registry has, the tag's shape kept. For a floating tag
+// (latest, stable, a bare major) and a digest pin, the registry's digest of
+// the tag when the box runs another one (#528); Auto says the nightly run
+// (laib-images.timer, --run) takes it itself, else the Operator's
+// aktualisierung proposes it. Reading only, except --run.
 
 type ImageUpdate struct {
 	Service string `json:"service"`
@@ -33,6 +38,8 @@ type ImageUpdate struct {
 	Minor   string `json:"minor,omitempty"`
 	Error   string `json:"error,omitempty"`
 	Paused  string `json:"paused,omitempty"` // the host row: the drop-in that pauses OS updates (#486)
+	Digest  string `json:"digest,omitempty"` // a floating tag or a digest pin: the registry's digest, when the box has another (#528)
+	Auto    bool   `json:"auto,omitempty"`   // the nightly run takes it (apply.AutoImage); else it is a proposal
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -66,14 +73,23 @@ func splitImage(ref string) (host, repo, tag string) {
 func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 	var out []ImageUpdate
 	for _, name := range st.ServiceNames() {
-		for key, v := range st.Services[name].Values {
+		svc := st.Services[name]
+		for key, v := range svc.Values {
 			host, repo, tag := splitImage(v.Literal)
-			cur := semverTag.FindStringSubmatch(tag)
-			if !strings.HasSuffix(key, "IMAGE") || cur == nil {
+			if !strings.HasSuffix(key, "IMAGE") || host == "" {
 				continue
 			}
-			ref, _, _ := strings.Cut(v.Literal, "@")
+			cur := semverTag.FindStringSubmatch(tag)
+			ref, pin, pinned := strings.Cut(v.Literal, "@")
 			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag}
+			if cur == nil || pinned {
+				u.Auto = apply.AutoImage(svc, key)
+				u.Digest, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
+			}
+			if cur == nil {
+				out = append(out, u)
+				continue
+			}
 			tags, err := registryTags(ctx, host, repo)
 			if err != nil {
 				u.Error = err.Error()
@@ -111,6 +127,25 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 		}
 	}
 	return out
+}
+
+// newDigest is the registry's digest of the tag when the box runs another:
+// the pin's, else the local image's (podman keeps the index digest among
+// its RepoDigests), and the error in words.
+func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (string, string) {
+	have := pin
+	if pin == "" {
+		have, _ = sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", ref)
+	}
+	resp, err := registryGet(ctx, host, repo, "/manifests/"+tag)
+	if err != nil {
+		return "", err.Error()
+	}
+	resp.Body.Close()
+	if d := resp.Header.Get("Docker-Content-Digest"); d != "" && !strings.Contains(have, d) {
+		return d, ""
+	}
+	return "", ""
 }
 
 // registryTags lists a repository's tags through the registry v2 API, with
@@ -190,15 +225,7 @@ func hostUpdate(ctx context.Context, file string) (u ImageUpdate, ok bool) {
 	}
 	u.Service, u.Image, u.Current = "host", name, digest
 	host, repo, _ := strings.Cut(name[strings.LastIndex(name, ":")+1:], "/")
-	resp, err := registryGet(ctx, host, repo, "/manifests/"+u.Key)
-	if err != nil {
-		u.Error = err.Error()
-		return u, true
-	}
-	resp.Body.Close()
-	if d := resp.Header.Get("Docker-Content-Digest"); d != digest {
-		u.Patch = d
-	}
+	u.Patch, u.Error = newDigest(ctx, host, repo, u.Key, "", digest)
 	return u, true
 }
 
@@ -215,24 +242,41 @@ func hostLine(u ImageUpdate) string {
 	return strings.TrimSpace(fmt.Sprintf("%-14s %s@%s  %s %s", u.Service, u.Image, u.Current, what, u.Error))
 }
 
-func Updates(ctx context.Context, env *cli.Env, _ []string) int {
+func Updates(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
 	}
+	code := cli.ExitOK
+	if slices.Contains(args, "--run") && !env.MCP {
+		code = apply.ImageRun(ctx, env, st) // laib-images.timer's nightly run (#528)
+	}
 	ups := ImageUpdates(ctx, st)
+	behind := map[string]string{} // the 30-day yellow in diag (#528): images only
+	for _, u := range ups {
+		if w := cmp.Or(u.Digest, u.Patch); u.Service != "host" && w != "" {
+			behind[u.Service+" "+u.Key] = w
+		}
+	}
+	diag.SeeBehind(env.Paths.Home, time.Now(), behind)
 	if env.JSON {
 		if ups == nil {
 			ups = []ImageUpdate{}
 		}
-		return cli.Emit(env, ups)
+		cli.Emit(env, ups)
+		return code
 	}
 	for _, u := range ups {
 		if u.Service == "host" && u.Key != "" {
 			fmt.Fprintln(env.W(), hostLine(u))
 			continue
 		}
+		if u.Digest != "" || !semverTag.MatchString(u.Current) {
+			how := map[bool]string{true: "nachts automatisch", false: "als Vorschlag"}[u.Auto]
+			fmt.Fprintf(env.W(), "%-14s %s:%s  %s (%s) %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Digest, "aktuell"), how, u.Error)
+			continue
+		}
 		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)
 	}
-	return cli.ExitOK
+	return code
 }

@@ -127,9 +127,22 @@ func TestBoxConfigMasksAnActiveFirewalld(t *testing.T) {
 	}
 }
 
+// #528: images update through laib-images.timer; podman's own timer, a
+// second path beside laib's lock and verify, is masked once and then left.
+func TestBoxConfigMasksPodmansAutoUpdateTimer(t *testing.T) {
+	log, out := runBoxConfigOnHost(t, `exit 0`)
+	if !strings.Contains(log, "systemctl --user mask --now podman-auto-update.timer") || !strings.Contains(out, "podman-auto-update.timer: masked") {
+		t.Fatalf("podman's timer is left on, or masking it is not said:\nshims:\n%s\noutput:\n%s", log, out)
+	}
+	log, out = runBoxConfigOnHost(t, `[ "$*" = "--user is-enabled podman-auto-update.timer" ] && echo masked; exit 0`)
+	if strings.Contains(log, "mask --now podman") || strings.Contains(out, "podman-auto-update.timer: masked") {
+		t.Fatalf("already masked: nothing to do, nothing to say\nshims:\n%s\noutput:\n%s", log, out)
+	}
+}
+
 func TestBoxConfigLeavesABoxWithoutFirewalldAlone(t *testing.T) {
 	log, out := runBoxConfigOnHost(t, `case "$*" in *firewalld*) exit 4;; esac; exit 0`)
-	if strings.Contains(log, "mask") {
+	if strings.Contains(log, "mask --now firewalld") {
 		t.Fatalf("no firewalld, but install-box.sh masked it:\n%s\n%s", log, out)
 	}
 }

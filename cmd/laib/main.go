@@ -54,7 +54,7 @@ func init() {
 		{Name: "repair", Tier: "propose", Help: "<probe> [service]: a diag finding's repair as a proposal; it runs once a human approves (#441)", Run: diag.Repair},
 		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: inbox.Wish},
 		{Name: "net", Tier: "read", Help: "[--mermaid]: every name with its reach, Authelia and target, the direct ports, the host network, the pods' links — from the rendered config (#439)", Run: cmdNet},
-		{Name: "updates", Tier: "read", Help: "newer patch and minor releases of every pinned image, from the registry (#287)", Run: registry.Updates},
+		{Name: "updates", Tier: "read", Help: "[--run]: what is behind — a tag's or pin's newer digest, patch and minor releases (#287), a template's extensions and firmware; --run is laib-images.timer's nightly update of the images without data (#528)", Run: registry.Updates},
 		{Name: "skill", Tier: "read", Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
 		{Name: "operator", Tier: "apply", Help: "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", Run: cmdOperator},
 		{Name: "logs", Tier: "read", Help: "journald for every unit of a service, secrets redacted (--since 1h)", Run: cmdLogs},
@@ -85,6 +85,7 @@ func init() {
 		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
 		{Name: "person_invite", Tier: "apply", Help: "<user> --first F --last L --email E [--group family|admins] [--resend]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back (`laib person invite`)", Run: cmdPersonInvite},
 		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
+		{Name: "calendar", Tier: "apply", Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495)", Run: cmdCalendar},
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
 	}

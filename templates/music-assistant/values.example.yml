@@ -1,1 +1,3 @@
 IMAGE: ghcr.io/music-assistant/server:latest
+MA_ADMIN_USER: laib                # Music Assistant's built-in administrator post-deploy onboards as (break-glass; the family signs in with Home Assistant)
+JELLYFIN_ADMIN_USER: admin         # media's ADMIN_USER: post-deploy makes Jellyfin's account musicassistant as this administrator

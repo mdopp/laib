@@ -3,7 +3,8 @@
 Home Assistant, Z-Wave JS UI and the Matter server on the host network.
 What belongs here from ADR 0015, configured in HA after install: the
 Wyoming integrations for Stimme (whisper, piper/Martin, openWakeWord), the
-CalDAV integration for Radicale, Music Assistant, MQTT for mosquitto. Frage
+CalDAV integration for Radicale, MQTT for mosquitto. Music Assistant is
+not clicked together either (#526, below). Frage
 as the conversation agent is not clicked together: post-deploy adds Home
 Assistant's Ollama integration on `FRAGE_URL` (default
 `http://127.0.0.1:8710`, Frage speaks Ollama's `/api/tags` and `/api/chat`)
@@ -28,6 +29,7 @@ long-lived token per consumer over HA's WebSocket API
 | `HAUS_HA_TOKEN` | the administrator (`laib: haus`) | Haus's pages and widgets, and voice counting (admin-only debug calls, below) |
 | `BOTE_AUTOMAT_HA_TOKEN` | the administrator (`laib: bote-automat`) | the Bote's Automat: HA's automation config API is admin-only; every write the Automat makes needs the admin's approval code |
 | `BOTE_HA_TOKEN` | **`bote`**, no administrator (`laib: bote`) | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
+| `MUSIC_ASSISTANT_HA_TOKEN` | the administrator (`laib: music-assistant`) | Music Assistant's Home Assistant plugin (it reads HA's users for the family's login into MA); minted only once Music Assistant is there |
 
 Two administrator tokens instead of one for Haus and the check: each is
 revocable on its own and HA names who holds it; it costs nothing. The user
@@ -67,6 +69,30 @@ Once the tokens exist the password is used only when no administrator
 token works any more: a password changed in HA later does not lock Laib
 out.
 
+## Music Assistant, both ways (#526)
+
+music-assistant's post-deploy onboards Music Assistant (its built-in
+administrator `laib` is break-glass), adds Jellyfin and Radio Browser and
+hands back `HA_MUSIC_ASSISTANT_TOKEN`, a long-lived MA token. This template
+declares it and renders it into the check's unit, so the same apply
+re-applies Home Assistant (one restart), and this post-deploy then
+
+- connects MA's **Home Assistant plugin** with `MUSIC_ASSISTANT_HA_TOKEN`
+  on `https://home.<domain>` (`HA_PUBLIC_URL`). Not `127.0.0.1:8123`:
+  that plugin's URL is where MA sends a browser for "Mit Home Assistant
+  anmelden", so the family signs in Authelia → Home Assistant → Music
+  Assistant, and MA makes their user on the first login (HA
+  administrators become MA administrators);
+- adds the **Music Assistant integration** on `http://127.0.0.1:8095`
+  (`MA_URL`): its config flow's browser step takes the token as the code
+  MA's login page would return, and HA exchanges it for its own
+  long-lived MA token. An entry that asks to sign in again (MA's tokens
+  last a year) is answered the same way on the next apply.
+
+Without Music Assistant the hook says so and stays green. The checklist
+below turns yellow until Music Assistant is onboarded, has its Jellyfin
+source with titles, knows at least one player and has the plugin.
+
 ## The checklist on the Box page (#55, #309)
 
 With `HA_TOKEN`, `home-assistant-check.service` reads the config entries and
@@ -75,6 +101,22 @@ integrations above are still missing. The Box page and `laib diag` show it
 with its age ("geprüft vor 12 min"). Looking at either re-checks a result
 older than five minutes in the background, the Box page has "jetzt prüfen",
 and a timer re-checks once an hour so the morning report reads a fresh one.
+
+## Updates: extensions and firmware (#528)
+
+The same check reads Home Assistant's `update.*` entities that are on.
+Each extension (HACS, a custom integration) is an info finding `Update:
+<name> <installed> → <latest>` with its release notes; the installable ones
+together are one finding whose fix is a value proposal, `HA_INSTALL=
+update.x=<version>,…`. The Operator's weekly `aktualisierung` files it as it
+stands; the review makes it a person's decision (a service with a
+database), Laib snapshots Home Assistant before the approval applies, and
+post-deploy installs each extension still offered at that version, then
+restarts Home Assistant once. Device firmware is `Firmware: …`, reported
+only: a failed flash can brick a device, so it is installed only on an
+explicit yes, by hand in Home Assistant. Both appear in laib-notify's weekly
+"Was ist veraltet". Home Assistant's own image (`stable`) moves by a
+proposal pinned to the registry's digest (`laib updates`).
 
 ## The family's login (#253)
 
