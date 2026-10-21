@@ -24,7 +24,8 @@ integration for an OpenAI server with its own URL, its Ollama integration
 takes any URL, and Frage speaks Ollama's /api/tags and /api/chat (as
 Solaris's engine did for conversation.solaris). When Frage answers on
 FRAGE_URL, this hook adds that Ollama entry and its conversation agent
-"Frage" once; which pipeline uses it stays the owner's choice.
+"Frage" once; which pipeline uses it stays the owner's choice, unless a
+pipeline's agent is gone (below).
 
 Music Assistant, both ways (#526): with the token music-assistant's
 post-deploy hands back (HA_MUSIC_ASSISTANT_TOKEN), this hook adds Home
@@ -35,6 +36,21 @@ Home Assistant plugin with an administrator token minted here
 it). That plugin is what offers "Mit Home Assistant anmelden" in Music
 Assistant, so its URL is the one a browser reaches, https://home.<domain>:
 MA sends the browser there to sign in.
+
+Stimme's Wyoming entries (#540): when Stimme's servers answer (Whisper
+10300, Piper 10200, openWakeWord 10400 on STIMME_HOST), this hook adds a
+Wyoming entry for each that HA has none for, found by host and port in HA's
+own .storage/core.config_entries (its REST API does not show an entry's
+data, and HA's Wyoming flow takes the same server twice). An entry there
+from before (Solaris served 10300 and 10400) is Stimme's now; one that gave
+up while the port was dark is reloaded. Nothing is deleted: an entry that
+points at a server that is gone is the owner's to delete, and the check
+names it.
+
+The Assist pipelines (#540): a pipeline part (speech to text, text to
+speech, wake word, conversation agent) whose entity is gone or unavailable
+is pointed at Stimme's or Frage's, when that one is there and speaks the
+pipeline's language; a part that works stays as the owner chose it.
 
 The family's calendars (#495): Home Assistant reads Radicale as its own
 account `homeassistant` (seeded by auth, HA_RADICALE_PASSWORD), whose home
@@ -58,6 +74,10 @@ FRAGE = E.get("FRAGE_URL", "http://127.0.0.1:8710").rstrip("/")  # HA is on the 
 RETRY = float(E.get("HA_RETRY_SECONDS", "3"))
 MA = E.get("MA_URL", "http://127.0.0.1:8095").rstrip("/")  # both on the host network
 MA_TOKEN = E.get("LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN", "")
+STIMME_HOST = E.get("STIMME_HOST", "127.0.0.1")   # HA is on the host network, so is Stimme (templates/stimme)
+STIMME = [("Whisper", int(E.get("STIMME_WHISPER_PORT", "10300")), "stt"), ("Piper", int(E.get("STIMME_PIPER_PORT", "10200")), "tts"),
+          ("openWakeWord", int(E.get("STIMME_WAKEWORD_PORT", "10400")), "wake_word")]
+HA_STORAGE = os.path.join(E.get("LAIB_DATA_DIR", "/mnt/data/stacks"), "home-assistant", "homeassistant", ".storage", "core.config_entries")
 HA_PUBLIC = E.get("HA_PUBLIC_URL") or f"https://home.{E.get('LAIB_DOMAIN', '')}"
 ADMIN = {"HA_TOKEN": "laib: home-assistant-check", "HAUS_HA_TOKEN": "laib: haus", "BOTE_AUTOMAT_HA_TOKEN": "laib: bote-automat"}
 
@@ -339,6 +359,113 @@ def frage_agent():
     raise RuntimeError("the Ollama entry for Frage did not load")
 
 
+def local(host):
+    return "127.0.0.1" if host in ("127.0.0.1", "localhost", "::1") else host
+
+
+def wyoming_on_disk():
+    """{(host, port): entry_id} of HA's Wyoming entries, from HA's own storage (only host and port are read)"""
+    with open(HA_STORAGE) as f:
+        entries = json.load(f)["data"]["entries"]
+    out = {}
+    for e in entries:
+        d = e.get("data") or {}
+        if e.get("domain") == "wyoming" and d.get("host") and d.get("port"):
+            out[(local(str(d["host"])), int(d["port"]))] = e.get("entry_id")
+    return out
+
+
+def stimme_wyoming():
+    """Stimme's Wyoming servers as HA's Wyoming entries, each once, found by host and port (#540);
+    {name: entry_id} of those there"""
+    up = []
+    for name, port, _ in STIMME:
+        try:
+            socket.create_connection((STIMME_HOST, port), timeout=3).close()
+            up.append((name, port))
+        except OSError:
+            pass
+    if not up:
+        print(f"home-assistant: Stimme does not answer on {STIMME_HOST}: no Wyoming entries; after laib add stimme: laib apply home-assistant")
+        return {}
+    try:
+        on_disk = wyoming_on_disk()
+    except (OSError, ValueError, KeyError, TypeError) as e:   # without it a second entry per server would follow
+        raise RuntimeError(f"HA's config entries ({HA_STORAGE}) are not readable ({type(e).__name__}): no Wyoming entry added")
+    tok = admin_session()
+    listed = {e.get("entry_id"): e for e in call("GET", "/api/config/config_entries/entry", token=tok)[1] or []}
+    have, failed = {}, []
+    for name, port in up:
+        eid = on_disk.get((local(STIMME_HOST), port))
+        if eid in listed:
+            have[name] = eid
+            if listed[eid].get("state") in ("setup_retry", "setup_error"):   # it gave up while the port was dark (Solaris went)
+                st, _ = call("POST", f"/api/config/config_entries/entry/{eid}/reload", {}, token=tok)
+                print(f"home-assistant: Wyoming {name} ({STIMME_HOST}:{port}) " + ("reloaded" if st == 200 else f"NOT reloaded (HTTP {st})"))
+            continue
+        st, flow = call("POST", "/api/config/config_entries/flow", {"handler": "wyoming"}, token=tok)
+        if st != 200 or not (flow or {}).get("flow_id"):
+            failed.append(f"{name}: the Wyoming flow did not start (HTTP {st})")
+            continue
+        st, done = call("POST", "/api/config/config_entries/flow/" + flow["flow_id"], {"host": STIMME_HOST, "port": port}, token=tok)
+        if (done or {}).get("type") != "create_entry":
+            failed.append(f"{name} on {STIMME_HOST}:{port} refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
+            continue
+        have[name] = (done.get("result") or {}).get("entry_id") if isinstance(done.get("result"), dict) else None
+        print(f"home-assistant: Wyoming {name} added ({STIMME_HOST}:{port}, \"{done.get('title') or name}\")")
+    if len(have) == len(STIMME):
+        print("home-assistant: Stimme's Wyoming entries are there (Whisper, Piper, openWakeWord)")
+    if failed:
+        print("home-assistant: Wyoming NOT set up: " + "; ".join(failed), file=sys.stderr)
+    return have
+
+
+def assist_pipelines(stimme):
+    """each Assist pipeline part whose entity is gone or unavailable, pointed at Stimme's or Frage's (#540)"""
+    tok = admin_session()
+    entries = call("GET", "/api/config/config_entries/entry", token=tok)[1] or []
+    frage = next((e.get("entry_id") for e in entries if e.get("domain") == "ollama" and e.get("title") == FRAGE), None)
+    if not stimme and not frage:
+        return
+    states = {s.get("entity_id"): s.get("state") for s in call("GET", "/api/states", token=tok)[1] or []}
+    works = lambda eid: eid in states and states[eid] not in ("unavailable", None)
+    ws = WS(tok)
+    try:
+        reg = ws("config/entity_registry/list")
+        of = lambda entry, dom: next((r["entity_id"] for r in reg if entry and r.get("config_entry_id") == entry
+                                      and r.get("entity_id", "").startswith(dom + ".") and not r.get("disabled_by")), None)
+        want = {"stt_engine": of(stimme.get("Whisper"), "stt"), "tts_engine": of(stimme.get("Piper"), "tts"),
+                "wake_word_entity": of(stimme.get("openWakeWord"), "wake_word"), "conversation_engine": of(frage, "conversation")}
+        for p in (ws("assist_pipeline/pipeline/list") or {}).get("pipelines") or []:
+            lang, upd, said = p.get("language"), {k: v for k, v in p.items() if k != "id"}, []
+            for field, new in want.items():
+                cur = p.get(field)
+                # a part nobody chose, a legacy provider (no entity id) or one that works is the owner's choice
+                if not cur or "." not in cur or works(cur) or not new or not works(new) or cur == new:
+                    continue
+                if field in ("stt_engine", "tts_engine"):
+                    kind = field[:3]
+                    langs = next((x.get("supported_languages") or [] for x in (ws(f"{kind}/engine/list", language=lang) or {}).get("providers") or []
+                                  if x.get("engine_id") == new), [])
+                    if not langs:
+                        print(f"home-assistant: Assist pipeline \"{p.get('name')}\": {new} speaks no {lang}; {field} stays {cur}", file=sys.stderr)
+                        continue
+                    upd[kind + "_language"] = langs[0]
+                    if kind == "tts":
+                        upd["tts_voice"] = None   # the voice Piper was started with (PERSONA_VOICE)
+                if field == "wake_word_entity":
+                    upd["wake_word_id"] = None
+                if field == "conversation_engine":
+                    upd["conversation_language"] = p.get("conversation_language") or lang
+                upd[field] = new
+                said.append(f"{field} {cur} ({states.get(cur) or 'gone'}) -> {new}")
+            if said:
+                ws("assist_pipeline/pipeline/update", pipeline_id=p["id"], **upd)
+                print(f"home-assistant: Assist pipeline \"{p.get('name')}\": " + ", ".join(said))
+    finally:
+        ws.close()
+
+
 def install_updates():
     """HA_INSTALL (#528): the extensions a person approved, "update.a=1.2,update.b=3.0"
     as the Operator proposed them from home-assistant-check.py (laib snapshotted
@@ -500,10 +627,19 @@ try:
     install_updates()
 except (RuntimeError, OSError, ValueError) as e:
     red(f"HA_INSTALL: {type(e).__name__}: {e}")
+stimme = {}
+try:
+    stimme = stimme_wyoming()
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; the check lists the missing Wyoming rows
+    print(f"home-assistant: Wyoming for Stimme NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     frage_agent()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists the missing agent
     print(f"home-assistant: conversation agent Frage NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
+try:
+    assist_pipelines(stimme)
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the pipelines stay as they were
+    print(f"home-assistant: Assist pipelines NOT checked: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     music_assistant()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists what Music Assistant lacks

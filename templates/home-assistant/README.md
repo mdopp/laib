@@ -1,10 +1,22 @@
 # home-assistant
 
 Home Assistant, Z-Wave JS UI and the Matter server on the host network.
-What belongs here from ADR 0015, configured in HA after install: the
-Wyoming integrations for Stimme (whisper, piper/Martin, openWakeWord), the
-CalDAV integration for Radicale, MQTT for mosquitto. Music Assistant is
-not clicked together either (#526, below). Frage
+What belongs here from ADR 0015, configured in HA after install: MQTT
+for mosquitto. The rest is not clicked together. The Wyoming integrations
+for Stimme (Whisper 10300, Piper 10200, openWakeWord 10400 on
+`STIMME_HOST`, default `127.0.0.1`): post-deploy adds an entry for each
+server that answers, once, found by host and port in HA's
+`.storage/core.config_entries` (the REST API does not show an entry's data,
+and HA's Wyoming flow would take a server twice); an entry from before on
+one of those ports is kept and reloaded when it had given up (#540). An
+Assist pipeline part (speech to text, text to speech, wake word,
+conversation agent) whose entity is gone or unavailable is pointed at
+Stimme's or Frage's when that one works and speaks the pipeline's
+language; a part that works, or a legacy provider, stays the owner's
+choice. Nothing is deleted: an entry whose server is gone is the owner's to
+delete, and the check names it („… antwortet nicht“). The CalDAV
+integration for Radicale (#495) and Music Assistant (#526, below) come from
+post-deploy too. Frage
 as the conversation agent is not clicked together: post-deploy adds Home
 Assistant's Ollama integration on `FRAGE_URL` (default
 `http://127.0.0.1:8710`, Frage speaks Ollama's `/api/tags` and `/api/chat`)
@@ -12,7 +24,7 @@ and its conversation agent "Frage" (model `frage`, no HA tools: HA's own
 intents answer commands), once Frage answers there (#491). HA 2026.10 has no
 built-in integration for an OpenAI server with its own URL; Solaris took the
 same path for `conversation.solaris`. Which Assist pipeline uses Frage stays
-the owner's choice. Without Frage the hook says so and stays green; `laib
+the owner's choice, unless a pipeline's agent is gone (above). Without Frage the hook says so and stays green; `laib
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
 ## The tokens Laib mints (#349)
