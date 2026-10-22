@@ -8,14 +8,23 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "paperless-mail.py"
 AUTH = "Basic " + base64.b64encode(b"admin:adminpw").decode()
+# what a Paperless superuser's /api/ui_settings/ lists (codenames, app label stripped): Paperless'
+# own models and the framework's, which no household group needs
+MODELS = ["document", "tag", "correspondent", "documenttype", "storagepath", "savedview", "paperlesstask",
+          "applicationconfiguration", "uisettings", "note", "mailaccount", "mailrule", "processedmail", "user", "group",
+          "sharelink", "sharelinkbundle", "customfield", "workflow", "logentry"]
+PERMS = ["%s_%s" % (a, m) for m in MODELS for a in ("view", "add", "change", "delete")] + [
+    "view_global_statistics", "view_system_monitoring", "view_session", "add_session", "view_contenttype",
+    "view_groupobjectpermission", "view_socialaccount", "add_token"]
 
 
 class Fake:
     """Paperless' mail endpoints: accounts and rules in memory, the test answers ok/refused"""
 
-    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None):
+    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None, groups=None, perms=None):
         self.accounts, self.rules, self.test_ok, self.calls, self.tested = accounts or [], rules or [], test_ok, [], []
         self.tasks, self.queries, self.processed = tasks or [], [], []
+        self.groups, self.perms = groups if groups is not None else [], PERMS if perms is None else perms
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -38,7 +47,13 @@ class Fake:
                 path, _, query = self.path.partition("?")
                 fake.calls.append((method, path, body))
                 fake.queries.append((path, query, self.headers.get("Accept", "")))
-                coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules}
+                coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules, "/api/groups/": fake.groups}
+                if path == "/api/ui_settings/" and method == "GET":
+                    return self.send(200, {"user": {"id": 1, "username": "admin", "is_superuser": True}, "settings": {}, "permissions": fake.perms})
+                if path == "/api/groups/" and method in ("POST", "PATCH") or path.startswith("/api/groups/") and method == "PATCH":
+                    unknown = [c for c in body.get("permissions", []) if c not in fake.perms]
+                    if unknown:   # Paperless' SlugRelatedField: a codename it has not is a 400
+                        return self.send(400, {"permissions": ["Object with codename=%s does not exist." % unknown[0]]})
                 if path == "/api/mail_accounts/test/":
                     fake.tested.append(body)
                     return self.send(200, {"success": True}) if fake.test_ok else self.send(400, "Unable to connect to server")
@@ -83,6 +98,12 @@ class Fake:
 
     def writes(self):
         return [c for c in self.calls if c[0] != "GET" and c[1] != "/api/mail_accounts/test/" and not c[1].endswith("/process/")]
+
+    def mail_calls(self):
+        return [c for c in self.calls if c[1].startswith("/api/mail_")]
+
+    def group(self, name):
+        return next(g for g in self.groups if g["name"] == name)
 
 
 MAIL = {"PAPERLESS_MAIL_HOST": "imap.strato.de", "PAPERLESS_MAIL_PORT": "993", "PAPERLESS_MAIL_SECURITY": "ssl",
@@ -142,21 +163,67 @@ class PaperlessMail(unittest.TestCase):
         fake = Fake(accounts=[{"id": 1, "imap_server": "x", "username": "y"}])
         r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(fake.writes(), [])
+        self.assertEqual([c for c in fake.mail_calls() if c[0] != "GET"], [])
         self.assertEqual(self.status(), {**self.status(), "detail": "", "findings": []})
 
-    def test_without_a_host_the_api_is_not_asked(self):
-        # a box moved from ServiceBay keeps ServiceBay's admin: without an inbox the apply must not
-        # depend on the one laib knows (the rehearsal's paperless step, train 28)
+    def test_without_a_host_the_mail_api_is_not_asked(self):
+        # no inbox: nothing of Paperless' mail is read or written; the groups are made all the same
         fake = Fake()
         r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(fake.calls, [])
+        self.assertEqual(fake.mail_calls(), [])
+        self.assertEqual(sorted(g["name"] for g in fake.groups), ["admins", "family"])
+        # a box moved from ServiceBay keeps ServiceBay's admin: a refused one is a finding, not a
+        # red apply (the rehearsal's paperless step, train 28): Paperless runs, the groups wait
         env = {"PATH": os.environ["PATH"], "PAPERLESS_API": fake.url, "ADMIN_USER": "admin", "LAIB_DATA_DIR": self.tmp,
                "LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD": "wrong"}
         r = subprocess.run([sys.executable, str(SCRIPT), "setup"], env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self.status()["findings"], [])
+        self.assertEqual([f["severity"] for f in self.status()["findings"]], ["rot"])
+        self.assertIn("lehnt den Admin admin ab (401)", self.status()["findings"][0]["detail"])
+
+    def test_setup_makes_the_household_groups_with_their_permissions(self):
+        # 2026-10-22: mdopp logged in through Authelia, Paperless synced his groups admins and family,
+        # which had no permissions: "Error loading settings", Forbidden /api/ui_settings/
+        fake = Fake()
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        admins, family = set(fake.group("admins")["permissions"]), set(fake.group("family")["permissions"])
+        # admins: everything of Paperless' own, users, groups, mail and workflows included
+        own = set(PERMS) - {"view_session", "add_session", "view_contenttype", "view_groupobjectpermission", "view_socialaccount", "add_token"}
+        self.assertEqual(admins, own)
+        # family: the documents and what files them, their own settings and tasks; not the inbox,
+        # the workflows, the custom fields' definitions, the users or the groups
+        for c in ["view_document", "add_document", "change_document", "delete_document", "view_tag", "add_tag",
+                  "view_correspondent", "change_documenttype", "view_storagepath", "add_savedview", "view_note", "add_note",
+                  "view_uisettings", "add_uisettings", "change_uisettings", "view_paperlesstask", "change_paperlesstask",
+                  "view_customfield", "add_sharelink", "view_sharelink"]:
+            self.assertIn(c, family)
+        for c in ["view_mailaccount", "change_mailrule", "add_workflow", "add_customfield", "delete_customfield", "view_user",
+                  "change_group", "view_applicationconfiguration", "view_logentry", "view_system_monitoring", "view_session"]:
+            self.assertNotIn(c, family)
+        self.assertIn("Gruppe family angelegt", r.stdout)
+        # again: nothing written
+        fake.calls.clear()
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(fake.writes(), [])
+
+    def test_takes_over_hand_made_groups_and_keeps_what_the_owner_added(self):
+        fake = Fake(groups=[{"id": 4, "name": "family", "permissions": ["view_document", "view_mailrule"]}])
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len([g for g in fake.groups if g["name"] == "family"]), 1)
+        family = fake.group("family")["permissions"]
+        self.assertIn("view_mailrule", family)       # the owner's addition stays
+        self.assertIn("change_uisettings", family)
+
+    def test_a_paperless_without_a_permission_does_not_fail_the_apply(self):
+        # an older or newer Paperless without, say, share link bundles: given what it has
+        fake = Fake(perms=[c for c in PERMS if "sharelink" not in c and "uisettings" not in c])
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("view_document", fake.group("family")["permissions"])
 
     def test_a_refused_admin_is_a_finding_not_a_red_apply(self):
         fake = Fake()
