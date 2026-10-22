@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.1](https://github.com/mdopp/laib/compare/v0.19.0...v0.19.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **template:** paperless files mail attachments and diag sees a failed consume ([9772460](https://github.com/mdopp/laib/commit/9772460f5f55755d1b1ab5d36ed7c23d3aafd0df))
+* **template:** paperless files mail attachments, sees failed consumes, gives the household groups their permissions ([02a7bcd](https://github.com/mdopp/laib/commit/02a7bcd6138fe87d438a47ae7e5d9670ecdaa629))
+* **template:** paperless gives the household groups their permissions ([be405b8](https://github.com/mdopp/laib/commit/be405b862a3e8ecd58b500ff3e741cdfadbbd19e))
+
 ## [0.19.0](https://github.com/mdopp/laib/compare/v0.18.1...v0.19.0) (2026-10-22)
 
 
