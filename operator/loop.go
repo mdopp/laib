@@ -402,6 +402,9 @@ func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, o
 		}
 	}
 	for _, u := range ups {
+		if u.Service == "laib" {
+			continue // Laib's own update is self-update.sh's (#547), no proposal
+		}
 		if u.Service == "host" && u.Patch != "" {
 			// the host image (#368): the runner proposes it itself, a human approves
 			patch := fmt.Sprintf("--- a/host/image\n+++ b/host/image\n@@ -1,2 +1,2 @@\n # tag: %s\n-%s@%s\n+%s@%s\n", u.Key, u.Image, u.Current, u.Image, u.Patch)

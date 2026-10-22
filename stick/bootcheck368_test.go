@@ -179,9 +179,10 @@ func runInstallTo(t *testing.T, bootCheck string, env ...string) (etc, out strin
 	}
 	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
 	follow, _ := os.ReadFile(filepath.Join("..", "scripts", "host-image.sh"))
+	self, _ := os.ReadFile(filepath.Join("..", "scripts", "self-update.sh"))
 	sums := ""
-	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real), "laib-host-image.sh": string(follow)} {
-		if (name == "laib-boot-check.sh" || name == "laib-host-image.sh") && bootCheck == "" {
+	for name, body := range map[string]string{"laib-linux-amd64": "#!/bin/sh\n", "laib-operator-linux-amd64": "#!/bin/sh\n", "laib-lease-linux-amd64": "#!/bin/sh\n", "laib-boot-check.sh": string(real), "laib-host-image.sh": string(follow), "laib-self-update.sh": string(self)} {
+		if (name == "laib-boot-check.sh" || name == "laib-host-image.sh" || name == "laib-self-update.sh") && bootCheck == "" {
 			continue // a release from before #368
 		}
 		sum := sha256.Sum256([]byte(body))

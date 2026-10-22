@@ -136,6 +136,28 @@ func TestTheImageRunFollowsTheBackupAndTheUpdateWindow(t *testing.T) {
 	}
 }
 
+// #547: Laib updates itself before the nightly image run: laib-images.service
+// runs self-update.sh first (a failed self-update never stops the image run)
+// with box.yml updates.laib as LAIB_UPDATE, auto by default.
+func TestTheImageRunUpdatesLaibFirst(t *testing.T) {
+	st, err := state.Load(filepath.Join("..", "..", "testdata", "golden", "basic", "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for set, want := range map[string]string{"": "auto", "off": "off", "v0.16.0": "v0.16.0"} {
+		st.Box.Updates.Laib = set
+		out, err := Render(st, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc := out["systemd/laib-images.service"]
+		if !strings.Contains(svc, "ExecStartPre=-/bin/bash /var/opt/laib/self-update.sh\n") || !strings.Contains(svc, "Environment=LAIB_UPDATE="+want+"\n") ||
+			strings.Index(svc, "ExecStartPre=") > strings.Index(svc, "ExecStart=/var/opt/laib/laib updates --run") {
+			t.Fatalf("updates.laib %q: self-update.sh with LAIB_UPDATE=%s before the image run:\n%s", set, want, svc)
+		}
+	}
+}
+
 // #42 (2): on the GPU box the builtin MODEL_KEY is the model role's own
 // key (secret MODEL_API_KEY, declared by the llama template), so the Bote,
 // the Werkstatt and the Operator can take the lease; a remote model keeps

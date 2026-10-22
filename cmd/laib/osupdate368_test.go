@@ -45,6 +45,7 @@ func osBox(t *testing.T) *cbox {
 	t.Setenv("LAIB_VAR", vardir)
 	os.WriteFile(filepath.Join(vardir, "boot-proven"), []byte(bootedSum+" 0 0\n"), 0o644)
 	c.down["laib-backup.service"] = true
+	c.down["laib-images.service"] = true
 	prev := sysd.Run
 	t.Cleanup(func() { sysd.Run = prev })
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
@@ -101,6 +102,11 @@ func TestTheRebootIsHeld(t *testing.T) {
 		"at midday":          func(c *cbox) (func() time.Time, string) { return at("12:00"), "127.0.0.1:1" },
 		"while the backup runs": func(c *cbox) (func() time.Time, string) {
 			delete(c.down, "laib-backup.service")
+			return at("06:00"), "127.0.0.1:1"
+		},
+		// #547: Laib's own update and the images run in laib-images.service; a reboot must not cut them
+		"while the nightly update runs": func(c *cbox) (func() time.Time, string) {
+			delete(c.down, "laib-images.service")
 			return at("06:00"), "127.0.0.1:1"
 		},
 		"while a service is red": func(c *cbox) (func() time.Time, string) {

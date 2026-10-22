@@ -39,6 +39,8 @@ func FleetLock(env *cli.Env, now func() time.Time) http.HandlerFunc {
 			why = "außerhalb des Fensters " + diag.WindowText(st)
 		case a == "active" || a == "activating":
 			why = "die Sicherung läuft"
+		case sysd.Active(r.Context(), "laib-images.service") == "active" || sysd.Active(r.Context(), "laib-images.service") == "activating":
+			why = "das nächtliche Update läuft (Laib, dann die Images)" // #547: a reboot must not cut it
 		case rd.State != "bereit" || rd.Red > 0:
 			why = "laib ist nicht grün"
 		case !diag.Proven(o.Booted):
