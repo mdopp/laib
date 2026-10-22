@@ -100,12 +100,16 @@ func (l *LLM) ContextWindow(ctx context.Context) (int, error) {
 	return p.Settings.NCtx, nil
 }
 
+// personQuiet is how long after a person's model request no session
+// starts: the Bote's next turn usually comes within it (#550).
+const personQuiet = 2 * time.Minute
+
 // Busy says why the model is not to be asked now, or "" (#550): an
 // Operator session evicted the Bote's prompt cache and ran into the
 // household model's cold start. Not while the lease is not haushalt, the
-// model is loading, or the router reports it not loaded. A model without
-// the lease proxy in front (no /api/model-lease) is never busy. Nothing
-// the proxy serves says when a person last asked the model; that waits.
+// model is loading, the router reports it not loaded, or a person asked
+// the model less than personQuiet ago (the proxy's last_human_at). A model
+// without the lease proxy in front (no /api/model-lease) is never busy.
 func (l *LLM) Busy(ctx context.Context) string {
 	base := strings.TrimSuffix(strings.TrimRight(l.URL, "/"), "/v1")
 	client := l.Client
@@ -124,7 +128,10 @@ func (l *LLM) Busy(ctx context.Context) string {
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(v) == nil
 	}
-	var lease struct{ State, Mode, Holder string }
+	var lease struct {
+		State, Mode, Holder string
+		LastHuman           int64 `json:"last_human_at"`
+	}
 	if !get("/api/model-lease", &lease) {
 		return ""
 	}
@@ -133,6 +140,9 @@ func (l *LLM) Busy(ctx context.Context) string {
 		return fmt.Sprintf("die Grafikkarte ist vergeben: %s hält sie im Modus %s", cmp.Or(lease.Holder, "jemand"), lease.Mode)
 	case lease.State == "preparing":
 		return "das Modell lädt gerade"
+	case lease.LastHuman != 0 && time.Since(time.Unix(lease.LastHuman, 0)) < personQuiet:
+		ago := time.Since(time.Unix(lease.LastHuman, 0)).Round(time.Second)
+		return fmt.Sprintf("eine Person hat das Modell vor %s gefragt; die Sitzung verdrängte ihren Prompt-Cache", ago)
 	}
 	var models struct {
 		Data []struct {
@@ -169,6 +179,7 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Messag
 		return Message{}, err
 	}
 	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Laib-Background", "operator") // not a person's request (#550)
 	if l.Key != "" {
 		r.Header.Set("Authorization", "Bearer "+l.Key)
 	}

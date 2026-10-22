@@ -12,7 +12,9 @@
 // Every /v1 request names a model; outside the standing window it is
 // refused with 409 naming what is allowed. The household window (no lease)
 // allows the household model only: another window is taken by a named
-// holder's lease, never by a request (#522).
+// holder's lease, never by a request (#522). GET also says when a person
+// last asked the model: every forwarded request not marked
+// X-Laib-Background (#550).
 package lease
 
 import (
@@ -36,6 +38,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
@@ -141,6 +144,7 @@ type Server struct {
 	byMode map[string]map[string][]string // mode → service → its units
 	voice  []string                       // resolved voice units
 	roles  []statusFinding                // the modes' missing roles (#374)
+	human  atomic.Int64                   // Unix seconds of the last person's request (#550)
 }
 
 type statusFinding struct {
@@ -644,7 +648,10 @@ func (s *Server) leaseAPI(w http.ResponseWriter, r *http.Request) {
 // clients; a consumer that reads only the contract's fields sees the same.
 func (s *Server) status(ctx context.Context) map[string]any {
 	out := map[string]any{"state": "none", "model": "", "alias": s.cfg.Household, "expires_at": nil, "holder": "",
-		"last_renewed_at": nil, "renew_after": nil, "retry_after": retryAfter}
+		"last_renewed_at": nil, "renew_after": nil, "retry_after": retryAfter, "last_human_at": nil}
+	if t := s.human.Load(); t != 0 {
+		out["last_human_at"] = t
+	}
 	l := s.read()
 	if l == nil {
 		out["allowed"], out["mode"] = s.Policy()
@@ -802,6 +809,10 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
 		json.NewEncoder(w).Encode(s.denial(model, mode, allowed, holder))
 		return
+	}
+	// a service's own work says so (the Operator's, #550); the rest is a person's
+	if r.Header.Get("X-Laib-Background") == "" {
+		s.human.Store(time.Now().Unix())
 	}
 	s.proxy.ServeHTTP(w, r)
 }
