@@ -287,7 +287,9 @@ bypass paths straight through; Authelia gets a bypass rule per prefix.
 
 ### `laib remove <service>`
 
-Humans only. Stops the service's units, takes `services/<name>` out of the
+Humans only. Stops the service's units and resets their failed state (a
+unit without its file is never listed as failed, #551; an apply that deletes
+a unit file does the same), takes `services/<name>` out of the
 state (a commit: `laib rollback` brings the service back), removes its
 Quadlet and rendered files, applies (Caddy, Authelia, DNS lose the routes).
 Data paths stay, and Laib prints where; deleting data is a separate, human
