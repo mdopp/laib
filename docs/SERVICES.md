@@ -13,7 +13,7 @@ draft and `podlet`/hand for the units, then `laib template lint`.
 |---|---|---|
 | nginx (NPM, 80/443/81, 24 hosts) | `caddy`, role proxy | built-in exists; DNS-01 unverified on a box |
 | auth (Authelia 9091 + LLDAP 3890/17170) | `auth`, roles sso + identity | built-in: Authelia and LLDAP in one pod, configuration.yml, OIDC key and LLDAP seeding by the hook |
-| adguard (53, 8083) | `adguard`, role dns | built-in: host network, first config by the hook, rewrites synced via the API |
+| adguard (53, 8083) | `adguard`, role dns | built-in: host network, first config by the hook, rewrites and the PTR upstream (the router, #551) synced via the API |
 | llama, llama-embed (11434/11436, GPU) | `llama`, role model, + `laib-lease` | ported, GPU-unverified (#18) |
 | servicebay (5888) | Laib itself (5900) + Operator | done; retired at the end |
 

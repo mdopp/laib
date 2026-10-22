@@ -72,6 +72,9 @@ func TestALargeWindowKeepsTheMiddleAndWholeResults(t *testing.T) {
 type lastTool func(string)
 
 func (f lastTool) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method != http.MethodPost {
+		return http.DefaultTransport.RoundTrip(r) // the lease and the catalogue (#550)
+	}
 	var req struct {
 		Messages []Message `json:"messages"`
 	}

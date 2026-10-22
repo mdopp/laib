@@ -9,7 +9,10 @@ check about an agent's task before it runs.
   `more:` tools for a capable model, `plan` and `apply` in the vocabulary;
   amended 2026-10-21 (#543): a look that finds nothing new asks no model,
   `routineblick` files repairs; amended 2026-10-21 (#544): a proposal is
-  judged by what happened
+  judged by what happened; amended 2026-10-22 (#550): a look's small
+  context, one note per session, no session into a busy graphics card;
+  amended 2026-10-22 (#550, #551): the log review reads by content, the
+  model sees patterns
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -370,3 +373,120 @@ shows up as a rate, not as a feeling. Nothing is worse for the family:
 nothing is applied that was not before; a reject gains an optional text
 field. What it costs: about 200 kernel lines (the anchor, the settle in
 diag, the reason, the lessons in context) and one MCP read per session.
+
+## Amendment 2026-10-22 — a look reads little, a session notes once, the graphics card comes first (#550)
+
+The Kraftwerk's log on v0.11.1: 143 prompts over 5,000 tokens in a day,
+4.0 million tokens together (about 28,000 a look), about 2.8 hours of
+GPU just reading; every look evicted the Bote's prompt cache, so Joshua
+often started cold; the same note five times within 14 s; seven red
+sessions whose log line said only "red". #543 (v0.16.0) already made an
+unchanged look ask no model and write no note. What changes, all of it
+code in the runner:
+
+- **A look's context is diag and the last journal lines, in its own
+  budget.** For an interval skill granted `diag` the runner no longer
+  hands the model the `laib context` bundle (every service and the day's
+  journal, whose budget grew with the 131k window): it hands it what diag
+  found, as news (the rewrite the #543 amendment gives a `laib_diag` result), and
+  the journal's last 15 entries without the Operator's own notes. The
+  look's context and each tool result have their own budget (9,000 and
+  4,000 chars), whatever the window; with the Kraftwerk's day the first
+  request falls from ~21,000 to ~800 tokens. The other skills keep the
+  bundle and the window's budgets (#285): an incident needs the middle.
+- **A session writes its note once.** The runner carried out every
+  `laib_note` the model asked for, in one reply or over passes; a second
+  one in a session is refused and the model is told its note stands. A
+  session cut off after its note writes no second one.
+- **A red session's log line says what was red and what came of it**:
+  `session vorfall/jellyfin: red, 12 calls, 98000ms — jellyfin: apply:
+  unit failed (abgebrochen nach 12 Aufrufen) → vorgeschlagen #12`. What
+  was red is the event's detail or a look's red findings; why it ended
+  red is the text call, the budget answer or the call limit; what came of
+  it is the proposals by number, a restart, an escalation, or „nichts
+  geändert“. The session record carries both (`red`, `why`).
+- **No session into another's window or a cold start.** Before a session
+  asks the model, the runner reads the lease proxy (`/api/model-lease`,
+  `/v1/models` at `MODEL_URL`'s host): while the lease's mode is not
+  `haushalt`, the window is still preparing, or the router reports the
+  model not `loaded`, the session is `skipped` with its reason. Skipped
+  is no error and writes no note; a look keeps its news for the next one,
+  and a daily or weekly slot tries again at the next step rather than in
+  a day or a week. A model without the lease proxy in front is never
+  busy. The lease and the proxy do not say when a person last asked the
+  model, so "not within N seconds of a Bote, Haus or Frage request" waits
+  for that signal; until then the household model's warm state is what
+  the runner respects.
+- **Updates and firmware wake no look.** `aktualisierung` was and stays
+  weekly (Sa 10:00), but Home Assistant's status file names each new
+  extension version and firmware as an info finding (`Update: …`,
+  `Firmware: …`), and a new finding is news: an update woke a model
+  session in the ten-minute tick. The look leaves those findings to the
+  weekly skill, which proposes the extensions and reports the firmware
+  (#528).
+
+Weighed against before (#246): the family gets the graphics card back —
+no Operator prompt between the Bote's turns while someone else holds the
+card or the household model is cold, and a few looks a day instead of 140
+— and the journal keeps one note per session. Maintenance gets easier: a
+red session's line names its cause and result without opening
+`incidents.jsonl`. What it costs: a look's model no longer sees the whole
+day's journal and every service at once (it has `status` and `diag` to
+ask), and an incident that comes while the card is lent is skipped; it
+reaches the Operator again with its next red, ten minutes on, and the
+morning report reads the journal. ServiceBay had no Operator of its own
+on the GPU; there is no earlier solution to compare with.
+
+## Amendment 2026-10-22 — the log review reads by content, the model sees patterns (#550, #551)
+
+On the Kraftwerk a human read 48 hours of the journal (#551): about 36,000
+lines of priority `err`, most of them a container's INFO on stderr
+(podman's journald driver files stderr as `err` whatever it says:
+Radicale 4,297, Whisper 2,937, llama 1,586, Paperless 1,246, Beets 829),
+and among them a few real errors that came back every day — AdGuard's PTR
+timeouts, Immich's thumbnails failing on the same 44 assets, Jellyfin's
+broken files, Caddy's aborted responses. `-p err` is no alarm, and no
+skill did this review. What changes:
+
+- **A built-in skill `durchsicht`** (daily, 06:30; tools `status`, `logs`,
+  `wish`, `note`; `limits: {wish: 3}`; output `note`). Daily, not weekly:
+  a day's lines fit the line cap per unit, a setting that makes the family
+  wait (a PTR timeout on every lookup) is seen the next morning, and the
+  morning report, half an hour later, carries the note. Read verbs, a
+  note and a wish — what `nutzung` has; a wish waits for the admin and
+  then becomes an intake issue.
+- **`context: logs`**: the runner reads, not the model. It lists the
+  services (`laib status`) and reads each one's warnings and errors of 24
+  hours (`laib logs <svc> --since 24h --lines 5000 --priority warning`;
+  `--priority` is the kernel's one new flag, journalctl `-p`, a level and
+  nothing else). A line's own level decides (`level=error`, `"level":
+  "error"`, `[ERR]`, `ERROR (MainThread)`), else its words (error, failed,
+  timeout, …Exception); `INFO`, `LOG`, `DEBUG` and warnings are noise,
+  counted per unit, never shown as errors. Numbers, ids, paths, addresses
+  and timestamps are taken out, so the 44 failed assets are one pattern
+  with a count. The kernel requires `status` and `logs` for that context.
+- **The model sees news only.** A pattern is shown when it is new (three
+  times or more in the day), recurring (in the last review too, shown
+  once) or growing (at least doubled since it was shown), at most eight,
+  each with unit, count and an example line, plus one line counting the
+  rest and the units' noise — about 1,000 tokens, no `laib context`.
+  Nothing of that: no model, no note (outcome `unchanged`, as #543's
+  look). Memory: `OPERATOR_HOME/durchsicht.json`, written only after a
+  session that did not fail, so a model outage shows the same news again.
+
+What it does not see: a real error a program writes to stdout (priority
+`info`); the review reads `warning` and worse to keep a day inside the
+cap. A unit that reaches 5,000 lines is reported as „mindestens“.
+
+The fix at the source was weighed: podman cannot file a container's
+stderr by content, and lowering an app's log level (Radicale's `[logging]
+level`, uvicorn's access log, `PAPERLESS_LOGLEVEL`) takes away the INFO
+lines a human reads in `laib logs` when something breaks. That stays a
+per-template decision, not part of this change.
+
+Weighed against before (#246) and ServiceBay, which had no log review:
+maintenance gets easier — the review a human did by hand runs every
+morning and costs the GPU nothing on a day without news; the family is
+not worse off — nothing is applied, and a wish waits for the admin. What
+it costs: about 230 Operator lines and 13 kernel lines (the flag, the
+context check).

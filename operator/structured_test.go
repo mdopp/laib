@@ -77,6 +77,9 @@ func mustJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
 type tools func([]ToolDef)
 
 func (f tools) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method != http.MethodPost {
+		return http.DefaultTransport.RoundTrip(r) // the lease and the catalogue (#550)
+	}
 	var req struct {
 		Tools []ToolDef `json:"tools"`
 	}

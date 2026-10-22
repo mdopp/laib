@@ -59,6 +59,20 @@ func parseDiag(text string) ([]finding, []json.RawMessage, bool) {
 	return fs, raw, true
 }
 
+// forLook drops what the weekly aktualisierung reports (#550, #528): Home
+// Assistant's "Update: …" and "Firmware: …" status findings. A new version
+// is no news for the ten-minute look and wakes no model there.
+func forLook(fs []finding, raw []json.RawMessage) ([]finding, []json.RawMessage) {
+	kf, kr := []finding{}, []json.RawMessage{}
+	for i, f := range fs {
+		if f.Probe == "status" && f.Severity == "info" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")) {
+			continue
+		}
+		kf, kr = append(kf, f), append(kr, raw[i])
+	}
+	return kf, kr
+}
+
 // ids is the findings' identities, sorted and once each; never nil, so a
 // look that found nothing is remembered as such.
 func ids(fs []finding, more ...string) []string {

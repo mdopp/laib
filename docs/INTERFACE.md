@@ -7,7 +7,7 @@ the Solaris cards are views on it.
 
 ```
 laib status [service] [--watch]      one line per service; first line is the readiness state
-laib logs <service> [--since 1h]     journald of every unit, the containers' output in it (podman log driver journald), secrets redacted
+laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
@@ -108,12 +108,13 @@ dropped from its reply. The built-in skills' menus:
 
 | Skill | Trigger | Menu |
 |---|---|---|
-| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543) |
+| `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543); when it runs, its context is what diag found and the journal's last 15 entries without the Operator's notes, in its own budget (9,000 chars, each result 4,000) whatever the window; Home Assistant's `Update: …`/`Firmware: …` findings are `aktualisierung`'s and wake no look (#550) |
 | `vorfall` | a red | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
+| `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
@@ -287,7 +288,9 @@ bypass paths straight through; Authelia gets a bypass rule per prefix.
 
 ### `laib remove <service>`
 
-Humans only. Stops the service's units, takes `services/<name>` out of the
+Humans only. Stops the service's units and resets their failed state (a
+unit without its file is never listed as failed, #551; an apply that deletes
+a unit file does the same), takes `services/<name>` out of the
 state (a commit: `laib rollback` brings the service back), removes its
 Quadlet and rendered files, applies (Caddy, Authelia, DNS lose the routes).
 Data paths stay, and Laib prints where; deleting data is a separate, human
@@ -491,7 +494,14 @@ the same way. The Operator's system prompt is generated from the tool
 list the hand has; a reply that writes a tool call as text is asked once
 for a real call and then ends the session red with a note; a tool call
 whose arguments are not a JSON object is refused, never run; the context
-bundle is budgeted (head and newest journal lines). `laib operator
+bundle is budgeted (head and newest journal lines). A session writes its
+note once: a second `laib_note` is refused (#550). Before a session asks
+the model, the runner reads the lease proxy: while the lease's mode is
+not `haushalt`, the window is preparing or the router reports the model
+not loaded, the session is `skipped` with its reason (no error, no note;
+a daily or weekly slot tries again at the next step). A red or incident
+session's log line names what was red, why it ended red and what came of
+it (`… — <was rot war> (<warum>) → vorgeschlagen #N`). `laib operator
 enable` points `notify.url` at the operator's event endpoint unless the
 owner set one, so reds wake it; an operator enabled for three ticks
 without a single note is red („stumm“).

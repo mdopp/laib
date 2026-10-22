@@ -30,9 +30,54 @@ type Session struct {
 	Trigger  Trigger   `json:"trigger"`
 	Calls    []string  `json:"calls"`
 	Note     string    `json:"note"`
-	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
+	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged | skipped
 	Duration int64     `json:"ms"`
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
+	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
+	Why      string    `json:"why,omitempty"`      // why it ended red, or was skipped (#550)
+}
+
+// Line is the session's log line. A red or an incident session's names
+// what was red, why it ended red and what came of it (#550): seven red
+// looks in 40 h said only "red".
+func (s Session) Line() string {
+	l := fmt.Sprintf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+	if s.Outcome == "skipped" {
+		return l + " — " + s.Why
+	}
+	if s.Outcome != "red" && s.Outcome != "escalated" && s.Trigger.Kind != "event" {
+		return l
+	}
+	what := cmp.Or(strings.Join(s.Red, "; "), "kein roter Befund genannt")
+	if s.Why != "" {
+		what += " (" + s.Why + ")"
+	}
+	var came []string
+	for _, n := range s.Proposed {
+		came = append(came, fmt.Sprintf("#%d", n))
+	}
+	result := "nichts geändert"
+	switch {
+	case len(came) > 0:
+		result = "vorgeschlagen " + strings.Join(came, ", ")
+	case countPrefix(s.Calls, "laib_restart") > 0:
+		result = "neu gestartet"
+	}
+	if s.Outcome == "escalated" {
+		result += ", eskaliert"
+	}
+	return l + " — " + what + " → " + result
+}
+
+// countPrefix is how many calls start with prefix.
+func countPrefix(calls []string, prefix string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
 }
 
 // Operator holds the clients and the limits.
@@ -67,13 +112,16 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		now = o.Now
 	}
 	s = Session{Started: now().UTC(), Skill: sk.Name, Trigger: tr, Outcome: "error"}
+	if tr.Kind == "event" {
+		s.Red = []string{tr.Detail}
+	}
 	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
 	defer func() {
 		s.Duration = time.Since(s.Started).Milliseconds()
 		if o.failing = s.Outcome == "error"; !o.failing {
 			o.Looked.Store(now().Unix())
 		}
-		if saw != nil && !o.failing && s.Outcome != "unchanged" {
+		if saw != nil && !o.failing && s.Outcome != "unchanged" && s.Outcome != "skipped" {
 			mem.Seen[sk.Name] = saw
 			o.remember(mem)
 		}
@@ -87,16 +135,22 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	// a look skill (#543) — an interval skill that reads diag — asks no
 	// model and writes no note while diag says what its last session saw;
 	// a finding diag offers a repair for becomes a proposal first
-	human := ""
-	if sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag") {
+	human, look, found := "", sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag"), ""
+	if look {
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
-		if fs, _, ok := parseDiag(text); ok && err == nil && !isErr {
+		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
+			fs, raw = forLook(fs, raw)
 			last, had := mem.Seen[sk.Name]
 			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
 				s.Outcome = "unchanged"
 				return s, nil
 			}
-			saw = ids(fs)
+			found, saw = news(fs, raw, mem.Seen[sk.Name]), ids(fs)
+			for _, f := range fs {
+				if f.Severity == "rot" {
+					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
+				}
+			}
 			if slices.Contains(sk.Granted, "repair") {
 				human = o.repairs(ctx, &mcp, fs, mem)
 			}
@@ -144,10 +198,27 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
 			return s, nil
 		}
+	} else if sk.Context == "logs" {
+		// the log review (#550): the runner's patterns, not the box's context;
+		// nothing new asks no model, a failed session is not remembered
+		var remember func()
+		if ctxText, remember = o.review(ctx, &mcp); ctxText == "" {
+			remember()
+			s.Outcome = "unchanged"
+			return s, nil
+		}
+		defer func() {
+			if s.Outcome != "error" {
+				remember()
+			}
+		}()
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 		if web != nil {
 			web.upstream = upstreamOf(ctxText)
+		}
+		if look {
+			ctxText = lookBundle(found, ctxText)
 		}
 	}
 	// the record (#544): what came of its last proposals, for every session;
@@ -177,6 +248,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 		ctxText = list + "\n" + ctxText
 	}
+	// GPU courtesy (#550): no session into another's window or a cold start;
+	// skipped is no error, the next step tries again
+	if why := o.LLM.Busy(ctx); why != "" {
+		s.Outcome, s.Why = "skipped", why
+		return s, nil
+	}
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
@@ -201,7 +278,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "user", Content: "Das war Text, kein Tool-Aufruf. Rufe das Werkzeug über die Tool-Schnittstelle auf (function call), nicht als Text."})
 				continue
 			}
-			s.Outcome = "red"
+			s.Outcome, s.Why = "red", "Text statt Tool-Aufruf"
 			s.Note = "Sitzung rot: das Modell antwortete mit Text statt mit einem Tool-Aufruf (" + strings.TrimSpace(firstLine(reply.Content)) + "). Keine Änderung ausgeführt."
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": s.Note})
 			return s, nil
@@ -269,6 +346,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					continue
 				}
 			}
+			if mcpName == "laib_note" && noted {
+				// a session's note is written once (#550): a model repeating it
+				// put the same note five times into the journal within 14 s
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: die Notiz dieser Sitzung steht schon — beende die Sitzung"})
+				continue
+			}
 			if n := sk.Limits[strings.TrimPrefix(mcpName, "laib_")]; n > 0 && used[mcpName] >= n {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
 				continue
@@ -306,10 +389,16 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				s.Proposed = append(s.Proposed, n)
 			}
 			if fs, raw, ok := parseDiag(out); mcpName == "laib_diag" && !isErr && ok {
+				if look {
+					fs, raw = forLook(fs, raw)
+				}
 				out = news(fs, raw, mem.Seen[sk.Name])
 				saw = ids(fs, saw...)
 			}
 			_, limit := o.budgets()
+			if look {
+				limit = min(limit, lookResult)
+			}
 			if len(out) > limit {
 				out = out[:limit/2] + "\n…\n" + out[len(out)-limit/2:]
 			}
@@ -327,13 +416,15 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				}
 			}
 			if isErr && strings.Contains(out, "Budget") {
-				s.Outcome = "red"
+				s.Outcome, s.Why = "red", mcpName+": "+firstLine(out)
 			}
 			msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 		}
 	}
-	s.Outcome = "red"
-	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
+	s.Outcome, s.Why = "red", fmt.Sprintf("abgebrochen nach %d Aufrufen", len(s.Calls))
+	if !noted { // the session's one note (#550): a note written stands, the log line says the rest
+		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
+	}
 	return s, nil
 }
 
@@ -461,6 +552,41 @@ func (o *Operator) budgets() (ctx, result int) {
 		ctx, result = max(ctx, o.Window*3/5), max(result, o.Window/5)
 	}
 	return ctx, result
+}
+
+// A look's own budget (#550), whatever the model's window: a look that ran
+// read about 28,000 tokens, 4.0 million a day on the Kraftwerk, because the
+// context grew with the 131k window, and it evicted the Bote's prompt
+// cache. Its context is diag and the last journal lines; chars, at roughly
+// three a token.
+const lookCtx, lookResult, lookLines = 9000, 4000, 15
+
+// lookBundle is a look's context: what diag found, as the model would see
+// it, and the journal's last entries without the Operator's own notes —
+// the lease, a backup, a converge are what is news there.
+func lookBundle(found, bundle string) string {
+	var c struct {
+		Journal []struct {
+			T                                            time.Time
+			Actor, Verb, Service, Result, Reason, Detail string
+		}
+	}
+	json.Unmarshal([]byte(bundle), &c)
+	var lines []string
+	for i := len(c.Journal) - 1; i >= 0 && len(lines) < lookLines; i-- {
+		e := c.Journal[i]
+		if e.Actor == "ops" && e.Verb == "note" {
+			continue
+		}
+		l := strings.Join(strings.Fields(strings.Join([]string{e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail}, " ")), " ")
+		if r := []rune(l); len(r) > 200 {
+			l = string(r[:200]) + "…"
+		}
+		lines = append(lines, "- "+l)
+	}
+	slices.Reverse(lines)
+	text := "Befunde (laib diag):\n" + budget(cmp.Or(found, "nicht lesbar"), lookCtx/2) + "\n\nJournal, die letzten Einträge ohne die Notizen des Operators:\n" + strings.Join(lines, "\n")
+	return budget(text, lookCtx)
 }
 
 // shownArgs is a call's arguments for the session record: the command line

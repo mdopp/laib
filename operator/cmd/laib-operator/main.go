@@ -73,7 +73,7 @@ func main() {
 	}
 	logged := func(ss []operator.Session) {
 		for _, s := range ss {
-			log.Printf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+			log.Print(s.Line())
 		}
 	}
 

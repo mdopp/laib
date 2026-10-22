@@ -3,6 +3,8 @@
 # model, no note. A finding diag offers a repair for (and that is not red,
 # red is vorfall's) becomes one repair proposal, filed once until it
 # changes; findings already noted reach the model only as a count.
+# #550: when it runs, its context is diag and the last journal lines, in
+# its own budget; updates and firmware are aktualisierung's, not news here.
 description: Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn sich etwas geändert hat.
 trigger: {every: "${TICK}"}
 tools: [status, diag, repair, note]

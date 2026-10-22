@@ -100,6 +100,55 @@ func (l *LLM) ContextWindow(ctx context.Context) (int, error) {
 	return p.Settings.NCtx, nil
 }
 
+// Busy says why the model is not to be asked now, or "" (#550): an
+// Operator session evicted the Bote's prompt cache and ran into the
+// household model's cold start. Not while the lease is not haushalt, the
+// model is loading, or the router reports it not loaded. A model without
+// the lease proxy in front (no /api/model-lease) is never busy. Nothing
+// the proxy serves says when a person last asked the model; that waits.
+func (l *LLM) Busy(ctx context.Context) string {
+	base := strings.TrimSuffix(strings.TrimRight(l.URL, "/"), "/v1")
+	client := l.Client
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	get := func(path string, v any) bool {
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
+		if err != nil {
+			return false
+		}
+		resp, err := client.Do(r)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(v) == nil
+	}
+	var lease struct{ State, Mode, Holder string }
+	if !get("/api/model-lease", &lease) {
+		return ""
+	}
+	switch {
+	case lease.Mode != "" && lease.Mode != "haushalt":
+		return fmt.Sprintf("die Grafikkarte ist vergeben: %s hält sie im Modus %s", cmp.Or(lease.Holder, "jemand"), lease.Mode)
+	case lease.State == "preparing":
+		return "das Modell lädt gerade"
+	}
+	var models struct {
+		Data []struct {
+			ID     string
+			Status struct{ Value string }
+		}
+	}
+	get("/v1/models", &models)
+	for _, m := range models.Data {
+		if m.ID == l.Model && m.Status.Value != "" && m.Status.Value != "loaded" {
+			return "das Modell " + l.Model + " ist nicht geladen (" + m.Status.Value + "); die Sitzung wäre sein Kaltstart"
+		}
+	}
+	return ""
+}
+
 // Chat sends the conversation and returns the assistant message. It
 // streams and carries max_tokens (#489): a model caught in a thinking loop
 // stops at the budget, and on the timeout the connection closes, which a

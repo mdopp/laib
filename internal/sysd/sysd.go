@@ -53,3 +53,9 @@ func Stop(ctx context.Context, unit string) error {
 	_, err := Run(ctx, "systemctl", "--user", "stop", unit)
 	return err
 }
+
+// ResetFailed clears a unit's failed state: a stopped unit whose file goes
+// would stay listed as failed, with no file to start it again (#551).
+func ResetFailed(ctx context.Context, unit string) {
+	Run(ctx, "systemctl", "--user", "reset-failed", unit)
+}
