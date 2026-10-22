@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -136,5 +138,97 @@ func TestALooksContextIsSmallWhateverTheWindow(t *testing.T) {
 		if !strings.Contains(user, want) {
 			t.Errorf("the look's context lacks %q: %.300s…", want, user)
 		}
+	}
+}
+
+// fakeLease is the lease proxy in front of the model (#550): the lease, the
+// catalogue with the router's status per preset, and the chat it counts.
+func fakeLease(t *testing.T, lease, catalogue *string, script []Message) (*httptest.Server, *int) {
+	t.Helper()
+	asked := 0
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.URL.Path {
+		case "/api/model-lease":
+			w.Write([]byte(*lease))
+		case "/v1/models":
+			w.Write([]byte(*catalogue))
+		case "/v1/chat/completions":
+			m := script[min(asked, len(script)-1)]
+			asked++
+			json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": m}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &asked
+}
+
+const (
+	household = `{"state":"none","mode":"haushalt","holder":"","allowed":["qwen"]}`
+	werkstatt = `{"state":"ready","mode":"werkstatt","holder":"werkstatt","allowed":["gemma"]}`
+	preparing = `{"state":"preparing","mode":"haushalt","holder":"","allowed":["qwen"]}`
+	loaded    = `{"data":[{"id":"qwen","status":{"value":"loaded"}}]}`
+	unloaded  = `{"data":[{"id":"qwen","status":{"value":"unloaded"}}]}`
+)
+
+// #550: an Operator session evicted the Bote's prompt cache and ran into the
+// household model's cold start. While the lease is not haushalt, the model
+// is loading or not loaded, no session asks the model: it is skipped with
+// its reason — no error, no note — and a look keeps its news for the next.
+func TestNoSessionWhileTheGraphicsCardIsElsewhereOrCold(t *testing.T) {
+	lease, catalogue := werkstatt, loaded
+	llm, asked := fakeLease(t, &lease, &catalogue, []Message{
+		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"watch","text":"Zwei Punkte sind gelb."}`)}},
+		{Role: "assistant", Content: "fertig"},
+	})
+	mcp, calls := fakeMCP(t, map[string]string{"laib_diag": "[" + watchdog + "]"})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	look := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
+	for _, c := range []struct{ lease, catalogue, why string }{
+		{werkstatt, loaded, "werkstatt"},
+		{preparing, loaded, "lädt"},
+		{household, unloaded, "nicht geladen"},
+	} {
+		lease, catalogue = c.lease, c.catalogue
+		s, err := op.Run(context.Background(), look, Trigger{Kind: "tick"})
+		if err != nil || s.Outcome != "skipped" || !strings.Contains(s.Why, c.why) {
+			t.Fatalf("lease %s, catalogue %s: %+v %v", c.lease, c.catalogue, s, err)
+		}
+		if !strings.Contains(s.Line(), "skipped") || !strings.Contains(s.Line(), c.why) {
+			t.Errorf("the log line hides the reason: %s", s.Line())
+		}
+	}
+	if *asked != 0 || countPrefix(*calls, "laib_note") != 0 {
+		t.Fatalf("a skipped session asked the model %d times or wrote a note: %v", *asked, *calls)
+	}
+	// the household model is back and warm: the same findings are news still
+	lease, catalogue = household, loaded
+	if s, _ := op.Run(context.Background(), look, Trigger{Kind: "tick"}); s.Outcome != "green" || *asked == 0 {
+		t.Fatalf("the look after a skip did not run: %+v", s)
+	}
+}
+
+// A skipped daily skill tries again at the next step, not tomorrow; an
+// interval skill keeps its interval.
+func TestASkippedDailySkillTriesAgainAtTheNextStep(t *testing.T) {
+	lease, catalogue := werkstatt, loaded
+	llm, asked := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "Bericht: alles ruhig."}})
+	mcp, _ := fakeMCP(t, nil)
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	report := skillFor(t, Trigger{Kind: "report"}, "")
+	r := &Runner{Op: op}
+	r.LoadLast()
+	day := time.Date(2026, 10, 22, 0, 0, 0, 0, time.Local)
+	r.Last[report.Name] = day.Add(-17 * time.Hour)
+	if ss := r.Step(context.Background(), day.Add(7*time.Hour+time.Minute), []Skill{report}); len(ss) != 1 || ss[0].Outcome != "skipped" {
+		t.Fatalf("%+v", ss)
+	}
+	lease = household
+	if ss := r.Step(context.Background(), day.Add(7*time.Hour+2*time.Minute), []Skill{report}); len(ss) != 1 || ss[0].Outcome != "green" || *asked != 1 {
+		t.Fatalf("the skipped report did not run at the next step: %+v", ss)
 	}
 }
