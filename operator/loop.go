@@ -132,16 +132,16 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	// a look skill (#543) — an interval skill that reads diag — asks no
 	// model and writes no note while diag says what its last session saw;
 	// a finding diag offers a repair for becomes a proposal first
-	human := ""
-	if sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag") {
+	human, look, found := "", sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag"), ""
+	if look {
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
-		if fs, _, ok := parseDiag(text); ok && err == nil && !isErr {
+		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
 			last, had := mem.Seen[sk.Name]
 			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
 				s.Outcome = "unchanged"
 				return s, nil
 			}
-			saw = ids(fs)
+			found, saw = news(fs, raw, mem.Seen[sk.Name]), ids(fs)
 			for _, f := range fs {
 				if f.Severity == "rot" {
 					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
@@ -198,6 +198,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 		if web != nil {
 			web.upstream = upstreamOf(ctxText)
+		}
+		if look {
+			ctxText = lookBundle(found, ctxText)
 		}
 	}
 	// the record (#544): what came of its last proposals, for every session;
@@ -366,6 +369,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				saw = ids(fs, saw...)
 			}
 			_, limit := o.budgets()
+			if look {
+				limit = min(limit, lookResult)
+			}
 			if len(out) > limit {
 				out = out[:limit/2] + "\n…\n" + out[len(out)-limit/2:]
 			}
@@ -519,6 +525,41 @@ func (o *Operator) budgets() (ctx, result int) {
 		ctx, result = max(ctx, o.Window*3/5), max(result, o.Window/5)
 	}
 	return ctx, result
+}
+
+// A look's own budget (#550), whatever the model's window: a look that ran
+// read about 28,000 tokens, 4.0 million a day on the Kraftwerk, because the
+// context grew with the 131k window, and it evicted the Bote's prompt
+// cache. Its context is diag and the last journal lines; chars, at roughly
+// three a token.
+const lookCtx, lookResult, lookLines = 9000, 4000, 15
+
+// lookBundle is a look's context: what diag found, as the model would see
+// it, and the journal's last entries without the Operator's own notes —
+// the lease, a backup, a converge are what is news there.
+func lookBundle(found, bundle string) string {
+	var c struct {
+		Journal []struct {
+			T                                            time.Time
+			Actor, Verb, Service, Result, Reason, Detail string
+		}
+	}
+	json.Unmarshal([]byte(bundle), &c)
+	var lines []string
+	for i := len(c.Journal) - 1; i >= 0 && len(lines) < lookLines; i-- {
+		e := c.Journal[i]
+		if e.Actor == "ops" && e.Verb == "note" {
+			continue
+		}
+		l := strings.Join(strings.Fields(strings.Join([]string{e.T.Format("15:04"), e.Actor, e.Verb, e.Service, e.Result, e.Reason, e.Detail}, " ")), " ")
+		if r := []rune(l); len(r) > 200 {
+			l = string(r[:200]) + "…"
+		}
+		lines = append(lines, "- "+l)
+	}
+	slices.Reverse(lines)
+	text := "Befunde (laib diag):\n" + budget(cmp.Or(found, "nicht lesbar"), lookCtx/2) + "\n\nJournal, die letzten Einträge ohne die Notizen des Operators:\n" + strings.Join(lines, "\n")
+	return budget(text, lookCtx)
 }
 
 // shownArgs is a call's arguments for the session record: the command line
