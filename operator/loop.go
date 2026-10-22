@@ -30,7 +30,7 @@ type Session struct {
 	Trigger  Trigger   `json:"trigger"`
 	Calls    []string  `json:"calls"`
 	Note     string    `json:"note"`
-	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
+	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged | skipped
 	Duration int64     `json:"ms"`
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
@@ -42,6 +42,9 @@ type Session struct {
 // looks in 40 h said only "red".
 func (s Session) Line() string {
 	l := fmt.Sprintf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+	if s.Outcome == "skipped" {
+		return l + " — " + s.Why
+	}
 	if s.Outcome != "red" && s.Outcome != "escalated" && s.Trigger.Kind != "event" {
 		return l
 	}
@@ -118,7 +121,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		if o.failing = s.Outcome == "error"; !o.failing {
 			o.Looked.Store(now().Unix())
 		}
-		if saw != nil && !o.failing && s.Outcome != "unchanged" {
+		if saw != nil && !o.failing && s.Outcome != "unchanged" && s.Outcome != "skipped" {
 			mem.Seen[sk.Name] = saw
 			o.remember(mem)
 		}
@@ -229,6 +232,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			return s, nil
 		}
 		ctxText = list + "\n" + ctxText
+	}
+	// GPU courtesy (#550): no session into another's window or a cold start;
+	// skipped is no error, the next step tries again
+	if why := o.LLM.Busy(ctx); why != "" {
+		s.Outcome, s.Why = "skipped", why
+		return s, nil
 	}
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)

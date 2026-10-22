@@ -17,6 +17,10 @@ func recLLM(t *testing.T, script []Message) (*httptest.Server, *[][]Message) {
 	var mu sync.Mutex
 	var seen [][]Message
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			http.NotFound(w, r) // no lease proxy in front (#550)
+			return
+		}
 		var req struct {
 			Messages []Message `json:"messages"`
 		}

@@ -142,6 +142,9 @@ func TestNutzungWithoutUsageMetricsNotesAndProposesNothing(t *testing.T) {
 type peek func(string)
 
 func (p peek) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method != http.MethodPost {
+		return http.DefaultTransport.RoundTrip(r) // the lease and the catalogue (#550)
+	}
 	var req struct {
 		Messages []Message `json:"messages"`
 	}
