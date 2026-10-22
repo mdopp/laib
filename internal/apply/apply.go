@@ -104,9 +104,11 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		if c.Kind == "delete" {
 			// a unit whose file goes must stop first: after daemon-reload systemd
 			// forgets it, and a running container would keep running unmanaged;
-			// a host unit is disabled too, or it is back on the next boot (#41)
+			// a host unit is disabled too, or it is back on the next boot (#41);
+			// a failed one is reset, or it stays listed as failed (#551)
 			if unit := unitOfFile(c.Path); unit != "" {
 				sysd.Stop(ctx, unit)
+				sysd.ResetFailed(ctx, unit)
 				if strings.HasPrefix(c.Path, "systemd/") {
 					sysd.Run(ctx, "systemctl", "--user", "disable", unit)
 				}

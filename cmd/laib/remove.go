@@ -53,6 +53,7 @@ func cmdRemove(ctx context.Context, env *cliEnv, args []string) int {
 	defer unlock()
 	for _, unit := range svc.UnitNames() {
 		sysd.Stop(ctx, unit)
+		sysd.ResetFailed(ctx, unit) // its file goes: a failed unit would stay listed as failed (#551)
 	}
 	kept := state.DataPaths(st, svc)
 	if err := os.RemoveAll(filepath.Join(env.Paths.State, "services", name)); err != nil {

@@ -43,7 +43,7 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 
 | Template | Role | Notes |
 |---|---|---|
-| adguard | dns | AdGuard Home on the host network; pre-start writes the first config with the admin user, post-deploy syncs laib's rewrites via the API |
+| adguard | dns | AdGuard Home on the host network; pre-start writes the first config with the admin user, post-deploy syncs laib's rewrites and the PTR upstream for private addresses (the default gateway, or `PTR_UPSTREAMS`) via the API |
 | caddy | proxy | host network (the one carve-out), reads `render/caddy/Caddyfile` |
 | auth | sso, identity | Authelia + LLDAP in one pod; pre-start writes configuration.yml and the OIDC key, post-deploy seeds LLDAP |
 | whoami | — | the smallest complete example: route, SSO, OIDC, secret, LAN-blocked port |

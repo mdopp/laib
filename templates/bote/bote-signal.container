@@ -10,6 +10,12 @@ Pod=bote.pod
 Entrypoint=/usr/bin/signal-cli-native
 Exec=--config /home/.local/share/signal-cli -a ${SIGNAL_ACCOUNT} daemon --http 127.0.0.1:8080
 Volume=${DATA_DIR}/bote/signal:/home/.local/share/signal-cli:z
+# the image's HEALTHCHECK asks the REST API's /v1/health, which the daemon does
+# not serve: unhealthy for good (#551). The check asks the daemon itself, on the
+# path Hermes and the relay depend on; curl is the image's own.
+HealthCmd=curl -fsS -o /dev/null http://127.0.0.1:8080/api/v1/check
+HealthInterval=30s
+HealthStartPeriod=60s
 AutoUpdate=registry
 
 [Service]

@@ -2,3 +2,4 @@ IMAGE: docker.io/adguard/adguardhome:latest
 ADMIN_USER: admin
 ADMIN_PW: !secret ADGUARD_ADMIN_PASSWORD
 UPSTREAMS: "https://dns.quad9.net/dns-query https://dns.google/dns-query"
+PTR_UPSTREAMS: ""                 # who answers PTR for LAN addresses; empty: the default gateway (the router), when AdGuard has none set (#551)
