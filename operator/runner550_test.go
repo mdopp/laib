@@ -232,3 +232,25 @@ func TestASkippedDailySkillTriesAgainAtTheNextStep(t *testing.T) {
 		t.Fatalf("the skipped report did not run at the next step: %+v", ss)
 	}
 }
+
+// #550 point 7: updates and firmware are the weekly aktualisierung's (#528).
+// Home Assistant's status file names each new version as an info finding;
+// that is no news for the ten-minute look and wakes no model there.
+func TestAnUpdateOrFirmwareIsNoNewsForTheLook(t *testing.T) {
+	update := `{"severity":"info","probe":"status","service":"home-assistant","detail":"Update: Matter Server 6.1 → 6.2","fix":"der Operator schlägt es samstags vor (HA_INSTALL)"}`
+	firmware := `{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Shelly Plug 1.4 → 1.5 (nur gemeldet)","fix":"einspielen nur auf ein ausdrückliches Ja"}`
+	replies := map[string]string{"laib_diag": "[" + watchdog + "]"}
+	mcp, _ := fakeMCP(t, replies)
+	llm, asked := recLLM(t, []Message{{Role: "assistant", Content: "Der Wächter fehlt."}})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
+	if s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err != nil || s.Outcome != "green" {
+		t.Fatalf("%+v %v", s, err)
+	}
+	for _, more := range []string{update, update + "," + firmware} {
+		replies["laib_diag"] = "[" + watchdog + "," + more + "]"
+		if s, _ := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); s.Outcome != "unchanged" || len(*asked) != 1 {
+			t.Fatalf("an update woke the look: %+v, the model asked %d times", s, len(*asked))
+		}
+	}
+}
