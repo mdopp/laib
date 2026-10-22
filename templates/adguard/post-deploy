@@ -1,25 +1,41 @@
 #!/usr/bin/env python3
 """adguard post-deploy (#36): the rewrites from render/adguard/rewrites.json
-synced through AdGuard's API on every apply (the service is up and green).
-The first AdGuardHome.yaml is pre-start's."""
-import base64, json, os, sys, time, urllib.request
+synced through AdGuard's API on every apply (the service is up and green),
+and the PTR upstream for private addresses (#551). The first
+AdGuardHome.yaml is pre-start's."""
+import base64, json, os, socket, struct, sys, time, urllib.request
 
 E = os.environ
 user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
-
-# rewrites: *.domain and the apex → this box (rendered by laib), synced via the API
-rewrites_path = "/mnt/data/laib/render/adguard/rewrites.json"
-try:
-    wanted = json.load(open(rewrites_path))
-except OSError:
-    print("no rewrites rendered yet (box.yml lanIp missing?)"); sys.exit(0)
+BASE = E.get("ADGUARD_URL", "http://127.0.0.1:8083")
 auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
+
+
 def api(path, body=None):
-    req = urllib.request.Request("http://127.0.0.1:8083/control" + path, data=json.dumps(body).encode() if body is not None else None,
+    req = urllib.request.Request(BASE + "/control" + path, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Authorization": "Basic " + auth, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=10) as r:
         raw = r.read()
         return json.loads(raw) if raw else None
+
+
+def gateway(table):
+    """The default gateway (IPv4) with the lowest metric from the host's
+    routing table; the hook runs on the host network, so this is the box's."""
+    best = None
+    try:
+        lines = open(table).read().splitlines()[1:]
+    except OSError:
+        return None
+    for line in lines:
+        f = line.split()
+        if len(f) < 7 or f[1] != "00000000" or not int(f[3], 16) & 2:  # default route, RTF_GATEWAY
+            continue
+        if best is None or int(f[6]) < best[0]:
+            best = (int(f[6]), socket.inet_ntoa(struct.pack("<L", int(f[2], 16))))
+    return best and best[1]
+
+
 current = None
 for _ in range(45):
     try:
@@ -29,11 +45,36 @@ for _ in range(45):
         time.sleep(2)
 if current is None:
     print("AdGuard API did not answer; rewrites not synced (re-run laib apply adguard)", file=sys.stderr); sys.exit(1)
-have = {(r["domain"], r["answer"]) for r in current}
-want = {(r["domain"], r["answer"]) for r in wanted}
-for d, a in want - have:
-    api("/rewrite/add", {"domain": d, "answer": a}); print("rewrite added:", d, "→", a)
-for d, a in have - want:
-    if d.endswith(E["LAIB_DOMAIN"]) or d == E["LAIB_DOMAIN"]:
-        api("/rewrite/delete", {"domain": d, "answer": a}); print("rewrite removed:", d)
-print(f"rewrites in step: {len(want)}")
+
+# rewrites: *.domain and the apex → this box (rendered by laib), synced via the API
+rewrites_path = os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "adguard", "rewrites.json")
+try:
+    wanted = json.load(open(rewrites_path))
+except OSError:
+    print("no rewrites rendered yet (box.yml lanIp missing?)")
+    wanted = None
+if wanted is not None:
+    have = {(r["domain"], r["answer"]) for r in current}
+    want = {(r["domain"], r["answer"]) for r in wanted}
+    for d, a in want - have:
+        api("/rewrite/add", {"domain": d, "answer": a}); print("rewrite added:", d, "→", a)
+    for d, a in have - want:
+        if d.endswith(E["LAIB_DOMAIN"]) or d == E["LAIB_DOMAIN"]:
+            api("/rewrite/delete", {"domain": d, "answer": a}); print("rewrite removed:", d)
+    print(f"rewrites in step: {len(want)}")
+
+# PTR for private addresses (#551): AdGuard asks local_ptr_upstreams, and with
+# none it asks the system resolver, which on this box is AdGuard itself: every
+# such query ran into the timeout. The router knows the LAN's names. A
+# PTR_UPSTREAMS value wins; without one, an empty list gets the default
+# gateway and a list the owner set in the UI stays.
+dns = api("/dns_info") or {}
+have_ptr = dns.get("local_ptr_upstreams") or []
+explicit = E.get("PTR_UPSTREAMS", "").split()
+want_ptr = explicit or (have_ptr or [g for g in [gateway(E.get("ROUTE_TABLE", "/proc/net/route"))] if g])
+if not want_ptr:
+    print("PTR upstream not set: no default gateway in the routing table (set PTR_UPSTREAMS)", file=sys.stderr)
+elif want_ptr != have_ptr:
+    api("/dns_config", {"local_ptr_upstreams": want_ptr}); print("PTR upstream for private addresses:", " ".join(want_ptr))
+else:
+    print("PTR upstream in step:", " ".join(want_ptr))
