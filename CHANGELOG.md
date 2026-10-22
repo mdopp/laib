@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.0](https://github.com/mdopp/laib/compare/v0.19.1...v0.20.0) (2026-10-22)
+
+
+### Features
+
+* **scan:** the scan service, paper stacks from the inbox folder or a SANE scanner into Paperless ([41a3987](https://github.com/mdopp/laib/commit/41a398791cd3ae62de6f7ab54f67e574703f9a22)), closes [#568](https://github.com/mdopp/laib/issues/568)
+* **scan:** the scan service, paper stacks into Paperless ([#568](https://github.com/mdopp/laib/issues/568)) ([bd4328e](https://github.com/mdopp/laib/commit/bd4328e237774d05eaa0997e328d86d8ba43c2a0))
+
 ## [0.19.1](https://github.com/mdopp/laib/compare/v0.19.0...v0.19.1) (2026-10-22)
 
 
