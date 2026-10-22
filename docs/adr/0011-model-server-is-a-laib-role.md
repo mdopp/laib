@@ -92,8 +92,8 @@ the window names. They are, named for what they do to the card:
 | 401 | `{ok: false, reason: "unauthorized"}` |
 
 **`GET /api/model-lease`** needs no key and answers
-`{state, model, alias, expires_at, holder, last_renewed_at, renew_after, retry_after, mode, allowed}`,
-where `state` is one of `none`, `preparing`, `ready`.
+`{state, model, alias, expires_at, holder, last_renewed_at, renew_after, retry_after, mode, allowed, last_human_at}`,
+where `state` is one of `none`, `preparing`, `ready` (`last_human_at`: amendment #550).
 
 **`DELETE /api/model-lease`**
 - Needs the key. Body is `{holder}`; with no body it is the admin's way out of a window nobody renews.
@@ -124,3 +124,16 @@ the llama status file reports it yellow (holder, window, end). Refusing
 was chosen over redirecting to the household model: a redirected caller
 gets an answer from a model it did not ask for and never learns its
 configuration is wrong.
+
+## Amendment 2026-10-22 (#550): when a person last asked
+
+An Operator session between two of the Bote's turns evicted its prompt
+cache. The proxy, which every model request passes, now keeps when a
+person last asked: `GET /api/model-lease` carries `last_human_at` (Unix
+seconds, `null` until the first one since the proxy started). A
+forwarded request counts unless it carries `X-Laib-Background: <service>`,
+which a service sets on its own unattended work (the Operator does); a
+refused request does not count. The background client marks itself
+rather than the proxy listing the person-facing ones (Bote, Haus, Frage,
+a browser), so a new household client counts without a change here. The
+time lives in memory only: after a restart nobody has asked yet.

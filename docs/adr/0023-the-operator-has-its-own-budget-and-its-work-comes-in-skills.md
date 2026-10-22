@@ -12,7 +12,9 @@ check about an agent's task before it runs.
   judged by what happened; amended 2026-10-22 (#550): a look's small
   context, one note per session, no session into a busy graphics card;
   amended 2026-10-22 (#550, #551): the log review reads by content, the
-  model sees patterns
+  model sees patterns;
+  amended 2026-10-22 (#550): no session within two minutes of a person's
+  model request
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -413,10 +415,8 @@ code in the runner:
   is no error and writes no note; a look keeps its news for the next one,
   and a daily or weekly slot tries again at the next step rather than in
   a day or a week. A model without the lease proxy in front is never
-  busy. The lease and the proxy do not say when a person last asked the
-  model, so "not within N seconds of a Bote, Haus or Frage request" waits
-  for that signal; until then the household model's warm state is what
-  the runner respects.
+  busy. Nor while a person asked the model less than two minutes ago
+  (see the last amendment).
 - **Updates and firmware wake no look.** `aktualisierung` was and stays
   weekly (Sa 10:00), but Home Assistant's status file names each new
   extension version and firmware as an info finding (`Update: …`,
@@ -490,3 +490,19 @@ morning and costs the GPU nothing on a day without news; the family is
 not worse off — nothing is applied, and a wish waits for the admin. What
 it costs: about 230 Operator lines and 13 kernel lines (the flag, the
 context check).
+
+## Amendment 2026-10-22 — no session right after a person's request (#550)
+
+#553 left one gap of point 5: "not within N seconds of a Bote, Haus or
+Frage request", because nothing recorded that time. The lease proxy now
+does (ADR 0011 amendment #550, `last_human_at`), and the Operator marks
+its own model requests `X-Laib-Background: operator`, so they are not
+counted. Before a session asks the model, the runner skips it while the
+last person's request is younger than two minutes — `skipped` with its
+reason, no error, retried at the next step, like the other skips. Two
+minutes, a constant in `operator/llm.go`, covers the gap between a
+person's turns; no box.yml knob. An incident session follows the same
+rule as the other skips (whether it should wait in a queue instead is
+the owner's open question). What it costs: a look or report on a busy
+evening runs a few minutes later; ServiceBay had no Operator on the GPU
+to compare with.

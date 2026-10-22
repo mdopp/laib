@@ -498,7 +498,10 @@ bundle is budgeted (head and newest journal lines). A session writes its
 note once: a second `laib_note` is refused (#550). Before a session asks
 the model, the runner reads the lease proxy: while the lease's mode is
 not `haushalt`, the window is preparing or the router reports the model
-not loaded, the session is `skipped` with its reason (no error, no note;
+not loaded, or a person asked the model less than two minutes ago (the
+proxy's `last_human_at`: every forwarded request without
+`X-Laib-Background`, which the Operator sets on its own), the session is
+`skipped` with its reason (no error, no note;
 a daily or weekly slot tries again at the next step). A red or incident
 session's log line names what was red, why it ended red and what came of
 it (`… — <was rot war> (<warum>) → vorgeschlagen #N`). `laib operator

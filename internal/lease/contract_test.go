@@ -125,7 +125,7 @@ func TestTheLeaseContract(t *testing.T) {
 	if code != 200 || out["state"] != "none" || out["holder"] != "" || out["model"] != "" || out["alias"] != "qwen3.6-35b-a3b" || out["expires_at"] != nil {
 		t.Fatalf("idle GET: %d %v", code, out)
 	}
-	has(t, "idle GET", out, "state", "model", "alias", "expires_at", "holder", "last_renewed_at", "renew_after", "retry_after")
+	has(t, "idle GET", out, "state", "model", "alias", "expires_at", "holder", "last_renewed_at", "renew_after", "retry_after", "last_human_at")
 
 	// a consumer asks for a model; the lease picks the narrowest window
 	code, out = call(t, "POST", api, "lease-secret", `{"model":"gemma-4-12b","ttl_s":900,"holder":"chronicle"}`)
