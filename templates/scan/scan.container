@@ -1,0 +1,41 @@
+[Unit]
+Description=Scan: paper stacks into Paperless — the inbox folder or a SANE scanner, split by the household model (#568)
+After=network-online.target
+
+[Container]
+Image=${SCAN_IMAGE}
+Network=host
+Environment=TZ=${TZ}
+Environment=SCANNER=${SCANNER}
+Environment=SCAN_DPI=${SCAN_DPI}
+Environment=SCAN_MODE=${SCAN_MODE}
+Environment=SCAN_AREA=${SCAN_AREA}
+Environment=SCAN_DUPLEX=${SCAN_DUPLEX}
+Environment=SCAN_BACK_FIRST=${SCAN_BACK_FIRST}
+Environment=SCAN_TAG=${SCAN_TAG}
+Environment=SCAN_KEEP_DAYS=${SCAN_KEEP_DAYS}
+# whom the closing message goes to: SCAN_NOTIFY, else box.yml notify.person; an order or a
+# person's inbox subfolder names someone else
+Environment=SCAN_NOTIFY=${SCAN_NOTIFY}
+Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
+Environment=NOTIFY_URL=http://127.0.0.1:8645/mitteilung
+Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+# the household model through the lease's proxy, its key in the environment, never on argv
+Environment=MODEL_URL=${MODEL_URL}
+Environment=MODEL_LEASE=${MODEL_LEASE}
+Environment=MODEL_KEY=${MODEL_KEY}
+Environment=MODEL_NAME=${MODEL_NAME}
+Volume=${DATA_DIR}/scan:/data:z
+# the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry
+# core does not own, #230); labelling off for this container, as bote-notify's
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/file-share/data/scan-eingang:/eingang
+Volume=${DATA_DIR}/file-share/data/paperless-consume:/consume
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

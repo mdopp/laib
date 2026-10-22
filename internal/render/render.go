@@ -265,7 +265,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
 		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
 	}
-	vars["PEOPLE_REV"] = st.PeopleRev()
+	vars["PEOPLE_REV"], vars["NOTIFY_PERSON"] = st.PeopleRev(), st.Box.Notify.Person
 	maps.Copy(vars, st.ZuhauseVars())
 	for k, v := range svc.Values {
 		if v.Secret != "" {

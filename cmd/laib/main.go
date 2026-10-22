@@ -87,6 +87,7 @@ func init() {
 		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
 		{Name: "calendar", Tier: "apply", Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495)", Run: cmdCalendar},
 		{Name: "zuhause", Tier: "propose", Help: "show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]: the household's address in box.yml; set replaces it as a proposal a human approves (#561)", Run: cmdZuhause},
+		{Name: "scan", Tier: "propose", Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: cmdScan},
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Run: cmdResume},
 	}

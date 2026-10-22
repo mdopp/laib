@@ -7,7 +7,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 
 | Repo | What | State |
 |---|---|---|
-| `mdopp/laib` (public since 2026-10-12) | the control plane: kernel, stick, operator, lease, Frage, Automat, 24 templates, docs, ADRs, CI | release v0.3.5 (built by hand, #47); ci/boot green, vm-install green end to end on the merged chain (run 38282916929) |
+| `mdopp/laib` (public since 2026-10-12) | the control plane: kernel, stick, operator, lease, Frage, Automat, 25 templates, docs, ADRs, CI | release v0.3.5 (built by hand, #47); ci/boot green, vm-install green end to end on the merged chain (run 38282916929) |
 | `mdopp/haus` (public since 2026-10-12) | the family's surface: Box page, pairing, companion API for the Android widgets | 5 commits, ci green, image `ghcr.io/mdopp/haus` |
 | `mdopp/servicebay` | the predecessor, untouched, running on the Kraftwerk | reference only: `docs/COMPANION_APP.md`, `tools/sb/internal/build/assets/fedora-coreos.bu` (setup-raid) |
 | `mdopp/solarisbay`, `mdopp/solaris-android` | voice/portal today; to be deconstructed (#21) | untouched; the app's `data/SbApiClient.kt` pins the companion JSON shapes |
@@ -22,7 +22,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 | Frage | `frage/` (`frage/cmd/frage`) | SearXNG + summary, OpenAI-compatible ("was ist …") | unit tests; image built |
 | Automat | `automat/` (`automat/cmd/automat`), `mcpserver/` | HA automations as MCP in the bote pod, writes behind the admin's confirmation | unit tests vs fake HA; image built |
 | Stick | `stick/` (`stick/cmd/laib-stick`), `usb/` | cross-platform wizard: Butane in-process, ISO download + sha256, Ignition embed (coreos-installer format), dd / raw Windows write; first boot: data disk RAID1, firstboot → `install-box.sh` | VM: install, reboot, first boot, RAID, reinstall keeps data, caddy, backup/restore, update, remove |
-| Templates (24) | `templates/*` | laib.yml contract + Quadlet units + hooks: adguard, audiobookshelf, auth, beets, bote, caddy, esphome, file-share, frage, haus, home-assistant, immich, kalender, llama, media, mosquitto, music-assistant, paperless, radicale, stimme, usage-metrics, vaultwarden, werkstatt, whoami (+ README) | lint + render; only caddy installed on the VM |
+| Templates (25) | `templates/*` | laib.yml contract + Quadlet units + hooks: adguard, audiobookshelf, auth, beets, bote, caddy, esphome, file-share, frage, haus, home-assistant, immich, kalender, llama, media, mosquitto, music-assistant, paperless, radicale, scan, stimme, usage-metrics, vaultwarden, werkstatt, whoami (+ README) | lint + render; only caddy installed on the VM |
 | Werkstatt | `werkstatt/` | dev image: pi + Claude Code, autoloop, laibctl | python unit tests; image built |
 | Docs | `docs/*.md`, `docs/adr/0001–0018` | KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, MIGRATION, DEKONSTRUKTION, BACKUP, INSTALL, OUTSIDE, SERVICES, C4 | — |
 
