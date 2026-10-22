@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# The mail inbox from values (#521): paperless-mail.py makes or updates
-# Paperless' IMAP account and its rule through Paperless' API, then writes
-# the status laib shows. Idempotent; empty PAPERLESS_MAIL_HOST changes nothing.
+# The household's groups and the mail inbox from values (#231, #521):
+# paperless-mail.py makes the groups admins and family with their
+# permissions, makes or updates Paperless' IMAP account and its rule through
+# Paperless' API, then writes the status laib shows. Idempotent; an empty
+# PAPERLESS_MAIL_HOST changes nothing of Paperless' mail.
 set -euo pipefail
 exec python3 "$(dirname "$0")/paperless-mail.py" setup

@@ -5,10 +5,12 @@ which mails it takes, every ten minutes. Both live in Paperless' database,
 so they come from this template's values through Paperless' API, never
 from a script by hand:
 
-  setup  post-deploy, on every apply: makes or updates the account and the
-         rule from PAPERLESS_MAIL_* (the password from the secret
-         PAPERLESS_MAIL_PASSWORD), then checks. An empty PAPERLESS_MAIL_HOST
-         changes nothing in Paperless: an account made by hand stays.
+  setup  post-deploy, on every apply: makes the household's groups admins
+         and family with their permissions (GROUPS), makes or updates the
+         account and the rule from PAPERLESS_MAIL_* (the password from the
+         secret PAPERLESS_MAIL_PASSWORD), then checks. An empty
+         PAPERLESS_MAIL_HOST changes nothing of Paperless' mail: an account
+         made by hand stays.
   check  paperless-check.service, inside the Paperless container
          (`podman exec -i … python3 - check`): laib starts it when someone
          looks at diag or the Box page and the status is older than its
@@ -23,9 +25,18 @@ from the consume folder) and flags the mail afterwards; Paperless skips
 flagged mail, so nothing is filed twice.
 
 The check is Paperless' own connection test (POST /api/mail_accounts/test/
-with the account's id: Paperless logs in with the stored password). What it
-cannot see: a mail Paperless fetched but could not file (that is in
-Paperless' log), and a rule that matches nothing (a wrong recipient).
+with the account's id: Paperless logs in with the stored password), and
+the consume tasks Paperless lists as failed and nobody dismissed (a mail's
+attachment, a file from the consume folder or an upload not filed): yellow,
+with the file and Paperless' reason. What it cannot see: a rule that
+matches nothing (a wrong recipient), and a failure someone dismissed.
+
+setup ends by asking Paperless to fetch now (POST /api/mail_accounts/<id>/
+process/), in its worker. Never fetch by hand with `python3 manage.py
+mail_fetcher` under a root `podman exec`: the attachment lands in a 0700
+dir of root's that the worker (uid 1000) cannot read, and the consume fails
+with Permission denied (2026-10-22). The image's own `mail_fetcher` wrapper
+drops to the paperless user; laib's own exec runs `--user paperless`.
 
 Status file: {"at", "detail", "findings": [{severity, detail, fix}]}.
 Standard library only: it runs in the hooks image and in Paperless'.
@@ -66,10 +77,10 @@ class API:
         self.base = base.rstrip("/")
         self.auth = "Basic " + base64.b64encode((user + ":" + password).encode()).decode()
 
-    def __call__(self, method, path, body=None):
+    def __call__(self, method, path, body=None, accept="application/json"):
         r = urllib.request.Request(self.base + path, method=method,
                                    data=json.dumps(body).encode() if body is not None else None,
-                                   headers={"Authorization": self.auth, "Accept": "application/json",
+                                   headers={"Authorization": self.auth, "Accept": accept,
                                             "Content-Type": "application/json"})
         with urllib.request.urlopen(r, timeout=30) as resp:
             data = resp.read()
@@ -121,13 +132,95 @@ def setup(api, password):
     else:
         api("PATCH", "/api/mail_rules/%d/" % rul["id"], body)
         print("paperless: Regel angepasst:", rule["name"])
+    # fetch now, in Paperless' worker (uid 1000): the reason not to run mail_fetcher by hand,
+    # which under a root podman exec leaves attachments the worker cannot read (2026-10-22)
+    api("POST", "/api/mail_accounts/%d/process/" % acc["id"], {})
+    print("paperless: Abruf angestoßen, Paperless holt die Mails jetzt")
+
+
+# The household's groups (templates/auth seeds them in LLDAP; Authelia sends them as the groups
+# claim): Paperless syncs a login's groups by name on every OIDC login, but only to groups it
+# has, and a group without permissions shows nothing, not even the settings (#231, 2026-10-22).
+CRUD = ("view", "add", "change", "delete")
+GROUPS = {
+    # everything of Paperless' own: the users, groups, mail, workflows and settings included
+    "admins": ["%s_%s" % (a, m) for m in ("document", "tag", "correspondent", "documenttype", "storagepath",
+               "savedview", "note", "uisettings", "sharelink", "sharelinkbundle", "customfield", "paperlesstask",
+               "mailaccount", "mailrule", "processedmail", "workflow", "user", "group",
+               "applicationconfiguration", "logentry") for a in CRUD]
+              + ["view_global_statistics", "view_system_monitoring"],
+    # the documents and what files them, their own views, notes, share links and settings, their
+    # tasks (to see and dismiss an upload); not the mail inbox (laib makes it from values, a change
+    # by hand is overwritten on the next apply), the workflows, the custom fields' definitions,
+    # the users, the groups or the history
+    "family": ["%s_%s" % (a, m) for m in ("document", "tag", "correspondent", "documenttype", "storagepath",
+               "savedview", "note", "uisettings", "sharelink", "sharelinkbundle") for a in CRUD]
+              + ["view_paperlesstask", "change_paperlesstask", "view_customfield"],
+}
+
+
+def groups(api):
+    """the household's groups with their permissions: made when missing, given what they lack;
+    a permission someone added by hand stays. Only codenames this Paperless has (its admin's
+    own list), so a Paperless without one of them still applies."""
+    have = set((api("GET", "/api/ui_settings/") or {}).get("permissions") or [])
+    existing = {g.get("name"): g for g in api.all("/api/groups/")}
+    for name, want in GROUPS.items():
+        perms = sorted(c for c in want if c in have)
+        g = existing.get(name)
+        if g is None:
+            api("POST", "/api/groups/", {"name": name, "permissions": perms})
+            print("paperless: Gruppe %s angelegt (%d Rechte)" % (name, len(perms)))
+            continue
+        missing = [c for c in perms if c not in (g.get("permissions") or [])]
+        if not missing:
+            print("paperless: Gruppe %s unverändert" % name)
+            continue
+        api("PATCH", "/api/groups/%d/" % g["id"], {"permissions": sorted(set(g.get("permissions") or []) | set(perms))})
+        print("paperless: Gruppe %s ergänzt um %d Rechte" % (name, len(missing)))
+
+
+def failed_consumes(api):
+    """findings for the documents Paperless could not file and still lists as failed
+    (a task nobody dismissed): from mail, the consume folder or an upload alike.
+    API version 9 on purpose: Paperless 2.x speaks it, 3.x keeps it for old clients,
+    and its shape (a plain list, uppercase states) is the stable one."""
+    try:
+        tasks = api("GET", "/api/tasks/?task_name=consume_file&acknowledged=false",
+                    accept="application/json; version=9")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return refused(e.code)["findings"]
+        return [{"severity": "gelb", "detail": "Paperless antwortet nicht auf die Dateiaufgaben: %s" % e, "fix": "laib logs paperless"}]
+    except (OSError, ValueError) as e:
+        return [{"severity": "gelb", "detail": "Paperless antwortet nicht auf die Dateiaufgaben: %s" % e, "fix": "laib logs paperless"}]
+    if isinstance(tasks, dict):
+        tasks = tasks.get("results", [])
+    bad = [t for t in tasks or [] if t.get("status") == "FAILURE" and t.get("task_name") == "consume_file"
+           and not t.get("acknowledged")]
+    if not bad:
+        return []
+    names = ", ".join("%s (%s)" % (t.get("task_file_name") or "?", (t.get("result") or "").strip()[:160]) for t in bad[:3])
+    return [{"severity": "gelb",
+             "detail": "Paperless konnte %d Dokument%s nicht ablegen: %s%s" % (len(bad), "" if len(bad) == 1 else "e", names, " …" if len(bad) > 3 else ""),
+             "fix": "in Paperless unter Dateiaufgaben → Fehlgeschlagen den Grund lesen und das Dokument neu ablegen "
+                    "(aus einer Mail: Einstellungen → E-Mail, bei der Regel die verarbeiteten E-Mails öffnen und den "
+                    "fehlgeschlagenen Eintrag löschen, beim nächsten Abruf holt Paperless sie neu), dann die Aufgabe verwerfen"}]
 
 
 def check(api):
-    """the status: whether Paperless can log in to the mailbox the values name"""
+    """the status: whether Paperless can log in to the mailbox the values name, and the
+    documents it fetched or was given but could not file"""
+    r = inbox(api)
+    if not any("lehnt den Admin" in f["detail"] for f in r["findings"]):
+        r["findings"] += failed_consumes(api)
+    return r
+
+
+def inbox(api):
     w = want()
     if w is None:
-        return {"detail": "", "findings": []}  # no mail inbox, nothing to say (as before #521)
+        return {"detail": "", "findings": []}  # no mail inbox, nothing to say about one (as before #521)
     account, rule = w
     who = account["username"] + " auf " + account["imap_server"]
     try:
@@ -175,8 +268,8 @@ def refused(code):
     database keeps ServiceBay's administrator, and Paperless makes ADMIN_USER only in an
     empty one. A finding, not a red apply: Paperless itself runs, only the inbox waits."""
     user = E.get("ADMIN_USER") or E.get("PAPERLESS_ADMIN_USER") or "admin"
-    return {"detail": "E-Mail-Eingang nicht eingerichtet", "findings": [{"severity": "rot",
-            "detail": "Paperless lehnt den Admin %s ab (%d): Mailkonto und Regel werden nicht angelegt" % (user, code),
+    return {"detail": "Paperless nicht eingerichtet", "findings": [{"severity": "rot",
+            "detail": "Paperless lehnt den Admin %s ab (%d): die Gruppen admins und family, Mailkonto und Regel werden nicht angelegt" % (user, code),
             "fix": "ADMIN_USER und PAPERLESS_ADMIN_PASSWORD auf einen Paperless-Administrator setzen "
                    "(laib secret set PAPERLESS_ADMIN_PASSWORD über stdin), dann laib apply paperless"}]}
 
@@ -185,7 +278,7 @@ def up(api):
     """None when the API takes the admin, else the status that says why not"""
     for _ in range(60):
         try:
-            api("GET", "/api/mail_accounts/?page_size=1")
+            api("GET", "/api/ui_settings/")
             return None
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
@@ -201,13 +294,10 @@ if __name__ == "__main__":
     if mode == "setup":   # post-deploy, in the hooks image on the host network
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD"])
         status = os.path.join(E["LAIB_DATA_DIR"], "paperless", "data", "laib-status.json")
-        if want() is None:   # no inbox: Paperless' API is not asked at all
-            setup(api, "")
-            r = None
-        else:
-            r = up(api)
-            if r is None:
-                setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
+        r = up(api)   # a refused admin is a finding, not a red apply: Paperless runs, the groups and the inbox wait
+        if r is None:
+            groups(api)
+            setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
     else:                 # inside the Paperless container: its own admin from its environment
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
         status = E.get("LAIB_STATUS_FILE", "/usr/src/paperless/data/laib-status.json")
