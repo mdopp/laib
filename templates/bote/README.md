@@ -92,7 +92,9 @@ Discord off (no line in `.env`), as with Telegram.
 HTTP daemon (`signal-cli-native … daemon --http 127.0.0.1:8080`), which is
 what Hermes and the relay speak (`/api/v1/check`, `/api/v1/events`,
 `/api/v1/rpc`). It does not run the image's REST API, so there is no QR
-endpoint. pre-start gives `${DATA_DIR}/bote/signal` to the image's user,
+endpoint, and the image's own health check (the REST API's `/v1/health`)
+would keep it unhealthy: the unit's `HealthCmd` asks the daemon's
+`/api/v1/check` instead (#551). pre-start gives `${DATA_DIR}/bote/signal` to the image's user,
 uid 1000. The number is set up once, with the daemon stopped. The Box page
 (**Bote verbinden**) prints the exact commands for this box:
 
