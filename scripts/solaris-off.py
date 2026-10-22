@@ -42,7 +42,7 @@ E = os.environ
 HOME = Path(E.get("HOME", "/var/home/core"))
 Q = Path(E.get("Q", HOME / ".config/containers/systemd"))
 UNITS = Path(E.get("UNITS", HOME / ".config/systemd/user"))
-SB_PARK = Path(E.get("SB_PARK", HOME / "servicebay-units"))      # migration-day.sh's PARK
+SB_PARK = Path(E.get("SB_PARK", HOME / "servicebay-units"))      # where migration day parked ServiceBay's units
 OFF = Path(E.get("OFF_DIR", HOME / "solaris-off"))
 DATA = Path(E.get("DATA_DIR", "/mnt/data/stacks"))
 LAIB_HOME = Path(E.get("LAIB_HOME", "/mnt/data/laib"))
@@ -208,7 +208,7 @@ def status():
     left += len(q) + len(h) + len(lines or [])
     parked = sorted(p.name for p in SB_PARK.glob("solaris*")) if SB_PARK.is_dir() else []
     if parked:
-        say(f"  info   parked on migration day in {SB_PARK} (migration-day.sh's rollback): {', '.join(parked)}")
+        say(f"  info   parked on migration day in {SB_PARK} (ServiceBay's units, kept for a rollback): {', '.join(parked)}")
     if not (STATE / "services").is_dir():
         say(f"  ?      no state at {STATE}")
         unknown += 1

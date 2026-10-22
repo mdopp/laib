@@ -76,7 +76,7 @@ if not KEY or call("GET", "/api/system-config", key=KEY)[0] != 200:
     if not token:
         red(f"immich: the admin {EMAIL} cannot log in (HTTP {code}), and there is no working API key: the family "
             "login was NOT configured. Set ADMIN_EMAIL to Immich's admin and IMMICH_ADMIN_PASSWORD to its password "
-            "(laib secret set; on a box from ServiceBay, carry-servicebay-secrets.sh immich), then laib apply immich")
+            "(laib secret set), then laib apply immich")
     code, body = call("POST", "/api/api-keys", {"name": "laib", "permissions": ["systemConfig.read", "systemConfig.update"]}, token=token)
     if code not in (200, 201) or not body or not body.get("secret"):
         red(f"immich: could not mint the API key (HTTP {code})")

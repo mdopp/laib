@@ -4,8 +4,8 @@ Inventory of the GPU box on 2026-10-10 (read-only through ServiceBay's
 MCP: 33 units, 32 active, one dead), mapped onto the Laib end state in
 `docs/KONZEPT.md`. "Port" means: a template folder in the household
 registry (`mdopp/laib-templates`), written from the ServiceBay template's
-Pod YAML and `variables.json` with `scripts/migrate-servicebay.py` as the
-draft and `podlet`/hand for the units, then `laib template lint`.
+Pod YAML and `variables.json`, with `podlet`/hand for the units, then
+`laib template lint`.
 
 ## Platform roles
 
@@ -74,9 +74,8 @@ Audiobookshelf, radio and speakers through Music Assistant.
 - Repos that need a `laib.yml`: flutstunde. foundry-chronicle has one (`chronik`).
 - Decisions: `mdopp/laib-templates` to create (usage-metrics: kept, #238).
 
-Each port is mechanical: `scripts/migrate-servicebay.py` writes the
-contract draft from `variables.json` and the backup annotation, `podlet`
-or the existing Pod YAML gives the units, the ServiceBay `post-deploy.py`
+Each port is mechanical: the contract comes from `variables.json` and the
+backup annotation, `podlet` or the existing Pod YAML gives the units, the ServiceBay `post-deploy.py`
 becomes the hook (what it did for proxy/OIDC/credentials is rendered by
 Laib and falls away). The Werkstatt's autoloop can work these as tickets
 once the registry repo exists.

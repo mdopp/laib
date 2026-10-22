@@ -84,10 +84,8 @@ log line (#214).
   account `laib` is Laib's. Location and country are HA's settings
   (Settings → System → General).
 - A box from ServiceBay: ServiceBay onboarded HA as `OSCAR_HA_ADMIN_USERNAME`
-  (`oscar`) with a generated `OSCAR_HA_ADMIN_PASSWORD`;
-  `scripts/carry-servicebay-secrets.sh` carries the password as
-  `HA_ADMIN_PASSWORD`, `migrate-servicebay.py` puts `HA_ADMIN_USER=oscar` on
-  the `laib add` line.
+  (`oscar`) with a generated `OSCAR_HA_ADMIN_PASSWORD`; migration day
+  carried the password as `HA_ADMIN_PASSWORD` and set `HA_ADMIN_USER=oscar`.
 - Neither (HA onboarded by hand): set `HA_ADMIN_USER` to an HA
   administrator and type its password once, `laib secret set
   HA_ADMIN_PASSWORD`. Until then the apply is red and says so.

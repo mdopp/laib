@@ -205,13 +205,12 @@ The owner's steps:
 `scripts/werkstatt-app.sh` (job `werkstatt-e2e/app`) walks the path in this
 image on a box on the runner.
 
-Migration from `claude-dev`: `scripts/move-servicebay-data.sh werkstatt`
-copies the checkouts into `werkstatt/workspace` and, from claude-dev's home
-(its `/workspace`), into `werkstatt/home` (#498): `.claude.json`
-(onboarding, trust, the account), `.claude/.credentials.json` (the
-claude.ai login), `.claude/history.jsonl`,
-`.claude/projects/-workspace-<checkout>` for each checkout that kept its
-name (the conversations `--continue` picks up), `.config/gh/hosts.yml` and
-`.gitconfig`. claude-dev's `settings.json` (its hooks) stays behind. A box
-whose Werkstatt already started does the one-time import by hand
-(docs/MIGRATION.md, "The Werkstatt's sessions").
+Migration from `claude-dev` (migration day, 2026-10-19; the mover is in
+git history, ADR 0010) copied the checkouts into `werkstatt/workspace` and,
+from claude-dev's home (its `/workspace`), into `werkstatt/home` (#498):
+`.claude.json` (onboarding, trust, the account),
+`.claude/.credentials.json` (the claude.ai login),
+`.claude/history.jsonl`, `.claude/projects/-workspace-<checkout>` for each
+checkout that kept its name (the conversations `--continue` picks up),
+`.config/gh/hosts.yml` and `.gitconfig`. claude-dev's `settings.json` (its
+hooks) stayed behind.

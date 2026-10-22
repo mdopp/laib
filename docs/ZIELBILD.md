@@ -11,8 +11,9 @@ answer says **auf der Box zu prüfen**. The concept is still
 
 **One box: the Kraftwerk**, the GPU box that ran ServiceBay. It runs Laib
 and nothing else manages it. The Intel NUC was the proving ground (#23).
-ServiceBay moved to Laib on migration day, 2026-10-18/19
-(`docs/MIGRATION-DAY.md`, `scripts/migration-day.sh`, #160).
+ServiceBay moved to Laib on migration day, 2026-10-18/19 (ADR 0010,
+#160); its runbook and scripts were removed on 2026-10-22 and are in git
+history.
 
 - **Host OS:** Universal Blue's uCore, `ucore-minimal:stable-nvidia`,
   pinned by digest (`@sha256:a287759b…`). It is Fedora CoreOS 44, kernel
@@ -31,8 +32,7 @@ ServiceBay moved to Laib on migration day, 2026-10-18/19
 ## The services
 
 The built-ins in `templates/` replace every unit ServiceBay ran
-(`docs/SERVICES.md`). On the box, migration day's `migration-day.sh`
-moved them in this order:
+(`docs/SERVICES.md`). On the box, migration day moved them in this order:
 
 - the platform roles: `auth` (Authelia + LLDAP), `adguard`, `llama` (the
   model role, with `laib-lease`), `caddy` (in place of NPM);
@@ -45,11 +45,11 @@ Which services the state holds today, `laib status` says: auf der Box zu
 prüfen. Solaris' units ran on as ServiceBay units, ignored (`laib
 ignore`), until Phase 5: `scripts/solaris-off.py --do` stops and parks
 them, takes their ignore.yml lines out, adds Stimme and lets Home
-Assistant's post-deploy wire Stimme's Wyoming entries (#540,
-`docs/MIGRATION.md`, "Phase 5: Solaris off"); their data stays 30 days.
+Assistant's post-deploy wire Stimme's Wyoming entries (#540, the
+script's docstring is the runbook); their data stays 30 days.
 Whether it ran: auf der Box zu prüfen. Its links into ServiceBay were
 switched off explicitly before (#396). ServiceBay itself is off; its data dir
-stays 30 days (`docs/MIGRATION.md`, step 7).
+stays 30 days after migration day.
 
 ## What the family and the admin use
 
@@ -114,10 +114,10 @@ Whether they are gone: auf der Box zu prüfen.
 - **ServiceBay's control plane** became Laib: the state repo instead of 28
   JSON stores, plan/apply with snapshot and rollback, Caddy instead of NPM,
   one secrets file, restic, the journal (`docs/DESIGN.md`).
-- **Its migration** is a script and a runbook (`docs/MIGRATION.md`,
-  `docs/MIGRATION-DAY.md`). The secrets the data was made with were
-  carried over (`scripts/carry-servicebay-secrets.sh`). The data moved
-  into Laib's layout (`scripts/move-servicebay-data.sh`).
+- **Its migration** ran once, on 2026-10-19, by script and runbook: the
+  secrets the data was made with were carried over, the data moved into
+  Laib's layout (ADR 0010). The scripts, the runbook and their rehearsal
+  were removed on 2026-10-22 and are in git history.
 - **Its assist catalog:** the general checklists became Werkstatt skills
   (`werkstatt/guide/skills/`, #394). The rest stays behind. There is no
   `laib migrate assists` (#160).

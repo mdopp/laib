@@ -183,7 +183,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	// The box's own config (#281): install-box.sh writes it on every box, stick or migrated.
 	for _, f := range []string{cmp.Or(os.Getenv("LAIB_ETC"), "/etc") + "/systemd/journald.conf.d/50-laib.conf", filepath.Join(filepath.Dir(env.Paths.Quadlet), "containers.conf.d", "50-laib.conf")} {
 		if _, err := os.Stat(f); err != nil && only == "" {
-			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config (docs/MIGRATION.md Schritt 1)"})
+			out = append(out, Finding{Severity: "rot", Probe: "box", Detail: f + " fehlt: das Journal hat nicht Laibs Grenzen (vier Wochen, 4G) oder Container-Ausgaben keinen festen Log-Treiber", Fix: "install-box.sh --box-config"})
 		}
 	}
 	// #368, #486: a staged OS update waits for laib's reboot lock; a pause, a

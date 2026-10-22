@@ -39,19 +39,15 @@ What it does, in order:
 5. Starts the daemon and prints `/ready`.
 
 For a fresh box the same script runs from Ignition (`systemd.units` entry
-that calls it once on first boot); for the migration it runs beside
-ServiceBay.
+that calls it once on first boot).
 
-## After the install (migration step 1, docs/MIGRATION.md)
+## After the install
 
 ```
-laib plan                       # every ServiceBay unit shows as 'nicht verwaltet'
-for u in $(laib plan --json | jq -r '.unmanaged[]'); do laib ignore "$u"; done
-laib token mint ops             # for Solaris; paste into its ops profile
+laib plan                       # a unit Laib did not write shows as 'nicht verwaltet'
+laib ignore <unit>              # one that stays beside Laib on purpose
 laib token mint claude --ttl 8h # for a Claude session
 ```
-
-Nothing before step 3 changes a service; NPM stays the proxy until the services have moved, then Caddy replaces it (step 4d).
 
 ## One wildcard certificate (DNS-01, the challenge delegated to deSEC)
 

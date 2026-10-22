@@ -99,9 +99,9 @@ runs there and what is open is `docs/ZIELBILD.md`.
 4. [`docs/adr/`](docs/adr/) — the decisions. Read the index in
    [`docs/adr/README.md`](docs/adr/README.md) before changing anything about
    runtime, identity, proxy, templates or tests.
-5. [`docs/MIGRATION.md`](docs/MIGRATION.md) — the one-shot move from ServiceBay.
-   The session that runs it on the Kraftwerk starts at
-   [`docs/MIGRATION-DAY.md`](docs/MIGRATION-DAY.md) (`scripts/migration-day.sh`).
+5. [`docs/adr/0010-one-migration-no-compat.md`](docs/adr/0010-one-migration-no-compat.md)
+   — the one-shot move from ServiceBay (done 2026-10-19; its runbook and
+   scripts are in git history).
 6. [`docs/DEKONSTRUKTION.md`](docs/DEKONSTRUKTION.md) — how Solaris and the
    Android app split into Solaris, Haus, Stimme and the Laib Operator.
 7. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the
@@ -127,5 +127,5 @@ via Ignition at `/var/opt/laib/laib` and runs as a systemd user service of the
 
 Founded 2026-10-08; reviewed 2026-10-11 (#31, worked through #60). Nothing
 has run on a real box yet: the VM job is the proof, the NUC trial (#23) is
-the first real run. See `docs/MIGRATION.md` for the order in which services
-move and `docs/REVIEW.md` for what is proven and what is not.
+the first real run. The Kraftwerk moved from ServiceBay to Laib on
+2026-10-19 (ADR 0010); see `docs/ZIELBILD.md` for what runs and `docs/REVIEW.md` for what is proven and what is not.

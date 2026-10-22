@@ -124,7 +124,7 @@ reconstructing. Which hand may call what is the owner's call (#392).
 - **Settings, registry browser and setup pages.** Entscheidung: mdopp, 2026-10-19 — the state repo and the agents are the interface.
 - **Learning proposals** (`propose_learning`). Entscheidung: mdopp, 2026-10-19 — replaced by pull requests to the Werkstatt guide's skills (#394).
 - **Fritz!Box integration** (TR-064: port forwards, DNS). Entscheidung: mdopp, 2026-10-19 — a one-time setup, not worth the attack surface.
-- **The `:dev` canary channel.** Entscheidung: mdopp, 2026-10-19 — vm-install and the generalprobe test every release.
+- **The `:dev` canary channel.** Entscheidung: mdopp, 2026-10-19 — vm-install tests every release.
 - **Multi-node over SSH.** Entscheidung: mdopp, 2026-10-19 — Laib is one box (ADR 0003).
 - **The factory-reset assistant.** Entscheidung: mdopp, 2026-10-19 — the stick reinstalls the box.
 
