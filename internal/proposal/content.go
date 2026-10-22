@@ -21,7 +21,8 @@ type Edit struct {
 	Patch  string            // unified diff against the repo root
 	Set    map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
 	Add    *AddService
-	Update *UpdateService // replace a service's template files, keep values.yml and add the new keys (#14, #215)
+	Update *UpdateService    // replace a service's template files, keep values.yml and add the new keys (#14, #215)
+	Write  map[string][]byte // path → the file's new content, written whole (laib zuhause, #561)
 }
 
 // UpdateService refreshes services/<name> from a newer template folder.
@@ -117,6 +118,11 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(fmt.Errorf("patch does not apply: %s", out))
 		}
 		os.Remove(pf)
+	}
+	for file, b := range e.Write {
+		if err := os.WriteFile(filepath.Join(wt, file), b, 0o644); err != nil {
+			return fail(err)
+		}
 	}
 	for key, val := range e.Set {
 		file, k, ok := strings.Cut(key, ":")

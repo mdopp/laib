@@ -69,8 +69,9 @@ func Load(dir string) (*State, error) {
 
 	errs = append(errs, st.loadPersonas()...)
 	errs = append(errs, st.validatePeople()...)
+	errs = append(errs, st.Box.Zuhause.validate()...)
 	errs = append(errs, st.validate()...)
-	st.Warnings = append(st.purposeWarnings(), st.personaWarnings()...)
+	st.Warnings = slices.Concat(st.purposeWarnings(), st.personaWarnings(), st.zuhauseWarnings())
 	if len(errs) > 0 {
 		return st, errors.Join(errs...)
 	}
@@ -433,6 +434,7 @@ func proxySecretsDeclared(svc *Service) error {
 // Builtins are the placeholders every unit may use without a values.yml entry.
 var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_URL", "MODEL_KEY", "MODEL_LEASE",
 	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV", // the house persona (ADR 0020)
+	"ZUHAUSE_STREET", "ZUHAUSE_POSTCODE", "ZUHAUSE_CITY", "ZUHAUSE_COUNTRY", "ZUHAUSE_LATITUDE", "ZUHAUSE_LONGITUDE", "ZUHAUSE_ELEVATION", "ZUHAUSE_REV", // box.yml zuhause (#561)
 	"PEOPLE_REV",    // box.yml people (ADR 0022 §3): a unit that carries it gets render/people/people.json
 	"LAIB_PAGE_URL"} // the box page, https://<box.yml laib.host>.<domain>/ (#381, #480)
 

@@ -72,6 +72,7 @@ which kind of name goes where.
 | persona (engine) | where a person stands in the Bote: directory, levels, context, gimmicks | `persona/`, container `bote-persona`, tool `persona` |
 | Joshua | the first persona: WOPR from WarGames, "Hey Joshua" | persona package (ADR 0020) |
 | Haus | the family's surface: pages, cards, `/napi`, the app's server | repo `mdopp/haus`, `templates/haus`, `haus.<domain>` |
+| Zuhause | the household's address and coordinates, once for every template (#561, ADR 0017 amendment) | `box.yml zuhause`, the `ZUHAUSE_*` builtins, verb `laib zuhause` |
 | Haushalt | the household's data: calendar, contacts, notes, reminders | Haus's MCP source (ADR 0017), Bote tool `haushalt` |
 | memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `haus-qmd` in the haus pod (#195) |
 | Vermittler | serves the memory library: qmd's `/query` on qmd's SDK, plus each hit's cosine (`vec`), until qmd returns it itself | `qmd/vermittler.mjs`, container `haus-qmd` (#198) |

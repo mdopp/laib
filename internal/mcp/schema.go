@@ -71,6 +71,11 @@ var mcpParams = map[string][]mcpParam{
 	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer, haus für die Familie)"},
 		{name: "name", typ: "string", desc: "kurz, klein, a-z 0-9 -"}, {name: "kind", typ: "string", enum: []string{"google", "abo"}, desc: "google: Googles geheime iCal-Adresse; abo: ein öffentlicher Kalender"},
 		{name: "title", typ: "string", desc: "der Name, den die Familie sieht"}},
+	"zuhause": {{name: "action", typ: "string", enum: []string{"show", "set"}, required: true},
+		{name: "street", typ: "string", flag: "--street", desc: "Straße und Hausnummer"}, {name: "postcode", typ: "string", flag: "--postcode", desc: "Postleitzahl"},
+		{name: "city", typ: "string", flag: "--city", desc: "Ort"}, {name: "country", typ: "string", flag: "--country", desc: "Land, zwei Buchstaben (DE)"},
+		{name: "latitude", typ: "string", flag: "--latitude", desc: "Breitengrad, z. B. 52.1234; mit longitude"}, {name: "longitude", typ: "string", flag: "--longitude", desc: "Längengrad, z. B. 8.0456"},
+		{name: "elevation", typ: "string", flag: "--elevation", desc: "Höhe in Metern, ganze Zahl"}},
 	"skill": {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 

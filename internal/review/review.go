@@ -112,6 +112,7 @@ var boxKeyReason = map[string]string{
 	"dns":         "ändert den DNS-Anbieter (box.yml dns)",
 	"model":       "ändert das Modell (box.yml model)",
 	"operator":    "ändert den Operator (box.yml operator)",
+	"zuhause":     "ändert die Adresse des Haushalts (box.yml zuhause)",
 }
 
 // Dirs compares a checkout of main (base) with a checkout of the change.

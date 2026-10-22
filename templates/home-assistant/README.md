@@ -27,6 +27,21 @@ same path for `conversation.solaris`. Which Assist pipeline uses Frage stays
 the owner's choice, unless a pipeline's agent is gone (above). Without Frage the hook says so and stays green; `laib
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
+## Its home comes from box.yml zuhause (#561)
+
+The household's address lives once in box.yml (`zuhause`, docs/STATE.md);
+the unit carries `${ZUHAUSE_REV}`, so a move applies Home Assistant again,
+and post-deploy gets the `ZUHAUSE_*` values. With latitude and longitude
+set it compares them, the elevation, the country and box.yml's time zone
+with HA's core config (`GET /api/config`) and, where one differs, sets them
+through `config/core/update`; HA's home zone follows. The same home twice
+is no update. Without coordinates HA keeps the location it has (set in its
+onboarding or by hand) and the hook says why: Laib never looks an address
+up, the coordinates come from whoever enters the address (Haus's form: a
+map pin, or a lookup the person starts knowingly). No value reaches the
+hook's log. To change the address: `laib zuhause set …`, a proposal the
+owner approves.
+
 ## The tokens Laib mints (#349)
 
 Nobody clicks a long-lived token together in HA's UI. post-deploy logs in

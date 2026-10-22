@@ -619,6 +619,38 @@ def caldav_entry():
     print(f"home-assistant: CalDAV entry homeassistant added ({RADICALE}); the old one with a person's login can go")
 
 
+def zuhause():
+    """box.yml zuhause (#561) as Home Assistant's home: latitude, longitude, elevation, time zone and
+    country, only where they differ. Without coordinates HA's location stays as it is: Laib never
+    looks an address up. No value reaches the log."""
+    lat, lon = E.get("ZUHAUSE_LATITUDE", ""), E.get("ZUHAUSE_LONGITUDE", "")
+    if not lat or not lon:
+        if any(E.get("ZUHAUSE_" + k) for k in ("STREET", "POSTCODE", "CITY")):
+            print("home-assistant: box.yml zuhause has an address but no latitude/longitude: Home Assistant's location "
+                  "stays as it is (laib zuhause set --latitude … --longitude …)")
+        return
+    want = {"latitude": float(lat), "longitude": float(lon), "time_zone": E.get("LAIB_TZ") or "Europe/Berlin"}
+    if E.get("ZUHAUSE_ELEVATION"):
+        want["elevation"] = int(E["ZUHAUSE_ELEVATION"])
+    if E.get("ZUHAUSE_COUNTRY"):
+        want["country"] = E["ZUHAUSE_COUNTRY"]
+    tok = admin_session()
+    st, have = call("GET", "/api/config", token=tok)
+    if st == 200 and all((have or {}).get(k) == v for k, v in want.items()):
+        print("home-assistant: its home is box.yml zuhause")
+        return
+    ws = WS(tok)
+    try:
+        ws("config/core/update", **want)
+    finally:
+        ws.close()
+    print("home-assistant: home set from box.yml zuhause (" + ", ".join(want) + ")")
+
+
+try:
+    zuhause()
+except (RuntimeError, OSError, ValueError) as e:  # the tokens stand; HA keeps the location it has
+    print(f"home-assistant: home NOT set from box.yml zuhause: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     caldav_entry()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; the calendars come with the next apply
