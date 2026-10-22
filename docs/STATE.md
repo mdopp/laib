@@ -108,7 +108,9 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}`,
 `${PERSONA_LANGUAGES}` (`de,en`) and
 `${PERSONA_REV}` come from the house persona. A unit that carries
-`PERSONA_REV` is restarted on any persona change.
+`PERSONA_REV` is restarted on any persona change. `${NOTIFY_PERSON}` is
+`notify.person`, whom a service tells when its values name nobody (the
+scan service's closing message, #568).
 
 `zuhause` is the household's address, once for every template that needs
 it (#561): Home Assistant's home, a solar forecast, a waste calendar. The

@@ -1,0 +1,12 @@
+SCAN_IMAGE: ghcr.io/mdopp/laib-scan:latest      # scan/ in this repo (#568); laib-images pulls it nightly
+SCANNER: ""                       # a SANE device, epson2:net:192.168.178.87; empty: only the inbox folder
+SCAN_DPI: "300"
+SCAN_MODE: Gray                   # Gray or Color
+SCAN_AREA: 210x297                # mm; the WF-3540 jams with SANE's default 215.9x297.18
+SCAN_DUPLEX: "true"
+SCAN_BACK_FIRST: "true"           # duplex: the WF-3540 delivers each sheet's back before its front
+SCAN_TAG: Stapel                  # the Paperless tag: the folder in the consume folder
+SCAN_NOTIFY: ""                   # a person from box.yml people; empty: notify.person
+SCAN_KEEP_DAYS: "14"              # the archive of each stack
+MODEL_NAME: qwen3.6-35b-a3b       # the household model
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer; empty without the Bote

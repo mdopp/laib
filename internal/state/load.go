@@ -435,6 +435,7 @@ func proxySecretsDeclared(svc *Service) error {
 var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_URL", "MODEL_KEY", "MODEL_LEASE",
 	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV", // the house persona (ADR 0020)
 	"ZUHAUSE_STREET", "ZUHAUSE_POSTCODE", "ZUHAUSE_CITY", "ZUHAUSE_COUNTRY", "ZUHAUSE_LATITUDE", "ZUHAUSE_LONGITUDE", "ZUHAUSE_ELEVATION", "ZUHAUSE_REV", // box.yml zuhause (#561)
+	"NOTIFY_PERSON", // box.yml notify.person: whom a service tells by default (#568)
 	"PEOPLE_REV",    // box.yml people (ADR 0022 §3): a unit that carries it gets render/people/people.json
 	"LAIB_PAGE_URL"} // the box page, https://<box.yml laib.host>.<domain>/ (#381, #480)
 

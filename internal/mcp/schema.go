@@ -76,6 +76,10 @@ var mcpParams = map[string][]mcpParam{
 		{name: "city", typ: "string", flag: "--city", desc: "Ort"}, {name: "country", typ: "string", flag: "--country", desc: "Land, zwei Buchstaben (DE)"},
 		{name: "latitude", typ: "string", flag: "--latitude", desc: "Breitengrad, z. B. 52.1234; mit longitude"}, {name: "longitude", typ: "string", flag: "--longitude", desc: "Längengrad, z. B. 8.0456"},
 		{name: "elevation", typ: "string", flag: "--elevation", desc: "Höhe in Metern, ganze Zahl"}},
+	"scan": {{name: "action", typ: "string", enum: []string{"status", "start", "weiter", "abschliessen", "verwerfen", "redo"}, required: true,
+		desc: "status: was der Scanner gerade tut; start: einen Stapel scannen; nach einem Abbruch weiter, abschliessen oder verwerfen; redo: einen Stapel aus dem Archiv neu trennen"},
+		{name: "person", typ: "string", flag: "--person", desc: "wem die Abschlussmeldung gilt (box.yml people); leer: notify.person"},
+		{name: "stapel", typ: "string", flag: "--stapel", desc: "redo: der Stapel, JJJJ-MM-TTThh-mm-ss"}},
 	"skill": {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 
