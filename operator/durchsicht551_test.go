@@ -149,7 +149,7 @@ func TestDurchsichtShowsOnlyNewRecurringOrGrowingRealErrors(t *testing.T) {
 	if user == "" {
 		t.Fatalf("the first review asks the model: %+v", s)
 	}
-	for _, want := range []string{"adguard.service", "40×", "i/o timeout", "immich-server.service", "44×", "Input file is missing", "caddy.service", "12×", "aborting with incomplete response", "Beispiel:"} {
+	for _, want := range []string{"adguard.service", "40×", "i/o timeout", "immich-server.service", "44×", "Input file is missing: <pfad>\n", "caddy.service", "12×", "aborting with incomplete response", "Beispiel:"} {
 		if !strings.Contains(user, want) {
 			t.Errorf("the model is not shown %q:\n%s", want, user)
 		}

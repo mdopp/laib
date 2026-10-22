@@ -7,7 +7,7 @@ the Solaris cards are views on it.
 
 ```
 laib status [service] [--watch]      one line per service; first line is the readiness state
-laib logs <service> [--since 1h]     journald of every unit, the containers' output in it (podman log driver journald), secrets redacted
+laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
@@ -114,6 +114,7 @@ dropped from its reply. The built-in skills' menus:
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
+| `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox

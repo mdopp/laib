@@ -233,6 +233,7 @@ print(json.dumps(json.load(urllib.request.urlopen(req))["result"]))
 PY3
 }
 mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] for t in json.load(sys.stdin)["tools"]]; assert n==["laib_status","laib_diag","laib_note","laib_repair"], n' || fail "routineblick sees more than its tools"
+mcp_skill durchsicht tools/list | python3 -c 'import sys,json; n=sorted(t["name"] for t in json.load(sys.stdin)["tools"]); assert n==["laib_logs","laib_note","laib_status","laib_wish"], n' || fail "the log review sees more than read tools, note and wish (#550)"
 mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
 mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
@@ -246,6 +247,7 @@ grep -q "morgenbericht: paused" "$LAIB_HOME/state/policy.yml" || fail "pause not
 [ -z "$(git -C "$LAIB_HOME/state" status --porcelain)" ] || fail "skill pause left policy.yml uncommitted"
 LAIB_ACTOR=human:e2e "$BIN" skill enable morgenbericht >/dev/null || fail "skill enable"
 grep -qE "^aktiv +nutzung" <<<"$("$BIN" skill list)" || fail "the weekly usage skill is not active"
+grep -qE "^aktiv +durchsicht" <<<"$("$BIN" skill list)" || fail "the daily log review is not active (#550)"
 j 'notes=[e for e in es if e["verb"]=="note" and e["actor"]=="ops"]; assert notes and "jetzt grün" in notes[-1]["detail"], notes'
 j 'assert any(e["verb"]=="restart" and e["actor"]=="ops" and e.get("service")=="caddy" for e in es), "operator restart not journaled"'
 test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"

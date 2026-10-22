@@ -34,7 +34,7 @@ type Skill struct {
 	Trigger     Trigger  `yaml:"trigger" json:"trigger"`
 	Tools       []string `yaml:"tools" json:"tools"`
 	More        []string `yaml:"more" json:"more,omitempty"` // tools only a capable model gets (#286), checked like tools
-	Context     string   `yaml:"context" json:"context"`     // box | usage
+	Context     string   `yaml:"context" json:"context"`     // box | usage | logs
 	Output      string   `yaml:"output" json:"output"`       // note | report | propose
 	Prompt      string   `yaml:"prompt" json:"prompt"`
 	// The mechanics the Operator's runner enforces, never prompt prose
@@ -156,8 +156,12 @@ func check(s *Skill) string {
 	if s.Context == "" {
 		s.Context = "box"
 	}
-	if s.Context != "box" && s.Context != "usage" {
-		return fmt.Sprintf("context %q: box oder usage", s.Context)
+	if s.Context != "box" && s.Context != "usage" && s.Context != "logs" {
+		return fmt.Sprintf("context %q: box, usage oder logs", s.Context)
+	}
+	// logs: the runner reads every service's error lines itself (#550)
+	if s.Context == "logs" && (!slices.Contains(s.Tools, "status") || !slices.Contains(s.Tools, "logs")) {
+		return "context logs braucht status und logs in tools"
 	}
 	switch s.Output {
 	case "note", "report":

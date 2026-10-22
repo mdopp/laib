@@ -1,0 +1,24 @@
+# The log review (#550 point 6, #551): what a human did on the Kraftwerk
+# — 48 hours of the journal's err lines, most of them INFO a container
+# wrote to stderr, and among them a few real errors that came back every
+# day. The runner does the reading (context logs): every service's
+# warnings and errors of the last 24 hours (laib logs --priority warning),
+# a line's own level decides, else its words, so the journal's err is not
+# trusted; lines become patterns with numbers, ids, paths and timestamps
+# taken out, counted per unit, compared with the last review
+# (OPERATOR_HOME/durchsicht.json). The model sees only what is new (three
+# times or more), recurring (seen in the last review too) or growing (at
+# least doubled), each with an example line. Nothing of that: no model, no
+# note. Daily, before the morning report, which then carries the note; a
+# week of logs would not fit the line cap and a broken setting would wait
+# up to seven days.
+description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
+trigger: {daily: "06:30"}
+tools: [status, logs, wish, note]
+context: logs
+output: note
+limits: {wish: 3}
+prompt: |
+  Auslöser: Protokoll-Durchsicht. Unten stehen die Fehlermuster der letzten 24 Stunden, die neu, wiederkehrend oder gewachsen sind. laib hat sie nach Inhalt gruppiert; Rauschen (normale Meldungen auf stderr) ist schon aussortiert und nur gezählt.
+  Schreib eine note mit kind watch: je Muster eine Zeile mit Unit, Muster, Anzahl und der Beispielzeile, das Wichtigste zuerst, und was es für die Familie heißt, wenn die Zeile das hergibt. Erfinde keine Ursache.
+  Braucht ein Muster einen Menschen (eine Einstellung im Template, kaputte Dateien), dann höchstens drei Vorschläge mit wish: text nennt Dienst und Muster, saw die Anzahl und die Beispielzeile. Du änderst nichts selbst.

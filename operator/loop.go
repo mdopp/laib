@@ -144,6 +144,20 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
 			return s, nil
 		}
+	} else if sk.Context == "logs" {
+		// the log review (#550): the runner's patterns, not the box's context;
+		// nothing new asks no model, a failed session is not remembered
+		var remember func()
+		if ctxText, remember = o.review(ctx, &mcp); ctxText == "" {
+			remember()
+			s.Outcome = "unchanged"
+			return s, nil
+		}
+		defer func() {
+			if s.Outcome != "error" {
+				remember()
+			}
+		}()
 	} else {
 		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
 		if web != nil {
