@@ -61,6 +61,7 @@ which kind of name goes where.
 | Operator | the box's admin agent, hand `ops` | `operator/` (ADR 0013, 0023) |
 | skill | a declared unit of the Operator's work: trigger, tools, prompt, output; active or paused in `policy.yml`; *Fähigkeit* on the pages; not Hermes' skills (the Bote's are off) | `skills/` (built in), `skills/` in the state repo (ADR 0023) |
 | lesson | what the Operator learned from a solved incident — finding, cause, fix — proposed by the `lehre` skill, let in by a human; text in every session's context, never a rule; *Lehre* on the pages | `lessons/<name>.md` in the state repo (#544) |
+| log review | the daily `durchsicht` skill: the units' error lines grouped by pattern in Operator code, real errors told from noise by content, only new, recurring or growing patterns shown to the model; *Protokoll-Durchsicht* on the pages | `skills/durchsicht.yml`, `operator/durchsicht.go` (#550, #551) |
 | outcome | what came of a proposal, recorded by laib: effective, no effect, rolled back, rejected with the owner's reason, later (a free „nicht jetzt“), applied (nothing to measure) | the inbox entry's `outcome`, journal verb `outcome` (#544) |
 | Werkstatt | the dev container: Claude Code and pi, and the autoloop that works issues | `templates/werkstatt`, `werkstatt/` |
 | Bote | the agent people write to, on Signal and in Haus's Sprechen field | `templates/bote` (ADR 0016) |

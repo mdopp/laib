@@ -185,7 +185,8 @@ An Operator skill (ADR 0023): `description` (German, one sentence),
 `reportAt`), `tools` (kernel verbs from `status diag logs inspect look read
 journal context inbox plan note escalate propose wish restart exec write
 apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
-the same way, #286), `context` (`box` or `usage`), `output` (`note`,
+the same way, #286), `context` (`box`, `usage`, or `logs`: the runner reads
+the services' error lines itself and needs `status` and `logs`, #550), `output` (`note`,
 `report`, `propose`) and `prompt`. The mechanics are fields the Operator's
 runner enforces, never prompt prose (#376): `limits` (a cap per tool and
 session, `{propose: 3}`) and, for an updates skill, `updates: patch` (the
@@ -197,7 +198,7 @@ interval skill granted `diag` is a look (#543): the runner reads diag
 first, asks no model while the findings are the ones its last good session
 saw, and, granted `repair`, proposes each non-red finding's repair once
 until it changes. The prompt keeps the judgment. A file with a built-in's name
-(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`, `lehre`) replaces it. The
+(`routineblick`, `morgenbericht`, `vorfall`, `nutzung`, `aktualisierung`, `sicherung`, `lehre`, `durchsicht`) replaces it. The
 kernel grants only the tools the ops ceiling reaches; a file it cannot
 accept is listed as `verweigert` with the reason and never runs. Adding or
 changing one is class `human` in the review.

@@ -16,26 +16,35 @@ import (
 // (ADR 0003: journald is the agent).
 func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.Fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200]"))
+		return env.Fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200] [--priority warning]"))
 	}
 	_, svc, err := envelope.LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
-	since, lines := "1h", "200"
+	since, lines, prio := "1h", "200", ""
 	for i := 1; i+1 < len(args); i += 2 {
 		switch args[i] {
 		case "--since":
 			since = args[i+1]
 		case "--lines":
 			lines = args[i+1]
+		case "--priority": // journalctl -p: this level and worse (#551, the log review)
+			prio = args[i+1]
 		}
+	}
+	if prio != "" && prio != "err" && prio != "warning" {
+		return env.Fail(errors.New("--priority: err oder warning"))
 	}
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	out := map[string]string{}
 	units := append(svc.UnitNames(), svc.Oneshots()...) // a timer's failed run is read here (#195)
 	for _, unit := range units {
-		text, _ := sysd.Run(ctx, "journalctl", "--user", "-u", unit, "--since", "-"+since, "-n", lines, "--no-pager", "-o", "short-iso")
+		jargs := []string{"--user", "-u", unit, "--since", "-" + since, "-n", lines, "--no-pager", "-o", "short-iso"}
+		if prio != "" {
+			jargs = append(jargs, "-p", prio)
+		}
+		text, _ := sysd.Run(ctx, "journalctl", jargs...)
 		out[unit] = render.Redact(render.Output{"l": text}, sec)["l"]
 	}
 	if env.JSON {

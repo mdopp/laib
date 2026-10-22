@@ -10,7 +10,9 @@ check about an agent's task before it runs.
   amended 2026-10-21 (#543): a look that finds nothing new asks no model,
   `routineblick` files repairs; amended 2026-10-21 (#544): a proposal is
   judged by what happened; amended 2026-10-22 (#550): a look's small
-  context, one note per session, no session into a busy graphics card
+  context, one note per session, no session into a busy graphics card;
+  amended 2026-10-22 (#550, #551): the log review reads by content, the
+  model sees patterns
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -434,3 +436,57 @@ ask), and an incident that comes while the card is lent is skipped; it
 reaches the Operator again with its next red, ten minutes on, and the
 morning report reads the journal. ServiceBay had no Operator of its own
 on the GPU; there is no earlier solution to compare with.
+
+## Amendment 2026-10-22 — the log review reads by content, the model sees patterns (#550, #551)
+
+On the Kraftwerk a human read 48 hours of the journal (#551): about 36,000
+lines of priority `err`, most of them a container's INFO on stderr
+(podman's journald driver files stderr as `err` whatever it says:
+Radicale 4,297, Whisper 2,937, llama 1,586, Paperless 1,246, Beets 829),
+and among them a few real errors that came back every day — AdGuard's PTR
+timeouts, Immich's thumbnails failing on the same 44 assets, Jellyfin's
+broken files, Caddy's aborted responses. `-p err` is no alarm, and no
+skill did this review. What changes:
+
+- **A built-in skill `durchsicht`** (daily, 06:30; tools `status`, `logs`,
+  `wish`, `note`; `limits: {wish: 3}`; output `note`). Daily, not weekly:
+  a day's lines fit the line cap per unit, a setting that makes the family
+  wait (a PTR timeout on every lookup) is seen the next morning, and the
+  morning report, half an hour later, carries the note. Read verbs, a
+  note and a wish — what `nutzung` has; a wish waits for the admin and
+  then becomes an intake issue.
+- **`context: logs`**: the runner reads, not the model. It lists the
+  services (`laib status`) and reads each one's warnings and errors of 24
+  hours (`laib logs <svc> --since 24h --lines 5000 --priority warning`;
+  `--priority` is the kernel's one new flag, journalctl `-p`, a level and
+  nothing else). A line's own level decides (`level=error`, `"level":
+  "error"`, `[ERR]`, `ERROR (MainThread)`), else its words (error, failed,
+  timeout, …Exception); `INFO`, `LOG`, `DEBUG` and warnings are noise,
+  counted per unit, never shown as errors. Numbers, ids, paths, addresses
+  and timestamps are taken out, so the 44 failed assets are one pattern
+  with a count. The kernel requires `status` and `logs` for that context.
+- **The model sees news only.** A pattern is shown when it is new (three
+  times or more in the day), recurring (in the last review too, shown
+  once) or growing (at least doubled since it was shown), at most eight,
+  each with unit, count and an example line, plus one line counting the
+  rest and the units' noise — about 1,000 tokens, no `laib context`.
+  Nothing of that: no model, no note (outcome `unchanged`, as #543's
+  look). Memory: `OPERATOR_HOME/durchsicht.json`, written only after a
+  session that did not fail, so a model outage shows the same news again.
+
+What it does not see: a real error a program writes to stdout (priority
+`info`); the review reads `warning` and worse to keep a day inside the
+cap. A unit that reaches 5,000 lines is reported as „mindestens“.
+
+The fix at the source was weighed: podman cannot file a container's
+stderr by content, and lowering an app's log level (Radicale's `[logging]
+level`, uvicorn's access log, `PAPERLESS_LOGLEVEL`) takes away the INFO
+lines a human reads in `laib logs` when something breaks. That stays a
+per-template decision, not part of this change.
+
+Weighed against before (#246) and ServiceBay, which had no log review:
+maintenance gets easier — the review a human did by hand runs every
+morning and costs the GPU nothing on a day without news; the family is
+not worse off — nothing is applied, and a wish waits for the admin. What
+it costs: about 230 Operator lines and 13 kernel lines (the flag, the
+context check).
