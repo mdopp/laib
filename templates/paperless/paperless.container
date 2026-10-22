@@ -23,8 +23,9 @@ Environment=PAPERLESS_OCR_MODE=auto
 Environment=PAPERLESS_CONSUMER_RECURSIVE=true
 Environment=PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS=true
 # One family login through Authelia's OIDC (django-allauth, #231): the account is
-# made on the first login, groups follow Authelia's on every login (give the Paperless
-# group of that name its permissions once), the local admin stays as break-glass and
+# made on the first login, groups follow Authelia's on every login (post-deploy makes
+# the groups admins and family with their permissions, paperless-mail.py), the local
+# admin stays as break-glass and
 # the apps log in with a token. The client secret is a podman secret, rendered from
 # secrets.age on every apply, so it cannot drift from Authelia's.
 Environment=PAPERLESS_APPS=allauth.socialaccount.providers.openid_connect

@@ -3,7 +3,9 @@ template: {registry: builtin, name: paperless, version: 1}
 provides: [documents]
 upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # where the Operator's web search looks first (#544)
 # Paperless-ngx: documents with OCR. The family logs in through Authelia's
-# OIDC (#231): one login, the account made on the first one, and the
+# OIDC (#231): one login, the account made on the first one, its groups
+# admins and family synced on each and given their permissions by
+# post-deploy, and the
 # Paperless apps keep working with a token, which forward-auth on the route
 # would break. The admin from the secrets stays as break-glass. The
 # consume folder is the file share's paperless-consume, so a scan dropped

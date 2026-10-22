@@ -12,6 +12,33 @@ through Haus' library, findable in Haus and by the Bote (haus#13):
 | Haus, "Dokument ablegen" (page and app) | `paperless-consume/` | the file's name |
 | The PC: File Browser or the network drive | `paperless-consume/`, any subfolder | the file's name; each folder on the way is a tag |
 
+## Logins and groups (#231)
+
+The family logs in with "Authelia" on Paperless' login page. Paperless
+makes the account on the first login and, on every login, sets its groups
+to those of Authelia's `groups` claim that Paperless has. post-deploy
+(`paperless-mail.py setup`, through Paperless' API as `ADMIN_USER`) makes
+the household's two groups from `templates/auth` on every apply, so a
+login has permissions without anyone clicking them together:
+
+| Group | Permissions |
+|---|---|
+| `admins` | everything of Paperless' own: documents and their metadata, users, groups, mail, workflows, custom fields, settings, history, statistics |
+| `family` | view, add, change, delete documents, tags, correspondents, document types, storage paths, saved views, notes, share links and their own UI settings; see and dismiss tasks; see custom fields |
+
+The family gets no mail permissions: the inbox comes from the values, and
+a rule changed by hand is overwritten on the next apply. Nor workflows,
+custom field definitions, users or groups: those change how Paperless files
+for everyone, which is the admins' call. A group is made when missing and
+given what it lacks; a permission added by hand stays. Only permissions
+this Paperless has are given, so an older or newer one still applies.
+
+Paperless sets a login's groups when it logs in: an account that logged in
+before the groups existed gets them on its next login (log out, log in
+again). A document belongs to who uploaded it through the web page and is
+then only theirs (share it, or give it no owner); mail and the consume
+folder file without an owner, for the whole family.
+
 ## The consume folder from a PC
 
 `paperless-consume` is a folder of the file share's data tree
