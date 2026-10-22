@@ -24,6 +24,10 @@ func TestScanNeverRelabelsTheShareAndKeepsNothingInTheBackup(t *testing.T) {
 	if !strings.Contains(string(unit), "SecurityLabelDisable=true") || !strings.Contains(string(unit), "Network=host") {
 		t.Error("the share mounts need SecurityLabelDisable, the SANE scanner and the lease the host network")
 	}
+	// an AirScan device's name has spaces: unquoted, systemd splits it into assignments (#571)
+	if !strings.Contains(string(unit), `Environment="SCANNER=${SCANNER}"`) {
+		t.Error("SCANNER is not quoted in the unit")
+	}
 	contract, err := fs.ReadFile(FS, "scan/laib.yml")
 	if err != nil {
 		t.Fatal(err)

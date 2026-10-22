@@ -56,8 +56,16 @@ WF-3540's never reaches SANE.
 hand by its verbs, the Bote by its ceiling) writes one JSON file into
 `${DATA_DIR}/scan/auftrag/`: `{"aktion", "stapel", "person", "von", "at"}`.
 Actions: `start`, `weiter`, `abschliessen`, `verwerfen`, `redo` (with
-`stapel`). The service takes them within seconds; one that does not fit
-the state (weiter with nothing waiting) is logged and dropped.
+`stapel`), and for the setup `suchen`, `pruefen`, `probe` (#571). The
+service takes them within seconds; one that does not fit the state (weiter
+with nothing waiting) is logged and dropped.
+
+`laib scan einrichten [--geraet <sane-gerät>]` writes no order: it is a
+proposal. Without the scan service it adds the template with that scanner
+(class human: the owner approves); with it, it sets `SCANNER` in its
+values, a value change the box's dial decides like any other (`values:
+auto` applies it and rolls back on red). A device name with a quote, a
+newline, `%` or `$` is refused.
 
 **Status** — `${DATA_DIR}/scan/laib-status.json`, written on every change,
 read by `laib status`, `laib diag`, `laib scan status` and Haus:
@@ -80,6 +88,15 @@ read by `laib status`, `laib diag`, `laib scan status` and Haus:
               "dokumente": [{"titel": "2023-05-01 Mosel - Rechnung", "datei": "2023-05-01 Mosel - Rechnung.pdf"}]}]
 }
 ```
+
+`suche` is the last search, `{"zustand": "läuft | fertig | fehler", "at",
+"detail", "funde": [{"geraet": "epson2:net:192.168.178.87", "name": "Epson
+PID 0899 flatbed scanner"}]}`; a `geraet` goes into `einrichten --geraet`
+as it is. `pruefung` is the last check, `{"geraet", "ok", "at", "detail",
+"probe"?}`: on the first start with a new `SCANNER`, on `pruefen` (the
+device opened, nothing scanned) and on `probe` (one sheet from the feeder,
+read, never filed). Both stay in every status until the next search or
+check.
 
 `seite` is set while `scannt` (the page being scanned), `blatt` and `grund`
 while `wartet-auf-rest` (the sheet to put the rest in from, the scanner's
@@ -115,6 +132,16 @@ never on argv.
 
 ## Setting it up
 
+From Haus (haus#77): „Scannen einrichten“ proposes the service; „Scanner
+suchen“ lists what the network answers, „Diesen einrichten“ (or a device
+typed by hand, `epson2:net:<ip>`) sets it, the check follows by itself,
+„Probeseite“ scans one sheet. The search finds epson2 devices (with `net
+autodiscovery`, which the service adds) and eSCL/AirScan devices
+(sane-airscan); whether the WF-3540 answers the search is not tested yet.
+A scanner that scans to a folder is set up in its own web menu: the share
+`\\<box>\data`, the folder `scan-eingang`, a family member's Samba account.
+
+By hand: `laib add scan SCANNER=<gerät>`.
 The service runs on the host network (the scanner on the LAN, the lease's
 proxy and bote-notify on loopback), so box.yml `hostNetwork` must list
 `scan`; `laib add scan` proposes it, and the owner approves. The SANE
