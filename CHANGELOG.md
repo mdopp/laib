@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.1](https://github.com/mdopp/laib/compare/v0.18.0...v0.18.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **operator:** no session within two minutes of a person's model request ([#550](https://github.com/mdopp/laib/issues/550)) ([166bb3f](https://github.com/mdopp/laib/commit/166bb3f590eeba8d17ad8ed6f7fdb880775fad5b))
+* **operator:** no session within two minutes of a person's model request ([#550](https://github.com/mdopp/laib/issues/550)) ([efcb691](https://github.com/mdopp/laib/commit/efcb691373e31fd317c2393565a6775518047c63))
+
 ## [0.18.0](https://github.com/mdopp/laib/compare/v0.17.0...v0.18.0) (2026-10-22)
 
 
