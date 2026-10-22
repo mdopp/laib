@@ -40,8 +40,8 @@ os_image() {
 }
 
 # The box's own config (#257, #281), one source for every box: the stick's
-# first boot runs this script, a migrated box runs it in step 1
-# (docs/MIGRATION.md); laib diag is red while either file is missing.
+# first boot runs this script, a migrated box ran it once (--box-config);
+# laib diag is red while either file is missing.
 # journald: persistent (the boot before a crash is the one to read), 4G and
 # four weeks, whichever comes first. Four weeks answers "since when" for
 # anything the family reports; 4G holds that at up to ~145 MB a day of the

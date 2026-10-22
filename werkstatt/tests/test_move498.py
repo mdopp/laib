@@ -5,8 +5,8 @@ cannot open Remote Control, and git could not push for want of gh's login.
 Here: the token yields to a login in the kept home, gh's login is wired into
 git and both logins are dev's alone, and a session pass answers the
 onboarding and the folder trust for each checkout in ~/.claude.json. The
-mover's half (claude-dev's home into werkstatt/home) is
-scripts/test_move_servicebay_data.py."""
+mover's half (claude-dev's home into werkstatt/home) was
+scripts/test_move_servicebay_data.py, removed with the migration tooling."""
 import getpass, json, os, shutil, stat, subprocess, sys, tempfile, unittest
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-# Sourced by the VM jobs (vm-install, generalprobe) from the job's working
+# Sourced by the VM job (vm-install) from the job's working
 # directory: the SSH line into the guest, a clean power-off (QEMU gone), and
 # waiting for laib after a boot.
 SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"

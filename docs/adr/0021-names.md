@@ -86,7 +86,7 @@ which kind of name goes where.
 
 | Name | Where it still is | Ends when |
 |---|---|---|
-| ServiceBay | the predecessor, migrated once | `scripts/migrate-servicebay.py` is run on the last box |
+| ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
 
 Ended (2026-10-14, ADR 0022): Solaris, `sol_device_`, `cloud.dopp.solaris://`
 and `/napi/servicebay` — nothing of the Solaris app is carried; the new app

@@ -129,7 +129,7 @@ jobs:
           mkdir -p foreign && echo "keep me" > foreign/marker
           truncate -s 12G foreign.raw && mkfs.ext4 -q -F -L backup -d foreign foreign.raw
           df -h / | tail -1
-          # the guest's launcher and the SSH helpers (off, ready, marker), shared with generalprobe
+          # the guest's launcher and the SSH helpers (off, ready, marker)
           cp scripts/vm/vm.sh scripts/vm/box.sh .
           chmod +x vm.sh; ./vm.sh order=cd
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1"
@@ -430,7 +430,7 @@ jobs:
                 echo "container output in journald under logmark.service, kept across the reboot"
                 LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core /var/opt/laib/laib remove logmark >/dev/null'
           # #281: a box that never got the box config (the migrated Kraftwerk is never reinstalled) is red in
-          # diag, and the migration's step 1 (install-box.sh --box-config, docs/MIGRATION.md) puts it right, no reboot
+          # diag, and install-box.sh --box-config puts it right, no reboot
           $SSH 'set -euo pipefail; export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
                 sudo rm -f /etc/systemd/journald.conf.d/50-laib.conf; rm -f ~/.config/containers/containers.conf.d/50-laib.conf; sudo systemctl restart systemd-journald
                 d=$(/var/opt/laib/laib diag 2>&1 || true); grep -E "^rot +box " <<<"$d" || true

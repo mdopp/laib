@@ -248,7 +248,7 @@ func inside(a, b string) bool { return a == b || strings.HasPrefix(a, strings.Tr
 // the service's own (the shared tree file-share/data with its folders, which
 // Immich, Jellyfin and Solaris read, ADR 0017; caches). Two control planes on
 // one service cannot coexist: the old unit is stopped and its file moved out
-// before apply (docs/MIGRATION.md, one owner per service).
+// before apply (ADR 0010, one owner per service).
 func Conflicts(st *state.State, paths boxfs.Paths) []string {
 	entries, _ := os.ReadDir(paths.Quadlet)
 	var out []string

@@ -16,7 +16,7 @@ an administrator token above that still works, else HA's own login flow as
 HA_ADMIN_USER with HA_ADMIN_PASSWORD: on a fresh Home Assistant this hook
 onboards that user first (a generated password, the family signs in with
 Familienkonto); on a box from ServiceBay it is ServiceBay's admin, carried
-(scripts/carry-servicebay-secrets.sh). The Bote's password HA_BOTE_PASSWORD
+on migration day. The Bote's password HA_BOTE_PASSWORD
 is generated; its token is minted by logging in as the Bote.
 
 Frage as Assist's conversation agent (#491): Home Assistant has no built-in
@@ -254,8 +254,7 @@ def admin_session():
         session = login(USER, PW)
     if not session:
         red(f"no administrator token works and {USER} cannot log in: the tokens were NOT minted. Set HA_ADMIN_USER to a "
-            "Home Assistant administrator (values.yml) and its password with `laib secret set HA_ADMIN_PASSWORD` (on a box "
-            "from ServiceBay: scripts/carry-servicebay-secrets.sh home-assistant), then laib apply home-assistant")
+            "Home Assistant administrator (values.yml) and its password with `laib secret set HA_ADMIN_PASSWORD`, then laib apply home-assistant")
     for step, body in (("core_config", {}), ("analytics", {}), ("integration", {"client_id": CLIENT, "redirect_uri": CLIENT})):
         if step not in done:  # what the onboarding wizard would ask; location and country stay HA's settings
             if call("POST", "/api/onboarding/" + step, body, token=session)[0] != 200:

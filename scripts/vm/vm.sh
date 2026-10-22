@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the KVM guest the VM jobs drive (vm-install, generalprobe), daemonized,
+# Start the KVM guest the VM job drives (vm-install), daemonized,
 # from the job's working directory: qemu.pid, qmp.sock and serial.log land there.
 #
 # $1 = qemu -boot argument: order=cd (disk first, empty disk falls through to the stick),
