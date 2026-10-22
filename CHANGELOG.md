@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.0](https://github.com/mdopp/laib/compare/v0.20.0...v0.21.0) (2026-10-22)
+
+
+### Features
+
+* **scan:** set the scanner up from Haus — search, choose, check, probe ([#571](https://github.com/mdopp/laib/issues/571)) ([1da7260](https://github.com/mdopp/laib/commit/1da72603fbff8329cc968afc5d52e69ee40f1d4a))
+* **scan:** set the scanner up from Haus: search, choose, check, probe sheet ([2986ff8](https://github.com/mdopp/laib/commit/2986ff88c6ba349b323849c49ac3e8d18f14647b)), closes [#571](https://github.com/mdopp/laib/issues/571)
+
 ## [0.20.0](https://github.com/mdopp/laib/compare/v0.19.1...v0.20.0) (2026-10-22)
 
 
