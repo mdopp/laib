@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.0](https://github.com/mdopp/laib/compare/v0.17.0...v0.18.0) (2026-10-22)
+
+
+### Features
+
+* **operator:** the log review, a daily skill that reads errors by content ([37e06a0](https://github.com/mdopp/laib/commit/37e06a0d232bcaa176d807bbde1f4e77751a1c83))
+
+
+### Bug Fixes
+
+* **apply:** reset the failed state of the units whose files go ([a8e2d91](https://github.com/mdopp/laib/commit/a8e2d913423dcce3a43ba025d1d5a05bf112e2e2))
+* **operator:** a look reads diag and the last journal lines, in its own budget ([533bb23](https://github.com/mdopp/laib/commit/533bb23e106b83a843d34b28db0801412c5edfa5))
+* **operator:** a red session's log line names what was red and what came of it ([a432eb2](https://github.com/mdopp/laib/commit/a432eb259693d9504809b7d9d2063310a5a44633))
+* **operator:** a session's note is written once ([ee8854b](https://github.com/mdopp/laib/commit/ee8854b1fb93af4d1372db403d7bdd1f866654f8))
+* **operator:** no session into another's window or the household model's cold start ([d81a912](https://github.com/mdopp/laib/commit/d81a912f0c054d6cbe0960e1cc139a1cfabd1978))
+* **operator:** updates and firmware wake no ten-minute look ([da46cca](https://github.com/mdopp/laib/commit/da46ccab0b20e65eeb32884ae16509a8689c093a))
+* **template:** AdGuard asks the router for the names of private addresses ([e0f31dc](https://github.com/mdopp/laib/commit/e0f31dcde84a22e6ea028dc4444a7ac3374c875a))
+* **template:** bote-signal's health check asks signal-cli's daemon ([f88588e](https://github.com/mdopp/laib/commit/f88588ec53bf3b726309c4114966f559f5eadc76))
+
 ## [0.17.0](https://github.com/mdopp/laib/compare/v0.16.0...v0.17.0) (2026-10-22)
 
 
