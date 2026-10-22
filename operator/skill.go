@@ -154,7 +154,16 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 		if sk.Output == "report" {
 			kind = "report"
 		}
-		out = append(out, r.RunNow(ctx, sk, Trigger{Kind: kind}))
+		s := r.RunNow(ctx, sk, Trigger{Kind: kind})
+		if s.Outcome == "skipped" && sk.Trigger.Every == "" {
+			// a daily or weekly slot is not lost to a busy graphics card (#550):
+			// the next step tries again; an interval skill keeps its interval
+			if r.Last[sk.Name] = last; !seen {
+				delete(r.Last, sk.Name)
+			}
+			r.saveLast()
+		}
+		out = append(out, s)
 	}
 	return out
 }

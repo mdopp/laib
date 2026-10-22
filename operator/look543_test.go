@@ -17,6 +17,10 @@ func recLLM(t *testing.T, script []Message) (*httptest.Server, *[][]Message) {
 	var mu sync.Mutex
 	var seen [][]Message
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			http.NotFound(w, r) // no lease proxy in front (#550)
+			return
+		}
 		var req struct {
 			Messages []Message `json:"messages"`
 		}
@@ -47,16 +51,6 @@ func diagShown(asked [][]Message) string {
 		}
 	}
 	return ""
-}
-
-func countPrefix(calls []string, prefix string) int {
-	n := 0
-	for _, c := range calls {
-		if strings.HasPrefix(c, prefix) {
-			n++
-		}
-	}
-	return n
 }
 
 // #543: a yellow with a repair verb is one proposal, not a note every ten
