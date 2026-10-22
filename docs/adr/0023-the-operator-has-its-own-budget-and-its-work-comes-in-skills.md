@@ -9,7 +9,8 @@ check about an agent's task before it runs.
   `more:` tools for a capable model, `plan` and `apply` in the vocabulary;
   amended 2026-10-21 (#543): a look that finds nothing new asks no model,
   `routineblick` files repairs; amended 2026-10-21 (#544): a proposal is
-  judged by what happened
+  judged by what happened; amended 2026-10-22 (#550): a look's small
+  context, one note per session, no session into a busy graphics card
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -370,3 +371,66 @@ shows up as a rate, not as a feeling. Nothing is worse for the family:
 nothing is applied that was not before; a reject gains an optional text
 field. What it costs: about 200 kernel lines (the anchor, the settle in
 diag, the reason, the lessons in context) and one MCP read per session.
+
+## Amendment 2026-10-22 — a look reads little, a session notes once, the graphics card comes first (#550)
+
+The Kraftwerk's log on v0.11.1: 143 prompts over 5,000 tokens in a day,
+4.0 million tokens together (about 28,000 a look), about 2.8 hours of
+GPU just reading; every look evicted the Bote's prompt cache, so Joshua
+often started cold; the same note five times within 14 s; seven red
+sessions whose log line said only "red". #543 (v0.16.0) already made an
+unchanged look ask no model and write no note. What changes, all of it
+code in the runner:
+
+- **A look's context is diag and the last journal lines, in its own
+  budget.** For an interval skill granted `diag` the runner no longer
+  hands the model the `laib context` bundle (every service and the day's
+  journal, whose budget grew with the 131k window): it hands it what diag
+  found, as news (the rewrite the #543 amendment gives a `laib_diag` result), and
+  the journal's last 15 entries without the Operator's own notes. The
+  look's context and each tool result have their own budget (9,000 and
+  4,000 chars), whatever the window; with the Kraftwerk's day the first
+  request falls from ~21,000 to ~800 tokens. The other skills keep the
+  bundle and the window's budgets (#285): an incident needs the middle.
+- **A session writes its note once.** The runner carried out every
+  `laib_note` the model asked for, in one reply or over passes; a second
+  one in a session is refused and the model is told its note stands. A
+  session cut off after its note writes no second one.
+- **A red session's log line says what was red and what came of it**:
+  `session vorfall/jellyfin: red, 12 calls, 98000ms — jellyfin: apply:
+  unit failed (abgebrochen nach 12 Aufrufen) → vorgeschlagen #12`. What
+  was red is the event's detail or a look's red findings; why it ended
+  red is the text call, the budget answer or the call limit; what came of
+  it is the proposals by number, a restart, an escalation, or „nichts
+  geändert“. The session record carries both (`red`, `why`).
+- **No session into another's window or a cold start.** Before a session
+  asks the model, the runner reads the lease proxy (`/api/model-lease`,
+  `/v1/models` at `MODEL_URL`'s host): while the lease's mode is not
+  `haushalt`, the window is still preparing, or the router reports the
+  model not `loaded`, the session is `skipped` with its reason. Skipped
+  is no error and writes no note; a look keeps its news for the next one,
+  and a daily or weekly slot tries again at the next step rather than in
+  a day or a week. A model without the lease proxy in front is never
+  busy. The lease and the proxy do not say when a person last asked the
+  model, so "not within N seconds of a Bote, Haus or Frage request" waits
+  for that signal; until then the household model's warm state is what
+  the runner respects.
+- **Updates and firmware wake no look.** `aktualisierung` was and stays
+  weekly (Sa 10:00), but Home Assistant's status file names each new
+  extension version and firmware as an info finding (`Update: …`,
+  `Firmware: …`), and a new finding is news: an update woke a model
+  session in the ten-minute tick. The look leaves those findings to the
+  weekly skill, which proposes the extensions and reports the firmware
+  (#528).
+
+Weighed against before (#246): the family gets the graphics card back —
+no Operator prompt between the Bote's turns while someone else holds the
+card or the household model is cold, and a few looks a day instead of 140
+— and the journal keeps one note per session. Maintenance gets easier: a
+red session's line names its cause and result without opening
+`incidents.jsonl`. What it costs: a look's model no longer sees the whole
+day's journal and every service at once (it has `status` and `diag` to
+ask), and an incident that comes while the card is lent is skipped; it
+reaches the Operator again with its next red, ten minutes on, and the
+morning report reads the journal. ServiceBay had no Operator of its own
+on the GPU; there is no earlier solution to compare with.
