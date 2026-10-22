@@ -35,3 +35,30 @@ func TestASessionWritesItsNoteOnce(t *testing.T) {
 		t.Fatalf("the model was not told its note stands: %+v", last[len(last)-1])
 	}
 }
+
+// #550: seven red sessions in 40 h, about 100 s and 12 calls each, and the
+// log said only "red". A red session's line names what was red, why the
+// session ended red and what came of it.
+func TestARedSessionsLineSaysWhatWasRedAndWhatCameOfIt(t *testing.T) {
+	mcp, _ := fakeMCP(t, map[string]string{"laib_propose": "Vorschlag #12 angelegt"})
+	llm := fakeLLM(t, []Message{
+		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_propose", `{"reason":"jellyfin neu","service":"jellyfin","key":"IMAGE","value":"j:1.2","finding":"unit jellyfin","evidence":"unit failed","undo":"IMAGE zurück"}`)}},
+		{Role: "assistant", ToolCalls: []ToolCall{tcall("2", "laib_diag", `{}`)}}, // loops until the limit
+	})
+	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
+	tr := Trigger{Kind: "event", Service: "jellyfin", Detail: "jellyfin: apply: unit failed"}
+	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := s.Line()
+	for _, want := range []string{"session vorfall/jellyfin: red", "jellyfin: apply: unit failed", "4 Aufrufen", "→ vorgeschlagen #12"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the line lacks %q: %s", want, line)
+		}
+	}
+	green := Session{Skill: "routineblick", Outcome: "green", Calls: []string{"laib_note x"}, Duration: 900}
+	if l := green.Line(); l != "session routineblick/: green, 1 calls, 900ms" {
+		t.Errorf("a green line changed: %s", l)
+	}
+}
