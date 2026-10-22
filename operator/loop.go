@@ -139,6 +139,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	if look {
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
 		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
+			fs, raw = forLook(fs, raw)
 			last, had := mem.Seen[sk.Name]
 			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
 				s.Outcome = "unchanged"
@@ -374,6 +375,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				s.Proposed = append(s.Proposed, n)
 			}
 			if fs, raw, ok := parseDiag(out); mcpName == "laib_diag" && !isErr && ok {
+				if look {
+					fs, raw = forLook(fs, raw)
+				}
 				out = news(fs, raw, mem.Seen[sk.Name])
 				saw = ids(fs, saw...)
 			}
