@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.0](https://github.com/mdopp/laib/compare/v0.18.1...v0.19.0) (2026-10-22)
+
+
+### Features
+
+* **state:** box.yml zuhause, the household's address, proposed by laib zuhause and read by templates ([3899a8e](https://github.com/mdopp/laib/commit/3899a8ecc38da4c305f7b379930d26ed4c1dd6ad))
+* **state:** box.yml zuhause, the household's address, proposed by laib zuhause and read by templates ([e6cf234](https://github.com/mdopp/laib/commit/e6cf23429eb510a17b71b193165d4574ae4b4211)), closes [#561](https://github.com/mdopp/laib/issues/561)
+
 ## [0.18.1](https://github.com/mdopp/laib/compare/v0.18.0...v0.18.1) (2026-10-22)
 
 
