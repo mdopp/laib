@@ -269,6 +269,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					continue
 				}
 			}
+			if mcpName == "laib_note" && noted {
+				// a session's note is written once (#550): a model repeating it
+				// put the same note five times into the journal within 14 s
+				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: die Notiz dieser Sitzung steht schon — beende die Sitzung"})
+				continue
+			}
 			if n := sk.Limits[strings.TrimPrefix(mcpName, "laib_")]; n > 0 && used[mcpName] >= n {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
 				continue
