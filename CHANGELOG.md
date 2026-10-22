@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0](https://github.com/mdopp/laib/compare/v0.16.0...v0.17.0) (2026-10-22)
+
+
+### Features
+
+* **update:** Laib updates itself before the nightly image run ([2c1bd51](https://github.com/mdopp/laib/commit/2c1bd5142ea523b124a80ec118f31aa54783aa89))
+* **update:** Laib updates itself before the nightly image run ([67ebc98](https://github.com/mdopp/laib/commit/67ebc98bf98882145051e024fb743ef5bad41724)), closes [#547](https://github.com/mdopp/laib/issues/547)
+
+
+### Bug Fixes
+
+* **update:** the self-update reads the real version, converges back, waits right ([deb7910](https://github.com/mdopp/laib/commit/deb79107b83adf5b5fdbee82a06eadbc3a899708)), closes [#547](https://github.com/mdopp/laib/issues/547)
+
 ## [0.16.0](https://github.com/mdopp/laib/compare/v0.15.0...v0.16.0) (2026-10-21)
 
 
