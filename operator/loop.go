@@ -33,6 +33,48 @@ type Session struct {
 	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged
 	Duration int64     `json:"ms"`
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
+	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
+	Why      string    `json:"why,omitempty"`      // why it ended red, or was skipped (#550)
+}
+
+// Line is the session's log line. A red or an incident session's names
+// what was red, why it ended red and what came of it (#550): seven red
+// looks in 40 h said only "red".
+func (s Session) Line() string {
+	l := fmt.Sprintf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+	if s.Outcome != "red" && s.Outcome != "escalated" && s.Trigger.Kind != "event" {
+		return l
+	}
+	what := cmp.Or(strings.Join(s.Red, "; "), "kein roter Befund genannt")
+	if s.Why != "" {
+		what += " (" + s.Why + ")"
+	}
+	var came []string
+	for _, n := range s.Proposed {
+		came = append(came, fmt.Sprintf("#%d", n))
+	}
+	result := "nichts geändert"
+	switch {
+	case len(came) > 0:
+		result = "vorgeschlagen " + strings.Join(came, ", ")
+	case countPrefix(s.Calls, "laib_restart") > 0:
+		result = "neu gestartet"
+	}
+	if s.Outcome == "escalated" {
+		result += ", eskaliert"
+	}
+	return l + " — " + what + " → " + result
+}
+
+// countPrefix is how many calls start with prefix.
+func countPrefix(calls []string, prefix string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
 }
 
 // Operator holds the clients and the limits.
@@ -67,6 +109,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		now = o.Now
 	}
 	s = Session{Started: now().UTC(), Skill: sk.Name, Trigger: tr, Outcome: "error"}
+	if tr.Kind == "event" {
+		s.Red = []string{tr.Detail}
+	}
 	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
 	defer func() {
 		s.Duration = time.Since(s.Started).Milliseconds()
@@ -97,6 +142,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				return s, nil
 			}
 			saw = ids(fs)
+			for _, f := range fs {
+				if f.Severity == "rot" {
+					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
+				}
+			}
 			if slices.Contains(sk.Granted, "repair") {
 				human = o.repairs(ctx, &mcp, fs, mem)
 			}
@@ -201,7 +251,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				msgs = append(msgs, Message{Role: "user", Content: "Das war Text, kein Tool-Aufruf. Rufe das Werkzeug über die Tool-Schnittstelle auf (function call), nicht als Text."})
 				continue
 			}
-			s.Outcome = "red"
+			s.Outcome, s.Why = "red", "Text statt Tool-Aufruf"
 			s.Note = "Sitzung rot: das Modell antwortete mit Text statt mit einem Tool-Aufruf (" + strings.TrimSpace(firstLine(reply.Content)) + "). Keine Änderung ausgeführt."
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": s.Note})
 			return s, nil
@@ -333,13 +383,15 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				}
 			}
 			if isErr && strings.Contains(out, "Budget") {
-				s.Outcome = "red"
+				s.Outcome, s.Why = "red", mcpName+": "+firstLine(out)
 			}
 			msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 		}
 	}
-	s.Outcome = "red"
-	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
+	s.Outcome, s.Why = "red", fmt.Sprintf("abgebrochen nach %d Aufrufen", len(s.Calls))
+	if !noted { // the session's one note (#550): a note written stands, the log line says the rest
+		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
+	}
 	return s, nil
 }
 

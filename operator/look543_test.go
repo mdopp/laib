@@ -49,16 +49,6 @@ func diagShown(asked [][]Message) string {
 	return ""
 }
 
-func countPrefix(calls []string, prefix string) int {
-	n := 0
-	for _, c := range calls {
-		if strings.HasPrefix(c, prefix) {
-			n++
-		}
-	}
-	return n
-}
-
 // #543: a yellow with a repair verb is one proposal, not a note every ten
 // minutes; an unchanged set of findings asks no model and writes no note,
 // and that is decided by the runner, not the prompt. The heartbeat still
