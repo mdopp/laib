@@ -6,7 +6,8 @@ After=network-online.target
 Image=${SCAN_IMAGE}
 Network=host
 Environment=TZ=${TZ}
-Environment=SCANNER=${SCANNER}
+# quoted: an AirScan device name has spaces (#571)
+Environment="SCANNER=${SCANNER}"
 Environment=SCAN_DPI=${SCAN_DPI}
 Environment=SCAN_MODE=${SCAN_MODE}
 Environment=SCAN_AREA=${SCAN_AREA}
