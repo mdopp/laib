@@ -62,8 +62,27 @@ laib plan && laib apply paperless
 ```
 
 `laib plan` refuses a host without user or password (`requires:`).
+Each apply ends by asking Paperless to fetch now, in its own worker.
 `laib diag` shows the inbox's state from `paperless-check.service`
 (Paperless' own connection test with the stored password, hourly and when
 someone looks): red when Paperless cannot log in to the mailbox, or the
-account or rule is missing. What it does not see: a mail fetched but not
-filed (Paperless' log), and a filter address that no mail is sent to.
+account or rule is missing; yellow, with the file and Paperless' reason,
+for every document Paperless could not file and still lists as a failed
+task (from a mail, the consume folder or an upload alike). What it does
+not see: a failure someone dismissed, and a filter address that no mail is
+sent to.
+
+**Never fetch by hand as root.** `podman exec systemd-paperless python3
+manage.py mail_fetcher` runs the fetch as root: the attachment lands in a
+`0700` folder of root's under `/tmp/paperless`, the worker (uid 1000)
+cannot read it, and the document fails with `Permission denied` (seen
+2026-10-22). To fetch now: Paperless → Einstellungen → E-Mail → the
+account's "Verarbeiten", or `laib apply paperless`; on the box, the image's
+own wrapper `podman exec systemd-paperless mail_fetcher`, which drops to the
+paperless user. `paperless-check.service` itself execs `--user paperless`.
+
+**A mail whose attachment failed** is not fetched again by itself:
+Paperless records it as processed (failed) and does not flag it. To file
+it: Einstellungen → E-Mail, at the rule open the processed mails, delete
+the failed entry; the next fetch takes the mail again. Then dismiss the
+failed task under Dateiaufgaben, which turns diag's yellow off.
