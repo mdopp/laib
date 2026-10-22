@@ -24,7 +24,7 @@ MA = {}
 def fresh(onboarded=None):
     """onboarded: None for a fresh Home Assistant, else (username, password) of its owner"""
     HA.clear()
-    HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, n=0,
+    HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, core_updates=0, n=0,
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
               registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None)
     MA.clear()
@@ -110,6 +110,8 @@ class FakeHA(BaseHTTPRequestHandler):
             return self.reply(401)
         if self.path == "/api/":
             return self.reply(200, {"message": "API running."})
+        if self.path == "/api/config":   # the core config every user may read (#561)
+            return self.reply(200, dict({"latitude": 32.87336, "longitude": -117.22743, "elevation": 0, "time_zone": "UTC", "country": None}, **HA["core"]))
         if self.path == "/api/config/config_entries/entry":
             return self.reply(200, [{"entry_id": "e-met", "domain": "met", "title": "Home", "state": "loaded"}]
                               + [{k: v for k, v in e.items() if k not in ("data", "token")} for e in HA["entries"]])   # every user may list them over REST, as in HA
@@ -376,6 +378,7 @@ class FakeHA(BaseHTTPRequestHandler):
                                      for x in HA["engines"][kind]]})
         if t == "config/core/update":
             HA["core"].update({k: v for k, v in m.items() if k not in ("id", "type")})
+            HA["core_updates"] += 1
             return ok()
         return err("unknown_command", t)
 
@@ -410,7 +413,7 @@ class Hook(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
 
     def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
-                 stimme=(1, 1, 1), data_dir=""):
+                 stimme=(1, 1, 1), data_dir="", zuhause=None):
         HA["ma_url"] = ma
         env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
@@ -419,6 +422,7 @@ class Hook(unittest.TestCase):
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         for name, value in (tokens or {}).items():
             env["LAIB_SECRET_" + name] = value
+        env.update(zuhause or {})
         p = subprocess.run([str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + "\n" + p.stderr).splitlines() if not l.startswith("laib-secret: "))
@@ -707,6 +711,40 @@ class Stimme(Hook):
         sol = HA["pipelines"][0]
         self.assertEqual((sol["tts_engine"], sol["conversation_engine"]), ("tts.solaris_tts", "conversation.frage"))
         self.assertIn("tts.piper speaks no de", log)
+
+
+class Zuhause(Hook):
+    """#561: box.yml zuhause is Home Assistant's home (latitude, longitude, elevation, time zone,
+    country), set through config/core/update only when it differs; without coordinates HA's
+    location stays as the owner set it, and the hook says why (Laib never looks an address up).
+    A fictitious household; the coordinates never reach the log."""
+    HOME = {"ZUHAUSE_STREET": "Musterweg 12", "ZUHAUSE_CITY": "Musterstadt", "ZUHAUSE_COUNTRY": "DE",
+            "ZUHAUSE_LATITUDE": "52.1234", "ZUHAUSE_LONGITUDE": "8.0456", "ZUHAUSE_ELEVATION": "63"}
+
+    def test_the_unit_names_zuhause_so_laib_hands_it_to_this_hook_and_applies_it_on_a_move(self):
+        self.assertIn("${ZUHAUSE_REV}", (HOOK.parent / "home-assistant.container").read_text())
+
+    def test_the_household_coordinates_become_has_home_once(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        p, _, log = self.run_hook(zuhause=self.HOME)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual({k: HA["core"].get(k) for k in ("latitude", "longitude", "elevation", "time_zone", "country")},
+                         {"latitude": 52.1234, "longitude": 8.0456, "elevation": 63, "time_zone": "Europe/Berlin", "country": "DE"}, log)
+        self.assertEqual(HA["core_updates"], 1)
+        self.assertNotIn("52.1234", log, "the coordinates in the hook's log")
+        self.assertNotIn("Musterweg", log, "the street in the hook's log")
+        p, _, log = self.run_hook(zuhause=self.HOME)
+        self.assertEqual((p.returncode, HA["core_updates"]), (0, 1), "the same home twice is one update: " + log)
+
+    def test_without_coordinates_has_location_stays(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["core"].update(latitude=1.5, longitude=2.5)
+        p, _, log = self.run_hook(zuhause={"ZUHAUSE_CITY": "Musterstadt", "ZUHAUSE_LATITUDE": "", "ZUHAUSE_LONGITUDE": ""})
+        self.assertEqual((p.returncode, HA["core_updates"]), (0, 0), log)
+        self.assertIn("no latitude/longitude", log)
+        p, _, log = self.run_hook()
+        self.assertEqual((p.returncode, HA["core_updates"], HA["core"]["latitude"]), (0, 0, 1.5), log)
+        self.assertNotIn("zuhause", log, "without the block the hook has nothing to say about it")
 
 
 class FakeMA(BaseHTTPRequestHandler):

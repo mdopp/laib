@@ -1,5 +1,12 @@
 domain: example.home
 timezone: Europe/Berlin
+zuhause:                      # a fictitious household (#561)
+  street: Musterweg 12
+  postcode: "12345"
+  city: Musterstadt
+  country: DE
+  latitude: 52.1234
+  longitude: 8.0456
 dataDir: /mnt/data/stacks
 lanIp: 192.168.1.10
 hostNetwork: [caddy]
