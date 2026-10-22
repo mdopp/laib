@@ -29,6 +29,14 @@ The journal is *not* in the repo: `/mnt/data/laib/journal/YYYY-MM-DD.jsonl`.
 ```yaml
 domain: example.home
 timezone: Europe/Berlin
+zuhause:                          # the household's address (#561), all optional; templates read ZUHAUSE_*
+  street: Musterweg 12
+  postcode: "12345"
+  city: Musterstadt
+  country: DE                     # ISO 3166-1, two letters
+  latitude: 52.1234               # degrees; latitude and longitude together or not at all
+  longitude: 8.0456
+  elevation: 63                   # whole metres, optional
 dataDir: /mnt/data/stacks        # ${DATA_DIR} for templates
 roles:                            # which service plays which platform role
   proxy: caddy
@@ -101,6 +109,24 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `${PERSONA_LANGUAGES}` (`de,en`) and
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change.
+
+`zuhause` is the household's address, once for every template that needs
+it (#561): Home Assistant's home, a solar forecast, a waste calendar. The
+loader checks it: every field one line, the postcode loose (letters, digits,
+blanks, dashes, 2 to 10), the country two capitals, latitude (-90…90) and
+longitude (-180…180) together, the elevation whole metres (-500…9000).
+Units get `${ZUHAUSE_STREET}`, `${ZUHAUSE_POSTCODE}`, `${ZUHAUSE_CITY}`,
+`${ZUHAUSE_COUNTRY}`, `${ZUHAUSE_LATITUDE}`, `${ZUHAUSE_LONGITUDE}`,
+`${ZUHAUSE_ELEVATION}` (empty where unset) and `${ZUHAUSE_REV}`, which
+changes with any of them: a unit that carries it is applied again on a
+move, and its post-deploy runs. Hooks get the same `ZUHAUSE_*` variables,
+but only for a service whose units name one; no other service sees the
+address. Coordinates are entered, never looked up: Laib makes no call to a
+geocoding service. An address without coordinates while a service reads
+them is a plan warning, and that service leaves its location alone.
+`laib zuhause set` (Haus's form calls `laib_zuhause`) changes the block as a
+proposal of class human ("ändert die Adresse des Haushalts"); the owner
+approves it, the caller never (docs/INTERFACE.md).
 
 `people` names each person once (lowercase, like a service name) with the
 channels a message to them goes out on, in order, as `hermes send` takes

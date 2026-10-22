@@ -607,6 +607,11 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "PERSONA="+st.Box.Persona,
 		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
 		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HAUS_URL="+render.HausURL(st))
+	if svc.Uses("ZUHAUSE_") { // the address only where a unit reads it (#561)
+		for k, v := range st.ZuhauseVars() {
+			env = append(env, k+"="+v)
+		}
+	}
 	for k, v := range svc.Values {
 		val := v.Literal
 		if v.Secret != "" {

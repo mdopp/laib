@@ -28,11 +28,16 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 16,400: raised by the owner, mdopp, 2026-10-22, #561: box.yml zuhause,
+# the household's address, its proposal verb (laib zuhause) and the
+# ZUHAUSE_* builtins, about 230 lines, the kernel at 15,867 before; state,
+# review and render work with no honest cut. The owner set 16,400 rather
+# than the 16,200 asked, room for the next household setting of that kind.
 # 16,000: raised by the owner, mdopp, 2026-10-19, #443: the growth since
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
-# owner, 2026-10-17, #309.) The 95 % warning sits at 15,200.
-budget kernel 16000 cmd internal
+# owner, 2026-10-17, #309.) 
+budget kernel 16400 cmd internal
 budget operator 3000 operator
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
 budget stick 1800 stick         # the laptop's install-stick builder, 1,468

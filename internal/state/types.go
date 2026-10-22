@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // Box is box.yml.
 type Box struct {
-	Domain   string `yaml:"domain"`
-	Timezone string `yaml:"timezone"`
-	DataDir  string `yaml:"dataDir"`
-	LanIP    string `yaml:"lanIp"`
-	Roles    Roles  `yaml:"roles"`
-	GPU      GPU    `yaml:"gpu"`
-	Backup   Backup `yaml:"backup"`
-	DNS      DNS    `yaml:"dns"`
-	TLS      string `yaml:"tls"` // "" = Let's Encrypt (HTTP-01, or DNS-01 with dns.provider); "internal" = Caddy's own CA (a trial box behind another box's port 80)
-	Laib     Laib   `yaml:"laib"`
+	Domain   string  `yaml:"domain"`
+	Timezone string  `yaml:"timezone"`
+	Zuhause  Zuhause `yaml:"zuhause"` // the household's address (#561): templates read ZUHAUSE_*
+	DataDir  string  `yaml:"dataDir"`
+	LanIP    string  `yaml:"lanIp"`
+	Roles    Roles   `yaml:"roles"`
+	GPU      GPU     `yaml:"gpu"`
+	Backup   Backup  `yaml:"backup"`
+	DNS      DNS     `yaml:"dns"`
+	TLS      string  `yaml:"tls"` // "" = Let's Encrypt (HTTP-01, or DNS-01 with dns.provider); "internal" = Caddy's own CA (a trial box behind another box's port 80)
+	Laib     Laib    `yaml:"laib"`
 	// HostNetwork is the closed carve-out list (ServiceBay ADR 0007 carried
 	// over, #16): only these services may declare hostNetwork: true.
 	HostNetwork []string `yaml:"hostNetwork"`
@@ -364,6 +366,16 @@ type Value struct {
 // Set: the value is a non-empty literal. ~, null and blanks load as empty;
 // `false` is text and counts; a !secret never does, plan does not know it.
 func (svc *Service) Set(name string) bool { return svc.Values[name].Literal != "" }
+
+// Uses: one of the service's units names a value starting with prefix.
+func (svc *Service) Uses(prefix string) bool {
+	for _, content := range svc.Units {
+		if slices.ContainsFunc(Placeholders(content), func(v string) bool { return strings.HasPrefix(v, prefix) }) {
+			return true
+		}
+	}
+	return false
+}
 
 // Unmet lists what `requires` leaves open: with secrets nil the literal
 // values (load), with secrets the !secret ones (plan, render).

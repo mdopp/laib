@@ -1,7 +1,8 @@
 # ADR 0017 — Data lives in standard backends; agents are clients
 
 Applies when an agent, a page or a tool wants its own store for something
-a person wrote down: a note, an appointment, a contact, a reminder.
+a person wrote down: a note, an appointment, a contact, a reminder; or
+when a template needs the household's address (amendment, #561).
 
 - **Status:** Accepted, 2026-10-10
 
@@ -38,3 +39,29 @@ Hermes, the question was whether notes and calendars move into the agent.
   for the Bote (a secret in its template).
 - Favorites go to Haus; topics and sessions go away; pending residents
   become a Box card.
+
+## Amendment 2026-10-22 (#561): the household's address is box.yml zuhause
+
+Home Assistant asks for its home in its onboarding, a solar forecast needs
+coordinates, a waste-collection lookup needs the street. Kept per service,
+a move means finding every copy. The owner: "wir brauchen also irgendwo ein
+Setup, so dass wir Adressen auch nachträglich ändern können."
+
+- **The address is box configuration, not a backend's data.** Templates
+  read it when they render and when their hooks run, so it lives in the
+  state repo once: `box.yml zuhause` (street, postcode, city, country,
+  latitude, longitude, elevation), validated on load, given to units as
+  the `ZUHAUSE_*` builtins and to the hooks of a service whose units name
+  one (docs/STATE.md). No other service sees it.
+- **Changing it is the owner's decision.** `laib zuhause set` (MCP
+  `laib_zuhause`) writes the block as a proposal; the review marks a
+  change to `zuhause` class human, so neither the dial nor the caller lets
+  it in. The haus hand may call it (Haus's form, admins only); it decides
+  nothing. The proposal's reason carries no address, so the inbox list, the
+  journal and the owner's chat message do not either; the diff does, for
+  the one who approves.
+- **Laib never geocodes.** Street to coordinates is a call to an outside
+  service and sends the address out; the kernel makes none. The
+  coordinates are entered (Haus's form: a map pin, or a lookup the person
+  starts knowingly, saying where it goes). A template that needs
+  coordinates and finds only an address says so and changes nothing.

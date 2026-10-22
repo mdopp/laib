@@ -266,6 +266,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
 	}
 	vars["PEOPLE_REV"] = st.PeopleRev()
+	maps.Copy(vars, st.ZuhauseVars())
 	for k, v := range svc.Values {
 		if v.Secret != "" {
 			vars[k] = secretValue(secrets, v.Secret)
@@ -297,16 +298,7 @@ func ModelVars(st *state.State, secrets map[string]string) map[string]string {
 
 // uses: some service's unit names a value starting with prefix (PERSONA…, PEOPLE_REV).
 func uses(st *state.State, prefix string) bool {
-	for _, svc := range st.Services {
-		for _, content := range svc.Units {
-			for _, v := range state.Placeholders(content) {
-				if strings.HasPrefix(v, prefix) {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return slices.ContainsFunc(slices.Collect(maps.Values(st.Services)), func(svc *state.Service) bool { return svc.Uses(prefix) })
 }
 
 // secretValue: the placeholder only while no secrets are given (plan,

@@ -6,6 +6,8 @@ After=network-online.target
 Image=${HA_IMAGE}
 Network=host
 Environment=TZ=${TZ}
+# box.yml zuhause (#561): a move changes it, so laib applies HA again and post-deploy sets its home
+Environment=ZUHAUSE_REV=${ZUHAUSE_REV}
 # rest_command.mitteilung's bearer (packages/laib_mitteilung.yaml reads it with !env_var, #177)
 Environment="BOTE_NOTIFY_AUTH=Bearer ${NOTIFY_TOKEN}"
 # auth_oidc's client secret (packages/laib_auth_oidc.yaml reads it with !env_var, #253)

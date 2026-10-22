@@ -6,6 +6,9 @@ Image=docker.io/traefik/whoami:v1.10
 PublishPort=127.0.0.1:8080:80
 Environment=WHOAMI_NAME=whoami.example.home
 Secret=laib.whoami.whoami.TOKEN,type=env,target=TOKEN
+# box.yml zuhause (#561): the coordinates, and the revision that applies it again on a move
+Environment=HOME_LAT=52.1234 HOME_LON=8.0456
+Environment=ZUHAUSE_REV=906422ac3a34
 AutoUpdate=registry
 
 [Service]
