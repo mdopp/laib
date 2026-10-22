@@ -13,8 +13,9 @@ AUTH = "Basic " + base64.b64encode(b"admin:adminpw").decode()
 class Fake:
     """Paperless' mail endpoints: accounts and rules in memory, the test answers ok/refused"""
 
-    def __init__(self, accounts=None, rules=None, test_ok=True):
+    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None):
         self.accounts, self.rules, self.test_ok, self.calls, self.tested = accounts or [], rules or [], test_ok, [], []
+        self.tasks, self.queries, self.processed = tasks or [], [], []
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -34,12 +35,22 @@ class Fake:
                     return self.send(401, {"detail": "no"})
                 n = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(n)) if n else None
-                path = self.path.split("?")[0]
+                path, _, query = self.path.partition("?")
                 fake.calls.append((method, path, body))
+                fake.queries.append((path, query, self.headers.get("Accept", "")))
                 coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules}
                 if path == "/api/mail_accounts/test/":
                     fake.tested.append(body)
                     return self.send(200, {"success": True}) if fake.test_ok else self.send(400, "Unable to connect to server")
+                if path == "/api/tasks/" and method == "GET":
+                    # API version 9 (Paperless 2.x, and 3.x for old clients): a plain list, uppercase states
+                    if "version=9" not in self.headers.get("Accept", ""):
+                        return self.send(406, {"detail": "the probe must pin version 9"})
+                    ack = "acknowledged=false" in query
+                    return self.send(200, [t for t in fake.tasks if not (ack and t["acknowledged"])])
+                if path.startswith("/api/mail_accounts/") and path.endswith("/process/") and method == "POST":
+                    fake.processed.append(int(path.split("/")[3]))
+                    return self.send(200, {"result": "OK"})
                 if path in coll and method == "GET":
                     return self.send(200, {"count": len(coll[path]), "next": None, "results": coll[path]})
                 if path in coll and method == "POST":
@@ -71,7 +82,7 @@ class Fake:
         self.url = "http://127.0.0.1:%d" % self.srv.server_port
 
     def writes(self):
-        return [c for c in self.calls if c[0] != "GET" and c[1] != "/api/mail_accounts/test/"]
+        return [c for c in self.calls if c[0] != "GET" and c[1] != "/api/mail_accounts/test/" and not c[1].endswith("/process/")]
 
 
 MAIL = {"PAPERLESS_MAIL_HOST": "imap.strato.de", "PAPERLESS_MAIL_PORT": "993", "PAPERLESS_MAIL_SECURITY": "ssl",
@@ -196,6 +207,55 @@ class PaperlessMail(unittest.TestCase):
         self.assertEqual(st["findings"][0]["severity"], "rot")
         self.assertIn("die Regel", st["findings"][0]["detail"])
         self.assertEqual(fake.writes(), [])   # check only looks
+
+    def run_check(self, fake, values):
+        out = os.path.join(self.tmp, "st.json")
+        env = {"PATH": os.environ["PATH"], "PAPERLESS_API": fake.url, "PAPERLESS_ADMIN_USER": "admin", "PAPERLESS_ADMIN_PASSWORD": "adminpw",
+               "LAIB_STATUS_FILE": out, **values}
+        r = subprocess.run([sys.executable, "-", "check"], input=SCRIPT.read_text(), env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(out) as f:
+            return json.load(f)
+
+    def test_a_failed_consume_is_a_yellow_finding(self):
+        # 2026-10-22: a mail was fetched, its attachment not filed (PermissionError in the scratch
+        # dir); the inbox check stayed green. A failed consume Paperless still lists is yellow.
+        accounts = [{"id": 1, "name": "x", "imap_server": "imap.strato.de", "username": "webmaster@example.org", "imap_port": 993,
+                     "imap_security": 2, "character_set": "UTF-8", "account_type": 1, "is_token": False}]
+        rules = [{"id": 1, "account": 1, "filter_to": "dokumente@example.org", "enabled": True, "name": "r"}]
+        failed = {"id": 9, "task_name": "consume_file", "task_file_name": "Rechnung_1117583.pdf", "status": "FAILURE",
+                  "result": "[Errno 13] Permission denied: '/tmp/paperless/paperless-mail-43qxltum/Rechnung_1117583.pdf'",
+                  "acknowledged": False, "date_created": "2026-10-22T14:50:30Z"}
+        fine = [{**failed, "id": 10, "status": "SUCCESS", "task_file_name": "ok.pdf"},
+                {**failed, "id": 11, "acknowledged": True, "task_file_name": "dismissed.pdf"},
+                {**failed, "id": 12, "task_name": "train_classifier", "task_file_name": None}]
+        st = self.run_check(Fake(accounts=accounts, rules=rules, tasks=[failed] + fine), MAIL)
+        self.assertEqual([f["severity"] for f in st["findings"]], ["gelb"])
+        self.assertIn("Rechnung_1117583.pdf", st["findings"][0]["detail"])
+        self.assertIn("Permission denied", st["findings"][0]["detail"])
+        self.assertNotIn("ok.pdf", json.dumps(st))
+        self.assertNotIn("dismissed.pdf", json.dumps(st))
+        # and the probe can be green: the same box without the failure
+        self.assertEqual(self.run_check(Fake(accounts=accounts, rules=rules, tasks=fine), MAIL)["findings"], [])
+        # a failed consume from the consume folder counts too, also without a mail inbox
+        st = self.run_check(Fake(tasks=[failed]), {"PAPERLESS_MAIL_HOST": ""})
+        self.assertEqual([f["severity"] for f in st["findings"]], ["gelb"])
+
+    def test_setup_fetches_once_through_paperless_worker(self):
+        # a fetch run by hand as root (python3 manage.py mail_fetcher under podman exec) writes the
+        # attachment into a 0700 root dir the worker (uid 1000) cannot read: setup asks Paperless'
+        # API to fetch now, so the worker fetches and nobody has a reason to
+        fake = Fake()
+        r = self.run_setup(fake, MAIL)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(fake.processed, [1])
+
+    def test_laibs_exec_never_runs_as_root(self):
+        unit = (SCRIPT.parent / "paperless-check.service").read_text()
+        execs = [l for l in unit.splitlines() if l.startswith("ExecStart=") and "podman exec" in l]
+        self.assertTrue(execs)
+        for l in execs:
+            self.assertIn(" --user paperless ", l)
 
 
 if __name__ == "__main__":
