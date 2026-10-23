@@ -104,7 +104,7 @@ func TestEnsureFirewallLoadsTheRulesetOnlyWhenMissing(t *testing.T) {
 func TestSelfRollbackSwapsThePreviousBinariesAndRestarts(t *testing.T) {
 	env, _, calls := fwBox(t, false, true)
 	dir := t.TempDir()
-	for _, b := range []string{"laib", "laib-operator", "laib-lease"} {
+	for _, b := range []string{"laib", "laib-operator", "laib-lease", "laib-haushalt"} {
 		os.WriteFile(filepath.Join(dir, b), []byte("new"), 0o755)
 		os.WriteFile(filepath.Join(dir, b+".prev"), []byte("old"), 0o755)
 	}
@@ -113,7 +113,7 @@ func TestSelfRollbackSwapsThePreviousBinariesAndRestarts(t *testing.T) {
 		t.Fatalf("rc %d", rc)
 	}
 	joined := strings.Join(*calls, "\n")
-	for _, want := range []string{"sudo mv " + filepath.Join(dir, "laib.prev") + " " + filepath.Join(dir, "laib"), "sudo mv " + filepath.Join(dir, "laib-lease.prev"), "systemctl --user try-restart laib.service"} {
+	for _, want := range []string{"sudo mv " + filepath.Join(dir, "laib.prev") + " " + filepath.Join(dir, "laib"), "sudo mv " + filepath.Join(dir, "laib-lease.prev"), "sudo mv " + filepath.Join(dir, "laib-haushalt.prev"), "systemctl --user try-restart laib.service"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}

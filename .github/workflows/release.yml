@@ -71,6 +71,7 @@ jobs:
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-lease-linux-amd64 ./cmd/laib-lease
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-disk-linux-amd64 ./disk/cmd/laib-disk
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-notify-linux-amd64 ./notify/cmd/laib-notify
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-haushalt-linux-amd64 ./haushalt/cmd/laib-haushalt
       - run: |
           for t in linux-amd64 darwin-arm64 darwin-amd64 windows-amd64; do
             ext=""; [ "$t" = windows-amd64 ] && ext=.exe
@@ -83,6 +84,6 @@ jobs:
           subject-path: |
             laib-*
             SHA256SUMS
-      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64 laib-lease-linux-amd64 laib-disk-linux-amd64 laib-notify-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-install-box.sh laib-self-update.sh laib-stick-* SHA256SUMS
+      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-operator-linux-amd64 laib-lease-linux-amd64 laib-disk-linux-amd64 laib-notify-linux-amd64 laib-haushalt-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-install-box.sh laib-self-update.sh laib-stick-* SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
