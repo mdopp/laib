@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.24.0](https://github.com/mdopp/laib/compare/v0.23.0...v0.24.0) (2026-10-23)
+
+
+### Features
+
+* **inbox:** laib propose --path, and zuhause and person signal onto it ([b0fde9d](https://github.com/mdopp/laib/commit/b0fde9d3dbd792a8a63b9fe05d3faea3b0e1aa59))
+* **policy:** path grants for hands with a verb list ([6dc9862](https://github.com/mdopp/laib/commit/6dc98620dc5411708a17f5f3c70ac352e296d71d))
+
+
+### Bug Fixes
+
+* **ci,update:** vm-install runs on a train again; template updates proposed after every update, once ([04cc6a9](https://github.com/mdopp/laib/commit/04cc6a9a1ec8464d88e949a604c1948ec57f0ac8))
+
 ## [0.23.0](https://github.com/mdopp/laib/compare/v0.22.0...v0.23.0) (2026-10-23)
 
 
