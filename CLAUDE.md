@@ -5,7 +5,7 @@ Laib is the agent-first control plane for one home box. Read `README.md`, then
 `docs/adr/` are binding; the weirdness you are about to "fix" is usually one of
 them.
 
-## The three rules that outrank everything else
+## The four rules that outrank everything else
 
 1. **Scripts do the mechanics, agents produce artifacts.** An agent's output is
    a diff, a proposal, a question, a report or a test. Applying, waiting,
@@ -25,6 +25,20 @@ them.
    squeezing code to fit is a review finding, not a fix. No gate until
    something recurs. Three similar lines beat a premature abstraction. No
    feature flags for cases that cannot happen.
+
+4. **Every touch answers at once — UX is part of the feature, not polish.**
+   (owner, 2026-10-23) Anything a person starts — a tap in Haus or the pages,
+   a message to the Bote, a voice command, a button on a device — shows
+   within a moment that it was received (pressed state, "läuft …"), shows
+   what is happening while it runs (the step, the page, the progress), and
+   always ends in a visible outcome in the place it was started: done,
+   failed with the reason in plain German and what to do next, or waiting
+   for the person with the choices. No silent buttons, no spinner without
+   an end (a timeout becomes an honest error), no dead ends, no raw tool
+   errors ("Invalid argument") in front of the family. Every surface works
+   on a phone first. A backend that answers asynchronously owes the surface
+   a status it can show; a feature whose outcome only shows in a log is not
+   done. A PR that adds an action without these states fails review.
 
 ## Where things are
 
