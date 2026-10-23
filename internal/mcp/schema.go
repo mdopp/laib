@@ -34,6 +34,7 @@ var mcpParams = map[string][]mcpParam{
 	"logs":     {svcParam, sinceParam},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
+	"state":    {{name: "path", typ: "string", desc: "die Datei im State-Repo, z. B. policy.yml oder services/jellyfin/values.yml; leer = die Liste der Dateien"}},
 	"write":    {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
 	"look":     cmdParams,
 	"exec":     cmdParams,

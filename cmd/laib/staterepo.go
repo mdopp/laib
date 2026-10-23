@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 )
 
@@ -160,5 +165,67 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	fmt.Fprintf(env.W(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.Paths.State, recipient, env.Paths.Key)
+	return cli.ExitOK
+}
+
+var yamlKey = regexp.MustCompile(`(?m)^(\s*)([A-Za-z_][A-Za-z0-9_]*):[ \t]*(\S[^\n]*)$`)
+
+// cmdState lists the state repo's files on main, or prints one as main has
+// it (#576), so an agent writes `laib propose --patch` against the real
+// text. secrets.age is never shown; a secret's value is redacted wherever
+// it stands, and so is a literal under a declared secret's key.
+func cmdState(ctx context.Context, env *cliEnv, args []string) int {
+	ls, err := exec.CommandContext(ctx, "git", "-C", env.Paths.State, "ls-tree", "-r", "--name-only", "main").Output()
+	if err != nil {
+		return env.Fail(fmt.Errorf("git ls-tree main: %w", err))
+	}
+	files := slices.DeleteFunc(strings.Split(string(ls), "\n"), func(f string) bool { return f == "" || f == "secrets.age" })
+	if len(args) == 0 {
+		if env.JSON {
+			return cli.Emit(env, files)
+		}
+		fmt.Fprintln(env.W(), strings.Join(files, "\n"))
+		return cli.ExitOK
+	}
+	p := args[0]
+	if !slices.Contains(files, p) {
+		return env.Fail(fmt.Errorf("%s is not a file on main (laib state lists them; secrets.age is never shown)", p))
+	}
+	b, err := exec.CommandContext(ctx, "git", "-C", env.Paths.State, "show", "main:"+p).Output()
+	if err != nil {
+		return env.Fail(fmt.Errorf("git show main:%s: %w", p, err))
+	}
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	declared := map[string]bool{}
+	for name := range sec {
+		declared[name] = true
+	}
+	if st, err := cli.LoadState(env); err == nil {
+		for _, s := range render.SecretNames(st) {
+			declared[s.Name] = true
+		}
+	}
+	text, hit := string(b), map[string]bool{}
+	for _, name := range slices.Sorted(maps.Keys(sec)) {
+		if v := sec[name]; v != "" && strings.Contains(text, v) {
+			text, hit[name] = strings.ReplaceAll(text, v, render.Placeholder(name)), true
+		}
+	}
+	text = yamlKey.ReplaceAllStringFunc(text, func(line string) string {
+		m := yamlKey.FindStringSubmatch(line)
+		if !declared[m[2]] || strings.HasPrefix(m[3], "!secret") || m[3] == render.Placeholder(m[2]) {
+			return line
+		}
+		hit[m[2]] = true
+		return m[1] + m[2] + ": " + render.Placeholder(m[2])
+	})
+	redacted := slices.Sorted(maps.Keys(hit))
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"path": p, "content": text, "redacted": redacted})
+	}
+	fmt.Fprint(env.W(), text)
+	if len(redacted) > 0 {
+		fmt.Fprintf(env.Errw(), "laib: redacted %s\n", strings.Join(redacted, ", "))
+	}
 	return cli.ExitOK
 }

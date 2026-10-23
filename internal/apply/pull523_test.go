@@ -13,7 +13,9 @@ import (
 // so apply pulled nothing. A floating image of a service the plan restarts
 // is pulled; a pinned one, or one of a service not in the plan, is not.
 func TestAFloatingImageOfARestartedServiceIsPulled(t *testing.T) {
-	unit := func(img, extra string) string { return "[Container]\nImage=" + img + "\n" + extra + "\n[Install]\nWantedBy=default.target\n" }
+	unit := func(img, extra string) string {
+		return "[Container]\nImage=" + img + "\n" + extra + "\n[Install]\nWantedBy=default.target\n"
+	}
 	out := render.Output(map[string]string{
 		"quadlet/frage/frage.container":       unit("ghcr.io/mdopp/laib-frage:latest", "AutoUpdate=registry"),
 		"quadlet/frage/frage-searx.container": unit("docker.io/searxng/searxng:2026.10.1", "AutoUpdate=registry"),

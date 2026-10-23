@@ -11,6 +11,10 @@ laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journa
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
+laib state [<path>]                  the state repo's files on main, or one file as committed there (box.yml, policy.yml,
+                                     services/<s>/values.yml …), to write a --patch against the real text; secrets.age is
+                                     never listed or shown, a secret's value and a literal under a declared secret's key
+                                     read ${secret:NAME}, and the output names what was redacted (#576)
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
@@ -41,7 +45,7 @@ laib rollback <service|commit>       git revert + apply
 laib propose "<reason>"              human with a shell: commit the working tree to a proposal branch
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
 laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
-laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property); validated in a worktree
+laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property), against the text laib state shows; validated in a worktree
 laib propose … [--finding "<probe> <service>"] [--evidence …] [--undo …] [--source <url>]…
                                      the anchor (#544): the diag finding it answers (diag must show it now),
                                      what was seen, the way back; a --source makes it class human
@@ -81,6 +85,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
+| `laib_state` | `path?` → without it the list of files on main; with it `{path, content, redacted}` (read tier: every hand without a verb list reaches it by its ceiling, #576) |
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
