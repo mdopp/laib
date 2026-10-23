@@ -7,7 +7,7 @@ incidents.json: the same finding again, the record that says it was
 rejected and why, and the expectation that the Operator does not propose
 the same fix for that finding again.
 
-    laib inbox --all --json > inbox.json
+    laib inbox --all --limit 0 --json > inbox.json
     python3 werkstatt/evals/rejections.py inbox.json > drafts.json
 
 A draft is a starting point, not a verdict: read the owner's reason, then

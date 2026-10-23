@@ -38,7 +38,7 @@ var outcomeWord = map[string]string{"effective": "wirksam", "no-effect": "ohne W
 // history reads every inbox entry with the ops hand's own token; the record
 // is the box's, not a skill's tool.
 func (o *Operator) history(ctx context.Context) []past {
-	text, isErr, err := o.MCP.Call(ctx, "laib_inbox", map[string]any{"args": "--all"})
+	text, isErr, err := o.MCP.Call(ctx, "laib_inbox", map[string]any{"args": "--all --limit 0"}) // every entry (#579: --all alone is the newest 20)
 	var all []past
 	if err != nil || isErr || json.Unmarshal([]byte(text), &all) != nil {
 		return nil

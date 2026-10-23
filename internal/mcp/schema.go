@@ -45,7 +45,9 @@ var mcpParams = map[string][]mcpParam{
 	"note": {{name: "kind", typ: "string", flag: "--kind", enum: []string{"watch", "incident", "report"}, required: true, desc: "incident nach Reparatur oder Eskalation, watch wenn alles in Ordnung war, report für den Morgenbericht"},
 		{name: "text", typ: "string", desc: "deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst", required: true}},
 	"journal": {sinceParam},
-	"context": {sinceParam},
+	"context": {sinceParam, {name: "full", typ: "boolean", flag: "--full", desc: "das ganze Bündel: alle Dienste, das Journal ungekürzt (sonst der erste Blick, #579)"}},
+	"inbox": {{name: "id", typ: "string", desc: "ein Vorschlag ganz, mit Karte, auch ein entschiedener"}, {name: "all", typ: "boolean", flag: "--all", desc: "auch die entschiedenen, neueste zuerst, ohne Karte"},
+		{name: "limit", typ: "string", flag: "--limit", desc: "höchstens so viele entschiedene (20; 0 = alle)"}},
 	// propose and wish build their argv in code (mcpArgv)
 	"propose": {{name: "reason", typ: "string", desc: "ein Satz: warum", required: true},
 		{name: "service", typ: "string", desc: "der Dienst, dessen values.yml sich ändert"},

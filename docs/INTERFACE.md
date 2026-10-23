@@ -51,7 +51,9 @@ laib approve <id> | laib reject <id> ["<grund>"]  merge or drop a proposal (tier
                                      a reject keeps the reason, "nicht jetzt" is free (#544)
 laib backup                          restic snapshot of state, journal and declared data paths
 laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply
-laib context [--since 24h]           starter bundle for an agent session
+laib context [--since 24h] [--full]  starter bundle for an agent session; by default the first look (#579): readiness, the services
+                                     not green, the open proposals (`open`), the journal's newest 30 lines without the looks, each cut
+                                     to a line (`omitted`: how many it left out); --full is the whole bundle
 laib template list|lint|add <git>    registries and the contract check
 laib adopt <unit> | laib ignore <unit>
 laib token mint <hand> | list | revoke <id>   humans only
@@ -86,7 +88,9 @@ splitting a command line, so quotes and spaces survive:
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
-| `laib_journal`, `laib_context` | `since?` |
+| `laib_journal` | `since?` |
+| `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
+| `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
@@ -132,7 +136,7 @@ dropped from its reply. The built-in skills' menus:
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
---all` as the ops hand and puts the last ten measured proposals before the
+--all --limit 0` as the ops hand and puts the last ten measured proposals before the
 context — how many were effective, without effect, rolled back, rejected,
 with the owner's reasons; the morning report's note ends with the month's
 rate and names each lesson whose finding has since failed twice, for
@@ -287,8 +291,11 @@ findings (`laib-disk probe [--hardware]`, JSON).
 
 ### `laib inbox`
 
-Open proposals (`--all` for decided ones), as a table or `--json`; also an
-MCP tool (read tier), so the Bote and Haus can show the inbox. A proposal
+Open proposals in full, with their cards, as a table or `--json`; also an
+MCP tool (read tier), so the Bote and Haus can show the inbox. `--all` adds
+the decided ones newest first, without card, `reasons`, `warnings` and
+`facts`, at most `--limit` of them (20; `0` for all, #579);
+`laib inbox <id>` is one proposal in full, decided or not. A proposal
 of class `human` lists why only a human may allow it (the content review,
 docs/DESIGN.md). Deciding stays `laib approve` / `laib reject`; an agent's
 approve of a human-class proposal is refused with the same reasons.
