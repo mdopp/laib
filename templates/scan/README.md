@@ -90,13 +90,19 @@ read by `laib status`, `laib diag`, `laib scan status` and Haus:
 ```
 
 `suche` is the last search, `{"zustand": "läuft | fertig | fehler", "at",
-"detail", "funde": [{"geraet": "epson2:net:192.168.178.87", "name": "Epson
-PID 0899 flatbed scanner"}]}`; a `geraet` goes into `einrichten --geraet`
-as it is. `pruefung` is the last check, `{"geraet", "ok", "at", "detail",
-"probe"?}`: on the first start with a new `SCANNER`, on `pruefen` (the
-device opened, nothing scanned) and on `probe` (one sheet from the feeder,
-read, never filed). Both stay in every status until the next search or
-check.
+"detail", "gefragt", "einzelheiten"?, "funde": [{"geraet":
+"epson2:net:192.168.178.87", "name": "Epson PID 0899 flatbed scanner"}]}`;
+a `geraet` goes into `einrichten --geraet` as it is. `gefragt` is how many
+LAN neighbours the search asked directly (#589). `pruefung` is the last
+check, `{"geraet", "ok", "at", "detail", "einzelheiten"?, "probe"?}`: on
+the first start with a new `SCANNER`, on `pruefen` (the device opened,
+nothing scanned) and on `probe` (one sheet from the feeder, read, never
+filed). Both stay in every status until the next search or check.
+
+`detail` is always a German sentence for the family („Der Scanner unter
+192.168.178.87 antwortet nicht – ist er an?“); the raw words of SANE, of a
+socket or of a tool go only into `einzelheiten` (#589, #588), also on a
+stack in `letzte` that failed before its first sheet.
 
 `seite` is set while `scannt` (the page being scanned), `blatt` and `grund`
 while `wartet-auf-rest` (the sheet to put the rest in from, the scanner's
@@ -137,7 +143,22 @@ suchen“ lists what the network answers, „Diesen einrichten“ (or a device
 typed by hand, `epson2:net:<ip>`) sets it, the check follows by itself,
 „Probeseite“ scans one sheet. The search finds epson2 devices (with `net
 autodiscovery`, which the service adds) and eSCL/AirScan devices
-(sane-airscan); whether the WF-3540 answers the search is not tested yet.
+(sane-airscan), and then asks the LAN's neighbours directly (#589): the
+host's neighbour table (`/proc/net/arp`, the host's own, as `laib net
+geraete` reads it; complete IPv4 entries on the default route's
+interface), after one UDP knock on the discard port of each address of
+their /24, as `laib net geraete --wecken` does. Each neighbour is asked on
+two ports only, TCP 1865 (epson2: a find `epson2:net:<ip>`) and eSCL
+(`/eSCL/ScannerCapabilities` on 80, then 443: `escl:http://<ip>:80`, the
+SANE escl backend's name, or sane-airscan's device when it lists that
+address), in parallel, 1.5 s per knock and 3 s all told after a 1.5 s
+wake. A device asleep through the knock, or outside that /24, is not found:
+type it by hand.
+
+The check knocks on the device's port first (1865 for `epson2:net:`, the
+URL's for `escl:`; an `airscan:` name carries no address and goes straight
+to SANE): no answer is „antwortet nicht – ist er an?“, and SANE is not
+asked.
 A scanner that scans to a folder is set up in its own web menu: the share
 `\\<box>\data`, the folder `scan-eingang`, a family member's Samba account.
 

@@ -61,25 +61,33 @@ func cmdZuhause(ctx context.Context, env *cliEnv, args []string) int {
 	if args[0] != "set" || fs.NArg() > 0 || fs.NFlag() == 0 {
 		return env.Fail(errors.New(usage))
 	}
-	box, err := os.ReadFile(filepath.Join(env.Paths.State, "box.yml"))
+	id, err := proposeBox(ctx, env, st, "zuhause", "Die Adresse des Haushalts ändern (box.yml zuhause)", func(box []byte) ([]byte, error) { return state.WithBlock(box, "zuhause", z) })
 	if err != nil {
 		return env.Fail(err)
 	}
-	b, err := state.WithZuhause(box, z)
-	if err != nil {
-		return env.Fail(err)
-	}
-	// the reason reaches the inbox, the journal and the owner's chat: no address in it
-	reason := "Die Adresse des Haushalts ändern (box.yml zuhause)"
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Write: map[string][]byte{"box.yml": b}}, inbox.JudgeFor(st, env.Actor))
-	if err != nil {
-		return env.Fail(err)
-	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "zuhause", Result: "info", Reason: reason, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
-	msg := fmt.Sprintf("Vorschlag #%d: die neue Adresse gilt nach der Freigabe durch einen Menschen.", p.ID)
+	msg := fmt.Sprintf("Vorschlag #%d: die neue Adresse gilt nach der Freigabe durch einen Menschen.", id)
 	if env.JSON {
-		return cli.Emit(env, map[string]any{"proposal": p.ID, "message": msg})
+		return cli.Emit(env, map[string]any{"proposal": id, "message": msg})
 	}
 	fmt.Fprintln(env.W(), msg)
 	return cli.ExitOK
+}
+
+// proposeBox files box.yml as edit makes it as a proposal (laib zuhause, laib
+// person signal); the review marks a box.yml change a human's to approve. The
+// reason reaches the inbox, the journal and the owner's chat: no address, no number.
+func proposeBox(ctx context.Context, env *cliEnv, st *state.State, verb, reason string, edit func([]byte) ([]byte, error)) (int, error) {
+	box, err := os.ReadFile(filepath.Join(env.Paths.State, "box.yml"))
+	if err == nil {
+		box, err = edit(box)
+	}
+	if err != nil {
+		return 0, err
+	}
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Write: map[string][]byte{"box.yml": box}}, inbox.JudgeFor(st, env.Actor))
+	if err != nil {
+		return 0, err
+	}
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Result: "info", Reason: reason, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
+	return p.ID, nil
 }

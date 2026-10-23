@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
 """home-assistant post-deploy (#349): the Home Assistant tokens, minted here,
 never clicked together in HA's UI. One long-lived token per consumer, each
-handed back (`laib-secret:`) and revocable on its own (HA lists them by name
-under the user's Security tab):
+handed back (`laib-secret:`) and revocable on its own, and each on the
+consumer's own Home Assistant user, never a person's (#591): HA's logbook
+then names the machine that switched, not whoever onboarded HA.
 
-  HA_TOKEN               administrator: the integrations checklist (#55, #309)
-  HAUS_HA_TOKEN          administrator: Haus's pages, widgets, voice counting (#266)
-  BOTE_AUTOMAT_HA_TOKEN  administrator: the Automat (HA's automation config API is admin-only)
-  BOTE_HA_TOKEN          the user "bote", no administrator: the Bote's `ha` tool,
-                         so whoever chats with the Bote reaches no admin API
+  HA_TOKEN               "Laib-Prüfung", no administrator: the integrations checklist (#55, #309)
+  HAUS_HA_TOKEN          "Haus", administrator: Haus's pages, widgets, voice counting (#266)
+  BOTE_AUTOMAT_HA_TOKEN  "Bote-Automat", administrator: the Automat
+  BOTE_HA_TOKEN          "Bote", no administrator: the Bote's `ha` tool, so
+                         whoever chats with the Bote reaches no admin API
+  MUSIC_ASSISTANT_HA_TOKEN  "Music Assistant", administrator (below)
 
-A token that works and is of its kind is kept; a revoked one, or an
-administrator's in BOTE_HA_TOKEN, is replaced. The administrator session is
-an administrator token above that still works, else HA's own login flow as
-HA_ADMIN_USER with HA_ADMIN_PASSWORD: on a fresh Home Assistant this hook
-onboards that user first (a generated password, the family signs in with
-Familienkonto); on a box from ServiceBay it is ServiceBay's admin, carried
-on migration day. The Bote's password HA_BOTE_PASSWORD
-is generated; its token is minted by logging in as the Bote.
+HA mints a long-lived token only for the user of the session that asks, so
+each user has a homeassistant login with a generated password (HA_*_PASSWORD)
+that only this hook uses. A token that works, on its user and of its kind, is
+kept; any other is replaced. One that works on another user (#349 minted
+them on the administrator) is retired: handed back in HA_RETIRED_TOKENS and
+revoked by a later run, once the new one is in secrets.age, its consumer
+re-applied with it and HA takes it as that user; the same apply re-runs
+this hook, so nothing goes dark in between. Only a token Laib minted
+("laib: …") is revoked; another is left to the owner. The administrator
+session is an administrator token above that still works, else HA's own
+login flow as HA_ADMIN_USER with HA_ADMIN_PASSWORD: on a fresh Home
+Assistant this hook onboards that user first (a generated password, the
+family signs in with Familienkonto); on a box from ServiceBay it is
+ServiceBay's admin, carried on migration day. Who else is in Home Assistant
+(users, their long-lived tokens' names) is one line from HA's .storage/auth;
+nothing there is deleted, that is the owner's decision (#591).
 
 Frage as Assist's conversation agent (#491): Home Assistant has no built-in
 integration for an OpenAI server with its own URL, its Ollama integration
@@ -31,9 +41,9 @@ Music Assistant, both ways (#526): with the token music-assistant's
 post-deploy hands back (HA_MUSIC_ASSISTANT_TOKEN), this hook adds Home
 Assistant's "Music Assistant" integration (its config flow's browser step
 takes that token as the code MA's login would return), and connects MA's
-Home Assistant plugin with an administrator token minted here
-(MUSIC_ASSISTANT_HA_TOKEN, "laib: music-assistant"; MA reads HA's users with
-it). That plugin is what offers "Mit Home Assistant anmelden" in Music
+Home Assistant plugin with a token minted here for HA's user "Music
+Assistant", an administrator (MUSIC_ASSISTANT_HA_TOKEN; MA reads HA's users
+with it, config/auth/list is admin-only). That plugin is what offers "Mit Home Assistant anmelden" in Music
 Assistant, so its URL is the one a browser reaches, https://home.<domain>:
 MA sends the browser there to sign in.
 
@@ -67,7 +77,6 @@ E = os.environ
 BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
 CLIENT = BASE + "/"  # HA's IndieAuth client id; the redirect is the same URL
 USER, PW = E.get("HA_ADMIN_USER") or "laib", E.get("LAIB_SECRET_HA_ADMIN_PASSWORD", "")
-BOTE_PW = E.get("LAIB_SECRET_HA_BOTE_PASSWORD", "")
 RADICALE = E.get("RADICALE_URL", "http://127.0.0.1:5232/")   # HA is on the host network, Radicale publishes 5232
 CAL_USER, CAL_PW = "homeassistant", E.get("LAIB_SECRET_HA_RADICALE_PASSWORD", "")
 FRAGE = E.get("FRAGE_URL", "http://127.0.0.1:8710").rstrip("/")  # HA is on the host network, Frage's pod publishes 8710
@@ -79,7 +88,18 @@ STIMME = [("Whisper", int(E.get("STIMME_WHISPER_PORT", "10300")), "stt"), ("Pipe
           ("openWakeWord", int(E.get("STIMME_WAKEWORD_PORT", "10400")), "wake_word")]
 HA_STORAGE = os.path.join(E.get("LAIB_DATA_DIR", "/mnt/data/stacks"), "home-assistant", "homeassistant", ".storage", "core.config_entries")
 HA_PUBLIC = E.get("HA_PUBLIC_URL") or f"https://home.{E.get('LAIB_DOMAIN', '')}"
-ADMIN = {"HA_TOKEN": "laib: home-assistant-check", "HAUS_HA_TOKEN": "laib: haus", "BOTE_AUTOMAT_HA_TOKEN": "laib: bote-automat"}
+HA_AUTH = os.path.join(os.path.dirname(HA_STORAGE), "auth")
+# each consumer's own user (#591): secret -> (token name, username, name in HA, administrator, its password's secret)
+MACHINES = {
+    "HA_TOKEN": ("laib: home-assistant-check", "laib-pruefung", "Laib-Prüfung", False, "HA_CHECK_PASSWORD"),  # REST config entries and states: every user may
+    "HAUS_HA_TOKEN": ("laib: haus", "haus", "Haus", True, "HA_HAUS_PASSWORD"),   # voice counting: assist_pipeline/pipeline_debug is admin-only (#266)
+    "BOTE_AUTOMAT_HA_TOKEN": ("laib: bote-automat", "bote-automat", "Bote-Automat", True, "HA_BOTE_AUTOMAT_PASSWORD"),  # HA's automation config API is admin-only
+    "BOTE_HA_TOKEN": ("laib: bote", "bote", "Bote", False, "HA_BOTE_PASSWORD"),  # Assist API only
+    "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
+}
+RETIRED = [tuple(w.split("=", 1)) for w in E.get("LAIB_SECRET_HA_RETIRED_TOKENS", "").split() if "=" in w]  # (secret, old token)
+RETIRED_AT_START = list(RETIRED)
+VERIFIED = set()   # the secrets whose token works on its own user in this run
 
 
 def red(msg):
@@ -102,19 +122,20 @@ def call(method, path, body=None, token=None, form=False):
         return e.code, None
 
 
-def kind(token):
-    """'admin', 'user', or None for a token HA refuses. An admin-only command
-    decides: HA's REST API lets every user list the config entries."""
+def whoami(token):
+    """(kind, user id) of a token: 'admin' or 'user', (None, None) for one HA refuses"""
     if not token or call("GET", "/api/", token=token)[0] != 200:
-        return None
+        return None, None
     ws = WS(token)
     try:
-        ws("config/auth/list")
-        return "admin"
-    except RuntimeError:
-        return "user"
+        me = ws("auth/current_user")
     finally:
         ws.close()
+    return ("admin" if me.get("is_admin") else "user"), me.get("id")
+
+
+def kind(token):
+    return whoami(token)[0]
 
 
 class WS:
@@ -266,45 +287,164 @@ def admin_session():
     return session
 
 
+USERS = None   # HA's users, read once with the administrator session
+
+
+def user(uname, display):
+    """the user with that login, else one of that name without a login (an earlier run stopped half way)"""
+    global USERS
+    if USERS is None:
+        ws = WS(admin_session())
+        try:
+            USERS = ws("config/auth/list")
+        finally:
+            ws.close()
+    return (next((u for u in USERS if u.get("username") == uname), None)
+            or next((u for u in USERS if not u.get("username") and not u.get("system_generated") and u.get("name") == display), None))
+
+
+def set_password(uid, pw):
+    """a machine user's password back to the one Laib holds: HA lets only its owner do that,
+    so after the administrator session the HA_ADMIN_USER login is tried"""
+    for get in (admin_session, lambda: login(USER, PW)):
+        s = get()
+        if not s:
+            continue
+        ws = WS(s)
+        try:
+            ws("config/auth_provider/homeassistant/admin_change_password", user_id=uid, password=pw)
+            return
+        except RuntimeError:
+            pass
+        finally:
+            ws.close()
+
+
+def machine(secret):
+    """secret's token on its own user (#591): kept when it works there and is of its kind, else
+    minted there. One that works on another user is retired (revoked once the new one is verified)."""
+    label, uname, display, admin, pw_secret = MACHINES[secret]
+    want, group, pw = ("admin" if admin else "user"), ["system-admin" if admin else "system-users"], E.get("LAIB_SECRET_" + pw_secret, "")
+    if not pw:
+        raise RuntimeError(f"{pw_secret} is empty: laib generates it on apply")
+    u = user(uname, display)
+    if u is None or u.get("group_ids") != group or not u.get("username"):
+        ws = WS(admin_session())
+        try:
+            if u is None:
+                u = ws("config/auth/create", name=display, group_ids=group)["user"]
+                USERS.append(u)
+                print(f"home-assistant: user {uname} created ({'administrator' if admin else 'no administrator'})")
+            elif u.get("group_ids") != group:
+                ws("config/auth/update", user_id=u["id"], group_ids=group)
+                print(f"home-assistant: user {uname} is {'an administrator again' if admin else 'no administrator any more'}")
+            if not u.get("username"):
+                ws("config/auth_provider/homeassistant/create", user_id=u["id"], username=uname, password=pw)
+            u.update(username=uname, group_ids=group)
+        finally:
+            ws.close()
+    have = E.get("LAIB_SECRET_" + secret, "")
+    k, uid = whoami(have)
+    if (k, uid) == (want, u["id"]):
+        VERIFIED.add(secret)
+        return have, False
+    s = login(uname, pw)
+    if not s:
+        set_password(u["id"], pw)
+        s = login(uname, pw)
+    if not s:
+        raise RuntimeError(f"the user {uname} cannot log in with {pw_secret}")
+    token = mint(s, label)
+    if whoami(token) != (want, u["id"]):
+        raise RuntimeError(f"the token minted for {secret} is not the user {uname}'s, or not of its kind")
+    print(f"laib-secret: {secret}={token}")
+    why = ("new" if not have else "replaces one HA refuses" if k is None else "moves it off another user, #591" if uid != u["id"]
+           else "replaces a non-admin one" if admin else "replaces an administrator's")
+    print(f"home-assistant: {secret} minted ({why}) for the user {uname}")
+    if k is not None and uid != u["id"]:
+        RETIRED.append((secret, have))
+        hand_retired()
+    return token, True
+
+
+def hand_retired():
+    value = " ".join(f"{n}={t}" for n, t in RETIRED)
+    if value != " ".join(f"{n}={t}" for n, t in RETIRED_AT_START):
+        print("laib-secret: HA_RETIRED_TOKENS=" + value)
+
+
+def revoke(token):
+    """the token's own long-lived refresh token revoked, if Laib minted it: what became of it"""
+    if call("GET", "/api/", token=token)[0] != 200:
+        return "gone"
+    ws = WS(token)
+    try:
+        cur = next((t for t in ws("auth/refresh_tokens") if t.get("is_current")), None)
+        name = (cur or {}).get("client_name") or "unnamed"
+        if not name.startswith("laib: "):
+            return f'"{name}" is not one Laib minted: left to the owner'
+        try:
+            ws("auth/delete_refresh_token", refresh_token_id=cur["id"])
+        except ConnectionError:   # HA closes the connection whose token went
+            pass
+    finally:
+        try:
+            ws.close()
+        except OSError:
+            pass
+    if call("GET", "/api/", token=token)[0] == 200:
+        raise RuntimeError(f'the old token "{name}" still works after its revocation')
+    return f'the old token "{name}" revoked'
+
+
+def retire():
+    """each retired token whose successor works on its own user, revoked (#591)"""
+    if not RETIRED:
+        return
+    left = []
+    for secret, old in RETIRED:
+        if secret in VERIFIED and (secret, old) in RETIRED_AT_START:   # retired in an earlier run: its successor was handed over
+            print(f"home-assistant: {secret}: {revoke(old)}, the new one works on its own user")
+        else:
+            left.append((secret, old))
+    RETIRED[:] = left
+    hand_retired()
+
+
+def strangers():
+    """who else is in Home Assistant, from its .storage/auth (names only, never a token): users
+    that are not Laib's machines and their long-lived tokens' names (#591). Nothing is deleted."""
+    try:
+        with open(HA_AUTH) as f:
+            d = json.load(f)["data"]
+    except (OSError, ValueError, KeyError):
+        return
+    login_of = {c.get("user_id"): (c.get("data") or {}).get("username") for c in d.get("credentials") or []
+                if c.get("auth_provider_type") == "homeassistant"}
+    ours = {m[1] for m in MACHINES.values()}
+    tokens = {}
+    for t in d.get("refresh_tokens") or []:
+        if t.get("token_type") == "long_lived_access_token":
+            tokens.setdefault(t.get("user_id"), []).append(f"„{t.get('client_name') or '?'}“")
+    out = []
+    for u in d.get("users") or []:
+        if u.get("system_generated") or login_of.get(u.get("id")) in ours:
+            continue
+        tags = ["owner" if u.get("is_owner") else "administrator" if "system-admin" in (u.get("group_ids") or []) else ""]
+        tags += ["HA_ADMIN_USER" if login_of.get(u.get("id")) == USER else "", "" if u.get("is_active", True) else "deactivated"]
+        tags = ", ".join(t for t in tags if t)
+        toks = tokens.get(u.get("id"))
+        out.append(f"„{u.get('name')}“" + (f" ({tags})" if tags else "") + (": " + ", ".join(toks) if toks else ""))
+    if out:
+        print("home-assistant: in Home Assistant and not Laib's (the owner decides, nothing deleted, #591): " + "; ".join(out))
+
+
 def main():
     global session
-    kinds = {n: kind(E.get("LAIB_SECRET_" + n, "")) for n in [*ADMIN, "BOTE_HA_TOKEN"]}
-    session = next((E["LAIB_SECRET_" + n] for n in ADMIN if kinds[n] == "admin"), None)
-    for name, label in ADMIN.items():
-        if kinds[name] != "admin":
-            token = mint(admin_session(), label)
-            if kind(token) != "admin":
-                red(f"the token minted for {name} is not an administrator's")
-            print(f"laib-secret: {name}={token}")
-            why = "new" if not E.get("LAIB_SECRET_" + name) else "replaces one HA refuses" if kinds[name] is None else "replaces a non-admin one"
-            print(f"home-assistant: {name} minted ({why})")
-
-    if kinds["BOTE_HA_TOKEN"] != "user":
-        # the user "bote": there, no administrator, with the password Laib holds
-        ws = WS(admin_session())
-        users = ws("config/auth/list")
-        bote = next((u for u in users if u.get("username") == "bote"), None)
-        if bote is None:
-            bote = ws("config/auth/create", name="Bote", group_ids=["system-users"])["user"]
-            ws("config/auth_provider/homeassistant/create", user_id=bote["id"], username="bote", password=BOTE_PW)
-            print("home-assistant: user bote created (no administrator)")
-        elif bote.get("group_ids") != ["system-users"]:
-            ws("config/auth/update", user_id=bote["id"], group_ids=["system-users"])
-            print("home-assistant: user bote is no administrator any more")
-        session_bote = login("bote", BOTE_PW)
-        if not session_bote:
-            ws("config/auth_provider/homeassistant/admin_change_password", user_id=bote["id"], password=BOTE_PW)
-            session_bote = login("bote", BOTE_PW)
-        ws.close()
-        if not session_bote:
-            red("the user bote cannot log in with HA_BOTE_PASSWORD")
-        token = mint(session_bote, "laib: bote")
-        if kind(token) != "user":
-            red("the token minted for BOTE_HA_TOKEN is an administrator's or refused")
-        print(f"laib-secret: BOTE_HA_TOKEN={token}")
-        print("home-assistant: BOTE_HA_TOKEN minted for the user bote (no administrator)")
-
-    print("home-assistant: tokens for the check, Haus, the Automat and the Bote work")
+    session = next((E["LAIB_SECRET_" + n] for n in ("HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
+    for secret in ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN"):
+        machine(secret)
+    print("home-assistant: tokens for the check, Haus, the Automat and the Bote work, each on its own user")
 
 
 def frage_agent():
@@ -553,14 +693,9 @@ def music_assistant():
     ma("auth/me")  # MA answers and takes its token, or the error says which
     tok = admin_session()
     # 1. Music Assistant's Home Assistant plugin: HA's users for MA's login, with an administrator token
-    plug = E.get("LAIB_SECRET_MUSIC_ASSISTANT_HA_TOKEN", "")
-    minted = kind(plug) != "admin"
-    if minted:
-        plug = mint(tok, "laib: music-assistant")
-        if kind(plug) != "admin":
-            raise RuntimeError("the token minted for MUSIC_ASSISTANT_HA_TOKEN is not an administrator's")
-        print(f"laib-secret: MUSIC_ASSISTANT_HA_TOKEN={plug}")
-        print("home-assistant: MUSIC_ASSISTANT_HA_TOKEN minted (Music Assistant's Home Assistant plugin)")
+    plug, minted = machine("MUSIC_ASSISTANT_HA_TOKEN")
+    VERIFIED.discard("MUSIC_ASSISTANT_HA_TOKEN")   # verified once the plugin has it, below
+    minted = minted or any(n == "MUSIC_ASSISTANT_HA_TOKEN" for n, _ in RETIRED)   # still moving: the plugin gets the new one first
     values = {"url": HA_PUBLIC, "verify_ssl": True, "token": plug}
     have = ma("config/providers", provider_domain="hass") or []
     if not have:
@@ -569,6 +704,7 @@ def music_assistant():
     elif minted or have[0].get("status") in ("auth_required", "error"):
         ma_flow(ma("config/providers/reconfigure", instance_id=have[0]["instance_id"]), values)
         print(f"home-assistant: Music Assistant's Home Assistant plugin connected again ({HA_PUBLIC}, it was {have[0].get('status')})")
+    VERIFIED.add("MUSIC_ASSISTANT_HA_TOKEN")
     # 2. Home Assistant's Music Assistant integration
     entry = next((e for e in call("GET", "/api/config/config_entries/entry", token=tok)[1] or [] if e.get("domain") == "music_assistant"), None)
     if entry is None:
@@ -675,3 +811,9 @@ try:
     music_assistant()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists what Music Assistant lacks
     print(f"home-assistant: Music Assistant NOT connected: {type(e).__name__}: {e}", file=sys.stderr)
+try:
+    retire()
+except (RuntimeError, OSError, ValueError, KeyError) as e:  # the old tokens stay retired: the next apply revokes them
+    hand_retired()
+    print(f"home-assistant: old tokens NOT revoked: {type(e).__name__}: {e}", file=sys.stderr)
+strangers()

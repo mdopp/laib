@@ -31,6 +31,52 @@ if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NU
 # the owner's Discord id must be one the Bote talks to (#463): the allowed list is the identity the chat knows
 if [ -n "$ADMIN_DISCORD_ID" ]; then case ",${DISCORD_ALLOWED_USERS// /}," in *",$ADMIN_DISCORD_ID,"*) ;; *) echo "bote: ADMIN_DISCORD_ID steht nicht in DISCORD_ALLOWED_USERS" >&2; exit 1;; esac; fi
 if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
+# Who may talk (#586): the value, plus everyone in box.yml people with an id on the platform
+# (render/people/people.json; a change there restarts the pod and runs this again). Signal's
+# number and a Telegram DM's chat id are the sender's id; a Matrix or Discord target is a room or
+# a channel, not a user, so those lists stay the value's. The value alone switches a channel on.
+allowed() { python3 - "$1" "$2" "${LAIB_RENDER_DIR:-/nonexistent}/people/people.json" <<'PY'
+import json, sys
+platform, value, path = sys.argv[1:]
+ids = [i.strip() for i in value.split(",") if i.strip()]
+try:
+    people = json.load(open(path))
+except (OSError, ValueError):
+    people = {}
+for name in sorted(people):
+    for ch in people[name]:
+        p, _, target = ch.partition(":")
+        if p == platform and target and target not in ids and not target.startswith("-"):   # a negative Telegram id is a group
+            ids.append(target)
+print(",".join(ids))
+PY
+}
+[ -z "$SIGNAL_ACCOUNT" ] || SIGNAL_ALLOWED_USERS="$(allowed signal "${SIGNAL_ALLOWED_USERS:-}")"
+[ -z "$TELEGRAM_ALLOWED_USERS" ] || TELEGRAM_ALLOWED_USERS="$(allowed telegram "$TELEGRAM_ALLOWED_USERS")"
+# Hermes' notice to the owner about a dropped sender (#586) is Hermes' own text (locales/*.yaml):
+# it names ~/.env and `hermes pairing`, neither is the way here. Hermes reads an overlay from
+# $HERMES_HOME/locales/<lang>.yaml over its own (agent/i18n.py); it speaks en unless told otherwise.
+# #596: it asks who it is and offers the people without a signal: id; the owner's answer reaches
+# the Bote, which proposes the number (laib_person_signal) for the owner to approve. {who} is
+# Hermes' "Name (+49…)"; a change to people restarts the pod, so the list stays current.
+OHNE="$(python3 - "${LAIB_RENDER_DIR:-/nonexistent}/people/people.json" <<'PY'
+import json, sys
+try:
+    people = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    people = {}
+print(", ".join(n for n in sorted(people) if not any(c.startswith("signal:") for c in people[n])))
+PY
+)"
+if [ -n "$OHNE" ]; then BEISPIEL="${OHNE%%,*}"; OHNE=" Noch ohne Signal-Nummer: $OHNE."; else BEISPIEL="<Name>"; fi
+mkdir -p "$H/locales"
+for lang in en de; do cat > "$H/locales/$lang.yaml" <<YAML
+# rendered by laib pre-start; do not edit by hand (#586, #596)
+gateway:
+  unauthorized:
+    owner_notice: "Laib hat eine Nachricht von {who} auf {platform} verworfen: der Absender steht bei keiner Person in box.yml people. Wer ist das? Gehört er zum Haushalt, antworte mir hier, etwa „{who} ist $BEISPIEL“.$OHNE Ich schlage seine Nummer dann vor, du gibst den Vorschlag in der Inbox frei, und danach darf er dem Boten schreiben; die verworfene Nachricht schickt er noch einmal. Auf anderen Wegen als Signal trag seine Kennung selbst in box.yml people ein."
+YAML
+done
 {
   echo "# rendered by laib pre-start; do not edit by hand"
   if [ -n "$SIGNAL_ACCOUNT" ]; then

@@ -113,6 +113,7 @@ var boxKeyReason = map[string]string{
 	"model":       "ändert das Modell (box.yml model)",
 	"operator":    "ändert den Operator (box.yml operator)",
 	"zuhause":     "ändert die Adresse des Haushalts (box.yml zuhause)",
+	"people":      "ändert, wer im Haushalt wie erreicht wird und dem Boten schreiben darf (box.yml people)",
 }
 
 // Dirs compares a checkout of main (base) with a checkout of the change.

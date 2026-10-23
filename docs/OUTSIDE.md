@@ -39,7 +39,9 @@ for it (#360). Authelia mails the link, in German, with the way to
 password passes through Laib or Haus. Without a mail server (#359) the verb
 returns the link to pass on (Signal); it lives 24 hours, and `--resend`
 sends a new one and keeps the group. `laib person pending` lists who has not
-used the link yet. The haus hand may invite into `family` only: an admin is
+used the link yet. `--signal +49…` also proposes the person's Signal number
+for box.yml `people` (#596), approved by a human like any box.yml change;
+`laib person signal <user> +49…` sets or changes it later. The haus hand may invite into `family` only: an admin is
 a human's call at the console. Removing someone stays LLDAP's admin UI
 (`ldap.`). The tool doing the LLDAP and Authelia work is the auth template's
 `person.py`, run in the hooks image like a hook. `dopp.cloud` and `www.`

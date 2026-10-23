@@ -362,3 +362,31 @@ func TestTheGamesNumberShowsTheList(t *testing.T) {
 		t.Fatalf("the games level takes its commands after the number:\n%s", out)
 	}
 }
+
+// #587: the owner answered Hermes' drop notice ("… damit unbekannte Absender …") with "Dir
+// sollte die Nummer bekannt sein"; the quote's ABSENDER held ENDE, and the Bote said AUF
+// WIEDERSEHEN. A sentence is a request for the Bote whatever word it holds; only a short
+// message that is the command or the greeting is one.
+func TestASentenceIsARequestNotAPersonaLine(t *testing.T) {
+	for _, line := range []string{
+		`[Replying to: "Laib hat eine Nachricht verworfen, damit unbekannte Absender …"] Dir sollte die Nummer bekannt sein`,
+		"Am Wochenende kommt Oma",
+		"Hallo, wie hoch ist der höchste Berg?",
+		"Joshua, schalte das Licht in der Küche an",
+		"Ich brauche Hilfe beim Rezept",
+		"Kannst du das Licht im Exit-Flur ausmachen?",
+	} {
+		j := term()
+		if out := j.Talk("p", "de", line); !strings.HasPrefix(out, "WEITER: ") {
+			t.Errorf("%q got a persona screen, not the Bote:\n%s", line, out)
+		}
+	}
+	for line, want := range map[string]string{"logoff": "AUF WIEDERSEHEN.", "Tschüss Joshua!": "AUF WIEDERSEHEN.", "bye": "AUF WIEDERSEHEN.",
+		"Hallo": "WOPR HAUPTVERZEICHNIS", "Hallo Joshua": "WOPR HAUPTVERZEICHNIS", "Was kannst du?": "WOPR HAUPTVERZEICHNIS",
+		"Joshua": "WOPR HAUPTVERZEICHNIS", "Wollen wir ein Spiel spielen?": "WOPR HAUPTVERZEICHNIS"} {
+		j := term()
+		if out := j.Talk("p", "de", line); !strings.Contains(out, want) {
+			t.Errorf("%q: want %q:\n%s", line, want, out)
+		}
+	}
+}

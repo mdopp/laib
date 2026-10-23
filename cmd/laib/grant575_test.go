@@ -26,7 +26,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 	if b, _ := os.ReadFile(pol); string(b) != state.DefaultPolicy {
 		t.Fatal("laib init does not write state.DefaultPolicy")
 	}
-	old := strings.Replace(state.DefaultPolicy, ", zuhause, scan]", ", zuhause]", 1)
+	old := strings.Replace(state.DefaultPolicy, ", zuhause, scan, note]", ", zuhause]", 1)
 	old = strings.Replace(old, "reject, inbox, status, note]", "reject, inbox, status]", 1)
 	old = strings.Replace(old, "  human: {ceiling: destroy}\n", "  human: {ceiling: destroy}\n  kiosk: {ceiling: read, verbs: [status]}   # the owner's\n", 1)
 	os.WriteFile(pol, []byte(old), 0o644)
@@ -51,7 +51,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 		t.Fatalf("%+v", p)
 	}
 	diff := proposal.Diff(ctx, env.Paths.State, p)
-	if strings.Count(diff, "\n+  ") != 2 || strings.Count(diff, "\n-  ") != 2 || !strings.Contains(diff, "zuhause, scan]") || !strings.Contains(diff, "status, note]") {
+	if strings.Count(diff, "\n+  ") != 2 || strings.Count(diff, "\n-  ") != 2 || !strings.Contains(diff, "zuhause, scan, note]") || !strings.Contains(diff, "status, note]") {
 		t.Fatalf("not exactly the two lines:\n%s", diff)
 	}
 	if b, _ := os.ReadFile(pol); string(b) != old {
@@ -68,7 +68,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 	}
 
 	// a new release's verb is a new question; `laib updates --run` asks it (the unit runs it right after self-update.sh)
-	os.WriteFile(pol, []byte(strings.Replace(old, "person_pending, calendar,", "person_pending,", 1)), 0o644)
+	os.WriteFile(pol, []byte(strings.Replace(old, "person_signal, calendar,", "person_signal,", 1)), 0o644)
 	if code := registry.Updates(ctx, env, []string{"--run"}); code != cli.ExitOK {
 		t.Fatalf("updates --run: exit %d", code)
 	}
