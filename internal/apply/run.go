@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -22,6 +23,9 @@ import (
 // ApplyLocked is the apply mechanics after the policy check: lock, secrets,
 // plan, apply, journal. Used by `laib apply` and by an approval.
 func ApplyLocked(ctx context.Context, env *cli.Env, st *state.State, only, reason string) int {
+	if only == "" && Carry != nil && len(proposal.Waiting(cli.InboxDir(env))) > 0 {
+		return Carry(ctx, env) // main holds approvals no run applied: the run that snapshots and attributes them (#609)
+	}
 	unlock, code := TakeLock(env, st, "apply")
 	if code != cli.ExitOK {
 		return code
@@ -29,6 +33,11 @@ func ApplyLocked(ctx context.Context, env *cli.Env, st *state.State, only, reaso
 	defer unlock()
 	return ApplyHeld(ctx, env, st, only, reason)
 }
+
+// Carry is the apply worker (inbox.Carry, #609): the run that applies what
+// was approved. Every release of the lock starts it, so what was approved
+// while the lock was held gets its run right after.
+var Carry func(ctx context.Context, env *cli.Env) int
 
 // TakeLock takes the one lock (#39) for a verb; a stale lock (its process
 // gone) is taken over with a journal line, a live one refuses with exitLocked.
@@ -44,7 +53,12 @@ func TakeLock(env *cli.Env, st *state.State, verb string) (func(), int) {
 	if stale != "" {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Result: "info", Detail: "Sperre übernommen: " + stale + " (Prozess weg)"})
 	}
-	return unlock, cli.ExitOK
+	return func() {
+		unlock()
+		if Carry != nil {
+			Carry(context.Background(), &cli.Env{Paths: env.Paths, Actor: env.Actor, Out: io.Discard, ErrOut: io.Discard})
+		}
+	}, cli.ExitOK
 }
 
 // ApplyHeld is apply under a lock the caller holds.

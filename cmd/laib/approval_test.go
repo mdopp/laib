@@ -137,7 +137,7 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 		t.Fatalf("the journal does not say why ops was refused: %+v", es)
 	}
 	// the human may: the inbox told them what it does
-	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}, true); code != cli.ExitOK {
+	if code := inbox.Approve(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test"}, []string{id}); code != cli.ExitOK {
 		t.Fatalf("the human's approval: exit %d", code)
 	}
 	if _, err := os.Stat(ran); err == nil {

@@ -10,6 +10,8 @@ prove before the Kraftwerk moves.
   request is named; where it is the owner's call, it says so.
   Amended 2026-10-17 (#286): a capable model may run `apply` itself,
   inside the envelope — see the amendment under Consequences.
+  Amended 2026-10-23 (#609): an approve is a merge, a run applies what
+  was approved, batched, and rolls it back as a whole on red.
 - **Deciders:** operator (mdopp), on the review's measure: good UX,
   resilience, agentic operation — for people who mostly do not think
   technically and are afraid of breaking something.
@@ -139,3 +141,31 @@ Which model may: the Operator offers `apply` only to a capable model (a
 skill's `more:` tools, ADR 0023 amendment); a small model never sees it.
 That choice is the Operator's; the limits above hold whatever it sends.
 
+
+## Amendment 2026-10-23 — approving is a merge, the run applies (#609)
+
+The owner: „Aber warum muss die Sperre gehalten werden und blockiert das
+Interface gegen weitere Freigabe.“ An approve held the one lock (d) from
+the snapshot through the merge to the last verify, so a tap behind a nine
+minute apply waited nine minutes before it was even recorded.
+
+- **An approve is the merge.** It runs every check it ran before — the
+  state loads, the own-proposal rule, the human class, the second factor
+  of a web decision — under the state repo's own short lock, never the
+  box's, and the proposal is `approved` (outcome `waiting`) at once.
+- **The run applies.** One worker (`inbox.Carry`) takes the one lock and
+  applies `main` with everything approved meanwhile; each release of the
+  lock starts it again, so N approvals during one apply give one more
+  apply. Invariant (d) holds for the run unchanged; the approve is no
+  longer a holder.
+- **The snapshot (#528) moves to the run**, right before it touches the
+  services with data, and still fails closed: a failed snapshot leaves the
+  box as it was and rolls the run's merges back.
+- **A red run is rolled back as a whole**, each proposal marked
+  `rolled-back` with the run named, in the Inbox and the journal; one that
+  should go alone is proposed again. The dial's auto-approve is the same
+  run: "merge, apply, verify, revert and re-apply on red" now means the
+  run's merges, not one proposal's.
+- The worker lives in the `laib` binary, not in a unit: the CLI, the Signal
+  relay (through `laib approve`), MCP and `laib serve` reach it the same
+  way, and the shell keeps seeing its apply when the lock is free.

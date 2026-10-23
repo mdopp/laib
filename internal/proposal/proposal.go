@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
@@ -100,6 +102,31 @@ func Settle(inbox string, present func(finding string) bool, now time.Time) []*P
 	return out
 }
 
+// Waiting are the approved proposals no run has applied yet (#609), oldest first.
+func Waiting(inbox string) []*Proposal {
+	all, _ := List(inbox, false)
+	all = slices.DeleteFunc(all, func(p *Proposal) bool { return p.Status != "approved" || p.Outcome != "waiting" })
+	slices.Reverse(all)
+	return all
+}
+
+// Boxless: wishes and repairs only change nothing on the box; no run carries them.
+func (p *Proposal) Boxless() bool {
+	return len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") })
+}
+
+// LockRepo serialises what moves main (#609): an approve's merge, a
+// rollback's revert, apply's commits. It is short, so it waits; it is not
+// the box's apply lock, which an approve no longer takes.
+func LockRepo(repo string) func() {
+	f, err := os.OpenFile(repo+".lock", os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return func() {} // no lock file, no repo: git itself fails next
+	}
+	syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	return func() { f.Close() }
+}
+
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
 var ErrOwnProposal = errors.New("a hand cannot approve its own proposal")
 
@@ -160,6 +187,7 @@ func CommitDirty(ctx context.Context, repo, actor string) error {
 // secret a hook handed back, or one `laib secret set` wrote, is the box's
 // truth, never part of a proposal a reject would drop.
 func CommitSecrets(ctx context.Context, repo, why string) error {
+	defer LockRepo(repo)()
 	if st, err := git(ctx, repo, "status", "--porcelain", "--", "secrets.age"); err != nil || st == "" {
 		return err
 	}
@@ -270,6 +298,7 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" && by != "laib" {
 		return ErrOwnProposal
 	}
+	defer LockRepo(repo)()
 	if err := CommitDirty(ctx, repo, by); err != nil {
 		return err
 	}
@@ -310,7 +339,10 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 		return fmt.Errorf("main did not fast-forward to the merged result: %s", out)
 	}
 	git(ctx, repo, "branch", "-q", "-D", p.Branch)
-	p.Status, p.Decided, p.DecidedBy = "approved", time.Now().UTC(), by
+	p.Status, p.Decided, p.DecidedBy, p.Merge = "approved", time.Now().UTC(), by, strings.TrimSpace(sha)
+	if !p.Boxless() {
+		p.Outcome = "waiting" // until the run that applies it (#609)
+	}
 	return Save(inbox, p)
 }
 

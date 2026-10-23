@@ -21,6 +21,7 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -371,6 +372,7 @@ func writeAtomic(target, content string) error {
 // snapshot commits the state repo so the applied state has a hash. A clean
 // tree returns HEAD.
 func snapshot(ctx context.Context, repo, reason string) (string, error) {
+	defer proposal.LockRepo(repo)() // beside an approve's merge (#609)
 	git := func(args ...string) (string, error) {
 		return sysd.Run(ctx, "git", append([]string{"-C", repo}, args...)...)
 	}

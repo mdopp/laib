@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -105,7 +106,7 @@ func TestThreeApprovalsDuringOneApplyGiveOneMoreApply(t *testing.T) {
 	}
 	unlock()
 	as := applies(t, env)
-	if len(as) != 1 || as[0].Result != "green" || !strings.Contains(as[0].Reason, "#1, #2, #3") {
+	if len(as) != 1 || as[0].Result != "green" || !regexp.MustCompile(`^Freigaben #1, #2, #3 \([0-9a-f]{7,}\.\.[0-9a-f]{7,}\)$`).MatchString(as[0].Reason) {
 		t.Fatalf("want one green apply carrying #1, #2, #3: %+v", as)
 	}
 	batch := ""
@@ -142,7 +143,7 @@ func TestARedBatchRollsBackAllAndSaysSoForEach(t *testing.T) {
 	unlock()
 	for _, p := range ps {
 		got, _ := proposal.Get(cli.InboxDir(env), p.ID)
-		if got.Outcome != "rolled-back" || got.Batch == "" {
+		if got.Outcome != "rolled-back" || !strings.HasPrefix(got.Batch, "#1, #2, #3 (") || strings.Contains(got.Batch, "fatal") {
 			t.Fatalf("#%d not rolled back with its run: %+v", p.ID, got)
 		}
 		if _, err := os.Stat(filepath.Join(env.Paths.State, "services", "w"+fmt.Sprint(p.ID))); err == nil {
@@ -153,7 +154,7 @@ func TestARedBatchRollsBackAllAndSaysSoForEach(t *testing.T) {
 		}
 	}
 	es, _, _ := journal.ReadCounted(env.Paths.Journal, time.Now().Add(-time.Hour))
-	for _, want := range []string{"#1 zurückgenommen, zusammen mit #2, #3", "#2 zurückgenommen, zusammen mit #1, #3", "#3 zurückgenommen, zusammen mit #1, #2"} {
+	for _, want := range []string{"#1 zurückgenommen, mit dem ganzen Lauf #1, #2, #3", "#2 zurückgenommen, mit dem ganzen Lauf #1, #2, #3", "#3 zurückgenommen, mit dem ganzen Lauf #1, #2, #3"} {
 		if !slices.ContainsFunc(es, func(e journal.Entry) bool { return e.Verb == "rollback" && strings.Contains(e.Detail, want) }) {
 			t.Fatalf("the journal does not say %q", want)
 		}

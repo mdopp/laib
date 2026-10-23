@@ -68,7 +68,9 @@ laib propose --grant <hand> <verb> "<reason>"  one verb added to one hand's verb
 laib propose … [--finding "<probe> <service>"] [--evidence …] [--undo …] [--source <url>]…
                                      the anchor (#544): the diag finding it answers (diag must show it now),
                                      what was seen, the way back; a --source makes it class human
-laib approve <id> | laib reject <id> ["<grund>"]  merge or drop a proposal (tier check from policy.yml);
+laib approve <id> | laib reject <id> ["<grund>"]  merge or drop a proposal (tier check from policy.yml); an approve
+                                     is the merge, then the run that applies it: here and now when the lock is free,
+                                     else at once „freigegeben: wird mit dem nächsten Lauf angewendet“ (#609);
                                      a reject keeps the reason, "nicht jetzt" is free (#544)
 laib backup                          restic snapshot of state, journal and declared data paths
 laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply
@@ -435,7 +437,8 @@ on the inbox entry (`outcome`) and, when measured, as a journal line with
 verb `outcome`: a whole-box `laib diag` settles every approved proposal
 that names a `finding` — the finding gone is `effective`, still there two
 hours after the approval (`proposal.Window`) is `no-effect`; a proposal
-without one is `applied`. `laib rollback #N` makes it `rolled-back`, and
+without one is `applied`; `waiting` is approved and not yet applied
+(#609), never settled. `laib rollback #N` or a red run makes it `rolled-back`, and
 `laib reject <id> "<grund>"` `rejected` with the owner's reason
 (`rejectReason`) — „nicht jetzt“ or „später“ is `later`, a free no that
 counts against nobody. The Inbox page asks for the reason next to
@@ -453,11 +456,30 @@ class-2 action go ahead without a pre-repair snapshot; the default refuses.
 ### One lock, pauses, pending activation (#39)
 
 Everything that mutates the box — `apply`, `converge`, `restore`, `remove`,
-`approve`, `rollback` — holds the one lock (`<home>/apply.lock`, a flock the
+`rollback`, the run that applies approvals — holds the one lock (`<home>/apply.lock`, a flock the
 kernel releases when the process dies, with holder, pid and start inside)
 for its whole duration. A `converge` tick that finds the lock taken is
 skipped and journaled `übersprungen: gesperrt durch restore:human:core`; a
 lock whose process is gone is taken over with a journal line.
+
+**Approving is a merge, applying is a run (#609).** An approve never waits
+for that lock: it runs its checks (the state loads, the own-proposal rule,
+the human class, the second factor of a web decision), merges under the
+state repo's short lock (`<state>.lock`, a flock that also serialises a
+rollback's revert and apply's commits) and marks the proposal `outcome:
+waiting`. The run (`inbox.Carry`) takes the one lock, applies `main` as it
+is with every waiting proposal at once — one restart per service, its
+snapshots (#528) first, fail closed — and records on each proposal and in
+the journal which run carried it (`batch`: `#4, #5, #6 (<from>..<to>)`, the
+state's commit range). Every release of the lock starts the run again, so
+three approvals during one long apply give exactly one more apply with all
+three; `laib serve` starts it after a restart, and a converge tick or a
+whole-box `laib apply` that finds approvals waiting hands over to it. A run
+that is not green (verify red, a snapshot failed) is rolled back as a
+whole: each of its merges is reverted, newest first, each proposal is
+`rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
+#4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
+again to be approved alone.
 `laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
 (apply tier): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;

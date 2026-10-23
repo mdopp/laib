@@ -12,6 +12,7 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -37,6 +38,9 @@ func Converge(ctx context.Context, env *cli.Env, args []string) int {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "converge", Result: "info", Detail: "übersprungen: gesperrt durch " + holder})
 		fmt.Fprintln(env.W(), "übersprungen: gesperrt durch", holder)
 		return cli.ExitOK
+	}
+	if Carry != nil && len(proposal.Waiting(cli.InboxDir(env))) > 0 {
+		return Carry(ctx, env) // approved, not yet applied (#609): the worker's, with its snapshots, not drift
 	}
 	unlock, code := TakeLock(env, st, "converge")
 	if code != cli.ExitOK {
