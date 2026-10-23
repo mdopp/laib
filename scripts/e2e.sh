@@ -601,4 +601,15 @@ j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") fo
 # the Operator applies only its own proposal, inside the envelope (#286): a bare apply by ops is refused
 rc=0; LAIB_ACTOR=ops "$BIN" apply whoami >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "ops applied without a proposal (rc $rc)"
 
+# the verb door (ADR 0026, #598): laib scan is laib-haushalt's, run by the
+# kernel with the actor; einrichten calls laib back for its proposal, and the
+# kernel's judge answers it (scan wants paperless and file-share, which this
+# box has not), through the program to the caller
+export LAIB_HAUSHALT="${LAIB_HAUSHALT:-$ROOT/laib-haushalt}"
+rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan status 2>&1)" || rc=$?; [ "$rc" = 3 ] && grep -q "nicht eingerichtet" <<<"$OUT" || fail "laib scan through the door (rc $rc): $OUT"
+grep -q "laib scan \[propose\]" <<<"$("$BIN" scan --help)" || fail "laib scan --help is not the kernel's"
+rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan einrichten --geraet "airscan:e0:Beispiel" --json 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -q 'after names "paperless"' <<<"$OUT" || fail "laib scan einrichten did not reach the kernel's judge through the door (rc $rc): $OUT"
+rc=0; LAIB_ACTOR=ops LAIB_CEILING=propose "$BIN" approve 1 >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "a call back from behind the door went above propose (rc $rc)"
+
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
