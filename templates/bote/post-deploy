@@ -237,12 +237,16 @@ echo "laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes"
 # the soul: who the Bote is. Rendered on every apply while it carries the
 # marker below, so it names exactly the tools wired above (#54); a SOUL.md
 # without the marker is the admin's own and stays.
+# #596: the owner answers Laib's notice about a dropped Signal sender with who it is; the Bote proposes it
+SIGNAL_RULE=""
+[ -z "${SIGNAL_ACCOUNT:-}" ] || SIGNAL_RULE="
+Sagt dir jemand, wem eine Signal-Nummer gehört („+49… ist mama“, meist als Antwort auf Laibs Mitteilung über eine verworfene Nachricht), schlag sie mit laib_person_signal vor (user: der Name, klein; number: die Nummer aus der Mitteilung, +49… ohne Leerzeichen) und nenn die Nummer des Vorschlags: freigeben tut der Admin in der Inbox."
 if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^You are Hermes Agent"; then cat > "$H/SOUL.md" <<SOUL
 # rendered by laib post-deploy; edit SOUL.md and remove this first line to make it yours
 $STYLE
 Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
-Ein Spruch der Figur ersetzt nie die Antwort: wer etwas sagt oder fragt, bekommt eine Antwort zur Sache. Antwortet jemand auf eine Mitteilung von Laib (eine verworfene Nachricht, ein Vorfall, ein Vorschlag), lies den Stand mit laib und sag, was fehlt und was zu tun ist; wer dir schreiben darf, steht in box.yml people.
+Ein Spruch der Figur ersetzt nie die Antwort: wer etwas sagt oder fragt, bekommt eine Antwort zur Sache. Antwortet jemand auf eine Mitteilung von Laib (eine verworfene Nachricht, ein Vorfall, ein Vorschlag), lies den Stand mit laib und sag, was fehlt und was zu tun ist; wer dir schreiben darf, steht in box.yml people.${SIGNAL_RULE}
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${HA_RULE}${FRAGE_RULE}${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.

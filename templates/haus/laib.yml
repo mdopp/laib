@@ -15,7 +15,7 @@ routes:
     proxySecret: HAUS_PROXY_SECRET # Caddy sends it as X-Haus-Proxy on the authenticated handler only (ADR 0012 §3)
     redirectFrom: ["@", www]       # ServiceBay's entry points (the domain itself and www.) lead to Haus (#360)
 secrets:
-  - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the haus hand: status, inbox, journal, restart, person_invite, person_pending, calendar (#495), note (who switched in HA, #591) — nothing else
+  - name: HAUS_LAIB_TOKEN          # minted on `laib add haus` as the haus hand: status, inbox, journal, restart, person_invite, person_pending, person_signal (#596), calendar (#495), note (who switched in HA, #591) — nothing else
     external: true
     mint: haus
   - name: HAUS_PROXY_SECRET        # generated; without it no page request counts (haus#1)

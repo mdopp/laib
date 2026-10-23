@@ -149,8 +149,16 @@ Without a number at all, Discord or Matrix work.
    tells the owner (`SIGNAL_HOME_CHANNEL`) with Laib's text, not its own
    `.env` / `hermes pairing` advice: pre-start writes
    `locales/{en,de}.yaml`, Hermes' overlay for `gateway.unauthorized.owner_notice`.
-   Haus's „Person einladen“ makes the account only; the number goes into
-   `people`. The relay and Hermes both
+   The number gets into `people` as a proposal the owner approves (#596):
+   Haus's „Person einladen“ with the number, or `laib person signal <user>
+   +49…`. The notice asks who it was („Wer ist das?“), names the people in
+   `people` without a `signal:` id, and gives the sentence to answer with
+   („Anna (+49…) ist oma“); the Bote, reading that answer, proposes the
+   number with `laib_person_signal` and names the proposal; the owner
+   approves it in the Inbox (class human: no poll), and the restart that
+   follows lets the number talk. Hermes notices each sender once per
+   gateway run, and the dropped message itself is not kept: the person
+   sends it again. The relay and Hermes both
    listen to signal-cli's daemon (`/api/v1/events`, which serves every
    subscriber; Hermes also uses `/api/v1/rpc`) — the `bote-signal`
    container must run `signal-cli daemon --http` (#54 checks the image).

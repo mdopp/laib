@@ -1,7 +1,6 @@
 package state
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,8 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Zuhause is the household's address (#561), once for every template that
@@ -93,32 +90,4 @@ func (st *State) ZuhauseVars() map[string]string {
 	h := sha256.Sum256(b)
 	v["ZUHAUSE_REV"] = hex.EncodeToString(h[:])[:12]
 	return v
-}
-
-// WithZuhause is box.yml with its zuhause block replaced by z (appended
-// when missing); every other line stays as it is.
-func WithZuhause(box []byte, z Zuhause) ([]byte, error) {
-	var block bytes.Buffer
-	enc := yaml.NewEncoder(&block)
-	enc.SetIndent(2)
-	if err := enc.Encode(map[string]Zuhause{"zuhause": z}); err != nil {
-		return nil, err
-	}
-	lines := strings.Split(strings.TrimSuffix(string(box), "\n"), "\n")
-	start, end := len(lines), len(lines)
-	for i, l := range lines {
-		if strings.HasPrefix(l, "zuhause:") {
-			start, end = i, i+1
-			for end < len(lines) && strings.HasPrefix(lines[end], " ") {
-				end++
-			}
-			break
-		}
-	}
-	head := strings.Join(lines[:start], "\n")
-	if head != "" {
-		head += "\n"
-	}
-	out := head + block.String() + strings.Join(lines[end:], "\n")
-	return []byte(strings.TrimSuffix(out, "\n") + "\n"), nil
 }

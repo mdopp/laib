@@ -68,7 +68,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 	}
 
 	// a new release's verb is a new question; `laib updates --run` asks it (the unit runs it right after self-update.sh)
-	os.WriteFile(pol, []byte(strings.Replace(old, "person_pending, calendar,", "person_pending,", 1)), 0o644)
+	os.WriteFile(pol, []byte(strings.Replace(old, "person_signal, calendar,", "person_signal,", 1)), 0o644)
 	if code := registry.Updates(ctx, env, []string{"--run"}); code != cli.ExitOK {
 		t.Fatalf("updates --run: exit %d", code)
 	}

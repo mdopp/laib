@@ -17,6 +17,7 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
 )
 
 // personTool is the identity template's tool (templates/auth/person.py,
@@ -26,13 +27,14 @@ const personTool = "person.py"
 
 // Invite is what person_invite returns (haus#56 codes against it).
 type Invite struct {
-	User    string `json:"user"`
-	Name    string `json:"name,omitempty"`
-	Email   string `json:"email,omitempty"`
-	Mailed  bool   `json:"mailed"`
-	Link    string `json:"link,omitempty"`
-	Expires string `json:"expires"`
-	Message string `json:"message"`
+	User     string `json:"user"`
+	Name     string `json:"name,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Mailed   bool   `json:"mailed"`
+	Link     string `json:"link,omitempty"`
+	Expires  string `json:"expires"`
+	Message  string `json:"message"`
+	Proposal int    `json:"proposal,omitempty"` // the Signal number's, with --signal (#596)
 }
 
 // runPerson runs the tool and decodes its last output line; a refusal is
@@ -67,20 +69,20 @@ func runPerson(ctx context.Context, env *cliEnv, v any, args ...string) error {
 }
 
 // cmdPersonInvite: `laib person invite <user> --first F --last L --email E
-// [--group family|admins] [--resend]`. The LLDAP user without a password, in
+// [--group family|admins] [--resend] [--signal +49…]`. The LLDAP user without a password, in
 // the group; Authelia mails the set-password link, or, without SMTP, the
 // link comes back to be passed on. Admins are invited by a human only.
 func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	fs := flag.NewFlagSet("person invite", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	first, last, email := fs.String("first", "", ""), fs.String("last", "", ""), fs.String("email", "", "")
-	group, resend := fs.String("group", "", ""), fs.Bool("resend", false, "")
+	group, resend, signal := fs.String("group", "", ""), fs.Bool("resend", false, ""), fs.String("signal", "", "")
 	var user string
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		user, args = args[0], args[1:]
 	}
 	if err := fs.Parse(args); err != nil || user == "" || fs.NArg() > 0 || *first == "" || *email == "" {
-		return env.Fail(errors.New("usage: laib person invite <user> --first F --last L --email E [--group family|admins] [--resend]"))
+		return env.Fail(errors.New("usage: laib person invite <user> --first F --last L --email E [--group family|admins] [--resend] [--signal +49…]"))
 	}
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -97,6 +99,11 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 		r = "1"
 	}
 	var inv Invite
+	if *signal != "" { // the number first: one the loader refuses stops before the account
+		if inv.Proposal, err = proposeBox(ctx, env, st, "person", "Die Signal-Nummer von "+user+" eintragen (box.yml people)", func(box []byte) ([]byte, error) { return state.WithSignal(box, user, *signal) }); err != nil {
+			return env.Fail(err)
+		}
+	}
 	if err := runPerson(ctx, env, &inv, "invite", user, *first, *last, *email, g, r); err != nil {
 		return env.Fail(err)
 	}
@@ -113,6 +120,9 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	default:
 		inv.Message = fmt.Sprintf("%s ist angelegt, aber die Box verschickt keine Mails: gib %s den Link weiter, etwa über Signal. Er gilt bis %s, danach „erneut senden“.", inv.Name, *first, until)
 	}
+	if inv.Proposal > 0 {
+		inv.Message += fmt.Sprintf(" Die Signal-Nummer gilt nach der Freigabe von Vorschlag #%d durch einen Menschen.", inv.Proposal)
+	}
 	what := "invite"
 	if *resend {
 		what = "resend"
@@ -125,6 +135,28 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	if inv.Link != "" {
 		fmt.Fprintln(env.W(), inv.Link)
 	}
+	return cli.ExitOK
+}
+
+// cmdPersonSignal: `laib person signal <user> <+49…>`, a person's Signal number in box.yml
+// people as a proposal a human approves, as invite --signal files it (#596).
+func cmdPersonSignal(ctx context.Context, env *cliEnv, args []string) int {
+	if len(args) != 2 {
+		return env.Fail(errors.New("usage: laib person signal <user> <+49…>"))
+	}
+	st, err := cli.LoadState(env)
+	if err != nil {
+		return env.Fail(err)
+	}
+	id, err := proposeBox(ctx, env, st, "person", "Die Signal-Nummer von "+args[0]+" eintragen (box.yml people)", func(box []byte) ([]byte, error) { return state.WithSignal(box, args[0], args[1]) })
+	if err != nil {
+		return env.Fail(err)
+	}
+	msg := fmt.Sprintf("Vorschlag #%d: nach der Freigabe durch einen Menschen darf %s dem Boten auf Signal schreiben.", id, args[0])
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"proposal": id, "message": msg})
+	}
+	fmt.Fprintln(env.W(), msg)
 	return cli.ExitOK
 }
 
@@ -157,8 +189,8 @@ func cmdPersonPending(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-// personArgs: `laib person invite|pending …` is the verb person_invite or
-// person_pending, the names the MCP tools carry (laib_person_invite).
+// personArgs: `laib person invite|pending|signal …` is the verb person_invite,
+// person_pending or person_signal, the names the MCP tools carry (laib_person_invite).
 func personArgs(rest []string) []string {
 	if len(rest) > 1 && rest[0] == "person" {
 		return append([]string{"person_" + rest[1]}, rest[2:]...)

@@ -56,12 +56,25 @@ PY
 # Hermes' notice to the owner about a dropped sender (#586) is Hermes' own text (locales/*.yaml):
 # it names ~/.env and `hermes pairing`, neither is the way here. Hermes reads an overlay from
 # $HERMES_HOME/locales/<lang>.yaml over its own (agent/i18n.py); it speaks en unless told otherwise.
+# #596: it asks who it is and offers the people without a signal: id; the owner's answer reaches
+# the Bote, which proposes the number (laib_person_signal) for the owner to approve. {who} is
+# Hermes' "Name (+49…)"; a change to people restarts the pod, so the list stays current.
+OHNE="$(python3 - "${LAIB_RENDER_DIR:-/nonexistent}/people/people.json" <<'PY'
+import json, sys
+try:
+    people = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    people = {}
+print(", ".join(n for n in sorted(people) if not any(c.startswith("signal:") for c in people[n])))
+PY
+)"
+if [ -n "$OHNE" ]; then BEISPIEL="${OHNE%%,*}"; OHNE=" Noch ohne Signal-Nummer: $OHNE."; else BEISPIEL="<Name>"; fi
 mkdir -p "$H/locales"
-for lang in en de; do cat > "$H/locales/$lang.yaml" <<'YAML'
-# rendered by laib pre-start; do not edit by hand (#586)
+for lang in en de; do cat > "$H/locales/$lang.yaml" <<YAML
+# rendered by laib pre-start; do not edit by hand (#586, #596)
 gateway:
   unauthorized:
-    owner_notice: "Laib hat eine Nachricht von {who} auf {platform} verworfen: der Absender steht bei keiner Person in box.yml people. Gehört er zum Haushalt, trag seine Kennung dort bei seiner Person ein (zum Beispiel signal:+49…); nach dem nächsten laib apply darf er dem Boten schreiben. „Person einladen“ in Haus legt nur das Konto an, nicht die Nummer."
+    owner_notice: "Laib hat eine Nachricht von {who} auf {platform} verworfen: der Absender steht bei keiner Person in box.yml people. Wer ist das? Gehört er zum Haushalt, antworte mir hier, etwa „{who} ist $BEISPIEL“.$OHNE Ich schlage seine Nummer dann vor, du gibst den Vorschlag in der Inbox frei, und danach darf er dem Boten schreiben; die verworfene Nachricht schickt er noch einmal. Auf anderen Wegen als Signal trag seine Kennung selbst in box.yml people ein."
 YAML
 done
 {
