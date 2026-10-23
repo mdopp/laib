@@ -28,7 +28,7 @@ func TestSetBoxKeepsTheRest(t *testing.T) {
 		name, in, want string
 		f              func(string) error
 	}{
-		{"operator into bare", bare, "# the box\ndomain: home.example # public name\ndataDir: /mnt/data/stacks\noperator:\n    enabled: true\n    model: big\n    reportAt: 07:00\n",
+		{"operator into bare", bare, "# the box\ndomain: home.example # public name\ndataDir: /mnt/data/stacks\noperator:\n  enabled: true\n  model: big\n  reportAt: 07:00\n",
 			func(p string) error {
 				return state.SetBlock(p, "operator", "enabled", "true", "model", "big", "reportAt", "07:00")
 			}},
@@ -40,7 +40,7 @@ func TestSetBoxKeepsTheRest(t *testing.T) {
 			func(p string) error {
 				return state.SetBlock(p, "operator", "enabled", "false", "model", "", "reportAt", "")
 			}},
-		{"notify into bare", bare, "# the box\ndomain: home.example # public name\ndataDir: /mnt/data/stacks\nnotify:\n    url: http://127.0.0.1:5901/event\n",
+		{"notify into bare", bare, "# the box\ndomain: home.example # public name\ndataDir: /mnt/data/stacks\nnotify:\n  url: http://127.0.0.1:5901/event\n",
 			func(p string) error { return state.SetBlock(p, "notify", "url", "http://127.0.0.1:5901/event") }},
 		{"notify over existing", withBlocks, "# the box\ndomain: home.example\noperator:\n    enabled: false # off for now\n    model: small\nnotify:\n    # the webhook\n    url: http://127.0.0.1:5901/event\n",
 			func(p string) error { return state.SetBlock(p, "notify", "url", "http://127.0.0.1:5901/event") }},
