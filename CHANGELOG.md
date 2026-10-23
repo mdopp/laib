@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.1](https://github.com/mdopp/laib/compare/v0.24.0...v0.24.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **pages:** Inbox decisions queue behind the lock and outlive the request ([21ca27f](https://github.com/mdopp/laib/commit/21ca27f8563504f09cc3dda066b256f999abe5ae))
+* **pages:** Inbox decisions queue behind the lock and outlive the request ([46d0db0](https://github.com/mdopp/laib/commit/46d0db01fd02945d32fb6d0ab8ea984146216999))
+
 ## [0.24.0](https://github.com/mdopp/laib/compare/v0.23.0...v0.24.0) (2026-10-23)
 
 
