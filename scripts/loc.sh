@@ -52,6 +52,9 @@ budget persona 900 persona      # the Bote's persona engine, 701
 budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
 budget disk 700 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
 budget notify 400 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
+# behind the kernel's verb door (ADR 0026, #598): the household verbs, each
+# program with its own cap; the kernel's shrank by what moved, 16,889 to 16,695
+budget haushalt 600 haushalt    # laib-haushalt: scan and net geraete, 480
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -64,7 +67,7 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick frage automat persona mcpserver disk notify; do
+for prog in stick frage automat persona mcpserver disk notify haushalt; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)

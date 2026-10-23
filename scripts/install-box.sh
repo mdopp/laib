@@ -329,16 +329,17 @@ fi
  [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; }
  [ -z "$FOLLOW" ] || [ "$(grep " laib-host-image.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-host-image.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-host-image.sh" >&2; exit 1; })
 # the programs out of the kernel (#443): laib-disk (the data RAID and disk
-# health) and laib-notify (the watchdog ping, the owner's mail). A release from
-# before has them not; then laib diag says so
+# health) and laib-notify (the watchdog ping, the owner's mail), and the
+# household verbs behind the verb door, laib-haushalt (ADR 0026, #598). A
+# release from before has them not; then laib diag says so
 EXTRA=""
-for P in laib-disk laib-notify; do
+for P in laib-disk laib-notify laib-haushalt; do
   if grep -q " $P-linux-amd64\$" "$TMPD/SHA256SUMS"; then
     curl -fsSL "${get[@]}" -o "$TMPD/$P" "$(asset_url "$P-linux-amd64")" || { echo "$TAG lists $P but it does not download: refusing" >&2; exit 1; }
     [ "$(grep " $P-linux-amd64\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/$P" | cut -d' ' -f1)" ] || { echo "checksum mismatch for $P" >&2; exit 1; }
     EXTRA="$EXTRA $P"
   else
-    echo "$TAG carries no $P (#443): installing without it"
+    echo "$TAG carries no $P (#443, #598): installing without it"
   fi
 done
 # the previous binaries stay as *.prev: `laib self rollback` puts them back

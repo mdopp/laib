@@ -56,6 +56,7 @@ persona/             the Bote's persona engine: directory, levels, gimmicks (ADR
 mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, persona)
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag; its own program and budget (#443)
+haushalt/            laib-haushalt behind the kernel's verb door: scan and net geraete, the household verbs (ADR 0026); its own program and budget
 notify/              laib-notify on a rendered timer: the outside watchdog ping and the owner's mail, over MCP as the notify hand; its own program and budget (#443)
 skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)
 templates/           built-in templates (Quadlet files + laib.yml + hooks)

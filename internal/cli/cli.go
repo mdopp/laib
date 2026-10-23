@@ -34,6 +34,9 @@ type Env struct {
 	// ErrOut is where a verb's errors go (#289): nil = os.Stderr; MCP passes
 	// the call's own buffer, so no process-wide stderr is ever swapped
 	ErrOut io.Writer
+	// Ceiling is LAIB_CEILING, set by the verb door (ADR 0026): the
+	// program's call back runs no verb above it, the dial applies nothing
+	Ceiling string
 }
 
 // Errw is the verb's error writer.

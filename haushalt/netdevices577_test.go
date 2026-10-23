@@ -1,17 +1,12 @@
-package main
+package haushalt
 
 import (
-	"context"
 	"encoding/json"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/mcp"
-	"github.com/mdopp/laib/internal/policy"
 )
 
 // /proc/net/arp as the kernel writes it; documentation addresses, made-up MACs.
@@ -48,15 +43,12 @@ func TestParseARPKeepsTheLANsAnsweringDevices(t *testing.T) {
 	}
 }
 
-// #577: the verb over MCP, read tier: devices with name and maker, a random
-// MAC said as such, and the limits as a field, not as fine print.
+// #577: the verb, read tier: devices with name and maker, a random MAC said
+// as such, and the limits as a field, not as fine print. The kernel's side,
+// over MCP through the door: cmd/laib/door598_test.go.
 func TestNetGeraeteListsDevicesWithTheirLimits(t *testing.T) {
-	env, _ := testBox(t)
-	box := filepath.Join(env.Paths.State, "box.yml")
-	b, _ := os.ReadFile(box)
-	if err := os.WriteFile(box, []byte(strings.Replace(string(b), "10.0.0.2", "192.0.2.10", 1)), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	state := t.TempDir()
+	os.WriteFile(filepath.Join(state, "box.yml"), []byte("domain: box.test\nlanIp: 192.0.2.10\ndataDir: /x\n"), 0o644)
 	dir := t.TempDir()
 	arp, oui := filepath.Join(dir, "arp"), filepath.Join(dir, "oui.txt")
 	os.WriteFile(arp, []byte(arpFixture), 0o644)
@@ -67,14 +59,15 @@ func TestNetGeraeteListsDevicesWithTheirLimits(t *testing.T) {
 	lookupName = func(ip string) string { return map[string]string{"192.0.2.33": "epson-buero.fritz.box"}[ip] }
 	woke := ""
 	wakeLAN = func(p netip.Prefix, self netip.Addr) { woke = p.String() + " " + self.String() }
-
-	st, err := cli.LoadState(env)
-	if err != nil {
-		t.Fatal(err)
+	call := func(json bool, args ...string) (string, int) {
+		var out, errOut strings.Builder
+		code := Run(t.Context(), &Env{Actor: "ops", State: state, JSON: json, Out: &out, Err: &errOut}, append([]string{"net", "geraete"}, args...))
+		return out.String() + errOut.String(), code
 	}
-	out, code := mcp.Call(context.Background(), env, st, "ops", "laib_net", map[string]any{"view": "geraete"})
+
+	out, code := call(true)
 	var got netDevices
-	if code != cli.ExitOK || json.Unmarshal([]byte(out), &got) != nil {
+	if code != exitOK || json.Unmarshal([]byte(out), &got) != nil {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	if got.Subnet != "192.0.2.0/24" || len(got.Devices) != 3 || woke != "" {
@@ -90,19 +83,16 @@ func TestNetGeraeteListsDevicesWithTheirLimits(t *testing.T) {
 		t.Fatalf("limits %v", got.Limits)
 	}
 
-	out, code = mcp.Call(context.Background(), env, st, "ops", "laib_net", map[string]any{"view": "geraete", "wecken": true})
-	if code != cli.ExitOK || woke != "192.0.2.0/24 192.0.2.10" || !strings.Contains(out, `"woken": true`) {
+	out, code = call(true, "--wecken")
+	if code != exitOK || woke != "192.0.2.0/24 192.0.2.10" || !strings.Contains(out, `"woken": true`) {
 		t.Fatalf("wecken: exit %d, woke %q: %s", code, woke, out)
 	}
 
 	ouiFile = filepath.Join(dir, "missing")
-	env.JSON = false
-	var buf strings.Builder
-	env.Out = &buf
-	if code := cmdNet(context.Background(), env, []string{"geraete"}); code != cli.ExitOK || !strings.Contains(buf.String(), "192.0.2.33") || !strings.Contains(buf.String(), "kein Herstellerverzeichnis") {
-		t.Fatalf("text: exit %d: %s", code, buf.String())
+	if out, code := call(false); code != exitOK || !strings.Contains(out, "192.0.2.33") || !strings.Contains(out, "kein Herstellerverzeichnis") {
+		t.Fatalf("text: exit %d: %s", code, out)
 	}
-	if !policy.KnownVerbs["net"] {
-		t.Fatal("net is not in policy.KnownVerbs")
+	if _, code := call(false, "--laut"); code != 1 {
+		t.Fatalf("an unknown argument: exit %d", code)
 	}
 }

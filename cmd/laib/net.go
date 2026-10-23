@@ -12,14 +12,15 @@ import (
 
 // cmdNet is `laib net [--mermaid]` (#439): the box's network as the rendered
 // config makes it. Read only; it probes nothing. `laib net geraete` is the
-// LAN's devices as the host sees them (#577).
-func cmdNet(_ context.Context, env *cliEnv, args []string) int {
+// LAN's devices as the host sees them (#577), served by laib-haushalt
+// behind the verb door (ADR 0026).
+func cmdNet(ctx context.Context, env *cliEnv, args []string) int {
+	if len(args) > 0 && args[0] == "geraete" {
+		return door(ctx, env, "haushalt", "read", append([]string{"net"}, args...))
+	}
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
-	}
-	if len(args) > 0 && args[0] == "geraete" {
-		return cmdNetDevices(env, st, args[1:])
 	}
 	n := render.Net(st)
 	if env.JSON {

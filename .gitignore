@@ -3,6 +3,7 @@
 /laib-lease
 /laib-disk
 /laib-notify
+/laib-haushalt
 /frage/frage
 /dist/
 *.test
