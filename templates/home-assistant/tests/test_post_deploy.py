@@ -17,6 +17,11 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 ADMIN_PW = "-ha-admin-pw-9q"
 BOTE_PW = "-ha-bote-pw-3x"
 ADMIN_SECRETS = ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
+# #591: each consumer on its own Home Assistant user, never a person's: (username, kind)
+MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HAUS_HA_TOKEN": ("haus", "admin"),
+            "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user")}
+PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HAUS_PASSWORD": "-ha-haus-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
+             "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d"}
 HA = {}
 MA = {}
 
@@ -64,6 +69,18 @@ def save():
         Path(HA["storage"]).parent.mkdir(parents=True, exist_ok=True)
         Path(HA["storage"]).write_text(json.dumps({"version": 1, "minor_version": 5, "key": "core.config_entries",
                                                    "data": {"entries": [{k: v for k, v in e.items() if k != "state"} for e in HA["entries"]]}}))
+
+
+def save_auth(data_dir):
+    """HA's .storage/auth, as HA writes it, the token values in it too (#591: the hook reads names only)"""
+    path = Path(data_dir, "home-assistant", "homeassistant", ".storage", "auth")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "minor_version": 1, "key": "auth", "data": {
+        "users": list(HA["users"].values()), "groups": [],
+        "credentials": [{"id": "c-" + n, "user_id": i, "auth_provider_type": "homeassistant", "auth_provider_id": None, "data": {"username": n}}
+                        for n, (_, i) in HA["creds"].items()],
+        "refresh_tokens": [{"id": "rt-" + t, "user_id": u, "client_name": HA["names"][t][1], "token_type": "long_lived_access_token",
+                            "token": t, "jwt_key": "k-" + t} for t, u in HA["tokens"].items() if t in HA["names"]]}}))
 
 
 def username(uid):
@@ -300,7 +317,8 @@ class FakeHA(BaseHTTPRequestHandler):
         self.wfile.flush()
         self.ws_send({"type": "auth_required", "ha_version": "2026.10.2"})
         msg = self.ws_recv()
-        uid = HA["tokens"].get(msg.get("access_token"))
+        token = msg.get("access_token")
+        uid = HA["tokens"].get(token)
         if msg.get("type") != "auth" or uid is None:
             self.ws_send({"type": "auth_invalid", "message": "Invalid access token or password"})
             return
@@ -313,9 +331,9 @@ class FakeHA(BaseHTTPRequestHandler):
                 return
             if msg is None:
                 return
-            self.ws_send(self.ws_command(uid, msg))
+            self.ws_send(self.ws_command(uid, msg, token))
 
-    def ws_command(self, uid, m):
+    def ws_command(self, uid, m, current=None):
         t, i = m["type"], m["id"]
         ok = lambda r=None: {"id": i, "type": "result", "success": True, "result": r}
         err = lambda code, text: {"id": i, "type": "result", "success": False, "error": {"code": code, "message": text}}
@@ -324,8 +342,11 @@ class FakeHA(BaseHTTPRequestHandler):
                 return ok(token_for(uid, True, m["client_name"]))
             except ValueError:
                 return err("unknown_error", "Unknown error")   # what HA answers
+        if t == "auth/current_user":   # every user may ask who they are; is_admin is the owner or the admin group (auth/models.py)
+            u = HA["users"][uid]
+            return ok({"id": uid, "name": u["name"], "is_owner": u["is_owner"], "is_admin": u["is_owner"] or is_admin(uid)})
         if t == "auth/refresh_tokens":
-            return ok([{"id": "rt-" + tok, "client_name": HA["names"][tok][1], "type": "long_lived_access_token"}
+            return ok([{"id": "rt-" + tok, "client_name": HA["names"][tok][1], "type": "long_lived_access_token", "is_current": tok == current}
                        for tok in HA["tokens"] if tok in HA["names"] and HA["names"][tok][0] == uid])
         if t == "auth/delete_refresh_token":
             tok = m["refresh_token_id"][3:]
@@ -420,13 +441,16 @@ class Hook(unittest.TestCase):
                "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
+        env.update({"LAIB_SECRET_" + k: v for k, v in PASSWORDS.items()})
+        if data_dir:
+            save_auth(data_dir)
         for name, value in (tokens or {}).items():
             env["LAIB_SECRET_" + name] = value
         env.update(zuhause or {})
         p = subprocess.run([str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + "\n" + p.stderr).splitlines() if not l.startswith("laib-secret: "))
-        for value in list(handed.values()) + list((tokens or {}).values()) + [password, bote_password]:
+        for value in list(handed.values()) + list((tokens or {}).values()) + [password, bote_password] + list(PASSWORDS.values()) + list(HA["tokens"]):
             if value:
                 self.assertNotIn(value, rest, "a token or a password in the hook's log (#214)")
         return p, handed, rest
@@ -434,6 +458,13 @@ class Hook(unittest.TestCase):
     def kind(self, token):
         uid = HA["tokens"].get(token)
         return None if uid is None else ("admin" if is_admin(uid) else "user")
+
+    def assertOnItsOwnUser(self, handed):
+        """#591: each handed token a long-lived one of its consumer's own user, of its kind"""
+        for name, tok in handed.items():
+            if name in MACHINES:
+                self.assertEqual((username(HA["tokens"].get(tok)), self.kind(tok)), MACHINES[name], name)
+                self.assertTrue(tok.startswith("llat-"), f"{name} is a short-lived session, not a long-lived token")
 
 
 class PostDeploy(Hook):
@@ -461,11 +492,12 @@ class PostDeploy(Hook):
         self.assertEqual(HA["onboarding"], {"user", "core_config", "analytics", "integration"}, "onboarding left half done")
         self.assertEqual(HA["creds"]["laib"][0], ADMIN_PW)
         self.assertEqual(HA["core"].get("time_zone"), "Europe/Berlin")
-        self.assertEqual(set(handed), set(ADMIN_SECRETS) | {"BOTE_HA_TOKEN"})
-        for name in ADMIN_SECRETS:
-            self.assertEqual(self.kind(handed[name]), "admin", name)
-            self.assertTrue(handed[name].startswith("llat-"), f"{name} is a short-lived session, not a long-lived token")
+        self.assertEqual(set(handed), set(MACHINES))
+        self.assertOnItsOwnUser(handed)
         self.assertEqual(len({handed[n] for n in handed}), 4, "one token per consumer, each revocable on its own")
+        laib = HA["creds"]["laib"][1]
+        self.assertFalse([n for t, n in HA["names"].items() if n[0] == laib], "a consumer's token on the administrator's own user (#591)")
+        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote"})
         bote = HA["tokens"][handed["BOTE_HA_TOKEN"]]
         self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user", "the Bote's token must not be an administrator's")
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
@@ -488,9 +520,8 @@ class PostDeploy(Hook):
         p, again, log = self.run_hook(tokens=handed, password="")
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(set(again), {"HAUS_HA_TOKEN", "BOTE_HA_TOKEN"})
-        self.assertEqual(self.kind(again["HAUS_HA_TOKEN"]), "admin")
-        self.assertEqual(self.kind(again["BOTE_HA_TOKEN"]), "user")
-        self.assertEqual(HA["logins"], ["bote"], "the administrator logged in although HA_TOKEN works")
+        self.assertOnItsOwnUser(again)
+        self.assertEqual(HA["logins"], ["haus", "bote"], "the administrator logged in although an administrator token works")
 
     def test_a_secret_lost_while_ha_still_holds_its_token_by_name_is_replaced(self):
         # HA keeps one long-lived token per name and user: Laib lost HA_TOKEN (or it was set to junk),
@@ -501,7 +532,7 @@ class PostDeploy(Hook):
         p, again, log = self.run_hook(tokens=tokens)
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(set(again), {"HA_TOKEN"})
-        self.assertEqual(self.kind(again["HA_TOKEN"]), "admin")
+        self.assertOnItsOwnUser(again)
         self.assertNotIn(handed["HA_TOKEN"], HA["tokens"], "the old token of that name is still valid in HA")
         self.assertEqual(self.kind(handed["HAUS_HA_TOKEN"]), "admin", "another consumer's token was revoked")
 
@@ -516,11 +547,76 @@ class PostDeploy(Hook):
         p, handed, log = self.run_hook(tokens={"BOTE_HA_TOKEN": pasted}, user="oscar")
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(HA["logins"][0], "oscar")
-        self.assertEqual(set(handed), set(ADMIN_SECRETS) | {"BOTE_HA_TOKEN"}, "the pasted admin token stayed the Bote's")
+        self.assertEqual(set(handed), set(MACHINES) | {"HA_RETIRED_TOKENS"}, "the pasted admin token stayed the Bote's")
         self.assertEqual(HA["tokens"][handed["BOTE_HA_TOKEN"]], bote, "a second Bote user instead of the one there")
         self.assertEqual(HA["users"][bote]["group_ids"], ["system-users"])
-        self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user")
+        self.assertOnItsOwnUser(handed)
         self.assertIn(pasted, HA["tokens"], "the owner's own token was revoked: not Laib's to take")
+        p, again, log = self.run_hook(tokens=dict(handed, BOTE_HA_TOKEN=handed["BOTE_HA_TOKEN"]), user="oscar")
+        self.assertEqual((p.returncode, again), (0, {"HA_RETIRED_TOKENS": ""}), log)
+        self.assertIn(pasted, HA["tokens"], "a token Laib did not mint was revoked once the Bote's own one worked")
+        self.assertIn("not one Laib minted", log)
+
+    def test_an_old_box_moves_each_token_to_its_own_user_and_revokes_the_old_one_only_after(self):
+        # #591: #349 minted HA_TOKEN, HAUS_HA_TOKEN and BOTE_AUTOMAT_HA_TOKEN on the administrator,
+        # a person's user: every Haus action showed in HA's logbook as that person
+        owner, old = old_box()
+        p, handed, log = self.run_hook(tokens=old)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(handed), {"HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "HA_RETIRED_TOKENS"}, log)
+        self.assertOnItsOwnUser(handed)
+        for name, tok in old.items():
+            self.assertIn(tok, HA["tokens"], f"the old {name} revoked before its consumer had the new one")
+        # laib stored the hand-back and re-applies the consumers, then home-assistant with what it stored
+        stored = dict(old, **handed)
+        HA["logins"].clear()
+        p, again, log = self.run_hook(tokens=stored)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(again, {"HA_RETIRED_TOKENS": ""}, "a verified token was replaced, or the old ones are still held")
+        for name, tok in old.items():
+            if name != "BOTE_HA_TOKEN":   # on the Bote's own user already
+                self.assertNotIn(tok, HA["tokens"], f"the old {name} still works on the owner's user")
+        self.assertEqual([n for t, n in HA["names"].items() if n[0] == owner], [], "a Laib token left on the owner's user")
+        self.assertIn('the old token "laib: haus" revoked', log)
+        self.assertEqual(HA["logins"], [], "logged in although every token works")
+        p, third, log = self.run_hook(tokens=dict(stored, **again))
+        self.assertEqual((p.returncode, third), (0, {}), "a third run changed something: " + log)
+
+    def test_an_old_token_stays_while_its_successor_does_not_work(self):
+        owner, old = old_box()
+        _, handed, _ = self.run_hook(tokens=old)
+        del HA["tokens"][handed["HAUS_HA_TOKEN"]]   # the new one refused (revoked by hand) before it was verified
+        p, again, log = self.run_hook(tokens=dict(old, **handed))
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn(old["HAUS_HA_TOKEN"], HA["tokens"], "the old token went although its successor never worked")
+        self.assertNotIn(old["HA_TOKEN"], HA["tokens"])
+        self.assertOnItsOwnUser({"HAUS_HA_TOKEN": again["HAUS_HA_TOKEN"]})
+        self.assertTrue(again.get("HA_RETIRED_TOKENS", "").startswith("HAUS_HA_TOKEN="), "the old one forgotten")
+        _, last, log = self.run_hook(tokens={**old, **handed, **again})
+        self.assertNotIn(old["HAUS_HA_TOKEN"], HA["tokens"], log)
+        self.assertEqual(last, {"HA_RETIRED_TOKENS": ""})
+
+    def test_whoever_else_is_in_home_assistant_is_listed_and_nothing_is_deleted(self):
+        # #591 point 4: users from before (a ServiceBay admin with its bridge token, a second user
+        # of the owner's name) are the owner's decision; the hook names them, never their tokens' values
+        owner, old = old_box()
+        legacy = add_user("Legacy Admin", admin=True)
+        HA["creds"]["legacy"] = ("x", legacy)
+        secret = token_for(legacy, True, "legacy-bridge")
+        add_user("Owner", admin=False)
+        users = len(HA["users"])
+        with tempfile.TemporaryDirectory() as d:
+            p, handed, log = self.run_hook(tokens=old, data_dir=d)
+            self.assertEqual(p.returncode, 0, log)
+            self.assertIn("not Laib's", log)
+            self.assertIn("„Legacy Admin“ (administrator): „legacy-bridge“", log)
+            self.assertIn("„Owner“ (owner, HA_ADMIN_USER): „laib: home-assistant-check“", log, "Laib's old token names on a person's user are not named")
+            self.assertEqual(log.count("„Owner“"), 2, "the second user of that name is not listed")
+            self.assertNotIn("Haus“", log, "Laib's own users listed as strangers")
+            self.assertNotIn(secret, log)
+            self.assertNotIn("k-" + secret, log)
+        self.assertEqual(len(HA["users"]), users + 3, "a user deleted, or more than Laib-Prüfung, Haus and Bote-Automat added")
+        self.assertIn(secret, HA["tokens"])
 
     def test_no_admin_login_and_no_token_is_red_and_says_what_to_set(self):
         fresh(onboarded=("oscar", "the real one"))
@@ -529,6 +625,19 @@ class PostDeploy(Hook):
         self.assertEqual(handed, {})
         self.assertIn("laib secret set HA_ADMIN_PASSWORD", log)
         self.assertIn("HA_ADMIN_USER", log)
+
+
+def old_box():
+    """a box from before #591: #349 minted the check's, Haus's and the Automat's tokens on the
+    administrator, the owner's own user; the Bote has its own user already"""
+    fresh(onboarded=("laib", ADMIN_PW))
+    owner = next(iter(HA["users"]))
+    old = {n: token_for(owner, True, label) for n, label in (("HA_TOKEN", "laib: home-assistant-check"), ("HAUS_HA_TOKEN", "laib: haus"),
+                                                              ("BOTE_AUTOMAT_HA_TOKEN", "laib: bote-automat"))}
+    bote = add_user("Bote", admin=False)
+    HA["creds"]["bote"] = (BOTE_PW, bote)
+    old["BOTE_HA_TOKEN"] = token_for(bote, True, "laib: bote")
+    return owner, old
 
 
 def fake_frage():
@@ -814,7 +923,9 @@ class MusicAssistant(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertIn("MUSIC_ASSISTANT_HA_TOKEN", handed)
         self.assertEqual(self.kind(handed["MUSIC_ASSISTANT_HA_TOKEN"]), "admin", "MA reads HA's users: an administrator's token")
-        self.assertEqual(HA["names"][handed["MUSIC_ASSISTANT_HA_TOKEN"]][1], "laib: music-assistant")
+        self.assertEqual(HA["names"][handed["MUSIC_ASSISTANT_HA_TOKEN"]], (HA["creds"]["music-assistant"][1], "laib: music-assistant"),
+                         "Music Assistant's token on a person's user, not its own (#591)")
+        self.assertEqual(HA["users"][HA["creds"]["music-assistant"][1]]["name"], "Music Assistant")
         (plug,) = MA["providers"].values()
         self.assertEqual((plug["url"], plug["token"]), ("https://home.box.test", handed["MUSIC_ASSISTANT_HA_TOKEN"]),
                          "MA sends the browser to the plugin's URL to sign in: 127.0.0.1 would be the phone itself")
@@ -828,6 +939,17 @@ class MusicAssistant(Hook):
         self.assertEqual(len(self.entries()), 1, "a second Music Assistant entry")
         self.assertEqual(list(MA["providers"].values())[0]["token"], handed["MUSIC_ASSISTANT_HA_TOKEN"])
         self.assertEqual(HA["logins"], [], "logged in although every token works")
+
+    def test_an_old_plugin_token_on_the_owner_moves_and_goes_once_the_plugin_has_the_new_one(self):
+        owner, old = old_box()
+        old["MUSIC_ASSISTANT_HA_TOKEN"] = token_for(owner, True, "laib: music-assistant")
+        _, handed, _ = self.run_hook(tokens=dict(old, HA_MUSIC_ASSISTANT_TOKEN="ma-tok"), ma=self.url)
+        self.assertEqual(MA["providers"]["hass"]["token"], handed["MUSIC_ASSISTANT_HA_TOKEN"])
+        self.assertIn(old["MUSIC_ASSISTANT_HA_TOKEN"], HA["tokens"])
+        p, again, log = self.run_hook(tokens=dict(old, **handed, HA_MUSIC_ASSISTANT_TOKEN="ma-tok"), ma=self.url)
+        self.assertEqual((p.returncode, again), (0, {"HA_RETIRED_TOKENS": ""}), log)
+        self.assertNotIn(old["MUSIC_ASSISTANT_HA_TOKEN"], HA["tokens"])
+        self.assertEqual(MA["providers"]["hass"]["token"], handed["MUSIC_ASSISTANT_HA_TOKEN"])
 
     def test_a_plugin_whose_token_ha_revoked_gets_a_new_one(self):
         fresh()
