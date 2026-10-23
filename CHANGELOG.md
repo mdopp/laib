@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.0](https://github.com/mdopp/laib/compare/v0.24.1...v0.25.0) (2026-10-23)
+
+
+### Features
+
+* **inbox:** approving is a merge, one run applies what was approved ([8568cbd](https://github.com/mdopp/laib/commit/8568cbd991795c53a312b28708aa55323b45aa17)), closes [#609](https://github.com/mdopp/laib/issues/609)
+* **inbox:** approving is a merge; a red run rolls back its batch ([#609](https://github.com/mdopp/laib/issues/609), [#608](https://github.com/mdopp/laib/issues/608)) ([ae92b46](https://github.com/mdopp/laib/commit/ae92b46c2792e39265fbbdd34cae6909d1659b13))
+
 ## [0.24.1](https://github.com/mdopp/laib/compare/v0.24.0...v0.24.1) (2026-10-23)
 
 
