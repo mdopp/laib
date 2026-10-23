@@ -28,6 +28,9 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 20,000: set by the owner, mdopp, 2026-10-23, on #609 (approve is a merge,
+# a red run rolls back its whole batch) asking for 17,000: "Setze die Grenze
+# auf 20k". The kernel stood at 16,944; relay and lease stay in it (ADR 0005).
 # 16,900: raised by the owner, mdopp, 2026-10-23, #574-#579: the tools an
 # agent was missing on the box ("Setze das alles um"): built-in hands get
 # their new verbs after an update, the state repo readable, the LAN's
@@ -42,7 +45,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 16900 cmd internal
+budget kernel 20000 cmd internal
 budget operator 3000 operator
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
 budget stick 1800 stick         # the laptop's install-stick builder, 1,468

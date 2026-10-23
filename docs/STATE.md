@@ -421,6 +421,11 @@ boot). A failed verify is `"result":"red"` with a `detail` field.
 proposal that named a finding: `#N von ops wirksam: der Befund ist weg
 (unit jellyfin)` or `… ohne Wirkung: der Befund ist noch da (…)`, once per
 proposal; a `reject` line carries the owner's reason after the colon.
+An `approve` line is the merge (`approve #N by …` on `main`); the apply
+that carries it comes after, as one run for whatever was approved
+meanwhile, with reason `Freigaben #4, #5, #6 (<from>..<to>)` — the
+proposals and the state's commit range, also kept on each inbox entry as
+`batch`. A red run's `rollback` lines name it per proposal (#609).
 
 ### Routes that trust only the proxy
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -318,6 +319,9 @@ func waitActive(ctx context.Context, service, unit string) Check {
 	deadline := time.Now().Add(60 * time.Second)
 	last := ""
 	for time.Now().Before(deadline) {
+		if ctx.Err() != nil { // a cancelled apply (#608): no unit is "unknown", the wait is over
+			return Check{Service: service, What: "unit " + unit, OK: false, Detail: ctx.Err().Error()}
+		}
 		last = sysd.Active(ctx, unit)
 		if last == "active" {
 			return Check{Service: service, What: "unit " + unit, OK: true}
@@ -338,7 +342,7 @@ func waitHTTP(ctx context.Context, service string, h state.Health) Check {
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	deadline := time.Now().Add(httpDeadline)
 	last := ""
-	for time.Now().Before(deadline) {
+	for time.Now().Before(deadline) && (ctx.Err() == nil || last == "") {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		resp, err := client.Do(req)
 		if err == nil {
@@ -371,6 +375,7 @@ func writeAtomic(target, content string) error {
 // snapshot commits the state repo so the applied state has a hash. A clean
 // tree returns HEAD.
 func snapshot(ctx context.Context, repo, reason string) (string, error) {
+	defer proposal.LockRepo(repo)() // beside an approve's merge (#609)
 	git := func(args ...string) (string, error) {
 		return sysd.Run(ctx, "git", append([]string{"-C", repo}, args...)...)
 	}

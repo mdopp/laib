@@ -72,6 +72,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
 		}
 	}
+	go inbox.Carry(context.Background(), &cli.Env{Paths: env.Paths, Actor: "laib"}) // a run a restart cut off before it applied what waits (#609)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcp.Handler(env))
 	mux.HandleFunc("/v1/", FleetLock(env, time.Now))
@@ -192,7 +193,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 					b.WriteString("<h2>Zuletzt freigegeben</h2>")
 				}
 				n++
-				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span>%s</div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
+				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span>%s%s</div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), runNote(p), DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
 			}
 			for _, p := range all {
 				if p.Status == "stale" {
@@ -306,34 +307,23 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
 			argv = append(argv, why)
 		}
-		setDecision(n, "wartet, bis es dran ist")
-		decisions.q <- func() { decide(env, actor, n, decision, argv) }
+		setDecision(n, "wird entschieden …")
+		go decide(env, actor, n, decision, argv)
 		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
 	}
 }
 
-// DecisionRetry is how often a queued decision looks at the lock again (#607).
-var DecisionRetry = 5 * time.Second
-
-// decisions run one after another in the background, detached from the
-// request that took them (#607): a tap while an apply holds the lock waits
-// its turn instead of failing, and a closed connection cuts no apply off.
+// decisions are the taps not yet done (#607), each carried out on its own,
+// detached from the request that took it: a closed connection cuts no
+// apply off. An approve is a merge and done at once (#609); the run that
+// applies it says itself, on the proposal, that it waits.
 var decisions = struct {
 	sync.Mutex
 	state map[int]string
-	q     chan func()
-}{state: map[int]string{}, q: make(chan func(), 64)}
-
-func init() {
-	go func() {
-		for f := range decisions.q {
-			f()
-		}
-	}()
-}
+}{state: map[int]string{}}
 
 // DecisionState is what the Inbox says about a decision taken and not yet
-// done: that it waits, that it runs, or why it failed. Empty when done.
+// done, or why it failed. Empty when done.
 func DecisionState(id int) string {
 	decisions.Lock()
 	defer decisions.Unlock()
@@ -351,35 +341,32 @@ func setDecision(id int, s string) {
 }
 
 func decide(env *cli.Env, actor string, id int, decision string, argv []string) {
-	for start := time.Now(); ; time.Sleep(DecisionRetry) {
-		if h := apply.LockHolder(env.Paths); h != "" {
-			if time.Since(start) > 30*time.Minute {
-				setDecision(id, "fehlgeschlagen: seit 30 Minuten gesperrt durch "+h)
-				return
-			}
-			setDecision(id, "wartet, bis "+h+" fertig ist")
-			continue
-		}
-		setDecision(id, "wird angewendet …")
-		var errOut strings.Builder
-		webEnv := &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
-		var code int
-		if decision == "rollback" {
-			code = inbox.Rollback(context.Background(), webEnv, []string{"#" + strconv.Itoa(id)})
-		} else {
-			code = inbox.Decide(context.Background(), webEnv, argv, decision == "approve")
-		}
-		switch {
-		case code == cli.ExitLocked:
-			continue // taken between the look and the lock
-		case code != cli.ExitOK && code != cli.ExitRed:
-			lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
-			setDecision(id, "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code)))
-		default:
-			setDecision(id, "")
-		}
+	var errOut strings.Builder
+	ctx, webEnv := context.Background(), &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
+	var code int
+	if decision == "rollback" {
+		code = inbox.Rollback(ctx, webEnv, []string{"#" + strconv.Itoa(id)})
+	} else if code = inbox.Decide(ctx, webEnv, argv, decision == "approve"); code == cli.ExitOK && decision == "approve" {
+		setDecision(id, "") // approved: from here the proposal says it waits for its run
+		code = inbox.Carry(ctx, webEnv)
+	}
+	if code != cli.ExitOK && code != cli.ExitRed {
+		lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
+		setDecision(id, "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code)))
 		return
 	}
+	setDecision(id, "")
+}
+
+// runNote says what the run did with an approved proposal (#609).
+func runNote(p *proposal.Proposal) string {
+	if p.Outcome == "waiting" {
+		return "<p class=gelb>freigegeben – wird mit dem nächsten Lauf angewendet</p>"
+	}
+	if p.Outcome == "rolled-back" && p.Batch != "" {
+		return "<p class=rot>zurückgenommen · Lauf " + html.EscapeString(p.Batch) + "</p>"
+	}
+	return ""
 }
 
 // DecisionForm is one Inbox button (#574): on submit it disables itself and

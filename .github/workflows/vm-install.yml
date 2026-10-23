@@ -84,6 +84,21 @@ jobs:
           else
             echo "no green vm-install of tree $(git rev-parse 'HEAD^{tree}') near $GITHUB_SHA: vm-install runs"
           fi
+  qemu-cache:
+    # a cache saved on a PR is that PR's alone; main's is every branch's (#604)
+    name: qemu packages into main's cache
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - id: qkey
+        run: echo "key=qemu-debs-$ImageOS-$ImageVersion-v2" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/qemu-debs
+          key: ${{ steps.qkey.outputs.key }}
+      - run: scripts/vm/qemu-debs.sh
   reused:
     name: "reused: run ${{ needs.reuse.outputs.run }} of ${{ needs.reuse.outputs.sha }} proved tree ${{ needs.reuse.outputs.tree }}"
     needs: reuse
@@ -146,23 +161,17 @@ jobs:
         with:
           name: vm-build
           path: dist/
-      # the Azure mirror stalled 17-20 min in this step in 6 of 10 runs (2026-10-23):
-      # the packages come from a cache, without the recommended GUI and sound libraries
+      # qemu from a cache (#604): caches are per PR, so main fills the one every train reads (job qemu-cache)
+      - id: qkey
+        run: echo "key=qemu-debs-$ImageOS-$ImageVersion-v2" >> "$GITHUB_OUTPUT"
       - name: qemu packages, cached
         uses: actions/cache@v4
         with:
           path: ~/qemu-debs
-          key: qemu-debs-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-v1
+          key: ${{ steps.qkey.outputs.key }}
       - name: qemu + kvm
         run: |
-          pkgs="qemu-system-x86 qemu-utils seabios ipxe-qemu"
-          if ! ls ~/qemu-debs/*.deb >/dev/null 2>&1; then
-            mkdir -p ~/qemu-archives/partial ~/qemu-debs
-            fetch() { timeout 180 sudo apt-get update -q && timeout 240 sudo apt-get install -y -q --no-install-recommends --download-only -o Acquire::Retries=3 -o Dir::Cache::archives="$HOME/qemu-archives" $pkgs; }
-            # a stalled Azure mirror gets four minutes, then Ubuntu's own archive
-            fetch || { sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null; fetch; }
-            cp ~/qemu-archives/*.deb ~/qemu-debs/
-          fi
+          scripts/vm/qemu-debs.sh
           sudo apt-get install -y -q --no-install-recommends ~/qemu-debs/*.deb
           test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
       - name: this commit's build, served to the box; the stick

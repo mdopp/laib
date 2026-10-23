@@ -227,7 +227,7 @@ itself:
 
 | Class | Example | Default | "auto" means |
 |---|---|---|---|
-| values | a newer image tag, a changed port | auto (`laib init`) | laib merges, applies, and reverts the merge when verify is red |
+| values | a newer image tag, a changed port | auto (`laib init`) | laib merges; the next run applies it and reverts its merges when verify is red (#609) |
 | template-update | the registry shipped a new version | auto | the weekly sync proposes and laib applies, rollback on red |
 | new-service | "install Paperless" | proposal | laib adds it when no purpose warning fires |
 | patch | anything else an agent can express as a diff | auto | same |
@@ -341,7 +341,7 @@ first line of the box page, the header of the Solaris chat, the first line of
 | State | Means | What you can do |
 |---|---|---|
 | `bereit` | daemon answers, state repo readable, apply possible | everything |
-| `eingeschränkt` | daemon answers, apply is locked (an apply is running, or the Werkstatt holds the GPU) | ask, read, propose |
+| `eingeschränkt` | daemon answers, apply is locked (an apply is running, or the Werkstatt holds the GPU) | ask, read, propose, approve (it applies with the next run, #609) |
 | `nicht erreichbar` | no answer since time X | Solaris still answers and tells you |
 
 Solaris and Laib are two processes. If Laib falls, the conversation stays and

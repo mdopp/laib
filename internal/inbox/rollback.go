@@ -3,11 +3,13 @@ package inbox
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
@@ -16,6 +18,74 @@ import (
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
+
+func init() { apply.Carry = Carry }
+
+// Carry is the apply worker (#609): an approve only merges, and whoever
+// gets the lock next applies main with every proposal still waiting as one
+// run, named by them and its commit range. Each release of the lock starts
+// it again, so N approvals during one apply give one more apply. A red run
+// is rolled back as a whole: each of its proposals says with which run.
+func Carry(ctx context.Context, env *cli.Env) int {
+	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
+		return cli.ExitOK
+	}
+	unlock, code := apply.TakeLock(env, nil, "apply")
+	if code == cli.ExitLocked {
+		fmt.Fprintln(env.W(), "freigegeben: wird mit dem nächsten Lauf angewendet")
+		return cli.ExitOK
+	} else if code != cli.ExitOK {
+		return code
+	}
+	defer unlock()
+	release := proposal.LockRepo(env.Paths.State) // the run and the state it applies, as one
+	batch := proposal.Waiting(cli.InboxDir(env))
+	st, err := cli.LoadState(env)
+	if len(batch) == 0 { // carried meanwhile
+		release()
+		return cli.ExitOK
+	}
+	from, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--short", batch[0].Merge+"^1")
+	to, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--short", "HEAD")
+	release()
+	if err != nil {
+		return env.Fail(err)
+	}
+	run := ""
+	for _, p := range batch {
+		run += fmt.Sprintf(", #%d", p.ID)
+		for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the run touches it, fail closed
+			if svc := st.Services[name]; svc != nil && code == cli.ExitOK {
+				code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true)
+			}
+		}
+	}
+	run = fmt.Sprintf("%s (%s..%s)", run[2:], strings.TrimSpace(from), strings.TrimSpace(to))
+	if code == cli.ExitOK {
+		code = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+run)
+	}
+	for _, p := range batch {
+		p.Outcome, p.Batch = "", run
+		if code != cli.ExitOK {
+			p.Outcome, p.Settled = "rolled-back", time.Now().UTC()
+		}
+		proposal.Save(cli.InboxDir(env), p)
+	}
+	if code == cli.ExitOK {
+		return code
+	}
+	for _, p := range slices.Backward(batch) { // the run's merges, newest first
+		if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
+			return cli.ExitRed
+		}
+	}
+	if st, err = cli.LoadState(env); err != nil {
+		return env.Fail(err)
+	}
+	apply.ApplyHeld(ctx, env, st, "", "rollback "+run)
+	return code
+}
 
 // Rollback: `laib rollback [#<proposal> | <commit>]` (#41). By proposal
 // it reverts the approve merge (-m 1) without touching secrets.age, drops
@@ -48,7 +118,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 		if err != nil {
 			return env.Fail(fmt.Errorf("%q is not a proposal", arg))
 		}
-		subject, err := RevertProposal(ctx, env, st, id)
+		subject, err := RevertProposal(ctx, env, st, id, "")
 		if err != nil {
 			return env.Fail(err)
 		}
@@ -84,8 +154,9 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 // RevertProposal reverts the approve merge of proposal id (#41): the tree
 // without the proposal, secrets.age as it is now (the running services'
 // secrets stay), minus the secrets of services the revert takes out of
-// the state. Returns the subject for the journal.
-func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int) (string, error) {
+// the state. with names the run it went with. Returns the subject for the journal.
+func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int, with string) (string, error) {
+	defer proposal.LockRepo(env.Paths.State)() // beside an approve's merge (#609)
 	g := func(args ...string) (string, error) {
 		return sysd.Run(ctx, "git", append([]string{"-C", env.Paths.State, "-c", "user.name=laib", "-c", "user.email=laib@localhost"}, args...)...)
 	}
@@ -135,7 +206,7 @@ func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int) 
 		p.Outcome, p.Settled = "rolled-back", time.Now().UTC()
 		proposal.Save(cli.InboxDir(env), p)
 	}
-	subject := fmt.Sprintf("#%d zurückgenommen", id)
+	subject := fmt.Sprintf("#%d zurückgenommen%s", id, with)
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})
 	return subject, nil
 }
