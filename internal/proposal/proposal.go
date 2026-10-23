@@ -41,8 +41,11 @@ type Proposal struct {
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 	Anchor
 	// what came of it (#544), recorded by laib, never by the proposer:
-	// effective | no-effect | rolled-back | rejected | later | applied
+	// waiting (approved, no run has applied it yet, #609) | effective |
+	// no-effect | rolled-back | rejected | later | applied
 	Outcome      string    `json:"outcome,omitempty"`
+	Merge        string    `json:"merge,omitempty"`        // the approve merge on main (#609)
+	Batch        string    `json:"batch,omitempty"`        // the run that applied it, as the state's commit range (#609)
 	RejectReason string    `json:"rejectReason,omitempty"` // the owner's short reason for a no
 	Settled      time.Time `json:"settled,omitempty"`
 }
