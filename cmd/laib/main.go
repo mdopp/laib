@@ -62,6 +62,7 @@ func init() {
 		{Name: "backup", Tier: "propose", Help: "restic snapshot of state, journal and declared data paths", Run: backup.Cmd},
 		{Name: "restore", Tier: "apply", Help: "<snapshot|latest> [service] restore declared paths, then apply", Run: backup.Restore},
 		{Name: "converge", Tier: "apply", Help: "bring the box back to the state: re-apply drift, restart inactive units, within a budget", Run: apply.Converge},
+		{Name: "state", Tier: "read", Help: "[<path>]: the state repo's files on main, or one as committed — box.yml, policy.yml, services/<s>/values.yml …, to write a --patch against; secrets.age never, secrets redacted (#576)", Run: cmdState},
 		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h)", Run: cmdJournal},
 		{Name: "context", Tier: "read", Help: "starter bundle for an agent session", Run: cmdContext},
 		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: registry.TemplateCmd},
