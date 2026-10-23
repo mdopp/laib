@@ -32,6 +32,7 @@ import (
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/review"
 	"github.com/mdopp/laib/internal/state"
+	"gopkg.in/yaml.v3"
 )
 
 // Propose has two shapes. A human with a shell: `laib propose "<grund>"`
@@ -83,6 +84,24 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 			}
 			edit.Set[k] = v
 			i++
+		case "--path": // a value at a named path, as YAML (#598)
+			usage := errors.New("--path wants file:a.b.c=VALUE (a YAML value; empty removes it)")
+			if i+1 >= len(args) {
+				return env.Fail(usage)
+			}
+			k, v, ok := strings.Cut(args[i+1], "=")
+			var doc yaml.Node
+			if err := yaml.Unmarshal([]byte(v), &doc); !ok || !strings.Contains(k, ":") || err != nil {
+				return env.Fail(usage)
+			}
+			if edit.At == nil {
+				edit.At = map[string]*yaml.Node{}
+			}
+			edit.At[k] = nil
+			if len(doc.Content) > 0 {
+				edit.At[k] = doc.Content[0]
+			}
+			i++
 		case "--grant":
 			if i+2 >= len(args) {
 				return env.Fail(errors.New("--grant wants <hand> <verb>"))
@@ -123,18 +142,21 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		edit.Patch = string(b)
 	}
+	if err := MayPaths(st, env.Actor, edit.At); err != nil {
+		return cli.Refused(env, err.Error())
+	}
 	reason := strings.Join(words, " ")
 	if reason == "" {
-		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]|--grant <hand> <verb>] \"<grund>\""))
+		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--path file:a.b=VALUE|--add <template> [--name n] [KEY=VALUE…]|--grant <hand> <verb>] \"<grund>\""))
 	}
 	// the finding a proposal answers is one diag shows now, or laib measures nothing (#544)
 	if anchor.Finding != "" && Present != nil && !Present(ctx, env, st, anchor.Finding) {
 		return env.Fail(fmt.Errorf("Befund %q steht nicht in laib diag: nenne probe und Dienst eines Befunds, den diag jetzt zeigt", anchor.Finding))
 	}
 	var p *proposal.Proposal
-	if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Write == nil {
+	if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Write == nil && edit.At == nil {
 		if env.MCP {
-			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE, --add <template> or --grant <hand> <verb>"))
+			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE, --path file:a.b=VALUE, --add <template> or --grant <hand> <verb>"))
 		}
 		p, err = proposal.Create(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, JudgeFor(st, env.Actor))
 	} else {
@@ -147,7 +169,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		// The dial says laib decides this class itself: approve as laib,
 		// apply, and roll back on a red verify. A warning (a second service
 		// for one purpose) and anything the judge named always go to a human.
@@ -523,9 +545,35 @@ func isValueArg(a string) bool {
 	return valueKey.MatchString(a) || strings.Contains(a, "=") && !strings.Contains(a, " ")
 }
 
+// MayPaths refuses the first path policy.yml does not let the actor's hand
+// propose a value at (#598), before anything is written.
+func MayPaths(st *state.State, actor string, at map[string]*yaml.Node) error {
+	for _, p := range slices.Sorted(maps.Keys(at)) {
+		if !policy.MayPath(st.Policy, proposal.Hand(actor), p) {
+			return fmt.Errorf("%s darf keinen Wert für %s vorschlagen: policy.yml gibt der Hand diesen Pfad nicht (paths)", proposal.Hand(actor), p)
+		}
+	}
+	return nil
+}
+
+// ProposeAt files values at named paths as one proposal (#598): laib
+// zuhause, laib person signal. The reason reaches the inbox, the journal and
+// the owner's chat: no address, no number.
+func ProposeAt(ctx context.Context, env *cli.Env, st *state.State, verb, reason string, at map[string]*yaml.Node) (int, error) {
+	if err := MayPaths(st, env.Actor, at); err != nil {
+		return 0, err
+	}
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{At: at}, JudgeFor(st, env.Actor))
+	if err != nil {
+		return 0, err
+	}
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Result: "info", Reason: reason, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
+	return p.ID, nil
+}
+
 const defaultsReason = "Neue Standard-Verben für eingebaute Hände: "
 
-// ProposeDefaults files one proposal that adds the verbs the built-in hands
+// ProposeDefaults files one proposal that adds the verbs and path grants the built-in hands
 // lack against state.DefaultPolicy (#575), run by `laib updates --run` right
 // after laib-images' ExecStartPre updated Laib, so the new release's
 // defaults decide. policy.yml makes it class human. Nothing while one is
@@ -536,11 +584,13 @@ func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*propo
 	if err != nil {
 		return nil, err
 	}
-	miss := policy.Missing(st.Policy)
 	var adds []string
-	for _, hand := range slices.Sorted(maps.Keys(miss)) {
-		if b, err := policy.Grant(text, hand, miss[hand]...); err == nil {
-			text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
+	for _, paths := range []bool{false, true} { // the verbs, then the path grants (#598)
+		miss := policy.Missing(st.Policy, paths)
+		for _, hand := range slices.Sorted(maps.Keys(miss)) {
+			if b, err := policy.Grant(text, hand, paths, miss[hand]...); err == nil {
+				text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
+			}
 		}
 	}
 	reason := defaultsReason + strings.Join(adds, ", ")
@@ -576,6 +626,6 @@ func grantEdit(env *cli.Env, st *state.State, hand, verb string) (map[string][]b
 	if err != nil {
 		return nil, err
 	}
-	b, err := policy.Grant(text, hand, verb)
+	b, err := policy.Grant(text, hand, false, verb)
 	return map[string][]byte{"policy.yml": b}, err
 }

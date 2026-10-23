@@ -24,6 +24,7 @@ import (
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/pages"
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/registry"
 )
 
@@ -69,7 +70,7 @@ func init() {
 		{Name: "add", Tier: "apply", Help: "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", Flags: []string{"--name"}, Run: inbox.Add},
 		{Name: "remove", Tier: "apply", Help: "<service>: stop its units, take it out of the state, apply; data stays (humans only)", Flags: []string{}, Run: cmdRemove},
 		{Name: "inbox", Tier: "read", Help: "[<id>] [--all [--limit 20]]: open proposals in full; --all adds the decided ones newest first without their cards (--limit 0: all); <id> one in full (#579)", Run: inbox.List},
-		{Name: "propose", Tier: "propose", Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
+		{Name: "propose", Tier: "propose", Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--path", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
 		{Name: "approve", Tier: "apply", Help: "<id>: merge a proposal and apply it (never your own)", Flags: []string{}, Run: inbox.Approve},
 		{Name: "reject", Tier: "apply", Help: "<id> [\"<grund>\"]: drop a proposal", Flags: []string{}, Run: inbox.Reject},
 		{Name: "adopt", Tier: "propose", Help: "adopt an unmanaged Quadlet folder into services/", Run: cmdAdopt},
@@ -89,7 +90,7 @@ func init() {
 		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
 		{Name: "calendar", Tier: "apply", Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495)", Run: cmdCalendar},
 		{Name: "zuhause", Tier: "propose", Help: "show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]: the household's address in box.yml; set replaces it as a proposal a human approves (#561)", Run: cmdZuhause},
-		{Name: "scan", Tier: "propose", Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: cmdScan},
+		{Name: "scan", Tier: "propose", Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: served("haushalt", "scan", "propose")},
 		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Flags: []string{"--until"}, Run: cmdPause},
 		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Flags: []string{}, Run: cmdResume},
 	}
@@ -112,7 +113,7 @@ func main() {
 }
 
 func runArgs(args []string) int {
-	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR")}
+	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR"), Ceiling: os.Getenv("LAIB_CEILING")}
 	if env.Actor == "" {
 		env.Actor = "human:" + os.Getenv("USER")
 	}
@@ -132,6 +133,9 @@ func runArgs(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP) // an SSH drop ends an apply cleanly, the flock goes with the process
 	defer stop()
 	for _, v := range mcp.Verbs {
+		if v.Name == rest[0] && env.Ceiling != "" && policy.Index(v.Tier) > policy.Index(env.Ceiling) { // a program behind the door (ADR 0026)
+			return cli.Refused(env, fmt.Sprintf("%s ist Stufe %s; ein Programm hinter der Tür darf höchstens %s", v.Name, v.Tier, env.Ceiling))
+		}
 		if v.Name == rest[0] {
 			return v.Run(ctx, env, rest[1:])
 		}

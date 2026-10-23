@@ -68,7 +68,7 @@ want="$(grep ' laib-install-box.sh$' "$tmp/SHA256SUMS" | cut -d' ' -f1)"
 # the binaries that run now, for the way back (*.prev of a binary the last
 # update did not change is older than what runs)
 mkdir "$tmp/keep"
-for b in laib laib-operator laib-lease laib-disk laib-notify; do [ ! -f "$BIN/$b" ] || cp -p "$BIN/$b" "$tmp/keep/"; done
+for b in laib laib-operator laib-lease laib-disk laib-notify laib-haushalt; do [ ! -f "$BIN/$b" ] || cp -p "$BIN/$b" "$tmp/keep/"; done
 changed() { for f in "$tmp/keep"/*; do cmp -s "$f" "$BIN/$(basename "$f")" || return 0; done; return 1; }
 say "$running → $target"
 LAIB_SELF_UPDATE=1 LAIB_BIN_DIR="$BIN" timeout "$LIMIT" bash "$tmp/laib-install-box.sh" --version "$target" >"$HOME_DIR/self-update.log" 2>&1

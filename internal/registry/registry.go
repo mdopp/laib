@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -92,6 +93,10 @@ func Update(ctx context.Context, env *cli.Env, st *state.State, svcName string) 
 	tpl, err := inbox.TemplateFS(env, tplName)
 	if err != nil {
 		return env.Fail(err)
+	}
+	// one open update per service: the sync runs after every update (#604), the owner decides it once
+	if open, _ := proposal.List(cli.InboxDir(env), true); slices.ContainsFunc(open, func(o *proposal.Proposal) bool { return o.Reason == "template update "+svcName }) {
+		return cli.ExitUsage
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "template update "+svcName,
 		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, inbox.JudgeFor(st, env.Actor))

@@ -21,8 +21,9 @@ type Edit struct {
 	Patch  string            // unified diff against the repo root
 	Set    map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
 	Add    *AddService
-	Update *UpdateService    // replace a service's template files, keep values.yml and add the new keys (#14, #215)
-	Write  map[string][]byte // path → the file's new content, written whole (laib zuhause, #561)
+	Update *UpdateService        // replace a service's template files, keep values.yml and add the new keys (#14, #215)
+	Write  map[string][]byte     // path → the file's new content, written whole (laib propose --grant, #575)
+	At     map[string]*yaml.Node // "box.yml:people.mama.signal" → its value, nil removes it (state.WithPath, #598)
 }
 
 // UpdateService refreshes services/<name> from a newer template folder.
@@ -68,7 +69,7 @@ func (e Edit) Class() string {
 		return "template-update"
 	case e.Patch != "":
 		return "patch"
-	case len(e.Set) > 0:
+	case len(e.Set) > 0 || len(e.At) > 0:
 		return "values"
 	}
 	return "tree"
@@ -133,6 +134,15 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 	}
+	for key, v := range e.At {
+		file, at, ok := strings.Cut(key, ":")
+		if !ok {
+			return fail(fmt.Errorf("--path wants file:path=VALUE, got %q", key))
+		}
+		if err := setAt(filepath.Join(wt, file), at, v); err != nil {
+			return fail(err)
+		}
+	}
 	if e.Add != nil {
 		if err := addService(wt, e.Add); err != nil {
 			return fail(err)
@@ -185,41 +195,21 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	return p, Save(inbox, p)
 }
 
-// setValue edits one key of a values.yml, keeping comments and the !secret
-// tag of other entries. A value "!secret NAME" becomes a tagged node.
+// setValue sets one key of a values.yml to a string, or "!secret NAME" to a
+// tagged node; the other entries keep their comments and tags.
 func setValue(path, key, val string) error {
-	var doc yaml.Node
-	if b, err := os.ReadFile(path); err == nil {
-		if err := yaml.Unmarshal(b, &doc); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
-		}
+	v := &yaml.Node{Kind: yaml.ScalarNode, Value: val, Tag: "!!str"}
+	if name, ok := strings.CutPrefix(val, "!secret "); ok {
+		v.Value, v.Tag = name, "!secret"
 	}
-	if len(doc.Content) == 0 {
-		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
-	}
-	m := doc.Content[0]
-	if m.Kind != yaml.MappingNode {
-		return fmt.Errorf("%s is not a map", path)
-	}
-	node := &yaml.Node{Kind: yaml.ScalarNode, Value: val, Tag: "!!str"}
-	if strings.HasPrefix(val, "!secret ") {
-		node = &yaml.Node{Kind: yaml.ScalarNode, Value: strings.TrimPrefix(val, "!secret "), Tag: "!secret"}
-	}
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			m.Content[i+1] = node
-			return writeYAML(path, &doc)
-		}
-	}
-	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key, Tag: "!!str"}, node)
-	return writeYAML(path, &doc)
+	return setAt(path, key, v)
 }
 
-func writeYAML(path string, doc *yaml.Node) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, err := yaml.Marshal(doc)
+// setAt sets the value at a dotted path of one file as state.WithPath does
+// (#598); a missing file starts empty.
+func setAt(path, at string, v *yaml.Node) error {
+	b, _ := os.ReadFile(path)
+	b, err := state.WithPath(b, filepath.Base(path), at, v)
 	if err != nil {
 		return err
 	}
@@ -451,71 +441,41 @@ func wireBox(wt, name string) error {
 		Provides    []string `yaml:"provides"`
 		HostNetwork bool     `yaml:"hostNetwork"`
 	}
+	var box struct {
+		Roles       map[string]string `yaml:"roles"`
+		HostNetwork []string          `yaml:"hostNetwork"`
+	}
+	path := filepath.Join(wt, "box.yml")
 	cb, err := os.ReadFile(filepath.Join(wt, "services", name, "laib.yml"))
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	if err := yaml.Unmarshal(cb, &contract); err != nil {
 		return err
 	}
-	var doc yaml.Node
-	b, err := os.ReadFile(filepath.Join(wt, "box.yml"))
-	if err != nil {
+	if err := yaml.Unmarshal(b, &box); err != nil {
 		return err
-	}
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return err
-	}
-	root := doc.Content[0]
-	get := func(m *yaml.Node, key string) *yaml.Node {
-		for i := 0; i+1 < len(m.Content); i += 2 {
-			if m.Content[i].Value == key {
-				return m.Content[i+1]
-			}
-		}
-		return nil
-	}
-	changed := false
-	roles := get(root, "roles")
-	if roles == nil || roles.Kind != yaml.MappingNode {
-		roles = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "roles", Tag: "!!str"}, roles)
-		changed = true
 	}
 	for _, p := range contract.Provides {
 		switch p {
 		case "proxy", "sso", "identity", "dns", "model":
-			if cur := get(roles, p); cur == nil {
-				roles.Content = append(roles.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: p, Tag: "!!str"}, &yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"})
-				changed = true
-			} else if cur.Value == "" {
-				cur.Value, cur.Tag = name, "!!str"
-				changed = true
+			if box.Roles[p] == "" && err == nil {
+				err = setAt(path, "roles."+p, &yaml.Node{Kind: yaml.ScalarNode, Value: name})
 			}
 		}
 	}
-	if contract.HostNetwork {
-		hn := get(root, "hostNetwork")
-		if hn == nil || hn.Kind != yaml.SequenceNode {
-			hn = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-			root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "hostNetwork", Tag: "!!str"}, hn)
-			changed = true
+	if err == nil && contract.HostNetwork && !slices.Contains(box.HostNetwork, name) {
+		hn := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
+		for _, s := range append(box.HostNetwork, name) {
+			hn.Content = append(hn.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: s})
 		}
-		found := false
-		for _, n := range hn.Content {
-			if n.Value == name {
-				found = true
-			}
-		}
-		if !found {
-			hn.Content = append(hn.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"})
-			changed = true
-		}
+		err = setAt(path, "hostNetwork", hn)
 	}
-	if !changed {
-		return nil
-	}
-	return writeYAML(filepath.Join(wt, "box.yml"), &doc)
+	return err
 }
 
 // isHook: the template hooks apply runs (ADR 0004 amendment, #36). Both

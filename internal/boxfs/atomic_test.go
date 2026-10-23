@@ -17,10 +17,11 @@ import (
 func TestEveryRenameIsADurableWrite(t *testing.T) {
 	allowed := map[string]string{
 		"internal/boxfs/atomic.go": "the helper itself",
+		"haushalt/haushalt.go":     "laib-haushalt's copy of it, which may not import the kernel (ADR 0026)",
 	}
 	rename := regexp.MustCompile(`\bRename\(`)
 	var bad []string
-	for _, top := range []string{"cmd", "internal"} {
+	for _, top := range []string{"cmd", "internal", "haushalt"} {
 		filepath.WalkDir(filepath.Join("..", "..", top), func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return err

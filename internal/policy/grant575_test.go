@@ -20,8 +20,8 @@ func TestDefaultPolicyIsTheOnePlace(t *testing.T) {
 	if err := Validate(p); err != nil {
 		t.Fatal(err)
 	}
-	if !MayVerb(p, "haus", "scan") || !MayVerb(p, "haus", "note") || len(Missing(p)) != 0 { // note: Haus journals who switched in HA (#591)
-		t.Fatalf("the defaults lack their own verbs: %v", Missing(p))
+	if !MayVerb(p, "haus", "scan") || !MayVerb(p, "haus", "note") || len(Missing(p, false))+len(Missing(p, true)) != 0 { // note: Haus journals who switched in HA (#591)
+		t.Fatalf("the defaults lack their own verbs: %v", Missing(p, false))
 	}
 	if strings.Join(p.Hands["laib"].Verbs, ",") != strings.Join(state.BoxHand.Verbs, ",") || strings.Join(p.Hands["notify"].Verbs, ",") != strings.Join(state.NotifyHand.Verbs, ",") {
 		t.Fatal("the hands Load supplies are not the defaults")
@@ -35,7 +35,7 @@ func TestMissingOnlyAddsToBuiltInVerbLists(t *testing.T) {
 		"notify": {Ceiling: "propose", Verbs: []string{"diag"}}, // the owner's own extra verbs stay
 		"kiosk":  {Ceiling: "read", Verbs: []string{"status"}},  // the owner's hand
 	}}
-	got := Missing(cur)
+	got := Missing(cur, false)
 	if strings.Join(got["haus"], ",") != "journal,restart,person_invite,person_pending,person_signal,calendar,zuhause,scan,note" || strings.Join(got["notify"], ",") != "updates,inbox,note" || len(got) != 2 {
 		t.Fatalf("%v", got)
 	}
@@ -43,7 +43,7 @@ func TestMissingOnlyAddsToBuiltInVerbLists(t *testing.T) {
 
 func TestGrantIsALineEdit(t *testing.T) {
 	text := "tiers: [read]\n# a comment the owner wrote\nhands:\n  haus: {ceiling: apply, verbs: [status, inbox]}   # the family's pages\n  kiosk: {ceiling: read}\napprovals:\n  destroy: {by: human}\n"
-	out, err := Grant([]byte(text), "haus", "scan", "journal")
+	out, err := Grant([]byte(text), "haus", false, "scan", "journal")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,12 +52,12 @@ func TestGrantIsALineEdit(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", out, want)
 	}
 	for hand, why := range map[string]string{"kiosk": "no verb list", "nobody": "no such hand", "destroy": "not a hand"} {
-		if _, err := Grant([]byte(text), hand, "scan"); err == nil {
+		if _, err := Grant([]byte(text), hand, false, "scan"); err == nil {
 			t.Fatalf("%s (%s): granted", hand, why)
 		}
 	}
 	block := "hands:\n  haus:\n    ceiling: apply\n    verbs:\n      - status\n"
-	if _, err := Grant([]byte(block), "haus", "scan"); err == nil {
+	if _, err := Grant([]byte(block), "haus", false, "scan"); err == nil {
 		t.Fatal("a block list was edited blindly")
 	}
 }

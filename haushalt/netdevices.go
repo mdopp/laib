@@ -1,4 +1,4 @@
-package main
+package haushalt
 
 import (
 	"bufio"
@@ -13,9 +13,6 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
-
-	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/state"
 )
 
 // The host's view of the LAN (#577). Seams for the tests: the neighbour
@@ -104,15 +101,19 @@ func knock(p netip.Prefix, self netip.Addr) {
 	time.Sleep(3 * time.Second)
 }
 
-// cmdNetDevices is `laib net geraete [--wecken]` (#577): the devices the
+// NetDevices is `laib net geraete [--wecken]` (#577): the devices the
 // box's neighbour table holds for its LAN, read only; --wecken knocks once.
-func cmdNetDevices(env *cliEnv, st *state.State, args []string) int {
-	if len(args) > 1 || (len(args) == 1 && args[0] != "--wecken") {
-		return env.Fail(fmt.Errorf("usage: laib net geraete [--wecken]"))
+func NetDevices(env *Env, args []string) int {
+	b, err := loadBox(env.State)
+	if err != nil {
+		return env.fail(err)
 	}
-	self, err := netip.ParseAddr(st.Box.LanIP)
+	if len(args) > 1 || (len(args) == 1 && args[0] != "--wecken") {
+		return env.fail(fmt.Errorf("usage: laib net geraete [--wecken]"))
+	}
+	self, err := netip.ParseAddr(b.LanIP)
 	if err != nil || !self.Is4() {
-		return cli.Refused(env, "box.yml hat keine IPv4-Adresse (lanIp); ohne sie weiß laib nicht, welches Netz das Heimnetz ist.")
+		return env.refused("box.yml hat keine IPv4-Adresse (lanIp); ohne sie weiß laib nicht, welches Netz das Heimnetz ist.")
 	}
 	sub := netip.PrefixFrom(self, 24).Masked()
 	res := netDevices{Subnet: sub.String(), Woken: len(args) == 1}
@@ -121,7 +122,7 @@ func cmdNetDevices(env *cliEnv, st *state.State, args []string) int {
 	}
 	arp, err := os.ReadFile(neighFile)
 	if err != nil {
-		return env.Fail(fmt.Errorf("Nachbartabelle %s: %w", neighFile, err))
+		return env.fail(fmt.Errorf("Nachbartabelle %s: %w", neighFile, err))
 	}
 	res.Devices = append([]netDevice{}, parseARP(strings.NewReader(string(arp)), sub)...)
 	limit := "nur Geräte, die gerade antworten oder kürzlich mit der Box gesprochen haben; ein schlafender Drucker fehlt"
@@ -149,14 +150,14 @@ func cmdNetDevices(env *cliEnv, st *state.State, args []string) int {
 	}
 	wg.Wait()
 	if env.JSON {
-		return cli.Emit(env, res)
+		return env.emit(res)
 	}
-	w := tabwriter.NewWriter(env.W(), 0, 2, 2, ' ', 0)
+	w := tabwriter.NewWriter(env.Out, 0, 2, 2, ' ', 0)
 	fmt.Fprintf(w, "Adresse\tMAC\tName\tHersteller\n")
 	for _, d := range res.Devices {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", d.IP, d.MAC, d.Name, d.Maker)
 	}
 	w.Flush()
-	fmt.Fprintf(env.W(), "\nGrenzen:\n- %s\n", strings.Join(res.Limits, "\n- "))
-	return cli.ExitOK
+	fmt.Fprintf(env.Out, "\nGrenzen:\n- %s\n", strings.Join(res.Limits, "\n- "))
+	return exitOK
 }
