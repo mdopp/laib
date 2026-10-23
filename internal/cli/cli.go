@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -165,6 +166,31 @@ type Verb struct {
 	Tier string
 	Help string
 	Run  func(ctx context.Context, env *Env, args []string) int
+	// Flags are the flags it takes; non-nil, any other is refused (#590)
+	Flags []string
+}
+
+// Guard is every verb's front door (#590): --help or -h shows the usage and
+// runs nothing; a verb with Flags refuses one it does not take before it
+// runs. What follows "--" is the command's own (exec, look).
+func Guard(v Verb) Verb {
+	run := v.Run
+	v.Run = func(ctx context.Context, env *Env, args []string) int {
+		for _, a := range args {
+			switch {
+			case a == "--":
+				return run(ctx, env, args)
+			case a == "--help" || a == "-h":
+				fmt.Fprintf(env.W(), "laib %s [%s]  %s\n", v.Name, v.Tier, v.Help)
+				return ExitOK
+			case v.Flags != nil && len(a) > 1 && a[0] == '-' && !slices.Contains(v.Flags, a) && strings.Trim(a, "-0123456789.") != "":
+				fmt.Fprintf(env.Errw(), "laib %s: unknown flag %s, nothing ran (laib %s --help)\n", v.Name, a, v.Name)
+				return ExitUsage
+			}
+		}
+		return run(ctx, env, args)
+	}
+	return v
 }
 
 // Version is the binary's (initialize, /ready); cmd/laib sets it.
