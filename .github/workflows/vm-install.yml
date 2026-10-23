@@ -146,9 +146,23 @@ jobs:
         with:
           name: vm-build
           path: dist/
+      # the Azure mirror stalled 17-20 min in this step in 6 of 10 runs (2026-10-23):
+      # the packages come from a cache, without the recommended GUI and sound libraries
+      - name: qemu packages, cached
+        uses: actions/cache@v4
+        with:
+          path: ~/qemu-debs
+          key: qemu-debs-${{ runner.os }}-${{ env.ImageOS }}-${{ env.ImageVersion }}-v1
       - name: qemu + kvm
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
+          pkgs="qemu-system-x86 qemu-utils seabios ipxe-qemu"
+          if ! ls ~/qemu-debs/*.deb >/dev/null 2>&1; then
+            mkdir -p ~/qemu-archives/partial ~/qemu-debs
+            sudo apt-get update -q
+            sudo apt-get install -y -q --no-install-recommends --download-only -o Acquire::Retries=3 -o Dir::Cache::archives="$HOME/qemu-archives" $pkgs
+            cp ~/qemu-archives/*.deb ~/qemu-debs/
+          fi
+          sudo apt-get install -y -q --no-install-recommends ~/qemu-debs/*.deb
           test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
       - name: this commit's build, served to the box; the stick
         run: |
