@@ -319,6 +319,9 @@ func waitActive(ctx context.Context, service, unit string) Check {
 	deadline := time.Now().Add(60 * time.Second)
 	last := ""
 	for time.Now().Before(deadline) {
+		if ctx.Err() != nil { // a cancelled apply (#608): no unit is "unknown", the wait is over
+			return Check{Service: service, What: "unit " + unit, OK: false, Detail: ctx.Err().Error()}
+		}
 		last = sysd.Active(ctx, unit)
 		if last == "active" {
 			return Check{Service: service, What: "unit " + unit, OK: true}
@@ -339,7 +342,7 @@ func waitHTTP(ctx context.Context, service string, h state.Health) Check {
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	deadline := time.Now().Add(httpDeadline)
 	last := ""
-	for time.Now().Before(deadline) {
+	for time.Now().Before(deadline) && (ctx.Err() == nil || last == "") {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		resp, err := client.Do(req)
 		if err == nil {
