@@ -34,6 +34,7 @@ var mcpParams = map[string][]mcpParam{
 	"logs":     {svcParam, sinceParam},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
+	"state":    {{name: "path", typ: "string", desc: "die Datei im State-Repo, z. B. policy.yml oder services/jellyfin/values.yml; leer = die Liste der Dateien"}},
 	"write":    {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
 	"look":     cmdParams,
 	"exec":     cmdParams,
@@ -45,7 +46,9 @@ var mcpParams = map[string][]mcpParam{
 	"note": {{name: "kind", typ: "string", flag: "--kind", enum: []string{"watch", "incident", "report"}, required: true, desc: "incident nach Reparatur oder Eskalation, watch wenn alles in Ordnung war, report für den Morgenbericht"},
 		{name: "text", typ: "string", desc: "deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst", required: true}},
 	"journal": {sinceParam},
-	"context": {sinceParam},
+	"context": {sinceParam, {name: "full", typ: "boolean", flag: "--full", desc: "das ganze Bündel: alle Dienste, das Journal ungekürzt (sonst der erste Blick, #579)"}},
+	"inbox": {{name: "id", typ: "string", desc: "ein Vorschlag ganz, mit Karte, auch ein entschiedener"}, {name: "all", typ: "boolean", flag: "--all", desc: "auch die entschiedenen, neueste zuerst, ohne Karte"},
+		{name: "limit", typ: "string", flag: "--limit", desc: "höchstens so viele entschiedene (20; 0 = alle)"}},
 	// propose and wish build their argv in code (mcpArgv)
 	"propose": {{name: "reason", typ: "string", desc: "ein Satz: warum", required: true},
 		{name: "service", typ: "string", desc: "der Dienst, dessen values.yml sich ändert"},
@@ -54,14 +57,17 @@ var mcpParams = map[string][]mcpParam{
 		{name: "finding", typ: "string", desc: "der Befund aus laib diag, den der Vorschlag beheben soll: probe und Dienst, z. B. unit jellyfin; laib misst danach, ob er weg ist"},
 		{name: "evidence", typ: "string", desc: "was du gesehen hast: die Zeile aus diag oder dem Log"},
 		{name: "undo", typ: "string", desc: "wie man es rückgängig macht, ein Satz"},
-		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"}},
+		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"},
+		{name: "hand", typ: "string", desc: "mit verb: die Hand in policy.yml, deren Verbliste ein Verb dazubekommt (#575); ein Mensch entscheidet"},
+		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true},
 		{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen"},
 		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"}},
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
-	"updates": {},
-	"net":     {},
+	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"}},
+	"net": {{name: "view", typ: "string", enum: []string{"geraete"}, desc: "leer: Namen, Ports und Wege aus der Konfiguration; geraete: die Geräte im Heimnetz, die die Box gerade sieht (Adresse, MAC, Name, Hersteller)"},
+		{name: "wecken", typ: "boolean", flag: "--wecken", desc: "geraete: vorher einmal bei jeder Adresse im /24 anklopfen (ein UDP-Paket, kein Portscan), dauert etwa 3 s"}},
 	"person_invite": {{name: "user", typ: "string", desc: "der Benutzername in LLDAP, klein, ohne Leerzeichen", required: true},
 		{name: "first", typ: "string", flag: "--first", desc: "Vorname", required: true}, {name: "last", typ: "string", flag: "--last", desc: "Nachname"},
 		{name: "email", typ: "string", flag: "--email", desc: "wohin der Link zum Passwort geht", required: true},
@@ -209,6 +215,11 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 				return nil, "", fmt.Errorf("service, key und value gehören zusammen")
 			}
 			argv = append(argv, "--set", "services/"+val["service"]+"/values.yml:"+val["key"]+"="+val["value"])
+		}
+		if (val["hand"] == "") != (val["verb"] == "") {
+			return nil, "", fmt.Errorf("hand und verb gehören zusammen")
+		} else if val["hand"] != "" {
+			argv = append(argv, "--grant", val["hand"], val["verb"])
 		}
 		for _, k := range []string{"finding", "evidence", "undo"} {
 			if val[k] != "" {

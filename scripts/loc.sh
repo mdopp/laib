@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 16,900: raised by the owner, mdopp, 2026-10-23, #574-#579: the tools an
+# agent was missing on the box ("Setze das alles um"): built-in hands get
+# their new verbs after an update, the state repo readable, the LAN's
+# devices, an update on demand, a short context and inbox, an honest
+# Inbox error; the kernel at 16,232 before, about 500 lines asked.
 # 16,400: raised by the owner, mdopp, 2026-10-22, #561: box.yml zuhause,
 # the household's address, its proposal verb (laib zuhause) and the
 # ZUHAUSE_* builtins, about 230 lines, the kernel at 15,867 before; state,
@@ -37,7 +42,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 16400 cmd internal
+budget kernel 16900 cmd internal
 budget operator 3000 operator
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
 budget stick 1800 stick         # the laptop's install-stick builder, 1,468

@@ -4,14 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
 )
 
 func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
@@ -147,7 +153,7 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 	if err := write("box.yml", backup+fmt.Sprintf("domain: %s\ntimezone: Europe/Berlin\ndataDir: %s\nlanIp: %s\nroles: {}\ngpu: {present: %v}\n# the closed carve-out list (ADR 0007): built-ins that need the host network\nhostNetwork: [caddy, adguard, home-assistant, file-share, stimme, llama, esphome, music-assistant]\n%s%s", domain, dataDir, lanIP, gpu, certs, model)); err != nil {
 		return env.Fail(err)
 	}
-	if err := write("policy.yml", "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  laib: {ceiling: propose, verbs: [backup, diag]}   # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update\n  notify: {ceiling: propose, verbs: [diag, updates, inbox, note]}   # laib-notify (#443, #441): tells the owner through the Bote, mail as fallback; reads, journals a failed send\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; never approves\n  approver: {ceiling: apply, human: true, verbs: [approve, reject, inbox, status, note]}   # the Signal relay (#48): acts only on the admin's verified number, can only decide\n  haus: {ceiling: apply, verbs: [status, inbox, journal, restart, person_invite, person_pending, calendar, zuhause, scan]}   # the family's pages (haus#1): looks, restarts, invites residents (admins only on the Haus side, #360), connects calendars (#495), proposes the address (#561), orders a scan (#568), decides nothing\n  claude: {ceiling: apply, ttl: 8h}\n  werkstatt: {ceiling: read, verbs: [session], session: claude}   # the Werkstatt (#380): gets a claude token per session, with claude's ttl; nothing else\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: proposal\n  patch: proposal\n  new-service: proposal   # adds surface: a human decides\n  # whatever the dial says: a change the content review marks (a script on the box, a public route,\n  # policy.yml, a token, a host folder …) waits for a human (#34)\n  # remove is never auto; a public route is always a human's call\n"); err != nil {
+	if err := write("policy.yml", state.DefaultPolicy); err != nil {
 		return env.Fail(err)
 	}
 	if err := write(".gitignore", "secrets.age.tmp\n"); err != nil {
@@ -160,5 +166,67 @@ func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	fmt.Fprintf(env.W(), "state repo: %s\nage recipient: %s\nage key: %s\n\nJetzt: laib recovery-sheet  → eine Seite mit Schlüssel, Repo und Passwort; ausdrucken oder in den Passwortmanager, dann --confirm\n", env.Paths.State, recipient, env.Paths.Key)
+	return cli.ExitOK
+}
+
+var yamlKey = regexp.MustCompile(`(?m)^(\s*)([A-Za-z_][A-Za-z0-9_]*):[ \t]*(\S[^\n]*)$`)
+
+// cmdState lists the state repo's files on main, or prints one as main has
+// it (#576), so an agent writes `laib propose --patch` against the real
+// text. secrets.age is never shown; a secret's value is redacted wherever
+// it stands, and so is a literal under a declared secret's key.
+func cmdState(ctx context.Context, env *cliEnv, args []string) int {
+	ls, err := exec.CommandContext(ctx, "git", "-C", env.Paths.State, "ls-tree", "-r", "--name-only", "main").Output()
+	if err != nil {
+		return env.Fail(fmt.Errorf("git ls-tree main: %w", err))
+	}
+	files := slices.DeleteFunc(strings.Split(string(ls), "\n"), func(f string) bool { return f == "" || f == "secrets.age" })
+	if len(args) == 0 {
+		if env.JSON {
+			return cli.Emit(env, files)
+		}
+		fmt.Fprintln(env.W(), strings.Join(files, "\n"))
+		return cli.ExitOK
+	}
+	p := args[0]
+	if !slices.Contains(files, p) {
+		return env.Fail(fmt.Errorf("%s is not a file on main (laib state lists them; secrets.age is never shown)", p))
+	}
+	b, err := exec.CommandContext(ctx, "git", "-C", env.Paths.State, "show", "main:"+p).Output()
+	if err != nil {
+		return env.Fail(fmt.Errorf("git show main:%s: %w", p, err))
+	}
+	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	declared := map[string]bool{}
+	for name := range sec {
+		declared[name] = true
+	}
+	if st, err := cli.LoadState(env); err == nil {
+		for _, s := range render.SecretNames(st) {
+			declared[s.Name] = true
+		}
+	}
+	text, hit := string(b), map[string]bool{}
+	for _, name := range slices.Sorted(maps.Keys(sec)) {
+		if v := sec[name]; v != "" && strings.Contains(text, v) {
+			text, hit[name] = strings.ReplaceAll(text, v, render.Placeholder(name)), true
+		}
+	}
+	text = yamlKey.ReplaceAllStringFunc(text, func(line string) string {
+		m := yamlKey.FindStringSubmatch(line)
+		if !declared[m[2]] || strings.HasPrefix(m[3], "!secret") || m[3] == render.Placeholder(m[2]) {
+			return line
+		}
+		hit[m[2]] = true
+		return m[1] + m[2] + ": " + render.Placeholder(m[2])
+	})
+	redacted := slices.Sorted(maps.Keys(hit))
+	if env.JSON {
+		return cli.Emit(env, map[string]any{"path": p, "content": text, "redacted": redacted})
+	}
+	fmt.Fprint(env.W(), text)
+	if len(redacted) > 0 {
+		fmt.Fprintf(env.Errw(), "laib: redacted %s\n", strings.Join(redacted, ", "))
+	}
 	return cli.ExitOK
 }

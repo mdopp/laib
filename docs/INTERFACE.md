@@ -11,6 +11,10 @@ laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journa
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
+laib state [<path>]                  the state repo's files on main, or one file as committed there (box.yml, policy.yml,
+                                     services/<s>/values.yml …), to write a --patch against the real text; secrets.age is
+                                     never listed or shown, a secret's value and a literal under a declared secret's key
+                                     read ${secret:NAME}, and the output names what was redacted (#576)
 laib exec <service> [--container c] -- <cmd>   inside the container, output journaled (envelope)
 laib write <service> <path>          content on stdin, in the data paths (envelope)
 laib restart <service>               restart + verify (envelope)
@@ -32,8 +36,15 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
-laib updates [--run]                 what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update
+laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
+                                     the built-in hands' new default verbs as one proposal (#575);
+                                     --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
+                                     refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
+laib net geraete [--wecken]          the LAN's devices as the host sees them (#577): address, MAC, reverse-DNS name, maker from the
+                                     host's IEEE oui.txt if one is there; only the box's /24, only complete entries of /proc/net/arp.
+                                     `limits` says what the list cannot see (a sleeping device, another subnet). --wecken first sends
+                                     one UDP datagram to port 9 of every address of the /24 so ARP fills the table; no port is read
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
@@ -41,7 +52,9 @@ laib rollback <service|commit>       git revert + apply
 laib propose "<reason>"              human with a shell: commit the working tree to a proposal branch
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
 laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
-laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property); validated in a worktree
+laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property), against the text laib state shows; validated in a worktree
+laib propose --grant <hand> <verb> "<reason>"  one verb added to one hand's verb list in policy.yml, a line edit (#575);
+                                     class human; an unknown verb or hand, a hand without a list, a verb it has: refused
 laib propose … [--finding "<probe> <service>"] [--evidence …] [--undo …] [--source <url>]…
                                      the anchor (#544): the diag finding it answers (diag must show it now),
                                      what was seen, the way back; a --source makes it class human
@@ -49,7 +62,9 @@ laib approve <id> | laib reject <id> ["<grund>"]  merge or drop a proposal (tier
                                      a reject keeps the reason, "nicht jetzt" is free (#544)
 laib backup                          restic snapshot of state, journal and declared data paths
 laib restore <snapshot|latest> [svc] pre-restore snapshot, stop, restore paths, apply
-laib context [--since 24h]           starter bundle for an agent session
+laib context [--since 24h] [--full]  starter bundle for an agent session; by default the first look (#579): readiness, the services
+                                     not green, the open proposals (`open`), the journal's newest 30 lines without the looks, each cut
+                                     to a line (`omitted`: how many it left out); --full is the whole bundle
 laib template list|lint|add <git>    registries and the contract check
 laib adopt <unit> | laib ignore <unit>
 laib token mint <hand> | list | revoke <id>   humans only
@@ -81,16 +96,19 @@ splitting a command line, so quotes and spaces survive:
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
+| `laib_state` | `path?` → without it the list of files on main; with it `{path, content, redacted}` (read tier: every hand without a verb list reaches it by its ceiling, #576) |
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
-| `laib_journal`, `laib_context` | `since?` |
-| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
+| `laib_journal` | `since?` |
+| `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
+| `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
+| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
-| `laib_updates` | none |
+| `laib_updates` | `now?` (a boolean, tier apply): start the nightly run now → `{started, unit, message}` (#578) |
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean) → `{user, mailed, link?, expires (RFC 3339), message}` (#360) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
 | `laib_calendar` | `action` (`subscribe`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
@@ -130,7 +148,7 @@ dropped from its reply. The built-in skills' menus:
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
---all` as the ops hand and puts the last ten measured proposals before the
+--all --limit 0` as the ops hand and puts the last ten measured proposals before the
 context — how many were effective, without effect, rolled back, rejected,
 with the owner's reasons; the morning report's note ends with the month's
 rate and names each lesson whose finding has since failed twice, for
@@ -285,8 +303,11 @@ findings (`laib-disk probe [--hardware]`, JSON).
 
 ### `laib inbox`
 
-Open proposals (`--all` for decided ones), as a table or `--json`; also an
-MCP tool (read tier), so the Bote and Haus can show the inbox. A proposal
+Open proposals in full, with their cards, as a table or `--json`; also an
+MCP tool (read tier), so the Bote and Haus can show the inbox. `--all` adds
+the decided ones newest first, without card, `reasons`, `warnings` and
+`facts`, at most `--limit` of them (20; `0` for all, #579);
+`laib inbox <id>` is one proposal in full, decided or not. A proposal
 of class `human` lists why only a human may allow it (the content review,
 docs/DESIGN.md). Deciding stays `laib approve` / `laib reject`; an agent's
 approve of a human-class proposal is refused with the same reasons.
@@ -361,6 +382,17 @@ journaled (verb `session`), `laib token list` shows it as `session
 <caller>: <name>`, and expired ones are dropped from `tokens.json` on the
 next mint. `laib init` ships `werkstatt: {ceiling: read, verbs: [session],
 session: claude}`; the Werkstatt holds that token, never a claude one.
+
+The built-in hands' policy is one constant, `state.DefaultPolicy` (#575):
+`laib init` writes it, and `laib updates --run` — laib-images.service,
+right after `self-update.sh` installed a new release, nightly or through a
+manual update — compares the box's `policy.yml` with it. Verbs a built-in
+hand's one-line list lacks become **one** proposal adding exactly those
+(class human: policy.yml). It never removes or narrows: a hand without a
+list may already use every verb, a removed built-in stays removed, a hand
+the owner added is not compared. No second one while one is open, none
+again for the verbs the owner rejected; a list the owner wrote across lines
+stays his (`laib propose --grant`).
 
 ### The decision card (#58)
 

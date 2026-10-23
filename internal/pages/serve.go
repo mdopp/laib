@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"cmp"
 	"context"
 	"crypto/subtle"
 	_ "embed"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -160,7 +162,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			for _, w := range p.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
-			approve := fmt.Sprintf("<form method=post action=/inbox/%d/approve><button class=go>Freigeben</button></form>", p.ID)
+			approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
 			// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
 			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
 			later := "<a href=\"/\"><button>Später</button></a>"
@@ -184,7 +186,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 					b.WriteString("<h2>Zuletzt freigegeben</h2>")
 				}
 				n++
-				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span><form method=post action=/inbox/%d/rollback><button>Zurücknehmen</button></form></div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), p.ID)
+				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span>%s</div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
 			}
 			for _, p := range all {
 				if p.Status == "stale" {
@@ -194,29 +196,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		page(w, "Inbox", b.String())
 	}))
-	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(func(w http.ResponseWriter, r *http.Request) {
-		// Authelia hands the user in Remote-User; without it the actor is the web itself.
-		actor := "human:" + r.Header.Get("Remote-User")
-		if actor == "human:" {
-			actor = "human:web"
-		}
-		webEnv := &cli.Env{Paths: env.Paths, Actor: actor}
-		var code int
-		if r.PathValue("decision") == "rollback" {
-			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + r.PathValue("id")})
-		} else {
-			argv := []string{r.PathValue("id")}
-			if why := strings.TrimSpace(r.FormValue("grund")); why != "" && r.PathValue("decision") == "reject" {
-				argv = append(argv, why)
-			}
-			code = inbox.Decide(r.Context(), webEnv, argv, r.PathValue("decision") == "approve")
-		}
-		if code != cli.ExitOK && code != cli.ExitRed {
-			page(w, "Inbox", fmt.Sprintf("<p class=rot>Entscheidung fehlgeschlagen (exit %d). Siehe Journal.</p><p><a href=/inbox>Inbox</a></p>", code))
-			return
-		}
-		http.Redirect(w, r, "/journal", http.StatusSeeOther)
-	}))
+	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(Decision(env)))
 	// "jetzt prüfen" (#309): the service's check, started without waiting
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
@@ -289,6 +269,53 @@ func resultClass(r string) string {
 		return "rot"
 	}
 	return "info"
+}
+
+// Decision is the Inbox's POST (#574). A proposal that is no longer open
+// is answered with what is true — a second submit of an approved one is not
+// a failure — and a real failure shows its error line, not an exit code.
+func Decision(env *cli.Env) http.HandlerFunc {
+	done := map[string]string{"approved": "freigegeben", "rejected": "abgelehnt", "stale": "veraltet"}
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Authelia hands the user in Remote-User; without it the actor is the web itself.
+		actor := "human:" + r.Header.Get("Remote-User")
+		if actor == "human:" {
+			actor = "human:web"
+		}
+		var errOut strings.Builder
+		webEnv := &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
+		id, decision := r.PathValue("id"), r.PathValue("decision")
+		var code int
+		if decision == "rollback" {
+			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + id})
+		} else {
+			if n, err := strconv.Atoi(id); err == nil {
+				if p, err := proposal.Get(cli.InboxDir(env), n); err == nil && p.Status != "open" {
+					page(w, "Inbox", fmt.Sprintf("<p>#%d ist schon %s, von %s, um %s.</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>",
+						p.ID, done[p.Status], html.EscapeString(strings.TrimPrefix(p.DecidedBy, "human:")), p.Decided.Local().Format("15:04")))
+					return
+				}
+			}
+			argv := []string{id}
+			if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
+				argv = append(argv, why)
+			}
+			code = inbox.Decide(r.Context(), webEnv, argv, decision == "approve")
+		}
+		if code != cli.ExitOK && code != cli.ExitRed {
+			lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
+			why := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code))
+			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(why)+"</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>")
+			return
+		}
+		http.Redirect(w, r, "/journal", http.StatusSeeOther)
+	}
+}
+
+// DecisionForm is one Inbox button (#574): on submit it disables itself and
+// says it is working, so nobody taps twice while the apply runs.
+func DecisionForm(id int, action, label, class string) string {
+	return fmt.Sprintf(`<form method=post action=/inbox/%d/%s onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird angewendet …'"><button class="%s">%s</button></form>`, id, action, class, label)
 }
 
 // Abmelden is the way out (#480): Authelia's logout, then the login for the

@@ -3,8 +3,13 @@ package policy
 
 import (
 	"fmt"
+	"reflect"
+	"regexp"
 	"slices"
+	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/mdopp/laib/internal/state"
 )
@@ -112,7 +117,7 @@ const ConvergeBudget = 3
 
 // KnownVerbs is every verb of the CLI (cmd/laib's table), so policy.yml can
 // name them in a hand's verb list and be validated without importing it.
-var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "repair": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "person_invite": true, "person_pending": true, "session": true, "calendar": true, "zuhause": true, "scan": true}
+var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "repair": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "net": true, "person_invite": true, "person_pending": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true}
 
 // MayVerb reports whether a hand may use a verb at all: a hand with a verb
 // list is limited to it (the approver: approve, reject, inbox, status,
@@ -130,4 +135,48 @@ func MayVerb(p state.Policy, hand, verb string) bool {
 // acts only on the admin's verified Signal number (#48).
 func IsHuman(p state.Policy, hand string) bool {
 	return hand == "human" || p.Hands[hand].Human
+}
+
+// Missing names, per built-in hand, the verbs state.DefaultPolicy gives it
+// that cur lacks (#575). It only ever adds: a hand without a verb list may
+// already use every verb (a list would narrow it), a hand the owner removed
+// stays removed, a hand the owner added is no built-in.
+func Missing(cur state.Policy) map[string][]string {
+	var def state.Policy
+	yaml.Unmarshal([]byte(state.DefaultPolicy), &def)
+	out := map[string][]string{}
+	for name, h := range def.Hands {
+		have, ok := cur.Hands[name]
+		if !ok || len(have.Verbs) == 0 {
+			continue
+		}
+		for _, v := range h.Verbs {
+			if !slices.Contains(have.Verbs, v) {
+				out[name] = append(out[name], v)
+			}
+		}
+	}
+	return out
+}
+
+// Grant adds verbs to one hand's one-line verb list in policy.yml's text:
+// a line edit, every comment and every other line stays. A list it cannot
+// find on one line, or an edit that would change anything else, is refused.
+func Grant(text []byte, hand string, verbs ...string) ([]byte, error) {
+	re := regexp.MustCompile(`(?m)^([ \t]+` + regexp.QuoteMeta(hand) + `:[ \t]*\{.*\bverbs:[ \t]*\[)([^\]\n]*)\]`)
+	if n := len(re.FindAllIndex(text, -1)); n != 1 {
+		return nil, fmt.Errorf("policy.yml: hand %q has no one-line verb list to add to (found %d)", hand, n)
+	}
+	out := re.ReplaceAll(text, []byte("${1}${2}, "+strings.Join(verbs, ", ")+"]"))
+	var before, after state.Policy
+	if yaml.Unmarshal(text, &before) != nil || yaml.Unmarshal(out, &after) != nil || before.Hands == nil {
+		return nil, fmt.Errorf("policy.yml does not parse")
+	}
+	h := before.Hands[hand]
+	h.Verbs = append(h.Verbs, verbs...)
+	before.Hands[hand] = h
+	if !reflect.DeepEqual(before, after) {
+		return nil, fmt.Errorf("policy.yml: adding %v to %q would change more than its verb list", verbs, hand)
+	}
+	return out, nil
 }

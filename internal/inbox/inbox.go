@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -82,6 +83,14 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 			}
 			edit.Set[k] = v
 			i++
+		case "--grant":
+			if i+2 >= len(args) {
+				return env.Fail(errors.New("--grant wants <hand> <verb>"))
+			}
+			if edit.Write, err = grantEdit(env, st, args[i+1], args[i+2]); err != nil {
+				return env.Fail(err)
+			}
+			i += 2
 		case "--add":
 			if i+1 >= len(args) {
 				return env.Fail(errors.New("--add wants a template name"))
@@ -116,16 +125,16 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	reason := strings.Join(words, " ")
 	if reason == "" {
-		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]] \"<grund>\""))
+		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--add <template> [--name n] [KEY=VALUE…]|--grant <hand> <verb>] \"<grund>\""))
 	}
 	// the finding a proposal answers is one diag shows now, or laib measures nothing (#544)
 	if anchor.Finding != "" && Present != nil && !Present(ctx, env, st, anchor.Finding) {
 		return env.Fail(fmt.Errorf("Befund %q steht nicht in laib diag: nenne probe und Dienst eines Befunds, den diag jetzt zeigt", anchor.Finding))
 	}
 	var p *proposal.Proposal
-	if edit.Patch == "" && edit.Set == nil && edit.Add == nil {
+	if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Write == nil {
 		if env.MCP {
-			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE or --add <template>"))
+			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE, --add <template> or --grant <hand> <verb>"))
 		}
 		p, err = proposal.Create(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, JudgeFor(st, env.Actor))
 	} else {
@@ -411,33 +420,61 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 	return apply.ApplyLocked(ctx, env, st, "", reason)
 }
 
-// List lists proposals: open ones by default, --all for every one.
+// List lists proposals: the open ones in full, with their cards. --all adds
+// the decided ones newest first, without card, reasons and warnings, at
+// most --limit of them (20; 0 for all, #579); `laib inbox <id>` is one in full.
 func List(_ context.Context, env *cli.Env, args []string) int {
-	openOnly := true
-	for _, a := range args {
-		if a == "--all" {
+	openOnly, limit, id := true, 20, 0
+	for i := 0; i < len(args); i++ {
+		n, err := strconv.Atoi(args[i])
+		switch {
+		case args[i] == "--all":
 			openOnly = false
+		case args[i] == "--limit" && i+1 < len(args):
+			i++
+			if limit, err = strconv.Atoi(args[i]); err != nil {
+				return env.Fail(fmt.Errorf("--limit %q: keine Zahl", args[i]))
+			}
+		case err == nil:
+			id = n
 		}
 	}
-	ps, err := proposal.List(cli.InboxDir(env), openOnly)
+	ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
 	if err != nil {
 		return env.Fail(err)
 	}
+	decided := 0
+	ps = slices.DeleteFunc(ps, func(p *proposal.Proposal) bool {
+		if id != 0 || p.Status == "open" {
+			return id != 0 && p.ID != id
+		}
+		decided++
+		p.Reasons, p.Warnings, p.Facts = nil, nil, nil
+		return limit > 0 && decided > limit
+	})
+	if id != 0 && len(ps) == 0 {
+		return env.Fail(fmt.Errorf("kein Vorschlag #%d", id))
+	}
+	full := func(p *proposal.Proposal) bool { return id != 0 || p.Status == "open" }
 	domain := ""
 	if st, err := cli.LoadState(env); err == nil {
 		domain = st.Box.Domain
 	}
 	if env.JSON {
-		if ps == nil {
-			ps = []*proposal.Proposal{}
-		}
 		type withCard struct {
 			*proposal.Proposal
 			Card proposal.Decision `json:"card"`
 		}
-		out := make([]withCard, 0, len(ps))
+		out := []any{}
 		for _, p := range ps {
-			out = append(out, withCard{p, proposal.Card(p, domain)})
+			if full(p) {
+				out = append(out, withCard{p, proposal.Card(p, domain)})
+			} else {
+				out = append(out, p)
+			}
+		}
+		if id != 0 {
+			return cli.Emit(env, out[0])
 		}
 		return cli.Emit(env, out)
 	}
@@ -447,14 +484,15 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 	}
 	for _, p := range ps {
 		fmt.Fprintf(env.W(), "#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
-		if p.Status == "open" {
-			c := proposal.Card(p, domain)
-			fmt.Fprintf(env.W(), "     %s\n", c.Summary)
-			for _, i := range c.Impact {
-				fmt.Fprintf(env.W(), "     · %s\n", i)
-			}
-			fmt.Fprintf(env.W(), "     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
+		if !full(p) {
+			continue
 		}
+		c := proposal.Card(p, domain)
+		fmt.Fprintf(env.W(), "     %s\n", c.Summary)
+		for _, i := range c.Impact {
+			fmt.Fprintf(env.W(), "     · %s\n", i)
+		}
+		fmt.Fprintf(env.W(), "     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
 		if p.Class == "human" {
 			fmt.Fprintln(env.W(), "     nur ein Mensch kann freigeben:")
 			for _, r := range p.Reasons {
@@ -483,4 +521,61 @@ var valueKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*=`)
 // when its key is a value's name ("SMTP_FROM=Die Box <box@…>", #359).
 func isValueArg(a string) bool {
 	return valueKey.MatchString(a) || strings.Contains(a, "=") && !strings.Contains(a, " ")
+}
+
+const defaultsReason = "Neue Standard-Verben für eingebaute Hände: "
+
+// ProposeDefaults files one proposal that adds the verbs the built-in hands
+// lack against state.DefaultPolicy (#575), run by `laib updates --run` right
+// after laib-images' ExecStartPre updated Laib, so the new release's
+// defaults decide. policy.yml makes it class human. Nothing while one is
+// open, nothing again for verbs the owner rejected; a hand whose list is
+// not on one line stays the owner's. nil without a proposal.
+func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*proposal.Proposal, error) {
+	text, err := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
+	if err != nil {
+		return nil, err
+	}
+	miss := policy.Missing(st.Policy)
+	var adds []string
+	for _, hand := range slices.Sorted(maps.Keys(miss)) {
+		if b, err := policy.Grant(text, hand, miss[hand]...); err == nil {
+			text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
+		}
+	}
+	reason := defaultsReason + strings.Join(adds, ", ")
+	all, _ := proposal.List(cli.InboxDir(env), false)
+	if len(adds) == 0 || slices.ContainsFunc(all, func(p *proposal.Proposal) bool {
+		return (p.Status == "open" && strings.HasPrefix(p.Reason, defaultsReason)) || (p.Status == "rejected" && p.Reason == reason)
+	}) {
+		return nil, nil
+	}
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Write: map[string][]byte{"policy.yml": text}}, JudgeFor(st, env.Actor))
+	if err != nil {
+		return nil, err
+	}
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: reason, Result: "info", Detail: fmt.Sprintf("#%d policy.yml (%s)", p.ID, p.Class)})
+	return p, nil
+}
+
+// grantEdit is `laib propose --grant <hand> <verb>` (#575): one verb added
+// to one hand's verb list, as a policy.yml line edit.
+func grantEdit(env *cli.Env, st *state.State, hand, verb string) (map[string][]byte, error) {
+	h, ok := st.Policy.Hands[hand]
+	switch {
+	case !policy.KnownVerbs[verb]:
+		return nil, fmt.Errorf("--grant: %q ist kein Verb von laib", verb)
+	case !ok:
+		return nil, fmt.Errorf("--grant: policy.yml kennt keine Hand %q", hand)
+	case len(h.Verbs) == 0:
+		return nil, fmt.Errorf("--grant: %s hat keine Verbliste und darf schon jedes Verb bis zu ihrer Obergrenze", hand)
+	case slices.Contains(h.Verbs, verb):
+		return nil, fmt.Errorf("--grant: %s darf %s schon", hand, verb)
+	}
+	text, err := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
+	if err != nil {
+		return nil, err
+	}
+	b, err := policy.Grant(text, hand, verb)
+	return map[string][]byte{"policy.yml": b}, err
 }

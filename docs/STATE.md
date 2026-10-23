@@ -179,6 +179,10 @@ A style.md that talks about approvals or rules is a plan warning.
 
 ## policy.yml
 
+`laib init` writes `state.DefaultPolicy`; a box from before a release gets
+the built-in hands' new verbs as one proposal (docs/INTERFACE.md, #575).
+An excerpt:
+
 ```yaml
 tiers: [read, propose, apply, destroy]   # destroy covers reboot and exec
 hands:
