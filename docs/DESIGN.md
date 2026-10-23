@@ -164,6 +164,26 @@ per hour, every action journaled with its output, verify after a restart,
 rollback on red, eight mutating actions per service per hour before the
 hand is stopped and `escalate` is the way on.
 
+## Every touch answers at once
+
+UX is part of the feature, not a polish pass after it (owner, 2026-10-23,
+#588). Every touch — a button in Haus, a card in the Inbox, a Solaris
+answer, a verb's reply — answers at once, shows its progress, and ends
+visibly where it began, in one of three states:
+
+- **done**, with what is now true;
+- **an error** with its reason in the family's words and the next step;
+- **waiting** with a choice: what is needed, from whom, and the buttons.
+
+No silent buttons, no endless spinners (a wait has a limit and then says
+so), no raw error text in front of the family. Phone first: the end state
+fits a phone screen without scrolling to it. An action without these three
+states does not pass review.
+
+Example: Haus „Scanner einrichten“ showed nothing after the tap. Laib had
+answered in 4 s — no scanner found, enter the address by hand — and Haus
+never showed that answer. The search worked; the feature did not.
+
 ## The user's path
 
 "Ich hätte gern Paperless für die Familie, nur intern." Solaris asks the one
