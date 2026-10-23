@@ -1,6 +1,8 @@
 # Releases come from here only (CLAUDE.md, ADR 0003): release-please cuts
 # the version on main, and the binaries are built after a green vm-install
-# of that very commit — a release never ships code no VM has run (#47).
+# of that very code — a release never ships code no VM has run (#47). The
+# same code is enough: a tree that had a green run, differing from the
+# release commit's in release-please's files at most (#604).
 # Every asset carries build provenance (actions/attest-build-provenance):
 # `gh attestation verify laib-linux-amd64 -R mdopp/laib` on a laptop proves
 # which workflow built it from which commit. On the box install-box.sh
@@ -37,23 +39,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag }}
-      - name: wait for a green vm-install of this commit
+          fetch-depth: 20   # the merge before the release and the train head it merged (#604)
+      - name: wait for a green vm-install of this code
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.tag }}
         run: |
           set -euo pipefail
           sha=$(git rev-parse HEAD)
+          # the same code, proven (#604): a green vm-install of a tree that differs from this commit's
+          # in release-please's files at most, typically the train head main merged before the release
+          reused() {
+            local r run of tree why
+            r=$(scripts/vm-install-reuse.sh HEAD) || return 1
+            read -r run of tree why <<<"$r"
+            echo "reusing vm-install run $run of $of (only release files differ: $why, tree $tree)"
+          }
+          reused && exit 0
           # '.[]', not '.[0]': with no run, '.[0]' prints "null null null" and the
           # dispatch below never happened — v0.4.0 waited 150 minutes for nothing (#99)
           # not a pull_request run: a single PR's run is green with nothing but its `not run` check (#343)
           run_for_sha() { gh run list --workflow vm-install --commit "$sha" --json databaseId,status,conclusion,event --limit 20 -q '[.[] | select(.event != "pull_request")][:1][] | "\(.databaseId) \(.status) \(.conclusion)"'; }
           if [ -z "$(run_for_sha)" ]; then
-            echo "no vm-install run for $sha (the release commit changes only version files): dispatching one on $TAG"
+            echo "no green vm-install of this code and no run for $sha: dispatching one on $TAG"
             gh workflow run vm-install --ref "$TAG"
             sleep 30
           fi
           for i in $(seq 1 150); do
+            reused && exit 0   # main's run of the merge may finish first
             read -r id status conclusion <<<"$(run_for_sha)"
             echo "vm-install $id: $status $conclusion"
             if [ "$status" = completed ]; then

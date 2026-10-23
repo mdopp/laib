@@ -26,6 +26,14 @@
 #             Assistant, Jellyfin, Audiobookshelf)
 #   recovery  the data disk, the foreign disk (the backup target), a real
 #             apply, the disaster recovery with only the sheet (#40)
+#
+# One run per code state (#604): the job `proven: tree <T>` runs only when
+# every part is green and names the tree this run checked out. On main's push
+# `reuse` looks for such a run of the same tree near the commit (the train
+# head main just merged, scripts/vm-install-reuse.sh); when there is one, the
+# VM does not run again and the job `reused: run <id> …` says which run it
+# relies on. A dispatch and a train PR always run. The release takes the same
+# proof for its commit, whose tree differs only in release-please's files.
 name: vm-install
 on:
   push:
@@ -49,14 +57,58 @@ jobs:
           msg="vm-install did NOT run for this PR: it runs on train PRs (train/*), on main, and by dispatch (gh workflow run vm-install --ref ${{ github.head_ref }}). Proven here: ci and boot only (#343)."
           echo "::notice title=vm-install not run::$msg"
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+  reuse:
+    name: reuse — a green vm-install of this very tree (#604)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read    # gh run list / run view
+    outputs:
+      run: ${{ steps.r.outputs.run }}
+      sha: ${{ steps.r.outputs.sha }}
+      tree: ${{ steps.r.outputs.tree }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20   # the first parents and the train head they merged
+      - id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if r=$(scripts/vm-install-reuse.sh HEAD); then
+            read -r run sha tree why <<<"$r"
+            printf 'run=%s\nsha=%s\ntree=%s\n' "$run" "$sha" "$tree" >> "$GITHUB_OUTPUT"
+            echo "reusing vm-install run $run of $sha ($why): tree $tree is proven, the VM does not run again"
+          else
+            echo "no green vm-install of tree $(git rev-parse 'HEAD^{tree}') near $GITHUB_SHA: vm-install runs"
+          fi
+  reused:
+    name: "reused: run ${{ needs.reuse.outputs.run }} of ${{ needs.reuse.outputs.sha }} proved tree ${{ needs.reuse.outputs.tree }}"
+    needs: reuse
+    if: needs.reuse.outputs.run != ''
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          u="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ needs.reuse.outputs.run }}"
+          msg="vm-install did not run again: run ${{ needs.reuse.outputs.run }} ($u) of ${{ needs.reuse.outputs.sha }} proved tree ${{ needs.reuse.outputs.tree }}, the tree of this commit (#604)"
+          echo "::notice title=vm-install reused::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
   build:
-    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/')
+    needs: reuse
+    # reuse is skipped off main's push and fails open: no run named, the VM runs
+    if: ${{ !cancelled() && needs.reuse.outputs.run == '' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      tree: ${{ steps.tree.outputs.tree }}
     env:
       HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
     steps:
       - uses: actions/checkout@v4
+      - id: tree
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"   # what this run proves (#604); a PR's test merge, not its head
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -454,21 +506,9 @@ jobs:
                 command -v python3 && { echo "the box has python3; this proves nothing"; exit 1; } || echo "no python3 on the box: hooks must run in the image"
                 # the operator first password, known to the job: the family login below logs in with it (#254)
                 printf "vm-operator-pw-254\n" | $L secret set OPERATOR_PASSWORD
-                # #245: a box from ServiceBay. Its Authelia file, with the client of an app not in Laib yet and its
-                # signing key, sits where auth pre-start writes Laib config
-                sb=/mnt/data/stacks/auth/authelia-config; mkdir -p "$sb"
-                podman run --rm "${{ env.HOOKS }}" openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > /tmp/sb-key.pem
-                { printf "identity_providers:\n  oidc:\n    hmac_secret: sb-vm-hmac\n    jwks:\n      - key_id: main\n        algorithm: RS256\n        use: sig\n        key: |\n"
-                  sed "s/^/          /" /tmp/sb-key.pem
-                  printf "    clients:\n      - client_id: sbvm\n        client_name: ServiceBay app\n        client_secret: \"\$plaintext\$sb-vm-secret\"\n        public: false\n        authorization_policy: one_factor\n        redirect_uris:\n          - https://sbvm.vm.test/callback\n        scopes: [openid, profile, email]\n"
-                } > "$sb/configuration.yml"
                 $L add auth OPERATOR_USER=core OPERATOR_EMAIL=core@vm.test BASE_DN=dc=vm,dc=test | tee /tmp/add-auth.txt
                 grep -q "^ok  auth pre-start" /tmp/add-auth.txt || { echo "auth pre-start is not green"; exit 1; }
                 grep -q "^ok  auth post-deploy" /tmp/add-auth.txt || { echo "auth post-deploy (LLDAP seeding) is not green"; exit 1; }
-                test -s "$sb/servicebay-clients.yml" || { echo "the ServiceBay clients were not kept (#245)"; exit 1; }
-                cmp -s /tmp/sb-key.pem "$sb/oidc.pem" || { echo "the ServiceBay signing key was not kept (#245)"; exit 1; }
-                grep -q "client_id: sbvm" "$sb/oidc-clients.yml" || { echo "the kept client is not registered (#245)"; exit 1; }
-                grep -q "still ServiceBay.*sbvm" /tmp/add-auth.txt || { echo "the apply does not say which clients are still ServiceBay (#245)"; exit 1; }
                 grep -q "lldap seeded" /tmp/add-auth.txt || { echo "the hook output does not say LLDAP was seeded"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/configuration.yml || { echo "pre-start did not write configuration.yml"; exit 1; }
                 test -s /mnt/data/stacks/auth/authelia-config/oidc.pem || { echo "pre-start did not generate the OIDC key"; exit 1; }
@@ -500,10 +540,6 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
-                # #245: the kept client is live in Authelia: an authorization request for it goes to the login, with a flow
-                loc=$(curl -s --cacert "$root" --capath "$none" --resolve auth.vm.test:443:127.0.0.1 -o /dev/null -w "%{redirect_url}" "https://auth.vm.test/api/oidc/authorization?client_id=sbvm&response_type=code&redirect_uri=https://sbvm.vm.test/callback&scope=openid&state=vm245state" || true)
-                echo "authorization for the kept ServiceBay client -> $loc"
-                case "$loc" in https://auth.vm.test/*flow_id=*) ;; *) echo "Authelia does not know the kept ServiceBay client (#245)"; exit 1;; esac
                 # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there; the Inbox (laib.) asks two since #441: destructive approvals need the second factor
                 pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
                 for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins two_factor" "caldav - bypass"; do
@@ -755,7 +791,7 @@ jobs:
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/immich /mnt/data/stacks/immich-photos   # Postgres owns pgdata inside the user namespace
                 podman image rm -f ghcr.io/immich-app/immich-server:release ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 >/dev/null || true
                 echo "immich: a family member logged in through Authelia"'
-      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, from ServiceBay's configuration.yaml (#253); Laib mints its tokens (#349)
+      - name: home-assistant — the family login (auth_oidc) loads on a real Home Assistant, added to the admin's configuration.yaml (#253); Laib mints its tokens (#349)
         if: matrix.part == 'logins'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
@@ -767,10 +803,9 @@ jobs:
                 R=/mnt/data/laib/registries/vm/templates/home-assistant; mkdir -p "$(dirname "$R")"; rm -rf "$R"; mv /tmp/ha "$R"
                 rm "$R/home-assistant-zwave.container" "$R/home-assistant-matter.container"
                 sed -i "s/^after: .*/after: [auth]/" "$R/laib.yml"
-                # what ServiceBay left: its top-level block with its secret, and a component it installed
-                C=/mnt/data/stacks/home-assistant/homeassistant; mkdir -p "$C/custom_components/auth_oidc"
-                echo v1.1.0 > "$C/custom_components/auth_oidc/.sb_installed_version"
-                printf "default_config:\n\nauth_oidc:\n  client_id: homeassistant\n  client_secret: servicebay-old\n  discovery_url: https://auth.vm.test/.well-known/openid-configuration\n  roles:\n    admin: admins\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
+                # a configuration.yaml the admin wrote: pre-start only adds the packages include to it
+                C=/mnt/data/stacks/home-assistant/homeassistant; mkdir -p "$C"
+                printf "default_config:\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
                 touch "$C/automations.yaml" "$C/scripts.yaml" "$C/scenes.yaml"
                 podman pull -q ghcr.io/home-assistant/home-assistant:stable >/dev/null; echo "home assistant image pre-pulled"
                 # #349: a stand-in for Haus and the Bote, there before Home Assistant: it declares their tokens as they
@@ -783,7 +818,7 @@ jobs:
                 $L add home-assistant | tee /tmp/add-ha.txt
                 grep -q "^ok  home-assistant pre-start" /tmp/add-ha.txt || { echo "home-assistant pre-start is not green"; exit 1; }
                 grep -q "auth_oidc installed" /tmp/add-ha.txt || { echo "the pinned component was not installed"; exit 1; }
-                if grep -q "^auth_oidc:" "$C/configuration.yaml"; then echo "ServiceBay block is still in configuration.yaml"; exit 1; fi
+                grep -q "packages: !include_dir_named packages" "$C/configuration.yaml" || { echo "pre-start did not include the packages of laib in configuration.yaml"; exit 1; }
                 grep -q "AUTH_OIDC_SECRET" "$C/packages/laib_auth_oidc.yaml"
                 if grep -rqF "$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.home-assistant.home-assistant.AUTH_OIDC_SECRET)" "$C"; then echo "the OIDC secret is in a file under the config"; exit 1; fi
                 A=/mnt/data/laib/render/authelia/laib-clients.yml
@@ -833,7 +868,7 @@ jobs:
                 $L remove home-assistant >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/home-assistant
                 podman image rm -f ghcr.io/home-assistant/home-assistant:stable >/dev/null || true
-                echo "home-assistant: the family login loaded from Laib package, ServiceBay block gone"'
+                echo "home-assistant: the family login loaded from Laib package"'
       - name: media — a family member logs in to Jellyfin with the LLDAP account, through a read-only bind (#256)
         if: matrix.part == 'logins'
         run: |
@@ -1080,3 +1115,10 @@ jobs:
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- ignition files (#96: exec format error)"; for f in /usr/local/bin/laib-data-disk.sh /usr/local/bin/laib-firstboot.sh $(ls /etc/sysctl.d/* 2>/dev/null); do echo "$f"; sudo head -c 48 "$f" | od -c | head -3; sudo md5sum "$f"; done; systemctl status --no-pager systemd-sysctl 2>&1 | tail -6; for b in -3 -2 -1; do echo "boot $b data disk:"; journalctl --no-pager -b $b -u laib-data-disk 2>/dev/null | tail -25; done; sudo dmesg | grep -iE "xfs|vda4" | tail -10; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; for u in $(systemctl --user list-units --failed --plain --no-legend | cut -d" " -f1); do echo "--- failed: $u"; journalctl --user --no-pager -u "$u" | tail -30; done; podman ps -a' || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; echo "--- authelia"; journalctl --user --no-pager -u auth-authelia | tail -30; echo "--- lldap"; journalctl --user --no-pager -u auth-lldap | tail -30; systemctl --user --no-pager status auth-pod.service auth-lldap.service auth-authelia.service | head -40; echo "--- adguard"; journalctl --user --no-pager -u adguard | tail -30; echo "--- radicale"; journalctl --user --no-pager -u radicale | tail -40; podman logs --tail 40 systemd-radicale 2>&1 | tail -40; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 2h | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true
+  proven:
+    # the claim the release and main's push reuse (#604): only when every part is green
+    name: "proven: tree ${{ needs.build.outputs.tree }}"
+    needs: [build, install]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "vm-install proved tree ${{ needs.build.outputs.tree }} (${{ github.sha }})"
