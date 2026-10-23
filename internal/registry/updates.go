@@ -17,6 +17,8 @@ import (
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -282,6 +284,10 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	code := cli.ExitOK
 	if slices.Contains(args, "--run") && !env.MCP {
+		// after Laib's own update (the unit's ExecStartPre): the new release's default verbs as one proposal (#575)
+		if _, err := inbox.ProposeDefaults(ctx, env, st); err != nil {
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Result: "red", Detail: "Standard-Verben: " + err.Error()})
+		}
 		code = apply.ImageRun(ctx, env, st) // laib-images.timer's nightly run (#528)
 	}
 	ups := ImageUpdates(ctx, st)

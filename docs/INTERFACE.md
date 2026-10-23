@@ -36,7 +36,8 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
-laib updates [--run]                 what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update
+laib updates [--run]                 what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
+                                     the built-in hands' new default verbs as one proposal (#575)
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
@@ -46,6 +47,8 @@ laib propose "<reason>"              human with a shell: commit the working tree
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
 laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
 laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property), against the text laib state shows; validated in a worktree
+laib propose --grant <hand> <verb> "<reason>"  one verb added to one hand's verb list in policy.yml, a line edit (#575);
+                                     class human; an unknown verb or hand, a hand without a list, a verb it has: refused
 laib propose … [--finding "<probe> <service>"] [--evidence …] [--undo …] [--source <url>]…
                                      the anchor (#544): the diag finding it answers (diag must show it now),
                                      what was seen, the way back; a --source makes it class human
@@ -90,7 +93,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
 | `laib_journal`, `laib_context` | `since?` |
-| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
+| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
@@ -366,6 +369,17 @@ journaled (verb `session`), `laib token list` shows it as `session
 <caller>: <name>`, and expired ones are dropped from `tokens.json` on the
 next mint. `laib init` ships `werkstatt: {ceiling: read, verbs: [session],
 session: claude}`; the Werkstatt holds that token, never a claude one.
+
+The built-in hands' policy is one constant, `state.DefaultPolicy` (#575):
+`laib init` writes it, and `laib updates --run` — laib-images.service,
+right after `self-update.sh` installed a new release, nightly or through a
+manual update — compares the box's `policy.yml` with it. Verbs a built-in
+hand's one-line list lacks become **one** proposal adding exactly those
+(class human: policy.yml). It never removes or narrows: a hand without a
+list may already use every verb, a removed built-in stays removed, a hand
+the owner added is not compared. No second one while one is open, none
+again for the verbs the owner rejected; a list the owner wrote across lines
+stays his (`laib propose --grant`).
 
 ### The decision card (#58)
 
