@@ -42,37 +42,64 @@ map pin, or a lookup the person starts knowingly). No value reaches the
 hook's log. To change the address: `laib zuhause set …`, a proposal the
 owner approves.
 
-## The tokens Laib mints (#349)
+## The tokens Laib mints (#349), each on its own user (#591)
 
 Nobody clicks a long-lived token together in HA's UI. post-deploy logs in
-through Home Assistant's own login flow as its administrator, mints one
-long-lived token per consumer over HA's WebSocket API
-(`auth/long_lived_access_token`) and hands each back into `secrets.age`
-(`laib-secret:`); HA lists them under that user's Security tab by name:
+through Home Assistant's own login flow as its administrator, makes one HA
+user per consumer, mints that consumer's long-lived token over HA's
+WebSocket API (`auth/long_lived_access_token`) and hands it back into
+`secrets.age` (`laib-secret:`). A machine never switches as a person: HA's
+logbook says „Haus hat … eingeschaltet“, not the name of whoever onboarded
+HA (#591). HA mints a token only for the user of the session that asks, so
+each of these users has a homeassistant login with a generated password
+that only post-deploy uses:
 
-| secret | user | for |
-|---|---|---|
-| `HA_TOKEN` | the administrator (`laib: home-assistant-check`) | the checklist below; it runs inside HA's container, which holds HA's whole config anyway |
-| `HAUS_HA_TOKEN` | the administrator (`laib: haus`) | Haus's pages and widgets, and voice counting (admin-only debug calls, below) |
-| `BOTE_AUTOMAT_HA_TOKEN` | the administrator (`laib: bote-automat`) | the Bote's Automat: HA's automation config API is admin-only; every write the Automat makes needs the admin's approval code |
-| `BOTE_HA_TOKEN` | **`bote`**, no administrator (`laib: bote`) | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
-| `MUSIC_ASSISTANT_HA_TOKEN` | the administrator (`laib: music-assistant`) | Music Assistant's Home Assistant plugin (it reads HA's users for the family's login into MA); minted only once Music Assistant is there |
+| secret | HA user (login, password) | administrator | for |
+|---|---|---|---|
+| `HA_TOKEN` | „Laib-Prüfung“ (`laib-pruefung`, `HA_CHECK_PASSWORD`) | no | the checklist below: config entries and states, which every user may read |
+| `HAUS_HA_TOKEN` | „Haus“ (`haus`, `HA_HAUS_PASSWORD`) | yes: voice counting reads Assist's debug runs, admin-only (below) | Haus's pages and widgets, voice counting |
+| `BOTE_AUTOMAT_HA_TOKEN` | „Bote-Automat“ (`bote-automat`, `HA_BOTE_AUTOMAT_PASSWORD`) | yes: HA's automation config API is admin-only | the Bote's Automat; every write it makes needs the admin's approval code |
+| `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
+| `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |
 
-Two administrator tokens instead of one for Haus and the check: each is
-revocable on its own and HA names who holds it; it costs nothing. The user
-`bote` is created through HA's API when it is missing (group "Users"), with
-the generated `HA_BOTE_PASSWORD`; if someone makes it an administrator, the
-next apply takes that back and replaces its token.
+Each token is named `laib: <consumer>` under its user's Security tab and
+revocable on its own. A user that is missing is created through HA's API
+(`config/auth/create`, `config/auth_provider/homeassistant/create`); one
+someone moved into the other group is moved back on the next apply.
 
-On every apply: a token that works and is of its kind is kept; one HA
-refuses (revoked, or a box restored from an older HA) is replaced; an
-administrator's token in `BOTE_HA_TOKEN` is replaced by the Bote's. The
-apply that mints also restarts what uses the tokens (Laib re-applies every
-service that declares a handed-back secret, #349): Haus and the Bote have
-theirs in the same apply, and Home Assistant restarts once, for the check's
-unit. A consumer added later finds its token already there. Tokens and
-passwords are only ever on the `laib-secret:` lines, never on argv or in a
-log line (#214).
+On every apply: a token that works, on its own user and of its kind, is
+kept; any other is replaced. The apply that mints also restarts what uses
+the tokens (Laib re-applies every service that declares a handed-back
+secret, #349): Haus and the Bote have theirs in the same apply, and Home
+Assistant restarts once, for the check's unit. A consumer added later finds
+its token already there. Tokens and passwords are only ever on the
+`laib-secret:` lines, never on argv or in a log line (#214).
+
+**Moving a box from before #591.** There `HA_TOKEN`, `HAUS_HA_TOKEN`,
+`BOTE_AUTOMAT_HA_TOKEN` and `MUSIC_ASSISTANT_HA_TOKEN` live on the
+administrator, a person's user. Nothing goes dark on the way:
+
+1. post-deploy creates the four users and mints a new token on each; the
+   old token still works and is handed back in `HA_RETIRED_TOKENS`, the new
+   one in its secret. Music Assistant's plugin gets the new one at once.
+2. Laib stores both and re-applies the consumers (Bote, Haus) with the new
+   tokens, then Home Assistant, whose post-deploy runs again.
+3. That run finds each new token working on its own user and revokes the
+   old one it replaced, with the old token's own session
+   (`auth/refresh_tokens` → the current one → `auth/delete_refresh_token`),
+   and only when its name is `laib: …`: a token Laib did not mint is left
+   to the owner. `HA_RETIRED_TOKENS` is handed back empty.
+
+A new token that does not work yet keeps its old one retired until a later
+apply verifies it. Re-running changes nothing.
+
+**Who else is in Home Assistant** is one line of post-deploy's output (the
+apply's detail): every user that is not one of the machines above, whether
+it is the owner or an administrator, whether it is `HA_ADMIN_USER`, and the
+names of its long-lived tokens, read from HA's `.storage/auth` (names only).
+Users from before (ServiceBay's or Solaris' administrator and its bridge
+token, a second user of a person's name) show there; nothing is deleted,
+that is the owner's decision.
 
 **The administrator login.** `HA_ADMIN_USER` (value, default `laib`) with
 `HA_ADMIN_PASSWORD` (secret):
@@ -221,7 +248,44 @@ conversation agent) and `nicht-erkannt` (an error); the sentence of a
 satellite or conversation id, kept 30 days.
 
 **What you switch on in Home Assistant:** nothing new. Those debug calls are
-admin-only; `HAUS_HA_TOKEN` is the administrator's, minted above (#349). A
-token set by hand that is not an administrator's is replaced on the next
-apply. Known limits: more than 10 commands on one pipeline
+admin-only; `HAUS_HA_TOKEN` is the user „Haus“'s, an administrator, minted
+above (#349, #591). A token set by hand that is not that user's is replaced
+on the next apply. Known limits: more than 10 commands on one pipeline
 within a minute, or an HA restart in between, lose those runs' counts.
+
+## Who switched: the person behind an action (#591)
+
+HA's logbook names the user of the token (`context.user_id`): with the
+tokens above that is „Haus“, „Bote“ or „Bote-Automat“, never a person. Who
+was signed in to Haus, wrote to the Bote or spoke to a satellite is
+recorded once, in Laib's journal, by the hand that acted, with HA's context
+id so the logbook row and the journal row meet:
+
+```
+laib_note  kind: watch
+           text: "ha person=<user> service=<domain>.<service> entity=<entity_id>[,<entity_id>…] context=<HA context id>"
+```
+
+- `person`: Haus's `Remote-User` (Authelia), the Bote's person id from
+  box.yml people; `-` when nobody is known (a voice satellite).
+- `context`: the `context.id` HA returns for the call: the WebSocket
+  `call_service` result carries `{"context": {"id": …}}`; over REST, each
+  state in the answer of `POST /api/services/<domain>/<service>` carries
+  it. HA's logbook and `GET /api/logbook` show the same id per row.
+- Only what a person asked for; nothing for reads, nothing for the
+  Automat's own triggers (HA's automation is the actor there).
+
+The journal row is `actor=haus` (or `bote`) by the token that wrote it,
+`verb=note`, `reason=watch`; `laib journal` lists it. The haus hand may
+`note` from this release on (`state.DefaultPolicy`); a box from before gets
+that verb as one policy proposal the owner approves (#575). The Bote's hand
+has no verb list and may note already.
+
+Why not one HA user per resident whose token Haus uses: HA mints a token
+only for the session's own user, and residents sign in through
+Familienkonto (auth_oidc) without a password; Laib would have to give each
+person's account a second login it holds, residents who are HA
+administrators would hand Haus administrator tokens in their name again,
+and the per-person tokens would be a secret that changes with people. The
+journal row reaches Haus, the Bote and voice alike and needs no new
+identity in HA.
