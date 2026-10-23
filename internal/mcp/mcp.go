@@ -147,7 +147,7 @@ func InputSchema(verb string) map[string]any {
 		props["stdin"] = map[string]any{"type": "string", "description": "the file content"}
 	}
 	if verb == "propose" {
-		props["args"] = map[string]any{"type": "string", "description": "the reason in quotes, plus --set services/<svc>/values.yml:KEY=VALUE (repeatable), --add <template> [--name <svc>] [KEY=VALUE…], or --patch together with the patch property"}
+		props["args"] = map[string]any{"type": "string", "description": "the reason in quotes, plus --set services/<svc>/values.yml:KEY=VALUE (repeatable), --path box.yml:a.b.c=VALUE, --add <template> [--name <svc>] [KEY=VALUE…], or --patch together with the patch property"}
 		props["patch"] = map[string]any{"type": "string", "description": "a unified diff against the state repo root (paths like services/x/values.yml); applied in a worktree, validated, refused if the state does not load"}
 	}
 	return map[string]any{"type": "object", "properties": props}

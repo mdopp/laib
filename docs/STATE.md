@@ -189,8 +189,8 @@ A style.md that talks about approvals or rules is a plan warning.
 ## policy.yml
 
 `laib init` writes `state.DefaultPolicy`; a box from before a release gets
-the built-in hands' new verbs as one proposal (docs/INTERFACE.md, #575).
-An excerpt:
+the built-in hands' new verbs and path grants as one proposal
+(docs/INTERFACE.md, #575, #598). An excerpt:
 
 ```yaml
 tiers: [read, propose, apply, destroy]   # destroy covers reboot and exec
@@ -200,6 +200,7 @@ hands:
   laib:     { ceiling: propose, verbs: [backup, diag] }  # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update; supplied when missing
   notify:   { ceiling: propose, verbs: [diag, updates, inbox, note] }  # laib-notify (#443, #441): the watchdog ping and the owner's messages; reads, journals a failed send; supplied when missing
   pi:       { ceiling: propose }
+  haus:     { ceiling: apply, verbs: [status, inbox, zuhause, person_signal, …], paths: [zuhause, people.*.signal] }  # the family's pages
   claude:   { ceiling: apply, ttl: 8h }
   human:    { ceiling: destroy }
 approvals:
@@ -214,6 +215,17 @@ autonomy:                       # the repair dial (docs/DESIGN.md "Repair")
 skills:                         # the Operator's skills (ADR 0023): absent = active
   routineblick: paused          # active | paused; laib skill enable|pause <name>
 ```
+
+A hand's `paths` (#598) name where in box.yml it may propose a value
+(`laib propose --path`, and the verbs built on it: `laib zuhause` at
+`zuhause`, `laib person signal` at `people.<user>.signal`). A pattern is a
+dotted path, `*` stands for exactly one segment, and it names one path, not
+the subtree under it; `services/*/values.yml:KEY` names a values.yml key.
+Only a hand with a verb list is held to its paths; a hand without one and
+a ceiling of at least `propose` (claude, pi, the Bote) may propose a value
+at any path. A path grant is a policy.yml change, so the owner decides it,
+like a verb grant; what the proposal changes is still reviewed and
+classed as any other (a box.yml change waits for a human).
 
 A hand never approves its own proposal. `destroy` requires a human on the box
 page or a Solaris card; a token cannot approve.
