@@ -37,11 +37,12 @@ type ImageUpdate struct {
 	Patch   string `json:"patch,omitempty"`
 	Minor   string `json:"minor,omitempty"`
 	Error   string `json:"error,omitempty"`
-	Paused  string `json:"paused,omitempty"` // the host row: the drop-in that pauses OS updates (#486)
-	Digest  string `json:"digest,omitempty"` // a floating tag or a digest pin: the registry's digest, when the box has another (#528)
-	Auto    bool   `json:"auto,omitempty"`   // the nightly run takes it (apply.AutoImage); else it is a proposal
-	Latest  string `json:"latest,omitempty"` // the laib row (#547): the newest release; never patch or digest, it is no proposal
-	At      string `json:"at,omitempty"`     // the laib row: when self-update.sh last looked
+	Paused  string `json:"paused,omitempty"`  // the host row: the drop-in that pauses OS updates (#486)
+	Digest  string `json:"digest,omitempty"`  // a floating tag or a digest pin: the registry's digest, when the box has another (#528)
+	Auto    bool   `json:"auto,omitempty"`    // the nightly run takes it (apply.AutoImage); else it is a proposal
+	Latest  string `json:"latest,omitempty"`  // the laib row (#547): the newest release; never patch or digest, it is no proposal
+	At      string `json:"at,omitempty"`      // the laib row: when self-update.sh last looked
+	Running string `json:"running,omitempty"` // the laib row (#578): since when laib-images.service runs
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -272,7 +273,22 @@ func laibLine(u ImageUpdate) string {
 	case u.Latest != "":
 		what = "neu: " + u.Latest + " (aus: box.yml updates.laib)"
 	}
-	return strings.TrimSpace(fmt.Sprintf("%-14s %s  %s, geprüft %s  %s", u.Service, u.Current, what, u.At, u.Error))
+	if u.Running != "" {
+		what = "der Update-Lauf läuft seit " + u.Running + "; " + what
+	}
+	return strings.TrimSpace(fmt.Sprintf("%-14s %s  %s, geprüft %s  %s", u.Service, u.Current, what, cmp.Or(u.At, "—"), u.Error))
+}
+
+// RunningSince (#578): since when laib-images.service runs, "" when it does not.
+func RunningSince(ctx context.Context) string {
+	if a := sysd.Active(ctx, "laib-images.service"); a != "activating" && a != "active" {
+		return ""
+	}
+	out, _ := sysd.Run(ctx, "systemctl", "--user", "show", "--timestamp=unix", "--value", "-p", "InactiveExitTimestamp", "laib-images.service")
+	if n, err := strconv.ParseInt(strings.TrimPrefix(out, "@"), 10, 64); err == nil && n > 0 {
+		return time.Unix(n, 0).Local().Format("15:04")
+	}
+	return "eben"
 }
 
 func Updates(ctx context.Context, env *cli.Env, args []string) int {
@@ -285,7 +301,9 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		code = apply.ImageRun(ctx, env, st) // laib-images.timer's nightly run (#528)
 	}
 	ups := ImageUpdates(ctx, st)
-	if u, ok := laibRow(env.Paths.Home, cli.Version); ok {
+	u, ok := laibRow(env.Paths.Home, cli.Version)
+	if u.Running = RunningSince(ctx); ok || u.Running != "" {
+		u.Service, u.Image, u.Current = "laib", "laib", cli.Version
 		ups = append(ups, u)
 	}
 	behind := map[string]string{} // the 30-day yellow in diag (#528): images only

@@ -60,7 +60,7 @@ var mcpParams = map[string][]mcpParam{
 		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"}},
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
-	"updates": {},
+	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"}},
 	"net":     {},
 	"person_invite": {{name: "user", typ: "string", desc: "der Benutzername in LLDAP, klein, ohne Leerzeichen", required: true},
 		{name: "first", typ: "string", flag: "--first", desc: "Vorname", required: true}, {name: "last", typ: "string", flag: "--last", desc: "Nachname"},

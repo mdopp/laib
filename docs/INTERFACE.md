@@ -32,7 +32,9 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
-laib updates [--run]                 what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update
+laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update;
+                                     --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
+                                     refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
@@ -90,7 +92,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
-| `laib_updates` | none |
+| `laib_updates` | `now?` (a boolean, tier apply): start the nightly run now → `{started, unit, message}` (#578) |
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean) → `{user, mailed, link?, expires (RFC 3339), message}` (#360) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
 | `laib_calendar` | `action` (`subscribe`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
