@@ -420,33 +420,61 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 	return apply.ApplyLocked(ctx, env, st, "", reason)
 }
 
-// List lists proposals: open ones by default, --all for every one.
+// List lists proposals: the open ones in full, with their cards. --all adds
+// the decided ones newest first, without card, reasons and warnings, at
+// most --limit of them (20; 0 for all, #579); `laib inbox <id>` is one in full.
 func List(_ context.Context, env *cli.Env, args []string) int {
-	openOnly := true
-	for _, a := range args {
-		if a == "--all" {
+	openOnly, limit, id := true, 20, 0
+	for i := 0; i < len(args); i++ {
+		n, err := strconv.Atoi(args[i])
+		switch {
+		case args[i] == "--all":
 			openOnly = false
+		case args[i] == "--limit" && i+1 < len(args):
+			i++
+			if limit, err = strconv.Atoi(args[i]); err != nil {
+				return env.Fail(fmt.Errorf("--limit %q: keine Zahl", args[i]))
+			}
+		case err == nil:
+			id = n
 		}
 	}
-	ps, err := proposal.List(cli.InboxDir(env), openOnly)
+	ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
 	if err != nil {
 		return env.Fail(err)
 	}
+	decided := 0
+	ps = slices.DeleteFunc(ps, func(p *proposal.Proposal) bool {
+		if id != 0 || p.Status == "open" {
+			return id != 0 && p.ID != id
+		}
+		decided++
+		p.Reasons, p.Warnings, p.Facts = nil, nil, nil
+		return limit > 0 && decided > limit
+	})
+	if id != 0 && len(ps) == 0 {
+		return env.Fail(fmt.Errorf("kein Vorschlag #%d", id))
+	}
+	full := func(p *proposal.Proposal) bool { return id != 0 || p.Status == "open" }
 	domain := ""
 	if st, err := cli.LoadState(env); err == nil {
 		domain = st.Box.Domain
 	}
 	if env.JSON {
-		if ps == nil {
-			ps = []*proposal.Proposal{}
-		}
 		type withCard struct {
 			*proposal.Proposal
 			Card proposal.Decision `json:"card"`
 		}
-		out := make([]withCard, 0, len(ps))
+		out := []any{}
 		for _, p := range ps {
-			out = append(out, withCard{p, proposal.Card(p, domain)})
+			if full(p) {
+				out = append(out, withCard{p, proposal.Card(p, domain)})
+			} else {
+				out = append(out, p)
+			}
+		}
+		if id != 0 {
+			return cli.Emit(env, out[0])
 		}
 		return cli.Emit(env, out)
 	}
@@ -456,14 +484,15 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 	}
 	for _, p := range ps {
 		fmt.Fprintf(env.W(), "#%-3d %-9s %-8s %-14s %s  (%s)\n", p.ID, p.Status, p.Tier, p.Actor, p.Reason, p.Created.Format("02.01. 15:04"))
-		if p.Status == "open" {
-			c := proposal.Card(p, domain)
-			fmt.Fprintf(env.W(), "     %s\n", c.Summary)
-			for _, i := range c.Impact {
-				fmt.Fprintf(env.W(), "     · %s\n", i)
-			}
-			fmt.Fprintf(env.W(), "     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
+		if !full(p) {
+			continue
 		}
+		c := proposal.Card(p, domain)
+		fmt.Fprintf(env.W(), "     %s\n", c.Summary)
+		for _, i := range c.Impact {
+			fmt.Fprintf(env.W(), "     · %s\n", i)
+		}
+		fmt.Fprintf(env.W(), "     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
 		if p.Class == "human" {
 			fmt.Fprintln(env.W(), "     nur ein Mensch kann freigeben:")
 			for _, r := range p.Reasons {

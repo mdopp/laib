@@ -55,8 +55,8 @@ func TestEverySessionHearsItsRecordAndTheReportItsRate(t *testing.T) {
 	if !strings.Contains(s.Note, "Vorschläge des Operators, 30 Tage: 2 von 4 wirksam (50 %); 2 wirksam, 1 zurückgenommen, 1 abgelehnt.") {
 		t.Fatalf("the report lacks the month's rate: %q", s.Note)
 	}
-	if !slices.ContainsFunc(*calls, func(c string) bool { return c == "laib_inbox --all" }) {
-		t.Fatalf("the record is read as laib inbox --all: %v", *calls)
+	if !slices.ContainsFunc(*calls, func(c string) bool { return c == "laib_inbox --all --limit 0" }) {
+		t.Fatalf("the record is read as laib inbox --all --limit 0 (every entry, #579): %v", *calls)
 	}
 }
 
