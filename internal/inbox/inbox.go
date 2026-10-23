@@ -19,10 +19,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/mdopp/laib/internal/apply"
-	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/templates"
 
@@ -245,16 +243,11 @@ func reasonsSuffix(p *proposal.Proposal) string {
 	return ": " + strings.Join(p.Reasons, "; ")
 }
 
-// AutoApprove is the "canary by rollback": laib merges and applies; if the
-// verify is red, it reverts the merge and applies again, and the journal
-// carries both so the human sees what was tried.
+// AutoApprove is the "canary by rollback": laib merges, and the run that
+// applies it reverts the merge when its verify is red (#609: with the rest
+// of that run); the journal carries both so the human sees what was tried.
 func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 	laibEnv := &cli.Env{Paths: env.Paths, JSON: env.JSON, Actor: "laib", In: env.In, MCP: env.MCP}
-	unlock, code := apply.TakeLock(laibEnv, nil, "approve")
-	if code != cli.ExitOK {
-		return code
-	}
-	defer unlock()
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads); err != nil {
 		return env.Fail(err)
 	}
@@ -263,23 +256,11 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 		return env.Fail(err)
 	}
 	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
-	code = apply.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("#%d %s (auto, von %s)", p.ID, p.Reason, p.Actor))
-	if code == cli.ExitRed {
-		if _, err := RevertProposal(ctx, laibEnv, st, p.ID); err != nil {
-			cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
-			return cli.ExitRed
-		}
-		cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "rollback", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d zurückgenommen: verify war rot", p.ID)})
-		st, err = cli.LoadState(env)
-		if err != nil {
-			return env.Fail(err)
-		}
-		apply.ApplyHeld(ctx, laibEnv, st, "", fmt.Sprintf("rollback #%d", p.ID))
-		return cli.ExitRed
-	}
-	return code
+	return Carry(ctx, laibEnv)
 }
 
+// Decide approves or rejects (#609): an approve is the merge, under the
+// state repo's short lock, never the box's; Approve then starts the run.
 func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int {
 	if len(args) < 1 || approve && len(args) > 1 {
 		return env.Fail(errors.New("usage: laib approve <id> · laib reject <id> [\"<grund>\"]"))
@@ -324,19 +305,6 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
 	}
-	unlock, code := apply.TakeLock(env, st, "approve")
-	if code != cli.ExitOK {
-		return code
-	}
-	release := sync.OnceFunc(unlock)
-	defer release()
-	for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the merge, fail closed
-		if svc := st.Services[name]; svc != nil {
-			if code := backup.Pre(ctx, env, st, svc, "approve", "pre-update", true); code != cli.ExitOK {
-				return code
-			}
-		}
-	}
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(env.Errw(), "laib:", err)
@@ -345,21 +313,24 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
-	// The merged state is the new truth: reload and apply it.
-	st, err = cli.LoadState(env)
-	if err != nil {
+	if st, err = cli.LoadState(env); err != nil {
 		return env.Fail(err)
 	}
 	FileWishes(ctx, env, st, p)
-	if len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") }) {
-		release() // a wish changes nothing on the box: no apply; a repair's verb takes the lock itself
-		return RunRepairs(ctx, env, st, p)
+	if p.Boxless() {
+		return RunRepairs(ctx, env, st, p) // a wish changes nothing on the box; a repair's verb takes the lock itself
 	}
-	return apply.ApplyHeld(ctx, env, st, "", fmt.Sprintf("#%d %s (von %s)", p.ID, p.Reason, p.Actor))
+	return cli.ExitOK
 }
 
+// Approve is `laib approve`: the merge, then the run (Carry), here and now
+// when the lock is free, so the shell sees the apply; behind a running
+// apply it answers at once and the run after it carries the proposal.
 func Approve(ctx context.Context, env *cli.Env, args []string) int {
-	return Decide(ctx, env, args, true)
+	if code := Decide(ctx, env, args, true); code != cli.ExitOK {
+		return code
+	}
+	return Carry(ctx, env)
 }
 func Reject(ctx context.Context, env *cli.Env, args []string) int {
 	return Decide(ctx, env, args, false)
@@ -435,11 +406,7 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d add %s", p.ID, add.Name)})
-	st, err = cli.LoadState(env)
-	if err != nil {
-		return env.Fail(err)
-	}
-	return apply.ApplyLocked(ctx, env, st, "", reason)
+	return Carry(ctx, env)
 }
 
 // List lists proposals: the open ones in full, with their cards. --all adds

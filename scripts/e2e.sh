@@ -140,12 +140,28 @@ if grep -qF -e "$OLD" -e "$NEW" -e cf-token "$SYSTEMCTL_LOG"; then fail "a secre
 if LAIB_ACTOR=ops "$BIN" secret rotate WHOAMI_TOKEN >/dev/null 2>&1; then fail "ops rotated"; fi
 
 # --- 7. template update: a proposal (#3); the template brings its health URL back,
-#        nothing listens, so the human's approval ends red (exit 2) with files applied
+#        nothing listens, so the human's approval ends red (exit 2) and its run is rolled back (#609)
 LAIB_ACTOR=ops "$BIN" template update whoami >/dev/null || fail "template update exit $?"
 LAIB_ACTOR=human:e2e "$BIN" approve 3 >/dev/null && CODE=0 || CODE=$?
 [ "$CODE" = 2 ] || fail "approve #3 expected exit 2 (red verify), got $CODE"
 grep -q "whoami:v1.11" "$LAIB_HOME/state/services/whoami/values.yml" || fail "values.yml not kept on template update"
 j 'reds=[e for e in es if e["result"]=="red"]; assert any("health" in e.get("detail","") for e in reds), "red verify not journaled: %r" % reds'
+"$BIN" inbox 3 --json | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["outcome"]=="rolled-back" and p["batch"].startswith("#3 ("), p' || fail "the red run is not rolled back with its name"
+
+# --- 7b. an approve while an apply holds the lock answers at once (#609); a whole-box apply carries it
+sed -i 's/WHOAMI_NAME=\${SERVICE}/WHOAMI_NAME=later-${SERVICE}/' "$LAIB_HOME/state/services/whoami/whoami.container"
+LAIB_ACTOR=ops "$BIN" propose "e2e: approve during an apply" >/dev/null || fail "propose 7b"
+ID="$("$BIN" inbox --json | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')"
+flock "$LAIB_HOME/apply.lock" sleep 3 & HOLDER=$!
+sleep 0.5
+OUT="$(LAIB_ACTOR=human:e2e timeout 10 "$BIN" approve "$ID" 2>&1)" || fail "approve during an apply did not answer at once: $OUT"
+grep -q "nächsten Lauf" <<<"$OUT" || fail "the approver is not told it runs with the next run: $OUT"
+grep -q "later-whoami" "$LAIB_QUADLET/whoami/whoami.container" && fail "applied while the lock was held"
+"$BIN" inbox "$ID" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["status"]=="approved" and p["outcome"]=="waiting", p' || fail "not approved and waiting"
+wait "$HOLDER"
+LAIB_ACTOR=human:e2e "$BIN" apply >/dev/null || fail "the run after the lock exit $?"
+grep -q "later-whoami" "$LAIB_QUADLET/whoami/whoami.container" || fail "the waiting approval was not applied"
+"$BIN" inbox "$ID" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p.get("outcome","")!="waiting" and p["batch"].startswith("#%s (" % p["id"]), p' || fail "the run that carried it is not recorded"
 sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME/state/services/whoami/laib.yml"
 LAIB_ACTOR=human:e2e "$BIN" apply whoami --reason "e2e: health stripped again" >/dev/null || fail "re-apply exit $?"
 
