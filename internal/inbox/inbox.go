@@ -147,7 +147,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		// The dial says laib decides this class itself: approve as laib,
 		// apply, and roll back on a red verify. A warning (a second service
 		// for one purpose) and anything the judge named always go to a human.
