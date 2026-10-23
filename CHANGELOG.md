@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.23.0](https://github.com/mdopp/laib/compare/v0.22.0...v0.23.0) (2026-10-23)
+
+
+### Features
+
+* **bote:** the drop notice asks who it is, the answer becomes a proposal ([3eb1764](https://github.com/mdopp/laib/commit/3eb1764a78b1f49632414204b2f16a8092857862)), closes [#596](https://github.com/mdopp/laib/issues/596)
+* **person:** the Signal number as a box.yml people proposal ([2d7a0f4](https://github.com/mdopp/laib/commit/2d7a0f46d8b428406738ff40e3d6f21ac8841a03)), closes [#596](https://github.com/mdopp/laib/issues/596)
+* **state:** the haus hand may note who switched in Home Assistant ([8a6ec77](https://github.com/mdopp/laib/commit/8a6ec771a3e5d03247b33e013b654bb65cde2d51))
+* **template:** home-assistant mints each machine's token on its own HA user ([aad5663](https://github.com/mdopp/laib/commit/aad5663751b332edab2806ae51f2260e3e89c3f7))
+
+
+### Bug Fixes
+
+* **bote:** allowed users from box.yml people, Laib's drop notice ([d4876e7](https://github.com/mdopp/laib/commit/d4876e7c08ad96f989d9b09f91c0795746304407)), closes [#586](https://github.com/mdopp/laib/issues/586)
+* **bote:** facts from Frage, answers before persona lines, no guessed HA prompts ([92a9056](https://github.com/mdopp/laib/commit/92a9056e742394722cfe58b7a259cd3ed7dbca24)), closes [#587](https://github.com/mdopp/laib/issues/587)
+* **cli:** --help shows the usage and runs nothing, unknown flags refused ([67e2edc](https://github.com/mdopp/laib/commit/67e2edc3714c557dc869fd0a5b346f15f1dedf41)), closes [#590](https://github.com/mdopp/laib/issues/590)
+* **scan:** ask the LAN's neighbours on 1865 and eSCL, and ask whether an off scanner is on ([26f1352](https://github.com/mdopp/laib/commit/26f13526d84368ec3d23e61828caa94a495385ad)), closes [#589](https://github.com/mdopp/laib/issues/589)
+* scanner search, HA machine users, Bote, Signal number, --help ([#586](https://github.com/mdopp/laib/issues/586)-[#596](https://github.com/mdopp/laib/issues/596)) ([b295513](https://github.com/mdopp/laib/commit/b295513e85964e70375ec4cd9aa702f6da79b9ea))
+
 ## [0.22.0](https://github.com/mdopp/laib/compare/v0.21.0...v0.22.0) (2026-10-23)
 
 
