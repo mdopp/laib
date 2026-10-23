@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Box is box.yml.
@@ -201,12 +203,12 @@ type Hand struct {
 // BoxHand is the hand laib's own timers run as (#444): it snapshots and
 // checks the backup, nothing more. laib init writes it; Load supplies it to a
 // policy.yml without one, which may narrow it but not miss it.
-var BoxHand = Hand{Ceiling: "propose", Verbs: []string{"backup", "diag"}}
+var BoxHand = defaults.Hands["laib"]
 
 // NotifyHand is laib-notify's (#443): it reads diag and the image updates and
 // journals a failed mail (note, tier propose); it proposes and decides nothing.
 // Supplied like BoxHand to a policy.yml without one.
-var NotifyHand = Hand{Ceiling: "propose", Verbs: []string{"diag", "updates", "inbox", "note"}} // inbox: the proposals it announces (#441)
+var NotifyHand = defaults.Hands["notify"] // inbox: the proposals it announces (#441)
 
 // Approval says who may approve a tier.
 type Approval struct {
@@ -428,3 +430,15 @@ type State struct {
 	// Off says which units `when` turned off and why; plan prints it (#184).
 	Off []string
 }
+
+// DefaultPolicy is the policy.yml laib init writes, and the one place the
+// built-in hands' verbs are defined (#575): a box from before a release gets
+// the verbs its built-in hands lack as a proposal (inbox.ProposeDefaults).
+const DefaultPolicy = "tiers: [read, propose, apply, destroy]\nhands:\n  resident: {ceiling: read}\n  ops: {ceiling: apply}          # the operator (ADR 0013): observe unbounded, correct inside the envelope\n  laib: {ceiling: propose, verbs: [backup, diag]}   # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update\n  notify: {ceiling: propose, verbs: [diag, updates, inbox, note]}   # laib-notify (#443, #441): tells the owner through the Bote, mail as fallback; reads, journals a failed send\n  pi: {ceiling: propose}\n  bote: {ceiling: propose}       # the Bote on Signal (ADR 0016): reads, proposes, notes; never approves\n  approver: {ceiling: apply, human: true, verbs: [approve, reject, inbox, status, note]}   # the Signal relay (#48): acts only on the admin's verified number, can only decide\n  haus: {ceiling: apply, verbs: [status, inbox, journal, restart, person_invite, person_pending, calendar, zuhause, scan]}   # the family's pages (haus#1): looks, restarts, invites residents (admins only on the Haus side, #360), connects calendars (#495), proposes the address (#561), orders a scan (#568), decides nothing\n  claude: {ceiling: apply, ttl: 8h}\n  werkstatt: {ceiling: read, verbs: [session], session: claude}   # the Werkstatt (#380): gets a claude token per session, with claude's ttl; nothing else\n  human: {ceiling: destroy}\napprovals:\n  destroy: {by: human, snapshot: required}\nautonomy:\n  converge: on            # the ten-minute loop re-applies drift and restarts units\n  values: auto            # laib applies, rolls back on red\n  template-update: proposal\n  patch: proposal\n  new-service: proposal   # adds surface: a human decides\n  # whatever the dial says: a change the content review marks (a script on the box, a public route,\n  # policy.yml, a token, a host folder …) waits for a human (#34)\n  # remove is never auto; a public route is always a human's call\n"
+
+var defaults = func() (p Policy) {
+	if err := yaml.Unmarshal([]byte(DefaultPolicy), &p); err != nil {
+		panic(err)
+	}
+	return p
+}()
