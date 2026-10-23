@@ -41,6 +41,10 @@ laib updates [--run|--now]           what is behind: patch and minor releases of
                                      --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
                                      refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
+laib net geraete [--wecken]          the LAN's devices as the host sees them (#577): address, MAC, reverse-DNS name, maker from the
+                                     host's IEEE oui.txt if one is there; only the box's /24, only complete entries of /proc/net/arp.
+                                     `limits` says what the list cannot see (a sleeping device, another subnet). --wecken first sends
+                                     one UDP datagram to port 9 of every address of the /24 so ARP fills the table; no port is read
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
 laib plan [service]                  render state → diff against the box (files + units)
 laib apply [service] [--proposal id] snapshot → write → reload → restart → verify
