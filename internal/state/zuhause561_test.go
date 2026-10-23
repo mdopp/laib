@@ -90,11 +90,11 @@ func TestAnAddressWithoutCoordinatesIsAWarningWhenAServiceReadsThem(t *testing.T
 }
 
 // laib zuhause set writes the block and nothing else of box.yml (#561)
-func TestWithZuhauseReplacesOnlyTheBlock(t *testing.T) {
+func TestWithBlockReplacesOnlyTheBlock(t *testing.T) {
 	box := "domain: x.home   # the domain\ntimezone: Europe/Berlin\nzuhause:\n  city: Altstadt   # old\n  latitude: 1\n  longitude: 2\npeople:\n  mama: [\"signal:+4917000000000\"]\n"
 	lat, lon := 52.1234, 8.0456
 	z := Zuhause{Street: "Musterweg 12", Postcode: "01234", City: "Musterstadt", Latitude: &lat, Longitude: &lon}
-	got, err := WithZuhause([]byte(box), z)
+	got, err := WithBlock([]byte(box), "zuhause", z)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestWithZuhauseReplacesOnlyTheBlock(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
 	// missing: appended, and a file without a final newline stays YAML
-	got, _ = WithZuhause([]byte("domain: x.home"), Zuhause{City: "Musterstadt"})
+	got, _ = WithBlock([]byte("domain: x.home"), "zuhause", Zuhause{City: "Musterstadt"})
 	if string(got) != "domain: x.home\nzuhause:\n  city: Musterstadt\n" {
 		t.Fatalf("appended: %q", got)
 	}
