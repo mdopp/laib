@@ -76,7 +76,15 @@ laib init                            first setup as a dialogue
 laib serve                           daemon: /ready, /api, /mcp, the three pages
 ```
 
-Every verb has `--json`. The MCP tool list is generated from the same verb
+Every verb has `--json`. Every verb takes `--help` or `-h` anywhere before
+`--`, on the CLI and over MCP alike: it prints the verb's usage, exits 0
+and runs nothing (#590). The verbs that stop, write, restore or apply
+(`apply`, `approve`, `reject`, `rollback`, `backup`, `restore`, `stop`,
+`start`, `restart`, `remove`, `exec`, `write`, `converge`, `add`, `pause`,
+`resume`, `secret`, `token`, `propose`) name their flags in the verb table;
+a flag they do not take exits 1 before anything runs, never read as a
+service, a reason or a commit. What follows `--` is the container
+command's own. The MCP tool list is generated from the same verb
 table (`mcpVerbs` names which of them an agent may reach at all), and
 `scripts/drift.sh` in CI checks that every tool the Operator's prompt
 names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
