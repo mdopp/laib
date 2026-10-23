@@ -3,11 +3,11 @@ SIGNAL_IMAGE: docker.io/bbernhard/signal-cli-rest-api:latest
 # Channels (#184): each optional, at least one. A channel is on while its
 # first value is set; an empty one leaves no container and no Hermes entry.
 SIGNAL_ACCOUNT: "+4915112345678"          # Signal: the Bote's own number, E.164, linked once via QR (README)
-SIGNAL_ALLOWED_USERS: "+4915198765432"    # who may talk to the Bote on Signal, comma-separated (ADR 0016 §5)
+SIGNAL_ALLOWED_USERS: "+4915198765432"    # who else may talk to the Bote on Signal, comma-separated (ADR 0016 §5); everyone in box.yml people with a signal: id may anyway (#586)
 MATRIX_HOMESERVER: ""                     # Matrix: the Bote's homeserver, https://matrix.example.org; secret BOTE_MATRIX_TOKEN
 MATRIX_ALLOWED_USERS: ""                  # who may talk to the Bote on Matrix, comma-separated Matrix IDs
 MATRIX_TOKEN: !secret BOTE_MATRIX_TOKEN   # the relay reads the admin's room with it
-TELEGRAM_ALLOWED_USERS: ""                # Telegram: who may talk to the bot, numeric user ids; secret BOTE_TELEGRAM_TOKEN
+TELEGRAM_ALLOWED_USERS: ""                # Telegram: who may talk to the bot, numeric user ids, plus box.yml people's telegram: ids (#586); secret BOTE_TELEGRAM_TOKEN
 TELEGRAM_TOKEN: !secret BOTE_TELEGRAM_TOKEN
 DISCORD_ALLOWED_USERS: ""                 # Discord: who may talk to the bot, numeric user ids (#421); secret BOTE_DISCORD_TOKEN
 DISCORD_TOKEN: !secret BOTE_DISCORD_TOKEN

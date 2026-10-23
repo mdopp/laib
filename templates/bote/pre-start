@@ -31,6 +31,39 @@ if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NU
 # the owner's Discord id must be one the Bote talks to (#463): the allowed list is the identity the chat knows
 if [ -n "$ADMIN_DISCORD_ID" ]; then case ",${DISCORD_ALLOWED_USERS// /}," in *",$ADMIN_DISCORD_ID,"*) ;; *) echo "bote: ADMIN_DISCORD_ID steht nicht in DISCORD_ALLOWED_USERS" >&2; exit 1;; esac; fi
 if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
+# Who may talk (#586): the value, plus everyone in box.yml people with an id on the platform
+# (render/people/people.json; a change there restarts the pod and runs this again). Signal's
+# number and a Telegram DM's chat id are the sender's id; a Matrix or Discord target is a room or
+# a channel, not a user, so those lists stay the value's. The value alone switches a channel on.
+allowed() { python3 - "$1" "$2" "${LAIB_RENDER_DIR:-/nonexistent}/people/people.json" <<'PY'
+import json, sys
+platform, value, path = sys.argv[1:]
+ids = [i.strip() for i in value.split(",") if i.strip()]
+try:
+    people = json.load(open(path))
+except (OSError, ValueError):
+    people = {}
+for name in sorted(people):
+    for ch in people[name]:
+        p, _, target = ch.partition(":")
+        if p == platform and target and target not in ids and not target.startswith("-"):   # a negative Telegram id is a group
+            ids.append(target)
+print(",".join(ids))
+PY
+}
+[ -z "$SIGNAL_ACCOUNT" ] || SIGNAL_ALLOWED_USERS="$(allowed signal "${SIGNAL_ALLOWED_USERS:-}")"
+[ -z "$TELEGRAM_ALLOWED_USERS" ] || TELEGRAM_ALLOWED_USERS="$(allowed telegram "$TELEGRAM_ALLOWED_USERS")"
+# Hermes' notice to the owner about a dropped sender (#586) is Hermes' own text (locales/*.yaml):
+# it names ~/.env and `hermes pairing`, neither is the way here. Hermes reads an overlay from
+# $HERMES_HOME/locales/<lang>.yaml over its own (agent/i18n.py); it speaks en unless told otherwise.
+mkdir -p "$H/locales"
+for lang in en de; do cat > "$H/locales/$lang.yaml" <<'YAML'
+# rendered by laib pre-start; do not edit by hand (#586)
+gateway:
+  unauthorized:
+    owner_notice: "Laib hat eine Nachricht von {who} auf {platform} verworfen: der Absender steht bei keiner Person in box.yml people. Gehört er zum Haushalt, trag seine Kennung dort bei seiner Person ein (zum Beispiel signal:+49…); nach dem nächsten laib apply darf er dem Boten schreiben. „Person einladen“ in Haus legt nur das Konto an, nicht die Nummer."
+YAML
+done
 {
   echo "# rendered by laib pre-start; do not edit by hand"
   if [ -n "$SIGNAL_ACCOUNT" ]; then
