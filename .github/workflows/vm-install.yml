@@ -129,6 +129,8 @@ jobs:
           retention-days: 3
   install:
     needs: build
+    # build's own condition skips reuse on a PR; a skipped ancestor would skip this too (#604)
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -1119,6 +1121,7 @@ jobs:
     # the claim the release and main's push reuse (#604): only when every part is green
     name: "proven: tree ${{ needs.build.outputs.tree }}"
     needs: [build, install]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.install.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - run: echo "vm-install proved tree ${{ needs.build.outputs.tree }} (${{ github.sha }})"
