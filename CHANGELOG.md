@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.22.0](https://github.com/mdopp/laib/compare/v0.21.0...v0.22.0) (2026-10-23)
+
+
+### Features
+
+* **cli:** laib state reads the state repo as committed on main ([06e3c7e](https://github.com/mdopp/laib/commit/06e3c7ecdc0b26534cfe3f60ba23f6589fde14ae)), closes [#576](https://github.com/mdopp/laib/issues/576)
+* **context:** laib context and laib inbox --all fit an agent's first look ([ccb2319](https://github.com/mdopp/laib/commit/ccb2319cc16f986a4f237f494dc15030e14b7d71)), closes [#579](https://github.com/mdopp/laib/issues/579)
+* **net:** laib net geraete lists the LAN's devices the host sees ([3b00c8c](https://github.com/mdopp/laib/commit/3b00c8cff097781fb9a2bee3a49fca4b516a9a53)), closes [#577](https://github.com/mdopp/laib/issues/577)
+* **policy:** propose the built-in hands' new default verbs after an update ([53e77aa](https://github.com/mdopp/laib/commit/53e77aa92b9b506e0e6029c6391ba70b4c77c054)), closes [#575](https://github.com/mdopp/laib/issues/575)
+* the tools an agent was missing on the box ([#574](https://github.com/mdopp/laib/issues/574)-[#579](https://github.com/mdopp/laib/issues/579)) ([5dec968](https://github.com/mdopp/laib/commit/5dec968878197caf1e28a3b22649d59cf98d027c))
+* **updates:** laib updates --now starts the nightly run on demand ([57f9588](https://github.com/mdopp/laib/commit/57f9588cd19b223878d68447ba5e0c8063a050e5)), closes [#578](https://github.com/mdopp/laib/issues/578)
+
+
+### Bug Fixes
+
+* **pages:** the Inbox tells the truth about a second submit ([bb53abe](https://github.com/mdopp/laib/commit/bb53abef0e68c16df600058354f0515f130b04ac)), closes [#574](https://github.com/mdopp/laib/issues/574)
+
 ## [0.21.0](https://github.com/mdopp/laib/compare/v0.20.0...v0.21.0) (2026-10-22)
 
 
