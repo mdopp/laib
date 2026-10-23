@@ -211,6 +211,13 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("Antwortet jemand auf eine Mitteilung von Laib", soul)
         self.assertIn("box.yml people", soul)
 
+    def test_an_answer_naming_who_a_number_is_becomes_a_proposal(self):
+        """#596: the owner answers Laib's notice about a dropped sender with "+49… ist mama"; the
+        SOUL has the Bote propose it with laib_person_signal, and the owner approves it."""
+        _, _, soul = self.hook()
+        self.assertIn("laib_person_signal", soul)
+        self.assertIn("Inbox", soul.split("laib_person_signal", 1)[1].split("\n", 1)[0])
+
     def test_the_ha_tool_has_no_prompts_to_guess(self):
         """#587: the Bote called mcp__ha__get_prompt with made-up names (light_status, ha_status) and got
         "Unknown prompt" before GetLiveContext, a detour per question. Hermes' generated prompt tools for

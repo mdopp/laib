@@ -98,6 +98,24 @@ class OwnerNotice(unittest.TestCase):
                 for wrong in (".env", "hermes pairing", "unauthorized_dm_behavior"):
                     self.assertNotIn(wrong, text)
 
+    def test_the_notice_asks_who_it_is_and_offers_the_people_without_a_number(self):
+        """#596: the owner is asked who wrote, offered the people in box.yml people without a
+        signal: id, and told the sentence to answer with; the Bote files that as a proposal
+        (laib_person_signal) the owner approves."""
+        with tempfile.TemporaryDirectory() as d:
+            env_file(d, {"mama": ["signal:+4900000002"], "oma": ["email:oma@example.org"], "lena": ["telegram:123"]})
+            text = (Path(d) / "bote" / "hermes" / "locales" / "de.yaml").read_text()
+        self.assertIn("Wer ist das?", text)
+        self.assertIn("„{who} ist lena“", text)
+        self.assertIn("lena, oma", text)
+        self.assertNotIn("mama", text)
+        self.assertIn("Inbox", text)
+        with tempfile.TemporaryDirectory() as d:
+            env_file(d, {"mama": ["signal:+4900000002"]})
+            text = (Path(d) / "bote" / "hermes" / "locales" / "de.yaml").read_text()
+        self.assertIn("„{who} ist <Name>“", text)
+        self.assertNotIn("mama", text)
+
 
 if __name__ == "__main__":
     unittest.main()
