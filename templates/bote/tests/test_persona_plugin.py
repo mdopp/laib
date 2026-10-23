@@ -117,6 +117,17 @@ class PersonaPlugin(unittest.TestCase):
         ctx, _ = self.turn("Ist das Licht in der Küche an?", "Ja.")   # a menu level's routing still goes
         self.assertIn("nur mit dem Werkzeug ha", ctx["context"])
 
+    def test_a_reply_is_the_persons_words_not_the_quote(self):
+        # #587: the owner replied to Hermes' drop notice; Hermes puts the quoted message in front
+        # ([Replying to: "…"], gateway/run_inbound.py), and the engine read the quote's words as a
+        # command (ABSENDER held ENDE: AUF WIEDERSEHEN). The engine gets what the person wrote.
+        quote = '[Replying to: "Laib hat eine Nachricht verworfen.\n\nDamit unbekannte Absender …"]\n\n'
+        for message, words in ((quote + "Dir sollte die Nummer bekannt sein", "Dir sollte die Nummer bekannt sein"),
+                               ('[Replying to your previous message: "Menü"]\n\n[Anna] Licht an', "Licht an")):
+            CALLS.clear()
+            self.turn(message, "Ok.")
+            self.assertEqual([c["eingabe"] for c in CALLS], [words])
+
     def test_hermes_steer_frame_never_reaches_the_person(self):
         # #520, measured over Haus: the whole answer was the frame around the person's words
         frame = ("[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; "

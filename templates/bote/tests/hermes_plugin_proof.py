@@ -9,6 +9,7 @@ import json, logging, os, sys, threading, types
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 SEEN = []
+LINES = []  # what the persona engine was asked
 
 
 class FakeUsageMetrics(BaseHTTPRequestHandler):
@@ -29,6 +30,7 @@ class FakePersona(BaseHTTPRequestHandler):
     def do_POST(self):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         line = req["params"]["arguments"]["eingabe"]
+        LINES.append(line)
         text = {"Menü": "WOPR\n\n1 SPIELE\n\nJOSHUA>", "Ist das Licht an?": "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>"}.get(line, "WEITER: -\nPROMPT: JOSHUA>")
         body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": text}]}}).encode()
         self.send_response(200)
@@ -139,4 +141,24 @@ assert not FILED
 handled, reply = asyncio.run(ablegen("Stromrechnung ablegen"))
 assert handled and reply.startswith("Liegt in Paperless, Titel „Stromrechnung“"), (handled, reply)
 assert [(p, a, b["titel"], b["absender"]) for p, a, b in FILED] == [("/ablage", "Bearer notify-proof", "Stromrechnung", "+4917000")], FILED
+# #587: a reply carries the quoted message in front, as Hermes writes it; the engine gets the person's
+# words only (the quote's ABSENDER read as ENDE, and the Bote said AUF WIEDERSEHEN)
+quoted = GatewayInboundMixin._prepend_inbound_reply_context(
+    types.SimpleNamespace(reply_to_text="Laib hat verworfen.\n\nDamit unbekannte Absender …", reply_to_message_id="1", reply_to_is_own_message=True),
+    source, "Dir sollte die Nummer bekannt sein")
+assert quoted.startswith("[Replying to"), quoted
+LINES.clear()
+pre("t6", quoted)
+assert LINES == ["Dir sollte die Nummer bekannt sein"], LINES
+# #586: Hermes' notice to the owner about a dropped sender is Laib's text (pre-start's locales overlay)
+from gateway.run_inbound_unauthorized import unauthorized_owner_hint  # noqa: E402
+hint = unauthorized_owner_hint("signal", "+4900000002", "Anna", hermes_home="/opt/data")
+assert "box.yml people" in hint and "+4900000002" in hint and ".env" not in hint and "hermes pairing" not in hint, hint
+# #587: no generated get_prompt / list_prompts for ha, whose prompt names the model guessed
+import hermes_yaml  # noqa: E402
+from tools.mcp_tool_registration import _select_utility_schemas  # noqa: E402
+conf = hermes_yaml.safe_load(open(os.path.join(os.environ["HERMES_HOME"], "config.yaml")))
+both = types.SimpleNamespace(initialize_result=types.SimpleNamespace(capabilities=types.SimpleNamespace(prompts=object(), resources=object())), session=None)
+assert _select_utility_schemas("ha", both, conf["mcp_servers"]["ha"]) == [], conf["mcp_servers"]["ha"]
+assert _select_utility_schemas("laib", both, conf["mcp_servers"]["laib"]), "the check would pass with utilities off everywhere"
 print("hermes plugin proof ok")

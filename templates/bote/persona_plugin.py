@@ -58,7 +58,13 @@ def _message(user_message):
     if not isinstance(user_message, str):
         return ""
     m = user_message.rsplit("[New message]\n", 1)[-1]
+    m = _REPLY.sub("", m, count=1)
     return re.sub(r"^(\s*\[[^\]\n]{0,80}\])+\s*", "", m).strip()
+
+
+# Hermes puts a reply's quoted message in front of the person's words (gateway/run_inbound.py
+# _prepend_inbound_reply_context, v0.22.2): the quote is someone else's text, never a command (#587)
+_REPLY = re.compile(r'^\s*\[Replying to[^:\n]{0,40}: ".*?"\]\n\n', re.S)
 
 
 def _routing(text):

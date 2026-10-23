@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/mdopp/laib/mcpserver"
 	"gopkg.in/yaml.v3"
@@ -279,12 +280,12 @@ func (t *Terminal) Talk(sid, language, line string) string {
 	}
 	s.last = now
 	w := wordsFor(s)
-	if has(in, "LOGOFF", "LOG OFF", "BYE", "EXIT", "QUIT", "TSCHÜSS", "ENDE") {
+	if said(in, 3, "LOGOFF", "LOG OFF", "BYE", "EXIT", "QUIT", "TSCHÜSS", "ENDE") {
 		delete(t.sessions, sid)
 		return w.bye
 	}
-	if named(s.p, in) || has(in, "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP", "WAS KANNST DU", "WHAT CAN YOU DO",
-		"SHALL WE PLAY", "WOLLEN WIR EIN SPIEL", "HALLO", "HELLO") {
+	if (said(in, 3) && named(s.p, in)) || said(in, 2, "HALLO", "HELLO") || said(in, 3, "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP") ||
+		said(in, 5, "WAS KANNST DU", "WHAT CAN YOU DO", "SHALL WE PLAY", "WOLLEN WIR EIN SPIEL") {
 		s.mode, s.ctx = modeMenu, ""
 		return t.directory(s, w)
 	}
@@ -614,6 +615,23 @@ func cell(in string) int {
 		return int(in[0] - '1')
 	}
 	return -1
+}
+
+// said: a message of at most max words that holds one of the phrases as words of
+// their own (none given: any). A longer message is a request for the Bote,
+// whatever word it holds (#587: a quote's ABSENDER held ENDE, the Bote said goodbye).
+func said(in string, max int, phrases ...string) bool {
+	f := strings.FieldsFunc(in, func(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune(",;:!?.\"[]()", r) })
+	if len(f) > max {
+		return false
+	}
+	padded := " " + strings.Join(f, " ") + " "
+	for _, p := range phrases {
+		if strings.Contains(padded, " "+p+" ") {
+			return true
+		}
+	}
+	return len(phrases) == 0
 }
 
 func has(in string, words ...string) bool {
