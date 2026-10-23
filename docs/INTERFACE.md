@@ -27,10 +27,12 @@ laib repair <probe> [service]                 a diag finding's repair (its `repa
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib zuhause show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]
                                      the household's address, box.yml zuhause (#561): show prints the block only; set replaces
-                                     the whole block as a box.yml proposal of class human (the owner approves, never the caller)
+                                     the whole block as a box.yml proposal of class human (the owner approves, never the caller);
+                                     it is the value at the path box.yml:zuhause (#598): a hand with a verb list needs that path grant
 laib person signal <user> <+49…>    a person's Signal number in box.yml people (#596): sets the signal: channel, or changes
                                      the one there, as a box.yml proposal of class human; `laib person invite … --signal +49…`
-                                     files the same one before it makes the account (a number the loader refuses stops both)
+                                     files the same one before it makes the account (a number the loader refuses stops both);
+                                     it is the value at box.yml:people.<user>.signal (#598): a hand with a verb list needs people.*.signal
 laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> | suchen | pruefen | probe [--person p]
                                      the scan service (#568): status prints its status file; the rest is an order file in
                                      ${DATA_DIR}/scan/auftrag/ the service picks up: a stack from the SANE scanner, after a jam
@@ -54,6 +56,11 @@ laib apply [service] [--proposal id] snapshot → write → reload → restart �
 laib rollback <service|commit>       git revert + apply
 laib propose "<reason>"              human with a shell: commit the working tree to a proposal branch
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
+laib propose --path <file>:<a.b.c>=<VALUE> "<reason>"  one value at a named path of box.yml or a values.yml (#598), as a line
+                                     edit that rewrites only that top-level block and keeps its comments; VALUE is YAML (a scalar,
+                                     or flow: {city: X}), empty removes it; a segment on a list names its "<segment>:" item
+                                     (box.yml:people.mama.signal=+49…); a key box.yml does not know, or a state the loader refuses,
+                                     is refused before any proposal; a hand with a verb list only at the paths policy.yml grants it
 laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
 laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property), against the text laib state shows; validated in a worktree
 laib propose --grant <hand> <verb> "<reason>"  one verb added to one hand's verb list in policy.yml, a line edit (#575);
@@ -114,17 +121,17 @@ splitting a command line, so quotes and spaces survive:
 | `laib_journal` | `since?` |
 | `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
 | `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
-| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
+| `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
 | `laib_updates` | `now?` (a boolean, tier apply): start the nightly run now → `{started, unit, message}` (#578) |
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean), `signal?` (E.164, `+49…`: a `laib_person_signal` proposal filed first; a number the loader refuses stops the invite, #596) → `{user, mailed, link?, expires (RFC 3339), message, proposal?}` (#360; `proposal` with `signal`, the message names it) |
-| `laib_person_signal` | `user` (the name in box.yml people, lowercase; someone not there yet is added with that channel), `number` (E.164, `+49…`) → `{proposal, message}`: people.`<user>`'s `signal:` channel set in place or added after their others, a class-human proposal whose reason carries no number; after a human approves it the Bote takes the number (#586's pre-start). Tier propose: the haus hand by its verbs (the person page), the Bote by its ceiling (the owner's answer to a drop notice) (#596) |
+| `laib_person_signal` | `user` (the name in box.yml people, lowercase; someone not there yet is added with that channel), `number` (E.164, `+49…`) → `{proposal, message}`: people.`<user>`'s `signal:` channel set in place or added after their others, a class-human proposal whose reason carries no number; after a human approves it the Bote takes the number (#586's pre-start). Tier propose: the haus hand by its verbs and its path grant `people.*.signal` (the person page), the Bote by its ceiling (the owner's answer to a drop notice) (#596, #598) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
 | `laib_calendar` | `action` (`subscribe`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
-| `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The haus hand calls it from the admins' form; Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
+| `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The haus hand calls it from the admins' form, by its verb and its path grant `zuhause` (#598); Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
 | `laib_scan` | `action` (`status`, `start`, `weiter`, `abschliessen`, `verwerfen`, `redo`, `suchen`, `pruefen`, `probe`, `einrichten`), `geraet?` (einrichten: a SANE device; the answer is `{proposal, class, message}`), `person?` (whom the closing message is for; empty: `notify.person`), `stapel?` (redo: `JJJJ-MM-TTThh-mm-ss`) → status: the service's status file as it is (templates/scan/README.md); otherwise `{message}`. Tier propose: the haus hand by its verbs, the Bote by its ceiling (#568) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |

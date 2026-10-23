@@ -111,7 +111,7 @@ func TestAddWiresRolesAndCarveOut(t *testing.T) {
 		t.Fatal("a human may approve their own --add:", err)
 	}
 	b, _ := os.ReadFile(filepath.Join(repo, "box.yml"))
-	if !strings.Contains(string(b), "dns: dnsbox") || !strings.Contains(string(b), "- dnsbox") || !strings.Contains(string(b), "provider: cloudflare") {
+	if !strings.Contains(string(b), "dns: dnsbox") || !strings.Contains(string(b), "hostNetwork: [dnsbox]") || !strings.Contains(string(b), "provider: cloudflare") {
 		t.Fatalf("box.yml not wired or the shell edit lost:\n%s", b)
 	}
 }

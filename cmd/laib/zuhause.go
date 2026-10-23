@@ -6,21 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
-	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
 	"gopkg.in/yaml.v3"
 )
 
 // cmdZuhause: `laib zuhause show | set [--street S] [--postcode P] [--city C]
 // [--country DE] [--latitude N --longitude E] [--elevation M]` (#561). Set
-// replaces the whole block and becomes a box.yml proposal a human approves:
+// proposes the whole block as the value at box.yml:zuhause (#598), which a human approves:
 // the household's address is the owner's call, the review marks it so.
 func cmdZuhause(ctx context.Context, env *cliEnv, args []string) int {
 	st, err := cli.LoadState(env)
@@ -61,7 +57,11 @@ func cmdZuhause(ctx context.Context, env *cliEnv, args []string) int {
 	if args[0] != "set" || fs.NArg() > 0 || fs.NFlag() == 0 {
 		return env.Fail(errors.New(usage))
 	}
-	id, err := proposeBox(ctx, env, st, "zuhause", "Die Adresse des Haushalts ändern (box.yml zuhause)", func(box []byte) ([]byte, error) { return state.WithBlock(box, "zuhause", z) })
+	var v yaml.Node
+	if err := v.Encode(z); err != nil {
+		return env.Fail(err)
+	}
+	id, err := inbox.ProposeAt(ctx, env, st, "zuhause", "Die Adresse des Haushalts ändern (box.yml zuhause)", map[string]*yaml.Node{"box.yml:zuhause": &v})
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -71,23 +71,4 @@ func cmdZuhause(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fmt.Fprintln(env.W(), msg)
 	return cli.ExitOK
-}
-
-// proposeBox files box.yml as edit makes it as a proposal (laib zuhause, laib
-// person signal); the review marks a box.yml change a human's to approve. The
-// reason reaches the inbox, the journal and the owner's chat: no address, no number.
-func proposeBox(ctx context.Context, env *cliEnv, st *state.State, verb, reason string, edit func([]byte) ([]byte, error)) (int, error) {
-	box, err := os.ReadFile(filepath.Join(env.Paths.State, "box.yml"))
-	if err == nil {
-		box, err = edit(box)
-	}
-	if err != nil {
-		return 0, err
-	}
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Write: map[string][]byte{"box.yml": box}}, inbox.JudgeFor(st, env.Actor))
-	if err != nil {
-		return 0, err
-	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Result: "info", Reason: reason, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
-	return p.ID, nil
 }

@@ -3,6 +3,7 @@ package policy
 
 import (
 	"fmt"
+	"path"
 	"reflect"
 	"regexp"
 	"slices"
@@ -137,11 +138,41 @@ func IsHuman(p state.Policy, hand string) bool {
 	return hand == "human" || p.Hands[hand].Human
 }
 
-// Missing names, per built-in hand, the verbs state.DefaultPolicy gives it
-// that cur lacks (#575). It only ever adds: a hand without a verb list may
-// already use every verb (a list would narrow it), a hand the owner removed
+// MayPath reports whether a hand may propose a value at a path
+// ("box.yml:people.mama.signal"; no file means box.yml, #598): a hand with
+// propose and no verb list anything, one with a list only what its paths
+// grant — a pattern names one path, * stands for one segment.
+func MayPath(p state.Policy, hand, at string) bool {
+	h := p.Hands[hand]
+	return Allowed(p, hand, "propose") && (len(h.Verbs) == 0 || slices.ContainsFunc(h.Paths, func(pat string) bool {
+		ok, _ := path.Match(slashed(pat), slashed(at))
+		return ok
+	}))
+}
+
+// slashed is a path with its segments split by /, the way path.Match counts them.
+func slashed(at string) string {
+	file, dotted, ok := strings.Cut(at, ":")
+	if !ok {
+		file, dotted = "box.yml", at
+	}
+	return file + "/" + strings.ReplaceAll(dotted, ".", "/")
+}
+
+// list is a hand's verb list, or with paths its path grants.
+func list(h *state.Hand, paths bool) *[]string {
+	if paths {
+		return &h.Paths
+	}
+	return &h.Verbs
+}
+
+// Missing names, per built-in hand, the verbs (or with paths the path
+// grants) state.DefaultPolicy gives it that cur lacks (#575, #598). It only
+// ever adds: a hand without a verb list may already use every verb and
+// propose every path (a list would narrow it), a hand the owner removed
 // stays removed, a hand the owner added is no built-in.
-func Missing(cur state.Policy) map[string][]string {
+func Missing(cur state.Policy, paths bool) map[string][]string {
 	var def state.Policy
 	yaml.Unmarshal([]byte(state.DefaultPolicy), &def)
 	out := map[string][]string{}
@@ -150,8 +181,8 @@ func Missing(cur state.Policy) map[string][]string {
 		if !ok || len(have.Verbs) == 0 {
 			continue
 		}
-		for _, v := range h.Verbs {
-			if !slices.Contains(have.Verbs, v) {
+		for _, v := range *list(&h, paths) {
+			if !slices.Contains(*list(&have, paths), v) {
 				out[name] = append(out[name], v)
 			}
 		}
@@ -159,24 +190,34 @@ func Missing(cur state.Policy) map[string][]string {
 	return out
 }
 
-// Grant adds verbs to one hand's one-line verb list in policy.yml's text:
-// a line edit, every comment and every other line stays. A list it cannot
-// find on one line, or an edit that would change anything else, is refused.
-func Grant(text []byte, hand string, verbs ...string) ([]byte, error) {
-	re := regexp.MustCompile(`(?m)^([ \t]+` + regexp.QuoteMeta(hand) + `:[ \t]*\{.*\bverbs:[ \t]*\[)([^\]\n]*)\]`)
-	if n := len(re.FindAllIndex(text, -1)); n != 1 {
-		return nil, fmt.Errorf("policy.yml: hand %q has no one-line verb list to add to (found %d)", hand, n)
+// Grant adds verbs (or with paths path grants) to one hand's one-line list in
+// policy.yml's text: a line edit, every comment and every other line stays.
+// A missing paths list is added to the hand's line; a hand not on one line,
+// one without a verb list, or an edit that would change anything else is refused.
+func Grant(text []byte, hand string, paths bool, items ...string) ([]byte, error) {
+	key := map[bool]string{false: "verbs", true: "paths"}[paths]
+	locs := regexp.MustCompile(`(?m)^[ \t]+`+regexp.QuoteMeta(hand)+`:[ \t]*\{[^}\n]*\}`).FindAllIndex(text, -1)
+	if len(locs) != 1 {
+		return nil, fmt.Errorf("policy.yml: hand %q is not on one line to add to (found %d)", hand, len(locs))
 	}
-	out := re.ReplaceAll(text, []byte("${1}${2}, "+strings.Join(verbs, ", ")+"]"))
+	line, add := string(text[locs[0][0]:locs[0][1]]), strings.Join(items, ", ")
+	if m := regexp.MustCompile(`\b` + key + `:[ \t]*\[[^\]\n]*`).FindStringIndex(line); m != nil {
+		line = line[:m[1]] + ", " + add + line[m[1]:]
+	} else if paths {
+		line = line[:len(line)-1] + ", paths: [" + add + "]}"
+	} else {
+		return nil, fmt.Errorf("policy.yml: hand %q has no verb list to add to", hand)
+	}
+	out := slices.Concat(text[:locs[0][0]], []byte(line), text[locs[0][1]:])
 	var before, after state.Policy
 	if yaml.Unmarshal(text, &before) != nil || yaml.Unmarshal(out, &after) != nil || before.Hands == nil {
 		return nil, fmt.Errorf("policy.yml does not parse")
 	}
 	h := before.Hands[hand]
-	h.Verbs = append(h.Verbs, verbs...)
+	*list(&h, paths) = append(*list(&h, paths), items...)
 	before.Hands[hand] = h
 	if !reflect.DeepEqual(before, after) {
-		return nil, fmt.Errorf("policy.yml: adding %v to %q would change more than its verb list", verbs, hand)
+		return nil, fmt.Errorf("policy.yml: adding %v to %q would change more than its %s", items, hand, key)
 	}
 	return out, nil
 }

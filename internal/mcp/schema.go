@@ -53,7 +53,8 @@ var mcpParams = map[string][]mcpParam{
 	"propose": {{name: "reason", typ: "string", desc: "ein Satz: warum", required: true},
 		{name: "service", typ: "string", desc: "der Dienst, dessen values.yml sich ändert"},
 		{name: "key", typ: "string", desc: "der Schlüssel in values.yml, z. B. IMAGE"},
-		{name: "value", typ: "string", desc: "der neue Wert, eine Zeile"},
+		{name: "value", typ: "string", desc: "der neue Wert, eine Zeile; mit path ein YAML-Wert, leer entfernt ihn"},
+		{name: "path", typ: "string", desc: "statt service/key: der Pfad, an dem value steht, Datei:a.b.c, z. B. box.yml:people.mama.signal (#598)"},
 		{name: "finding", typ: "string", desc: "der Befund aus laib diag, den der Vorschlag beheben soll: probe und Dienst, z. B. unit jellyfin; laib misst danach, ob er weg ist"},
 		{name: "evidence", typ: "string", desc: "was du gesehen hast: die Zeile aus diag oder dem Log"},
 		{name: "undo", typ: "string", desc: "wie man es rückgängig macht, ein Satz"},
@@ -213,7 +214,9 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 	switch verb {
 	case "propose":
 		argv := []string{val["reason"]}
-		if val["service"] != "" || val["key"] != "" || val["value"] != "" {
+		if val["path"] != "" {
+			argv = append(argv, "--path", val["path"]+"="+val["value"])
+		} else if val["service"] != "" || val["key"] != "" || val["value"] != "" {
 			if val["service"] == "" || val["key"] == "" {
 				return nil, "", fmt.Errorf("service, key und value gehören zusammen")
 			}

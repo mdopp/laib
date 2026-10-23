@@ -3,6 +3,8 @@ package state
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // a fictitious household: no real address in the tree (#561)
@@ -89,12 +91,14 @@ func TestAnAddressWithoutCoordinatesIsAWarningWhenAServiceReadsThem(t *testing.T
 	}
 }
 
-// laib zuhause set writes the block and nothing else of box.yml (#561)
-func TestWithBlockReplacesOnlyTheBlock(t *testing.T) {
+// laib zuhause set writes the block and nothing else of box.yml (#561, #598)
+func TestWithPathReplacesOnlyTheBlock(t *testing.T) {
 	box := "domain: x.home   # the domain\ntimezone: Europe/Berlin\nzuhause:\n  city: Altstadt   # old\n  latitude: 1\n  longitude: 2\npeople:\n  mama: [\"signal:+4917000000000\"]\n"
 	lat, lon := 52.1234, 8.0456
 	z := Zuhause{Street: "Musterweg 12", Postcode: "01234", City: "Musterstadt", Latitude: &lat, Longitude: &lon}
-	got, err := WithBlock([]byte(box), "zuhause", z)
+	var v yaml.Node
+	v.Encode(z)
+	got, err := WithPath([]byte(box), "box.yml", "zuhause", &v)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +107,7 @@ func TestWithBlockReplacesOnlyTheBlock(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
 	// missing: appended, and a file without a final newline stays YAML
-	got, _ = WithBlock([]byte("domain: x.home"), "zuhause", Zuhause{City: "Musterstadt"})
+	got, _ = WithPath([]byte("domain: x.home"), "box.yml", "zuhause.city", scalar("Musterstadt"))
 	if string(got) != "domain: x.home\nzuhause:\n  city: Musterstadt\n" {
 		t.Fatalf("appended: %q", got)
 	}

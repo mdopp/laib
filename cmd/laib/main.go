@@ -70,7 +70,7 @@ func init() {
 		{Name: "add", Tier: "apply", Help: "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", Flags: []string{"--name"}, Run: inbox.Add},
 		{Name: "remove", Tier: "apply", Help: "<service>: stop its units, take it out of the state, apply; data stays (humans only)", Flags: []string{}, Run: cmdRemove},
 		{Name: "inbox", Tier: "read", Help: "[<id>] [--all [--limit 20]]: open proposals in full; --all adds the decided ones newest first without their cards (--limit 0: all); <id> one in full (#579)", Run: inbox.List},
-		{Name: "propose", Tier: "propose", Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
+		{Name: "propose", Tier: "propose", Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--path", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
 		{Name: "approve", Tier: "apply", Help: "<id>: merge a proposal and apply it (never your own)", Flags: []string{}, Run: inbox.Approve},
 		{Name: "reject", Tier: "apply", Help: "<id> [\"<grund>\"]: drop a proposal", Flags: []string{}, Run: inbox.Reject},
 		{Name: "adopt", Tier: "propose", Help: "adopt an unmanaged Quadlet folder into services/", Run: cmdAdopt},

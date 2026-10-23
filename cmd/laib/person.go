@@ -13,11 +13,13 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
+	"gopkg.in/yaml.v3"
 )
 
 // personTool is the identity template's tool (templates/auth/person.py,
@@ -100,7 +102,7 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	var inv Invite
 	if *signal != "" { // the number first: one the loader refuses stops before the account
-		if inv.Proposal, err = proposeBox(ctx, env, st, "person", "Die Signal-Nummer von "+user+" eintragen (box.yml people)", func(box []byte) ([]byte, error) { return state.WithSignal(box, user, *signal) }); err != nil {
+		if inv.Proposal, err = proposeSignal(ctx, env, st, user, *signal); err != nil {
 			return env.Fail(err)
 		}
 	}
@@ -148,7 +150,7 @@ func cmdPersonSignal(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	id, err := proposeBox(ctx, env, st, "person", "Die Signal-Nummer von "+args[0]+" eintragen (box.yml people)", func(box []byte) ([]byte, error) { return state.WithSignal(box, args[0], args[1]) })
+	id, err := proposeSignal(ctx, env, st, args[0], args[1])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -158,6 +160,12 @@ func cmdPersonSignal(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fmt.Fprintln(env.W(), msg)
 	return cli.ExitOK
+}
+
+// proposeSignal is people.<user>.signal as a proposal (#598); the loader checks the number.
+func proposeSignal(ctx context.Context, env *cliEnv, st *state.State, user, number string) (int, error) {
+	return inbox.ProposeAt(ctx, env, st, "person", "Die Signal-Nummer von "+user+" eintragen (box.yml people)",
+		map[string]*yaml.Node{"box.yml:people." + user + ".signal": {Kind: yaml.ScalarNode, Value: number}})
 }
 
 // Pending is one invited person who has not used the link yet.
