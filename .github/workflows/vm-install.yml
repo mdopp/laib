@@ -158,8 +158,9 @@ jobs:
           pkgs="qemu-system-x86 qemu-utils seabios ipxe-qemu"
           if ! ls ~/qemu-debs/*.deb >/dev/null 2>&1; then
             mkdir -p ~/qemu-archives/partial ~/qemu-debs
-            sudo apt-get update -q
-            sudo apt-get install -y -q --no-install-recommends --download-only -o Acquire::Retries=3 -o Dir::Cache::archives="$HOME/qemu-archives" $pkgs
+            fetch() { timeout 180 sudo apt-get update -q && timeout 240 sudo apt-get install -y -q --no-install-recommends --download-only -o Acquire::Retries=3 -o Dir::Cache::archives="$HOME/qemu-archives" $pkgs; }
+            # a stalled Azure mirror gets four minutes, then Ubuntu's own archive
+            fetch || { sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null; fetch; }
             cp ~/qemu-archives/*.deb ~/qemu-debs/
           fi
           sudo apt-get install -y -q --no-install-recommends ~/qemu-debs/*.deb

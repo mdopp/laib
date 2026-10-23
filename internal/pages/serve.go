@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
@@ -134,6 +135,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		if err != nil {
 			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
 		}
+		decisions.Lock()
+		for id, st := range decisions.state { // #607: what was tapped and is not done yet
+			fmt.Fprintf(&b, "<p class=%s>#%d: %s</p>", map[bool]string{true: "rot", false: "gelb"}[strings.HasPrefix(st, "fehlgeschlagen")], id, html.EscapeString(st))
+		}
+		decisions.Unlock()
 		if len(open) == 0 {
 			b.WriteString("<p>Keine offenen Vorschläge.</p>")
 		}
@@ -282,33 +288,97 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		if actor == "human:" {
 			actor = "human:web"
 		}
-		var errOut strings.Builder
-		webEnv := &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
 		id, decision := r.PathValue("id"), r.PathValue("decision")
-		var code int
-		if decision == "rollback" {
-			code = inbox.Rollback(r.Context(), webEnv, []string{"#" + id})
-		} else {
-			if n, err := strconv.Atoi(id); err == nil {
-				if p, err := proposal.Get(cli.InboxDir(env), n); err == nil && p.Status != "open" {
-					page(w, "Inbox", fmt.Sprintf("<p>#%d ist schon %s, von %s, um %s.</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>",
-						p.ID, done[p.Status], html.EscapeString(strings.TrimPrefix(p.DecidedBy, "human:")), p.Decided.Local().Format("15:04")))
-					return
-				}
-			}
-			argv := []string{id}
-			if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
-				argv = append(argv, why)
-			}
-			code = inbox.Decide(r.Context(), webEnv, argv, decision == "approve")
-		}
-		if code != cli.ExitOK && code != cli.ExitRed {
-			lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
-			why := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code))
-			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(why)+"</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>")
+		n, err := strconv.Atoi(id)
+		if err != nil {
+			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(id)+" ist keine Nummer</p><p><a href=/inbox>Inbox</a></p>")
 			return
 		}
-		http.Redirect(w, r, "/journal", http.StatusSeeOther)
+		if p, err := proposal.Get(cli.InboxDir(env), n); err != nil {
+			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(err.Error())+"</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>")
+			return
+		} else if decision != "rollback" && p.Status != "open" {
+			page(w, "Inbox", fmt.Sprintf("<p>#%d ist schon %s, von %s, um %s.</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>",
+				p.ID, done[p.Status], html.EscapeString(strings.TrimPrefix(p.DecidedBy, "human:")), p.Decided.Local().Format("15:04")))
+			return
+		}
+		argv := []string{id}
+		if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
+			argv = append(argv, why)
+		}
+		setDecision(n, "wartet, bis es dran ist")
+		decisions.q <- func() { decide(env, actor, n, decision, argv) }
+		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
+	}
+}
+
+// DecisionRetry is how often a queued decision looks at the lock again (#607).
+var DecisionRetry = 5 * time.Second
+
+// decisions run one after another in the background, detached from the
+// request that took them (#607): a tap while an apply holds the lock waits
+// its turn instead of failing, and a closed connection cuts no apply off.
+var decisions = struct {
+	sync.Mutex
+	state map[int]string
+	q     chan func()
+}{state: map[int]string{}, q: make(chan func(), 64)}
+
+func init() {
+	go func() {
+		for f := range decisions.q {
+			f()
+		}
+	}()
+}
+
+// DecisionState is what the Inbox says about a decision taken and not yet
+// done: that it waits, that it runs, or why it failed. Empty when done.
+func DecisionState(id int) string {
+	decisions.Lock()
+	defer decisions.Unlock()
+	return decisions.state[id]
+}
+
+func setDecision(id int, s string) {
+	decisions.Lock()
+	defer decisions.Unlock()
+	if s == "" {
+		delete(decisions.state, id)
+	} else {
+		decisions.state[id] = s
+	}
+}
+
+func decide(env *cli.Env, actor string, id int, decision string, argv []string) {
+	for start := time.Now(); ; time.Sleep(DecisionRetry) {
+		if h := apply.LockHolder(env.Paths); h != "" {
+			if time.Since(start) > 30*time.Minute {
+				setDecision(id, "fehlgeschlagen: seit 30 Minuten gesperrt durch "+h)
+				return
+			}
+			setDecision(id, "wartet, bis "+h+" fertig ist")
+			continue
+		}
+		setDecision(id, "wird angewendet …")
+		var errOut strings.Builder
+		webEnv := &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
+		var code int
+		if decision == "rollback" {
+			code = inbox.Rollback(context.Background(), webEnv, []string{"#" + strconv.Itoa(id)})
+		} else {
+			code = inbox.Decide(context.Background(), webEnv, argv, decision == "approve")
+		}
+		switch {
+		case code == cli.ExitLocked:
+			continue // taken between the look and the lock
+		case code != cli.ExitOK && code != cli.ExitRed:
+			lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
+			setDecision(id, "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code)))
+		default:
+			setDecision(id, "")
+		}
+		return
 	}
 }
 
