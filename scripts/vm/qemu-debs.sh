@@ -11,10 +11,11 @@ d="$HOME/qemu-debs"
 if ls "$d"/*.deb >/dev/null 2>&1; then echo "qemu packages from the cache"; exit 0; fi
 mkdir -p "$d"
 timeout 120 sudo apt-get update -q || echo "apt-get update did not finish; the lists the runner has"
-list=$(apt-get install -y -q --no-install-recommends --print-uris $pkgs | grep "^'http")
+# the runner's sources are mirror+file: URIs; only the path from pool/ on counts
+list=$(apt-get install -y -q --no-install-recommends --print-uris $pkgs | grep "^'.*/pool/" || true)
 [ -n "$list" ] || { echo "apt named no files for $pkgs"; exit 1; }
 get() { # get <uri> <file> <sha256>
-  path=${1#*/ubuntu/}
+  path=pool/${1#*/pool/}
   for base in http://archive.ubuntu.com/ubuntu http://azure.archive.ubuntu.com/ubuntu http://de.archive.ubuntu.com/ubuntu http://us.archive.ubuntu.com/ubuntu; do
     if curl -fsSL --connect-timeout 5 --max-time 60 -o "$d/$2.part" "$base/$path" && echo "$3  $d/$2.part" | sha256sum -c --quiet; then
       mv "$d/$2.part" "$d/$2"; echo "ok $2 ($base)"; return 0
