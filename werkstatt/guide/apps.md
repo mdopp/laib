@@ -83,6 +83,13 @@ Authelia's OIDC (`oidc:` in `laib.yml`, the client secret as `!secret
 OIDC_<CLIENT>_SECRET`) — see `templates.md`. Never `auth: none` for an app
 without its own login.
 
+**Every touch answers at once** (`docs/DESIGN.md`, #588). Each button or
+form answers at once, shows its progress, and ends visibly where it was
+touched: done, an error with its reason and the next step (in German, never
+the raw error), or waiting with a choice. No silent button, no spinner
+without a limit; check it on a phone first. Haus „Scanner einrichten“
+showed nothing while Laib had answered in 4 s: that is the failure to avoid.
+
 ## 3. Build and test, here
 
 ```

@@ -51,6 +51,11 @@ them.
   solution, read the one it replaces (for anything ServiceBay did: its
   template and `assists/`), and say in the PR what was there and which of the
   two gets better. The Operator's prompts carry the same rule.
+- **Every touch answers at once** (#588, `docs/DESIGN.md`): an action
+  the family or an agent triggers answers at once, shows its progress and
+  ends visibly where it began — done, an error with its reason and the
+  next step, or waiting with a choice. A silent button, an endless spinner
+  or a raw error fails review; phone first.
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
   check. Not the first time.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
