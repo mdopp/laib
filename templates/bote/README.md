@@ -140,9 +140,17 @@ Without a number at all, Discord or Matrix work.
    Inbox link with the second factor. The Automat's writes and deletes execute only with
    the four-digit code its first answer names; deleted automations are
    kept under `bote/automat/geloescht` for `automation_wiederherstellen`.
-3. Pairing: the first message from an unknown number yields a pairing code;
-   approve with `laib exec bote -- hermes pairing approve signal <CODE>` or
-   list the number in `SIGNAL_ALLOWED_USERS`. The relay and Hermes both
+3. Who may talk (#586): everyone in box.yml `people` with a `signal:` id
+   (and on Telegram, a `telegram:` id), plus the numbers in
+   `SIGNAL_ALLOWED_USERS` / `TELEGRAM_ALLOWED_USERS`; pre-start merges both
+   into Hermes' `.env`, and a change to `people` restarts the pod. Matrix and
+   Discord targets in `people` are rooms and channels, not users, so their
+   lists stay the values'. A message from anyone else is dropped, and Hermes
+   tells the owner (`SIGNAL_HOME_CHANNEL`) with Laib's text, not its own
+   `.env` / `hermes pairing` advice: pre-start writes
+   `locales/{en,de}.yaml`, Hermes' overlay for `gateway.unauthorized.owner_notice`.
+   Haus's „Person einladen“ makes the account only; the number goes into
+   `people`. The relay and Hermes both
    listen to signal-cli's daemon (`/api/v1/events`, which serves every
    subscriber; Hermes also uses `/api/v1/rpc`) — the `bote-signal`
    container must run `signal-cli daemon --http` (#54 checks the image).
@@ -390,9 +398,20 @@ newer release; ci.yml proves the plugins in the pinned image.
 The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to
 `render/persona/<name>/`) plus the fixed rules: approvals, warnings and
 errors in plain words, no approvals by the Bote, the never-list, and with
-Frage wired: questions about the world go to `frage`, never from memory
-(#510: without thinking the model made up a mountain table). No persona
-changes those (ADR 0020 §3). A number in box.yml `chatPersonas` talks to its
+Frage wired: questions about the world go to `frage`, never from memory,
+and names and numbers come only from its answer, with the source (#510,
+#587: the model made up a mountain table); without Frage the Bote says it
+does not know. A line of the persona never stands in for the answer, and a
+reply to one of Laib's notices is read with `laib` (#587: "AUF
+WIEDERSEHEN." to the owner's reply). The `ha` entry has Hermes' generated
+`get_prompt`/`list_prompts` off (`tools: {prompts: false, resources:
+false}`): the model guessed prompt names before `GetLiveContext` (#587).
+No persona changes those (ADR 0020 §3). The engine only takes a short
+message as a command or greeting (`LOGOFF`, `HALLO`, its own name, `MENÜ`
+up to three words; the "what can you do" phrases up to five); anything
+longer is a request for the Bote, and the plugin gives it the person's
+words without Hermes' `[Replying to: "…"]` quote (#587: the quote's
+"Absender" held ENDE). A number in box.yml `chatPersonas` talks to its
 own persona: Hermes shows the model the sender's profile name, the persona
 engine resolves it to the number through signal-cli's contacts in the pod,
 and answers with a `FIGUR:` line naming who to be. An ambiguous name gets

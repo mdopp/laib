@@ -39,9 +39,12 @@ if [ -n "${FRAGE_URL:-}" ]; then
     TOOLS="$TOOLS, Fragen (frage: Websuche mit Quellen)"
     # #510: without thinking the model answered "Wie groß ist ein K8 Berg?" from memory, with a made-up table
     FRAGE_RULE="
-Fragen über die Welt (Fakten, Zahlen, Personen, Orte, Aktuelles) beantwortest du immer mit frage, nie aus dem Gedächtnis. Findet frage nichts, sag das, statt etwas zu erfinden."
+Fragen über die Welt (Fakten, Zahlen, Personen, Orte, Aktuelles) beantwortest du immer mit frage, nie aus dem Gedächtnis. Namen und Zahlen nennst du nur aus einer Antwort von frage, mit ihrer Quelle. Findet frage nichts, sag das, statt etwas zu erfinden."
   else echo "frage: $FRAGE_URL antwortet nicht, weggelassen"; fi
 fi
+# #587: without Frage the model made up a K8 "valley" with heights; no search means no facts
+[ -n "$FRAGE_RULE" ] || FRAGE_RULE="
+Du hast keine Websuche: Fragen über die Welt mit Namen oder Zahlen (Höhen, Daten, Orte, Personen) beantwortest du nicht aus dem Kopf; sag, dass du es nicht weißt."
 if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
   # Haus's Haushalt (haus#11) wants Haus's bearer; the token stays in .env (#170)
   if [ -z "${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}" ]; then echo "haushalt: kein Token (HAUS_HAUSHALT_TOKEN: erst laib add haus), weggelassen"
@@ -55,11 +58,11 @@ fi
 # the Automat edits automations, admin-only in HA, with BOTE_AUTOMAT_HA_TOKEN in its
 # own container, never in Hermes'.
 if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}" ]; then
-  MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/api/mcp/assist\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server, Assist API as the user bote: lights, switches, players, \"was ist an\"\n"
+  MCP_EXTRA="$MCP_EXTRA  ha:\n    url: ${HA_URL:-http://host.containers.internal:8123}/api/mcp/assist\n    headers:\n      Authorization: \"Bearer \${HA_TOKEN}\"\n    trust: full      # Home Assistant's own MCP server, Assist API as the user bote: lights, switches, players, \"was ist an\"\n    tools:           # #587: no get_prompt the model guesses names for (light_status, ha_status); the state is GetLiveContext\n      prompts: false\n      resources: false\n"
   TOOLS="$TOOLS, die Geräte (ha: Licht, Schalter, Musik, was gerade an ist)"
   # #520: without thinking, "Bambi aus" read as a statement ("Bambi aus.") and nothing switched
   HA_RULE="
-Kurze Sätze mit einem Gerät und an, aus, auf, zu oder einer Prozentzahl (\"Bambi aus\", \"Küche an\", \"Rollo zu\", \"Licht 30 Prozent\") sind Befehle: schalte sofort mit ha, ohne Rückfrage, dann ein Satz Bestätigung. Nur eine Frage (\"Ist Bambi an?\") liest den Stand."
+Kurze Sätze mit einem Gerät und an, aus, auf, zu oder einer Prozentzahl (\"Bambi aus\", \"Küche an\", \"Rollo zu\", \"Licht 30 Prozent\") sind Befehle: schalte sofort mit ha, ohne Rückfrage, dann ein Satz Bestätigung. Nur eine Frage (\"Ist Bambi an?\") liest den Stand. Den Stand der Geräte liest du mit GetLiveContext; Prompt-Namen von ha rätst du nie."
 fi
 if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
@@ -239,6 +242,7 @@ if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^Y
 $STYLE
 Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
 Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
+Ein Spruch der Figur ersetzt nie die Antwort: wer etwas sagt oder fragt, bekommt eine Antwort zur Sache. Antwortet jemand auf eine Mitteilung von Laib (eine verworfene Nachricht, ein Vorfall, ein Vorschlag), lies den Stand mit laib und sag, was fehlt und was zu tun ist; wer dir schreiben darf, steht in box.yml people.
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${HA_RULE}${FRAGE_RULE}${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.

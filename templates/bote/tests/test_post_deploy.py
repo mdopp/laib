@@ -188,6 +188,42 @@ class PostDeploy(unittest.TestCase):
         _, _, soul = self.hook()
         self.assertNotIn("schalte sofort", soul)
 
+    def test_a_fact_comes_from_frage_or_the_bote_says_it_does_not_know(self):
+        """#587: "Wie groß ist ein k8 Berg" got invented valleys and heights, without a call to Frage.
+        With Frage wired, names and numbers come only from its answer, with the source; without it
+        the SOUL tells the Bote to say it does not know rather than answer from memory."""
+        srv = HTTPServer(("127.0.0.1", 0), FakeHaushalt)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        _, _, soul = self.hook(FRAGE_URL=f"http://127.0.0.1:{srv.server_port}/mcp")
+        self.assertIn("Namen und Zahlen nennst du nur aus einer Antwort von frage, mit ihrer Quelle", soul)
+        _, _, soul = self.hook(FRAGE_URL="")
+        self.assertNotIn("frage", soul.split("Du kennst:", 1)[1].split("\n", 1)[0], "the SOUL names Frage it lacks (#54)")
+        self.assertIn("Du hast keine Websuche", soul)
+        self.assertIn("sag, dass du es nicht weißt", soul)
+
+    def test_a_persona_line_never_replaces_the_answer(self):
+        """#587: the owner answered Laib's notice ("Dir sollte die Nummer bekannt sein") and got
+        "AUF WIEDERSEHEN.", a line of the persona. The SOUL: a line of the figure never stands in for
+        the answer, and a reply to one of Laib's notices is read with laib, not guessed."""
+        _, _, soul = self.hook()
+        self.assertIn("Ein Spruch der Figur ersetzt nie die Antwort", soul)
+        self.assertIn("Antwortet jemand auf eine Mitteilung von Laib", soul)
+        self.assertIn("box.yml people", soul)
+
+    def test_the_ha_tool_has_no_prompts_to_guess(self):
+        """#587: the Bote called mcp__ha__get_prompt with made-up names (light_status, ha_status) and got
+        "Unknown prompt" before GetLiveContext, a detour per question. Hermes' generated prompt tools for
+        ha are off (mcp_servers.ha.tools.prompts, tools/mcp_tool_registration.py), the SOUL names
+        GetLiveContext for the state; without ha neither is there."""
+        _, conf, soul = self.hook(LAIB_SECRET_BOTE_HA_TOKEN="bote-user-tok")
+        ha = conf.split("\n  ha:\n", 1)[1].split("\n  automat:", 1)[0].split("\n# ", 1)[0]
+        self.assertRegex(ha, r"\n    tools: +(#[^\n]*)?\n      prompts: false\n      resources: false")
+        self.assertIn("GetLiveContext", soul)
+        self.assertIn("Prompt-Namen", soul)
+        _, conf, soul = self.hook()
+        self.assertNotIn("GetLiveContext", soul)
+
     def test_hermes_is_pinned(self):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()
