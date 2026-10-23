@@ -145,6 +145,15 @@ declares `channels` (below), every target must be on a platform one of them
 has set; a `matrix:` target on a box whose Bote has no Matrix fails plan,
 naming the value that would switch it on (#184).
 
+A person's Signal number gets into `people` by a proposal, never by hand
+(#596): `laib person invite … --signal +49…` (Haus's „Person einladen“) or
+`laib person signal <user> +49…` (the person page; the Bote, when the owner
+answers its notice about a dropped sender with who it was) sets that
+person's `signal:` channel, in place or after their others, and adds the
+person when they are not there yet. The review marks a `people` change class
+human: who may write to the Bote is the owner's call. Once applied, the
+Bote's pre-start lets the number talk (#586).
+
 ## host/image (optional, #368)
 
 The host OS image, in two lines: `# tag: <tag>`, the tag it follows, then the

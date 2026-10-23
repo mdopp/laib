@@ -153,7 +153,7 @@ assert LINES == ["Dir sollte die Nummer bekannt sein"], LINES
 # #586: Hermes' notice to the owner about a dropped sender is Laib's text (pre-start's locales overlay)
 from gateway.run_inbound_unauthorized import unauthorized_owner_hint  # noqa: E402
 hint = unauthorized_owner_hint("signal", "+4900000002", "Anna", hermes_home="/opt/data")
-assert "box.yml people" in hint and "+4900000002" in hint and ".env" not in hint and "hermes pairing" not in hint, hint
+assert "box.yml people" in hint and "Wer ist das?" in hint and "+4900000002" in hint and ".env" not in hint and "hermes pairing" not in hint, hint
 # #587: no generated get_prompt / list_prompts for ha, whose prompt names the model guessed
 import hermes_yaml  # noqa: E402
 from tools.mcp_tool_registration import _select_utility_schemas  # noqa: E402
