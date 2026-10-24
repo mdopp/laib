@@ -82,7 +82,7 @@ model:                            # a box without a model role (ADR 0018)
 intake:                           # wishes and escalations become tickets (#56); token GITHUB_INTAKE_TOKEN in secrets.age
   repo: mdopp/laib
   label: wunsch                   # a person triages; pi:ready is set by hand
-operator:                         # laib-operator (ADR 0013); laib operator enable sets this
+operator:                         # laib-operator's container (ADR 0013, 0027); laib operator enable sets this
   enabled: true
   model: qwen3.6-35b-a3b
   reportAt: "07:00"
@@ -494,6 +494,9 @@ after its unit stopped. An apply cut off in between is finished by the next
 plan (the value still differs) or the pending marker. An empty value stays
 `Environment=KEY=`: podman refuses an empty secret. Host units (`.service`)
 keep `Environment=`: systemd sets it without an argv, in a 0600 file.
+Laib's own containers (ADR 0027) get theirs the same way, named
+`laib.laib-operator.laib-operator.LAIB_TOKEN` and so on; an empty one is
+left out of the unit.
 A key built from a value (`ACCOUNT_${SHARE_USER}`) can hold what podman
 refuses in a name, or a dot that would make two lines one name: such a line
 gets `laib.<service>.<hash of container and key>` instead. A secret line
