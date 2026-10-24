@@ -17,7 +17,10 @@ cleanup() {
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
   for s in HAUS_PROXY_SECRET LAIB_TOKEN HAUS_USAGE_TOKEN; do podman secret rm "laib.haus-boot.haus-boot.$s" >/dev/null 2>&1 || true; done
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
+  systemctl --user stop laib-operator.service 2>/dev/null || true
+  podman secret rm laib.laib-operator.laib-operator.LAIB_TOKEN >/dev/null 2>&1 || true
+  [ -z "${CANARY:-}" ] || sudo rm -rf /mnt/data/laib
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$LAIB_QUADLET/laib-operator" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -220,4 +223,40 @@ s = json.load(sys.stdin)
 haus = {e["event"]: e["count"] for a in s["apps"] if a["app"] == "haus" for e in a["events"]}
 assert haus.get("seite.start") == 2 and haus.get("von.widget.device") == 2, s
 assert "anna" not in json.dumps(s).lower(), "who looked must never reach usage-metrics"'
-echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who"
+# ADR 0027 (#624): the Operator in its own container, for real — the image
+# boot.yml built from this commit (OPERATOR_IMAGE, pinned into this laib),
+# the unit laib renders. Laib's key, secrets.age and the state repo stay out
+# of reach; its folder is in. The folders are /mnt/data/laib, as on every box
+# (render.LaibHome): a scratch one here, with a canary key, secrets.age and
+# state, and the test's own LAIB_HOME beside it.
+[ -n "${OPERATOR_IMAGE:-}" ] && podman image exists "$OPERATOR_IMAGE" || { echo "FAIL: no operator image $OPERATOR_IMAGE (boot.yml builds it)"; exit 1; }
+[ ! -e /mnt/data/laib ] || { echo "FAIL: /mnt/data/laib exists on this machine: the boot test will not touch it"; exit 1; }
+CANARY=1; sudo mkdir -p /mnt/data/laib/state /mnt/data/laib/operator && sudo chown -R "$(id -un)" /mnt/data/laib
+echo canary-key > /mnt/data/laib/age.key; echo canary-secrets > /mnt/data/laib/state/secrets.age; echo mine > /mnt/data/laib/operator/canary
+printf 'laib:\n  port: 18090\nmodel:\n  url: http://127.0.0.1:18081/v1\n' >> "$LAIB_HOME/state/box.yml"
+LAIB_ACTOR=human:boot "$BIN" operator enable > op-enable.out || { echo "FAIL: operator enable exit $?"; cat op-enable.out; journalctl --user -u laib-operator.service --no-pager | tail -30; exit 1; }
+[ "$(systemctl --user is-active laib-operator.service)" = active ] || { echo "FAIL: laib-operator.service is not active"; journalctl --user -u laib-operator.service --no-pager | tail -30; exit 1; }
+for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:5901/ready >/dev/null 2>&1 && break; sleep 1; done
+grep -q bereit <<<"$(curl -fsS http://127.0.0.1:5901/ready)" || { echo "FAIL: the Operator in its container does not answer on 127.0.0.1:5901"; journalctl --user -u laib-operator.service --no-pager | tail -30; exit 1; }
+OPC=systemd-laib-operator
+grep -qx "$OPERATOR_IMAGE" <<<"$(podman inspect "$OPC" --format '{{.ImageName}}')" || { echo "FAIL: the Operator runs another image: $(podman inspect "$OPC" --format '{{.ImageName}}')"; exit 1; }
+# the control that can go red: its own folder is there, written by core
+[ "$(podman cp "$OPC:/operator/canary" - | tar -xO)" = mine ] || { echo "FAIL: the Operator does not see its own folder"; exit 1; }
+# what it must not reach, by every path it has on the host
+for f in /mnt/data/laib/age.key /mnt/data/laib/state/secrets.age /mnt/data/laib/state "$LAIB_HOME/age.key" "$LAIB_HOME/state/secrets.age" "$LAIB_HOME/state" "$LAIB_HOME/journal"; do
+  if podman cp "$OPC:$f" - >/dev/null 2>&1; then echo "FAIL: $f is readable inside the Operator's container"; exit 1; fi
+done
+mounts="$(podman inspect "$OPC" --format '{{range .Mounts}}{{.Source}}={{.Destination}} {{end}}')"
+for m in $mounts; do
+  src="${m%%=*}"   # a source that is the key or a folder above it
+  for k in /mnt/data/laib/age.key "$LAIB_HOME/age.key"; do
+    case "$k" in "$src" | "${src%/}/"*) echo "FAIL: the Operator mounts $src, which holds $k"; exit 1;; esac
+  done
+done
+grep -q "/mnt/data/laib/operator=/operator" <<<"$mounts" || { echo "FAIL: the Operator's folder is not its mount: $mounts"; exit 1; }
+TOKV="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.laib-operator.laib-operator.LAIB_TOKEN)"
+[ -n "$TOKV" ] || { echo "FAIL: no podman secret with the Operator's token"; exit 1; }
+if grep -rqF -- "$TOKV" "$LAIB_QUADLET/laib-operator" || grep -qF -- "$TOKV" <<<"$(podman inspect "$OPC" --format "{{.Config.CreateCommand}}")"; then echo "FAIL: the Operator's token is in its unit or on podman run's argv"; exit 1; fi
+LAIB_ACTOR=human:boot "$BIN" operator disable >/dev/null || { echo "FAIL: operator disable exit $?"; exit 1; }
+[ "$(systemctl --user is-active laib-operator.service)" != active ] || { echo "FAIL: the Operator still runs after disable"; exit 1; }
+echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo"
