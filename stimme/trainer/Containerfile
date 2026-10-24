@@ -15,6 +15,13 @@ RUN git clone https://github.com/kahrendt/microWakeWord /opt/microWakeWord \
 # microWakeWord's own deps only; piper-sample-generator's ~3 GB torch stack is
 # installed onto the work volume at the first run (trainer.py provision).
 RUN pip install --no-cache-dir -e /opt/microWakeWord
+# microWakeWord reads its clips through Hugging Face datasets' Audio feature;
+# datasets 4 decodes audio only with torchcodec (and a matching torch), which
+# this TensorFlow image does not have: the feature step died with "please
+# install 'torchcodec'" (2026-10-24). datasets 3 decodes with soundfile. The
+# build fails if a later dependency pulls datasets 4 back in.
+RUN pip install --no-cache-dir "datasets>=2.18,<4" soundfile \
+ && python -c "import datasets, soundfile; assert int(datasets.__version__.split('.')[0]) < 4, datasets.__version__"
 
 COPY stimme/trainer/train.py stimme/trainer/trainer.py /opt/
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib

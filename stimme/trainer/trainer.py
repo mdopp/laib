@@ -250,7 +250,8 @@ def provision(work: pathlib.Path, sets: list[PositiveSet]) -> None:
     # and its sample generator's own ones by name.
     pip = [sys.executable, "-m", "pip", "install", "--cache-dir", str(work / "pip-cache")]
     _run(pip + ["--no-deps", "-e", str(work / "piper-sample-generator")])
-    _run(pip + ["piper-tts==1.3.0", "torch>=2,<3", "torchaudio"])
+    # datasets stays below 4: microWakeWord decodes its clips with it, and 4 needs torchcodec (2026-10-24)
+    _run(pip + ["piper-tts==1.3.0", "torch>=2,<3", "torchaudio", "datasets>=2.18,<4"])
     voices = work / "piper-sample-generator" / "voices"
     voices.mkdir(parents=True, exist_ok=True)
     for s in sets:
