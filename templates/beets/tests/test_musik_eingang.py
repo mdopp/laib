@@ -3,8 +3,8 @@
 family drops into the share's musik-eingang folder into the library with
 `beet import -q`. Here against a fake `beet` that moves audio files into a
 fake library the way `import.move: yes` does, and logs like beets' import
-log; every name is made up."""
-import fcntl, json, os, subprocess, sys, tempfile, textwrap, unittest, zipfile
+log, and a fake bote-notify for the closing message; every name is made up."""
+import fcntl, http.server, json, os, subprocess, sys, tempfile, textwrap, threading, unittest, zipfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "musik-eingang.py"
@@ -12,9 +12,20 @@ SCRIPT = Path(__file__).resolve().parent.parent / "musik-eingang.py"
 # The fake beet: `beet -c <overlay> import -q [-s] <path>`. Audio files go to
 # <BIB>/, except a name with "doppelt" (beets' duplicate-skip) or "kaputt"
 # (an error, exit 1). The call and the overlay are kept for the asserts.
+# `beet -c <overlay> ls [-a] -f <format> added:<since>..` answers what the
+# last import added: the albums (each audio file's folder name) or, for a
+# singleton, the titles (the file name's stem).
 FAKE_BEET = textwrap.dedent(r'''
     import json, os, sys
     args = sys.argv[1:]
+    added = os.environ["FAKE_BIB"] + ".added"
+    if "ls" in args:
+        with open(os.environ["FAKE_CALLS"] + ".ls", "a") as f:
+            f.write(json.dumps(args) + "\n")
+        last = json.load(open(added)) if os.path.exists(added) else []
+        album = "-a" in args
+        print("\n".join(dict.fromkeys(x["album"] if album else x["title"] for x in last if x["album"] or not album)))
+        sys.exit(0)
     overlay = open(args[args.index("-c") + 1]).read()
     log = [l.split(":", 1)[1].strip() for l in overlay.splitlines() if l.strip().startswith("log:")][0]
     bib = os.environ["FAKE_BIB"]
@@ -23,7 +34,7 @@ FAKE_BEET = textwrap.dedent(r'''
     pfad = args[-1]
     audio = (".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wav")
     files = [pfad] if os.path.isfile(pfad) else [os.path.join(w, n) for w, _, ns in os.walk(pfad) for n in ns]
-    rc = 0
+    rc, neu = 0, []
     with open(log, "a") as lf:
         for f in sorted(files):
             if not f.lower().endswith(audio):
@@ -38,8 +49,29 @@ FAKE_BEET = textwrap.dedent(r'''
             ziel = os.path.join(bib, os.path.relpath(f, os.path.dirname(pfad.rstrip("/"))))
             os.makedirs(os.path.dirname(ziel), exist_ok=True)
             os.rename(f, ziel)
+            neu.append({"album": "" if "-s" in args else os.path.basename(os.path.dirname(f)),
+                        "title": os.path.splitext(os.path.basename(f))[0]})
+    json.dump(neu, open(added, "w"))
     sys.exit(rc)
 ''')
+
+
+class FakeBote(http.server.BaseHTTPRequestHandler):
+    """bote-notify: POST /mitteilung {an, text} with the bearer; an unknown person is 404"""
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"null")
+        srv = self.server
+        srv.got.append({"path": self.path, "auth": self.headers.get("Authorization"), **body})
+        code = srv.code if srv.code != 200 else (200 if body.get("an") in srv.people else 404)
+        out = json.dumps({"ok": code == 200}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
+    def log_message(self, *a):
+        pass
 
 
 class MusikEingang(unittest.TestCase):
@@ -52,11 +84,19 @@ class MusikEingang(unittest.TestCase):
             d.mkdir()
         (self.root / "beet.py").write_text(FAKE_BEET)
         self.calls = self.root / "calls.jsonl"
+        self.bote = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FakeBote)
+        self.bote.got, self.bote.code, self.bote.people = [], 200, {"mama", "erika"}
+        threading.Thread(target=self.bote.serve_forever, daemon=True).start()
+        self.addCleanup(self.bote.server_close)
+        self.addCleanup(self.bote.shutdown)
 
     def run_it(self, stable="0", **extra):
         env = dict(os.environ, MUSIK_EINGANG=str(self.eingang), BEETS_DATA=str(self.config),
                    BEET=f"{sys.executable} {self.root / 'beet.py'}", MUSIK_STABIL_S=stable,
-                   FAKE_BIB=str(self.bib), FAKE_CALLS=str(self.calls), **extra)
+                   FAKE_BIB=str(self.bib), FAKE_CALLS=str(self.calls), NOTIFY_PERSON="mama",
+                   NOTIFY_URL="http://127.0.0.1:%d/mitteilung" % self.bote.server_address[1],
+                   NOTIFY_TOKEN="erfundener-token")
+        env.update(extra)
         with open(SCRIPT) as f:   # as the unit runs it: the script on stdin
             p = subprocess.run([sys.executable, "-"], stdin=f, env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -278,6 +318,101 @@ class MusikEingang(unittest.TestCase):
         self.assertEqual(s["detail"], "Musik-Eingang: bereit, noch nichts importiert")
         self.assertEqual((s["letzte"], s["findings"]), ([], []))
         self.assertTrue(s["at"].endswith("Z"))
+
+
+    # the closing message (owner, 2026-10-24: „Bekomme ich irgendwo mit, wenn die Musik richtig einsortiert wurde?“)
+
+    def album(self, name, *titel):
+        d = self.eingang / name
+        d.mkdir(parents=True)
+        for t in titel:
+            (d / t).write_bytes(b"ID3" + t.encode())
+        return d
+
+    def test_one_message_per_upload_to_the_notify_person(self):
+        self.album("Erfundenes Album", "01 Eins.mp3", "02 Zwei.mp3")
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3" + b"l" * 10)
+        self.twice()
+        got = self.bote.got
+        self.assertEqual(len(got), 2, got)
+        self.assertEqual({g["an"] for g in got}, {"mama"}, "without Haus' sidecar the household's notify person")
+        self.assertEqual({g["path"] for g in got}, {"/mitteilung"})
+        self.assertEqual({g["auth"] for g in got}, {"Bearer erfundener-token"})
+        texte = sorted(g["text"] for g in got)
+        self.assertEqual(texte, ["🎵 1 Album (2 Titel) ist in der Musik: Erfundenes Album",
+                                 "🎵 1 Titel ist in der Musik: Erfundenes Lied"])
+        self.twice()
+        self.assertEqual(len(self.bote.got), 2, "a run with nothing new sent another message")
+
+    def test_what_was_kept_and_more_than_three_albums_are_short(self):
+        for n in range(1, 6):
+            self.album(f"Sammlung/Erfundenes Album {n}", f"0{n} Lied.mp3")
+        (self.eingang / "Sammlung" / "cover.rar").write_bytes(b"Rar!")
+        self.twice()
+        self.assertEqual(len(self.bote.got), 1, "one upload, one message")
+        self.assertEqual(self.bote.got[0]["text"],
+                         "🎵 5 Alben (5 Titel) sind in der Musik: Erfundenes Album 1, Erfundenes Album 2, "
+                         "Erfundenes Album 3 und 2 weitere · 1 Datei nicht übernommen: cover.rar – kann ich "
+                         "nicht auspacken (liegt in musik-eingang/_nicht-importiert)")
+
+    def test_nothing_imported_but_kept_says_so(self):
+        (self.eingang / "doppelt.mp3").write_bytes(b"ID3" + b"d" * 20)
+        self.twice()
+        self.assertEqual([g["text"] for g in self.bote.got],
+                         ["🎵 Nichts Neues in der Musik · 1 Datei nicht übernommen: doppelt.mp3 – schon in der "
+                          "Musiksammlung (liegt in musik-eingang/_nicht-importiert)"])
+
+    def test_haus_sidecar_names_the_uploader(self):
+        self.album("Erfundenes Album", "01 Eins.mp3")
+        (self.eingang / "._Erfundenes Album.von").write_text("Erika\n")
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3" + b"l" * 10)
+        self.twice()
+        an = {g["text"].split(": ", 1)[1]: g["an"] for g in self.bote.got}
+        self.assertEqual(an, {"Erfundenes Album": "erika", "Erfundenes Lied": "mama"})
+        self.assertFalse((self.eingang / "._Erfundenes Album.von").exists(), "the sidecar stays behind")
+        self.assertEqual(self.left_in_inbox(), [])
+        self.assertEqual(self.status()["letzte"][1]["von"], "erika")
+
+    def test_an_unknown_uploader_falls_back_to_the_notify_person(self):
+        self.album("Erfundenes Album", "01 Eins.mp3")
+        (self.eingang / "._Erfundenes Album.von").write_text("niemand\n")
+        self.twice()
+        self.assertEqual([g["an"] for g in self.bote.got], ["niemand", "mama"])
+        self.assertEqual(self.status()["einzelheiten"], "")
+
+    def test_no_message_when_nothing_happened(self):
+        self.run_it()                                   # an empty inbox
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3")
+        self.run_it()                                   # first sight: still settling
+        (self.eingang / "Leer").mkdir()
+        self.assertEqual(self.bote.got, [])
+        self.run_it(MUSIK_MELDEN="false")               # switched off
+        self.assertEqual(self.bote.got, [])
+        self.assertTrue((self.bib / "Erfundenes Lied.mp3").exists())
+
+    def test_a_failing_notify_never_fails_the_run(self):
+        self.bote.code = 500
+        self.album("Erfundenes Album", "01 Eins.mp3")
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3" + b"l" * 10)
+        self.twice()                                    # run_it asserts exit 0
+        self.assertEqual(len(list(self.bib.rglob("*.mp3"))), 2, "the import waited for the Bote")
+        s = self.status()
+        self.assertEqual(s["einzelheiten"].count("Mitteilung"), 1, s["einzelheiten"])
+        self.assertIn("HTTP 500", s["einzelheiten"])
+        self.assertNotIn("Mitteilung", s["detail"])
+        self.assertEqual(s["findings"], [])
+
+    def test_an_unreachable_bote_never_fails_the_run(self):
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3")
+        self.twice(NOTIFY_URL="http://127.0.0.1:1/mitteilung")
+        self.assertTrue((self.bib / "Erfundenes Lied.mp3").exists())
+        self.assertEqual(self.status()["einzelheiten"].count("Mitteilung"), 1)
+
+    def test_without_the_bote_no_message_and_no_error(self):
+        (self.eingang / "Erfundenes Lied.mp3").write_bytes(b"ID3")
+        self.twice(NOTIFY_TOKEN="")
+        self.assertEqual(self.bote.got, [])
+        self.assertTrue((self.bib / "Erfundenes Lied.mp3").exists())
 
 
 if __name__ == "__main__":
