@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.28.0](https://github.com/mdopp/laib/compare/v0.27.1...v0.28.0) (2026-10-24)
+
+
+### Features
+
+* **beets:** the music inbox — songs, albums or ZIPs in musik-eingang end up tagged in Jellyfin ([2045760](https://github.com/mdopp/laib/commit/20457605856616906b5b792017c1b71a375c7197))
+* **template:** beets imports the Musik-Eingang once a minute ([#639](https://github.com/mdopp/laib/issues/639)) ([e825c41](https://github.com/mdopp/laib/commit/e825c41f3f916cd37f9cdc59a0e2b9dec30cb8c6))
+* **template:** Haus mounts the Musik-Eingang for music uploads ([#639](https://github.com/mdopp/laib/issues/639)) ([a0002bf](https://github.com/mdopp/laib/commit/a0002bf70bee21d8caac982c25ee3e7bf22e489a))
+* **template:** Jellyfin's Musik library watches its folder ([#639](https://github.com/mdopp/laib/issues/639)) ([dabe36a](https://github.com/mdopp/laib/commit/dabe36a2fabad18bae458cdec6c48fba3e013f9b))
+
+
+### Bug Fixes
+
+* **stimme:** a new trainer build retries a failed wake-word run ([8ec52e2](https://github.com/mdopp/laib/commit/8ec52e26aafad3e640593a277cfe61af3bd99fce))
+
 ## [0.27.1](https://github.com/mdopp/laib/compare/v0.27.0...v0.27.1) (2026-10-24)
 
 
