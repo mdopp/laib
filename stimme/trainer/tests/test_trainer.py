@@ -6,6 +6,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import trainer  # noqa: E402
@@ -41,7 +42,8 @@ class Decide(unittest.TestCase):
         # #309: the Box page and diag read laib-status.json, which the trainer
         # writes on every change; laib names no template
         for state, reason, want in (("training", "", "wird trainiert"), ("done", "Modell gebaut", "trainiert"),
-                                    ("failed", "OOM", "Training fehlgeschlagen: OOM")):
+                                    ("failed", "beim Schritt „Modell trainieren“: der Speicher hat nicht gereicht.",
+                                     "Training fehlgeschlagen beim Schritt „Modell trainieren“")):
             trainer.write_status(self.out, "hey_joshua", state, "Hey Joshua", "r1", reason)
             s = json.loads((self.out / "laib-status.json").read_text())
             self.assertIn(want, s["detail"])
@@ -64,6 +66,97 @@ class Positives(unittest.TestCase):
     def test_each_wake_word_has_its_own_work_dir(self):
         work = pathlib.Path("/work")
         self.assertNotEqual(trainer.run_dir(work, "hey_joshua"), trainer.run_dir(work, "hello_hal"))
+
+
+# What the box's run of 2026-10-22 printed before it died (#627): the real
+# error two levels down, then train.py's own CalledProcessError about it.
+BUILD_FEATURES_DIED = r"""
+print("== phase: features")
+print("+ /usr/bin/python /work/runs/hey_joshua/_build_features.py")
+print("Traceback (most recent call last):")
+print('  File "/opt/microWakeWord/microwakeword/audio/augmentation.py", line 136, in __init__')
+print("    audiomentations.AddColorNoise(")
+print("AttributeError: module 'audiomentations' has no attribute 'AddColorNoise'. Did you mean: 'AddShortNoises'?")
+print("Traceback (most recent call last):")
+print('  File "/opt/train.py", line 72, in _run')
+print("subprocess.CalledProcessError: Command '['/usr/bin/python', '/work/runs/hey_joshua/_build_features.py']' returned non-zero exit status 1.")
+raise SystemExit(1)
+"""
+
+
+class AFailedRunSaysWhy(unittest.TestCase):
+    """#627, #588: the family reads a German sentence, the admin the error
+    line and the tail; the line is never a command cut off at 500 chars."""
+
+    def setUp(self):
+        self.out = pathlib.Path(tempfile.mkdtemp())
+
+    def fail_with(self, script, rc_cmd=None):
+        cmd = rc_cmd or [sys.executable, "-c", script, "--phrase", "Hey Joshua"] + ["--voice", "de_DE-x.onnx"] * 80
+        with self.assertRaises(trainer.StepFailed) as cm, mock.patch("sys.stdout"):
+            trainer._run(cmd)
+        trainer.write_status(self.out, "hey_joshua", "failed", "Hey Joshua", "r1", cm.exception.grund, cm.exception.einzelheiten)
+        return json.loads((self.out / "laib-status.json").read_text())
+
+    def test_the_cause_is_the_error_line_not_the_command(self):
+        s = self.fail_with(BUILD_FEATURES_DIED)
+        self.assertIn("Merkmale", s["detail"], "the step, in German")
+        self.assertIn("passen nicht zusammen", s["detail"])
+        for raw in ("CalledProcessError", "Command '[", "AttributeError", "--voice"):
+            self.assertNotIn(raw, s["detail"], "no raw error in front of the family")
+            self.assertNotIn(raw, s["findings"][0]["detail"])
+        self.assertTrue(s["einzelheiten"].startswith("AttributeError: module 'audiomentations' has no attribute 'AddColorNoise'"))
+        self.assertIn("augmentation.py", s["einzelheiten"], "the tail stays for the admin")
+        self.assertEqual(s["findings"][0]["einzelheiten"], s["einzelheiten"])
+        self.assertLess(len(s["detail"]), 200)
+
+    def test_the_trainers_own_status_keeps_it_too(self):
+        self.fail_with(BUILD_FEATURES_DIED)
+        s = json.loads((self.out / "hey_joshua.status.json").read_text())
+        self.assertIn("Merkmale", s["reason"])
+        self.assertIn("AddColorNoise", s["einzelheiten"])
+
+    def test_a_killed_run_says_memory(self):
+        s = self.fail_with("import os, signal; print('== phase: train', flush=True); os.kill(os.getpid(), signal.SIGKILL)")
+        self.assertIn("Speicher", s["detail"])
+        self.assertIn("Modell trainieren", s["detail"])
+
+    def test_a_failed_download_says_download(self):
+        s = self.fail_with("", rc_cmd=["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9/nope.onnx"])
+        self.assertIn("Download", s["detail"])
+
+    def test_the_child_still_reaches_the_journal(self):
+        with mock.patch("sys.stdout") as out:
+            trainer._run([sys.executable, "-c", "print('hello journal')"])
+        self.assertIn("hello journal", "".join(c.args[0] for c in out.write.call_args_list))
+
+    def test_a_waiting_run_shows_the_same(self):
+        self.fail_with(BUILD_FEATURES_DIED)
+        before = json.loads((self.out / "laib-status.json").read_text())
+        (self.out / "laib-status.json").unlink()
+        trainer.show_waiting(self.out, "hey_joshua", "Hey Joshua")
+        s = json.loads((self.out / "laib-status.json").read_text())
+        self.assertEqual((s["detail"], s["einzelheiten"]), (before["detail"], before["einzelheiten"]))
+
+
+class Provision(unittest.TestCase):
+    """#627: piper-sample-generator pins audiomentations==0.33.0; installing it
+    with its deps downgraded the image's 0.43.1 and microWakeWord's
+    augmentation lost AddColorNoise."""
+
+    def test_piper_sample_generator_leaves_microwakewords_packages_alone(self):
+        src, work = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        for repo in trainer.SOURCE_REPOS:
+            (src / repo).mkdir()
+        cmds = []
+        with mock.patch.object(trainer, "IMAGE_SOURCES", src), mock.patch.object(trainer, "_run", lambda cmd, cwd=None: cmds.append(cmd)):
+            trainer.provision(work, [])
+        pips = [c for c in cmds if "pip" in c]
+        psg = [c for c in pips if str(work / "piper-sample-generator") in c]
+        self.assertEqual(len(psg), 1)
+        self.assertIn("--no-deps", psg[0])
+        for c in pips:
+            self.assertFalse(any("audiomentations" in a for a in c), c)
 
 
 if __name__ == "__main__":

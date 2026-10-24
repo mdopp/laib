@@ -23,7 +23,10 @@ from the unit. When `stimme/micro/<id>.tflite` is missing it trains: Piper
 voices for every language (German first, English for an English name),
 plus the household's own WAVs under `stimme/recordings/<id>/` if any.
 `stimme/micro/<id>.status.json` says training, done or failed with the
-reason. A failed run is not retried until the persona changes or that file
+reason: a German sentence for the family (the step and the kind of
+failure), and in `einzelheiten` the error line and the output's last lines
+for the admin (`laib look stimme --container systemd-stimme-wakeword-trainer
+-- cat /out/<id>.status.json`, #627). A failed run is not retried until the persona changes or that file
 is deleted. A persona change restarts the unit (`PERSONA_REV`) and trains
 the new phrase. Hours of GPU time; the GPU lease stops the trainer while a
 mode needs the card.

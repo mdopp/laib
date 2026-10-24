@@ -14,6 +14,9 @@ unit, which restarts it. On start the trainer looks at what it left in /out:
 
 It writes <id>.status.json (training, done, failed with a reason) so `laib`
 and a person can see where it stands, and the model atomically when done.
+A failed run says why in two registers (#588, #627): a German sentence for
+the family (the step and the kind of failure), and in `einzelheiten` the
+error line and the output's tail for the admin.
 Flashing the model onto the Voice PE stays a separate ESPHome step (README).
 
 Stdlib only; TensorFlow lives in the image and is reached through train.py.
@@ -21,10 +24,13 @@ Stdlib only; TensorFlow lives in the image and is reached through train.py.
 
 from __future__ import annotations
 
+import collections
+import io
 import json
 import logging
 import os
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -84,31 +90,40 @@ def status_path(out: pathlib.Path, wake_id: str) -> pathlib.Path:
     return out / f"{wake_id}.status.json"
 
 
-def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: str, reason: str) -> None:
+def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: str, reason: str,
+                 einzelheiten: str = "") -> None:
     out.mkdir(parents=True, exist_ok=True)
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = status_path(out, wake_id).with_suffix(".tmp")
     tmp.write_text(json.dumps({"state": state, "phrase": phrase, "rev": rev, "reason": reason,
-                               "at": at}, ensure_ascii=False) + "\n")
+                               "einzelheiten": einzelheiten, "at": at}, ensure_ascii=False) + "\n")
     tmp.replace(status_path(out, wake_id))
-    write_laib_status(out, state, phrase, reason, at)
+    write_laib_status(out, state, phrase, reason, at, einzelheiten)
 
 
 LAIB_STATUS = "laib-status.json"
 RETRY = "erneut versucht wird erst bei einem neuen Satz oder einer neuen Revision der persona (box.yml persona)"
 
 
-def write_laib_status(out: pathlib.Path, state: str, phrase: str, reason: str, at: str) -> None:
+def write_laib_status(out: pathlib.Path, state: str, phrase: str, reason: str, at: str, einzelheiten: str = "") -> None:
     """The status laib shows on the Box page and in diag (#169, #309): written
-    when the state changes, so laib reads it fresh and nothing polls."""
+    when the state changes, so laib reads it fresh and nothing polls. detail
+    is for the family; the raw words go only into einzelheiten (#588)."""
     detail = {"done": f"Wake-Word „{phrase}“ trainiert",
               "training": f"Wake-Word „{phrase}“ wird trainiert (seit {at})",
-              "failed": f"Wake-Word „{phrase}“: Training fehlgeschlagen: {reason}"}.get(state, f"Wake-Word „{phrase}“ noch nicht trainiert")
-    findings = [{"severity": "gelb", "detail": detail, "fix": RETRY}] if state == "failed" else []
+              "failed": f"Wake-Word „{phrase}“: Training fehlgeschlagen {reason}"}.get(state, f"Wake-Word „{phrase}“ noch nicht trainiert")
+    findings = [{"severity": "gelb", "detail": detail, "fix": RETRY, "einzelheiten": einzelheiten}] if state == "failed" else []
     out.mkdir(parents=True, exist_ok=True)
     tmp = out / (LAIB_STATUS + ".tmp")
-    tmp.write_text(json.dumps({"at": at, "detail": detail, "findings": findings}, ensure_ascii=False) + "\n")
+    tmp.write_text(json.dumps({"at": at, "detail": detail, "einzelheiten": einzelheiten, "findings": findings},
+                              ensure_ascii=False) + "\n")
     tmp.replace(out / LAIB_STATUS)
+
+
+def show_waiting(out: pathlib.Path, wake_id: str, phrase: str) -> None:
+    """A run that failed waits; laib keeps showing why it failed."""
+    s = json.loads(status_path(out, wake_id).read_text())
+    write_laib_status(out, "failed", phrase, s.get("reason", ""), s.get("at", ""), s.get("einzelheiten", ""))
 
 
 def decide(out: pathlib.Path, phrase: str, wake_id: str, rev: str) -> str:
@@ -126,6 +141,59 @@ def decide(out: pathlib.Path, phrase: str, wake_id: str, rev: str) -> str:
 
 class _Stopped(Exception):
     pass
+
+
+# The steps, as train.py announces them ("== phase: <name>") and as the
+# family reads them; provisioning is everything before train.py.
+STEPS = {"provision": "Vorbereiten", "generate": "Beispiele erzeugen", "real": "eigene Aufnahmen",
+         "features": "Merkmale berechnen", "negatives": "Gegenbeispiele laden",
+         "train": "Modell trainieren", "export": "Modell schreiben"}
+TAIL_LINES = 40
+EXCEPTION_LINE = re.compile(r"^(?:[A-Za-z_][\w.]*\.)?([A-Za-z_]\w*(?:Error|Exception|Exit|Interrupt))(?::|$)")
+
+
+class StepFailed(Exception):
+    """A child that exited non-zero: grund is the family's sentence (from
+    „Training fehlgeschlagen“ on), einzelheiten the error line and the tail."""
+
+    def __init__(self, cmd: list[str], rc: int, tail: list[str]):
+        step = "provision"
+        for line in tail:
+            if line.startswith("== phase: "):
+                step = line[len("== phase: "):].strip()
+        if os.path.basename(cmd[0]) == "wget":
+            step = "provision"
+        error = cause(tail, rc)
+        rest = "\n".join(line[:500] for line in tail)
+        self.einzelheiten = error[:500] + "\n\n" + rest[-3000:]
+        self.grund = f"beim Schritt „{STEPS.get(step, step)}“: {kind(cmd, rc, error)}."
+        super().__init__(self.grund)
+
+
+def cause(tail: list[str], rc: int) -> str:
+    """The real error: the last exception line that is not a child's
+    CalledProcessError about the real one further up."""
+    for line in reversed(tail):
+        m = EXCEPTION_LINE.match(line.strip())
+        if m and m.group(1) != "CalledProcessError":
+            return line.strip()
+    if rc < 0:
+        return f"killed by signal {-rc}"
+    return next((l.strip() for l in reversed(tail) if l.strip()), f"exit status {rc}")
+
+
+def kind(cmd: list[str], rc: int, error: str) -> str:
+    """What went wrong, in words the family understands."""
+    low = error.lower()
+    if rc in (-9, 137) or "memoryerror" in low or "resourceexhausted" in low or "out of memory" in low:
+        return "der Speicher hat nicht gereicht"
+    if os.path.basename(cmd[0]) == "wget" or "connection" in low or "http error" in low:
+        return "ein Download ist fehlgeschlagen; ist das Internet erreichbar?"
+    if "cuda" in low or "gpu" in low:
+        return "die Grafikkarte war nicht nutzbar"
+    if re.match(r"(ModuleNotFoundError|ImportError|AttributeError: module)", error):
+        return "Programmteile im Trainer passen nicht zusammen, ein Fehler im Trainer selbst"
+    return "ein unerwarteter Fehler"
 
 
 _stopping = False
@@ -146,13 +214,24 @@ def _run(cmd: list[str], cwd: pathlib.Path | None = None) -> None:
     if _stopping:
         raise _Stopped()
     log.info("+ %s", " ".join(cmd))
-    _child = subprocess.Popen(cmd, cwd=cwd)
+    # the child's output goes to the journal as before, and its tail stays
+    # here so a failure can say why (#627)
+    tail: collections.deque[str] = collections.deque(maxlen=TAIL_LINES)
+    try:
+        _child = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except OSError as err:
+        raise StepFailed(cmd, 127, [f"{type(err).__name__}: {err}"]) from err
+    # lines end at \n only: a progress bar's \r redraws stay one line
+    for line in io.TextIOWrapper(_child.stdout, encoding="utf-8", errors="replace", newline="\n"):
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        tail.append(line.rstrip("\n").rsplit("\r")[-1])
     rc = _child.wait()
     _child = None
     if _stopping:
         raise _Stopped()
     if rc != 0:
-        raise subprocess.CalledProcessError(rc, cmd)
+        raise StepFailed(cmd, rc, list(tail))
 
 
 def provision(work: pathlib.Path, sets: list[PositiveSet]) -> None:
@@ -165,8 +244,13 @@ def provision(work: pathlib.Path, sets: list[PositiveSet]) -> None:
     for repo in SOURCE_REPOS:
         if not (work / repo).exists():
             shutil.copytree(IMAGE_SOURCES / repo, work / repo, symlinks=True)
-    _run([sys.executable, "-m", "pip", "install", "--cache-dir", str(work / "pip-cache"),
-          "-e", str(work / "piper-sample-generator")])
+    # piper-sample-generator pins audiomentations==0.33.0, for its augment.py
+    # we never call; with its deps it downgraded the image's audiomentations
+    # and microWakeWord's augmentation lost AddColorNoise (#627). So: no deps,
+    # and its sample generator's own ones by name.
+    pip = [sys.executable, "-m", "pip", "install", "--cache-dir", str(work / "pip-cache")]
+    _run(pip + ["--no-deps", "-e", str(work / "piper-sample-generator")])
+    _run(pip + ["piper-tts==1.3.0", "torch>=2,<3", "torchaudio"])
     voices = work / "piper-sample-generator" / "voices"
     voices.mkdir(parents=True, exist_ok=True)
     for s in sets:
@@ -215,8 +299,7 @@ def main() -> int:
     if what == "done":  # a model from an earlier run, or a phrase that came back
         write_laib_status(out, "done", phrase, "", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     elif what == "wait":  # the failed run's reason stays what laib shows
-        s = json.loads(status_path(out, wake_id).read_text())
-        write_laib_status(out, "failed", phrase, s.get("reason", ""), s.get("at", ""))
+        show_waiting(out, wake_id, phrase)
     if what == "train":
         sets = positive_sets(phrase, languages)
         write_status(out, wake_id, "training", phrase, rev, "")
@@ -229,9 +312,13 @@ def main() -> int:
             # left as "training": the next start trains again
             log.info("stopped during training")
             return 0
-        except Exception as err:  # one failed run is a status, never a dead container
-            write_status(out, wake_id, "failed", phrase, rev, f"{type(err).__name__}: {err}"[:500])
-            log.error("training failed: %s", err)
+        except StepFailed as err:  # one failed run is a status, never a dead container
+            write_status(out, wake_id, "failed", phrase, rev, err.grund, err.einzelheiten)
+            log.error("training failed %s\n%s", err.grund, err.einzelheiten.split("\n", 1)[0])
+        except Exception as err:
+            write_status(out, wake_id, "failed", phrase, rev, "mit einem unerwarteten Fehler im Trainer.",
+                         f"{type(err).__name__}: {err}"[:4000])
+            log.exception("training failed")
     while not _stopping:  # idle until the next persona change restarts the unit
         time.sleep(1)
     return 0

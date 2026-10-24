@@ -8,7 +8,8 @@ Network=host
 Environment=TZ=${TZ}
 # the house persona's phrase; a persona change changes this unit and restarts it,
 # and the trainer trains when /out has no model for the phrase (stimme/trainer/trainer.py)
-Environment=WAKE_PHRASE=${PERSONA_PHRASE}
+# quoted: systemd splits an unquoted value at a space, "Hey Joshua" arrived as "Hey" (#627)
+Environment="WAKE_PHRASE=${PERSONA_PHRASE}"
 Environment=WAKE_ID=${PERSONA_WAKEWORD}
 Environment=WAKE_LANGUAGES=${PERSONA_LANGUAGES}
 Environment=PERSONA_REV=${PERSONA_REV}
