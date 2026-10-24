@@ -21,10 +21,13 @@ func binDir() string {
 	return "/var/opt/laib"
 }
 
-var selfUnits = []string{"laib.service", "laib-operator.service", "laib-lease.service"}
+var selfUnits = []string{"laib.service", "laib-lease.service"}
 
 // cmdSelf: rollback — the previous binaries back (install-box.sh keeps them
-// as *.prev) and the units that run them restarted. Humans only.
+// as *.prev), the units that run them restarted, and the previous laib
+// converges the box to its own rendering: laib-operator and laib-notify are
+// containers pinned by the laib that renders them (ADR 0027), so they go
+// back with it like any service. Humans only.
 func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) < 1 || args[0] != "rollback" {
 		return env.Fail(errors.New("usage: laib self rollback"))
@@ -33,8 +36,8 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 		return cli.Refused(env, "self rollback is the human's verb")
 	}
 	dir := binDir()
-	bins := []string{"laib", "laib-operator", "laib-lease"}
-	for _, b := range []string{"laib-disk", "laib-notify", "laib-haushalt"} { // since #443, #598; a box from before has none to roll back
+	bins := []string{"laib", "laib-lease"}
+	for _, b := range []string{"laib-disk", "laib-haushalt"} { // since #443, #598; a box from before has none to roll back
 		if _, err := os.Stat(filepath.Join(dir, b+".prev")); err == nil {
 			bins = append(bins, b)
 		}
@@ -57,9 +60,15 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 	for _, u := range selfUnits {
 		sysd.Run(ctx, "systemctl", "--user", "try-restart", u)
 	}
-	if st, err := cli.LoadState(env); err == nil {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "self", Result: "info", Detail: "rollback: previous binaries restored, units restarted"})
+	// the previous laib renders its own files: the Operator's and notify's images among them
+	out, err := sysd.Run(ctx, "env", "LAIB_HOME="+env.Paths.Home, "LAIB_ACTOR=laib", filepath.Join(dir, "laib"), "converge", "--force")
+	if st, lerr := cli.LoadState(env); lerr == nil {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "self", Result: "info", Detail: "rollback: previous binaries restored, units restarted, converged"})
 	}
-	fmt.Fprintln(env.W(), "zurückgerollt: vorherige Binaries aktiv, laib/operator/lease neu gestartet")
+	if err != nil {
+		fmt.Fprintln(env.W(), "zurückgerollt: vorherige Binaries aktiv, laib und lease neu gestartet; der Abgleich ist rot: "+cli.Tail(out, 300)+" (laib plan zeigt warum)")
+		return cli.ExitRed
+	}
+	fmt.Fprintln(env.W(), "zurückgerollt: vorherige Binaries aktiv, laib und lease neu gestartet, Operator und notify auf dem vorigen Stand")
 	return cli.ExitOK
 }
