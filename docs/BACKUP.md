@@ -76,7 +76,16 @@ One tool, one declaration per service, one key.
   the price of a database that opens after a restore.
 - **The restore test.** `laib backup check` runs monthly from a timer:
   `restic check --read-data-subset=5%`, then one service's path restored
-  into a scratch dir and compared. A green journal line is the proof; diag
+  into a scratch dir and compared with the snapshot, never with the live
+  path (a database changes after its snapshot, #552): the latest regular
+  snapshot's `restic ls --json` names every file and its size, the restore
+  runs with `--verify` (restic re-reads each file against its recorded
+  hashes), every listed file must be there with its size, and a restored
+  SQLite database must be whole — `PRAGMA integrity_check` where a
+  `sqlite3` binary exists, otherwise (Fedora CoreOS has none) its header:
+  a valid page size and every page the header counts. A damaged page
+  inside a database passes the header check; a Postgres dump is checked
+  by size and hash only. A green journal line is the proof; diag
   is yellow after 35 days without one, and red a week after install while
   the only repo sits on the data disk.
 - **Reinstall is the ordinary path.** Install Laib from the stick, put the
