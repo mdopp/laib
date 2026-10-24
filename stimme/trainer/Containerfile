@@ -23,9 +23,11 @@ RUN pip install --no-cache-dir -e /opt/microWakeWord
 RUN pip install --no-cache-dir "datasets>=2.18,<4" soundfile \
  && python -c "import datasets, soundfile; assert int(datasets.__version__.split('.')[0]) < 4, datasets.__version__"
 
+# the build a failed run is remembered for: a new one tries again (trainer.revision)
+ARG TRAINER_BUILD=dev
 COPY stimme/trainer/train.py stimme/trainer/trainer.py /opt/
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
 # TF_FORCE_GPU_ALLOW_GROWTH: whisper and the model share the card; without it
 # TF takes all VRAM the moment a run starts.
-ENV PYTHONUNBUFFERED=1 WAKEWORD_WORK_DIR=/work WAKEWORD_OUT_DIR=/out TF_FORCE_GPU_ALLOW_GROWTH=true
+ENV TRAINER_BUILD=${TRAINER_BUILD} PYTHONUNBUFFERED=1 WAKEWORD_WORK_DIR=/work WAKEWORD_OUT_DIR=/out TF_FORCE_GPU_ALLOW_GROWTH=true
 ENTRYPOINT ["python", "/opt/trainer.py"]

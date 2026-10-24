@@ -23,5 +23,6 @@ jobs:
         with:
           context: .
           file: stimme/trainer/Containerfile
+          build-args: TRAINER_BUILD=${{ github.sha }}
           push: true
           tags: ghcr.io/mdopp/laib-wakeword-trainer:latest,ghcr.io/mdopp/laib-wakeword-trainer:${{ github.sha }}

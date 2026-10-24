@@ -9,7 +9,7 @@ unit, which restarts it. On start the trainer looks at what it left in /out:
 - <id>.tflite and <id>.json there: done, nothing to do.
 - <id>.status.json says failed for this phrase and this persona revision:
   wait. A run that failed once is not retried in a loop; a persona change
-  (a new revision) or deleting the status file retries it.
+  (a new revision), a new trainer build (TRAINER_BUILD) or deleting the status file retries it.
 - anything else, including a run cut by a restart: train.
 
 It writes <id>.status.json (training, done, failed with a reason) so `laib`
@@ -102,7 +102,7 @@ def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: 
 
 
 LAIB_STATUS = "laib-status.json"
-RETRY = "erneut versucht wird erst bei einem neuen Satz oder einer neuen Revision der persona (box.yml persona)"
+RETRY = "erneut versucht wird bei einem neuen Satz, einer neuen Revision der persona (box.yml persona) oder einem neuen Trainer"
 
 
 def write_laib_status(out: pathlib.Path, state: str, phrase: str, reason: str, at: str, einzelheiten: str = "") -> None:
@@ -124,6 +124,13 @@ def show_waiting(out: pathlib.Path, wake_id: str, phrase: str) -> None:
     """A run that failed waits; laib keeps showing why it failed."""
     s = json.loads(status_path(out, wake_id).read_text())
     write_laib_status(out, "failed", phrase, s.get("reason", ""), s.get("at", ""), s.get("einzelheiten", ""))
+
+
+def revision() -> str:
+    """what a failed run is remembered for: the persona's revision and the trainer's build, so a
+    fixed trainer image tries again by itself (2026-10-24)"""
+    rev, build = os.environ.get("PERSONA_REV", ""), os.environ.get("TRAINER_BUILD", "")
+    return f"{rev}@{build}" if build else rev
 
 
 def decide(out: pathlib.Path, phrase: str, wake_id: str, rev: str) -> str:
@@ -288,7 +295,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, _on_stop)
     phrase = os.environ.get("WAKE_PHRASE", "").strip()
     wake_id = os.environ.get("WAKE_ID", "").strip()
-    rev = os.environ.get("PERSONA_REV", "")
+    rev = revision()
     languages = [l for l in os.environ.get("WAKE_LANGUAGES", "de").split(",") if l]
     work = pathlib.Path(os.environ.get("WAKEWORD_WORK_DIR", "/work"))
     out = pathlib.Path(os.environ.get("WAKEWORD_OUT_DIR", "/out"))

@@ -1,6 +1,7 @@
 """#128: the wake-word trainer trains the house persona's phrase, decided from
 the files it leaves, not from a queue in a database (Solaris's is gone)."""
 
+import os
 import json
 import pathlib
 import sys
@@ -171,6 +172,18 @@ class Provision(unittest.TestCase):
         cf = (pathlib.Path(trainer.__file__).parent / "Containerfile").read_text()
         self.assertIn('"datasets>=2.18,<4"', cf)
         self.assertIn("assert int(datasets.__version__", cf, "the image build must fail on datasets 4")
+
+class RetryOnANewTrainer(unittest.TestCase):
+    """2026-10-24: a fixed trainer image never retried a run that failed in the old one."""
+
+    def test_a_new_trainer_build_retries_a_failed_run(self):
+        out = pathlib.Path(tempfile.mkdtemp())
+        with mock.patch.dict(os.environ, {"PERSONA_REV": "r1", "TRAINER_BUILD": "aaa"}):
+            rev = trainer.revision()
+        trainer.write_status(out, "hey_x", "failed", "Hey X", rev, "kaputt")
+        self.assertEqual(trainer.decide(out, "Hey X", "hey_x", rev), "wait")
+        with mock.patch.dict(os.environ, {"PERSONA_REV": "r1", "TRAINER_BUILD": "bbb"}):
+            self.assertEqual(trainer.decide(out, "Hey X", "hey_x", trainer.revision()), "train")
 
 if __name__ == "__main__":
     unittest.main()
