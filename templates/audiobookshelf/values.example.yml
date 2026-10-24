@@ -3,3 +3,5 @@ AUDIOBOOKS: /mnt/data/stacks/file-share/data/audiobooks
 PODCASTS: /mnt/data/stacks/file-share/data/podcasts
 ROOT_PW: !secret ABS_ROOT_PASSWORD
 OIDC_SECRET: !secret OIDC_AUDIOBOOKSHELF_SECRET   # post-deploy sets it as ABS's OIDC client secret (#255)
+PFLEGE_IMAGE: docker.io/library/python:3.13-alpine   # abs-pflege.py, the standard library only (#646)
+MATCH_PER_RUN: "25"                # books matched against audible.de per 30-minute run: paced, resumes on the next

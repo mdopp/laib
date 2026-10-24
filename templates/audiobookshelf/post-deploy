@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""audiobookshelf post-deploy: the root user on first run, the two
-libraries (Hörbücher, Podcasts), and the family's login (#255). Podcast
-subscriptions are added in the app or the UI; ABS downloads new episodes
-on its own schedule.
+"""audiobookshelf post-deploy: the root user on first run, metadata kept
+next to the files, the two libraries („Hörbücher & Hörspiele" on
+/audiobooks, matched against audible.de; „Podcasts" on /podcasts), Music
+Assistant's own account with an API key (#646), and the family's login
+(#255). The care of the libraries (the one-time Audible match, the
+Hörspiel series, the podcasts of sync_podcasts.py) is abs-pflege.py's,
+on a timer: it is slow and resumes, a hook is neither.
+
+Music Assistant plays books and podcasts on the speakers through its
+Audiobookshelf provider: a user `musicassistant` (type user: listens,
+changes nothing) and an API key for it, handed back as ABS_MA_TOKEN.
+music-assistant declares that secret and renders it, so the same apply
+re-applies Music Assistant and its post-deploy adds the provider (#349's
+pattern). A key that still works is kept; one ABS refuses is replaced and
+the old ones of its name deleted.
 
 The login: ABS keeps its OIDC settings, the client secret among them, in
 its own database, and builds its OIDC client from them once, in memory. That
@@ -12,11 +23,13 @@ through ABS's API (PATCH /api/auth-settings), reads them back, and when they
 changed switches openid off and on, which is what makes ABS drop its cached
 client (MiscController.updateAuthSettings → unuse/init). ABS's own login
 stays on: the fallback when Authelia is down."""
-import json, os, sys, time, urllib.request, urllib.error
+import json, os, secrets, sys, time, urllib.request, urllib.error
 
 E = os.environ
 BASE = E.get("ABS_URL", "http://127.0.0.1:13378")
 PW = E["LAIB_SECRET_ABS_ROOT_PASSWORD"]
+MA_KEY, MA_USER, KEY_NAME = E.get("LAIB_SECRET_ABS_MA_TOKEN", ""), "musicassistant", "Music Assistant (laib)"
+LIBRARIES = (("Hörbücher & Hörspiele", "/audiobooks", "book", "audible.de"), ("Podcasts", "/podcasts", "podcast", "itunes"))
 AUTH = "https://auth." + E["LAIB_DOMAIN"]
 WANT = {  # Authelia's endpoints; ABS does no discovery of its own
     "authOpenIDIssuerURL": AUTH, "authOpenIDAuthorizationURL": AUTH + "/api/oidc/authorization",
@@ -50,13 +63,48 @@ else:
 if not status.get("isInit"):
     req("POST", "/init", {"newRoot": {"username": "root", "password": PW}})
     print("root user created")
-user = req("POST", "/login", {"username": "root", "password": PW})["user"]
+login = req("POST", "/login", {"username": "root", "password": PW})
+user = login["user"]
 token = user.get("accessToken") or user["token"]  # ABS 2.26 added accessToken; token is the old one
-have = {l["name"] for l in req("GET", "/api/libraries", token=token)["libraries"]}
-for name, folder, mtype in (("Hörbücher", "/audiobooks", "book"), ("Podcasts", "/podcasts", "podcast")):
-    if name not in have:
-        req("POST", "/api/libraries", {"name": name, "folders": [{"fullPath": folder}], "mediaType": mtype}, token=token)
+
+# metadata.json and the cover next to the files (#646): the folder carries what the match found, a
+# new ABS or a restore reads it back; the audio files themselves are never rewritten
+if not (login.get("serverSettings") or {}).get("storeMetadataWithItem"):
+    req("PATCH", "/api/settings", {"storeMetadataWithItem": True}, token=token)
+    print("audiobookshelf: metadata is stored with each item")
+
+# the libraries, found by their folder: one the owner made or renamed stays as it is
+have = req("GET", "/api/libraries", token=token)["libraries"]
+for name, folder, mtype, provider in LIBRARIES:
+    if not any(l.get("mediaType") == mtype and folder in [f.get("fullPath") for f in l.get("folders") or []] for l in have):
+        req("POST", "/api/libraries", {"name": name, "folders": [{"fullPath": folder}], "mediaType": mtype, "provider": provider}, token=token)
         print("library created:", name)
+
+# Music Assistant's account and key (#646)
+u = next((u for u in req("GET", "/api/users", token=token)["users"] if u.get("username") == MA_USER), None)
+if not u:
+    u = req("POST", "/api/users", {"username": MA_USER, "password": secrets.token_urlsafe(32), "type": "user", "isActive": True,
+                                   "permissions": {"download": True, "update": False, "delete": False, "upload": False,
+                                                   "accessAllLibraries": True, "accessAllTags": True, "accessExplicitContent": True}},
+            token=token)["user"]
+    print(f"audiobookshelf: account {MA_USER} created (Music Assistant's: listens, changes nothing)")
+
+
+def key_works(key):
+    try:
+        return bool(key) and req("GET", "/api/me", token=key).get("username") == MA_USER
+    except urllib.error.HTTPError:
+        return False
+
+
+if not key_works(MA_KEY):
+    for k in req("GET", "/api/api-keys", token=token)["apiKeys"]:
+        if k.get("name") == KEY_NAME:
+            req("DELETE", "/api/api-keys/" + k["id"], token=token)
+    new = req("POST", "/api/api-keys", {"name": KEY_NAME, "userId": u["id"], "isActive": True}, token=token)["apiKey"]["apiKey"]
+    print(f"laib-secret: ABS_MA_TOKEN={new}")
+    print("audiobookshelf: ABS_MA_TOKEN minted (" + ("replaces one ABS refuses" if MA_KEY else "new")
+          + "): Laib re-applies Music Assistant, which adds Audiobookshelf as a source")
 
 ok = lambda s: all(s.get(k) == v for k, v in WANT.items()) and "openid" in s.get("authActiveAuthMethods", [])
 if ok(req("GET", "/api/auth-settings", token=token)):

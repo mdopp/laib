@@ -5,7 +5,9 @@ upstream: [https://github.com/music-assistant/server, https://music-assistant.io
 # Music Assistant: the house's player brain for Home Assistant Assist —
 # "spiele Einslive", playlists, podcasts on the speakers (ADR 0015). Host
 # network for player discovery (mDNS, Chromecast, DLNA); Jellyfin is its
-# music provider, Radio Browser its radio provider. Usable after `laib add`
+# music provider, Radio Browser its radio provider, the share's radio/
+# stations its radio favourites, Audiobookshelf (once there) its books and
+# podcasts (#646). Usable after `laib add`
 # without a form (#526): post-deploy onboards it with Laib's administrator,
 # adds both sources (Jellyfin through its own account `musicassistant`) and
 # hands Home Assistant a token; Home Assistant's post-deploy then adds the
@@ -25,11 +27,16 @@ secrets:
   - name: JELLYFIN_ADMIN_PASSWORD    # media's: post-deploy makes the account musicassistant with it; without media no Jellyfin source
     external: true
     optional: true
+  - name: ABS_MA_TOKEN               # minted by audiobookshelf's post-deploy (#646): the key of ABS's user musicassistant; without ABS none
+    external: true
+    optional: true
   - name: HA_MUSIC_ASSISTANT_TOKEN   # minted here (an administrator's long-lived MA token), for Home Assistant's integration and its check
     external: true
     optional: true
 data:
   - path: ${DATA_DIR}/music-assistant/data
+  - path: ${DATA_DIR}/file-share/data/radio      # the house's stations (*.m3u, *.strm): post-deploy reads them (#646); the share backs them up
+    backup: false
 health:
   http: http://127.0.0.1:8095/
 ports:

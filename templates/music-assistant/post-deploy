@@ -20,7 +20,15 @@ typed into a form. Against Music Assistant 2.10's own API (POST /setup, POST
    because media's post-deploy runs only when media changes: `laib add
    music-assistant` must not wait for it. MA's Jellyfin provider then logs in
    on http://127.0.0.1:8096 as that account.
-3. Radio Browser as the second source.
+3. Radio Browser as the second source, and the house's own stations
+   (#646): every station of the share's radio/*.m3u and radio/*.strm
+   (ServiceBay's Jellyfin "Radio" library) added once through the builtin
+   provider (builtin/add_radio) and made a favourite. Which ones were added
+   is kept in laib-state.json in MA's data: a station the family removes in
+   MA stays removed; a stream MA cannot open is named, not red.
+3b. Audiobookshelf as a source (#646), once audiobookshelf's post-deploy
+   handed over ABS_MA_TOKEN (the API key of its user musicassistant):
+   books and podcasts on the speakers. A new key sets the source up again.
 4. A long-lived MA token for Home Assistant's "Music Assistant" integration,
    handed back as HA_MUSIC_ASSISTANT_TOKEN; Home Assistant declares it, so the
    same apply re-applies Home Assistant and its post-deploy adds the
@@ -30,7 +38,7 @@ Idempotent: an account that logs in, a provider that is loaded, a token that
 works are kept. Passwords and tokens appear only on the laib-secret line,
 never on argv or in another line of output (#214). Python's standard
 library only (the hooks image)."""
-import json, os, sys, time, urllib.error, urllib.parse, urllib.request
+import glob, hashlib, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
 MA = E.get("MA_URL", "http://127.0.0.1:8095").rstrip("/")
@@ -41,6 +49,10 @@ JF_ADMIN, JF_ADMIN_PW = E.get("JELLYFIN_ADMIN_USER") or "admin", E.get("LAIB_SEC
 JF_USER, JF_PW = "musicassistant", E.get("LAIB_SECRET_JELLYFIN_MA_PASSWORD", "")
 HA_TOKEN = E.get("LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN", "")
 TOKEN_NAME = "Home Assistant (laib)"
+ABS, ABS_KEY = E.get("ABS_URL", "http://127.0.0.1:13378").rstrip("/"), E.get("LAIB_SECRET_ABS_MA_TOKEN", "")
+DATA = E.get("LAIB_DATA_DIR", "/mnt/data/stacks")
+RADIO, STATE = os.path.join(DATA, "file-share", "data", "radio"), os.path.join(DATA, "music-assistant", "data", "laib-state.json")
+SPOKEN = ("/media/audiobooks", "/media/podcasts", "/media/radio")  # Jellyfin libraries that are no music (#646)
 WAIT = float(E.get("MA_WAIT_SECONDS", "2"))
 # Jellyfin 12 reads the client id from Authorization only (ServiceBay #3048), as templates/media does
 JF_CLIENT = 'MediaBrowser Client="laib", Device="laib", DeviceId="laib-music-assistant", Version="1"'
@@ -159,7 +171,8 @@ def jellyfin_account():
         jf("POST", f"/Users/Password?userId={u['Id']}", {"NewPw": JF_PW}, token=admin)
         print(f"music-assistant: Jellyfin account {JF_USER} has the password from JELLYFIN_MA_PASSWORD again")
     st, folders = jf("GET", "/Library/VirtualFolders", token=admin)
-    music = [f["ItemId"] for f in folders or [] if f.get("CollectionType") == "music" or f.get("Name") == "Musik"] if st == 200 else []
+    music = [f["ItemId"] for f in folders or [] if (f.get("CollectionType") == "music" or f.get("Name") == "Musik")
+             and not any(x.rstrip("/") in SPOKEN for x in f.get("Locations") or [])] if st == 200 else []
     pol = u.get("Policy") or {}
     want = {**pol, "IsAdministrator": False, "IsHidden": True, "EnableAllFolders": False, "EnabledFolders": music}
     if want != pol:
@@ -171,15 +184,15 @@ def jellyfin_account():
     return True
 
 
-def provider(token, domain, values, label):
-    """one instance of an MA provider: kept when loaded, set up again when it failed, else added"""
+def provider(token, domain, values, label, again=False):
+    """one instance of an MA provider: kept when loaded, set up again when it failed (or again is True), else added"""
     have = cmd(token, "config/providers", provider_domain=domain)
-    if any(p.get("status") == "loaded" for p in have):
+    if not again and any(p.get("status") == "loaded" for p in have):
         return
-    broken = next((p for p in have if p.get("status") in ("auth_required", "error")), None)
+    broken = next((p for p in have if again or p.get("status") in ("auth_required", "error")), None)
     if broken:
         flow(token, cmd(token, "config/providers/reconfigure", instance_id=broken["instance_id"]), values)
-        print(f"music-assistant: {label} set up again (it was {broken['status']})")
+        print(f"music-assistant: {label} set up again (" + ("a new key" if again else f"it was {broken['status']}") + ")")
     elif not have:
         flow(token, cmd(token, "config/providers/setup", provider_domain=domain), values)
         print(f"music-assistant: {label} added")
@@ -202,6 +215,73 @@ def ha_token(token):
           + "): Home Assistant's integration; Laib re-applies Home Assistant, which connects both ways")
 
 
+def stations():
+    """{url: (name, logo)} from radio/*.m3u (#EXTINF names and tvg-logo) and radio/*.strm (the file's name)"""
+    out = {}
+    for f in sorted(glob.glob(os.path.join(RADIO, "*.m3u")) + glob.glob(os.path.join(RADIO, "*.m3u8"))):
+        name = logo = None
+        for line in open(f, encoding="utf-8-sig", errors="replace"):
+            line = line.strip()
+            if line.startswith("#EXTINF:"):
+                attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', line))
+                rest = re.sub(r'[\w-]+="[^"]*"', "", line[len("#EXTINF:"):])
+                name, logo = (rest.split(",", 1)[1].strip() if "," in rest else None), attrs.get("tvg-logo")
+            elif line.startswith(("http://", "https://")):
+                out.setdefault(line, (name or line, logo))
+                name = logo = None
+    for f in sorted(glob.glob(os.path.join(RADIO, "*.strm"))):
+        url = next((l.strip() for l in open(f, encoding="utf-8-sig", errors="replace") if l.strip()), "")
+        if url.startswith(("http://", "https://")):
+            out.setdefault(url, (os.path.splitext(os.path.basename(f))[0], None))
+    return out
+
+
+def load_state():
+    try:
+        return json.load(open(STATE))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(s):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    with open(STATE + ".tmp", "w") as f:
+        json.dump(s, f, indent=1)
+    os.replace(STATE + ".tmp", STATE)
+
+
+def radios(token, state):
+    """the share's stations as favourites, each once (#646)"""
+    want = stations()
+    done = state.setdefault("radio", [])
+    if not want:
+        return
+    have = cmd(token, "music/radios/library_items", limit=1000) or []
+    by_url = {m.get("item_id"): r for r in have for m in r.get("provider_mappings") or []}
+    by_name = {(r.get("name") or "").casefold(): r for r in have}
+    added, refused = [], []
+    for url, (name, logo) in want.items():
+        r = by_url.get(url) or by_name.get(name.casefold())
+        if url in done and not r:
+            continue  # added once, removed by the family since: stays removed
+        try:
+            if not r:
+                r = cmd(token, "builtin/add_radio", url=url, name=name, **({"image_url": logo} if logo else {}))
+                added.append(name)
+            if not r.get("favorite"):
+                cmd(token, "music/favorites/add_item", item=r["uri"])
+        except RuntimeError as e:
+            refused.append(f"{name} ({str(e)[:80]})")
+            continue
+        if url not in done:
+            done.append(url)
+    if added:
+        print(f"music-assistant: radio stations added from the share as favourites: {', '.join(added)}")
+    if refused:
+        print(f"music-assistant: Music Assistant could not open these streams (left out, the next apply tries again): {'; '.join(refused)}")
+    print(f"music-assistant: {sum(1 for u in want if u in done)} of {len(want)} stations of radio/ are in Music Assistant")
+
+
 for _ in range(150):  # the server, its config and auth loaded: /info answers once the webserver serves
     try:
         st, info = http("GET", MA + "/info")
@@ -215,6 +295,7 @@ else:
 
 token = session()
 failed = []
+state = load_state()
 try:
     if PUBLIC:  # where the Home Assistant sign-in returns the browser to (auth.py _get_oauth_callback_base_url)
         cmd(token, "config/core/save", domain="webserver", values={"external_url": PUBLIC})
@@ -222,6 +303,20 @@ try:
         provider(token, "radiobrowser", {}, "Radio Browser")
     except (RuntimeError, OSError) as e:
         failed.append(f"Radio Browser: {e}")
+    try:
+        radios(token, state)
+    except (RuntimeError, OSError) as e:
+        failed.append(f"radio stations: {e}")
+    try:
+        if not ABS_KEY:
+            print("music-assistant: no Audiobookshelf source yet (after laib add audiobookshelf it hands over its key, and this follows)")
+        else:
+            h = hashlib.sha256(ABS_KEY.encode()).hexdigest()
+            provider(token, "audiobookshelf", {"url": ABS, "api_token": ABS_KEY, "verify_ssl": False},
+                     f"Audiobookshelf source ({ABS}, account musicassistant)", again=state.get("abs_key") not in (None, h))
+            state["abs_key"] = h
+    except (RuntimeError, OSError) as e:
+        failed.append(f"Audiobookshelf: {e}")
     try:
         if jellyfin_account():
             provider(token, "jellyfin", {"url": JF, "username": JF_USER, "password": JF_PW, "verify_ssl": False},
@@ -235,7 +330,8 @@ try:
 except (RuntimeError, OSError, ValueError) as e:
     failed.append(f"{type(e).__name__}: {e}")
 finally:
+    save_state(state)
     http("POST", MA + "/auth/logout", None, {"Authorization": "Bearer " + token})
 if failed:
     red("; ".join(failed))
-print("music-assistant: onboarded, Jellyfin and Radio Browser are its sources; the family signs in through Home Assistant")
+print("music-assistant: onboarded, Jellyfin, Radio Browser" + (" and Audiobookshelf" if ABS_KEY else "") + " are its sources; the family signs in through Home Assistant")

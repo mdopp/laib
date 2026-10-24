@@ -7,6 +7,10 @@ Image=${IMAGE}
 Network=host
 Environment=TZ=${TZ}
 Volume=${DATA_DIR}/music-assistant/data:/data:z
+# MA does not read this: it ties Audiobookshelf's key to this unit, so the
+# apply in which audiobookshelf hands it over re-applies Music Assistant and
+# its post-deploy adds the Audiobookshelf source (#646, #349's pattern)
+Environment=LAIB_ABS_TOKEN=${ABS_TOKEN}
 AddCapability=DAC_READ_SEARCH,SYS_ADMIN
 SecurityLabelDisable=true
 AutoUpdate=registry

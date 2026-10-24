@@ -2,10 +2,13 @@ name: audiobookshelf
 template: {registry: builtin, name: audiobookshelf, version: 1}
 provides: [audiobooks, podcasts]
 upstream: [https://github.com/advplyr/audiobookshelf, https://www.audiobookshelf.org/docs]   # where the Operator's web search looks first (#544)
-# Hörbücher und Podcasts: Audiobookshelf fetches podcast episodes itself
-# (RSS, auto-download, retention), keeps progress and chapters, has its own
-# apps. This replaces the hand-rolled sync_podcasts.py and takes audiobooks
-# out of Jellyfin (docs/SERVICES.md). OIDC through Authelia.
+# Hörbücher, Hörspiele und Podcasts: Audiobookshelf fetches podcast
+# episodes itself (RSS, auto-download, retention), keeps progress and
+# chapters, has its own apps. This replaces the hand-rolled
+# sync_podcasts.py and takes spoken word out of Jellyfin (docs/SERVICES.md,
+# #646). OIDC through Authelia. post-deploy: the libraries, metadata next to
+# the files, Music Assistant's account and key; abs-pflege.py on a timer:
+# the one-time Audible match, the Hörspiel series, the podcasts subscribed.
 after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: hoerbuecher
@@ -16,13 +19,21 @@ secrets:
   - name: ABS_ROOT_PASSWORD
     login: {user: root, host: hoerbuecher, note: "Audiobookshelf"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+  - name: ABS_MA_TOKEN               # minted here (#646): the API key of ABS's user musicassistant, handed back; music-assistant connects with it
+    external: true
+    optional: true
 oidc:
   clientId: audiobookshelf           # post-deploy writes the secret into ABS's settings on every apply (#255)
   redirectUris: ["https://hoerbuecher.${DOMAIN}/auth/openid/callback", "https://hoerbuecher.${DOMAIN}/auth/openid/mobile-redirect"]
 data:
   - path: ${DATA_DIR}/audiobookshelf/config
   - path: ${DATA_DIR}/audiobookshelf/metadata
+  - path: ${DATA_DIR}/audiobookshelf/pflege       # the care's status and which items were matched once (abgleich.json)
 health:
   http: http://127.0.0.1:13378/healthcheck
+status:                            # the care (#646): "Hörbücher: 140 abgeglichen, 3 ohne Treffer: …", the podcasts
+  file: ${DATA_DIR}/audiobookshelf/pflege/laib-status.json
+  check: audiobookshelf-pflege.service
+  stale: 1h                        # the timer runs every 30 min
 ports:
   - {port: 13378, lan: true}       # the apps at home talk to it directly
