@@ -216,6 +216,43 @@ class Mirror(unittest.TestCase):
         self.assertEqual(len(self.r.items("/lea/google-familie/")), 1)
         self.assertIn("Zahnarzt 11 Uhr", list(self.r.items("/lea/google-familie/").values())[0])
 
+    def test_a_public_abo_is_fetched_once_a_month_a_google_calendar_every_run(self):
+        # the owner, 2026-10-24: "15 min ist etwas viel. Einmal im Monat sollte eher passen" (the Müllabfuhr)
+        apath = "/abfuhrkalender.ics"
+        self.src.cals[apath] = ics(("m1@osb", "Restmüll"))
+        self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
+        abo = {"person": "haus", "name": "muellabfuhr", "kind": "abo", "title": "Müllabfuhr", "since": "2026-10-24T00:00:00Z", "url": self.src.url + apath}
+        def asked(path):
+            return sum(1 for s in self.src.seen if s[0] == path)
+        s = self.run_it(abo, self.google, ha="")
+        self.assertIn("2 Kalender verbunden, 2 Termine", s["detail"])
+        s = self.run_it(abo, self.google, ha="")
+        self.assertEqual(asked(apath), 1, "the public abo was fetched again within the month")
+        self.assertEqual(asked(self.gpath), 2, "Google is fetched every run")
+        self.assertIn("2 Termine", s["detail"], "a skipped abo still counts its events")
+        st = json.loads(Path(self.data, "state.json").read_text())
+        st["haus/abo-muellabfuhr/"]["ok"] -= 31 * 86400   # a month later
+        Path(self.data, "state.json").write_text(json.dumps(st))
+        self.run_it(abo, self.google, ha="")
+        self.assertEqual(asked(apath), 2, "after a month the abo is fetched again")
+
+    def test_each_calendar_has_its_own_interval(self):
+        # #619: a Google calendar told to wait, a public one told to hurry
+        self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
+        self.src.cals["/verein.ics"] = ics(("v1", "Training"))
+        g = dict(self.google, every="12h")
+        v = {"person": "haus", "name": "verein", "kind": "abo", "title": "Verein", "url": self.src.url + "/verein.ics", "every": "30m"}
+        def asked(path):
+            return sum(1 for s in self.src.seen if s[0] == path)
+        self.run_it(g, v, ha="")
+        st = json.loads(Path(self.data, "state.json").read_text())
+        for c in st:
+            st[c]["ok"] -= 3600   # an hour later
+        Path(self.data, "state.json").write_text(json.dumps(st))
+        self.run_it(g, v, ha="")
+        self.assertEqual(asked(self.gpath), 1, "Google with every 12h was fetched again after an hour")
+        self.assertEqual(asked("/verein.ics"), 2, "the abo with every 30m was not fetched after an hour")
+
     def test_trennen_removes_the_copy_and_the_has_copy_and_nothing_else(self):
         self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
         self.r.cols["/lea/google-kontakte/"] = "Takeout-Kontakte"
@@ -248,7 +285,7 @@ class Mirror(unittest.TestCase):
         self.assertEqual(len(self.r.items("/lea/google-familie/")), 1, "a failed fetch deletes nothing")
 
     def test_a_failure_is_quiet_until_the_last_good_run_is_older_than_two_hours(self):
-        pub = {"person": "haus", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "url": self.src.url + "/muell.ics"}
+        pub = {"person": "haus", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "url": self.src.url + "/muell.ics", "every": "1m"}
         self.src.cals["/muell.ics"] = ics(("m1", "Gelbe Tonne"))
         self.run_it(pub, ha="")
         self.src.cals["/muell.ics"] = "<html>Wartung</html>"

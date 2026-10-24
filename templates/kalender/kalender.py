@@ -283,7 +283,15 @@ def why(e):
     return "gelb", msg, "systemctl --user status kalender-abgleich.service; hält es an: " + FIX_HAUS
 
 
-def run(data, raw, dav, ha_user, stale_hours, now=None):
+def every(abo, abo_every_days):
+    """seconds between fetches: the subscription's every (30m, 12h, 30d), else by kind"""
+    m = re.fullmatch(r"([1-9][0-9]{0,3})([mhd])", abo.get("every") or "")
+    if m:
+        return int(m[1]) * {"m": 60, "h": 3600, "d": 86400}[m[2]]
+    return 0 if abo.get("kind") == "google" else abo_every_days * 86400
+
+
+def run(data, raw, dav, ha_user, stale_hours, now=None, abo_every_days=30):
     now = now or time.time()
     state_path = os.path.join(data, "state.json")
     try:
@@ -313,6 +321,13 @@ def run(data, raw, dav, ha_user, stale_hours, now=None):
     for col, display, get, abo in targets:
         where = f"„{display}“ ({col.split('/')[0]})"
         cols = ([col] if abo else []) + ([ha_collection(ha_home, col)] if ha_home else [])
+        # each calendar's own interval (#619): its `every`, else Google every run and a public abo
+        # (Müllabfuhr, Feiertage) once in ABO_EVERY_DAYS. A failed or new one is asked again at once.
+        if abo and every(abo, abo_every_days) > 0 and all(
+                c in state and not state[c].get("problem") and now - state[c].get("ok", 0) < every(abo, abo_every_days) for c in cols):
+            new_state.update({c: state[c] for c in cols})
+            total += len(state[col].get("seen", {}))
+            continue
         try:
             want, err = events(get()), None
         except Fail as e:
@@ -381,7 +396,8 @@ def main():
     dav = Radicale(os.environ.get("RADICALE_URL", "http://host.containers.internal:5232"),
                    os.environ.get("RADICALE_USER", "kalender"), os.environ.get("RADICALE_PASSWORD", ""))
     s = run(os.environ.get("DATA", "/data"), os.environ.get("KALENDER_ABOS", ""), dav,
-            os.environ.get("HA_USER", ""), float(os.environ.get("STALE_HOURS") or 2))
+            os.environ.get("HA_USER", ""), float(os.environ.get("STALE_HOURS") or 2),
+            abo_every_days=float(os.environ.get("ABO_EVERY_DAYS") or 30))
     print(s["detail"])
     for f in s["findings"]:
         print(f"{f['severity']}: {f['detail']}")
