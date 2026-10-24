@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.29.0](https://github.com/mdopp/laib/compare/v0.28.0...v0.29.0) (2026-10-24)
+
+
+### Features
+
+* **beets:** a Signal message after each music-inbox import ([59941bf](https://github.com/mdopp/laib/commit/59941bf0dc5f537a967fb07d3f569680050ce52f))
+* **template:** the Musik-Eingang tells the uploader what went into the music ([#639](https://github.com/mdopp/laib/issues/639)) ([f7e8bc0](https://github.com/mdopp/laib/commit/f7e8bc04487afbca3c84445629d989364c972e56))
+
+
+### Bug Fixes
+
+* **template:** send the Musik-Eingang's messages from the host, bote-notify stays on loopback ([#639](https://github.com/mdopp/laib/issues/639)) ([1a48b7f](https://github.com/mdopp/laib/commit/1a48b7f48a26d65fc27d4b25b455d700c3bd9ee4))
+
 ## [0.28.0](https://github.com/mdopp/laib/compare/v0.27.1...v0.28.0) (2026-10-24)
 
 
