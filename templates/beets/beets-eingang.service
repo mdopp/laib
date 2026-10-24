@@ -8,19 +8,18 @@
 Description=beets: the Musik-Eingang into the music library
 After=beets.service
 
-#
-# After the run, one message per upload through the Bote's bote-notify: to the
-# uploader Haus names (._<name>.von), else box.yml notify.person. beets is not on
-# the host network, so it asks bote-notify at host.containers.internal (the box's
-# address; templates/bote publishes 8645 there, lan: false). The token reaches
-# podman through the environment, never on argv.
+# After the run, one message per upload through the Bote's bote-notify: the importer
+# writes them into /config/musik-eingang/meldungen.jsonl (for the uploader Haus names
+# in ._<name>.von, else box.yml notify.person), and musik-meldungen.sh sends them from
+# here, the host, where bote-notify listens on loopback. "-": a message never fails
+# the unit. The token is the sender's environment, never argv, and never the container's.
 [Service]
 Type=oneshot
 Environment=MUSIK_MELDEN=${MUSIK_MELDEN}
 Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
-Environment=NOTIFY_URL=http://host.containers.internal:8645/mitteilung
 Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+Environment=MELDUNGEN=${DATA_DIR}/beets/config/musik-eingang/meldungen.jsonl
 StandardInput=file:%h/.config/containers/systemd/beets/musik-eingang.py
-ExecStart=/usr/bin/podman exec -i -e MUSIK_MELDEN -e NOTIFY_PERSON -e NOTIFY_URL -e NOTIFY_TOKEN systemd-beets python3 -
-# a discography with fetchart and lyrics takes a while; the lock keeps the next minute's run out
+ExecStart=/usr/bin/podman exec -i -e MUSIK_MELDEN -e NOTIFY_PERSON systemd-beets python3 -
+ExecStartPost=-/bin/sh %h/.config/containers/systemd/beets/musik-meldungen.sh
 TimeoutStartSec=2h

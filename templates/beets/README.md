@@ -75,17 +75,28 @@ on stdin). One run at a time: a run that finds the lock
   Neues in der Musik · 1 Datei nicht übernommen: doppelt.mp3 – schon in der
   Musiksammlung (…)“; at most three names, then „und N weitere“. The names
   are beets' own (`beet ls -a -f '$album' added:<start>..`, `$title` for a
-  singleton), the upload's name when beets has none. It goes to the
-  uploader Haus named (below), else, and when bote-notify does not know that
-  person, to `NOTIFY_PERSON` (box.yml `notify.person`). An empty upload or a
-  run that took nothing sends none; `MUSIK_MELDEN: "false"` sends none; no
-  Bote (no token) sends none. A message that does not go out never fails or
-  holds up the import: it is one line „Mitteilung nicht zugestellt: …“ in
-  the status' `einzelheiten`, and an unreachable bote-notify is asked once
-  per run, not once per upload. beets is not on the host network: it asks
-  `host.containers.internal:8645` (templates/bote publishes it there,
-  `lan: false`), the token passed through the unit's environment, never on
-  argv.
+  singleton), the upload's name when beets has none. It is for the uploader
+  Haus named (below), else `NOTIFY_PERSON` (box.yml `notify.person`). An
+  empty upload or a run that took nothing writes none; `MUSIK_MELDEN:
+  "false"` writes none.
+- **Sent from the host, never from the container.** beets is not on the
+  host network and bote-notify listens on the host's loopback only
+  (`127.0.0.1:8645`), so the importer only writes each message, the
+  payload plus `"at"` (epoch), as a JSON line into
+  `/config/musik-eingang/meldungen.jsonl` (staged and renamed), and the
+  unit's `ExecStartPost=-/bin/sh …/musik-meldungen.sh` sends them on the
+  host with curl (Fedora CoreOS has sh and curl, no python). The bearer
+  reaches curl as its config on stdin (`-K -`), never on argv, and never
+  enters the container. A person bote-notify does not know (404) gets the
+  line once more to `NOTIFY_PERSON`. A send that fails (unreachable, 429,
+  5xx) stays for the next run; an unreachable bote-notify is asked once per
+  run; a line older than a day is dropped. Each failure is a line in the
+  journal (`journalctl --user -u beets-eingang`), never the text, and while
+  lines wait the status' `einzelheiten` says „N Mitteilungen nicht
+  zugestellt …“. Without the Bote (no token) the file is removed unsent.
+  `curl -m 60`: bote-notify tries each channel, up to 50 s, and a shorter
+  cap would send a delivered message again. Nothing about a message ever
+  fails or holds up the import (`-`).
 
 The status file `/config/laib-status.json`
 (`${DATA_DIR}/beets/config/laib-status.json`, the template's `status:`):
@@ -123,8 +134,8 @@ The contract for any uploader:
    is the signed-in LLDAP user, the name box.yml `people` knows the person
    by (`erika`); lower case, `[a-z0-9._@-]`, at most 64 characters, else it
    is ignored. The importer reads and deletes it when it takes the upload
-   and sends the message to that person; without one, or for a person
-   bote-notify does not know, to `notify.person`. A sidecar whose upload
+   and the message goes to that person; without one, or for a person
+   bote-notify does not know (404), to `notify.person`. A sidecar whose upload
    never came is deleted after a day. A sidecar, not a staging folder named
    after the user: a folder at the top is an upload (an album) itself.
 3. A finished upload is taken about a minute later.

@@ -27,13 +27,15 @@ GRUND.txt saying why in German. Nothing the import did not take is
 deleted; only the emptied folders and a zip whose content was imported or
 kept unpacked are.
 
-After the run, one message per upload that imported or kept something,
-through bote-notify (POST NOTIFY_URL {an, text} with the bearer
-NOTIFY_TOKEN, as scan does): to the uploader Haus named in the sidecar
-`._<name>.von` (an LLDAP user, which box.yml people names), else, and when
-that person is unknown, to NOTIFY_PERSON. MUSIK_MELDEN=false switches it
-off; without the Bote (no token) none goes out. A message that does not go
-out never fails or holds up the import: it is one line in einzelheiten.
+After the run, one message per upload that imported or kept something:
+bote-notify's payload {an, text} plus "at" (epoch), one JSON line each,
+appended to musik-eingang/meldungen.jsonl (staged and renamed). It is for
+the uploader Haus named in the sidecar `._<name>.von` (an LLDAP user,
+which box.yml people names), else for NOTIFY_PERSON. beets is not on the
+host network and bote-notify listens on the host's loopback only, so the
+container never sends: musik-meldungen.sh does, on the host, as the unit's
+ExecStartPost. MUSIK_MELDEN=false switches it off. Lines the sender left
+(bote-notify away) are one line in einzelheiten; the import never waits.
 
 The status, ${DATA_DIR}/beets/config/laib-status.json (laib status beets,
 Haus): {"at", "detail", "einzelheiten", "findings", "wartet",
@@ -42,7 +44,7 @@ Haus): {"at", "detail", "einzelheiten", "findings", "wartet",
 Stdlib only: the image (linuxserver/beets) has python3 and beet, no
 unzip, no 7z, no unrar.
 """
-import datetime, fcntl, json, os, re, shlex, shutil, stat, subprocess, sys, time, urllib.error, urllib.request, zipfile
+import datetime, fcntl, json, os, re, shlex, shutil, stat, subprocess, sys, time, zipfile
 
 E = os.environ
 EINGANG = E.get("MUSIK_EINGANG", "/eingang")
@@ -53,8 +55,6 @@ ZIP_MAX_BYTES = int(E.get("MUSIK_ZIP_MAX_BYTES", str(20 << 30)))   # a discograp
 ZIP_MAX_DATEIEN = int(E.get("MUSIK_ZIP_MAX_DATEIEN", "5000"))
 MELDEN = E.get("MUSIK_MELDEN", "true").strip().lower() not in ("false", "0", "no", "nein", "off", "aus")
 NOTIFY_PERSON = E.get("NOTIFY_PERSON", "")
-NOTIFY_URL = E.get("NOTIFY_URL", "http://host.containers.internal:8645/mitteilung")
-NOTIFY_TOKEN = E.get("NOTIFY_TOKEN", "")
 
 AUDIO = (".mp3", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav")
 ARCHIV = (".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst")
@@ -62,6 +62,7 @@ UNFERTIG = (".part", ".tmp", ".crdownload", ".partial", "~")
 NI, ARBEIT = "_nicht-importiert", ".in-arbeit"
 ZUSTAND = os.path.join(DATA, "musik-eingang")
 STATUS = os.path.join(DATA, "laib-status.json")
+MELDUNGEN = os.path.join(ZUSTAND, "meldungen.jsonl")   # musik-meldungen.sh sends them from the host
 
 KEINE_MUSIK = "keine Musikdatei"
 DUPLIKAT = ("schon in der Musiksammlung (Duplikat): nicht noch einmal übernommen. Ist diese Fassung besser, "
@@ -348,36 +349,22 @@ class Lauf:
 
 
     def melden(self):
-        """one message per upload that imported or kept something; what does not go out is one line in einzelheiten"""
-        texte = [(u, mitteilung(u)) for u in self.uploads]
-        texte = [(u, t) for u, t in texte if t]
-        if not MELDEN or not texte or not NOTIFY_TOKEN:   # off, nothing happened, or no Bote
+        """one message per upload that imported or kept something, for the host's sender; staged and renamed"""
+        zeilen = []
+        for u in self.uploads:
+            text, an = mitteilung(u), u["von"] or NOTIFY_PERSON
+            if text and an:
+                zeilen.append(json.dumps({"an": an, "text": text, "at": int(time.time())}, ensure_ascii=False) + "\n")
+        if not MELDEN or not zeilen:
             return
-        fehler, weg = [], ""
-        for u, text in texte:
-            versuche = []
-            for an in dict.fromkeys(p for p in (u["von"], NOTIFY_PERSON) if p):
-                if weg:
-                    versuche.append(weg)
-                    break
-                try:
-                    req = urllib.request.Request(NOTIFY_URL, method="POST", data=json.dumps({"an": an, "text": text}).encode(),
-                                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + NOTIFY_TOKEN})
-                    urllib.request.urlopen(req, timeout=60).close()   # bote-notify tries each channel: up to 50 s
-                    versuche = []
-                    break
-                except urllib.error.HTTPError as err:
-                    versuche.append("an %s: HTTP %d" % (an, err.code))
-                except Exception as err:   # unreachable: the rest of this run waits for nothing
-                    weg = "bote-notify nicht erreichbar (%s)" % getattr(err, "reason", err)
-                    versuche.append(weg)
-                    break
-            else:
-                versuche = versuche or ["niemand zu benachrichtigen: NOTIFY_PERSON ist leer"]
-            if versuche:
-                fehler.append("„%s“: %s" % (u["eingang"], "; ".join(versuche)))
-        if fehler:
-            self.einzelheiten.append("Mitteilung nicht zugestellt: " + " · ".join(fehler))
+        try:
+            with open(MELDUNGEN) as f:
+                alt = f.read()
+        except OSError:
+            alt = ""
+        with open(MELDUNGEN + ".tmp", "w") as f:
+            f.write(alt + ("\n" if alt and not alt.endswith("\n") else "") + "".join(zeilen))
+        os.replace(MELDUNGEN + ".tmp", MELDUNGEN)
 
 
 def mehrzahl(n, eins, viele):
@@ -419,7 +406,7 @@ def zeile(lauf):
     return "Musik-Eingang: " + teil + (", %s nicht importiert" % mehrzahl(n, "Datei", "Dateien") if n else "")
 
 
-def status(alt, lauf, wartet):
+def status(alt, lauf, wartet, hinweis=""):
     if lauf is None:
         lauf, letzte = alt.get("lauf"), alt.get("letzte", [])
     else:
@@ -433,7 +420,7 @@ def status(alt, lauf, wartet):
                          "detail": "Musik-Eingang: %s nicht importiert" % mehrzahl(lauf["nicht"], "Datei", "Dateien"),
                          "fix": "sie liegen in musik-eingang/%s/, der Grund steht in GRUND.txt; berichtigt wieder in musik-eingang legen" % lauf["ordner"],
                          "einzelheiten": lauf["einzelheiten"]})
-    schreib(STATUS, {"at": jetzt_utc(), "detail": detail, "einzelheiten": lauf["einzelheiten"] if lauf else "",
+    schreib(STATUS, {"at": jetzt_utc(), "detail": detail, "einzelheiten": "\n\n".join(x for x in (lauf["einzelheiten"] if lauf else "", hinweis) if x),
                      "findings": findings, "eingang": "musik-eingang", "wartet": wartet, "lauf": lauf, "letzte": letzte})
 
 
@@ -479,15 +466,25 @@ def main():
         pass
     schreib(gesehen_pfad, neu)
     try:
+        with open(MELDUNGEN) as f:   # what the host's sender could not deliver last time
+            offen = sum(1 for z in f if z.strip())
+    except OSError:
+        offen = 0
+    hinweis = ""
+    if offen:
+        hinweis = ("%s nicht zugestellt: bote-notify war nicht erreichbar oder lehnte ab; der nächste Lauf "
+                   "versucht es wieder, nach einem Tag verworfen (journalctl --user -u beets-eingang)"
+                   % ("1 Mitteilung" if offen == 1 else "%d Mitteilungen" % offen))
+    try:
         lauf.melden()
     except Exception as err:   # a message never fails the import
-        lauf.einzelheiten.append("Mitteilung nicht zugestellt: %s" % err)
+        lauf.einzelheiten.append("Mitteilung nicht geschrieben: %s" % err)
     ergebnis = None
     if lauf.uploads:
         ergebnis = {"at": jetzt_utc(), "titel": sum(u["titel"] for u in lauf.uploads), "alben": sum(u["alben"] for u in lauf.uploads),
                     "nicht": sum(len(u["nicht_importiert"]) for u in lauf.uploads), "ordner": NI + "/" + lauf.zeit,
                     "gelb": lauf.gelb, "einzelheiten": "\n\n".join(lauf.einzelheiten), "uploads": lauf.uploads}
-    status(lies(STATUS, {}), ergebnis, wartet)
+    status(lies(STATUS, {}), ergebnis, wartet, hinweis)
 
 
 if __name__ == "__main__":
