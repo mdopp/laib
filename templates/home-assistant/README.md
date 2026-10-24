@@ -33,6 +33,46 @@ whose agent is Frage gets `prefer_local_intents: true` (ADR 0015, #557):
 „Mach Bambi aus“ is HA's intent in about a second, not a web search. Without Frage the hook says so and stays green; `laib
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
+## The house persona's Assist pipeline (#634)
+
+One Assist pipeline is Laib's, named after the house persona (box.yml
+`persona`, ADR 0020; Joshua: „Joshua“), in the persona's first language:
+Frage with `prefer_local_intents` (HA's own agent while Frage is not
+there), Stimme's Whisper and Piper (`tts_voice` empty: the voice Piper runs
+with, the persona's), and a wake word. Post-deploy creates it once Stimme
+answers, sets those parts again when they drifted, makes it preferred, and
+points every Assist satellite's „Assistent“ select at it (a Voice PE, found
+by HA's translation key `pipeline`; a second slot only when it was on a
+pipeline that goes). The persona comes from `render/persona/<name>/persona.json`;
+the check's unit carries the persona's name, wake word and phrase, so a
+persona change applies this hook again.
+
+- **Wake word.** The persona's (`hey_joshua`) once Stimme's openWakeWord
+  offers it (`wake_word/info`); until then the one the preferred pipeline
+  had, if openWakeWord offers it; else none, never a wake word nobody can
+  say. Stimme's trainer builds a microWakeWord model for the device
+  (templates/stimme): once it is flashed and the satellite's
+  „Aktivierungswort“ select offers the persona's phrase, post-deploy selects
+  it; until then the device keeps its own.
+- **End of speech.** `VOICE_VAD` (default `aggressive`) is every satellite's
+  „Sprechpausen-Erkennung“: how much silence ends a sentence — `default`
+  0.7 s, `relaxed` 1.25 s, `aggressive` 0.25 s (HA's assist_pipeline/vad.py).
+  Empty leaves it as set in HA. Without speech ending, HA records until its
+  15 s timeout.
+- **The old pipelines.** `VOICE_OLD_PIPELINES` (default `Sol,Solaris`, the
+  Solaris era's) are deleted once nothing uses them; one that a select still
+  shows, or a file under HA's config names by id (its YAML, `.storage`), is
+  renamed „… (alt)“ and the hook says who names it.
+
+The check measures it without switching anything: the pipeline is there and
+preferred; HA's local intents recognize „Wie spät ist es“ in its language
+(`conversation/agent/homeassistant/debug`: recognized, never executed); the
+wake word is the persona's or the status says which one wakes until then;
+each satellite is on the pipeline. One line in the status, e.g. „Sprache:
+lokale Befehle aktiv (HassGetCurrentTime in 40 ms) · Weckwort nur am Gerät,
+bis hey_joshua da ist“. It does not measure the microphone, the end of
+speech or Whisper: a spoken test on the device does.
+
 ## Its home comes from box.yml zuhause (#561)
 
 The household's address lives once in box.yml (`zuhause`, docs/STATE.md);

@@ -12,9 +12,13 @@ the timer once an hour so the morning report reads a fresh one.
 It writes /config/.laib-status.json:
 {"at": RFC3339, "detail": "…", "findings": [{"severity", "detail", "fix"}]}
 """
+import base64
 import json
 import os
+import socket
+import struct
 import time
+import urllib.parse
 import urllib.request
 
 # what ADR 0015 wires into HA: a domain and a word of the entry's title
@@ -160,6 +164,148 @@ def music(url: str, token: str) -> tuple:
     return f"Music Assistant: {tracks} Titel, {len(players)} Lautsprecher", []
 
 
+class WS:
+    """Home Assistant's WebSocket API with the check's token, one command at a time (stdlib only)"""
+
+    def __init__(self, base: str, token: str):
+        u = urllib.parse.urlsplit(base)
+        self.s = socket.create_connection((u.hostname, u.port or 80), timeout=8)
+        self.s.sendall((f"GET /api/websocket HTTP/1.1\r\nHost: {u.netloc}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                        f"Sec-WebSocket-Key: {base64.b64encode(os.urandom(16)).decode()}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+        self.buf = b""
+        while b"\r\n\r\n" not in self.buf:
+            self.buf += self.more()
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        if b" 101 " not in head.split(b"\r\n")[0]:
+            raise ConnectionError("no WebSocket: " + head.split(b"\r\n")[0].decode(errors="replace"))
+        self.recv()
+        self.send({"type": "auth", "access_token": token})
+        if self.recv().get("type") != "auth_ok":
+            raise ConnectionError("the WebSocket API refused HA_TOKEN")
+        self.n = 0
+
+    def more(self) -> bytes:
+        b = self.s.recv(65536)
+        if not b:
+            raise ConnectionError("Home Assistant closed the WebSocket")
+        return b
+
+    def take(self, n: int) -> bytes:
+        while len(self.buf) < n:
+            self.buf += self.more()
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def send(self, obj, opcode: int = 1) -> None:
+        data, mask = (json.dumps(obj).encode() if opcode == 1 else obj), os.urandom(4)
+        n = len(data)
+        head = bytes([0x80 | opcode]) + (bytes([0x80 | n]) if n < 126 else bytes([0xFE]) + struct.pack(">H", n) if n < 65536
+                                         else bytes([0xFF]) + struct.pack(">Q", n))
+        self.s.sendall(head + mask + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+
+    def recv(self) -> dict:
+        msg = b""
+        while True:
+            b0, b1 = self.take(2)
+            n = b1 & 0x7F
+            n = struct.unpack(">H", self.take(2))[0] if n == 126 else struct.unpack(">Q", self.take(8))[0] if n == 127 else n
+            data = self.take(n)
+            if b0 & 0x0F == 8:
+                raise ConnectionError("Home Assistant closed the WebSocket")
+            if b0 & 0x0F == 9:
+                self.send(data, opcode=10)  # pong
+                continue
+            msg += data
+            if b0 & 0x80:
+                return json.loads(msg)
+
+    def __call__(self, type: str, **kw):
+        self.n += 1
+        self.send(dict(kw, id=self.n, type=type))
+        while True:
+            m = self.recv()
+            if m.get("id") == self.n and m.get("type") == "result":
+                if not m.get("success"):
+                    raise RuntimeError(f"{type}: {(m.get('error') or {}).get('message', 'refused')}")
+                return m.get("result")
+
+    def close(self) -> None:
+        self.s.close()
+
+
+# a sentence HA's built-in intents know on every box, that needs no device and switches nothing
+PROBE = {"de": "Wie spät ist es", "en": "What time is it"}
+APPLY = "laib apply home-assistant (#634)"
+
+
+def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tuple:
+    """#634: the house persona's Assist pipeline, measured, never switched: there and preferred,
+    HA's local intents recognize PROBE in its language (conversation/agent/homeassistant/debug
+    recognizes and executes nothing), its wake word is the persona's or one the engine offers,
+    the satellites are on it. What it does not measure: the microphone, the end of speech, Whisper.
+    (detail, findings)"""
+    if not token or not persona:
+        return "", []
+    out = []
+    try:
+        ws = WS(base, token)
+        try:
+            listed = ws("assist_pipeline/pipeline/list") or {}
+            ours = next((p for p in listed.get("pipelines") or [] if p.get("name") == persona), None)
+            if ours is None:
+                return f"Sprache: kein Ablauf „{persona}“", [{"severity": "gelb", "detail": f"Sprache: kein Assist-Ablauf „{persona}“", "fix": APPLY}]
+            if listed.get("preferred_pipeline") != ours.get("id"):
+                out.append(("gelb", f"Sprache: der Ablauf „{persona}“ ist nicht bevorzugt", APPLY))
+            lang = ours.get("language") or "de"
+            sentence = PROBE.get(lang.split("-")[0])
+            said = f"Sprache: kein Prüfsatz für {lang}"
+            if sentence:
+                t0 = time.monotonic()
+                got = (ws("conversation/agent/homeassistant/debug", sentences=[sentence], language=lang) or {}).get("results") or [None]
+                ms = round((time.monotonic() - t0) * 1000)
+                hit = got[0] or {}
+                intent = (hit.get("intent") or {}).get("name") or ("eigener Satz" if hit.get("source") == "trigger" else "")
+                if hit.get("match") and intent:
+                    said = f"Sprache: lokale Befehle aktiv ({intent} in {ms} ms)"
+                else:
+                    said = "Sprache: lokale Befehle antworten nicht"
+                    out.append(("gelb", f"Sprache: Home Assistants lokale Befehle erkennen „{sentence}“ ({lang}) nicht",
+                                "Home Assistant → Einstellungen → Sprachassistenten: die Sprache des Ablaufs; laib logs home-assistant"))
+            if ours.get("conversation_engine") != "conversation.home_assistant" and not ours.get("prefer_local_intents"):
+                out.append(("gelb", f"Sprache: „{persona}“ fragt erst den Gesprächsagenten, nicht die lokalen Befehle", APPLY))
+            have, engine = ours.get("wake_word_id"), ours.get("wake_word_entity")
+            try:
+                offered = [w.get("id") for w in (ws("wake_word/info", entity_id=engine) or {}).get("wake_words") or []] if engine else []
+            except RuntimeError:
+                offered = None   # the engine does not answer: nothing to say about its models
+            if have == wake_id:
+                said += f" · Weckwort {wake_id}"
+            elif offered and wake_id in offered:
+                out.append(("gelb", f"Weckwort: openWakeWord bietet {wake_id}, der Ablauf nutzt {have or 'keins'}", APPLY))
+            elif have and offered is not None and have not in offered:
+                out.append(("gelb", f"Weckwort: {have} bietet openWakeWord nicht an, der Ablauf wacht so nie auf", APPLY))
+            else:
+                said += f" · Weckwort {have or 'nur am Gerät'}, bis {wake_id} da ist"
+            reg = ws("config/entity_registry/list") or []
+        finally:
+            ws.close()
+        req = urllib.request.Request(base.rstrip("/") + "/api/states", headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            states = {s.get("entity_id"): s for s in json.load(resp)}
+    except Exception as err:  # an unreachable or refusing HA is a finding, never a failed unit
+        return "Sprache nicht messbar", [{"severity": "gelb", "detail": f"Sprache: nicht messbar ({type(err).__name__}: {err})", "fix": APPLY}]
+    for r in reg:   # the satellites' selects, by HA's translation keys (a Voice PE, any Assist satellite)
+        st = states.get(r.get("entity_id")) or {}
+        if r.get("disabled_by") or not st:
+            continue
+        who, options = (st.get("attributes") or {}).get("friendly_name") or r.get("entity_id"), (st.get("attributes") or {}).get("options") or []
+        if r.get("translation_key") == "pipeline" and st.get("state") != persona:
+            out.append(("gelb", f"Satellit „{who}“: {st.get('state')}, nicht „{persona}“", APPLY))
+        if r.get("translation_key") == "wake_word" and phrase and st.get("state") != phrase and phrase in options:
+            out.append(("gelb", f"Satellit „{who}“: weckt mit {st.get('state')}, kann „{phrase}“", APPLY))
+    return said, [{"severity": s, "detail": d, "fix": f} for s, d, f in out]
+
+
 def write(path: str, r: dict) -> None:
     r["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = path + ".tmp"
@@ -173,6 +319,11 @@ if __name__ == "__main__":
     r = report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123"))
     r["findings"] += offers(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("LAIB_SERVICE", "home-assistant"))
     detail, found = music(os.environ.get("MA_URL", "http://127.0.0.1:8095"), os.environ.get("MA_TOKEN", ""))
+    if detail:
+        r["findings"] += found
+        r["detail"] = (r["detail"] + " · " if r["detail"] else "") + detail
+    detail, found = voice(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("VOICE_PERSONA", ""),
+                          os.environ.get("VOICE_WAKEWORD", ""), os.environ.get("VOICE_PHRASE", ""))
     if detail:
         r["findings"] += found
         r["detail"] = (r["detail"] + " · " if r["detail"] else "") + detail
