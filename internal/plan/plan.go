@@ -65,7 +65,15 @@ func ServiceOf(outPath string) string {
 
 // Compute renders (with real secrets, so the box comparison is exact) and
 // diffs against the box. The diffs it returns are redacted. `only` limits the
-// changes to one service and the role outputs.
+// changes to one service and the box's own outputs.
+// outside: a change of svc that `laib apply <only>` leaves for later. Role
+// outputs and Laib's own programs (ADR 0027) belong to the box, not to a
+// service: their units come with the timers that start them, or a scoped
+// apply enables laib-notify.timer without the container it triggers (#633).
+func outside(only, svc string) bool {
+	return only != "" && svc != "" && svc != only && !slices.Contains(render.Own, svc)
+}
+
 func Compute(ctx context.Context, st *state.State, secrets map[string]string, paths boxfs.Paths, only string) (*Plan, error) {
 	out, err := render.Render(st, secrets)
 	if err != nil {
@@ -83,7 +91,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 	}
 	for _, k := range slices.Sorted(maps.Keys(out)) {
 		svc := ServiceOf(k)
-		if only != "" && svc != "" && svc != only {
+		if outside(only, svc) {
 			continue
 		}
 		target := Target(paths, k)
@@ -125,7 +133,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 			continue
 		}
 		svc := ServiceOf(k)
-		if only != "" && svc != "" && svc != only {
+		if outside(only, svc) {
 			continue
 		}
 		add(Change{Path: k, Target: target, Service: svc, Kind: "delete"})
@@ -160,7 +168,7 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 			cur, onBox := box[n]
 			want, wanted := p.Secrets[n]
 			svc := strings.SplitN(n, ".", 3)[1]
-			if (onBox && wanted && cur == want) || (only != "" && svc != only) {
+			if (onBox && wanted && cur == want) || outside(only, svc) {
 				continue
 			}
 			kind := map[bool]string{true: "change", false: "add"}[onBox]
