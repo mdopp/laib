@@ -4,7 +4,7 @@ provides: [haus]
 # Haus (ADR 0014, mdopp/haus): the family's pages and the companion API the
 # Android widgets speak. Loopback only; Caddy fronts it. /napi/ bypasses
 # Authelia (device tokens), the pages are behind it.
-after: [auth]
+after: [auth]                    # not file-share: the share folders it mounts are declared under data:, so a box without file-share still loads (#639)
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes:
   - host: haus
@@ -44,6 +44,8 @@ data:
   - path: ${DATA_DIR}/file-share/data/notes   # the household's notes (ADR 0017), mounted for the Haushalt; declared here so it exists without file-share
     backup: false                             # backed up by file-share
   - path: ${DATA_DIR}/file-share/data/paperless-consume   # the app's camera uploads land here for Paperless (haus#10); transient
+    backup: false
+  - path: ${DATA_DIR}/file-share/data/musik-eingang   # the app's music uploads for beets' Musik-Eingang (#639): ._<name>.part, then renamed; transient
     backup: false
   - path: ${DATA_DIR}/file-share/samba-accounts   # where Haus hands a network-drive password to file-share (#296); without file-share no FIFO, no page
     backup: false

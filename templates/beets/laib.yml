@@ -2,7 +2,11 @@ name: beets
 template: {registry: builtin, name: beets, version: 1}
 provides: [music-tagging]
 upstream: [https://github.com/beetbox/beets, https://beets.readthedocs.io/]   # where the Operator's web search looks first (#544)
-# beets tags and sorts the music folder the file share holds. Admin tool.
+# beets tags and sorts the music folder the file share holds. Admin tool,
+# and the Musik-Eingang (#639): what the family drops into the share's
+# musik-eingang folder (a song, an album folder, a .zip) goes into the
+# library once a minute with beet import -q (beets-eingang.timer,
+# musik-eingang.py); Jellyfin sees it through its realtime monitor.
 after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: beets
@@ -13,7 +17,12 @@ routes:
 secrets: []
 data:
   - path: ${DATA_DIR}/beets/config
+  - path: ${DATA_DIR}/file-share/data/musik-eingang   # the inbox, \\<box>\data\musik-eingang; emptied by every run, what was not imported in _nicht-importiert/
+    backup: false                                    # transient: the music goes into music/
 health:
   http: http://127.0.0.1:8337/
+status:                            # the Musik-Eingang: what the last run imported and what it kept back, per upload (#639)
+  file: ${DATA_DIR}/beets/config/laib-status.json
+  check: beets-eingang.service
 ports:
   - {port: 8337, lan: false}

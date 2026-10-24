@@ -19,7 +19,7 @@ JF = {}
 def fresh():
     JF.clear()
     JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
-              config={"QuickConnectAvailable": False, "ServerName": "x"})
+              config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0)
 
 
 class FakeJellyfin(BaseHTTPRequestHandler):
@@ -57,7 +57,8 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         if not self.token():
             return self.reply(401)
         if self.path == "/Library/VirtualFolders":
-            return self.reply(200, [{"Name": n, "ItemId": i} for n, i in JF["folders"]])
+            return self.reply(200, [{"Name": n, "ItemId": i, "Locations": JF["locations"].get(i, []),
+                                     "LibraryOptions": JF["options"].get(i, {})} for n, i in JF["folders"]])
         if self.path == "/Users":
             return self.reply(200, list(JF["users"].values()))
         if self.path == "/Plugins":
@@ -89,7 +90,14 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(401)
         if p.startswith("/Library/VirtualFolders?"):
             name = re.search(r"name=([^&]+)", p).group(1)
-            JF["folders"].append((name, f"lib-{len(JF['folders']) + 1}"))
+            i = f"lib-{len(JF['folders']) + 1}"
+            JF["folders"].append((name, i))
+            JF["locations"][i] = [x["Path"] for x in b["LibraryOptions"]["PathInfos"]]
+            JF["options"][i] = b["LibraryOptions"]
+            return self.reply(204)
+        if p == "/Library/VirtualFolders/LibraryOptions":
+            JF["option_posts"] += 1
+            JF["options"][b["Id"]] = b["LibraryOptions"]
             return self.reply(204)
         if p.startswith("/Packages/Installed/LDAP%20Authentication"):
             JF["installs"] += 1
@@ -192,6 +200,21 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual((p.returncode, JF["created"]), (0, 1), p.stdout + p.stderr)
         p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD="ha-svc-pw-new")
         self.assertEqual((p.returncode, JF["users"]["homeassistant"]["pw"]), (0, "ha-svc-pw-new"), p.stdout + p.stderr)
+
+    def test_the_music_library_watches_its_folder(self):
+        # #639: what the Musik-Eingang imports shows without a scan. A library from ServiceBay ("Music", by its
+        # folder) without the realtime monitor gets it, its other options kept; the next apply changes nothing
+        JF.update(wizard=True, users={"admin": {"Name": "admin", "Id": "u-admin", "pw": ADMIN_PW}},
+                  folders=[("Music", "sb-1"), ("Filme", "sb-2")], plugins=[{"Name": "LDAP-Auth", "Id": PLUGIN, "Status": "Active"}],
+                  locations={"sb-1": ["/media/music"], "sb-2": ["/media/movies"]},
+                  options={"sb-1": {"EnableRealtimeMonitor": False, "PreferredMetadataLanguage": "de"}, "sb-2": {}})
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(JF["options"]["sb-1"], {"EnableRealtimeMonitor": True, "PreferredMetadataLanguage": "de"})
+        self.assertEqual(JF["options"]["sb-2"], {}, "only the music library is touched")
+        self.assertEqual(JF["option_posts"], 1)
+        p = self.run_hook()
+        self.assertEqual((p.returncode, JF["option_posts"]), (0, 1), p.stdout + p.stderr)
 
     def test_a_server_still_starting_behind_a_green_health_is_waited_for(self):
         JF["starting"], JF["wizard503"] = 3, 2
