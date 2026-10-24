@@ -136,7 +136,7 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 	// an apply killed between write and restart (#39): its services are
 	// restarted and verified now, even with a clean file diff
 	for _, name := range Pending(env.Paths) {
-		if _, ok := st.Services[name]; ok && !slices.Contains(p.Services, name) {
+		if _, ok := st.Services[name]; (ok || slices.Contains(render.Own, name)) && !slices.Contains(p.Services, name) {
 			p.Services = append(p.Services, name)
 		}
 	}

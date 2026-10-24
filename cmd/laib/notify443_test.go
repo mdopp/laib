@@ -47,7 +47,7 @@ func TestTheNotifierRunsAsItsOwnProgramWithANarrowHand(t *testing.T) {
 	if strings.Join(tools, " ") != "laib_diag laib_inbox laib_note laib_updates" {
 		t.Fatalf("the notify hand reaches %v, want diag, inbox (#441), note, updates and nothing else", tools)
 	}
-	if out, _ := render.Render(st, nil); out["systemd/laib-notify.service"] != "" {
+	if out, _ := render.Render(st, nil); out["quadlet/laib-notify/laib-notify.container"] != "" {
 		t.Error("a box without a watchdog and without mail renders a notifier")
 	}
 
@@ -64,20 +64,22 @@ func TestTheNotifierRunsAsItsOwnProgramWithANarrowHand(t *testing.T) {
 	if !slices.Contains(render.SecretNames(st), state.Secret{Name: render.NotifyToken, External: true, Mint: "notify"}) {
 		t.Errorf("apply does not mint the notifier's token: %v", render.SecretNames(st))
 	}
-	out, err := render.Render(st, map[string]string{render.NotifyToken: "tok-n", "AUTHELIA_SMTP_PASSWORD": `p%w"x`})
+	sec := map[string]string{render.NotifyToken: "tok-n", "AUTHELIA_SMTP_PASSWORD": `p%w"x`}
+	out, err := render.Render(st, sec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit, timer, envf := out["systemd/laib-notify.service"], out["systemd/laib-notify.timer"], out["systemd/laib-notify.env"]
-	for _, w := range []string{"ExecStart=/var/opt/laib/laib-notify", "EnvironmentFile=%h/.config/systemd/user/laib-notify.env", `Environment="WATCHDOG_URL=https://hc.example/ping/abc"`,
+	// its container since ADR 0027 (#624): the image, the secrets as podman secrets
+	unit, timer, pod := out["quadlet/laib-notify/laib-notify.container"], out["systemd/laib-notify.timer"], render.PodmanSecrets(st, sec)
+	for _, w := range []string{"Image=" + render.NotifyImage, "Secret=laib.laib-notify.laib-notify.SMTP_PASSWORD,type=env,target=SMTP_PASSWORD", `Environment="WATCHDOG_URL=https://hc.example/ping/abc"`,
 		`Environment="SMTP_FROM=Die Box <box@example>"`, `Environment="MAIL_TO=admin@example.home"`, "/ready", "/mcp"} {
 		if !strings.Contains(unit, w) {
 			t.Errorf("the notifier's unit lacks %s:\n%s", w, unit)
 		}
 	}
-	// the secrets in the env file (apply writes it 0600), never in the unit
-	if strings.Contains(unit, "tok-n") || strings.Contains(unit, "p%w") || !strings.Contains(envf, `LAIB_TOKEN="tok-n"`) || !strings.Contains(envf, `SMTP_PASSWORD="p%w\"x"`) {
-		t.Errorf("unit:\n%s\nenv:\n%s", unit, envf)
+	// the secrets reach podman on stdin, never the unit
+	if strings.Contains(unit, "tok-n") || strings.Contains(unit, "p%w") || pod["laib.laib-notify.laib-notify.LAIB_TOKEN"] != "tok-n" || pod["laib.laib-notify.laib-notify.SMTP_PASSWORD"] != `p%w"x` {
+		t.Errorf("unit:\n%s\npodman secrets: %v", unit, pod)
 	}
 	if !strings.Contains(timer, "OnUnitActiveSec=5m") {
 		t.Errorf("not every five minutes:\n%s", timer)

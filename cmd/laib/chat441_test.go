@@ -98,18 +98,19 @@ func TestTheNotifierTellsTheOwnerThroughTheBote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := render.Render(st, map[string]string{render.NotifyToken: "tok-n", "BOTE_NOTIFY_TOKEN": "bote-n"})
+	sec := map[string]string{render.NotifyToken: "tok-n", "BOTE_NOTIFY_TOKEN": "bote-n"}
+	out, err := render.Render(st, sec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit, envf := out["systemd/laib-notify.service"], out["systemd/laib-notify.env"]
+	unit := out["quadlet/laib-notify/laib-notify.container"]
 	for _, w := range []string{`Environment="NOTIFY_PERSON=martin"`, `Environment="BOTE_NOTIFY_URL=http://127.0.0.1:8645"`, `Environment="LAIB_INBOX_URL=https://laib.`} {
 		if !strings.Contains(unit, w) {
 			t.Errorf("the notifier's unit lacks %s (a person is enough to run it):\n%s", w, unit)
 		}
 	}
-	if strings.Contains(unit, "bote-n") || !strings.Contains(envf, `BOTE_NOTIFY_TOKEN="bote-n"`) {
-		t.Errorf("the Bote's token belongs in the env file, not the unit:\nunit:\n%s\nenv:\n%s", unit, envf)
+	if strings.Contains(unit, "bote-n") || render.PodmanSecrets(st, sec)["laib.laib-notify.laib-notify.BOTE_NOTIFY_TOKEN"] != "bote-n" {
+		t.Errorf("the Bote's token belongs in a podman secret, not the unit:\n%s", unit)
 	}
 	var tools []string
 	for _, tl := range mcp.Tools(st, "notify") {

@@ -14,7 +14,7 @@ import (
 
 func main() {
 	e := os.Getenv
-	c := notify.Config{MCPURL: e("LAIB_MCP_URL"), ReadyURL: e("LAIB_READY_URL"), Token: e("LAIB_TOKEN"), Home: e("LAIB_HOME"),
+	c := notify.Config{MCPURL: e("LAIB_MCP_URL"), ReadyURL: e("LAIB_READY_URL"), Token: e("LAIB_TOKEN"), Home: e("NOTIFY_HOME"),
 		WatchdogURL: e("WATCHDOG_URL"), MailTo: e("MAIL_TO"), Domain: e("LAIB_DOMAIN"),
 		SMTPHost: e("SMTP_HOST"), SMTPPort: e("SMTP_PORT"), SMTPSecurity: e("SMTP_SECURITY"), SMTPUser: e("SMTP_USER"), SMTPFrom: e("SMTP_FROM"), SMTPPassword: e("SMTP_PASSWORD"),
 		BoteURL: e("BOTE_NOTIFY_URL"), BoteToken: e("BOTE_NOTIFY_TOKEN"), Person: e("NOTIFY_PERSON"), InboxURL: e("LAIB_INBOX_URL")}
