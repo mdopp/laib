@@ -68,3 +68,34 @@ propose" held only by agreement.
   down, a lease cannot pause anything, and the lease says so.
 - `scripts/loc.sh` keeps one budget per program. Moving to a container
   changes where a program runs, not what it counts toward.
+
+## Implementation notes (#624: the Operator and notify)
+
+How the first two moves were made, where the decision left room:
+
+- **Pinned by the release, not by the template path.** The release builds
+  both images from its tag and builds `laib` with their digests
+  (`internal/render.OperatorImage`, `NotifyImage`). They speak the MCP of
+  the laib that renders them and the Operator's skills come from it
+  (ADR 0023), so they must not drift from it: the self-update brings the
+  new images with the new laib, and `laib self rollback` converges with
+  the previous laib, which renders its own images back. `laib updates`
+  does not list them; a build from source renders `:latest`. The release
+  carries no `laib-operator` or `laib-notify` binary any more; one an
+  older release installed stays in `/var/opt/laib` for a rollback to it.
+- **The host's network.** Laib, the model, Frage, usage-metrics and
+  bote-notify answer on host ports, laib serve on 127.0.0.1 unless the
+  box opens it, and laib posts to the Operator on 127.0.0.1:5901. The line
+  this ADR draws is the disk and the identity, not the ports: with
+  `Network=host` each program reaches what its host unit reached, and no
+  more of the box's files.
+- **The folders.** `/mnt/data/laib/operator` is mounted at `/operator`,
+  `/mnt/data/laib/notify` at `/notify`; the unit makes the folder on the
+  host before it starts. laib-notify's `mail.json` and `watchdog.last`
+  lay in `/mnt/data/laib` itself: its first start moves them into
+  `notify/`, and `/ready` reads the stamp there.
+- **The proof.** e2e checks the rendered unit (one mount, no source above
+  the age key, `secrets.age`, the state repo or the journal, no env file);
+  the boot job runs the Operator from this commit's image and the unit
+  laib renders and shows the key unreadable inside while its folder is
+  there. On the box it is still to be shown, with the box's own paths.

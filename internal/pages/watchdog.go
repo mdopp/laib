@@ -21,7 +21,10 @@ import (
 // outside (a healthchecks-style endpoint) turns fifteen minutes of silence
 // into a push to the admin's phone. A red box stays silent on purpose.
 
-func watchdogStamp(env *cli.Env) string { return filepath.Join(env.Paths.Home, "watchdog.last") }
+// The stamp lies in laib-notify's own folder, the one its container mounts (ADR 0027).
+func watchdogStamp(env *cli.Env) string {
+	return filepath.Join(env.Paths.Home, "notify", "watchdog.last")
+}
 
 // watchdogState for readiness: "kein Wächter" | "zuletzt gemeldet 12:05" | "noch nie gemeldet".
 func watchdogState(env *cli.Env, st *state.State) string {

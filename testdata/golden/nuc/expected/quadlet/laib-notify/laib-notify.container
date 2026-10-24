@@ -1,0 +1,25 @@
+# Rendered by laib: the watchdog ping and the owner's mail (#443), in its container (ADR 0027).
+[Unit]
+Description=Laib notify
+After=laib.service
+
+[Container]
+Image=ghcr.io/mdopp/laib-notify:latest
+Network=host
+Timezone=local
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Volume=/mnt/data/laib/notify:/notify:Z
+Environment="LAIB_MCP_URL=http://127.0.0.1:5900/mcp"
+Environment="LAIB_READY_URL=http://127.0.0.1:5900/ready"
+Environment="NOTIFY_HOME=/notify"
+Environment="LAIB_DOMAIN=nuc.home"
+Environment="WATCHDOG_URL=https://hc.example/ping/nuc"
+Environment="LAIB_INBOX_URL=https://laib.nuc.home/inbox"
+Secret=laib.laib-notify.laib-notify.LAIB_TOKEN,type=env,target=LAIB_TOKEN
+
+[Service]
+ExecStartPre=/usr/bin/mkdir -p /mnt/data/laib/notify
+ExecStartPre=-/usr/bin/mv -n /mnt/data/laib/mail.json /mnt/data/laib/watchdog.last /mnt/data/laib/notify/
+Type=oneshot

@@ -26,7 +26,13 @@ func TestReadinessShowsTheWatchdogsLastReport(t *testing.T) {
 	if r, _ := pages.CollectStatus(context.Background(), c.env, st); r.Watchdog != "noch nie gemeldet" {
 		t.Fatalf("before any ping: %q", r.Watchdog)
 	}
+	// in notify's own folder, the one its container mounts (ADR 0027): a stamp beside it is not read
 	os.WriteFile(filepath.Join(c.env.Paths.Home, "watchdog.last"), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
+	if r, _ := pages.CollectStatus(context.Background(), c.env, st); r.Watchdog != "noch nie gemeldet" {
+		t.Fatalf("a stamp outside notify/ is read: %q", r.Watchdog)
+	}
+	os.MkdirAll(filepath.Join(c.env.Paths.Home, "notify"), 0o755)
+	os.WriteFile(filepath.Join(c.env.Paths.Home, "notify", "watchdog.last"), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
 	if r, _ := pages.CollectStatus(context.Background(), c.env, st); !strings.Contains(r.Watchdog, "zuletzt gemeldet") {
 		t.Fatalf("readiness must show the last report: %q", r.Watchdog)
 	}

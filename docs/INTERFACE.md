@@ -46,7 +46,7 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
                                      the setup's search, check and probe sheet (#571)
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
-laib operator enable|disable|status  mint the ops token, render and start laib-operator (humans only)
+laib operator enable|disable|status  mint the ops token, render and start laib-operator's container (ADR 0027; humans only)
 laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
                                      the built-in hands' new default verbs as one proposal (#575);
                                      --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —

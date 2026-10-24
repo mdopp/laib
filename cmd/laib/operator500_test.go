@@ -5,7 +5,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 	"github.com/mdopp/laib/internal/token"
 )
 
@@ -29,16 +29,13 @@ func TestOperatorEnableAfterDisableRunsWithAValidToken(t *testing.T) {
 	}
 	srv := httptest.NewServer(mcp.Handler(c.env))
 	defer srv.Close()
-	// what the operator does: the bearer from its rendered env file, against MCP
+	// what the operator does: the bearer from its podman secret (ADR 0027), against MCP
 	call := func() int {
 		t.Helper()
-		b, err := os.ReadFile(filepath.Join(c.env.Paths.Systemd, "laib-operator.env"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		m := regexp.MustCompile(`(?m)^LAIB_TOKEN="([^"]*)"`).FindSubmatch(b)
+		b, _ := sysd.Run(context.Background(), "podman", "secret", "inspect", "--showsecret", "--format", "x", "laib.laib-operator.laib-operator.LAIB_TOKEN")
+		m := regexp.MustCompile(`"([^"]+)"`).FindStringSubmatch(b)
 		if m == nil {
-			t.Fatalf("no LAIB_TOKEN in the env file:\n%s", b)
+			t.Fatalf("no podman secret with the operator's token: %q", b)
 		}
 		req, _ := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)))
 		req.Header.Set("Authorization", "Bearer "+string(m[1]))

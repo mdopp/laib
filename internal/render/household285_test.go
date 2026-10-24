@@ -35,7 +35,7 @@ func TestEveryConsumerDefaultsToTheHouseholdPreset(t *testing.T) {
 		t.Fatalf("the household preset is %q, not Qwen 3.x", h)
 	}
 	unit, _ := operatorUnit(&state.State{}, nil)
-	if !strings.Contains(unit, "Environment=MODEL_NAME="+h+"\n") {
+	if !strings.Contains(unit, `Environment="MODEL_NAME=`+h+`"`) {
 		t.Fatalf("the Operator's unit does not default to %s:\n%s", h, unit)
 	}
 	for file, re := range map[string]string{

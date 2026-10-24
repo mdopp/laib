@@ -190,15 +190,19 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			}
 		}
 	}
-	for _, c := range p.Changes {
-		// a changed env file (#443: a host unit's secrets) restarts its long-running unit
-		if strings.HasPrefix(c.Path, "systemd/") && strings.HasSuffix(c.Path, ".env") && c.Kind != "delete" {
-			unit := strings.TrimSuffix(strings.TrimPrefix(c.Path, "systemd/"), ".env") + ".service"
-			if strings.Contains(p.Output["systemd/"+unit], "[Install]") && !slices.Contains(res.Restarted, unit) {
-				sysd.Restart(ctx, unit)
-				res.Restarted = append(res.Restarted, unit)
-			}
+	// Laib's own programs in containers (ADR 0027): a changed unit or secret
+	// restarts the long-running one, and it is verified like a service's
+	for _, name := range render.Own {
+		if !slices.Contains(p.Services, name) || !strings.Contains(p.Output["quadlet/"+name+"/"+name+".container"], "[Install]") {
+			continue
 		}
+		unit := name + ".service"
+		if err := sysd.Restart(ctx, unit); err != nil {
+			res.Checks = append(res.Checks, Check{Service: "laib", What: "restart " + unit, OK: false, Detail: err.Error()})
+			continue
+		}
+		res.Restarted = append(res.Restarted, unit)
+		res.Checks = append(res.Checks, waitActive(ctx, "laib", unit))
 	}
 	for _, c := range p.Changes {
 		if c.Path == "nftables/laib.nft" && c.Kind == "delete" {
@@ -366,7 +370,7 @@ func writeAtomic(target, content string) error {
 	// Unit files carry rendered secrets (Environment=…), people.json the
 	// household's numbers (#177); keep them private.
 	mode := os.FileMode(0o644)
-	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") || strings.HasSuffix(target, ".env") {
+	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") {
 		mode = 0o600
 	}
 	return boxfs.WriteAtomic(target+".laib-tmp", target, []byte(content), mode)

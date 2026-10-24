@@ -63,6 +63,13 @@ building a kernel under 15k lines beside it. One user, one migration
 17. `laib context`: the starter bundle for an agent session.
 18. `laib init`: first setup as a dialogue; USB install stays a script.
 19. `laib adopt`: an unmanaged unit on the box is drift; adopt it or ignore it (ADR 0008).
+20. Only what touches the host runs on it (ADR 0027): `laib`, `laib-disk`,
+    `self-update.sh` and the backup. `laib-operator` and `laib-notify` are
+    Quadlet containers laib renders (`quadlet/<name>/<name>.container`): the
+    image the release pins by digest into laib, the host's network, a
+    read-only root without capabilities, their own folder under
+    `/mnt/data/laib` as the only mount, their tokens as podman secrets. The
+    age key, `secrets.age`, the state repo and the journal are not in reach.
 
 ## Features that are dropped
 

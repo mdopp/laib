@@ -106,11 +106,12 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["systemd/laib-backup-check.service"] = "# Rendered by laib: the monthly restore test (laib backup check).\n[Unit]\nDescription=Laib backup check\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib backup check\nEnvironment=LAIB_HOME=/mnt/data/laib\nEnvironment=LAIB_ACTOR=laib\n"
 		out["systemd/laib-backup-check.timer"] = "# Rendered by laib: once a month, a restore test.\n[Unit]\nDescription=Laib backup check timer\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n"
 	}
+	// Laib's own programs in their containers (ADR 0027)
 	if st.Box.Operator.Enabled {
-		out["systemd/laib-operator.service"], out["systemd/laib-operator.env"] = operatorUnit(st, secrets)
+		out["quadlet/laib-operator/laib-operator.container"], _ = operatorUnit(st, secrets)
 	}
 	if notifier(st) {
-		out["systemd/laib-notify.service"], out["systemd/laib-notify.env"] = notifyUnit(st, secrets)
+		out["quadlet/laib-notify/laib-notify.container"], _ = notifyUnit(st, secrets)
 		out["systemd/laib-notify.timer"] = "# Rendered by laib: the watchdog ping and the owner's mail every five minutes (#443).\n[Unit]\nDescription=Laib notify timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=5m\n\n[Install]\nWantedBy=timers.target\n"
 	}
 	if st.Policy.Autonomy["converge"] == "on" {
@@ -322,6 +323,14 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 			_, sec, _ := secretEnv(svc, file, content, vars) // Render reported an error first
 			maps.Copy(all, sec)
 		}
+	}
+	if st.Box.Operator.Enabled {
+		_, sec := operatorUnit(st, secrets)
+		maps.Copy(all, sec)
+	}
+	if notifier(st) {
+		_, sec := notifyUnit(st, secrets)
+		maps.Copy(all, sec)
 	}
 	return all
 }
@@ -777,83 +786,108 @@ func notifier(st *state.State) bool {
 	return st.Box.Watchdog.URL != "" || mailTo(st) != "" || st.Box.Notify.Person != ""
 }
 
-// envFile is a host unit's secrets as its EnvironmentFile (#443): never in
-// the unit itself; apply writes *.env 0600. Values are double-quoted.
-func envFile(kv ...string) string {
+// OperatorImage and NotifyImage are the images of Laib's own programs that
+// run in containers (ADR 0027). The release pins them by digest (ldflags
+// -X, .github/workflows/release.yml), so they move with the binary that
+// renders their units: self-update and self-rollback carry them along.
+// A build from source renders the floating tag CI publishes on main.
+var (
+	OperatorImage = "ghcr.io/mdopp/laib-operator:latest"
+	NotifyImage   = "ghcr.io/mdopp/laib-notify:latest"
+)
+
+// Own are those programs by unit name (ADR 0027): their output is
+// quadlet/<name>/<name>.container, apply starts the long-running ones.
+var Own = []string{"laib-operator", "laib-notify"}
+
+// LaibHome is where they keep their folders; units carry no LAIB_HOME of
+// a test, as every unit laib renders.
+const LaibHome = "/mnt/data/laib"
+
+// ownUnit renders one of them as a Quadlet container: the host's network
+// (laib, the model, Frage and bote-notify stay on 127.0.0.1 as before), its
+// own folder as the only mount, made on the host before it starts, a
+// read-only root without capabilities, and its secrets as podman secrets
+// (#224): no secret on argv, in the unit or in a file. An empty secret is
+// left out, podman refuses one. It returns the unit and the secrets.
+func ownUnit(name, head, folder, inside string, env, sec []string, service string) (string, map[string]string) {
+	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage}[name]
 	var b strings.Builder
-	for i := 0; i+1 < len(kv); i += 2 {
-		fmt.Fprintf(&b, "%s=\"%s\"\n", kv[i], strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", " ").Replace(kv[i+1]))
+	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\nTimezone=local\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\nVolume=%s/%s:%s:Z\n", head, image, LaibHome, folder, inside)
+	for i := 0; i+1 < len(env); i += 2 {
+		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", env[i], strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(env[i+1]))
 	}
-	return b.String()
+	secrets := map[string]string{}
+	for i := 0; i+1 < len(sec); i += 2 {
+		if sec[i+1] == "" {
+			continue
+		}
+		n := podmanSecretName(name, name, sec[i])
+		secrets[n] = sec[i+1]
+		fmt.Fprintf(&b, "Secret=%s,type=env,target=%s\n", n, sec[i])
+	}
+	fmt.Fprintf(&b, "\n[Service]\nExecStartPre=/usr/bin/mkdir -p %s/%s\n%s", LaibHome, folder, service)
+	return b.String(), secrets
 }
 
-// notifyUnit is laib-notify's oneshot and its env file: laib's MCP and
-// /ready, the watchdog URL and Authelia's mail settings in the unit, each
-// value quoted for systemd; the token and the SMTP password in the env file.
-func notifyUnit(st *state.State, secrets map[string]string) (string, string) {
-	var b strings.Builder
-	b.WriteString("# Rendered by laib: the watchdog ping and the owner's mail (#443).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n\n[Service]\nType=oneshot\nExecStart=/var/opt/laib/laib-notify\nEnvironmentFile=%h/.config/systemd/user/laib-notify.env\n")
-	env := func(k, v string) {
-		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", k, strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(v))
-	}
+// notifyUnit is laib-notify's container, a oneshot its timer starts: laib's
+// MCP and /ready, the watchdog URL and Authelia's mail settings; the token
+// and the SMTP password as podman secrets. Its folder holds mail.json and
+// watchdog.last, which /ready reads.
+func notifyUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
 	base := fmt.Sprintf("http://127.0.0.1:%d", st.Box.Laib.Port)
-	env("LAIB_MCP_URL", base+"/mcp")
-	env("LAIB_READY_URL", base+"/ready")
-	env("LAIB_HOME", "/mnt/data/laib")
-	env("LAIB_DOMAIN", st.Box.Domain)
-	env("WATCHDOG_URL", st.Box.Watchdog.URL)
-	env("LAIB_INBOX_URL", "https://"+fqdn(st, st.Box.Laib.Host)+"/inbox")
-	secret := []string{"LAIB_TOKEN", secretValue(secrets, NotifyToken)}
+	env := []string{"LAIB_MCP_URL", base + "/mcp", "LAIB_READY_URL", base + "/ready", "NOTIFY_HOME", "/notify", "LAIB_DOMAIN", st.Box.Domain,
+		"WATCHDOG_URL", st.Box.Watchdog.URL, "LAIB_INBOX_URL", "https://" + fqdn(st, st.Box.Laib.Host) + "/inbox"}
+	sec := []string{"LAIB_TOKEN", secretValue(secrets, NotifyToken)}
 	if p := st.Box.Notify.Person; p != "" {
 		// the Bote's channels first (#441): bote-notify on the host port templates/bote declares
-		env("NOTIFY_PERSON", p)
-		env("BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
-		secret = append(secret, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
+		env = append(env, "NOTIFY_PERSON", p, "BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
+		sec = append(sec, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
 	}
 	if to := mailTo(st); to != "" {
 		v := st.Services[st.Box.Roles.SSO].Values
-		env("MAIL_TO", to)
+		env = append(env, "MAIL_TO", to)
 		for _, k := range []string{"SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_FROM"} {
-			env(k, v[k].Literal)
+			env = append(env, k, v[k].Literal)
 		}
-		secret = append(secret, "SMTP_PASSWORD", secretValue(secrets, "AUTHELIA_SMTP_PASSWORD"))
+		sec = append(sec, "SMTP_PASSWORD", secretValue(secrets, "AUTHELIA_SMTP_PASSWORD"))
 	}
-	return b.String(), envFile(secret...)
+	// #624: what the host unit kept in LAIB_HOME moves into the folder once
+	move := fmt.Sprintf("ExecStartPre=-/usr/bin/mv -n %[1]s/mail.json %[1]s/watchdog.last %[1]s/notify/\nType=oneshot\n", LaibHome)
+	return ownUnit("laib-notify", "# Rendered by laib: the watchdog ping and the owner's mail (#443), in its container (ADR 0027).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n",
+		"notify", "/notify", env, sec, move)
 }
 
 // OperatorToken is the secret holding the operator's ops bearer.
 const OperatorToken = "OPERATOR_TOKEN"
 
-func operatorUnit(st *state.State, secrets map[string]string) (string, string) {
-	model := cmp.Or(st.Box.Operator.Model, "qwen3.6-35b-a3b")
-	reportAt := cmp.Or(st.Box.Operator.ReportAt, "07:00")
-	tick := cmp.Or(st.Box.Operator.Tick, "10m")
+func operatorUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
+	env := []string{"LAIB_MCP_URL", fmt.Sprintf("http://127.0.0.1:%d/mcp", st.Box.Laib.Port), "MODEL_URL", st.ModelURL(),
+		"MODEL_NAME", cmp.Or(st.Box.Operator.Model, "qwen3.6-35b-a3b"), "OPERATOR_HOME", "/operator", "OPERATOR_LISTEN", "127.0.0.1:5901",
+		"OPERATOR_TICK", cmp.Or(st.Box.Operator.Tick, "10m"), "OPERATOR_REPORT_AT", cmp.Or(st.Box.Operator.ReportAt, "07:00")}
 	key := ""
 	if st.Box.Model.KeySecret != "" {
 		key = secretValue(secrets, st.Box.Model.KeySecret)
 	}
-	window := ""
 	if n := st.Box.Operator.ContextWindow; n > 0 {
-		window = "Environment=OPERATOR_CONTEXT_WINDOW=" + fmt.Sprint(n) + "\n"
+		env = append(env, "OPERATOR_CONTEXT_WINDOW", fmt.Sprint(n))
 	}
-	// the nutzung skill reads usage-metrics with its token (#270), on the host port
-	usage := ""
-	for _, name := range st.ServiceNames() {
-		if c := st.Services[name].Contract; slices.Contains(c.Provides, "usage-metrics") && len(c.Ports) > 0 {
-			usage = "Environment=USAGE_METRICS_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\n"
-		}
-	}
-	// the web search reads through Frage's SearXNG (#544), on the host port
-	web := ""
-	for _, name := range st.ServiceNames() {
-		if c := st.Services[name].Contract; slices.Contains(c.Provides, "frage") && len(c.Ports) > 0 {
-			web = "Environment=FRAGE_URL=http://127.0.0.1:" + fmt.Sprint(c.Ports[0].Port) + "\n"
-		}
-	}
-	// the bearers in the env file (#443): the unit carries no secret value
 	sec := []string{"LAIB_TOKEN", secretValue(secrets, OperatorToken), "MODEL_KEY", key}
-	if usage != "" {
-		sec = append(sec, "USAGE_METRICS_TOKEN", secretValue(secrets, "USAGE_METRICS_TOKEN"))
+	for _, name := range st.ServiceNames() {
+		c := st.Services[name].Contract
+		if len(c.Ports) == 0 {
+			continue
+		}
+		if slices.Contains(c.Provides, "usage-metrics") {
+			// the nutzung skill reads usage-metrics with its token (#270), on the host port
+			env = append(env, "USAGE_METRICS_URL", "http://127.0.0.1:"+fmt.Sprint(c.Ports[0].Port))
+			sec = append(sec, "USAGE_METRICS_TOKEN", secretValue(secrets, "USAGE_METRICS_TOKEN"))
+		}
+		if slices.Contains(c.Provides, "frage") {
+			// the web search reads through Frage's SearXNG (#544), on the host port
+			env = append(env, "FRAGE_URL", "http://127.0.0.1:"+fmt.Sprint(c.Ports[0].Port))
+		}
 	}
-	return "# Rendered by laib: the box's admin agent (ADR 0013).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n\n[Service]\nExecStart=/var/opt/laib/laib-operator\nEnvironmentFile=%h/.config/systemd/user/laib-operator.env\nEnvironment=LAIB_MCP_URL=http://127.0.0.1:" + fmt.Sprint(st.Box.Laib.Port) + "/mcp\nEnvironment=MODEL_URL=" + st.ModelURL() + "\nEnvironment=MODEL_NAME=" + model + "\nEnvironment=OPERATOR_HOME=/mnt/data/laib/operator\nEnvironment=OPERATOR_LISTEN=127.0.0.1:5901\nEnvironment=OPERATOR_TICK=" + tick + "\nEnvironment=OPERATOR_REPORT_AT=" + reportAt + "\n" + window + usage + web + "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n", envFile(sec...)
+	return ownUnit("laib-operator", "# Rendered by laib: the box's admin agent (ADR 0013), in its container (ADR 0027).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n",
+		"operator", "/operator", env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }

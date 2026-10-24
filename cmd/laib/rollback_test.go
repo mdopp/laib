@@ -96,7 +96,7 @@ func TestOperatorDisableStopsTheUnitAndRevokesTheToken(t *testing.T) {
 	if rc := cmdOperator(context.Background(), c.env, []string{"enable"}); rc != cli.ExitOK {
 		t.Fatalf("enable rc %d", rc)
 	}
-	unit := filepath.Join(c.env.Paths.Systemd, "laib-operator.service")
+	unit := filepath.Join(c.env.Paths.Quadlet, "laib-operator", "laib-operator.container")
 	if _, err := os.Stat(unit); err != nil {
 		t.Fatal("operator unit not rendered")
 	}
@@ -118,8 +118,9 @@ func TestOperatorDisableStopsTheUnitAndRevokesTheToken(t *testing.T) {
 		t.Fatal("the operator unit file is still there")
 	}
 	joined := strings.Join(c.calls, "\n")
-	if !strings.Contains(joined, "stop laib-operator.service") || !strings.Contains(joined, "disable laib-operator.service") {
-		t.Fatalf("the unit must be stopped and disabled:\n%s", joined)
+	// a Quadlet unit is off once its file is gone (ADR 0027); its token leaves podman too
+	if !strings.Contains(joined, "stop laib-operator.service") || !strings.Contains(joined, "podman secret rm laib.laib-operator.laib-operator.LAIB_TOKEN") {
+		t.Fatalf("the unit must be stopped and its secret removed:\n%s", joined)
 	}
 	store, _ = token.Load(cli.TokenPath(c.env))
 	for _, r := range store.List() {

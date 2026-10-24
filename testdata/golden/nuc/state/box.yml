@@ -6,6 +6,8 @@ tls: internal                  # the trial box: port 80 of the house goes to the
 hostNetwork: [caddy, adguard]
 notify:
   url: http://127.0.0.1:8787/api/laib-events
+watchdog:
+  url: https://hc.example/ping/nuc   # laib-notify pings it from its container (ADR 0027)
 roles:
   proxy: caddy
   sso: auth

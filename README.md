@@ -49,7 +49,7 @@ internal/skill       the Operator's skills: registry, vocabulary, what the ceili
 internal/lease       the lease and the policy proxy
 internal/boxfs       the box's paths
 internal/sysd        the systemctl seam
-operator/            the Operator, the admin agent (ADR 0013), a host unit: its own program and line budget (ADR 0023)
+operator/            the Operator, the admin agent (ADR 0013), a container laib renders (ADR 0027): its own program and line budget (ADR 0023)
 frage/               "was ist …": SearXNG + summary, OpenAI-compatible and MCP; its own program and budget (#309)
 automat/             Home Assistant automations as an MCP tool in the bote pod; its own program and budget
 persona/             the Bote's persona engine: directory, levels, gimmicks (ADR 0020); its own program and budget
@@ -57,7 +57,7 @@ mcpserver/           the smallest MCP server, shared by the Bote's tools (frage,
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag; its own program and budget (#443)
 haushalt/            laib-haushalt behind the kernel's verb door: scan and net geraete, the household verbs (ADR 0026); its own program and budget
-notify/              laib-notify on a rendered timer: the outside watchdog ping and the owner's mail, over MCP as the notify hand; its own program and budget (#443)
+notify/              laib-notify, a container on a rendered timer (ADR 0027): the outside watchdog ping and the owner's mail, over MCP as the notify hand; its own program and budget (#443)
 skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
