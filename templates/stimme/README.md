@@ -34,5 +34,7 @@ mode needs the card.
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says
-`WHISPER_DEVICE=cpu`; the trainer needs the GPU and stays off there
+`WHISPER_DEVICE=cpu` (it must exist: Whisper requires it, a Quadlet
+`EnvironmentFile=-` is no optional file but a broken path, #557; on the GPU
+box llama's pre-start writes it); the trainer needs the GPU and stays off there
 (`laib ignore` its unit, or remove the file from the service folder).

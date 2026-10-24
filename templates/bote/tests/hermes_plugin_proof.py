@@ -1,4 +1,4 @@
-"""#266, #471, #521, #591: laib-nutzung, laib-persona, laib-ablage and laib-journal under Hermes' own plugin loader,
+"""#266, #471, #520, #521, #591: laib-nutzung, laib-persona, laib-ablage and laib-journal under Hermes' own plugin loader,
 pre_llm_call collector and turn finalizer, not a fake: run with the image's
 Python and HERMES_HOME pointing at what post-deploy rendered (config.yaml
 enabling both plugins, plugins/laib-*). argv[1]: Hermes' source dir
@@ -47,6 +47,7 @@ threading.Thread(target=psrv.serve_forever, daemon=True).start()
 os.environ["PERSONA_MCP_URL"] = "http://127.0.0.1:%d/mcp" % psrv.server_port
 # #591: laib-journal notes who switched in HA to Laib's MCP, the context id from HA's state
 NOTES = []
+ASKED = []  # what Home Assistant's conversation API was asked
 
 
 class FakeLaib(BaseHTTPRequestHandler):
@@ -63,8 +64,16 @@ class FakeLaib(BaseHTTPRequestHandler):
 
     def do_POST(self):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        NOTES.append((self.headers.get("Authorization"), req["params"]))
-        body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": "ok"}]}}).encode()
+        if self.path == "/api/conversation/process":   # #520: HA's own intents, first; HA switches "Bambi an" and "Mach Bambi aus"
+            ASKED.append((self.headers.get("Authorization"), req))
+            hit = req["text"] in ("Bambi an", "Mach Bambi aus")
+            res = ({"response_type": "action_done", "speech": {"plain": {"speech": "Eingeschaltet" if req["text"] == "Bambi an" else "Ausgeschaltet"}},
+                    "data": {"targets": [], "success": [{"name": "Bambi", "type": "entity", "id": "light.bambi"}], "failed": []}} if hit else
+                   {"response_type": "error", "speech": {"plain": {"speech": "Entschuldigung, das habe ich nicht verstanden"}}, "data": {"code": "no_intent_match"}})
+            body = json.dumps({"response": res, "conversation_id": None}).encode()
+        else:
+            NOTES.append((self.headers.get("Authorization"), req["params"]))
+            body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": "ok"}]}}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -90,14 +99,14 @@ for name in ["mcp__haushalt__kalender", "mcp__persona__eingabe", "mcp__haushalt_
     _emit_post_tool_call_hook(function_name=name, function_args={"q": "Anna"}, result="{}", session_id="s-9", turn_id="t1")
 
 
-def turn(turn_id, message, answer):
-    agent = types.SimpleNamespace(session_id="s-9", model="gemma", platform="signal", _persist_disabled=False)
-    return _apply_output_hooks(agent, answer, logging.getLogger("proof"), platform="signal", effective_task_id="task",
+def turn(turn_id, message, answer, platform="signal"):
+    agent = types.SimpleNamespace(session_id="s-9", model="gemma", platform=platform, _persist_disabled=False)
+    return _apply_output_hooks(agent, answer, logging.getLogger("proof"), platform=platform, effective_task_id="task",
                                turn_id=turn_id, original_user_message=message, messages=[])[0]
 
 
-def pre(turn_id, message):
-    agent = types.SimpleNamespace(session_id="s-9", model="gemma", platform="signal", _persist_disabled=False, _user_id="+4917000", _parent_session_id="")
+def pre(turn_id, message, platform="signal", user="+4917000"):
+    agent = types.SimpleNamespace(session_id="s-9", model="gemma", platform=platform, _persist_disabled=False, _user_id=user, _parent_session_id="")
     return _collect_pre_llm_call_context(agent, effective_task_id="task", turn_id=turn_id, original_user_message=message, messages=[], conversation_history=[])
 
 
@@ -128,7 +137,7 @@ assert [body for path, body in SEEN if path == "/miss"] == [{"source": "bote", "
 assert "Anna" not in json.dumps(SEEN, ensure_ascii=False) and "s-9" not in json.dumps(SEEN)
 # #591: a switch through ha, by the person who wrote this turn, reaches Laib's journal; a read does not
 import time  # noqa: E402
-pre("t7", "Bambi an")
+pre("t7", "Schalte Bambi bitte ein")
 _emit_post_tool_call_hook(function_name="mcp__ha__GetLiveContext", function_args={}, result=json.dumps({"result": '{"success": true, "result": "Bambi: off"}'}), session_id="s-9", turn_id="t7")
 done = {"speech": {}, "response_type": "action_done", "data": {"success": [{"name": "Bambi", "type": "entity", "id": "light.bambi"}], "failed": []}}
 _emit_post_tool_call_hook(function_name="mcp__ha__HassTurnOn", function_args={"name": "Bambi"}, result=json.dumps({"result": json.dumps(done)}), session_id="s-9", turn_id="t7")
@@ -138,6 +147,30 @@ for _ in range(50):
     time.sleep(0.1)
 time.sleep(0.3)
 assert NOTES == [("Bearer bote-proof", {"name": "laib_note", "arguments": {"kind": "watch", "text": "ha person=anna service=intent.HassTurnOn entity=light.bambi context=ctx-proof"}})], NOTES
+# #520, ADR 0015: HA's own intents first, on both paths. Signal ("Bambi an" from anna's number) and
+# Haus's Sprechen field (Hermes' API server: platform api_server, no sender): HA switches, the person
+# reads HA's answer whatever the model wrote, and laib-journal still notes who switched (#591)
+NOTES.clear()
+ASKED.clear()
+assert "Home Assistant" in pre("t8", "Bambi an"), "HA's answer was not announced to the model"
+e = turn("t8", "Bambi an", "Bambi an.")
+assert e == "Eingeschaltet", repr(e)
+assert "Home Assistant" in pre("t9", "[Haus] Mach Bambi aus", platform="api_server", user="")
+f = turn("t9", "[Haus] Mach Bambi aus", "OK", platform="api_server")
+assert f == "Ausgeschaltet", repr(f)
+assert [(a, q["text"], q["agent_id"], q["language"]) for a, q in ASKED] == [
+    ("Bearer ha-proof", "Bambi an", "conversation.home_assistant", "de"), ("Bearer ha-proof", "Mach Bambi aus", "conversation.home_assistant", "de")], ASKED
+for _ in range(50):
+    if len(NOTES) == 2:
+        break
+    time.sleep(0.1)
+assert sorted(n[1]["arguments"]["text"] for n in NOTES) == [
+    "ha person=- service=conversation.process entity=light.bambi context=ctx-proof",
+    "ha person=anna service=conversation.process entity=light.bambi context=ctx-proof"], NOTES
+# what HA did not understand (no_intent_match) is the model's turn, as before
+assert pre("t10", "Erzähl mir einen Witz über Bambi", platform="api_server", user="") == ""
+g = turn("t10", "Erzähl mir einen Witz über Bambi", "Ein Reh kommt in eine Bar.", platform="api_server")
+assert g == "Ein Reh kommt in eine Bar.", repr(g)
 # #521: laib-ablage under Hermes' own gateway hooks: pre_gateway_dispatch marks a PDF sent with
 # "ablegen", post_gateway_admission (after Hermes' sender check) files it and answers, so a hook
 # Hermes renames or a payload it narrows shows up here, not as documents that never arrive.

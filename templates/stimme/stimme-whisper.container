@@ -8,7 +8,8 @@ Network=host
 Environment=WHISPER_MODEL=${WHISPER_MODEL}
 Environment=WHISPER_LANG=${WHISPER_LANG}
 Environment=WHISPER_BEAM=1
-EnvironmentFile=-${VOICE_ENV}
+# required: Quadlet passes an optional "-" to podman --env-file as part of the path (#557); llama's pre-start writes the file
+EnvironmentFile=${VOICE_ENV}
 Volume=${DATA_DIR}/stimme/whisper:/config:z
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true

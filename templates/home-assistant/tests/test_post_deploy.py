@@ -31,7 +31,8 @@ def fresh(onboarded=None):
     HA.clear()
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, core_updates=0, n=0,
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
-              registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None)
+              registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None,
+              restarts=0)
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -141,8 +142,19 @@ class FakeHA(BaseHTTPRequestHandler):
             return self.reply(200, s) if s else self.reply(404)
         self.reply(404)
 
+    def restarting(self):
+        """#557: HA restarts under the hook: the connection drops without an answer, HA_RESTARTS times"""
+        if HA.get("restarts", 0) > 0:
+            HA["restarts"] -= 1
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+            return True
+        return False
+
     def do_POST(self):
         b = self.body()
+        if self.path == "/api/config/config_entries/flow" and b.get("handler") == "wyoming" and self.restarting():
+            return
         if self.path.startswith("/api/services/"):   # #528: update.install, homeassistant.restart
             if self.user() is None or not is_admin(self.user()):
                 return self.reply(401)
@@ -434,9 +446,9 @@ class Hook(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
 
     def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
-                 stimme=(1, 1, 1), data_dir="", zuhause=None):
+                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60"):
         HA["ma_url"] = ma
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
                "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
@@ -766,7 +778,7 @@ class Stimme(Hook):
                          "tts": [{"engine_id": "tts.piper", "supported_languages": ["de_DE"]}, {"engine_id": "tts.google_translate_de", "supported_languages": ["de"]}]}
         pipe = lambda i, name, stt, tts, conv: {"id": i, "name": name, "language": "de", "stt_engine": stt, "stt_language": "de", "tts_engine": tts,
                                                 "tts_language": "de", "tts_voice": "martin", "conversation_engine": conv, "conversation_language": "de",
-                                                "wake_word_entity": None, "wake_word_id": None, "prefer_local_intents": True}
+                                                "wake_word_entity": None, "wake_word_id": None, "prefer_local_intents": False}
         HA["pipelines"] = [pipe("p-sol", "Solaris", "stt.faster_whisper", "tts.solaris_tts", "conversation.solaris"),
                            pipe("p-own", "Eigene", "cloud", "tts.google_translate_de", "conversation.home_assistant")]
         save()
@@ -786,6 +798,8 @@ class Stimme(Hook):
         self.assertEqual((sol["stt_engine"], sol["tts_engine"], sol["tts_language"], sol["tts_voice"], sol["conversation_engine"]),
                          ("stt.faster_whisper", "tts.piper", "de_DE", None, "conversation.frage"), log)
         self.assertIn('Assist pipeline "Solaris"', log)
+        self.assertTrue(sol["prefer_local_intents"], "#557: with Frage as the agent, HA's own intents must answer first")
+        self.assertFalse(own["prefer_local_intents"], "a pipeline on HA's own agent is the owner's choice")
         self.assertEqual(own["stt_engine"], "cloud", "a legacy provider was replaced")
         self.assertEqual((own["tts_engine"], own["conversation_engine"]), ("tts.google_translate_de", "conversation.home_assistant"),
                          "a part that works is the owner's choice")
@@ -805,12 +819,41 @@ class Stimme(Hook):
         self.assertEqual(HA["pipeline_updates"], [], "a pipeline moved to nothing")
         self.assertIn("after laib add stimme: laib apply home-assistant", log)
 
-    def test_unreadable_storage_adds_no_entry_it_might_have_twice(self):
+    def test_unreadable_storage_adds_no_entry_it_might_have_twice_and_is_red(self):
         self.kraftwerk()
-        p, _, log = self.run_hook(stimme=self.ports)   # LAIB_DATA_DIR without HA's .storage
-        self.assertEqual(p.returncode, 0, log)
+        p, handed, log = self.run_hook(stimme=self.ports)   # LAIB_DATA_DIR without HA's .storage
+        self.assertEqual(p.returncode, 1, "#557/#588: green with a NOT set up line\n" + log)
         self.assertEqual(len(self.wyoming()), 2)
         self.assertIn("Wyoming for Stimme NOT set up", log)
+        self.assertIn("BOTE_HA_TOKEN", handed, "the tokens are handed back before the red")
+
+    def test_home_assistant_restarting_under_the_hook_is_waited_for(self):   # #557: laib add stimme while HA restarted
+        self.kraftwerk()
+        HA["restarts"] = 1
+        p, _, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.wyoming()), 4, log)
+        self.assertNotIn("NOT set up", log)
+        self.assertIn("waiting for Home Assistant", log)
+
+    def test_home_assistant_that_stays_away_is_red_not_green(self):
+        self.kraftwerk()
+        HA["restarts"] = 99
+        p, _, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name, wait="1")
+        self.assertEqual(p.returncode, 1, log)
+        self.assertIn("Wyoming for Stimme NOT set up", log)
+        self.assertIn("laib apply home-assistant", log)
+
+    def test_a_pipeline_already_on_frage_prefers_has_intents_once(self):   # #557
+        self.kraftwerk()
+        HA["pipelines"][1].update(conversation_engine="conversation.frage")
+        p, handed, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertTrue(all(x["prefer_local_intents"] for x in HA["pipelines"]), HA["pipelines"])
+        self.assertIn("prefer_local_intents", log)
+        n = len(HA["pipeline_updates"])
+        p, _, log = self.run_hook(tokens=handed, frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual((p.returncode, len(HA["pipeline_updates"])), (0, n), "a second run changed a pipeline")
 
     def test_a_stimme_that_does_not_speak_the_language_leaves_the_part(self):
         self.kraftwerk()

@@ -30,7 +30,10 @@ class FakeHermes(BaseHTTPRequestHandler):
             return
         said = body["messages"][-1]["content"]
         frames = []
-        if self.mode == "ok" or (self.mode == "echo-short" and len(said.split()) > 2):
+        if self.mode == "ha":   # HA switched it in front of the model: no tool, HA's answer
+            ha_switches(said)
+            reply = "Erledigt"
+        elif self.mode == "ok" or (self.mode == "echo-short" and len(said.split()) > 2):
             frames.append(("hermes.tool.progress", {"tool": "mcp__ha__HassTurnOff", "toolCallId": "c1", "status": "running"}))
             frames.append(("hermes.tool.progress", {"tool": "mcp__ha__HassTurnOff", "toolCallId": "c1", "status": "completed"}))
             reply = "Erledigt, %s." % said
@@ -46,6 +49,39 @@ class FakeHermes(BaseHTTPRequestHandler):
         for event, data in frames:
             self.wfile.write(((("event: %s\n" % event) if event else "") + "data: %s\n\n" % json.dumps(data)).encode())
         self.wfile.write(b"data: [DONE]\n\n")
+
+
+LIGHT = {}   # the fake Home Assistant's light "Bambi" (#520: HA switches it itself, no tool runs in Hermes)
+
+
+class FakeHA(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Bearer ha-tok":
+            self.send_response(401)
+            self.end_headers()
+            return
+        states = [{"entity_id": "light.wohnzimmer_bambi", "state": LIGHT["state"], "attributes": {"friendly_name": "Bambi", "brightness": LIGHT.get("brightness")}},
+                  {"entity_id": "sensor.bambi_akku", "state": "80", "attributes": {"friendly_name": "Bambi"}}]
+        body = json.dumps(states if self.path == "/api/states" else next((x for x in states if "/api/states/" + x["entity_id"] == self.path), {})).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def ha_switches(said):
+    """what HA's own intent does with the sentence (the persona plugin sent it there first)"""
+    s = said.lower()
+    if "prozent" in s:
+        pct = int(s.split()[-2])
+        LIGHT.update(state="on", brightness=round(pct * 255 / 100))
+    elif s.endswith(" an"):
+        LIGHT.update(state="on", brightness=255)
+    elif s.endswith(" aus"):
+        LIGHT.update(state="off", brightness=None)
 
 
 class SwitchTest(unittest.TestCase):
@@ -74,6 +110,25 @@ class SwitchTest(unittest.TestCase):
         sessions = {h.get("X-Hermes-Session-Id") for _, h, _ in SEEN}
         self.assertEqual(len(sessions), len(SEEN), "each sentence needs its own session")
         self.assertTrue(all(p == "/v1/chat/completions" and b["stream"] for p, _, b in SEEN))
+
+    def test_ha_switching_in_front_of_the_model_counts_by_the_lights_state(self):
+        # #520, ADR 0015: the persona plugin hands "Bambi aus" to HA's own intents first. No Hermes tool
+        # runs, so with HA's token in the key file the case is measured where it matters: at the light.
+        ha = HTTPServer(("127.0.0.1", 0), FakeHA)
+        threading.Thread(target=ha.serve_forever, daemon=True).start()
+        self.addCleanup(ha.server_close)
+        self.addCleanup(ha.shutdown)
+        self.env.write_text("API_SERVER_KEY=%s\nHA_TOKEN=ha-tok\nHA_URL=http://host.containers.internal:8123\n" % KEY)
+        LIGHT.update(state="off", brightness=None)
+        url = "http://127.0.0.1:%d" % ha.server_port
+        rc, out = self.run_it("ha", "--ha-url", url)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("6 von 6 Befehlen geschaltet", out)
+        self.assertIn("HA", out)
+        LIGHT.update(state="on", brightness=255)
+        rc, out = self.run_it("echo", "--ha-url", url, "--wait", "0.2")   # nothing switched, nothing ran
+        self.assertEqual(rc, 1, out)
+        self.assertRegex(out, r"FEHLT .*Bambi aus .*Bambi ist on, nicht off")
 
     def test_an_echo_is_no_switch(self):
         # #520: "Bambi aus" came back as "Bambi aus." and nothing switched

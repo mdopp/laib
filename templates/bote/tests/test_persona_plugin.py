@@ -7,7 +7,8 @@ pre_llm_call asks the engine and puts its routing into the user turn;
 transform_llm_output answers a screen turn with the engine's screen,
 verbatim, whatever the model wrote. Hermes calls the hooks with keyword
 arguments; here they are called the same way against a fake engine."""
-import importlib.util, json, os, threading, unittest
+import importlib.util, json, os, sys, threading, unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -54,7 +55,7 @@ def load():
     return m
 
 
-class PersonaPlugin(unittest.TestCase):
+class Base(unittest.TestCase):
     def setUp(self):
         self.srv = HTTPServer(("127.0.0.1", 0), FakeEngine)
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
@@ -72,6 +73,8 @@ class PersonaPlugin(unittest.TestCase):
         out = self.p.on_output(response_text=model_says, session_id="s1", turn_id=turn, platform=platform, model="m")
         return ctx, out
 
+
+class PersonaPlugin(Base):
     def test_a_screen_reaches_the_person_verbatim(self):
         ctx, out = self.turn("Menü", "Hier ist das Menü: 1. Spiele 2. Geräte")   # what the model made of it before
         self.assertEqual(out, "```\n" + MENU + "\n```")
@@ -172,6 +175,122 @@ class PersonaPlugin(unittest.TestCase):
     def test_hermes_prefixes_are_not_the_message(self):
         self.turn("[Anna] Menü", "x")
         self.assertEqual(CALLS[0]["eingabe"], "Menü")
+
+
+ASKED = []   # what Home Assistant's conversation API was asked (#520)
+
+
+def ha_says(text):
+    """HA's answer to POST /api/conversation/process with agent_id conversation.home_assistant (HA 2026.10,
+    conversation/http.py): a switch is action_done with the entities, a state question query_answer,
+    words it has no sentence for are an error with code no_intent_match (HTTP 200 all three)"""
+    plain = lambda s: {"plain": {"speech": s, "extra_data": None}}
+    if text in ("Bambi aus", "Mach Bambi aus", "Wohnzimmer aus"):
+        ids = ["light.wohnzimmer_bambi"] + (["light.stehlampe"] if text.startswith("Wohnzimmer") else [])
+        return {"response_type": "action_done", "speech": plain("Ausgeschaltet"), "language": "de",
+                "data": {"targets": [], "success": [{"name": i, "type": "entity", "id": i} for i in ids], "failed": []}}
+    if text == "Ist Bambi an?":
+        return {"response_type": "query_answer", "speech": plain("Nein, Bambi ist aus"), "language": "de",
+                "data": {"targets": [], "success": [{"name": "Bambi", "type": "entity", "id": "light.wohnzimmer_bambi"}], "failed": []}}
+    if text == "Bambi auf 400 Prozent":
+        return {"response_type": "error", "speech": plain("Entschuldigung, das kann ich nicht"), "language": "de",
+                "data": {"code": "no_valid_targets"}}
+    return {"response_type": "error", "speech": plain("Entschuldigung, das habe ich nicht verstanden"), "language": "de",
+            "data": {"code": "no_intent_match"}}
+
+
+class FakeHA(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        ASKED.append((self.path, self.headers.get("Authorization"), req))
+        body = json.dumps({"response": ha_says(req.get("text")), "conversation_id": "c1", "continue_conversation": False}).encode()
+        self.send_response(200 if self.path == "/api/conversation/process" else 404)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class HomeAssistantFirst(Base):
+    """#520, ADR 0015: every message goes to HA's own intents first. "Bambi aus" over Haus's Sprechen
+    field (Hermes' API server) and over Signal is switched by HA in a second, whatever the model makes of
+    it; the model only answers what HA did not handle. HA executing the intent directly still writes
+    who switched (#591), with laib-journal's own note."""
+
+    def setUp(self):
+        super().setUp()
+        self.ha = HTTPServer(("127.0.0.1", 0), FakeHA)
+        threading.Thread(target=self.ha.serve_forever, daemon=True).start()
+        self.addCleanup(self.ha.server_close)
+        self.addCleanup(self.ha.shutdown)
+        env = mock.patch.dict(os.environ, HA_URL="http://127.0.0.1:%d" % self.ha.server_port, HA_TOKEN="ha-bote-tok",
+                              LAIB_TOKEN="bote-laib-tok", LAIB_MCP_URL="http://127.0.0.1:9/mcp")
+        env.start()
+        self.addCleanup(env.stop)
+        ASKED.clear()
+        spec = importlib.util.spec_from_file_location("laib_journal_for_persona", HERE / "journal_plugin.py")
+        self.journal = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.journal)
+        self.notes = []
+        self.journal._spawn = lambda fn, *a: self.notes.append(a)   # note(person, service, entities), not run
+        self.journal._who = lambda key: {"signal:+4917012345": "anna"}.get(key, "-")
+        sys.modules["laib_journal_for_persona"] = self.journal          # Hermes keeps its plugins in sys.modules
+        self.addCleanup(sys.modules.pop, "laib_journal_for_persona", None)
+
+    def test_a_switch_over_signal_is_has_and_the_model_only_says_ok(self):
+        ctx, out = self.turn("Bambi aus", "OK")
+        self.assertEqual(ASKED, [("/api/conversation/process", "Bearer ha-bote-tok",
+                                  {"text": "Bambi aus", "language": "de", "agent_id": "conversation.home_assistant"})])
+        self.assertIn("Home Assistant", ctx["context"])
+        self.assertEqual(out, "Ausgeschaltet", "the person reads HA's answer, not the model's")
+        self.assertEqual(self.notes, [("anna", "conversation.process", ["light.wohnzimmer_bambi"])], "who switched (#591)")
+
+    def test_a_switch_over_hauses_sprechen_field_is_has_too(self):
+        # Hermes' API server: platform api_server, no sender id (gateway/platforms/api_server.py _create_agent)
+        ctx, out = self.turn("[Anna] Wohnzimmer aus", "Wohnzimmer aus.", sender="", platform="api_server")
+        self.assertEqual([a[2]["text"] for a in ASKED], ["Wohnzimmer aus"])
+        self.assertEqual(out, "Ausgeschaltet")
+        self.assertEqual(self.notes, [("-", "conversation.process", ["light.wohnzimmer_bambi", "light.stehlampe"])])
+
+    def test_what_ha_did_not_understand_goes_to_the_model(self):
+        for i, line in enumerate(("Wann kommt der Müll?", "Bambi auf 400 Prozent")):
+            ctx, out = self.turn(line, "Das sage ich dir gleich.", turn="u%d" % i)
+            self.assertIsNone(ctx, line)
+            self.assertIsNone(out, line)
+        self.assertEqual(len(ASKED), 2)
+        self.assertEqual(self.notes, [])
+
+    def test_a_state_question_is_has_answer_and_notes_nothing(self):
+        ctx, out = self.turn("Ist Bambi an?", "OK")
+        self.assertEqual(out, "Nein, Bambi ist aus")
+        self.assertEqual(self.notes, [], "a read is no switch")
+
+    def test_inside_a_menu_level_the_answer_keeps_its_prompt_line(self):
+        _, out = self.turn("Ist das Licht in der Küche an?", "OK")   # HA: no_intent_match, the model's turn
+        self.assertEqual(out, "JOSHUA/GERÄTE>\nOK")
+        state = ha_says("Ist Bambi an?")
+        with mock.patch.object(sys.modules[__name__], "ha_says", lambda t: state):
+            _, out = self.turn("Ist das Licht in der Küche an?", "OK", turn="t2")   # HA answers inside the level
+        self.assertEqual(out, "JOSHUA/GERÄTE>\nNein, Bambi ist aus")
+
+    def test_a_screen_is_never_asked_of_ha(self):
+        _, out = self.turn("Menü", "x")
+        self.assertEqual(out, "```\n" + MENU + "\n```")
+        self.assertEqual(ASKED, [])
+
+    def test_without_ha_or_without_the_engine_the_switch_still_goes_first_to_ha(self):
+        os.environ["PERSONA_MCP_URL"] = "http://127.0.0.1:9/mcp"
+        _, out = self.turn("Mach Bambi aus", "OK")
+        self.assertEqual(out, "Ausgeschaltet")
+        os.environ["HA_URL"] = "http://127.0.0.1:9"
+        ctx, out = self.turn("Mach Bambi aus", "Bambi ist aus.", turn="t2")
+        self.assertEqual((ctx, out), (None, None), "HA down: the model's turn, as before")
+
+    def test_a_scheduled_job_never_switches_through_ha(self):
+        self.turn("Bambi aus", "…", platform="cron")
+        self.assertEqual(ASKED, [])
 
 
 if __name__ == "__main__":
