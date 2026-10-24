@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
@@ -150,7 +152,11 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	r, rows := CollectStatus(ctx, env, st)
+	fresh := slices.Contains(args, "--fresh")
+	args = slices.DeleteFunc(args, func(a string) bool { return a == "--fresh" })
+	// laib_status in serve answers from a readiness under StatusTTL old (#593);
+	// a named service (after a restart), --fresh and the CLI compute
+	r, rows, at := kept(ctx, env, st, fresh || len(args) > 0 || !env.MCP)
 	if len(args) > 0 {
 		var one []ServiceStatus
 		for _, row := range rows {
@@ -161,7 +167,7 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 		rows = one
 	}
 	if env.JSON {
-		return cli.Emit(env, map[string]any{"ready": r, "services": rows})
+		return cli.Emit(env, map[string]any{"ready": r, "services": rows, "at": at.UTC().Format(time.RFC3339)})
 	}
 	fmt.Fprintf(env.W(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
@@ -183,6 +189,41 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 		fmt.Fprintf(env.W(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 	}
 	return cli.ExitOK
+}
+
+// StatusTTL is how long laib_status answers from the kept readiness (#593).
+var StatusTTL = 30 * time.Second
+
+var statusCache struct {
+	sync.Mutex
+	key  string
+	at   time.Time
+	r    Readiness
+	rows []ServiceStatus
+}
+
+// kept returns the kept readiness while it is younger than StatusTTL and
+// nothing changed the box since: every apply, decision, restart, start and
+// stop writes a journal line, so the newest day file's size and time are
+// part of the key, and so is the apply lock's holder (an apply under way).
+func kept(ctx context.Context, env *cli.Env, st *state.State, fresh bool) (Readiness, []ServiceStatus, time.Time) {
+	key := env.Paths.Home + "|" + apply.LockHolder(env.Paths)
+	if files, _ := filepath.Glob(filepath.Join(env.Paths.Journal, "*.jsonl")); len(files) > 0 {
+		if fi, err := os.Stat(slices.Max(files)); err == nil {
+			key += fmt.Sprintf("|%s|%d|%d", fi.Name(), fi.Size(), fi.ModTime().UnixNano())
+		}
+	}
+	c := &statusCache
+	c.Lock()
+	defer c.Unlock()
+	if fresh || c.key != key || time.Since(c.at) >= StatusTTL {
+		c.r, c.rows = CollectStatus(ctx, env, st)
+		c.key, c.at = key, time.Now()
+		if ctx.Err() != nil { // a call cut off mid-way is no readiness to keep
+			c.key = ""
+		}
+	}
+	return c.r, slices.Clone(c.rows), c.at
 }
 
 // Guarantees reads the last successful backup from the journal and the

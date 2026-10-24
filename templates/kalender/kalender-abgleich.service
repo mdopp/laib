@@ -15,6 +15,7 @@ Environment=RADICALE_PASSWORD=${RADICALE_PASSWORD}
 Environment=RADICALE_URL=${RADICALE_URL}
 Environment=HA_USER=${HA_USER}
 Environment=STALE_HOURS=${STALE_HOURS}
+Environment=ABO_EVERY_DAYS=${ABO_EVERY_DAYS}
 StandardInput=file:%h/.config/containers/systemd/kalender/kalender.py
-ExecStart=/usr/bin/podman run --rm -i --name kalender-abgleich -e KALENDER_ABOS -e RADICALE_PASSWORD -e RADICALE_URL -e RADICALE_USER=kalender -e HA_USER -e STALE_HOURS -v ${DATA_DIR}/kalender:/data:z ${IMAGE} python3 -
+ExecStart=/usr/bin/podman run --rm -i --name kalender-abgleich -e KALENDER_ABOS -e RADICALE_PASSWORD -e RADICALE_URL -e RADICALE_USER=kalender -e HA_USER -e STALE_HOURS -e ABO_EVERY_DAYS -v ${DATA_DIR}/kalender:/data:z ${IMAGE} python3 -
 TimeoutStartSec=10min

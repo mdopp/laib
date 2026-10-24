@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,19 +15,49 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 )
 
+// cmdJournal: --limit n is the newest n (without --since of any age),
+// --verb and --kind (a note's kind) filter before the limit (#593).
 func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
-	since := 24 * time.Hour
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--since" && i+1 < len(args) {
+	since, limit := time.Now().Add(-24*time.Hour), 0
+	sinceSet := false
+	var verb, kind string
+	for i := 0; i+1 < len(args); i += 2 {
+		switch args[i] {
+		case "--since":
 			d, err := time.ParseDuration(args[i+1])
 			if err != nil {
 				return env.Fail(err)
 			}
-			since = d
-			i++
+			since, sinceSet = time.Now().Add(-d), true
+		case "--limit":
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil || n < 0 {
+				return env.Fail(fmt.Errorf("--limit %q: a count, 0 = all", args[i+1]))
+			}
+			limit = n
+		case "--verb":
+			verb = args[i+1]
+		case "--kind":
+			if kind = args[i+1]; kind != "report" && kind != "incident" && kind != "watch" {
+				return env.Fail(fmt.Errorf("unknown kind %q (report|incident|watch)", kind))
+			}
+		default:
+			i--
 		}
 	}
-	es, err := journal.Read(env.Paths.Journal, time.Now().Add(-since))
+	keep := func(e journal.Entry) bool {
+		return (verb == "" || e.Verb == verb) && (kind == "" || e.Verb == "note" && e.Reason == kind)
+	}
+	var es []journal.Entry
+	var err error
+	if limit > 0 {
+		if !sinceSet {
+			since = time.Time{}
+		}
+		es, err = journal.Newest(env.Paths.Journal, since, limit, keep)
+	} else if es, err = journal.Read(env.Paths.Journal, since); err == nil {
+		es = slices.DeleteFunc(es, func(e journal.Entry) bool { return !keep(e) })
+	}
 	if err != nil {
 		return env.Fail(err)
 	}

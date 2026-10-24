@@ -23,6 +23,9 @@ func TestDefaultPolicyIsTheOnePlace(t *testing.T) {
 	if !MayVerb(p, "haus", "scan") || !MayVerb(p, "haus", "note") || len(Missing(p, false))+len(Missing(p, true)) != 0 { // note: Haus journals who switched in HA (#591)
 		t.Fatalf("the defaults lack their own verbs: %v", Missing(p, false))
 	}
+	if !Allowed(p, "bote", "propose") || !MayVerb(p, "bote", "note") { // note is propose-tier: the Bote journals who switched in HA (#591)
+		t.Fatal("the Bote's hand may not note")
+	}
 	if strings.Join(p.Hands["laib"].Verbs, ",") != strings.Join(state.BoxHand.Verbs, ",") || strings.Join(p.Hands["notify"].Verbs, ",") != strings.Join(state.NotifyHand.Verbs, ",") {
 		t.Fatal("the hands Load supplies are not the defaults")
 	}

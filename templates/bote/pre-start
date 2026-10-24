@@ -107,6 +107,9 @@ done
   echo "MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}"
   echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
   echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
+  # the plugin laib-journal (#591) notes who switched in HA: to Laib with LAIB_TOKEN, the context id from HA
+  echo "LAIB_MCP_URL=${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}"
+  echo "HA_URL=${HA_URL:-http://host.containers.internal:8123}"
   echo "HERMES_NON_INTERACTIVE=1"
   # the plugin laib-nutzung (#266) reads these; without usage-metrics' token no line and no plugin
   if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
@@ -121,6 +124,19 @@ done
   fi
 } > "$H/.env"
 chmod 600 "$H/.env"
+# Who wrote (#591): Hermes knows the sender's id, laib-journal names the person; box.yml people
+# turned round, "signal:+49…" to the name, for the ids that are a person's (as for the allowed lists)
+( umask 077; python3 - "${LAIB_RENDER_DIR:-/nonexistent}/people/people.json" > "$H/personen.json" <<'PY'
+import json, sys
+try:
+    people = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    people = {}
+print(json.dumps({ch: name for name in sorted(people) for ch in people[name]
+                  if ch.partition(":")[0] in ("signal", "telegram") and ch.partition(":")[2][:1] not in ("", "-")}))
+PY
+)
+chmod 600 "$H/personen.json"
 # bote-notify (#177) gets the platform credentials only: no Bote token, no
 # model key, nothing else of HERMES_HOME (sessions, memory).
 N="$LAIB_DATA_DIR/bote/notify"; mkdir -p "$N"

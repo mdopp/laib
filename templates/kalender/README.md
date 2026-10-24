@@ -34,6 +34,12 @@ they were (Google), and a mirror only reads.
   `homeassistant` (`HA_USER`), read only for HA. The home-assistant
   template's post-deploy adds that CalDAV entry: nobody types a password into
   HA. This replaces the hand-made `~/ha-caldav.sh`.
+- **Each calendar its own interval (#619).** A subscription's `every` (30m,
+  12h, 30d) says how often it is fetched: `laib calendar subscribe … --every
+  30d`, or later `laib calendar every <person> <name> --every 1d`. Without
+  one, a Google calendar is fetched every run and a public abo (Müllabfuhr,
+  Feiertage) every `ABO_EVERY_DAYS` (30). A failed or new one is asked again
+  on the next run.
 - **A timer, no daemon.** `kalender-abgleich.timer` runs it every 15 minutes
   in a stock Python image (stdlib only). `laib diag`: yellow when a calendar
   has not been mirrored for `STALE_HOURS` (2) or Google answers 404 (the

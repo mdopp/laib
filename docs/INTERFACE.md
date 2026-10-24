@@ -6,7 +6,13 @@ the Solaris cards are views on it.
 ## CLI
 
 ```
-laib status [service] [--watch]      one line per service; first line is the readiness state
+laib status [service] [--watch] [--fresh]   one line per service; first line is the readiness state; --json adds `at`,
+                                     when it was measured. Through MCP (laib_status) the answer is the kept readiness while
+                                     it is under 30 s old and no journal line or apply lock came since (#593); a named
+                                     service, --fresh and the CLI measure anew; /ready and the Status page always measure
+laib journal [--since 24h] [--limit n] [--verb v] [--kind report|incident|watch]
+                                     journal entries, oldest first; --verb and --kind (a note's kind) filter, --limit keeps
+                                     the newest n, and without --since of any age (#593)
 laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
@@ -112,7 +118,8 @@ splitting a command line, so quotes and spaces survive:
 
 | Tool | Parameters |
 |---|---|
-| `laib_status`, `laib_diag` | `service?` |
+| `laib_status` | `service?`, `fresh?` (a boolean) → `{ready, services, at}`; `at` (RFC3339) is when the answer was measured, up to 30 s old (#593) |
+| `laib_diag` | `service?` |
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
@@ -120,7 +127,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
-| `laib_journal` | `since?` |
+| `laib_journal` | `since?`, `limit?` (a count as a string: the newest n, without `since` of any age), `kind?` (`report`, `incident`, `watch`: notes of that kind), `verb?` (#593) |
 | `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
 | `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
@@ -132,7 +139,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_person_invite` | `user`, `first`, `last?`, `email`, `group?` (`family`, `admins`; empty: family, or on a resend the group the user has), `resend?` (a boolean), `signal?` (E.164, `+49…`: a `laib_person_signal` proposal filed first; a number the loader refuses stops the invite, #596) → `{user, mailed, link?, expires (RFC 3339), message, proposal?}` (#360; `proposal` with `signal`, the message names it) |
 | `laib_person_signal` | `user` (the name in box.yml people, lowercase; someone not there yet is added with that channel), `number` (E.164, `+49…`) → `{proposal, message}`: people.`<user>`'s `signal:` channel set in place or added after their others, a class-human proposal whose reason carries no number; after a human approves it the Bote takes the number (#586's pre-start). Tier propose: the haus hand by its verbs and its path grant `people.*.signal` (the person page), the Bote by its ceiling (the owner's answer to a drop notice) (#596, #598) |
 | `laib_person_pending` | none → `[{user, name, email, invited_at}]`: invited, link not used yet |
-| `laib_calendar` | `action` (`subscribe`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
+| `laib_calendar` | `action` (`subscribe`, `every`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `every?` (`30m`, `12h`, `30d`: how often this calendar is fetched, #619; empty: Google every run, a public abo every 30 days), `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since, every?}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
 | `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The haus hand calls it from the admins' form, by its verb and its path grant `zuhause` (#598); Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
 | `laib_scan` | `action` (`status`, `start`, `weiter`, `abschliessen`, `verwerfen`, `redo`, `suchen`, `pruefen`, `probe`, `einrichten`), `geraet?` (einrichten: a SANE device; the answer is `{proposal, class, message}`), `person?` (whom the closing message is for; empty: `notify.person`), `stapel?` (redo: `JJJJ-MM-TTThh-mm-ss`) → status: the service's status file as it is (templates/scan/README.md); otherwise `{message}`. Tier propose: the haus hand by its verbs, the Bote by its ceiling (#568) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |

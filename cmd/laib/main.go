@@ -37,7 +37,7 @@ type cliEnv = cli.Env
 func init() {
 	cli.Version = Version
 	mcp.Verbs = []cli.Verb{
-		{Name: "status", Tier: "read", Help: "one line per service; first line is the readiness state", Run: pages.Status},
+		{Name: "status", Tier: "read", Help: "[service] [--fresh]: one line per service; first line is the readiness state", Run: pages.Status},
 		{Name: "diag", Tier: "read", Help: "findings with severity and a fix verb each: units, health, drift, disk", Run: diag.Cmd},
 		{Name: "plan", Tier: "read", Help: "render the state and diff it against the box", Run: cmdPlan},
 		{Name: "apply", Tier: "apply", Help: "[<service>] [--reason \"<grund>\"] | --proposal <id> (ops): snapshot, write, reload, restart, verify", Flags: []string{"--reason", "--proposal"}, Run: cmdApply},
@@ -64,7 +64,7 @@ func init() {
 		{Name: "restore", Tier: "apply", Help: "<snapshot|latest> <service> | --box <snapshot|latest>: restore declared paths, then apply", Flags: []string{"--box"}, Run: backup.Restore},
 		{Name: "converge", Tier: "apply", Help: "[--force]: bring the box back to the state: re-apply drift, restart inactive units, within a budget", Flags: []string{"--force"}, Run: apply.Converge},
 		{Name: "state", Tier: "read", Help: "[<path>]: the state repo's files on main, or one as committed — box.yml, policy.yml, services/<s>/values.yml …, to write a --patch against; secrets.age never, secrets redacted (#576)", Run: cmdState},
-		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h)", Run: cmdJournal},
+		{Name: "journal", Tier: "read", Help: "show journal entries (--since 24h) [--limit n] [--verb v] [--kind report|incident|watch]: newest n, filtered", Run: cmdJournal},
 		{Name: "context", Tier: "read", Help: "[--since 24h] [--full]: starter bundle for an agent session — the first look (readiness, what is not green, open proposals, the journal short); --full the whole bundle (#579)", Run: cmdContext},
 		{Name: "template", Tier: "read", Help: "lint <dir> | list | sync | update <service>", Run: registry.TemplateCmd},
 		{Name: "add", Tier: "apply", Help: "<template> [--name n] [KEY=VALUE…]: install a template — propose, approve and apply as the human", Flags: []string{"--name"}, Run: inbox.Add},

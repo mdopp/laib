@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -66,31 +67,71 @@ func ReadCounted(dir string, since time.Time) ([]Entry, int, error) {
 	var out []Entry
 	skipped := 0
 	for _, file := range files {
-		day := strings.TrimSuffix(filepath.Base(file), ".jsonl")
-		if d, err := time.Parse("2006-01-02", day); err == nil && d.Add(24*time.Hour).Before(since) {
+		if dayBefore(file, since) {
 			continue
 		}
-		f, err := os.Open(file)
+		es, n, err := readFile(file, since)
+		skipped += n
 		if err != nil {
 			return nil, skipped, err
 		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 1<<20), 1<<20)
-		for sc.Scan() {
-			var e Entry
-			if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
-				skipped++
-				continue
-			}
-			if !e.T.Before(since) {
-				out = append(out, e)
-			}
+		out = append(out, es...)
+	}
+	return out, skipped, nil
+}
+
+// Newest returns the newest n entries since a time that keep accepts (nil
+// keeps all), oldest first. It reads the day files newest first and stops
+// once it has n, so the last morning report costs a day, not the whole
+// journal (#593).
+func Newest(dir string, since time.Time, n int, keep func(Entry) bool) ([]Entry, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	var out []Entry
+	for i := len(files) - 1; i >= 0 && len(out) < n && !dayBefore(files[i], since); i-- {
+		es, _, err := readFile(files[i], since)
+		if err != nil {
+			return nil, err
 		}
-		if err := sc.Err(); err != nil {
-			f.Close()
-			return nil, skipped, fmt.Errorf("%s: %w", file, err)
+		if keep != nil {
+			es = slices.DeleteFunc(es, func(e Entry) bool { return !keep(e) })
 		}
-		f.Close()
+		out = append(es, out...)
+	}
+	return out[max(0, len(out)-n):], nil
+}
+
+// dayBefore: the day file ends before since.
+func dayBefore(file string, since time.Time) bool {
+	d, err := time.Parse("2006-01-02", strings.TrimSuffix(filepath.Base(file), ".jsonl"))
+	return err == nil && d.Add(24*time.Hour).Before(since)
+}
+
+func readFile(file string, since time.Time) ([]Entry, int, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+	var out []Entry
+	skipped := 0
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	for sc.Scan() {
+		var e Entry
+		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+			skipped++
+			continue
+		}
+		if !e.T.Before(since) {
+			out = append(out, e)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, skipped, fmt.Errorf("%s: %w", file, err)
 	}
 	return out, skipped, nil
 }

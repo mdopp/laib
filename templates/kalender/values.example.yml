@@ -4,3 +4,4 @@ RADICALE_PASSWORD: !secret KALENDER_RADICALE_PASSWORD
 RADICALE_URL: http://host.containers.internal:5232   # Radicale's port on the box (templates/radicale)
 HA_USER: homeassistant                        # Home Assistant's Radicale account (auth seeds it): the family's calendars are copied into its home; empty: no copies
 STALE_HOURS: "2"                              # a calendar not mirrored for this long is yellow in laib diag (#495)
+ABO_EVERY_DAYS: "30"                           # a public abo (Müllabfuhr, Feiertage) is fetched this often; a Google calendar every run (15 min)
