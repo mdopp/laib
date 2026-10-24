@@ -6,7 +6,13 @@ the Solaris cards are views on it.
 ## CLI
 
 ```
-laib status [service] [--watch]      one line per service; first line is the readiness state
+laib status [service] [--watch] [--fresh]   one line per service; first line is the readiness state; --json adds `at`,
+                                     when it was measured. Through MCP (laib_status) the answer is the kept readiness while
+                                     it is under 30 s old and no journal line or apply lock came since (#593); a named
+                                     service, --fresh and the CLI measure anew; /ready and the Status page always measure
+laib journal [--since 24h] [--limit n] [--verb v] [--kind report|incident|watch]
+                                     journal entries, oldest first; --verb and --kind (a note's kind) filter, --limit keeps
+                                     the newest n, and without --since of any age (#593)
 laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
@@ -112,7 +118,8 @@ splitting a command line, so quotes and spaces survive:
 
 | Tool | Parameters |
 |---|---|
-| `laib_status`, `laib_diag` | `service?` |
+| `laib_status` | `service?`, `fresh?` (a boolean) → `{ready, services, at}`; `at` (RFC3339) is when the answer was measured, up to 30 s old (#593) |
+| `laib_diag` | `service?` |
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
@@ -120,7 +127,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
 | `laib_escalate` | `service`, `summary` |
 | `laib_note` | `kind` (`watch`, `incident`, `report`), `text` |
-| `laib_journal` | `since?` |
+| `laib_journal` | `since?`, `limit?` (a count as a string: the newest n, without `since` of any age), `kind?` (`report`, `incident`, `watch`: notes of that kind), `verb?` (#593) |
 | `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
 | `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
