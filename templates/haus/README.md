@@ -19,6 +19,12 @@ generated `HAUS_HAUSHALT_TOKEN` as its bearer (ADR 0017). The Bote reaches it
 on the host's port 8650: Haus publishes 8650 beyond loopback, `lan: false`
 keeps the LAN out, and pages, `/napi` and `/mcp` each check their own secret
 (#170). Notes are Markdown files in the file share's `notes` folder.
+Music uploads go into the share's `musik-eingang` folder, mounted at
+`/musik-eingang` and nothing else of the share (#639): Haus writes
+`._<name>.part` and renames it when whole, beets imports it within about a
+minute, and `laib status beets` (its status file's `letzte`) says per
+upload what went in and what was kept back; the contract is in
+`templates/beets/README.md`, „Musik-Eingang“.
 Calendar and reminders use the Radicale account `haus` (#418). The auth
 template seeds it in LLDAP with the generated `HAUS_RADICALE_PASSWORD`, and
 `RADICALE_USER: haus` is the default. Haus makes the household's calendar
