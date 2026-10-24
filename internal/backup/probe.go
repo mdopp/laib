@@ -88,6 +88,10 @@ func probeRestore(ctx context.Context, st *state.State, pw, probe, scratch strin
 }
 
 // sqliteWhole: a file that starts like an SQLite database must be one. With
+// SQLite3 is the binary the probe looks for; a test points it at its own
+// stand-in, whatever the machine running the test has installed.
+var SQLite3 = "sqlite3"
+
 // a sqlite3 binary on the host that is `PRAGMA integrity_check` answering
 // "ok"; without one (Fedora CoreOS has none) it is the header: a valid page
 // size and a file that holds every page the header counts — that catches a
@@ -120,7 +124,7 @@ func sqliteWhole(ctx context.Context, path string) (bool, error) {
 	if pages := int64(binary.BigEndian.Uint32(h[28:32])); pages > 0 && binary.BigEndian.Uint32(h[24:28]) == binary.BigEndian.Uint32(h[92:96]) && fi.Size() < pages*page {
 		return true, fmt.Errorf("SQLite truncated: header counts %d pages, the file holds %d", pages, fi.Size()/page)
 	}
-	if _, err := exec.LookPath("sqlite3"); err == nil {
+	if _, err := exec.LookPath(SQLite3); err == nil {
 		out, err := sysd.Run(ctx, "sqlite3", "file:"+path+"?immutable=1", "PRAGMA integrity_check")
 		if err != nil || strings.TrimSpace(out) != "ok" {
 			return true, fmt.Errorf("PRAGMA integrity_check: %s", cli.Tail(out, 200))

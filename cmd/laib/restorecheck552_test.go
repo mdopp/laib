@@ -37,6 +37,10 @@ func sqliteFile(pages, counted int) []byte {
 // turns it red.
 func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 	b := newRbox(t)
+	// the header checks first, whether or not this machine has sqlite3 (CI's runner has)
+	realSQLite := backup.SQLite3
+	t.Cleanup(func() { backup.SQLite3 = realSQLite })
+	backup.SQLite3 = "laib-test-no-sqlite3"
 	st, err := cli.LoadState(b.env)
 	if err != nil {
 		t.Fatal(err)
@@ -133,6 +137,7 @@ func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "sqlite3"), []byte("#!/bin/sh\n"), 0o755)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	backup.SQLite3 = "sqlite3"
 	if rc, e := check(); rc == cli.ExitOK || !strings.Contains(e.Detail, "integrity_check") {
 		t.Errorf("a database sqlite3 does not call ok must be red: rc %d %+v", rc, e)
 	}
