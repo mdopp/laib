@@ -1005,6 +1005,25 @@ class Voice(Stimme):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
 
+    def test_until_the_persona_word_exists_the_device_wakes_on_the_fallback(self):
+        # the owner, 2026-10-24: until „Hey Joshua“ is on the device, the Voice PE listens to the word it has
+        self.box(device=("Okay Nabu", "Solaris"))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"Solaris"}, log)
+
+    def test_the_persona_word_wins_over_the_fallback(self):
+        self.box(device=("Okay Nabu", "Solaris", "Hey Joshua"))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
+
+    def test_a_fallback_the_device_lacks_is_not_set(self):
+        self.box(device=("Okay Nabu",))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"no_wake_word"}, log)
+        self.assertIn("VOICE_WAKE_FALLBACK Solaris", log)
+
     def test_a_pipeline_something_else_names_is_renamed_not_deleted(self):
         self.box()
         Path(self.tmp.name, "home-assistant", "homeassistant", "automations.yaml").write_text("- action: x\n  data: {pipeline_id: p-sol}\n")

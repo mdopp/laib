@@ -633,6 +633,7 @@ def assist_pipelines(stimme):
 
 PERSONA_JSON = os.path.join(E.get("LAIB_RENDER_DIR") or "/nonexistent", "persona", E.get("PERSONA") or "joshua", "persona.json")
 VAD = E.get("VOICE_VAD", "").strip()
+WAKE_FALLBACK = E.get("VOICE_WAKE_FALLBACK", "").strip()   # the device's word until the persona's is on it (owner, 2026-10-24)
 OLD_PIPELINES = [n.strip() for n in E.get("VOICE_OLD_PIPELINES", "").split(",") if n.strip()]
 
 
@@ -757,9 +758,13 @@ def voice(stimme):
             elif tk == "vad_sensitivity" and VAD:
                 pick(eid, VAD, f"VOICE_VAD {VAD}")
             elif tk == "wake_word":
-                hit = next((o for o in (st.get("attributes") or {}).get("options", []) if o.casefold() == phrase.casefold()), None)
+                opts = (st.get("attributes") or {}).get("options", [])
+                hit = next((o for o in opts if o.casefold() == phrase.casefold()), None)
                 if hit:
                     pick(eid, hit, "the persona's wake word, on the device")
+                elif WAKE_FALLBACK:   # the first slot only: the second (wake_word_n) stays the owner's
+                    pick(eid, next((o for o in opts if o.casefold() == WAKE_FALLBACK.casefold()), WAKE_FALLBACK),
+                         f"VOICE_WAKE_FALLBACK {WAKE_FALLBACK}, until the device has {phrase}")
         for s in said:
             print("home-assistant: satellite " + s)
         for p in old:
