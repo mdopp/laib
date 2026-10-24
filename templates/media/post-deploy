@@ -87,6 +87,16 @@ for name, ctype, sub in LIBRARIES:
         {"LibraryOptions": {"PathInfos": [{"Path": f"/media/{sub}"}], "EnableRealtimeMonitor": True}}, token=token)
     print("library created:", name)
 
+# 3b. Musik watches its folder (#639): what the Musik-Eingang imports shows without a scan. A library
+# made here has it from the start; one from ServiceBay or set by hand may not. Found by name or folder
+for f in req("GET", "/Library/VirtualFolders", token=token):
+    if f.get("Name") != "Musik" and "/media/music" not in (f.get("Locations") or []):
+        continue
+    opts = f.get("LibraryOptions") or {}
+    if not opts.get("EnableRealtimeMonitor"):
+        req("POST", "/Library/VirtualFolders/LibraryOptions", {"Id": f["ItemId"], "LibraryOptions": {**opts, "EnableRealtimeMonitor": True}}, token=token)
+        print("realtime monitor on:", f.get("Name"))
+
 # 4. Quick Connect
 conf = req("GET", "/System/Configuration", token=token)
 if not conf.get("QuickConnectAvailable"):
