@@ -14,7 +14,11 @@ conversation agent) whose entity is gone or unavailable is pointed at
 Stimme's or Frage's when that one works and speaks the pipeline's
 language; a part that works, or a legacy provider, stays the owner's
 choice. Nothing is deleted: an entry whose server is gone is the owner's to
-delete, and the check names it („… antwortet nicht“). The CalDAV
+delete, and the check names it („… antwortet nicht“). Home Assistant
+restarting under the apply (`laib add stimme`) is waited for, at most
+`HA_WAIT_SECONDS` (300), and the step runs once more; Wyoming entries still
+not set up make post-deploy red after its other steps, never green with a
+„NOT set up“ line (#557, #588). The CalDAV
 integration for Radicale (#495) and Music Assistant (#526, below) come from
 post-deploy too. Frage
 as the conversation agent is not clicked together: post-deploy adds Home
@@ -24,7 +28,9 @@ and its conversation agent "Frage" (model `frage`, no HA tools: HA's own
 intents answer commands), once Frage answers there (#491). HA 2026.10 has no
 built-in integration for an OpenAI server with its own URL; Solaris took the
 same path for `conversation.solaris`. Which Assist pipeline uses Frage stays
-the owner's choice, unless a pipeline's agent is gone (above). Without Frage the hook says so and stays green; `laib
+the owner's choice, unless a pipeline's agent is gone (above); a pipeline
+whose agent is Frage gets `prefer_local_intents: true` (ADR 0015, #557):
+„Mach Bambi aus“ is HA's intent in about a second, not a web search. Without Frage the hook says so and stays green; `laib
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
 ## Its home comes from box.yml zuhause (#561)
