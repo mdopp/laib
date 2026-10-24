@@ -180,10 +180,9 @@ update is a values change) and writes `packages/laib_auth_oidc.yaml`, which
 Laib owns whole: client `homeassistant`, users linked by name, a person
 created per user, `admins` → administrator, `family` → user. The client
 secret is not in it: the unit hands it over as `AUTH_OIDC_SECRET`, so a
-rotation restarts Home Assistant with the new one. On a box from ServiceBay,
-its top-level `auth_oidc:` block leaves `configuration.yaml` (Home Assistant
-would keep it over the package, with ServiceBay's secret); the users it
-linked stay linked.
+rotation restarts Home Assistant with the new one. A top-level `auth_oidc:`
+block of your own in `configuration.yaml` would be a duplicate key beside the
+package: leave the login to the package.
 
 ## Z-Wave JS and Matter stay off the LAN (#231)
 

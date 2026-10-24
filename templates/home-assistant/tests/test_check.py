@@ -174,7 +174,7 @@ class Check(unittest.TestCase):
         self.assertIn("laib add stimme", next(f["fix"] for f in r["findings"] if f["detail"] == "Wyoming Piper: fehlt"))
         self.assertIn("„piper“ (wyoming) antwortet nicht", details)
         self.assertIn("„http://127.0.0.1:8787/ollama“ (ollama) antwortet nicht", details)
-        self.assertIn("solaris-off", r["findings"][-1]["fix"])
+        self.assertIn("in Home Assistant löschen", r["findings"][-1]["fix"])
         self.assertEqual(r["detail"], "fehlt: Wyoming Piper · 2 Sprach-Integrationen ohne Dienst")
 
     def test_complete_and_unreachable_and_no_token(self):
