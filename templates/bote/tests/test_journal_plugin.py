@@ -9,6 +9,7 @@ nothing, and a note that fails never fails the switch. Hermes calls the
 hooks with keyword arguments; here they are called the same way against a
 fake Laib MCP and a fake Home Assistant."""
 import datetime, importlib.util, io, json, os, tempfile, threading, unittest
+from unittest import mock
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -81,6 +82,9 @@ class JournalPlugin(unittest.TestCase):
         self.laib, self.ha = serve(FakeLaib), serve(FakeHA)
         self.home = tempfile.TemporaryDirectory()
         Path(self.home.name, "personen.json").write_text(json.dumps({"signal:+4900000002": "mama", "telegram:123": "papa"}))
+        env = mock.patch.dict(os.environ)  # the other tests in this run see their own environment
+        env.start()
+        self.addCleanup(env.stop)
         os.environ.update(HERMES_HOME=self.home.name, LAIB_TOKEN="bote-laib-tok", HA_TOKEN="ha-tok",
                           LAIB_MCP_URL="http://127.0.0.1:%d/mcp" % self.laib.server_port, HA_URL="http://127.0.0.1:%d" % self.ha.server_port)
         spec = importlib.util.spec_from_file_location("laib_journal", PLUGIN)
@@ -91,8 +95,9 @@ class JournalPlugin(unittest.TestCase):
         self.m.register(self.ctx)
 
     def tearDown(self):
-        self.laib.shutdown()
-        self.ha.shutdown()
+        for srv in (self.laib, self.ha):
+            srv.shutdown()
+            srv.server_close()
         self.home.cleanup()
 
     def pre(self, sender, platform="signal", session="s-1"):
@@ -147,17 +152,13 @@ class JournalPlugin(unittest.TestCase):
         self.assertEqual(self.texts(), ["ha person=mama service=automation.turn_off entity=automation.licht_abends context=ctx-3"])
 
     def test_a_failed_note_never_fails_the_switch(self):
-        self.laib.shutdown()
-        self.laib.server_close()
-        self.ha.shutdown()
-        self.ha.server_close()
+        os.environ.update(LAIB_MCP_URL="http://127.0.0.1:1/mcp", HA_URL="http://127.0.0.1:1")  # neither answers
         self.pre("+4900000002")
         out = io.StringIO()
         with redirect_stdout(out):
             for _ in range(2):
                 self.assertIsNone(self.tool("mcp__ha__HassTurnOn", done("light.bambi")))
         self.assertEqual(out.getvalue().count("[laib-journal]"), 1, out.getvalue())  # said once, not per switch
-        os.environ["LAIB_MCP_URL"] = "http://127.0.0.1:1/mcp"
         self.m._spawn = lambda fn, *a: (_ for _ in ()).throw(RuntimeError("no thread"))
         self.assertIsNone(self.tool("mcp__ha__HassTurnOn", done("light.bambi")))
 

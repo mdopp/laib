@@ -281,6 +281,21 @@ The journal row is `actor=haus` (or `bote`) by the token that wrote it,
 that verb as one policy proposal the owner approves (#575). The Bote's hand
 has no verb list and may note already.
 
+Who writes it:
+
+- **Haus**, for a signed-in person's call (mdopp/haus).
+- **The Bote** (Signal, Telegram), with its plugin `laib-journal` (bote
+  README, „Who switched“). `person` is the box.yml people name whose
+  `signal:`/`telegram:` id wrote the turn, else `-`. `service` is
+  `intent.<HassName>` for HA's Assist intents (`intent.HassTurnOn`), since
+  the Bote calls intents, not services; for the Automat's
+  `automation_schalten` it is `automation.turn_on|turn_off`. `context` is
+  read from the entity's state when it changed in the last 30 s, else `-`,
+  because HA's MCP answer has no context id.
+- **Voice**: a satellite talks to HA's Assist pipeline, not to the Bote,
+  so nothing notes it yet. Haus's Sprechen field reaches the Bote over its
+  API server and is noted as `person=-`.
+
 Why not one HA user per resident whose token Haus uses: HA mints a token
 only for the session's own user, and residents sign in through
 Familienkonto (auth_oidc) without a password; Laib would have to give each

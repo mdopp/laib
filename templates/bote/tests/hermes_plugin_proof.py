@@ -1,4 +1,4 @@
-"""#266, #471, #521: laib-nutzung, laib-persona and laib-ablage under Hermes' own plugin loader,
+"""#266, #471, #521, #591: laib-nutzung, laib-persona, laib-ablage and laib-journal under Hermes' own plugin loader,
 pre_llm_call collector and turn finalizer, not a fake: run with the image's
 Python and HERMES_HOME pointing at what post-deploy rendered (config.yaml
 enabling both plugins, plugins/laib-*). argv[1]: Hermes' source dir
@@ -45,6 +45,38 @@ os.environ["USAGE_METRICS_URL"] = "http://127.0.0.1:%d" % srv.server_port
 psrv = HTTPServer(("127.0.0.1", 0), FakePersona)
 threading.Thread(target=psrv.serve_forever, daemon=True).start()
 os.environ["PERSONA_MCP_URL"] = "http://127.0.0.1:%d/mcp" % psrv.server_port
+# #591: laib-journal notes who switched in HA to Laib's MCP, the context id from HA's state
+NOTES = []
+
+
+class FakeLaib(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):  # Home Assistant's /api/states/<id>: changed just now, by this call's context
+        import datetime
+        body = json.dumps({"state": "on", "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(), "context": {"id": "ctx-proof"}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        NOTES.append((self.headers.get("Authorization"), req["params"]))
+        body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": "ok"}]}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+lsrv = HTTPServer(("127.0.0.1", 0), FakeLaib)
+threading.Thread(target=lsrv.serve_forever, daemon=True).start()
+os.environ.update(LAIB_MCP_URL="http://127.0.0.1:%d/mcp" % lsrv.server_port, HA_URL="http://127.0.0.1:%d" % lsrv.server_port,
+                  LAIB_TOKEN="bote-proof", HA_TOKEN="ha-proof")
+with open(os.path.join(os.environ["HERMES_HOME"], "personen.json"), "w") as f:
+    f.write('{"signal:+4917000": "anna"}')
 sys.path.insert(0, sys.argv[1])
 
 from hermes_cli import plugins  # noqa: E402
@@ -94,6 +126,18 @@ got = {body["event"]: body["count"] for path, body in SEEN if path == "/ingest"}
 assert got == {"werkzeug.haushalt.kalender": 2, "zug": 4, "unbeantwortet": 1}, got
 assert [body for path, body in SEEN if path == "/miss"] == [{"source": "bote", "text": "Wann kommt der Müll?", "day": SEEN[0][1]["day"]}], SEEN
 assert "Anna" not in json.dumps(SEEN, ensure_ascii=False) and "s-9" not in json.dumps(SEEN)
+# #591: a switch through ha, by the person who wrote this turn, reaches Laib's journal; a read does not
+import time  # noqa: E402
+pre("t7", "Bambi an")
+_emit_post_tool_call_hook(function_name="mcp__ha__GetLiveContext", function_args={}, result=json.dumps({"result": '{"success": true, "result": "Bambi: off"}'}), session_id="s-9", turn_id="t7")
+done = {"speech": {}, "response_type": "action_done", "data": {"success": [{"name": "Bambi", "type": "entity", "id": "light.bambi"}], "failed": []}}
+_emit_post_tool_call_hook(function_name="mcp__ha__HassTurnOn", function_args={"name": "Bambi"}, result=json.dumps({"result": json.dumps(done)}), session_id="s-9", turn_id="t7")
+for _ in range(50):
+    if NOTES:
+        break
+    time.sleep(0.1)
+time.sleep(0.3)
+assert NOTES == [("Bearer bote-proof", {"name": "laib_note", "arguments": {"kind": "watch", "text": "ha person=anna service=intent.HassTurnOn entity=light.bambi context=ctx-proof"}})], NOTES
 # #521: laib-ablage under Hermes' own gateway hooks: pre_gateway_dispatch marks a PDF sent with
 # "ablegen", post_gateway_admission (after Hermes' sender check) files it and answers, so a hook
 # Hermes renames or a payload it narrows shows up here, not as documents that never arrive.
