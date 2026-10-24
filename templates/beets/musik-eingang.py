@@ -15,7 +15,7 @@ being filled.
 
 An upload moves into .in-arbeit/ first (a rename on the share, so nobody
 changes it under the import), a zip is unpacked there safely (no path
-leaving the folder, no absolute path, no symlink, no password, at most
+leaving the folder, no drive letter, no symlink, no password, at most
 MUSIK_ZIP_MAX_DATEIEN files and MUSIK_ZIP_MAX_BYTES unpacked, the actual
 bytes counted, not the header's), and `beet import -q` takes it with
 quiet_fallback asis (an album beets cannot match goes in with its own
@@ -129,8 +129,10 @@ def entpacke(zip_pfad, ziel):
         for i in z.infolist():
             name = i.filename.replace("\\", "/")
             teile = [t for t in name.split("/") if t not in ("", ".")]
-            if name.startswith("/") or (len(name) > 1 and name[1] == ":"):
-                raise Abgelehnt("unsicherer Pfad in der ZIP-Datei (absolut): %s" % i.filename)
+            # a leading "/" only roots a name: it unpacks inside like any other (teile drops it), and a bare
+            # "/" directory entry, which some shops' downloads carry, is nothing (2026-10-24); a drive is refused
+            if len(name) > 1 and name[1] == ":":
+                raise Abgelehnt("unsicherer Pfad in der ZIP-Datei (Laufwerk): %s" % i.filename)
             if ".." in teile:
                 raise Abgelehnt("unsicherer Pfad in der ZIP-Datei (zeigt nach außen): %s" % i.filename)
             if stat.S_ISLNK(i.external_attr >> 16):
