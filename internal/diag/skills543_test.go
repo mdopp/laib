@@ -37,13 +37,17 @@ func TestDiagSaysWhenThePolicyKeepsASkillFromItsJob(t *testing.T) {
 	if !ok || !strings.Contains(s.Detail, "ohne backup") || !strings.Contains(s.Detail, "probeweise wiederherstellen") || !strings.Contains(s.Detail, "policy.yml beschränkt ops") {
 		t.Fatalf("sicherung without backup: %+v", got)
 	}
-	for _, want := range []string{"policy.yml backup geben", "laib skill pause sicherung", "skills/sicherung.yml"} {
+	// the owner's command, not a hand edit of policy.yml (#575); diag grants nothing itself
+	for _, want := range []string{`laib propose --grant ops backup "Fähigkeit sicherung braucht backup"`, "laib skill pause sicherung", "skills/sicherung.yml"} {
 		if !strings.Contains(s.Fix, want) {
 			t.Errorf("the fix lacks the choice %q: %s", want, s.Fix)
 		}
 	}
 	if v := got["vorfall"]; !strings.Contains(v.Detail, "ohne restart") || strings.Contains(v.Detail, "look") {
 		t.Errorf("vorfall: restart is its job, look only a capable model's extra: %+v", v)
+	}
+	if v := got["vorfall"]; !strings.Contains(v.Fix, "laib propose --grant ops restart") || strings.Contains(v.Fix, "policy.yml") {
+		t.Errorf("vorfall's fix names the grant command, not policy.yml: %s", v.Fix)
 	}
 	if _, ok := got["nutzung"]; ok {
 		t.Error("a paused skill is the owner's answer already")

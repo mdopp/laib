@@ -35,9 +35,15 @@ func skillFindings(sks []skill.Skill) []Finding {
 			continue
 		}
 		list := strings.Join(tools, ", ")
+		// the grant is the owner's decision in the Inbox (#575): diag names
+		// the command that proposes it and grants nothing itself
+		var grants []string
+		for _, t := range tools {
+			grants = append(grants, fmt.Sprintf("laib propose --grant ops %s \"Fähigkeit %s braucht %s\"", t, s.Name, t))
+		}
 		out = append(out, Finding{Severity: "gelb", Probe: "skill",
 			Detail: fmt.Sprintf("Fähigkeit %s läuft ohne %s, ihre Aufgabe bleibt liegen (%s): %s", s.Name, list, strings.TrimSuffix(s.Description, "."), strings.Join(whys, "; ")),
-			Fix:    fmt.Sprintf("deine Wahl: ops in policy.yml %s geben (hands.ops), oder laib skill pause %s, oder eine skills/%s.yml im State-Repo ohne %s", list, s.Name, s.Name, list)})
+			Fix:    fmt.Sprintf("deine Wahl: %s, oder laib skill pause %s, oder eine skills/%s.yml im State-Repo ohne %s", strings.Join(grants, " und "), s.Name, s.Name, list)})
 	}
 	return out
 }

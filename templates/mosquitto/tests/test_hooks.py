@@ -162,13 +162,15 @@ class Owner(unittest.TestCase):
             log = Path(d) / "chown.log"
             box.hook("pre-start")
             calls = log.read_text() if log.exists() else ""
-            self.assertRegex(calls, r"1883:0 .*/mosquitto/config/passwd")
+            self.assertRegex(calls, r"1883:1883 .*/mosquitto/config/passwd")
 
     def test_the_password_file_has_the_group_the_broker_wants(self):
         """#524: on every apply the broker warned "File /mosquitto/config/passwd group is not
         root. Future versions will refuse to load this file." (eclipse-mosquitto 2.1.2,
         libcommon/file_common.c: owner and group must be the broker's uid and gid), and then
-        every MQTT device is out. Whichever hook ran last, the file is 1883's, group root."""
+        every MQTT device is out. Group root then warned "group is not mosquitto" (v0.16.0 box
+        check): whichever hook ran last, the file is 1883:1883, also one an older apply left
+        as 1883:0."""
         for first in (True, False):
             with tempfile.TemporaryDirectory() as d:
                 box = Box(d)
@@ -177,4 +179,4 @@ class Owner(unittest.TestCase):
                 log.unlink()
                 box.apply(first=first)
                 last = [l for l in log.read_text().splitlines() if l.endswith("/mosquitto/config/passwd")][-1:]
-                self.assertEqual([l.split()[0] for l in last], ["1883:0"], log.read_text())
+                self.assertEqual([l.split()[0] for l in last], ["1883:1883"], log.read_text())
