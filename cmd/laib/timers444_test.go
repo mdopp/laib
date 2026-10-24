@@ -68,7 +68,7 @@ func TestTheRenderedTimersRunAsTheirActor(t *testing.T) {
 			if args[0] == "snapshots" {
 				return `[{"id":"0a1b2c3d4e5f"}]`, nil
 			}
-			return "", nil
+			return fakeRestoreTest(args), nil
 		}
 		for _, unit := range []string{"systemd/laib-backup.service"} {
 			text := out[unit]

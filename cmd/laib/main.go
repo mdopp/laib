@@ -25,6 +25,7 @@ import (
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/registry"
 )
 
@@ -98,6 +99,10 @@ func init() {
 		mcp.Verbs[i] = cli.Guard(mcp.Verbs[i])
 	}
 	inbox.Present = diag.Present
+	proposal.VerbTier = map[string]string{} // the card says whether a granted verb changes or proposes (#616)
+	for _, v := range mcp.Verbs {
+		proposal.VerbTier[v.Name] = v.Tier
+	}
 	inbox.RunVerb = func(ctx context.Context, env *cli.Env, argv []string) int {
 		for _, v := range mcp.Verbs {
 			if v.Name == argv[0] {

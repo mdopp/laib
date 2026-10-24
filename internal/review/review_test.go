@@ -271,3 +271,22 @@ func TestReviewStatesWhereANewServiceIsReachable(t *testing.T) {
 		t.Fatalf("facts must say where the new service is reachable:\n%s", joined)
 	}
 }
+
+// #616: the review records what a change grants and sets, before → after,
+// so the card can say it in words: a hand's verbs and path grants with what
+// it keeps, and a service's values.
+func TestReviewRecordsWhatChangesBeforeAndAfter(t *testing.T) {
+	base, changed := copyTree(t, golden), copyTree(t, golden)
+	edit(t, base, "policy.yml", "  pi: {ceiling: propose}\n", "  pi: {ceiling: propose}\n  haus: {ceiling: apply, verbs: [status, restart]}\n")
+	edit(t, changed, "policy.yml", "  pi: {ceiling: propose}\n", "  pi: {ceiling: propose}\n  haus: {ceiling: apply, verbs: [status, zuhause], paths: [people.*.signal]}\n")
+	edit(t, changed, "services/whoami/values.yml", "IMAGE: docker.io/traefik/whoami:v1.10", "IMAGE: docker.io/traefik/whoami:v1.11")
+	r := Dirs(base, changed)
+	var got []string
+	for _, c := range r.Changes {
+		got = append(got, c.Op+" "+c.Hand+c.Service+" "+c.Verb+c.Path+c.Key+" "+c.Old+">"+c.New)
+	}
+	want := []string{"+ haus zuhause >", "+ haus people.*.signal >", "- haus restart >", "= haus status >", "~ whoami IMAGE docker.io/traefik/whoami:v1.10>docker.io/traefik/whoami:v1.11"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("changes:\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
