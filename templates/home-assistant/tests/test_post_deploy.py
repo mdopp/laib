@@ -31,7 +31,8 @@ def fresh(onboarded=None):
     HA.clear()
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, core_updates=0, n=0,
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
-              registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None)
+              registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None,
+              restarts=0, preferred=None, wake_words={}, intents={}, deleted=[])
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -141,12 +142,28 @@ class FakeHA(BaseHTTPRequestHandler):
             return self.reply(200, s) if s else self.reply(404)
         self.reply(404)
 
+    def restarting(self):
+        """#557: HA restarts under the hook: the connection drops without an answer, HA_RESTARTS times"""
+        if HA.get("restarts", 0) > 0:
+            HA["restarts"] -= 1
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+            return True
+        return False
+
     def do_POST(self):
         b = self.body()
+        if self.path == "/api/config/config_entries/flow" and b.get("handler") == "wyoming" and self.restarting():
+            return
         if self.path.startswith("/api/services/"):   # #528: update.install, homeassistant.restart
             if self.user() is None or not is_admin(self.user()):
                 return self.reply(401)
             HA["calls"].append((self.path, b))
+            if self.path == "/api/services/select/select_option":   # HA validates the option against the select's options
+                st = HA["states"].get(b["entity_id"])
+                if st is None or b["option"] not in (st.get("attributes") or {}).get("options", []):
+                    return self.reply(400, {"message": f"Option {b['option']} is not valid"})
+                st["state"] = b["option"]
             if self.path == "/api/services/update/install":
                 st = HA["states"][b["entity_id"]]
                 st["state"], st["attributes"]["installed_version"] = "off", st["attributes"]["latest_version"]
@@ -354,6 +371,18 @@ class FakeHA(BaseHTTPRequestHandler):
                 return err("invalid_token_id", "Received invalid token")
             del HA["tokens"][tok], HA["names"][tok]
             return ok()
+        # every user may read these (HA: no require_admin; the check's token is no administrator)
+        if t == "config/entity_registry/list":
+            return ok(HA["registry"])
+        if t == "assist_pipeline/pipeline/list":
+            pref = HA["preferred"] or (HA["pipelines"][0]["id"] if HA["pipelines"] else None)
+            return ok({"pipelines": HA["pipelines"], "preferred_pipeline": pref})
+        if t == "wake_word/info":   # wake_word/__init__.py: the engine's models, {id, name, phrase}
+            if m["entity_id"] not in HA["wake_words"]:
+                return err("not_found", "Entity not found")
+            return ok({"wake_words": [{"id": w, "name": w, "phrase": None} for w in HA["wake_words"][m["entity_id"]]]})
+        if t == "conversation/agent/homeassistant/debug":   # conversation/http.py: recognized, never executed
+            return ok({"results": [HA["intents"].get(((m.get("language") or "").split("-")[0], s)) for s in m["sentences"]]})
         if not is_admin(uid):
             return err("unauthorized", "Unauthorized")
         if t == "config/auth/list":
@@ -380,10 +409,31 @@ class FakeHA(BaseHTTPRequestHandler):
                       if HA.get("ma_reauth") else [])
         if t == "config_entries/subentries/list":
             return ok([{k: v for k, v in sub.items() if k != "data"} for sub in HA["subentries"].get(m["entry_id"], [])])
-        if t == "config/entity_registry/list":
-            return ok(HA["registry"])
-        if t == "assist_pipeline/pipeline/list":
-            return ok({"pipelines": HA["pipelines"], "preferred_pipeline": HA["pipelines"][0]["id"] if HA["pipelines"] else None})
+        if t == "assist_pipeline/pipeline/create":   # PIPELINE_FIELDS: every field but prefer_local_intents required
+            fields = {k: v for k, v in m.items() if k not in ("id", "type")}
+            need = {"conversation_engine", "conversation_language", "language", "name", "stt_engine", "stt_language", "tts_engine",
+                    "tts_language", "tts_voice", "wake_word_entity", "wake_word_id"}
+            if not need <= set(fields):
+                return err("invalid_format", f"missing {sorted(need - set(fields))}")
+            HA["n"] += 1
+            p = dict(fields, id=f"p-new-{HA['n']}")
+            HA["pipelines"].append(p)
+            HA["pipeline_updates"].append(("create", p["id"]))
+            for st in HA["states"].values():   # an Assist satellite's pipeline select lists every pipeline by name (esphome select.py)
+                if st.get("pipeline_select"):
+                    st["attributes"]["options"] = ["preferred"] + [x["name"] for x in HA["pipelines"]]
+            return ok(p)
+        if t == "assist_pipeline/pipeline/delete":
+            if m["pipeline_id"] == (HA["preferred"] or HA["pipelines"][0]["id"]):
+                return err("home_assistant_error", f"Item {m['pipeline_id']} preferred.")
+            HA["pipelines"] = [p for p in HA["pipelines"] if p["id"] != m["pipeline_id"]]
+            HA["deleted"].append(m["pipeline_id"])
+            HA["pipeline_updates"].append(("delete", m["pipeline_id"]))
+            return ok()
+        if t == "assist_pipeline/pipeline/set_preferred":
+            HA["preferred"] = m["pipeline_id"]
+            HA["pipeline_updates"].append(("preferred", m["pipeline_id"]))
+            return ok()
         if t == "assist_pipeline/pipeline/update":   # PIPELINE_FIELDS, every one required as in HA
             fields = {k: v for k, v in m.items() if k not in ("id", "type", "pipeline_id")}
             p = next((p for p in HA["pipelines"] if p["id"] == m["pipeline_id"]), None)
@@ -434,9 +484,9 @@ class Hook(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
 
     def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
-                 stimme=(1, 1, 1), data_dir="", zuhause=None):
+                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60", voice=None):
         HA["ma_url"] = ma
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_INSTALL": install,
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
                "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
@@ -447,6 +497,7 @@ class Hook(unittest.TestCase):
         for name, value in (tokens or {}).items():
             env["LAIB_SECRET_" + name] = value
         env.update(zuhause or {})
+        env.update(voice or {})
         p = subprocess.run([str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + "\n" + p.stderr).splitlines() if not l.startswith("laib-secret: "))
@@ -766,7 +817,7 @@ class Stimme(Hook):
                          "tts": [{"engine_id": "tts.piper", "supported_languages": ["de_DE"]}, {"engine_id": "tts.google_translate_de", "supported_languages": ["de"]}]}
         pipe = lambda i, name, stt, tts, conv: {"id": i, "name": name, "language": "de", "stt_engine": stt, "stt_language": "de", "tts_engine": tts,
                                                 "tts_language": "de", "tts_voice": "martin", "conversation_engine": conv, "conversation_language": "de",
-                                                "wake_word_entity": None, "wake_word_id": None, "prefer_local_intents": True}
+                                                "wake_word_entity": None, "wake_word_id": None, "prefer_local_intents": False}
         HA["pipelines"] = [pipe("p-sol", "Solaris", "stt.faster_whisper", "tts.solaris_tts", "conversation.solaris"),
                            pipe("p-own", "Eigene", "cloud", "tts.google_translate_de", "conversation.home_assistant")]
         save()
@@ -786,6 +837,8 @@ class Stimme(Hook):
         self.assertEqual((sol["stt_engine"], sol["tts_engine"], sol["tts_language"], sol["tts_voice"], sol["conversation_engine"]),
                          ("stt.faster_whisper", "tts.piper", "de_DE", None, "conversation.frage"), log)
         self.assertIn('Assist pipeline "Solaris"', log)
+        self.assertTrue(sol["prefer_local_intents"], "#557: with Frage as the agent, HA's own intents must answer first")
+        self.assertFalse(own["prefer_local_intents"], "a pipeline on HA's own agent is the owner's choice")
         self.assertEqual(own["stt_engine"], "cloud", "a legacy provider was replaced")
         self.assertEqual((own["tts_engine"], own["conversation_engine"]), ("tts.google_translate_de", "conversation.home_assistant"),
                          "a part that works is the owner's choice")
@@ -805,12 +858,41 @@ class Stimme(Hook):
         self.assertEqual(HA["pipeline_updates"], [], "a pipeline moved to nothing")
         self.assertIn("after laib add stimme: laib apply home-assistant", log)
 
-    def test_unreadable_storage_adds_no_entry_it_might_have_twice(self):
+    def test_unreadable_storage_adds_no_entry_it_might_have_twice_and_is_red(self):
         self.kraftwerk()
-        p, _, log = self.run_hook(stimme=self.ports)   # LAIB_DATA_DIR without HA's .storage
-        self.assertEqual(p.returncode, 0, log)
+        p, handed, log = self.run_hook(stimme=self.ports)   # LAIB_DATA_DIR without HA's .storage
+        self.assertEqual(p.returncode, 1, "#557/#588: green with a NOT set up line\n" + log)
         self.assertEqual(len(self.wyoming()), 2)
         self.assertIn("Wyoming for Stimme NOT set up", log)
+        self.assertIn("BOTE_HA_TOKEN", handed, "the tokens are handed back before the red")
+
+    def test_home_assistant_restarting_under_the_hook_is_waited_for(self):   # #557: laib add stimme while HA restarted
+        self.kraftwerk()
+        HA["restarts"] = 1
+        p, _, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(self.wyoming()), 4, log)
+        self.assertNotIn("NOT set up", log)
+        self.assertIn("waiting for Home Assistant", log)
+
+    def test_home_assistant_that_stays_away_is_red_not_green(self):
+        self.kraftwerk()
+        HA["restarts"] = 99
+        p, _, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name, wait="1")
+        self.assertEqual(p.returncode, 1, log)
+        self.assertIn("Wyoming for Stimme NOT set up", log)
+        self.assertIn("laib apply home-assistant", log)
+
+    def test_a_pipeline_already_on_frage_prefers_has_intents_once(self):   # #557
+        self.kraftwerk()
+        HA["pipelines"][1].update(conversation_engine="conversation.frage")
+        p, handed, log = self.run_hook(frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertTrue(all(x["prefer_local_intents"] for x in HA["pipelines"]), HA["pipelines"])
+        self.assertIn("prefer_local_intents", log)
+        n = len(HA["pipeline_updates"])
+        p, _, log = self.run_hook(tokens=handed, frage=self.url, stimme=self.ports, data_dir=self.tmp.name)
+        self.assertEqual((p.returncode, len(HA["pipeline_updates"])), (0, n), "a second run changed a pipeline")
 
     def test_a_stimme_that_does_not_speak_the_language_leaves_the_part(self):
         self.kraftwerk()
@@ -820,6 +902,166 @@ class Stimme(Hook):
         sol = HA["pipelines"][0]
         self.assertEqual((sol["tts_engine"], sol["conversation_engine"]), ("tts.solaris_tts", "conversation.frage"))
         self.assertIn("tts.piper speaks no de", log)
+
+
+class Voice(Stimme):
+    """#634: one Assist pipeline named after the house persona (ADR 0020): Frage with HA's local
+    intents first, Stimme's Whisper and Piper, the persona's wake word once a model for it exists
+    and never one the engine does not offer. Preferred, and every satellite's pipeline select on
+    it; the Solaris-era pipelines go once nothing uses them, else they are renamed. The
+    satellites' end-of-speech setting is VOICE_VAD. A fictitious household: two satellites."""
+    PERSONA = {"name": "joshua", "display": "Joshua", "languages": ["de", "en"], "phrase": "Hey Joshua", "wakeword": "hey_joshua",
+               "voice": "de_DE-thorsten-high"}
+
+    def box(self, offered=("okay_nabu", "hey_jarvis"), device=("Okay Nabu", "Solaris")):
+        """the Kraftwerk as it ran on 2026-10-24: „Home Assistant“ (en), „Sol“ and „Solaris“ (de, Frage, the
+        wake word solaris), „Solaris“ preferred, a Voice PE on „Solaris“ in both slots"""
+        self.kraftwerk()
+        w, pi, ww = self.ports
+        render = os.path.join(self.tmp.name, "render")
+        Path(render, "persona", "joshua").mkdir(parents=True)
+        Path(render, "persona", "joshua", "persona.json").write_text(json.dumps(self.PERSONA))
+        self.env = {"LAIB_RENDER_DIR": render, "PERSONA": "joshua", "VOICE_VAD": "aggressive", "VOICE_OLD_PIPELINES": "Sol,Solaris"}
+        pipe = lambda i, name, lang, conv: {"id": i, "name": name, "language": lang, "stt_engine": "stt.faster_whisper", "stt_language": lang,
+                                            "tts_engine": "tts.piper", "tts_language": "de_DE", "tts_voice": None, "conversation_engine": conv,
+                                            "conversation_language": lang, "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "solaris",
+                                            "prefer_local_intents": True}
+        own = dict(pipe("p-ha", "Home Assistant", "en", "conversation.home_assistant"), stt_engine=None, stt_language=None, tts_engine=None,
+                   tts_language=None, wake_word_entity=None, wake_word_id=None, prefer_local_intents=False)
+        HA["pipelines"] = [own, pipe("p-sol", "Sol", "de", "conversation.frage"), pipe("p-solaris", "Solaris", "de", "conversation.frage")]
+        HA["preferred"] = "p-solaris"
+        HA["states"]["stt.faster_whisper"] = {"state": "unknown"}
+        HA["wake_words"] = {"wake_word.openwakeword": list(offered)}
+        names = ["preferred", "Home Assistant", "Sol", "Solaris"]
+        sel = lambda state, options, **kw: dict({"state": state, "attributes": {"options": list(options)}}, **kw)
+        for dev in ("kueche", "flur"):
+            HA["registry"] += [{"entity_id": f"select.voice_{dev}_{tk}", "config_entry_id": f"e-esp-{dev}", "platform": "esphome", "device_id": f"d-{dev}",
+                                "translation_key": tk, "disabled_by": None} for tk in ("pipeline", "pipeline_n", "vad_sensitivity", "wake_word")]
+            HA["states"].update({f"select.voice_{dev}_pipeline": sel("Solaris", names, pipeline_select=True),
+                                 f"select.voice_{dev}_pipeline_n": sel("Solaris", names, pipeline_select=True),
+                                 f"select.voice_{dev}_vad_sensitivity": sel("default", ["default", "relaxed", "aggressive"]),
+                                 f"select.voice_{dev}_wake_word": sel("no_wake_word", ["no_wake_word", *device])})
+        # the Wyoming entries Stimme's flow adds on the first run: the engines' languages for the pipeline
+        HA["engines"]["stt"] = [{"engine_id": "stt.faster_whisper", "supported_languages": ["de", "en"]}]
+        HA["engines"]["tts"] = [{"engine_id": "tts.piper", "supported_languages": ["de_DE", "en_US"]}]
+
+    def hook(self, tokens=None, **env):
+        return self.run_hook(tokens=tokens, frage=self.url, stimme=self.ports, data_dir=self.tmp.name, voice=dict(self.env, **env))
+
+    def ours(self):
+        return next((p for p in HA["pipelines"] if p["name"] == "Joshua"), None)
+
+    def selects(self, tk):
+        return {k: v["state"] for k, v in HA["states"].items() if k.startswith("select.voice_") and k.endswith("_" + tk)}
+
+    def test_the_persona_pipeline_is_preferred_the_satellites_follow_and_the_old_ones_go_once(self):
+        self.box()
+        p, handed, log = self.hook()
+        self.assertEqual(p.returncode, 0, log)
+        j = self.ours()
+        self.assertIsNotNone(j, log)
+        self.assertEqual({k: j[k] for k in ("language", "conversation_engine", "conversation_language", "prefer_local_intents", "stt_engine",
+                                            "stt_language", "tts_engine", "tts_language", "tts_voice")},
+                         {"language": "de", "conversation_engine": "conversation.frage", "conversation_language": "de", "prefer_local_intents": True,
+                          "stt_engine": "stt.faster_whisper", "stt_language": "de", "tts_engine": "tts.piper", "tts_language": "de_DE",
+                          "tts_voice": None}, "tts_voice None is the voice Piper runs with, the persona's")
+        self.assertEqual(HA["preferred"], j["id"])
+        self.assertEqual(set(self.selects("pipeline").values()) | set(self.selects("pipeline_n").values()), {"Joshua"}, log)
+        self.assertEqual(set(self.selects("vad_sensitivity").values()), {"aggressive"})
+        self.assertEqual(set(self.selects("wake_word").values()), {"no_wake_word"}, "the device has no Hey Joshua: its wake word stays")
+        self.assertEqual(sorted(HA["deleted"]), ["p-sol", "p-solaris"], log)
+        self.assertEqual([p["name"] for p in HA["pipelines"]], ["Home Assistant", "Joshua"], "the owner's own pipeline went")
+        self.assertIn('Assist pipeline "Joshua" created', log)
+        self.assertIn('"Sol" deleted', log)
+        HA["pipeline_updates"].clear()
+        HA["calls"].clear()
+        p, _, log = self.hook(tokens=handed)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((HA["pipeline_updates"], [c for c in HA["calls"] if "select" in c[0]]), ([], []), "a second run changed something: " + log)
+        self.assertIn('Assist pipeline "Joshua" is there', log)
+
+    def test_a_dead_wake_word_is_not_carried_and_the_log_says_why(self):
+        # solaris was the pipelines' wake word; Stimme's openWakeWord has no such model: a pipeline on it never wakes
+        self.box()
+        p, _, log = self.hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((self.ours()["wake_word_entity"], self.ours()["wake_word_id"]), (None, None), log)
+        self.assertIn("hey_joshua", log)
+        self.assertIn("solaris", log)
+
+    def test_the_current_wake_word_stays_until_the_persona_one_exists(self):
+        self.box(offered=("okay_nabu", "solaris"))
+        p, handed, log = self.hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((self.ours()["wake_word_entity"], self.ours()["wake_word_id"]), ("wake_word.openwakeword", "solaris"), log)
+        HA["wake_words"]["wake_word.openwakeword"].append("hey_joshua")   # the trainer's model reached openWakeWord
+        p, _, log = self.hook(tokens=handed)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.ours()["wake_word_id"], "hey_joshua", log)
+
+    def test_the_satellite_wakes_on_the_persona_once_the_device_has_it(self):
+        self.box(device=("Okay Nabu", "Hey Joshua"))
+        p, _, log = self.hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
+
+    def test_until_the_persona_word_exists_the_device_wakes_on_the_fallback(self):
+        # the owner, 2026-10-24: until „Hey Joshua“ is on the device, the Voice PE listens to the word it has
+        self.box(device=("Okay Nabu", "Solaris"))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"Solaris"}, log)
+
+    def test_the_persona_word_wins_over_the_fallback(self):
+        self.box(device=("Okay Nabu", "Solaris", "Hey Joshua"))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
+
+    def test_a_fallback_the_device_lacks_is_not_set(self):
+        self.box(device=("Okay Nabu",))
+        p, _, log = self.hook(VOICE_WAKE_FALLBACK="Solaris")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"no_wake_word"}, log)
+        self.assertIn("VOICE_WAKE_FALLBACK Solaris", log)
+
+    def test_a_pipeline_something_else_names_is_renamed_not_deleted(self):
+        self.box()
+        Path(self.tmp.name, "home-assistant", "homeassistant", "automations.yaml").write_text("- action: x\n  data: {pipeline_id: p-sol}\n")
+        p, _, log = self.hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["deleted"], ["p-solaris"], log)
+        self.assertEqual(next(p["name"] for p in HA["pipelines"] if p["id"] == "p-sol"), "Sol (alt)", log)
+        self.assertIn("automations.yaml", log)
+
+    def test_vad_follows_the_value_and_an_unknown_one_is_said(self):
+        self.box()
+        p, _, log = self.hook(VOICE_VAD="")
+        self.assertEqual(set(self.selects("vad_sensitivity").values()), {"default"}, "an empty VOICE_VAD is the owner's setting")
+        p, _, log = self.hook(VOICE_VAD="schnell")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(set(self.selects("vad_sensitivity").values()), {"default"})
+        self.assertIn("VOICE_VAD schnell", log)
+
+    def test_without_stimme_no_persona_pipeline_and_nothing_goes(self):
+        self.box()
+        p, _, log = self.run_hook(frage=self.url, data_dir=self.tmp.name, voice=self.env)   # Stimme's ports answer nothing
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIsNone(self.ours())
+        self.assertEqual(HA["deleted"], [])
+        self.assertIn('no Assist pipeline "Joshua"', log)
+
+    def test_without_the_persona_file_nothing_changes(self):
+        self.box()
+        p, _, log = self.hook(LAIB_RENDER_DIR="/nonexistent")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIsNone(self.ours())
+        self.assertEqual(HA["deleted"], [])
+
+    def test_the_check_unit_carries_the_persona_so_a_persona_change_applies_this_hook(self):
+        unit = (HOOK.parent / "home-assistant-check.service").read_text()
+        for v in ("${PERSONA_DISPLAY}", "${PERSONA_WAKEWORD}", "${PERSONA_PHRASE}", "${VOICE_VAD}"):
+            self.assertIn(v, unit)
+        self.assertIn("VOICE_VAD: aggressive", (HOOK.parent / "values.example.yml").read_text())
 
 
 class Zuhause(Hook):

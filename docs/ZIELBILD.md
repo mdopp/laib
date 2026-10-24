@@ -46,7 +46,7 @@ prüfen. Solaris' units ran on as ServiceBay units, ignored (`laib
 ignore`), until Phase 5: `scripts/solaris-off.py --do` stops and parks
 them, takes their ignore.yml lines out, adds Stimme and lets Home
 Assistant's post-deploy wire Stimme's Wyoming entries (#540, the
-script's docstring is the runbook); their data stays 30 days.
+script's docstring is the runbook; in git history since 2026-10-24); their data stays 30 days.
 Whether it ran: auf der Box zu prüfen. Its links into ServiceBay were
 switched off explicitly before (#396). ServiceBay itself is off; its data dir
 stays 30 days after migration day.
@@ -152,8 +152,8 @@ From #160:
 - the Operator, Frage and Haus's data from the NUC;
 - ADR 0015's check 1 (Assist sentences);
 - the Voice PE satellites (#30);
-- Solaris the agent off (`scripts/solaris-off.py`, #540) and its data
-  deleted 30 days later;
+- Solaris the agent off (#540; `scripts/solaris-off.py` is in git history
+  since 2026-10-24) and its data deleted 30 days later;
 - ServiceBay's data dir deleted after 30 days.
 
 Elsewhere:

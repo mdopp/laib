@@ -271,14 +271,34 @@ test -s "$WORK/op/incidents.jsonl" || fail "incidents.jsonl not written"
 if LAIB_ACTOR=human:e2e "$BIN" operator enable >/dev/null 2>&1; then fail "operator enabled without a model"; fi
 printf 'model:\n  url: http://127.0.0.1:5977/v1\n' >> "$LAIB_HOME/state/box.yml"
 LAIB_ACTOR=human:e2e "$BIN" operator enable --report-at 06:30 >/dev/null || fail "operator enable exit $?"
-grep -q "MODEL_URL=http://127.0.0.1:5977/v1" "$LAIB_SYSTEMD/laib-operator.service" || fail "model url not rendered into the unit"
-test -f "$LAIB_SYSTEMD/laib-operator.service" || fail "operator unit not rendered"
-grep -q "OPERATOR_REPORT_AT=06:30" "$LAIB_SYSTEMD/laib-operator.service" || fail "report time not rendered"
-# the token sits in the unit's env file, never in the unit (#443)
-grep -q 'LAIB_TOKEN="laib_ops_' "$LAIB_SYSTEMD/laib-operator.env" || fail "ops token not in the unit's env file"
-if grep -q "laib_ops_" "$LAIB_SYSTEMD/laib-operator.service"; then fail "the ops token is in the unit itself"; fi
-[ "$(stat -c %a "$LAIB_SYSTEMD/laib-operator.env")" = 600 ] || fail "the env file with the token is not 0600"
-grep -q "enable --now laib-operator.service" "$SYSTEMCTL_LOG" || fail "operator unit not enabled"
+# its container since ADR 0027 (#624): no host unit, no env file
+OPU="$LAIB_QUADLET/laib-operator/laib-operator.container"
+test -f "$OPU" || fail "operator container not rendered"
+if [ -e "$LAIB_SYSTEMD/laib-operator.service" ] || [ -e "$LAIB_SYSTEMD/laib-operator.env" ]; then fail "the Operator still has a host unit or env file"; fi
+grep -q 'Environment="MODEL_URL=http://127.0.0.1:5977/v1"' "$OPU" || fail "model url not rendered into the unit"
+grep -q 'Environment="OPERATOR_REPORT_AT=06:30"' "$OPU" || fail "report time not rendered"
+# the token is a podman secret, never in the unit (#224, #443)
+grep -q "^laib_ops_" "$WORK/podsec/laib.laib-operator.laib-operator.LAIB_TOKEN" || fail "ops token is no podman secret"
+if grep -q "laib_ops_" "$OPU"; then fail "the ops token is in the unit itself"; fi
+grep -q "restart laib-operator.service" "$SYSTEMCTL_LOG" || fail "operator container not started"
+# what it cannot reach (ADR 0027): its one mount is its own folder; no mount holds the age key,
+# secrets.age, the state repo or the journal — by the box's paths or this run's — and no line names them.
+# What the kernel does with the mounts is the boot job's to show (scripts/boot-test.sh), a box's to prove.
+python3 - "$OPU" "$LAIB_HOME" <<'PY' || fail "the Operator's container reaches more than its folder (ADR 0027)"
+import os, sys
+unit, home = open(sys.argv[1]).read(), sys.argv[2]
+never = [os.path.join(h, p) for h in ("/mnt/data/laib", home) for p in ("age.key", "state/secrets.age", "state", "journal")]
+mounts = [l.split("=", 1)[1] for l in unit.splitlines() if l.split("=", 1)[0] in ("Volume", "Mount")]
+assert mounts == ["/mnt/data/laib/operator:/operator:Z"], mounts
+for m in mounts:
+    src = m.split(":")[0].rstrip("/") + "/"
+    assert not any((n + "/").startswith(src) for n in never), m
+for l in unit.splitlines():
+    k = l.split("=", 1)[0]
+    assert k not in ("EnvironmentFile", "PodmanArgs", "AddCapability", "SecurityLabelDisable", "Rootfs", "UserNS"), l
+    assert k != "Environment" or not any(n in l for n in never), l
+assert "\nReadOnly=true\n" in unit and "\nDropCapability=all\n" in unit and "\nNoNewPrivileges=true\n" in unit, unit
+PY
 if LAIB_ACTOR=ops "$BIN" operator disable >/dev/null 2>&1; then fail "ops disabled the operator"; fi
 
 # --- 11. the bote and frage hooks render their configs from values and secrets
@@ -627,5 +647,14 @@ grep -q "laib scan \[propose\]" <<<"$("$BIN" scan --help)" || fail "laib scan --
 rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan einrichten --geraet "airscan:e0:Beispiel" --json 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -q 'after names "paperless"' <<<"$OUT" || fail "laib scan einrichten did not reach the kernel's judge through the door (rc $rc): $OUT"
 rc=0; LAIB_ACTOR=ops LAIB_CEILING=propose "$BIN" approve 1 >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "a call back from behind the door went above propose (rc $rc)"
+
+# laib-notify is the box's, like its timer (#633): an apply scoped to one
+# service that turns the notifier on writes the container the timer starts,
+# before the reload that loads it and the enable that starts the timer
+printf 'watchdog:\n  url: https://hc.e2e.home/ping\n' >> "$LAIB_HOME/state/box.yml"
+n=$(wc -l < "$SYSTEMCTL_LOG")
+LAIB_ACTOR=human:e2e "$BIN" apply whoami --reason "e2e: the watchdog on" >/dev/null || fail "the scoped apply with the notifier on exit $?"
+test -f "$LAIB_QUADLET/laib-notify/laib-notify.container" || fail "a scoped apply enabled laib-notify.timer without its container (#633)"
+grep -q "daemon-reload.*enable --now laib-notify.timer" <<<"$(tail -n +$((n + 1)) "$SYSTEMCTL_LOG" | grep "daemon-reload\|enable --now laib-notify.timer" | tr '\n' ' ')" || fail "laib-notify.timer is not enabled after the reload (#633)"
 
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"

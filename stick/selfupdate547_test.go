@@ -100,14 +100,14 @@ func (s *selfBox) release(tag, body, sum string) {
 }
 
 // installer is a release's install-box.sh: it logs how it was called, puts
-// the new laib in place (and an operator) and lets /ready answer with the
+// the new laib in place (and a lease) and lets /ready answer with the
 // version and state it would.
 func (s *selfBox) installer(version, state string) string {
 	b, _ := json.Marshal(map[string]any{"state": state, "red": 0, "version": version})
 	os.WriteFile(filepath.Join(s.fx, "laib-"+version), []byte(laibBin(version)), 0o755)
 	return `echo "install-box.sh $* LAIB_SELF_UPDATE=$LAIB_SELF_UPDATE" >> "$SHIM_LOG"
 cp "$FX/laib-` + version + `" "$LAIB_BIN_DIR/laib"
-echo "#!/bin/sh" > "$LAIB_BIN_DIR/laib-operator"
+echo "#!/bin/sh" > "$LAIB_BIN_DIR/laib-lease"
 echo '` + string(b) + `' > "$FX/ready"
 `
 }
@@ -163,8 +163,12 @@ func TestSelfUpdateRollsBackARedReleaseAndDoesNotRetryIt(t *testing.T) {
 	if !installed(log) {
 		t.Fatalf("the installer never ran:\n%s\n%s", log, out)
 	}
-	if b, _ := os.ReadFile(filepath.Join(s.opt, "laib-operator")); !strings.Contains(string(b), "old laib-operator") {
-		t.Errorf("the operator that ran before is not back:\n%s", b)
+	if b, _ := os.ReadFile(filepath.Join(s.opt, "laib-lease")); !strings.Contains(string(b), "old laib-lease") {
+		t.Errorf("the lease that ran before is not back:\n%s", b)
+	}
+	// the Operator and notify are containers (ADR 0027): the old laib's converge brings their images back
+	if strings.Contains(log, "laib-operator") || strings.Contains(log, "laib-notify") {
+		t.Errorf("the Operator or notify were handled as binaries or host units:\n%s", log)
 	}
 	if b, _ := exec.Command(filepath.Join(s.opt, "laib"), "version").Output(); string(b) != "laib v0.11.1\n" {
 		t.Errorf("laib is not back on v0.11.1: %s\n%s", b, out)

@@ -117,7 +117,7 @@ func TestStimmeTrainsTheHousePersonasWakeWord(t *testing.T) {
 		}
 	}
 	trainer, _ := os.ReadFile(filepath.Join(dir, "stimme-wakeword-trainer.container"))
-	for _, want := range []string{"WAKE_PHRASE=${PERSONA_PHRASE}", "WAKE_ID=${PERSONA_WAKEWORD}", "WAKE_LANGUAGES=${PERSONA_LANGUAGES}", "PERSONA_REV=${PERSONA_REV}", "${DATA_DIR}/stimme/micro:/out"} {
+	for _, want := range []string{`"WAKE_PHRASE=${PERSONA_PHRASE}"`, "WAKE_ID=${PERSONA_WAKEWORD}", "WAKE_LANGUAGES=${PERSONA_LANGUAGES}", "PERSONA_REV=${PERSONA_REV}", "${DATA_DIR}/stimme/micro:/out"} {
 		if !strings.Contains(string(trainer), want) {
 			t.Errorf("the trainer unit lacks %s", want)
 		}

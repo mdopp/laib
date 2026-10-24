@@ -65,8 +65,6 @@ if [ -n "${LAIB_WERKSTATT_TOKEN:-}" ]; then
   su dev -c "claude mcp remove -s user laib >/dev/null 2>&1 || true"
   su dev -c "claude mcp add-json -s user laib '{\"type\":\"http\",\"url\":\"${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}\",\"headersHelper\":\"laib --headers\"}' >/dev/null 2>&1 || true"
 fi
-# ServiceBay's MCP (:5888) is gone: its entries in the kept home fail every session start (#392)
-su dev -c "python3 /usr/local/bin/werkstatt-mcp-tidy" || true
 if [ -n "${WERKSTATT_GIT_TOKEN:-}" ]; then
   printf 'https://x-access-token:%s@github.com\n' "$WERKSTATT_GIT_TOKEN" > /run/laib/git-credentials
   chmod 600 /run/laib/git-credentials; chown dev:dev /run/laib/git-credentials

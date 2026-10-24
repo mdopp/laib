@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0027**. Each file's first paragraph after the title says *in which
+number: **0028**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -32,3 +32,4 @@ situation* it applies, so an agent can self-select.
 | [0024](0024-the-host-os-is-a-prebuilt-image-proven-at-boot.md) | Proposed: the host OS is a prebuilt image (the NVIDIA module built in CI, not on the box); the CDI spec at every boot; every new deployment proven or rolled back once |
 | [0025](0025-the-operator-reads-the-web-and-never-acts-on-it.md) | The Operator reads the web through the box's own search (Frage's SearXNG), entry points first, only in sessions that can only propose; a proposal resting on it is a human's |
 | [0026](0026-household-verbs-live-outside-the-kernel.md) | Household verbs (scan, zuhause, person_*, calendar, net geraete) live outside the kernel: the kernel offers proposals scoped to box.yml/values paths and a verb door to programs that can only read and propose |
+| [0027](0027-only-what-touches-the-host-runs-on-the-host.md) | Only what touches the host runs on the host (laib, laib-disk, self-update, backup); Operator, notify, haushalt and lease run as containers with their own token and folders, never the age key or the state repo |

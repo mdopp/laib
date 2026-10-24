@@ -72,6 +72,13 @@ def _run(cmd: list[str], cwd: pathlib.Path | None = None) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def phase(name: str) -> None:
+    """Announce a phase; trainer.py names the step a failure happened in by
+    the last of these lines (#627)."""
+    sys.stdout.write(f"== phase: {name}\n")
+    sys.stdout.flush()
+
+
 def generate_positives(work: pathlib.Path, run: pathlib.Path, phrase: str, voice_sets: list[list[str]], n: int) -> pathlib.Path:
     """Synthesize the phrase with each language's voices into <run>/generated_samples."""
     psg = work / "piper-sample-generator"
@@ -393,17 +400,23 @@ def main(argv: list[str] | None = None) -> int:
     languages = [l for l in args.languages.split(",") if l]
 
     if args.phase in ("all", "generate"):
+        phase("generate")
         generate_positives(work, run, args.phrase, list(groups.values()), args.positive_samples)
     if args.phase in ("all", "real"):
+        phase("real")
         fold_real_positives(run, args.recordings, args.real_oversample)
     if args.phase in ("all", "features"):
+        phase("features")
         build_features(work, run)
     if args.phase in ("all", "negatives"):
+        phase("negatives")
         fetch_negatives(work)
     if args.phase in ("all", "train"):
+        phase("train")
         cfg = write_training_config(work, run, args.steps)
         train(work, mww, cfg)
     if args.phase in ("all", "export"):
+        phase("export")
         export(run, args.out, args.cutoff, args.phrase, languages)
     return 0
 

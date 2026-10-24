@@ -324,7 +324,8 @@ func copyOffsite(ctx context.Context, env *cli.Env, st *state.State, pw string) 
 
 // backupCheck is the monthly restore test (#40): restic verifies a sample of
 // the repo's data, and one service's first backed-up path is restored into
-// a scratch directory and compared with what is on disk. The result is a
+// a scratch directory and compared with the snapshot (probeRestore, #552) —
+// not with what is on disk, which a database has changed since. The result is a
 // journal line (verb backup, reason check) that diag and the box page read.
 func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw, reason string) int {
 	start := time.Now()
@@ -353,14 +354,11 @@ func backupCheck(ctx context.Context, env *cli.Env, st *state.State, pw, reason 
 		return fail1("scratch", err)
 	}
 	defer os.RemoveAll(scratch)
-	if out, err := ResticRun(ctx, st, pw, "restore", "latest:"+probe, "--target", scratch); err != nil {
-		return fail1("restore "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
+	compared, err := probeRestore(ctx, st, pw, probe, scratch)
+	if err != nil {
+		return fail1("restore test "+probe, err)
 	}
-	if out, err := sysd.Run(ctx, "diff", "-rq", scratch, probe); err != nil && !strings.Contains(out, "Only in "+probe) {
-		// files only on disk are newer than the snapshot; a differing file is not
-		return fail1("compare "+probe, fmt.Errorf("%s", cli.Tail(out, 300)))
-	}
-	entry.Result, entry.Detail, entry.MS = "green", st.Box.Backup.Repo+": restic check 5% ok; "+probe+" restored into a scratch dir and compared", time.Since(start).Milliseconds()
+	entry.Result, entry.Detail, entry.MS = "green", st.Box.Backup.Repo+": restic check 5% ok; "+compared, time.Since(start).Milliseconds()
 	journal.Append(env.Paths.Journal, entry)
 	fmt.Fprintln(env.W(), "grün ·", entry.Detail)
 	return cli.ExitOK

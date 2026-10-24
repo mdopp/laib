@@ -17,10 +17,11 @@ CFG
 # eclipse-mosquitto 2.1 drops to its own user (1883) before it opens the
 # password file and writes its persistence: both are that user's, as the
 # broker's user namespace maps it (this hook runs in the same one, #248).
-# The password file's group is root (#524): the broker warns on every load
-# "File /mosquitto/config/passwd group is not root. Future versions will
-# refuse to load this file." (libcommon/file_common.c: its group must be the
-# broker's gid). 0600, so the group can read nothing.
-chown 1883:0 "$C/passwd"
+# The password file's group is the broker's too (#524): libcommon/file_common.c
+# warns on every load when it is not ("group is not root", then with group
+# root "group is not mosquitto") and future versions refuse the file. 0600,
+# so the group can read nothing. Every apply sets it, so a file an older
+# apply left as 1883:0 is corrected on the next one.
+chown 1883:1883 "$C/passwd"
 chown 1883:1883 "$LAIB_DATA_DIR/mosquitto/data"
 echo "mosquitto.conf rendered"

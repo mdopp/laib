@@ -40,6 +40,8 @@ type Verdict struct {
 	Facts []string // plain facts for the decision card (#58)
 	Ask   []string // a person decides, not the dial (#528): a warning
 	Snap  []string // services snapshotted before the approved change applies (#528)
+	// Changes: what the change does, before → after, for the card (#616)
+	Changes []Change
 }
 
 // Judge reads the change — a checkout of main and one of the change — and
@@ -168,7 +170,6 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 	}
-	warnings := slices.Concat(proposed.Warnings, updateWarnings, verdict.Ask)
 	if _, err := git(ctx, wt, "add", "-A"); err != nil {
 		return fail(err)
 	}
@@ -184,15 +185,31 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
 	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(), Warnings: warnings,
-		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap}
+	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(),
+		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])
 		}
 	}
+	p.Warnings = slices.Concat(ownWarnings(repo, proposed.Warnings, append(servicesOf(p), p.Adds...)), updateWarnings, verdict.Ask)
 	git(ctx, repo, "worktree", "remove", "--force", wt)
 	return p, Save(inbox, p)
+}
+
+// ownWarnings: the state's warnings this change brings, or that name a
+// service it touches (#616). A warning the box had before and that is
+// about other services (a second service for one purpose elsewhere) is
+// the box's, shown on the status page — not on every card, and not a
+// reason to keep each later proposal from the dial.
+func ownWarnings(repo string, warnings, touched []string) []string {
+	before, err := state.Load(repo)
+	if err != nil {
+		return warnings
+	}
+	return slices.DeleteFunc(slices.Clone(warnings), func(w string) bool {
+		return slices.Contains(before.Warnings, w) && !slices.ContainsFunc(touched, func(s string) bool { return mentions(w, s) })
+	})
 }
 
 // setValue sets one key of a values.yml to a string, or "!secret NAME" to a

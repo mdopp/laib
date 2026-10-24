@@ -14,9 +14,17 @@ Environment=HA_TOKEN=${HA_TOKEN}
 Environment=LAIB_SERVICE=${SERVICE}
 # Music Assistant set up, with Jellyfin's titles and players (#526); empty without Music Assistant
 Environment=MA_TOKEN=${MA_TOKEN}
+# the house persona's Assist pipeline (#634): its name, wake word and phrase. A persona change changes
+# this unit, so laib applies home-assistant again and post-deploy moves the pipeline
+Environment=VOICE_PERSONA=${PERSONA_DISPLAY}
+Environment=VOICE_WAKEWORD=${PERSONA_WAKEWORD}
+Environment="VOICE_PHRASE=${PERSONA_PHRASE}"
+# the satellites' end of speech post-deploy sets (VOICE_VAD); here so a change applies the hook again
+Environment=VOICE_VAD=${VOICE_VAD}
+Environment="VOICE_WAKE_FALLBACK=${VOICE_WAKE_FALLBACK}"
 # zwave-js-ui's driver health (#417): not ready fails this unit, and laib status shows home-assistant red
 Environment=ZWAVE_URL=http://127.0.0.1:8091
 StandardInput=file:%h/.config/containers/systemd/home-assistant/home-assistant-check.py
 # only where the box runs Z-Wave JS: a template without the zwave unit (no stick) checks no Z-Wave
-ExecStart=/bin/sh -c 'test -f %h/.config/containers/systemd/home-assistant/home-assistant-zwave.container || unset ZWAVE_URL; exec /usr/bin/podman exec -i -e HA_TOKEN -e LAIB_SERVICE -e MA_TOKEN -e ZWAVE_URL systemd-home-assistant python3 -'
+ExecStart=/bin/sh -c 'test -f %h/.config/containers/systemd/home-assistant/home-assistant-zwave.container || unset ZWAVE_URL; exec /usr/bin/podman exec -i -e HA_TOKEN -e LAIB_SERVICE -e MA_TOKEN -e ZWAVE_URL -e VOICE_PERSONA -e VOICE_WAKEWORD -e VOICE_PHRASE systemd-home-assistant python3 -'
 TimeoutStartSec=60

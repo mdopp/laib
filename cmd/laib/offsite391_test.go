@@ -52,7 +52,7 @@ func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 				return "repository does not exist", errors.New("exit 10")
 			}
 		}
-		return "ok", nil
+		return fakeRestoreTest(args), nil
 	}
 	if rc := backup.Cmd(context.Background(), b.env, nil); rc != cli.ExitOK {
 		t.Fatalf("backup rc %d: %s", rc, strings.Join(calls, "\n"))
@@ -87,7 +87,7 @@ func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 	if rc := backup.Cmd(context.Background(), b.env, []string{"check"}); rc != cli.ExitOK {
 		t.Fatalf("backup check rc %d: %s", rc, strings.Join(calls, "\n"))
 	}
-	if !strings.Contains(strings.Join(calls, "\n"), "rclone:nas:laib-restic restore latest:") {
+	if !strings.Contains(strings.Join(calls, "\n"), "rclone:nas:laib-restic restore ") {
 		t.Fatalf("no restore test from the off-box repo:\n%s", strings.Join(calls, "\n"))
 	}
 
@@ -114,4 +114,23 @@ func backupFinding(b *rbox, st *state.State, word string) *diag.Finding {
 		}
 	}
 	return nil
+}
+
+// fakeRestoreTest answers the restore test's restic calls (#552): ls lists
+// one file under the probe, restore writes it with the listed size.
+func fakeRestoreTest(args []string) string {
+	switch args[0] {
+	case "ls":
+		probe := args[len(args)-1]
+		return `{"id":"0123456789abcdef","struct_type":"snapshot"}` + "\n" + `{"type":"file","path":"` + probe + `/f","size":2,"struct_type":"node"}`
+	case "restore":
+		for i, a := range args {
+			if a == "--include" {
+				p := filepath.Join(args[i+3], args[i+1], "f")
+				os.MkdirAll(filepath.Dir(p), 0o755)
+				os.WriteFile(p, []byte("ok"), 0o644)
+			}
+		}
+	}
+	return "ok"
 }

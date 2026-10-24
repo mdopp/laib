@@ -133,9 +133,8 @@ func TestForeignUnitOnTheSharedTreeIsNoConflict(t *testing.T) {
 }
 
 // Review of #234. Everything below the backup:false shared tree is shared
-// too: Solaris keeps running beside Laib until it retires (Phase 5,
-// scripts/solaris-off.py) and mounts file-share/data/notes, which file-share backs up as a
-// folder of the tree. A probe's `path: /` and a name that only starts like a
+// too: Solaris ran beside Laib until it retired (Phase 5, #540) and mounted
+// file-share/data/notes, which file-share backs up as a folder of the tree. A probe's `path: /` and a name that only starts like a
 // data path (auth-old) are not mounts of it; a pod's containerPort is not a
 // host port.
 func TestBelowTheSharedTreeAndNearMissesAreNoConflict(t *testing.T) {

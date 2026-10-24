@@ -45,9 +45,9 @@ CLI describe a system that is off and are not carried.
 (over SSH, and the Remote Control sessions the Claude app opens) has Laib
 as the MCP server `laib` at `host.containers.internal:5900/mcp`, user
 scope, written by the entrypoint with the token as a header variable, never
-on argv. ServiceBay's entries (`servicebay`, `atHome-Servicebay`,
-`:5888/mcp`), carried over in the kept home, are dropped at every start by
-`werkstatt-mcp-tidy`; everything else in `~/.claude.json` stays. There is
+on argv. (Until 2026-10-24 `werkstatt-mcp-tidy` dropped ServiceBay's
+entries carried over in the kept home at every start; they are gone, and so
+is the tidy.) There is
 no claude.ai connector to the box: `admin.<domain>/mcp` answers only the
 LAN (`respond 403` otherwise), and the owner's Claude from outside is the
 Claude app attached to a Werkstatt session, which has `laib` already.

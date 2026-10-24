@@ -66,9 +66,11 @@ want="$(grep ' laib-install-box.sh$' "$tmp/SHA256SUMS" | cut -d' ' -f1)"
 [ "$want" = "$(sha256sum "$tmp/laib-install-box.sh" | cut -d' ' -f1)" ] || { failed="$target"; record failed "$target: install-box.sh passt nicht zu SHA256SUMS"; exit 0; }
 
 # the binaries that run now, for the way back (*.prev of a binary the last
-# update did not change is older than what runs)
+# update did not change is older than what runs). laib-operator and
+# laib-notify are containers whose images the laib that renders them pins
+# (ADR 0027): they come back with the old laib's converge below.
 mkdir "$tmp/keep"
-for b in laib laib-operator laib-lease laib-disk laib-notify laib-haushalt; do [ ! -f "$BIN/$b" ] || cp -p "$BIN/$b" "$tmp/keep/"; done
+for b in laib laib-lease laib-disk laib-haushalt; do [ ! -f "$BIN/$b" ] || cp -p "$BIN/$b" "$tmp/keep/"; done
 changed() { for f in "$tmp/keep"/*; do cmp -s "$f" "$BIN/$(basename "$f")" || return 0; done; return 1; }
 say "$running → $target"
 LAIB_SELF_UPDATE=1 LAIB_BIN_DIR="$BIN" timeout "$LIMIT" bash "$tmp/laib-install-box.sh" --version "$target" >"$HOME_DIR/self-update.log" 2>&1
@@ -89,7 +91,7 @@ fi
 for f in "$tmp/keep"/*; do
   sudo install -m 0755 "$f" "$BIN/$(basename "$f").new" && sudo mv -f "$BIN/$(basename "$f").new" "$BIN/$(basename "$f")"
 done
-for u in laib.service laib-operator.service laib-lease.service; do systemctl --user try-restart "$u" 2>/dev/null || true; done
+for u in laib.service laib-lease.service; do systemctl --user try-restart "$u" 2>/dev/null || true; done
 # the new release's converge rendered its own files; the old laib renders its own back
 sleep 2; laib converge --force >>"$HOME_DIR/self-update.log" 2>&1
 end=$((SECONDS + WAIT)); back="grün"

@@ -19,6 +19,14 @@ rewritten or dropped. Here the engine sees each message before the model:
   none (#510: "JOSHUA>" above "Bambi ist aus." was out of place). With
   nothing to route (any tool, the top level, no FIGUR) the plugin adds no
   context: the user turn is the person's words alone (#520).
+- Home Assistant first (#520, ADR 0015): a message that is no screen goes to
+  HA's conversation API (agent conversation.home_assistant, its own intents)
+  before the model. action_done (it switched) or query_answer (a state
+  question) is HA's answer, which the person gets, like a screen; the model
+  is only told to say OK. Everything else, an error such as no_intent_match
+  ("not understood") or HA not answering, is the model's turn as before. A
+  switch HA executed is noted with laib-journal's note (#591): no tool ran,
+  so its post_tool_call never sees it.
 - Hermes' steer frame ([OUT-OF-BAND USER MESSAGE …]) never reaches a person:
   the model copied it from Hermes' system prompt (#520), and the plugin
   takes it out of every answer.
@@ -26,10 +34,10 @@ rewritten or dropped. Here the engine sees each message before the model:
 Without the engine (it does not answer) the turn is Hermes' as usual. A
 scheduled job is no person and is left alone. Stdlib only.
 """
-import json, os, re, threading, urllib.request
+import json, os, re, sys, threading, urllib.request
 
 _lock = threading.Lock()
-_turns = {}  # turn id -> (kind, payload, session); kind: screen | valid | weiter
+_turns = {}  # turn id -> (kind, payload, session); kind: screen | valid | weiter | ha
 
 
 def _url():
@@ -49,6 +57,38 @@ def _ask(line, session, language="de"):
     if res.get("isError"):
         return None
     return "".join(c.get("text", "") for c in res.get("content") or [] if c.get("type") == "text") or None
+
+
+def _ha(line, language="de"):
+    """(HA's answer, the entities it switched) when Home Assistant's own intents handled the
+    line, else None: not understood, an error, or HA not there (#520)"""
+    url, token = os.environ.get("HA_URL", ""), os.environ.get("HA_TOKEN", "")
+    if not url or not token:
+        return None
+    body = json.dumps({"text": line, "language": language, "agent_id": "conversation.home_assistant"}).encode()
+    req = urllib.request.Request(url.rstrip("/") + "/api/conversation/process", data=body,
+                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as f:
+            res = json.load(f).get("response") or {}
+        kind = res.get("response_type")
+        if kind not in ("action_done", "query_answer"):
+            return None   # error: no_intent_match, no_valid_targets, failed_to_handle … the model's turn
+        speech = ((res.get("speech") or {}).get("plain") or {}).get("speech") or "Erledigt."
+        done = [t.get("id") for t in (res.get("data") or {}).get("success") or [] if isinstance(t, dict) and t.get("type") == "entity" and t.get("id")]
+        return speech, done if kind == "action_done" else []
+    except Exception:
+        return None
+
+
+def _journal(platform, sender_id, entities):
+    """who switched (#591), with laib-journal's own note, when that plugin is loaded"""
+    j = next((m for m in list(sys.modules.values()) if callable(getattr(m, "handled_by_ha", None))), None)
+    if j is not None and entities:
+        try:
+            j.handled_by_ha(platform, sender_id, entities)
+        except Exception:
+            pass
 
 
 def _message(user_message):
@@ -89,9 +129,20 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
     if not line:
         return None
     answer = _ask(line, session)
+    key = turn_id or session_id
+    if answer is None or answer.startswith("WEITER:"):
+        r = _routing(answer or "")
+        handled = _ha(line) if r.get("WEITER", "-") in ("", "-", "ha") else None
+        if handled:
+            speech, switched = handled
+            prompt = r.get("PROMPT", "") if "/" in r.get("PROMPT", "") else ""
+            with _lock:
+                _turns[key] = ("ha", (prompt + "\n" if prompt else "") + speech, session)
+            _journal(platform, sender_id, switched)
+            return {"context": "Persona: Home Assistant hat das schon erledigt, die Person bekommt seine Antwort. "
+                               "Ruf kein Werkzeug auf und antworte nur mit OK."}
     if answer is None:
         return None
-    key = turn_id or session_id
     if answer.startswith("WEITER:"):
         r = _routing(answer)
         tool = r.get("WEITER", "-")
@@ -144,6 +195,8 @@ def on_output(response_text=None, session_id=None, turn_id=None, **_):
     if turn is None:
         return _unframed(response_text)
     kind, payload, session = turn
+    if kind == "ha":
+        return payload
     if kind == "screen":
         return _block(payload)
     if kind == "valid":

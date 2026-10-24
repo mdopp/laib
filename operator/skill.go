@@ -124,7 +124,8 @@ func (r *Runner) saveLast() {
 	}
 }
 
-// Step runs every active scheduled skill that is due at now. An interval
+// Step runs the incidents that waited, then every active scheduled skill
+// that is due at now. An interval
 // skill seen for the first time starts its clock: its first run is one
 // interval later, as the tick always did.
 func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Session {
@@ -135,7 +136,7 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 	if reportAt == "" {
 		reportAt = "07:00"
 	}
-	var out []Session
+	out := r.drain(ctx, now, skills) // the incidents that waited for the graphics card first (#550)
 	for _, sk := range skills {
 		if sk.Status != "active" || sk.Trigger.Event != "" {
 			continue

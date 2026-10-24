@@ -14,7 +14,9 @@ check about an agent's task before it runs.
   amended 2026-10-22 (#550, #551): the log review reads by content, the
   model sees patterns;
   amended 2026-10-22 (#550): no session within two minutes of a person's
-  model request
+  model request;
+  amended 2026-10-24 (#550): a look without news is silent, an incident
+  waits for the graphics card
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -506,3 +508,34 @@ rule as the other skips (whether it should wait in a queue instead is
 the owner's open question). What it costs: a look or report on a busy
 evening runs a few minutes later; ServiceBay had no Operator on the GPU
 to compare with.
+
+## Amendment 2026-10-24 — a look without news is silent, an incident waits (#550)
+
+The Kraftwerk's journal after 0.18.0 still had looks noting „Alle 23
+Dienste sind grün, keine neuen Befunde“: a finding had gone away, the set
+differed from the last look's, and the model was asked to say nothing.
+And an incident that came while the graphics card was lent was skipped.
+The owner decided both (2026-10-24):
+
+- **New means a finding the last look did not see.** A finding's identity
+  stays the #543 one (severity, probe, service, detail without numbers).
+  A look whose findings are all among the last look's asks no model and
+  writes no note, also when some went away; the runner remembers the
+  smaller set, so a finding that returns is news, and its repair can be
+  filed again.
+- **An incident waits in a queue.** When the lease, a cold model or a
+  person's request makes an incident session skip, the runner writes the
+  trigger to `OPERATOR_HOME/queue/`, one file per finding (skill, service,
+  the detail without numbers); the same red again counts on that file.
+  Each step, once the model is free, runs the queue oldest first, and the
+  session's note says how long the incident waited and how often it came.
+  At most 20 wait (the oldest gives way); one older than 24 hours is not
+  run, since the next look sees what is still red. Each drop is a note.
+  The folder survives a restart and the Operator's move into a container,
+  which keeps `OPERATOR_HOME` mounted.
+
+Weighed against before (#246): the journal loses the empty notes; an
+incident on a gaming evening is handled when the card is back instead of
+waiting for its next red, which a red that stays red only sends again
+after the ten-minute debounce. What it costs: about 150 Operator lines.
+ServiceBay had no Operator on the GPU to compare with.

@@ -96,7 +96,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	if errs := lintMounts(st, name, out, neighbours); len(errs) > 0 {
+	if errs := append(lintMounts(st, name, out, neighbours), lintEnvironment(name, out)...); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(env.Errw(), e)
 		}
@@ -140,6 +140,26 @@ func LintTemplate(env *cli.Env, dir string) int {
 	}
 	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
 	return cli.ExitOK
+}
+
+// lintEnvironment: systemd splits an unquoted Environment= value at
+// whitespace, so "Hey Joshua" reaches the container as "Hey" (#571, #627).
+// Lint renders with the built-in persona and values.example.yml, so the
+// rendered line shows a value with a space; quoted, the whole value arrives.
+func lintEnvironment(name string, out render.Output) []string {
+	var errs []string
+	for key, text := range out {
+		if !strings.HasPrefix(key, "quadlet/"+name+"/") {
+			continue
+		}
+		for _, line := range strings.Split(text, "\n") {
+			v, ok := strings.CutPrefix(strings.TrimSpace(line), "Environment=")
+			if ok && !strings.HasPrefix(v, `"`) && !strings.HasPrefix(v, "'") && strings.ContainsAny(v, " \t") {
+				errs = append(errs, fmt.Sprintf("%s: %s: systemd splits an unquoted value at the space; quote it: Environment=\"%s\"", key, line, v))
+			}
+		}
+	}
+	return errs
 }
 
 // hookInterpreters is what ghcr.io/mdopp/laib-hooks provides (#36).

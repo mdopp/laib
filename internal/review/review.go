@@ -20,6 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 )
@@ -35,6 +36,9 @@ type Result struct {
 	// and laib snapshots these services before the approved change applies.
 	Ask      []string
 	Snapshot []string
+	// Changes: what the change does to the hands, the rules and the
+	// services' values, before → after — the card's words (#616)
+	Changes []proposal.Change
 
 	domain string // the box's domain, for the facts
 }
@@ -217,6 +221,7 @@ func Dirs(base, changed string) Result {
 			say("entfernt den Dienst %s", name)
 		}
 	}
+	r.Changes = policyChanges(bst.Policy, ast.Policy)
 	mints := map[string]bool{}
 	for _, name := range ast.ServiceNames() {
 		a := ast.Services[name]
@@ -230,6 +235,9 @@ func Dirs(base, changed string) Result {
 		}
 		r.contract(name, bc, a.Contract, existed, mints)
 		r.values(name, ast, b, a, existed)
+		if existed {
+			r.Changes = append(r.Changes, valueChanges(name, b.Values, a.Values)...)
+		}
 		if existed && !maps.Equal(b.Values, a.Values) && slices.ContainsFunc(a.Contract.Data, func(d state.DataPath) bool { return d.Quiesce }) {
 			r.data(name, "ändert die Werte (ein Image, eine Einstellung) von "+name+", einem Dienst mit Datenbank")
 		}
@@ -274,6 +282,90 @@ func Dirs(base, changed string) Result {
 		}
 	}
 	return r
+}
+
+// policyChanges: what policy.yml grants before and after (#616), hand by
+// hand — ceiling, verbs, path grants, and what a hand keeps when its verbs
+// change — then the dial's rules.
+func policyChanges(b, a state.Policy) []proposal.Change {
+	var out []proposal.Change
+	for _, name := range keyUnion(b.Hands, a.Hands) {
+		bh, had := b.Hands[name]
+		ah, has := a.Hands[name]
+		switch {
+		case !has:
+			out = append(out, proposal.Change{Op: "-", Hand: name, Key: "ceiling", Old: bh.Ceiling})
+			continue
+		case !had:
+			out = append(out, proposal.Change{Op: "+", Hand: name, Key: "ceiling", New: ah.Ceiling})
+		case bh.Ceiling != ah.Ceiling:
+			out = append(out, proposal.Change{Op: "~", Hand: name, Key: "ceiling", Old: bh.Ceiling, New: ah.Ceiling})
+		}
+		if had && (len(bh.Verbs) == 0) != (len(ah.Verbs) == 0) { // a verb list appears or goes: all up to the ceiling ↔ a list
+			out = append(out, proposal.Change{Op: "~", Hand: name, Key: "verbs", Old: strings.Join(bh.Verbs, " "), New: strings.Join(ah.Verbs, " ")})
+			continue
+		}
+		var diff, kept []proposal.Change
+		for _, v := range ah.Verbs {
+			if !slices.Contains(bh.Verbs, v) {
+				diff = append(diff, proposal.Change{Op: "+", Hand: name, Verb: v})
+			} else {
+				kept = append(kept, proposal.Change{Op: "=", Hand: name, Verb: v})
+			}
+		}
+		for _, v := range ah.Paths {
+			if !slices.Contains(bh.Paths, v) {
+				diff = append(diff, proposal.Change{Op: "+", Hand: name, Path: v})
+			}
+		}
+		for _, v := range bh.Verbs {
+			if !slices.Contains(ah.Verbs, v) {
+				diff = append(diff, proposal.Change{Op: "-", Hand: name, Verb: v})
+			}
+		}
+		for _, v := range bh.Paths {
+			if !slices.Contains(ah.Paths, v) {
+				diff = append(diff, proposal.Change{Op: "-", Hand: name, Path: v})
+			}
+		}
+		if len(diff) > 0 && had {
+			diff = append(diff, kept...)
+		}
+		out = append(out, diff...)
+	}
+	for _, k := range keyUnion(b.Autonomy, a.Autonomy) {
+		if b.Autonomy[k] != a.Autonomy[k] {
+			out = append(out, proposal.Change{Op: "~", Key: "autonomy." + k, Old: b.Autonomy[k], New: a.Autonomy[k]})
+		}
+	}
+	for _, k := range keyUnion(b.Approvals, a.Approvals) {
+		if b.Approvals[k] != a.Approvals[k] {
+			out = append(out, proposal.Change{Op: "~", Key: "approvals." + k, Old: b.Approvals[k].By, New: a.Approvals[k].By})
+		}
+	}
+	return out
+}
+
+// valueChanges: a service's values before and after (#616); a secret by its name.
+func valueChanges(svc string, b, a map[string]state.Value) []proposal.Change {
+	show := func(v state.Value) string {
+		if v.Secret != "" {
+			return "!secret " + v.Secret
+		}
+		return v.Literal
+	}
+	var out []proposal.Change
+	for _, k := range keyUnion(b, a) {
+		bv, had := b[k]
+		av, has := a[k]
+		switch {
+		case !has:
+			out = append(out, proposal.Change{Op: "-", Service: svc, Key: k, Old: show(bv)})
+		case !had || bv != av:
+			out = append(out, proposal.Change{Op: "~", Service: svc, Key: k, Old: show(bv), New: show(av)})
+		}
+	}
+	return out
 }
 
 // loadReason turns a loader error into the plain reason a human reads. The

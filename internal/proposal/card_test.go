@@ -43,8 +43,8 @@ func TestCardsArePlainGermanAndDefaultToSpaeterWhenRisky(t *testing.T) {
 		if c.Primary != tc.primary {
 			t.Errorf("%s: primary %q, want %q", tc.name, c.Primary, tc.primary)
 		}
-		if !strings.Contains(c.Why, tc.p.Actor) || !strings.Contains(c.Why, tc.p.Reason) {
-			t.Errorf("%s: why %q must quote actor and reason", tc.name, c.Why)
+		if !strings.Contains(strings.ToLower(c.Why), strings.ToLower(HandName(tc.p.Actor, false))) || !strings.Contains(c.Why, tc.p.Reason) {
+			t.Errorf("%s: why %q must name the proposer and quote the reason", tc.name, c.Why)
 		}
 		for _, s := range append([]string{c.Summary, c.Reversible, c.Why}, c.Impact...) {
 			if strings.Contains(s, "diff") || strings.Contains(s, "git ") || strings.Contains(s, ".yml") {

@@ -10,8 +10,11 @@ curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box
        --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease
 ```
 
-Release v0.1.0 carries `laib`, `laib-operator`, `laib-lease` and
-`SHA256SUMS`; the script verifies the sums. The repo, its releases and
+A release carries `laib`, `laib-lease`, `laib-disk`, `laib-haushalt`,
+the scripts and `SHA256SUMS`; the script verifies the sums. `laib-operator`
+and `laib-notify` are images (`ghcr.io/mdopp/laib-operator`,
+`ghcr.io/mdopp/laib-notify`) whose digests the release builds into `laib`
+(ADR 0027): its apply pulls them. The repo, its releases and
 the ghcr images are public: no GitHub token is needed (a private fork or
 mirror exports `LAIB_GH_TOKEN`; never a flag, ps shows every argv, #217).
 
@@ -26,11 +29,9 @@ it, #42). Operator, Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and
 What it does, in order:
 
 1. Downloads the release binaries to `/var/opt/laib/`: `laib`,
-   `laib-operator` (the admin agent), `laib-lease` (the model role's
-   sidecar) and, since #443, `laib-disk` (the data RAID and the disks'
-   health, which `laib disk` and `laib diag` run) and `laib-notify` (the
-   watchdog ping and the owner's mail, on a timer laib renders), and since
-   #598 `laib-haushalt` (the household verbs `laib scan` and `laib net
+   `laib-lease` (the model role's sidecar) and, since #443, `laib-disk`
+   (the data RAID and the disks' health, which `laib disk` and `laib diag`
+   run), and since #598 `laib-haushalt` (the household verbs `laib scan` and `laib net
    geraete`, which laib serves through its verb door, ADR 0026). The `/var/opt` prefix is writable on CoreOS; `/opt` is not.
 2. Creates `/mnt/data/laib` owned by `core`.
 3. Installs `dist/laib.service` as a **user** unit and enables linger so it
@@ -390,7 +391,7 @@ $laib status; $laib diag; $laib plan
 #    tap in the inbox. Raised to apply per action type once the evals (#82) are clean.
 sed -i -E 's/^( *ops: *\{ *ceiling: *)apply/\1propose/' /mnt/data/laib/state/policy.yml
 grep -n "ops:" /mnt/data/laib/state/policy.yml   # ops: { ceiling: propose }
-$laib operator enable                        # mints the ops token, renders and starts laib-operator
+$laib operator enable                        # mints the ops token, renders and starts laib-operator's container
 $laib journal --since 1h
 ```
 

@@ -1,0 +1,34 @@
+# Rendered by laib: the box's admin agent (ADR 0013), in its container (ADR 0027).
+[Unit]
+Description=Laib operator
+After=laib.service
+Wants=laib.service
+
+[Container]
+Image=ghcr.io/mdopp/laib-operator:latest
+Network=host
+Timezone=local
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Volume=/mnt/data/laib/operator:/operator:Z
+Environment="LAIB_MCP_URL=http://127.0.0.1:5900/mcp"
+Environment="MODEL_URL=http://192.168.1.20:11435/v1"
+Environment="MODEL_NAME=qwen3.6-35b-a3b"
+Environment="OPERATOR_HOME=/operator"
+Environment="OPERATOR_LISTEN=127.0.0.1:5901"
+Environment="OPERATOR_TICK=5m"
+Environment="OPERATOR_REPORT_AT=06:30"
+Environment="OPERATOR_CONTEXT_WINDOW=131072"
+Environment="FRAGE_URL=http://127.0.0.1:8710"
+Environment="USAGE_METRICS_URL=http://127.0.0.1:8094"
+Secret=laib.laib-operator.laib-operator.LAIB_TOKEN,type=env,target=LAIB_TOKEN
+Secret=laib.laib-operator.laib-operator.USAGE_METRICS_TOKEN,type=env,target=USAGE_METRICS_TOKEN
+
+[Service]
+ExecStartPre=/usr/bin/mkdir -p /mnt/data/laib/operator
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

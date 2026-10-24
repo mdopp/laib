@@ -6,6 +6,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "home-assistant-check.py"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_post_deploy as fake   # its fake Home Assistant, WebSocket included (#634)
 
 
 def fake_ha(entries, status=200):
@@ -174,7 +176,7 @@ class Check(unittest.TestCase):
         self.assertIn("laib add stimme", next(f["fix"] for f in r["findings"] if f["detail"] == "Wyoming Piper: fehlt"))
         self.assertIn("„piper“ (wyoming) antwortet nicht", details)
         self.assertIn("„http://127.0.0.1:8787/ollama“ (ollama) antwortet nicht", details)
-        self.assertIn("solaris-off", r["findings"][-1]["fix"])
+        self.assertIn("in Home Assistant löschen", r["findings"][-1]["fix"])
         self.assertEqual(r["detail"], "fehlt: Wyoming Piper · 2 Sprach-Integrationen ohne Dienst")
 
     def test_complete_and_unreachable_and_no_token(self):
@@ -253,6 +255,104 @@ class Check(unittest.TestCase):
         unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
         self.assertIn("Environment=MA_TOKEN=${MA_TOKEN}", unit)
         self.assertIn("-e MA_TOKEN", unit)
+
+
+class Voice(unittest.TestCase):
+    """#634: the voice, measured: the persona's pipeline is there and preferred, HA's local intents
+    recognize a harmless sentence in its language (conversation/agent/homeassistant/debug: recognized,
+    never executed, so nothing switches), the wake word is the persona's or the status says why not,
+    the satellites are on the pipeline. Against the fake Home Assistant of test_post_deploy, as the
+    check's own non-admin user."""
+
+    def setUp(self):
+        fake.fresh(onboarded=("laib", "pw"))
+        self.srv = fake.ThreadingHTTPServer(("127.0.0.1", 0), fake.FakeHA)
+        self.srv.daemon_threads = True
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.addCleanup(self.srv.shutdown)
+        self.token = fake.token_for(fake.add_user("Laib-Prüfung", admin=False), True, "laib: home-assistant-check")
+        H = fake.HA
+        H["entries"] = [{"entry_id": "e", "domain": d, "title": t, "state": "loaded"} for d, t in [
+            ("wyoming", "faster-whisper"), ("wyoming", "piper"), ("wyoming", "openwakeword"), ("caldav", ""), ("music_assistant", ""),
+            ("mqtt", ""), ("mcp_server", ""), ("ollama", "http://127.0.0.1:8710")]]
+        H["pipelines"] = [{"id": "p-ha", "name": "Home Assistant", "language": "en", "conversation_engine": "conversation.home_assistant",
+                           "prefer_local_intents": False, "wake_word_entity": None, "wake_word_id": None},
+                          {"id": "p-j", "name": "Joshua", "language": "de", "conversation_engine": "conversation.frage", "prefer_local_intents": True,
+                           "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "okay_nabu"}]
+        H["preferred"] = "p-j"
+        H["wake_words"] = {"wake_word.openwakeword": ["okay_nabu"]}
+        H["intents"] = {("de", "Wie spät ist es"): {"intent": {"name": "HassGetCurrentTime"}, "match": True, "source": "builtin"}}
+        H["registry"] = [{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
+                         {"entity_id": "select.voice_kueche_wake_word", "platform": "esphome", "translation_key": "wake_word", "disabled_by": None}]
+        H["states"] = {"select.voice_kueche_pipeline": {"state": "Joshua", "attributes": {"options": ["preferred", "Joshua"], "friendly_name": "Küche Assistent"}},
+                       "select.voice_kueche_wake_word": {"state": "Okay Nabu", "attributes": {"options": ["no_wake_word", "Okay Nabu"]}}}
+
+    def check(self, **env):
+        d = tempfile.mkdtemp()
+        out = os.path.join(d, ".laib-status.json")
+        e = dict(os.environ, HA_TOKEN=self.token, HA_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_STATUS_FILE=out, ZWAVE_URL="",
+                 MA_TOKEN="", VOICE_PERSONA="Joshua", VOICE_WAKEWORD="hey_joshua", VOICE_PHRASE="Hey Joshua")
+        e.update(env)
+        p = subprocess.run([sys.executable, "-"], stdin=open(SCRIPT), capture_output=True, text=True, env=e)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        return json.loads(Path(out).read_text())
+
+    def voice(self, r):
+        return [f["detail"] for f in r["findings"] if f["detail"].startswith(("Sprache", "Weckwort", "Satellit"))]
+
+    def test_local_intents_answer_and_the_status_says_so_and_nothing_switches(self):
+        r = self.check()
+        self.assertRegex(r["detail"], r"Sprache: lokale Befehle aktiv \(HassGetCurrentTime in \d+ ms\)", r)
+        self.assertEqual([c for c in fake.HA["calls"]], [], "the check called a service")
+        self.assertEqual(fake.HA["pipeline_updates"], [], "the check changed a pipeline")
+
+    def test_until_the_persona_wake_word_exists_the_status_says_which_one_wakes(self):
+        r = self.check()
+        self.assertIn("Weckwort okay_nabu, bis hey_joshua da ist", r["detail"], r)
+        self.assertFalse([f for f in r["findings"] if f["severity"] != "info" and "Weckwort" in f["detail"]], r)
+
+    def test_a_persona_wake_word_offered_but_unused_is_a_finding_with_the_apply(self):
+        fake.HA["wake_words"]["wake_word.openwakeword"].append("hey_joshua")
+        r = self.check()
+        f = [f for f in r["findings"] if "Weckwort" in f["detail"]]
+        self.assertTrue(f and f[0]["severity"] == "gelb" and "laib apply home-assistant" in f[0]["fix"], r)
+        fake.HA["pipelines"][1].update(wake_word_id="hey_joshua")
+        r = self.check()
+        self.assertIn("Weckwort hey_joshua", r["detail"])
+        self.assertEqual(self.voice(r), [], r)
+
+    def test_a_dead_wake_word_is_yellow(self):
+        fake.HA["pipelines"][1].update(wake_word_id="solaris")
+        r = self.check()
+        f = [f for f in r["findings"] if "Weckwort" in f["detail"]]
+        self.assertTrue(f and f[0]["severity"] == "gelb" and "solaris" in f[0]["detail"], r)
+
+    def test_local_intents_that_do_not_answer_are_yellow(self):
+        fake.HA["intents"].clear()
+        r = self.check()
+        self.assertIn("Sprache: lokale Befehle antworten nicht", r["detail"], r)
+        self.assertTrue([f for f in r["findings"] if f["severity"] == "gelb" and f["detail"].startswith("Sprache")], r)
+
+    def test_no_persona_pipeline_or_not_preferred_or_a_satellite_elsewhere_is_named(self):
+        fake.HA["preferred"] = "p-ha"
+        fake.HA["states"]["select.voice_kueche_pipeline"]["state"] = "Home Assistant"
+        r = self.check()
+        details = " | ".join(self.voice(r))
+        self.assertIn("nicht bevorzugt", details, r)
+        self.assertIn("Küche Assistent", details, r)
+        fake.HA["pipelines"].pop()
+        r = self.check()
+        self.assertIn("Sprache: kein Ablauf „Joshua“", r["detail"], r)
+
+    def test_without_the_persona_no_voice_line(self):
+        r = self.check(VOICE_PERSONA="")
+        self.assertNotIn("Sprache", r["detail"])
+
+    def test_the_unit_hands_the_check_the_persona(self):
+        unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
+        for v in ("VOICE_PERSONA", "VOICE_WAKEWORD", "VOICE_PHRASE"):
+            self.assertIn("-e " + v, unit)
+        self.assertIn('"VOICE_PHRASE=${PERSONA_PHRASE}"', unit, "a phrase with a space, quoted (#627)")
 
 
 if __name__ == "__main__":

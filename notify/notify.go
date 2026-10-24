@@ -32,7 +32,7 @@ import (
 // Config is the unit's environment.
 type Config struct {
 	MCPURL, ReadyURL, Token                                            string
-	Home                                                               string // LAIB_HOME: mail.json and watchdog.last, which laib's /ready reads
+	Home                                                               string // NOTIFY_HOME, its own folder (ADR 0027): mail.json and watchdog.last, which laib's /ready reads
 	WatchdogURL                                                        string
 	MailTo, Domain                                                     string
 	SMTPHost, SMTPPort, SMTPSecurity, SMTPUser, SMTPFrom, SMTPPassword string

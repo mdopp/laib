@@ -117,7 +117,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 		}
 		day, text := LastReport(env)
-		page(w, "Status", statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != ""))
+		body := statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != "")
+		for _, w := range st.Warnings { // the box's own warnings, once here, not on every proposal (#616)
+			body += "<p class=gelb>Hinweis: " + html.EscapeString(w) + "</p>"
+		}
+		page(w, "Status", body)
 	}))
 	// how the Bote gets its Signal number (#469): registered or linked, with signal-cli once
 	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -144,16 +148,35 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		if len(open) == 0 {
 			b.WriteString("<p>Keine offenen Vorschläge.</p>")
 		}
-		domain := ""
+		domain, box := "", []string(nil)
 		if st, err := cli.LoadState(env); err == nil {
-			domain = st.Box.Domain
+			domain, box = st.Box.Domain, st.Warnings
 		}
 		for _, p := range open {
-			// the decision card (#58): consequence, reversibility, who and why,
-			// a safe default — the diff only behind Details
-			c := proposal.Card(p, domain)
+			// the decision card (#58, #616): headline and weight, what changes,
+			// what it means, who and why, the way back — the diff only behind
+			// the technical details
+			c := proposal.Card(p, domain, box...)
 			fmt.Fprintf(&b, "<section class=card data-f><h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
-			b.WriteString("<ul>")
+			fmt.Fprintf(&b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
+			if c.Decider != "" {
+				fmt.Fprintf(&b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
+			}
+			b.WriteString("</p>")
+			if len(c.Changes) > 0 {
+				b.WriteString("<h3>Was sich ändert</h3><ul class=changes>")
+				for _, l := range c.Changes {
+					op := l.Op
+					if op == "=" || op == "" {
+						op = ""
+					} else {
+						op = "<b>" + op + "</b> "
+					}
+					fmt.Fprintf(&b, "<li>%s%s</li>", op, html.EscapeString(l.Text))
+				}
+				b.WriteString("</ul>")
+			}
+			b.WriteString("<h3>Was das für euch bedeutet</h3><ul>")
 			for _, i := range c.Impact {
 				cls := ""
 				if strings.HasPrefix(i, "Achtung") {
@@ -162,11 +185,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(&b, "<li%s>%s</li>", cls, html.EscapeString(i))
 			}
 			b.WriteString("</ul>")
-			fmt.Fprintf(&b, "<p>%s</p><p>%s</p>", html.EscapeString(c.Reversible), html.EscapeString(c.Why))
-			if p.Class == "human" {
-				b.WriteString("<p class=rot>Nur ein Mensch kann freigeben.</p>")
-			}
-			for _, w := range p.Warnings {
+			fmt.Fprintf(&b, "<h3>Wer will das und warum</h3><p>%s</p><h3>Rückgängig</h3><p>%s</p>", html.EscapeString(c.Why), html.EscapeString(c.Reversible))
+			for _, w := range c.Warnings {
 				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 			}
 			approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
@@ -178,8 +198,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			} else {
 				fmt.Fprintf(&b, "<p>%s %s %s</p>", approve, reject, later)
 			}
-			fmt.Fprintf(&b, "<details><summary>Details (von %s, Stufe %s, braucht eine andere Hand mit %s)</summary><pre>%s</pre></details>",
-				html.EscapeString(p.Actor), p.Tier, p.Tier, html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
+			fmt.Fprintf(&b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
+				html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 			b.WriteString("</section>")
 		}
 		// what was approved lately can be taken back (#41)
