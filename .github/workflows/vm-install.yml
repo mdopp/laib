@@ -38,7 +38,7 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, notify/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:   # every PR: a train runs the VM, a single PR gets the `not run` check
   workflow_dispatch:
 concurrency:
@@ -120,6 +120,8 @@ jobs:
       tree: ${{ steps.tree.outputs.tree }}
     env:
       HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
+      OPERATOR_IMAGE: ghcr.io/mdopp/laib-operator:${{ github.sha }}   # this commit's own programs in containers (ADR 0027), pinned into its laib
+      NOTIFY_IMAGE: ghcr.io/mdopp/laib-notify:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - id: tree
@@ -132,6 +134,13 @@ jobs:
           podman login ghcr.io -u "${{ github.actor }}" -p "${{ github.token }}"
           podman build -q -t "$HOOKS" -f hooks/Containerfile . && podman push -q "$HOOKS"
           echo "pushed $HOOKS"
+      - name: this commit's laib-operator and laib-notify images, pushed so the box can pull them (ADR 0027)
+        run: |
+          for i in "operator $OPERATOR_IMAGE" "notify $NOTIFY_IMAGE"; do
+            set -- $i
+            podman build -q -t "$2" -f "$1/Containerfile" . && podman push -q "$2"
+            echo "pushed $2"
+          done
       - name: this commit's binaries and laib-stick, once for every box
         run: |
           scripts/vm/serve.sh "${GITHUB_SHA::7}" build
