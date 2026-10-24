@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.27.0](https://github.com/mdopp/laib/compare/v0.26.0...v0.27.0) (2026-10-24)
+
+
+### Features
+
+* **home-assistant:** the satellite wakes on a fallback word until the persona's is on the device ([fb2564e](https://github.com/mdopp/laib/commit/fb2564efde0c90e7bf61b9ae76996aaef477d11c))
+* old tickets, migration leftovers out, Operator and notify in containers (ADR 0027) ([1f911ab](https://github.com/mdopp/laib/commit/1f911abc0a89236e5491f75d951e468c1496b858))
+* **operator:** a look without news is silent, an incident waits for the GPU ([6292729](https://github.com/mdopp/laib/commit/6292729402beeeee228ed619bf229e12aef3550d))
+* **proposal:** a decision card that says what changes and what follows ([5cec309](https://github.com/mdopp/laib/commit/5cec309b1676ef0d6df8405657bb9f246815a17d)), closes [#616](https://github.com/mdopp/laib/issues/616)
+* **render:** laib-operator and laib-notify as Quadlet containers ([014e80a](https://github.com/mdopp/laib/commit/014e80a4150e085fee54ac073cfd086c4231ee32))
+* **template:** one Assist pipeline for the house persona, a shorter end of speech, a measured voice ([e1079e3](https://github.com/mdopp/laib/commit/e1079e3e719f6d4b3e930863498aa77e4a6a81ee))
+
+
+### Bug Fixes
+
+* **backup:** compare the restore test with the snapshot, not the live file ([221cf12](https://github.com/mdopp/laib/commit/221cf127c8b041cd68bb311bb1ce5451f6c8b9bb)), closes [#552](https://github.com/mdopp/laib/issues/552)
+* **backup:** the restore test leaves the SELinux xattrs alone ([d063ee4](https://github.com/mdopp/laib/commit/d063ee4cbab9076724fde89550e001cf3b1b8641))
+* **plan:** a scoped apply carries Laib's own programs with their timers ([17c9a96](https://github.com/mdopp/laib/commit/17c9a96475478001447230e718cac86e2f87dac8))
+* **policy:** let policy.yml name wish, and diag name the grant command ([329d641](https://github.com/mdopp/laib/commit/329d6419cd65216341ff9e31bbf175e4b37e9bdf))
+* **registry:** lint refuses an unquoted Environment= value with a space ([595a15d](https://github.com/mdopp/laib/commit/595a15dd062097d871f3693e38fbd7c87b558edb)), closes [#627](https://github.com/mdopp/laib/issues/627)
+* **self:** roll back and update laib-operator and laib-notify as containers ([217afb8](https://github.com/mdopp/laib/commit/217afb8bba60ebf6429d8e8ceecf8ef29b7c1831))
+* **template:** give mosquitto's password file the broker's group ([46dee31](https://github.com/mdopp/laib/commit/46dee311e03746b71830ca05ee0c19ed5dab77be)), closes [#524](https://github.com/mdopp/laib/issues/524)
+* **template:** quote the wake phrase in the stimme trainer unit ([0d89876](https://github.com/mdopp/laib/commit/0d89876a97d072cfcee1732e2797d61b62c1c94b)), closes [#627](https://github.com/mdopp/laib/issues/627)
+* **template:** stimme's Whisper reads a required device file, HA pipelines prefer local intents, no green NOT set up ([2334885](https://github.com/mdopp/laib/commit/2334885a20d35ea5f351667bf4de238833b46d5f)), closes [#557](https://github.com/mdopp/laib/issues/557)
+* **template:** the Bote hands every message to Home Assistant's intents first ([e3b9a47](https://github.com/mdopp/laib/commit/e3b9a4793205523d35b6fd4a881a93202dc7e003)), closes [#520](https://github.com/mdopp/laib/issues/520)
+* **trainer:** keep microWakeWord's audiomentations and say why a run failed ([c4d0a4d](https://github.com/mdopp/laib/commit/c4d0a4d7b18f761f9de48477984b068f32d3ef3b)), closes [#627](https://github.com/mdopp/laib/issues/627)
+* **werkstatt:** forward stdin for every verb whose schema takes it ([54d2c4d](https://github.com/mdopp/laib/commit/54d2c4df181b2f7fc17db8fe66cd432687d2c906)), closes [#617](https://github.com/mdopp/laib/issues/617)
+
 ## [0.26.0](https://github.com/mdopp/laib/compare/v0.25.0...v0.26.0) (2026-10-24)
 
 
