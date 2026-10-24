@@ -295,7 +295,10 @@ Who writes it:
   `signal:`/`telegram:` id wrote the turn, else `-`. `service` is
   `intent.<HassName>` for HA's Assist intents (`intent.HassTurnOn`), since
   the Bote calls intents, not services; for the Automat's
-  `automation_schalten` it is `automation.turn_on|turn_off`. `context` is
+  `automation_schalten` it is `automation.turn_on|turn_off`; a sentence
+  HA's own intents switched before the model (#520, `laib-persona` sends
+  every message to `/api/conversation/process` first) is
+  `conversation.process`. `context` is
   read from the entity's state when it changed in the last 30 s, else `-`,
   because HA's MCP answer has no context id.
 - **Voice**: a satellite talks to HA's Assist pipeline, not to the Bote,

@@ -41,6 +41,11 @@ def on_pre(session_id=None, sender_id=None, platform="", **_):
 def _person(session_id):
     with _lock:
         key = _senders.get(session_id or "", "")
+    return _who(key)
+
+
+def _who(key):
+    """the box.yml people name of "platform:sender id", else -"""
     if not key:
         return "-"
     try:
@@ -121,6 +126,15 @@ def on_tool(tool_name="", args=None, result=None, session_id=None, status=None, 
     except Exception:
         pass
     return None
+
+
+def handled_by_ha(platform, sender_id, entities):
+    """laib-persona's HA-first path (#520): Home Assistant executed the intent itself, no tool ran,
+    so post_tool_call never sees it; the same line, service conversation.process"""
+    if not entities or not os.environ.get("LAIB_TOKEN") or not os.environ.get("LAIB_MCP_URL"):
+        return
+    key = "%s:%s" % (platform, sender_id) if sender_id and platform != "cron" else ""
+    _spawn(note, _who(key), "conversation.process", list(entities))
 
 
 def register(ctx):

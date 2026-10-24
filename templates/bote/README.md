@@ -308,7 +308,10 @@ propose-tier verb). It does this only for a switch:
 
 - an HA intent (`mcp__ha__Hass…`) that HA answers `action_done` with
   entities in `data.success`: `service=intent.<HassName>`;
-- the Automat's `automation_schalten`: `service=automation.turn_on|turn_off`.
+- the Automat's `automation_schalten`: `service=automation.turn_on|turn_off`;
+- Home Assistant first (#520, above): HA's conversation API executed the
+  intent itself, no tool ran, and `laib-persona` hands the entities to this
+  plugin's `handled_by_ha`, the same note with `service=conversation.process`.
 
 Reads (`GetLiveContext`, `HassGetState`), errors and calls that changed
 nothing note nothing. The person is the box.yml `people` name whose
@@ -488,11 +491,33 @@ it had been shown. So:
   aus, auf, zu or a percentage is a command, switched at once with `ha`,
   then one sentence of confirmation; only a question reads the state.
 
+That was not enough (box check, 2026-10-22: 0 of 6 switched; fresh, "Bambi
+an" still came back without a tool). Home Assistant's own intents switch
+the same sentences in about a second without a model. So **Home Assistant
+first** (ADR 0015), in `laib-persona`'s `pre_llm_call`, the one place every
+message passes, from Signal and from Haus's Sprechen field alike: unless
+the engine shows a screen (or routes to another tool), the message goes to
+`POST /api/conversation/process` (`agent_id: conversation.home_assistant`,
+German, `HA_URL` with the user bote's `HA_TOKEN`). `action_done` (it
+switched) or `query_answer` (a state question) is HA's answer: the person
+gets HA's sentence, after a menu level's prompt line, like a screen, and
+the model is only told to answer OK. Anything else goes to the model as
+before: HA's „not understood“ is HTTP 200 with `response_type: error` and
+`data.code` `no_intent_match` (or `no_valid_targets` for a name it does not
+know), and HA not answering within 8 s counts the same. A switch HA
+executed is noted by `laib-journal`'s own `note`, `service=conversation.process`
+(below, „Who switched“). Over a streamed answer the model's OK has gone out
+before HA's sentence (Hermes appends a rewrite, as for a screen).
+
 **The test set** belongs to every Bote or llama update, over the API (what
 Haus uses) and over Signal. `scripts/bote-schalttest.py` (stdlib, in the
 laib repo) sends each sentence in its own session to Hermes' API server,
-streamed, and checks that a Home Assistant tool ran, that the answer is no
-echo of the sentence and carries no steer frame. Pairs switch back, so the
+streamed, and checks that the device is where the sentence puts it (HA's
+`/api/states` with `HA_TOKEN` from the same `.env`, `--ha-url`
+`http://127.0.0.1:8123` by default; the table says whether HA or the
+model switched), that the answer is no echo of the sentence and carries no
+steer frame. Without `HA_TOKEN` in the file it checks that a Home Assistant
+tool ran, which HA-first never does. Pairs switch back, so the
 house ends as it was. On the box (the key stays in a file, never on argv):
 
     H=${DATA_DIR}/bote/hermes
