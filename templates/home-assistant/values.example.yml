@@ -13,3 +13,5 @@ OIDC_SECRET: !secret OIDC_HOMEASSISTANT_SECRET   # auth_oidc's client secret, AU
 # christiaangoossens/hass-oidc-auth, the tag archive and its SHA-256 (ServiceBay pinned the same, its #2453): an update is a values change
 AUTH_OIDC_ARCHIVE: https://github.com/christiaangoossens/hass-oidc-auth/archive/refs/tags/v1.1.0.tar.gz
 AUTH_OIDC_SHA256: 92650f0698401e8bc7533065cfd3f2ca5c2074b5ffdb50554898954f32a50412
+VOICE_VAD: aggressive                          # #634: the satellites' Sprechpausen-Erkennung, how soon a pause ends the sentence: default 0.7 s, relaxed 1.25 s, aggressive 0.25 s of silence; empty leaves it as set in HA
+VOICE_OLD_PIPELINES: Sol,Solaris               # #634: Assist pipelines from before the persona's (the Solaris era): deleted once nothing uses them, else renamed „… (alt)“

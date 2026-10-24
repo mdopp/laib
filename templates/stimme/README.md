@@ -33,7 +33,12 @@ mode needs the card.
 
 **On the Voice PE** (once, by hand, in ESPHome): copy `<id>.tflite` and
 `<id>.json` from `stimme/micro` next to the device's YAML, set
-`micro_wake_word: models: - model: <id>.json`, then Install.
+`micro_wake_word: models: - model: <id>.json`, then Install. The next
+`laib apply home-assistant` sees the phrase among the device's
+„Aktivierungswort“ options and selects it; the persona's Assist pipeline
+uses `<id>` as its server wake word only once openWakeWord here offers it
+(a model in `stimme/wakeword`), and none rather than a dead one until then
+(templates/home-assistant, #634).
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says
