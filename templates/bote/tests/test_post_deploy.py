@@ -94,6 +94,24 @@ class PostDeploy(unittest.TestCase):
                 self.assertNotIn("Werkzeug persona", soul)
                 self.assertIn("Persona:", soul)
 
+    def test_who_switched_is_a_plugin_while_home_assistant_is_wired(self):
+        """#591: laib-journal journals who switched in HA through the Bote; it is placed and on
+        only while the ha tool or the Automat is wired, and the Bote's hand may note (propose tier)."""
+        for secrets, on in (({}, False), ({"LAIB_SECRET_BOTE_HA_TOKEN": "t"}, True), ({"LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN": "t"}, True)):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                           MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok", **secrets)
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                h = Path(d, "bote/hermes")
+                conf = (h / "config.yaml").read_text()
+                self.assertEqual("laib-journal" in conf, on, (secrets, conf))
+                self.assertEqual((h / "plugins/laib-journal").exists(), on)
+                if on:
+                    self.assertIn("enabled: [laib-persona, laib-journal]", conf)
+                    self.assertEqual((h / "plugins/laib-journal/__init__.py").read_text(), (HOOK.parent / "journal_plugin.py").read_text())
+                    self.assertIn("name: laib-journal", (h / "plugins/laib-journal/plugin.yaml").read_text())
+
     def test_the_tools_are_in_the_array_and_hermes_stock_skills_are_gone(self):
         """#502, measured on the Kraftwerk: behind Hermes' tool search every tool call took
         tool_search, tool_describe and tool_call, three extra model rounds, and the search

@@ -117,5 +117,26 @@ class OwnerNotice(unittest.TestCase):
         self.assertNotIn("mama", text)
 
 
+class Personen(unittest.TestCase):
+    """#591: the plugin laib-journal names who switched in Home Assistant. Hermes knows the sender's
+    id only (a Signal number, a Telegram chat id); pre-start writes box.yml people the other way
+    round, id to person, next to Hermes, for the platforms whose id is a person, and tells the
+    plugin where Laib and Home Assistant answer."""
+
+    def test_the_ids_of_people_map_to_their_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            got = env_file(d, dict(AllowedUsers.PEOPLE, kinder=["telegram:-100"]))
+            f = Path(d) / "bote" / "hermes" / "personen.json"
+            self.assertEqual(json.loads(f.read_text()), {"signal:+4900000002": "mama", "telegram:123": "mama",
+                                                         "telegram:456": "papa", "signal:+4900000003": "papa"})
+            self.assertEqual(f.stat().st_mode & 0o777, 0o600, "the numbers are readable by others")
+        self.assertEqual(got["LAIB_MCP_URL"], "http://host.containers.internal:5900/mcp")
+        self.assertEqual(got["HA_URL"], "http://host.containers.internal:8123")
+        with tempfile.TemporaryDirectory() as d:
+            got = env_file(d, None, LAIB_MCP_URL="http://laib:1/mcp", HA_URL="http://ha:2")
+            self.assertEqual(json.loads((Path(d) / "bote" / "hermes" / "personen.json").read_text()), {})
+        self.assertEqual((got["LAIB_MCP_URL"], got["HA_URL"]), ("http://laib:1/mcp", "http://ha:2"))
+
+
 if __name__ == "__main__":
     unittest.main()
