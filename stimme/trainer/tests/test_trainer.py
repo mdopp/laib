@@ -185,5 +185,24 @@ class RetryOnANewTrainer(unittest.TestCase):
         with mock.patch.dict(os.environ, {"PERSONA_REV": "r1", "TRAINER_BUILD": "bbb"}):
             self.assertEqual(trainer.decide(out, "Hey X", "hey_x", trainer.revision()), "train")
 
+class TrainsOnTheCPU(unittest.TestCase):
+    """2026-10-24: the run trained and then died validating, the card full with
+    the household model and Whisper (LargestFreeBlock: 0). It trains on the CPU
+    unless WAKEWORD_DEVICE says gpu."""
+
+    def run_train(self, **env):
+        seen = {}
+        with mock.patch.dict(os.environ, env, clear=False), \
+                mock.patch.object(trainer, "_run", lambda cmd, cwd=None, env=None: seen.update(env=env or {})):
+            trainer.train(pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp()), "Hey X", "hey_x", [])
+        return seen["env"]
+
+    def test_the_default_hides_the_card(self):
+        os.environ.pop("WAKEWORD_DEVICE", None)
+        self.assertEqual(self.run_train().get("CUDA_VISIBLE_DEVICES"), "-1")
+
+    def test_gpu_on_request(self):
+        self.assertNotEqual(self.run_train(WAKEWORD_DEVICE="gpu").get("CUDA_VISIBLE_DEVICES"), "-1")
+
 if __name__ == "__main__":
     unittest.main()
