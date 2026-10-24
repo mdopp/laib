@@ -1,14 +1,11 @@
 """#253: Home Assistant keeps the family's Authelia login (owner, #229).
 
-ServiceBay installed christiaangoossens/hass-oidc-auth from a SHA-256-pinned
-tag archive and kept an auth_oidc: block in configuration.yaml on every
-deploy. Laib's pre-start, before Home Assistant starts, installs the same
-pinned archive, writes the block as a package Laib owns whole
-(packages/laib_auth_oidc.yaml, the secret from the unit's environment, never
-in a file), and on a box from ServiceBay takes ServiceBay's top-level block
-out of configuration.yaml: two auth_oidc blocks are a duplicate key, and Home
-Assistant would keep ServiceBay's, with ServiceBay's secret. The archive is
-served here by a fake GitHub."""
+Laib's pre-start, before Home Assistant starts, installs
+christiaangoossens/hass-oidc-auth from a SHA-256-pinned tag archive and
+writes the block as a package Laib owns whole (packages/laib_auth_oidc.yaml,
+the secret from the unit's environment, never in a file). The admin's
+configuration.yaml is only added to. The archive is served here by a fake
+GitHub."""
 import hashlib, io, os, re, subprocess, sys, tarfile, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -44,38 +41,17 @@ class FakeGitHub(BaseHTTPRequestHandler):
         self.wfile.write(SERVED["body"])
 
 
-# the Kraftwerk's configuration.yaml (read-only, 2026-10-16), secret replaced
-KRAFTWERK = """# Home Assistant base config. ServiceBay writes this once on first
-# install. Edit freely afterwards — re-deploys don't overwrite.
-
-# Loads default set of integrations. Do not remove.
-default_config:
+# the shape of the Kraftwerk's configuration.yaml today (read-only, 2026-10-24)
+KRAFTWERK = """default_config:
 
 automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
+# auth_oidc: moved to packages/laib_auth_oidc.yaml by laib (#253)
 
-# OIDC auth via the `auth_oidc` custom component (installed by
-# post-deploy.py from a pinned tarball — see HA_OIDC_AUTH_VERSION).
-auth_oidc:
-  client_id: homeassistant
-  client_secret: servicebay-old-secret
-  discovery_url: https://auth.vm.test/.well-known/openid-configuration
-  features:
-    # LLDAP-side `sub` claim auto-binds to the matching HA user record
-    automatic_user_linking: true
-    automatic_person_creation: true
-  roles:
-    admin: "admins"
-    user:  "family"
-
-# >>> solaris notify.solaris — managed by the post-deploy >>>
-notify:
-  - name: solaris
-    platform: rest
-    resource: "http://127.0.0.1:8787/api/ha/notify"
-# <<< solaris notify.solaris <<<
+homeassistant:
+  packages: !include_dir_named packages
 """
 
 
@@ -121,22 +97,13 @@ class PreStart(unittest.TestCase):
         self.assertEqual((p.returncode, SERVED["hits"]), (0, hits), "the pinned archive was fetched again")
         self.assertEqual(before, {p: p.read_bytes() for p in self.c.rglob("*") if p.is_file()}, "a second run changed files")
 
-    def test_a_box_from_servicebay_keeps_its_users_and_loses_only_the_old_block(self):
+    def test_the_admins_configuration_is_left_as_it_is(self):
         (self.c / "configuration.yaml").write_text(KRAFTWERK)
-        old = self.c / "custom_components/auth_oidc"
-        old.mkdir(parents=True)
-        (old / ".sb_installed_version").write_text("v1.1.0\n")
         (self.c / ".storage").mkdir()
         (self.c / ".storage/auth_provider.auth_oidc").write_text('{"linked": "anna"}')
         p = self.run_hook()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        conf = (self.c / "configuration.yaml").read_text()
-        self.assertNotRegex(conf, r"(?m)^auth_oidc:", "two auth_oidc blocks: Home Assistant keeps ServiceBay's")
-        self.assertNotIn("servicebay-old-secret", conf)
-        self.assertNotIn("automatic_user_linking", conf, "a piece of the old block was left behind")
-        for kept in ("default_config:", "automation: !include automations.yaml", "notify:\n  - name: solaris", "# <<< solaris notify.solaris <<<"):
-            self.assertIn(kept, conf)
-        self.assertRegex(conf, r"(?m)^homeassistant:\n  packages: !include_dir_named packages$")
+        self.assertEqual((self.c / "configuration.yaml").read_text(), KRAFTWERK)
         self.assertEqual((self.c / ".storage/auth_provider.auth_oidc").read_text(), '{"linked": "anna"}', "the linked users were touched")
         self.assertTrue((self.c / "custom_components/auth_oidc/manifest.json").exists())
         self.assertIn("client_id: homeassistant", (self.c / "packages/laib_auth_oidc.yaml").read_text())

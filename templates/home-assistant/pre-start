@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """home-assistant pre-start: the configuration Home Assistant reads at start,
 written before it starts, on every apply. Idempotent; the admin's own
-configuration.yaml is only ever added to, with one exception below.
+configuration.yaml is only ever added to.
 
 1. The family's Authelia login (#253; owner decision in #229). The custom
    component christiaangoossens/hass-oidc-auth, from the tag archive pinned by
@@ -10,10 +10,6 @@ configuration.yaml is only ever added to, with one exception below.
    a file Laib owns whole. The client secret is not in it: the unit hands it
    to Home Assistant as AUTH_OIDC_SECRET (a podman secret), so a rotation
    restarts Home Assistant with the new one. Home Assistant's own login stays.
-   On a box from ServiceBay, its top-level auth_oidc: block leaves
-   configuration.yaml: two blocks are a duplicate key, and Home Assistant
-   would keep ServiceBay's, with ServiceBay's secret. Same client id, same
-   Authelia: the users it linked stay linked (.storage is not touched).
 2. rest_command.mitteilung (#177, ADR 0022 §3): an automation's message to a
    person, delivered by the Bote's bote-notify on 127.0.0.1:8645 with the
    bearer from BOTE_NOTIFY_AUTH in Home Assistant's environment.
@@ -121,18 +117,6 @@ homeassistant:
 """)
     print("configuration.yaml written: Home Assistant's defaults and the packages include")
 text = open(Y).read()
-lines = text.splitlines(keepends=True)
-# ServiceBay's block: the top-level key and everything indented (or blank) under it
-start = next((i for i, l in enumerate(lines) if re.match(r"auth_oidc:\s*(#.*)?$", l)), None)
-if start is not None:
-    end = start + 1
-    while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
-        end += 1
-    while end > start + 1 and not lines[end - 1].strip():
-        end -= 1  # the blank lines before the next key stay
-    lines[start:end] = ["# auth_oidc: moved to packages/laib_auth_oidc.yaml by laib (#253)\n"]
-    print("ServiceBay's auth_oidc block left configuration.yaml for packages/laib_auth_oidc.yaml")
-text = "".join(lines)
 if re.search(r"(?m)^\s+" + re.escape(INCLUDE) + r"\s*$", text):
     pass
 elif re.search(r"(?m)^\s*packages:", text):

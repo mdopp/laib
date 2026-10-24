@@ -47,8 +47,6 @@ RUN mkdir -p /opt/werkstatt/laib && cd /opt/werkstatt/laib \
     && chmod +x laib && ./laib version
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY laibctl.py /usr/local/bin/laib
-# drops ServiceBay's dead MCP entries from the sessions' config at every start (#392)
-COPY mcp_tidy.py /usr/local/bin/werkstatt-mcp-tidy
 COPY autoloop.py /opt/werkstatt/autoloop.py
 COPY extensions /opt/werkstatt/extensions
 # every pi loads the laib-llama provider (#261) and the guide; npm's own pi is pi-upstream
@@ -65,7 +63,7 @@ COPY sessions.sh /usr/local/bin/werkstatt-sessions
 COPY tmux.conf /etc/tmux.conf
 # pi in the browser (#384): pi-web-ui with the Werkstatt's provider, guide and hand
 COPY piweb.sh /usr/local/bin/werkstatt-pi-web
-RUN chmod +x /usr/local/bin/werkstatt-mcp-tidy /usr/local/bin/werkstatt-skills /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
+RUN chmod +x /usr/local/bin/werkstatt-skills /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

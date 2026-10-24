@@ -34,7 +34,7 @@ STIMME_FIX = "laib add stimme, dann laib apply home-assistant: die Wyoming-Eintr
 FIXES = {"Frage als Gesprächsagent": "laib add frage, dann laib apply home-assistant: die Ollama-Integration auf Frage (#491)",
          "Wyoming Whisper": STIMME_FIX, "Wyoming Piper": STIMME_FIX, "Wyoming openWakeWord": STIMME_FIX}
 # an entry Home Assistant could not set up: it counts for no row. Of the voice's domains it is a
-# finding of its own, the server behind it is gone (Solaris' after Phase 5, #540)
+# finding of its own, the server behind it is gone (#540)
 BROKEN = ("setup_error", "setup_retry", "migration_error", "failed_unload")
 VOICE = ("wyoming", "ollama")
 
@@ -62,7 +62,7 @@ def report(token: str, base: str) -> dict:
     findings = [{"severity": "gelb", "detail": f"{name}: fehlt", "fix": FIXES.get(name, FIX)} for name in missing]
     findings += [{"severity": "gelb", "detail": f"„{e.get('title')}“ ({e.get('domain')}) antwortet nicht",
                   "fix": "der Dienst dahinter läuft nicht: starten, oder den Eintrag in Home Assistant löschen (Einstellungen → "
-                         "Geräte & Dienste); was von Solaris übrig ist, listet scripts/solaris-off.py (#540)"} for e in dead]
+                         "Geräte & Dienste)"} for e in dead]
     detail = ["fehlt: " + ", ".join(missing)] if missing else []
     detail += [f"{len(dead)} Sprach-Integration{'en' if len(dead) > 1 else ''} ohne Dienst"] if dead else []
     return {"detail": " · ".join(detail) or f"alle {len(EXPECTED)} Integrationen eingerichtet", "findings": findings}
