@@ -35,19 +35,27 @@ type Abo struct {
 	Title  string `json:"title"`
 	URL    string `json:"url,omitempty"`
 	Since  string `json:"since"`
+	Every  string `json:"every,omitempty"` // how often it is fetched (#619): 30m, 12h, 30d; empty: Google every run, a public abo ABO_EVERY_DAYS
 }
 
 var aboName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 var aboPerson = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+var aboEvery = regexp.MustCompile(`^[1-9][0-9]{0,3}[mhd]$`)
 
 // cmdCalendar: `laib calendar subscribe <person> <name> google|abo [<title>]`
-// (the address on stdin) | unsubscribe <person> <name> | list.
+// (the address on stdin) | every <person> <name> | unsubscribe <person> <name>
+// | list; subscribe and every take --every <30m|12h|30d>, per calendar (#619).
 func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
+	every := ""
+	if i := slices.Index(args, "--every"); i >= 0 && i+1 < len(args) {
+		every, args = args[i+1], slices.Delete(slices.Clone(args), i, i+2)
+	}
 	// padded: a missing argument is "", the checks below refuse it
 	args = append(args, "", "", "", "", "")
 	act, pos, kind, title := args[0], args[1:3], args[3], args[4]
-	if act != "list" && (!aboPerson.MatchString(pos[0]) || !aboName.MatchString(pos[1])) || act == "subscribe" && kind != "google" && kind != "abo" {
-		return env.Fail(errors.New("usage: laib calendar subscribe <person> <name> google|abo [<title>] (address on stdin) | unsubscribe <person> <name> | list"))
+	if act != "list" && (!aboPerson.MatchString(pos[0]) || !aboName.MatchString(pos[1])) || act == "subscribe" && kind != "google" && kind != "abo" ||
+		every != "" && !aboEvery.MatchString(every) || act == "every" && every == "" {
+		return env.Fail(errors.New("usage: laib calendar subscribe <person> <name> google|abo [<title>] [--every 30d] (address on stdin) | every <person> <name> --every 30m|12h|30d | unsubscribe <person> <name> | list"))
 	}
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -77,8 +85,15 @@ func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
 			return cli.Refused(env, "Das ist nicht Googles „Geheime Adresse im iCal-Format“ (https://calendar.google.com/…/basic.ics).")
 		}
 		abos = slices.DeleteFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
-		abos = append(abos, Abo{Person: pos[0], Name: pos[1], Kind: kind, Title: title, URL: u.String(), Since: time.Now().UTC().Format(time.RFC3339)})
+		abos = append(abos, Abo{Person: pos[0], Name: pos[1], Kind: kind, Title: title, URL: u.String(), Since: time.Now().UTC().Format(time.RFC3339), Every: every})
 		msg = "„" + cmp.Or(title, pos[1]) + "“ ist verbunden. Die Termine erscheinen in den nächsten 15 Minuten."
+	case "every":
+		i := slices.IndexFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
+		if i < 0 {
+			return cli.Refused(env, "Diesen Kalender gibt es nicht: "+pos[0]+"/"+pos[1])
+		}
+		abos[i].Every = every
+		msg = "„" + cmp.Or(abos[i].Title, pos[1]) + "“ wird ab jetzt alle " + every + " abgeglichen."
 	case "unsubscribe":
 		abos = slices.DeleteFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
 		msg = "Getrennt. Beim nächsten Abgleich verschwindet die Kopie aus Radicale."

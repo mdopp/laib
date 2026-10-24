@@ -99,4 +99,26 @@ func TestHausSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 	if code != cli.ExitOK || strings.Contains(string(raw), "private-") || !strings.Contains(string(raw), "feiertage") {
 		t.Fatalf("unsubscribe: exit %d %s, left %q", code, out, raw)
 	}
+
+	// #619: each calendar its own interval, set at subscribe or changed later without the address
+	if out, code := call(map[string]any{"action": "subscribe", "person": "haus", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "every": "30d", "stdin": "https://example.org/abfuhr.ics"}); code != cli.ExitOK {
+		t.Fatalf("subscribe --every: exit %d: %s", code, out)
+	}
+	if out, code := call(map[string]any{"action": "every", "person": "haus", "name": "feiertage", "every": "12h"}); code != cli.ExitOK || !strings.Contains(out, "alle 12h") {
+		t.Fatalf("every: exit %d: %s", code, out)
+	}
+	sec, _ = secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	raw, _ = base64.RawURLEncoding.DecodeString(sec["KALENDER_ABOS"])
+	if !strings.Contains(string(raw), `"name":"muell","kind":"abo","title":"Müllabfuhr","url":"https://example.org/abfuhr.ics"`) || !strings.Contains(string(raw), `"every":"30d"`) || !strings.Contains(string(raw), `"every":"12h"`) || !strings.Contains(string(raw), "openholidaysapi") {
+		t.Fatalf("intervals not kept, or the address lost: %q", raw)
+	}
+	for _, bad := range []map[string]any{
+		{"action": "every", "person": "haus", "name": "feiertage", "every": "15s"},
+		{"action": "every", "person": "haus", "name": "feiertage"},
+		{"action": "every", "person": "haus", "name": "gibtsnicht", "every": "1d"},
+	} {
+		if out, code := call(bad); code == cli.ExitOK {
+			t.Fatalf("%v accepted: %s", bad, out)
+		}
+	}
 }
