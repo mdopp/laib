@@ -3,8 +3,7 @@
 OIDC signing key and the OIDC clients (oidc-clients.yml), before the pod
 starts — Authelia does not start without them, so this cannot wait for a
 green verify. Idempotent: the config and the clients are rewritten on every
-apply (values may change), the key is kept. On a box from ServiceBay its
-clients are carried until their service moves (#245). LLDAP is seeded by
+apply (values may change), the key is kept. LLDAP is seeded by
 post-deploy. Runs in the hooks image, not on the host."""
 import datetime, json, os, re, subprocess, sys
 
@@ -14,32 +13,8 @@ DOMAIN = E["LAIB_DOMAIN"]
 cfg_dir = os.path.join(D, "auth", "authelia-config")
 os.makedirs(cfg_dir, exist_ok=True)
 
-# 0. a box from ServiceBay (#245): its Authelia kept the OIDC clients and the
-# signing key in the configuration.yml this hook is about to overwrite. The
-# clients are kept once, verbatim, and registered below until a Laib service
-# declares the same client id; the key is kept, so the JWKS and every token an
-# app holds stay valid. Deleted by hand at the migration's step 7.
 conf_path = os.path.join(cfg_dir, "configuration.yml")
-carried_path = os.path.join(cfg_dir, "servicebay-clients.yml")
 key_path = os.path.join(cfg_dir, "oidc.pem")
-old = open(conf_path).read() if os.path.exists(conf_path) else ""
-if old and "rendered by laib pre-start" not in old:
-    m = re.search(r"(?m)^( *)clients:\n((?:\1  .*\n|\s*\n)+)", old.split("identity_providers:", 1)[-1])
-    if m and not os.path.exists(carried_path):
-        lines = m.group(2).splitlines()
-        shift = 6 - (len(lines[0]) - len(lines[0].lstrip()))  # Laib's entries sit at six blanks
-        with open(carried_path + ".tmp", "w") as f:
-            f.write("".join((" " * shift + l if shift > 0 else l[-shift:]) + "\n" for l in lines if l.strip()))
-        os.chmod(carried_path + ".tmp", 0o600)
-        os.replace(carried_path + ".tmp", carried_path)
-        print("ServiceBay's OIDC clients kept in servicebay-clients.yml")
-    k = re.search(r"(?m)^( *)key: \|\n((?:\1  .*\n)+)", old.split("jwks:", 1)[-1]) if "jwks:" in old else None
-    if k and not os.path.exists(key_path):
-        with open(key_path + ".tmp", "w") as f:
-            f.write("".join(l.strip() + "\n" for l in k.group(2).splitlines()))
-        os.chmod(key_path + ".tmp", 0o600)
-        os.replace(key_path + ".tmp", key_path)
-        print("ServiceBay's OIDC signing key kept")
 
 # 1. the OIDC signing key, generated once: a 4096-bit RSA key in PKCS#1 PEM
 # (what Authelia's own `crypto pair rsa generate` writes); openssl is in the image
@@ -189,23 +164,18 @@ for ext, body in (("txt", TXT), ("html", HTML)):
 
 # 3. the OIDC clients, one list in one file (oidc-clients.yml): Laib's, rendered
 # into /laib/laib-clients.yml (render/authelia; the hook runs again whenever it
-# changes), then the carried ServiceBay ones Laib does not declare (#245).
-# Authelia replaces a list from a later config file instead of merging it, so
-# two files with clients would leave one set out.
+# changes). Authelia replaces a list from a later config file instead of
+# merging it, so two files with clients would leave one set out.
 entries = lambda text: re.split(r"(?m)^(?=      - client_id: )", text)[1:]
-cid = lambda e: e.split(None, 3)[2].strip("'\"")
 try:
     laib = entries(open(os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "authelia", "laib-clients.yml")).read())
 except OSError:
     laib = []
-carried = [e for e in entries(open(carried_path).read() if os.path.exists(carried_path) else "") if cid(e) not in {cid(x) for x in laib}]
-if carried:
-    print("OIDC clients still ServiceBay's (until their service moves):", ", ".join(cid(e) for e in carried))
-has_clients = bool(laib or carried)
-body = "identity_providers:\n  oidc:\n    clients:\n" + "".join(laib + carried) if has_clients else ""
+has_clients = bool(laib)
+body = "identity_providers:\n  oidc:\n    clients:\n" + "".join(laib) if has_clients else ""
 tmp = os.path.join(cfg_dir, "oidc-clients.yml.tmp")
 with open(tmp, "w") as f:
-    f.write("# rendered by laib pre-start (templates/auth): render/authelia/laib-clients.yml + servicebay-clients.yml\n" + body)
+    f.write("# rendered by laib pre-start (templates/auth): render/authelia/laib-clients.yml\n" + body)
 os.chmod(tmp, 0o600)
 os.replace(tmp, os.path.join(cfg_dir, "oidc-clients.yml"))
 # OIDC only once a client exists: Authelia refuses an oidc block without
