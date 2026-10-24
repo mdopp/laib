@@ -28,8 +28,9 @@ failure), and in `einzelheiten` the error line and the output's last lines
 for the admin (`laib look stimme --container systemd-stimme-wakeword-trainer
 -- cat /out/<id>.status.json`, #627). A failed run is not retried until the persona changes or that file
 is deleted. A persona change restarts the unit (`PERSONA_REV`) and trains
-the new phrase. Hours of GPU time; the GPU lease stops the trainer while a
-mode needs the card.
+the new phrase. It trains on the CPU (the card holds the household model and
+Whisper; WAKEWORD_DEVICE=gpu to use it), some hours; the GPU lease still
+stops the trainer while a mode needs the whole box.
 
 **On the Voice PE** (once, by hand, in ESPHome): copy `<id>.tflite` and
 `<id>.json` from `stimme/micro` next to the device's YAML, set
