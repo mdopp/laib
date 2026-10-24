@@ -6,7 +6,8 @@ pi_servicebay.py). The token is read from a 0600 file, never from argv.
   laib                      list the verbs this hand may call
   laib status [args…]       call laib_status with the arguments as one string
   laib propose --set services/x/values.yml:K=V "grund"
-  laib write media /path < file     (stdin becomes the content)
+  laib write media /path < file     (stdin becomes the content, for every
+                                    verb whose schema takes stdin)
   laib template lint <dir>  runs here, with the release's laib binary
   laib --headers            the Authorization header as JSON: Claude Code's
                             headersHelper for the laib MCP server (#380)
@@ -86,9 +87,15 @@ def main(argv: list[str]) -> int:
         return 0
     verb, rest = argv[0], argv[1:]
     args = {"args": " ".join(f'"{a}"' if " " in a else a for a in rest)}
-    if verb in ("write",) or (verb == "propose" and "--patch" in rest):
-        key = "patch" if verb == "propose" else "stdin"
-        args[key] = sys.stdin.read()
+    if verb == "propose" and "--patch" in rest:
+        args["patch"] = sys.stdin.read()
+    elif sys.stdin is not None and not sys.stdin.isatty():
+        # every verb whose schema takes stdin gets ours: calendar
+        # subscribe's address, write's content (#617)
+        tools = {t["name"]: t for t in rpc("tools/list", {}).get("tools", [])}
+        if "stdin" in tools.get("laib_" + verb, {}).get("inputSchema", {}).get("properties", {}):
+            if data := sys.stdin.read():
+                args["stdin"] = data
     res = rpc("tools/call", {"name": "laib_" + verb, "arguments": args})
     for c in res.get("content", []):
         sys.stdout.write(c.get("text", ""))
