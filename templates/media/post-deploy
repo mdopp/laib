@@ -15,7 +15,12 @@ bound as the admin). Only members of family and admins may log in, as on
 Authelia's wildcard rule; the service accounts may not. Home Assistant gets
 a Jellyfin account of its own, `homeassistant`, not an LLDAP one (#375). A new user sees the
 libraries Laib made, plus the ones ServiceBay's configuration already gave
-new users — not anyone's private library."""
+new users — not anyone's private library.
+
+Music and video only (#646, docs/SERVICES.md): ServiceBay's twin libraries
+("Music2" beside "Music", the same folders) go, and Hörbücher, Podcasts and
+Radio go once the owner set SPOKEN_WORD=audiobookshelf and Audiobookshelf
+and Music Assistant answer with them; until then they stay."""
 import json, os, re, sys, time, urllib.parse, urllib.request, urllib.error
 
 E = os.environ
@@ -28,6 +33,13 @@ PLUGIN = "958aad6637844d2ab89aa7b6fab6e25c"   # jellyfin-plugin-ldapauth
 # Jellyfin 12 reads the client id from Authorization only and answers 400 to X-Emby-Authorization (ServiceBay #3048)
 CLIENT = 'MediaBrowser Client="laib", Device="laib", DeviceId="laib-post-deploy", Version="1"'
 LIBRARIES = [("Musik", "music", "music"), ("Filme", "movies", "movies"), ("Serien", "tvshows", "tv")]
+# #646: spoken word lives in Audiobookshelf, radio in Music Assistant. A Jellyfin library on these
+# folders goes once the owner set SPOKEN_WORD=audiobookshelf AND its replacement answers with content
+SPOKEN = E.get("SPOKEN_WORD") or "jellyfin"
+ABS, MA = E.get("ABS_URL", "http://127.0.0.1:13378"), E.get("MA_URL", "http://127.0.0.1:8095")
+ABS_KEY, MA_TOKEN = E.get("LAIB_SECRET_ABS_MA_TOKEN", ""), E.get("LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN", "")
+MOVED = {"/media/audiobooks": ("book", "/audiobooks", "Hörbücher"), "/media/podcasts": ("podcast", "/podcasts", "Podcasts"),
+         "/media/radio": ("radio", None, "Radio")}
 
 
 def req(method, path, body=None, token=None, raw=False):
@@ -97,6 +109,77 @@ for f in req("GET", "/Library/VirtualFolders", token=token):
         req("POST", "/Library/VirtualFolders/LibraryOptions", {"Id": f["ItemId"], "LibraryOptions": {**opts, "EnableRealtimeMonitor": True}}, token=token)
         print("realtime monitor on:", f.get("Name"))
 
+# 3c. ServiceBay's twins (#646): it registered most libraries twice, "Music" and "Music2" on one folder,
+# and a player's shuffle sees both. Strict: the name is the other's plus "2", the same kind, the same
+# non-empty folders. Only Jellyfin's entry goes (DELETE /Library/VirtualFolders), never a file; whoever
+# saw the twin sees the one that stays.
+twins = {}  # removed id -> the id that stays
+libs = req("GET", "/Library/VirtualFolders", token=token)
+by_name = {f["Name"]: f for f in libs}
+for f in libs:
+    t = by_name.get(f["Name"][:-1]) if f["Name"].endswith("2") else None
+    locs = sorted(f.get("Locations") or [])
+    if not t or not locs or locs != sorted(t.get("Locations") or []) or f.get("CollectionType") != t.get("CollectionType"):
+        continue
+    req("DELETE", f"/Library/VirtualFolders?name={urllib.parse.quote(f['Name'])}&refreshLibrary=false", token=token)
+    twins[f["ItemId"]] = t["ItemId"]
+    print(f"library removed: {f['Name']} (a twin of {t['Name']}: {f.get('CollectionType')} on {', '.join(locs)}; Jellyfin's entry only, no file touched)")
+
+
+def guard(kind, folder):
+    """why the replacement of a Jellyfin library is not there yet, or "" when it answers with content"""
+    try:
+        if kind == "radio":
+            if not MA_TOKEN:
+                return "Music Assistant has handed out no token yet (laib add music-assistant)"
+            r = urllib.request.Request(MA + "/api", data=json.dumps({"message_id": "laib", "command": "music/radios/count", "args": {}}).encode(),
+                                       headers={"Content-Type": "application/json", "Authorization": "Bearer " + MA_TOKEN}, method="POST")
+            with urllib.request.urlopen(r, timeout=20) as resp:
+                n = json.loads(resp.read() or b"0")
+            return "" if isinstance(n, int) and n > 0 else "Music Assistant holds no radio station yet (its post-deploy imports radio/*.m3u)"
+        if not ABS_KEY:
+            return "Audiobookshelf is not there yet (laib add audiobookshelf hands its key over)"
+        get = lambda path: json.loads(urllib.request.urlopen(urllib.request.Request(ABS + path, headers={"Authorization": "Bearer " + ABS_KEY}), timeout=20).read())
+        lib = next((l for l in get("/api/libraries")["libraries"] if l.get("mediaType") == kind
+                    and folder in [x.get("fullPath") for x in l.get("folders") or []]), None)
+        if not lib:
+            return f"Audiobookshelf has no {kind} library on {folder}"
+        return "" if get(f"/api/libraries/{lib['id']}/items?limit=1").get("total", 0) > 0 else f"Audiobookshelf's library on {folder} is still empty (scanning?)"
+    except (OSError, ValueError) as e:
+        return f"{'Music Assistant' if kind == 'radio' else 'Audiobookshelf'} does not answer: {e}"
+
+
+# 3d. spoken word and radio leave Jellyfin (#646), only after their replacement is there: the owner's
+# switch SPOKEN_WORD=audiobookshelf, then per library a live look at Audiobookshelf or Music Assistant.
+# Never the other way round: the family is never without their audiobooks in between.
+retired, held = set(), []
+for f in req("GET", "/Library/VirtualFolders", token=token):
+    locs = [x.rstrip("/") for x in f.get("Locations") or []]
+    if not locs or not all(x in MOVED for x in locs):
+        continue
+    if SPOKEN != "audiobookshelf":
+        print(f"library {f['Name']} stays in Jellyfin until SPOKEN_WORD=audiobookshelf (docs/SERVICES.md)")
+        continue
+    why = "; ".join(w for w in (guard(MOVED[x][0], MOVED[x][1]) for x in locs) if w)
+    if why:
+        held.append(f"{f['Name']}: {why}")
+        continue
+    req("DELETE", f"/Library/VirtualFolders?name={urllib.parse.quote(f['Name'])}&refreshLibrary=false", token=token)
+    retired.add(f["ItemId"])
+    print(f"library removed: {f['Name']} ({', '.join(MOVED[x][2] for x in locs)} live in "
+          f"{'Music Assistant' if MOVED[locs[0]][0] == 'radio' else 'Audiobookshelf'} now; Jellyfin's entry only, no file touched)")
+
+# whoever saw a removed twin sees the one that stays; an administrator sees all anyway
+if twins:
+    for u in req("GET", "/Users", token=token):
+        pol = u.get("Policy") or {}
+        have = pol.get("EnabledFolders") or []
+        if pol.get("EnableAllFolders") or not any(i in twins for i in have):
+            continue
+        want = list(dict.fromkeys(twins.get(i, i) for i in have))
+        req("POST", f"/Users/{u['Id']}/Policy", {**pol, "EnabledFolders": want}, token=token)
+        print(f"jellyfin user {u['Name']} sees the libraries that stay instead of their twins")
+
 # 4. Quick Connect
 conf = req("GET", "/System/Configuration", token=token)
 if not conf.get("QuickConnectAvailable"):
@@ -113,6 +196,7 @@ if not plugin():
     restart = True
 old = open(XML).read() if os.path.exists(XML) else ""
 folders = re.findall(r"<string>([^<]+)</string>", (re.search(r"(?s)<EnabledFolders>(.*?)</EnabledFolders>", old) or [None, ""])[1])
+folders = [i for i in dict.fromkeys(twins.get(i, i) for i in folders) if i not in retired]  # #646: no library that is gone
 for f in req("GET", "/Library/VirtualFolders", token=token):
     if f["Name"] in {n for n, _, _ in LIBRARIES} and f["ItemId"] not in folders:
         folders.append(f["ItemId"])
@@ -201,4 +285,6 @@ if HA_PW:
     if not logs_in(HA_USER, HA_PW):
         red(f"the jellyfin account {HA_USER} does not log in with JELLYFIN_HA_PASSWORD: Home Assistant's entry gets 401")
     print(f"jellyfin account {HA_USER} logs in: Home Assistant's Jellyfin entry uses it")
+if held:  # the owner switched, the replacement is not there: say so, never green while the libraries stay (#646)
+    red("SPOKEN_WORD=audiobookshelf, but these stay in Jellyfin until their replacement answers: " + " | ".join(held))
 print("jellyfin provisioned: the family logs in with LLDAP, Quick Connect on, local admin kept")
