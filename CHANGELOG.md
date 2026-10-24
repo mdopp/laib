@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.1](https://github.com/mdopp/laib/compare/v0.27.0...v0.27.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **stimme:** the wake-word trainer keeps datasets below 4 ([bd38d94](https://github.com/mdopp/laib/commit/bd38d949bed80a1e654edd059ead62ecbca8bc10))
+* **stimme:** wake-word trainer keeps datasets below 4; Solaris out of the wake-word example ([7bad7ca](https://github.com/mdopp/laib/commit/7bad7ca9985be8026edb890c8319400a4f96768d))
+
 ## [0.27.0](https://github.com/mdopp/laib/compare/v0.26.0...v0.27.0) (2026-10-24)
 
 
