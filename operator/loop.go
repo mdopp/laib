@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,6 +22,10 @@ type Trigger struct {
 	Kind    string `json:"kind"` // event | tick | report | manual
 	Service string `json:"service,omitempty"`
 	Detail  string `json:"detail,omitempty"`
+	// an incident that waited for the graphics card (#550): since when, in
+	// unix seconds, and how often its red came meanwhile
+	Queued int64 `json:"queued,omitempty"`
+	Count  int   `json:"count,omitempty"`
 }
 
 // Session is one run of a skill: trigger in, tool calls, a note out.
@@ -112,8 +117,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		now = o.Now
 	}
 	s = Session{Started: now().UTC(), Skill: sk.Name, Trigger: tr, Outcome: "error"}
+	human := ""
 	if tr.Kind == "event" {
 		s.Red = []string{tr.Detail}
+		human = tr.waited(now())
 	}
 	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
 	defer func() {
@@ -135,13 +142,20 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	// a look skill (#543) — an interval skill that reads diag — asks no
 	// model and writes no note while diag says what its last session saw;
 	// a finding diag offers a repair for becomes a proposal first
-	human, look, found := "", sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag"), ""
+	look, found := sk.Trigger.Every != "" && slices.Contains(sk.Granted, "diag"), ""
 	if look {
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
 		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
 			fs, raw = forLook(fs, raw)
+			// nothing new (#550): every finding the last look saw too; one
+			// that went away is remembered, so its return is news again
 			last, had := mem.Seen[sk.Name]
-			if tr.Kind == "tick" && had && !o.failing && slices.Equal(ids(fs), last) {
+			if cur := ids(fs); tr.Kind == "tick" && had && !o.failing && !slices.ContainsFunc(cur, func(id string) bool { return !slices.Contains(last, id) }) {
+				if !slices.Equal(cur, last) {
+					mem.Seen[sk.Name] = cur
+					maps.DeleteFunc(mem.Repaired, func(id, _ string) bool { return !slices.Contains(cur, id) })
+					o.remember(mem)
+				}
 				s.Outcome = "unchanged"
 				return s, nil
 			}
@@ -249,9 +263,14 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		ctxText = list + "\n" + ctxText
 	}
 	// GPU courtesy (#550): no session into another's window or a cold start;
-	// skipped is no error, the next step tries again
+	// skipped is no error, the next step tries again; an incident waits in
+	// the queue (owner, 2026-10-24)
 	if why := o.LLM.Busy(ctx); why != "" {
 		s.Outcome, s.Why = "skipped", why
+		if tr.Kind == "event" && o.Home != "" {
+			s.Why += "; wartet in der Warteschlange"
+			o.enqueue(ctx, sk.Name, tr, now())
+		}
 		return s, nil
 	}
 	user := o.prompt(sk, tr, ctxText)
@@ -279,7 +298,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				continue
 			}
 			s.Outcome, s.Why = "red", "Text statt Tool-Aufruf"
-			s.Note = "Sitzung rot: das Modell antwortete mit Text statt mit einem Tool-Aufruf (" + strings.TrimSpace(firstLine(reply.Content)) + "). Keine Änderung ausgeführt."
+			s.Note = strings.TrimSpace("Sitzung rot: das Modell antwortete mit Text statt mit einem Tool-Aufruf (" + strings.TrimSpace(firstLine(reply.Content)) + "). Keine Änderung ausgeführt. " + human)
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": s.Note})
 			return s, nil
 		}
@@ -423,7 +442,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	s.Outcome, s.Why = "red", fmt.Sprintf("abgebrochen nach %d Aufrufen", len(s.Calls))
 	if !noted { // the session's one note (#550): a note written stands, the log line says the rest
-		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": "Sitzung nach zu vielen Schritten abgebrochen; siehe Journal."})
+		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": strings.TrimSpace("Sitzung nach zu vielen Schritten abgebrochen; siehe Journal. " + human)})
 	}
 	return s, nil
 }

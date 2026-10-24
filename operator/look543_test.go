@@ -99,8 +99,8 @@ func TestAnUnchangedLookAsksNoModelAndARepairIsProposedOnce(t *testing.T) {
 
 // What changed reaches the model; what it already noted only as a count,
 // so the owner's own item (the watchdog) is in one note, not in every one.
-// The open repair is not filed again; a finding that went away and comes
-// back is a new one.
+// The open repair is not filed again; a finding that went away is no news
+// alone (#550), and when it comes back it is a new one.
 func TestOnlyWhatChangedReachesTheModel(t *testing.T) {
 	disk := `{"severity":"gelb","probe":"disk","detail":"/var hat 12.5% frei"}`
 	replies := map[string]string{"laib_diag": "[" + restoreTest + "," + watchdog + "]"}
@@ -133,10 +133,12 @@ func TestOnlyWhatChangedReachesTheModel(t *testing.T) {
 		t.Fatalf("the open repair was filed again: %d", n)
 	}
 
+	// a finding that went away alone is no news (#550): no model, no note
 	replies["laib_diag"] = "[" + watchdog + "," + disk + "]"
+	before := len(*asked)
 	run()
-	if got := shown(); !strings.Contains(got, "nicht mehr da: restore-test") {
-		t.Fatalf("a finding that went away is news: %s", got)
+	if len(*asked) != before {
+		t.Fatalf("only a finding gone asked the model")
 	}
 	replies["laib_diag"] = "[" + restoreTest + "," + watchdog + "," + disk + "]"
 	run()
