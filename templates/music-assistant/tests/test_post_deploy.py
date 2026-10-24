@@ -7,7 +7,7 @@ the owner had to make an MA account, connect Jellyfin with a Jellyfin login
 and add the integration in Home Assistant by hand. ServiceBay had no Music
 Assistant template; its rule (LLDAP/Authelia logins, service accounts minted
 by the box) is the one kept here."""
-import json, os, subprocess, threading, unittest, urllib.parse
+import json, os, subprocess, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -18,12 +18,16 @@ MA, JF = {}, {}
 
 def fresh(onboarded=None, jellyfin=True, music=True):
     MA.clear()
-    MA.update(users={}, tokens={}, n=0, providers={}, flows={}, onboard=False, core={}, logins=0, setups=0, logouts=0, fail_jellyfin=False)
+    MA.update(users={}, tokens={}, n=0, providers={}, flows={}, onboard=False, core={}, logins=0, setups=0, logouts=0, fail_jellyfin=False,
+              radios=[], dead=set(), abs_keys={"abs-api-key-1", "abs-api-key-2"})
     if onboarded:
         MA["users"][onboarded[0]] = onboarded[1]
     JF.clear()
     JF.update(up=jellyfin, users={"admin": {"Id": "u-admin", "Name": "admin", "pw": JF_ADMIN_PW, "Policy": {"IsAdministrator": True}}},
-              folders=[{"Name": "Musik", "ItemId": "f-music", "CollectionType": "music"}] if music else [], admin_logins=0)
+              folders=[{"Name": "Musik", "ItemId": "f-music", "CollectionType": "music", "Locations": ["/media/music"]},
+                       {"Name": "Podcasts", "ItemId": "f-pod", "CollectionType": "music", "Locations": ["/media/podcasts"]},
+                       {"Name": "Radio", "ItemId": "f-radio", "CollectionType": "music", "Locations": ["/media/radio"]}] if music else [],
+              admin_logins=0)
 
 
 def new_token(user, name, long_lived=False):
@@ -108,17 +112,20 @@ class FakeMA(Base):
                     return ok(self.step("f0", "abort", reason="already_configured"))
                 self.add(d, {})
                 return ok(self.step("f0", "finish", result={"instance_id": d}))
-            if d != "jellyfin":
+            if d not in ("jellyfin", "audiobookshelf"):
                 return self.reply(400, b"Unknown provider domain")
             MA["flows"]["f1"] = ("setup", d, None)
-            return ok(self.step("f1", "form", entries=[{"key": k} for k in ("url", "username", "password", "verify_ssl")]))
+            return ok(self.step("f1", "form", entries=[{"key": k} for k in self.keys(d)]))
         if c == "config/providers/reconfigure":
-            MA["flows"]["f2"] = ("reconfigure", "jellyfin", a["instance_id"])
-            return ok(self.step("f2", "form", entries=[{"key": k} for k in ("url", "username", "password", "verify_ssl")]))
+            d = MA["providers"][a["instance_id"]]["domain"]
+            MA["flows"]["f2"] = ("reconfigure", d, a["instance_id"])
+            return ok(self.step("f2", "form", entries=[{"key": k} for k in self.keys(d)]))
         if c == "config/flows/submit":
             kind, d, iid = MA["flows"].pop(a["flow_id"])
             v = a["values"]
-            if MA["fail_jellyfin"] or JF["users"].get(v.get("username"), {}).get("pw") != v.get("password"):
+            refused = (v.get("api_token") not in MA["abs_keys"] or v.get("url") != "http://127.0.0.1:13378") if d == "audiobookshelf" else \
+                (MA["fail_jellyfin"] or JF["users"].get(v.get("username"), {}).get("pw") != v.get("password"))
+            if refused:
                 MA["flows"][a["flow_id"]] = (kind, d, iid)
                 return ok(self.step(a["flow_id"], "form", errors={"base": "auth_failed"}, entries=[{"key": k} for k in v]))
             if kind == "setup":
@@ -140,7 +147,24 @@ class FakeMA(Base):
             return ok(None)
         if c == "auth/token/create":
             return ok(new_token(tok["user"], a["name"], long_lived=True))
+        if c == "builtin/add_radio":           # providers/builtin: the URL is the item id, MA probes the stream
+            if a["url"] in MA["dead"]:
+                return self.reply(500, b"Unable to retrieve info for stream")
+            MA["radios"] = [r for r in MA["radios"] if r["url"] != a["url"]]
+            MA["radios"].append({"url": a["url"], "name": a["name"], "image": a.get("image_url"), "favorite": False, "id": str(len(MA["radios"]) + 1)})
+            return ok({"item_id": a["url"], "provider": "builtin", "name": a["name"], "media_type": "radio", "uri": "builtin://radio/" + a["url"]})
+        if c == "music/radios/library_items":
+            return ok([{"item_id": r["id"], "provider": "library", "name": r["name"], "favorite": r["favorite"], "uri": "library://radio/" + r["id"],
+                        "provider_mappings": [{"item_id": r["url"], "provider_domain": "builtin", "provider_instance": "builtin"}]} for r in MA["radios"]])
+        if c == "music/favorites/add_item":
+            u = a["item"]
+            r = next(r for r in MA["radios"] if u in ("builtin://radio/" + r["url"], "library://radio/" + r["id"]))
+            r["favorite"] = True
+            return ok(None)
         self.reply(400, f"Invalid Command: {c}".encode())
+
+    def keys(self, d):
+        return ("url", "username", "password", "api_token", "verify_ssl") if d == "audiobookshelf" else ("url", "username", "password", "verify_ssl")
 
     def add(self, domain, values):
         iid = f"{domain}--{len(MA['providers'])}"
@@ -204,15 +228,33 @@ def serve(handler):
     return srv
 
 
+M3U = """#EXTM3U
+#EXTINF:-1 tvg-logo="https://img.example.org/welle-eins.png" group-title="Erfunden, öffentlich", Welle Eins
+https://stream.example.org/welle-eins/mp3/128/stream.mp3
+
+#EXTINF:-1 group-title="Erfunden", Radio Möwe, Nord
+https://radio-moewe.example.net/live
+
+#EXTINF:-1 tvg-logo="https://img.example.org/still.png",Stille Station
+https://still.example.com/dead.mp3
+"""
+
+
 class PostDeploy(unittest.TestCase):
     def setUp(self):
         self.ma, self.jf = serve(FakeMA), serve(FakeJellyfin)
         for srv in (self.ma, self.jf):
             self.addCleanup(srv.server_close)
             self.addCleanup(srv.shutdown)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.radio = Path(self.tmp.name, "file-share/data/radio")
+        self.radio.mkdir(parents=True)
+        Path(self.tmp.name, "music-assistant/data").mkdir(parents=True)
 
-    def run_hook(self, ha_token="", jf_admin_pw=JF_ADMIN_PW, ma_pw=MA_PW, jellyfin=None):
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "MA_WAIT_SECONDS": "0.05",
+    def run_hook(self, ha_token="", jf_admin_pw=JF_ADMIN_PW, ma_pw=MA_PW, jellyfin=None, abs_key=""):
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "MA_WAIT_SECONDS": "0.05", "LAIB_DATA_DIR": self.tmp.name,
+               "LAIB_SECRET_ABS_MA_TOKEN": abs_key, "ABS_URL": "http://127.0.0.1:13378",
                "MA_URL": f"http://127.0.0.1:{self.ma.server_port}", "JELLYFIN_URL": jellyfin or f"http://127.0.0.1:{self.jf.server_port}",
                "MA_ADMIN_USER": "laib", "JELLYFIN_ADMIN_USER": "admin", "LAIB_SECRET_MA_ADMIN_PASSWORD": ma_pw,
                "LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD": jf_admin_pw, "LAIB_SECRET_JELLYFIN_MA_PASSWORD": JF_MA_PW,
@@ -220,7 +262,7 @@ class PostDeploy(unittest.TestCase):
         p = subprocess.run([str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + "\n" + p.stderr).splitlines() if not l.startswith("laib-secret: "))
-        for value in [MA_PW, JF_ADMIN_PW, JF_MA_PW, ha_token, *handed.values()]:
+        for value in [MA_PW, JF_ADMIN_PW, JF_MA_PW, ha_token, abs_key, *handed.values()]:
             if value:
                 self.assertNotIn(value, rest, "a password or a token in the hook's log (#214)")
         return p, handed, rest
@@ -242,7 +284,8 @@ class PostDeploy(unittest.TestCase):
         acct = JF["users"]["musicassistant"]
         self.assertEqual(acct["pw"], JF_MA_PW)
         self.assertEqual((acct["Policy"]["IsAdministrator"], acct["Policy"]["IsHidden"], acct["Policy"]["EnableAllFolders"],
-                          acct["Policy"]["EnabledFolders"]), (False, True, False, ["f-music"]), "more than the music library, or an admin")
+                          acct["Policy"]["EnabledFolders"]), (False, True, False, ["f-music"]),
+                         "more than the music library (podcasts and radio are no music, #646), or an admin")
         self.assertEqual(set(handed), {"HA_MUSIC_ASSISTANT_TOKEN"})
         t = MA["tokens"][handed["HA_MUSIC_ASSISTANT_TOKEN"]]
         self.assertEqual((t["user"], t["name"], t["long"]), ("laib", "Home Assistant (laib)", True))
@@ -305,6 +348,45 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(handed, {})
         self.assertIn("laib secret set MA_ADMIN_PASSWORD", log)
         self.assertEqual(MA["users"], {"owner": "theirs"}, "a second administrator next to the owner's")
+
+
+    # #646: the house's stations, as the share holds them (radio/*.m3u, *.strm), become Music Assistant's
+    # radio favourites once; the Jellyfin library "Radio" can then go
+    def test_the_shares_stations_become_radio_favourites_once(self):
+        fresh()
+        (self.radio / "sender.m3u").write_text(M3U)
+        (self.radio / "Welle Eins.strm").write_text("https://stream.example.org/welle-eins/mp3/128/stream.mp3\n")   # the same as in the m3u
+        (self.radio / "Kleiner Sender.strm").write_text("https://klein.example.org/stream\n")
+        (self.radio / "kaputt.strm").write_text("keine adresse\n")
+        MA["dead"].add("https://still.example.com/dead.mp3")
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        got = {r["name"]: r for r in MA["radios"]}
+        self.assertEqual(set(got), {"Welle Eins", "Radio Möwe, Nord", "Kleiner Sender"})
+        self.assertEqual(got["Welle Eins"]["image"], "https://img.example.org/welle-eins.png")
+        self.assertTrue(all(r["favorite"] for r in MA["radios"]), "in the library, but no favourite")
+        self.assertIn("Stille Station", log, "a station Music Assistant refused is not named")
+        MA["radios"] = [r for r in MA["radios"] if r["name"] != "Kleiner Sender"]   # the family removed one in MA
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual({r["name"] for r in MA["radios"]}, {"Welle Eins", "Radio Möwe, Nord"}, "a removed station came back")
+
+    def test_audiobookshelf_becomes_a_source_with_the_key_it_handed_over(self):
+        fresh()
+        p, _, log = self.run_hook()
+        self.assertEqual((p.returncode, self.providers("audiobookshelf")), (0, []), log)
+        self.assertIn("laib add audiobookshelf", log)
+        p, _, log = self.run_hook(abs_key="abs-api-key-1")
+        self.assertEqual(p.returncode, 0, log)
+        (a,) = self.providers("audiobookshelf")
+        self.assertEqual((a["data"]["url"], a["data"]["api_token"]), ("http://127.0.0.1:13378", "abs-api-key-1"))
+        p, _, log = self.run_hook(abs_key="abs-api-key-1")
+        self.assertEqual((p.returncode, len(self.providers("audiobookshelf"))), (0, 1), log)
+        # ABS minted a new key (the old one refused): MA takes it, still one source
+        p, _, log = self.run_hook(abs_key="abs-api-key-2")
+        self.assertEqual(p.returncode, 0, log)
+        (a,) = self.providers("audiobookshelf")
+        self.assertEqual(a["data"]["api_token"], "abs-api-key-2")
 
 
 if __name__ == "__main__":

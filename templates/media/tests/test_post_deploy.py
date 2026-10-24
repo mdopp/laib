@@ -6,7 +6,7 @@ Jellyfin administrators, the local admin kept as break-glass, Quick Connect
 on. The plugin binds with a read-only LLDAP account (as radicale does since
 #55), never the LLDAP admin as ServiceBay did. A fake Jellyfin answers like
 Jellyfin 12, which ignores X-Emby-Authorization (ServiceBay #3048)."""
-import json, os, re, subprocess, sys, tempfile, threading, unittest
+import json, os, re, subprocess, sys, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -14,12 +14,15 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 LDAP_PW, ADMIN_PW, HA_PW = "-ldap-ro-pw-8K", "admin-pw-3J", "ha-svc-pw-7Q"
 PLUGIN = "958aad6637844d2ab89aa7b6fab6e25c"
 JF = {}
+SIDE = {}   # what Audiobookshelf and Music Assistant answer media's ordering guard (#646)
 
 
 def fresh():
     JF.clear()
     JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
-              config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0)
+              config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0, types={}, deleted=[])
+    SIDE.clear()
+    SIDE.update(abs_token="abs-key-1", ma_token="ma-tok-1", abs_libs=[], abs_totals={}, radios=0)
 
 
 class FakeJellyfin(BaseHTTPRequestHandler):
@@ -57,7 +60,7 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         if not self.token():
             return self.reply(401)
         if self.path == "/Library/VirtualFolders":
-            return self.reply(200, [{"Name": n, "ItemId": i, "Locations": JF["locations"].get(i, []),
+            return self.reply(200, [{"Name": n, "ItemId": i, "Locations": JF["locations"].get(i, []), "CollectionType": JF["types"].get(i),
                                      "LibraryOptions": JF["options"].get(i, {})} for n, i in JF["folders"]])
         if self.path == "/Users":
             return self.reply(200, list(JF["users"].values()))
@@ -94,6 +97,7 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             JF["folders"].append((name, i))
             JF["locations"][i] = [x["Path"] for x in b["LibraryOptions"]["PathInfos"]]
             JF["options"][i] = b["LibraryOptions"]
+            JF["types"][i] = re.search(r"collectionType=([^&]+)", p).group(1)
             return self.reply(204)
         if p == "/Library/VirtualFolders/LibraryOptions":
             JF["option_posts"] += 1
@@ -129,6 +133,54 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         self.reply(404)
 
 
+    def do_DELETE(self):
+        if not self.client():
+            return self.reply(400, {"error": "no client identity"})
+        if not self.token():
+            return self.reply(401)
+        if m := re.fullmatch(r"/Library/VirtualFolders\?name=([^&]+)&refreshLibrary=false", self.path):
+            name = urllib.parse.unquote(m.group(1))
+            if not any(n == name for n, _ in JF["folders"]):
+                return self.reply(404)
+            JF["folders"] = [(n, i) for n, i in JF["folders"] if n != name]
+            JF["deleted"].append(name)
+            return self.reply(204)
+        self.reply(404)
+
+
+class FakeSide(BaseHTTPRequestHandler):
+    """Audiobookshelf (/api/libraries with MA's API key) and Music Assistant (/api with HA's token), as far as
+    media's guard asks them: are the books, the podcasts and the radio there before Jellyfin lets them go"""
+
+    def log_message(self, *a):
+        pass
+
+    def reply(self, code, body=None):
+        data = json.dumps(body).encode() if body is not None else b""
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Bearer " + SIDE["abs_token"]:
+            return self.reply(401)
+        if self.path == "/api/libraries":
+            return self.reply(200, {"libraries": SIDE["abs_libs"]})
+        if m := re.fullmatch(r"/api/libraries/([^/?]+)/items\?limit=1", self.path):
+            return self.reply(200, {"results": [], "total": SIDE["abs_totals"].get(m.group(1), 0)})
+        self.reply(404)
+
+    def do_POST(self):
+        b = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        if self.path != "/api" or self.headers.get("Authorization") != "Bearer " + SIDE["ma_token"]:
+            return self.reply(401)
+        if b.get("command") == "music/radios/count":
+            return self.reply(200, SIDE["radios"])
+        self.reply(400)
+
+
 class PostDeploy(unittest.TestCase):
     def setUp(self):
         fresh()
@@ -141,9 +193,13 @@ class PostDeploy(unittest.TestCase):
         for d in ("music", "movies"):
             (self.media / d).mkdir(parents=True)
         self.xml = Path(self.tmp.name, "media/jellyfin-config/plugins/configurations/LDAP-Auth.xml")
+        self.side = HTTPServer(("127.0.0.1", 0), FakeSide)
+        threading.Thread(target=self.side.serve_forever, daemon=True).start()
+        self.addCleanup(self.side.shutdown)
 
     def run_hook(self, **extra):
-        env = dict(os.environ, **extra, JELLYFIN_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DATA_DIR=self.tmp.name,
+        side = f"http://127.0.0.1:{self.side.server_port}"
+        env = dict(os.environ, ABS_URL=side, MA_URL=side, **extra, JELLYFIN_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DATA_DIR=self.tmp.name,
                    MEDIA_ROOT=str(self.media), BASE_DN="dc=vm,dc=test", ADMIN_USER="admin",
                    LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD=ADMIN_PW, LAIB_SECRET_JELLYFIN_LDAP_PASSWORD=LDAP_PW)
         return subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
@@ -228,6 +284,93 @@ class PostDeploy(unittest.TestCase):
         p = self.run_hook()
         self.assertNotEqual(p.returncode, 0, "the family cannot log in, yet the hook is green")
         self.assertIn("LDAP", p.stderr)
+
+
+    # #646: ServiceBay registered most libraries twice ("Music" and "Music2" on one folder); Symfonium's shuffle
+    # sees every one. The house as it is on the box, with made-up ids, and the twins that only look alike.
+    def box(self, *more):
+        libs = [("Music", "music", ["/media/music"]), ("Music2", "music", ["/media/music"]),
+                ("Music (cdopp)", "music", ["/media/cdopp/music"]), ("Music (cdopp)2", "music", ["/media/cdopp/music"]),
+                ("Audiobooks", "books", ["/media/audiobooks"]), ("Audiobooks2", "books", ["/media/audiobooks"]),
+                ("Podcasts", "music", ["/media/podcasts"]), ("Radio", "music", ["/media/radio"]),
+                ("Movies", "movies", ["/media/movies"]), ("Movies2", "movies", ["/media/movies"]), ("Movies (mdopp)", "movies", ["/media/mdopp/movies"]),
+                ("Shows", "tvshows", ["/media/tv"]), ("Shows2", "tvshows", ["/media/tv"]), *more]
+        JF.update(wizard=True, plugins=[{"Name": "LDAP-Auth", "Id": PLUGIN, "Status": "Active"}],
+                  users={"admin": {"Name": "admin", "Id": "u-admin", "pw": ADMIN_PW}},
+                  folders=[(n, f"id-{k}") for k, (n, _, _) in enumerate(libs)],
+                  types={f"id-{k}": t for k, (_, t, _) in enumerate(libs)},
+                  locations={f"id-{k}": locs for k, (_, _, locs) in enumerate(libs)},
+                  options={f"id-{k}": {"EnableRealtimeMonitor": True} for k in range(len(libs))})
+        return {n: f"id-{k}" for k, (n, _, _) in enumerate(libs)}
+
+    def names(self):
+        return {n for n, _ in JF["folders"]}
+
+    def test_servicebays_twins_go_and_who_saw_one_sees_the_other(self):
+        ids = self.box(("Hörspiele2", "books", ["/media/hoerspiele"]),            # a "2" without a twin
+                       ("Filme", "movies", ["/media/filme"]), ("Filme2", "movies", ["/media/filme-alt"]),   # its twin's name, other folders
+                       ("Musik", "music", ["/media/music"]),                       # the same folder, but not the name plus "2"
+                       ("Krimis", "books", ["/media/krimis"]), ("Krimis2", "music", ["/media/krimis"]),     # same folder, another kind
+                       ("Leer", "music", []), ("Leer2", "music", []))              # no folders: nothing says they are the same
+        JF["users"]["anna"] = {"Name": "anna", "Id": "u-anna", "pw": "x", "Policy": {
+            "EnableAllFolders": False, "EnabledFolders": [ids["Music2"], ids["Shows"], ids["Shows2"]],
+            "AuthenticationProviderId": "LDAP", "PasswordResetProviderId": "Default"}}
+        self.xml.parent.mkdir(parents=True)
+        self.xml.write_text(f"<PluginConfiguration><EnabledFolders><string>{ids['Music2']}</string></EnabledFolders></PluginConfiguration>")
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(sorted(JF["deleted"]), ["Audiobooks2", "Movies2", "Music (cdopp)2", "Music2", "Shows2"])
+        for kept in ("Hörspiele2", "Filme2", "Musik", "Krimis2", "Leer2", "Music", "Music (cdopp)", "Audiobooks", "Podcasts", "Radio"):
+            self.assertIn(kept, self.names())
+        self.assertIn("library removed: Music2", p.stdout)
+        self.assertIn("/media/music", p.stdout, "the log does not say why it was a twin")
+        self.assertEqual(JF["users"]["anna"]["Policy"]["EnabledFolders"], [ids["Music"], ids["Shows"]],
+                         "anna loses the music she saw through the twin")
+        x = self.xml.read_text()
+        self.assertNotIn(f"<string>{ids['Music2']}</string>", x, "new users get a library that is gone")
+        self.assertIn(f"<string>{ids['Music']}</string>", x)
+        p = self.run_hook()
+        self.assertEqual((p.returncode, len(JF["deleted"])), (0, 5), p.stdout + p.stderr)
+
+    def ready(self, books=140, podcasts=2, radios=8):
+        SIDE.update(abs_libs=[{"id": "abs-b", "mediaType": "book", "folders": [{"fullPath": "/audiobooks"}]},
+                              {"id": "abs-p", "mediaType": "podcast", "folders": [{"fullPath": "/podcasts"}]}],
+                    abs_totals={"abs-b": books, "abs-p": podcasts}, radios=radios)
+
+    def secrets(self):
+        return {"LAIB_SECRET_ABS_MA_TOKEN": "abs-key-1", "LAIB_SECRET_HA_MUSIC_ASSISTANT_TOKEN": "ma-tok-1"}
+
+    def test_spoken_word_stays_in_jellyfin_until_the_owner_switches(self):
+        self.box()
+        self.ready()
+        p = self.run_hook(**self.secrets())
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue({"Audiobooks", "Podcasts", "Radio"} <= self.names(), "gone without the owner's switch")
+        self.assertIn("SPOKEN_WORD", p.stdout)
+
+    def test_spoken_word_goes_only_once_its_replacement_answers(self):
+        ids = self.box()
+        self.ready(books=0, podcasts=2, radios=0)            # ABS still scanning the books, MA without radio
+        p = self.run_hook(SPOKEN_WORD="audiobookshelf", **self.secrets())
+        self.assertNotEqual(p.returncode, 0, "the family's audiobooks would stay in Jellyfin, yet the apply is green")
+        self.assertIn("Podcasts", JF["deleted"])
+        self.assertTrue({"Audiobooks", "Radio"} <= self.names(), "removed before the replacement holds anything")
+        self.assertIn("Audiobooks", p.stderr)
+        self.assertIn("Radio", p.stderr)
+        self.ready()
+        p = self.run_hook(SPOKEN_WORD="audiobookshelf", **self.secrets())
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertFalse({"Audiobooks", "Podcasts", "Radio"} & self.names())
+        self.assertTrue({"Music", "Music (cdopp)", "Movies", "Movies (mdopp)", "Shows"} <= self.names(), "music or video went too")
+        self.assertNotIn(f"<string>{ids['Audiobooks']}</string>", self.xml.read_text(), "new users get a library that is gone")
+
+    def test_spoken_word_without_audiobookshelf_or_music_assistant_stays(self):
+        self.box()
+        self.ready()
+        p = self.run_hook(SPOKEN_WORD="audiobookshelf")      # neither key handed over yet: ABS not installed
+        self.assertNotEqual(p.returncode, 0)
+        self.assertTrue({"Audiobooks", "Podcasts", "Radio"} <= self.names())
+        self.assertIn("laib add audiobookshelf", p.stderr)
 
 
 if __name__ == "__main__":

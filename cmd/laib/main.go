@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/backup"
@@ -119,6 +120,9 @@ func main() {
 
 func runArgs(args []string) int {
 	env := &cliEnv{Paths: boxfs.Default(), Actor: os.Getenv("LAIB_ACTOR"), Ceiling: os.Getenv("LAIB_CEILING")}
+	if strings.HasPrefix(env.Actor, "human:") {
+		env.Wait = 15 * time.Minute // a human at the shell means approve to be applied when it returns (#609)
+	}
 	if env.Actor == "" {
 		env.Actor = "human:" + os.Getenv("USER")
 	}

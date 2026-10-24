@@ -177,9 +177,21 @@ class MusikEingang(unittest.TestCase):
         self.assertEqual(s["letzte"][0]["nicht_importiert"][0]["datei"], "boese.zip")
         self.assertIn("unsicher", s["letzte"][0]["nicht_importiert"][0]["grund"])
 
-    def test_a_zip_with_an_absolute_path_or_a_symlink_is_refused(self):
-        with zipfile.ZipFile(self.eingang / "absolut.zip", "w") as z:
-            z.writestr("/etc/erfunden.mp3", b"ID3")
+    def test_a_zip_with_a_root_entry_or_leading_slashes_unpacks_inside(self):
+        # 2026-10-24: a shop's download had a bare "/" directory entry and was refused as „absolut“;
+        # a leading slash only roots a name, it is unpacked inside the scratch folder like any other
+        with zipfile.ZipFile(self.eingang / "laden.zip", "w") as z:
+            z.writestr(zipfile.ZipInfo("/"), b"")
+            z.writestr("/Erfundenes Album/01 Eins.mp3", b"ID3" + b"a" * 40)
+            z.writestr("Erfundenes Album/02 Zwei.mp3", b"ID3" + b"b" * 40)
+        self.twice()
+        self.assertEqual(len(list(self.bib.rglob("*.mp3"))), 2, self.nicht_importiert())
+        self.assertEqual(self.nicht_importiert(), [])
+        self.assertFalse(os.path.exists("/Erfundenes Album"), "a leading slash wrote outside")
+
+    def test_a_zip_with_a_drive_letter_or_a_symlink_is_refused(self):
+        with zipfile.ZipFile(self.eingang / "laufwerk.zip", "w") as z:
+            z.writestr("C:/erfunden.mp3", b"ID3")
         with zipfile.ZipFile(self.eingang / "verweis.zip", "w") as z:
             i = zipfile.ZipInfo("link.mp3")
             i.external_attr = (0o120777 << 16)
@@ -187,7 +199,7 @@ class MusikEingang(unittest.TestCase):
         self.twice()
         self.assertEqual(list(self.bib.rglob("*")), [])
         ni = self.nicht_importiert()
-        self.assertTrue(any(p.endswith("/absolut.zip") for p in ni) and any(p.endswith("/verweis.zip") for p in ni), ni)
+        self.assertTrue(any(p.endswith("/laufwerk.zip") for p in ni) and any(p.endswith("/verweis.zip") for p in ni), ni)
 
     def test_a_zip_over_the_caps_is_refused(self):
         with zipfile.ZipFile(self.eingang / "riesig.zip", "w") as z:

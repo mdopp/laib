@@ -1,0 +1,18 @@
+# Audiobookshelf's care (#646): abs-pflege.py in a stock Python image, fed
+# on stdin (as kalender-abgleich), every 30 minutes from the timer; laib
+# also starts it when someone looks and the status is older than an hour.
+# The one-time Audible match, paced and resumed across runs, the Hörspiel
+# series, the podcasts of sync_podcasts.py (read, never run). The share's
+# podcasts folder read-only and unlabelled (#230); the password reaches
+# podman through the environment, never on argv.
+[Unit]
+Description=Audiobookshelf: Hörbücher abgleichen, Serien, Podcasts abonnieren
+After=audiobookshelf.service
+
+[Service]
+Type=oneshot
+Environment=ABS_PASSWORD=${ROOT_PW}
+Environment=MATCH_PER_RUN=${MATCH_PER_RUN}
+StandardInput=file:%h/.config/containers/systemd/audiobookshelf/abs-pflege.py
+ExecStart=/usr/bin/podman run --rm -i --name audiobookshelf-pflege --security-opt label=disable -e ABS_PASSWORD -e MATCH_PER_RUN -e ABS_URL=http://host.containers.internal:13378 -e STATE_DIR=/data -e PODCASTS_DIR=/podcasts -v ${DATA_DIR}/audiobookshelf/pflege:/data -v ${PODCASTS}:/podcasts:ro ${PFLEGE_IMAGE} python3 -
+TimeoutStartSec=30min

@@ -24,7 +24,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 | home-assistant (8123, zwave 8091, 3 containers) | `home-assistant` | built-in: HA, Z-Wave JS UI, Matter on the host network; onboarding and the Wyoming/CalDAV/MQTT integrations are configuration in HA |
 | solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` and `haus` built-ins exist; Haus is its own repo, `mdopp/haus` |
 | solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moved with it: `chronik-whisper` in foundry-chronicle's template (Stimme's Wyoming Whisper returns no timestamps) |
-| media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video; the family logs in with their LLDAP accounts through the LDAP-Authentication plugin, Quick Connect on (#256); Audiobookshelf takes Hörbücher and Podcasts with auto-download (replaces `podcasts/sync_podcasts.py`, which nothing ran); its family login is set from Laib's OIDC secret on every apply, the cached client rebuilt, so the drift that retired it on ServiceBay cannot stay (#255); Music Assistant drives the speakers for Assist |
+| media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video; the family logs in with their LLDAP accounts through the LDAP-Authentication plugin, Quick Connect on (#256); ServiceBay's twin libraries ("Music2" on Music's folders) are removed by media's post-deploy (#646). Audiobookshelf takes Hörbücher, Hörspiele and Podcasts: metadata next to the files, a paced one-time match against audible.de, Hörspiel series from `<NNN> - <Titel>`, the feeds of `podcasts/sync_podcasts.py` subscribed with auto-download (#646); its family login is set from Laib's OIDC secret on every apply, the cached client rebuilt, so the drift that retired it on ServiceBay cannot stay (#255). Music Assistant drives the speakers for Assist, with the share's radio stations as favourites and Audiobookshelf as a source (#646) |
 | immich (4 containers, ML) | `immich` | built-in |
 | paperless (3 containers) | `paperless` | built-in with OIDC logins through Authelia |
 | radicale (5232) | `radicale` | built-in: LDAP logins against LLDAP, owner-only rights |
@@ -44,7 +44,6 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 |---|---|
 | Haus (pages, cards, `/napi`, the Haushalt MCP source) | new repo `mdopp/haus` (DEKONSTRUKTION step 3) |
 | searxng | inside the `frage` pod, built-in |
-| music-assistant | **port needed**, household registry |
 | signal-cli | inside the `bote` pod while the Bote has Signal, built-in |
 | the household registry itself | new repo `mdopp/laib-templates`, `laib template lint` in CI |
 
@@ -71,6 +70,34 @@ the `podcasts/` folder on purpose. On the box today, without changing
 anything: in Symfonium untick the Audiobooks library. In Laib: a `phone`
 Jellyfin user that sees Musik only, audiobooks and podcasts in
 Audiobookshelf, radio and speakers through Music Assistant.
+
+The same, 2026-10-24 (#646): Symfonium's shuffle played Marc-Uwe Kling,
+podcasts and radio between the music. Jellyfin held thirteen libraries:
+five were ServiceBay's twins ("Music2", "Music (cdopp)2", "Audiobooks2",
+"Movies2", "Shows2", each on its original's folders), and Podcasts and
+Radio (.strm streams) were *music* libraries. `sync_podcasts.py` ran once
+by hand on 2026-07-26 (five episodes each, names with `&amp;`) and never
+again. The fix, in the order the family is never without their books:
+
+1. media's post-deploy removes the twins (strict: the name plus "2", the
+   same kind, the same folders; Jellyfin's entry only); users who saw a
+   twin see the original.
+2. `laib add audiobookshelf` (the owner approves the new service and its
+   public route): „Hörbücher & Hörspiele" and „Podcasts", metadata stored
+   with each item, the one-time Audible match paced by
+   `audiobookshelf-pflege.timer`, the feeds of `sync_podcasts.py`
+   subscribed. It hands Music Assistant an API key: the same apply adds
+   Audiobookshelf as MA's source.
+3. Music Assistant's post-deploy imports `radio/*.m3u` and `*.strm` as
+   radio favourites.
+4. Only then `SPOKEN_WORD=audiobookshelf` in media's values (a proposal):
+   media's post-deploy removes Jellyfin's Audiobooks, Podcasts and Radio,
+   each only when Audiobookshelf or Music Assistant answers with its
+   content, red with the reason otherwise.
+
+Afterwards Symfonium sees music (and video) only; Hörbücher and Podcasts
+are in the Audiobookshelf app (hoerbuecher.<domain>), radio on the
+speakers through Music Assistant and Home Assistant.
 - Repos that need a `laib.yml`: flutstunde. foundry-chronicle has one (`chronik`).
 - Decisions: `mdopp/laib-templates` to create (usage-metrics: kept, #238).
 

@@ -601,6 +601,9 @@ jobs:
                 getenforce; ls -dZn "$S" "$S/import" "$S/import/root.flac"
                 podman pull -q docker.io/linuxserver/beets:latest >/dev/null
                 $L add beets
+                # #609: an add while converge holds the lock is approved at once and applied by the next run
+                for i in $(seq 1 60); do systemctl --user cat beets.service >/dev/null 2>&1 && break; sleep 5; done
+                systemctl --user cat beets.service >/dev/null || { echo "beets was approved but never applied"; $L journal --since 10m | tail -20; exit 1; }
                 systemctl --user restart file-share-filebrowser.service file-share-samba.service file-share-syncthing.service beets.service
                 sleep 20
                 for u in file-share-filebrowser file-share-samba file-share-syncthing beets; do

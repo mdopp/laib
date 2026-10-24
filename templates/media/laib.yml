@@ -2,10 +2,13 @@ name: media
 template: {registry: builtin, name: media, version: 1}
 provides: [music, video]
 upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   # where the Operator's web search looks first (#544)
-# Jellyfin for music and video. Audiobooks and podcasts are NOT here any
-# more (docs/SERVICES.md, the Symfonium finding): they live in
-# audiobookshelf, so a phone player that syncs Jellyfin's audio sees music
-# only. The hook completes the first-run wizard, creates the local admin
+# Jellyfin for music and video. Audiobooks, podcasts and radio are NOT
+# here any more (docs/SERVICES.md, the Symfonium finding, #646): they live
+# in audiobookshelf and music-assistant, so a phone player that syncs
+# Jellyfin's audio sees music only. The hook removes ServiceBay's twin
+# libraries ("Music2" on Music's folders) and, once the owner set
+# SPOKEN_WORD=audiobookshelf and both answer with content, the old
+# Audiobooks, Podcasts and Radio libraries. The hook completes the first-run wizard, creates the local admin
 # (break-glass), registers the libraries Musik (/media/music) and, when the
 # folders exist, Filme and Serien, and logs the family in with their LLDAP
 # accounts through the LDAP-Authentication plugin (#256), Quick Connect on.
@@ -24,6 +27,12 @@ secrets:
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: JELLYFIN_LDAP_PASSWORD      # the read-only LLDAP account the plugin binds with, seeded by the auth template (#256)
     external: true
+  - name: ABS_MA_TOKEN                # audiobookshelf's key for Music Assistant (#646): media only reads with it whether the books and podcasts are there
+    external: true
+    optional: true
+  - name: HA_MUSIC_ASSISTANT_TOKEN    # minted by music-assistant (#526): media only asks with it whether the radio stations are there (#646)
+    external: true
+    optional: true
   - name: JELLYFIN_HA_PASSWORD        # Home Assistant's own Jellyfin account `homeassistant` (#375), not an LLDAP login; laib secret set, the same in HA's entry; without it no account
     external: true
     optional: true

@@ -88,6 +88,29 @@ func TestApproveDuringAnApplyAnswersAtOnce(t *testing.T) {
 	}
 }
 
+// A human at the shell who approves (laib add, laib approve) means it to be
+// applied when the command returns: it waits for the lock, bounded, and
+// applies, instead of leaving it to the next run. The VM test's adds raced
+// the converge timer and restarted a unit not there yet (train 2026-10-24f).
+func TestAShellApproveWaitsForTheLockAndApplies(t *testing.T) {
+	ctx := context.Background()
+	env, _ := testBox(t)
+	st, _ := cli.LoadState(env)
+	p := proposeService(t, env, "w2")
+	unlock, code := apply.TakeLock(env, st, "apply")
+	if code != cli.ExitOK {
+		t.Fatal(code)
+	}
+	go func() { time.Sleep(300 * time.Millisecond); unlock() }()
+	shell := &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard, Wait: 30 * time.Second}
+	if code := inbox.Approve(ctx, shell, []string{fmt.Sprint(p.ID)}); code != cli.ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(env.Paths.Quadlet, "w2", "w2.container")); err != nil {
+		t.Fatal("a shell approve returned before its change was applied")
+	}
+}
+
 // #609: three approvals during one apply give exactly one more apply,
 // which carries all three; journal and proposals name that run.
 func TestThreeApprovalsDuringOneApplyGiveOneMoreApply(t *testing.T) {

@@ -216,7 +216,7 @@ def _on_stop(signum, frame) -> None:
         _child.terminate()
 
 
-def _run(cmd: list[str], cwd: pathlib.Path | None = None) -> None:
+def _run(cmd: list[str], cwd: pathlib.Path | None = None, env: dict[str, str] | None = None) -> None:
     global _child
     if _stopping:
         raise _Stopped()
@@ -225,7 +225,7 @@ def _run(cmd: list[str], cwd: pathlib.Path | None = None) -> None:
     # here so a failure can say why (#627)
     tail: collections.deque[str] = collections.deque(maxlen=TAIL_LINES)
     try:
-        _child = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        _child = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
     except OSError as err:
         raise StepFailed(cmd, 127, [f"{type(err).__name__}: {err}"]) from err
     # lines end at \n only: a progress bar's \r redraws stay one line
@@ -285,7 +285,13 @@ def train(work: pathlib.Path, out: pathlib.Path, phrase: str, wake_id: str, sets
     recordings = pathlib.Path(os.environ.get("WAKEWORD_RECORDINGS", "/recordings")) / wake_id
     if recordings.is_dir():
         cmd += ["--recordings", str(recordings)]
-    _run(cmd)
+    # the CPU by default (2026-10-24): the card holds the household model and
+    # Whisper, and the run died validating with no memory left on it. The
+    # model is small; the CPU takes hours longer and nobody loses the GPU.
+    env = dict(os.environ)
+    if os.environ.get("WAKEWORD_DEVICE", "cpu") != "gpu":
+        env["CUDA_VISIBLE_DEVICES"] = "-1"
+    _run(cmd, env=env)
     return out / f"{wake_id}.tflite"
 
 

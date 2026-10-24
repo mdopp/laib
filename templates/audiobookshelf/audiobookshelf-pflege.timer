@@ -1,0 +1,11 @@
+[Unit]
+Description=Audiobookshelf: alle 30 Minuten pflegen
+
+[Timer]
+OnActiveSec=3min
+OnUnitActiveSec=30min
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
