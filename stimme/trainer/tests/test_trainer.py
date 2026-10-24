@@ -159,5 +159,18 @@ class Provision(unittest.TestCase):
             self.assertFalse(any("audiomentations" in a for a in c), c)
 
 
+    def test_datasets_stays_below_4(self):
+        # 2026-10-24: datasets 4 decodes audio only with torchcodec, which the image lacks
+        src, work = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        for repo in trainer.SOURCE_REPOS:
+            (src / repo).mkdir()
+        cmds = []
+        with mock.patch.object(trainer, "IMAGE_SOURCES", src), mock.patch.object(trainer, "_run", lambda cmd, cwd=None: cmds.append(cmd)):
+            trainer.provision(work, [])
+        self.assertTrue(any("datasets>=2.18,<4" in c for c in cmds), cmds)
+        cf = (pathlib.Path(trainer.__file__).parent / "Containerfile").read_text()
+        self.assertIn('"datasets>=2.18,<4"', cf)
+        self.assertIn("assert int(datasets.__version__", cf, "the image build must fail on datasets 4")
+
 if __name__ == "__main__":
     unittest.main()
