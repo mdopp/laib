@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -62,6 +63,7 @@ func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 	t.Cleanup(func() { backup.ResticRun = realRestic })
 	var restored map[string][]byte // what the restore writes; nil = what the snapshot has
 	var calls []string
+	failRestore := "" // restic's output when the restore itself fails
 	listing := func() string {
 		lines := []string{`{"time":"2026-10-22T03:06:00Z","id":"abcdef0123456789","short_id":"abcdef01","struct_type":"snapshot"}`,
 			`{"name":"lldap","type":"dir","path":"` + probe + `","struct_type":"node"}`}
@@ -80,6 +82,9 @@ func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 			}
 			return listing(), nil
 		case "restore":
+			if failRestore != "" {
+				return failRestore, errors.New("exit status 1")
+			}
 			target := args[slices.Index(args, "--target")+1]
 			files := restored
 			if files == nil {
@@ -111,6 +116,12 @@ func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 	if j := strings.Join(calls, "\n"); !strings.Contains(j, "restore abcdef0123456789 --include "+probe+" --target ") || !strings.Contains(j, "--verify") {
 		t.Fatalf("the restore must be the listed snapshot, verified by restic:\n%s", j)
 	}
+	// #633 (vm-install, recovery): the scratch folder's parents carry the
+	// host's SELinux label, which restic may not remove; only the security.*
+	// xattrs are left alone, every other restore error stays red
+	if restore := calls[slices.IndexFunc(calls, func(c string) bool { return strings.HasPrefix(c, "restore ") })]; !strings.HasSuffix(restore, " --exclude-xattr security.* --verify") {
+		t.Fatalf("the restore must leave the security xattrs alone and nothing else: %s", restore)
+	}
 	for _, c := range []struct {
 		name     string
 		restored map[string][]byte
@@ -131,6 +142,14 @@ func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 			t.Errorf("%s must turn the restore test red with %q: rc %d %+v", c.name, c.want, rc, e)
 		}
 	}
+
+	// restic's own error stays red: a blob that does not match, past the xattr filter
+	restored, snapshot = nil, map[string][]byte{"users.db": db, "lldap_config.toml": []byte("[ldap]\n")}
+	failRestore = "ignoring error for /data/auth/lldap/users.db: verify: hash mismatch\nFatal: There were 1 errors"
+	if rc, e := check(); rc == cli.ExitOK || e.Result != "red" || !strings.Contains(e.Detail, "There were 1 errors") {
+		t.Errorf("a failed restore must turn the restore test red: rc %d %+v", rc, e)
+	}
+	failRestore = ""
 
 	// with a sqlite3 binary on the host, PRAGMA integrity_check decides
 	restored, snapshot = nil, map[string][]byte{"users.db": db, "lldap_config.toml": []byte("[ldap]\n")}

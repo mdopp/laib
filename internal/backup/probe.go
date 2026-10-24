@@ -59,7 +59,10 @@ func probeRestore(ctx context.Context, st *state.State, pw, probe, scratch strin
 		// an empty listing compares nothing: no green from it
 		return "", fmt.Errorf("the latest snapshot holds no file of %s: %s", probe, cli.Tail(out, 200))
 	}
-	if out, err := ResticRun(ctx, st, pw, "restore", snap, "--include", probe, "--target", scratch, "--verify"); err != nil {
+	// the scratch folder's parents carry the host's SELinux label, which restic
+	// would remove as not in the snapshot and may not (#633): the security.*
+	// xattrs are left alone, any other error is the restore's
+	if out, err := ResticRun(ctx, st, pw, "restore", snap, "--include", probe, "--target", scratch, "--exclude-xattr", "security.*", "--verify"); err != nil {
 		return "", fmt.Errorf("restore %s: %s", probe, cli.Tail(out, 300))
 	}
 	var dbs []string
