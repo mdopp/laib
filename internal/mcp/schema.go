@@ -28,7 +28,7 @@ var sinceParam = mcpParam{name: "since", typ: "string", flag: "--since", desc: "
 var cmdParams = []mcpParam{svcParam, {name: "container", typ: "string", flag: "--container", desc: "einer der Container des Dienstes; leer = der erste"}, {name: "command", typ: "array", flag: "--", desc: "das Programm und seine Argumente, je ein Element", required: true}}
 
 var mcpParams = map[string][]mcpParam{
-	"status":   {optSvc},
+	"status":   {optSvc, {name: "fresh", typ: "boolean", flag: "--fresh", desc: "neu messen statt des Stands unter 30 s (at)"}},
 	"diag":     {optSvc},
 	"repair":   {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
 	"logs":     {svcParam, sinceParam},
@@ -45,7 +45,9 @@ var mcpParams = map[string][]mcpParam{
 	"escalate": {svcParam, {name: "summary", typ: "string", desc: "was du weißt, ein bis drei Sätze", required: true}},
 	"note": {{name: "kind", typ: "string", flag: "--kind", enum: []string{"watch", "incident", "report"}, required: true, desc: "incident nach Reparatur oder Eskalation, watch wenn alles in Ordnung war, report für den Morgenbericht"},
 		{name: "text", typ: "string", desc: "deutsch, drei bis fünf Sätze, Fakten mit Uhrzeit, rot zuerst", required: true}},
-	"journal": {sinceParam},
+	"journal": {sinceParam, {name: "limit", typ: "string", flag: "--limit", desc: "nur die neuesten so viele; ohne since jeden Alters"},
+		{name: "kind", typ: "string", flag: "--kind", enum: []string{"report", "incident", "watch"}, desc: "nur Notizen dieser Art; report ist der Morgenbericht"},
+		{name: "verb", typ: "string", flag: "--verb", desc: "nur Einträge dieses Verbs, z. B. apply"}},
 	"context": {sinceParam, {name: "full", typ: "boolean", flag: "--full", desc: "das ganze Bündel: alle Dienste, das Journal ungekürzt (sonst der erste Blick, #579)"}},
 	"inbox": {{name: "id", typ: "string", desc: "ein Vorschlag ganz, mit Karte, auch ein entschiedener"}, {name: "all", typ: "boolean", flag: "--all", desc: "auch die entschiedenen, neueste zuerst, ohne Karte"},
 		{name: "limit", typ: "string", flag: "--limit", desc: "höchstens so viele entschiedene (20; 0 = alle)"}},

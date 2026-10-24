@@ -58,6 +58,9 @@ func TestMcpArgvFromTypedArguments(t *testing.T) {
 		{"look", map[string]any{"service": "whoami", "command": []any{"cat", "/etc/a b"}}, []string{"whoami", "--", "cat", "/etc/a b"}},
 		{"escalate", map[string]any{"service": "caddy", "summary": "flattert seit 03:00"}, []string{"caddy", "flattert seit 03:00"}},
 		{"status", map[string]any{}, nil},
+		{"status", map[string]any{"fresh": true}, []string{"--fresh"}},
+		{"journal", map[string]any{"kind": "report", "limit": "1"}, []string{"--limit", "1", "--kind", "report"}},
+		{"journal", map[string]any{"args": "--limit 25 --verb apply"}, []string{"--limit", "25", "--verb", "apply"}},
 		{"logs", map[string]any{"args": `whoami --since 1h`}, []string{"whoami", "--since", "1h"}},
 	} {
 		got, _, err := mcp.Argv(st, c.verb, c.args)
