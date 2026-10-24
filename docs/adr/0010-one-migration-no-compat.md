@@ -45,7 +45,11 @@ commit that had them is `0203ec07bcdadaa01305cee8d02eb00512d88f80`
 (`git show 0203ec07:docs/MIGRATION.md`; its "Rollback during the weekend"
 section is the way back while ServiceBay's data dir is kept).
 
-What stays: Phase 5's `scripts/solaris-off.py` and
-`scripts/solaris-links-off.py` (Solaris is still to go off, #540), the
-general disk import `scripts/laib-import.py`, and the code comments that say
-which ServiceBay rule a Laib rule came from.
+Phase 5's `scripts/solaris-off.py` and `scripts/solaris-links-off.py`
+(#540), the carry-over of ServiceBay's OIDC clients in the auth pre-start
+(#245), the removal of ServiceBay's `auth_oidc:` block in Home Assistant's
+pre-start (#253) and the Werkstatt's `werkstatt-mcp-tidy` (#392) followed
+on 2026-10-24 (owner: "Altlasten können weg"); they too live in git history.
+
+What stays: the general disk import `scripts/laib-import.py`, and the code
+comments that say which ServiceBay rule a Laib rule came from.
