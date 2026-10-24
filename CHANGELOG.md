@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.26.0](https://github.com/mdopp/laib/compare/v0.25.0...v0.26.0) (2026-10-24)
+
+
+### Features
+
+* journal limit/kind and a cached status, per-calendar interval, the Bote journals who switched ([#593](https://github.com/mdopp/laib/issues/593), [#619](https://github.com/mdopp/laib/issues/619), [#591](https://github.com/mdopp/laib/issues/591)) ([1f878a8](https://github.com/mdopp/laib/commit/1f878a826cb5ff7503c027beb04fa3ed886da7e6))
+* **kalender:** each calendar its own interval; a public abo monthly by default ([8d376ca](https://github.com/mdopp/laib/commit/8d376cab5c8499aec4e0e72da7f1badf510827f6)), closes [#619](https://github.com/mdopp/laib/issues/619)
+* **mcp:** journal limit, verb and kind; status answers from a kept readiness ([3a5bec3](https://github.com/mdopp/laib/commit/3a5bec30273748103b9a67db44efa3c4461a49d1)), closes [#593](https://github.com/mdopp/laib/issues/593)
+* **template:** the Bote journals who switched in Home Assistant ([98d1f54](https://github.com/mdopp/laib/commit/98d1f541c5b4588a977c1d03a6749b6befa91a01))
+
 ## [0.25.0](https://github.com/mdopp/laib/compare/v0.24.1...v0.25.0) (2026-10-23)
 
 
