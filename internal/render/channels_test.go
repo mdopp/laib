@@ -182,7 +182,7 @@ func TestBoteWithoutSignalHasNoPort8085(t *testing.T) {
 	if strings.Contains(out[pod], "8085") || strings.Contains(out[nft], "8085") {
 		t.Fatalf("no Signal: 8085 is published or declared:\n%s\n%s", out[pod], out[nft])
 	}
-	if !strings.Contains(out[pod], "PublishPort=127.0.0.1:8645:8645\n") || !strings.Contains(out[nft], "8645") {
+	if !strings.Contains(out[pod], "PublishPort=8645:8645\n") || !strings.Contains(out[nft], "8645") {
 		t.Fatalf("no Signal: bote-notify's port stays:\n%s\n%s", out[pod], out[nft])
 	}
 	out, err = boteBox(t, "", nil) // values.example.yml: Signal only

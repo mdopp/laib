@@ -78,4 +78,4 @@ ports:
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server, with BOTE_API_KEY; published beyond loopback for Haus's Sprechen field (#215)
   - {port: 8643, lan: false}         # Automat MCP, loopback only
   - {port: 8644, lan: false}         # the persona engine's MCP (today Joshua), loopback only
-  - {port: 8645, lan: false}         # bote-notify: POST /mitteilung with the bearer; Home Assistant (host network) calls it on 127.0.0.1
+  - {port: 8645, lan: false}         # bote-notify: POST /mitteilung with the bearer; Home Assistant and scan (host network) call it on 127.0.0.1, beets' Musik-Eingang over host.containers.internal

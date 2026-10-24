@@ -1,2 +1,4 @@
 IMAGE: docker.io/linuxserver/beets:latest
 MUSIC: /mnt/data/stacks/file-share/data/music
+MUSIK_MELDEN: "true"              # the Musik-Eingang's message per upload through the Bote; "false": none
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer; empty without the Bote

@@ -27,14 +27,22 @@ GRUND.txt saying why in German. Nothing the import did not take is
 deleted; only the emptied folders and a zip whose content was imported or
 kept unpacked are.
 
+After the run, one message per upload that imported or kept something,
+through bote-notify (POST NOTIFY_URL {an, text} with the bearer
+NOTIFY_TOKEN, as scan does): to the uploader Haus named in the sidecar
+`._<name>.von` (an LLDAP user, which box.yml people names), else, and when
+that person is unknown, to NOTIFY_PERSON. MUSIK_MELDEN=false switches it
+off; without the Bote (no token) none goes out. A message that does not go
+out never fails or holds up the import: it is one line in einzelheiten.
+
 The status, ${DATA_DIR}/beets/config/laib-status.json (laib status beets,
 Haus): {"at", "detail", "einzelheiten", "findings", "wartet",
-"letzte": [{"at", "eingang", "titel", "alben", "ordner",
+"letzte": [{"at", "eingang", "von", "titel", "alben", "namen", "ordner",
 "nicht_importiert": [{"datei", "grund"}]}]}, the newest upload first.
 Stdlib only: the image (linuxserver/beets) has python3 and beet, no
 unzip, no 7z, no unrar.
 """
-import datetime, fcntl, json, os, shlex, shutil, stat, subprocess, sys, time, zipfile
+import datetime, fcntl, json, os, re, shlex, shutil, stat, subprocess, sys, time, urllib.error, urllib.request, zipfile
 
 E = os.environ
 EINGANG = E.get("MUSIK_EINGANG", "/eingang")
@@ -43,6 +51,10 @@ BEET = shlex.split(E.get("BEET", "beet"))
 STABIL_S = float(E.get("MUSIK_STABIL_S", "15"))
 ZIP_MAX_BYTES = int(E.get("MUSIK_ZIP_MAX_BYTES", str(20 << 30)))   # a discography in FLAC fits, a disk does not
 ZIP_MAX_DATEIEN = int(E.get("MUSIK_ZIP_MAX_DATEIEN", "5000"))
+MELDEN = E.get("MUSIK_MELDEN", "true").strip().lower() not in ("false", "0", "no", "nein", "off", "aus")
+NOTIFY_PERSON = E.get("NOTIFY_PERSON", "")
+NOTIFY_URL = E.get("NOTIFY_URL", "http://host.containers.internal:8645/mitteilung")
+NOTIFY_TOKEN = E.get("NOTIFY_TOKEN", "")
 
 AUDIO = (".mp3", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav")
 ARCHIV = (".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst")
@@ -181,6 +193,29 @@ def importiere(pfad, einzeln, konfig):
     return rc, "\n".join(aus.strip().splitlines()[-15:]), zeilen
 
 
+def namen(einzeln, seit, konfig):
+    """what beets added since seit, by its own names: the titles of a singleton, else the albums ("" untagged)"""
+    ab = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(seit))
+    cmd = BEET + ["-c", konfig, "ls"] + (["-f", "$title", "singleton:true"] if einzeln else ["-a", "-f", "$album"]) + ["added:%s.." % ab]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=300)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [z.strip() for z in p.stdout.splitlines()] if p.returncode == 0 else []
+
+
+def absender(name):
+    """the uploader Haus named in ._<name>.von, read and removed; "" without one"""
+    p = os.path.join(EINGANG, "._%s.von" % name)
+    try:
+        with open(p) as f:
+            wer = f.readline().strip().lower()
+        os.remove(p)
+    except (OSError, UnicodeDecodeError):
+        return ""
+    return wer if re.fullmatch(r"[a-z0-9][a-z0-9._@-]{0,63}", wer) else ""
+
+
 def dateien(wurzel):
     return [os.path.join(w, n) for w, _, ns in os.walk(wurzel) for n in ns]
 
@@ -234,8 +269,8 @@ class Lauf:
                 except OSError:
                     pass
 
-    def eintrag(self, name, titel=0, alben=0, nicht=()):
-        e = {"at": jetzt_utc(), "eingang": name, "titel": titel, "alben": alben,
+    def eintrag(self, name, titel=0, alben=0, nicht=(), von="", namen=()):
+        e = {"at": jetzt_utc(), "eingang": name, "von": von, "titel": titel, "alben": alben, "namen": list(namen),
              "ordner": NI + "/" + self.zeit if nicht else "", "nicht_importiert": list(nicht)}
         self.uploads.append(e)
 
@@ -259,6 +294,7 @@ class Lauf:
         except OSError:
             os.rmdir(arbeit)
             return
+        von = absender(name)
         gruende = {}
         if os.path.isfile(pfad) and name.lower().endswith(".zip"):
             ziel = os.path.join(arbeit, frei(arbeit, name[:-4] or "zip"))
@@ -270,12 +306,12 @@ class Lauf:
                 gruende[pfad] = str(err)
         if pfad not in gruende:
             self.beet(pfad, gruende)
-        titel, alben = gruende.pop("", (0, 0))
+        titel, alben, genannt = gruende.pop("", (0, 0, []))
         nicht = self.beiseite(arbeit, lambda p: gruende.get(p) or (KEINE_MUSIK if not p.lower().endswith(AUDIO) else NICHT_GENOMMEN))
         self.aufraeumen(arbeit)
         if any(x["grund"] in (FEHLER, NICHT_GENOMMEN) for x in nicht):
             self.gelb = True
-        self.eintrag(name, titel, alben, nicht)
+        self.eintrag(name, titel, alben, nicht, von, genannt)
 
     def beet(self, pfad, gruende):
         """beet import over one upload; gruende gets each file's reason, and "" (titles, albums)"""
@@ -292,9 +328,11 @@ class Lauf:
         if self.konfig is None:
             self.konfig = overlay()
         einzeln = not os.path.isdir(pfad)
+        seit = time.time()
         rc, aus, log = importiere(pfad, einzeln, self.konfig)
         genommen = [p for p in musik if not os.path.lexists(p)]
-        gruende[""] = (len(genommen), 0 if einzeln else len({os.path.dirname(p) for p in genommen}))
+        gruende[""] = (len(genommen), 0 if einzeln else len({os.path.dirname(p) for p in genommen}),
+                       namen(einzeln, seit, self.konfig) if genommen else [])
         for p in musik:
             if p in genommen:
                 continue
@@ -309,8 +347,67 @@ class Lauf:
             self.einzelheiten.append("beet import %s: Exit %d\n%s" % (os.path.basename(pfad), rc, aus))
 
 
+    def melden(self):
+        """one message per upload that imported or kept something; what does not go out is one line in einzelheiten"""
+        texte = [(u, mitteilung(u)) for u in self.uploads]
+        texte = [(u, t) for u, t in texte if t]
+        if not MELDEN or not texte or not NOTIFY_TOKEN:   # off, nothing happened, or no Bote
+            return
+        fehler, weg = [], ""
+        for u, text in texte:
+            versuche = []
+            for an in dict.fromkeys(p for p in (u["von"], NOTIFY_PERSON) if p):
+                if weg:
+                    versuche.append(weg)
+                    break
+                try:
+                    req = urllib.request.Request(NOTIFY_URL, method="POST", data=json.dumps({"an": an, "text": text}).encode(),
+                                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + NOTIFY_TOKEN})
+                    urllib.request.urlopen(req, timeout=60).close()   # bote-notify tries each channel: up to 50 s
+                    versuche = []
+                    break
+                except urllib.error.HTTPError as err:
+                    versuche.append("an %s: HTTP %d" % (an, err.code))
+                except Exception as err:   # unreachable: the rest of this run waits for nothing
+                    weg = "bote-notify nicht erreichbar (%s)" % getattr(err, "reason", err)
+                    versuche.append(weg)
+                    break
+            else:
+                versuche = versuche or ["niemand zu benachrichtigen: NOTIFY_PERSON ist leer"]
+            if versuche:
+                fehler.append("„%s“: %s" % (u["eingang"], "; ".join(versuche)))
+        if fehler:
+            self.einzelheiten.append("Mitteilung nicht zugestellt: " + " · ".join(fehler))
+
+
 def mehrzahl(n, eins, viele):
     return "%d %s" % (n, eins if n == 1 else viele)
+
+
+def aufzaehlung(namen, gesamt):
+    """at most three names, then „und N weitere“ up to gesamt"""
+    return ", ".join(namen[:3]) + (" und %d weitere" % (gesamt - len(namen[:3])) if gesamt > len(namen[:3]) else "")
+
+
+def mitteilung(u):
+    """the family's message for one upload, or None when it neither imported nor kept anything"""
+    t, nicht = u["titel"], u["nicht_importiert"]
+    if not t and not nicht:
+        return None
+    if t:
+        einzeln = not u["alben"]
+        n = t if einzeln else (len(u["namen"]) or u["alben"])     # beets' albums: CD1 and CD2 are one
+        genannt = [x for x in u["namen"] if x] or [os.path.splitext(u["eingang"])[0] if einzeln else u["eingang"]]
+        kopf = ("%s %s" % (mehrzahl(t, "Titel", "Titel"), "ist" if t == 1 else "sind") if einzeln else
+                "%s (%s) %s" % (mehrzahl(n, "Album", "Alben"), mehrzahl(t, "Titel", "Titel"), "ist" if n == 1 else "sind"))
+        kopf += " in der Musik: " + aufzaehlung(genannt, n)
+    else:
+        kopf = "Nichts Neues in der Musik"
+    if nicht:
+        gruende = ["%s – %s" % (os.path.basename(x["datei"]), re.split(r" \(|: ", x["grund"], maxsplit=1)[0]) for x in nicht]
+        kopf += " · %s nicht übernommen: %s (%s in musik-eingang/%s)" % (
+            mehrzahl(len(nicht), "Datei", "Dateien"), aufzaehlung(gruende, len(nicht)), "liegt" if len(nicht) == 1 else "liegen", NI)
+    return "🎵 " + kopf
 
 
 def zeile(lauf):
@@ -355,6 +452,12 @@ def main():
     lauf.unterbrochen()
     bereit, wartet = [], 0
     for name in sorted(os.listdir(EINGANG)):
+        if name.startswith("._") and name.endswith(".von") and not os.path.lexists(os.path.join(EINGANG, name[2:-4])):
+            try:   # a sidecar whose upload never came
+                if jetzt - os.lstat(os.path.join(EINGANG, name)).st_mtime > 86400:
+                    os.remove(os.path.join(EINGANG, name))
+            except OSError:
+                pass
         if name == NI or ignoriert(name):
             continue
         try:
@@ -375,6 +478,10 @@ def main():
     except OSError:
         pass
     schreib(gesehen_pfad, neu)
+    try:
+        lauf.melden()
+    except Exception as err:   # a message never fails the import
+        lauf.einzelheiten.append("Mitteilung nicht zugestellt: %s" % err)
     ergebnis = None
     if lauf.uploads:
         ergebnis = {"at": jetzt_utc(), "titel": sum(u["titel"] for u in lauf.uploads), "alben": sum(u["alben"] for u in lauf.uploads),

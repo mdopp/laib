@@ -189,7 +189,9 @@ Without a number at all, Discord or Matrix work.
    box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,
    preferred first, only on the Bote's channels; docs/STATE.md). The `bote-notify` container runs this
    template's `notify.py` (stdlib) in the stock Hermes image and serves
-   `POST /mitteilung {"an": "mama", "text": "…"}` on `127.0.0.1:8645` with
+   `POST /mitteilung {"an": "mama", "text": "…"}` on `127.0.0.1:8645` (and,
+   for a pod off the host network such as beets' Musik-Eingang, on
+   `host.containers.internal:8645`; `lan: false`) with
    `Authorization: Bearer <BOTE_NOTIFY_TOKEN>` (generated on add). It looks
    the person up in `render/people/people.json`, refuses an unknown person
    (404, never a free target) and delivers with
