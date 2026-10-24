@@ -113,6 +113,15 @@ PERS="$H/plugins/laib-persona"; mkdir -p "$PERS"
 cp "$(dirname "$0")/persona_plugin.py" "$PERS/__init__.py"
 printf 'name: laib-persona\nversion: "1"\ndescription: the persona engine in front of the model, its screens verbatim (laib#471)\n' > "$PERS/plugin.yaml"
 ENABLED="laib-persona"
+# Who switched (#591): with the ha tool or the Automat wired, laib-journal notes the person who wrote
+# beside HA's context id in Laib's journal (home-assistant README, "Who switched"); the hand bote may note
+JOUR="$H/plugins/laib-journal"
+if [ -n "${LAIB_SECRET_BOTE_HA_TOKEN:-}${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ]; then
+  mkdir -p "$JOUR"
+  cp "$(dirname "$0")/journal_plugin.py" "$JOUR/__init__.py"
+  printf 'name: laib-journal\nversion: "1"\ndescription: who switched in Home Assistant, into Laib'"'"'s journal (laib#591)\n' > "$JOUR/plugin.yaml"
+  ENABLED="$ENABLED, laib-journal"
+else rm -rf "$JOUR"; fi
 NUTZ="$H/plugins/laib-nutzung"; UNBEANTWORTET=""
 if [ -n "${LAIB_SECRET_USAGE_METRICS_TOKEN:-}" ]; then
   mkdir -p "$NUTZ"

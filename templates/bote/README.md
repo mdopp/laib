@@ -295,6 +295,42 @@ CI runs the plugin under the pinned Hermes' own gateway hooks
 download (Hermes' adapter) and Paperless consuming the file, which only the
 box shows.
 
+## Who switched: the person in Laib's journal (#591)
+
+Home Assistant's logbook names the token's user, „Bote“, never who wrote.
+With the `ha` tool or the Automat wired, post-deploy places the plugin
+`laib-journal` (`journal_plugin.py`). Its `pre_llm_call` keeps the
+sender Hermes reports per session (`platform:id`, a Signal number or a
+Telegram chat id). Its `post_tool_call` notes the line from
+home-assistant's README („Who switched“) with `laib_note` and the
+Bote's own token (`LAIB_TOKEN`; the hand `bote` reaches `note`, a
+propose-tier verb). It does this only for a switch:
+
+- an HA intent (`mcp__ha__Hass…`) that HA answers `action_done` with
+  entities in `data.success`: `service=intent.<HassName>`;
+- the Automat's `automation_schalten`: `service=automation.turn_on|turn_off`.
+
+Reads (`GetLiveContext`, `HassGetState`), errors and calls that changed
+nothing note nothing. The person is the box.yml `people` name whose
+`signal:` or `telegram:` id is the sender. pre-start writes that map,
+turned round, as `personen.json` (mode 600) next to Hermes. An unknown
+sender, a cron job or the API server (Haus's Sprechen field) is `-`.
+HA's MCP answer carries no context id, so the plugin reads
+`/api/states/<entity>` with `HA_TOKEN` and takes the `context.id` of
+a state updated in the last 30 s. If the state did not change (the
+light was already on), the context is `-`. The note runs in a thread.
+A note Laib refuses or cannot take is logged once
+(`[laib-journal] Laib nimmt die Notiz nicht an`) and never fails the
+switch. Exposed HA scripts called as tools are not noted: their answer
+does not say what they switched.
+
+Tests: `tests/test_journal_plugin.py` (the hooks against a fake Laib and
+HA) and `tests/hermes_plugin_proof.py` (Hermes' own `pre_llm_call` and
+`post_tool_call` call sites in the pinned image). Only a real Signal
+message on the box shows the rest: that Hermes' Signal sender reaches
+`pre_llm_call` as the number in box.yml, and that HA's state carries
+the call's context within the window.
+
 ## What the Bote is used for: counts, and what it could not answer (#266)
 
 With usage-metrics installed (its token `USAGE_METRICS_TOKEN` set), the
