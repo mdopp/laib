@@ -655,6 +655,6 @@ printf 'watchdog:\n  url: https://hc.e2e.home/ping\n' >> "$LAIB_HOME/state/box.y
 n=$(wc -l < "$SYSTEMCTL_LOG")
 LAIB_ACTOR=human:e2e "$BIN" apply whoami --reason "e2e: the watchdog on" >/dev/null || fail "the scoped apply with the notifier on exit $?"
 test -f "$LAIB_QUADLET/laib-notify/laib-notify.container" || fail "a scoped apply enabled laib-notify.timer without its container (#633)"
-tail -n +$((n + 1)) "$SYSTEMCTL_LOG" | grep "daemon-reload\|enable --now laib-notify.timer" | tr '\n' ' ' | grep -q "daemon-reload.*enable --now laib-notify.timer" || fail "laib-notify.timer is not enabled after the reload (#633)"
+grep -q "daemon-reload.*enable --now laib-notify.timer" <<<"$(tail -n +$((n + 1)) "$SYSTEMCTL_LOG" | grep "daemon-reload\|enable --now laib-notify.timer" | tr '\n' ' ')" || fail "laib-notify.timer is not enabled after the reload (#633)"
 
 echo "e2e ok: $(wc -l < "$SYSTEMCTL_LOG") systemctl calls, $(ls "$LAIB_HOME"/journal | wc -l) journal file(s)"
