@@ -1,0 +1,16 @@
+# The Musik-Eingang (#639): musik-eingang.py runs inside the running beets
+# container and imports what the family dropped into the share's
+# musik-eingang folder (beets-eingang.timer, once a minute). It writes the
+# status file laib.yml declares; laib also starts it when someone looks and
+# the file is older than its stale. The script holds a lock: a run that
+# finds another one still importing leaves it alone.
+[Unit]
+Description=beets: the Musik-Eingang into the music library
+After=beets.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/beets/musik-eingang.py
+ExecStart=/usr/bin/podman exec -i systemd-beets python3 -
+# a discography with fetchart and lyrics takes a while; the lock keeps the next minute's run out
+TimeoutStartSec=2h

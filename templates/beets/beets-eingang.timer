@@ -1,0 +1,9 @@
+[Unit]
+Description=beets: look into the Musik-Eingang once a minute (#639)
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
