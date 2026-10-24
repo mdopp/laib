@@ -214,7 +214,7 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
-		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot}, nil
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes}, nil
 	}
 }
 
@@ -445,9 +445,9 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 		return env.Fail(fmt.Errorf("kein Vorschlag #%d", id))
 	}
 	full := func(p *proposal.Proposal) bool { return id != 0 || p.Status == "open" }
-	domain := ""
+	domain, box := "", []string(nil)
 	if st, err := cli.LoadState(env); err == nil {
-		domain = st.Box.Domain
+		domain, box = st.Box.Domain, st.Warnings
 	}
 	if env.JSON {
 		type withCard struct {
@@ -457,7 +457,7 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 		out := []any{}
 		for _, p := range ps {
 			if full(p) {
-				out = append(out, withCard{p, proposal.Card(p, domain)})
+				out = append(out, withCard{p, proposal.Card(p, domain, box...)})
 			} else {
 				out = append(out, p)
 			}
@@ -476,12 +476,22 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 		if !full(p) {
 			continue
 		}
-		c := proposal.Card(p, domain)
-		fmt.Fprintf(env.W(), "     %s\n", c.Summary)
+		c := proposal.Card(p, domain, box...)
+		fmt.Fprintf(env.W(), "     %s  [%s: %s]\n", c.Summary, c.Risk, c.RiskWhy)
+		for _, l := range c.Changes {
+			fmt.Fprintf(env.W(), "     %s %s\n", l.Op, l.Text)
+		}
 		for _, i := range c.Impact {
 			fmt.Fprintf(env.W(), "     · %s\n", i)
 		}
-		fmt.Fprintf(env.W(), "     %s\n     sicherer Knopf: %s\n", c.Reversible, c.Primary)
+		for _, w := range c.Warnings {
+			fmt.Fprintf(env.W(), "     Hinweis: %s\n", w)
+		}
+		fmt.Fprintf(env.W(), "     %s\n     %s\n     sicherer Knopf: %s\n", c.Why, c.Reversible, c.Primary)
+		if c.Decider != "" {
+			fmt.Fprintln(env.W(), "    ", c.Decider)
+		}
+		fmt.Fprintf(env.W(), "     technisch: %s\n", c.Details)
 		if p.Class == "human" {
 			fmt.Fprintln(env.W(), "     nur ein Mensch kann freigeben:")
 			for _, r := range p.Reasons {
