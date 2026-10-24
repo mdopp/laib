@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.30.0](https://github.com/mdopp/laib/compare/v0.29.0...v0.30.0) (2026-10-24)
+
+
+### Features
+
+* spoken word into Audiobookshelf, radio into Music Assistant, Jellyfin twins out ([#646](https://github.com/mdopp/laib/issues/646)) ([64cbd6c](https://github.com/mdopp/laib/commit/64cbd6ca179fae3624e2cd70440fe37393df0893))
+* **template:** audiobookshelf fits the box: libraries, Audible match, series, podcasts, a key for Music Assistant ([f356ca3](https://github.com/mdopp/laib/commit/f356ca3c4c28b6f3e2f120abbf4c0785c4859c30)), closes [#646](https://github.com/mdopp/laib/issues/646)
+* **template:** media drops ServiceBay's twin libraries and, behind a guard, spoken word ([76086ca](https://github.com/mdopp/laib/commit/76086cae60c472fa3de12af757fe273d2f8efe3d)), closes [#646](https://github.com/mdopp/laib/issues/646)
+* **template:** music-assistant imports the share's radio stations and adds Audiobookshelf ([6052e98](https://github.com/mdopp/laib/commit/6052e980d708af8cc79d3a86328fb0f1c7818e21)), closes [#646](https://github.com/mdopp/laib/issues/646)
+
+
+### Bug Fixes
+
+* **beets:** a ZIP with a bare "/" entry or rooted names is no threat ([48b3823](https://github.com/mdopp/laib/commit/48b38231b6bbbbf5a806452c7d12e861c9f0d978))
+* **inbox:** a shell approve by a human waits for the lock and applies ([7d3d48d](https://github.com/mdopp/laib/commit/7d3d48d3338eb733f20e9bdabc1b2185e591ed98))
+* **stimme:** the wake-word trainer trains on the CPU by default ([c91ea64](https://github.com/mdopp/laib/commit/c91ea64a9c879efcb4f92982ec64a0fc61631e38))
+
 ## [0.29.0](https://github.com/mdopp/laib/compare/v0.28.0...v0.29.0) (2026-10-24)
 
 
