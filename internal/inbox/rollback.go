@@ -30,6 +30,13 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
 		return cli.ExitOK
 	}
+	// a shell approve waits for the run before it (env.Wait), which may carry this one too
+	for until := time.Now().Add(env.Wait); apply.LockHolder(env.Paths) != "" && time.Now().Before(until); {
+		time.Sleep(time.Second)
+	}
+	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
+		return cli.ExitOK
+	}
 	unlock, code := apply.TakeLock(env, nil, "apply")
 	if code == cli.ExitLocked {
 		fmt.Fprintln(env.W(), "freigegeben: wird mit dem nächsten Lauf angewendet")

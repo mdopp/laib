@@ -37,6 +37,10 @@ type Env struct {
 	// Ceiling is LAIB_CEILING, set by the verb door (ADR 0026): the
 	// program's call back runs no verb above it, the dial applies nothing
 	Ceiling string
+	// Wait is how long an approve by a human at the shell waits for the lock
+	// and applies, instead of leaving it to the next run; 0 for the web, MCP
+	// and the relay, which answer at once (#609)
+	Wait time.Duration
 }
 
 // Errw is the verb's error writer.
