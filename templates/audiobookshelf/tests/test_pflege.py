@@ -135,7 +135,10 @@ class FakeABS(BaseHTTPRequestHandler):
             ABS["created"].append(b)
             i = f"pod-{len(ABS['podcasts'])}"
             ABS["podcasts"][i] = {"id": i, "relPath": b["path"].split("/")[-1], "mediaType": "podcast",
-                                  "media": {"metadata": b["media"]["metadata"], "autoDownloadEpisodes": b["media"].get("autoDownloadEpisodes")}}
+                                  "media": {"metadata": b["media"]["metadata"], "autoDownloadEpisodes": b["media"].get("autoDownloadEpisodes"),
+                                            # PodcastModel.createFromRequest: what the request leaves out is ABS's default
+                                            "maxEpisodesToKeep": b["media"].get("maxEpisodesToKeep", 0),
+                                            "maxNewEpisodesToDownload": b["media"].get("maxNewEpisodesToDownload", 3)}}
             return self.reply(200, {"id": i, "media": b["media"]})
         if m := re.fullmatch(r"/api/podcasts/([^/]+)/download-episodes", self.path):
             ABS["downloads"][m.group(1)] = b
@@ -168,8 +171,9 @@ class FakeABS(BaseHTTPRequestHandler):
                 md["authorName"] = ", ".join(a["name"] for a in v)
             else:
                 md[k] = v
-        if "autoDownloadEpisodes" in b:
-            it["media"]["autoDownloadEpisodes"] = b["autoDownloadEpisodes"]
+        for k in ("autoDownloadEpisodes", "maxEpisodesToKeep", "maxNewEpisodesToDownload"):
+            if k in b:
+                it["media"][k] = b[k]
         self.reply(200, {"updated": True})
 
 
@@ -410,6 +414,7 @@ class Pflege(unittest.TestCase):
         (new,) = ABS["created"]
         self.assertEqual((new["path"], new["folderId"], new["libraryId"]), ("/podcasts/Nachtschicht Radio", "fo-p", "lib-p"))
         self.assertTrue(new["media"]["autoDownloadEpisodes"])
+        self.assertEqual((new["media"]["maxEpisodesToKeep"], new["media"]["maxNewEpisodesToDownload"]), (3, 3), "#676: the last three, from the start")
         self.assertEqual(new["media"]["metadata"]["feedUrl"], "https://podcast.example.net/nachtschicht/feed/m4a")
         self.assertEqual(new["media"]["metadata"]["author"], "Erfundene Leute", "the feed's metadata is not used")
         (dl,) = ABS["downloads"].values()
@@ -417,6 +422,28 @@ class Pflege(unittest.TestCase):
         self.assertIn("Podcasts: 2 abonniert", st["detail"])
         self.run_pflege()
         self.assertEqual((len(ABS["created"]), ABS["episode_matches"], len(ABS["feeds"])), (1, ["pod-old"], 1), "subscribed twice")
+
+    def test_every_podcast_keeps_its_last_three_episodes_unless_the_owner_set_it_otherwise(self):
+        # #676 (haus#123, the owner 2026-10-25): "immer die letzten 3 Folgen", for the podcasts there are and
+        # those Haus or the app subscribe later; no sync_podcasts.py needed. ABS's defaults (keep 0 = all, 3 new
+        # per check) become 3 and 3; a value the owner chose in ABS stays, also one he set after the care
+        pod = lambda i, keep, new: {"id": i, "relPath": i, "mediaType": "podcast", "media": {
+            "metadata": {"title": i, "feedUrl": f"https://feeds.example.org/{i}.xml"}, "autoDownloadEpisodes": True,
+            "maxEpisodesToKeep": keep, "maxNewEpisodesToDownload": new}}
+        fresh(podcasts=[pod("abs-default", 0, 3), pod("eigene", 10, 3), pod("schon", 3, 3)])
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        got = lambda i: (ABS["podcasts"][i]["media"]["maxEpisodesToKeep"], ABS["podcasts"][i]["media"]["maxNewEpisodesToDownload"])
+        self.assertEqual((got("abs-default"), got("eigene"), got("schon")), ((3, 3), (10, 3), (3, 3)))
+        self.assertEqual([i for i, _ in ABS["media"]], ["abs-default"], "a podcast already at 3 was written again")
+        self.assertIn("Podcasts: 3 abonniert, je die letzten 3 Folgen", st["detail"])
+        self.assertIn("1 mit eigener Einstellung", st["detail"])
+        ABS["podcasts"]["abs-default"]["media"]["maxEpisodesToKeep"] = 0   # the owner: this one keeps everything
+        ABS["podcasts"]["neu"] = pod("neu", 0, 3)                          # subscribed in Haus or the app since
+        self.run_pflege()
+        self.assertEqual((got("abs-default"), got("neu")), ((0, 3), (3, 3)), "the owner's choice was overwritten, or a new one missed")
+        self.run_pflege()
+        self.assertEqual(len(ABS["media"]), 2, "the care writes the same thing on every run")
 
     def test_abs_down_is_red_in_the_status(self):
         env = {"PATH": os.environ["PATH"], "ABS_URL": "http://127.0.0.1:1", "ABS_PASSWORD": ROOT, "STATE_DIR": str(self.data),

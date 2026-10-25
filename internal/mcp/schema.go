@@ -80,6 +80,8 @@ var mcpParams = map[string][]mcpParam{
 	"person_signal": {{name: "user", typ: "string", desc: "der Name in box.yml people, klein (wie der Benutzername)", required: true},
 		{name: "number", typ: "string", desc: "die Signal-Nummer mit Ländervorwahl, +49…", required: true}},
 	"person_pending": {},
+	"tell": {{name: "person", typ: "string", desc: "der Benutzername in box.yml people, klein", required: true},
+		{name: "text", typ: "string", desc: "ein kurzer deutscher Satz, höchstens 1000 Zeichen", required: true}},
 	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "every", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer, haus für die Familie)"},
 		{name: "name", typ: "string", desc: "kurz, klein, a-z 0-9 -"}, {name: "kind", typ: "string", enum: []string{"google", "abo"}, desc: "google: Googles geheime iCal-Adresse; abo: ein öffentlicher Kalender"},
 		{name: "title", typ: "string", desc: "der Name, den die Familie sieht"},

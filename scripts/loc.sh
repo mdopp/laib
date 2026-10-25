@@ -59,7 +59,10 @@ budget disk 700 disk            # laib-disk: the data RAID, SMART, thermal (#443
 budget notify 600 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
 # behind the kernel's verb door (ADR 0026, #598): the household verbs, each
 # program with its own cap; the kernel's shrank by what moved, 16,889 to 16,695
-budget haushalt 600 haushalt    # laib-haushalt: scan and net geraete, 480
+# haushalt 700: set by the owner, mdopp, 2026-10-25, on #676 ("1 a"): laib tell (one message to
+# one person through the Bote, haus#123), the first household verb ADR 0026 puts here instead of
+# the kernel; 610 lines, room for the next verb of that size
+budget haushalt 700 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676)
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
