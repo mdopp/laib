@@ -53,11 +53,22 @@ class FakeWS:
 
 
 class Prompt(unittest.TestCase):
-    def test_the_exposed_names_in_upstreams_order_areas_in_use_then_the_named_things(self):
+    def test_the_named_things_first_then_the_areas_in_use(self):
         p = names.prompt(names.fetch(FakeWS(HOUSE)))
-        # areas and floors holding something exposed, then lights/switches/media players with their aliases,
-        # then the areas with nothing exposed, then the rest (sensors) — wyoming-faster-whisper's tiers
-        self.assertEqual(p, "Wohnzimmer, Stube, Badezimmer, PV Anlage, Erdgeschoss, Sofalicht, Sofa, Couch, Bambi, Badmini, Küche, Obergeschoss, PV Leistung.")
+        # lights/switches/media players with their aliases first (Whisper knows „Küche“, not „Bambi“), then the
+        # areas and floors holding something exposed, then the areas with nothing exposed, then the rest (sensors)
+        self.assertEqual(p, "Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer, Stube, Badezimmer, PV Anlage, Erdgeschoss, Küche, Obergeschoss, PV Leistung.")
+
+    def test_a_name_late_in_the_alphabet_survives_a_full_prompt(self):
+        """the box: 50 exposed things, areas first, cut at the T of the entity ids — light.wohnzimmer_bambi lost"""
+        many = dict(HOUSE, registry=[ent(f"light.a{i:02}", area="wohnzimmer") for i in range(40)] + [ent("light.wohnzimmer_bambi", area="wohnzimmer")],
+                    states=[{"entity_id": f"light.a{i:02}", "attributes": {"friendly_name": f"Licht {i}"}} for i in range(40)]
+                    + [{"entity_id": "light.wohnzimmer_bambi", "attributes": {"friendly_name": "Bambi"}}])
+        self.assertIn("Bambi", names.prompt(names.fetch(FakeWS(many)), lambda text: len(text) // 3))
+
+    def test_the_budget_is_counted_with_whispers_tokenizer_when_it_is_there(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(names.counter(d)("abcdefgh"), 4, "no tokenizer.json: two characters a token")
 
     def test_what_the_household_did_not_expose_is_not_said(self):
         p = names.prompt(names.fetch(FakeWS(HOUSE)))

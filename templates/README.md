@@ -8,6 +8,11 @@ folder to `services/<name>/` in the state repo, renaming
 `laib template lint templates/<name>` validates a folder exactly like the
 state loader would.
 
+`news` is what each change brings the household, one German sentence per
+change, newest first (#687): a template update's decision card shows the
+lines the box does not have yet. A change to a template without a new line
+there fails CI (`scripts/drift.sh`).
+
 ## Route policy
 
 Two kinds of route, written into every `laib.yml` (#55):

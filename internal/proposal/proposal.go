@@ -42,6 +42,7 @@ type Proposal struct {
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	Changes     []Change  `json:"changes,omitempty"`     // what it changes, before → after, for the card's words (#616)
 	Lines       []string  `json:"lines,omitempty"`       // the single lines Reasons tells grouped by file (#661)
+	News        []string  `json:"news,omitempty"`        // a template update: what it brings the household, the template's news the box lacks (#687)
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 	Intent      *Intent   `json:"intent,omitempty"`      // the structured edit, computed again when the branch no longer merges (#637)
 	Recomputed  bool      `json:"recomputed,omitempty"`  // approved as computed again on the current main (#637)
@@ -55,6 +56,8 @@ type Proposal struct {
 	Batch        string    `json:"batch,omitempty"`        // the run that applied it, as the state's commit range (#609)
 	RejectReason string    `json:"rejectReason,omitempty"` // the owner's short reason for a no
 	Settled      time.Time `json:"settled,omitempty"`
+	Step         string    `json:"step,omitempty"`    // what the run that carries it does now, for the Inbox (#686)
+	Because      string    `json:"because,omitempty"` // why that run took it back, in the owner's words (#686)
 }
 
 // Anchor is what a proposal answers (#544): the diag finding it should make

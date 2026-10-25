@@ -50,5 +50,17 @@ for f in .release-please-manifest.json version.txt; do
 done
 found "release manifest" "$stale"
 
+# 7. a template change brings a new line in its news (#687): the sentence a
+# template update's card shows the household. Its tests and README are no
+# change of the template. Against main's merge base; on main itself, nothing.
+base=$(git merge-base HEAD "${DRIFT_BASE:-origin/main}" 2>/dev/null || true)
+silent=""
+for t in $( [ -n "$base" ] && git diff --name-only "$base" -- 'templates/*/*' | grep -vE '^templates/[^/]+/(tests/|README\.md$|news$)' | cut -d/ -f2 | sort -u); do
+  [ -d "templates/$t" ] || continue
+  [ "$(git diff "$base" -- "templates/$t/news" | grep -cE '^\+[^+#]')" -gt 0 ] || silent="${silent}templates/$t changed without a new line in templates/$t/news
+"
+done
+found "template news" "$(printf %s "$silent")"
+
 [ "$bad" -eq 0 ] && echo "drift: none"
 exit $bad

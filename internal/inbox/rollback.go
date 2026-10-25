@@ -58,12 +58,33 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	if err != nil {
 		return env.Fail(err)
 	}
+	// each step of the run is on its proposals, for the Inbox (#686)
+	because, prefix := "weil die Box beim Einrichten einen Fehler hatte (Näheres im Journal)", ""
+	say := func(step string, red bool) {
+		if red && prefix == "" {
+			because = "weil " + step
+		}
+		for _, p := range batch {
+			p.Step = prefix + step
+			proposal.Save(cli.InboxDir(env), p)
+		}
+	}
+	ctx = apply.WithProgress(ctx, say)
+	defer func() {
+		for _, p := range batch {
+			p.Step = ""
+			proposal.Save(cli.InboxDir(env), p)
+		}
+	}()
 	run := ""
 	for _, p := range batch {
 		run += fmt.Sprintf(", #%d", p.ID)
 		for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the run touches it, fail closed
 			if svc := st.Services[name]; svc != nil && code == cli.ExitOK {
-				code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true)
+				say("sichert "+name, false)
+				if code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true); code != cli.ExitOK {
+					because = "weil die Sicherung von " + name + " nicht ging"
+				}
 			}
 		}
 	}
@@ -74,13 +95,15 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	for _, p := range batch {
 		p.Outcome, p.Batch = "", run
 		if code != cli.ExitOK {
-			p.Outcome, p.Settled = "rolled-back", time.Now().UTC()
+			p.Outcome, p.Settled, p.Because = "rolled-back", time.Now().UTC(), because+others(batch, p)
 		}
 		proposal.Save(cli.InboxDir(env), p)
 	}
 	if code == cli.ExitOK {
 		return code
 	}
+	say("macht die Änderung rückgängig", false)
+	prefix = "macht rückgängig: "
 	for _, p := range slices.Backward(batch) { // the run's merges, newest first
 		if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
@@ -92,6 +115,20 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	}
 	apply.ApplyHeld(ctx, env, st, "", "rollback "+run)
 	return code
+}
+
+// others names the rest of a red run p was taken back with (#609, #686).
+func others(batch []*proposal.Proposal, p *proposal.Proposal) string {
+	var ids []string
+	for _, o := range batch {
+		if o != p {
+			ids = append(ids, fmt.Sprintf("#%d", o.ID))
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	return " – mit " + strings.Join(ids, ", ") + " im selben Durchgang"
 }
 
 // Rollback: `laib rollback [#<proposal> | <commit>]` (#41). By proposal
