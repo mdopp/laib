@@ -1,0 +1,9 @@
+[Unit]
+Description=Stimme: the household's names for Whisper, every 15 minutes
+
+[Timer]
+OnCalendar=*:7/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

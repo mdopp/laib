@@ -341,7 +341,7 @@ assert "systemd/llama-lease.service" not in cs, "laib-lease is still a host unit
 d = cs["quadlet/llama/llama-lease.container"]["diff"]
 open(sys.argv[2], "w").write("\n".join(l[1:] for l in d.splitlines() if l.startswith("+") and not l.startswith("+++")) + "\n")
 PY
-python3 "$WORK/own.py" "$GPU/lease.container" "$GPU/home" '["'"$GPU"'/data/llama/lease:/lease:z", "%h/.config/containers/systemd/llama/presets.json:/presets.json:ro"]' || fail "the lease's container reaches more than its folder and presets.json (ADR 0027)"
+python3 "$WORK/own.py" "$GPU/lease.container" "$GPU/home" '["'"$GPU"'/data/llama/lease:/lease:z", "'"$GPU"'/data/llama/presets:/presets:ro,z"]' || fail "the lease's container reaches more than its folder and presets.json (ADR 0027)"
 grep -qx "Image=ghcr.io/mdopp/laib-lease:latest" "$GPU/lease.container" || fail "a laib built from source renders the lease's floating tag: $(grep Image= "$GPU/lease.container")"
 grep -qx "Secret=laib.llama.llama-lease.LAIB_TOKEN,type=env,target=LAIB_TOKEN" "$GPU/lease.container" || fail "the lease's laib token is no podman secret"
 if grep -q "secret-LLAMA_LAIB_TOKEN\|secret-MODEL_API_KEY" "$GPU/lease.container"; then fail "a secret value is in the lease's unit"; fi

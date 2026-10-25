@@ -7,8 +7,9 @@ upstream: [https://github.com/advplyr/audiobookshelf, https://www.audiobookshelf
 # chapters, has its own apps. This replaces the hand-rolled
 # sync_podcasts.py and takes spoken word out of Jellyfin (docs/SERVICES.md,
 # #646). OIDC through Authelia. post-deploy: the libraries, metadata next to
-# the files, Music Assistant's account and key; abs-pflege.py on a timer:
-# the one-time Audible match, the Hörspiel series, the podcasts subscribed.
+# the files, Music Assistant's and Haus' accounts and keys; abs-pflege.py on a timer:
+# the one-time Audible match, the Hörspiel series, the podcasts subscribed,
+# each keeping its last 3 episodes (#676).
 after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: hoerbuecher
@@ -20,6 +21,9 @@ secrets:
     login: {user: root, host: hoerbuecher, note: "Audiobookshelf"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: ABS_MA_TOKEN               # minted here (#646): the API key of ABS's user musicassistant, handed back; music-assistant connects with it
+    external: true
+    optional: true
+  - name: HAUS_ABS_TOKEN             # minted here (#676, haus#123): the API key of ABS's user haus, an administrator, handed back; haus subscribes podcasts with it
     external: true
     optional: true
 oidc:

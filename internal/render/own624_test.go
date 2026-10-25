@@ -163,11 +163,11 @@ func TestTheLeaseRunsInAContainerFromTheImageLaibPins(t *testing.T) {
 	if !strings.Contains(unit, "\nImage=ghcr.io/mdopp/laib-lease@sha256:1234\n") {
 		t.Fatalf("the lease does not run the image laib pins:\n%s", unit)
 	}
-	want := []string{"/mnt/data/stacks/llama/lease:/lease:z", "%h/.config/containers/systemd/llama/presets.json:/presets.json:ro"}
+	want := []string{"/mnt/data/stacks/llama/lease:/lease:z", "/mnt/data/stacks/llama/presets:/presets:ro,z"} // not laib's config folder: SELinux (#106)
 	if m := mountsOf(t, "llama-lease", unit); !slices.Equal(m, want) {
 		t.Errorf("the lease mounts %v, want its folder and presets.json read-only", m)
 	}
-	for _, w := range []string{"Environment=LEASE_DIR=/lease", "Environment=PRESETS_FILE=/presets.json", "Environment=LAIB_MCP_URL=http://127.0.0.1:5900/mcp",
+	for _, w := range []string{"Environment=LEASE_DIR=/lease", "Environment=PRESETS_FILE=/presets/presets.json", "Environment=LAIB_MCP_URL=http://127.0.0.1:5900/mcp",
 		"Secret=laib.llama.llama-lease.LEASE_TOKEN,type=env,target=LEASE_TOKEN", "Secret=laib.llama.llama-lease.LAIB_TOKEN,type=env,target=LAIB_TOKEN"} {
 		if !strings.Contains(unit, w+"\n") {
 			t.Errorf("the lease lacks %q:\n%s", w, unit)

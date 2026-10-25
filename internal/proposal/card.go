@@ -74,6 +74,7 @@ var verbWords = map[string]string{
 	"person_invite": "Personen einladen", "person_pending": "sehen, wer eine Einladung noch nicht angenommen hat",
 	"person_signal": "die Signal-Nummer einer Person eintragen lassen", "calendar": "Kalender verbinden",
 	"zuhause": "die Adresse des Haushalts ändern lassen", "scan": "Scans starten", "note": "Notizen ins Tagebuch schreiben", "aufgabe": "Box-Aufgaben führen und abhaken",
+	"tell":   "einer Person eine Nachricht schicken",
 	"backup": "eine Sicherung machen", "backups": "die Sicherungen sehen", "updates": "nach Updates sehen",
 	"approve": "Vorschläge freigeben", "reject": "Vorschläge ablehnen", "session": "einen Zugang für eine Werkstatt-Sitzung holen",
 	"plan": "sehen, was ein Ausrollen ändern würde", "apply": "Änderungen ausrollen", "inspect": "in Dienste hineinsehen",

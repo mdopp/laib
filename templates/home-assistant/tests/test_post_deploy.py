@@ -19,9 +19,10 @@ BOTE_PW = "-ha-bote-pw-3x"
 ADMIN_SECRETS = ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
 # #591: each consumer on its own Home Assistant user, never a person's: (username, kind)
 MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HAUS_HA_TOKEN": ("haus", "admin"),
-            "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user")}
+            "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user"),
+            "STIMME_HA_TOKEN": ("stimme", "user")}   # the names Whisper hears: the entity registry, every user may list it
 PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HAUS_PASSWORD": "-ha-haus-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
-             "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d"}
+             "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d", "HA_STIMME_PASSWORD": "-ha-stimme-pw-6e"}
 HA = {}
 MA = {}
 
@@ -545,10 +546,10 @@ class PostDeploy(Hook):
         self.assertEqual(HA["core"].get("time_zone"), "Europe/Berlin")
         self.assertEqual(set(handed), set(MACHINES))
         self.assertOnItsOwnUser(handed)
-        self.assertEqual(len({handed[n] for n in handed}), 4, "one token per consumer, each revocable on its own")
+        self.assertEqual(len({handed[n] for n in handed}), 5, "one token per consumer, each revocable on its own")
         laib = HA["creds"]["laib"][1]
         self.assertFalse([n for t, n in HA["names"].items() if n[0] == laib], "a consumer's token on the administrator's own user (#591)")
-        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote"})
+        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote", "Stimme"})
         bote = HA["tokens"][handed["BOTE_HA_TOKEN"]]
         self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user", "the Bote's token must not be an administrator's")
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
@@ -614,7 +615,7 @@ class PostDeploy(Hook):
         owner, old = old_box()
         p, handed, log = self.run_hook(tokens=old)
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(set(handed), {"HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "HA_RETIRED_TOKENS"}, log)
+        self.assertEqual(set(handed), {"HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "STIMME_HA_TOKEN", "HA_RETIRED_TOKENS"}, log)
         self.assertOnItsOwnUser(handed)
         for name, tok in old.items():
             self.assertIn(tok, HA["tokens"], f"the old {name} revoked before its consumer had the new one")
@@ -666,7 +667,7 @@ class PostDeploy(Hook):
             self.assertNotIn("Haus“", log, "Laib's own users listed as strangers")
             self.assertNotIn(secret, log)
             self.assertNotIn("k-" + secret, log)
-        self.assertEqual(len(HA["users"]), users + 3, "a user deleted, or more than Laib-Prüfung, Haus and Bote-Automat added")
+        self.assertEqual(len(HA["users"]), users + 4, "a user deleted, or more than Laib-Prüfung, Haus, Bote-Automat and Stimme added")
         self.assertIn(secret, HA["tokens"])
 
     def test_no_admin_login_and_no_token_is_red_and_says_what_to_set(self):
@@ -1061,7 +1062,7 @@ class Voice(Stimme):
         unit = (HOOK.parent / "home-assistant-check.service").read_text()
         for v in ("${PERSONA_DISPLAY}", "${PERSONA_WAKEWORD}", "${PERSONA_PHRASE}", "${VOICE_VAD}"):
             self.assertIn(v, unit)
-        self.assertIn("VOICE_VAD: aggressive", (HOOK.parent / "values.example.yml").read_text())
+        self.assertIn("VOICE_VAD: default", (HOOK.parent / "values.example.yml").read_text())
 
 
 class Zuhause(Hook):

@@ -2,7 +2,8 @@
 // door (ADR 0026, #598) in its own container (ADR 0027): HTTP on
 // HAUSHALT_LISTEN (127.0.0.1:5902), each call with the door's key
 // (HAUSHALT_KEY); a proposal goes back to laib at LAIB_MCP_URL with
-// LAIB_TOKEN, the haushalt hand's.
+// LAIB_TOKEN, the haushalt hand's; laib tell reaches bote-notify at
+// BOTE_NOTIFY_URL with BOTE_NOTIFY_TOKEN, both rendered only with a Bote (#676).
 package main
 
 import (
@@ -23,6 +24,6 @@ func main() {
 	addr := cmp.Or(os.Getenv("HAUSHALT_LISTEN"), "127.0.0.1:5902")
 	laib := haushalt.MCP{URL: os.Getenv("LAIB_MCP_URL"), Token: os.Getenv("LAIB_TOKEN")}
 	log.Printf("laib-haushalt: %s, laib at %s", addr, laib.URL)
-	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib, haushalt.Bote{URL: os.Getenv("BOTE_NOTIFY_URL"), Token: os.Getenv("BOTE_NOTIFY_TOKEN")}), ReadHeaderTimeout: 5 * time.Second}
 	log.Fatal(srv.ListenAndServe())
 }

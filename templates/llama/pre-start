@@ -4,7 +4,9 @@ router reads it once, when it starts (--models-preset), so it is on disk
 before laib (re)starts llama (#512); the weights follow in post-deploy.
 And lease/voice-device.env, when it is missing: Stimme's Whisper reads it
 as a required EnvironmentFile (#557), and laib-lease writes it only on a
-mode change. The lease's own gpu default; one it wrote is kept."""
+mode change. The lease's own gpu default; one it wrote is kept. And a copy of
+presets.json for laib-lease's container, which may not read laib's config
+folder under SELinux (#106)."""
 import json, os
 
 DATA = os.environ["LAIB_DATA_DIR"]
@@ -37,6 +39,11 @@ part = os.path.join(MODELS, "presets.ini.part")
 with open(part, "w") as f:
     f.write("\n".join(lines))
 os.replace(part, os.path.join(MODELS, "presets.ini"))
+copy = os.path.join(DATA, "llama", "presets", "presets.json")
+os.makedirs(os.path.dirname(copy), exist_ok=True)
+with open(copy + ".part", "w") as f:
+    json.dump(presets, f)
+os.replace(copy + ".part", copy)
 voice = os.path.join(DATA, "llama", "lease", "voice-device.env")
 if not os.path.exists(voice):
     os.makedirs(os.path.dirname(voice), exist_ok=True)
