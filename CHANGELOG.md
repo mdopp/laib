@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.31.1](https://github.com/mdopp/laib/compare/v0.31.0...v0.31.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **audiobookshelf:** read an empty library in; the status says how many titles ([c6b3acb](https://github.com/mdopp/laib/commit/c6b3acb61c877a379319e9ecb57ec92c4ae10db9))
+* **audiobookshelf:** the care job reads an empty library in and says how many titles there are ([53bfe0a](https://github.com/mdopp/laib/commit/53bfe0a5cc16b89e1cdddb70fdf46393712eb00a))
+
 ## [0.31.0](https://github.com/mdopp/laib/compare/v0.30.0...v0.31.0) (2026-10-25)
 
 
