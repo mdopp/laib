@@ -903,7 +903,8 @@ func ScanFolder(st *state.State) (svc, status, orders string) {
 // verbs behind the verb door (ADR 0026), on 127.0.0.1 in the host's network
 // (net geraete reads its neighbour table), its token and the door's key as
 // podman secrets. Its one mount is the scan service's orders folder, at the
-// same path (the door names it), shared with the scan container.
+// same path (the door names it), shared with the scan container. With a
+// Bote, bote-notify's address and bearer for laib tell.
 func haushaltUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
 	var mounts []string
 	if _, _, orders := ScanFolder(st); orders != "" {
@@ -911,6 +912,11 @@ func haushaltUnit(st *state.State, secrets map[string]string) (string, map[strin
 	}
 	env := []string{"HAUSHALT_LISTEN", HaushaltListen, "LAIB_MCP_URL", fmt.Sprintf("http://127.0.0.1:%d/mcp", st.Box.Laib.Port)}
 	sec := []string{"LAIB_TOKEN", secretValue(secrets, HaushaltToken), "HAUSHALT_KEY", secretValue(secrets, HaushaltKey)}
+	if slices.ContainsFunc(st.ServiceNames(), func(n string) bool { return slices.Contains(st.Services[n].Contract.Provides, "bote") }) {
+		// laib tell (#676): bote-notify on the host port templates/bote declares, as laib-notify's
+		env = append(env, "BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
+		sec = append(sec, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
+	}
 	return ownUnit(st, "laib-haushalt", "# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).\n[Unit]\nDescription=Laib haushalt\nAfter=laib.service\n",
 		mounts, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }

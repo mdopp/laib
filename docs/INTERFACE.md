@@ -54,7 +54,12 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator's container (ADR 0027; humans only)
-                                     (laib scan and laib net geraete are laib-haushalt's, in its container: the verb door hands
+laib tell <person> "<text>"          one message to one person of box.yml people (#676, haus#123: a new podcast episode for its
+                                     subscriber): bote-notify sends it on the person's first reachable channel. Answers
+                                     {sent, message} in German whatever happened, exit 0 only when it went out; refused before
+                                     sending: not a person's name, an empty text, more than 1000 characters. The journal names
+                                     the person and the channel, never the text. Without a Bote on the box: sent false
+                                     (laib scan, laib net geraete and laib tell are laib-haushalt's, in its container: the verb door hands
                                      each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027)
 laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
                                      the built-in hands' new default verbs as one proposal (#575);
