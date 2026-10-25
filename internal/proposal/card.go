@@ -1,6 +1,7 @@
 package proposal
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"sort"
@@ -219,6 +220,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 
 	// --- the headline, from the change
 	switch {
+	case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
+		d.Summary = p.News[0]
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
@@ -278,8 +281,16 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	for _, r := range rules {
 		d.Changes = append(d.Changes, Line{"→", upper(word(ruleWords, r.Key)) + ": " + word(ruleWords, orUnset(r.Old)) + " → " + word(ruleWords, orUnset(r.New))})
 	}
+	if len(p.News) > 1 {
+		for _, n := range p.News {
+			d.Changes = append(d.Changes, Line{"+", n})
+		}
+	}
+	var technical []string
 	for _, v := range values {
-		if v.Op == "-" {
+		if len(p.News) > 0 { // the template's values: its news says what they bring
+			technical = append(technical, title(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
+		} else if v.Op == "-" {
 			d.Changes = append(d.Changes, Line{"−", title(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
 		} else {
 			d.Changes = append(d.Changes, Line{"→", title(v.Service) + ": " + v.Key + ": " + valueWord(v.Old) + " → " + valueWord(v.New)})
@@ -290,15 +301,31 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 			d.Impact = append(d.Impact, title(s)+" startet dafür kurz neu.")
 		}
 	}
-	// the review's human-only reasons are the visible consequences; the one
-	// that only says the rules file changed is told above in words
-	var technical []string
+	// the review's human-only reasons are the visible consequences; the
+	// technical ones as one plain sentence (#687), each in Details, the one
+	// that only says the rules file changed told above in words
+	var because []string
 	for _, r := range p.Reasons {
-		if policyChange && strings.Contains(r, "(policy.yml)") {
+		i := slices.IndexFunc(plainWords, func(w [2]string) bool {
+			return slices.ContainsFunc(strings.Split(w[0], "|"), func(m string) bool { return strings.Contains(r, m) })
+		})
+		switch {
+		case i >= 0 || policyChange && strings.Contains(r, "(policy.yml)"):
 			technical = append(technical, r)
-			continue
+			if i >= 0 && !slices.Contains(because, plainWords[i][1]) {
+				because = append(because, plainWords[i][1])
+			}
+		default:
+			d.Impact = append(d.Impact, "Achtung: "+r)
 		}
-		d.Impact = append(d.Impact, "Achtung: "+r)
+	}
+	if len(because) > 0 {
+		last, svc := len(because)-1, cmp.Or(who, "der Dienst")
+		text := strings.Join(because[:last], ", ")
+		if last > 0 {
+			text += " und "
+		}
+		d.Impact = append([]string{"Laib fragt dich, weil " + strings.ReplaceAll(text+because[last], "%s", svc) + "."}, d.Impact...)
 	}
 	for _, m := range p.Mints {
 		d.Impact = append(d.Impact, fmt.Sprintf("Achtung: %s bekommt einen eigenen Laib-Schlüssel", HandName(m, true)))
@@ -318,7 +345,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
 	case len(handOrder) == 1:
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): " + HandName(handOrder[0], false) + " darf danach wieder nur das Bisherige. Daten bleiben."
-	case len(values) > 0:
+	case len(values) > 0 && p.Kind != "template-update":
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Wert von vorher kommt zurück, Daten bleiben."
 	default:
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): die Dateien von vorher kommen zurück, Daten bleiben."
@@ -329,6 +356,13 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 
 	// --- who and why
 	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), p.Reason)
+	if p.Kind == "template-update" && who != "" { // the reason is a command (#687): what the template brings instead
+		d.Why = fmt.Sprintf("%s schlägt die neue Vorlage von %s vor", upper(actorName(p.Actor)), who)
+		if len(p.News) > 0 {
+			d.Why += ": " + strings.Join(p.News, ". ")
+		}
+		d.Why += "."
+	}
 	if p.Evidence != "" {
 		d.Why += " — gesehen: " + p.Evidence
 	}
@@ -381,10 +415,25 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	if len(technical) > 0 {
 		d.Details += "; " + strings.Join(technical, "; ")
 	}
-	if len(p.Lines) > 0 {
+	if n := len(p.Lines) - linesMax; n > 0 { // the diff has them all
+		d.Details += "; im Einzelnen: " + strings.Join(p.Lines[:linesMax], "; ") + fmt.Sprintf("; und %d weitere (im Diff)", n)
+	} else if len(p.Lines) > 0 {
 		d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
 	}
 	return d
+}
+
+// linesMax: the single lines Details lists (#687); the rest is in the diff.
+const linesMax = 12
+
+// plainWords (#687): the review's technical reasons by their marks (| between
+// them), as the end of „Laib fragt dich, weil …“; %s is the service.
+var plainWords = [][2]string{
+	{"(Host-Unit)|direkt auf der Box aus|ist ausführbar|ein Skript, das", "ein Teil direkt auf der Box läuft statt abgeschirmt im Container"},
+	{"Geheimnis von außen|das ihm nicht gehört", "%s einen Schlüssel zu einem anderen Dienst bekommt"},
+	{"Zugriff auf den Ordner|Zugriff auf einen Ordner", "%s an Ordner der Box kommt, die nicht seine sind"},
+	{"Sonderrechte|im Netz der Box|nimmt eine Einschränkung weg", "%s mehr Rechte auf der Box bekommt als üblich"},
+	{"Laib nicht einschätzen kann|die Laib nicht kennt|ohne dass Laib den Grund erkennt", "Laib einige Zeilen nicht selbst prüfen kann"},
 }
 
 // impactMax: the lines of "what it means" a card shows before „und N weitere“ (#661).

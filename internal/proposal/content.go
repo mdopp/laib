@@ -191,8 +191,11 @@ func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Propos
 			return nil, err
 		}
 	}
-	var updateWarnings []string
+	var updateWarnings, news []string
 	if e.Update != nil {
+		was, _ := os.ReadFile(filepath.Join(wt, "services", e.Update.Name, NewsFile))
+		now, _ := fs.ReadFile(e.Update.Template, NewsFile)
+		news = newsSince(was, now)
 		var err error
 		if updateWarnings, err = updateService(wt, e.Update); err != nil {
 			return nil, err
@@ -201,6 +204,11 @@ func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Propos
 	proposed, err := state.Load(wt)
 	if err != nil {
 		return nil, fmt.Errorf("the proposed state does not load:\n%w", err)
+	}
+	if hp := proposed.HousePersona(); hp != nil {
+		for i := range news {
+			news[i] = strings.ReplaceAll(news[i], "${PERSONA_DISPLAY}", hp.Display)
+		}
 	}
 	var verdict Verdict
 	if judge != nil {
@@ -220,7 +228,7 @@ func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Propos
 	if strings.TrimSpace(status) == "" || onlyBase {
 		return nil, errors.New("nothing to propose: the edit changes nothing")
 	}
-	p := &Proposal{Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes, Lines: verdict.Lines}
+	p := &Proposal{Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes, Lines: verdict.Lines, News: news}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])
@@ -434,6 +442,26 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 		warn = append(warn, fmt.Sprintf("services/%s: in %s ändern die Box und die Vorlage dieselben Zeilen. Die Vorlage gilt: prüfe im Diff, ob dabei eine Änderung des Besitzers verloren geht.", u.Name, strings.Join(conflicts, ", ")))
 	}
 	return warn, nil
+}
+
+// NewsFile is a template's news (#687): one German sentence per change for
+// the household, newest first; # starts a comment. CI wants a new line with
+// every change of a template (scripts/drift.sh).
+const NewsFile = "news"
+
+// newsSince: the entries of now that was, the box's copy, does not have.
+func newsSince(was, now []byte) []string {
+	have := strings.Split(string(was), "\n")
+	for i := range have {
+		have[i] = strings.TrimSpace(have[i])
+	}
+	var out []string
+	for _, l := range strings.Split(string(now), "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") && !slices.Contains(have, l) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func writeBase(dst, name string, b []byte) error {

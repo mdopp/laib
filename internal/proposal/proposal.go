@@ -42,6 +42,7 @@ type Proposal struct {
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	Changes     []Change  `json:"changes,omitempty"`     // what it changes, before → after, for the card's words (#616)
 	Lines       []string  `json:"lines,omitempty"`       // the single lines Reasons tells grouped by file (#661)
+	News        []string  `json:"news,omitempty"`        // a template update: what it brings the household, the template's news the box lacks (#687)
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 	Intent      *Intent   `json:"intent,omitempty"`      // the structured edit, computed again when the branch no longer merges (#637)
 	Recomputed  bool      `json:"recomputed,omitempty"`  // approved as computed again on the current main (#637)

@@ -27,7 +27,7 @@ func TestCardsArePlainGermanAndDefaultToSpaeterWhenRisky(t *testing.T) {
 			"Media", "aus dem Internet erreichbar", "mit einem Tipp", "Später"},
 		{"a patch with a hook", Proposal{ID: 10, Actor: "ops", Reason: "Hook repariert", Kind: "patch", Class: "human", Files: []string{"services/frage/post-deploy"},
 			Reasons: []string{"führt ein Skript direkt auf der Box aus (services/frage/post-deploy)"}},
-			"Frage", "Skript direkt auf der Box", "mit einem Tipp", "Später"},
+			"Frage", "direkt auf der Box", "mit einem Tipp", "Später"},
 	}
 	for _, tc := range cases {
 		c := Card(&tc.p, "dopp.home")
