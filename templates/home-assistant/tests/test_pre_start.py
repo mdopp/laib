@@ -129,6 +129,32 @@ class PreStart(unittest.TestCase):
         hook = (T / "post-deploy").read_text()
         self.assertFalse(any(w in hook for w in ("configuration.yaml", "packages/", "custom_components")), "post-deploy writes config")
 
+    def test_the_zwave_network_keys_are_the_containers_alone(self):
+        # #664: zwave-js-ui's settings.json holds the S0/S2 network keys and was 0644 on the box, with
+        # ServiceBay's copies next to it (settings.json.servicebay, .sb-bak-…). Every apply makes them 0600;
+        # the other files of the store, and a link, stay as they are
+        z = Path(self.tmp.name) / "home-assistant" / "zwave-js"
+        z.mkdir(parents=True)
+        keys = ["settings.json", "settings.json.servicebay", "settings.json.sb-bak-1780442083"]
+        for f in keys + ["nodes.json"]:
+            (z / f).write_text("{}")
+            (z / f).chmod(0o644)
+        (z / "settings.json.link").symlink_to(z / "nodes.json")
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        for f in keys:
+            self.assertEqual((z / f).stat().st_mode & 0o777, 0o600, f)
+        self.assertEqual((z / "nodes.json").stat().st_mode & 0o777, 0o644, "a file without keys was touched")
+        self.assertIn("settings.json", p.stdout)
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("0600", p.stdout, "a second run changed something")
+        # a box without Z-Wave (no store) is no error
+        for f in z.iterdir():
+            f.unlink()
+        z.rmdir()
+        self.assertEqual(self.run_hook().returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

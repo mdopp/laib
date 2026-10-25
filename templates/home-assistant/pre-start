@@ -15,7 +15,12 @@ configuration.yaml is only ever added to.
    bearer from BOTE_NOTIFY_AUTH in Home Assistant's environment.
 3. The packages include both need, in configuration.yaml; a fresh box gets
    Home Assistant's default configuration with it, so the first start has
-   both."""
+   both.
+4. The Z-Wave network keys (#664): zwave-js-ui's settings.json holds the
+   S0/S2 keys, and ServiceBay left copies of it next to it
+   (settings.json.servicebay, .sb-bak-…). Each is 0600 for the store's
+   owner, the user the zwave container runs as (its root, which is the
+   box's core); home-assistant-check names one that others can read."""
 import hashlib, io, os, re, shutil, sys, tarfile, urllib.request
 
 E = os.environ
@@ -132,4 +137,18 @@ else:
     text = text.rstrip("\n") + "\n\n# added by laib (templates/home-assistant): its packages\nhomeassistant:\n  " + INCLUDE + "\n"
 if write("configuration.yaml", text):
     print("configuration.yaml: laib's packages included")
+# 4. the Z-Wave network keys: settings.json and its copies, the store's owner's alone
+Z = os.path.join(E["LAIB_DATA_DIR"], "home-assistant", "zwave-js")
+if os.path.isdir(Z):
+    own = os.stat(Z)
+    for f in sorted(os.listdir(Z)):
+        p = os.path.join(Z, f)
+        if not (f == "settings.json" or f.startswith("settings.json.")) or os.path.islink(p) or not os.path.isfile(p):
+            continue
+        st = os.stat(p)
+        if (st.st_uid, st.st_gid) != (own.st_uid, own.st_gid):
+            os.chown(p, own.st_uid, own.st_gid)
+        if st.st_mode & 0o777 != 0o600:
+            os.chmod(p, 0o600)
+            print(f"zwave-js/{f}: 0600 (the Z-Wave network keys, #664; was {st.st_mode & 0o777:04o})")
 print("home-assistant: family login (auth_oidc via Authelia) and rest_command.mitteilung in place")

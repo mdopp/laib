@@ -327,6 +327,9 @@ if __name__ == "__main__":
     if detail:
         r["findings"] += found
         r["detail"] = (r["detail"] + " · " if r["detail"] else "") + detail
+    if open_keys := os.environ.get("ZWAVE_OPEN_KEYS", "").split():   # the unit looked on the host (#664)
+        r["findings"].append({"severity": "gelb", "detail": "Z-Wave-Schlüssel für andere lesbar: zwave-js/" + ", zwave-js/".join(open_keys),
+                              "fix": "laib apply home-assistant: pre-start macht sie 0600 (#664)"})
     z = zwave(os.environ["ZWAVE_URL"]) if os.environ.get("ZWAVE_URL") else {}
     if z:   # first, and the unit fails: laib status shows home-assistant red (#417)
         r["findings"].insert(0, z)

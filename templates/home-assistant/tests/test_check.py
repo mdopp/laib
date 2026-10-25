@@ -132,7 +132,8 @@ class Check(unittest.TestCase):
             fake = Path(home) / "podman"
             fake.write_text('#!/bin/sh\necho "ZWAVE_URL=${ZWAVE_URL-unset}"\n')
             fake.chmod(0o755)
-            run = lambda: subprocess.run(["/bin/sh", "-c", cmd.replace("%h", home).replace("/usr/bin/podman", str(fake))],
+            sh = cmd.replace("%h", home).replace("%%", "%").replace("$$", "$").replace("/usr/bin/podman", str(fake))   # as systemd hands it to sh
+            run = lambda: subprocess.run(["/bin/sh", "-c", sh],
                                          env={"PATH": "/usr/bin:/bin", "ZWAVE_URL": "http://127.0.0.1:8091"},
                                          capture_output=True, text=True).stdout.strip()
             self.assertEqual(run(), "ZWAVE_URL=unset")
@@ -140,6 +141,50 @@ class Check(unittest.TestCase):
             d.mkdir(parents=True)
             (d / "home-assistant-zwave.container").write_text("")
             self.assertEqual(run(), "ZWAVE_URL=http://127.0.0.1:8091")
+
+    def test_zwave_keys_readable_by_others_are_a_finding(self):
+        # #664: the unit looks at the store on the host (the HA container does not mount it) and hands
+        # the names of the key files others can read to the check, which names them
+        ha, _ = fake_ha(EVERYTHING)
+        d = tempfile.mkdtemp()
+        out = os.path.join(d, ".laib-status.json")
+        p = subprocess.run([sys.executable, "-"], stdin=open(SCRIPT), capture_output=True, text=True,
+                           env=dict(os.environ, HA_TOKEN="tok", HA_URL=f"http://127.0.0.1:{ha.server_port}", LAIB_STATUS_FILE=out, ZWAVE_URL="",
+                                    ZWAVE_OPEN_KEYS="settings.json settings.json.servicebay "))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        r = json.loads(Path(out).read_text())
+        f = [f for f in r["findings"] if "Z-Wave-Schlüssel" in f["detail"]]
+        self.assertEqual(len(f), 1, r)
+        self.assertIn("settings.json.servicebay", f[0]["detail"])
+        self.assertIn("laib apply home-assistant", f[0]["fix"])
+        r = self.run_check("tok", f"http://127.0.0.1:{ha.server_port}")
+        self.assertFalse([f for f in r["findings"] if "Z-Wave-Schlüssel" in f["detail"]], r)
+
+    def test_the_unit_finds_the_open_key_files_on_the_host(self):
+        import re
+        unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
+        self.assertIn("-e ZWAVE_OPEN_KEYS", unit)
+        cmd = re.search(r"^ExecStart=/bin/sh -c '(.*)'$", unit, re.M).group(1)
+        with tempfile.TemporaryDirectory() as home:
+            z = Path(home, "d", "home-assistant", "zwave-js")
+            z.mkdir(parents=True)
+            for f, mode in (("settings.json", 0o644), ("settings.json.servicebay", 0o640), ("settings.json.sb-bak-1", 0o600), ("nodes.json", 0o644)):
+                (z / f).write_text("{}")
+                (z / f).chmod(mode)
+            fake = Path(home) / "podman"
+            fake.write_text('#!/bin/sh\necho "$ZWAVE_OPEN_KEYS"\n')
+            fake.chmod(0o755)
+            # as systemd hands it to sh: %% and $$ are one character there; laib renders ${DATA_DIR}
+            sh = cmd.replace("%h", home).replace("%%", "%").replace("$$", "$").replace("${DATA_DIR}", str(Path(home, "d"))).replace("/usr/bin/podman", str(fake))
+            run = lambda: subprocess.run(["/bin/sh", "-c", sh], env={"PATH": "/usr/bin:/bin"}, capture_output=True, text=True).stdout.split()
+            self.assertEqual(sorted(run()), ["settings.json", "settings.json.servicebay"])
+            for f in z.iterdir():
+                f.chmod(0o600)
+            self.assertEqual(run(), [])
+            for f in z.iterdir():
+                f.unlink()
+            z.rmdir()
+            self.assertEqual(run(), [], "a box without the store")
 
     def test_names_each_missing_integration(self):
         srv, h = fake_ha([{"domain": "wyoming", "title": "faster-whisper"}, {"domain": "mqtt", "title": "Mosquitto"},
