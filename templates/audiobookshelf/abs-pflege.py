@@ -49,8 +49,15 @@ pflegen". The folders are decent (<Autor>/<Titel>, a Hörspiel series as
    holds under that name gets the feed and its episodes matched against
    the feed (titles without "&amp;"); a new one is created from the
    feed's own metadata, with its three newest episodes.
+7. The last three episodes (#676, haus#123, the owner 2026-10-25): every
+   podcast, subscribed here, in Haus or in the app, keeps its newest three
+   (maxEpisodesToKeep) and fetches at most three new ones a check
+   (maxNewEpisodesToDownload). The care sets a field that is at ABS's
+   default and that it never set; a value the owner chose stays, also one
+   chosen after the care set 3 (pflege/abgleich.json "behalten").
 
-Nothing here deletes or rewrites an audio file. ABS down is a red status
+Nothing here deletes or rewrites an audio file; ABS itself removes a
+podcast's oldest episode after it downloaded a new one (point 7). ABS down is a red status
 and a failed run; an item ABS refuses is tried again next run."""
 import ast, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
@@ -67,6 +74,7 @@ DISC_TRACK = re.compile(r"^(?:(?:cd|dis[ck])\s*)?(\d{1,2})-(?:(?:cd|dis[ck])\s*\
 MOJIBAKE = re.compile("[\ufffdĂÃÂ]")
 JUNK = {"unknown", "unknown title", "unbekannt"}
 STATUS, STATE = os.path.join(DATA, "laib-status.json"), os.path.join(DATA, "abgleich.json")
+KEEP, RETENTION = 3, (("maxEpisodesToKeep", 0), ("maxNewEpisodesToDownload", 3))   # #676: the owner's „letzte 3“; ABS's defaults
 
 
 def write(path, obj):
@@ -343,10 +351,26 @@ def care_books(lib, token, state):
     return detail, findings
 
 
+def keep_last(pods, token, state):
+    """#676 (haus#123): each podcast keeps its newest KEEP episodes and downloads at most KEEP new ones a check.
+    A field at ABS's default (keep 0 = all, 3 new) the care never set gets KEEP; any other value is the owner's,
+    also one he set after the care did. ABS removes the oldest episode after each automatic download.
+    The count of podcasts with a setting of their own."""
+    mine, own = state.setdefault("behalten", {}), 0
+    for p in pods:
+        media, was = p["media"], mine.setdefault(p["id"], {})
+        patch = {f: KEEP for f, default in RETENTION if media.get(f, default) == default != KEEP and f not in was}
+        if patch:
+            req("PATCH", f"/api/items/{p['id']}/media", patch, token=token)
+            media.update(patch)
+            print(f"abs-pflege: Podcast {media['metadata'].get('title')}: behält die letzten {KEEP} Folgen")
+        was.update({f: KEEP for f, _ in RETENTION if media.get(f) == KEEP})
+        own += any(media.get(f, d) != KEEP for f, d in RETENTION)
+    return own
+
+
 def care_podcasts(lib, token, state):
     want = feeds()
-    if not want:
-        return "", []
     subs = state.setdefault("podcasts", {})
     have = items(lib["id"], token)
     findings = []
@@ -367,17 +391,28 @@ def care_podcasts(lib, token, state):
             folder = (lib.get("folders") or [{}])[0]
             safe = re.sub(r'[\\/*?:"<>|]', "", name).strip() or "Podcast"
             new = req("POST", "/api/podcasts", {"path": folder["fullPath"].rstrip("/") + "/" + safe, "folderId": folder["id"], "libraryId": lib["id"],
-                                                "media": {"metadata": {**feed.get("metadata", {}), "feedUrl": url}, "autoDownloadEpisodes": True}},
+                                                "media": {"metadata": {**feed.get("metadata", {}), "feedUrl": url}, "autoDownloadEpisodes": True,
+                                                          **{f: KEEP for f, _ in RETENTION}}},
                       token=token)
             if feed.get("episodes"):
-                req("POST", f"/api/podcasts/{new['id']}/download-episodes", feed["episodes"][:3], token=token)
+                req("POST", f"/api/podcasts/{new['id']}/download-episodes", feed["episodes"][:KEEP], token=token)
             subs[url] = new["id"]
+            state.setdefault("behalten", {})[new["id"]] = {f: KEEP for f, _ in RETENTION}
             print(f"abs-pflege: Podcast {name} abonniert, die drei neuesten Folgen kommen")
         except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
             findings.append({"severity": "gelb", "detail": f"Podcasts: {name} ließ sich nicht abonnieren ({e})",
                              "fix": "läuft beim nächsten Durchlauf wieder; sonst in Audiobookshelf → Podcasts → Hinzufügen mit der Feed-Adresse"})
-    n = sum(1 for u in want.values() if u in subs)
-    return f"Podcasts: {n} abonniert, neue Folgen laden von selbst", findings
+    try:
+        own = keep_last(have, token, state)
+    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+        own = 0
+        findings.append({"severity": "gelb", "detail": f"Podcasts: „die letzten {KEEP} Folgen behalten“ ließ sich nicht setzen ({e})",
+                         "fix": "läuft beim nächsten Durchlauf wieder"})
+    n = len({p["id"] for p in have} | set(subs.values()))
+    if not n:
+        return "", findings
+    return f"Podcasts: {n} abonniert, je die letzten {KEEP} Folgen" + (f" ({own} mit eigener Einstellung)" if own else "") + \
+        ", neue Folgen laden von selbst", findings
 
 
 def main():
