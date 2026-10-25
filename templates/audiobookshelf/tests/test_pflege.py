@@ -36,7 +36,7 @@ def book(i, rel, title=None, author=None, asin=None, series="", chapters=1, dura
 def fresh(books=(), podcasts=()):
     ABS.clear()
     ABS.update(books={b["id"]: b for b in books}, podcasts={p["id"]: p for p in podcasts}, matches=[], media=[], chapters={},
-               created=[], feeds=[], downloads={}, episode_matches=[], nohit=set(), series_from_match=set(), runtimes={})
+               created=[], feeds=[], downloads={}, episode_matches=[], nohit=set(), series_from_match=set(), runtimes={}, scans=[])
 
 
 class FakeABS(BaseHTTPRequestHandler):
@@ -90,6 +90,9 @@ class FakeABS(BaseHTTPRequestHandler):
             return self.reply(200, {"user": {"accessToken": "access-1"}})
         if not self.authed():
             return self.reply(401)
+        if m := re.fullmatch(r"/api/libraries/([^/]+)/scan", self.path):
+            ABS["scans"].append(m.group(1))
+            return self.reply(200)
         if m := re.fullmatch(r"/api/items/([^/]+)/match", self.path):
             it = ABS["books"][m.group(1)]
             ABS["matches"].append((m.group(1), b))
@@ -171,7 +174,7 @@ class Pflege(unittest.TestCase):
         self.assertEqual(len(ABS["matches"]), 3, "not paced: every item at once")
         self.assertEqual({b["provider"] for _, b in ABS["matches"]}, {"audible.de"})
         self.assertTrue(all(b.get("overrideDetails") is False for _, b in ABS["matches"]), "the match may overwrite what the owner wrote")
-        self.assertIn("3 von 7 abgeglichen", st["detail"])
+        self.assertIn("7 Titel, 3 abgeglichen, 4 noch offen", st["detail"])
         self.assertIn("4 noch offen", st["detail"])
         self.run_pflege(per_run="3")
         _, st = self.run_pflege(per_run="3")
@@ -179,7 +182,23 @@ class Pflege(unittest.TestCase):
         ABS["books"]["b-0"]["media"]["metadata"].update(title="Vom Besitzer korrigiert", asin=None)   # the owner edits it in ABS
         _, st = self.run_pflege(per_run="3")
         self.assertEqual(len(ABS["matches"]), 7, "an item the match already had was matched again")
-        self.assertIn("Hörbücher: 7 abgeglichen", st["detail"])
+        self.assertIn("Hörbücher: 7 Titel, 7 abgeglichen", st["detail"])
+
+    def test_an_empty_book_library_is_scanned_and_says_so(self):
+        # 2026-10-25: the library was made but never read in; the status said „0 abgeglichen“ for hours
+        fresh()
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(ABS["scans"], ["lib-b"])
+        self.assertIn("noch nichts eingelesen", st["detail"])
+        self.assertNotIn("0 abgeglichen", st["detail"])
+        p, st = self.run_pflege()
+        self.assertEqual(ABS["scans"], ["lib-b"], "a scan was asked for again within the day")
+
+    def test_the_count_of_books_is_in_the_status(self):
+        fresh([book(f"b-{n}", f"Erfundene Autorin/Buch {n}") for n in range(3)])
+        p, st = self.run_pflege()
+        self.assertIn("3 Titel", st["detail"])
 
     def test_an_item_with_an_asin_is_left_as_it_is(self):
         fresh([book("b-1", "Erfundene Autorin/Schon gepflegt", asin="B0OWNER1"), book("b-2", "Erfundene Autorin/Neu")])
@@ -192,7 +211,7 @@ class Pflege(unittest.TestCase):
         ABS["nohit"].add("Das Unauffindbare")
         p, st = self.run_pflege()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertIn("Hörbücher: 1 abgeglichen, 1 ohne Treffer: Das Unauffindbare", st["detail"])
+        self.assertIn("Hörbücher: 2 Titel, 1 abgeglichen, 1 ohne Treffer: Das Unauffindbare", st["detail"])
         (f,) = [f for f in st["findings"] if "Das Unauffindbare" in f["detail"]]
         self.assertIn("Audiobookshelf", f["fix"])
         ABS["books"]["b-2"]["media"]["metadata"]["asin"] = "B0BYHAND1"     # matched by hand in ABS
