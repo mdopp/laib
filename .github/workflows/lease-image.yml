@@ -1,0 +1,28 @@
+# laib-lease's image (ADR 0027) on every main push that touches it: :latest
+# and :<sha>, what a build from source renders. A release builds its own
+# from the release tag and pins that digest into laib (release.yml).
+name: lease-image
+on:
+  push:
+    branches: [main]
+    paths: ["cmd/laib-lease/**", "internal/**", "go.mod", "go.sum", ".github/workflows/lease-image.yml"]   # the lease imports the kernel's packages
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: cmd/laib-lease/Containerfile
+          push: true
+          tags: ghcr.io/mdopp/laib-lease:latest,ghcr.io/mdopp/laib-lease:${{ github.sha }}

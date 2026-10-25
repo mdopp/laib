@@ -1,0 +1,28 @@
+# laib-haushalt's image (ADR 0027) on every main push that touches it: :latest
+# and :<sha>, what a build from source renders. A release builds its own
+# from the release tag and pins that digest into laib (release.yml).
+name: haushalt-image
+on:
+  push:
+    branches: [main]
+    paths: ["haushalt/**", "go.mod", "go.sum", ".github/workflows/haushalt-image.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: haushalt/Containerfile
+          push: true
+          tags: ghcr.io/mdopp/laib-haushalt:latest,ghcr.io/mdopp/laib-haushalt:${{ github.sha }}
