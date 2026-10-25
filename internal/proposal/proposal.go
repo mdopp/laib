@@ -41,6 +41,7 @@ type Proposal struct {
 	Adds        []string  `json:"adds,omitempty"`        // services the change adds
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	Changes     []Change  `json:"changes,omitempty"`     // what it changes, before → after, for the card's words (#616)
+	Lines       []string  `json:"lines,omitempty"`       // the single lines Reasons tells grouped by file (#661)
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
 	Anchor
 	// what came of it (#544), recorded by laib, never by the proposer:
@@ -238,7 +239,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge)
 		}
 	}
 	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now(),
-		Kind: "tree", Class: classOf("tree", verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Changes: verdict.Changes}
+		Kind: "tree", Class: classOf("tree", verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Changes: verdict.Changes, Lines: verdict.Lines}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		// Run trims the output, so the two status columns may be gone; the
 		// path is always the last field.
