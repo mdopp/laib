@@ -363,7 +363,8 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 		if e.IsDir() || e.Name() == "values.yml" || e.Name() == "laib.yml" || shipped[e.Name()] {
 			continue
 		}
-		if ext := filepath.Ext(e.Name()); ext == ".container" || ext == ".pod" || ext == ".volume" || ext == ".network" || ext == ".kube" || e.Name() == "post-deploy" {
+		// a unit the template dropped goes, a host unit too: the lease moved into a container (ADR 0027)
+		if ext := filepath.Ext(e.Name()); ext == ".container" || ext == ".pod" || ext == ".volume" || ext == ".network" || ext == ".kube" || ext == ".service" || ext == ".timer" || e.Name() == "post-deploy" {
 			os.Remove(filepath.Join(dst, e.Name()))
 		}
 	}

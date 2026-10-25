@@ -67,6 +67,8 @@ type ServiceStatus struct {
 	State  string            `json:"state"` // grün | gelb | rot
 	Units  map[string]string `json:"units"`
 	Detail string            `json:"detail,omitempty"`
+	// Provides are its roles: laib-lease finds the units a window stops by them (ADR 0027)
+	Provides []string `json:"provides,omitempty"`
 }
 
 // BootUnclean is set by serve after its first comparison when the box did
@@ -95,7 +97,7 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 	r.Pending = apply.Pending(env.Paths)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
-		row := ServiceStatus{Name: name, State: "grün", Units: map[string]string{}}
+		row := ServiceStatus{Name: name, State: "grün", Units: map[string]string{}, Provides: svc.Contract.Provides}
 		for _, u := range svc.UnitNames() {
 			a := sysd.Active(ctx, u)
 			row.Units[u] = a

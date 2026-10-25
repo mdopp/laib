@@ -64,6 +64,7 @@ var handWords = map[string][2]string{
 	"claude": {"Claude in der Werkstatt", ""}, "pi": {"pi", ""}, "laib": {"Laib", ""},
 	"notify": {"die Benachrichtigung", "über den Boten oder per Mail"}, "approver": {"die Freigabe über Signal", ""},
 	"werkstatt": {"die Werkstatt", ""}, "resident": {"die Bewohner", ""}, "human": {"ein Mensch", ""},
+	"haushalt": {"die Haushaltsbefehle", "Scan und Geräte im Heimnetz"}, "lease": {"die Grafikkarten-Lease", "hält Dienste an, solange ein großes Modell die Karte braucht"},
 }
 
 // verbWords: what a verb lets a hand do, as the end of "darf …".
@@ -83,6 +84,7 @@ var verbWords = map[string]string{
 	"add": "Dienste installieren", "remove": "Dienste entfernen", "propose": "Änderungen vorschlagen", "adopt": "fremde Dienste übernehmen",
 	"ignore": "fremde Dienste übergehen", "token": "Zugänge ausstellen", "secret": "Geheimnisse setzen", "disk": "Festplatten verwalten",
 	"init": "die Box neu einrichten", "serve": "die Seiten der Box betreiben", "version": "die Version sehen",
+	"pause": "Dienste eine Weile anhalten", "resume": "angehaltene Dienste wieder starten",
 	"skill": "die Fähigkeiten des Operators sehen", "net": "das Netz der Box sehen", "state": "die Einstellungen der Box lesen",
 	"repair": "Reparaturen vorschlagen", "wish": "Wünsche an die Werkstatt schicken",
 }
