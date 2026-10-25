@@ -42,6 +42,9 @@ type Proposal struct {
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	Changes     []Change  `json:"changes,omitempty"`     // what it changes, before → after, for the card's words (#616)
 	StaleReason string    `json:"staleReason,omitempty"` // why it is stale: the conflict or the validation error (#41)
+	Intent      *Intent   `json:"intent,omitempty"`      // the structured edit, computed again when the branch no longer merges (#637)
+	Recomputed  bool      `json:"recomputed,omitempty"`  // approved as computed again on the current main (#637)
+	Refiled     int       `json:"refiled,omitempty"`     // stale because the recomputed content differs; filed fresh as this one (#637)
 	Anchor
 	// what came of it (#544), recorded by laib, never by the proposer:
 	// waiting (approved, no run has applied it yet, #609) | effective |
@@ -61,6 +64,16 @@ type Anchor struct {
 	Evidence string   `json:"evidence,omitempty"`
 	Undo     string   `json:"undo,omitempty"`
 	Sources  []string `json:"sources,omitempty"`
+}
+
+// Anchored records what p answers (#544). A proposal that rests on an
+// outside source is class human: what the web says, a person checks.
+func (p *Proposal) Anchored(a Anchor) {
+	p.Anchor = a
+	if len(a.Sources) > 0 {
+		p.Class = "human"
+		p.Reasons = append(p.Reasons, "stützt sich auf eine Quelle aus dem Netz: "+strings.Join(a.Sources, ", "))
+	}
 }
 
 // Window is how long an approved proposal's finding has to go away (#544).
@@ -286,8 +299,10 @@ func Diff(ctx context.Context, repo string, p *Proposal) string {
 // reaches main (no markers, no half-merged state), the merged result is
 // validated by check (state loads, renders) before main fast-forwards to
 // it, and a proposal that fails either way is marked stale with the
-// reason — "veraltet — neu vorschlagen".
-func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by string, check func(dir string) error) error {
+// reason — "veraltet — neu vorschlagen". A branch with an intent that no
+// longer merges is computed again on the current main (#637, re): applied
+// when it is what the owner approved, filed fresh when it is not.
+func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by string, check func(dir string) error, re *Recompute) error {
 	if p.Status != "open" {
 		return fmt.Errorf("proposal %d is %s", p.ID, p.Status)
 	}
@@ -325,7 +340,38 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 		git(ctx, wt, "merge", "--abort")
 		files, _ := git(ctx, wt, "diff", "--name-only", "--diff-filter=U")
 		git(ctx, wt, "reset", "-q", "--hard")
-		return stale("Konflikt mit dem aktuellen State in " + strings.TrimSpace(strings.ReplaceAll(files+" "+out, "\n", " ")))
+		conflict := "Konflikt mit dem aktuellen State in " + strings.TrimSpace(strings.ReplaceAll(files+" "+out, "\n", " "))
+		if p.Intent == nil || re == nil {
+			return stale(conflict)
+		}
+		np, err := recompute(ctx, repo, wt, p, by, re)
+		var ic intentConflict
+		switch {
+		case errors.As(err, &ic):
+			return stale(ic.Error())
+		case err != nil:
+			return stale(conflict + "; neu berechnet: " + err.Error())
+		case np != nil:
+			// approval binds to content: what the owner saw is not what the intent makes now
+			e, _ := p.Intent.edit(re)
+			fresh, err := CreateFromEdit(ctx, repo, inbox, p.Actor, p.Reason, e, re.Judge)
+			if err != nil {
+				return stale(conflict + "; neu berechnet: " + err.Error())
+			}
+			fresh.Anchored(p.Anchor)
+			if err := Save(inbox, fresh); err != nil {
+				return err
+			}
+			p.Refiled = fresh.ID
+			stale(fmt.Sprintf("geändert seit deiner Freigabe — neu vorgeschlagen als #%d", fresh.ID))
+			return fmt.Errorf("Vorschlag #%d wurde nicht angewendet: geändert seit deiner Freigabe — neu vorgeschlagen als #%d", p.ID, fresh.ID)
+		}
+		p.Recomputed = true
+	}
+	// merged, and main is as it was: someone else did this already (#637) — no approval of nothing
+	if _, err := git(ctx, wt, "diff", "--quiet", "HEAD^1", "HEAD"); err == nil {
+		git(ctx, wt, "reset", "-q", "--hard", "main")
+		return stale("ändert auf dem aktuellen Stand nichts mehr: das steht schon so")
 	}
 	if check != nil {
 		if err := check(wt); err != nil {

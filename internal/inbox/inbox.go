@@ -104,9 +104,11 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 			if i+2 >= len(args) {
 				return env.Fail(errors.New("--grant wants <hand> <verb>"))
 			}
-			if edit.Write, err = grantEdit(env, st, args[i+1], args[i+2]); err != nil {
+			g, err := grantEdit(st, args[i+1], args[i+2])
+			if err != nil {
 				return env.Fail(err)
 			}
+			edit.Grant = append(edit.Grant, g)
 			i += 2
 		case "--add":
 			if i+1 >= len(args) {
@@ -152,7 +154,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(fmt.Errorf("Befund %q steht nicht in laib diag: nenne probe und Dienst eines Befunds, den diag jetzt zeigt", anchor.Finding))
 	}
 	var p *proposal.Proposal
-	if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Write == nil && edit.At == nil {
+	if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Grant == nil && edit.At == nil {
 		if env.MCP {
 			return env.Fail(errors.New("over MCP a proposal needs content: --patch (with the patch property), --set path:KEY=VALUE, --path file:a.b=VALUE, --add <template> or --grant <hand> <verb>"))
 		}
@@ -228,11 +230,7 @@ func Anchor(inbox string, p *proposal.Proposal, a proposal.Anchor) error {
 	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && len(a.Sources) == 0 {
 		return nil
 	}
-	p.Anchor = a
-	if len(a.Sources) > 0 {
-		p.Class = "human"
-		p.Reasons = append(p.Reasons, "stützt sich auf eine Quelle aus dem Netz: "+strings.Join(a.Sources, ", "))
-	}
+	p.Anchored(a)
 	return proposal.Save(inbox, p)
 }
 
@@ -248,14 +246,17 @@ func reasonsSuffix(p *proposal.Proposal) string {
 // of that run); the journal carries both so the human sees what was tried.
 func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 	laibEnv := &cli.Env{Paths: env.Paths, JSON: env.JSON, Actor: "laib", In: env.In, MCP: env.MCP}
-	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads); err != nil {
-		return env.Fail(err)
-	}
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
 	}
-	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy", p.ID, p.Actor, p.Class)})
+	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads, recomputeFor(env, st, p)); err != nil {
+		return env.Fail(err)
+	}
+	if st, err = cli.LoadState(env); err != nil {
+		return env.Fail(err)
+	}
+	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy%s", p.ID, p.Actor, p.Class, recomputed(p))})
 	return Carry(ctx, laibEnv)
 }
 
@@ -305,14 +306,17 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
 	}
-	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads); err != nil {
+	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
 			fmt.Fprintln(env.Errw(), "laib:", err)
 			return cli.ExitRefused
 		}
 		return env.Fail(err)
 	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s", p.ID, p.Actor)})
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s%s", p.ID, p.Actor, recomputed(p))})
+	if p.Recomputed && !env.JSON {
+		fmt.Fprintf(env.W(), "#%d neu berechnet auf dem aktuellen Stand\n", p.ID)
+	}
 	if st, err = cli.LoadState(env); err != nil {
 		return env.Fail(err)
 	}
@@ -402,7 +406,7 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 	for _, w := range p.Warnings {
 		fmt.Fprintln(env.W(), "HINWEIS:", w)
 	}
-	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads); err != nil {
+	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d add %s", p.ID, add.Name)})
@@ -502,6 +506,20 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 	return 0
 }
 
+// recomputeFor is what approve computes p again with when its branch no
+// longer merges (#637): the proposer's judge, the templates as they are now.
+func recomputeFor(env *cli.Env, st *state.State, p *proposal.Proposal) *proposal.Recompute {
+	return &proposal.Recompute{Judge: JudgeFor(st, p.Actor), Template: func(name string) (fs.FS, error) { return TemplateFS(env, name) }}
+}
+
+// recomputed is the journal's note on an approve computed again (#637).
+func recomputed(p *proposal.Proposal) string {
+	if p.Recomputed {
+		return " — neu berechnet auf dem aktuellen Stand"
+	}
+	return ""
+}
+
 // stateLoads is the check every approve runs on the merged result (#41):
 // the state loads and renders, or main does not move.
 func stateLoads(dir string) error {
@@ -562,11 +580,13 @@ func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*propo
 		return nil, err
 	}
 	var adds []string
+	var grants []proposal.Grant
 	for _, paths := range []bool{false, true} { // the verbs, then the path grants (#598)
 		miss := policy.Missing(st.Policy, paths)
 		for _, hand := range slices.Sorted(maps.Keys(miss)) {
 			if b, err := policy.Grant(text, hand, paths, miss[hand]...); err == nil {
 				text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
+				grants = append(grants, proposal.Grant{Hand: hand, Paths: paths, Items: miss[hand]})
 			}
 		}
 	}
@@ -577,7 +597,7 @@ func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*propo
 	}) {
 		return nil, nil
 	}
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Write: map[string][]byte{"policy.yml": text}}, JudgeFor(st, env.Actor))
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Grant: grants}, JudgeFor(st, env.Actor))
 	if err != nil {
 		return nil, err
 	}
@@ -587,22 +607,17 @@ func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*propo
 
 // grantEdit is `laib propose --grant <hand> <verb>` (#575): one verb added
 // to one hand's verb list, as a policy.yml line edit.
-func grantEdit(env *cli.Env, st *state.State, hand, verb string) (map[string][]byte, error) {
+func grantEdit(st *state.State, hand, verb string) (proposal.Grant, error) {
 	h, ok := st.Policy.Hands[hand]
 	switch {
 	case !policy.KnownVerbs[verb]:
-		return nil, fmt.Errorf("--grant: %q ist kein Verb von laib", verb)
+		return proposal.Grant{}, fmt.Errorf("--grant: %q ist kein Verb von laib", verb)
 	case !ok:
-		return nil, fmt.Errorf("--grant: policy.yml kennt keine Hand %q", hand)
+		return proposal.Grant{}, fmt.Errorf("--grant: policy.yml kennt keine Hand %q", hand)
 	case len(h.Verbs) == 0:
-		return nil, fmt.Errorf("--grant: %s hat keine Verbliste und darf schon jedes Verb bis zu ihrer Obergrenze", hand)
+		return proposal.Grant{}, fmt.Errorf("--grant: %s hat keine Verbliste und darf schon jedes Verb bis zu ihrer Obergrenze", hand)
 	case slices.Contains(h.Verbs, verb):
-		return nil, fmt.Errorf("--grant: %s darf %s schon", hand, verb)
+		return proposal.Grant{}, fmt.Errorf("--grant: %s darf %s schon", hand, verb)
 	}
-	text, err := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
-	if err != nil {
-		return nil, err
-	}
-	b, err := policy.Grant(text, hand, false, verb)
-	return map[string][]byte{"policy.yml": b}, err
+	return proposal.Grant{Hand: hand, Items: []string{verb}}, nil
 }

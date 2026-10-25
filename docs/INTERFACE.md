@@ -509,7 +509,18 @@ the argument (`git rev-parse --verify --end-of-options`) and reverts a
 merge commit with `-m 1`. An approve merges in a temporary worktree: a
 conflict never reaches `main`, the merged result must load and render, and
 a proposal that fails either way is `stale` with a reason („veraltet — neu
-vorschlagen“). Apply records every file it put on the box in
+vorschlagen“). A structured proposal (`--grant`, `--set`, `--path`, a
+template update) keeps its intent beside its diff (#637): when its branch
+no longer merges, approve applies the intent to the current `main` again
+and reviews the result. It is applied („neu berechnet auf dem aktuellen
+Stand“) only when class, files, tokens, services, reasons, warnings and
+the card's changes are what the owner approved, and a template update only
+from the very template files the owner saw; otherwise nothing is applied,
+it goes stale („geändert seit deiner Freigabe — neu vorgeschlagen als #N“)
+and the new content is filed fresh. When the intent itself conflicts — a
+verb the hand has by now, a value someone changed since the proposal — it
+is stale with that reason; a merge that changes nothing is stale, never an
+approval. Apply records every file it put on the box in
 `<home>/managed.json`; plan deletes — and for a unit stops and disables —
 whatever the manifest has but render no longer produces, so a removed
 service, a disabled operator or a removed llama does not keep running.

@@ -99,7 +99,7 @@ func Update(ctx context.Context, env *cli.Env, st *state.State, svcName string) 
 		return cli.ExitUsage
 	}
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "template update "+svcName,
-		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, Template: tpl}}, inbox.JudgeFor(st, env.Actor))
+		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, From: tplName, Template: tpl}}, inbox.JudgeFor(st, env.Actor))
 	if err != nil {
 		if strings.Contains(err.Error(), "nothing to propose") {
 			return cli.ExitUsage // up to date; the caller's loop skips it

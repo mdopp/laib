@@ -28,10 +28,14 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 					t.Fatalf("--grant haus %s: exit %d", verb, code)
 				}
 			}
+			var said strings.Builder
 			for _, id := range order {
-				if code := inbox.Decide(ctx, env, []string{strconv.Itoa(id)}, true); code != cli.ExitOK {
+				if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", Out: &said}, []string{strconv.Itoa(id)}, true); code != cli.ExitOK {
 					t.Fatalf("approve #%d (after #%d): exit %d", id, order[0], code)
 				}
+			}
+			if said.String() != "#"+strconv.Itoa(order[1])+" neu berechnet auf dem aktuellen Stand\n" {
+				t.Fatalf("the owner is not told: %q", said.String())
 			}
 			pol, _ := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
 			line := ""
@@ -53,19 +57,33 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 		})
 	}
 
-	// the same verb twice: the second one's intent is done already
+	// a verb that is there by now: the intent is done, by someone else
 	env, _ := testBox(t)
 	ctx := context.Background()
-	for _, who := range []string{"claude", "pi"} {
-		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "haus", "wish", "Wünsche"}); code != cli.ExitOK {
+	for i, who := range []string{"claude", "pi", "bote"} {
+		verb := []string{"wish", "diag", "wish"}[i]
+		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "haus", verb, "Haus braucht " + verb}); code != cli.ExitOK {
 			t.Fatalf("%s: exit %d", who, code)
 		}
 	}
 	inbox.Decide(ctx, env, []string{"1"}, true)
-	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: new(strings.Builder)}, []string{"2"}, true); code == cli.ExitOK {
+	inbox.Decide(ctx, env, []string{"2"}, true)
+	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: new(strings.Builder)}, []string{"3"}, true); code == cli.ExitOK {
 		t.Fatal("the same grant applied twice")
 	}
-	if p, _ := proposal.Get(cli.InboxDir(env), 2); p.Status != "stale" || !strings.Contains(p.StaleReason, "haus darf wish schon") {
+	if p, _ := proposal.Get(cli.InboxDir(env), 3); p.Status != "stale" || !strings.Contains(p.StaleReason, "haus darf wish schon") {
+		t.Fatalf("%s: %q", p.Status, p.StaleReason)
+	}
+
+	// the same line twice merges cleanly and changes nothing: no approval of nothing
+	for _, who := range []string{"claude", "pi"} {
+		inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "haus", "updates", "Haus sieht Updates"})
+	}
+	inbox.Decide(ctx, env, []string{"4"}, true)
+	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: new(strings.Builder)}, []string{"5"}, true); code == cli.ExitOK {
+		t.Fatal("an approve that changes nothing reported success")
+	}
+	if p, _ := proposal.Get(cli.InboxDir(env), 5); p.Status != "stale" || !strings.Contains(p.StaleReason, "das steht schon so") {
 		t.Fatalf("%s: %q", p.Status, p.StaleReason)
 	}
 }

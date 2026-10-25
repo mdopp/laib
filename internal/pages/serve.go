@@ -216,7 +216,10 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span>%s%s</div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), runNote(p), DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
 			}
 			for _, p := range all {
-				if p.Status == "stale" {
+				switch {
+				case p.Status == "stale" && p.Refiled != 0: // #637: the content changed since the approval
+					fmt.Fprintf(&b, "<p class=gelb>#%d nicht angewendet: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+				case p.Status == "stale":
 					fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
 				}
 			}
@@ -380,13 +383,17 @@ func decide(env *cli.Env, actor string, id int, decision string, argv []string) 
 
 // runNote says what the run did with an approved proposal (#609).
 func runNote(p *proposal.Proposal) string {
+	note := ""
+	if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
+		note = "<p class=note>neu berechnet auf dem aktuellen Stand</p>"
+	}
 	if p.Outcome == "waiting" {
-		return "<p class=gelb>freigegeben – wird mit dem nächsten Lauf angewendet</p>"
+		return note + "<p class=gelb>freigegeben – wird mit dem nächsten Lauf angewendet</p>"
 	}
 	if p.Outcome == "rolled-back" && p.Batch != "" {
-		return "<p class=rot>zurückgenommen · Lauf " + html.EscapeString(p.Batch) + "</p>"
+		return note + "<p class=rot>zurückgenommen · Lauf " + html.EscapeString(p.Batch) + "</p>"
 	}
-	return ""
+	return note
 }
 
 // DecisionForm is one Inbox button (#574): on submit it disables itself and

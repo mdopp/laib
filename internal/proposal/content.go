@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -22,14 +23,22 @@ type Edit struct {
 	Set    map[string]string // "services/x/values.yml:KEY" → value (or "!secret NAME")
 	Add    *AddService
 	Update *UpdateService        // replace a service's template files, keep values.yml and add the new keys (#14, #215)
-	Write  map[string][]byte     // path → the file's new content, written whole (laib propose --grant, #575)
+	Grant  []Grant               // verbs or path grants added to a hand's policy.yml line (laib propose --grant, #575)
 	At     map[string]*yaml.Node // "box.yml:people.mama.signal" → its value, nil removes it (state.WithPath, #598)
 }
 
 // UpdateService refreshes services/<name> from a newer template folder.
 type UpdateService struct {
 	Name     string
+	From     string // the template's name, to find it again on approve (#637)
 	Template fs.FS
+}
+
+// Grant adds verbs (or, Paths, path grants) to one hand (policy.Grant).
+type Grant struct {
+	Hand  string   `json:"hand"`
+	Paths bool     `json:"paths,omitempty"`
+	Items []string `json:"items"`
 }
 
 // Verdict is what the judge says about a change (internal/review).
@@ -86,9 +95,9 @@ type AddService struct {
 
 // CreateFromEdit applies the edit in a temporary worktree on a new branch,
 // validates the result with the state loader, lets the judge read it
-// against main, commits and records the inbox entry. The main checkout is
-// never touched, so a bad patch leaves nothing behind. The judge is
-// injected so this package stays free of render and review.
+// against main, commits and records the inbox entry with the edit's intent
+// (#637). The main checkout is never touched, so a bad patch leaves nothing
+// behind. The judge is injected so this package stays free of render and review.
 func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Edit, judge Judge) (*Proposal, error) {
 	if err := CommitDirty(ctx, repo, actor); err != nil {
 		return nil, err
@@ -112,66 +121,94 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		git(ctx, repo, "branch", "-q", "-D", branch)
 		return nil, err
 	}
+	p, err := prepare(ctx, repo, wt, e, judge)
+	if err != nil {
+		return fail(err)
+	}
+	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
+		return fail(err)
+	}
+	p.ID, p.Actor, p.Reason, p.Branch, p.Tier, p.Status, p.Created = id, actor, reason, branch, "apply", "open", now()
+	p.Intent = intentOf(repo, e)
+	git(ctx, repo, "worktree", "remove", "--force", wt)
+	return p, Save(inbox, p)
+}
+
+// prepare applies the edit in the worktree wt, checks that the result
+// loads, lets the judge read it against main (repo) and stages it: the
+// proposal as the owner sees it, without its number. Approve runs the same
+// steps again on the current main (#637).
+func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Proposal, error) {
 	if e.Patch != "" {
 		pf := filepath.Join(wt, ".laib-patch")
 		if err := os.WriteFile(pf, []byte(e.Patch), 0o600); err != nil {
-			return fail(err)
+			return nil, err
 		}
 		if out, err := git(ctx, wt, "apply", "--index", "--unidiff-zero", "--whitespace=nowarn", pf); err != nil {
-			return fail(fmt.Errorf("patch does not apply: %s", out))
+			return nil, fmt.Errorf("patch does not apply: %s", out)
 		}
 		os.Remove(pf)
 	}
-	for file, b := range e.Write {
-		if err := os.WriteFile(filepath.Join(wt, file), b, 0o644); err != nil {
-			return fail(err)
+	if len(e.Grant) > 0 {
+		path := filepath.Join(wt, "policy.yml")
+		text, err := os.ReadFile(path)
+		for _, g := range e.Grant {
+			if err == nil {
+				text, err = applyGrant(text, g)
+			}
+		}
+		if err == nil {
+			err = os.WriteFile(path, text, 0o644)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	for key, val := range e.Set {
 		file, k, ok := strings.Cut(key, ":")
 		if !ok {
-			return fail(fmt.Errorf("--set wants path:KEY=VALUE, got %q", key))
+			return nil, fmt.Errorf("--set wants path:KEY=VALUE, got %q", key)
 		}
 		if err := setValue(filepath.Join(wt, file), k, val); err != nil {
-			return fail(err)
+			return nil, err
 		}
 	}
 	for key, v := range e.At {
 		file, at, ok := strings.Cut(key, ":")
 		if !ok {
-			return fail(fmt.Errorf("--path wants file:path=VALUE, got %q", key))
+			return nil, fmt.Errorf("--path wants file:path=VALUE, got %q", key)
 		}
 		if err := setAt(filepath.Join(wt, file), at, v); err != nil {
-			return fail(err)
+			return nil, err
 		}
 	}
 	if e.Add != nil {
 		if err := addService(wt, e.Add); err != nil {
-			return fail(err)
+			return nil, err
 		}
 		if err := wireBox(wt, e.Add.Name); err != nil {
-			return fail(err)
+			return nil, err
 		}
 	}
 	var updateWarnings []string
 	if e.Update != nil {
+		var err error
 		if updateWarnings, err = updateService(wt, e.Update); err != nil {
-			return fail(err)
+			return nil, err
 		}
 	}
 	proposed, err := state.Load(wt)
 	if err != nil {
-		return fail(fmt.Errorf("the proposed state does not load:\n%w", err))
+		return nil, fmt.Errorf("the proposed state does not load:\n%w", err)
 	}
 	var verdict Verdict
 	if judge != nil {
-		verdict, err = judge(repo, wt)
-		if err != nil {
-			return fail(err)
+		if verdict, err = judge(repo, wt); err != nil {
+			return nil, err
 		}
 	}
 	if _, err := git(ctx, wt, "add", "-A"); err != nil {
-		return fail(err)
+		return nil, err
 	}
 	status, _ := git(ctx, wt, "status", "--porcelain")
 	// only the base copies (#511): the service is as the template has it, and that alone
@@ -180,21 +217,35 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		return !strings.Contains(l, "services/"+e.Update.Name+"/"+state.BaseDir+"/")
 	})
 	if strings.TrimSpace(status) == "" || onlyBase {
-		return fail(errors.New("nothing to propose: the edit changes nothing"))
+		return nil, errors.New("nothing to propose: the edit changes nothing")
 	}
-	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
-		return fail(err)
-	}
-	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(),
-		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes}
+	p := &Proposal{Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])
 		}
 	}
 	p.Warnings = slices.Concat(ownWarnings(repo, proposed.Warnings, append(servicesOf(p), p.Adds...)), updateWarnings, verdict.Ask)
-	git(ctx, repo, "worktree", "remove", "--force", wt)
-	return p, Save(inbox, p)
+	return p, nil
+}
+
+// applyGrant adds one Grant to policy.yml's text; a verb the hand has already
+// is the intent done by someone else (#637), not a second entry.
+func applyGrant(text []byte, g Grant) ([]byte, error) {
+	var pol state.Policy
+	if err := yaml.Unmarshal(text, &pol); err != nil {
+		return nil, fmt.Errorf("policy.yml: %w", err)
+	}
+	have := pol.Hands[g.Hand].Verbs
+	if g.Paths {
+		have = pol.Hands[g.Hand].Paths
+	}
+	for _, item := range g.Items {
+		if slices.Contains(have, item) {
+			return nil, intentConflict(fmt.Sprintf("%s darf %s schon", g.Hand, item))
+		}
+	}
+	return policy.Grant(text, g.Hand, g.Paths, g.Items...)
 }
 
 // ownWarnings: the state's warnings this change brings, or that name a
