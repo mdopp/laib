@@ -35,6 +35,19 @@ image; its status is `laib status audiobookshelf` / `laib diag`.
   `<Nummer> - <Titel>` (`Die drei ???/001 - …`) is a series; each child
   gets the series, its number as the sequence and the bare title, where
   the match gave no series.
+- **Tags that made a title up** (#678): a title with U+FFFD, only
+  „CD 1"/„Teil 1", the author's or series' name, or the folder's name
+  plus „CD 1" gets the folder's name (ABS's default precedence lets the
+  album tag beat the folder; the API write lands in `metadata.json`).
+  Audible is asked up to three times: then with umlauts restored
+  („Schuesse" → „Schüsse") and without the author. A series folder takes
+  the series name Audible gave most of its children. An item without a
+  hit is asked again once there is a new question.
+- **CDs in one folder** (`1-01 …`, `CD 1-01 …`) are put in disc order
+  through ABS's track API, chapters with them, once per item and file
+  count. **Copies** of a file (same size, same length) are a finding with
+  the exact moves to `aussortiert/audiobooks/…`; nothing is moved or
+  renamed by the care.
 - **Items without a hit** are in the status („Hörbücher: 140
   abgeglichen, 3 ohne Treffer: …") and as findings, until the owner
   matched them in ABS (Buch öffnen → Bearbeiten → Abgleichen).
