@@ -10,11 +10,10 @@ curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box
        --model-url http://<gpu-box>:11435/v1 --model-lease http://<gpu-box>:11435/api/model-lease
 ```
 
-A release carries `laib`, `laib-lease`, `laib-disk`, `laib-haushalt`,
-the scripts and `SHA256SUMS`; the script verifies the sums. `laib-operator`
-and `laib-notify` are images (`ghcr.io/mdopp/laib-operator`,
-`ghcr.io/mdopp/laib-notify`) whose digests the release builds into `laib`
-(ADR 0027): its apply pulls them. The repo, its releases and
+A release carries `laib`, `laib-disk`, the scripts and `SHA256SUMS`; the
+script verifies the sums. `laib-operator`, `laib-notify`, `laib-haushalt`
+and `laib-lease` are images (`ghcr.io/mdopp/laib-<program>`) whose digests
+the release builds into `laib` (ADR 0027): its apply pulls them. The repo, its releases and
 the ghcr images are public: no GitHub token is needed (a private fork or
 mirror exports `LAIB_GH_TOKEN`; never a flag, ps shows every argv, #217).
 
@@ -28,11 +27,12 @@ it, #42). Operator, Bote and Frage read `${MODEL_URL}`, `${MODEL_KEY}` and
 
 What it does, in order:
 
-1. Downloads the release binaries to `/var/opt/laib/`: `laib`,
-   `laib-lease` (the model role's sidecar) and, since #443, `laib-disk`
-   (the data RAID and the disks' health, which `laib disk` and `laib diag`
-   run), and since #598 `laib-haushalt` (the household verbs `laib scan` and `laib net
-   geraete`, which laib serves through its verb door, ADR 0026). The `/var/opt` prefix is writable on CoreOS; `/opt` is not.
+1. Downloads the release binaries to `/var/opt/laib/`: `laib` and, since
+   #443, `laib-disk` (the data RAID and the disks' health, which `laib disk`
+   and `laib diag` run). The household verbs (`laib-haushalt`, ADR 0026) and
+   the model role's sidecar (`laib-lease`) run in containers since ADR 0027;
+   a binary of theirs an older release left stays for a rollback to it. The
+   `/var/opt` prefix is writable on CoreOS; `/opt` is not.
 2. Creates `/mnt/data/laib` owned by `core`.
 3. Installs `dist/laib.service` as a **user** unit and enables linger so it
    runs without a login session.
