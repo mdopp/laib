@@ -77,11 +77,9 @@ func Validate(p state.Policy) error {
 		}
 	}
 	for name, h := range p.Hands {
-		for _, v := range h.Verbs {
-			if !KnownVerbs[v] {
-				return fmt.Errorf("policy.yml: hand %q lists unknown verb %q", name, v)
-			}
-		}
+		// a verb this laib does not know is no error: a policy.yml a newer laib
+		// wrote must load after a rollback, and a verb that is not in the verb
+		// table can never be called (`laib template lint` and verbs543 catch typos)
 		if Index(h.Ceiling) < 0 {
 			return fmt.Errorf("policy.yml: hand %q has unknown ceiling %q", name, h.Ceiling)
 		}

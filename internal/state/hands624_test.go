@@ -17,10 +17,10 @@ func TestTheHaushaltAndLeaseHandsAreBuiltInAndSupplied(t *testing.T) {
 		"haushalt": {Ceiling: "propose", Verbs: []string{"propose"}},
 		"lease":    {Ceiling: "apply", Verbs: []string{"status", "pause", "resume", "note"}},
 	}
-	for name, w := range want {
-		h, ok := defaults.Hands[name]
-		if !ok || h.Ceiling != w.Ceiling || !slices.Equal(h.Verbs, w.Verbs) {
-			t.Errorf("DefaultPolicy %s: %+v, want %+v", name, h, w)
+	for name := range want {
+		// fixed in code, never written: a rollback's older laib must load what init wrote
+		if _, ok := defaults.Hands[name]; ok {
+			t.Errorf("DefaultPolicy writes the %s hand into policy.yml", name)
 		}
 	}
 	dir := t.TempDir()
