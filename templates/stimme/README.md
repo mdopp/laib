@@ -15,6 +15,24 @@ through it (#242). Piper speaks with the house persona's voice (`PERSONA_VOICE`,
 ADR 0020). Martin, the Kokoro GPU voice of the old stack, is not in the
 Assist path; it would need a Wyoming bridge.
 
+**The household's names.** Whisper has never heard „Bambi“ as a name: „Schalte
+Bambi an“ came back as „Schaut er beim Jahn.“ `stimme-names.service` (every 15
+minutes) reads what the household exposed to Assist in Home Assistant, the
+entities' names and aliases and the areas and floors they are in, with
+`STIMME_HA_TOKEN` (home-assistant's post-deploy mints it for the non-admin HA
+user „Stimme“), and writes it comma-joined to `stimme/whisper/laib-names.txt`.
+Whisper reads that file at start as its initial prompt
+(`WYO_WHISPER_INITIAL_PROMPT_FILE`); the order and the 200-token budget are
+wyoming-faster-whisper's own (its `--hass-token` biasing, which needs an
+administrator's token and the aiohttp extra this image lacks). The unit
+rewrites the file only when the names changed and only then restarts Whisper,
+with `try-restart`: a Whisper the GPU lease stopped stays stopped and reads the
+new names when it comes back. A name not exposed to Assist (Home Assistant →
+Einstellungen → Sprachassistenten → Freigeben) is not in the prompt. Home
+Assistant away keeps the last names; a refused token fails the unit (`laib
+apply home-assistant` mints a new one). `laib look stimme --container
+systemd-stimme-whisper -- cat /config/laib-names.txt` shows what Whisper hears.
+
 **The wake word** is the house persona's phrase (Joshua: "Hey Joshua"). The
 HA Voice PE wakes on the device with microWakeWord; openWakeWord here serves
 streaming satellites only. The trainer (`stimme/trainer` in this repo, image

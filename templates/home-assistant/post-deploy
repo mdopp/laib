@@ -11,6 +11,8 @@ then names the machine that switched, not whoever onboarded HA.
   BOTE_HA_TOKEN          "Bote", no administrator: the Bote's `ha` tool, so
                          whoever chats with the Bote reaches no admin API
   MUSIC_ASSISTANT_HA_TOKEN  "Music Assistant", administrator (below)
+  STIMME_HA_TOKEN        "Stimme", no administrator: the exposed names Whisper
+                         hears (templates/stimme, stimme-names)
 
 HA mints a long-lived token only for the user of the session that asks, so
 each user has a homeassistant login with a generated password (HA_*_PASSWORD)
@@ -101,6 +103,7 @@ MACHINES = {
     "BOTE_AUTOMAT_HA_TOKEN": ("laib: bote-automat", "bote-automat", "Bote-Automat", True, "HA_BOTE_AUTOMAT_PASSWORD"),  # HA's automation config API is admin-only
     "BOTE_HA_TOKEN": ("laib: bote", "bote", "Bote", False, "HA_BOTE_PASSWORD"),  # Assist API only
     "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
+    "STIMME_HA_TOKEN": ("laib: stimme", "stimme", "Stimme", False, "HA_STIMME_PASSWORD"),  # the entity, area and floor registries: every user may list them
 }
 RETIRED = [tuple(w.split("=", 1)) for w in E.get("LAIB_SECRET_HA_RETIRED_TOKENS", "").split() if "=" in w]  # (secret, old token)
 RETIRED_AT_START = list(RETIRED)
@@ -465,9 +468,9 @@ def strangers():
 def main():
     global session
     session = next((E["LAIB_SECRET_" + n] for n in ("HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
-    for secret in ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN"):
+    for secret in ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
         machine(secret)
-    print("home-assistant: tokens for the check, Haus, the Automat and the Bote work, each on its own user")
+    print("home-assistant: tokens for the check, Haus, the Automat, the Bote and Stimme work, each on its own user")
 
 
 def frage_agent():

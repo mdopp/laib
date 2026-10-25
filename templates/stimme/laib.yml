@@ -11,7 +11,10 @@ upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/
 hostNetwork: true
 after: []
 routes: []
-secrets: []
+secrets:
+  - name: STIMME_HA_TOKEN            # minted by home-assistant's post-deploy for HA's non-admin user stimme: stimme-names reads the exposed names; without HA Whisper has no names
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/stimme/whisper
     backup: false                  # model cache
