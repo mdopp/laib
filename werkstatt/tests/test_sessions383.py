@@ -168,5 +168,13 @@ class Wiring(unittest.TestCase):
         self.assertIn("WERKSTATT_SESSIONS_EVERY", entry)
 
 
+
+class ClaudeTree(unittest.TestCase):
+    def test_the_entrypoint_gives_dev_claude_codes_tree_back(self):
+        """2026-10-25: ~/.claude/projects was root's, so haus-android and laib-608 never saved a
+        conversation and came back empty after the restart (Transcript writes are failing, EACCES)"""
+        src = (Path(__file__).resolve().parent.parent / "entrypoint.sh").read_text()
+        self.assertIn("find /home/dev/.claude -xdev ! -user dev -exec chown dev:dev {} + ||", src)
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,10 @@ set -euo pipefail
 mkdir -p /home/dev
 chown dev:dev /home/dev
 if [ -d /home/dev/.cache ]; then chown dev:dev /home/dev/.cache; fi
+# Claude Code's own tree is dev's: a ~/.claude/projects a root restore left
+# behind (2026-10-20) kept every checkout without a folder yet from saving its
+# conversation, so `claude --continue` after a restart started it empty
+if [ -d /home/dev/.claude ]; then find /home/dev/.claude -xdev ! -user dev -exec chown dev:dev {} + || echo "werkstatt: WARNING: ~/.claude is not all dev's; a checkout may not save its conversation" >&2; fi
 if [ -d /opt/werkstatt/home-seed ] && [ -z "$(ls -A /home/dev | grep -vx .cache || true)" ]; then
   su dev -c "cp -a /opt/werkstatt/home-seed/. /home/dev/"
 fi
