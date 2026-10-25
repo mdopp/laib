@@ -1,0 +1,18 @@
+# laib-lease in its container (ADR 0027): the llama template's policy
+# proxy and GPU lease (ADR 0011). It gets its lease folder, presets.json
+# read-only and two tokens (the model key, the lease hand's); it pauses
+# services through laib's MCP, never with systemctl.
+# One static binary on distroless/static, no shell. It runs as the
+# container's root, which rootless podman maps to core: it owns its lease
+# folder as the host unit did. The llama template ships the unit
+# (templates/llama/llama-lease.container); laib pins this image into it.
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-lease ./cmd/laib-lease
+FROM gcr.io/distroless/static-debian12
+COPY --from=build /laib-lease /laib-lease
+LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
+ENTRYPOINT ["/laib-lease"]

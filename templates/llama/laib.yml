@@ -16,6 +16,9 @@ routes:
     auth: one_factor
 secrets:
   - name: MODEL_API_KEY            # the model key (builtin MODEL_KEY on this box): generated on the first apply; a peer box sets the same value by hand
+  - name: LLAMA_LAIB_TOKEN         # laib-lease's token for laib (ADR 0027), minted on apply as the lease hand: status, pause, resume, note
+    external: true
+    mint: lease
 data:
   - path: ${DATA_DIR}/llama/models
     backup: false                # GGUF downloads; re-fetched by the hook, never backed up

@@ -26,12 +26,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -41,9 +41,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/boxfs"
-	"github.com/mdopp/laib/internal/journal"
 )
 
 // Preset is one model the router serves.
@@ -72,15 +70,40 @@ type Config struct {
 	// VoiceUnits are the role/container refs that read voice-device.env
 	// (voice/whisper, voice/piper); restarted when the device changes.
 	VoiceUnits []string `json:"voiceUnits"`
-	// Units resolves a role to the service that provides it and its unit
-	// names; main wires it to laib's state, tests to the real templates.
-	Units     func(role string) (service string, units []string) `json:"-"`
-	RouterURL string                                             `json:"-"`
-	LeaseDir  string                                             `json:"-"`
-	Token     string                                             `json:"-"` // bearer for POST/DELETE on the lease API (#42)
-	Renew     time.Duration                                      `json:"-"` // a holder renews within this, or loses the card
-	WarnAfter time.Duration                                      `json:"-"` // a foreign window older than this is journaled yellow
-	Paths     boxfs.Paths                                        `json:"-"` // pause markers and the journal
+	// Laib is laib serve as the lease reaches it (ADR 0027): the services
+	// and their units, pause and resume; main wires it to MCP, tests to a fake.
+	Laib      Box           `json:"-"`
+	RouterURL string        `json:"-"`
+	LeaseDir  string        `json:"-"`
+	Token     string        `json:"-"` // bearer for POST/DELETE on the lease API (#42)
+	Renew     time.Duration `json:"-"` // a holder renews within this, or loses the card
+	WarnAfter time.Duration `json:"-"` // a foreign window older than this is noted yellow
+}
+
+// Box is what the lease asks of laib (ADR 0027). It stops no unit and
+// writes no marker itself: laib's pause verb does both, for the units it
+// names, and resume brings back what the pause stopped and restarted.
+type Box interface {
+	Services(ctx context.Context) ([]Service, error) // laib status: who provides which role, with which units
+	Pause(ctx context.Context, h Hold) error
+	Resume(ctx context.Context, service string) error
+	Note(ctx context.Context, text string) error // a line in laib's journal
+}
+
+// Service is one row of laib status.
+type Service struct {
+	Name     string            `json:"name"`
+	Provides []string          `json:"provides"`
+	Units    map[string]string `json:"units"`
+}
+
+// Hold is one pause: the service, until when and why (the family reads
+// it), the units to stop and the ones to restart. A renewal names none.
+type Hold struct {
+	Service       string
+	Until         time.Time
+	Reason        string
+	Stop, Restart []string
 }
 
 // Lease is the standing lease, persisted as lease.json.
@@ -121,30 +144,20 @@ var holderRe = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 // ErrUnknownModel: neither a window nor a preset the router serves.
 var ErrUnknownModel = errors.New("unknown model")
 
-// Systemctl is the seam to `systemctl --user`; tests swap it.
-var Systemctl = func(ctx context.Context, verb string, units []string) error {
-	if len(units) == 0 {
-		return nil
-	}
-	out, err := exec.CommandContext(ctx, "systemctl", append([]string{"--user", verb}, units...)...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("systemctl %s: %s", verb, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
 // Server holds the state.
 type Server struct {
-	cfg    Config
-	mu     sync.Mutex
-	proxy  *httputil.ReverseProxy
-	client *http.Client
-	warmed sync.Map                       // preset → answered once: GET does not ask the router again
-	units  map[string][]string            // mode → resolved unit names, sorted
-	byMode map[string]map[string][]string // mode → service → its units
-	voice  []string                       // resolved voice units
-	roles  []statusFinding                // the modes' missing roles (#374)
-	human  atomic.Int64                   // Unix seconds of the last person's request (#550)
+	cfg      Config
+	mu       sync.Mutex
+	proxy    *httputil.ReverseProxy
+	client   *http.Client
+	warmed   sync.Map                       // preset → answered once: GET does not ask the router again
+	units    map[string][]string            // mode → resolved unit names, sorted
+	byMode   map[string]map[string][]string // mode → service → its units
+	voice    map[string][]string            // service → its voice units
+	roles    []statusFinding                // the modes' missing roles (#374)
+	services []Service                      // laib status, once laib answered
+	away     string                         // why laib did not answer; "" once it did (ADR 0027)
+	human    atomic.Int64                   // Unix seconds of the last person's request (#550)
 }
 
 type statusFinding struct {
@@ -166,10 +179,12 @@ func (s *Server) resolve(refs []string) (map[string][]string, []string, error) {
 		if !ok || role == "" || container == "" {
 			return nil, nil, fmt.Errorf("presets.json: %q is not role/container", ref)
 		}
-		if s.cfg.Units == nil {
-			return nil, nil, errors.New("no unit resolver")
+		service, units := "", []string(nil)
+		for _, svc := range s.services {
+			if slices.Contains(svc.Provides, role) {
+				service, units = svc.Name, slices.Sorted(maps.Keys(svc.Units))
+			}
 		}
-		service, units := s.cfg.Units(role)
 		if service == "" {
 			missing = append(missing, ref)
 			continue
@@ -209,37 +224,18 @@ func New(cfg Config) (*Server, error) {
 	if cfg.WarnAfter <= 0 {
 		cfg.WarnAfter = 20 * time.Minute
 	}
-	if cfg.Paths.Home == "" {
-		cfg.Paths = boxfs.Default()
+	if cfg.Laib == nil {
+		return nil, errors.New("no way to laib (LAIB_MCP_URL): the lease could pause nothing")
 	}
 	u, err := url.Parse(cfg.RouterURL)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, proxy: httputil.NewSingleHostReverseProxy(u), client: &http.Client{Timeout: 10 * time.Minute}, units: map[string][]string{}, byMode: map[string]map[string][]string{}}
+	s := &Server{cfg: cfg, proxy: httputil.NewSingleHostReverseProxy(u), client: &http.Client{Timeout: 10 * time.Minute}}
 	s.proxy.FlushInterval = -1 // token streams
-	fix := func(ref string) string {
-		return "einen Dienst mit der Rolle „" + strings.Split(ref, "/")[0] + "“ installieren, oder " + ref + " aus presets.json nehmen"
+	if err := s.connect(context.Background()); err != nil {
+		return nil, err
 	}
-	for _, name := range slices.Sorted(maps.Keys(cfg.Modes)) {
-		by, missing, err := s.resolve(cfg.Modes[name].Stops)
-		if err != nil {
-			return nil, fmt.Errorf("mode %s: %w", name, err)
-		}
-		for _, ref := range missing {
-			s.roles = append(s.roles, statusFinding{"gelb", fmt.Sprintf("Modus %s: %s stellt kein Dienst bereit; die Lease hält es nicht an", name, ref), fix(ref)})
-		}
-		s.byMode[name] = by
-		s.units[name] = flatten(by)
-	}
-	voice, missing, err := s.resolve(cfg.VoiceUnits)
-	if err != nil {
-		return nil, fmt.Errorf("voiceUnits: %w", err)
-	}
-	for _, ref := range missing {
-		s.roles = append(s.roles, statusFinding{"gelb", ref + " stellt kein Dienst bereit; ein Wechsel des Sprachgeräts startet es nicht neu", fix(ref)})
-	}
-	s.voice = flatten(voice)
 	if l := s.read(); l != nil && l.Holder == staleRouter {
 		s.Release(context.Background(), staleRouter) // the window a request took before #522
 	}
@@ -250,12 +246,65 @@ func New(cfg Config) (*Server, error) {
 	return s, nil
 }
 
+// connect asks laib for its services and resolves the modes against them.
+// While laib does not answer the lease serves the household and says so
+// (ADR 0027); a ref the answering laib does not have stops it, as before.
+func (s *Server) connect(ctx context.Context) error {
+	svcs, err := s.cfg.Laib.Services(ctx)
+	if err != nil {
+		s.away = err.Error()
+		return nil
+	}
+	s.services, s.away, s.roles = svcs, "", nil
+	s.units, s.byMode = map[string][]string{}, map[string]map[string][]string{}
+	fix := func(ref string) string {
+		return "einen Dienst mit der Rolle „" + strings.Split(ref, "/")[0] + "“ installieren, oder " + ref + " aus presets.json nehmen"
+	}
+	for _, name := range slices.Sorted(maps.Keys(s.cfg.Modes)) {
+		by, missing, err := s.resolve(s.cfg.Modes[name].Stops)
+		if err != nil {
+			return fmt.Errorf("mode %s: %w", name, err)
+		}
+		for _, ref := range missing {
+			s.roles = append(s.roles, statusFinding{"gelb", fmt.Sprintf("Modus %s: %s stellt kein Dienst bereit; die Lease hält es nicht an", name, ref), fix(ref)})
+		}
+		s.byMode[name] = by
+		s.units[name] = flatten(by)
+	}
+	voice, missing, err := s.resolve(s.cfg.VoiceUnits)
+	if err != nil {
+		return fmt.Errorf("voiceUnits: %w", err)
+	}
+	for _, ref := range missing {
+		s.roles = append(s.roles, statusFinding{"gelb", ref + " stellt kein Dienst bereit; ein Wechsel des Sprachgeräts startet es nicht neu", fix(ref)})
+	}
+	s.voice = voice
+	return nil
+}
+
+// reach is connect again while laib was away; an error says the lease can
+// stop nothing now.
+func (s *Server) reach(ctx context.Context) error {
+	if s.away != "" {
+		if err := s.connect(ctx); err != nil {
+			return err
+		}
+	}
+	if s.away != "" {
+		return fmt.Errorf("Laib antwortet nicht (%s): die Lease kann gerade nichts anhalten, nur der Haushalt läuft", s.away)
+	}
+	return nil
+}
+
 // writeStatus writes the status file laib status and diag read
 // (templates/llama status.file): the modes' missing roles (#374), and a
 // standing lease in yellow with its holder, window and end (#522), so a
 // mode other than the household's is never silent.
 func (s *Server) writeStatus(l *Lease) error {
 	findings := append([]statusFinding{}, s.roles...)
+	if s.away != "" {
+		findings = append(findings, statusFinding{"gelb", "Laib antwortet nicht: die Lease kann keinen Dienst anhalten, ein Fenster mit Pausen wird abgelehnt (" + s.away + ")", "systemctl --user status laib.service; die Lease fragt bei jedem Fenster neu"})
+	}
 	detail := "Haushalt: nur " + s.cfg.Household
 	if l != nil {
 		detail = "Modus " + l.Mode + " für " + l.Holder
@@ -386,50 +435,88 @@ func (s *Server) Acquire(ctx context.Context, holder, want string, ttl time.Dura
 		if alias != "" {
 			cur.Alias = alias
 		}
-		s.pause(cur)
+		for _, svc := range cur.Paused { // the pauses move with it, their units stay as they are
+			if err := s.cfg.Laib.Pause(ctx, Hold{Service: svc, Until: cur.Until, Reason: s.reason(cur)}); err != nil {
+				log.Printf("laib-lease: renewing the pause of %s: %v", svc, err)
+			}
+		}
 		return cur, s.write(cur)
 	}
-	left := Mode{}
-	leftUnits := map[string][]string{}
-	if cur != nil {
-		left = s.cfg.Modes[cur.Mode]
-		leftUnits = s.byMode[cur.Mode]
+	if m := s.cfg.Modes[mode]; len(m.Stops) > 0 || m.Voice == "cpu" || mode == Exclusive {
+		if err := s.reach(ctx); err != nil {
+			return nil, err // the card is never taken from services that keep running
+		}
 	}
-	m := s.cfg.Modes[mode]
+	holds := s.holds(mode)
+	if cur != nil {
+		s.giveBack(ctx, cur) // the holder's other window first
+	}
 	l := &Lease{Holder: holder, Mode: mode, Alias: alias, Allowed: s.allowed(mode), Since: now, Deadline: now.Add(ttl), LastRenewed: now, RenewAfter: s.renewAfter(ttl)}
 	l.Until = s.until(now, l.Deadline)
 	if mode == Exclusive { // everything stops, nothing answers
 		l.Allowed = []string{}
-		if err := s.write(l); err != nil {
-			return nil, err
-		}
-		l.Paused = s.pausedServices(s.allUnits())
-		s.pause(l)
-		Systemctl(ctx, "stop", s.exclusiveUnits())
-		l.Ready = true
-		return l, s.write(l)
 	}
 	if err := s.write(l); err != nil {
 		return nil, err
 	}
-	if len(s.units[mode]) > 0 {
-		// the units are the lease holder's now (#39): converge must not start them again
-		l.Paused = s.pausedServices(s.byMode[mode])
-		s.pause(l)
-		Systemctl(ctx, "stop", s.units[mode])
-	} else if len(leftUnits) > 0 {
-		for svc := range leftUnits {
-			apply.Resume(s.cfg.Paths, svc)
-		}
-		Systemctl(ctx, "start", flatten(leftUnits))
+	if s.cfg.Modes[mode].Voice == "cpu" {
+		s.voiceDevice("cpu") // before the voice units restart and read it
 	}
-	if m.Voice == "cpu" {
-		s.voiceDevice("cpu")
-	} else if left.Voice == "cpu" {
-		s.voiceDevice("gpu")
+	// the units are the lease holder's now (#39): laib pauses each service,
+	// so converge does not start them again, and stops what the window takes
+	for _, svc := range slices.Sorted(maps.Keys(holds)) {
+		h := holds[svc]
+		h.Until, h.Reason = l.Until, s.reason(l)
+		if err := s.cfg.Laib.Pause(ctx, h); err != nil {
+			s.giveBack(ctx, l)
+			s.clear()
+			return nil, fmt.Errorf("laib hält %s nicht an: %w; die Lease gibt die Grafikkarte nicht her", svc, err)
+		}
+		l.Paused = append(l.Paused, svc)
 	}
 	l.Ready = true
 	return l, s.write(l)
+}
+
+// holds is what a window asks laib to pause: per service the units it
+// stops, and for the voice on the CPU the voice units to restart. The
+// exclusive window stops every window's units.
+func (s *Server) holds(mode string) map[string]Hold {
+	out := map[string]Hold{}
+	by := s.byMode[mode]
+	if mode == Exclusive {
+		by = s.allUnits()
+	}
+	for svc, us := range by {
+		out[svc] = Hold{Service: svc, Stop: slices.Compact(slices.Sorted(slices.Values(us)))}
+	}
+	if s.cfg.Modes[mode].Voice == "cpu" {
+		for svc, us := range s.voice {
+			h := out[svc]
+			h.Service, h.Restart = svc, slices.Sorted(slices.Values(us))
+			out[svc] = h
+		}
+	}
+	return out
+}
+
+// giveBack is the end of a window: the voice back on the GPU first, then
+// laib resumes every service the window paused, which starts and restarts
+// their units again. A lease.json from before #624 names no pauses: what
+// its mode holds is resumed.
+func (s *Server) giveBack(ctx context.Context, l *Lease) {
+	if s.cfg.Modes[l.Mode].Voice == "cpu" {
+		s.voiceDevice("gpu")
+	}
+	paused := slices.Clone(l.Paused)
+	if len(paused) == 0 {
+		paused = slices.Sorted(maps.Keys(s.holds(l.Mode)))
+	}
+	for _, svc := range paused {
+		if err := s.cfg.Laib.Resume(ctx, svc); err != nil {
+			log.Printf("laib-lease: resume %s: %v (its pause ends at %s, then converge starts it)", svc, err, l.Until.Local().Format("15:04"))
+		}
+	}
 }
 
 // renewAfter is when a holder posts again: a third of its ttl, and at
@@ -445,18 +532,6 @@ func (s *Server) until(now, deadline time.Time) time.Time {
 		return u
 	}
 	return deadline
-}
-
-func (s *Server) pausedServices(by map[string][]string) []string {
-	return slices.Sorted(maps.Keys(by))
-}
-
-// pause writes the marker for every service whose units the lease stopped,
-// with the reason the Box page and Haus show the family.
-func (s *Server) pause(l *Lease) {
-	for _, svc := range l.Paused {
-		apply.WritePause(s.cfg.Paths, apply.Pause{Service: svc, By: "lease:" + l.Holder, Until: l.Until.UTC(), Reason: s.reason(l)})
-	}
 }
 
 // reason says in plain German who has the card and what that costs.
@@ -486,23 +561,19 @@ func (s *Server) sortedModes() []string {
 	return slices.Sorted(maps.Keys(s.cfg.Modes))
 }
 
-// exclusiveUnits is every mode's units, sorted, each once.
-func (s *Server) exclusiveUnits() []string {
-	return slices.Compact(flatten(s.units))
-}
-
-// voiceDevice writes the device file the voice units read as an EnvironmentFile.
+// voiceDevice writes the device file the voice units read as an
+// EnvironmentFile; laib restarts them (Hold.Restart, resume).
 func (s *Server) voiceDevice(dev string) {
 	env := "WHISPER_DEVICE=cuda\nTTS_DEVICE=cuda\n"
 	if dev == "cpu" {
 		env = "WHISPER_DEVICE=cpu\nTTS_DEVICE=cpu\n"
 	}
+	os.MkdirAll(s.cfg.LeaseDir, 0o755)
 	os.WriteFile(filepath.Join(s.cfg.LeaseDir, "voice-device.env"), []byte(env), 0o644)
-	Systemctl(context.Background(), "restart", s.voice)
 }
 
-// Release gives the card back: start what the mode stopped, voice to gpu,
-// drop the lease last.
+// Release gives the card back: voice to gpu, laib resumes what the window
+// paused, the lease goes last.
 func (s *Server) Release(ctx context.Context, holder string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -513,19 +584,8 @@ func (s *Server) Release(ctx context.Context, holder string) error {
 	if holder != "" && cur.Holder != holder {
 		return fmt.Errorf("lease is held by %q, not %q", cur.Holder, holder)
 	}
-	for _, svc := range cur.Paused {
-		apply.Resume(s.cfg.Paths, svc)
-	}
-	if cur.Mode == Exclusive {
-		Systemctl(ctx, "start", s.exclusiveUnits())
-	} else if m, ok := s.cfg.Modes[cur.Mode]; ok {
-		if us := s.units[cur.Mode]; len(us) > 0 {
-			Systemctl(ctx, "start", us)
-		}
-		if m.Voice == "cpu" {
-			s.voiceDevice("gpu")
-		}
-	}
+	s.reach(ctx)
+	s.giveBack(ctx, cur)
 	s.clear()
 	return nil
 }
@@ -560,8 +620,7 @@ func (s *Server) expireOnce(ctx context.Context) {
 	}
 	l.Warned = true
 	s.write(l)
-	journal.Append(s.cfg.Paths.Journal, journal.Entry{Actor: "lease", Verb: "lease", Service: "llama", Result: "gelb",
-		Detail: fmt.Sprintf("%s hält die Grafikkarte seit %d min: %s", l.Holder, int(time.Since(l.Since).Minutes()), s.reason(l))})
+	s.cfg.Laib.Note(ctx, fmt.Sprintf("%s hält die Grafikkarte seit %d min: %s", l.Holder, int(time.Since(l.Since).Minutes()), s.reason(l)))
 }
 
 // Handler serves the lease API and the policy proxy.

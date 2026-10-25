@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,19 +18,9 @@ import (
 // and says so in its status file (gelb, which mode, which role), which
 // laib status and diag read.
 func TestAnUnprovidedRoleDegradesInsteadOfStoppingTheLease(t *testing.T) {
-	var calls []string
-	Systemctl = func(_ context.Context, verb string, units []string) error {
-		calls = append(calls, verb+" "+strings.Join(units, ","))
-		return nil
-	}
 	cfg := config42(t, router42(t).URL)
-	real := cfg.Units
-	cfg.Units = func(role string) (string, []string) { // the llama template only, no Stimme
-		if role == "voice" {
-			return "", nil
-		}
-		return real(role)
-	}
+	laib := cfg.Laib.(*fakeLaib)
+	laib.services = slices.DeleteFunc(laib.services, func(s Service) bool { return s.Name == "stimme" }) // the llama template only, no Stimme
 	s, err := New(cfg)
 	if err != nil {
 		t.Fatalf("the lease must start without a voice provider: %v", err)
@@ -37,9 +28,8 @@ func TestAnUnprovidedRoleDegradesInsteadOfStoppingTheLease(t *testing.T) {
 	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(calls, "\n")
-	if !strings.Contains(joined, "stop llama-embed.service") || strings.Contains(joined, "stimme") {
-		t.Fatalf("full stops what is provided and nothing else: %v", calls)
+	if !slices.Equal(laib.calls, []string{"pause llama stop llama-embed.service"}) {
+		t.Fatalf("full stops what is provided and nothing else: %v", laib.calls)
 	}
 	var st struct {
 		Findings []struct{ Severity, Detail string }

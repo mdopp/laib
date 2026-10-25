@@ -104,6 +104,10 @@ type Pause struct {
 	By      string    `json:"by"`
 	Until   time.Time `json:"until"`
 	Reason  string    `json:"reason,omitempty"`
+	// Stop and Restart are the units the pause stopped or restarted (the
+	// GPU lease, ADR 0027); resume starts and restarts them again
+	Stop    []string `json:"stop,omitempty"`
+	Restart []string `json:"restart,omitempty"`
 }
 
 func pauseDir(paths boxfs.Paths) string { return filepath.Join(paths.Home, "paused") }

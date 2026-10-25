@@ -1,7 +1,7 @@
 # llama — the model role (ADR 0011)
 
 **Ported, not yet verified on the GPU box.** The policy proxy and the lease
-are `cmd/laib-lease` (Go, tested with a fake router: household only,
+are `cmd/laib-lease`, in its container (ADR 0027; Go, tested with a fake router: household only,
 a foreign preset refused without a lease, a named holder, 409 with the holder named, the
 catalogue marked, exclusive, release by holder). The pre-start hook
 writes the router's `presets.ini` from `presets.json` before every start
@@ -19,11 +19,11 @@ units reading `voice-device.env`, and the 1.3 s turn.
 | Pod YAML with `hostNetwork: true`, `nvidia.com/gpu` limit, GPU Quadlet fallback written by the hook | `llama.container` with `AddDevice=nvidia.com/gpu=all`; `hostNetwork: true` in laib.yml and the carve-out in `box.yml` |
 | `post-deploy.py download_model / ensure_preset_weights` | `post-deploy` hook: idempotent download of the preset files into `${DATA_DIR}/llama/models` |
 | `write_presets`, `render_presets` | `presets.json` next to the units, rendered by the `pre-start` hook into the router's models directory before the router starts (#512) |
-| `proxy_run`, `make_proxy_server`, `allowed_presets`, `canonical_mode` | `laib-lease` run by `llama-lease.service`: the policy proxy on `PORT` |
+| `proxy_run`, `make_proxy_server`, `allowed_presets`, `canonical_mode` | `laib-lease` in `llama-lease.container` (ADR 0027): the policy proxy on `PORT` |
 | `lease_acquire / lease_release / schedule_expiry`, the broker units and `gpu_lease_request.json` | the same `laib-lease`: `POST/GET/DELETE /api/model-lease` with Laib's lease contract (ADR 0011, amendment 2026-10-14); no broker, consumers speak HTTP |
 | `install_embed_unit` | `llama-embed.container` |
 | `register_http_check` against ServiceBay's API | `health:` in laib.yml |
-| `set_voice_device` (voice stack to CPU in heavy modes) | the lease itself: a window with `voice: cpu` writes `voice-device.env` and restarts the voice units |
+| `set_voice_device` (voice stack to CPU in heavy modes) | the lease itself: a window with `voice: cpu` writes `voice-device.env` in its folder, and laib's `pause --restart` restarts the voice units |
 
 Consumers: the Werkstatt's pi and
 foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
@@ -73,7 +73,18 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   carries the pause marker (`laib status`, `/ready`, the Box page) with
   the reason in German: „Grafikkarte reserviert für bote („qwen3.6-35b-a3b“):
   Sprache läuft langsamer, bis 15:30“. A window older than
-  `LEASE_WARN_AFTER` (20 min) gets one yellow journal line.
+  `LEASE_WARN_AFTER` (20 min) gets one line in laib's journal (`laib note`).
+- **In its container, through laib (ADR 0027).** `llama-lease.container`
+  runs `ghcr.io/mdopp/laib-lease` — the template names `:latest`, laib puts
+  in the digest its release built — with the lease folder and
+  `presets.json` read-only as its only mounts and the model key and
+  `LLAMA_LAIB_TOKEN` (minted for the `lease` hand: status, pause, resume,
+  note) as podman secrets. It stops no unit: it finds a role's units in
+  `laib status` and asks `laib pause <service> --until … --stop <unit>
+  --restart <unit> "<grund>"` over MCP; laib writes the marker and acts,
+  `laib resume` brings back what the pause held. While laib serve does not
+  answer the proxy serves the household, the status file says the lease
+  cannot pause anything, and a window that would stop units is refused.
 - **The presets, nothing else.** `/v1/models` through the proxy lists the
   presets, the household's first, each marked `allowed_in_mode`; the router
   also lists every GGUF file in its models dir, and those are left out. A

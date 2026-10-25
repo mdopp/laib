@@ -99,3 +99,93 @@ How the first two moves were made, where the decision left room:
   the boot job runs the Operator from this commit's image and the unit
   laib renders and shows the key unreadable inside while its folder is
   there. On the box it is still to be shown, with the box's own paths.
+
+## Implementation notes (#624, part 2: haushalt and lease)
+
+How the last two moves were made:
+
+- **laib-haushalt: a container on every box, the door over HTTP.** Laib
+  renders `quadlet/laib-haushalt/laib-haushalt.container` like the
+  Operator's (`render.HaushaltImage`, pinned by the release): the host's
+  network, so `net geraete` reads the box's neighbour table; HTTP on
+  127.0.0.1:5902. The door (`cmd/laib/door.go`) posts each call to
+  `/call` with the door's key (`LAIB_HAUSHALT_KEY`, generated into
+  `secrets.age`, a podman secret for the container), the caller's actor,
+  the verb's ceiling and what the verbs read of the box: the LAN address,
+  the scan service's name, its status file's content and its orders
+  folder. The program reads none of laib's files. What it would journal
+  comes back with the answer and the kernel writes it as the caller.
+- **The scan status comes with the call, not as a mount.** The issue
+  asked for the status file read-only; scan writes it by rename, and a
+  file bind mount keeps the old inode, so the container would read a
+  status that never changes. Mounting its folder would hand over the
+  stacks' archive. So the door reads the file as `laib status` does and
+  hands its content over; the one mount is `auftrag/`, at the same path,
+  `:z` (shared with the scan container), only while scan is installed.
+- **The way back is propose only, enforced.** `scan einrichten` calls
+  `laib_propose` over MCP with `LAIB_HAUSHALT_TOKEN`, minted on apply for
+  the new `haushalt` hand (`ceiling: propose, verbs: [propose]`). Laib
+  holds that hand to ceiling propose whatever `X-Laib-Ceiling` says
+  (`mcp.DoorHands`): its proposals are never the dial's, and the header
+  can only lower the ceiling (net geraete sends read). The proposal's
+  actor is `haushalt`; the journal line names the caller. A verb served
+  behind the door takes no MCP lock — its call back takes it, which
+  would otherwise wait for the call it is part of.
+- **The oui list is in the image.** Distroless has none; the image takes
+  Alpine's `hwdata-net` (`/usr/share/hwdata/oui.txt`), so makers stay
+  named without a mount of the host's file.
+- **laib-lease stays the llama template's unit, as a container.**
+  `llama-lease.container` names `ghcr.io/mdopp/laib-lease:latest`; laib
+  replaces that line with `render.LeaseImage`, pinned by the release, so
+  the lease moves with laib. Mounts: the lease folder (`:z`, Stimme's
+  units read `voice-device.env` from it) and `presets.json` read-only
+  (`%h/.config/containers/systemd/llama/`; a changed presets.json
+  restarts the llama units, so the file mount never goes stale). The
+  model key and `LLAMA_LAIB_TOKEN` (the template's secret, `mint: lease`)
+  are podman secrets.
+- **Pausing through laib.** The lease finds a role's units in `laib
+  status` (its rows carry `provides` now) and holds a service with `laib
+  pause <service> --until … --stop <unit> --restart <unit> "<grund>"`
+  over MCP as the `lease` hand (`ceiling: apply, verbs: [status, pause,
+  resume, note]`). `pause` gained `--stop` and `--restart` for the
+  service's own units; the marker keeps them and `resume` starts and
+  restarts them again. A renewal names no unit and touches none.
+  Of what looked host-bound: writing `voice-device.env` is the lease's own
+  folder, no host needed; stopping Whisper is `--stop`; restarting the
+  voice units on a new device is `--restart`, after the lease wrote the
+  file. The long-window warning is `laib note --kind watch`.
+- **Without laib serve.** The lease starts anyway, serves the household,
+  writes "Laib antwortet nicht" into its status file and refuses a
+  window that would stop units (the card is never taken from services
+  that keep running); it asks laib again at the next window. A renewal
+  that cannot reach laib leaves the marker to end at its renewal time.
+- **The migration.** Every box gets laib-haushalt's container with the
+  first apply after the self-update (the token is minted, the key
+  generated). The llama template's change reaches a box as a template
+  update: its apply stops and disables the host `llama-lease.service`
+  before the reload (a template update now drops a `.service` or `.timer`
+  the template no longer ships) and starts the container under the same
+  unit name. The update mints a token for the `lease` hand (apply), so
+  laib's nightly sync (the `laib` hand, propose) may not file it (#34):
+  the owner runs `laib template update llama`, a human-class proposal,
+  and approves it — one apply. Until then the host lease keeps running
+  the binary an older release installed.
+- **Release and rollback.** The release builds and attests
+  `ghcr.io/mdopp/laib-haushalt` and `ghcr.io/mdopp/laib-lease` and pins
+  their digests into laib; it carries no `laib-lease` or `laib-haushalt`
+  binary. `laib self rollback` swaps laib (and laib-disk) and converges
+  with the previous laib, which renders its own images. A laib from
+  before this change renders the template's `:latest` for the lease and
+  runs the old `laib-haushalt` binary behind its door; its policy has no
+  `lease` hand, so a lease then cannot pause anything and says so.
+- **The proof.** e2e checks laib-haushalt's rendered unit (no mount
+  without scan) and the lease's (a scratch GPU box with the llama
+  template, through `laib plan`): exactly their mounts, none above the age
+  key, `secrets.age`, the state repo or the journal, the tokens as podman
+  secrets; the door's checks run against the real program with the key
+  and token the apply handed podman. The boot job runs laib-haushalt from
+  this commit's image and the unit laib renders: `laib scan` reaches it, a
+  call without the key gets 401, and the key, `secrets.age`, the state
+  repo and the journal are not readable inside. The lease's container on
+  the GPU box, and both on the box with its own paths, are still to be
+  shown.

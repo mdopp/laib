@@ -175,6 +175,10 @@ type Verb struct {
 	Run  func(ctx context.Context, env *Env, args []string) int
 	// Flags are the flags it takes; non-nil, any other is refused (#590)
 	Flags []string
+	// Door: a program behind the verb door serves it (ADR 0026, 0027). Over
+	// MCP it takes no lock: what it changes in laib comes back as its own
+	// call, which takes it.
+	Door bool
 }
 
 // Guard is every verb's front door (#590): --help or -h shows the usage and

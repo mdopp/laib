@@ -200,6 +200,8 @@ hands:
   ops:      { ceiling: apply }  # the operator (ADR 0013)
   laib:     { ceiling: propose, verbs: [backup, diag] }  # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update; supplied when missing
   notify:   { ceiling: propose, verbs: [diag, updates, inbox, note] }  # laib-notify (#443, #441): the watchdog ping and the owner's messages; reads, journals a failed send; supplied when missing
+  haushalt: { ceiling: propose, verbs: [propose] }  # laib-haushalt's call back from behind the verb door (ADR 0026, 0027): its proposals are never the dial's; supplied when missing
+  lease:    { ceiling: apply, verbs: [status, pause, resume, note] }  # laib-lease in its container (ADR 0027): pauses and resumes what a GPU window stops, notes a long one; supplied when missing
   pi:       { ceiling: propose }
   haus:     { ceiling: apply, verbs: [status, inbox, zuhause, person_signal, …], paths: [zuhause, people.*.signal] }  # the family's pages
   claude:   { ceiling: apply, ttl: 8h }
@@ -500,7 +502,10 @@ plan (the value still differs) or the pending marker. An empty value stays
 keep `Environment=`: systemd sets it without an argv, in a 0600 file.
 Laib's own containers (ADR 0027) get theirs the same way, named
 `laib.laib-operator.laib-operator.LAIB_TOKEN` and so on; an empty one is
-left out of the unit.
+left out of the unit. `laib-haushalt`'s are `LAIB_HAUSHALT_TOKEN` (minted
+on apply for the haushalt hand) and `LAIB_HAUSHALT_KEY` (generated: the
+verb door's bearer) in `secrets.age`; the lease's laib token is the llama
+template's `LLAMA_LAIB_TOKEN`, minted for the lease hand.
 A key built from a value (`ACCOUNT_${SHARE_USER}`) can hold what podman
 refuses in a name, or a dot that would make two lines one name: such a line
 gets `laib.<service>.<hash of container and key>` instead. A secret line

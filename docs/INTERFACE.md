@@ -54,13 +54,15 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator's container (ADR 0027; humans only)
+                                     (laib scan and laib net geraete are laib-haushalt's, in its container: the verb door hands
+                                     each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027)
 laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
                                      the built-in hands' new default verbs as one proposal (#575);
                                      --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
                                      refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
 laib net geraete [--wecken]          the LAN's devices as the host sees them (#577): address, MAC, reverse-DNS name, maker from the
-                                     host's IEEE oui.txt if one is there; only the box's /24, only complete entries of /proc/net/arp.
+                                     IEEE oui.txt laib-haushalt's image carries; only the box's /24, only complete entries of /proc/net/arp.
                                      `limits` says what the list cannot see (a sleeping device, another subnet). --wecken first sends
                                      one UDP datagram to port 9 of every address of the /24 so ARP fills the table; no port is read
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
@@ -495,11 +497,16 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
-`laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
-(apply tier): a paused service is left alone by converge and shows as
+`laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
+(apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
-`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
-while a mode stands. Apply records the services whose activation it owes
+`restore` pauses the service it rewrites. `--stop` and `--restart` act on the
+service's own units after the marker is written and the marker keeps them;
+`resume` lifts it, starts what it stopped and restarts what it restarted. A
+renewal by the same hand moves the end and touches no unit. That is how the
+GPU lease, in its container (ADR 0027), as the `lease` hand, pauses every
+service whose units a window takes the card from (`llama`, `stimme`) while a
+mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies
 them even when the file diff is clean. Restart-only converge runs are

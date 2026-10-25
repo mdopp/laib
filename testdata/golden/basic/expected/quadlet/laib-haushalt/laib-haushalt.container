@@ -1,0 +1,23 @@
+# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).
+[Unit]
+Description=Laib haushalt
+After=laib.service
+
+[Container]
+Image=ghcr.io/mdopp/laib-haushalt:latest
+Network=host
+Timezone=local
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Environment="HAUSHALT_LISTEN=127.0.0.1:5902"
+Environment="LAIB_MCP_URL=http://127.0.0.1:5900/mcp"
+Secret=laib.laib-haushalt.laib-haushalt.LAIB_TOKEN,type=env,target=LAIB_TOKEN
+Secret=laib.laib-haushalt.laib-haushalt.HAUSHALT_KEY,type=env,target=HAUSHALT_KEY
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

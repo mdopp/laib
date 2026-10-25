@@ -300,6 +300,51 @@ for l in unit.splitlines():
 assert "\nReadOnly=true\n" in unit and "\nDropCapability=all\n" in unit and "\nNoNewPrivileges=true\n" in unit, unit
 PY
 if LAIB_ACTOR=ops "$BIN" operator disable >/dev/null 2>&1; then fail "ops disabled the operator"; fi
+# laib-haushalt and the llama template's laib-lease in their containers (ADR 0027, #624): each unit's mounts
+# are the set it should have, none holds the age key, secrets.age, the state repo or the journal, no line names them
+cat > "$WORK/own.py" <<'PY'
+import json, os, sys
+unit, home, want = open(sys.argv[1]).read(), sys.argv[2], json.loads(sys.argv[3])
+never = [os.path.join(h, p) for h in ("/mnt/data/laib", home) for p in ("age.key", "state/secrets.age", "state", "journal")]
+mounts = [l.split("=", 1)[1] for l in unit.splitlines() if l.split("=", 1)[0] in ("Volume", "Mount")]
+assert mounts == want, mounts
+for m in mounts:
+    src = m.split(":")[0].rstrip("/") + "/"
+    assert not any((n + "/").startswith(src) for n in never), m
+for l in unit.splitlines():
+    k = l.split("=", 1)[0]
+    assert k not in ("EnvironmentFile", "PodmanArgs", "AddCapability", "SecurityLabelDisable", "Rootfs", "UserNS"), l
+    assert k != "Environment" or not any(n in l for n in never), l
+assert "\nReadOnly=true\n" in unit and "\nDropCapability=all\n" in unit and "\nNoNewPrivileges=true\n" in unit and "\nNetwork=host\n" in unit, unit
+PY
+HHU="$LAIB_QUADLET/laib-haushalt/laib-haushalt.container"
+test -f "$HHU" || fail "laib-haushalt's container is not rendered"
+if [ -e "$LAIB_SYSTEMD/laib-haushalt.service" ]; then fail "laib-haushalt has a host unit"; fi
+python3 "$WORK/own.py" "$HHU" "$LAIB_HOME" '[]' || fail "laib-haushalt's container reaches more than it may (ADR 0027): without scan it mounts nothing"
+grep -q "^laib_haushalt_" "$WORK/podsec/laib.laib-haushalt.laib-haushalt.LAIB_TOKEN" || fail "laib-haushalt's token is no podman secret of the haushalt hand"
+[ -s "$WORK/podsec/laib.laib-haushalt.laib-haushalt.HAUSHALT_KEY" ] || fail "the door's key is no podman secret"
+if grep -q "laib_haushalt_" "$HHU"; then fail "the haushalt token is in the unit itself"; fi
+grep -q "restart laib-haushalt.service" "$SYSTEMCTL_LOG" || fail "laib-haushalt's container not started"
+# the lease, as a GPU box with the llama template renders it: a scratch box, laib plan shows the unit
+GPU="$WORK/gpu"; mkdir -p "$GPU/home"
+( export LAIB_HOME="$GPU/home" LAIB_QUADLET="$GPU/q" LAIB_SYSTEMD="$GPU/s" SYSTEMCTL_LOG="$GPU/systemctl.log"
+  LAIB_ACTOR=human:e2e "$BIN" init --domain gpu.home --lan-ip 10.0.0.3 --data-dir "$GPU/data" --gpu >/dev/null
+  mkdir -p "$LAIB_HOME/state/services/llama" && find "$ROOT/templates/llama" -maxdepth 1 -type f -exec cp {} "$LAIB_HOME/state/services/llama/" \;
+  cp "$ROOT/templates/llama/values.example.yml" "$LAIB_HOME/state/services/llama/values.yml"
+  sed -i 's/^roles:.*/roles: {model: llama, sso: llama}/' "$LAIB_HOME/state/box.yml"
+  for s in MODEL_API_KEY LLAMA_LAIB_TOKEN; do echo "secret-$s" | LAIB_ACTOR=human:e2e "$BIN" secret set "$s" >/dev/null; done
+  LAIB_ACTOR=human:e2e "$BIN" plan llama --json ) > "$GPU/plan.json" || fail "the GPU box's plan: $(cat "$GPU/plan.json")"
+python3 - "$GPU/plan.json" "$GPU/lease.container" <<'PY' || fail "the lease's unit is not in the GPU box's plan"
+import json, sys
+cs = {c["path"]: c for c in json.load(open(sys.argv[1]))["changes"]}
+assert "systemd/llama-lease.service" not in cs, "laib-lease is still a host unit"
+d = cs["quadlet/llama/llama-lease.container"]["diff"]
+open(sys.argv[2], "w").write("\n".join(l[1:] for l in d.splitlines() if l.startswith("+") and not l.startswith("+++")) + "\n")
+PY
+python3 "$WORK/own.py" "$GPU/lease.container" "$GPU/home" '["'"$GPU"'/data/llama/lease:/lease:z", "%h/.config/containers/systemd/llama/presets.json:/presets.json:ro"]' || fail "the lease's container reaches more than its folder and presets.json (ADR 0027)"
+grep -qx "Image=ghcr.io/mdopp/laib-lease:latest" "$GPU/lease.container" || fail "a laib built from source renders the lease's floating tag: $(grep Image= "$GPU/lease.container")"
+grep -qx "Secret=laib.llama.llama-lease.LAIB_TOKEN,type=env,target=LAIB_TOKEN" "$GPU/lease.container" || fail "the lease's laib token is no podman secret"
+if grep -q "secret-LLAMA_LAIB_TOKEN\|secret-MODEL_API_KEY" "$GPU/lease.container"; then fail "a secret value is in the lease's unit"; fi
 
 # --- 11. the bote and frage hooks render their configs from values and secrets
 HOOKDIR="$WORK/hooks"; mkdir -p "$HOOKDIR"
@@ -637,16 +682,26 @@ j 'assert any(e["verb"]=="wish" and "bleibt in wishes/" in e.get("detail","") fo
 # the Operator applies only its own proposal, inside the envelope (#286): a bare apply by ops is refused
 rc=0; LAIB_ACTOR=ops "$BIN" apply whoami >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "ops applied without a proposal (rc $rc)"
 
-# the verb door (ADR 0026, #598): laib scan is laib-haushalt's, run by the
-# kernel with the actor; einrichten calls laib back for its proposal, and the
-# kernel's judge answers it (scan wants paperless and file-share, which this
-# box has not), through the program to the caller
-export LAIB_HAUSHALT="${LAIB_HAUSHALT:-$ROOT/laib-haushalt}"
-rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan status 2>&1)" || rc=$?; [ "$rc" = 3 ] && grep -q "nicht eingerichtet" <<<"$OUT" || fail "laib scan through the door (rc $rc): $OUT"
+# the verb door (ADR 0026, 0027, #598, #624): laib scan is laib-haushalt's.
+# On the box it runs in its container; here its program, with the key and
+# the token the apply handed podman, on its own port, and a laib serve for
+# its call back. einrichten calls laib back for its proposal and the
+# kernel's judge answers it (scan wants paperless and file-share, which
+# this box has not), through the program to the caller
+HHSEC="$WORK/podsec/laib.laib-haushalt.laib-haushalt"
+LAIB_LISTEN=127.0.0.1:5978 "$BIN" serve >/dev/null 2>&1 & echo $! > "$WORK/hhserve.pid"
+HAUSHALT_LISTEN=127.0.0.1:5979 HAUSHALT_KEY="$(cat "$HHSEC.HAUSHALT_KEY")" LAIB_MCP_URL=http://127.0.0.1:5978/mcp LAIB_TOKEN="$(cat "$HHSEC.LAIB_TOKEN")" \
+  "${LAIB_HAUSHALT:-$ROOT/laib-haushalt}" 2>"$WORK/haushalt.log" & echo $! > "$WORK/haushalt.pid"
+export LAIB_HAUSHALT_URL=http://127.0.0.1:5979
+for _ in $(seq 1 50); do curl -fsS http://127.0.0.1:5979/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:5978/ready >/dev/null 2>&1 && break; sleep 0.2; done
+rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan status 2>&1)" || rc=$?; [ "$rc" = 3 ] && grep -q "nicht eingerichtet" <<<"$OUT" || fail "laib scan through the door (rc $rc): $OUT $(cat "$WORK/haushalt.log")"
 grep -q "laib scan \[propose\]" <<<"$("$BIN" scan --help)" || fail "laib scan --help is not the kernel's"
 rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan einrichten --geraet "airscan:e0:Beispiel" --json 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -q 'after names "paperless"' <<<"$OUT" || fail "laib scan einrichten did not reach the kernel's judge through the door (rc $rc): $OUT"
 rc=0; LAIB_ACTOR=ops LAIB_CEILING=propose "$BIN" approve 1 >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "a call back from behind the door went above propose (rc $rc)"
+# only the door gets in: a call without its key is refused by the program
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"argv":["scan","start"]}' http://127.0.0.1:5979/call)" = 401 ] || fail "laib-haushalt takes a call without the door's key"
+kill "$(cat "$WORK/haushalt.pid")" "$(cat "$WORK/hhserve.pid")"; rm "$WORK/haushalt.pid" "$WORK/hhserve.pid"
 
 # laib-notify is the box's, like its timer (#633): an apply scoped to one
 # service that turns the notifier on writes the container the timer starts,

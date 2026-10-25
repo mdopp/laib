@@ -20,7 +20,7 @@ import (
 // decides nothing; a resident's read token may not order a scan.
 func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 	env, dataDir := testBox(t)
-	withHaushalt(t) // served behind the verb door since #598
+	withHaushalt(t, env) // served behind the verb door since #598
 	call := func(hand string, args map[string]any) (string, int) {
 		st, err := cli.LoadState(env)
 		if err != nil {

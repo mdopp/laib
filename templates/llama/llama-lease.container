@@ -1,0 +1,39 @@
+# laib-lease in its container (ADR 0027): the policy proxy in front of the
+# router and the GPU lease (ADR 0011). It stops nothing itself: it pauses
+# the services a window takes the card from through laib's pause verb over
+# MCP, as the lease hand (its token is LLAMA_LAIB_TOKEN), and writes only
+# its lease folder (lease.json, laib-status.json, voice-device.env).
+# presets.json comes read-only. laib replaces the floating tag below with
+# the image its release built (render.LeaseImage), so the lease moves with
+# laib: the self-update brings it, laib self rollback takes it back.
+[Unit]
+Description=llama policy proxy and GPU lease (laib role: model)
+After=llama.service laib.service
+Wants=llama.service
+
+[Container]
+Image=ghcr.io/mdopp/laib-lease:latest
+Network=host
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Volume=${DATA_DIR}/llama/lease:/lease:z
+Volume=%h/.config/containers/systemd/llama/presets.json:/presets.json:ro
+Environment=ROUTER_URL=http://127.0.0.1:${ROUTER_PORT}
+Environment=LISTEN=0.0.0.0:${PORT}
+Environment=LEASE_DIR=/lease
+Environment=PRESETS_FILE=/presets.json
+# the model key: consumers send it as Bearer to the proxy and the lease API (#42)
+Environment=LEASE_TOKEN=${LEASE_TOKEN}
+# laib on the host's loopback, where pause, resume and status answer
+Environment=LAIB_MCP_URL=http://127.0.0.1:5900/mcp
+Environment=LAIB_TOKEN=${LAIB_TOKEN}
+Environment=LEASE_RENEW=10m
+Environment=LEASE_WARN_AFTER=20m
+
+[Service]
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
