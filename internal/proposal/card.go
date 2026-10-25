@@ -304,6 +304,10 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	if len(d.Impact) == 0 {
 		d.Impact = []string{"Für die Familie ändert sich nichts Sichtbares."}
 	}
+	if n := len(d.Impact) - impactMax; n > 0 { // short on every phone (#661); the rest is technical
+		technical = append(technical, d.Impact[impactMax:]...)
+		d.Impact = append(d.Impact[:impactMax:impactMax], fmt.Sprintf("und %d weitere (unter Technische Details)", n))
+	}
 
 	// --- how it is undone
 	switch {
@@ -374,8 +378,14 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	if len(technical) > 0 {
 		d.Details += "; " + strings.Join(technical, "; ")
 	}
+	if len(p.Lines) > 0 {
+		d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
+	}
 	return d
 }
+
+// impactMax: the lines of "what it means" a card shows before „und N weitere“ (#661).
+const impactMax = 6
 
 func orUnset(s string) string {
 	if s == "" {

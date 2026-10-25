@@ -17,10 +17,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"mime"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"path/filepath"
@@ -42,48 +46,122 @@ type Config struct {
 func (c Config) chat() bool { return c.BoteURL != "" && c.BoteToken != "" && c.Person != "" }
 func (c Config) mail() bool { return c.SMTPHost != "" && c.MailTo != "" }
 
-// tell is one message to the owner: through the Bote's channels first
-// (bote-notify picks the person's first reachable one), by mail only when
-// that fails or there is no Bote (#441). A poll rides along to bote-notify only (#509).
-func tell(ctx context.Context, c Config, subject, body string, poll map[string]any) error {
-	var chatErr error
-	if c.chat() {
-		msg := map[string]any{"an": c.Person, "text": subject + "\n\n" + body}
-		for k, v := range poll {
-			msg[k] = v
-		}
-		b, _ := json.Marshal(msg)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+"/mitteilung", bytes.NewReader(b))
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+c.BoteToken)
-			var resp *http.Response
-			if resp, err = client.Do(req); err == nil {
-				resp.Body.Close()
-				if resp.StatusCode/100 == 2 {
-					return nil
-				}
-				err = fmt.Errorf("Bote: %s", resp.Status)
-			}
-		}
-		chatErr = err
-	}
-	if !c.mail() {
-		return chatErr
-	}
-	return send(c, subject, body)
+// run is one sweep: its time, the state it reads and writes, and which
+// messages it tried, so the failures of the others are forgotten.
+type run struct {
+	ctx   context.Context
+	c     Config
+	now   time.Time
+	seen  *mailSeen
+	tried map[string]bool
 }
 
-// whom names where a failed message was going, for the journal.
-func (c Config) whom() string {
-	if c.mail() {
-		return "mail an " + c.MailTo
+// tell is one message to the owner, named by its subject: through the Bote's
+// channels first (bote-notify picks the person's first reachable one), by
+// mail only when that fails or there is no Bote (#441), once, and not after
+// GiveUp since its first failure (#659). A poll rides along to bote-notify
+// only (#509). chat: the chat took it; err nil: the owner has it, or with
+// no chat never will.
+func (r *run) tell(subject, body string, poll map[string]any) (chat bool, err error) {
+	c, s := r.c, r.seen
+	r.tried[subject] = true
+	if c.chat() {
+		if err = post(r.ctx, c, subject, body, poll); err == nil {
+			return true, nil
+		}
+		r.note("mitteilung an "+c.Person, err)
+		if errors.Is(err, errBusy) { // the Bote is there: the next run, not the mail
+			return false, err
+		}
 	}
-	return "mitteilung an " + c.Person
+	if s.Failing[subject].IsZero() {
+		s.Failing[subject] = r.now
+	}
+	if !c.mail() || s.ByMail[subject] {
+		return false, err
+	}
+	if r.now.Sub(s.Failing[subject]) >= GiveUp {
+		s.ByMail[subject] = true
+		r.note("mail an "+c.MailTo, fmt.Errorf("„%s“ seit %s nicht zugestellt, keine weitere Mail", subject, GiveUp))
+		if c.chat() {
+			return false, err
+		}
+		return false, nil
+	}
+	if e := send(c, subject, body); e != nil {
+		r.note("mail an "+c.MailTo, e)
+		return false, e
+	}
+	s.ByMail[subject] = true
+	return false, nil
+}
+
+// note journals a failure, each distinct one once an hour (#659): watch, not
+// incident: a failed message must not wake the Operator into a loop.
+func (r *run) note(whom string, err error) {
+	text := whom + ": " + err.Error()
+	if r.now.Sub(r.seen.Noted[text]) < time.Hour {
+		return
+	}
+	r.seen.Noted[text] = r.now
+	call(r.ctx, r.c, "laib_note", map[string]any{"kind": "watch", "text": text})
+}
+
+// bote-notify's limits (templates/bote/notify.py): a body over maxBody is
+// refused with 413 before anything is logged, a text over maxText is cut.
+const maxBody, maxText = 4096, 1000
+
+var errBusy = errors.New("Bote: 429, zu viele Mitteilungen in dieser Minute")
+
+// post sends one message to bote-notify, its text cut until it fits.
+func post(ctx context.Context, c Config, subject, body string, poll map[string]any) error {
+	var b bytes.Buffer
+	for n := maxText; ; n = n * 9 / 10 {
+		msg := map[string]any{"an": c.Person, "text": cut(subject+"\n\n"+body, n)}
+		maps.Copy(msg, poll)
+		b.Reset()
+		enc := json.NewEncoder(&b)
+		enc.SetEscapeHTML(false)
+		enc.Encode(msg)
+		if b.Len() <= maxBody || n < 100 {
+			break
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+"/mitteilung", &b)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.BoteToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 == 2 {
+		return nil
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return errBusy
+	}
+	why, _ := io.ReadAll(io.LimitReader(resp.Body, 200)) // bote-notify's "fehler"
+	return fmt.Errorf("Bote: %s %s", resp.Status, bytes.TrimSpace(why))
+}
+
+// cut shortens s to n characters, the last one "…".
+func cut(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }
 
 // RedFor is how long a finding stays red before it is mailed.
 var RedFor = 10 * time.Minute
+
+// GiveUp is how long a failing message is still mailed (#659); the chat
+// is tried for as long as the message stands.
+var GiveUp = 24 * time.Hour
 
 var client = &http.Client{Timeout: 2 * time.Minute}
 
@@ -164,7 +242,10 @@ type mailSeen struct {
 	Red       map[string]time.Time `json:"red"`
 	Mailed    map[string]bool      `json:"mailed"`
 	Updates   time.Time            `json:"updates"`
-	Proposals map[int]bool         `json:"proposals"` // announced once (#441)
+	Proposals map[int]bool         `json:"proposals"` // reached the chat, or the mail where there is none (#441, #659)
+	Failing   map[string]time.Time `json:"failing"`   // a message's first failed send, by its subject (#659)
+	ByMail    map[string]bool      `json:"byMail"`    // mailed, or given up on: the chat alone tries again
+	Noted     map[string]time.Time `json:"noted"`     // a failure's last journal note, by its text
 }
 
 // Sweep mails a red that stayed RedFor, once per incident, and once a week
@@ -175,13 +256,12 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		return nil
 	}
 	path := filepath.Join(c.Home, "mail.json")
-	seen := mailSeen{Red: map[string]time.Time{}, Mailed: map[string]bool{}, Proposals: map[int]bool{}}
+	seen := mailSeen{Red: map[string]time.Time{}, Mailed: map[string]bool{}, Proposals: map[int]bool{},
+		Failing: map[string]time.Time{}, ByMail: map[string]bool{}, Noted: map[string]time.Time{}}
 	if b, err := os.ReadFile(path); err == nil {
 		json.Unmarshal(b, &seen)
 	}
-	if seen.Proposals == nil {
-		seen.Proposals = map[int]bool{}
-	}
+	r := &run{ctx: ctx, c: c, now: now, seen: &seen, tried: map[string]bool{}}
 	text, err := call(ctx, c, "laib_diag", map[string]any{})
 	if err != nil {
 		return err
@@ -217,7 +297,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
-		if err = tell(ctx, c, "Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles.", nil); err == nil {
+		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles.", nil); err == nil {
 			for _, k := range keys {
 				seen.Mailed[k] = true
 			}
@@ -243,20 +323,27 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		}
 		seen.Updates = now
 		if len(ups) > 0 {
-			if e := tell(ctx, c, "Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
+			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
 				seen.Updates, err = time.Time{}, e
 			}
 		}
 	}
-	if e := proposals(ctx, c, seen.Proposals); e != nil {
+	if e := r.proposals(); e != nil {
 		err = e
+	}
+	for k := range seen.Failing { // a message no longer tried is no longer failing
+		if !r.tried[k] {
+			delete(seen.Failing, k)
+			delete(seen.ByMail, k)
+		}
+	}
+	for k, t := range seen.Noted {
+		if now.Sub(t) >= time.Hour {
+			delete(seen.Noted, k)
+		}
 	}
 	b, _ := json.Marshal(seen)
 	os.WriteFile(path, b, 0o600)
-	if err != nil {
-		// watch, not incident: a failed message must not wake the Operator into a loop
-		call(ctx, c, "laib_note", map[string]any{"kind": "watch", "text": c.whom() + ": " + err.Error()})
-	}
 	return err
 }
 
@@ -265,9 +352,11 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 // owner's verified identity); a destroy, a removal or what the review marks
 // for a human only links the Inbox, where Authelia asks for the second
 // factor: the chat never approves those (ADR 0016).
-func proposals(ctx context.Context, c Config, seen map[int]bool) error {
-	text, err := call(ctx, c, "laib_inbox", map[string]any{})
+func (r *run) proposals() error {
+	c, seen := r.c, r.seen.Proposals
+	text, err := call(r.ctx, c, "laib_inbox", map[string]any{})
 	if err != nil {
+		r.note("laib-notify", err)
 		return err
 	}
 	var open []struct {
@@ -280,7 +369,9 @@ func proposals(ctx context.Context, c Config, seen map[int]bool) error {
 		}
 	}
 	if err := json.Unmarshal([]byte(text), &open); err != nil {
-		return fmt.Errorf("laib_inbox: %w", err)
+		err = fmt.Errorf("laib_inbox: %w", err)
+		r.note("laib-notify", err)
+		return err
 	}
 	isOpen := map[int]bool{}
 	for _, p := range open {
@@ -295,34 +386,52 @@ func proposals(ctx context.Context, c Config, seen map[int]bool) error {
 			body += "\nDas entscheidest du nur in der Inbox, mit dem zweiten Faktor: " + c.InboxURL
 		} else {
 			body += fmt.Sprintf("\nIm Chat: »gib #%d frei« oder »lehne #%d ab«. Oder in der Inbox: %s", p.ID, p.ID, c.InboxURL)
-			poll = map[string]any{"vorschlag": p.ID, "frage": fmt.Sprintf("Vorschlag #%d: %s", p.ID, cmp.Or(p.Card.Summary, p.Reason))}
+			poll = map[string]any{"vorschlag": p.ID, "frage": cut(fmt.Sprintf("Vorschlag #%d: %s", p.ID, cmp.Or(p.Card.Summary, p.Reason)), 200)}
 		}
-		for _, i := range p.Card.Impact {
+		for n, i := range p.Card.Impact { // a review's hundred lines are the Inbox's (#659)
+			if n == 5 {
+				body += fmt.Sprintf("\n- … und %d weitere in der Inbox", len(p.Card.Impact)-n)
+				break
+			}
 			body += "\n- " + i
 		}
 		if p.Card.Reversible != "" {
 			body += "\nRückgängig: " + p.Card.Reversible
 		}
-		if e := tell(ctx, c, fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body, poll); e != nil {
-			return e
+		// one that fails blocks no other; it is told again on the next run,
+		// on the chat until the chat takes it (#659)
+		chat, e := r.tell(fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body, poll)
+		if chat || e == nil && !c.chat() {
+			seen[p.ID] = true
+		} else if e != nil {
+			err = e
 		}
-		seen[p.ID] = true
 	}
 	for id := range seen { // decided ones are forgotten, so the file stays small
 		if !isOpen[id] {
 			delete(seen, id)
 		}
 	}
-	return nil
+	return err
 }
 
 // send: SMTP_SECURITY tls is implicit TLS (465); starttls and none upgrade
 // when the server offers it.
 func send(c Config, subject, body string) error {
-	host, from := c.SMTPHost, cmp.Or(c.SMTPFrom, c.SMTPUser)
+	// SMTP_FROM is Authelia's sender, "Name <addr>": the envelope takes the
+	// bare address, else Gmail answers 555 5.5.2 (#659)
+	from, err := mail.ParseAddress(cmp.Or(c.SMTPFrom, c.SMTPUser))
+	if err != nil {
+		return fmt.Errorf("SMTP_FROM: %w", err)
+	}
+	to, err := mail.ParseAddress(c.MailTo)
+	if err != nil {
+		return fmt.Errorf("MAIL_TO: %w", err)
+	}
+	from.Name = cmp.Or(from.Name, "Laib")
+	host := c.SMTPHost
 	addr := net.JoinHostPort(host, cmp.Or(c.SMTPPort, "587"))
 	var conn net.Conn
-	var err error
 	if c.SMTPSecurity == "tls" {
 		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}, "tcp", addr, &tls.Config{ServerName: host})
 	} else {
@@ -346,17 +455,17 @@ func send(c Config, subject, body string) error {
 			return err
 		}
 	}
-	if err := s.Mail(from); err != nil {
+	if err := s.Mail(from.Address); err != nil {
 		return err
 	}
-	if err := s.Rcpt(c.MailTo); err != nil {
+	if err := s.Rcpt(to.Address); err != nil {
 		return err
 	}
 	w, err := s.Data()
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "From: Laib <%s>\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
+	fmt.Fprintf(w, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
 		from, c.MailTo, mime.QEncoding.Encode("utf-8", subject+" ("+c.Domain+")"), time.Now().Format(time.RFC1123Z), strings.ReplaceAll(body, "\n", "\r\n"))
 	if err := w.Close(); err != nil {
 		return err

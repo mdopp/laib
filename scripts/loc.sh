@@ -54,7 +54,9 @@ budget automat 600 automat      # the Bote's HA automations, 421
 budget persona 900 persona      # the Bote's persona engine, 701
 budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
 budget disk 700 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
-budget notify 400 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
+# notify 600: the owner, mdopp, 2026-10-25 (#659): the chat retried before mail, mail sent right,
+# failures noted once an hour; 501 lines, no honest cut
+budget notify 600 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
 # behind the kernel's verb door (ADR 0026, #598): the household verbs, each
 # program with its own cap; the kernel's shrank by what moved, 16,889 to 16,695
 budget haushalt 600 haushalt    # laib-haushalt: scan and net geraete, 480

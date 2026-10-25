@@ -39,8 +39,12 @@ type Result struct {
 	// Changes: what the change does to the hands, the rules and the
 	// services' values, before → after — the card's words (#616)
 	Changes []proposal.Change
+	// Lines: the single lines Human tells grouped by file (#661), for the
+	// card's technical details
+	Lines []string
 
-	domain string // the box's domain, for the facts
+	domain   string      // the box's domain, for the facts
+	unjudged [][2]string // file, line: a line of a unit or script Laib cannot judge
 }
 
 type file struct {
@@ -121,7 +125,16 @@ var boxKeyReason = map[string]string{
 }
 
 // Dirs compares a checkout of main (base) with a checkout of the change.
+// The reasons come weightiest first, a file's lines Laib cannot judge as
+// one reason with their count (#661).
 func Dirs(base, changed string) Result {
+	r := dirs(base, changed)
+	r.group()
+	slices.SortStableFunc(r.Human, func(a, b string) int { return weight(a) - weight(b) })
+	return r
+}
+
+func dirs(base, changed string) Result {
 	var r Result
 	say := func(format string, a ...any) { r.Human = append(r.Human, fmt.Sprintf(format, a...)) }
 
@@ -271,7 +284,7 @@ func Dirs(base, changed string) Result {
 	}
 	// rendered platform files (Caddy, Authelia, AdGuard, nftables, host units)
 	// that changed without a reason above: not understood, so a human
-	if len(r.Human) == before2 {
+	if len(r.Human)+len(r.unjudged) == before2 {
 		for key, text := range aout {
 			if strings.HasPrefix(key, "quadlet/") {
 				continue
@@ -615,7 +628,7 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 			say("führt einen Befehl direkt auf der Box aus (%s in %s)", e.Key, unit)
 		case e.Section == "Service", e.Section == "Unit", e.Section == "Install":
 			if !harmless[e.Section][e.Key] {
-				say("ändert %s=%s in %s, was Laib nicht einschätzen kann", e.Key, e.Value, unit)
+				r.unjudged = append(r.unjudged, [2]string{unit, fmt.Sprintf("ändert %s=%s in %s, was Laib nicht einschätzen kann", e.Key, e.Value, unit)})
 			}
 		case e.Key == "Image":
 			if existedUnit && imageRepo(e.Value) != imageRepo(oldImage) {
@@ -657,9 +670,58 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 		case harmless[e.Section][e.Key]:
 			// fine
 		default:
-			say("ändert %s=%s in %s, was Laib nicht einschätzen kann", e.Key, e.Value, unit)
+			r.unjudged = append(r.unjudged, [2]string{unit, fmt.Sprintf("ändert %s=%s in %s, was Laib nicht einschätzen kann", e.Key, e.Value, unit)})
 		}
 	}
+}
+
+// group tells the lines Laib cannot judge as one reason per file, with
+// their count (#661): a script of 107 changed lines is one reason, not 107.
+// A single line stays that line. Either way it replaces the file's "nicht
+// kennt", which names the same file with less. The lines go to Lines.
+func (r *Result) group() {
+	byFile := map[string][]string{}
+	for _, u := range r.unjudged {
+		byFile[u[0]] = append(byFile[u[0]], u[1])
+	}
+	for _, f := range slices.Sorted(maps.Keys(byFile)) {
+		lines := byFile[f]
+		r.Human = slices.DeleteFunc(r.Human, func(h string) bool { return h == "ändert eine Datei, die Laib nicht kennt: services/"+f })
+		if len(lines) == 1 {
+			r.Human = append(r.Human, lines[0])
+			continue
+		}
+		what := "eine Datei, die"
+		switch {
+		case knownUnit(f):
+			what = "eine Unit, die"
+		case strings.HasSuffix(f, ".py"), strings.HasSuffix(f, ".sh"):
+			what = "ein Skript, das"
+		}
+		r.Human = append(r.Human, fmt.Sprintf("ändert %d Zeilen in %s (%s Laib nicht einschätzen kann)", len(lines), f, what))
+		r.Lines = append(r.Lines, lines...)
+	}
+}
+
+// weight orders the reasons (#661): what matters on its own first — a
+// secret from outside, a host unit, a public route or no login, a host
+// folder, policy.yml — then the others, then what Laib cannot judge.
+func weight(reason string) int {
+	for i, marks := range [][]string{
+		{"Geheimnis von außen", "Laib-Schlüssel"},
+		{"(Host-Unit)", "direkt auf der Box aus"},
+		{"aus dem Internet erreichbar", "ohne Anmeldung", "schwächt die Anmeldung"},
+		{"Zugriff auf den Ordner", "Zugriff auf einen Ordner"},
+		{"(policy.yml)"},
+	} {
+		if slices.ContainsFunc(marks, func(m string) bool { return strings.Contains(reason, m) }) {
+			return i
+		}
+	}
+	if strings.Contains(reason, "Laib nicht einschätzen kann") {
+		return 6
+	}
+	return 5
 }
 
 // keyUnion lists the keys of both maps, sorted, each once.
