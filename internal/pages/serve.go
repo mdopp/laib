@@ -133,99 +133,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		page(w, "Bote verbinden", "<h1>Bote verbinden</h1><p>Der Bote braucht eine eigene Signal-Nummer, einmal auf der Box eingerichtet:</p><pre>"+BoteLinkPage(st.Box.DataDir, boteAccount(st))+"</pre><p><a href=\"/\">zurück</a></p>")
 	}))
 	mux.HandleFunc("/abmelden", Abmelden(env))
-	mux.HandleFunc("/inbox", guard(func(w http.ResponseWriter, r *http.Request) {
-		open, err := proposal.List(cli.InboxDir(env), true)
-		var b strings.Builder
-		b.WriteString("<h1>Inbox</h1>" + filter)
-		if err != nil {
-			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
-		}
-		decisions.Lock()
-		for id, st := range decisions.state { // #607: what was tapped and is not done yet
-			fmt.Fprintf(&b, "<p class=%s>#%d: %s</p>", map[bool]string{true: "rot", false: "gelb"}[strings.HasPrefix(st, "fehlgeschlagen")], id, html.EscapeString(st))
-		}
-		decisions.Unlock()
-		if len(open) == 0 {
-			b.WriteString("<p>Keine offenen Vorschläge.</p>")
-		}
-		domain, box := "", []string(nil)
-		if st, err := cli.LoadState(env); err == nil {
-			domain, box = st.Box.Domain, st.Warnings
-		}
-		for _, p := range open {
-			// the decision card (#58, #616): headline and weight, what changes,
-			// what it means, who and why, the way back — the diff only behind
-			// the technical details
-			c := proposal.Card(p, domain, box...)
-			fmt.Fprintf(&b, "<section class=card data-f><h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
-			fmt.Fprintf(&b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
-			if c.Decider != "" {
-				fmt.Fprintf(&b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
-			}
-			b.WriteString("</p>")
-			if len(c.Changes) > 0 {
-				b.WriteString("<h3>Was sich ändert</h3><ul class=changes>")
-				for _, l := range c.Changes {
-					op := l.Op
-					if op == "=" || op == "" {
-						op = ""
-					} else {
-						op = "<b>" + op + "</b> "
-					}
-					fmt.Fprintf(&b, "<li>%s%s</li>", op, html.EscapeString(l.Text))
-				}
-				b.WriteString("</ul>")
-			}
-			b.WriteString("<h3>Was das für euch bedeutet</h3><ul>")
-			for _, i := range c.Impact {
-				cls := ""
-				if strings.HasPrefix(i, "Achtung") {
-					cls = " class=gelb"
-				}
-				fmt.Fprintf(&b, "<li%s>%s</li>", cls, html.EscapeString(i))
-			}
-			b.WriteString("</ul>")
-			fmt.Fprintf(&b, "<h3>Wer will das und warum</h3><p>%s</p><h3>Rückgängig</h3><p>%s</p>", html.EscapeString(c.Why), html.EscapeString(c.Reversible))
-			for _, w := range c.Warnings {
-				fmt.Fprintf(&b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
-			}
-			approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
-			// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
-			reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
-			later := "<a href=\"/\"><button>Später</button></a>"
-			if c.Risky {
-				fmt.Fprintf(&b, "<p>%s %s %s</p>", later, approve, reject)
-			} else {
-				fmt.Fprintf(&b, "<p>%s %s %s</p>", approve, reject, later)
-			}
-			fmt.Fprintf(&b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
-				html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
-			b.WriteString("</section>")
-		}
-		// what was approved lately can be taken back (#41)
-		if all, err := proposal.List(cli.InboxDir(env), false); err == nil {
-			n := 0
-			for _, p := range all {
-				if p.Status != "approved" || n >= 5 {
-					continue
-				}
-				if n == 0 {
-					b.WriteString("<h2>Zuletzt freigegeben</h2>")
-				}
-				n++
-				fmt.Fprintf(&b, "<div class=card data-f><span class=note>#%d · %s · von %s · freigegeben von %s</span>%s%s</div>", p.ID, html.EscapeString(p.Reason), html.EscapeString(p.Actor), html.EscapeString(p.DecidedBy), runNote(p), DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
-			}
-			for _, p := range all {
-				switch {
-				case p.Status == "stale" && p.Refiled != 0: // #637: the content changed since the approval
-					fmt.Fprintf(&b, "<p class=gelb>#%d nicht angewendet: %s</p>", p.ID, html.EscapeString(p.StaleReason))
-				case p.Status == "stale":
-					fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
-				}
-			}
-		}
-		page(w, "Inbox", b.String())
-	}))
+	mux.HandleFunc("/inbox", guard(Inbox(env)))
+	mux.HandleFunc("/inbox/alle", guard(ApproveAll(env)))
 	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(Decision(env)))
 	// "jetzt prüfen" (#309): the service's check, started without waiting
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -307,11 +216,6 @@ func resultClass(r string) string {
 func Decision(env *cli.Env) http.HandlerFunc {
 	done := map[string]string{"approved": "freigegeben", "rejected": "abgelehnt", "stale": "veraltet"}
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Authelia hands the user in Remote-User; without it the actor is the web itself.
-		actor := "human:" + r.Header.Get("Remote-User")
-		if actor == "human:" {
-			actor = "human:web"
-		}
 		id, decision := r.PathValue("id"), r.PathValue("decision")
 		n, err := strconv.Atoi(id)
 		if err != nil {
@@ -330,8 +234,8 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
 			argv = append(argv, why)
 		}
-		setDecision(n, "wird entschieden …")
-		go decide(env, actor, n, decision, argv)
+		setDecision(n, cmp.Or(map[string]string{"approve": "wird freigegeben …", "reject": "wird abgelehnt …"}[decision], "wird zurückgenommen …"))
+		go decide(env, webActor(r), n, decision, argv, 0)
 		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
 	}
 }
@@ -363,9 +267,10 @@ func setDecision(id int, s string) {
 	}
 }
 
-func decide(env *cli.Env, actor string, id int, decision string, argv []string) {
+// wait: how long an approve's run waits for the lock (Alle freigeben, #686).
+func decide(env *cli.Env, actor string, id int, decision string, argv []string, wait time.Duration) {
 	var errOut strings.Builder
-	ctx, webEnv := context.Background(), &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut}
+	ctx, webEnv := context.Background(), &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut, Wait: wait}
 	var code int
 	if decision == "rollback" {
 		code = inbox.Rollback(ctx, webEnv, []string{"#" + strconv.Itoa(id)})
@@ -381,19 +286,10 @@ func decide(env *cli.Env, actor string, id int, decision string, argv []string) 
 	setDecision(id, "")
 }
 
-// runNote says what the run did with an approved proposal (#609).
-func runNote(p *proposal.Proposal) string {
-	note := ""
-	if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
-		note = "<p class=note>neu berechnet auf dem aktuellen Stand</p>"
-	}
-	if p.Outcome == "waiting" {
-		return note + "<p class=gelb>freigegeben – wird mit dem nächsten Lauf angewendet</p>"
-	}
-	if p.Outcome == "rolled-back" && p.Batch != "" {
-		return note + "<p class=rot>zurückgenommen · Lauf " + html.EscapeString(p.Batch) + "</p>"
-	}
-	return note
+// webActor is who decides on the box page: Authelia hands the user in
+// Remote-User; without it the actor is the web itself.
+func webActor(r *http.Request) string {
+	return "human:" + cmp.Or(r.Header.Get("Remote-User"), "web")
 }
 
 // DecisionForm is one Inbox button (#574): on submit it disables itself and

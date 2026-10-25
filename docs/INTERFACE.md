@@ -290,6 +290,16 @@ Vorschlag #17   von ops (Solaris)   Stufe: apply   braucht: Admin
   [Freigeben]   [Ablehnen]   [In der Werkstatt öffnen]
 ```
 
+After „Freigeben“ the card leaves the open ones at once and stands, without
+buttons, under „Was die Box gerade macht“ with the step the run that carries
+it writes on the proposal (`step`, #686): „wartet, bis die Box mit der
+Arbeit davor fertig ist“, „sichert immich“, „startet immich“, „prüft, ob
+immich läuft“; then „fertig“ (with „Zurücknehmen“) or „zurückgenommen, weil
+immich danach nicht richtig lief“. The page reloads itself every 3 s while
+something runs. „Alle freigeben“ (two or more open cards) is one confirmation
+page that names the cards; it approves exactly those, one after the other,
+each with its own run, so a red one is taken back alone.
+
 Journal: one line per entry, filter by service and actor. Nothing else.
 
 The pages are server-rendered HTML from `laib serve`, behind Caddy and

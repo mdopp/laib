@@ -1,0 +1,219 @@
+package pages
+
+import (
+	"fmt"
+	"html"
+	"net/http"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
+)
+
+// Inbox is the Inbox page: what the box does with what was approved and
+// what came of it (#686), the open decision cards, what is stale.
+func Inbox(env *cli.Env) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		all, err := proposal.List(cli.InboxDir(env), false)
+		var b, list strings.Builder
+		b.WriteString("<h1>Inbox</h1>" + filter)
+		if err != nil {
+			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
+		}
+		domain, box := "", []string(nil)
+		if st, err := cli.LoadState(env); err == nil {
+			domain, box = st.Box.Domain, st.Warnings
+		}
+		locked, busy, fresh, n := apply.LockHolder(env.Paths) != "", false, false, 0
+		var open []*proposal.Proposal
+		for _, p := range all {
+			decision := DecisionState(p.ID)
+			if strings.HasPrefix(decision, "fehlgeschlagen") { // #607: the tap and why it did not go through
+				fmt.Fprintf(&b, "<p class=rot>#%d: %s</p>", p.ID, html.EscapeString(decision))
+				decision = ""
+			}
+			if p.Status == "open" && decision == "" {
+				open = append(open, p)
+				continue
+			}
+			text, class, running := progress(p, decision, locked)
+			recent := time.Since(p.Decided) < 15*time.Minute
+			if p.Status != "approved" && !running || !running && !recent && n >= 5 {
+				continue
+			}
+			n, busy, fresh = n+1, busy || running, fresh || recent
+			// the card as it ends (#686): what the box does now, then what came of it; no decision buttons
+			fmt.Fprintf(&list, "<div class=\"card %s\" data-f><b>#%d · %s</b><span class=state>%s</span>", class, p.ID, html.EscapeString(proposal.Card(p, domain).Summary), html.EscapeString(text))
+			if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
+				list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
+			}
+			if text == "fertig" { // what was approved can be taken back (#41)
+				list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
+			}
+			list.WriteString("</div>")
+		}
+		if busy {
+			b.WriteString(`<meta http-equiv=refresh content=3>`)
+		}
+		if may := approvable(env, open); len(may) > 1 {
+			fmt.Fprintf(&b, `<p><a href="/inbox/alle"><button class=go>Alle freigeben (%d)</button></a></p>`, len(may))
+		}
+		head := "<h2>Zuletzt freigegeben</h2><div class=liste>" + list.String() + "</div>"
+		if busy {
+			head = "<h2>Was die Box gerade macht</h2><div class=liste>" + list.String() + "</div>"
+		}
+		if n > 0 && (busy || fresh) {
+			b.WriteString(head)
+		}
+		if len(open) == 0 {
+			b.WriteString("<p>Keine offenen Vorschläge.</p>")
+		}
+		for _, p := range open {
+			card(&b, r, env, p, domain, box)
+		}
+		if n > 0 && !busy && !fresh {
+			b.WriteString(head)
+		}
+		for _, p := range all {
+			switch {
+			case p.Status == "stale" && p.Refiled != 0: // #637: the content changed since the approval
+				fmt.Fprintf(&b, "<p class=gelb>#%d nicht angewendet: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+			case p.Status == "stale":
+				fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+			}
+		}
+		page(w, "Inbox", b.String())
+	}
+}
+
+// progress is what an Inbox card says about a decision taken (#686): the
+// tap on its way, the run's step while a run holds the lock, waiting, or
+// how it ended. running: the page reloads itself, and no button shows.
+func progress(p *proposal.Proposal, decision string, locked bool) (text, class string, running bool) {
+	switch {
+	case decision != "":
+		return decision, "gelb", true
+	case p.Step != "" && locked:
+		return p.Step + " …", "gelb", true
+	case p.Outcome == "waiting" && locked:
+		return "wartet, bis die Box mit der Arbeit davor fertig ist", "gelb", true
+	case p.Outcome == "waiting":
+		return "fängt gleich an", "gelb", true
+	case p.Outcome == "rolled-back":
+		return strings.TrimSuffix("zurückgenommen, "+p.Because, ", "), "rot", false
+	}
+	return "fertig", "grün", false
+}
+
+// card is one open proposal's decision card (#58, #616): headline and
+// weight, what changes, what it means, who and why, the way back — the
+// diff only behind the technical details.
+func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, box []string) {
+	c := proposal.Card(p, domain, box...)
+	fmt.Fprintf(b, "<section class=card data-f><h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
+	fmt.Fprintf(b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
+	if c.Decider != "" {
+		fmt.Fprintf(b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
+	}
+	b.WriteString("</p>")
+	if len(c.Changes) > 0 {
+		b.WriteString("<h3>Was sich ändert</h3><ul class=changes>")
+		for _, l := range c.Changes {
+			op := l.Op
+			if op == "=" || op == "" {
+				op = ""
+			} else {
+				op = "<b>" + op + "</b> "
+			}
+			fmt.Fprintf(b, "<li>%s%s</li>", op, html.EscapeString(l.Text))
+		}
+		b.WriteString("</ul>")
+	}
+	b.WriteString("<h3>Was das für euch bedeutet</h3><ul>")
+	for _, i := range c.Impact {
+		cls := ""
+		if strings.HasPrefix(i, "Achtung") {
+			cls = " class=gelb"
+		}
+		fmt.Fprintf(b, "<li%s>%s</li>", cls, html.EscapeString(i))
+	}
+	b.WriteString("</ul>")
+	fmt.Fprintf(b, "<h3>Wer will das und warum</h3><p>%s</p><h3>Rückgängig</h3><p>%s</p>", html.EscapeString(c.Why), html.EscapeString(c.Reversible))
+	for _, w := range c.Warnings {
+		fmt.Fprintf(b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
+	}
+	approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
+	// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
+	reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
+	later := "<a href=\"/\"><button>Später</button></a>"
+	if c.Risky {
+		fmt.Fprintf(b, "<p>%s %s %s</p>", later, approve, reject)
+	} else {
+		fmt.Fprintf(b, "<p>%s %s %s</p>", approve, reject, later)
+	}
+	fmt.Fprintf(b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
+		html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
+	b.WriteString("</section>")
+}
+
+// approvable are the open proposals a human on the box page may approve
+// (#686): their tier within the human hand's ceiling. inbox.Decide checks
+// each again when it is approved.
+func approvable(env *cli.Env, open []*proposal.Proposal) []*proposal.Proposal {
+	st, err := cli.LoadState(env)
+	if err != nil {
+		return nil
+	}
+	return slices.DeleteFunc(slices.Clone(open), func(p *proposal.Proposal) bool {
+		return p.Status != "open" || DecisionState(p.ID) != "" || !policy.Allowed(st.Policy, "human", p.Tier)
+	})
+}
+
+// ApproveAll is „Alle freigeben“ (#686): GET is the one confirmation, the
+// cards it covers by number; POST approves exactly those, one after the
+// other, each with its own run — so a red one is taken back alone — and
+// the Inbox shows each as it is processed. It sits behind the box page's
+// second factor like Freigeben, and no token reaches it.
+func ApproveAll(env *cli.Env) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		open, _ := proposal.List(cli.InboxDir(env), true)
+		may := approvable(env, open)
+		if r.Method != http.MethodPost {
+			if len(may) == 0 {
+				page(w, "Inbox", "<p>Keine offenen Vorschläge.</p><p><a href=/inbox>Inbox</a></p>")
+				return
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "<h1>Alle freigeben</h1><p>Du gibst diese %d Vorschläge frei. Die Box wendet sie nacheinander an; geht einer schief, nimmt sie ihn zurück, die anderen bleiben.</p><form method=post action=/inbox/alle onsubmit=\"const b=this.querySelector('button');b.disabled=true;b.textContent='wird freigegeben …'\"><div class=liste>", len(may))
+			for _, p := range may {
+				c := proposal.Card(p, "")
+				fmt.Fprintf(&b, "<div class=card><input type=hidden name=id value=%d><b>#%d · %s</b><span class=\"risk %s\">%s</span></div>", p.ID, p.ID, html.EscapeString(c.Summary), c.Risk, c.Risk)
+			}
+			fmt.Fprintf(&b, "</div><p><button class=go>Ja, alle %d freigeben</button> <a href=/inbox>Abbrechen</a></p></form>", len(may))
+			page(w, "Inbox", b.String())
+			return
+		}
+		r.ParseForm()
+		var ids []int
+		for _, p := range may { // exactly what the owner saw and still open
+			if slices.Contains(r.Form["id"], strconv.Itoa(p.ID)) {
+				ids = append(ids, p.ID)
+				setDecision(p.ID, "kommt gleich dran")
+			}
+		}
+		slices.Sort(ids)
+		actor := webActor(r)
+		go func() {
+			for _, id := range ids {
+				setDecision(id, "wird freigegeben …")
+				decide(env, actor, id, "approve", []string{strconv.Itoa(id)}, 15*time.Minute)
+			}
+		}()
+		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
+	}
+}

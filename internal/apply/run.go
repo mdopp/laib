@@ -39,6 +39,23 @@ func ApplyLocked(ctx context.Context, env *cli.Env, st *state.State, only, reaso
 // while the lock was held gets its run right after.
 var Carry func(ctx context.Context, env *cli.Env) int
 
+// Progress hears what a run does now (#686), in the owner's words; red
+// says the step names what did not run afterwards.
+type Progress func(step string, red bool)
+
+type progressKey struct{}
+
+// WithProgress makes the runs under ctx tell f their steps.
+func WithProgress(ctx context.Context, f Progress) context.Context {
+	return context.WithValue(ctx, progressKey{}, f)
+}
+
+func say(ctx context.Context, red bool, format string, args ...any) {
+	if f, ok := ctx.Value(progressKey{}).(Progress); ok {
+		f(fmt.Sprintf(format, args...), red)
+	}
+}
+
 // TakeLock takes the one lock (#39) for a verb; a stale lock (its process
 // gone) is taken over with a journal line, a live one refuses with exitLocked.
 func TakeLock(env *cli.Env, st *state.State, verb string) (func(), int) {

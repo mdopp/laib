@@ -55,6 +55,8 @@ type Proposal struct {
 	Batch        string    `json:"batch,omitempty"`        // the run that applied it, as the state's commit range (#609)
 	RejectReason string    `json:"rejectReason,omitempty"` // the owner's short reason for a no
 	Settled      time.Time `json:"settled,omitempty"`
+	Step         string    `json:"step,omitempty"`    // what the run that carries it does now, for the Inbox (#686)
+	Because      string    `json:"because,omitempty"` // why that run took it back, in the owner's words (#686)
 }
 
 // Anchor is what a proposal answers (#544): the diag finding it should make

@@ -58,6 +58,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 		return res, fmt.Errorf("snapshot: %w", err)
 	}
 	res.Commit = commit
+	say(ctx, false, "richtet die Änderung ein")
 	// activation owed from here until verify ran (#39): an apply killed in
 	// between is finished by the next apply or converge
 	if err := WritePending(paths, p.Services, reason); err != nil {
@@ -161,6 +162,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	// a unit's first start has 90 s and must not include the image pull (#46):
 	// the images of new or re-imaged containers are pulled now
 	for _, image := range imagesToPull(p, previousImages) {
+		say(ctx, false, "lädt eine neue Version herunter")
 		if out, err := sysd.Run(ctx, "podman", "pull", "-q", image); err != nil {
 			// an image present locally starts the unit, and verify judges it: no DNS while
 			// the dns role's own AdGuard is replaced is no red (#370)
@@ -249,6 +251,7 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	}
 	restartOrder = st.Order(restartOrder)
 	for _, name := range restartOrder {
+		say(ctx, false, "startet %s", name)
 		for _, unit := range PodRestartSet(st.Services[name].UnitNames()) {
 			if err := sysd.Restart(ctx, unit); err != nil {
 				res.Checks = append(res.Checks, Check{Service: name, What: "restart " + unit, OK: false, Detail: err.Error()})
@@ -277,7 +280,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			targets = st.ServiceNames()
 		}
 	}
-	res.Checks = append(res.Checks, Verify(ctx, st, st.Order(targets))...)
+	switch targets = st.Order(targets); {
+	case len(targets) > 3:
+		say(ctx, false, "prüft, ob alles läuft")
+	case len(targets) > 1:
+		say(ctx, false, "prüft, ob %s laufen", strings.Join(targets, ", "))
+	default:
+		say(ctx, false, "prüft, ob %s läuft", strings.Join(targets, ", "))
+	}
+	res.Checks = append(res.Checks, Verify(ctx, st, targets)...)
 	// Post-deploy hooks run only for services whose verify is green.
 	redByService := map[string]bool{}
 	for _, c := range res.Checks {
@@ -293,7 +304,15 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 			res.Checks = append(res.Checks, c)
 		}
 	}
-	res.Green = !slices.ContainsFunc(res.Checks, func(c Check) bool { return !c.OK })
+	var red []string
+	for _, c := range res.Checks {
+		if !c.OK && !slices.Contains(red, c.Service) {
+			red = append(red, c.Service)
+		}
+	}
+	if res.Green = len(red) == 0; !res.Green {
+		say(ctx, true, "%s danach nicht richtig lief", strings.Join(red, ", "))
+	}
 	ClearPending(paths) // activated and verified
 	return res, nil
 }
