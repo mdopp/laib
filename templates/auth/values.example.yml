@@ -20,3 +20,9 @@ SMTP_SECURITY: starttls              # starttls (587) | tls (465) | none (a rela
 SMTP_USER: ""
 SMTP_FROM: ""                        # the sender; empty: SMTP_USER
 SMTP_PASSWORD: !secret AUTHELIA_SMTP_PASSWORD
+# Authelia's regulation (#653): this many failed logins for one name within the find time ban it for the ban time
+AUTH_MAX_RETRIES: "5"
+AUTH_FIND_TIME: 10m
+AUTH_BAN_TIME: 30m
+ANMELDUNGEN_IMAGE: docker.io/library/python:3.13-alpine   # the failed-login counter (anmeldungen.py), the standard library only
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer for the failed-login messages; empty without the Bote

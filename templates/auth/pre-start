@@ -79,6 +79,16 @@ else:
         "detail": f"Passwort-Mails gehen nicht: {why}. „Passwort vergessen“, Einladungen und der Code vor dem zweiten Faktor landen in einer Datei auf der Box (auth/authelia-data/notification.txt)",
         "fix": "in services/auth/values.yml SMTP_HOST, SMTP_PORT, SMTP_SECURITY, SMTP_USER, SMTP_FROM setzen, laib secret set AUTHELIA_SMTP_PASSWORD, dann laib apply auth"}]}
     print("notifier: filesystem (" + why + ")")
+# Authelia's regulation (#653): AUTH_MAX_RETRIES failed logins for one name
+# within AUTH_FIND_TIME ban it for AUTH_BAN_TIME. Without the block Authelia
+# bans after 3 in 2 minutes for 5 minutes, and nobody hears of it;
+# anmeldungen.py reads the same values and tells the owner. A values.yml
+# from before has none: the defaults. What Authelia would refuse stops here.
+reg = {k: E.get(k, d).strip() for k, d in (("AUTH_MAX_RETRIES", "5"), ("AUTH_FIND_TIME", "10m"), ("AUTH_BAN_TIME", "30m"))}
+bad = [k for k, v in reg.items() if not (re.fullmatch(r"[1-9][0-9]{0,2}", v) if k == "AUTH_MAX_RETRIES" else re.fullmatch(r"[1-9][0-9]*[smhd]", v))]
+if bad:
+    print("services/auth/values.yml: " + ", ".join(f"{k}={reg[k]!r}" for k in bad) +
+          " is no value Authelia takes (AUTH_MAX_RETRIES a number 1-999, the times like 10m, 30m, 1h)", file=sys.stderr); sys.exit(1)
 conf = f"""---
 # rendered by laib pre-start (templates/auth); access rules come from /laib/laib-access.yml, OIDC clients from oidc-clients.yml
 theme: dark
@@ -86,6 +96,10 @@ server:
   address: 'tcp://0.0.0.0:9091'
 log:
   level: info
+regulation:
+  max_retries: {reg["AUTH_MAX_RETRIES"]}
+  find_time: '{reg["AUTH_FIND_TIME"]}'
+  ban_time: '{reg["AUTH_BAN_TIME"]}'
 identity_validation:
   reset_password:
     jwt_lifespan: '24h'
