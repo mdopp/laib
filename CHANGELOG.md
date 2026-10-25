@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.31.2](https://github.com/mdopp/laib/compare/v0.31.1...v0.31.2) (2026-10-25)
+
+
+### Bug Fixes
+
+* **notify:** proposals reach the chat, mail is valid, failures visible; review groups by file ([#659](https://github.com/mdopp/laib/issues/659), [#661](https://github.com/mdopp/laib/issues/661)) ([a984fc6](https://github.com/mdopp/laib/commit/a984fc612eca7a5ddc7f31471c07e71e60f59ef9))
+* **notify:** retry proposals on the chat, mail with a bare envelope, note failures once an hour ([#659](https://github.com/mdopp/laib/issues/659)) ([8c1ea8d](https://github.com/mdopp/laib/commit/8c1ea8ddfb1f23ded17d6b0ab52f6a4b65a8cf19))
+* **review:** group what Laib cannot judge by file, weightiest reasons first ([ab37ff9](https://github.com/mdopp/laib/commit/ab37ff9dc25201831d960062304b06a02451cc92)), closes [#661](https://github.com/mdopp/laib/issues/661)
+
 ## [0.31.1](https://github.com/mdopp/laib/compare/v0.31.0...v0.31.1) (2026-10-25)
 
 
