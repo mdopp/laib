@@ -8,12 +8,15 @@ the areas and floors they are in) and writes it, comma-joined, to the file
 Whisper reads at start (WYO_WHISPER_INITIAL_PROMPT_FILE in
 stimme-whisper.container).
 
-The order and the budget are wyoming-faster-whisper's own (its
-vocabulary.py and hass_api.py, --hass-token): areas and floors that hold
-something exposed, then the names of lights, switches, media players and the
-like with their aliases, then the other areas, then everything else; cut at
-the first name that does not fit 200 tokens, estimated at two characters a
-token. Upstream fetches them itself, with an administrator's token and the
+The tiers are wyoming-faster-whisper's (its vocabulary.py and hass_api.py,
+--hass-token), but the names of lights, switches, media players and the like
+with their aliases come first, then the areas and floors that hold something
+exposed, then the other areas, then everything else: Whisper knows „Küche“,
+not „Bambi“, and with upstream's areas first a box's 50 exposed things were
+cut after the T of the entity ids, Bambi with them. The budget is 200 tokens
+counted with Whisper's own tokenizer (the tokenizer.json in its model cache)
+where there is one, else upstream's estimate of two characters a token,
+which on German names fills only about two thirds of it. Upstream fetches them itself, with an administrator's token and the
 aiohttp extra this image lacks; here a non-administrator's token reads
 `should_expose` from the entity registry, which every user may list.
 Entities Home Assistant keeps outside its registry (zone.home and the like)
@@ -137,15 +140,25 @@ def fetch(ws) -> list:
 
     def places(records, key, ids, in_use):
         return [n for r in records if (r.get(key) in ids) == in_use for n in [r.get("name") or ""] + list(r.get("aliases") or [])]
-    return clean(places(areas, "area_id", used, True), places(floors, "floor_id", floors_used, True)), clean(spoken), \
+    return clean(spoken), clean(places(areas, "area_id", used, True), places(floors, "floor_id", floors_used, True)), \
         clean(places(areas, "area_id", used, False), places(floors, "floor_id", floors_used, False)), clean(other)
 
 
-def prompt(tiers) -> str:
+def counter(cache: str = "/config"):
+    """tokens of a text: Whisper's own tokenizer from its model cache, else two characters a token"""
+    try:
+        import glob, tokenizers   # in Whisper's image; not the stdlib, so only here
+        tok = tokenizers.Tokenizer.from_file(sorted(glob.glob(os.path.join(cache, "**", "tokenizer.json"), recursive=True))[0])
+        return lambda text: len(tok.encode(" " + text).ids)
+    except (ImportError, IndexError, OSError, ValueError, RuntimeError):
+        return lambda text: len(text) // 2
+
+
+def prompt(tiers, count=lambda text: len(text) // 2) -> str:
     """vocabulary.RecognitionContext.whisper_prompt: fill in order, stop at the first name that does not fit"""
     chosen = []
     for name in clean(*tiers):
-        if len(", ".join(chosen + [name]) + ".") // 2 > BUDGET:
+        if count(", ".join(chosen + [name]) + ".") > BUDGET:
             break
         chosen.append(name)
     return ", ".join(chosen) + "." if chosen else ""
@@ -156,7 +169,7 @@ def main(path: str, token: str, connect) -> int:
         print("no STIMME_HA_TOKEN (laib apply home-assistant mints it): Whisper keeps the names it has")
         return 0
     try:
-        text = prompt(fetch(connect()))
+        text = prompt(fetch(connect()), counter(os.path.dirname(path)))
     except PermissionError as err:
         print(f"stimme-names: {err}: laib apply home-assistant mints a new one", file=sys.stderr)
         return 1
