@@ -108,7 +108,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
 		return cli.Refused(env, env.Actor+" may not rollback")
 	}
-	arg := "HEAD"
+	arg := lastChange(ctx, env.Paths.State)
 	if len(args) > 0 {
 		arg = args[0]
 	}
@@ -216,4 +216,18 @@ func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int, 
 	subject := fmt.Sprintf("#%d zurückgenommen%s", id, with)
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})
 	return subject, nil
+}
+
+// lastChange is what a bare rollback reverts: the newest commit on main
+// that changed more than aufgaben.yml (#667). Ticking a Box-Aufgabe off is
+// bookkeeping on top of the box's last change, not that change.
+func lastChange(ctx context.Context, repo string) string {
+	log, _ := sysd.Run(ctx, "git", "-C", repo, "log", "--first-parent", "-n", "50", "--format=%H")
+	for _, sha := range strings.Fields(log) {
+		files, err := sysd.Run(ctx, "git", "-C", repo, "diff", "--name-only", sha+"^1", sha)
+		if err != nil || strings.TrimSpace(files) != "aufgaben.yml" {
+			return sha
+		}
+	}
+	return "HEAD"
 }

@@ -20,6 +20,7 @@ skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
 lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
 ignore.yml            units on the box that are deliberately unmanaged
+aufgaben.yml          the Box-Aufgaben (#667): the owner's to-dos on the box; laib aufgabe commits it on main, never a proposal
 ```
 
 The journal is *not* in the repo: `/mnt/data/laib/journal/YYYY-MM-DD.jsonl`.
@@ -550,3 +551,52 @@ and Caddy writes the TXT record at that name
 through the same resolvers: red when it points elsewhere, yellow when it
 does not resolve. The owner's steps: docs/INSTALL.md, "One wildcard
 certificate".
+
+## aufgaben.yml
+
+The Box-Aufgaben (#667): what the owner has to do on or for the box that no
+code change closes (a second disk, a NAS share, a device to flash). Owner,
+2026-10-25: "das ist ja ein Thema der Box, nicht des Codes". They were
+GitHub issues and rotted there.
+
+```yaml
+aufgaben:
+  - id: 2
+    titel: Wächter von außen einrichten
+    warum: fällt die Box aus, erfährt es niemand
+    seit: "2026-10-25"
+    von: claude
+    erinnern: "2026-12-01"        # from this day diag reminds again
+    befund: watchdog              # the diag finding it covers: probe [service|topic]
+  - id: 1
+    titel: TOTP für mdopp prüfen
+    seit: "2026-10-25"
+    von: human:core
+    erledigt: {am: "2026-10-26", von: haus:mdopp}
+```
+
+- **Why the state repo, committed directly.** The list is the box's, so it
+  is backed up and versioned with it. A change is bookkeeping, not desired
+  state: it renders nothing and changes no service, so it needs no review
+  and no Inbox. `laib aufgabe` writes the file and commits it alone on main
+  (`proposal.CommitPath`, the way `secrets.age` is committed, #328), and a
+  bare `laib rollback` skips such commits: it reverts the box's last change,
+  not the ticking-off on top of it.
+- **Why the kernel, not laib-haushalt.** ADR 0026 puts household verbs
+  behind the verb door, but laib-haushalt's container mounts only the scan
+  orders (ADR 0027), never the state repo, and diag, which is the kernel,
+  reads the list on every run. A door program that only proposes could not
+  tick a task off without an approval.
+- **diag.** A finding that an open task's `befund` covers is shown at
+  severity info with „zurückgestellt → Box-Aufgabe #N“ and carries
+  `aufgabe: N`; from its `erinnern` day it is gelb with „erinnert“. A red
+  stays red: a deferral silences a nudge, never damage. A finding that could
+  not be measured (`unmeasured`, e.g. laib-disk silent) is never covered.
+  When a full diag measures the finding gone, laib checks the task off
+  („von Laib erledigt: Befund weg“), but only for the probes whose absence
+  is a measurement: watchdog, backup, recovery, restore-test, raid. Every
+  other task is ticked off by a person.
+- `befund` matches a finding by its probe and its service or topic
+  (`backup offsite`); a befund without one covers only findings without one.
+- Readiness carries `aufgaben` and `aufgabenFaellig`; the morning report
+  names the due ones.

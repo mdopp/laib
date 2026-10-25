@@ -150,6 +150,17 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 		t.Fatalf("the raid task closed while laib-disk could not measure: %+v", list[2])
 	}
 
+	// readiness carries the open count
+	out, code = mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_status", map[string]any{"fresh": true})
+	var rd struct {
+		Ready struct {
+			Aufgaben int `json:"aufgaben"`
+		} `json:"ready"`
+	}
+	if code != cli.ExitOK || json.Unmarshal([]byte(out), &rd) != nil || rd.Ready.Aufgaben != 1 {
+		t.Fatalf("readiness: one open task (raid): %d %s", code, out)
+	}
+
 	// laib rollback without a commit reverts the last change of the box,
 	// not the bookkeeping on top of it
 	head, _ := exec.Command("git", "-C", env.Paths.State, "log", "-1", "--format=%s").Output()

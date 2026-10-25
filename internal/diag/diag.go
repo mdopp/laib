@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
@@ -40,6 +41,14 @@ type Finding struct {
 	// Repair: the one laib verb that repairs it, when there is one (#441):
 	// `laib repair <probe> [service]` makes it a proposal a human approves.
 	Repair []string `json:"repair,omitempty"`
+	// Topic tells findings of one probe apart that have no service (#667:
+	// backup offsite), so a Box-Aufgabe's befund can name exactly one.
+	Topic string `json:"topic,omitempty"`
+	// Unmeasured: the probe could not look (laib-disk silent, DNS not
+	// answering). It is never covered by a Box-Aufgabe and closes none.
+	Unmeasured bool `json:"unmeasured,omitempty"`
+	// Aufgabe: the open Box-Aufgabe that covers it (#667).
+	Aufgabe int `json:"aufgabe,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -64,6 +73,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	if only == "" {
 		settle(env, st, findings)
+		closeGone(env, st, findings)
 	}
 	if toJournal {
 		// #13: after an auto-update. Red findings become red journal lines
@@ -224,7 +234,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	switch repo := st.Box.Backup.Repo; {
 	case st.Box.Backup.Offsite != nil && repo != "":
 		if time.Since(lastOffsite) > 48*time.Hour { // #391: the copy off the data disk is the one a dead disk leaves
-			out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "keine frische Kopie außer Haus (" + st.Box.Backup.Offsite.Repo + ") seit mehr als 48 Stunden: ein Plattenausfall nähme alles mit", Fix: "laib journal --verb backup (reason offsite); NAS erreichbar? laib backup"})
+			out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "keine frische Kopie außer Haus (" + st.Box.Backup.Offsite.Repo + ") seit mehr als 48 Stunden: ein Plattenausfall nähme alles mit", Fix: "laib journal --verb backup (reason offsite); NAS erreichbar? laib backup", Topic: "offsite"})
 		}
 	case repo == "":
 		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
@@ -233,7 +243,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		if !installed.IsZero() && time.Since(installed) > 7*24*time.Hour {
 			sev = "rot"
 		}
-		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)"})
+		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)", Topic: "offsite"})
 	}
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
 	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
@@ -258,6 +268,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, *f)
 		}
 	}
+	if tasks, err := aufgaben.Load(st.Dir); err == nil { // #667: what the owner deferred
+		out = cover(out, tasks, time.Now().Format(time.DateOnly))
+	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })
 	return out
@@ -276,7 +289,7 @@ func diskFindings(ctx context.Context, hardware bool) []Finding {
 	b, err := exec.CommandContext(ctx, DiskBin(), args...).Output()
 	var out []Finding
 	if err != nil || json.Unmarshal(b, &out) != nil {
-		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")"}}
+		return []Finding{{Severity: "gelb", Probe: "raid", Detail: fmt.Sprintf("laib-disk antwortet nicht (%v): RAID, SMART und Temperatur sind unbekannt", err), Fix: "install-box.sh bringt laib-disk mit (" + DiskBin() + ")", Unmeasured: true}}
 	}
 	return out
 }
@@ -346,7 +359,7 @@ func challengeFinding(domain, alias, cname string, err error) *Finding {
 	name := "_acme-challenge." + domain
 	fix := "beim DNS-Anbieter der Domain: " + name + " CNAME " + alias + " (docs/INSTALL.md, Wildcard-Zertifikat)"
 	if err != nil {
-		return &Finding{Severity: "gelb", Probe: "acme", Detail: name + " nicht auflösbar (" + err.Error() + "): ob das Zertifikat sich erneuern kann, ist offen", Fix: fix}
+		return &Finding{Severity: "gelb", Probe: "acme", Detail: name + " nicht auflösbar (" + err.Error() + "): ob das Zertifikat sich erneuern kann, ist offen", Fix: fix, Unmeasured: true}
 	}
 	if !strings.EqualFold(strings.TrimSuffix(cname, "."), strings.TrimSuffix(alias, ".")) {
 		return &Finding{Severity: "rot", Probe: "acme", Detail: name + " zeigt auf " + cname + ", nicht auf " + alias + ": Caddy schreibt die Challenge dorthin, Let's Encrypt sucht sie hier, das Zertifikat erneuert sich nicht", Fix: fix}

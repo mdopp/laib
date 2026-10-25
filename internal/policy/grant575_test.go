@@ -39,7 +39,7 @@ func TestMissingOnlyAddsToBuiltInVerbLists(t *testing.T) {
 		"kiosk":  {Ceiling: "read", Verbs: []string{"status"}},  // the owner's hand
 	}}
 	got := Missing(cur, false)
-	if strings.Join(got["haus"], ",") != "journal,restart,person_invite,person_pending,person_signal,calendar,zuhause,scan,note" || strings.Join(got["notify"], ",") != "updates,inbox,note" || len(got) != 2 {
+	if strings.Join(got["haus"], ",") != "journal,restart,person_invite,person_pending,person_signal,calendar,zuhause,scan,note,aufgabe" || strings.Join(got["notify"], ",") != "updates,inbox,note" || len(got) != 2 {
 		t.Fatalf("%v", got)
 	}
 }
