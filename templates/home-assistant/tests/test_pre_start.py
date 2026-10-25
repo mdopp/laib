@@ -135,7 +135,7 @@ class PreStart(unittest.TestCase):
         # the other files of the store, and a link, stay as they are
         z = Path(self.tmp.name) / "home-assistant" / "zwave-js"
         z.mkdir(parents=True)
-        keys = ["settings.json", "settings.json.servicebay", "settings.json.sb-bak-1780442083"]
+        keys = ["settings.json", "settings.json.servicebay", "settings.json.sb-bak-1780442083", "users.json"]   # users.json: the UI login's hash
         for f in keys + ["nodes.json"]:
             (z / f).write_text("{}")
             (z / f).chmod(0o644)
