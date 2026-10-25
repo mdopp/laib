@@ -131,7 +131,7 @@ func TestTheLeaseRunsInAContainerFromTheImageLaibPins(t *testing.T) {
 		t.Fatalf("the template's lease does not name %s:\n%s", LeaseLatest, tpl)
 	}
 	tmp := t.TempDir()
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: x.home\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: [llama]\nroles: {model: llama}\n"), 0o644)
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: x.home\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: [llama]\nroles: {model: llama, sso: llama}\n"), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	dst := filepath.Join(tmp, "services", "llama")
 	os.MkdirAll(dst, 0o755)

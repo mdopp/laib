@@ -152,8 +152,10 @@ func TestTheHaushaltHandProposesAndTheDialDecidesNothingOfIt(t *testing.T) {
 	if p, out := propose(hh, "read"); p != nil {
 		t.Fatalf("a call back under ceiling read proposed: %s", out)
 	}
-	if p, out := propose(bote, ""); p == nil || p.Status == "open" {
-		t.Fatalf("the control: bote's values proposal is the dial's (values: auto), got %+v %s", p, out)
+	propose(bote, "")
+	all, _ := proposal.List(cli.InboxDir(env), false)
+	if i := slices.IndexFunc(all, func(o *proposal.Proposal) bool { return o.Actor == "bote" }); i < 0 || all[i].Status == "open" {
+		t.Fatalf("the control: bote's values proposal is the dial's (values: auto): %+v", all)
 	}
 	if ps, _ := proposal.List(cli.InboxDir(env), true); !slices.ContainsFunc(ps, func(o *proposal.Proposal) bool { return o.Actor == "haushalt" }) {
 		t.Fatalf("haushalt's proposal left the inbox: %+v", ps)

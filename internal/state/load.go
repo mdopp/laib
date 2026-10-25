@@ -257,6 +257,11 @@ func (st *State) validate() []error {
 	if _, ok := st.Policy.Hands["notify"]; !ok && st.Policy.Hands != nil {
 		st.Policy.Hands["notify"] = NotifyHand // laib-notify (#443), the same way
 	}
+	for name, h := range map[string]Hand{"haushalt": HaushaltHand, "lease": LeaseHand} { // ADR 0027, the same way
+		if _, ok := st.Policy.Hands[name]; !ok && st.Policy.Hands != nil {
+			st.Policy.Hands[name] = h
+		}
+	}
 	st.Box.Laib.Host = cmp.Or(st.Box.Laib.Host, "laib")
 	st.Box.Laib.Port = cmp.Or(st.Box.Laib.Port, 5900)
 	st.Box.Laib.Listen = cmp.Or(st.Box.Laib.Listen, "127.0.0.1")

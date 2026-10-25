@@ -29,8 +29,15 @@ var Mu sync.RWMutex
 var Allowed = map[string]bool{
 	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true,
 	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "repair": true, "skill": true, "updates": true, "net": true,
-	"person_invite": true, "person_pending": true, "person_signal": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true,
+	"person_invite": true, "person_pending": true, "person_signal": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true, "pause": true, "resume": true,
 }
+
+// DoorHands are the hands of programs behind the verb door, with the
+// ceiling their calls back run under whatever they send (ADR 0027):
+// laib-haushalt proposes, and the dial applies nothing it proposes.
+var DoorHands = map[string]string{"haushalt": "propose"}
+
+type ceilingKey struct{}
 
 type rpcRequest struct {
 	ID     json.RawMessage `json:"id"`
@@ -85,6 +92,16 @@ func Handler(env *cli.Env) http.HandlerFunc {
 			return
 		}
 		hand := rec.Hand
+		// a call back from behind the verb door (ADR 0026, 0027) runs under its
+		// ceiling: the header can only lower it, a door hand is held to its own
+		ceiling := r.Header.Get("X-Laib-Ceiling")
+		if ceiling != "" && policy.Index(ceiling) < 0 {
+			ceiling = "read"
+		}
+		if c, ok := DoorHands[hand]; ok && (ceiling == "" || policy.Index(ceiling) > policy.Index(c)) {
+			ceiling = c
+		}
+		ctx := context.WithValue(r.Context(), ceilingKey{}, ceiling)
 		// a call in a skill's name (ADR 0023): only the skill's granted tools
 		inSkill := r.Header.Get("X-Laib-Skill")
 		switch req.Method {
@@ -115,7 +132,7 @@ func Handler(env *cli.Env) http.HandlerFunc {
 					return
 				}
 			}
-			out, code := Call(r.Context(), env, st, hand, p.Name, p.Args)
+			out, code := Call(ctx, env, st, hand, p.Name, p.Args)
 			rpcReply(w, req.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": out}}, "isError": code != cli.ExitOK}, nil)
 		default:
 			rpcReply(w, req.ID, nil, &rpcError{-32601, "method not found: " + req.Method})
@@ -171,15 +188,22 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	if !policy.MayVerb(st.Policy, hand, verbName) {
 		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), cli.ExitRefused
 	}
+	ceiling, _ := ctx.Value(ceilingKey{}).(string)
+	if ceiling != "" && policy.Index(v.Tier) > policy.Index(ceiling) {
+		return fmt.Sprintf("%s ist Stufe %s; ein Programm hinter der Tür darf höchstens %s", verbName, v.Tier, ceiling), cli.ExitRefused
+	}
 	callArgs, stdin, err := Argv(st, verbName, args)
 	if err != nil {
 		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", cli.ExitUsage
 	}
-	// reads run side by side; a verb that changes something runs alone (#289)
-	if v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session" {
+	// reads run side by side; a verb that changes something runs alone (#289);
+	// a verb behind the door takes nothing: its call back does (ADR 0027)
+	switch {
+	case v.Door:
+	case v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session":
 		Mu.RLock()
 		defer Mu.RUnlock()
-	} else {
+	default:
 		Mu.Lock()
 		defer Mu.Unlock()
 	}
@@ -187,7 +211,7 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	// stdout nor its stderr is ever swapped, so nothing another goroutine
 	// prints can land in a reply
 	var buf, errBuf bytes.Buffer
-	callEnv := &cli.Env{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf}
+	callEnv := &cli.Env{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf, Ceiling: ceiling}
 	if stdin != "" {
 		callEnv.In = strings.NewReader(stdin)
 	}

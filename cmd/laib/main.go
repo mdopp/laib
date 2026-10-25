@@ -92,9 +92,9 @@ func init() {
 		{Name: "person_pending", Tier: "read", Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
 		{Name: "calendar", Tier: "apply", Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495)", Run: cmdCalendar},
 		{Name: "zuhause", Tier: "propose", Help: "show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]: the household's address in box.yml; set replaces it as a proposal a human approves (#561)", Run: cmdZuhause},
-		{Name: "scan", Tier: "propose", Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: served("haushalt", "scan", "propose")},
-		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [\"<grund>\"]: converge leaves the service alone for a while", Flags: []string{"--until"}, Run: cmdPause},
-		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause", Flags: []string{}, Run: cmdResume},
+		{Name: "scan", Tier: "propose", Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: served("haushalt", "scan", "propose"), Door: true},
+		{Name: "pause", Tier: "apply", Help: "<service> [--until 2h] [--stop <unit>]… [--restart <unit>]… [\"<grund>\"]: converge leaves the service alone for a while; --stop/--restart act on its own units now, resume brings them back (the GPU lease, ADR 0027)", Flags: []string{"--until", "--stop", "--restart"}, Run: cmdPause},
+		{Name: "resume", Tier: "apply", Help: "<service>: lift a pause, start and restart what it stopped and restarted", Flags: []string{}, Run: cmdResume},
 	}
 	for i := range mcp.Verbs { // --help and unknown flags, for the CLI, MCP and an approved repair alike (#590)
 		mcp.Verbs[i] = cli.Guard(mcp.Verbs[i])

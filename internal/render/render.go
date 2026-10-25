@@ -61,7 +61,8 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 				if err != nil {
 					return nil, err
 				}
-				out["quadlet/"+name+"/"+file] = unit
+				// laib-lease runs from the image this laib was released with (ADR 0027)
+				out["quadlet/"+name+"/"+file] = strings.ReplaceAll(unit, "\nImage="+LeaseLatest+"\n", "\nImage="+LeaseImage+"\n")
 			}
 		}
 		for file, content := range svc.Assets {
@@ -110,6 +111,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Operator.Enabled {
 		out["quadlet/laib-operator/laib-operator.container"], _ = operatorUnit(st, secrets)
 	}
+	out["quadlet/laib-haushalt/laib-haushalt.container"], _ = haushaltUnit(st, secrets)
 	if notifier(st) {
 		out["quadlet/laib-notify/laib-notify.container"], _ = notifyUnit(st, secrets)
 		out["systemd/laib-notify.timer"] = "# Rendered by laib: the watchdog ping and the owner's mail every five minutes (#443).\n[Unit]\nDescription=Laib notify timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=5m\n\n[Install]\nWantedBy=timers.target\n"
@@ -239,6 +241,8 @@ func SecretNames(st *state.State) []state.Secret {
 	if notifier(st) {
 		out = append(out, state.Secret{Name: NotifyToken, External: true, Mint: "notify"}) // minted on apply
 	}
+	// laib-haushalt's call back (minted on apply) and the door's key (generated), ADR 0027
+	out = append(out, state.Secret{Name: HaushaltToken, External: true, Mint: "haushalt"}, state.Secret{Name: HaushaltKey})
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		out = append(out, svc.Contract.Secrets...)
@@ -332,6 +336,8 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 		_, sec := notifyUnit(st, secrets)
 		maps.Copy(all, sec)
 	}
+	_, sec := haushaltUnit(st, secrets)
+	maps.Copy(all, sec)
 	return all
 }
 
@@ -786,19 +792,25 @@ func notifier(st *state.State) bool {
 	return st.Box.Watchdog.URL != "" || mailTo(st) != "" || st.Box.Notify.Person != ""
 }
 
-// OperatorImage and NotifyImage are the images of Laib's own programs that
-// run in containers (ADR 0027). The release pins them by digest (ldflags
-// -X, .github/workflows/release.yml), so they move with the binary that
-// renders their units: self-update and self-rollback carry them along.
-// A build from source renders the floating tag CI publishes on main.
+// OperatorImage, NotifyImage, HaushaltImage and LeaseImage are the images
+// of Laib's own programs that run in containers (ADR 0027). The release
+// pins them by digest (ldflags -X, .github/workflows/release.yml), so they
+// move with the binary that renders their units: self-update and
+// self-rollback carry them along. A build from source renders the floating
+// tag CI publishes on main. The lease's unit is the llama template's: it
+// names LeaseLatest, and laib puts LeaseImage in.
 var (
 	OperatorImage = "ghcr.io/mdopp/laib-operator:latest"
 	NotifyImage   = "ghcr.io/mdopp/laib-notify:latest"
+	HaushaltImage = "ghcr.io/mdopp/laib-haushalt:latest"
+	LeaseImage    = LeaseLatest
 )
+
+const LeaseLatest = "ghcr.io/mdopp/laib-lease:latest"
 
 // Own are those programs by unit name (ADR 0027): their output is
 // quadlet/<name>/<name>.container, apply starts the long-running ones.
-var Own = []string{"laib-operator", "laib-notify"}
+var Own = []string{"laib-operator", "laib-notify", "laib-haushalt"}
 
 // LaibHome is where they keep their folders; units carry no LAIB_HOME of
 // a test, as every unit laib renders.
@@ -806,14 +818,19 @@ const LaibHome = "/mnt/data/laib"
 
 // ownUnit renders one of them as a Quadlet container: the host's network
 // (laib, the model, Frage and bote-notify stay on 127.0.0.1 as before), its
-// own folder as the only mount, made on the host before it starts, a
-// read-only root without capabilities, and its secrets as podman secrets
-// (#224): no secret on argv, in the unit or in a file. An empty secret is
-// left out, podman refuses one. It returns the unit and the secrets.
-func ownUnit(name, head, folder, inside string, env, sec []string, service string) (string, map[string]string) {
-	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage}[name]
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\nTimezone=local\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\nVolume=%s/%s:%s:Z\n", head, image, LaibHome, folder, inside)
+// own folders as the only mounts (host path, then where and how inside),
+// made on the host before it starts, a read-only root without
+// capabilities, and its secrets as podman secrets (#224): no secret on
+// argv, in the unit or in a file. An empty secret is left out, podman
+// refuses one. It returns the unit and the secrets.
+func ownUnit(name, head string, mounts []string, env, sec []string, service string) (string, map[string]string) {
+	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage, "laib-haushalt": HaushaltImage}[name]
+	var b, mkdir strings.Builder
+	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\nTimezone=local\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\n", head, image)
+	for i := 0; i+1 < len(mounts); i += 2 {
+		fmt.Fprintf(&b, "Volume=%s:%s\n", mounts[i], mounts[i+1])
+		fmt.Fprintf(&mkdir, "ExecStartPre=/usr/bin/mkdir -p %s\n", mounts[i])
+	}
 	for i := 0; i+1 < len(env); i += 2 {
 		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", env[i], strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(env[i+1]))
 	}
@@ -826,8 +843,52 @@ func ownUnit(name, head, folder, inside string, env, sec []string, service strin
 		secrets[n] = sec[i+1]
 		fmt.Fprintf(&b, "Secret=%s,type=env,target=%s\n", n, sec[i])
 	}
-	fmt.Fprintf(&b, "\n[Service]\nExecStartPre=/usr/bin/mkdir -p %s/%s\n%s", LaibHome, folder, service)
+	fmt.Fprintf(&b, "\n[Service]\n%s%s", mkdir.String(), service)
 	return b.String(), secrets
+}
+
+// HaushaltToken is laib-haushalt's bearer for its call back, as the
+// haushalt hand; HaushaltKey is how it knows a call came through laib's
+// verb door (ADR 0026, 0027). HaushaltListen is where the door finds it.
+const (
+	HaushaltToken  = "LAIB_HAUSHALT_TOKEN"
+	HaushaltKey    = "LAIB_HAUSHALT_KEY"
+	HaushaltListen = "127.0.0.1:5902"
+)
+
+// ScanFolder is the service that provides scan, its status file and its
+// orders folder beside it (#568), as host paths; "" without the service,
+// status and orders "" without a status file. laib-haushalt writes the
+// orders, the door reads the status.
+func ScanFolder(st *state.State) (svc, status, orders string) {
+	for _, name := range st.ServiceNames() {
+		c := st.Services[name].Contract
+		if !slices.Contains(c.Provides, "scan") {
+			continue
+		}
+		svc, status, orders = name, "", ""
+		if c.Status != nil && c.Status.File != "" {
+			status = strings.ReplaceAll(c.Status.File, "${DATA_DIR}", st.Box.DataDir)
+			orders = filepath.Join(filepath.Dir(status), "auftrag")
+		}
+	}
+	return svc, status, orders
+}
+
+// haushaltUnit is laib-haushalt's container, on every box: the household
+// verbs behind the verb door (ADR 0026), on 127.0.0.1 in the host's network
+// (net geraete reads its neighbour table), its token and the door's key as
+// podman secrets. Its one mount is the scan service's orders folder, at the
+// same path (the door names it), shared with the scan container.
+func haushaltUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
+	var mounts []string
+	if _, _, orders := ScanFolder(st); orders != "" {
+		mounts = []string{orders, orders + ":z"}
+	}
+	env := []string{"HAUSHALT_LISTEN", HaushaltListen, "LAIB_MCP_URL", fmt.Sprintf("http://127.0.0.1:%d/mcp", st.Box.Laib.Port)}
+	sec := []string{"LAIB_TOKEN", secretValue(secrets, HaushaltToken), "HAUSHALT_KEY", secretValue(secrets, HaushaltKey)}
+	return ownUnit("laib-haushalt", "# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).\n[Unit]\nDescription=Laib haushalt\nAfter=laib.service\n",
+		mounts, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }
 
 // notifyUnit is laib-notify's container, a oneshot its timer starts: laib's
@@ -855,7 +916,7 @@ func notifyUnit(st *state.State, secrets map[string]string) (string, map[string]
 	// #624: what the host unit kept in LAIB_HOME moves into the folder once
 	move := fmt.Sprintf("ExecStartPre=-/usr/bin/mv -n %[1]s/mail.json %[1]s/watchdog.last %[1]s/notify/\nType=oneshot\n", LaibHome)
 	return ownUnit("laib-notify", "# Rendered by laib: the watchdog ping and the owner's mail (#443), in its container (ADR 0027).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n",
-		"notify", "/notify", env, sec, move)
+		[]string{LaibHome + "/notify", "/notify:Z"}, env, sec, move)
 }
 
 // OperatorToken is the secret holding the operator's ops bearer.
@@ -889,5 +950,5 @@ func operatorUnit(st *state.State, secrets map[string]string) (string, map[strin
 		}
 	}
 	return ownUnit("laib-operator", "# Rendered by laib: the box's admin agent (ADR 0013), in its container (ADR 0027).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n",
-		"operator", "/operator", env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
+		[]string{LaibHome + "/operator", "/operator:Z"}, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }
