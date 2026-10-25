@@ -202,14 +202,25 @@ func CommitDirty(ctx context.Context, repo, actor string) error {
 // secret a hook handed back, or one `laib secret set` wrote, is the box's
 // truth, never part of a proposal a reject would drop.
 func CommitSecrets(ctx context.Context, repo, why string) error {
+	return CommitPath(ctx, repo, "secrets.age", why, "")
+}
+
+// CommitPath commits one file on main when it changed, and nothing else:
+// secrets.age (#328), aufgaben.yml, the box's to-do list (#667). actor,
+// when set, is the commit's author.
+func CommitPath(ctx context.Context, repo, path, why, actor string) error {
 	defer LockRepo(repo)()
-	if st, err := git(ctx, repo, "status", "--porcelain", "--", "secrets.age"); err != nil || st == "" {
+	if st, err := git(ctx, repo, "status", "--porcelain", "--", path); err != nil || st == "" {
 		return err
 	}
-	if _, err := git(ctx, repo, "add", "--", "secrets.age"); err != nil {
+	if _, err := git(ctx, repo, "add", "--", path); err != nil {
 		return err
 	}
-	_, err := git(ctx, repo, "commit", "-q", "-m", why, "--", "secrets.age")
+	args := []string{"commit", "-q", "-m", why}
+	if actor != "" {
+		args = append(args, "--author", actor+" <"+Hand(actor)+"@laib>")
+	}
+	_, err := git(ctx, repo, append(args, "--", path)...)
 	return err
 }
 

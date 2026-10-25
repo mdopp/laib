@@ -94,6 +94,16 @@ var mcpParams = map[string][]mcpParam{
 		{name: "geraet", typ: "string", flag: "--geraet", desc: "einrichten: das SANE-Gerät aus suche.funde oder von Hand, epson2:net:192.168.1.5"},
 		{name: "person", typ: "string", flag: "--person", desc: "wem die Abschlussmeldung gilt (box.yml people); leer: notify.person"},
 		{name: "stapel", typ: "string", flag: "--stapel", desc: "redo: der Stapel, JJJJ-MM-TTThh-mm-ss"}},
+	"aufgabe": {{name: "action", typ: "string", enum: []string{"list", "add", "erledigt", "zurueckstellen"}, required: true,
+		desc: "list: die offenen Box-Aufgaben; add: eine neue (ops, claude, Haus); erledigt, zurueckstellen: abhaken oder die Erinnerung verschieben (Menschen, claude, Haus)"},
+		{name: "id", typ: "string", desc: "erledigt, zurueckstellen: die Nummer der Aufgabe"},
+		{name: "titel", typ: "string", desc: "add: was zu tun ist, eine Zeile, deutsch"},
+		{name: "warum", typ: "string", flag: "--warum", desc: "add: warum, ein Satz"},
+		{name: "erinnern", typ: "string", flag: "--erinnern", desc: "add, zurueckstellen: ab diesem Tag erinnert diag wieder, JJJJ-MM-TT"},
+		{name: "befund", typ: "string", flag: "--befund", desc: "add: der Befund aus laib diag, den die Aufgabe abdeckt: Probe, wahlweise Dienst oder Thema, z. B. raid, watchdog, backup offsite; Laib hakt sie ab, wenn er weg ist"},
+		{name: "von", typ: "string", flag: "--von", desc: "nur Haus: der angemeldete Admin, für den Haus abhakt"},
+		{name: "alle", typ: "boolean", flag: "--alle", desc: "list: auch die erledigten"},
+		{name: "faellig", typ: "boolean", flag: "--faellig", desc: "list: nur die, deren Erinnerung fällig ist"}},
 	"skill": {{name: "action", typ: "string", enum: []string{"list", "enable", "pause"}, required: true}, {name: "name", typ: "string", desc: "die Fähigkeit"}},
 }
 

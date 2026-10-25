@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
@@ -57,6 +58,8 @@ type Readiness struct {
 	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
 	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
 	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
+	Aufgaben  int      `json:"aufgaben"`           // open Box-Aufgaben (#667), the owner's to-dos on the box
+	Faellig   int      `json:"aufgabenFaellig"`    // of them, the ones whose reminder day has come
 	// the three guarantees Haus's start page shows the family (haus#2)
 	LastBackup LastBackup `json:"lastBackup"`
 	LastChange LastChange `json:"lastChange"`
@@ -83,6 +86,9 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 	}
 	r.Firewall = apply.FirewallState(ctx, env.Paths)
 	r.Watchdog = watchdogState(env, st)
+	if list, err := aufgaben.Load(env.Paths.State); err == nil {
+		r.Aufgaben, r.Faellig = aufgaben.Counts(list, time.Now().Format(time.DateOnly))
+	}
 	if r.Firewall == "fehlt" && r.Lock == "" {
 		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
 	}
@@ -172,6 +178,9 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 	fmt.Fprintf(env.W(), "Laib · %s · %d Dienste · %d grün · %d gelb · %d rot · Drift %d · Operator %s\n", r.State, r.Services, r.Green, r.Yellow, r.Red, r.Drift, r.Operator)
 	if r.Lock != "" {
 		fmt.Fprintf(env.W(), "  gesperrt durch: %s\n", r.Lock)
+	}
+	if r.Aufgaben > 0 {
+		fmt.Fprintf(env.W(), "  Box-Aufgaben: %d offen, %d fällig (laib aufgabe list)\n", r.Aufgaben, r.Faellig)
 	}
 	for _, row := range rows {
 		fmt.Fprintf(env.W(), "  %-5s %-20s", row.State, row.Name)

@@ -232,7 +232,8 @@ func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 	st, _ := cli.LoadState(c.env)
 	var red, test bool
 	for _, f := range diag.Probes(context.Background(), c.env, st, "") {
-		if f.Probe == "backup" && f.Severity == "rot" && strings.Contains(f.Detail, "Datenplatte") {
+		// a risk, not damage (owner 2026-10-25, „Rot bleibt rot“): gelb, never red, so a Box-Aufgabe can cover it
+		if f.Probe == "backup" && f.Severity == "gelb" && strings.Contains(f.Detail, "Datenplatte") {
 			red = true
 		}
 		if f.Probe == "restore-test" && f.Severity == "gelb" {
@@ -240,7 +241,7 @@ func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 		}
 	}
 	if !red {
-		t.Fatal("eight days on the data disk alone must be red")
+		t.Fatal("eight days on the data disk alone must be yellow")
 	}
 	if !test {
 		t.Fatal("no restore test ever run must be yellow")
