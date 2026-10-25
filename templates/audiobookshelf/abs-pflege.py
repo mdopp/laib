@@ -123,6 +123,15 @@ def chapters(item, asin, token):
 
 def care_books(lib, token, state):
     books = items(lib["id"], token)
+    # a library ABS never read in holds nothing to match (2026-10-25: „0 abgeglichen“ for hours):
+    # ask for a scan when it is empty, and once a day so new folders come in; ABS scans in the background
+    scans = state.setdefault("scan", {})
+    if not books or time.time() - scans.get(lib["id"], 0) > 86400:
+        if time.time() - scans.get(lib["id"], 0) > 86400:
+            req("POST", f"/api/libraries/{lib['id']}/scan", token=token)
+            scans[lib["id"]] = time.time()
+        if not books:
+            return "Hörbücher: noch nichts eingelesen – Audiobookshelf liest die Bibliothek gerade ein", []
     done = state.setdefault("items", {})
     series = series_of(books)
     budget, findings = PER_RUN, []
@@ -167,7 +176,7 @@ def care_books(lib, token, state):
     ok = sum(d["r"] != "ohne Treffer" for d in have)
     miss = [d["title"] for d in have if d["r"] == "ohne Treffer"]
     left = len(books) - len(have)
-    detail = f"Hörbücher: {ok} von {len(books)} abgeglichen" if left else f"Hörbücher: {ok} abgeglichen"
+    detail = f"Hörbücher: {len(books)} Titel, {ok} abgeglichen"
     if miss:
         detail += f", {len(miss)} ohne Treffer: " + ", ".join(miss[:10]) + (" …" if len(miss) > 10 else "")
     if left:
