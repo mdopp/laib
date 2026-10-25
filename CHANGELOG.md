@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.33.0](https://github.com/mdopp/laib/compare/v0.32.0...v0.33.0) (2026-10-25)
+
+
+### Features
+
+* Haus gets an ABS key, podcasts keep their last 3, laib tell (haus[#123](https://github.com/mdopp/laib/issues/123)) ([37fc5e3](https://github.com/mdopp/laib/commit/37fc5e3c63fe8b8c9c13bbcc948bcb8301ae555f))
+* **haushalt:** laib tell sends one person a message through the Bote ([b369c81](https://github.com/mdopp/laib/commit/b369c815713ffdd335fc4929714ba3179cd4f0d6)), closes [#676](https://github.com/mdopp/laib/issues/676)
+* **template:** audiobookshelf gives Haus an administrator and its key ([559612b](https://github.com/mdopp/laib/commit/559612bba3a80e13a1c927fd26b1e407546647a4)), closes [#676](https://github.com/mdopp/laib/issues/676)
+* **template:** every podcast keeps its last three episodes ([0ac25b0](https://github.com/mdopp/laib/commit/0ac25b04442babcb377d9ca2777a9a3da06fc33f)), closes [#676](https://github.com/mdopp/laib/issues/676)
+* **template:** Whisper hears the household's exposed names as its initial prompt ([1922429](https://github.com/mdopp/laib/commit/19224293c3786fa16de2ecf960f4a0c7ef191c84))
+* **template:** Whisper hears the household's exposed names as its initial prompt ([29f3d02](https://github.com/mdopp/laib/commit/29f3d023204e1a242904941a48b99743c90e9817))
+
+
+### Bug Fixes
+
+* **template:** audiobookshelf's care names broken titles after their folder, asks Audible again, orders CDs ([e379b0e](https://github.com/mdopp/laib/commit/e379b0ece099af244e079a4d57219e0b0eaea647))
+* **template:** audiobookshelf's care names broken titles after their folder, asks Audible again, orders CDs ([eadbfca](https://github.com/mdopp/laib/commit/eadbfca446bd9f85ad3c8944d19627d13aab1bb1)), closes [#678](https://github.com/mdopp/laib/issues/678)
+* **template:** the lease reads presets from the data folder, Joshua waits 0.7 s for the end of a sentence ([d516214](https://github.com/mdopp/laib/commit/d51621491fd140ac1ff5bd937d5409974eab8409))
+
 ## [0.32.0](https://github.com/mdopp/laib/compare/v0.31.2...v0.32.0) (2026-10-25)
 
 
