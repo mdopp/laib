@@ -54,7 +54,7 @@ persona change applies this hook again.
   (templates/stimme): once it is flashed and the satellite's
   „Aktivierungswort“ select offers the persona's phrase, post-deploy selects
   it; until then the device keeps its own.
-- **End of speech.** `VOICE_VAD` (default `aggressive`) is every satellite's
+- **End of speech.** `VOICE_VAD` (default `default`; `aggressive` cut sentences at a breath) is every satellite's
   „Sprechpausen-Erkennung“: how much silence ends a sentence — `default`
   0.7 s, `relaxed` 1.25 s, `aggressive` 0.25 s (HA's assist_pipeline/vad.py).
   Empty leaves it as set in HA. Without speech ending, HA records until its

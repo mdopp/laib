@@ -21,6 +21,8 @@ def render(presets):
         r = subprocess.run([sys.executable, str(hook / "pre-start")], env=dict(os.environ, LAIB_DATA_DIR=d), capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             raise AssertionError(r.stdout + r.stderr)
+        if presets.get("presets") and json.loads(Path(d, "llama", "presets", "presets.json").read_text()) != presets:
+            raise AssertionError("the lease's copy of presets.json differs")
         return (models / "presets.ini").read_text()
 
 
@@ -45,6 +47,14 @@ class Presets(unittest.TestCase):
         self.assertNotIn("open(os.path.join(MODELS, \"presets.ini", (T / "post-deploy").read_text())
         self.assertTrue(os.access(T / "pre-start", os.X_OK), "pre-start must be executable")
 
+
+    def test_the_lease_reads_presets_from_the_data_folder(self):
+        """#106: a container may not read laib's config folder under SELinux;
+        the lease died on open /presets.json: permission denied."""
+        c = (T / "llama-lease.container").read_text()
+        self.assertIn("Volume=${DATA_DIR}/llama/presets:/presets:ro,z", c)
+        self.assertIn("PRESETS_FILE=/presets/presets.json", c)
+        self.assertNotIn("%h/.config", c)
 
     def test_presets_ini_names_the_current_drafter_flag(self):
         presets = json.loads((T / "presets.json").read_text())

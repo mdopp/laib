@@ -1061,7 +1061,7 @@ class Voice(Stimme):
         unit = (HOOK.parent / "home-assistant-check.service").read_text()
         for v in ("${PERSONA_DISPLAY}", "${PERSONA_WAKEWORD}", "${PERSONA_PHRASE}", "${VOICE_VAD}"):
             self.assertIn(v, unit)
-        self.assertIn("VOICE_VAD: aggressive", (HOOK.parent / "values.example.yml").read_text())
+        self.assertIn("VOICE_VAD: default", (HOOK.parent / "values.example.yml").read_text())
 
 
 class Zuhause(Hook):

@@ -23,6 +23,8 @@ data:
   - path: ${DATA_DIR}/llama/models
     backup: false                # GGUF downloads; re-fetched by the hook, never backed up
   - path: ${DATA_DIR}/llama/lease
+  - path: ${DATA_DIR}/llama/presets
+    backup: false                # pre-start's copy of presets.json for the lease (#106)
 health:
   http: http://127.0.0.1:11435/health
 status:                          # which roles of the modes nobody provides; laib-lease writes it at every start (#374)
