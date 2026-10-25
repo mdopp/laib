@@ -8,13 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/mdopp/laib/internal/apply"
-	"github.com/mdopp/laib/internal/boxfs"
-	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -45,20 +43,20 @@ func templateService(t *testing.T, name string) *state.Service {
 	return svc
 }
 
-// realUnits resolves a role to the real template that provides it.
-func realUnits(t *testing.T) func(role string) (string, []string) {
+// realServices are the real templates as laib status lists them: their
+// names, roles and units (UnitNames, the kernel's rule).
+func realServices(t *testing.T) []Service {
 	t.Helper()
-	services := []*state.Service{templateService(t, "stimme"), templateService(t, "llama")}
-	return func(role string) (string, []string) {
-		for _, svc := range services {
-			for _, p := range svc.Contract.Provides {
-				if p == role {
-					return svc.Name, svc.UnitNames()
-				}
-			}
+	var out []Service
+	for _, name := range []string{"stimme", "llama"} {
+		svc := templateService(t, name)
+		units := map[string]string{}
+		for _, u := range svc.UnitNames() {
+			units[u] = "active"
 		}
-		return "", nil
+		out = append(out, Service{Name: name, Provides: svc.Contract.Provides, Units: units})
 	}
+	return out
 }
 
 func config42(t *testing.T, router string) Config {
@@ -72,13 +70,12 @@ func config42(t *testing.T, router string) Config {
 			"full":   {Stops: []string{"voice/whisper", "voice/wakeword-trainer", "model/embed"}, Voice: "cpu"},
 		},
 		VoiceUnits: []string{"voice/whisper", "voice/piper"},
-		Units:      realUnits(t),
+		Laib:       newFake(realServices(t)),
 		RouterURL:  router,
 		LeaseDir:   filepath.Join(home, "lease"),
 		Token:      "lease-secret",
 		Renew:      10 * time.Minute,
 		WarnAfter:  20 * time.Minute,
-		Paths:      boxfs.Paths{Home: home, Journal: filepath.Join(home, "journal")},
 	}
 }
 
@@ -96,13 +93,8 @@ func router42(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func server42(t *testing.T) (*Server, *httptest.Server, *[]string, Config) {
+func server42(t *testing.T) (*Server, *httptest.Server, *fakeLaib, Config) {
 	t.Helper()
-	var calls []string
-	Systemctl = func(_ context.Context, verb string, units []string) error {
-		calls = append(calls, verb+" "+strings.Join(units, ","))
-		return nil
-	}
 	cfg := config42(t, router42(t).URL)
 	s, err := New(cfg)
 	if err != nil {
@@ -110,7 +102,7 @@ func server42(t *testing.T) (*Server, *httptest.Server, *[]string, Config) {
 	}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return s, srv, &calls, cfg
+	return s, srv, cfg.Laib.(*fakeLaib), cfg
 }
 
 func post42(t *testing.T, url, token, body string) (int, map[string]any) {
@@ -132,20 +124,24 @@ func post42(t *testing.T, url, token, body string) (int, map[string]any) {
 
 // #42 (1): modes name roles and containers; the lease resolves them to
 // unit names through the real templates, and a name that does not exist
-// is refused when the lease starts, not discovered on the GPU box.
+// is refused when the lease starts, not discovered on the GPU box. Since
+// ADR 0027 the lease stops nothing itself: it pauses each service through
+// laib, naming the units to stop and, for the voice on the CPU, the ones
+// to restart once voice-device.env says cpu.
 func TestModesResolveThroughTheRealTemplates(t *testing.T) {
-	s, _, calls, _ := server42(t)
+	s, _, laib, cfg := server42(t)
+	laib.onPause = func(h Hold) {
+		if b, _ := os.ReadFile(filepath.Join(cfg.LeaseDir, "voice-device.env")); h.Service == "stimme" && !strings.Contains(string(b), "WHISPER_DEVICE=cpu") {
+			t.Errorf("stimme is restarted before voice-device.env says cpu: %q", b)
+		}
+	}
 	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(*calls, "\n")
-	if !strings.Contains(joined, "stop llama-embed.service,stimme-wakeword-trainer.service,stimme-whisper.service") {
-		t.Fatalf("full must stop the real units: %v", *calls)
+	if want := []string{"pause llama stop llama-embed.service", "pause stimme stop stimme-wakeword-trainer.service,stimme-whisper.service restart stimme-piper.service,stimme-whisper.service"}; !slices.Equal(laib.calls, want) {
+		t.Fatalf("full must pause the real services with their real units:\n%s", strings.Join(laib.calls, "\n"))
 	}
-	if !strings.Contains(joined, "restart stimme-piper.service,stimme-whisper.service") {
-		t.Fatalf("the voice units are the real ones: %v", *calls)
-	}
-	cfg := config42(t, "http://127.0.0.1:1")
+	cfg = config42(t, "http://127.0.0.1:1")
 	cfg.Modes["full"] = Mode{Stops: []string{"voice/whisper-batch"}}
 	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "whisper-batch") || !strings.Contains(err.Error(), "stimme") {
 		t.Fatalf("a unit that does not exist must be refused at start, naming the service: %v", err)
@@ -194,13 +190,13 @@ func TestLeaseAPIRequiresTheToken(t *testing.T) {
 // #42 (3): acquiring by preset takes the narrowest mode that allows it,
 // not the first by name.
 func TestAcquireByPresetTakesTheNarrowestMode(t *testing.T) {
-	s, _, calls, _ := server42(t)
+	s, _, laib, _ := server42(t)
 	l, err := s.Acquire(context.Background(), "chronicle", "gemma-4-12b", time.Hour)
 	if err != nil || l.Mode != "shared" {
 		t.Fatalf("gemma-4-12b is allowed in shared (2 presets) and full (all): %+v %v", l, err)
 	}
-	if strings.Contains(strings.Join(*calls, "\n"), "stop ") {
-		t.Fatalf("shared stops nothing: %v", *calls)
+	if len(laib.calls) != 0 {
+		t.Fatalf("shared pauses nothing: %v", laib.calls)
 	}
 	s.Release(context.Background(), "chronicle")
 	l, err = s.Acquire(context.Background(), "bote", "qwen3.6-35b-a3b", time.Hour)
@@ -246,12 +242,8 @@ func TestAStandingLeaseIsYellowInTheStatusFile(t *testing.T) {
 // #522: the automatic window a request took before is given back at
 // start; voice returns to the GPU and its units start again.
 func TestAStaleRouterWindowIsReleasedAtStart(t *testing.T) {
-	var calls []string
-	Systemctl = func(_ context.Context, verb string, units []string) error {
-		calls = append(calls, verb+" "+strings.Join(units, ","))
-		return nil
-	}
 	cfg := config42(t, router42(t).URL)
+	laib := cfg.Laib.(*fakeLaib)
 	os.MkdirAll(cfg.LeaseDir, 0o755)
 	stale, _ := json.Marshal(Lease{Holder: "router", Mode: "full", Since: time.Now(), Until: time.Now().Add(45 * time.Minute)})
 	os.WriteFile(filepath.Join(cfg.LeaseDir, "lease.json"), stale, 0o644)
@@ -262,15 +254,15 @@ func TestAStaleRouterWindowIsReleasedAtStart(t *testing.T) {
 	if l := s.read(); l != nil {
 		t.Fatalf("the router's window stands: %+v", l)
 	}
-	if env, _ := os.ReadFile(filepath.Join(cfg.LeaseDir, "voice-device.env")); !strings.Contains(string(env), "cuda") || !strings.Contains(strings.Join(calls, "\n"), "start ") {
-		t.Fatalf("voice not back on the GPU or units not started: %q %v", env, calls)
+	if env, _ := os.ReadFile(filepath.Join(cfg.LeaseDir, "voice-device.env")); !strings.Contains(string(env), "cuda") || !slices.Equal(laib.calls, []string{"resume llama", "resume stimme"}) {
+		t.Fatalf("voice not back on the GPU or the services not resumed: %q %v", env, laib.calls)
 	}
 }
 
 // #42 goal: a holder renews or loses the card within one interval, not
 // after the 4 h TTL; the response says how often.
 func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
-	s, srv, calls, cfg := server42(t)
+	s, srv, laib, cfg := server42(t)
 	s.cfg.Renew = time.Second
 	code, out := post42(t, srv.URL+"/api/model-lease", cfg.Token, `{"model":"full","holder":"bote","ttl_s":14400}`)
 	if code != 200 {
@@ -297,8 +289,8 @@ func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 	if s.read() != nil {
 		t.Fatal("a holder that stopped renewing still holds the card")
 	}
-	if !strings.Contains(strings.Join(*calls, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service,stimme-whisper.service") {
-		t.Fatalf("the units come back on expiry: %v", *calls)
+	if !slices.Contains(laib.calls, "pause stimme") || !slices.Contains(laib.calls, "resume llama") || !slices.Contains(laib.calls, "resume stimme") {
+		t.Fatalf("a renewal renews the pauses, expiry resumes the services: %v", laib.calls)
 	}
 }
 
@@ -306,35 +298,33 @@ func TestAHolderThatStopsRenewingIsReleasedWithinOneInterval(t *testing.T) {
 // whose units the lease stopped and says why in plain German; a foreign
 // window older than WarnAfter gets one yellow journal line.
 func TestALongForeignLeaseIsVisible(t *testing.T) {
-	s, _, _, cfg := server42(t)
+	s, _, laib, cfg := server42(t)
 	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	paused := apply.Paused(cfg.Paths)
 	for _, svc := range []string{"stimme", "llama"} {
-		p, ok := paused[svc]
+		p, ok := laib.paused[svc]
 		if !ok {
-			t.Fatalf("%s must carry the pause marker (its units are stopped): %v", svc, paused)
+			t.Fatalf("%s must be paused through laib (its units are stopped): %v", svc, laib.paused)
 		}
-		if !strings.HasPrefix(p.By, "lease:") || !strings.Contains(p.Reason, "Grafikkarte") || !strings.Contains(p.Reason, "bote") {
-			t.Fatalf("the pause says who holds the card and why, in German: %+v", p)
+		if !strings.Contains(p.Reason, "Grafikkarte") || !strings.Contains(p.Reason, "bote") || !p.Until.Equal(s.read().Until) {
+			t.Fatalf("the pause says who holds the card and why, in German, until the renewal is due: %+v", p)
 		}
 	}
 	s.expireOnce(context.Background())
-	if es, _ := journal.Read(cfg.Paths.Journal, time.Now().Add(-time.Hour)); len(es) != 0 {
-		t.Fatalf("no warning before WarnAfter: %+v", es)
+	if len(laib.notes) != 0 {
+		t.Fatalf("no warning before WarnAfter: %v", laib.notes)
 	}
 	l := s.read()
 	l.Since = time.Now().Add(-cfg.WarnAfter - time.Minute)
 	s.write(l)
 	s.expireOnce(context.Background())
 	s.expireOnce(context.Background())
-	es, _ := journal.Read(cfg.Paths.Journal, time.Now().Add(-time.Hour))
-	if len(es) != 1 || es[0].Result != "gelb" || es[0].Verb != "lease" || !strings.Contains(es[0].Detail, "bote") || !strings.Contains(es[0].Detail, "Sprache") {
-		t.Fatalf("one yellow journal line naming the holder and the consequence: %+v", es)
+	if len(laib.notes) != 1 || !strings.Contains(laib.notes[0], "bote") || !strings.Contains(laib.notes[0], "Sprache") {
+		t.Fatalf("one note in laib's journal naming the holder and the consequence: %v", laib.notes)
 	}
 	s.Release(context.Background(), "bote")
-	if len(apply.Paused(cfg.Paths)) != 0 {
-		t.Fatal("release lifts every pause the lease wrote")
+	if len(laib.paused) != 0 {
+		t.Fatal("release resumes every service the lease paused")
 	}
 }

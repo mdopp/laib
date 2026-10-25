@@ -5,21 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
-	"sync"
 	"testing"
 )
 
-func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
+func testServer(t *testing.T) (*Server, *httptest.Server, *fakeLaib) {
 	t.Helper()
-	var mu sync.Mutex
-	var sysd []string
-	Systemctl = func(_ context.Context, verb string, units []string) error {
-		mu.Lock()
-		defer mu.Unlock()
-		sysd = append(sysd, verb+" "+strings.Join(units, ","))
-		return nil
-	}
 	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -38,7 +30,7 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *[]string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, httptest.NewServer(s.Handler()), &sysd
+	return s, httptest.NewServer(s.Handler()), cfg.Laib.(*fakeLaib)
 }
 
 func post(t *testing.T, url string, body string) (int, map[string]any) {
@@ -67,24 +59,24 @@ func TestHouseholdOnlyThenLeaseThenHeld(t *testing.T) {
 	if msg, _ := out["error"].(map[string]any)["message"].(string); code != 409 || !strings.Contains(msg, "Haushaltsmodell gemma-4-e4b") || !strings.Contains(msg, "/api/model-lease") {
 		t.Fatalf("a foreign preset from the household must be refused naming the household model: %d %v", code, out)
 	}
-	if l := s.read(); l != nil || len(*sysd) != 0 {
-		t.Fatalf("a request opened a window: %+v %v", l, *sysd)
+	if l := s.read(); l != nil || len(sysd.calls) != 0 {
+		t.Fatalf("a request opened a window: %+v %v", l, sysd.calls)
 	}
 	// full only by a named holder's lease
 	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"full","ttl_s":600,"holder":"bote"}`)
 	if code != 200 || out["model"] != "full" {
 		t.Fatalf("%d %v", code, out)
 	}
-	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatalf("full did not stop its units: %v", *sysd)
+	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-wakeword-trainer.service restart stimme-piper.service,stimme-whisper.service") {
+		t.Fatalf("full did not pause its services with their units: %v", sysd.calls)
 	}
 	if code, _ := post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`); code != 200 {
 		t.Fatal("the lease's preset refused", code)
 	}
 	s.Release(context.Background(), "bote")
 	// units come back when the window is given back
-	if !strings.Contains(strings.Join(*sysd, "\n"), "start llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatalf("leaving full did not restart units: %v", *sysd)
+	if !slices.Contains(sysd.calls, "resume llama") || !slices.Contains(sysd.calls, "resume stimme") {
+		t.Fatalf("leaving full did not resume its services: %v", sysd.calls)
 	}
 	code, out = post(t, srv.URL+"/api/model-lease", `{"model":"shared","ttl_s":60,"holder":"foundry-chronicle"}`)
 	if code != 200 || out["state"] != "ready" || out["model"] != "shared" {
@@ -140,8 +132,8 @@ func TestExclusiveStopsEverythingAndUnknownIsRefused(t *testing.T) {
 	if l := s.read(); l == nil || l.Mode != "exclusive" || len(l.Allowed) != 0 {
 		t.Fatalf("%+v", l)
 	}
-	if !strings.Contains(strings.Join(*sysd, "\n"), "stop llama-embed.service,stimme-wakeword-trainer.service") {
-		t.Fatal(*sysd)
+	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-wakeword-trainer.service") {
+		t.Fatal(sysd.calls)
 	}
 	code, _ = post(t, srv.URL+"/v1/chat/completions", `{"model":"gemma-4-e4b","messages":[]}`)
 	if code != 409 {
