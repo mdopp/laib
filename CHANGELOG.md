@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.31.0](https://github.com/mdopp/laib/compare/v0.30.0...v0.31.0) (2026-10-25)
+
+
+### Features
+
+* **auth:** failed logins and bans reported over Signal ([#653](https://github.com/mdopp/laib/issues/653)) ([0abc026](https://github.com/mdopp/laib/commit/0abc02686212e22afd76dace1bb0f9c3f06620a3))
+* **template:** auth renders Authelia's regulation from its values ([851dc19](https://github.com/mdopp/laib/commit/851dc193f8df85abdff4d8367d17ceda67e4fbc1))
+* **template:** auth tells the owner about failed logins and bans ([05bb764](https://github.com/mdopp/laib/commit/05bb764f3e4acef499e6f57c37e927ffcc6ddaef))
+
 ## [0.30.0](https://github.com/mdopp/laib/compare/v0.29.0...v0.30.0) (2026-10-24)
 
 
