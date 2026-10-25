@@ -900,7 +900,7 @@ jobs:
                 # the next apply keeps what works; a token HA refuses is replaced
                 $L apply home-assistant | tee /tmp/apply-ha2.txt
                 if grep -q " minted" /tmp/apply-ha2.txt; then echo "a working token was minted again"; exit 1; fi
-                grep -q "tokens for the check, Haus, the Automat and the Bote work" /tmp/apply-ha2.txt
+                grep -q "tokens for the check, Haus, the Automat, the Bote and Stimme work" /tmp/apply-ha2.txt
                 echo vm-not-a-token-349 | $L secret set HA_TOKEN >/dev/null
                 $L apply home-assistant | tee /tmp/apply-ha3.txt
                 grep -q "HA_TOKEN minted (replaces one HA refuses)" /tmp/apply-ha3.txt || { echo "the refused HA_TOKEN was not replaced"; exit 1; }
