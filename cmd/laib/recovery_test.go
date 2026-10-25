@@ -247,3 +247,34 @@ func TestDiagWantsAnOffBoxRepoAfterAWeek(t *testing.T) {
 		t.Fatal("no restore test ever run must be yellow")
 	}
 }
+
+// A fresh box already has a secrets.age of its own (laib-haushalt's key is
+// minted at the first apply, ADR 0027), encrypted to the fresh box's key.
+// After the owner puts the recovery sheet's key in place, restore --box
+// must not stop on that file: the restore replaces it (vm-install, train
+// 2026-10-25d: „secrets.age: no identity matched any of the recipients“).
+func TestRestoreBoxIgnoresTheFreshBoxsOwnSecrets(t *testing.T) {
+	c := newCbox(t)
+	resticRecorder(t, c)
+	other := filepath.Join(t.TempDir(), "fresh.key")
+	if _, err := secrets.EnsureKey(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := secrets.Save(c.env.Paths.Secrets, other, map[string]string{"LAIB_HAUSHALT_KEY": "fresh"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RESTIC_PASSWORD", "from-the-sheet")
+	var errOut strings.Builder
+	c.env.ErrOut = &errOut
+	backup.Restore(context.Background(), c.env, []string{"--box", "latest"}) // the fake restic restores no files, so the last apply may miss a secret
+	if strings.Contains(errOut.String(), "no identity matched") {
+		t.Fatalf("restore --box stopped on the fresh box's own secrets.age: %s", errOut.String())
+	}
+	var restored bool
+	for _, l := range c.calls {
+		restored = restored || strings.Contains(l, "systemctl --user stop")
+	}
+	if !restored {
+		t.Fatalf("restore --box did not get to the services:\n%s", errOut.String())
+	}
+}

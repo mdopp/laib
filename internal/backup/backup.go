@@ -67,7 +67,13 @@ func restic(ctx context.Context, st *state.State, pw string, args ...string) (st
 // ResticRun is the seam tests swap; it defaults to the real binary.
 var ResticRun = restic
 
-func Prep(env *cli.Env) (*state.State, string, error) {
+func Prep(env *cli.Env) (*state.State, string, error) { return prep(env, false) }
+
+// prep: box is `restore --box` on a fresh box. Its own secrets.age (a fresh
+// box mints laib-haushalt's key at its first apply, ADR 0027) is encrypted
+// to the fresh box's key, not the recovery sheet's the owner put in place;
+// the restore replaces it, so a file that does not open is no reason to stop.
+func prep(env *cli.Env, box bool) (*state.State, string, error) {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return nil, "", err
@@ -76,6 +82,9 @@ func Prep(env *cli.Env) (*state.State, string, error) {
 		return nil, "", errors.New("box.yml has no backup.repo")
 	}
 	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	if err != nil && box && os.Getenv("RESTIC_PASSWORD") != "" {
+		sec, err = map[string]string{}, nil
+	}
 	if err != nil {
 		return nil, "", err
 	}
@@ -385,7 +394,7 @@ func Restore(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) == 0 || (!box && len(args) < 2) {
 		return env.Fail(errors.New("usage: laib restore <snapshot|latest> <service>  |  laib restore --box <snapshot|latest>"))
 	}
-	st, pw, err := Prep(env)
+	st, pw, err := prep(env, box)
 	if err != nil {
 		return env.Fail(err)
 	}
