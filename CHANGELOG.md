@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.34.0](https://github.com/mdopp/laib/compare/v0.33.1...v0.34.0) (2026-10-25)
+
+
+### Features
+
+* **pages:** Inbox shows what the box does after Freigeben, and Alle freigeben ([0bb5160](https://github.com/mdopp/laib/commit/0bb5160ab60558a756e426a443113538a2b19be1)), closes [#686](https://github.com/mdopp/laib/issues/686)
+* **proposal:** a template update's card says what it brings, in five plain lines ([e751128](https://github.com/mdopp/laib/commit/e7511285d60c5aad67fbf05c92473619571ca3eb)), closes [#687](https://github.com/mdopp/laib/issues/687)
+
+
+### Bug Fixes
+
+* **drift:** the news check counts with grep -c, no early grep in a pipe ([#307](https://github.com/mdopp/laib/issues/307)) ([85888e8](https://github.com/mdopp/laib/commit/85888e8933d178324e59269c014ebb99c8867474))
+* **template:** Whisper's prompt names the household's things first and counts real tokens ([269f119](https://github.com/mdopp/laib/commit/269f11967923642d6cb4940e5e7127421549d493))
+
 ## [0.33.1](https://github.com/mdopp/laib/compare/v0.33.0...v0.33.1) (2026-10-25)
 
 
