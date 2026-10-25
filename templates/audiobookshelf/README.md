@@ -17,6 +17,11 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
 - Music Assistant's account `musicassistant` (listens, changes nothing)
   and an API key for it, handed back as `ABS_MA_TOKEN`; music-assistant
   renders it, so the same apply adds Audiobookshelf as MA's source.
+- Haus' account `haus`, an administrator (subscribing, checking a feed
+  and asking for new episodes are admin-only in ABS), and its API key,
+  handed back as `HAUS_ABS_TOKEN` (#676, haus#123); haus renders it as
+  `HAUS_ABS_TOKEN` beside `HAUS_ABS_URL`, so the same apply gives Haus
+  its podcast page. A key that still works is kept, as Music Assistant's.
 - The family's login (OIDC), rewritten from Laib's secret on every apply.
 
 ## The care: `abs-pflege.py`
@@ -55,4 +60,15 @@ image; its status is `laib status audiobookshelf` / `laib diag`.
   literal, read as data, never run) are subscribed with auto-download; a
   folder that is already there gets the feed and its episodes renamed
   from it, a new one starts with its three newest episodes. After that,
-  podcasts are added in the app; `sync_podcasts.py` can go.
+  podcasts are added in Haus (by link) or in the app; `sync_podcasts.py`
+  can go.
+- **The last three episodes** (#676, the owner 2026-10-25): every
+  podcast keeps its newest three (`maxEpisodesToKeep: 3`) and fetches at
+  most three new ones a check (`maxNewEpisodesToDownload: 3`), whoever
+  subscribed it. ABS has no library-wide setting, so the care sets each
+  podcast's: a field at ABS's default that the care never set. A value
+  the owner chose in ABS stays, also one chosen after the care set 3
+  (`pflege/abgleich.json`, `behalten`); the status counts them („2 mit
+  eigener Einstellung"). ABS removes the oldest episode, file and all,
+  after each automatic download, so a podcast with many episodes shrinks
+  to three one new episode at a time.

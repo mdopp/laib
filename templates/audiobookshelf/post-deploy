@@ -2,7 +2,7 @@
 """audiobookshelf post-deploy: the root user on first run, metadata kept
 next to the files, the two libraries („Hörbücher & Hörspiele" on
 /audiobooks, matched against audible.de; „Podcasts" on /podcasts), Music
-Assistant's own account with an API key (#646), and the family's login
+Assistant's own account with an API key (#646), Haus' (#676), and the family's login
 (#255). The care of the libraries (the one-time Audible match, the
 Hörspiel series, the podcasts of sync_podcasts.py) is abs-pflege.py's,
 on a timer: it is slow and resumes, a hook is neither.
@@ -14,6 +14,11 @@ music-assistant declares that secret and renders it, so the same apply
 re-applies Music Assistant and its post-deploy adds the provider (#349's
 pattern). A key that still works is kept; one ABS refuses is replaced and
 the old ones of its name deleted.
+
+Haus subscribes podcasts by link and tells the subscriber of a new episode
+(#676, haus#123): a user `haus`, an administrator (subscribing, checking a
+feed and asking for new episodes are isAdminOrUp in ABS), and its API key
+handed back as HAUS_ABS_TOKEN, the same way; the haus template renders it.
 
 The login: ABS keeps its OIDC settings, the client secret among them, in
 its own database, and builds its OIDC client from them once, in memory. That
@@ -28,7 +33,7 @@ import json, os, secrets, sys, time, urllib.request, urllib.error
 E = os.environ
 BASE = E.get("ABS_URL", "http://127.0.0.1:13378")
 PW = E["LAIB_SECRET_ABS_ROOT_PASSWORD"]
-MA_KEY, MA_USER, KEY_NAME = E.get("LAIB_SECRET_ABS_MA_TOKEN", ""), "musicassistant", "Music Assistant (laib)"
+MA_USER, KEY_NAME = "musicassistant", "Music Assistant (laib)"
 LIBRARIES = (("Hörbücher & Hörspiele", "/audiobooks", "book", "audible.de"), ("Podcasts", "/podcasts", "podcast", "itunes"))
 AUTH = "https://auth." + E["LAIB_DOMAIN"]
 WANT = {  # Authelia's endpoints; ABS does no discovery of its own
@@ -80,31 +85,41 @@ for name, folder, mtype, provider in LIBRARIES:
         req("POST", "/api/libraries", {"name": name, "folders": [{"fullPath": folder}], "mediaType": mtype, "provider": provider}, token=token)
         print("library created:", name)
 
-# Music Assistant's account and key (#646)
-u = next((u for u in req("GET", "/api/users", token=token)["users"] if u.get("username") == MA_USER), None)
-if not u:
-    u = req("POST", "/api/users", {"username": MA_USER, "password": secrets.token_urlsafe(32), "type": "user", "isActive": True,
-                                   "permissions": {"download": True, "update": False, "delete": False, "upload": False,
-                                                   "accessAllLibraries": True, "accessAllTags": True, "accessExplicitContent": True}},
-            token=token)["user"]
-    print(f"audiobookshelf: account {MA_USER} created (Music Assistant's: listens, changes nothing)")
+# the accounts with a key of their own, each handed back to Laib as a secret its template declares:
+# Music Assistant's (#646) listens and changes nothing; Haus' (#676, haus#123) subscribes podcasts by
+# link, checks a feed and asks for new episodes, which ABS lets administrators only do (isAdminOrUp)
+LISTENS = {"download": True, "update": False, "delete": False, "upload": False,
+           "accessAllLibraries": True, "accessAllTags": True, "accessExplicitContent": True}
+ACCOUNTS = ((MA_USER, "user", KEY_NAME, "ABS_MA_TOKEN", "Laib re-applies Music Assistant, which adds Audiobookshelf as a source"),
+            ("haus", "admin", "Haus (laib)", "HAUS_ABS_TOKEN", "Laib re-applies Haus, which shows its podcast page"))
+users = req("GET", "/api/users", token=token)["users"]
 
 
-def key_works(key):
+def key_works(key, name):
     try:
-        return bool(key) and req("GET", "/api/me", token=key).get("username") == MA_USER
+        return bool(key) and req("GET", "/api/me", token=key).get("username") == name
     except urllib.error.HTTPError:
         return False
 
 
-if not key_works(MA_KEY):
+for name, kind, key_name, secret, then in ACCOUNTS:
+    u = next((u for u in users if u.get("username") == name), None)
+    if not u:
+        u = req("POST", "/api/users", {"username": name, "password": secrets.token_urlsafe(32), "type": kind, "isActive": True,
+                                       **({"permissions": LISTENS} if kind == "user" else {})}, token=token)["user"]   # an admin: ABS's
+        print(f"audiobookshelf: account {name} created ({kind})")
+    elif kind == "admin" and u.get("type") not in ("admin", "root"):
+        req("PATCH", f"/api/users/{u['id']}", {"type": "admin"}, token=token)
+        print(f"audiobookshelf: account {name} is an administrator now")
+    have = E.get("LAIB_SECRET_" + secret, "")
+    if key_works(have, name):
+        continue
     for k in req("GET", "/api/api-keys", token=token)["apiKeys"]:
-        if k.get("name") == KEY_NAME:
+        if k.get("name") == key_name:
             req("DELETE", "/api/api-keys/" + k["id"], token=token)
-    new = req("POST", "/api/api-keys", {"name": KEY_NAME, "userId": u["id"], "isActive": True}, token=token)["apiKey"]["apiKey"]
-    print(f"laib-secret: ABS_MA_TOKEN={new}")
-    print("audiobookshelf: ABS_MA_TOKEN minted (" + ("replaces one ABS refuses" if MA_KEY else "new")
-          + "): Laib re-applies Music Assistant, which adds Audiobookshelf as a source")
+    new = req("POST", "/api/api-keys", {"name": key_name, "userId": u["id"], "isActive": True}, token=token)["apiKey"]["apiKey"]
+    print(f"laib-secret: {secret}={new}")
+    print(f"audiobookshelf: {secret} minted (" + ("replaces one ABS refuses" if have else "new") + "): " + then)
 
 ok = lambda s: all(s.get(k) == v for k, v in WANT.items()) and "openid" in s.get("authActiveAuthMethods", [])
 if ok(req("GET", "/api/auth-settings", token=token)):

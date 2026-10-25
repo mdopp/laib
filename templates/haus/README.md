@@ -35,6 +35,16 @@ your own login: Account → CalDAV → the collection URL
 `https://caldav.<domain>/haus/haushalt/`. Without the account the Kalender
 page says so in one sentence (haus, laib#418) instead of landing on Start.
 
+Podcasts (haus#123, #676): Haus subscribes a podcast by its link in
+Audiobookshelf at `HAUS_ABS_URL` with `HAUS_ABS_TOKEN`, the API key of ABS's
+user `haus` (an administrator) that audiobookshelf's post-deploy mints and
+hands back; without ABS both are empty and Haus shows no podcast page. ABS
+keeps each podcast's last three episodes (audiobookshelf's care). Haus asks
+ABS for new episodes every 15 minutes and tells each subscriber with
+`laib_tell {person, text}` (the haus hand's `tell`, served by laib-haushalt
+through bote-notify); it offers the message once `laib_tell` is in its
+tools/list.
+
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`
