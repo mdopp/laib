@@ -8,6 +8,9 @@ Network=host
 Environment=WHISPER_MODEL=${WHISPER_MODEL}
 Environment=WHISPER_LANG=${WHISPER_LANG}
 Environment=WHISPER_BEAM=1
+# the household's names from Home Assistant as Whisper's initial prompt, read at start: stimme-names.service
+# writes the file and restarts Whisper when the names change. A missing file stops Whisper, so ExecStartPre makes it
+Environment=WYO_WHISPER_INITIAL_PROMPT_FILE=/config/laib-names.txt
 # required: Quadlet passes an optional "-" to podman --env-file as part of the path (#557); llama's pre-start writes the file
 EnvironmentFile=${VOICE_ENV}
 Volume=${DATA_DIR}/stimme/whisper:/config:z
@@ -16,6 +19,7 @@ SecurityLabelDisable=true
 AutoUpdate=registry
 
 [Service]
+ExecStartPre=/usr/bin/touch ${DATA_DIR}/stimme/whisper/laib-names.txt
 Restart=on-failure
 RestartSec=5
 

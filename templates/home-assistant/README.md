@@ -107,6 +107,7 @@ that only post-deploy uses:
 | `BOTE_AUTOMAT_HA_TOKEN` | „Bote-Automat“ (`bote-automat`, `HA_BOTE_AUTOMAT_PASSWORD`) | yes: HA's automation config API is admin-only | the Bote's Automat; every write it makes needs the admin's approval code |
 | `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
 | `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |
+| `STIMME_HA_TOKEN` | „Stimme“ (`stimme`, `HA_STIMME_PASSWORD`) | no | Stimme's `stimme-names`: the entity, area and floor registries, which every user may list, for the names Whisper hears |
 
 Each token is named `laib: <consumer>` under its user's Security tab and
 revocable on its own. A user that is missing is created through HA's API

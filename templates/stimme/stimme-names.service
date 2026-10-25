@@ -1,0 +1,17 @@
+# The household's names as Whisper's initial prompt: stimme-names.py runs inside the
+# Whisper container, reads what is exposed to Assist in Home Assistant with the token
+# home-assistant's post-deploy mints for the user stimme, and rewrites
+# stimme/whisper/laib-names.txt only when the names changed. Whisper reads it at start,
+# so only then is it restarted: try-restart, never a start, so a Whisper the GPU lease
+# stopped stays stopped and reads the new names when it comes back.
+# The token reaches podman through the environment, never on argv.
+[Unit]
+Description=Stimme: the household's names for Whisper
+After=stimme-whisper.service
+
+[Service]
+Type=oneshot
+Environment=HA_TOKEN=${HA_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/stimme/stimme-names.py
+ExecStart=/bin/sh -c 'systemctl --user -q is-active stimme-whisper.service || { echo "Whisper is not running: the names wait for its next start"; exit 0; }; out=$$(/usr/bin/podman exec -i -e HA_TOKEN systemd-stimme-whisper python3 -) || { echo "$$out"; exit 1; }; echo "$$out"; case "$$out" in *"names changed"*) systemctl --user try-restart stimme-whisper.service;; esac'
+TimeoutStartSec=120
