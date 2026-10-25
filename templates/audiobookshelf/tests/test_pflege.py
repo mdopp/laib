@@ -27,16 +27,26 @@ open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "RAN"), "w").write
 '''
 
 
-def book(i, rel, title=None, author=None, asin=None, series="", chapters=1, duration=3600.0):
-    return {"id": i, "relPath": rel, "mediaType": "book", "media": {"metadata": {
+def book(i, rel, title=None, author=None, asin=None, series="", chapters=1, duration=3600.0, files=None):
+    """files: [(name, size, seconds)] in ABS's current order; each file is one chapter, as ABS's scan makes them"""
+    b = {"id": i, "relPath": rel, "mediaType": "book", "media": {"metadata": {
         "title": title or rel.split("/")[-1], "authorName": author or rel.split("/")[0], "seriesName": series, "asin": asin},
         "numChapters": chapters, "duration": duration}}
+    if files:
+        b["media"]["audioFiles"] = [{"index": n + 1, "ino": f"{i}-ino-{n}", "duration": d, "exclude": False,
+                                     "metadata": {"filename": name, "size": size}} for n, (name, size, d) in enumerate(files)]
+        starts = [sum(d for _, _, d in files[:n]) for n in range(len(files))]
+        b["media"]["chapters"] = [{"id": n, "start": starts[n], "end": starts[n] + d, "title": name.rsplit(".", 1)[0]}
+                                  for n, (name, _, d) in enumerate(files)]
+        b["media"].update(numAudioFiles=len(files), numChapters=len(files), duration=sum(d for _, _, d in files))
+    return b
 
 
 def fresh(books=(), podcasts=()):
     ABS.clear()
     ABS.update(books={b["id"]: b for b in books}, podcasts={p["id"]: p for p in podcasts}, matches=[], media=[], chapters={},
-               created=[], feeds=[], downloads={}, episode_matches=[], nohit=set(), series_from_match=set(), runtimes={}, scans=[])
+               created=[], feeds=[], downloads={}, episode_matches=[], nohit=set(), series_from_match=set(), runtimes={}, scans=[],
+               hit_only={}, tracks={})
 
 
 class FakeABS(BaseHTTPRequestHandler):
@@ -69,10 +79,13 @@ class FakeABS(BaseHTTPRequestHandler):
                 {"id": "lib-b", "name": "Hörbücher & Hörspiele", "mediaType": "book", "folders": [{"id": "fo-b", "fullPath": "/audiobooks"}]},
                 {"id": "lib-p", "name": "Podcasts", "mediaType": "podcast", "folders": [{"id": "fo-p", "fullPath": "/podcasts"}]}]})
         if m := re.fullmatch(r"/api/libraries/(lib-[bp])/items", u.path):
-            items = list((ABS["books"] if m.group(1) == "lib-b" else ABS["podcasts"]).values())
+            items = [{**it, "media": {k: v for k, v in it["media"].items() if k not in ("audioFiles", "chapters")}}   # minified
+                     for it in (ABS["books"] if m.group(1) == "lib-b" else ABS["podcasts"]).values()]
             limit, page = int(q.get("limit", 0)), int(q.get("page", 0))
             return self.reply(200, {"results": items[page * limit:(page + 1) * limit] if limit else items, "total": len(items),
                                     "limit": limit, "page": page})
+        if (m := re.fullmatch(r"/api/items/([^/]+)", u.path)) and q.get("expanded") == "1":
+            return self.reply(200, ABS["books"][m.group(1)])
         if u.path == "/api/search/chapters":
             asin = q["asin"]
             if q.get("region") != "de" or asin not in ABS["runtimes"]:
@@ -96,7 +109,9 @@ class FakeABS(BaseHTTPRequestHandler):
         if m := re.fullmatch(r"/api/items/([^/]+)/match", self.path):
             it = ABS["books"][m.group(1)]
             ABS["matches"].append((m.group(1), b))
-            if it["media"]["metadata"]["title"] in ABS["nohit"] or b.get("title") in ABS["nohit"]:
+            want = ABS["hit_only"].get(m.group(1))   # Audible knows it only under this (title, author)
+            if it["media"]["metadata"]["title"] in ABS["nohit"] or b.get("title") in ABS["nohit"] or \
+                    (want and (b.get("title"), b.get("author")) != want):
                 return self.reply(200, {"warning": f"No {b.get('provider')} match found"})
             md = it["media"]["metadata"]
             md["asin"] = "B0" + m.group(1).upper().replace("-", "")
@@ -108,6 +123,7 @@ class FakeABS(BaseHTTPRequestHandler):
                 "chapters": [{"id": 0, "start": 0, "end": it["media"]["duration"], "title": "x"}][:it["media"]["numChapters"]]}}})
         if m := re.fullmatch(r"/api/items/([^/]+)/chapters", self.path):
             ABS["chapters"][m.group(1)] = b["chapters"]
+            ABS["books"][m.group(1)]["media"]["chapters"] = b["chapters"]
             return self.reply(200, {"success": True, "updated": True})
         if self.path == "/api/podcasts/feed":
             ABS["feeds"].append(b["rssFeed"])
@@ -131,6 +147,14 @@ class FakeABS(BaseHTTPRequestHandler):
 
     def do_PATCH(self):
         b = self.body()
+        if self.authed() and (m := re.fullmatch(r"/api/items/([^/]+)/tracks", self.path)):
+            media = ABS["books"][m.group(1)]["media"]
+            by_ino = {f["ino"]: f for f in media["audioFiles"]}
+            if sorted(by_ino) != sorted(f["ino"] for f in b["orderedFileData"]):
+                return self.reply(400)   # ABS drops every file the list leaves out
+            ABS["tracks"][m.group(1)] = [f["ino"] for f in b["orderedFileData"]]
+            media["audioFiles"] = [{**by_ino[f["ino"]], "index": n + 1} for n, f in enumerate(b["orderedFileData"])]
+            return self.reply(200, {"id": m.group(1)})
         m = re.fullmatch(r"/api/items/([^/]+)/media", self.path)
         if not self.authed() or not m:
             return self.reply(404)
@@ -140,6 +164,8 @@ class FakeABS(BaseHTTPRequestHandler):
         for k, v in (b.get("metadata") or {}).items():
             if k == "series":
                 md["seriesName"] = ", ".join(f"{s['name']} #{s['sequence']}" for s in v)
+            elif k == "authors":
+                md["authorName"] = ", ".join(a["name"] for a in v)
             else:
                 md[k] = v
         if "autoDownloadEpisodes" in b:
@@ -214,9 +240,12 @@ class Pflege(unittest.TestCase):
         self.assertIn("Hörbücher: 2 Titel, 1 abgeglichen, 1 ohne Treffer: Das Unauffindbare", st["detail"])
         (f,) = [f for f in st["findings"] if "Das Unauffindbare" in f["detail"]]
         self.assertIn("Audiobookshelf", f["fix"])
+        n = len(ABS["matches"])
+        self.run_pflege()
+        self.assertEqual(len(ABS["matches"]), n, "the unmatched item was tried again with the same queries")
         ABS["books"]["b-2"]["media"]["metadata"]["asin"] = "B0BYHAND1"     # matched by hand in ABS
         _, st = self.run_pflege()
-        self.assertEqual(len(ABS["matches"]), 2, "the unmatched item was tried again")
+        self.assertEqual(len(ABS["matches"]), n, "the unmatched item was tried again")
         self.assertFalse(any("Das Unauffindbare" in f["detail"] for f in st["findings"]))
         self.assertIn("2 abgeglichen", st["detail"])
 
@@ -241,6 +270,124 @@ class Pflege(unittest.TestCase):
         n = len(ABS["media"])
         self.run_pflege()
         self.assertEqual(len(ABS["media"]), n, "the series were written again")
+
+    def test_a_broken_tag_title_is_named_after_its_folder(self):
+        # 2026-10-25: „CD 1“, „Die K\ufffdnguru Chroniken“, „Die volle Wahrheit CD 1“: the album tag, not the folder
+        fresh([book("t-1", "Erfundene Autorin/Die Wüstenfähre", title="Die W\ufffdstenf\ufffdhre"),
+               book("t-2", "Erfundener Autor/Nebelreise", title="CD 1", author="Nebelreise"),
+               book("t-3", "Erfundene Autorin/Der lange Weg", title="Der lange Weg CD 1"),
+               book("t-4", "Erfundene Hörspiele/01 - Das Moorlicht", title="01 - Das Moorlicht - Teil 1"),
+               book("t-5", "Die Gruselfüchse/001 - Der Nebelturm", title="Die Gruselfüchse"),
+               book("t-6", "Die Gruselfüchse/002 - Das Spukschiff"),
+               book("t-7", "Erfundene Autorin/Gut benannt", title="Vom Besitzer benannt"),
+               book("t-8", "Erfundene Autorin/Teilchenzoo", title="Teilchenzoo, Band 2")])
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        md = lambda i: ABS["books"][i]["media"]["metadata"]
+        self.assertEqual([md(i)["title"] for i in ("t-1", "t-2", "t-3", "t-4")], ["Die Wüstenfähre", "Nebelreise", "Der lange Weg", "Das Moorlicht"])
+        self.assertEqual(md("t-5")["title"], "Der Nebelturm", "the series' name as an episode's title")
+        self.assertEqual(md("t-2")["authorName"], "Erfundener Autor", "the tag's artist is the book's name, the folder knows the author")
+        self.assertEqual(md("t-3")["authorName"], "Erfundene Autorin")
+        self.assertEqual((md("t-7")["title"], md("t-8")["title"]), ("Vom Besitzer benannt", "Teilchenzoo, Band 2"), "a sound title was replaced")
+        first = {i: b for i, b in reversed(ABS["matches"])}
+        self.assertEqual((first["t-2"]["title"], first["t-2"]["author"]), ("Nebelreise", "Erfundener Autor"), "Audible was asked for „CD 1“")
+        self.assertEqual(first["t-1"]["title"], "Die Wüstenfähre")
+        n = len(ABS["media"])
+        self.run_pflege()
+        self.assertEqual(len(ABS["media"]), n, "the titles were written again")
+
+    def test_a_second_query_restores_umlauts_and_leaves_the_author_out(self):
+        # „Der hoellische Werwolf“ in „043 - Der h_llische Werwolf“, „Schuesse aus dem Dunkel“ in „070 - Schüsse im Dunkeln“
+        fresh([book("u-1", "Die Gruselfüchse/001 - Der Nebelturm"), book("u-2", "Die Gruselfüchse/043 - Der h_llische Kobold", title="Der hoellische Kobold"),
+               book("u-3", "Die Gruselfüchse/070 - Schüsse im Moor", title="Schuesse aus dem Moor"),
+               book("u-4", "Erfundene Autorin/Die Raeuberleiter")])
+        ABS["hit_only"].update({"u-2": ("Der höllische Kobold", " "), "u-3": ("Schüsse aus dem Moor", " "), "u-4": ("Die Räuberleiter", " ")})
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        asked = lambda i: [(b["title"], b["author"]) for j, b in ABS["matches"] if j == i]
+        self.assertEqual(asked("u-2")[0], ("Der hoellische Kobold", "Die Gruselfüchse"), "the folder's „_“ went to Audible")
+        self.assertIn(("Der höllische Kobold", " "), asked("u-2"))
+        self.assertEqual(asked("u-3")[0], ("Schüsse im Moor", "Die Gruselfüchse"))
+        self.assertIn(("Schüsse aus dem Moor", " "), asked("u-3"), "the tag's title, with its umlauts, was never asked")
+        self.assertLessEqual(max(len(asked(i)) for i in ("u-2", "u-3", "u-4")), 3, "too many questions for one item")
+        self.assertIn("4 Titel, 4 abgeglichen", st["detail"])
+        self.assertEqual(ABS["books"]["u-4"]["relPath"], "Erfundene Autorin/Die Raeuberleiter")
+
+    def test_a_series_without_a_hit_takes_the_name_its_siblings_got_from_audible(self):
+        kids = [book(f"s-{n}", f"Die Gruselfuechse/{n:03d} - Folge {n}") for n in range(1, 5)]
+        fresh(kids + [book("s-9", "Die Gruselfuechse/009 - Ohne Treffer", series="Die Gruselfuechse #9")])
+        ABS["series_from_match"].update({"s-1", "s-2", "s-3"})
+        ABS["nohit"].update({"Ohne Treffer", "Folge 4"})
+        self.run_pflege()
+        self.run_pflege()   # the siblings' series is known once they are matched
+        md = lambda i: ABS["books"][i]["media"]["metadata"]
+        self.assertEqual(md("s-9")["seriesName"], "Aus Audible #9", "two series for one Hörspiel folder")
+        self.assertEqual(md("s-4")["seriesName"], "Aus Audible #4")
+        n = len(ABS["media"])
+        self.run_pflege()
+        self.assertEqual(len(ABS["media"]), n, "the series were written again")
+
+    def test_an_item_without_a_hit_is_matched_again_when_its_query_changed(self):
+        # the box's state from before this fix: „CD 1“ asked once, „ohne Treffer“ for good
+        fresh([book("r-1", "Erfundener Autor/Nebelreise", title="CD 1", author="Nebelreise"), book("r-2", "Niemand/Das Unauffindbare")])
+        ABS["nohit"].add("Das Unauffindbare")
+        (self.data / "abgleich.json").write_text(json.dumps({"items": {"r-1": {"r": "ohne Treffer", "title": "CD 1"},
+                                                                       "r-2": {"r": "ohne Treffer", "title": "Das Unauffindbare"}}}))
+        _, st = self.run_pflege()
+        self.assertEqual(ABS["books"]["r-1"]["media"]["metadata"]["asin"], "B0R1", "the renamed item was not matched again")
+        self.assertNotIn("CD 1", st["detail"])
+        self.assertIn("1 ohne Treffer: Das Unauffindbare", st["detail"])
+        n = len(ABS["matches"])
+        self.run_pflege()
+        self.assertEqual(len(ABS["matches"]), n, "matched again although nothing changed")
+
+    def test_the_cds_in_one_folder_play_in_disc_order(self):
+        # 2026-10-25: „Der Zeitdieb“ played 1-01, 2-01, 3-01, 1-02 …: ABS ordered the files by their track number only
+        fresh([book("d-1", "Erfundene Autorin/Die Uhrmacherin", asin="B0D1", files=[
+                   ("1-01 - Die Uhrmacherin.mp3", 100, 60.0), ("2-01 - Die Uhrmacherin.mp3", 110, 70.0),
+                   ("1-02 - Die Uhrmacherin.mp3", 120, 80.0), ("2-02 - Die Uhrmacherin.mp3", 130, 90.0)]),
+               book("d-2", "Erfundene Autorin/Das Sammelband", asin="B0D2", files=[   # „NN - DTT“: disc and track the other way round
+                   ("01 - 101.mp3", 10, 5.0), ("02 - 102.mp3", 11, 5.0), ("01 - 201.mp3", 12, 5.0), ("02 - 202.mp3", 13, 5.0)]),
+               book("d-3", "Erfundene Autorin/Die Brücke", asin="B0D3", files=[
+                   ("Die Brücke 1-1.mp3", 20, 5.0), ("Die Brücke 2-1.mp3", 21, 6.0), ("Die Brücke 1-2.mp3", 22, 7.0)])])
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(ABS["tracks"]["d-1"], ["d-1-ino-0", "d-1-ino-2", "d-1-ino-1", "d-1-ino-3"])
+        self.assertEqual([(c["start"], c["end"], c["title"]) for c in ABS["chapters"]["d-1"]], [
+            (0, 60, "1-01 - Die Uhrmacherin"), (60, 140, "1-02 - Die Uhrmacherin"), (140, 210, "2-01 - Die Uhrmacherin"),
+            (210, 300, "2-02 - Die Uhrmacherin")], "the chapters still jump between the CDs")
+        self.assertNotIn("d-2", ABS["tracks"], "a book without a disc in its file names was reordered")
+        self.assertEqual(ABS["tracks"]["d-3"], ["d-3-ino-0", "d-3-ino-2", "d-3-ino-1"], "the title before the disc hides it")
+        n = len(ABS["tracks"]), len(ABS["chapters"])
+        self.run_pflege()
+        self.assertEqual((len(ABS["tracks"]), len(ABS["chapters"])), n, "reordered twice")
+
+    def test_files_held_twice_are_a_proposal_for_the_owner_never_a_move(self):
+        # 2026-10-25: „The Bro Code“ holds CD 1 twice, „Schwarze Löcher“ a copy under a mojibake name
+        fresh([book("x-1", "Erfundener Autor/Der Doppelband", asin="B0X1", files=[
+                   ("01 - Track 1.mp3", 500, 30.0), ("CD1-CD1-01 Track 1.mp3", 500, 30.0), ("CD2-CD2-01 Piste 1.mp3", 700, 40.0),
+                   ("02 - Track 2.mp3", 600, 35.0), ("CD1-CD1-02 Track 2.mp3", 600, 35.0)]),
+               book("x-2", "Erfundener Autor/Schwarze Kästen", asin="B0X2", files=[
+                   ("Schwarze Kästen.mp3", 900, 99.0), ("_from_alt-Schwarze KĂ¤sten.mp3", 900, 99.0)])])
+        p, st = self.run_pflege()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(ABS["tracks"], {}, "files were reordered before the owner decided about the copies")
+        (f,) = [f for f in st["findings"] if "Der Doppelband" in f["detail"]]
+        self.assertIn("2 Dateien doppelt", f["detail"])
+        self.assertIn("„audiobooks/Erfundener Autor/Der Doppelband“ nach „aussortiert/audiobooks/Erfundener Autor/Der Doppelband“", f["fix"])
+        self.assertIn("01 - Track 1.mp3, 02 - Track 2.mp3", f["fix"])
+        self.assertNotIn("CD1-CD1-01", f["fix"])
+        (g,) = [f for f in st["findings"] if "Schwarze Kästen" in f["detail"]]
+        self.assertIn("_from_alt-Schwarze KĂ¤sten.mp3", g["fix"])
+        self.assertNotIn("„Schwarze Kästen.mp3", g["fix"])
+        # the owner moved the copies; ABS's scan sees four files fewer
+        media = ABS["books"]["x-1"]["media"]
+        media["audioFiles"] = [a for a in media["audioFiles"] if a["metadata"]["filename"].startswith("CD")]
+        media["chapters"] = [c for c in media["chapters"] if c["title"].startswith("CD")]
+        media.update(numAudioFiles=3, numChapters=3)
+        _, st = self.run_pflege()
+        self.assertFalse(any("Der Doppelband" in f["detail"] for f in st["findings"]))
+        self.assertEqual(ABS["tracks"]["x-1"], ["x-1-ino-1", "x-1-ino-4", "x-1-ino-2"])
 
     def test_chapters_come_from_audible_only_when_the_runtime_fits(self):
         fresh([book("c-1", "Erfundene Autorin/Passt", duration=3600.0), book("c-2", "Erfundene Autorin/Passt nicht", duration=3600.0),
