@@ -840,11 +840,17 @@ const LaibHome = "/mnt/data/laib"
 // made on the host before it starts, a read-only root without
 // capabilities, and its secrets as podman secrets (#224): no secret on
 // argv, in the unit or in a file. An empty secret is left out, podman
-// refuses one. It returns the unit and the secrets.
-func ownUnit(name, head string, mounts []string, env, sec []string, service string) (string, map[string]string) {
+// refuses one. The zone is box.yml's by name, never Timezone=local: podman
+// resolves that through /etc/localtime, which Fedora CoreOS does not ship,
+// and refuses the start (#673). It returns the unit and the secrets.
+func ownUnit(st *state.State, name, head string, mounts []string, env, sec []string, service string) (string, map[string]string) {
 	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage, "laib-haushalt": HaushaltImage}[name]
 	var b, mkdir strings.Builder
-	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\nTimezone=local\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\n", head, image)
+	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\n", head, image)
+	if tz := st.Box.Timezone; tz != "" {
+		fmt.Fprintf(&b, "Timezone=%s\n", tz)
+	}
+	b.WriteString("ReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\n")
 	for i := 0; i+1 < len(mounts); i += 2 {
 		fmt.Fprintf(&b, "Volume=%s:%s\n", mounts[i], mounts[i+1])
 		fmt.Fprintf(&mkdir, "ExecStartPre=/usr/bin/mkdir -p %s\n", mounts[i])
@@ -905,7 +911,7 @@ func haushaltUnit(st *state.State, secrets map[string]string) (string, map[strin
 	}
 	env := []string{"HAUSHALT_LISTEN", HaushaltListen, "LAIB_MCP_URL", fmt.Sprintf("http://127.0.0.1:%d/mcp", st.Box.Laib.Port)}
 	sec := []string{"LAIB_TOKEN", secretValue(secrets, HaushaltToken), "HAUSHALT_KEY", secretValue(secrets, HaushaltKey)}
-	return ownUnit("laib-haushalt", "# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).\n[Unit]\nDescription=Laib haushalt\nAfter=laib.service\n",
+	return ownUnit(st, "laib-haushalt", "# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).\n[Unit]\nDescription=Laib haushalt\nAfter=laib.service\n",
 		mounts, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }
 
@@ -933,7 +939,7 @@ func notifyUnit(st *state.State, secrets map[string]string) (string, map[string]
 	}
 	// #624: what the host unit kept in LAIB_HOME moves into the folder once
 	move := fmt.Sprintf("ExecStartPre=-/usr/bin/mv -n %[1]s/mail.json %[1]s/watchdog.last %[1]s/notify/\nType=oneshot\n", LaibHome)
-	return ownUnit("laib-notify", "# Rendered by laib: the watchdog ping and the owner's mail (#443), in its container (ADR 0027).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n",
+	return ownUnit(st, "laib-notify", "# Rendered by laib: the watchdog ping and the owner's mail (#443), in its container (ADR 0027).\n[Unit]\nDescription=Laib notify\nAfter=laib.service\n",
 		[]string{LaibHome + "/notify", "/notify:Z"}, env, sec, move)
 }
 
@@ -967,6 +973,6 @@ func operatorUnit(st *state.State, secrets map[string]string) (string, map[strin
 			env = append(env, "FRAGE_URL", "http://127.0.0.1:"+fmt.Sprint(c.Ports[0].Port))
 		}
 	}
-	return ownUnit("laib-operator", "# Rendered by laib: the box's admin agent (ADR 0013), in its container (ADR 0027).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n",
+	return ownUnit(st, "laib-operator", "# Rendered by laib: the box's admin agent (ADR 0013), in its container (ADR 0027).\n[Unit]\nDescription=Laib operator\nAfter=laib.service\nWants=laib.service\n",
 		[]string{LaibHome + "/operator", "/operator:Z"}, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
 }

@@ -6,7 +6,7 @@ After=laib.service
 [Container]
 Image=ghcr.io/mdopp/laib-haushalt:latest
 Network=host
-Timezone=local
+Timezone=Europe/Berlin
 ReadOnly=true
 NoNewPrivileges=true
 DropCapability=all

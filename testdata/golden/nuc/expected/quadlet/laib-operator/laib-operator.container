@@ -7,7 +7,7 @@ Wants=laib.service
 [Container]
 Image=ghcr.io/mdopp/laib-operator:latest
 Network=host
-Timezone=local
+Timezone=Europe/Berlin
 ReadOnly=true
 NoNewPrivileges=true
 DropCapability=all
