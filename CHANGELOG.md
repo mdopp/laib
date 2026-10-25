@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.32.0](https://github.com/mdopp/laib/compare/v0.31.2...v0.32.0) (2026-10-25)
+
+
+### Features
+
+* **aufgabe:** Box-Aufgaben, the box's own to-do list, deferring and closing diag findings ([723619b](https://github.com/mdopp/laib/commit/723619bf15e89edae3b42c5f022221e063de578c)), closes [#667](https://github.com/mdopp/laib/issues/667)
+* Box-Aufgaben, proposals recomputed on approve, haushalt+lease in containers; template fixes ([7db0ff3](https://github.com/mdopp/laib/commit/7db0ff38af1d65c018e27a7b88e4e3badee0f2ea))
+* **lease:** laib-lease in a container, pausing through laib's pause verb ([f8f4780](https://github.com/mdopp/laib/commit/f8f47807c245e1ab3bff4bd95ae1ce394d183fbf))
+* **proposal:** recompute a structured proposal on approve instead of going stale ([8079f87](https://github.com/mdopp/laib/commit/8079f87e16149b8149b8dae09f782b0f0ceae2c6))
+* **render:** laib-haushalt as a container behind the verb door ([34f54f0](https://github.com/mdopp/laib/commit/34f54f0d204192b931d6ba8a82356bc1ace31c82))
+
+
+### Bug Fixes
+
+* **backup:** restore --box does not stop on a fresh box's own secrets.age ([5496a88](https://github.com/mdopp/laib/commit/5496a88f27467cfc885ee55f9b5ffce5fb07b02a))
+* **diag:** a backup on the data disk alone is a risk, gelb, never red ([97f66e3](https://github.com/mdopp/laib/commit/97f66e3acb6696e81b4d6b742ae0e9ffbfcaadca))
+* **home-assistant:** zwave-js-ui's users.json (the UI login's hash) is 0600 too ([57b4f74](https://github.com/mdopp/laib/commit/57b4f741a09cce4b511775a04ceff866471f9678))
+* **policy:** a rollback loads what a newer laib wrote ([7767c7d](https://github.com/mdopp/laib/commit/7767c7d11eb8e32e989409ef2e5eb7994ec88355))
+* **policy:** haus gets aufgabe one release later ([3f30f8e](https://github.com/mdopp/laib/commit/3f30f8e3d45fddc3392ad7113266af8e85badb15))
+* **render:** laib's own containers name the box's timezone ([bef61b7](https://github.com/mdopp/laib/commit/bef61b74b3ad8c168c8243a99f60e2a9db91c5b3))
+* **self:** roll back and update laib-haushalt and laib-lease as containers ([033cae9](https://github.com/mdopp/laib/commit/033cae9b2f3a0ab2be8d045ece8e1fdaa4cb2186))
+* **template:** home-assistant keeps the Z-Wave network keys 0600 ([c79dc2b](https://github.com/mdopp/laib/commit/c79dc2bbb5fd783a2c2db45f9b1385e8bae99bf8)), closes [#664](https://github.com/mdopp/laib/issues/664)
+
 ## [0.31.2](https://github.com/mdopp/laib/compare/v0.31.1...v0.31.2) (2026-10-25)
 
 
