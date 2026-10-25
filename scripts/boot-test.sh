@@ -17,10 +17,10 @@ cleanup() {
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
   for s in HAUS_PROXY_SECRET LAIB_TOKEN HAUS_USAGE_TOKEN; do podman secret rm "laib.haus-boot.haus-boot.$s" >/dev/null 2>&1 || true; done
-  systemctl --user stop laib-operator.service 2>/dev/null || true
-  podman secret rm laib.laib-operator.laib-operator.LAIB_TOKEN >/dev/null 2>&1 || true
+  systemctl --user stop laib-operator.service laib-haushalt.service 2>/dev/null || true
+  for s in laib-operator.laib-operator.LAIB_TOKEN laib-haushalt.laib-haushalt.LAIB_TOKEN laib-haushalt.laib-haushalt.HAUSHALT_KEY; do podman secret rm "laib.$s" >/dev/null 2>&1 || true; done
   [ -z "${CANARY:-}" ] || sudo rm -rf /mnt/data/laib
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$LAIB_QUADLET/laib-operator" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$LAIB_QUADLET/laib-operator" "$LAIB_QUADLET/laib-haushalt" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -75,7 +75,7 @@ WantedBy=default.target
 UNIT
 
 "$BIN" plan > plan.out; head -5 plan.out   # no pipe: head closing early made plan die of SIGPIPE under pipefail (exit 141)
-LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test" || { echo "apply exit $?"; journalctl --user -u whoami.service --no-pager | tail -20; exit 1; }
+LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test" || { echo "apply exit $?"; journalctl --user -u whoami.service -u laib-haushalt.service --no-pager | tail -30; exit 1; }
 grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami does not answer with its name"; exit 1; }
 # #224: the token is a podman secret: in the container's environment (whoami's ?env=true), in no unit
 # file, on no podman run argv; a rotation replaces it and restarts the container with the new value
@@ -260,4 +260,32 @@ s = json.load(sys.stdin)
 haus = {e["event"]: e["count"] for a in s["apps"] if a["app"] == "haus" for e in a["events"]}
 assert haus.get("seite.start") == 2 and haus.get("von.widget.device") == 2, s
 assert "anna" not in json.dumps(s).lower(), "who looked must never reach usage-metrics"'
-echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo"
+# ADR 0027 (#624, part 2): laib-haushalt in its own container, for real —
+# the image boot.yml built from this commit (HAUSHALT_IMAGE, pinned into
+# this laib), the unit every apply renders. The door reaches it on
+# 127.0.0.1:5902 with its key, nobody else does; laib's key, secrets.age,
+# the state repo and the journal are not in it, by any path it has.
+[ -n "${HAUSHALT_IMAGE:-}" ] && podman image exists "$HAUSHALT_IMAGE" || { echo "FAIL: no haushalt image $HAUSHALT_IMAGE (boot.yml builds it)"; exit 1; }
+[ "$(systemctl --user is-active laib-haushalt.service)" = active ] || { echo "FAIL: laib-haushalt.service is not active"; journalctl --user -u laib-haushalt.service --no-pager | tail -30; exit 1; }
+HHC=systemd-laib-haushalt
+grep -qx "$HAUSHALT_IMAGE" <<<"$(podman inspect "$HHC" --format '{{.ImageName}}')" || { echo "FAIL: laib-haushalt runs another image: $(podman inspect "$HHC" --format '{{.ImageName}}')"; exit 1; }
+# the control that can go red: laib scan goes through the door into the container, and the answer is the program's
+rc=0; OUT="$(LAIB_ACTOR=human:boot "$BIN" scan status 2>&1)" || rc=$?
+[ "$rc" = 3 ] && grep -q "nicht eingerichtet" <<<"$OUT" || { echo "FAIL: laib scan did not reach laib-haushalt in its container (rc $rc): $OUT"; journalctl --user -u laib-haushalt.service --no-pager | tail -30; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"argv":["scan","start"]}' http://127.0.0.1:5902/call)" = 401 ] || { echo "FAIL: laib-haushalt takes a call without the door's key"; exit 1; }
+podman cp "$HHC:/usr/share/hwdata/oui.txt" "$WORK/oui.txt" && grep -q "(hex)" "$WORK/oui.txt" || { echo "FAIL: podman cp reads nothing in laib-haushalt's container (the maker list is in its image)"; exit 1; }
+for f in /mnt/data/laib/age.key /mnt/data/laib/state/secrets.age /mnt/data/laib/state "$LAIB_HOME/age.key" "$LAIB_HOME/state/secrets.age" "$LAIB_HOME/state" "$LAIB_HOME/journal"; do
+  if podman cp "$HHC:$f" - >/dev/null 2>&1; then echo "FAIL: $f is readable inside laib-haushalt's container"; exit 1; fi
+done
+for m in $(podman inspect "$HHC" --format '{{range .Mounts}}{{.Source}}={{.Destination}} {{end}}'); do
+  src="${m%%=*}"
+  for k in /mnt/data/laib/age.key "$LAIB_HOME/age.key" "$LAIB_HOME/state" "$LAIB_HOME/journal"; do
+    case "$k" in "$src" | "${src%/}/"*) echo "FAIL: laib-haushalt mounts $src, which holds $k"; exit 1;; esac
+  done
+done
+for s in LAIB_TOKEN HAUSHALT_KEY; do
+  v="$(podman secret inspect --showsecret --format "{{.SecretData}}" "laib.laib-haushalt.laib-haushalt.$s")"
+  [ -n "$v" ] || { echo "FAIL: no podman secret $s for laib-haushalt"; exit 1; }
+  if grep -rqF -- "$v" "$LAIB_QUADLET/laib-haushalt" || grep -qF -- "$v" <<<"$(podman inspect "$HHC" --format "{{.Config.CreateCommand}}")"; then echo "FAIL: laib-haushalt's $s is in its unit or on podman run's argv"; exit 1; fi
+done
+echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo; laib-haushalt answered the door in its own container, refused a call without the key, and the age key, secrets.age, the state repo and the journal were not in it"
