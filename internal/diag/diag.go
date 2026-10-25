@@ -228,7 +228,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		out = append(out, Finding{Severity: "gelb", Probe: "watchdog", Detail: "kein Wächter außerhalb der Box (box.yml watchdog.url): wenn die Box ausfällt, erfährt es niemand", Fix: "einen healthchecks-artigen Ping-URL eintragen (eigener Dienst oder ein freier Anbieter); laib serve meldet sich alle fünf Minuten, Stille wird draußen zum Push"})
 	}
 	// The backup target: none is yellow, one on the data disk itself is a nudge
-	// for a week and red after it (#40) — a dead disk then takes the backup with it.
+	// for a week and yellow after it (#40) — a risk, not damage (owner 2026-10-25:
+	// „Rot bleibt rot“, so a deferred Box-Aufgabe can cover it; a failed off-box copy stays red).
 	bf := backupFacts(env)
 	installed, lastCheck, lastGreen, lastOffsite, lastRun := bf.installed, bf.RestoreTest, bf.LastGreen, bf.Offsite, bf.Nightly.Result
 	switch repo := st.Box.Backup.Repo; {
@@ -239,11 +240,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	case repo == "":
 		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
 	case strings.HasPrefix(repo, "/") && strings.HasPrefix(repo, filepath.Dir(st.Box.DataDir)):
-		sev := "info"
-		if !installed.IsZero() && time.Since(installed) > 7*24*time.Hour {
-			sev = "rot"
-		}
-		out = append(out, Finding{Severity: sev, Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)", Topic: "offsite"})
+		out = append(out, Finding{Severity: localOnlySeverity(installed), Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)", Topic: "offsite"})
 	}
 	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
 	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
@@ -387,4 +384,13 @@ func uniq(in []string) []string {
 		}
 	}
 	return out
+}
+
+// localOnlySeverity: a backup on the data disk alone is info for the first
+// week after install, then gelb — never red, it is a risk, not a failure.
+func localOnlySeverity(installed time.Time) string {
+	if !installed.IsZero() && time.Since(installed) > 7*24*time.Hour {
+		return "gelb"
+	}
+	return "info"
 }

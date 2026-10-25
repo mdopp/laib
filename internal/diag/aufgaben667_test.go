@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mdopp/laib/internal/aufgaben"
 )
@@ -82,5 +83,17 @@ func TestATaskClosesOnlyWhenItsFindingIsMeasuredGone(t *testing.T) {
 	// a done task is not closed again
 	if got := gone(nil, tasks667[3:]); len(got) != 0 {
 		t.Fatalf("closed a done task: %v", got)
+	}
+}
+
+// The owner, 2026-10-25: „Rot bleibt rot“, and a backup on the data disk
+// alone is a risk, not damage: info for the first week, then gelb however
+// long the box runs, so a deferred Box-Aufgabe can cover it.
+func TestABackupOnlyOnTheDataDiskIsARiskNotRed(t *testing.T) {
+	if s := localOnlySeverity(time.Now().Add(-60 * 24 * time.Hour)); s != "gelb" {
+		t.Fatalf("a local-only backup two months after install is %q, want gelb", s)
+	}
+	if s := localOnlySeverity(time.Now().Add(-2 * 24 * time.Hour)); s != "info" {
+		t.Fatalf("in the first week it is %q, want info", s)
 	}
 }
