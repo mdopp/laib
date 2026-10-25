@@ -7,8 +7,8 @@ import (
 )
 
 // #661: the card says what matters in a few lines — at most six reasons
-// and „und N weitere“ — and keeps the rest, and the single lines the
-// review grouped, in the technical details.
+// and „und N weitere“ — and keeps the rest, and the first single lines
+// the review grouped (#687), in the technical details.
 func TestCardKeepsImpactShort(t *testing.T) {
 	var reasons, lines []string
 	for i := range 9 {
@@ -31,7 +31,8 @@ func TestCardKeepsImpactShort(t *testing.T) {
 			t.Errorf("impact lacks %q", w)
 		}
 	}
-	for _, w := range []string{"Grund 6", "Grund 8", "COUNT_0=2", "COUNT_125=2"} {
+	// #687: the single lines are capped, the diff has them all
+	for _, w := range []string{"Grund 6", "Grund 8", "COUNT_0=2", "COUNT_11=2", "und 114 weitere (im Diff)"} {
 		if !strings.Contains(c.Details, w) {
 			t.Errorf("details lack %q", w)
 		}

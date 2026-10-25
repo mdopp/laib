@@ -18,7 +18,14 @@ complete example is `templates/whoami`, a real app with OIDC is
    `${VAR}`. Builtins you never declare: `${DOMAIN}`, `${DATA_DIR}`,
    `${TZ}`, `${SERVICE}`, `${LAN_IP}`, `${MODEL_URL}`, `${MODEL_KEY}`,
    `${MODEL_LEASE}`.
-3. `laib template lint <dir>` until it is quiet. Then the same path as an
+3. Write one German sentence for the household at the top of `news`
+   (below the `#` comment), what this change brings them, in their words:
+   „Joshua lernt die Namen deiner Geräte“, never a key, unit or file;
+   `${PERSONA_DISPLAY}` is the house persona's name. Every change of a
+   template gets its own new line, CI fails without one
+   (`scripts/drift.sh`); a template update's card shows the lines the box
+   does not have yet as its headline (#687).
+4. `laib template lint <dir>` until it is quiet. Then the same path as an
    app: a PR to the registry repo, `laib template sync`, `laib propose
    --add` (`apps.md` steps 4–7).
 

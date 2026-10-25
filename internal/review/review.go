@@ -193,8 +193,8 @@ func dirs(base, changed string) Result {
 				say("%s läuft direkt auf der Box, nicht im Container (Host-Unit)", p)
 			case a.exec:
 				say("%s ist ausführbar", p)
-			case name == "laib.yml", name == "values.yml", name == "README.md", knownUnit(name):
-				// judged by content below
+			case name == "laib.yml", name == "values.yml", name == "README.md", name == proposal.NewsFile, knownUnit(name):
+				// judged by content below; the news is words for the card (#687)
 			default:
 				say("ändert eine Datei, die Laib nicht kennt: %s", p)
 			}

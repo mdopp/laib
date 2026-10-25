@@ -96,7 +96,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	if errs := append(lintMounts(st, name, out, neighbours), lintEnvironment(name, out)...); len(errs) > 0 {
+	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out)); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(env.Errw(), e)
 		}
@@ -185,6 +185,10 @@ func lintMounts(st *state.State, name string, out render.Output, neighbours []st
 				continue
 			}
 			src, _, _ := strings.Cut(strings.TrimPrefix(line, "Volume="), ":")
+			if strings.HasPrefix(src, "%h/") || strings.HasPrefix(src, "~/") { // #687: llama-lease, open /presets.json: permission denied
+				errs = append(errs, fmt.Sprintf("%s: %s mounts %s from laib's home: under SELinux a container may not read laib's config folder; copy the file into a declared data path in pre-start and mount that", key, line, src))
+				continue
+			}
 			if !strings.HasPrefix(src, "/") {
 				continue // a named volume
 			}
@@ -208,3 +212,60 @@ func lintMounts(st *state.State, name string, out render.Output, neighbours []st
 	}
 	return errs
 }
+
+// writers: the commands that create or change a file at a path they name.
+var writers = map[string]bool{"touch": true, "mkdir": true, "cp": true, "mv": true, "install": true, "tee": true, "chmod": true, "chown": true, "rm": true, "ln": true, "truncate": true}
+
+// lintHostWrites (#687): a host-side command of a unit (Exec* but Exec=)
+// that writes into a folder a container of the template mounts writable.
+// What the container writes there belongs to its user — a subuid unless
+// it runs as root — and the host's user is refused (stimme-whisper: touch:
+// Permission denied). `podman unshare <command>` writes in podman's user
+// namespace, where it works whoever owns the folder; a read, a podman
+// command and a write anywhere else are not this shape.
+func lintHostWrites(name string, out render.Output) []string {
+	var mounted []string
+	for key, text := range out {
+		for _, line := range strings.Split(text, "\n") {
+			v, ok := strings.CutPrefix(strings.TrimSpace(line), "Volume=")
+			parts := strings.Split(v, ":")
+			if ok && strings.HasPrefix(key, "quadlet/"+name+"/") && strings.HasPrefix(v, "/") && !(len(parts) > 2 && slices.Contains(strings.Split(parts[2], ","), "ro")) {
+				mounted = append(mounted, strings.TrimSuffix(parts[0], "/"))
+			}
+		}
+	}
+	into := func(f string) bool {
+		return slices.ContainsFunc(mounted, func(m string) bool { return f == m || strings.HasPrefix(f, m+"/") })
+	}
+	var errs []string
+	for key, text := range out {
+		if !strings.HasPrefix(key, "quadlet/"+name+"/") {
+			continue
+		}
+		for _, line := range strings.Split(text, "\n") {
+			k, v, _ := strings.Cut(strings.TrimSpace(line), "=")
+			if !commandKey[k] {
+				continue
+			}
+			// the shell's words, segment by segment: a quote is no boundary, a separator is
+			v = strings.NewReplacer("'", " ", `"`, " ", ">", " > ", ";", "\n", "&&", "\n", "||", "\n", "|", "\n", "$(", "\n", "(", "\n", ")", "\n", "{", "\n", "}", "\n").Replace(v)
+			for _, seg := range strings.Split(v, "\n") {
+				f := strings.Fields(seg)
+				for len(f) > 0 && strings.Contains(f[0], "=") {
+					f = f[1:] // VAR=value before the command
+				}
+				if len(f) == 0 || filepath.Base(strings.TrimLeft(f[0], "-@+!:")) == "podman" {
+					continue
+				}
+				for i, w := range f {
+					if into(w) && (writers[filepath.Base(strings.TrimLeft(f[0], "-@+!:"))] && i > 0 || i > 0 && f[i-1] == ">") {
+						errs = append(errs, fmt.Sprintf("%s: %s writes %s on the host, in a folder a container of %s mounts: the container's user may own it and the host's user is refused; run it as podman unshare %s", key, line, w, name, strings.Join(f, " ")))
+					}
+				}
+			}
+		}
+	}
+	return errs
+}
+
+var commandKey = map[string]bool{"ExecStart": true, "ExecStartPre": true, "ExecStartPost": true, "ExecStop": true, "ExecStopPost": true, "ExecReload": true, "ExecCondition": true}
