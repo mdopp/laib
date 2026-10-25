@@ -129,7 +129,7 @@ class Units(unittest.TestCase):
         u = (T / "stimme-whisper.container").read_text()
         self.assertIn("Environment=WYO_WHISPER_INITIAL_PROMPT_FILE=/config/laib-names.txt", u)
         # a missing _FILE stops wyoming-faster-whisper at its argument parser (env_args._read_env)
-        self.assertIn("ExecStartPre=/usr/bin/touch ${DATA_DIR}/stimme/whisper/laib-names.txt", u)
+        self.assertIn("ExecStartPre=/usr/bin/podman unshare touch ${DATA_DIR}/stimme/whisper/laib-names.txt", u)
 
     def test_the_names_unit_restarts_whisper_only_on_a_change_and_never_starts_a_stopped_one(self):
         u = (T / "stimme-names.service").read_text()

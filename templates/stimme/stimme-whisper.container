@@ -19,7 +19,9 @@ SecurityLabelDisable=true
 AutoUpdate=registry
 
 [Service]
-ExecStartPre=/usr/bin/touch ${DATA_DIR}/stimme/whisper/laib-names.txt
+# the folder belongs to the container's user (linuxserver's abc), so the host's user creates it in
+# podman's user namespace; a plain touch is refused (Permission denied, v0.33.0 on the box)
+ExecStartPre=/usr/bin/podman unshare touch ${DATA_DIR}/stimme/whisper/laib-names.txt
 Restart=on-failure
 RestartSec=5
 
