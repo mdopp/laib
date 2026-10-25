@@ -268,14 +268,32 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 	}
 	vars["PEOPLE_REV"], vars["NOTIFY_PERSON"] = st.PeopleRev(), st.Box.Notify.Person
 	maps.Copy(vars, st.ZuhauseVars())
+	maps.Copy(vars, resolveValues(svc, secrets, vars))
+	return vars
+}
+
+// Values are a service's values.yml as a unit and a hook get them: a secret
+// resolved, and a builtin inside a literal rendered (#647: the haus
+// template's RADICALE_PUBLIC_URL: https://caldav.${DOMAIN} reached Haus as
+// https://caldav.). Only builtins: one value naming another stays as written.
+func Values(st *state.State, svc *state.Service, secrets map[string]string) map[string]string {
+	return resolveValues(svc, secrets, variables(st, svc, secrets))
+}
+
+func resolveValues(svc *state.Service, secrets, vars map[string]string) map[string]string {
+	builtins := map[string]string{}
+	for _, k := range state.Builtins {
+		builtins[k] = vars[k]
+	}
+	out := map[string]string{}
 	for k, v := range svc.Values {
 		if v.Secret != "" {
-			vars[k] = secretValue(secrets, v.Secret)
+			out[k] = secretValue(secrets, v.Secret)
 			continue
 		}
-		vars[k] = v.Literal
+		out[k] = substitute(v.Literal, builtins)
 	}
-	return vars
+	return out
 }
 
 // ModelVars are the builtins MODEL_URL, MODEL_LEASE and MODEL_KEY as units

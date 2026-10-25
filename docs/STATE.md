@@ -379,7 +379,10 @@ Plain `KEY: value`. Secrets are referenced, never written here:
 `PAPERLESS_SECRET_KEY: !secret PAPERLESS_SECRET_KEY`. A value is text or
 `!secret NAME`, nothing else: a mapping (`{secret: NAME}`), a list, a
 `!secret` without a name or another `!tag` fails the load with the file,
-line and key.
+line and key. A builtin inside a value renders as it does in a unit, for
+the unit and for the hooks alike: `RADICALE_PUBLIC_URL:
+https://caldav.${DOMAIN}` reaches the container as the box's own name
+(#647). Only builtins: a value that names another value stays as written.
 
 `laib add` writes values.yml from the template's `values.example.yml`. A
 template update keeps it and appends each key the new example has and
