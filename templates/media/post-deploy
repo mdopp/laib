@@ -27,7 +27,6 @@ E = os.environ
 BASE = E.get("JELLYFIN_URL", "http://127.0.0.1:8096")
 ADMIN, ADMIN_PW = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_JELLYFIN_ADMIN_PASSWORD"]
 LDAP_PW, DN = E["LAIB_SECRET_JELLYFIN_LDAP_PASSWORD"], E["BASE_DN"]
-MEDIA_ROOT = E.get("MEDIA_ROOT", "/mnt/data/stacks/file-share/data")
 XML = os.path.join(E["LAIB_DATA_DIR"], "media", "jellyfin-config", "plugins", "configurations", "LDAP-Auth.xml")
 PLUGIN = "958aad6637844d2ab89aa7b6fab6e25c"   # jellyfin-plugin-ldapauth
 # Jellyfin 12 reads the client id from Authorization only and answers 400 to X-Emby-Authorization (ServiceBay #3048)
@@ -89,11 +88,16 @@ except urllib.error.HTTPError as e:
 # 2. login as admin
 token = req("POST", "/Users/AuthenticateByName", {"Username": ADMIN, "Pw": ADMIN_PW})["AccessToken"]
 
-# 3. libraries for the folders that exist
-have = {f["Name"] for f in req("GET", "/Library/VirtualFolders", token=token)}
+# 3. libraries for the folders Jellyfin sees (#651): the share is mounted into Jellyfin's container at
+# /media, not into this hook's, so Jellyfin's own file browser says which exist. A folder that already
+# has a library (ServiceBay's "Music" on /media/music) gets no second one.
+seen = {d["Name"] for d in req("GET", "/Environment/DirectoryContents?path=/media&includeFiles=false&includeDirectories=true", token=token) or []
+        if d.get("Type", "Directory") == "Directory"}
+libs = req("GET", "/Library/VirtualFolders", token=token)
+have = {f["Name"] for f in libs}
+used = {x.rstrip("/") for f in libs for x in f.get("Locations") or []}
 for name, ctype, sub in LIBRARIES:
-    path = os.path.join(MEDIA_ROOT, sub)
-    if name in have or not os.path.isdir(path):
+    if name in have or sub not in seen or f"/media/{sub}" in used:
         continue
     req("POST", f"/Library/VirtualFolders?name={urllib.parse.quote(name)}&collectionType={ctype}&refreshLibrary=true",
         {"LibraryOptions": {"PathInfos": [{"Path": f"/media/{sub}"}], "EnableRealtimeMonitor": True}}, token=token)

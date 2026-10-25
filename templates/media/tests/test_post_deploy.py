@@ -20,7 +20,8 @@ SIDE = {}   # what Audiobookshelf and Music Assistant answer media's ordering gu
 def fresh():
     JF.clear()
     JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
-              config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0, types={}, deleted=[])
+              config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0, types={}, deleted=[],
+              media={"music", "movies"})   # the folders Jellyfin sees under its own /media mount (#651)
     SIDE.clear()
     SIDE.update(abs_token="abs-key-1", ma_token="ma-tok-1", abs_libs=[], abs_totals={}, radios=0)
 
@@ -59,6 +60,11 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(200, {"Name": "root"})
         if not self.token():
             return self.reply(401)
+        if self.path.startswith("/Environment/DirectoryContents?"):   # Jellyfin's file browser, admin only
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if q.get("path") != ["/media"] or q.get("includeDirectories") != ["true"]:
+                return self.reply(400)
+            return self.reply(200, [{"Name": d, "Path": "/media/" + d, "Type": "Directory"} for d in sorted(JF["media"])])
         if self.path == "/Library/VirtualFolders":
             return self.reply(200, [{"Name": n, "ItemId": i, "Locations": JF["locations"].get(i, []), "CollectionType": JF["types"].get(i),
                                      "LibraryOptions": JF["options"].get(i, {})} for n, i in JF["folders"]])
@@ -189,9 +195,8 @@ class PostDeploy(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.media = Path(self.tmp.name, "share")
-        for d in ("music", "movies"):
-            (self.media / d).mkdir(parents=True)
+        # the hook container does not mount the share (#651): what exists is what Jellyfin sees, JF["media"]
+        self.media = Path(self.tmp.name, "share-not-mounted-here")
         self.xml = Path(self.tmp.name, "media/jellyfin-config/plugins/configurations/LDAP-Auth.xml")
         self.side = HTTPServer(("127.0.0.1", 0), FakeSide)
         threading.Thread(target=self.side.serve_forever, daemon=True).start()
@@ -222,6 +227,32 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn(LDAP_PW, p.stdout + p.stderr)
         p = self.run_hook()
         self.assertEqual((p.returncode, JF["installs"], JF["restarts"]), (0, 1, 1), p.stdout + p.stderr)
+
+    def test_an_empty_jellyfin_gets_musik_filme_serien_from_what_it_sees(self):
+        # #651: the hook asked os.path.isdir in its own container, where the share is not mounted, so a new
+        # box never got a library. Jellyfin's own /media decides; a folder it does not see gets none.
+        JF["media"] = {"music", "movies", "tv", "audiobooks"}
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.names(), {"Musik", "Filme", "Serien"})
+        self.assertEqual(sorted(l for ls in JF["locations"].values() for l in ls), ["/media/movies", "/media/music", "/media/tv"])
+        self.assertTrue(JF["options"]["lib-1"]["EnableRealtimeMonitor"])
+        p = self.run_hook()
+        self.assertEqual((p.returncode, len(JF["folders"])), (0, 3), p.stdout + p.stderr)
+        JF.update(folders=[], locations={}, options={}, types={}, media={"music"})
+        p = self.run_hook()
+        self.assertEqual((p.returncode, self.names()), (0, {"Musik"}), p.stdout + p.stderr)
+
+    def test_the_owners_libraries_stay_as_they_are(self):
+        # #651: a box with ServiceBay's libraries gets no second one on the same folder
+        JF.update(wizard=True, users={"admin": {"Name": "admin", "Id": "u-admin", "pw": ADMIN_PW}},
+                  plugins=[{"Name": "LDAP-Auth", "Id": PLUGIN, "Status": "Active"}], media={"music", "movies", "tv"},
+                  folders=[("Music", "sb-1"), ("Movies", "sb-2"), ("Shows", "sb-3")], types={"sb-1": "music", "sb-2": "movies", "sb-3": "tvshows"},
+                  locations={"sb-1": ["/media/music"], "sb-2": ["/media/movies/"], "sb-3": ["/media/tv"]},
+                  options={k: {"EnableRealtimeMonitor": True} for k in ("sb-1", "sb-2", "sb-3")})
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.names(), {"Music", "Movies", "Shows"}, "a second library on the owner's folder")
 
     def test_servicebays_plugin_config_is_rebound_and_keeps_its_libraries(self):
         JF.update(wizard=True, users={"admin": {"Name": "admin", "Id": "u-admin", "pw": ADMIN_PW}},
