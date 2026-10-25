@@ -42,6 +42,7 @@ type Verdict struct {
 	Snap  []string // services snapshotted before the approved change applies (#528)
 	// Changes: what the change does, before → after, for the card (#616)
 	Changes []Change
+	Lines   []string // the single lines Human tells grouped by file (#661)
 }
 
 // Judge reads the change — a checkout of main and one of the change — and
@@ -186,7 +187,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 		return fail(err)
 	}
 	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: branch, Tier: "apply", Status: "open", Created: now(),
-		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes}
+		Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes, Lines: verdict.Lines}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])

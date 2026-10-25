@@ -214,7 +214,7 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
-		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes}, nil
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes, Lines: r.Lines}, nil
 	}
 }
 
