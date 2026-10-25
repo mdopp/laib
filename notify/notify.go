@@ -85,6 +85,9 @@ func (c Config) whom() string {
 // RedFor is how long a finding stays red before it is mailed.
 var RedFor = 10 * time.Minute
 
+// GiveUp is how long a message is mailed again while it fails (#659).
+var GiveUp = 24 * time.Hour
+
 var client = &http.Client{Timeout: 2 * time.Minute}
 
 // call runs one of the notify hand's tools and returns its text.

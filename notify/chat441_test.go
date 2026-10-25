@@ -13,7 +13,7 @@ import (
 )
 
 // fakeBote is bote-notify's POST /mitteilung (templates/bote/notify.py):
-// it keeps each message, checks the bearer, and fails while down.
+// it keeps each message, checks the bearer and the size, and fails while down.
 type fakeBote struct {
 	mu   sync.Mutex
 	down bool
@@ -28,6 +28,10 @@ func newFakeBote(t *testing.T) *fakeBote {
 		defer b.mu.Unlock()
 		if r.URL.Path != "/mitteilung" || r.Header.Get("Authorization") != "Bearer bote-n" {
 			http.Error(w, "nein", http.StatusUnauthorized)
+			return
+		}
+		if r.ContentLength > 4096 { // notify.py's max_body: refused before anything is logged (#659)
+			http.Error(w, `{"fehler": "höchstens 4096 Bytes"}`, http.StatusRequestEntityTooLarge)
 			return
 		}
 		if b.down {
