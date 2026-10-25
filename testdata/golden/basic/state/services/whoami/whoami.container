@@ -6,6 +6,7 @@ Image=${IMAGE}
 PublishPort=127.0.0.1:8080:80
 Environment=WHOAMI_NAME=${SERVICE}.${DOMAIN}
 Environment=TOKEN=${TOKEN}
+Environment=WHOAMI_URL=${PUBLIC_URL}
 # box.yml zuhause (#561): the coordinates, and the revision that applies it again on a move
 Environment=HOME_LAT=${ZUHAUSE_LATITUDE} HOME_LON=${ZUHAUSE_LONGITUDE}
 Environment=ZUHAUSE_REV=${ZUHAUSE_REV}
