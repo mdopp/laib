@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.1](https://github.com/mdopp/laib/compare/v0.34.0...v0.34.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **werkstatt:** the entrypoint gives dev Claude Code's tree back ([be013f7](https://github.com/mdopp/laib/commit/be013f7f43c655d5f49ed8d592e4f2a22870e1fc))
+
 ## [0.34.0](https://github.com/mdopp/laib/compare/v0.33.1...v0.34.0) (2026-10-25)
 
 
