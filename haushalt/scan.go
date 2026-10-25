@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -31,14 +30,7 @@ var (
 // proposal: the scan template with that scanner, or SCANNER set on the
 // installed one. laib runs no scan itself and decides nothing about one.
 func Scan(ctx context.Context, env *Env, args []string) int {
-	b, err := loadBox(env.State)
-	if err != nil {
-		return env.fail(err)
-	}
-	svc, err := provider(env.State, "scan")
-	if err != nil {
-		return env.fail(err)
-	}
+	svc := env.Call.Scan
 	act := "status"
 	if len(args) > 0 {
 		act, args = args[0], args[1:]
@@ -55,16 +47,14 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 	if act == "einrichten" {
 		return scanEinrichten(ctx, env, svc, *geraet)
 	}
-	if svc == nil || svc.Status == nil || svc.Status.File == "" {
+	if svc == nil || svc.Orders == "" {
 		return env.refused("Der Dienst scan ist nicht eingerichtet.")
 	}
-	status := strings.ReplaceAll(svc.Status.File, "${DATA_DIR}", b.DataDir)
 	if act == "status" {
-		b, err := os.ReadFile(status)
-		if err != nil {
+		if svc.Status == nil {
 			return env.refused("Der Dienst scan hat noch keinen Zustand geschrieben.")
 		}
-		fmt.Fprintln(env.Out, string(b))
+		fmt.Fprintln(env.Out, *svc.Status)
 		return exitOK
 	}
 	switch {
@@ -73,7 +63,7 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 	case *person != "" && !scanPerson.MatchString(*person):
 		return env.fail(fmt.Errorf("--person %q: ein Name aus box.yml people, klein", *person))
 	}
-	dir := filepath.Join(filepath.Dir(status), "auftrag")
+	dir := svc.Orders
 	order, _ := json.Marshal(map[string]string{"aktion": act, "stapel": *stapel, "person": *person, "von": env.Actor, "at": time.Now().UTC().Format(time.RFC3339)})
 	name := fmt.Sprintf("%d", time.Now().UnixNano())
 	// written whole, then renamed: the service never reads half an order
@@ -90,7 +80,7 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 // scanEinrichten proposes the scanner (#571): the scan template with it when
 // scan is not there, else its SCANNER value. The box's review decides the
 // proposal like any other; Haus decides nothing.
-func scanEinrichten(ctx context.Context, env *Env, svc *service, geraet string) int {
+func scanEinrichten(ctx context.Context, env *Env, svc *ScanService, geraet string) int {
 	if (geraet != "" && !scanGeraet.MatchString(geraet)) || (geraet == "" && svc != nil) {
 		return env.fail(fmt.Errorf("--geraet %q: ein SANE-Gerät wie epson2:net:192.168.1.5, ohne Anführungszeichen, %% und $", geraet))
 	}
@@ -105,9 +95,12 @@ func scanEinrichten(ctx context.Context, env *Env, svc *service, geraet string) 
 	} else {
 		edit = []string{"--set", "services/" + svc.Name + "/values.yml:SCANNER=" + geraet}
 	}
-	id, class, code := env.propose(ctx, append(edit, reason)...)
-	if code != exitOK {
-		return code
+	if env.Laib == nil {
+		return env.fail(errors.New("laib-haushalt has no way back to laib (LAIB_MCP_URL, LAIB_TOKEN)"))
+	}
+	id, class, err := env.Laib.Propose(ctx, env.Ceiling, append(edit, reason)...)
+	if err != nil {
+		return env.fail(err)
 	}
 	env.journal("scan", reason, fmt.Sprintf("#%d (%s)", id, class))
 	return env.emit(map[string]any{"proposal": id, "class": class, "message": fmt.Sprintf("Vorschlag #%d liegt im Eingang: %s.", id, reason)})

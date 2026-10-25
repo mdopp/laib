@@ -31,6 +31,13 @@ laib escalate <service> "<was ich weiß>"       context bundle + red journal lin
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept under <home>/wishes without an intake; from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the approver; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
+laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"]
+            | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>
+                                     the Box-Aufgaben (#667): the owner's to-dos that are box topics, not code, in the state repo's
+                                     aufgaben.yml (docs/STATE.md). Bookkeeping, no proposal: each change is one commit of that file
+                                     on main and one journal line (verb aufgabe). ops, claude, Haus and humans add; humans, claude and
+                                     Haus (for an admin, --von <user>) check off and defer. A befund defers that diag finding
+                                     until erinnern, and laib ticks the task off once diag measures it gone; list shows the open ones, --alle the done too, --faellig the due ones
 laib zuhause show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]
                                      the household's address, box.yml zuhause (#561): show prints the block only; set replaces
                                      the whole block as a box.yml proposal of class human (the owner approves, never the caller);
@@ -47,13 +54,15 @@ laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <
 laib scan einrichten [--geraet <sane-gerät>]
                                      a proposal (#571): the scan template with that scanner, or SCANNER on the installed one
 laib operator enable|disable|status  mint the ops token, render and start laib-operator's container (ADR 0027; humans only)
+                                     (laib scan and laib net geraete are laib-haushalt's, in its container: the verb door hands
+                                     each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027)
 laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
                                      the built-in hands' new default verbs as one proposal (#575);
                                      --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
                                      refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
 laib net [--mermaid]                 every name (reach, Authelia, target), the direct ports, the host network, the pods' links: from the rendered config (#439)
 laib net geraete [--wecken]          the LAN's devices as the host sees them (#577): address, MAC, reverse-DNS name, maker from the
-                                     host's IEEE oui.txt if one is there; only the box's /24, only complete entries of /proc/net/arp.
+                                     IEEE oui.txt laib-haushalt's image carries; only the box's /24, only complete entries of /proc/net/arp.
                                      `limits` says what the list cannot see (a sleeping device, another subnet). --wecken first sends
                                      one UDP datagram to port 9 of every address of the /24 so ARP fills the table; no port is read
 laib skill list | enable <name> | pause <name>   the Operator's skills (ADR 0023); the switch is a human's, a commit to policy.yml
@@ -142,6 +151,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_calendar` | `action` (`subscribe`, `every`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `every?` (`30m`, `12h`, `30d`: how often this calendar is fetched, #619; empty: Google every run, a public abo every 30 days), `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since, every?}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
 | `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The haus hand calls it from the admins' form, by its verb and its path grant `zuhause` (#598); Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
 | `laib_scan` | `action` (`status`, `start`, `weiter`, `abschliessen`, `verwerfen`, `redo`, `suchen`, `pruefen`, `probe`, `einrichten`), `geraet?` (einrichten: a SANE device; the answer is `{proposal, class, message}`), `person?` (whom the closing message is for; empty: `notify.person`), `stapel?` (redo: `JJJJ-MM-TTThh-mm-ss`) → status: the service's status file as it is (templates/scan/README.md); otherwise `{message}`. Tier propose: the haus hand by its verbs, the Bote by its ceiling (#568) |
+| `laib_aufgabe` | `action` (`list`, `add`, `erledigt`, `zurueckstellen`); add: `titel`, `warum?`, `erinnern?` (`JJJJ-MM-TT`), `befund?` (`<probe> [<service or topic>]` from `laib_diag`, e.g. `raid`, `watchdog`, `backup offsite`); erledigt: `id`; zurueckstellen: `id`, `erinnern`; `von?` (Haus only: the admin it acts for, recorded as `haus:<user>`); list: `alle?`, `faellig?` (booleans). list → `{offen, faellig, aufgaben: [task]}`; the others → `{message, aufgabe: task}`; task = `{id, titel, warum?, seit, von, erinnern?, befund?, erledigt?: {am, von, wie?}}` (dates `JJJJ-MM-TT`). Tier propose; add for ops, claude, haus and humans, the rest for humans, claude and haus; Haus needs `aufgabe` in its verbs (#667) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
@@ -487,11 +497,16 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
-`laib pause <service> [--until 2h] ["<grund>"]` and `laib resume <service>`
-(apply tier): a paused service is left alone by converge and shows as
+`laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
+(apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
-`restore` pauses the service it rewrites, the GPU lease pauses every service whose units it stopped (`llama`, `stimme`)
-while a mode stands. Apply records the services whose activation it owes
+`restore` pauses the service it rewrites. `--stop` and `--restart` act on the
+service's own units after the marker is written and the marker keeps them;
+`resume` lifts it, starts what it stopped and restarts what it restarted. A
+renewal by the same hand moves the end and touches no unit. That is how the
+GPU lease, in its container (ADR 0027), as the `lease` hand, pauses every
+service whose units a window takes the card from (`llama`, `stimme`) while a
+mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies
 them even when the file diff is clean. Restart-only converge runs are
@@ -509,7 +524,18 @@ the argument (`git rev-parse --verify --end-of-options`) and reverts a
 merge commit with `-m 1`. An approve merges in a temporary worktree: a
 conflict never reaches `main`, the merged result must load and render, and
 a proposal that fails either way is `stale` with a reason („veraltet — neu
-vorschlagen“). Apply records every file it put on the box in
+vorschlagen“). A structured proposal (`--grant`, `--set`, `--path`, a
+template update) keeps its intent beside its diff (#637): when its branch
+no longer merges, approve applies the intent to the current `main` again
+and reviews the result. It is applied („neu berechnet auf dem aktuellen
+Stand“) only when class, files, tokens, services, reasons, warnings and
+the card's changes are what the owner approved, and a template update only
+from the very template files the owner saw; otherwise nothing is applied,
+it goes stale („geändert seit deiner Freigabe — neu vorgeschlagen als #N“)
+and the new content is filed fresh. When the intent itself conflicts — a
+verb the hand has by now, a value someone changed since the proposal — it
+is stale with that reason; a merge that changes nothing is stale, never an
+approval. Apply records every file it put on the box in
 `<home>/managed.json`; plan deletes — and for a unit stops and disables —
 whatever the manifest has but render no longer produces, so a removed
 service, a disabled operator or a removed llama does not keep running.

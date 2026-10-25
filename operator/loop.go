@@ -240,7 +240,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	all := o.history(ctx)
 	ctxText = Record(all) + ctxText
 	if sk.Output == "report" {
-		human = strings.TrimSpace(human + " " + Rate(all, now()) + " " + Stale(all))
+		due, _, _ := o.MCP.Call(ctx, "laib_aufgabe", map[string]any{"action": "list", "faellig": true}) // #667
+		human = strings.TrimSpace(human + " " + Rate(all, now()) + " " + Stale(all) + " " + dueLine(due))
 	}
 	// a lessons skill (#544) asks no model: the runner files the lessons
 	if sk.Lessons == "vorfall" {

@@ -1,0 +1,21 @@
+# laib-haushalt in its container (ADR 0027): the household verbs behind
+# laib's verb door (ADR 0026), scan and net geraete. It gets no more of the
+# box than the scan service's orders folder, the door's key and its own
+# propose-only token; it reads none of laib's files.
+# One static binary on distroless/static, no shell, and the IEEE OUI list
+# net geraete names the makers by (Alpine's hwdata-net, as the box's
+# /usr/share/hwdata/oui.txt). It runs as the container's root, which
+# rootless podman maps to core: it writes the orders as the host program
+# did. Laib renders the unit (internal/render haushaltUnit).
+FROM golang:1.27-alpine AS build
+RUN apk add --no-cache hwdata-net && test -s /usr/share/hwdata/oui.txt
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-haushalt ./haushalt/cmd/laib-haushalt
+FROM gcr.io/distroless/static-debian12
+COPY --from=build /laib-haushalt /laib-haushalt
+COPY --from=build /usr/share/hwdata/oui.txt /usr/share/hwdata/oui.txt
+LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
+ENTRYPOINT ["/laib-haushalt"]

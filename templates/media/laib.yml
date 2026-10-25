@@ -9,8 +9,8 @@ upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   #
 # libraries ("Music2" on Music's folders) and, once the owner set
 # SPOKEN_WORD=audiobookshelf and both answer with content, the old
 # Audiobooks, Podcasts and Radio libraries. The hook completes the first-run wizard, creates the local admin
-# (break-glass), registers the libraries Musik (/media/music) and, when the
-# folders exist, Filme and Serien, and logs the family in with their LLDAP
+# (break-glass), registers the libraries Musik, Filme and Serien for the
+# folders Jellyfin itself sees under /media (#651), and logs the family in with their LLDAP
 # accounts through the LDAP-Authentication plugin (#256), Quick Connect on.
 after: [auth, file-share]        # LLDAP's read-only account (#256); the share's folders are mounted here (#36)
 routes:

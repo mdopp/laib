@@ -104,14 +104,10 @@ func knock(p netip.Prefix, self netip.Addr) {
 // NetDevices is `laib net geraete [--wecken]` (#577): the devices the
 // box's neighbour table holds for its LAN, read only; --wecken knocks once.
 func NetDevices(env *Env, args []string) int {
-	b, err := loadBox(env.State)
-	if err != nil {
-		return env.fail(err)
-	}
 	if len(args) > 1 || (len(args) == 1 && args[0] != "--wecken") {
 		return env.fail(fmt.Errorf("usage: laib net geraete [--wecken]"))
 	}
-	self, err := netip.ParseAddr(b.LanIP)
+	self, err := netip.ParseAddr(env.LanIP)
 	if err != nil || !self.Is4() {
 		return env.refused("box.yml hat keine IPv4-Adresse (lanIp); ohne sie weiß laib nicht, welches Netz das Heimnetz ist.")
 	}

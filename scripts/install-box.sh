@@ -300,10 +300,11 @@ if [ -n "$TOKEN" ]; then
 fi
 
 sudo mkdir -p /var/opt/laib
-# laib-operator and laib-notify are containers since ADR 0027: their images
-# are pinned by laib and pulled by its apply. A binary of theirs from an
-# older release stays where it is: a self rollback to that release runs it.
-for BIN in laib laib-lease; do
+# laib-operator, laib-notify, laib-haushalt and laib-lease are containers
+# since ADR 0027: their images are pinned by laib and pulled by its apply.
+# A binary of theirs from an older release stays where it is: a self
+# rollback to that release runs it.
+for BIN in laib; do
   curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
 # SHA256SUMS is required: an unverified build is refused, release or --source (#37)
@@ -324,28 +325,28 @@ if [ -n "$CHECK" ] && grep -q " laib-host-image.sh\$" "$TMPD/SHA256SUMS"; then
   FOLLOW="$TMPD/laib-host-image.sh"
   u="$(asset_url laib-host-image.sh)" && curl -fsSL "${get[@]}" -o "$FOLLOW" "$u" || { echo "$TAG lists laib-host-image.sh but it does not download: refusing" >&2; exit 1; }
 fi
-(cd "$TMPD" && for BIN in laib laib-lease; do
+(cd "$TMPD" && for BIN in laib; do
    want="$(grep " $BIN-linux-amd64\$" SHA256SUMS | cut -d' ' -f1)"; have="$(sha256sum "$BIN" | cut -d' ' -f1)"
    [ -n "$want" ] || { echo "SHA256SUMS has no entry for $BIN" >&2; exit 1; }
    [ "$want" = "$have" ] || { echo "checksum mismatch for $BIN" >&2; exit 1; }
  done
  [ -z "$CHECK" ] || [ "$(grep " laib-boot-check.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-boot-check.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-boot-check.sh" >&2; exit 1; }
  [ -z "$FOLLOW" ] || [ "$(grep " laib-host-image.sh\$" SHA256SUMS | cut -d' ' -f1)" = "$(sha256sum laib-host-image.sh | cut -d' ' -f1)" ] || { echo "checksum mismatch for laib-host-image.sh" >&2; exit 1; })
-# the programs out of the kernel (#443): laib-disk (the data RAID and disk
-# health), and the household verbs behind the verb door, laib-haushalt
-# (ADR 0026, #598). A release from before has them not; then laib diag says so
+# the program out of the kernel that stays on the host (#443, ADR 0027):
+# laib-disk, the data RAID and disk health. A release from before has it
+# not; then laib diag says so
 EXTRA=""
-for P in laib-disk laib-haushalt; do
+for P in laib-disk; do
   if grep -q " $P-linux-amd64\$" "$TMPD/SHA256SUMS"; then
     curl -fsSL "${get[@]}" -o "$TMPD/$P" "$(asset_url "$P-linux-amd64")" || { echo "$TAG lists $P but it does not download: refusing" >&2; exit 1; }
     [ "$(grep " $P-linux-amd64\$" "$TMPD/SHA256SUMS" | cut -d' ' -f1)" = "$(sha256sum "$TMPD/$P" | cut -d' ' -f1)" ] || { echo "checksum mismatch for $P" >&2; exit 1; }
     EXTRA="$EXTRA $P"
   else
-    echo "$TAG carries no $P (#443, #598): installing without it"
+    echo "$TAG carries no $P (#443): installing without it"
   fi
 done
 # the previous binaries stay as *.prev: `laib self rollback` puts them back
-for BIN in laib laib-lease $EXTRA; do
+for BIN in laib $EXTRA; do
   if [ -f "/var/opt/laib/$BIN" ] && ! cmp -s "$TMPD/$BIN" "/var/opt/laib/$BIN"; then sudo cp -p "/var/opt/laib/$BIN" "/var/opt/laib/$BIN.prev"; fi
   sudo install -m 0755 "$TMPD/$BIN" "/var/opt/laib/$BIN.new" && sudo mv "/var/opt/laib/$BIN.new" "/var/opt/laib/$BIN"
 done
@@ -416,10 +417,8 @@ pin_host_image
 systemctl --user enable --now laib.service
 # enable --now does not restart a running service: an update would keep the old
 # code running until the next reboot. try-restart touches only what runs (#37).
-# (laib-operator's container restarts with the apply below when its image moved, ADR 0027)
-for u in laib.service laib-lease.service; do
-  systemctl --user try-restart "$u" 2>/dev/null || true
-done
+# (the containers of laib's own programs restart with the apply below when their images moved, ADR 0027)
+systemctl --user try-restart laib.service 2>/dev/null || true
 sleep 1
 # Laib's own units (converge loop, auto-update verify) come from the state too:
 # one apply, so the box is not "eingeschränkt" by its own drift on day one.

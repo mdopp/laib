@@ -9,14 +9,15 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       OPERATOR_IMAGE: localhost/laib-operator:boot
+      HAUSHALT_IMAGE: localhost/laib-haushalt:boot
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # the Operator's image from this commit (ADR 0027), pinned into this laib as a release pins its digest
-      - run: podman build -q -t "$OPERATOR_IMAGE" -f operator/Containerfile .
-      - run: CGO_ENABLED=0 go build -ldflags "-X github.com/mdopp/laib/internal/render.OperatorImage=$OPERATOR_IMAGE" -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./operator/cmd/laib-operator
+      # the Operator's and laib-haushalt's images from this commit (ADR 0027), pinned into this laib as a release pins their digests
+      - run: podman build -q -t "$OPERATOR_IMAGE" -f operator/Containerfile . && podman build -q -t "$HAUSHALT_IMAGE" -f haushalt/Containerfile .
+      - run: CGO_ENABLED=0 go build -ldflags "-X github.com/mdopp/laib/internal/render.OperatorImage=$OPERATOR_IMAGE -X github.com/mdopp/laib/internal/render.HaushaltImage=$HAUSHALT_IMAGE" -o laib ./cmd/laib && CGO_ENABLED=0 go build -o laib-operator ./operator/cmd/laib-operator
       - run: |
           podman --version
           systemctl --user status --no-pager | head -3 || true

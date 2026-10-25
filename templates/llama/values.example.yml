@@ -2,6 +2,7 @@ IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda-b11723@sha256:ffbb0d908f22ca66c026
 ROUTER_PORT: "11434"
 PORT: "11435"
 LEASE_TOKEN: !secret MODEL_API_KEY
+LAIB_TOKEN: !secret LLAMA_LAIB_TOKEN
 EMBED_PORT: "11436"
 EMBED_REPO: nomic-ai/nomic-embed-text-v1.5-GGUF
 EMBED_FILE: nomic-embed-text-v1.5.f16.gguf

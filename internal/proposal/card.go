@@ -64,6 +64,7 @@ var handWords = map[string][2]string{
 	"claude": {"Claude in der Werkstatt", ""}, "pi": {"pi", ""}, "laib": {"Laib", ""},
 	"notify": {"die Benachrichtigung", "über den Boten oder per Mail"}, "approver": {"die Freigabe über Signal", ""},
 	"werkstatt": {"die Werkstatt", ""}, "resident": {"die Bewohner", ""}, "human": {"ein Mensch", ""},
+	"haushalt": {"die Haushaltsbefehle", "Scan und Geräte im Heimnetz"}, "lease": {"die Grafikkarten-Lease", "hält Dienste an, solange ein großes Modell die Karte braucht"},
 }
 
 // verbWords: what a verb lets a hand do, as the end of "darf …".
@@ -72,7 +73,7 @@ var verbWords = map[string]string{
 	"diag": "die Befunde der Box lesen", "restart": "Dienste neu starten", "start": "Dienste starten", "stop": "Dienste anhalten",
 	"person_invite": "Personen einladen", "person_pending": "sehen, wer eine Einladung noch nicht angenommen hat",
 	"person_signal": "die Signal-Nummer einer Person eintragen lassen", "calendar": "Kalender verbinden",
-	"zuhause": "die Adresse des Haushalts ändern lassen", "scan": "Scans starten", "note": "Notizen ins Tagebuch schreiben",
+	"zuhause": "die Adresse des Haushalts ändern lassen", "scan": "Scans starten", "note": "Notizen ins Tagebuch schreiben", "aufgabe": "Box-Aufgaben führen und abhaken",
 	"backup": "eine Sicherung machen", "backups": "die Sicherungen sehen", "updates": "nach Updates sehen",
 	"approve": "Vorschläge freigeben", "reject": "Vorschläge ablehnen", "session": "einen Zugang für eine Werkstatt-Sitzung holen",
 	"plan": "sehen, was ein Ausrollen ändern würde", "apply": "Änderungen ausrollen", "inspect": "in Dienste hineinsehen",
@@ -83,6 +84,7 @@ var verbWords = map[string]string{
 	"add": "Dienste installieren", "remove": "Dienste entfernen", "propose": "Änderungen vorschlagen", "adopt": "fremde Dienste übernehmen",
 	"ignore": "fremde Dienste übergehen", "token": "Zugänge ausstellen", "secret": "Geheimnisse setzen", "disk": "Festplatten verwalten",
 	"init": "die Box neu einrichten", "serve": "die Seiten der Box betreiben", "version": "die Version sehen",
+	"pause": "Dienste eine Weile anhalten", "resume": "angehaltene Dienste wieder starten",
 	"skill": "die Fähigkeiten des Operators sehen", "net": "das Netz der Box sehen", "state": "die Einstellungen der Box lesen",
 	"repair": "Reparaturen vorschlagen", "wish": "Wünsche an die Werkstatt schicken",
 }

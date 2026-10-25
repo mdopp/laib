@@ -20,6 +20,7 @@ skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
 lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
 ignore.yml            units on the box that are deliberately unmanaged
+aufgaben.yml          the Box-Aufgaben (#667): the owner's to-dos on the box; laib aufgabe commits it on main, never a proposal
 ```
 
 The journal is *not* in the repo: `/mnt/data/laib/journal/YYYY-MM-DD.jsonl`.
@@ -199,6 +200,8 @@ hands:
   ops:      { ceiling: apply }  # the operator (ADR 0013)
   laib:     { ceiling: propose, verbs: [backup, diag] }  # laib's own timers (#444): the nightly backup, its check, the snapshot before an image update; supplied when missing
   notify:   { ceiling: propose, verbs: [diag, updates, inbox, note] }  # laib-notify (#443, #441): the watchdog ping and the owner's messages; reads, journals a failed send; supplied when missing
+  haushalt: { ceiling: propose, verbs: [propose] }  # laib-haushalt's call back from behind the verb door (ADR 0026, 0027): its proposals are never the dial's; supplied when missing
+  lease:    { ceiling: apply, verbs: [status, pause, resume, note] }  # laib-lease in its container (ADR 0027): pauses and resumes what a GPU window stops, notes a long one; supplied when missing
   pi:       { ceiling: propose }
   haus:     { ceiling: apply, verbs: [status, inbox, zuhause, person_signal, …], paths: [zuhause, people.*.signal] }  # the family's pages
   claude:   { ceiling: apply, ttl: 8h }
@@ -379,7 +382,10 @@ Plain `KEY: value`. Secrets are referenced, never written here:
 `PAPERLESS_SECRET_KEY: !secret PAPERLESS_SECRET_KEY`. A value is text or
 `!secret NAME`, nothing else: a mapping (`{secret: NAME}`), a list, a
 `!secret` without a name or another `!tag` fails the load with the file,
-line and key.
+line and key. A builtin inside a value renders as it does in a unit, for
+the unit and for the hooks alike: `RADICALE_PUBLIC_URL:
+https://caldav.${DOMAIN}` reaches the container as the box's own name
+(#647). Only builtins: a value that names another value stays as written.
 
 `laib add` writes values.yml from the template's `values.example.yml`. A
 template update keeps it and appends each key the new example has and
@@ -496,7 +502,10 @@ plan (the value still differs) or the pending marker. An empty value stays
 keep `Environment=`: systemd sets it without an argv, in a 0600 file.
 Laib's own containers (ADR 0027) get theirs the same way, named
 `laib.laib-operator.laib-operator.LAIB_TOKEN` and so on; an empty one is
-left out of the unit.
+left out of the unit. `laib-haushalt`'s are `LAIB_HAUSHALT_TOKEN` (minted
+on apply for the haushalt hand) and `LAIB_HAUSHALT_KEY` (generated: the
+verb door's bearer) in `secrets.age`; the lease's laib token is the llama
+template's `LLAMA_LAIB_TOKEN`, minted for the lease hand.
 A key built from a value (`ACCOUNT_${SHARE_USER}`) can hold what podman
 refuses in a name, or a dot that would make two lines one name: such a line
 gets `laib.<service>.<hash of container and key>` instead. A secret line
@@ -550,3 +559,52 @@ and Caddy writes the TXT record at that name
 through the same resolvers: red when it points elsewhere, yellow when it
 does not resolve. The owner's steps: docs/INSTALL.md, "One wildcard
 certificate".
+
+## aufgaben.yml
+
+The Box-Aufgaben (#667): what the owner has to do on or for the box that no
+code change closes (a second disk, a NAS share, a device to flash). Owner,
+2026-10-25: "das ist ja ein Thema der Box, nicht des Codes". They were
+GitHub issues and rotted there.
+
+```yaml
+aufgaben:
+  - id: 2
+    titel: Wächter von außen einrichten
+    warum: fällt die Box aus, erfährt es niemand
+    seit: "2026-10-25"
+    von: claude
+    erinnern: "2026-12-01"        # from this day diag reminds again
+    befund: watchdog              # the diag finding it covers: probe [service|topic]
+  - id: 1
+    titel: TOTP für mdopp prüfen
+    seit: "2026-10-25"
+    von: human:core
+    erledigt: {am: "2026-10-26", von: haus:mdopp}
+```
+
+- **Why the state repo, committed directly.** The list is the box's, so it
+  is backed up and versioned with it. A change is bookkeeping, not desired
+  state: it renders nothing and changes no service, so it needs no review
+  and no Inbox. `laib aufgabe` writes the file and commits it alone on main
+  (`proposal.CommitPath`, the way `secrets.age` is committed, #328), and a
+  bare `laib rollback` skips such commits: it reverts the box's last change,
+  not the ticking-off on top of it.
+- **Why the kernel, not laib-haushalt.** ADR 0026 puts household verbs
+  behind the verb door, but laib-haushalt's container mounts only the scan
+  orders (ADR 0027), never the state repo, and diag, which is the kernel,
+  reads the list on every run. A door program that only proposes could not
+  tick a task off without an approval.
+- **diag.** A finding that an open task's `befund` covers is shown at
+  severity info with „zurückgestellt → Box-Aufgabe #N“ and carries
+  `aufgabe: N`; from its `erinnern` day it is gelb with „erinnert“. A red
+  stays red: a deferral silences a nudge, never damage. A finding that could
+  not be measured (`unmeasured`, e.g. laib-disk silent) is never covered.
+  When a full diag measures the finding gone, laib checks the task off
+  („von Laib erledigt: Befund weg“), but only for the probes whose absence
+  is a measurement: watchdog, backup, recovery, restore-test, raid. Every
+  other task is ticked off by a person.
+- `befund` matches a finding by its probe and its service or topic
+  (`backup offsite`); a befund without one covers only findings without one.
+- Readiness carries `aufgaben` and `aufgabenFaellig`; the morning report
+  names the due ones.

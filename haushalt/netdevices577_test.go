@@ -47,8 +47,6 @@ func TestParseARPKeepsTheLANsAnsweringDevices(t *testing.T) {
 // as such, and the limits as a field, not as fine print. The kernel's side,
 // over MCP through the door: cmd/laib/door598_test.go.
 func TestNetGeraeteListsDevicesWithTheirLimits(t *testing.T) {
-	state := t.TempDir()
-	os.WriteFile(filepath.Join(state, "box.yml"), []byte("domain: box.test\nlanIp: 192.0.2.10\ndataDir: /x\n"), 0o644)
 	dir := t.TempDir()
 	arp, oui := filepath.Join(dir, "arp"), filepath.Join(dir, "oui.txt")
 	os.WriteFile(arp, []byte(arpFixture), 0o644)
@@ -61,7 +59,7 @@ func TestNetGeraeteListsDevicesWithTheirLimits(t *testing.T) {
 	wakeLAN = func(p netip.Prefix, self netip.Addr) { woke = p.String() + " " + self.String() }
 	call := func(json bool, args ...string) (string, int) {
 		var out, errOut strings.Builder
-		code := Run(t.Context(), &Env{Actor: "ops", State: state, JSON: json, Out: &out, Err: &errOut}, append([]string{"net", "geraete"}, args...))
+		code := Run(t.Context(), &Env{Call: Call{Actor: "ops", LanIP: "192.0.2.10", JSON: json}, Out: &out, Err: &errOut}, append([]string{"net", "geraete"}, args...))
 		return out.String() + errOut.String(), code
 	}
 

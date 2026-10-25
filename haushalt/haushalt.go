@@ -1,25 +1,25 @@
 // Package haushalt is the program laib-haushalt (ADR 0026, #598): the
-// household verbs that read the state, leave an order for a service or file
-// a proposal — scan and net geraete. The kernel serves them through its verb
-// door: it checks hand, tier and verb, then runs this program with the
-// actor, the state repo and laib itself to call back for a proposal. It
-// imports nothing of the kernel, and changes nothing of the box itself.
+// household verbs that read what the door hands over, leave an order for a
+// service or file a proposal — scan and net geraete. It runs in its own
+// container (ADR 0027): the kernel checks hand, tier and verb, then hands
+// each call over HTTP on 127.0.0.1 with the caller's actor, the verb's
+// ceiling and the facts the verbs need. A proposal goes back to laib over
+// MCP with the program's own token, the haushalt hand's, which only
+// proposes. It imports nothing of the kernel and reads none of its files.
 package haushalt
 
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Exit codes, as the kernel's (docs/INTERFACE.md).
@@ -28,16 +28,38 @@ const (
 	exitRefused = 3
 )
 
-// Env is what the door hands over (cmd/laib/door.go).
+// Call is one verb the door hands over (cmd/laib/door.go doorCall).
+type Call struct {
+	Argv    []string     `json:"argv"`
+	JSON    bool         `json:"json"`
+	Actor   string       `json:"actor"`
+	Ceiling string       `json:"ceiling"`
+	LanIP   string       `json:"lanIp"`
+	Scan    *ScanService `json:"scan,omitempty"`
+}
+
+// ScanService is the service that provides scan, as laib reads it from its state:
+// its status file's content (nil while it wrote none) and its orders
+// folder, mounted into this container at the same path ("" without a
+// status file: not set up).
+type ScanService struct {
+	Name   string  `json:"name"`
+	Status *string `json:"status"`
+	Orders string  `json:"orders"`
+}
+
+// Laib is the way back: a proposal as the haushalt hand, under a ceiling.
+type Laib interface {
+	Propose(ctx context.Context, ceiling string, args ...string) (id int, class string, err error)
+}
+
+// Env is one call's world.
 type Env struct {
-	Actor  string // LAIB_ACTOR
-	State  string // LAIB_STATE: the state repo, read only here
-	Kernel string // LAIB_KERNEL: laib, for a proposal
-	JSON   bool
-	In     io.Reader
-	Out    io.Writer
-	Err    io.Writer
-	// Journal is fd 3: the kernel writes each line as the caller; nil, nothing
+	Call
+	Laib Laib
+	Out  io.Writer
+	Err  io.Writer
+	// Journal gets one line per entry; the kernel writes each as the caller
 	Journal io.Writer
 }
 
@@ -49,7 +71,37 @@ func Run(ctx context.Context, env *Env, args []string) int {
 	case len(args) > 1 && args[0] == "net" && args[1] == "geraete":
 		return NetDevices(env, args[2:])
 	}
-	return env.fail(errors.New("usage: laib-haushalt [--json] scan … | net geraete … (the kernel serves them as laib scan, laib net geraete)"))
+	return env.fail(errors.New("usage: scan … | net geraete … (the kernel serves them as laib scan, laib net geraete)"))
+}
+
+// Handler serves the door: POST /call with the door's key, GET /health.
+func Handler(key string, laib Laib) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"haushalt": "bereit"})
+	})
+	mux.HandleFunc("POST /call", func(w http.ResponseWriter, r *http.Request) {
+		tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if key == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(key)) != 1 {
+			http.Error(w, "unauthorized: only laib's verb door calls laib-haushalt", http.StatusUnauthorized)
+			return
+		}
+		var c Call
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&c); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var out, errb, jr bytes.Buffer
+		code := Run(r.Context(), &Env{Call: c, Laib: laib, Out: &out, Err: &errb, Journal: &jr}, c.Argv)
+		lines := []json.RawMessage{}
+		for _, l := range bytes.Split(bytes.TrimSpace(jr.Bytes()), []byte("\n")) {
+			if json.Valid(l) {
+				lines = append(lines, l)
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"out": out.String(), "err": errb.String(), "code": code, "journal": lines})
+	})
+	return mux
 }
 
 func (e *Env) fail(err error) int {
@@ -77,71 +129,6 @@ func (e *Env) journal(service, reason, detail string) {
 		b, _ := json.Marshal(map[string]string{"service": service, "reason": reason, "result": "info", "detail": detail})
 		e.Journal.Write(append(b, '\n'))
 	}
-}
-
-// propose is `laib propose … --json` as the actor: the kernel's review,
-// class and Inbox decide it; behind the door the dial applies nothing.
-func (e *Env) propose(ctx context.Context, args ...string) (id int, class string, code int) {
-	var out bytes.Buffer
-	cmd := exec.CommandContext(ctx, e.Kernel, append([]string{"propose", "--json"}, args...)...)
-	cmd.Stdout, cmd.Stderr = &out, e.Err
-	err := cmd.Run()
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		return 0, "", exit.ExitCode()
-	}
-	var p struct {
-		ID    int    `json:"id"`
-		Class string `json:"class"`
-	}
-	if err != nil || json.Unmarshal(out.Bytes(), &p) != nil || p.ID == 0 {
-		return 0, "", e.fail(fmt.Errorf("laib propose: %v: %s", err, out.String()))
-	}
-	return p.ID, p.Class, exitOK
-}
-
-// box is what this program reads of box.yml.
-type box struct {
-	DataDir string `yaml:"dataDir"`
-	LanIP   string `yaml:"lanIp"`
-}
-
-func loadBox(state string) (box, error) {
-	var b box
-	raw, err := os.ReadFile(filepath.Join(state, "box.yml"))
-	if err == nil {
-		err = yaml.Unmarshal(raw, &b)
-	}
-	return b, err
-}
-
-// service is what this program reads of a service's laib.yml.
-type service struct {
-	Name     string
-	Provides []string `yaml:"provides"`
-	Status   *struct {
-		File string `yaml:"file"` // under ${DATA_DIR}
-	} `yaml:"status"`
-}
-
-// provider is the installed service that provides purpose, or nil.
-func provider(state, purpose string) (*service, error) {
-	dirs, _ := filepath.Glob(filepath.Join(state, "services", "*", "laib.yml"))
-	var found *service
-	for _, f := range dirs {
-		raw, err := os.ReadFile(f)
-		if err != nil {
-			return nil, err
-		}
-		s := &service{Name: filepath.Base(filepath.Dir(f))}
-		if err := yaml.Unmarshal(raw, s); err != nil {
-			return nil, fmt.Errorf("services/%s/laib.yml: %w", s.Name, err)
-		}
-		if slices.Contains(s.Provides, purpose) {
-			found = s
-		}
-	}
-	return found, nil
 }
 
 // writeAtomic is boxfs.WriteAtomic's shape (#148), which this program may

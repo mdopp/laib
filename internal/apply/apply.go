@@ -621,8 +621,9 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 			env = append(env, k+"="+v)
 		}
 	}
+	vals := render.Values(st, svc, secrets) // a builtin inside a value rendered, as in a unit (#647)
 	for k, v := range svc.Values {
-		val := v.Literal
+		val := vals[k]
 		if v.Secret != "" {
 			val = secrets[v.Secret]
 		}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -53,7 +55,7 @@ func TestComputeAddsChangesDeletesAndUnmanaged(t *testing.T) {
 	}
 	only, _ := Compute(context.Background(), st, secrets, paths, "whoami")
 	for _, c := range only.Changes {
-		if c.Service != "" && c.Service != "whoami" {
+		if c.Service != "" && c.Service != "whoami" && !slices.Contains(render.Own, c.Service) { // laib's own programs are the box's (#633)
 			t.Fatalf("only=whoami included %s", c.Path)
 		}
 	}

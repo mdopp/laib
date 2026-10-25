@@ -92,11 +92,21 @@ func TestEveryLandingIsANameTheBoxServes(t *testing.T) {
 				t.Fatal("configuration.yml names no default_redirection_url")
 			}
 			url := regexp.MustCompile(`https://([a-z0-9.-]*` + regexp.QuoteMeta(st.Box.Domain) + `)\b`)
+			// an address the owner wrote in values.yml (Haus's HA_PUBLIC_URL: https://home.${DOMAIN}, #647) is
+			// theirs, rendered since #647, and names a service this box may not have yet; laib's own landings must be served
+			owners := map[string]bool{}
+			for _, svc := range st.Services {
+				for _, v := range render.Values(st, svc, nil) {
+					for _, m := range url.FindAllStringSubmatch(v, -1) {
+						owners[m[1]] = true
+					}
+				}
+			}
 			seen := 0
 			for f, body := range files {
 				for _, m := range url.FindAllStringSubmatch(body, -1) {
 					seen++
-					if !served[m[1]] {
+					if !served[m[1]] && !owners[m[1]] {
 						t.Errorf("%s sends a person to https://%s, a name the box does not serve (served: %v)", filepath.Base(f), m[1], served)
 					}
 				}

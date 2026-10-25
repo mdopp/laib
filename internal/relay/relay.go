@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/internal/mcp"
 )
 
 // Config: the admin's identities, Laib's MCP and the approver token.
@@ -132,45 +134,7 @@ var show = regexp.MustCompile(`(?i)^\s*zeig\s+#?(\d+)\s*[.!?]?\s*$`)
 
 // laib calls one Laib tool with the approver token.
 func (r *Relay) laib(ctx context.Context, verb, args string) (string, error) {
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-		"params": map[string]any{"name": "laib_" + verb, "arguments": map[string]string{"args": args}}})
-	req, err := http.NewRequestWithContext(ctx, "POST", r.cfg.LaibURL, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+r.cfg.Token)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := r.h.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	var env struct {
-		Result struct {
-			Content []struct {
-				Text string `json:"text"`
-			} `json:"content"`
-			IsError bool `json:"isError"`
-		} `json:"result"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(raw, &env); err != nil {
-		return "", fmt.Errorf("laib: %s", strings.TrimSpace(string(raw)))
-	}
-	if env.Error != nil {
-		return "", errors.New("laib: " + env.Error.Message)
-	}
-	text := ""
-	if len(env.Result.Content) > 0 {
-		text = strings.TrimSpace(env.Result.Content[0].Text)
-	}
-	if env.Result.IsError {
-		return "", errors.New(text)
-	}
-	return text, nil
+	return mcp.Ask(ctx, r.h, r.cfg.LaibURL, r.cfg.Token, verb, args)
 }
 
 type proposal struct {

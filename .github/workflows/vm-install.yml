@@ -38,7 +38,7 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, notify/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, notify/**, haushalt/**, cmd/laib-lease/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:   # every PR: a train runs the VM, a single PR gets the `not run` check
   workflow_dispatch:
 concurrency:
@@ -122,6 +122,8 @@ jobs:
       HOOKS: ghcr.io/mdopp/laib-hooks:${{ github.sha }}   # the hooks image of this commit (#36)
       OPERATOR_IMAGE: ghcr.io/mdopp/laib-operator:${{ github.sha }}   # this commit's own programs in containers (ADR 0027), pinned into its laib
       NOTIFY_IMAGE: ghcr.io/mdopp/laib-notify:${{ github.sha }}
+      HAUSHALT_IMAGE: ghcr.io/mdopp/laib-haushalt:${{ github.sha }}
+      LEASE_IMAGE: ghcr.io/mdopp/laib-lease:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - id: tree
@@ -134,11 +136,11 @@ jobs:
           podman login ghcr.io -u "${{ github.actor }}" -p "${{ github.token }}"
           podman build -q -t "$HOOKS" -f hooks/Containerfile . && podman push -q "$HOOKS"
           echo "pushed $HOOKS"
-      - name: this commit's laib-operator and laib-notify images, pushed so the box can pull them (ADR 0027)
+      - name: this commit's images of laib's own programs, pushed so the box can pull them (ADR 0027)
         run: |
-          for i in "operator $OPERATOR_IMAGE" "notify $NOTIFY_IMAGE"; do
+          for i in "operator/Containerfile $OPERATOR_IMAGE" "notify/Containerfile $NOTIFY_IMAGE" "haushalt/Containerfile $HAUSHALT_IMAGE" "cmd/laib-lease/Containerfile $LEASE_IMAGE"; do
             set -- $i
-            podman build -q -t "$2" -f "$1/Containerfile" . && podman push -q "$2"
+            podman build -q -t "$2" -f "$1" . && podman push -q "$2"
             echo "pushed $2"
           done
       - name: this commit's binaries and laib-stick, once for every box
@@ -236,6 +238,10 @@ jobs:
                 systemctl is-active --quiet laib-boot-flag.service || { echo "laib-boot-flag did not run"; systemctl status --no-pager laib-boot-flag.service; exit 1; }
                 if grep -q ignition.firstboot <<<"$(sudo debugfs -D -R "ls /" /dev/disk/by-label/boot 2>/dev/null)"; then echo "GRUB still sees ignition.firstboot: a power cut now re-runs Ignition (#81)"; exit 1; fi
                 echo "first boot over, on disk too"
+                # laib-haushalt runs on every box from the first apply (ADR 0027); a red first apply here was a green job (#673)
+                for i in $(seq 1 30); do systemctl --user is-active --quiet laib-haushalt.service && break; sleep 2; done
+                systemctl --user is-active --quiet laib-haushalt.service || { echo "laib-haushalt is not running after the first apply"; journalctl --user -u laib-haushalt --no-pager | tail -40; exit 1; }
+                echo "laib-haushalt runs in its container"
                 test -s ~/.config/containers/auth.json || { echo "the registry login is not in ~/.config/containers/auth.json (#37)"; exit 1; }
                 grep -q -- "--token" <<<"$(journalctl --no-pager -b -u laib-firstboot)" && { echo "the token was on argv"; exit 1; } || echo "token never on argv"
                 /var/opt/laib/laib status || true; /var/opt/laib/laib plan || true; /var/opt/laib/laib diag || true'
@@ -1151,6 +1157,8 @@ jobs:
           echo "--- serial"; tail -c 20000 serial.log || true
           echo "--- build server"; tail -20 http.log || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- ready"; curl -s -w " HTTP %{http_code}\n" http://127.0.0.1:5900/ready; echo "--- lock"; cat /mnt/data/laib/apply.lock 2>/dev/null || echo none; echo "--- data disk"; journalctl --no-pager -b -u laib-data-disk | tail -12; cat /proc/mdstat; findmnt -n /mnt/data || echo "/mnt/data not mounted"; echo "--- ignition files (#96: exec format error)"; for f in /usr/local/bin/laib-data-disk.sh /usr/local/bin/laib-firstboot.sh $(ls /etc/sysctl.d/* 2>/dev/null); do echo "$f"; sudo head -c 48 "$f" | od -c | head -3; sudo md5sum "$f"; done; systemctl status --no-pager systemd-sysctl 2>&1 | tail -6; for b in -3 -2 -1; do echo "boot $b data disk:"; journalctl --no-pager -b $b -u laib-data-disk 2>/dev/null | tail -25; done; sudo dmesg | grep -iE "xfs|vda4" | tail -10; echo "--- system"; cat /proc/cmdline; journalctl --no-pager --list-boots | tail -5; findmnt -n -o SOURCE,TARGET / /sysroot /var 2>/dev/null; ls -la /usr/local/bin/ /var/usrlocal/bin/ 2>&1 | head -20; rpm-ostree status 2>/dev/null | head -12; echo "--- firstboot"; journalctl --no-pager -b -u laib-firstboot | tail -20; echo "--- laib"; journalctl --user --no-pager -u laib | tail -30; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib status 2>&1 | head -5; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -20; for u in $(systemctl --user list-units --failed --plain --no-legend | cut -d" " -f1); do echo "--- failed: $u"; journalctl --user --no-pager -u "$u" | tail -30; done; podman ps -a' || true
+          # laib's own containers (ADR 0027): a unit that restarts in a loop is never in the failed list (#673)
+          ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'echo "--- laib-haushalt"; ls -la /etc/localtime 2>&1; systemctl --user --no-pager status laib-haushalt.service 2>&1 | head -12; journalctl --user -u laib-haushalt --no-pager | tail -40; if systemctl --user cat llama-lease.service >/dev/null 2>&1; then echo "--- laib-lease"; systemctl --user --no-pager status llama-lease.service 2>&1 | head -12; journalctl --user -u llama-lease --no-pager | tail -40; fi; podman ps -a' || true
           ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i key -p 2222 core@127.0.0.1 'journalctl --no-pager -b -u laib-firstboot; journalctl --user --no-pager -u laib | tail -50; echo "--- caddy"; journalctl --user --no-pager -u caddy | tail -40; echo "--- authelia"; journalctl --user --no-pager -u auth-authelia | tail -30; echo "--- lldap"; journalctl --user --no-pager -u auth-lldap | tail -30; systemctl --user --no-pager status auth-pod.service auth-lldap.service auth-authelia.service | head -40; echo "--- adguard"; journalctl --user --no-pager -u adguard | tail -30; echo "--- radicale"; journalctl --user --no-pager -u radicale | tail -40; podman logs --tail 40 systemd-radicale 2>&1 | tail -40; LAIB_HOME=/mnt/data/laib /var/opt/laib/laib journal --since 2h | tail -40; podman ps -a' || true
           [ -f qemu.pid ] && sudo kill "$(cat qemu.pid)" || true
   proven:

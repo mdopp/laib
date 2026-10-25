@@ -63,3 +63,15 @@ func TestSkillSwitchIsActiveOrPaused(t *testing.T) {
 		t.Fatal("skills.routineblick: aus passed validation")
 	}
 }
+
+// A policy.yml written by a newer laib may name verbs this laib does not
+// know: a rollback must still load it (vm-install, train 2026-10-25d: the
+// previous laib refused the whole policy over „pause“). An unknown verb in
+// a list names nothing this laib can run, so it is no error.
+func TestAnUnknownVerbInAHandsListIsSkippedNotFatal(t *testing.T) {
+	p := state.Policy{Tiers: []string{"read", "propose", "apply", "destroy"}, Hands: map[string]state.Hand{
+		"lease": {Ceiling: "apply", Verbs: []string{"status", "kommt-erst-spaeter"}}}}
+	if err := Validate(p); err != nil {
+		t.Fatalf("a newer verb made the policy unloadable: %v", err)
+	}
+}

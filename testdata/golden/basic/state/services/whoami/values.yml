@@ -1,2 +1,3 @@
 IMAGE: docker.io/traefik/whoami:v1.10
 TOKEN: !secret WHOAMI_TOKEN
+PUBLIC_URL: https://whoami.${DOMAIN}/  # a builtin inside a value is rendered too (#647)

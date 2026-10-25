@@ -1,7 +1,6 @@
 package lease
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,15 +28,13 @@ func shippedConfig(t *testing.T, router string) Config {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	cfg.Units, cfg.RouterURL, cfg.LeaseDir = realUnits(t), router, filepath.Join(home, "lease")
+	cfg.Laib, cfg.RouterURL, cfg.LeaseDir = newFake(realServices(t)), router, filepath.Join(home, "lease")
 	cfg.Token, cfg.Renew, cfg.WarnAfter = "lease-secret", 10*time.Minute, 20*time.Minute
-	cfg.Paths.Home, cfg.Paths.Journal = home, filepath.Join(home, "journal")
 	return cfg
 }
 
 func contractServer(t *testing.T, router string) *httptest.Server {
 	t.Helper()
-	Systemctl = func(context.Context, string, []string) error { return nil }
 	s, err := New(shippedConfig(t, router))
 	if err != nil {
 		t.Fatal(err)

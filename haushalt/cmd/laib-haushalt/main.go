@@ -1,29 +1,28 @@
 // Command laib-haushalt serves the household verbs behind the kernel's verb
-// door (ADR 0026, #598): `laib-haushalt [--json] scan …` and `net geraete …`.
-// The kernel runs it as laib scan and laib net geraete, after its policy
-// check, with LAIB_ACTOR, LAIB_STATE, LAIB_KERNEL and the journal on fd 3.
+// door (ADR 0026, #598) in its own container (ADR 0027): HTTP on
+// HAUSHALT_LISTEN (127.0.0.1:5902), each call with the door's key
+// (HAUSHALT_KEY); a proposal goes back to laib at LAIB_MCP_URL with
+// LAIB_TOKEN, the haushalt hand's.
 package main
 
 import (
-	"context"
+	"cmp"
+	"log"
+	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/mdopp/laib/haushalt"
 )
 
 func main() {
-	args := os.Args[1:]
-	env := &haushalt.Env{Actor: os.Getenv("LAIB_ACTOR"), State: os.Getenv("LAIB_STATE"), Kernel: os.Getenv("LAIB_KERNEL"), In: os.Stdin, Out: os.Stdout, Err: os.Stderr}
-	if len(args) > 0 && args[0] == "--json" {
-		env.JSON, args = true, args[1:]
+	key := os.Getenv("HAUSHALT_KEY")
+	if key == "" {
+		log.Fatal("laib-haushalt: HAUSHALT_KEY is empty: anyone on the box could call it as laib's door")
 	}
-	if os.Getenv("LAIB_JOURNAL_FD") == "3" {
-		env.Journal = os.NewFile(3, "journal")
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := haushalt.Run(ctx, env, args)
-	stop()
-	os.Exit(code)
+	addr := cmp.Or(os.Getenv("HAUSHALT_LISTEN"), "127.0.0.1:5902")
+	laib := haushalt.MCP{URL: os.Getenv("LAIB_MCP_URL"), Token: os.Getenv("LAIB_TOKEN")}
+	log.Printf("laib-haushalt: %s, laib at %s", addr, laib.URL)
+	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib), ReadHeaderTimeout: 5 * time.Second}
+	log.Fatal(srv.ListenAndServe())
 }

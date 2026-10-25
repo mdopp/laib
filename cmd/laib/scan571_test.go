@@ -20,7 +20,7 @@ import (
 // unit (a quote, a newline, systemd's % and $) is refused.
 func TestHausSetsUpTheScannerByProposalOnly(t *testing.T) {
 	env, dataDir := testBox(t)
-	withHaushalt(t) // served behind the verb door since #598
+	withHaushalt(t, env) // served behind the verb door since #598
 	call := func(args map[string]any) (string, int) {
 		st, err := cli.LoadState(env)
 		if err != nil {

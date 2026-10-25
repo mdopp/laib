@@ -33,7 +33,6 @@ func TestHandVerbsAndHumanStatus(t *testing.T) {
 	if !IsHuman(p, "human") || !IsHuman(p, "approver") || IsHuman(p, "ops") {
 		t.Fatal("human status wrong")
 	}
-	if err := Validate(state.Policy{Tiers: []string{"read"}, Hands: map[string]state.Hand{"x": {Ceiling: "read", Verbs: []string{"fly"}}}}); err == nil {
-		t.Fatal("an unknown verb in a hand's list passed validation")
-	}
+	// an unknown verb no longer fails the policy: a rollback must load what a newer laib wrote
+	// (TestAnUnknownVerbInAHandsListIsSkippedNotFatal); --grant still refuses one (#575)
 }
