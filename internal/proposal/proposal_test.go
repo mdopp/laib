@@ -11,7 +11,7 @@ import (
 
 // Approve is ApproveChecked without a check of the merged state.
 func Approve(ctx context.Context, repo, inbox string, p *Proposal, by string) error {
-	return ApproveChecked(ctx, repo, inbox, p, by, nil)
+	return ApproveChecked(ctx, repo, inbox, p, by, nil, nil)
 }
 
 func setup(t *testing.T) (string, string) {
@@ -136,7 +136,7 @@ func TestApproveValidatesTheMergedResult(t *testing.T) {
 		}
 		return nil
 	}
-	err = ApproveChecked(ctx, repo, inbox, p, "human:mdopp", refuse)
+	err = ApproveChecked(ctx, repo, inbox, p, "human:mdopp", refuse, nil)
 	if err == nil || !strings.Contains(err.Error(), "declared twice") {
 		t.Fatalf("an invalid merge result must be refused with its reason: %v", err)
 	}
