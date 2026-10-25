@@ -1,0 +1,26 @@
+# Failed logins for the owner (#653): anmeldungen.py counts Authelia's
+# authentication_logs in a stock Python image without network (zaehlen),
+# then anmeldungen.sh sends its messages to bote-notify on the host's
+# loopback and writes its journal notes through laib note, as actor laib,
+# at most the propose tier (melden). The timer fires it every five minutes.
+# The bearer is the sender's environment, never argv, never the container's.
+# "-": a message or a note never fails the unit; a counter that cannot read
+# Authelia's database does.
+[Unit]
+Description=Anmeldungen: Fehlversuche und Sperren an den Admin melden
+After=auth-authelia.service
+
+[Service]
+Type=oneshot
+Environment=AUTH_DATA=${DATA_DIR}/auth
+Environment=ANMELDUNGEN_IMAGE=${ANMELDUNGEN_IMAGE}
+Environment=ANMELDUNGEN_SKRIPT=%h/.config/containers/systemd/auth/anmeldungen.py
+Environment=TZ=${TZ}
+Environment=AUTH_MAX_RETRIES=${AUTH_MAX_RETRIES}
+Environment=AUTH_FIND_TIME=${AUTH_FIND_TIME}
+Environment=AUTH_BAN_TIME=${AUTH_BAN_TIME}
+Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
+Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+ExecStart=/bin/sh %h/.config/containers/systemd/auth/anmeldungen.sh zaehlen
+ExecStartPost=-/bin/sh %h/.config/containers/systemd/auth/anmeldungen.sh melden
+TimeoutStartSec=5min

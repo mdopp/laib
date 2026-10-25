@@ -24,3 +24,5 @@ SMTP_PASSWORD: !secret AUTHELIA_SMTP_PASSWORD
 AUTH_MAX_RETRIES: "5"
 AUTH_FIND_TIME: 10m
 AUTH_BAN_TIME: 30m
+ANMELDUNGEN_IMAGE: docker.io/library/python:3.13-alpine   # the failed-login counter (anmeldungen.py), the standard library only
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer for the failed-login messages; empty without the Bote
