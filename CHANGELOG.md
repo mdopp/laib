@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.1](https://github.com/mdopp/laib/compare/v0.33.0...v0.33.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **template:** Whisper's names file is created in podman's user namespace ([6310c39](https://github.com/mdopp/laib/commit/6310c392d0a4a0e0e66e570d4f2f42d531ba35b4))
+
 ## [0.33.0](https://github.com/mdopp/laib/compare/v0.32.0...v0.33.0) (2026-10-25)
 
 
