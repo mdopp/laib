@@ -83,3 +83,6 @@ dir right after, not 30 days after migration day.
 - `laib servicebay remove` (tier destroy, humans only, so the Inbox only)
   refuses while a secret still has a value from the dir: the snapshot it takes
   first (restic, tag `pre-destroy`) must hold dead values only.
+- Done 2026-10-26 18:34: the dir is gone (journal: snapshot 62688769, tag
+  `pre-destroy`); the probe, `laib servicebay` and `rotate-carried.sh` went
+  with it (#751). `laib secret rotate`/`zurueck` and rotate-back-on-red stay.
