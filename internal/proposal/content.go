@@ -126,6 +126,24 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if err != nil {
 		return fail(err)
 	}
+	if e.Update != nil && !slices.ContainsFunc(p.Files, func(f string) bool { // only news (#698): nothing runs differently, bookkeeping on main
+		return f != "services/"+e.Update.Name+"/"+NewsFile && !strings.HasPrefix(f, "services/"+e.Update.Name+"/"+state.BaseDir+"/")
+	}) {
+		dir := filepath.Join("services", e.Update.Name)
+		for _, f := range []string{NewsFile, filepath.Join(state.BaseDir, NewsFile)} {
+			b, err := os.ReadFile(filepath.Join(wt, dir, f))
+			if err == nil {
+				err = os.WriteFile(filepath.Join(repo, dir, f), b, 0o644)
+			}
+			if err != nil {
+				return fail(err)
+			}
+		}
+		if err := CommitPath(ctx, repo, ":(glob)"+dir+"/**/"+NewsFile, "news of template "+e.Update.From+" for "+e.Update.Name+", taken over (#698)", actor); err != nil {
+			return fail(err)
+		}
+		return fail(errors.New("nothing to propose: only the template's news, taken over"))
+	}
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
 	}
