@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.36.0](https://github.com/mdopp/laib/compare/v0.35.0...v0.36.0) (2026-10-26)
+
+
+### Features
+
+* **pages:** set a secret on the Box page, Schlüssel hinterlegen ([#696](https://github.com/mdopp/laib/issues/696)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **pages:** set a secret on the Box page, Schlüssel hinterlegen ([#696](https://github.com/mdopp/laib/issues/696)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+* **template:** file-share offers the Werkstatt as an admins-only Samba share ([#666](https://github.com/mdopp/laib/issues/666)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **template:** file-share offers the Werkstatt as an admins-only Samba share ([#666](https://github.com/mdopp/laib/issues/666)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+* **template:** gemma-4-12b reads images with its mmproj ([#697](https://github.com/mdopp/laib/issues/697)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **template:** gemma-4-12b reads images with its mmproj ([#697](https://github.com/mdopp/laib/issues/697)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+* **template:** haus gets HAUS_DISCOGS_TOKEN ([#696](https://github.com/mdopp/laib/issues/696)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **template:** haus gets HAUS_DISCOGS_TOKEN ([#696](https://github.com/mdopp/laib/issues/696)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+* **template:** Paperless AI and OCR as values, embeddings through the lease ([#567](https://github.com/mdopp/laib/issues/567)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **template:** Paperless AI and OCR as values, embeddings through the lease ([#567](https://github.com/mdopp/laib/issues/567)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+
+
+### Bug Fixes
+
+* **template:** HA_INSTALL waits for the update entity and straightens nested custom_components ([#528](https://github.com/mdopp/laib/issues/528)) ([d6b4628](https://github.com/mdopp/laib/commit/d6b4628c628a24552e83570249774fc553754351))
+* **template:** HA_INSTALL waits for the update entity and straightens nested custom_components ([#528](https://github.com/mdopp/laib/issues/528)) ([d132f5b](https://github.com/mdopp/laib/commit/d132f5b19d198edb9b32e20f87ae5df62d4c491b))
+
 ## [0.35.0](https://github.com/mdopp/laib/compare/v0.34.1...v0.35.0) (2026-10-26)
 
 
