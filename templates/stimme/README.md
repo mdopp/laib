@@ -28,7 +28,9 @@ administrator's token and the aiohttp extra this image lacks). The unit
 rewrites the file only when the names changed and only then restarts Whisper,
 with `try-restart`: a Whisper the GPU lease stopped stays stopped and reads the
 new names when it comes back. A name not exposed to Assist (Home Assistant →
-Einstellungen → Sprachassistenten → Freigeben) is not in the prompt. Home
+Einstellungen → Sprachassistenten → Freigeben) is not in the prompt. Spellings
+of one name („Sofa-Licht“, „Sofa Licht“, the aliases home-assistant adds for
+„Sofalicht“, #760) count once: Whisper writes those anyway. Home
 Assistant away keeps the last names; a refused token fails the unit (`laib
 apply home-assistant` mints a new one). `laib look stimme --container
 systemd-stimme-whisper -- cat /config/laib-names.txt` shows what Whisper hears.

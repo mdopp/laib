@@ -1,0 +1,9 @@
+[Unit]
+Description=Home Assistant: the spellings Whisper writes, every 15 minutes (a device exposed to Assist gets them within that, #760)
+
+[Timer]
+OnCalendar=*:4/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

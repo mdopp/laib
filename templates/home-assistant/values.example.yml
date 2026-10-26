@@ -7,6 +7,7 @@ NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN          # the Bote's bote-notify (#177)
 BOTE_NOTIFY_URL: http://127.0.0.1:8645/mitteilung  # rest_command.mitteilung: HA is on the host network, the bote pod publishes on loopback
 MA_TOKEN: !secret HA_MUSIC_ASSISTANT_TOKEN     # Music Assistant's token for HA (#526): the check reads MA with it; empty without MA
 HA_TOKEN: !secret HA_TOKEN                     # minted by post-deploy (#349): home-assistant-check reads the integrations with it (#55)
+NAMES_TOKEN: !secret HA_NAMES_TOKEN            # minted by post-deploy (#760): home-assistant-names adds the spellings Whisper writes („Sofa-Licht“) as aliases
 HA_INSTALL: ""                                 # #528: extensions a person approved, "update.x=1.2,…": post-deploy installs them (the Operator proposes it)
 HA_LOGIN_SPERRE: ""                            # #703: Home Assistant bans an address after this many failed logins (5), aus: never; empty leaves HA as it is. Off by default: a ban also locks out a consumer on 127.0.0.1 whose token went stale (README)
 HA_TRUSTED_PROXIES: ""                         # #729: weitere Proxys, denen Home Assistant glaubt, wer fragt (außer der Box selbst, 127.0.0.1 und ::1), mit Komma getrennt, z. B. 192.168.178.2,10.0.0.0/8; leer: nur die Box. Laib owns the list: any other entry in HA is removed
