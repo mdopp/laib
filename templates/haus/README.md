@@ -45,12 +45,16 @@ ABS for new episodes every 15 minutes and tells each subscriber with
 through bote-notify); it offers the message once `laib_tell` is in its
 tools/list.
 
-Discogs (#696): the music wish list reads the household's Discogs
-collection ("habt ihr schon auf Vinyl"), puts record wishes on its wantlist
-and marks a wish arrived once the record is in the collection, with
-`HAUS_DISCOGS_TOKEN`, the Discogs account's personal access token. The owner
-creates it at discogs.com (Settings, Developers) and sets it on the box page,
-„Schlüssel hinterlegen“; without it the wish list has no Discogs, all else
+Discogs (#696, haus#138): one Discogs account per person. The household
+registers one Discogs app (discogs.com, Settings, Developers) and the owner
+sets its `HAUS_DISCOGS_KEY` (Consumer-Key) and `HAUS_DISCOGS_SECRET`
+(Consumer-Secret) on the box page, „Schlüssel hinterlegen“. Each person then
+connects their own account in Haus (Mehr → Discogs, OAuth; the way back is
+`https://haus.<domain>/discogs/zurueck`, behind Authelia like every family
+page); Haus keeps those tokens in its data dir for that person alone. The
+wish list then reads that person's collection ("habt ihr schon auf Vinyl"),
+puts record wishes on their wantlist and marks a wish arrived once the record
+is in it. Without key and secret the wish list has no Discogs, all else
 stays.
 
 Music wishes (#695): Haus asks Jellyfin at `HAUS_JELLYFIN_URL` with
