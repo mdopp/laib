@@ -110,6 +110,27 @@ def offers(base: str, token: str, service: str) -> list:
     return out
 
 
+def unpacked(config: str) -> list:
+    """#528: every custom integration where Home Assistant loads it, custom_components/<domain>/manifest.json.
+    HACS 2.0.5 unpacked one a level too deep (custom_components/senec/senec/): HA said "Integration not
+    found" and nothing else did. post-deploy straightens one whose manifest lies one level down."""
+    cc = os.path.join(config, "custom_components")
+    try:
+        names = sorted(n for n in os.listdir(cc) if not n.startswith((".", "_")) and os.path.isdir(os.path.join(cc, n)))
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        if os.path.isfile(os.path.join(cc, n, "manifest.json")):
+            continue
+        deep = any(os.path.isfile(os.path.join(cc, n, *sub, "manifest.json")) for sub in ([n], ["custom_components", n]))
+        out.append({"severity": "gelb",
+                    "detail": f"Erweiterung {n}: Home Assistant lädt sie nicht, " + ("sie liegt eine Ebene zu tief" if deep else "ihr fehlt die manifest.json"),
+                    "fix": "laib apply home-assistant: zieht sie gerade und startet Home Assistant neu" if deep
+                           else "in HACS neu herunterladen, dann laib apply home-assistant"})
+    return out
+
+
 def zwave(url: str) -> dict:
     """#417: zwave-js-ui's own health of its driver: 200 once the stick's
     controller is ready. Without it every Z-Wave device is unavailable while
@@ -318,6 +339,7 @@ def write(path: str, r: dict) -> None:
 if __name__ == "__main__":
     r = report(os.environ.get("HA_TOKEN", ""), os.environ.get("HA_URL", "http://127.0.0.1:8123"))
     r["findings"] += offers(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("LAIB_SERVICE", "home-assistant"))
+    r["findings"] += unpacked(os.environ.get("HA_CONFIG", "/config"))
     detail, found = music(os.environ.get("MA_URL", "http://127.0.0.1:8095"), os.environ.get("MA_TOKEN", ""))
     if detail:
         r["findings"] += found

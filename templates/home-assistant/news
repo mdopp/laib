@@ -1,4 +1,5 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Erweiterungen für Home Assistant, die du freigibst, werden jetzt wirklich installiert und danach geprüft, ob Home Assistant sie laden kann
 ${PERSONA_DISPLAY} darf die Namen deiner Geräte in Home Assistant lesen

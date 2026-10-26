@@ -9,7 +9,7 @@ when it has no administrator token that works, mints one token per consumer
 and hands each back (`laib-secret:`): Haus and the check get administrator
 tokens, the Automat too (HA's automation config API is admin-only), and the
 Bote's `ha` tool a token of a separate non-admin user "bote"."""
-import base64, hashlib, json, os, socket, struct, subprocess, tempfile, threading, unittest, urllib.parse
+import base64, hashlib, json, os, shutil, socket, struct, subprocess, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -33,7 +33,7 @@ def fresh(onboarded=None):
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, core_updates=0, n=0,
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
               registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None,
-              restarts=0, preferred=None, wake_words={}, intents={}, deleted=[])
+              restarts=0, preferred=None, wake_words={}, intents={}, deleted=[], late={}, progress={}, unpack=None)
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -83,6 +83,32 @@ def save_auth(data_dir):
                         for n, (_, i) in HA["creds"].items()],
         "refresh_tokens": [{"id": "rt-" + t, "user_id": u, "client_name": HA["names"][t][1], "token_type": "long_lived_access_token",
                             "token": t, "jwt_key": "k-" + t} for t, u in HA["tokens"].items() if t in HA["names"]]}}))
+
+
+def hacs(data_dir, *repos):
+    """HA's .storage as HACS leaves it (#528): each (update entity, repository id, domain) an
+    installed integration, its update entity of the platform hacs with the repository id"""
+    st = Path(data_dir, "home-assistant", "homeassistant", ".storage")
+    st.mkdir(parents=True, exist_ok=True)
+    (st / "core.entity_registry").write_text(json.dumps({"version": 1, "minor_version": 18, "key": "core.entity_registry", "data": {
+        "entities": [{"entity_id": e, "platform": "hacs", "unique_id": r, "config_entry_id": "e-hacs"} for e, r, _ in repos], "deleted_entities": []}}))
+    (st / "hacs.repositories").write_text(json.dumps({"version": "6", "minor_version": 1, "key": "hacs.repositories", "data": {
+        r: {"full_name": "someone/ha-" + d, "category": "integration", "domain": d, "installed": True} for _, r, d in repos}}, indent=2))
+
+
+def unpack(data_dir, domain, version, nested=False, manifest=True):
+    """custom_components/<domain> as HACS unpacks it; nested: one level too deep, as HACS 2.0.5 did with
+    marq24/ha-senec-v3 (the repository's custom_components/__init__.py, a dummy, on top, the integration below)"""
+    base = Path(data_dir, "home-assistant", "homeassistant", "custom_components", domain)
+    shutil.rmtree(base, ignore_errors=True)   # HACS removes the old version's folder first
+    real = base / domain if nested else base
+    real.mkdir(parents=True, exist_ok=True)
+    if manifest:
+        (real / "manifest.json").write_text(json.dumps({"domain": domain, "name": domain.upper(), "version": version}))
+    (real / "__init__.py").write_text("# the integration\n")
+    if nested:
+        (base / "__init__.py").write_text('"""Dummy init so that pytest works."""\n')
+    return base
 
 
 def username(uid):
@@ -139,7 +165,18 @@ class FakeHA(BaseHTTPRequestHandler):
         if self.path == "/api/states/sun.sun":
             return self.reply(200, {"entity_id": "sun.sun", "state": "above_horizon"})
         if self.path.startswith("/api/states/update."):
-            s = HA["states"].get(self.path[len("/api/states/"):])
+            eid = self.path[len("/api/states/"):]
+            if HA.get("late", {}).get(eid, 0) > 0:   # #528: HA answers after a restart before HACS set its entities up
+                HA["late"][eid] -= 1
+                return self.reply(404, {"message": "Entity not found."})
+            s = HA["states"].get(eid)
+            if s and s["attributes"].get("in_progress"):   # HACS still downloads: done after "progress" more looks
+                HA["progress"][eid] = HA["progress"].get(eid, 0) - 1
+                if HA["progress"][eid] <= 0:
+                    s["state"], s["attributes"]["in_progress"] = "off", False
+                    s["attributes"]["installed_version"] = s["attributes"]["latest_version"]
+                    if HA.get("unpack"):
+                        HA["unpack"](eid)
             return self.reply(200, s) if s else self.reply(404)
         self.reply(404)
 
@@ -165,9 +202,10 @@ class FakeHA(BaseHTTPRequestHandler):
                 if st is None or b["option"] not in (st.get("attributes") or {}).get("options", []):
                     return self.reply(400, {"message": f"Option {b['option']} is not valid"})
                 st["state"] = b["option"]
-            if self.path == "/api/services/update/install":
+            if self.path == "/api/services/update/install":   # HA's REST call returns while HACS still downloads (#528)
                 st = HA["states"][b["entity_id"]]
-                st["state"], st["attributes"]["installed_version"] = "off", st["attributes"]["latest_version"]
+                st["attributes"]["in_progress"] = True
+                HA["progress"].setdefault(b["entity_id"], 1)
             return self.reply(200, [])
         if self.path == "/api/onboarding/users":
             if "user" in HA["onboarding"]:
@@ -521,22 +559,6 @@ class Hook(unittest.TestCase):
 
 class PostDeploy(Hook):
 
-    def test_an_approved_extension_is_installed_once_and_ha_restarts(self):
-        # #528: the Operator proposed HA_INSTALL from the check's finding; a person approved it.
-        # Installed only while HA offers exactly that version; firmware a person did not name stays.
-        fresh()
-        upd = lambda old, new, cls=None: {"state": "on", "attributes": {"installed_version": old, "latest_version": new, "device_class": cls}}
-        HA["states"].update({"update.senec": upd("2026.6.3", "2026.10.0"), "update.meross": upd("1.0", "1.2"),
-                             "update.plug_firmware": upd("9.5.52", "9.5.60", "firmware")})
-        p, _, log = self.run_hook(install="update.senec=2026.10.0,update.meross=1.1")
-        self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(HA["calls"], [("/api/services/update/install", {"entity_id": "update.senec"}), ("/api/services/homeassistant/restart", {})], log)
-        self.assertIn("update.meross 1.1: nichts zu installieren", log)
-        self.assertEqual(HA["states"]["update.plug_firmware"]["state"], "on")
-        HA["calls"].clear()
-        p, _, log = self.run_hook(install="update.senec=2026.10.0")
-        self.assertEqual((p.returncode, HA["calls"]), (0, []), "installed is installed: no second install, no restart")
-
     def test_a_fresh_home_assistant_is_onboarded_and_every_token_minted(self):
         fresh()
         p, handed, log = self.run_hook()
@@ -774,6 +796,100 @@ class FrageAgent(Hook):
         p, _, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
         self.assertIn("no HA_RADICALE_PASSWORD", log)
+
+
+class Extensions(Hook):
+    """#528: HA_INSTALL, the extensions a person approved (the Operator proposed them from the check's
+    finding). Installed only while HA offers exactly that version; firmware a person did not name stays.
+    After the install the integration must lie where HA loads it, custom_components/<domain>/manifest.json."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.d = self.tmp.name
+        fresh()
+        upd = lambda old, new, cls=None, feat=1: {"state": "on", "attributes": {"installed_version": old, "latest_version": new, "device_class": cls,
+                                                                              "supported_features": feat, "in_progress": False}}
+        HA["states"].update({"update.senec": upd("2026.6.3", "2026.10.0", feat=23), "update.meross": upd("1.0", "1.2"),
+                             "update.plug_firmware": upd("9.5.52", "9.5.60", "firmware")})
+        hacs(self.d, ("update.senec", "606471314", "senec"), ("update.meross", "1", "meross_lan"))
+        unpack(self.d, "senec", "2026.6.3")
+        unpack(self.d, "meross_lan", "1.0")
+        self.cc = Path(self.d, "home-assistant", "homeassistant", "custom_components")
+
+    def manifest(self, domain):
+        return json.loads((self.cc / domain / "manifest.json").read_text())
+
+    def test_an_approved_extension_is_installed_once_and_ha_restarts(self):
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0,update.meross=1.1", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["calls"], [("/api/services/update/install", {"entity_id": "update.senec", "version": "2026.10.0"}),
+                                       ("/api/services/homeassistant/restart", {})], log)
+        self.assertIn("update.meross 1.1: nichts zu installieren (installiert: 1.0, angeboten: 1.2)", log)
+        self.assertEqual(HA["states"]["update.plug_firmware"]["state"], "on")
+        self.assertEqual(self.manifest("senec")["version"], "2026.10.0")
+        HA["calls"].clear()
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual((p.returncode, HA["calls"]), (0, []), "installed is installed: no second install, no restart: " + log)
+
+    def test_an_extension_home_assistant_has_not_set_up_yet_is_waited_for(self):
+        # the box (v0.26): approve snapshots HA stopped (quiesce, #40), HA starts again, the hook asks
+        # before HACS has set up its update entities: 404, and the hook said "installiert: None, angeboten: None"
+        HA["late"] = {"update.senec": 5}
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertNotIn("None", log)
+        self.assertIn(("/api/services/update/install", {"entity_id": "update.senec", "version": "2026.10.0"}), HA["calls"], log)
+
+    def test_an_extension_home_assistant_never_shows_is_red_not_silent(self):
+        p, _, log = self.run_hook(install="update.gone=1.0", data_dir=self.d, wait="1")
+        self.assertEqual(p.returncode, 1, log)
+        self.assertIn("update.gone", log)
+        self.assertIn("kennt", log)
+        self.assertEqual(HA["calls"], [])
+
+    def test_hacs_unpacking_one_level_too_deep_is_straightened(self):
+        # HACS 2.0.5 unpacked marq24/ha-senec-v3 into custom_components/senec/senec/, a dummy __init__.py on
+        # top: "Setup failed for 'senec': Integration not found". Laib waits for the download, then straightens it
+        HA["progress"] = {"update.senec": 4}
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0", nested=True)
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.manifest("senec")["version"], "2026.10.0", log)
+        self.assertEqual((self.cc / "senec" / "__init__.py").read_text(), "# the integration\n")
+        self.assertFalse((self.cc / "senec" / "senec").exists())
+        kept = list(Path(self.d, "home-assistant", "homeassistant", ".laib-senec-sicherung").glob("*/senec/__init__.py"))
+        self.assertEqual([k.read_text() for k in kept], ['"""Dummy init so that pytest works."""\n'], "what HACS left on top is kept")
+        self.assertIn("eine Ebene zu tief", log)
+        self.assertEqual([c for c in HA["calls"] if c[0].endswith("/restart")], [("/api/services/homeassistant/restart", {})])
+
+    def test_an_extension_without_its_manifest_is_red(self):
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0", manifest=False)
+        (self.cc / "senec" / "manifest.json").unlink()
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 1, log)
+        self.assertIn("custom_components/senec/manifest.json fehlt", log)
+
+    def test_a_version_other_than_the_approved_one_is_said(self):
+        # the box: update.install with version 2026.6.3 still unpacked 2026.10.0
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.7")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("senec: installiert ist 2026.10.7, freigegeben war 2026.10.0", log)
+
+    def test_a_nested_extension_is_straightened_on_any_apply(self):
+        # an update from HA's own updates page unpacks the same way; the next apply straightens it
+        unpack(self.d, "senec", "2026.10.0", nested=True)
+        p, _, log = self.run_hook(data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.manifest("senec")["version"], "2026.10.0", log)
+        self.assertEqual(HA["calls"], [("/api/services/homeassistant/restart", {})], log)
+        HA["calls"].clear()
+        p, _, log = self.run_hook(data_dir=self.d)
+        self.assertEqual((p.returncode, HA["calls"]), (0, []), "straight is straight: " + log)
 
 
 class Stimme(Hook):

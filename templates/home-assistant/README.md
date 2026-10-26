@@ -211,7 +211,22 @@ update.x=<version>,…`. The Operator's weekly `aktualisierung` files it as it
 stands; the review makes it a person's decision (a service with a
 database), Laib snapshots Home Assistant before the approval applies, and
 post-deploy installs each extension still offered at that version, then
-restarts Home Assistant once. Device firmware is `Firmware: …`, reported
+restarts Home Assistant once. The snapshot stops Home Assistant, so the
+hook first waits (`HA_WAIT_SECONDS`) until HACS has set its update entity
+up again: before, `/api/states/<entity>` is 404, and the first version of
+this read that as "installiert: None, angeboten: None". It waits again
+until HACS has downloaded the extension (HA's service call returns
+before), then checks that every custom integration lies where Home
+Assistant loads it, `custom_components/<domain>/manifest.json`: HACS 2.0.5
+unpacked marq24/ha-senec-v3 one level too deep (`custom_components/senec/
+senec/`, a dummy `__init__.py` on top, "Integration not found"). One whose
+manifest lies one level down is moved up, on every apply, and what lay on
+top is kept in `.laib-<domain>-sicherung/<time>/`; one with no manifest at
+all, an entity Home Assistant never shows and a download that does not end
+make the hook red, never a quiet "nichts zu installieren". A manifest with
+another version than the approved one is said (HACS downloads what it
+thinks newest). The check names a folder without a manifest as a finding
+too, so an update from Home Assistant's own page is not missed. Device firmware is `Firmware: …`, reported
 only: a failed flash can brick a device, so it is installed only on an
 explicit yes, by hand in Home Assistant. Both appear in laib-notify's weekly
 "Was ist veraltet". Home Assistant's own image (`stable`) moves by a
