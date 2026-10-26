@@ -40,6 +40,7 @@ func SetSecret(ctx context.Context, env *cli.Env, st *state.State, name, value, 
 		return nil, env.Fail(err)
 	}
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "secret", Result: "info", Detail: why})
+	say(ctx, false, "Schlüssel gespeichert")
 	users := render.SecretUsers(st, name)
 	for _, svc := range users {
 		if c := ApplyHeld(ctx, env, st, svc, why); c != cli.ExitOK {
