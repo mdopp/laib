@@ -45,6 +45,14 @@ ABS for new episodes every 15 minutes and tells each subscriber with
 through bote-notify); it offers the message once `laib_tell` is in its
 tools/list.
 
+Discogs (#696): the music wish list reads the household's Discogs
+collection ("habt ihr schon auf Vinyl"), puts record wishes on its wantlist
+and marks a wish arrived once the record is in the collection, with
+`HAUS_DISCOGS_TOKEN`, the Discogs account's personal access token. The owner
+creates it at discogs.com (Settings, Developers) and sets it on the box page,
+„Schlüssel hinterlegen“; without it the wish list has no Discogs, all else
+stays.
+
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`
