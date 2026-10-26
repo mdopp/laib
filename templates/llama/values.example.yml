@@ -4,6 +4,6 @@ PORT: "11435"
 LEASE_TOKEN: !secret MODEL_API_KEY
 LAIB_TOKEN: !secret LLAMA_LAIB_TOKEN
 EMBED_PORT: "11436"
-EMBED_REPO: nomic-ai/nomic-embed-text-v1.5-GGUF
-EMBED_FILE: nomic-embed-text-v1.5.f16.gguf
-EMBED_ALIAS: nomic-embed-text
+EMBED_REPO: ggml-org/embeddinggemma-300M-GGUF
+EMBED_FILE: embeddinggemma-300M-Q8_0.gguf
+EMBED_ALIAS: embeddinggemma
