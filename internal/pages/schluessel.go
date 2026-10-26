@@ -21,17 +21,48 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// keyState is what the form says about a key taken (#696), per name: on
-// its way, or how it ended. Never the value.
+// keyState is what the form says about a key taken (#696, #768), per
+// name: the steps done, the one on its way, or how it ended. Never the value.
 var keyState = struct {
 	sync.Mutex
-	m map[string]string
-}{m: map[string]string{}}
+	m map[string]*keyRun
+}{m: map[string]*keyRun{}}
 
-func setKeyState(name, s string) {
+type keyRun struct {
+	done     []string
+	now, end string
+	red      bool
+}
+
+// keyStep: the box does s now. Before the key is saved it only replaces
+// what it said; from „Schlüssel gespeichert“ on, each step stays, ticked.
+func keyStep(name, s string) {
 	keyState.Lock()
 	defer keyState.Unlock()
-	keyState.m[name] = s
+	r := keyState.m[name]
+	switch {
+	case r == nil || r.end != "":
+		r = &keyRun{now: s}
+		keyState.m[name] = r
+	case s == "Schlüssel gespeichert":
+		r.done, r.now = []string{s}, ""
+	default:
+		if r.now != "" && len(r.done) > 0 {
+			r.done = append(r.done, r.now)
+		}
+		r.now = s
+	}
+}
+
+// keyEnd: how it ended; the step on its way counts as done.
+func keyEnd(name, s string, red bool) {
+	keyState.Lock()
+	defer keyState.Unlock()
+	r := keyState.m[name]
+	if r.now != "" && len(r.done) > 0 {
+		r.done = append(r.done, r.now)
+	}
+	r.now, r.end, r.red = "", s, red
 }
 
 // keyFor: the owner's key of that name (#696), or nil when the page may
@@ -90,7 +121,7 @@ func Keys(env *cli.Env) http.HandlerFunc {
 			case !policy.Allowed(st.Policy, "human", "apply"):
 				note = "<p class=rot>Dieses Konto darf keine Schlüssel setzen.</p>"
 			default:
-				setKeyState(name, "wird gespeichert …")
+				keyStep(name, "wird gespeichert")
 				go storeKey(env, actor, name, key.Owner.Label, value)
 				http.Redirect(w, r, "/schluessel?"+url.Values{"name": {name}, "zurueck": {back}}.Encode(), http.StatusSeeOther)
 				return
@@ -105,50 +136,74 @@ func Keys(env *cli.Env) http.HandlerFunc {
 }
 
 // storeKey waits for the work before it, then sets the key and applies
-// its services. What it says afterwards never carries the value.
+// its services, each step on the page as the run tells it (#768). What it
+// says never carries the value.
 func storeKey(env *cli.Env, actor, name, label, value string) {
 	for until := time.Now().Add(15 * time.Minute); apply.LockHolder(env.Paths) != "" && time.Now().Before(until); time.Sleep(time.Second) {
-		setKeyState(name, "wartet, bis die Box mit der Arbeit davor fertig ist")
+		keyStep(name, "wartet, bis die Box mit der Arbeit davor fertig ist")
 	}
+	keyStep(name, "wird gespeichert")
 	var out strings.Builder
 	webEnv := &cli.Env{Paths: env.Paths, Actor: actor, Out: &out, ErrOut: &out}
 	st, err := cli.LoadState(webEnv)
 	if err != nil {
-		setKeyState(name, "fehlgeschlagen: "+err.Error())
+		keyEnd(name, "fehlgeschlagen: "+err.Error(), true)
 		return
 	}
-	users, code := apply.SetSecret(context.Background(), webEnv, st, name, value, "secret set "+name+" (Box-Seite)")
+	because := ""
+	ctx := apply.WithProgress(context.Background(), func(step string, red bool) {
+		if red {
+			because = step
+			return
+		}
+		keyStep(name, step)
+	})
+	users, code := apply.SetSecret(ctx, webEnv, st, name, value, "secret set "+name+" (Box-Seite)")
 	lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(out.String(), value, "…")), "\n")
+	last := strings.TrimPrefix(lines[len(lines)-1], "laib: ")
 	for i, u := range users {
 		users[i] = proposal.Title(u)
 	}
 	switch {
 	case code != cli.ExitOK && len(users) == 0:
-		setKeyState(name, "fehlgeschlagen, nicht gespeichert: "+strings.TrimPrefix(lines[len(lines)-1], "laib: "))
+		keyEnd(name, "fehlgeschlagen, nicht gespeichert: "+last, true)
 	case code != cli.ExitOK:
-		setKeyState(name, label+" hinterlegt, aber "+strings.Join(users, ", ")+" läuft danach nicht richtig: "+strings.TrimPrefix(lines[len(lines)-1], "laib: "))
+		keyEnd(name, "fehlgeschlagen, weil "+cmp.Or(because, last)+". "+label+" bleibt gespeichert.", true)
 	case len(users) == 0:
-		setKeyState(name, label+" hinterlegt, kein Dienst muss neu starten")
+		keyEnd(name, "fertig: "+label+" hinterlegt, kein Dienst muss neu starten", false)
+	case len(users) == 1:
+		keyEnd(name, "fertig: "+users[0]+" läuft mit dem neuen Schlüssel", false)
 	default:
-		setKeyState(name, label+" hinterlegt, "+strings.Join(users, ", ")+" neu gestartet")
+		keyEnd(name, "fertig: "+strings.Join(users, ", ")+" laufen mit dem neuen Schlüssel", false)
 	}
 }
 
-// keyLine: how saving one key went, while it runs or once it ended; it
-// reloads the page while it runs. Never the value.
+// keyLine: how saving one key goes, step by step while it runs (#768),
+// with how long it takes, reloading the page; then how it ended. Never
+// the value.
 func keyLine(name string) string {
 	keyState.Lock()
 	defer keyState.Unlock()
-	s, ok := keyState.m[name]
-	switch {
-	case !ok:
+	r := keyState.m[name]
+	if r == nil {
 		return ""
-	case strings.Contains(s, "fehlgeschlagen") || strings.Contains(s, "nicht richtig"):
-		return "<p class=rot>" + html.EscapeString(s) + "</p>"
-	case strings.HasSuffix(s, "…") || strings.HasPrefix(s, "wartet"):
-		return `<meta http-equiv=refresh content=3><p class=gelb>` + html.EscapeString(s) + "</p>"
 	}
-	return "<p class=grün>" + html.EscapeString(s) + "</p>"
+	var b strings.Builder
+	if r.end == "" {
+		b.WriteString(`<meta http-equiv=refresh content=3><p>Das dauert meist unter einer Minute, manchmal zwei. Du musst nichts tun, die Seite aktualisiert sich.</p>`)
+	}
+	for _, s := range r.done {
+		b.WriteString("<p class=grün>" + html.EscapeString(s) + " ✓</p>")
+	}
+	switch {
+	case r.end == "":
+		b.WriteString("<p class=gelb>" + html.EscapeString(r.now) + " …</p>")
+	case r.red:
+		b.WriteString("<p class=rot>" + html.EscapeString(r.end) + "</p>")
+	default:
+		b.WriteString("<p class=grün>" + html.EscapeString(r.end) + "</p>")
+	}
+	return b.String()
 }
 
 // keyState words: hinterlegt or fehlt, never the value.

@@ -18,6 +18,7 @@ import (
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // #696: the owner does not work at the console. On the box page (behind
@@ -128,6 +129,16 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 		t.Fatal("a refused form changed secrets.age")
 	}
 
+	// #768: while whoami restarts, the page says what the box does now, how long it takes, and reloads itself
+	var during []string
+	run := sysd.Run
+	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "systemctl" && slices.Contains(args, "restart") && slices.Contains(args, "whoami.service") {
+			_, p := do("GET", "/schluessel?name=WHOAMI_KEY", nil)
+			during = append(during, p)
+		}
+		return run(ctx, name, args...)
+	}
 	c.calls = nil
 	code, body = do("POST", "/schluessel", url.Values{"name": {"WHOAMI_KEY"}, "wert": {value + "\n"}, "zurueck": {back}})
 	bodies = append(bodies, body)
@@ -137,8 +148,20 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	until(t, "applied", func() bool {
 		_, body := do("GET", "/schluessel?"+url.Values{"name": {"WHOAMI_KEY"}, "zurueck": {back}}.Encode(), nil)
 		bodies = append(bodies, body)
-		return strings.Contains(body, "Whoami: Testschlüssel hinterlegt, Whoami neu gestartet") && strings.Contains(body, ">Zurück</a>")
+		return strings.Contains(body, "fertig: Whoami läuft mit dem neuen Schlüssel") && strings.Contains(body, ">Zurück</a>")
 	})
+	if len(during) == 0 {
+		t.Fatal("whoami was not restarted")
+	}
+	bodies = append(bodies, during...)
+	for _, w := range []string{"Schlüssel gespeichert ✓", "startet whoami …", "unter einer Minute", "Du musst nichts tun, die Seite aktualisiert sich", "http-equiv=refresh"} {
+		if !strings.Contains(during[0], w) {
+			t.Errorf("while whoami restarts the page lacks %q:\n%s", w, during[0])
+		}
+	}
+	if done := bodies[len(bodies)-len(during)-1]; !strings.Contains(done, "prüft, ob whoami läuft ✓") || strings.Contains(done, "http-equiv=refresh") || strings.Contains(done, "Du musst nichts tun") {
+		t.Errorf("done does not show its steps, or still reloads:\n%s", done)
+	}
 	if _, page = do("GET", "/schluessel", nil); !strings.Contains(page, "hinterlegt") || !strings.Contains(page, ">Ersetzen</a>") {
 		t.Errorf("the overview does not say the key is there:\n%s", page)
 	}
@@ -155,6 +178,21 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	if out, _ := exec.Command("git", "-C", c.env.Paths.State, "status", "--porcelain", "secrets.age").Output(); len(out) != 0 {
 		t.Errorf("secrets.age is not committed on main (#328): %s", out)
 	}
+
+	// #768: a restart that goes red says so and why, and stops reloading
+	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "systemctl" && slices.Contains(args, "is-active") && slices.Contains(args, "whoami.service") {
+			return "failed", nil
+		}
+		return run(ctx, name, args...)
+	}
+	do("POST", "/schluessel", url.Values{"name": {"WHOAMI_KEY"}, "wert": {value + "-2"}})
+	until(t, "red", func() bool {
+		_, body := do("GET", "/schluessel?name=WHOAMI_KEY", nil)
+		bodies = append(bodies, body)
+		return strings.Contains(body, "fehlgeschlagen, weil whoami danach nicht richtig lief") && !strings.Contains(body, "http-equiv=refresh")
+	})
+	sysd.Run = run
 
 	// never shown, never journaled, never logged, never in a commit message
 	journalFiles, _ := filepath.Glob(filepath.Join(c.env.Paths.Journal, "*"))
