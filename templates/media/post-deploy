@@ -30,6 +30,7 @@ or deletion. Its password is random and nobody's; the token is handed back
 as HAUS_JELLYFIN_TOKEN, the haus template renders it. A token that still
 works is kept; one Jellyfin refuses (its device removed in the dashboard)
 is replaced: a new random password, a new login on Haus' own device."""
+import http.client
 import json, os, re, secrets, sys, time, urllib.parse, urllib.request, urllib.error
 
 E = os.environ
@@ -62,7 +63,12 @@ def req(method, path, body=None, token=None, raw=False, client=CLIENT):
             if e.code != 503:
                 raise
             time.sleep(3)
-    red(f"jellyfin answered {path} 503 for three minutes")
+        except (urllib.error.URLError, ConnectionError, http.client.RemoteDisconnected) as e:
+            # Jellyfin restarting under the apply drops the connection (vm-install, train/2026-10-26j, #756)
+            if isinstance(e, urllib.error.URLError) and not isinstance(e.reason, ConnectionError):
+                raise
+            time.sleep(3)
+    red(f"jellyfin answered {path} 503 or dropped the connection for three minutes")
 
 
 def red(msg):
