@@ -22,6 +22,10 @@ VERTRAG_ARTEN: Vertrag, Versicherung, Bescheid
 VERTRAG_VORLAUF_TAGE: "28"
 HAUSHALT_URL: http://host.containers.internal:8650/mcp/haushalt
 HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
+# the household's own people are never a document's correspondent (#737): Paperless' users count
+# by themselves (their name from the first login); here, comma-separated, the ones without a
+# login, as "Vorname Nachname" (children, a partner who never logs in)
+HAUSHALT_NAMEN: ""
 CONSUME: /mnt/data/stacks/file-share/data/paperless-consume
 ADMIN_USER: admin
 DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD

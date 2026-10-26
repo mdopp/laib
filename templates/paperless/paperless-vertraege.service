@@ -7,7 +7,8 @@
 # notice date on by the renewal the text names, makes a reminder in Haus's
 # Haushalt before each notice date, and on the reminder day hands a message
 # for the owner to laib-notify's eingang/ (the Bote, else mail). It also has
-# letter-salad texts recognised again. Haus's token reaches podman through the
+# letter-salad texts recognised again, and clears a household person off the
+# documents the AI gave them as correspondent (#737). Haus's token reaches podman through the
 # environment, never on argv; without Haus no calendar reminder is made.
 # Hourly from the timer; the record in Paperless' data folder keeps it from
 # asking twice.
@@ -21,6 +22,7 @@ Environment=VERTRAG_ARTEN=${VERTRAG_ARTEN}
 Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
 Environment=HAUSHALT_URL=${HAUSHALT_URL}
 Environment=HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
+Environment=HAUSHALT_NAMEN=${HAUSHALT_NAMEN}
 Environment=VERTRAEGE_SKRIPT=%h/.config/containers/systemd/paperless/paperless-vertraege.py
 ExecStart=/bin/sh %h/.config/containers/systemd/paperless/paperless-vertraege.sh
 TimeoutStartSec=2h

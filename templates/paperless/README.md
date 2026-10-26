@@ -217,6 +217,29 @@ settings (the household model through the proxy, marked
   note. Still salad a day after: the tag `prüfen` and a note to scan the
   original again. A contract of salad is not read until its text reads.
   Every run looks at each document's text once (its hash is kept).
+- **The household's own people** (#737). Paperless 3.0's AI names the
+  people a letter mentions as its correspondent (its prompt is fixed, no
+  setting keeps names out), so a letter *to* a family member got that
+  member as its sender. The household is Paperless' own users: their first
+  and last name, which allauth takes from Authelia's `name` claim (LLDAP's
+  display name, split at the first space) on the first login, and the
+  login itself as a whole name; plus `HAUSHALT_NAMEN` (comma-separated
+  „Vorname Nachname“) for people without a login. box.yml `people` is not
+  a source: it carries a key and chat channels, no names. A correspondent
+  is a household person's when its name is the full name in either order
+  („Muster, Anna“, „Anna Muster“), „Familie“ and the surname, or a first
+  name or a login as its whole name; case, umlauts (ü = ue), accents,
+  punctuation, salutations and titles (Herrn Dr.) do not count, and
+  „Anna Muster Immobilien GmbH“ is no person. On such a document the run
+  clears the correspondent and leaves a note. **Never touched:** a document
+  with the tag `korrespondent-ok` (made with the first clearing, no
+  automatic matching, no owner; the note says to set it when the sender
+  was right), and every correspondent a document had when the pass first
+  ran (the record keeps them), so a hand-filed archive stays. The
+  correspondent itself is never deleted: Paperless marks none as made by
+  its AI. One the run left without documents is in the record, and
+  `paperless-check` shows it in `laib diag` (yellow) for the owner to
+  delete in Paperless.
 - **The record.** `laib-vertraege.json` in Paperless' data folder (backed
   up): per document what was filled and not taken, per reminder its day,
   the messages told, the dates marked, each text's verdict.
@@ -224,8 +247,7 @@ settings (the household model through the proxy, marked
   reminder.
 
 Not here (follow-up issues): questions to the documents through the Bote
-or Haus, and keeping the household's own people out of the AI's
-correspondent suggestions (Paperless 3.0 has no setting for it).
+or Haus; upstream, a Paperless setting for names its AI must not suggest.
 
 A document recognised before keeps its text: to recognise it again, select
 it in Paperless and reprocess it from the document actions (the values'

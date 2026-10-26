@@ -264,6 +264,24 @@ def ha_up(seconds):
         time.sleep(min(2, seconds))
 
 
+def ha_running(seconds):
+    """Home Assistant past its start (get_config's state RUNNING): http/config/configure refuses before"""
+    end = time.monotonic() + seconds
+    while True:
+        try:
+            ws = WS(admin_session())
+            try:
+                if (ws("get_config") or {}).get("state") == "RUNNING":
+                    return True
+            finally:
+                ws.close()
+        except (RuntimeError, OSError, ValueError):
+            pass
+        if time.monotonic() >= end:
+            return False
+        time.sleep(min(2, seconds))
+
+
 WAIT = float(E.get("HA_WAIT_SECONDS", "300"))
 if not ha_up(WAIT):
     red(f"Home Assistant does not answer on {BASE}/auth/providers")
@@ -1174,6 +1192,8 @@ def http_settings():
     elif want:
         problems.append(f"HA_LOGIN_SPERRE={want!r}: a number of failed logins (like 5), aus, or empty")
     proxies = wanted_proxies(problems)
+    if not ha_running(WAIT):  # configure refuses while HA starts (NOT_RUNNING), right after the apply's restart
+        return "; ".join(problems + ["Home Assistant is not RUNNING yet: HTTP settings next apply"])
     ws = WS(admin_session())
     try:
         cur = ws("http/config") or {}
@@ -1202,6 +1222,7 @@ def http_settings():
         time.sleep(float(E.get("HA_RETRY_SECONDS", "5")))
         if not ha_up(WAIT):
             return "; ".join(problems + ["Home Assistant did not come back from the restart into its HTTP settings; they revert in five minutes"])
+    ha_running(WAIT)
     ws = WS(admin_session())
     try:
         ws("http/config/promote")

@@ -496,6 +496,11 @@ class FakeHA(BaseHTTPRequestHandler):
             lang = m.get("language") or ""
             return ok({"providers": [dict(x, supported_languages=[l for l in x["supported_languages"] if l.split("_")[0].split("-")[0] == lang])
                                      for x in HA["engines"][kind]]})
+        if t == "get_config":   # core state: http/config/configure refuses before RUNNING (the box, 2026-10-26)
+            if HA.get("not_running", 0) > 0:
+                HA["not_running"] -= 1
+                return ok({"state": "NOT_RUNNING"})
+            return ok({"state": "RUNNING"})
         if t.startswith("http/config"):   # HA 2026.8's HTTP config store (#703; ServiceBay #2573 drove the same commands)
             HA["http_calls"].append(t)
             if not is_admin(uid):
@@ -503,6 +508,8 @@ class FakeHA(BaseHTTPRequestHandler):
             if t == "http/config":
                 return ok({"stable": HA["http"], "pending": HA["http_pending"], "active_config_type": "pending" if HA["http_pending"] else "stable"})
             if t == "http/config/configure":
+                if HA.get("not_running", 0) > 0:
+                    return err("home_assistant_error", "The HTTP configuration can only be changed while Home Assistant is running, current state: NOT_RUNNING")
                 if HA.get("http_refuse"):
                     return err("home_assistant_error", "refused")
                 if set(m["config"]) & {"created_at", "error", "error_message"}:
@@ -1422,6 +1429,16 @@ class LoginSperre(Hook):
         HA["http_calls"].clear()
         p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "5"})
         self.assertEqual((p.returncode, HA["http_calls"]), (0, ["http/config"]), "the same value twice restarts Home Assistant again: " + log)
+
+    def test_the_http_settings_wait_until_home_assistant_is_running(self):
+        """the box, 2026-10-26: right after the apply's restart HA answers but refuses configure
+        (NOT_RUNNING); the apply of #150 went red and rolled back"""
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"]["trusted_proxies"] = ["127.0.0.1/32", "10.0.0.0/8"]
+        HA["not_running"] = 3
+        p, _, log = self.run_hook(extra={"HA_WAIT_SECONDS": "30", "HA_RETRY_SECONDS": "0"})
+        self.assertEqual(p.returncode, 0, log)
+        self.assertNotIn("10.0.0.0/8", HA["http"]["trusted_proxies"], log)
 
     def test_aus_turns_it_off(self):
         fresh(onboarded=("laib", ADMIN_PW))

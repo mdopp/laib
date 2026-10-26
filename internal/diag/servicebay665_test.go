@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -77,7 +80,8 @@ func TestServiceBayFindingsNameTheSecretNotItsValue(t *testing.T) {
 		"media":  {Name: "media", Contract: state.Contract{Secrets: []state.Secret{{Name: "JELLYFIN_ADMIN_PASSWORD", DataBound: true}}}},
 	}}
 	sec := map[string]string{"IMMICH_DB_PASSWORD": "sealed-db-pw-665", "JELLYFIN_ADMIN_PASSWORD": "plain-jf-pw-665"}
-	fs := servicebayFindings(st, sec)
+	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
+	fs := servicebayFindings(env, st, sec)
 	if len(fs) != 2 {
 		t.Fatalf("want one finding per carried secret: %+v", fs)
 	}
@@ -101,12 +105,42 @@ func TestServiceBayFindingsNameTheSecretNotItsValue(t *testing.T) {
 	}
 
 	sec = map[string]string{"IMMICH_DB_PASSWORD": "new-one", "JELLYFIN_ADMIN_PASSWORD": "new-two"}
-	fs = servicebayFindings(st, sec)
+	fs = servicebayFindings(env, st, sec)
 	if len(fs) != 1 || !slices.Equal(fs[0].Repair, []string{"servicebay", "remove"}) || !strings.Contains(fs[0].Detail, dir) {
 		t.Fatalf("with nothing carried left, the dir is named with its removal: %+v", fs)
 	}
 	t.Setenv("LAIB_SERVICEBAY_DIR", filepath.Join(dir, "gone"))
-	if fs := servicebayFindings(st, sec); len(fs) != 0 {
+	if fs := servicebayFindings(env, st, sec); len(fs) != 0 {
 		t.Fatalf("no dir, no finding: %+v", fs)
+	}
+}
+
+// The box: 575 files of the old dir unreadable for laib, so a carried secret
+// the readable part does not show may still be there; until the journal shows
+// it rotated or set it is a finding with its repair (#665).
+func TestUnreadFilesKeepTheCarriedSecretsLaibHasNotRenewed(t *testing.T) {
+	dir := oldDir(t)
+	locked := filepath.Join(dir, "history", "locked.kube")
+	os.MkdirAll(locked, 0o755)
+	os.WriteFile(filepath.Join(locked, "x.bak"), []byte("x"), 0o000)
+	if f, err := os.Open(filepath.Join(locked, "x.bak")); err == nil { // root reads anything
+		f.Close()
+		t.Skip("running as root: no unreadable file")
+	}
+	t.Setenv("LAIB_SERVICEBAY_DIR", dir)
+	st := &state.State{Services: map[string]*state.Service{
+		"paperless": {Name: "paperless", Contract: state.Contract{Secrets: []state.Secret{{Name: "PAPERLESS_DB_PASSWORD", DataBound: true, Rotate: true}}}},
+	}}
+	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
+	sec := map[string]string{"PAPERLESS_DB_PASSWORD": "today-665"}
+	fs := servicebayFindings(env, st, sec)
+	if len(fs) < 1 || fs[0].Service != "paperless" || !slices.Equal(fs[0].Repair, []string{"secret", "rotate", "PAPERLESS_DB_PASSWORD"}) || strings.Contains(fs[0].Detail, "today-665") {
+		t.Fatalf("an unrenewed carried secret behind unreadable files is a repair: %+v", fs)
+	}
+	journal.Append(env.Paths.Journal, journal.Entry{Actor: "human:owner", Verb: "secret", Result: "info", Detail: "secret rotate PAPERLESS_DB_PASSWORD"})
+	for _, f := range servicebayFindings(env, st, sec) {
+		if f.Service == "paperless" {
+			t.Fatalf("a rotated secret is no finding any more: %+v", f)
+		}
 	}
 }
