@@ -6,6 +6,7 @@ Jellyfin administrators, the local admin kept as break-glass, Quick Connect
 on. The plugin binds with a read-only LLDAP account (as radicale does since
 #55), never the LLDAP admin as ServiceBay did. A fake Jellyfin answers like
 Jellyfin 12, which ignores X-Emby-Authorization (ServiceBay #3048)."""
+import socket
 import json, os, re, subprocess, sys, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -53,6 +54,11 @@ class FakeJellyfin(BaseHTTPRequestHandler):
         return m and m.group(1)
 
     def do_GET(self):
+        if self.path == "/Users/Me" and JF.get("drop_me", 0) > 0:   # Jellyfin restarting under the apply (#756)
+            JF["drop_me"] -= 1
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+            return
         if self.path == "/Users/Me":                 # whose token this is; a non-admin user's own token answers too
             t = self.bearer()
             if t == "tok":
@@ -269,6 +275,17 @@ class PostDeploy(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertNotIn("laib-secret: JELLYFIN_ADMIN_PASSWORD", p.stdout)
         self.assertIn("NOT rotated", p.stderr)
+
+    def test_a_dropped_connection_while_jellyfin_restarts_is_tried_again(self):
+        """vm-install, train/2026-10-26j: the second apply's Haus token check met a connection reset (#756)"""
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        tok = self.handed(p).get("HAUS_JELLYFIN_TOKEN")
+        JF["drop_me"] = 2
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_TOKEN=tok)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(JF["drop_me"], 0, "the drop did not happen")
+        self.assertNotIn("HAUS_JELLYFIN_TOKEN", self.handed(p), "a working token was minted again after a dropped connection")
 
     def test_an_empty_jellyfin_gets_musik_filme_serien_from_what_it_sees(self):
         # #651: the hook asked os.path.isdir in its own container, where the share is not mounted, so a new

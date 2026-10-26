@@ -145,6 +145,8 @@ func servicebayFindings(env *cli.Env, st *state.State, sec map[string]string) []
 	}
 	if len(out) == 0 {
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Detail: "der alte ServiceBay-Ordner " + dir + " liegt noch; kein Passwort hat mehr seinen Wert", Fix: "laib repair servicebay: löschen, vorher ein Snapshot, ein Mensch gibt frei", Repair: []string{"servicebay", "remove"}})
+	} else { // the owner may accept the rest (2026-10-26, „B“): the plaintext goes, the values stay in use
+		out = append(out, Finding{Severity: "info", Probe: "servicebay", Detail: "der alte ServiceBay-Ordner " + dir + " lässt sich auch jetzt löschen: die Werte oben bleiben in Gebrauch, aber nicht mehr im Klartext auf der Platte (der Snapshot davor hat sie noch)", Fix: "laib repair servicebay: trotzdem löschen, vorher ein Snapshot, ein Mensch gibt frei", Repair: []string{"servicebay", "remove", "--trotzdem"}})
 	}
 	return out
 }
@@ -174,8 +176,9 @@ func carriedFix(st *state.State, name string, last map[string]string) (string, s
 // ServiceBay is `laib servicebay remove` (destroy, humans only): the old
 // data dir goes once no secret has a value from it, after a snapshot of it.
 func ServiceBay(ctx context.Context, env *cli.Env, args []string) int {
-	if len(args) != 1 || args[0] != "remove" {
-		return env.Fail(errors.New("usage: laib servicebay remove"))
+	anyway := len(args) == 2 && args[1] == "--trotzdem" // the owner accepts the values still carried (#665)
+	if len(args) < 1 || args[0] != "remove" || (len(args) == 2 && !anyway) || len(args) > 2 {
+		return env.Fail(errors.New("usage: laib servicebay remove [--trotzdem]"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
 		return cli.Refused(env, "nur ein Mensch löscht den alten ServiceBay-Ordner")
@@ -194,9 +197,9 @@ func ServiceBay(ctx context.Context, env *cli.Env, args []string) int {
 	case errors.Is(err, fs.ErrNotExist):
 		fmt.Fprintln(env.W(), dir+" ist schon weg")
 		return cli.ExitOK
-	case err != nil || unread > 0:
+	case err != nil && !anyway, unread > 0 && !anyway: // the snapshot reads all of it in podman's namespace
 		return env.Fail(fmt.Errorf("%s nicht ganz lesbar (%d Dateien, %v): ob dort noch ein Passwort von heute liegt, ist offen", dir, unread, err))
-	case len(names) > 0: // the snapshot would keep live values
+	case len(names) > 0 && !anyway: // the snapshot would keep live values
 		return env.Fail(fmt.Errorf("noch nicht: %s haben den Wert aus %s; erst rotieren (laib diag, scripts/rotate-carried.sh)", strings.Join(names, ", "), dir))
 	}
 	out, err := backup.ResticRun(ctx, st, pw, "backup", "--tag", "pre-destroy", "--tag", "servicebay", dir)

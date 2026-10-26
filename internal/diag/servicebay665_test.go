@@ -82,9 +82,10 @@ func TestServiceBayFindingsNameTheSecretNotItsValue(t *testing.T) {
 	sec := map[string]string{"IMMICH_DB_PASSWORD": "sealed-db-pw-665", "JELLYFIN_ADMIN_PASSWORD": "plain-jf-pw-665"}
 	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
 	fs := servicebayFindings(env, st, sec)
-	if len(fs) != 2 {
-		t.Fatalf("want one finding per carried secret: %+v", fs)
+	if len(fs) != 3 || !slices.Equal(fs[2].Repair, []string{"servicebay", "remove", "--trotzdem"}) || fs[2].Severity != "info" {
+		t.Fatalf("want one finding per carried secret, then the owner's way to remove the dir anyway: %+v", fs)
 	}
+	fs = fs[:2]
 	for _, f := range fs {
 		if f.Probe != "servicebay" || f.Severity != "gelb" {
 			t.Fatalf("a carried secret is a yellow servicebay finding: %+v", f)
