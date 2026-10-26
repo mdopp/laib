@@ -246,6 +246,49 @@ rotation restarts Home Assistant with the new one. A top-level `auth_oidc:`
 block of your own in `configuration.yaml` would be a duplicate key beside the
 package: leave the login to the package.
 
+## Failed logins and HA's own ban (#703)
+
+Home Assistant logs every failed login ("Login attempt or request with
+invalid authentication from … (<address>)", no user name) and every ban it
+sets, in its unit's journal; the auth template's counter reads them and
+tells the owner (templates/auth/README.md, "Anmeldungen melden"). That
+needs nothing here: HA logs the line whether or not it bans.
+
+HA's own ban is `HA_LOGIN_SPERRE` in values.yml: a number bans an address
+after that many failed logins, `aus` never, empty (the default) leaves HA
+as it is. It needs the proxy trust below (HA would otherwise see Caddy for
+every login from outside and ban everyone), and post-deploy sets both in
+one go.
+
+## Caddy is a trusted proxy (#724)
+
+Caddy, on the host, forwards `home.<domain>` to `127.0.0.1:8123` with
+`X-Forwarded-For`. HA answers a forwarded request from a proxy it does not
+trust with 400, and without `use_x_forwarded_for` logs every client as
+127.0.0.1. Since 2026.8 HA keeps its HTTP settings (`use_x_forwarded_for`,
+`trusted_proxies`, `ip_ban_enabled`, `login_attempts_threshold`) in its own
+store (`.storage/http`) and ignores a YAML `http:` block, so post-deploy
+sets them through HA's `http/config`, `http/config/configure` and
+`http/config/promote` (the commands ServiceBay set the proxy trust with, its
+#2573). HA restarts into a new HTTP config on trial and reverts an
+unpromoted one after five minutes; post-deploy waits for it and promotes.
+
+Every apply reads the store. When HA already reads `X-Forwarded-For` and
+trusts 127.0.0.1, nothing is written and HA is not restarted; the owner's
+own entries stay (a box from ServiceBay keeps its 127.0.0.1/32 and the
+private ranges ServiceBay added). Otherwise post-deploy turns
+`use_x_forwarded_for` on and adds `127.0.0.1/32` and `::1/128`, nothing
+wider: HA is on the host network, and trusting a LAN range would let any
+device there claim another address in `X-Forwarded-For`. Where it cannot
+set them the apply is red after the other steps ran.
+
+**Why it is off by default:** HA bans by address, and the box's own
+consumers (the check, Haus, the Bote, Stimme) all come from 127.0.0.1. A
+token that went stale makes the same failed-login line; after the threshold
+HA bans 127.0.0.1, and all of them lose Home Assistant until someone
+deletes the line in `ip_bans.yaml` and restarts HA. The counter tells the
+owner of such a ban at once. Turning it on is the owner's call.
+
 ## Z-Wave JS and Matter stay off the LAN (#231)
 
 Z-Wave JS's server websocket (3000; 3001 on a box migrated from

@@ -79,16 +79,34 @@ func Inbox(env *cli.Env) http.HandlerFunc {
 		if n > 0 && !busy && !fresh {
 			b.WriteString(head)
 		}
-		for _, p := range all {
-			switch {
-			case p.Status == "stale" && p.Refiled != 0: // #637: the content changed since the approval
-				fmt.Fprintf(&b, "<p class=gelb>#%d nicht angewendet: %s</p>", p.ID, html.EscapeString(p.StaleReason))
-			case p.Status == "stale":
-				fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet — neu vorschlagen: %s</p>", p.ID, html.EscapeString(p.StaleReason))
-			}
-		}
+		b.WriteString(staleLines(all))
 		page(w, "Inbox", b.String())
 	}
+}
+
+// staleLines are the stale proposals still to act on (#716). One a later
+// proposal on the same file or with the same reason answered is not shown:
+// re-filed, decided or superseded, except the re-filed one still waiting.
+// What git said stays behind the details.
+func staleLines(all []*proposal.Proposal) string {
+	var b strings.Builder
+	for _, p := range all {
+		if p.Status != "stale" || strings.HasPrefix(p.StaleReason, "ändert auf dem aktuellen Stand nichts mehr") {
+			continue // "das steht schon so": nothing to do
+		}
+		if slices.ContainsFunc(all, func(q *proposal.Proposal) bool {
+			same := q.Reason == p.Reason && p.Reason != "" || slices.ContainsFunc(q.Files, func(f string) bool { return slices.Contains(p.Files, f) })
+			return q.ID > p.ID && same && !(q.ID == p.Refiled && q.Status == "open")
+		}) {
+			continue
+		}
+		if p.Refiled != 0 { // #637: the content changed since the approval
+			fmt.Fprintf(&b, "<p class=gelb>#%d nicht angewendet: %s</p>", p.ID, html.EscapeString(p.StaleReason))
+			continue
+		}
+		fmt.Fprintf(&b, "<p class=gelb>#%d ist veraltet: es passt nicht mehr zum aktuellen Stand — bitte neu vorschlagen.</p><details><summary>Details</summary><pre>%s</pre></details>", p.ID, html.EscapeString(p.StaleReason))
+	}
+	return b.String()
 }
 
 // progress is what an Inbox card says about a decision taken (#686): the

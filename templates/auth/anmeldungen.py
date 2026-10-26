@@ -20,8 +20,17 @@ last failure; what comes meanwhile is counted, never sent again. Failures
 below every threshold (a typo on the phone in the LAN) are one journal
 note per run (watch), no message.
 
-Out: STATE_DIR/meldungen.jsonl, bote-notify's payloads {"an","text","at"}
-for NOTIFY_PERSON, and STATE_DIR/notizen.tsv, "<kind>\\t<text>" per journal
+The other login doors (#703): Vaultwarden, Samba and Home Assistant log
+their failed logins to their units' journal; anmeldungen.sh exports each
+after its cursor into STATE_DIR/journal/<door>.json (journalctl -o json),
+and this reads them (DOORS below) and writes the cursor back. A door has no
+ban of its own (Home Assistant's, when it bans, is a message): one address
+with 10 failures or 5 names within an hour is an incident, from outside;
+Samba's from the LAN too, the share has no door to the outside.
+
+Out: STATE_DIR/meldungen.jsonl, bote-notify's payloads {"an","text",
+"betreff","at"} for NOTIFY_PERSON (with SMTP_HOST also without one: the
+mail fallback's subject is betreff), and STATE_DIR/notizen.tsv, "<kind>\\t<text>" per journal
 note (incident for each message, watch for the rest). anmeldungen.sh sends
 both from the host. LAN_NETZE: the box's own networks, comma-separated
 CIDRs (anmeldungen.sh reads them with ip addr). ANMELDUNGEN_JETZT: a fixed
@@ -129,6 +138,67 @@ def users(tmp):
         return None
 
 
+# the other doors (#703): (title in a message, its journal's regexes → (user, ip, banned), advice, counts in the LAN)
+VW_ADVICE = ("Warst du das? Ein Gerät mit einem alten Master-Passwort versucht es auch immer wieder. Sonst nichts tun: "
+             "Vaultwarden bremst wiederholte Anmeldungen, sperrt aber niemanden. Bei Häufung: sag es dem Operator.")
+SMB_ADVICE = ("Warst du das? Oft ist es ein Gerät, das sich noch mit einem alten Passwort am Netzlaufwerk anmeldet: "
+              "dort das Passwort neu eingeben. Sonst versucht ein Gerät im Heimnetz Passwörter: sag es dem Operator.")
+HA_ADVICE = ("Warst du das? Eine App mit abgelaufener Anmeldung versucht es auch immer wieder. Home Assistant sperrt eine "
+             "Adresse nur, wenn HA_LOGIN_SPERRE gesetzt ist (services/home-assistant/values.yml). Bei Häufung: sag es dem "
+             "Operator, er kann das vorschlagen.")
+HA_BAN_ADVICE = ("Warst du das? Dann die Adresse aus ip_bans.yaml im Ordner von Home Assistant löschen und Home Assistant "
+                 "neu starten, der Operator kann das vorschlagen. Sonst nichts tun, die Sperre greift.")
+DOORS = {
+    "vaultwarden": ("Vaultwarden (Passwörter)", [
+        (r"(?:Username or password|Username or access code) is incorrect\. Try again\. IP: ([^\s]+?)\. Username: (.*)\.\s*$", lambda m: (m[2], m[1], False)),
+        (r"Invalid admin token\. IP: ([^\s]+?)\.?\s*$", lambda m: ("Admin-Seite", m[1], False))], VW_ADVICE, False),
+    "samba": ("Netzlaufwerk (Samba)", [
+        (r"Auth: \[[^\]]*\] user \[[^\]]*\]\\\[(.*?)\] at \[.*?\] with \[.*?\] status \[(NT_STATUS_\w+)\] workstation \[.*?\] remote host \[ipv[46]:([^\]]*):\d+\]",
+         lambda m: None if m[2] == "NT_STATUS_OK" or not m[1] else (m[1], m[3], False))], SMB_ADVICE, True),
+    "home-assistant": ("Home Assistant", [
+        (r"invalid authentication from .* \(([0-9A-Fa-f:.]+)\)\.", lambda m: ("", m[1], False)),
+        (r"Banned IP (\S+) for too many login attempts", lambda m: ("", m[1], True))], HA_ADVICE, False),
+}
+
+
+def door_rows(st):
+    """the doors' new failures from STATE_DIR/journal/<door>.json; the cursors to write back"""
+    out, cursors = [], {}
+    for door, (_, pats, _, _) in DOORS.items():
+        path = os.path.join(STATE, "journal", door + ".json")
+        try:
+            lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(e, dict) or "__CURSOR" not in e:
+                continue
+            cursors[door] = e["__CURSOR"]
+            msg = e.get("MESSAGE") or ""
+            if isinstance(msg, list):   # journald's bytes, when not UTF-8
+                msg = bytes(b & 0xFF for b in msg if isinstance(b, int)).decode(errors="replace")
+            t = int(int(e.get("__REALTIME_TIMESTAMP") or 0) / 1_000_000)
+            if t < NOW - KEEP:
+                continue   # a first export reads the last hour; never what is older than the windows
+            for rx, row in pats:
+                m = re.search(rx, str(msg))
+                r = row(m) if m else None
+                if r:
+                    seq = re.search(r"\bi=([0-9a-f]+)", e["__CURSOR"])
+                    out.append({"id": f"{door}:{seq[1] if seq else e.get('__REALTIME_TIMESTAMP')}", "t": t, "ok": False, "banned": r[2],
+                                "user": str(r[0]), "ip": r[1].strip("[]"), "tuer": door})
+                    break
+    return out, cursors
+
+
+def tuer(r):
+    return r.get("tuer", "authelia")
+
+
 def read_rows(tmp, st):
     db = copy_db(E.get("AUTH_DB", "/authelia/db.sqlite3"), tmp)
     if db is None:
@@ -218,15 +288,19 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         known = users(tmp)
         new, cursor = read_rows(tmp, st)
-    recent = [r for r in st.get("recent", []) if r["t"] >= NOW - KEEP] + new
+    more, cursors = door_rows(st)
+    recent = [r for r in st.get("recent", []) if r["t"] >= NOW - KEEP]
+    seen = {r["id"] for r in recent}
+    new += [r for r in more if r["id"] not in seen]
+    recent += new
     offen = {k: v for k, v in st.get("offen", {}).items() if v["bis"] >= NOW}
-    fails = [r for r in recent if not r["ok"]]
+    fails = [r for r in recent if not r["ok"] and tuer(r) == "authelia"]
     covered, messages, notes = set(), [], []
 
     # 1. bans, from anywhere
     new_ids = {r["id"] for r in new}
     found = []
-    for u, until, ids in bans(recent):
+    for u, until, ids in bans([r for r in recent if tuer(r) == "authelia"]):
         if not ids & new_ids:
             continue
         covered |= ids & new_ids
@@ -238,13 +312,13 @@ def main():
         found.append((u, until, ids))
     # 2. one address outside the LAN, within the hour
     hits = {}
-    for ip in sorted({r["ip"] for r in new if not r["ok"] and not in_lan(r["ip"])}):
+    for ip in sorted({r["ip"] for r in new if not r["ok"] and tuer(r) == "authelia" and not in_lan(r["ip"])}):
         mine = [r for r in fails if r["ip"] == ip and r["t"] > NOW - HOUR]
         ns = [r["user"] for r in mine]
         if len(mine) < IP_FAILS and len({n.lower() for n in ns}) < IP_NAMES:
             continue
         key = "ip:" + ip
-        covered |= {r["id"] for r in new if r["ip"] == ip}
+        covered |= {r["id"] for r in new if r["ip"] == ip and tuer(r) == "authelia"}
         last = max(r["t"] for r in mine)
         if key in offen:
             offen[key]["bis"] = max(offen[key]["bis"], last + HOUR)
@@ -268,7 +342,7 @@ def main():
                          f"{n_names} Benutzernamen. Sieht nach Brute Force aus.")
             elif len(mine) > len(rows):
                 text += f"\nVon {clean(ip)} kamen in der letzten Stunde {len(mine)} Fehlversuche."
-        messages.append((text, "Warst du das? Sonst nichts tun, die Sperre greift. " + HINT))
+        messages.append((text, "Warst du das? Sonst nichts tun, die Sperre greift. " + HINT, f"Anmeldung gesperrt: {clean(rows[-1]['user'])} ({hhmm(NOW)})"))
     for ip, mine in hits.items():
         ns = [r["user"] for r in mine]
         n_names = len({n.lower() for n in ns})
@@ -279,25 +353,61 @@ def main():
         w = unknown_words(ns, known)
         text += " " + w if w else ""
         messages.append((text, f"Warst du das? Sonst nichts tun: Authelia sperrt jeden Namen nach {MAX} Fehlversuchen "
-                         f"für {dauer(BAN)}. " + HINT))
+                         f"für {dauer(BAN)}. " + HINT, f"Fehlversuche von {clean(ip)} ({hhmm(NOW)})"))
+    # 4. the other doors (#703): one address within the hour, or the door's own ban
+    for door, (title, _, advice, lan_too) in DOORS.items():
+        mine_new = [r for r in new if tuer(r) == door]
+        for ip in sorted({r["ip"] for r in mine_new if lan_too or not in_lan(r["ip"])}):
+            mine = [r for r in recent if tuer(r) == door and r["ip"] == ip and r["t"] > NOW - HOUR]
+            fl = [r for r in mine if not r["banned"]]
+            ns = [r["user"] for r in fl if r["user"]]
+            n_names = len({n.lower() for n in ns})
+            banned = any(r["banned"] for r in mine_new if r["ip"] == ip)
+            if not banned and len(fl) < IP_FAILS and n_names < IP_NAMES:
+                continue
+            covered |= {r["id"] for r in mine_new if r["ip"] == ip}
+            key = f"{door}:{'sperre' if banned else 'ip'}:{ip}"
+            last = max(r["t"] for r in mine)
+            if key in offen or not banned and f"{door}:sperre:{ip}" in offen:
+                offen.setdefault(key, {"bis": 0})["bis"] = max(offen[key]["bis"], last + HOUR)
+                continue
+            offen[key] = {"bis": last + (86400 if banned else HOUR)}   # a ban of Home Assistant stays until someone lifts it
+            who = (f" für {n_names} Benutzernamen: " if n_names > 1 else " für " if ns else "") + (names(ns) if ns else "")
+            if banned:
+                text = (f"🔒 {title} hat {clean(ip)} gesperrt: zu viele Fehlversuche bei der Anmeldung ({len(fl)} Fehlversuche{who} "
+                        f"in der letzten Stunde).\nWoher: {woher([ip])}.")
+                advice_now, betreff = HA_BAN_ADVICE, f"{title} sperrt {clean(ip)} ({hhmm(NOW)})"
+            else:
+                text = f"⚠️ {title}: {len(fl)} Fehlversuche{who} in der letzten Stunde.\nWoher: {woher([ip])}."
+                advice_now, betreff = advice, f"{title}: Fehlversuche von {clean(ip)} ({hhmm(NOW)})"
+            if n_names >= IP_NAMES:
+                text += "\nSieht nach Brute Force aus."
+            messages.append((text, advice_now, betreff))
     # the journal: what happened, without the advice (Part 6)
-    to = f"gemeldet an {E['NOTIFY_PERSON']}" if E.get("NOTIFY_PERSON") else "niemandem gemeldet, box.yml notify.person fehlt"
-    for text, _ in messages:
+    to = (f"gemeldet an {E['NOTIFY_PERSON']}" if E.get("NOTIFY_PERSON") else
+          "box.yml notify.person fehlt, per Mail gemeldet" if E.get("SMTP_HOST") else "niemandem gemeldet, box.yml notify.person fehlt")
+    for text, _, _ in messages:
         notes.append(("incident", "Anmeldungen: " + text.replace("\n", " · ") + f" ({to})"))
-    messages = [text + "\n" + advice for text, advice in messages]
+    messages = [(text + "\n" + advice, betreff) for text, advice, betreff in messages]
     # 3. below every threshold: one line in the journal, no message
     rest = [r for r in new if not r["ok"] and r["id"] not in covered]
     if rest:
-        lan = [r for r in rest if in_lan(r["ip"])]
-        out = [r for r in rest if not in_lan(r["ip"])]
-        parts = [f"{len(g)} {'Fehlversuch' if len(g) == 1 else 'Fehlversuche'} {where} ({names([r['user'] for r in g])} von {', '.join(sorted({clean(r['ip'] or '?') for r in g}))})"
-                 for g, where in ((lan, "aus dem Heimnetz"), (out, "von außen")) if g]
+        parts = []
+        for door in ["authelia"] + list(DOORS):
+            mine = [r for r in rest if tuer(r) == door]
+            lan = [r for r in mine if in_lan(r["ip"])]
+            out = [r for r in mine if not in_lan(r["ip"])]
+            parts += [("" if door == "authelia" else DOORS[door][0] + ": ") +
+                      f"{len(g)} {'Fehlversuch' if len(g) == 1 else 'Fehlversuche'} {where} ("
+                      + (names([r['user'] for r in g if r['user']]) + " " if any(r["user"] for r in g) else "")
+                      + f"von {', '.join(sorted({clean(r['ip'] or '?') for r in g}))})"
+                      for g, where in ((lan, "aus dem Heimnetz"), (out, "von außen")) if g]
         notes.append(("watch", "Anmeldungen: " + "; ".join(parts) + ", unter jeder Schwelle, keine Mitteilung."))
 
-    if E.get("NOTIFY_PERSON") and messages:
+    if (E.get("NOTIFY_PERSON") or E.get("SMTP_HOST")) and messages:   # without a person: for the mail (#703)
         with open(os.path.join(STATE, "meldungen.jsonl"), "a") as f:
-            for text in messages:
-                f.write(json.dumps({"an": E["NOTIFY_PERSON"], "text": text, "at": NOW}) + "\n")
+            for text, betreff in messages:
+                f.write(json.dumps({"an": E.get("NOTIFY_PERSON", ""), "text": text, "betreff": betreff, "at": NOW}) + "\n")
     if notes:
         with open(os.path.join(STATE, "notizen.tsv"), "a") as f:
             for kind, text in notes:
@@ -307,6 +417,9 @@ def main():
     with open(tmp, "w") as f:
         json.dump(st, f)
     os.replace(tmp, os.path.join(STATE, "stand.json"))
+    for door, c in cursors.items():   # after the state: a run that died reads the export again, its ids are known
+        with open(os.path.join(STATE, "journal", door + ".cursor"), "w") as f:
+            f.write(c + "\n")
     print(f"anmeldungen: {len(new)} neue Einträge, {len(messages)} Mitteilungen, {len(notes)} Notizen")
 
 

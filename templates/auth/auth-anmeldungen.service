@@ -21,6 +21,8 @@ Environment=AUTH_FIND_TIME=${AUTH_FIND_TIME}
 Environment=AUTH_BAN_TIME=${AUTH_BAN_TIME}
 Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
 Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+# the mail fallback (#703): with a mail server, what the Bote does not take goes to laib-notify
+Environment=SMTP_HOST=${SMTP_HOST}
 ExecStart=/bin/sh %h/.config/containers/systemd/auth/anmeldungen.sh zaehlen
 ExecStartPost=-/bin/sh %h/.config/containers/systemd/auth/anmeldungen.sh melden
 TimeoutStartSec=5min

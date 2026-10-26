@@ -142,8 +142,55 @@ values set: a field changed there by hand is reset on the next apply, the
 others stay. It also makes the contract fields once (custom fields, found
 by name, never changed): Anbieter, Vertragsnummer, Vertragsbeginn,
 Vertragsende, Kündigungsfrist, Nächster Kündigungstermin, Betrag,
-Zahlungsintervall. The family fills them; reading them out of a contract
-and the reminders before a notice date are not built yet (#567's follow-up).
+Zahlungsintervall. The family fills them, and so does the timer below.
+
+## Contract data and notice reminders (#709)
+
+`paperless-vertraege.timer` runs `paperless-vertraege.py` hourly inside the
+Paperless container, as the paperless user, with Paperless' own admin and AI
+settings (the household model through the proxy, marked
+`X-Laib-Background: paperless`, so it never counts as a person asking).
+
+- **Which documents.** A contract is a document whose document type or one
+  of whose tags is named in `VERTRAG_ARTEN` (default `Vertrag, Versicherung,
+  Bescheid`; the household's own names, compared without case).
+- **Reading.** A contract with an empty contract field is read once per
+  text, at most ten a run: the model answers JSON, per field a value and
+  the words of the text it stands on. A value is taken only when those
+  words are in the text (a name or number also in those words) and it has
+  its field's shape: a date, an amount (`EUR84.50`), a period
+  (`3 Monate`), one of monatlich, vierteljährlich, halbjährlich, jährlich,
+  einmalig. Otherwise the field stays empty, the document gets the tag
+  `prüfen` (made once, no automatic matching, no owner) and its note says
+  why. **Only empty fields are filled**: a value someone set is never
+  changed; a note on the document names what was filled. While the model
+  does not answer (a window holds the card), the run stops reading and the
+  next one asks again. A document recognised again (a new text) is read
+  again, still only for its empty fields.
+- **Reminding.** For a contract with *Nächster Kündigungstermin* and a
+  *Kündigungsfrist* it can read (a number and Tage, Wochen, Monate or
+  Jahre: "drei Monate zum Ende der Laufzeit" is 3 months), the notice must
+  be in by the notice date minus the period. `VERTRAG_VORLAUF_TAGE` (28)
+  before that, a reminder in Haus's Haushalt (`erinnerung_anlegen`: a task
+  with an alarm in the family calendar, on every phone and on Haus'
+  Kalender page), e.g. „Kündigung prüfen: Stromvertrag (Stadtwerke …).
+  Kündigen bis 31.12.2026 (Kündigungstermin 31.03.2027).
+  https://paperless.…/documents/12/details“. It is made as soon as both
+  fields are there, once per document and notice date; one already due is
+  due today; one whose notice date minus the period has passed is not
+  made. A period it cannot read is a line in the unit's journal. Without
+  Haus (`HAUS_HAUSHALT_TOKEN`) no reminder is made and none is recorded,
+  so the first run after `laib add haus` makes them.
+- **The record.** `laib-vertraege.json` in Paperless' data folder (backed
+  up): per document what was filled and not taken, per reminder its day.
+  `journalctl --user -u paperless-vertraege` has one line per document and
+  reminder.
+
+Not here (the follow-up issue): the Bote telling a reminder over Signal,
+renewing a notice date after it passed, questions to the documents through
+the Bote or Haus, keeping the household's own people out of the AI's
+correspondent suggestions (Paperless 3.0 has no setting for it), and a check
+for unusable text.
 
 A document recognised before keeps its text: to recognise it again, select
 it in Paperless and reprocess it from the document actions (the values'
