@@ -19,8 +19,11 @@ import (
 // #561: Haus's form hands the household's address to laib (laib_zuhause
 // set); it becomes a box.yml proposal only a human approves — Haus never
 // decides, and neither the inbox reason nor the journal carries the street.
+// Since #677 laib-haushalt serves it behind the door; the kernel's loader
+// still judges the address and its review still makes it a human's.
 func TestHausProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env)
 	call := func(hand string, args map[string]any) (string, int) {
 		st, err := cli.LoadState(env)
 		if err != nil {
@@ -100,6 +103,7 @@ func mustState(t *testing.T, env *cliEnv) *state.State {
 // even read the address (#561)
 func TestZuhauseRefusesBadValuesAndResidents(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env)
 	st := mustState(t, env)
 	for _, args := range []map[string]any{
 		{"action": "set", "city": "Musterstadt", "latitude": "52.1"},

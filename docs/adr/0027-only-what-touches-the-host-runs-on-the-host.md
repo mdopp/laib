@@ -189,3 +189,18 @@ How the last two moves were made:
   repo and the journal are not readable inside. The lease's container on
   the GPU box, and both on the box with its own paths, are still to be
   shown.
+
+## Note (#677): the lease outside the kernel's tree
+
+The lease's code moved from `internal/lease` and `cmd/laib-lease` to its
+own program `lease/` (`lease/cmd/laib-lease`, `lease/Containerfile`), with
+its own budget in `scripts/loc.sh` (ADR 0005, 2026-10-26). Nothing about
+its container changes: the image is still `ghcr.io/mdopp/laib-lease`, the
+release still pins its digest into laib (`render.LeaseImage`), and it still
+reaches laib only over MCP as the `lease` hand — now with its own client,
+since it imports nothing of the kernel. A rollback to a release from
+before runs that release's pinned lease image, built from the old path.
+The same train moved `zuhause` and `person_signal` behind the verb door:
+laib-haushalt proposes their box.yml paths as the `haushalt` hand, whose
+built-in grant now names `zuhause` and `people.*.signal`.
+

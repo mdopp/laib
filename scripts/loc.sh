@@ -30,7 +30,7 @@ diet=""
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
 # 20,000: set by the owner, mdopp, 2026-10-23, on #609 (approve is a merge,
 # a red run rolls back its whole batch) asking for 17,000: "Setze die Grenze
-# auf 20k". The kernel stood at 16,944; relay and lease stay in it (ADR 0005).
+# auf 20k". The kernel stood at 16,944.
 # 16,900: raised by the owner, mdopp, 2026-10-23, #574-#579: the tools an
 # agent was missing on the box ("Setze das alles um"): built-in hands get
 # their new verbs after an update, the state repo readable, the LAN's
@@ -62,7 +62,14 @@ budget notify 600 notify        # laib-notify: the watchdog ping and the owner's
 # haushalt 700: set by the owner, mdopp, 2026-10-25, on #676 ("1 a"): laib tell (one message to
 # one person through the Bote, haus#123), the first household verb ADR 0026 puts here instead of
 # the kernel; 610 lines, room for the next verb of that size
-budget haushalt 700 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676)
+# haushalt 920: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): laib zuhause and laib person
+# signal move behind the door out of the kernel (ADR 0026 §4); 736 lines, plus about a quarter
+budget haushalt 920 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677)
+# lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
+# as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
+# 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
+# and atomic write
+budget lease 1300 lease         # laib-lease: the policy proxy and the GPU lease (#677)
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -75,7 +82,7 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick frage automat persona mcpserver disk notify haushalt; do
+for prog in stick frage automat persona mcpserver disk notify haushalt lease; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
@@ -102,7 +109,6 @@ if [ -n "$diet" ]; then
   echo "| Package | Lines | What it is |"
   echo "|---|---:|---|"
   for c in $chores; do echo "| \`internal/$c\` | $(lines internal/$c) | box chore |"; done
-  echo "| \`internal/lease\`, \`cmd/laib-lease\` | $(lines internal/lease cmd/laib-lease) | the llama template's lease; stays by the owner's decision (2026-10-17), counts |"
   echo "| \`cmd/laib\` | $(lines cmd/laib) | the small verbs; \`internal/hands\` (secret, token, operator) is the next cut |"
   echo
   echo "Crossing the cap means raising it in the same PR, with its reason in \`scripts/loc.sh\` and the owner's approval (#309)."

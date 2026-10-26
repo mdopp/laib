@@ -19,7 +19,7 @@ class ProviderId(unittest.TestCase):
 
     def test_extension_lists_the_leases_real_catalog(self):
         # the lease's /v1/models answers id + allowed_in_mode and no `pi` object
-        # (internal/lease catalogue); the extension must still list every preset
+        # (lease/ catalogue); the extension must still list every preset
         catalog = {"object": "list", "mode": "haushalt", "data": [
             {"id": "gemma-4-e4b", "object": "model", "allowed_in_mode": True},
             {"id": al.CODING_PRESET, "object": "model", "allowed_in_mode": False},

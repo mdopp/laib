@@ -219,8 +219,9 @@ var NotifyHand = defaults.Hands["notify"] // inbox: the proposals it announces (
 // naming their newer verbs (pause, resume) would make a rollback to a laib
 // that does not know them refuse the whole policy. Load adds them.
 var (
-	// laib-haushalt's call back from behind the verb door: proposes, and the dial applies nothing of it
-	HaushaltHand = Hand{Ceiling: "propose", Verbs: []string{"propose"}}
+	// laib-haushalt's call back from behind the verb door: proposes, and the dial applies nothing of it;
+	// the paths are laib zuhause's and laib person signal's (#677)
+	HaushaltHand = Hand{Ceiling: "propose", Verbs: []string{"propose"}, Paths: []string{"zuhause", "people.*.signal"}}
 	// laib-lease in its container: pauses and resumes the services a GPU window stops, notes a long one
 	LeaseHand = Hand{Ceiling: "apply", Verbs: []string{"status", "pause", "resume", "note"}}
 )

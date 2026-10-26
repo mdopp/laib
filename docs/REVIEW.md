@@ -18,7 +18,7 @@ nothing has run on a real box. Read `README.md` (Stand), then this.
 |---|---|---|---|
 | Kernel | `cmd/laib`, `internal/{state,render,plan,apply,proposal,policy,secrets,token,journal,sysd,boxfs}` | Git state repo as truth; `plan`/`apply` (snapshot, write, daemon-reload, restart, verify); proposals + inbox; hands/tiers; MCP over HTTP; three pages; converge; `disk`, `inbox`, `remove`, `backup`/`restore` | unit + golden tests (`testdata/golden/{basic,nuc}`), `scripts/e2e.sh` (shims), `scripts/boot-test.sh` (real Quadlet on a runner), VM |
 | Operator | `operator/` (own budget, ADR 0023) | admin agent: OpenAI-compatible tool loop over Laib's MCP as hand `ops`, budget, pre-repair snapshots, notes, morning report; heartbeat in readiness/diag | e2e with a scripted model only |
-| Lease | `cmd/laib-lease`, `internal/lease` | llama policy proxy + GPU lease, the llama template's container (ADR 0027) | unit tests; never on a GPU |
+| Lease | `lease/` | llama policy proxy + GPU lease, the llama template's container (ADR 0027) | unit tests; never on a GPU |
 | Frage | `frage/` (`frage/cmd/frage`) | SearXNG + summary, OpenAI-compatible ("was ist …") | unit tests; image built |
 | Automat | `automat/` (`automat/cmd/automat`), `mcpserver/` | HA automations as MCP in the bote pod, writes behind the admin's confirmation | unit tests vs fake HA; image built |
 | Stick | `stick/` (`stick/cmd/laib-stick`), `usb/` | cross-platform wizard: Butane in-process, ISO download + sha256, Ignition embed (coreos-installer format), dd / raw Windows write; first boot: data disk RAID1, firstboot → `install-box.sh` | VM: install, reboot, first boot, RAID, reinstall keeps data, caddy, backup/restore, update, remove |

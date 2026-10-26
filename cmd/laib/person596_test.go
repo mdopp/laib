@@ -20,6 +20,7 @@ import (
 // and the Bote cannot. The reason that reaches the chat carries no number.
 func TestTheBoteProposesASignalNumberAndOnlyAHumanLetsItIn(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #677
 	box, _ := os.ReadFile(filepath.Join(env.Paths.State, "box.yml"))
 	out, code := mcp.Call(context.Background(), env, mustState(t, env), "bote", "laib_person_signal", map[string]any{"user": "mama", "number": "+4900000002"})
 	if code != cli.ExitOK {

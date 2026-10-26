@@ -55,11 +55,15 @@ func TestProposePathIsACommentKeepingEdit(t *testing.T) {
 }
 
 // #598: a hand with a verb list proposes only the paths policy.yml grants it;
-// without the grant laib_zuhause and laib_person_signal are refused before
-// anything is written. The default sync proposes the grant, once.
+// without the grant laib_person_invite --signal is refused before anything
+// is written or anyone invited. The default sync proposes the grant, once.
+// (laib_zuhause and laib_person_signal are served behind the door since
+// #677: the verb grant gates them, and laib-haushalt's hand holds the
+// paths; zuhause561_test.go, person596_test.go.)
 func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
-	env, _ := testBox(t)
+	env, calls := personBox(t, `{"user":"mama","name":"Mama","email":"mama@box.test","mailed":true,"expires":"2026-10-19T10:00:00Z"}`)
 	ctx := context.Background()
+	invite := map[string]any{"user": "mama", "first": "Mama", "email": "mama@box.test", "signal": "+4900000002"}
 	pol := filepath.Join(env.Paths.State, "policy.yml")
 	old := strings.Replace(state.DefaultPolicy, ", paths: [zuhause, people.*.signal]}", "}", 1)
 	if old == state.DefaultPolicy {
@@ -74,13 +78,8 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 		return out
 	}
 	before := branches()
-	for verb, args := range map[string]map[string]any{
-		"laib_zuhause":       {"action": "set", "city": "Musterstadt"},
-		"laib_person_signal": {"user": "mama", "number": "+4900000002"},
-	} {
-		if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", verb, args); code == cli.ExitOK {
-			t.Fatalf("%s without the path grant: exit %d: %s", verb, code, out)
-		}
+	if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", "laib_person_invite", invite); code == cli.ExitOK || len(*calls) != 0 {
+		t.Fatalf("invite --signal without the path grant: exit %d, %d tool runs: %s", code, len(*calls), out)
 	}
 	if all, _ := proposal.List(cli.InboxDir(env), false); len(all) != 0 || branches() != before {
 		t.Fatalf("a refused path left %d proposals or a branch", len(all))
@@ -107,7 +106,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	if code := inbox.Approve(ctx, env, []string{"1"}); code != cli.ExitOK {
 		t.Fatalf("approve: exit %d", code)
 	}
-	if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", "laib_zuhause", map[string]any{"action": "set", "city": "Musterstadt"}); code != cli.ExitOK {
+	if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", "laib_person_invite", invite); code != cli.ExitOK {
 		t.Fatalf("after the grant: exit %d: %s", code, out)
 	}
 }

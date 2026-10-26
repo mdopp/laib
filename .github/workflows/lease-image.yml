@@ -5,7 +5,7 @@ name: lease-image
 on:
   push:
     branches: [main]
-    paths: ["cmd/laib-lease/**", "internal/**", "go.mod", "go.sum", ".github/workflows/lease-image.yml"]   # the lease imports the kernel's packages
+    paths: ["lease/**", "go.mod", "go.sum", ".github/workflows/lease-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,6 +23,6 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: cmd/laib-lease/Containerfile
+          file: lease/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-lease:latest,ghcr.io/mdopp/laib-lease:${{ github.sha }}

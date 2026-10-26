@@ -14,7 +14,7 @@ import (
 // policy.yml from before has neither: Load supplies them, as notify's.
 func TestTheHaushaltAndLeaseHandsAreBuiltInAndSupplied(t *testing.T) {
 	want := map[string]Hand{
-		"haushalt": {Ceiling: "propose", Verbs: []string{"propose"}},
+		"haushalt": {Ceiling: "propose", Verbs: []string{"propose"}, Paths: []string{"zuhause", "people.*.signal"}}, // #677
 		"lease":    {Ceiling: "apply", Verbs: []string{"status", "pause", "resume", "note"}},
 	}
 	for name := range want {
@@ -31,7 +31,7 @@ func TestTheHaushaltAndLeaseHandsAreBuiltInAndSupplied(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, w := range want {
-		if h := st.Policy.Hands[name]; h.Ceiling != w.Ceiling || !slices.Equal(h.Verbs, w.Verbs) {
+		if h := st.Policy.Hands[name]; h.Ceiling != w.Ceiling || !slices.Equal(h.Verbs, w.Verbs) || !slices.Equal(h.Paths, w.Paths) {
 			t.Errorf("a policy.yml without %s gets %+v, want %+v", name, h, w)
 		}
 	}

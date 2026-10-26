@@ -220,8 +220,10 @@ skills:                         # the Operator's skills (ADR 0023): absent = act
 ```
 
 A hand's `paths` (#598) name where in box.yml it may propose a value
-(`laib propose --path`, and the verbs built on it: `laib zuhause` at
-`zuhause`, `laib person signal` at `people.<user>.signal`). A pattern is a
+(`laib propose --path`, and the verbs built on it: `laib person invite
+--signal` at `people.<user>.signal`; `laib zuhause` and `laib person signal`
+are served by laib-haushalt behind the door since #677 and propose as the
+built-in `haushalt` hand, which holds both paths in code). A pattern is a
 dotted path, `*` stands for exactly one segment, and it names one path, not
 the subtree under it; `services/*/values.yml:KEY` names a values.yml key.
 Only a hand with a verb list is held to its paths; a hand without one and

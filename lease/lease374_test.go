@@ -68,7 +68,7 @@ func TestAnUnprovidedRoleDegradesInsteadOfStoppingTheLease(t *testing.T) {
 
 // The llama contract points laib at the file the lease writes.
 func TestTheLlamaContractReadsTheLeaseStatus(t *testing.T) {
-	b, _ := os.ReadFile("../../templates/llama/laib.yml")
+	b, _ := os.ReadFile("../templates/llama/laib.yml")
 	if !strings.Contains(string(b), "file: ${DATA_DIR}/llama/lease/laib-status.json") {
 		t.Fatal("templates/llama/laib.yml has no status file at the lease dir")
 	}
