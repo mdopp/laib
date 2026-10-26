@@ -8,6 +8,8 @@ upstream: [https://github.com/syncthing/syncthing, https://docs.syncthing.net/, 
 # network for Samba discovery and Syncthing's local announcements.
 # Samba has one account per family member (#296): who is family comes from
 # LLDAP (the auth pod), each password from the person in Haus.
+# The Werkstatt's workspace is Samba's share werkstatt, for the admins only
+# (#666): not in File Browser, which writes as core, nor in Syncthing.
 hostNetwork: true
 after: [auth]
 routes:
@@ -48,6 +50,8 @@ data:
     backup: false
   - path: ${DATA_DIR}/file-share/data/tv
     backup: false
+  - path: ${DATA_DIR}/werkstatt/workspace   # the Werkstatt's, Samba's share werkstatt for the admins (#666); declared here so it exists without the Werkstatt
+    backup: false                             # backed up by werkstatt
 health:
   http: http://127.0.0.1:8384/rest/noauth/health
 ports:

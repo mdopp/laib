@@ -73,6 +73,12 @@ class Members(unittest.TestCase):
         self.assertIn("Bad Name", r.stdout + r.stderr)   # said, not taken
         self.assertNotIn(READER_PW, r.stdout + r.stderr)
 
+    def test_the_admins_have_their_own_list_for_the_werkstatt_share(self):
+        # #666: the Werkstatt share is the admins' only; family alone is not enough
+        r = self.run_once()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(Path(self.dir, "admins").read_text(), "anna\ncore\n")
+
     def test_lldap_down_or_login_refused_leaves_the_list(self):
         Path(self.dir, "members").write_text("anna\n")
         LLDAP["up"] = False
@@ -108,6 +114,9 @@ printf '%s:1000:XX:NT:[U          ]:LCT-%X:\n' "$u" "$(date +%s)" >> "$FAKE/pass
     "adduser": '#!/bin/bash\necho "adduser $*" >> "$FAKE/argv"; echo "${@: -1}" >> "$FAKE/posix"',
     "deluser": '#!/bin/bash\necho "deluser $*" >> "$FAKE/argv"; grep -vx "$1" "$FAKE/posix" > "$FAKE/x.tmp"; mv "$FAKE/x.tmp" "$FAKE/posix"',
     "id": '#!/bin/bash\ngrep -qx "${@: -1}" "$FAKE/posix"',
+    # busybox: addgroup GROUP makes it, addgroup USER GROUP adds to it, delgroup USER GROUP takes out
+    "addgroup": '#!/bin/bash\necho "addgroup $*" >> "$FAKE/argv"; [ $# = 2 ] || exit 0; grep -qx "$1" "$FAKE/admins" && exit 1; echo "$1" >> "$FAKE/admins"',
+    "delgroup": '#!/bin/bash\necho "delgroup $*" >> "$FAKE/argv"; grep -qx "$1" "$FAKE/admins" || exit 1; grep -vx "$1" "$FAKE/admins" > "$FAKE/g.tmp"; mv "$FAKE/g.tmp" "$FAKE/admins"',
 }
 
 
@@ -123,7 +132,7 @@ class Accounts(unittest.TestCase):
         # ServiceBay's passdb on a migrated box: anna and olda, and the shared account
         (self.fake / "passdb").write_text("samba:1000:XX:NT:[U          ]:LCT-6A000000:\nanna:1001:XX:NT:[U          ]:LCT-6A000001:\nolda:1002:XX:NT:[U          ]:LCT-6A000002:\n")
         (self.fake / "posix").write_text("samba\n")      # the entrypoint made the shared one; a restart lost the rest
-        for f in ("argv", "stdin"):
+        for f in ("argv", "stdin", "admins"):
             (self.fake / f).write_text("")
         self.proc = None
 
@@ -133,9 +142,11 @@ class Accounts(unittest.TestCase):
             self.proc.wait()
         shutil.rmtree(self.root)
 
-    def start(self, members="anna\nben\n"):
+    def start(self, members="anna\nben\n", admins=None):
         if members is not None:
             (self.dir / "members").write_text(members)
+        if admins is not None:
+            (self.dir / "admins").write_text(admins)
         env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", FAKE=str(self.fake), ACCOUNTS_DIR=str(self.dir), SHARE_USER="samba", TICK="1",
                    PASSDB=str(self.fake / "passdb"))
         self.out = open(self.root / "out", "w+")
@@ -200,6 +211,33 @@ class Accounts(unittest.TestCase):
         (self.dir / "members").write_text("ben\n")
         self.wait(lambda: "anna:" not in (self.fake / "passdb").read_text(), "anna's removal")
         self.assertIn("samba:", (self.fake / "passdb").read_text())
+
+    def group(self):
+        return (self.fake / "admins").read_text().split()
+
+    def test_only_admins_with_an_account_are_in_the_werkstatt_group(self):
+        # #666: valid users = @admins on the werkstatt share; the shared account never, ben is family only
+        self.start(admins="anna\nsamba\n")
+        self.wait(lambda: "werkstatt share" in self.output(), "the group")
+        self.assertEqual(self.group(), ["anna"])
+        self.assertIn("werkstatt share for: anna", self.output())
+
+    def test_no_admin_list_lets_nobody_in(self):
+        self.start()
+        self.wait(lambda: "werkstatt share" in self.output(), "the group")
+        self.assertEqual(self.group(), [])
+
+    def test_an_admin_who_leaves_the_list_loses_the_share(self):
+        self.start(admins="anna\n")
+        self.wait(lambda: self.group() == ["anna"], "anna in the group")
+        (self.dir / "admins").write_text("")
+        self.wait(lambda: self.group() == [], "anna out of the group")
+        self.assertIn("anna:", (self.fake / "passdb").read_text())   # family still: her account stays
+
+    def test_a_new_admin_account_gets_the_share_with_its_password(self):
+        self.start(admins="anna\nben\n")
+        self.send("set ben " + base64.b64encode(b"pw-ben").decode())
+        self.wait(lambda: "ben" in self.group(), "ben in the group")
 
 
 def stat_fifo(p):
