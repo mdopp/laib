@@ -289,7 +289,7 @@ data:
 health:
   http: http://127.0.0.1:8000/api/      # verify after apply
 status:                                # what the service says about itself beyond up/down (#309), optional
-  file: ${DATA_DIR}/paperless/laib-status.json   # {"at", "detail", "findings": [{severity, detail, fix}]}
+  file: ${DATA_DIR}/paperless/laib-status.json   # {"at", "detail", "findings": [{severity, detail, fix}]}; further fields reach laib_status <service> as eigenes (#688)
   check: paperless-check.service        # optional: a oneshot that refreshes it
   stale: 5m                             # older than this, a look starts the check (default 5m)
 ports:

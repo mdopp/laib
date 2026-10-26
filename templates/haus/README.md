@@ -53,6 +53,16 @@ creates it at discogs.com (Settings, Developers) and sets it on the box page,
 „Schlüssel hinterlegen“; without it the wish list has no Discogs, all else
 stays.
 
+Music wishes (#695): Haus asks Jellyfin at `HAUS_JELLYFIN_URL` with
+`HAUS_JELLYFIN_TOKEN` whether a shared song is there already, and every 15
+minutes whether an open wish arrived. The token is a user token, not an API
+key (Jellyfin's API keys have no levels, each is an administrator): the
+Jellyfin user `haus` that media's post-deploy keeps hidden, without
+administrator, playback, download or deletion, and with the music libraries
+only. Send it as `Authorization: MediaBrowser Token="…"`. Without media the
+token is empty: the wish list stays, without „hast du schon“ and without
+ticking a wish off by itself.
+
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`

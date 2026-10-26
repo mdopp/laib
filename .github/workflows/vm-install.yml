@@ -957,6 +957,13 @@ jobs:
                 echo "jellyfin login as core with a wrong password: HTTP $code"; [ "$code" = 401 ] || exit 1
                 [ "$(curl -s http://127.0.0.1:8096/QuickConnect/Enabled)" = true ] || { echo "Quick Connect is off"; exit 1; }
                 echo "quick connect on"
+                # #695: the account of Haus (hidden, music only) and its token, minted against this real Jellyfin; the next
+                # apply keeps it, which it does only when Jellyfin answers /Users/Me with that token as user haus
+                grep -q "HAUS_JELLYFIN_TOKEN minted (new)" /tmp/add-media.txt || { echo "HAUS_JELLYFIN_TOKEN was not minted"; exit 1; }
+                if grep -q "laib-secret" /tmp/add-media.txt; then echo "a token is in the apply output"; exit 1; fi
+                $L apply media | tee /tmp/apply-media2.txt
+                if grep -q "HAUS_JELLYFIN_TOKEN minted" /tmp/apply-media2.txt; then echo "the token Haus got does not work in Jellyfin: minted again"; exit 1; fi
+                echo "media: Haus has a music-only Jellyfin account and a token that works (#695)"
                 $L remove media >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
                 podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true
@@ -1032,6 +1039,8 @@ jobs:
                 $L self rollback
                 for i in $(seq 1 20); do curl -fsS http://127.0.0.1:5900/ready > /tmp/ready.json 2>/dev/null && break; sleep 1; done
                 cat /tmp/ready.json; echo
+                # /ready answers 503 when the state does not load: the previous release must read the policy.yml this commit wrote (#674)
+                test -s /tmp/ready.json || { echo "the previous release does not load the state after the rollback"; exit 1; }
                 prev=$(/var/opt/laib/laib version); echo "rolled back to: $prev"; [ "$prev" != "laib '"${GITHUB_SHA::7}"'" ]
                 bash /tmp/install-box.sh --source "$SRC" > /tmp/ib4.log 2>&1 || { tail -20 /tmp/ib4.log; exit 1; }
                 v=$(/var/opt/laib/laib version); echo "forward again: $v"; [ "$v" = "laib '"${GITHUB_SHA::7}"'" ]'
