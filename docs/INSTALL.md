@@ -83,6 +83,9 @@ domain and its records stay where they are; only the ACME challenge moves.
    laib secret set DNS_API_TOKEN          # paste the token, Enter, Ctrl-D: stdin, never argv
    ```
 
+   (or, once the box page answers, on
+   `https://<laib host>.<domain>/schluessel?name=DNS_API_TOKEN`, #696)
+
    then in `/mnt/data/laib/state/box.yml`:
 
    ```yaml

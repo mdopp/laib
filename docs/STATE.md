@@ -473,6 +473,14 @@ and `host` is a route host (the address becomes `https://<host>.<domain><path>`)
 `laib recovery-sheet` lists these logins, and `--vaultwarden <file>` exports
 them with their passwords for an import into Vaultwarden (docs/BACKUP.md).
 
+`owner: {label, warum, hilfe, link?}` (#696) on an `external` secret that
+no hook mints marks a key the owner brings from outside (Discogs' app key,
+the DNS provider's token, a mailbox password). Only these appear on the box
+page's „Schlüssel hinterlegen“, in the template's German words: what it is
+(`label`), what it brings the household (`warum`), where to get it
+(`hilfe`, `link`; `${DOMAIN}` in the link is the box's domain). The loader
+refuses `owner:` on a generated or minted secret, or without those words.
+
 ### Secrets the data was made with (#353)
 
 A contract secret with `dataBound: true` is read by its app only when the app

@@ -4,6 +4,7 @@
 package diag
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -52,8 +53,12 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 		p.Tier = "destroy"
 		err = proposal.Save(cli.InboxDir(env), p)
 	}
+	if f.Effect != "" { // #759: what the card tells the owner happens
+		p.Facts = append(p.Facts, f.Effect)
+	}
 	if err == nil { // the finding it answers is the one laib measures afterwards (#544)
-		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: "nichts zurückzunehmen: laib führt nur " + cmdline + " aus"})
+		undo := cmp.Or(f.Undo, "nichts zurückzunehmen: laib führt nur "+cmdline+" aus")
+		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: undo})
 	}
 	if err != nil {
 		return env.Fail(err)

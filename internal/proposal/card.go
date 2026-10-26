@@ -222,6 +222,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	switch {
 	case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
 		d.Summary = p.News[0]
+	case p.Boxless() && p.Evidence != "": // a repair: the finding it answers (#759)
+		d.Summary = "Reparieren: " + p.Evidence
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
@@ -288,7 +290,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	}
 	var technical []string
 	for _, v := range values {
-		if len(p.News) > 0 { // the template's values: its news says what they bring
+		if len(p.News) > 0 && v.Op == "-" { // #696: a value whose secret the template retired
+			technical = append(technical, title(v.Service)+": "+v.Key+" entfällt, die Vorlage braucht es nicht mehr (bisher "+valueWord(v.Old)+")")
+		} else if len(p.News) > 0 { // the template's values: its news says what they bring
 			technical = append(technical, title(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else if v.Op == "-" {
 			d.Changes = append(d.Changes, Line{"−", title(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
@@ -343,6 +347,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 
 	// --- how it is undone
 	switch {
+	case p.Tier == "destroy": // #759: a flashed device, a deleted folder
+		d.Reversible = "Nicht mit einem Tipp rückgängig."
 	case len(p.Adds) > 0:
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
 	case len(handOrder) == 1:
@@ -612,6 +618,9 @@ func servicesOf(p *Proposal) []string {
 	sort.Strings(out)
 	return out
 }
+
+// Title is title for the pages (the key page, #696).
+func Title(name string) string { return title(name) }
 
 // title: a service name as people say it (paperless → Paperless, home-assistant → Home Assistant).
 func title(name string) string {

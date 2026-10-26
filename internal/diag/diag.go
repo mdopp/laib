@@ -49,6 +49,10 @@ type Finding struct {
 	Unmeasured bool `json:"unmeasured,omitempty"`
 	// Aufgabe: the open Box-Aufgabe that covers it (#667).
 	Aufgabe int `json:"aufgabe,omitempty"`
+	// Effect and Undo: what the repair does to the household and how it is
+	// undone, in German, for its Inbox card (#759: a device restarts).
+	Effect string `json:"effect,omitempty"`
+	Undo   string `json:"undo,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -165,7 +169,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
 		}
 	}
-	for _, f := range append(servicebayFindings(env, st, sec), deviceFindings(env, st)...) { // #665: ServiceBay's data dir, until it goes; device-held secrets
+	for _, f := range append(servicebayFindings(env, st, sec), append(deviceFindings(env, st), keyFindings(st, sec)...)...) { // #665: ServiceBay's data dir, until it goes; device-held secrets
 		if only == "" || f.Service == only { // laib repair servicebay <svc> asks for one service
 			out = append(out, f)
 		}

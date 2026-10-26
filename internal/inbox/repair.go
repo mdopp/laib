@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
@@ -37,6 +38,9 @@ func Repairable(st *state.State, argv []string) bool {
 			}
 		}
 		return false
+	}
+	if len(argv) == 2 && argv[0] == "flash" { // #759: a service with a flash unit, which writes firmware onto a device
+		return st.Services[argv[1]] != nil && slices.Contains(st.Services[argv[1]].Oneshots(), argv[1]+"-flash.service")
 	}
 	return len(argv) == 2 && argv[0] == "restart" && st.Services[argv[1]] != nil
 }

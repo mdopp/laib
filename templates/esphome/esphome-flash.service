@@ -1,0 +1,19 @@
+# The house persona's wake word onto the ESPHome devices (#759): only `laib flash esphome`
+# starts this, after a human approved the repair Stimme's status names in the Inbox (laib
+# repair status stimme); no install section and no timer, so apply and restart never do. The host
+# copies Stimme's trained model next to the device YAMLs (the container mounts only /config),
+# then esphome-flash.py edits each device's micro_wake_word and compiles and uploads it over
+# the air. A failed run leaves the unit failed: laib diag names it, laib logs esphome says why.
+[Unit]
+Description=ESPHome: the house persona's wake word onto the devices (after the owner's approval)
+After=esphome.service
+
+[Service]
+Type=oneshot
+Environment=WAKE_ID=${PERSONA_WAKEWORD}
+ExecStartPre=/usr/bin/podman unshare mkdir -p ${DATA_DIR}/esphome/config/models
+ExecStartPre=/usr/bin/podman unshare cp -f ${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.tflite ${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.json ${DATA_DIR}/esphome/config/models/
+StandardInput=file:%h/.config/containers/systemd/esphome/esphome-flash.py
+ExecStart=/usr/bin/podman exec -i -e WAKE_ID systemd-esphome python3 -
+# a Voice PE build from its cache takes minutes, a first one longer
+TimeoutStartSec=45min

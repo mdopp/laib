@@ -327,6 +327,38 @@ func Start(ctx context.Context, env *cli.Env, args []string) int {
 	return units(ctx, env, "start", args)
 }
 
+// Flash is `laib flash <service>` (#759, destroy, humans only; laib repair
+// proposes it): it starts the service's <service>-flash.service, which
+// writes firmware onto a device, after a snapshot of the service, and
+// answers at once. The unit's result is laib diag's and laib logs'; what
+// the device runs afterwards, the template's status measures.
+func Flash(ctx context.Context, env *cli.Env, args []string) int {
+	if len(args) != 1 {
+		return env.Fail(errors.New("usage: laib flash <service>   (laib repair schlägt es vor, ein Mensch gibt es frei)"))
+	}
+	if proposal.Hand(env.Actor) != "human" {
+		return cli.Refused(env, "nur ein Mensch spielt Firmware auf ein Gerät: laib repair schlägt es in der Inbox vor")
+	}
+	st, svc, err := LoadSvc(env, args[0])
+	if err != nil {
+		return env.Fail(err)
+	}
+	unit := svc.Name + "-flash.service"
+	if !slices.Contains(svc.Oneshots(), unit) {
+		return env.Fail(fmt.Errorf("%s hat nichts aufzuspielen (kein %s)", svc.Name, unit))
+	}
+	if code := envelope(ctx, env, st, svc, "flash", unit); code != cli.ExitOK {
+		return code
+	}
+	if _, err := sysd.Run(ctx, "systemctl", "--user", "start", "--no-block", unit); err != nil {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "flash", Service: svc.Name, Result: "red", Detail: unit + ": " + err.Error()})
+		return env.Fail(err)
+	}
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "flash", Service: svc.Name, Result: "info", Detail: unit + " gestartet"})
+	fmt.Fprintf(env.W(), "%s spielt auf (%s): das dauert einige Minuten, das Gerät startet dabei neu. Wie es ausging: laib diag, laib logs %s\n", svc.Name, unit, svc.Name)
+	return cli.ExitOK
+}
+
 // Stop is `laib stop <service> [--until 2h] ["grund"]` (#441): a pause (the
 // service is the caller's; converge leaves it alone, at most a day) and the
 // stop, inside the envelope. A service off for good is `laib remove`.

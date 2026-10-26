@@ -6,6 +6,7 @@ hostNetwork: true
 routes: []
 secrets:
   - name: DNS_API_TOKEN
+    owner: {label: "Zertifikate: Zugang zum DNS-Anbieter", warum: "Damit holt die Box ein Zertifikat für alle Adressen eurer Domain auf einmal und erneuert es selbst.", hilfe: "Nur nötig, wenn die Box ihre Zertifikate über den DNS-Anbieter holt; die Box sagt dir, wenn er fehlt. Bei deSEC unter Token Management ein neues Token anlegen und kopieren.", link: "https://desec.io/tokens"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true               # laib secret set DNS_API_TOKEN; used by the Caddyfile's cert_issuer (dns <provider>, #378)
     optional: true               # only with box.yml dns.provider; HTTP-01 and tls: internal need none
 data:

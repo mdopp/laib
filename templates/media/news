@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Das Jellyfin-Passwort für Home Assistant hinterlegst du auf der Box-Seite, mit einer Anleitung, was es bewirkt
 Startet Jellyfin während eines Updates gerade neu, wartet die Einrichtung kurz, statt abzubrechen
 Das Admin-Passwort von Jellyfin lässt sich jetzt erneuern, ohne dass Filme und Musik ausfallen
 Haus darf in eure Musik schauen und sagt beim Teilen eines Lieds, ob ihr es schon habt

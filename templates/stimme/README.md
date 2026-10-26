@@ -52,14 +52,26 @@ the new phrase. It trains on the CPU (the card holds the household model and
 Whisper; WAKEWORD_DEVICE=gpu to use it), some hours; the GPU lease still
 stops the trainer while a mode needs the whole box.
 
-**On the Voice PE** (once, by hand, in ESPHome): copy `<id>.tflite` and
-`<id>.json` from `stimme/micro` next to the device's YAML, set
-`micro_wake_word: models: - model: <id>.json`, then Install. The next
-`laib apply home-assistant` sees the phrase among the device's
-„Aktivierungswort“ options and selects it; the persona's Assist pipeline
-uses `<id>` as its server wake word only once openWakeWord here offers it
-(a model in `stimme/wakeword`), and none rather than a dead one until then
-(templates/home-assistant, #634).
+**On the Voice PE** (#759): Laib flashes it, once the owner approves. Until a
+satellite offers the phrase, Stimme's status says „Wake-Word „Hey Joshua“
+trainiert, noch nicht auf dem Gerät“, with a repair: `laib repair status
+stimme` puts `laib flash esphome` into the Inbox (a destroy, only a human
+approves it; the card says the speaker restarts and is silent for about two
+minutes). Approved, esphome's `esphome-flash.service` copies `<id>.tflite` and
+`<id>.json` from `stimme/micro` into ESPHome's `models/`, points each device
+YAML's `micro_wake_word` at `<id>.json` (a model of its own from `models/`, a
+persona's from before, goes; upstream's stay; the YAML from before stays beside it as
+`….yaml.laib-vorher`) and compiles and uploads it over the air
+(templates/esphome). Whether the device runs it is measured, not assumed:
+`stimme-names` (every 15 minutes, with `STIMME_HA_TOKEN`) reads the
+satellites' „Aktivierungswort“ selects; once one offers the phrase, it selects
+it there, once, and the status says „auf dem Gerät“. The trainer's own „done“
+says „noch nicht auf dem Gerät“ and marks it unmeasured, so a Box-Aufgabe with
+the befund `status wakeword` closes only on that measurement. home-assistant's
+post-deploy selects the phrase on its next run too; the persona's Assist
+pipeline uses `<id>` as its server wake word only once openWakeWord here
+offers it (a model in `stimme/wakeword`), and none rather than a dead one
+until then (templates/home-assistant, #634).
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says

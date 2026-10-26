@@ -17,7 +17,8 @@ and a person can see where it stands, and the model atomically when done.
 A failed run says why in two registers (#588, #627): a German sentence for
 the family (the step and the kind of failure), and in `einzelheiten` the
 error line and the output's tail for the admin.
-Flashing the model onto the Voice PE stays a separate ESPHome step (README).
+Flashing the model onto the Voice PE is esphome's flash unit, after the owner approves
+(`laib flash esphome`, #759); stimme-names measures whether the device has it.
 
 Stdlib only; TensorFlow lives in the image and is reached through train.py.
 """
@@ -109,15 +110,29 @@ def write_laib_status(out: pathlib.Path, state: str, phrase: str, reason: str, a
     """The status laib shows on the Box page and in diag (#169, #309): written
     when the state changes, so laib reads it fresh and nothing polls. detail
     is for the family; the raw words go only into einzelheiten (#588)."""
-    detail = {"done": f"Wake-Word „{phrase}“ trainiert",
+    detail = {"done": f"Wake-Word „{phrase}“ trainiert, noch nicht auf dem Gerät",
               "training": f"Wake-Word „{phrase}“ wird trainiert (seit {at})",
               "failed": f"Wake-Word „{phrase}“: Training fehlgeschlagen {reason}"}.get(state, f"Wake-Word „{phrase}“ noch nicht trainiert")
     findings = [{"severity": "gelb", "detail": detail, "fix": RETRY, "einzelheiten": einzelheiten}] if state == "failed" else []
+    if state == "done":  # #759: whether the device runs it, stimme-names measures through Home Assistant and writes here
+        findings = [{"severity": "info", "detail": f"Wake-Word „{phrase}“: ob das Gerät es kennt, ist noch nicht gemessen",
+                     "fix": "stimme-names sieht alle 15 Minuten in Home Assistant nach", "topic": "wakeword", "unmeasured": True}]
     out.mkdir(parents=True, exist_ok=True)
     tmp = out / (LAIB_STATUS + ".tmp")
-    tmp.write_text(json.dumps({"at": at, "detail": detail, "einzelheiten": einzelheiten, "findings": findings},
+    tmp.write_text(json.dumps({"at": at, "detail": detail, "einzelheiten": einzelheiten, "findings": findings, "phrase": phrase},
                               ensure_ascii=False) + "\n")
     tmp.replace(out / LAIB_STATUS)
+
+
+def show_done(out: pathlib.Path, phrase: str) -> None:
+    """A model from an earlier run: what stimme-names measured on the device for this phrase stays (#759)."""
+    try:
+        s = json.loads((out / LAIB_STATUS).read_text())
+        if s.get("phrase") == phrase and "geraet" in s:
+            return
+    except (OSError, ValueError):
+        pass
+    write_laib_status(out, "done", phrase, "", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
 
 def show_waiting(out: pathlib.Path, wake_id: str, phrase: str) -> None:
@@ -311,7 +326,7 @@ def main() -> int:
     what = decide(out, phrase, wake_id, rev)
     log.info("wake word %r (%s), persona rev %s: %s", phrase, wake_id, rev, what)
     if what == "done":  # a model from an earlier run, or a phrase that came back
-        write_laib_status(out, "done", phrase, "", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        show_done(out, phrase)
     elif what == "wait":  # the failed run's reason stays what laib shows
         show_waiting(out, wake_id, phrase)
     if what == "train":

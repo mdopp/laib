@@ -302,6 +302,9 @@ func (st *State) validate() []error {
 		declared := map[string]bool{}
 		for _, s := range c.Secrets {
 			declared[s.Name] = true
+			if o := s.Owner; o != nil && (!s.External || s.Mint != "" || o.Label == "" || o.Warum == "" || o.Hilfe == "" || o.Link != "" && !strings.HasPrefix(o.Link, "https://")) {
+				fail("services/%s/laib.yml: %s: owner: wants external, no mint, a label, warum and hilfe, and an https link", name, s.Name)
+			}
 		}
 		if c.OIDC != nil && c.OIDC.ClientID != "" {
 			declared[OIDCSecretName(c.OIDC.ClientID)] = true // generated with the client, referenced by values

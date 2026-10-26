@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -252,6 +253,42 @@ func SecretNames(st *state.State) []state.Secret {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// OwnerSecret is a key the owner brings from outside (#696) and the
+// service whose template asks for it.
+type OwnerSecret struct {
+	Service string
+	state.Secret
+}
+
+// OwnerSecrets: the secrets a template marks owner:, by service, once
+// each; never one another declaration has the box make or mint. A peer
+// box's model key (box.yml model.keySecret, no template) is the owner's too.
+func OwnerSecrets(st *state.State) []OwnerSecret {
+	made := map[string]bool{}
+	for _, d := range SecretNames(st) {
+		made[d.Name] = made[d.Name] || !d.External || d.Mint != ""
+	}
+	var out []OwnerSecret
+	if k := st.Box.Model.KeySecret; k != "" && !made[k] {
+		out = append(out, OwnerSecret{"", state.Secret{Name: k, External: true, Owner: &state.OwnerKey{Label: "Sprachmodell: Schlüssel",
+			Warum: "Damit spricht die Box mit dem Sprachmodell einer anderen Box oder eines Anbieters.", Hilfe: "Derselbe Wert wie MODEL_API_KEY auf der Box mit dem Sprachmodell, oder der API-Schlüssel des Anbieters."}}})
+	}
+	for _, name := range st.ServiceNames() {
+		for _, d := range st.Services[name].Contract.Secrets {
+			if d.Owner != nil && !made[d.Name] && !slices.ContainsFunc(out, func(o OwnerSecret) bool { return o.Name == d.Name }) {
+				out = append(out, OwnerSecret{name, d})
+			}
+		}
+	}
+	return out
+}
+
+// KeyLink is the box page's form for exactly one key (#696): what a
+// finding, or another app's settings, points the owner to.
+func KeyLink(st *state.State, name string) string {
+	return "https://" + fqdn(st, st.Box.Laib.Host) + "/schluessel?name=" + url.QueryEscape(name)
 }
 
 // SecretUsers are the services that reference a secret in a value or

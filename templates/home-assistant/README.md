@@ -51,7 +51,8 @@ persona change applies this hook again.
   offers it (`wake_word/info`); until then the one the preferred pipeline
   had, if openWakeWord offers it; else none, never a wake word nobody can
   say. Stimme's trainer builds a microWakeWord model for the device
-  (templates/stimme): once it is flashed and the satellite's
+  (templates/stimme; `laib flash esphome` puts it on the device after the
+  owner approves, #759): once it is flashed and the satellite's
   „Aktivierungswort“ select offers the persona's phrase, post-deploy selects
   it; until then the device keeps its own.
 - **End of speech.** `VOICE_VAD` (default `default`; `aggressive` cut sentences at a breath) is every satellite's
