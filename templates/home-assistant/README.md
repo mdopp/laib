@@ -273,14 +273,22 @@ sets them through HA's `http/config`, `http/config/configure` and
 #2573). HA restarts into a new HTTP config on trial and reverts an
 unpromoted one after five minutes; post-deploy waits for it and promotes.
 
-Every apply reads the store. When HA already reads `X-Forwarded-For` and
-trusts 127.0.0.1, nothing is written and HA is not restarted; the owner's
-own entries stay (a box from ServiceBay keeps its 127.0.0.1/32 and the
-private ranges ServiceBay added). Otherwise post-deploy turns
-`use_x_forwarded_for` on and adds `127.0.0.1/32` and `::1/128`, nothing
-wider: HA is on the host network, and trusting a LAN range would let any
-device there claim another address in `X-Forwarded-For`. Where it cannot
-set them the apply is red after the other steps ran.
+Laib owns `trusted_proxies` (#729). Every apply reads the store; the
+wanted list is exactly `127.0.0.1/32` and `::1/128` plus the entries of
+`HA_TRUSTED_PROXIES` in values.yml (comma-separated addresses or CIDRs, a
+bare address is a /32; empty by default), with `use_x_forwarded_for` on.
+Anything else in the list is removed: HA is on the host network, and a
+trusted LAN range lets any device there talk to 8123 directly and claim
+another address in `X-Forwarded-For` (and steer the login alerts of
+#703). A box from ServiceBay carries `192.168.0.0/16`, `10.0.0.0/8` and
+`172.16.0.0/12` in that list; its next apply reduces it to loopback, one
+HA restart. When the list already is the wanted set (in any order),
+nothing is written and HA is not restarted. A proxy of the owner's own (a
+second reverse proxy in the LAN) goes into `HA_TRUSTED_PROXIES`, never into
+HA's UI: the next apply would remove it. A value that is no address or
+network is refused: the apply is red, HA's list stays as it is (only
+loopback is added where HA did not trust Caddy at all). Where post-deploy
+cannot set them the apply is red after the other steps ran.
 
 **Why it is off by default:** HA bans by address, and the box's own
 consumers (the check, Haus, the Bote, Stimme) all come from 127.0.0.1. A
