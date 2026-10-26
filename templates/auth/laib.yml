@@ -44,6 +44,7 @@ secrets:
     external: true
     optional: true
   - name: AUTHELIA_SMTP_PASSWORD      # the mail server's login (#359): laib secret set, carried from ServiceBay's notifications.email
+    owner: {label: "E-Mail-Versand: Passwort des Postfachs", warum: "Damit schickt die Anmeldung Mails, etwa den Link, mit dem jemand ein vergessenes Passwort neu setzt.", hilfe: "Das Passwort des Postfachs, das die Box als Absender nutzt; bei Gmail oder GMX dort ein eigenes App-Passwort anlegen und das hier einfügen."}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true                    # no mail server: resets land in a file, and diag says so
 after: []

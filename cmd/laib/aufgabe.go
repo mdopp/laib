@@ -19,7 +19,7 @@ import (
 
 // cmdAufgabe: `laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W]
 // [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"] | erledigt <id>
-// | zurueckstellen <id> <JJJJ-MM-TT>` (#667): the box's to-do list in the
+// | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"` (#667, #759): the box's to-do list in the
 // state repo's aufgaben.yml. Bookkeeping, not a change of the box: no
 // proposal, one commit and one journal line per change. ops, claude, Haus
 // and humans add; humans, claude and Haus (for an admin, --von) check off
@@ -38,7 +38,7 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			pos = append(pos, a)
 		}
 	}
-	usage := errors.New(`usage: laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>`)
+	usage := errors.New(`usage: laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"`)
 	if len(pos) == 0 {
 		return env.Fail(usage)
 	}
@@ -98,14 +98,17 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(aufgaben.Befund(b))
 		}
 		a = aufgaben.Aufgabe{Titel: strings.TrimSpace(pos[1]), Warum: val["--warum"], Erinnern: val["--erinnern"], Befund: val["--befund"]}
-	case "erledigt", "zurueckstellen":
+	case "erledigt", "zurueckstellen", "befund":
 		pos = append(pos, "", "")
 		id, err := strconv.Atoi(strings.TrimPrefix(pos[1], "#"))
 		day := cmp.Or(pos[2], val["--erinnern"])
-		if err != nil || pos[3] != "" || act == "erledigt" && day != "" || act == "zurueckstellen" && day == "" {
+		if err != nil || pos[3] != "" || act == "erledigt" && day != "" || act != "erledigt" && day == "" {
 			return env.Fail(usage)
 		}
-		a.ID, a.Erinnern = id, day
+		if act == "befund" && aufgaben.Befund(pos[2]) != nil { // #759: a task added without one, linked afterwards
+			return env.Fail(aufgaben.Befund(pos[2]))
+		}
+		a.ID, a.Erinnern, a.Befund = id, day, pos[2]
 	default:
 		return env.Fail(usage)
 	}
@@ -118,6 +121,9 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 		case "erledigt":
 			err = aufgaben.Done(list, a.ID, by, "", now)
 			msg, detail = fmt.Sprintf("Box-Aufgabe #%d erledigt.", a.ID), fmt.Sprintf("erledigt #%d", a.ID)
+		case "befund":
+			err = aufgaben.Link(list, a.ID, a.Befund)
+			msg, detail = fmt.Sprintf("Box-Aufgabe #%d schließt Laib, wenn der Befund %s weg ist.", a.ID, a.Befund), fmt.Sprintf("befund #%d %s", a.ID, a.Befund)
 		case "zurueckstellen":
 			err = aufgaben.Defer(list, a.ID, a.Erinnern)
 			msg, detail = fmt.Sprintf("Box-Aufgabe #%d zurückgestellt bis %s.", a.ID, a.Erinnern), fmt.Sprintf("zurueckstellen #%d bis %s", a.ID, a.Erinnern)

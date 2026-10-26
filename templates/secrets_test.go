@@ -48,3 +48,45 @@ func TestSecretsTheServiceWorksWithoutAreOptional(t *testing.T) {
 		}
 	}
 }
+
+// #696: exactly the keys the owner brings from outside say owner: and so
+// appear on the key page, each with its German label, warum and hilfe. A
+// token a hook mints, a Laib token or a generated secret never does: the
+// owner must not set it.
+func TestOnlyTheOwnersKeysSayOwner(t *testing.T) {
+	want := map[string]bool{
+		"haus/HAUS_DISCOGS_KEY": true, "haus/HAUS_DISCOGS_SECRET": true, "haus/HAUS_PAPERLESS_TOKEN": true,
+		"caddy/DNS_API_TOKEN": true, "auth/AUTHELIA_SMTP_PASSWORD": true, "paperless/PAPERLESS_MAIL_PASSWORD": true,
+		"bote/BOTE_MODEL_KEY": true, "bote/BOTE_TELEGRAM_TOKEN": true, "bote/BOTE_DISCORD_TOKEN": true, "bote/BOTE_MATRIX_TOKEN": true,
+		"media/JELLYFIN_HA_PASSWORD":        true,
+		"werkstatt/CLAUDE_CODE_OAUTH_TOKEN": true, "werkstatt/WERKSTATT_GIT_TOKEN": true, "werkstatt/WERKSTATT_PI_GIT_TOKEN": true,
+	}
+	files, _ := filepath.Glob("*/laib.yml")
+	for _, f := range files {
+		b, _ := os.ReadFile(f)
+		var c struct {
+			Secrets []struct {
+				Name     string            `yaml:"name"`
+				External bool              `yaml:"external"`
+				Mint     string            `yaml:"mint"`
+				Owner    map[string]string `yaml:"owner"`
+			} `yaml:"secrets"`
+		}
+		if err := yaml.Unmarshal(b, &c); err != nil {
+			t.Fatal(f, err)
+		}
+		for _, s := range c.Secrets {
+			key := filepath.Dir(f) + "/" + s.Name
+			switch {
+			case want[key] != (s.Owner != nil):
+				t.Errorf("%s: owner: %v, want %v", key, s.Owner != nil, want[key])
+			case s.Owner != nil && (!s.External || s.Mint != "" || s.Owner["label"] == "" || s.Owner["warum"] == "" || s.Owner["hilfe"] == ""):
+				t.Errorf("%s: an owner's key is external, not minted, with label, warum and hilfe: %+v", key, s)
+			}
+			delete(want, key)
+		}
+	}
+	for k := range want {
+		t.Errorf("%s is not declared", k)
+	}
+}

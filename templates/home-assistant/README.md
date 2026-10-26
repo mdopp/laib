@@ -25,7 +25,7 @@ as the conversation agent is not clicked together: post-deploy adds Home
 Assistant's Ollama integration on `FRAGE_URL` (default
 `http://127.0.0.1:8710`, Frage speaks Ollama's `/api/tags` and `/api/chat`)
 and its conversation agent "Frage" (model `frage`, no HA tools: HA's own
-intents answer commands), once Frage answers there (#491). HA 2026.10 has no
+intents answer commands; its prompt names the devices, #760 below), once Frage answers there (#491). HA 2026.10 has no
 built-in integration for an OpenAI server with its own URL; Solaris took the
 same path for `conversation.solaris`. Which Assist pipeline uses Frage stays
 the owner's choice, unless a pipeline's agent is gone (above); a pipeline
@@ -51,7 +51,8 @@ persona change applies this hook again.
   offers it (`wake_word/info`); until then the one the preferred pipeline
   had, if openWakeWord offers it; else none, never a wake word nobody can
   say. Stimme's trainer builds a microWakeWord model for the device
-  (templates/stimme): once it is flashed and the satellite's
+  (templates/stimme; `laib flash esphome` puts it on the device after the
+  owner approves, #759): once it is flashed and the satellite's
   „Aktivierungswort“ select offers the persona's phrase, post-deploy selects
   it; until then the device keeps its own.
 - **End of speech.** `VOICE_VAD` (default `default`; `aggressive` cut sentences at a breath) is every satellite's
@@ -72,6 +73,44 @@ each satellite is on the pipeline. One line in the status, e.g. „Sprache:
 lokale Befehle aktiv (HassGetCurrentTime in 40 ms) · Weckwort nur am Gerät,
 bis hey_joshua da ist“. It does not measure the microphone, the end of
 speech or Whisper: a spoken test on the device does.
+
+## The names as Whisper writes them (#760)
+
+„Schalte Sofa-Licht aus“ was heard right and missed HA's own intents: the
+light is named „Sofalicht“, and an intent matches a name or an alias,
+not another spelling of it. Whisper writes a German compound
+hyphenated or split, whatever its initial prompt says.
+
+- **The aliases.** `home-assistant-names.py` (its timer every 15 minutes,
+  post-deploy once per apply, with `HA_NAMES_TOKEN`) gives every entity
+  exposed to Assist the other spellings of each compound in its name and
+  its aliases: „Sofalicht“ → „Sofa-Licht“, „Sofa Licht“; „Sofa-Licht“ →
+  „Sofalicht“, „Sofa Licht“. A compound is a word ending in one of the
+  device nouns in the script's `SUFFIXES` (Licht, Lampe, Leuchte,
+  Strahler, Kette, Leiste, Dimmer, Steckdose, Stecker, Schalter, Rollo,
+  Rollladen, Jalousie, Markise, Heizung, Thermostat, Fenster, Tür,
+  Ventilator, Lüfter, Radio, Lautsprecher, Fernseher, and their plurals)
+  after at least three letters with a vowel; the longest noun decides. Two
+  words are never joined („Rote Lampe“ stays), nothing else is guessed: a
+  name the rule does not split gets an alias by hand (Einstellungen →
+  Sprachassistenten → Freigeben → the entity → Aliase).
+- **Only its own.** The owner's aliases are never changed or removed. What
+  Laib added is listed in `.laib-aliases.json` in HA's config folder; only
+  those are updated (a renamed entity) or removed (no longer exposed). One
+  the owner deletes is remembered and not added again. HA's logbook names
+  „Laib-Namen“ for each change.
+- **Stimme** counts „Sofa-Licht“ and „Sofalicht“ as one name in Whisper's
+  initial prompt: the spellings cost its 200 tokens nothing.
+- **A command that still misses** goes to Frage. Frage's prompt carries a
+  line „Geräte: …“, a template HA renders on each request with the names of
+  what Assist switches (lights, switches, covers, …); Frage answers a
+  sentence shaped like a command („Schalte …“, „… aus“) without a search:
+  „„Sofa-Dicht“ kenne ich nicht. Meinst du „Sofalicht“?“, or „… habe ich
+  nicht gefunden: welches Gerät meinst du?“. It never switches (ADR 0015).
+  post-deploy sets that prompt on the agent Frage when it has Laib's old
+  one; a prompt the owner wrote stays, and Frage names no nearest device
+  then. The agent gets no LLM API on purpose: with one, HA hands its
+  GetState and media intents to the agent instead of answering them itself.
 
 ## Its home comes from box.yml zuhause (#561)
 
@@ -108,6 +147,7 @@ that only post-deploy uses:
 | `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
 | `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |
 | `STIMME_HA_TOKEN` | „Stimme“ (`stimme`, `HA_STIMME_PASSWORD`) | no | Stimme's `stimme-names`: the entity, area and floor registries, which every user may list, for the names Whisper hears |
+| `HA_NAMES_TOKEN` | „Laib-Namen“ (`laib-namen`, `HA_NAMES_PASSWORD`) | yes: `config/entity_registry/update` is admin-only | `home-assistant-names`: the spellings Whisper writes, as aliases (#760, below) |
 
 Each token is named `laib: <consumer>` under its user's Security tab and
 revocable on its own. A user that is missing is created through HA's API

@@ -14,6 +14,8 @@ Environment=WYO_WHISPER_INITIAL_PROMPT_FILE=/config/laib-names.txt
 # required: Quadlet passes an optional "-" to podman --env-file as part of the path (#557); llama's pre-start writes the file
 EnvironmentFile=${VOICE_ENV}
 Volume=${DATA_DIR}/stimme/whisper:/config:z
+# Stimme's status: stimme-names writes whether the devices run the persona's wake word (#759)
+Volume=${DATA_DIR}/stimme/micro:/micro:z
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 AutoUpdate=registry

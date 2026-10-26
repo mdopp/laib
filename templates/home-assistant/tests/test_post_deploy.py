@@ -20,9 +20,11 @@ ADMIN_SECRETS = ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
 # #591: each consumer on its own Home Assistant user, never a person's: (username, kind)
 MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HAUS_HA_TOKEN": ("haus", "admin"),
             "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user"),
-            "STIMME_HA_TOKEN": ("stimme", "user")}   # the names Whisper hears: the entity registry, every user may list it
+            "STIMME_HA_TOKEN": ("stimme", "user"),   # the names Whisper hears: the entity registry, every user may list it
+            "HA_NAMES_TOKEN": ("laib-namen", "admin")}   # #760: the spellings Whisper writes, as aliases: entity_registry/update is admin-only
 PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HAUS_PASSWORD": "-ha-haus-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
-             "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d", "HA_STIMME_PASSWORD": "-ha-stimme-pw-6e"}
+             "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d", "HA_STIMME_PASSWORD": "-ha-stimme-pw-6e",
+             "HA_NAMES_PASSWORD": "-ha-names-pw-7f"}
 HA = {}
 MA = {}
 
@@ -74,7 +76,8 @@ def save():
     if HA["storage"]:
         Path(HA["storage"]).parent.mkdir(parents=True, exist_ok=True)
         Path(HA["storage"]).write_text(json.dumps({"version": 1, "minor_version": 5, "key": "core.config_entries",
-                                                   "data": {"entries": [{k: v for k, v in e.items() if k != "state"} for e in HA["entries"]]}}))
+                                                   "data": {"entries": [dict({k: v for k, v in e.items() if k != "state"}, subentries=HA["subentries"].get(e["entry_id"], []))
+                                                                    for e in HA["entries"]]}}))
 
 
 def save_auth(data_dir):
@@ -287,6 +290,7 @@ class FakeHA(BaseHTTPRequestHandler):
                 return self.reply(200, {"type": "abort", "flow_id": "of1", "reason": "already_configured"})
             e = {"entry_id": f"e-ollama-{len(HA['entries'])}", "domain": "ollama", "title": url, "data": {"url": url}}
             HA["entries"].append(e)
+            save()
             return self.reply(200, {"type": "create_entry", "flow_id": "of1", "result": {k: e[k] for k in ("entry_id", "domain", "title")}})
         if self.path == "/api/config/config_entries/subentries/flow":
             eid, kind = b["handler"]
@@ -295,8 +299,19 @@ class FakeHA(BaseHTTPRequestHandler):
             if HA["not_loaded"]:
                 HA["not_loaded"] -= 1
                 return self.reply(200, {"type": "abort", "flow_id": "sf0", "reason": "entry_not_loaded"})
+            if b.get("subentry_id"):   # config_entries.py SubentryManagerFlowIndexView: a subentry_id makes it a reconfigure
+                HA["flows"]["sf2"] = (eid, b["subentry_id"])
+                return self.reply(200, {"type": "form", "flow_id": "sf2", "handler": [eid, "conversation"], "step_id": "set_options"})
             HA["flows"]["sf1"] = eid
             return self.reply(200, {"type": "form", "flow_id": "sf1", "handler": [eid, "conversation"], "step_id": "set_options"})
+        if self.path == "/api/config/config_entries/subentries/flow/sf2":   # ollama's set_options: async_update_and_abort
+            eid, sid = HA["flows"].pop("sf2")
+            sub = next(s for s in HA["subentries"][eid] if s["subentry_id"] == sid)
+            if "name" in b or "model" not in b:
+                return self.reply(400, {"message": "extra keys not allowed" if "name" in b else "required key not provided @ data['model']"})
+            sub["data"] = b
+            save()
+            return self.reply(200, {"type": "abort", "flow_id": "sf2", "reason": "reconfigure_successful"})
         if self.path == "/api/config/config_entries/subentries/flow/sf1":
             eid = HA["flows"].pop("sf1")
             sub = {"subentry_id": f"s{len(HA['subentries'].get(eid, []))}", "subentry_type": "conversation", "title": b["name"],
@@ -305,6 +320,7 @@ class FakeHA(BaseHTTPRequestHandler):
             ent = "conversation." + b["name"].lower()   # the agent is an entity of the entry (#540: a pipeline names it)
             HA["registry"].append({"entity_id": ent, "config_entry_id": eid, "platform": "ollama", "disabled_by": None})
             HA["states"][ent] = {"state": "unknown"}
+            save()
             return self.reply(200, {"type": "create_entry", "flow_id": "sf1", "title": b["name"]})
         self.reply(404)
 
@@ -417,6 +433,17 @@ class FakeHA(BaseHTTPRequestHandler):
         # every user may read these (HA: no require_admin; the check's token is no administrator)
         if t == "config/entity_registry/list":
             return ok(HA["registry"])
+        if t == "get_states":
+            return ok([dict(v, entity_id=k) for k, v in HA["states"].items()])
+        if t == "config/entity_registry/get_entries":   # extended_dict: aliases with None for the entity's own name (2026.10)
+            return ok({e: next(({"aliases": r.get("aliases", [])} for r in HA["registry"] if r["entity_id"] == e), None) for e in m["entity_ids"]})
+        if t == "config/entity_registry/update":   # @require_admin (config/entity_registry.py)
+            if not is_admin(uid):
+                return err("unauthorized", "Unauthorized")
+            r = next(r for r in HA["registry"] if r["entity_id"] == m["entity_id"])
+            r["aliases"] = m["aliases"]
+            HA.setdefault("alias_updates", []).append((username(uid), m["entity_id"], m["aliases"]))
+            return ok({"entity_entry": r})
         if t == "assist_pipeline/pipeline/list":
             pref = HA["preferred"] or (HA["pipelines"][0]["id"] if HA["pipelines"] else None)
             return ok({"pipelines": HA["pipelines"], "preferred_pipeline": pref})
@@ -602,10 +629,10 @@ class PostDeploy(Hook):
         self.assertEqual(HA["core"].get("time_zone"), "Europe/Berlin")
         self.assertEqual(set(handed), set(MACHINES))
         self.assertOnItsOwnUser(handed)
-        self.assertEqual(len({handed[n] for n in handed}), 5, "one token per consumer, each revocable on its own")
+        self.assertEqual(len({handed[n] for n in handed}), 6, "one token per consumer, each revocable on its own")
         laib = HA["creds"]["laib"][1]
         self.assertFalse([n for t, n in HA["names"].items() if n[0] == laib], "a consumer's token on the administrator's own user (#591)")
-        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote", "Stimme"})
+        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote", "Stimme", "Laib-Namen"})
         bote = HA["tokens"][handed["BOTE_HA_TOKEN"]]
         self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user", "the Bote's token must not be an administrator's")
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
@@ -671,7 +698,7 @@ class PostDeploy(Hook):
         owner, old = old_box()
         p, handed, log = self.run_hook(tokens=old)
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(set(handed), {"HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "STIMME_HA_TOKEN", "HA_RETIRED_TOKENS"}, log)
+        self.assertEqual(set(handed), {"HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "STIMME_HA_TOKEN", "HA_NAMES_TOKEN", "HA_RETIRED_TOKENS"}, log)
         self.assertOnItsOwnUser(handed)
         for name, tok in old.items():
             self.assertIn(tok, HA["tokens"], f"the old {name} revoked before its consumer had the new one")
@@ -723,7 +750,7 @@ class PostDeploy(Hook):
             self.assertNotIn("Haus“", log, "Laib's own users listed as strangers")
             self.assertNotIn(secret, log)
             self.assertNotIn("k-" + secret, log)
-        self.assertEqual(len(HA["users"]), users + 4, "a user deleted, or more than Laib-Prüfung, Haus, Bote-Automat and Stimme added")
+        self.assertEqual(len(HA["users"]), users + 5, "a user deleted, or more than Laib-Prüfung, Haus, Bote-Automat, Stimme and Laib-Namen added")
         self.assertIn(secret, HA["tokens"])
 
     def test_a_rotation_changes_the_admin_password_in_home_assistant_and_hands_it_back(self):
@@ -813,6 +840,7 @@ class FrageAgent(Hook):
         subs = HA["subentries"][self.ollama()[0]["entry_id"]]
         self.assertEqual([(s["subentry_type"], s["title"], s["data"]["model"]) for s in subs], [("conversation", "Frage", "frage")])
         self.assertNotIn("llm_hass_api", subs[0]["data"], "Frage runs no HA tools: HA's own intents answer commands")
+        self.assertIn("Geräte: {{", subs[0]["data"]["prompt"], "Frage is not told the devices' names (#760)")
         HA["logins"].clear()
         p, _, log = self.run_hook(tokens=handed, frage=self.url)
         self.assertEqual(p.returncode, 0, log)
@@ -828,6 +856,41 @@ class FrageAgent(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(len(self.ollama()), 1)
         self.assertEqual([s["title"] for s in HA["subentries"]["e-hand"]], ["Frage"])
+
+    def agent_on_disk(self, prompt):
+        """an agent Frage from before #760, as HA keeps it in .storage (the hook reads its data there)"""
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        HA["storage"] = os.path.join(self.tmp.name, "home-assistant", "homeassistant", ".storage", "core.config_entries")
+        HA["entries"].append({"entry_id": "e-f", "domain": "ollama", "title": self.url, "data": {"url": self.url}})
+        HA["subentries"]["e-f"] = [{"subentry_id": "s0", "subentry_type": "conversation", "title": "Frage", "unique_id": None,
+                                    "data": {"model": "frage", "prompt": prompt, "keep_alive": -1}}]
+        save()
+
+    def test_an_agent_with_laibs_old_prompt_learns_the_devices_names(self):
+        # #760: a device command HA's intents missed reaches Frage; the prompt's „Geräte:“ line is how it
+        # names the nearest ones. HA renders the prompt as a template, so the names are HA's, each request
+        fresh()
+        self.agent_on_disk("Antworte kurz, auf Deutsch, zum Vorlesen.")
+        p, handed, log = self.run_hook(frage=self.url, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        sub = HA["subentries"]["e-f"][0]
+        self.assertIn("Geräte: {{ states", sub["data"]["prompt"], log)
+        self.assertEqual((sub["data"]["model"], sub["data"]["keep_alive"]), ("frage", -1), "the reconfigure lost the agent's other settings")
+        self.assertNotIn("llm_hass_api", sub["data"], "with an LLM API HA hands GetState and media to the agent, not its intents")
+        self.assertIn("Frage's prompt", log)
+        HA["flows"].clear()
+        p, _, log = self.run_hook(tokens=handed, frage=self.url, data_dir=self.tmp.name)
+        self.assertNotIn("sf2", HA["flows"], "reconfigured again although the prompt is set")
+        self.assertIn("conversation agent Frage is there", log)
+
+    def test_an_owners_own_prompt_stays(self):
+        fresh()
+        self.agent_on_disk("Sei freundlich.")
+        p, _, log = self.run_hook(frage=self.url, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["subentries"]["e-f"][0]["data"]["prompt"], "Sei freundlich.")
+        self.assertIn("the owner's", log)
 
     def test_without_frage_nothing_is_wired_and_the_apply_stays_green(self):
         fresh()
@@ -948,6 +1011,44 @@ class Extensions(Hook):
         HA["calls"].clear()
         p, _, log = self.run_hook(data_dir=self.d)
         self.assertEqual((p.returncode, HA["calls"]), (0, []), "straight is straight: " + log)
+
+
+class Names(Hook):
+    """#760: „Schalte Sofa-Licht aus“ missed HA's intents for a light named „Sofalicht“. post-deploy runs
+    home-assistant-names.py once per apply (its timer every 15 minutes) with the token of HA's user
+    „Laib-Namen“, an administrator: the logbook names the machine that added an alias (#591)."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conf = Path(self.tmp.name, "home-assistant", "homeassistant")
+        self.conf.mkdir(parents=True)
+
+    def test_an_exposed_compound_gets_its_spellings_once(self):
+        fresh()
+        HA["registry"].append({"entity_id": "light.a", "config_entry_id": "e-z", "platform": "zwave_js", "disabled_by": None,
+                               "options": {"conversation": {"should_expose": True}}, "aliases": [None, "Spots"]})
+        HA["states"]["light.a"] = {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}
+        p, handed, log = self.run_hook(data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA.get("alias_updates"), [("laib-namen", "light.a", [None, "Spots", "Sofa-Licht", "Sofa Licht"])], log)
+        self.assertEqual(json.loads((self.conf / ".laib-aliases.json").read_text())["entities"]["light.a"]["added"], ["Sofa-Licht", "Sofa Licht"])
+        p, _, log = self.run_hook(tokens=handed, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(len(HA["alias_updates"]), 1, "a second apply changed the aliases again")
+        self.assertIn("names: as set", log)
+
+    def test_a_failed_run_says_so_and_the_apply_stays_green(self):
+        fresh()
+        HA["registry"].append({"entity_id": "light.a", "config_entry_id": "e-z", "disabled_by": None,
+                               "options": {"conversation": {"should_expose": True}}, "aliases": []})
+        HA["states"]["light.a"] = {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}
+        (self.conf / ".laib-aliases.json").write_text("{not json")
+        p, _, log = self.run_hook(data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("NOT", log)
+        self.assertIsNone(HA.get("alias_updates"))
 
 
 class Stimme(Hook):

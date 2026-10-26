@@ -36,6 +36,7 @@ secrets:
   - name: HA_BOTE_AUTOMAT_PASSWORD   # the user bote-automat's („Bote-Automat“, administrator, #591): the same, for BOTE_AUTOMAT_HA_TOKEN
   - name: HA_MUSIC_ASSISTANT_PASSWORD   # the user music-assistant's („Music Assistant“, administrator, #591): the same, for MUSIC_ASSISTANT_HA_TOKEN
   - name: HA_STIMME_PASSWORD         # the non-admin user stimme's („Stimme“): only post-deploy logs in with it, to mint STIMME_HA_TOKEN
+  - name: HA_NAMES_PASSWORD          # the user laib-namen's („Laib-Namen“, administrator, #760): only post-deploy logs in with it, to mint HA_NAMES_TOKEN
   - name: HA_TOKEN                   # minted for the user laib-pruefung, no administrator: the check reads the integrations and states (#55)
     external: true
     optional: true
@@ -49,6 +50,9 @@ secrets:
     external: true
     optional: true
   - name: STIMME_HA_TOKEN            # minted for the user stimme, no administrator: Stimme reads the names exposed to Assist, Whisper's initial prompt
+    external: true
+    optional: true
+  - name: HA_NAMES_TOKEN             # minted for the user laib-namen, administrator (#760): home-assistant-names adds the spellings Whisper writes as aliases; entity_registry/update is admin-only
     external: true
     optional: true
   - name: MUSIC_ASSISTANT_HA_TOKEN   # minted for the user music-assistant once Music Assistant is there (#526), administrator: MA's plugin reads HA's users for the family's login into MA

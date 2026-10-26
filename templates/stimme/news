@@ -1,5 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+${PERSONA_DISPLAY} merkt sich mehr deiner Geräte, weil „Sofa-Licht“ und „Sofalicht“ nur noch einmal zählen
+Du siehst, ob der Lautsprecher sein Wake-Word schon kennt, und gibst das Aufspielen mit einem Tipp frei
 ${PERSONA_DISPLAY} kennt jetzt alle Namen deiner Geräte, nicht nur die ersten
 ${PERSONA_DISPLAY} lernt die Namen deiner Geräte

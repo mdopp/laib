@@ -26,13 +26,25 @@ It runs inside the Whisper container (stimme-names.service, `podman exec -i …
 python3 -`), the stdlib only, and prints "names changed" only when the file
 changed: the unit restarts Whisper then, and only then. Home Assistant away
 keeps the last names; a refused token fails the unit.
+
+It also looks whether the satellites run the house persona's wake word (#759,
+wake): once the trainer is done, it reads the satellites' wake-word selects
+(HA's translation key wake_word) and writes Stimme's status: „trainiert, noch
+nicht auf dem Gerät“ with the repair that flashes it (`laib flash esphome`, a
+human approves it in the Inbox) until a device offers the phrase, then „auf dem
+Gerät“. A device that offers it for the first time gets it selected, once; a
+later choice by hand stays (home-assistant's post-deploy selects it on its next
+run too). No satellite, or one Home Assistant does not reach, is no
+measurement: the status says so and closes no Box-Aufgabe.
 """
 import base64
 import json
 import os
+import pathlib
 import socket
 import struct
 import sys
+import time
 import urllib.parse
 
 BUDGET = 200   # vocabulary.DEFAULT_PROMPT_MAX_TOKENS: well under Whisper's hard cap of 223
@@ -106,13 +118,15 @@ class WS:
 
 
 def clean(*groups) -> list:
-    """vocabulary.clean_names: in order, whitespace collapsed, each name once (case-insensitive)"""
+    """vocabulary.clean_names: in order, whitespace collapsed, each name once (case-insensitive); „Sofa-Licht“
+    and „Sofa Licht“, the spellings home-assistant adds for „Sofalicht“ (#760), are the same name to Whisper"""
     out, seen = [], set()
     for g in groups:
         for v in g or ():
             name = " ".join(v.split()) if isinstance(v, str) else ""
-            if name and name.lower() not in seen:
-                seen.add(name.lower())
+            key = name.lower().replace("-", "").replace(" ", "")
+            if name and key not in seen:
+                seen.add(key)
                 out.append(name)
     return out
 
@@ -191,6 +205,71 @@ def main(path: str, token: str, connect) -> int:
     return 0
 
 
+FLASH = ["flash", "esphome"]   # the builtin esphome template's flash unit; laib repair offers it only where there is one
+
+
+def wake(connect, micro, wid: str, phrase: str) -> None:
+    """#759: Stimme's status (micro/laib-status.json) once the trainer is done: is the phrase on the satellites?"""
+    def read(name):
+        try:
+            return json.loads((micro / name).read_text())
+        except (OSError, ValueError):
+            return {}
+    done, before = read(f"{wid}.status.json").get("state") == "done" and (micro / f"{wid}.tflite").exists(), read("laib-status.json")
+    if not done:
+        print(f"wake word {wid}: not trained (yet), the trainer's status stays")
+        return
+    had = before.get("auf", []) if before.get("phrase") == phrase else []
+    try:
+        ws = connect()
+        try:
+            reg = ws("config/entity_registry/list") or []
+            states = {s.get("entity_id"): s for s in ws("get_states") or []}
+            on, off, away = [], [], []
+            for r in reg:
+                eid, st = r.get("entity_id", ""), states.get(r.get("entity_id")) or {}
+                if r.get("translation_key") != "wake_word" or r.get("disabled_by") or not eid.startswith("select."):
+                    continue
+                opts = (st.get("attributes") or {}).get("options") or []
+                name = ((st.get("attributes") or {}).get("friendly_name") or eid).removesuffix(" Aktivierungswort").removesuffix(" Wake word")
+                hit = next((o for o in opts if o.casefold() == phrase.casefold()), None)
+                if st.get("state") in (None, "unavailable", "unknown") or not opts:
+                    away.append(name)
+                elif not hit:
+                    off.append(name)
+                else:
+                    on.append((eid, name))
+                    if eid not in had and st.get("state") != hit:   # first offered: the persona's word, once
+                        ws("call_service", domain="select", service="select_option", service_data={"option": hit}, target={"entity_id": eid})
+                        print(f"wake word: {eid} {st.get('state')} -> {hit}")
+        finally:
+            ws.close()
+    except (OSError, RuntimeError, ValueError) as err:
+        print(f"wake word: Home Assistant does not answer ({type(err).__name__}: {err}), the last look stays")
+        return
+    trained = f"Wake-Word „{phrase}“ trainiert, noch nicht auf dem Gerät"
+    findings = []
+    if off:
+        findings.append({"severity": "gelb", "detail": f"{trained} „{', '.join(off)}“", "topic": "wakeword", "repair": FLASH,
+                         "fix": "laib repair status stimme: nach deiner Freigabe in der Inbox spielt Laib es auf",
+                         "effect": f"Laib baut die Firmware des Lautsprechers mit „{phrase}“ neu und spielt sie auf: er startet dabei neu "
+                                   f"und ist etwa 2 Minuten still, danach hört er auf „{phrase}“.",
+                         "undo": "Zurück nur mit einem neuen Aufspielen in ESPHome; seine YAML von vorher liegt daneben (….yaml.laib-vorher)."})
+    if away or not (on or off):
+        findings.append({"severity": "info", "topic": "wakeword", "unmeasured": True, "fix": "Lautsprecher einschalten, in Home Assistant einbinden",
+                         "detail": f"„{', '.join(away)}“ antwortet Home Assistant nicht" if away else "kein Gerät mit Wake-Word in Home Assistant"})
+    detail = f"Wake-Word „{phrase}“ auf dem Gerät „{', '.join(n for _, n in on)}“" if on and not off else trained
+    status = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": detail, "einzelheiten": "", "findings": findings,
+              "phrase": phrase, "geraet": bool(on) and not findings, "auf": [e for e, _ in on]}
+    tmp = micro / "laib-status.json.tmp"
+    tmp.write_text(json.dumps(status, ensure_ascii=False) + "\n")
+    tmp.replace(micro / "laib-status.json")
+    print(f"wake word: {detail}")
+
+
 if __name__ == "__main__":
     base, tok = os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", "")
-    raise SystemExit(main(os.environ.get("NAMES_FILE", "/config/laib-names.txt"), tok, lambda: WS(base, tok)))
+    code = main(os.environ.get("NAMES_FILE", "/config/laib-names.txt"), tok, lambda: WS(base, tok))
+    if tok and os.environ.get("WAKE_ID") and os.path.isdir("/micro"):
+        wake(lambda: WS(base, tok), pathlib.Path("/micro"), os.environ["WAKE_ID"], os.environ.get("WAKE_PHRASE", ""))
+    raise SystemExit(code)
