@@ -45,9 +45,11 @@ type NetMap struct {
 	Links       []NetLink `json:"links"` // a pod to another service over host.containers.internal
 }
 
-// forwardAuth: Caddy imports Authelia for the route (the portal itself never).
+// forwardAuth: Caddy imports Authelia for the route. The SSO service's other
+// routes too (ldap., owner 2026-10-26); only the portal itself never: a
+// portal behind itself is a loop.
 func forwardAuth(st *state.State, svc string, r state.Route) bool {
-	return r.Auth != "none" && svc != st.Box.Roles.SSO
+	return r.Auth != "none" && (svc != st.Box.Roles.SSO || r.Host != portalHost(st))
 }
 
 // rule: Authelia's rule for a name, the one without a path (#487)

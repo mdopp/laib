@@ -581,6 +581,9 @@ jobs:
                 # and a protected route is sent to the portal, not served
                 code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true)
                 echo "https://laib.vm.test/ behind Authelia -> HTTP $code"; [ "$code" = 302 ] || [ "$code" = 401 ]
+                # owner 2026-10-26: ldap. (the LLDAP admin UI, a route of the sso service) asks Authelia too, from the LAN; LLDAP itself would answer 200
+                code=$(curl -s --cacert "$root" --capath "$none" --resolve ldap.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code} %{redirect_url}" https://ldap.vm.test/ || true)
+                echo "https://ldap.vm.test/ logged out, from the LAN -> HTTP $code"; case "$code" in "302 https://auth.vm.test/"*|401*) ;; *) echo "ldap. is not behind Authelia, LLDAP answers itself"; exit 1;; esac
                 # #249: the running Authelia judges the config it loaded: the family is kept off the admin hosts, an admin needs two factors there; the Inbox (laib.) asks two since #441: destructive approvals need the second factor
                 pol() { podman exec systemd-auth-authelia authelia access-control check-policy --url "https://$1.vm.test/" ${2:+--username u --groups "$2"} | sed -n "s/^The policy .\([a-z_]*\). .*/\1/p"; }
                 for c in "ldap family deny" "dns family deny" "laib family deny" "ldap lldap_strict_readonly deny" "ldap admins two_factor" "dns admins two_factor" "laib admins two_factor" "caldav - bypass"; do
