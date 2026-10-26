@@ -60,6 +60,12 @@ func Load(path, keyPath string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Decrypt(enc, keyPath)
+}
+
+// Decrypt is Load's decryption of secrets.age's bytes, e.g. an older one
+// from the state repo's history (#665).
+func Decrypt(enc []byte, keyPath string) (map[string]string, error) {
 	kb, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("age key: %w", err)

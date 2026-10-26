@@ -9,6 +9,7 @@ routes: []
 secrets:
   - name: MQTT_PASSWORD
     login: {user: "${MQTT_USER}", note: "MQTT, Port 1883: die Geräte melden sich damit an"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
+    devices: true                   # the door lock and the sensors hold it: never a rotate repair; after a rotation diag offers laib secret zurueck (#665)
 data:
   - path: ${DATA_DIR}/mosquitto/config
   - path: ${DATA_DIR}/mosquitto/data

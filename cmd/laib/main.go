@@ -79,7 +79,7 @@ func init() {
 		{Name: "ignore", Tier: "propose", Help: "record an unmanaged unit as deliberately unmanaged", Run: cmdIgnore},
 		{Name: "session", Tier: "read", Help: "[<name>]: a token of the hand policy.yml names in your session:, with its ttl, for one session (#380)", Run: cmdSession},
 		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] [--note n] | list | revoke <id> (humans only)", Flags: []string{"--ttl", "--note"}, Run: cmdToken},
-		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME>", Flags: []string{}, Run: cmdSecret},
+		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME> | zurueck <NAME>", Flags: []string{}, Run: cmdSecret},
 		{Name: "disk", Tier: "apply", Help: "status | add <device>: the data RAID; add joins the mirror (humans only)", Run: cmdDisk},
 		{Name: "init", Tier: "apply", Help: "first setup: key, state repo skeleton", Run: cmdInit},
 		{Name: "serve", Tier: "read", Help: "daemon: /ready, the three pages", Run: pages.Serve},

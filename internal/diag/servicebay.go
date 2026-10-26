@@ -24,7 +24,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
@@ -119,28 +118,6 @@ func unseal(key []byte, m [][]byte) []byte {
 var carriedAtMove = []string{"ADGUARD_ADMIN_PASSWORD", "AUTHELIA_STORAGE_KEY", "HA_ADMIN_PASSWORD", "IMMICH_ADMIN_PASSWORD", "IMMICH_DB_PASSWORD",
 	"JELLYFIN_ADMIN_PASSWORD", "LLDAP_ADMIN_PASSWORD", "MQTT_PASSWORD", "PAPERLESS_DB_PASSWORD", "SAMBA_PASSWORD"}
 
-// renewed: the secrets the journal shows set or rotated (not rotated back) since the move.
-// A name's first set is the move's own (carry-servicebay-secrets.sh ran laib secret set),
-// so only a later set counts.
-func renewed(env *cli.Env) map[string]bool {
-	out, seen := map[string]bool{}, map[string]bool{}
-	all, _ := journal.Read(env.Paths.Journal, time.Time{})
-	for _, e := range all {
-		if e.Verb != "secret" {
-			continue
-		}
-		f := strings.Fields(strings.TrimSuffix(e.Detail, ": zurück"))
-		switch {
-		case len(f) >= 3 && f[0] == "secret" && f[1] == "rotate":
-			out[f[2]] = !strings.HasSuffix(e.Detail, ": zurück")
-		case len(f) >= 2 && f[0] == "set":
-			out[f[1]] = seen[f[1]]
-			seen[f[1]] = true
-		}
-	}
-	return out
-}
-
 func servicebayFindings(env *cli.Env, st *state.State, sec map[string]string) []Finding {
 	dir := ServiceBayDir(st)
 	names, unread, err := Carried(dir, sec, 256<<20) // diag runs often: a look, not a scan
@@ -151,17 +128,17 @@ func servicebayFindings(env *cli.Env, st *state.State, sec map[string]string) []
 		return []Finding{{Severity: "gelb", Probe: "servicebay", Detail: "der alte ServiceBay-Ordner " + dir + " ist nicht lesbar (" + err.Error() + "): ob dort noch ein Passwort von heute liegt, ist offen", Unmeasured: true}}
 	}
 	var out []Finding
+	last := lastSecret(env)
 	for _, n := range names {
-		svc, fix, repair := carriedFix(st, n)
+		svc, fix, repair := carriedFix(st, n, last)
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: n + " hat noch den Wert aus ServiceBay, lesbar in " + dir, Fix: fix, Repair: repair})
 	}
 	if unread > 0 {
-		done := renewed(env)
 		for _, n := range carriedAtMove {
-			if slices.Contains(names, n) || done[n] || sec[n] == "" {
+			if slices.Contains(names, n) || last[n] == "rotate" || last[n] == "set" || sec[n] == "" {
 				continue
 			}
-			svc, fix, repair := carriedFix(st, n)
+			svc, fix, repair := carriedFix(st, n, last)
 			out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: fmt.Sprintf("%s kann noch den Wert aus ServiceBay haben: %d Dateien in %s sind für Laib nicht lesbar, und erneuert wurde es seit dem Umzug nicht", n, unread, dir), Fix: fix, Repair: repair})
 		}
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Detail: fmt.Sprintf("%d Dateien in %s hat Laib nicht gelesen (nicht lesbar, oder über 256 MiB): ob dort noch ein Passwort von heute liegt, ist offen; laib servicebay remove liest alles", unread, dir), Unmeasured: true})
@@ -173,12 +150,17 @@ func servicebayFindings(env *cli.Env, st *state.State, sec map[string]string) []
 }
 
 // carriedFix: the service that declares name, the way to rotate it, and the
-// repair a human approves in the Inbox when laib can rotate it itself (#665).
-func carriedFix(st *state.State, name string) (string, string, []string) {
+// repair a human approves in the Inbox when laib can rotate it itself (#665):
+// not one devices hold, nor one whose app refused the last rotation (last).
+func carriedFix(st *state.State, name string, last map[string]string) (string, string, []string) {
 	for _, svc := range st.ServiceNames() {
 		for _, s := range st.Services[svc].Contract.Secrets {
 			switch {
 			case s.Name != name || s.External:
+			case s.Devices:
+				return svc, "die Geräte kennen dieses Passwort: erst erneuern, wenn du jedes Gerät, das sich damit anmeldet, neu einrichten kannst (laib secret rotate " + name + ", dann das neue in jedes Gerät)", nil
+			case last[name] == "refused":
+				return svc, svc + " nimmt das Passwort, das Laib hat, nicht mehr an: in der App von Hand ein neues setzen (als " + name + "s Benutzer), dann laib secret set " + name + " mit demselben Wert und laib apply " + svc, nil
 			case s.DataBound && !s.Rotate:
 				return svc, "in der App ändern, dann laib secret set " + name + " und laib apply " + svc + " (scripts/rotate-carried.sh --wie " + name + ")", nil
 			default:
