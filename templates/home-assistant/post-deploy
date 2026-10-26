@@ -1015,7 +1015,33 @@ def music_assistant():
     print(f"home-assistant: Music Assistant integration signed in again ({ha_flow(tok, dict(flows[0], type='form'))})")
 
 
+def rotate_admin():
+    """#665: `laib secret rotate HA_ADMIN_PASSWORD` hands the new value over as LAIB_ROTATE_HA_ADMIN_PASSWORD.
+    The administrator changes it in Home Assistant itself (HA lets only the owner of a login do that),
+    and it is handed back once HA took it; without the hand-back Laib keeps the old one. Idempotent:
+    a run that finds the new one working already only hands it back."""
+    global PW, session
+    new = E.get("LAIB_ROTATE_HA_ADMIN_PASSWORD", "")
+    if not new or new == PW:
+        return
+    if not login(USER, new):
+        s = login(USER, PW)
+        if not s:
+            red(f"HA_ADMIN_PASSWORD NOT rotated: {USER} cannot log in with the one Laib holds; it stays")
+        ws = WS(s)
+        try:
+            ws("config/auth_provider/homeassistant/change_password", current_password=PW, new_password=new)
+        except RuntimeError as e:
+            red(f"HA_ADMIN_PASSWORD NOT rotated, Home Assistant refused: {e}; the old one stays")
+        finally:
+            ws.close()
+    print("laib-secret: HA_ADMIN_PASSWORD=" + new)
+    print(f"home-assistant: the password of {USER} changed in Home Assistant (laib secret rotate)")
+    PW, session = new, None
+
+
 try:
+    rotate_admin()
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
     red(f"{type(e).__name__}: {e}")

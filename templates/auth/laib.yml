@@ -29,7 +29,8 @@ secrets:
   - name: LLDAP_JWT_SECRET
   - name: LLDAP_ADMIN_PASSWORD
     login: {user: admin, host: ldap, note: "LLDAP, Benutzer und Gruppen"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): post-deploy sets it as the admin over LDAP
   - name: OPERATOR_PASSWORD           # the admin's own first password; change it in LLDAP afterwards
     login: {user: "${OPERATOR_USER}", host: auth, note: "dein Konto für alle Dienste (erstes Passwort, in LLDAP ändern)"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)

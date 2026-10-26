@@ -48,6 +48,21 @@ def red(msg):
     sys.exit(1)
 
 
+# #665: `laib secret rotate` hands a new value over as LAIB_ROTATE_<NAME>; it is handed back once Immich
+# took it, else Laib keeps the old one. The database's: ALTER ROLE through psql in immich-db, over its
+# local socket, from a file in pgdata (never argv, #214); laib takes the hand-back only when psql ran
+# through. Setting the same value again is harmless, so a run after a dropped session just repeats it.
+NEXT_DB = E.get("LAIB_ROTATE_IMMICH_DB_PASSWORD", "")
+if NEXT_DB and NEXT_DB != E.get("LAIB_SECRET_IMMICH_DB_PASSWORD"):
+    sql = os.path.join(E["LAIB_DATA_DIR"], "immich", "pgdata", ".laib-rotate.sql")
+    fd = os.open(sql, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.write(fd, ("ALTER ROLE postgres PASSWORD '" + NEXT_DB.replace("'", "''") + "';\n").encode())
+    os.close(fd)
+    print("laib-exec: systemd-immich-db psql -q -v ON_ERROR_STOP=1 -U postgres -d immich -f /var/lib/postgresql/data/.laib-rotate.sql")
+    print("laib-secret: IMMICH_DB_PASSWORD=" + NEXT_DB)
+    print("laib-exec: systemd-immich-db rm -f /var/lib/postgresql/data/.laib-rotate.sql")
+    print("immich: the database password changes (laib secret rotate); the server takes it with its restart")
+
 for _ in range(300):  # first start: the image, Postgres, the migrations
     try:
         if call("GET", "/api/server/ping")[0] == 200:
@@ -64,6 +79,19 @@ if code == 200 and not info.get("isInitialized"):
     if code not in (200, 201):
         red(f"immich: admin sign-up refused (HTTP {code})")
     print("immich admin created:", EMAIL)
+
+NEXT = E.get("LAIB_ROTATE_IMMICH_ADMIN_PASSWORD", "")   # #665: the admin's, changed by the admin itself
+if NEXT and NEXT != PW:
+    if call("POST", "/api/auth/login", {"email": EMAIL, "password": NEXT})[0] != 201:
+        code, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": PW})
+        if code != 201 or not body or not body.get("accessToken"):
+            red(f"IMMICH_ADMIN_PASSWORD NOT rotated: the admin {EMAIL} cannot log in (HTTP {code}); the old one stays")
+        code, _ = call("POST", "/api/auth/change-password", {"password": PW, "newPassword": NEXT}, token=body["accessToken"])
+        if code not in (200, 201):
+            red(f"IMMICH_ADMIN_PASSWORD NOT rotated: Immich answered {code}; the old one stays")
+    print("laib-secret: IMMICH_ADMIN_PASSWORD=" + NEXT)
+    print("immich: the admin's password changed (laib secret rotate)")
+    PW = NEXT
 
 if not KEY or call("GET", "/api/system-config", key=KEY)[0] != 200:
     token = None

@@ -81,19 +81,40 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		if _, ok := sec[name]; !ok {
 			return env.Fail(fmt.Errorf("no secret %s", name))
 		}
-		external, bound := false, false
+		external, bound, inApp := false, false, false
 		for _, d := range render.SecretNames(st) {
 			if d.Name == name {
-				external, bound = external || d.External, bound || d.DataBound
+				external, bound, inApp = external || d.External, bound || d.DataBound, inApp || d.Rotate
 			}
 		}
 		if external {
 			return env.Fail(fmt.Errorf("%s is external: obtain a new value and use `laib secret set`", name))
 		}
-		if bound { // nothing changes: the old value keeps working (#353)
+		if bound && !inApp { // nothing changes: the old value keeps working (#353)
 			return env.Fail(fmt.Errorf("%s is bound to its app's data: the app reads it only when it creates its data, so a new value here locks it out. Change it inside the app first (its admin page, or ALTER ROLE for a database), then `laib secret set %s` with that same value and `laib apply`", name, name))
 		}
-		touched, code := apply.SetSecret(ctx, env, st, name, secrets.Generate(), "secret rotate "+name)
+		why := "secret rotate " + name
+		set := func(v string) ([]string, int) { // #665: a data-bound one through its hook, inside the app
+			if bound {
+				return apply.RotateInApp(ctx, env, st, name, v, why)
+			}
+			return apply.SetSecret(ctx, env, st, name, v, why)
+		}
+		old, value := sec[name], secrets.Generate()
+		touched, code := set(value)
+		now, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+		switch {
+		case code != cli.ExitOK && now[name] != old: // #665: red after the change rotates back, once
+			fmt.Fprintf(env.Errw(), "laib: %s nach der Rotation rot (%s): zurück auf den alten Wert\n", name, strings.Join(touched, ", "))
+			why = "secret rotate " + name + ": zurück"
+			if _, c := set(old); c != cli.ExitOK {
+				fmt.Fprintf(env.Errw(), "laib: auch zurück rot: laib diag, laib logs %s\n", strings.Join(touched, " "))
+			}
+			return code
+		case code != cli.ExitOK:
+			fmt.Fprintf(env.Errw(), "laib: %s nicht rotiert, der alte Wert gilt weiter: laib logs %s\n", name, strings.Join(touched, " "))
+			return code
+		}
 		fmt.Fprintf(env.W(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
 		return code
 	}

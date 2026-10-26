@@ -6,7 +6,7 @@ setup wizard on :3000 and verify can never go green. Written once: AdGuard
 owns the file afterwards (settings change in its UI and through the API,
 post-deploy syncs the rewrites). schema_version is the current one; AdGuard
 migrates forward, never back, so IMAGE must not be older than the schema."""
-import os, sys
+import os, re, sys
 
 import bcrypt
 
@@ -14,9 +14,29 @@ E = os.environ
 conf_dir = os.path.join(E["LAIB_DATA_DIR"], "adguard", "conf")
 os.makedirs(conf_dir, exist_ok=True)
 conf = os.path.join(conf_dir, "AdGuardHome.yaml")
+user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
+NEXT = E.get("LAIB_ROTATE_ADGUARD_ADMIN_PASSWORD", "")
+if os.path.exists(conf) and NEXT and NEXT != pw:
+    # #665: `laib secret rotate` hands the new value over. AdGuard has no API for its password (ServiceBay
+    # set the user's hash in the file, too), so the hash of the user's entry is replaced here, before the
+    # restart reads it, and only when it is the current one's; handed back then, else Laib keeps the old one
+    text = open(conf).read()
+    m = re.search(r"(?m)^(\s*-\s*name:\s*" + re.escape(user) + r"\s*\n\s*password:\s*)(\S+)[ \t]*$", text)
+    if not m:
+        print(f"ADGUARD_ADMIN_PASSWORD NOT rotated: no user {user} in AdGuardHome.yaml", file=sys.stderr); sys.exit(1)
+    if not bcrypt.checkpw(NEXT.encode(), m.group(2).encode()):
+        if not bcrypt.checkpw(pw.encode(), m.group(2).encode()):
+            print(f"ADGUARD_ADMIN_PASSWORD NOT rotated: {user}'s password in AdGuardHome.yaml is not the one Laib holds "
+                  "(changed in AdGuard's own settings?); the old one stays", file=sys.stderr); sys.exit(1)
+        text = text[:m.start(2)] + bcrypt.hashpw(NEXT.encode(), bcrypt.gensalt(10)).decode() + text[m.end(2):]
+        with open(conf + ".tmp", "w") as f:
+            f.write(text)
+        os.chmod(conf + ".tmp", 0o600)
+        os.replace(conf + ".tmp", conf)
+    print("laib-secret: ADGUARD_ADMIN_PASSWORD=" + NEXT)
+    print(f"AdGuardHome.yaml: {user}'s password changed (laib secret rotate); AdGuard reads it at its restart")
 if os.path.exists(conf):
     print("AdGuardHome.yaml exists; AdGuard owns it"); sys.exit(0)
-user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
 upstreams = E.get("UPSTREAMS", "https://dns.quad9.net/dns-query").split()
 pwhash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt(10)).decode()
 y = ["http:", "  address: 0.0.0.0:8083", "  session_ttl: 720h", "users:", f"  - name: {user}", f"    password: {pwhash}",
