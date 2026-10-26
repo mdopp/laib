@@ -310,6 +310,20 @@ type Secret struct {
 	// Login: the secret is a human's login (#441): the recovery sheet lists
 	// it, `laib recovery-sheet --vaultwarden` exports it with its password.
 	Login *Login `yaml:"login"`
+	// Owner: the owner brings it from outside and sets it on the box page
+	// (#696, „Schlüssel hinterlegen“): only these are offered there, with
+	// the template's German words. Never on a generated or minted one.
+	Owner *OwnerKey `yaml:"owner"`
+}
+
+// OwnerKey is what the key page tells the owner about one key: what it is
+// (label), what it brings the household (warum), where to get it (hilfe,
+// link; ${DOMAIN} in the link is the box's domain).
+type OwnerKey struct {
+	Label string `yaml:"label"`
+	Warum string `yaml:"warum"`
+	Hilfe string `yaml:"hilfe"`
+	Link  string `yaml:"link"`
 }
 
 // Login: user is a literal or ${KEY} of values.yml, host a route host;

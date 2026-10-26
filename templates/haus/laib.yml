@@ -24,6 +24,7 @@ secrets:
     external: true
     optional: true
   - name: HAUS_PAPERLESS_TOKEN     # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search
+    owner: {label: "Paperless: Zugang für die Dokumentensuche", warum: "Damit findet Haus eure Dokumente in Paperless, etwa wenn du den Boten nach einem Vertrag fragst.", hilfe: "In Paperless oben rechts auf deinen Namen → Mein Profil, beim API-Token auf Erzeugen tippen und ihn kopieren. Haus findet dann, was dieses Konto sieht.", link: "https://paperless.${DOMAIN}/"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true
   - name: HAUS_HA_TOKEN            # minted by home-assistant's post-deploy (#349) for HA's own user „Haus“, an administrator (haus#10, #591): Haus serves the house paths from Home Assistant; without HA there are none
@@ -42,9 +43,11 @@ secrets:
     external: true
     optional: true
   - name: HAUS_DISCOGS_KEY         # the household's Discogs app (#696, haus#138): its Consumer-Key, set by the owner on the box page („Schlüssel hinterlegen“); each person connects their own Discogs account in Haus (OAuth)
+    owner: {label: "Discogs: Consumer Key", warum: "Damit kennt die Musik-Wunschliste eure Platten bei Discogs und setzt Wünsche auf eure Discogs-Wunschliste; danach verbindet jede Person in Haus ihr eigenes Konto.", hilfe: "Bei Discogs angemeldet unter Einstellungen → Developers auf „Create an Application“ tippen, als Namen etwa „Haus“ eintragen, speichern und den Consumer Key kopieren.", link: "https://www.discogs.com/settings/developers"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true
   - name: HAUS_DISCOGS_SECRET      # the same Discogs app's Consumer-Secret; without key and secret no Discogs on the music wish list
+    owner: {label: "Discogs: Consumer Secret", warum: "Gehört zum Consumer Key: erst mit beiden gibt es Discogs auf der Musik-Wunschliste.", hilfe: "Steht bei derselben Discogs-App direkt unter dem Consumer Key.", link: "https://www.discogs.com/settings/developers"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true
 data:

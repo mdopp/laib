@@ -140,7 +140,7 @@ func TestNewValuesEdges(t *testing.T) {
 	} {
 		path := filepath.Join(t.TempDir(), "values.yml")
 		os.WriteFile(path, []byte(c.have), 0o644)
-		err := newValues(path, []byte(c.example))
+		err := newValues(path, []byte(c.example), nil)
 		got, _ := os.ReadFile(path)
 		switch {
 		case c.err != "" && (err == nil || !strings.Contains(err.Error(), c.err)):

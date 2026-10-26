@@ -45,6 +45,7 @@ secrets:
     external: true
     optional: true
   - name: PAPERLESS_MAIL_PASSWORD   # the mailbox's password (#521); the owner sets it: laib secret set PAPERLESS_MAIL_PASSWORD, on stdin
+    owner: {label: "Dokumente per Mail: Passwort des Postfachs", warum: "Damit holt Paperless die Dokumente ab, die ihr an das Dokumenten-Postfach schickt.", hilfe: "Das Passwort des Postfachs, das Paperless abruft; bei Gmail oder GMX dort ein eigenes App-Passwort anlegen und das hier einfügen."}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true                  # no mail inbox without PAPERLESS_MAIL_HOST
 requires:                           # a mail inbox needs its user, recipient and password: refused at plan, before anything restarts (#184)

@@ -432,7 +432,18 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 		shipped[e.Name()] = true
 	}
 	if ex, err := fs.ReadFile(u.Template, "values.example.yml"); err == nil {
-		if err := newValues(filepath.Join(dst, "values.yml"), ex); err != nil {
+		var c state.Contract
+		var declared map[string]bool // the new contract's secrets; unknown: nil, nothing goes
+		if b, err := fs.ReadFile(u.Template, "laib.yml"); err == nil && yaml.Unmarshal(b, &c) == nil {
+			declared = map[string]bool{}
+			for _, s := range c.Secrets {
+				declared[s.Name] = true
+			}
+			if c.OIDC != nil {
+				declared[state.OIDCSecretName(c.OIDC.ClientID)] = true
+			}
+		}
+		if err := newValues(filepath.Join(dst, "values.yml"), ex, declared); err != nil {
 			return nil, err
 		}
 	}
@@ -509,8 +520,11 @@ func merge3(cur, base, theirs []byte) ([]byte, bool) {
 // newValues appends to values.yml each key the template's example has and
 // values.yml lacks, as the example's line writes it (#215): a template
 // update never leaves a new placeholder without a value, and what the
-// operator set stays as it is, byte for byte.
-func newValues(path string, example []byte) error {
+// operator set stays as it is, byte for byte. A key the example no longer
+// has whose !secret the new contract does not declare goes (#696: the
+// retired HAUS_DISCOGS_TOKEN): kept, the update would not load. Without
+// declared (nil) nothing goes; a plain value never does.
+func newValues(path string, example []byte, declared map[string]bool) error {
 	have, _ := os.ReadFile(path)
 	var cur, ex yaml.Node
 	if err := yaml.Unmarshal(have, &cur); err != nil {
@@ -522,13 +536,28 @@ func newValues(path string, example []byte) error {
 	if len(ex.Content) == 0 {
 		return nil
 	}
-	known := map[string]bool{}
+	known, inEx, m := map[string]bool{}, map[string]bool{}, ex.Content[0]
+	for i := 0; i < len(m.Content); i += 2 {
+		inEx[m.Content[i].Value] = true
+	}
+	var stale []int
 	if len(cur.Content) > 0 {
-		for i := 0; i < len(cur.Content[0].Content); i += 2 {
-			known[cur.Content[0].Content[i].Value] = true
+		for i := 0; i+1 < len(cur.Content[0].Content); i += 2 {
+			k, v := cur.Content[0].Content[i], cur.Content[0].Content[i+1]
+			known[k.Value] = true
+			if !inEx[k.Value] && declared != nil && v.Tag == "!secret" && !declared[v.Value] {
+				stale = append(stale, k.Line-1)
+			}
 		}
 	}
-	lines, m := strings.Split(string(example), "\n"), ex.Content[0]
+	if len(stale) > 0 {
+		lines := strings.Split(string(have), "\n")
+		for _, i := range slices.Backward(stale) {
+			lines = slices.Delete(lines, i, i+1)
+		}
+		have = []byte(strings.Join(lines, "\n"))
+	}
+	lines := strings.Split(string(example), "\n")
 	var add []byte
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		if k, v := m.Content[i], m.Content[i+1]; !known[k.Value] {
@@ -538,10 +567,10 @@ func newValues(path string, example []byte) error {
 			add = append(add, lines[k.Line-1]+"\n"...)
 		}
 	}
-	if len(add) == 0 {
+	if len(add) == 0 && len(stale) == 0 {
 		return nil
 	}
-	if len(have) > 0 && have[len(have)-1] != '\n' {
+	if len(have) > 0 && have[len(have)-1] != '\n' && len(add) > 0 {
 		have = append(have, '\n')
 	}
 	return os.WriteFile(path, append(have, add...), 0o644)
