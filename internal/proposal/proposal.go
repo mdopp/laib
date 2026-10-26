@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -206,6 +207,21 @@ func CommitDirty(ctx context.Context, repo, actor string) error {
 // truth, never part of a proposal a reject would drop.
 func CommitSecrets(ctx context.Context, repo, why string) error {
 	return CommitPath(ctx, repo, "secrets.age", why, "")
+}
+
+// Before is path as it was before the newest commit on main with this
+// subject (#665: secrets.age before `secret rotate <NAME>`); nil without one.
+func Before(ctx context.Context, repo, path, subject string) ([]byte, error) {
+	log, err := git(ctx, repo, "log", "main", "--format=%H %s", "--", path)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range strings.Split(log, "\n") {
+		if h, s, _ := strings.Cut(l, " "); s == subject { // the raw bytes: Run trims them
+			return exec.CommandContext(ctx, "git", "-C", repo, "show", h+"^:"+path).Output()
+		}
+	}
+	return nil, nil
 }
 
 // CommitPath commits one file on main when it changed, and nothing else:

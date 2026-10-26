@@ -84,7 +84,8 @@ func RotateInApp(ctx context.Context, env *cli.Env, st *state.State, name, value
 	if err != nil {
 		return owners, env.Fail(err)
 	}
-	if _, left := sec[name+".next"]; left {
+	if _, left := sec[name+".next"]; left { // diag then offers the owner's way, not this again (#665)
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "secret", Result: "red", Detail: why + ": von der App nicht übernommen"})
 		if err := pend(ctx, env, name, nil, why+": von der App nicht übernommen"); err != nil {
 			return owners, env.Fail(err)
 		}

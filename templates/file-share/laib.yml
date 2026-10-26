@@ -25,6 +25,7 @@ routes:
     bypass: [/share/, /api/public/, /static/]   # share links and their page stay open; File Browser checks a share's own password
 secrets:
   - name: SAMBA_PASSWORD                # the shared account's, the fallback
+    devices: true                       # the laptops and phones that mount the share hold it (#665)
   - name: FILE_SHARE_LDAP_PASSWORD      # the read-only LLDAP account samba-members.py reads with, seeded by the auth template (#296, #55)
     external: true
 data:
