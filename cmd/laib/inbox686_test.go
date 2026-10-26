@@ -79,7 +79,9 @@ func TestAfterFreigebenTheCardSaysWhatTheBoxDoesUntilDone(t *testing.T) {
 	unlock, _ := apply.TakeLock(env, st, "apply") // the work before it
 	do("POST", fmt.Sprintf("/inbox/%d/approve", p.ID), nil)
 	until(t, "approved", func() bool { got, _ := proposal.Get(cli.InboxDir(env), p.ID); return got.Status == "approved" })
-	body := do("GET", "/inbox", nil)
+	// the carry writes its first step just after the approval: wait for it, not for a fixed moment
+	var body string
+	until(t, "waiting shown", func() bool { body = do("GET", "/inbox", nil); return strings.Contains(body, "wartet, bis") })
 	for _, w := range []string{"wartet, bis die Box mit der Arbeit davor fertig ist", "http-equiv=refresh"} {
 		if !strings.Contains(body, w) {
 			t.Errorf("while it waits the Inbox lacks %q:\n%s", w, body)

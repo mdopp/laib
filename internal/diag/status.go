@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/mdopp/laib/internal/state"
@@ -18,7 +20,14 @@ type Report struct {
 	At       time.Time // the file's "at", else its modification time
 	Findings []Finding
 	Found    bool
+	// Eigenes are the file's further fields, by name, as written (#688);
+	// Gekappt names those left out for EigenesMax.
+	Eigenes map[string]json.RawMessage
+	Gekappt []string
 }
+
+// EigenesMax caps a status file's own fields in one answer, in bytes.
+const EigenesMax = 32 << 10
 
 // ReadStatus reads the service's status file fresh: a file read on every
 // status, /ready and diag, no cache and no watcher. A missing or unreadable
@@ -39,10 +48,24 @@ func ReadStatus(st *state.State, svc *state.Service) Report {
 			Severity, Detail, Fix string
 		} `json:"findings"`
 	}
-	if json.Unmarshal(b, &f) != nil {
+	var all map[string]json.RawMessage
+	if json.Unmarshal(b, &f) != nil || json.Unmarshal(b, &all) != nil {
 		return Report{}
 	}
 	r := Report{Detail: f.Detail, Found: true}
+	n := 0
+	for _, k := range slices.Sorted(maps.Keys(all)) {
+		switch {
+		case k == "at" || k == "detail" || k == "findings":
+		case n+len(k)+len(all[k]) > EigenesMax:
+			r.Gekappt = append(r.Gekappt, k)
+		default:
+			if r.Eigenes == nil {
+				r.Eigenes = map[string]json.RawMessage{}
+			}
+			r.Eigenes[k], n = all[k], n+len(k)+len(all[k])
+		}
+	}
 	if t, err := time.Parse(time.RFC3339, f.At); err == nil {
 		r.At = t
 	} else if fi, err := os.Stat(p); err == nil {

@@ -331,7 +331,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Impact = append(d.Impact, fmt.Sprintf("Achtung: %s bekommt einen eigenen Laib-Schlüssel", HandName(m, true)))
 	}
 	d.Impact = append(d.Impact, p.Facts...)
-	if len(d.Impact) == 0 {
+	if len(d.Impact) == 0 && len(p.News) > 0 { // the headline is what changes (#698)
+		d.Impact = []string{"Für die Familie ändert sich nur, was oben steht."}
+	} else if len(d.Impact) == 0 {
 		d.Impact = []string{"Für die Familie ändert sich nichts Sichtbares."}
 	}
 	if n := len(d.Impact) - impactMax; n > 0 { // short on every phone (#661); the rest is technical

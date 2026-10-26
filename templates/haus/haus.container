@@ -62,6 +62,11 @@ Environment=HAUS_BOTE_KEY=${BOTE_KEY}
 # audiobookshelf's post-deploy, empty without ABS, and then Haus shows no podcast page
 Environment=HAUS_ABS_URL=${ABS_URL}
 Environment=HAUS_ABS_TOKEN=${ABS_TOKEN}
+# the music wish list (#695): Jellyfin as this pod reaches it and the token of its user haus (hidden, the
+# music libraries only, no administrator: API keys have no levels); minted by media's post-deploy, empty
+# without media, and then a wish is never „hast du schon“ nor ticked off by itself
+Environment=HAUS_JELLYFIN_URL=${JELLYFIN_URL}
+Environment=HAUS_JELLYFIN_TOKEN=${JELLYFIN_TOKEN}
 # what the family uses (#266): counts per feature and day, never who, flushed every few minutes to
 # usage-metrics as this pod reaches it; the admins' "Was wird genutzt" card reads it back. Without
 # usage-metrics the token renders empty and Haus counts nothing

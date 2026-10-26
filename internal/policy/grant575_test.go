@@ -20,7 +20,7 @@ func TestDefaultPolicyIsTheOnePlace(t *testing.T) {
 	if err := Validate(p); err != nil {
 		t.Fatal(err)
 	}
-	if !MayVerb(p, "haus", "scan") || !MayVerb(p, "haus", "note") || len(Missing(p, false))+len(Missing(p, true)) != 0 { // note: Haus journals who switched in HA (#591)
+	if !MayVerb(p, "haus", "scan") || !MayVerb(p, "haus", "note") || !MayVerb(p, "haus", "aufgabe") || len(Missing(p, false))+len(Missing(p, true)) != 0 { // note: Haus journals who switched in HA (#591)
 		t.Fatalf("the defaults lack their own verbs: %v", Missing(p, false))
 	}
 	if !Allowed(p, "bote", "propose") || !MayVerb(p, "bote", "note") { // note is propose-tier: the Bote journals who switched in HA (#591)
@@ -39,7 +39,7 @@ func TestMissingOnlyAddsToBuiltInVerbLists(t *testing.T) {
 		"kiosk":  {Ceiling: "read", Verbs: []string{"status"}},  // the owner's hand
 	}}
 	got := Missing(cur, false)
-	if strings.Join(got["haus"], ",") != "journal,restart,person_invite,person_pending,person_signal,calendar,zuhause,scan,note,tell" || strings.Join(got["notify"], ",") != "updates,inbox,note" || len(got) != 2 {
+	if strings.Join(got["haus"], ",") != "journal,restart,person_invite,person_pending,person_signal,calendar,zuhause,scan,note,tell,aufgabe" || strings.Join(got["notify"], ",") != "updates,inbox,note" || len(got) != 2 {
 		t.Fatalf("%v", got)
 	}
 }

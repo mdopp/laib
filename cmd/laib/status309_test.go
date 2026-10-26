@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -119,5 +120,39 @@ func TestLaibStatusPrintsTheTemplatesStatusLine(t *testing.T) {
 	}
 	if !strings.Contains(line, "Passwort-Mails gehen nicht (kein Mailserver)") {
 		t.Fatalf("the whoami line carries the status detail:\n%s", out.String())
+	}
+}
+
+// #688: laib_status for one named service carries its status file's own
+// fields (Haus shows one upload's result); the whole box's answer does not.
+func TestStatusForOneServiceCarriesTheStatusFilesOwnFields(t *testing.T) {
+	c := newCbox(t)
+	svc := filepath.Join(c.env.Paths.State, "services", "whoami")
+	b, _ := os.ReadFile(filepath.Join(svc, "laib.yml"))
+	os.WriteFile(filepath.Join(svc, "laib.yml"), append(b, []byte("status:\n  file: ${DATA_DIR}/whoami/laib-status.json\n")...), 0o644)
+	data := filepath.Join(filepath.Dir(c.env.Paths.State), "data", "whoami")
+	os.MkdirAll(data, 0o755)
+	os.WriteFile(filepath.Join(data, "laib-status.json"), []byte(`{"detail":"Musik-Eingang: bereit","wartet":0,"letzte":[{"eingang":"a.zip","von":"mama"}]}`), 0o644)
+	status := func(args ...string) string {
+		var buf bytes.Buffer
+		if rc := pages.Status(context.Background(), &cliEnv{Paths: c.env.Paths, JSON: true, Out: &buf}, args); rc != cli.ExitOK {
+			t.Fatalf("status rc %d", rc)
+		}
+		return buf.String()
+	}
+	var one struct {
+		Services []struct {
+			Eigenes struct {
+				Wartet *int
+				Letzte []struct{ Eingang, Von string }
+			}
+		}
+	}
+	if out := status("whoami"); json.Unmarshal([]byte(out), &one) != nil || len(one.Services) != 1 || one.Services[0].Eigenes.Wartet == nil ||
+		len(one.Services[0].Eigenes.Letzte) != 1 || one.Services[0].Eigenes.Letzte[0].Von != "mama" {
+		t.Fatalf("one service: its own fields under eigenes:\n%s", out)
+	}
+	if out := status(); strings.Contains(out, "eigenes") {
+		t.Fatalf("the whole box: no service's own fields:\n%s", out)
 	}
 }

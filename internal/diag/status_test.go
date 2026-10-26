@@ -86,3 +86,18 @@ func TestAStaleStatusStartsTheTemplatesCheck(t *testing.T) {
 		t.Error("a status without a check is never refreshed by laib: its service writes it")
 	}
 }
+
+// #688: a status file's further fields are its own, passed on by name;
+// what does not fit the cap is named, never silently missing.
+func TestAStatusFilesOwnFieldsArePassedOnCapped(t *testing.T) {
+	st, svc, p := statusBox(t, "")
+	os.WriteFile(p, []byte(`{"at":"2026-10-26T10:00:00Z","detail":"d","findings":[],"wartet":1,"letzte":[{"eingang":"a.zip","von":"mama","titel":12,"alben":2}]}`), 0o644)
+	r := ReadStatus(st, svc)
+	if len(r.Eigenes) != 2 || string(r.Eigenes["wartet"]) != "1" || !strings.Contains(string(r.Eigenes["letzte"]), `"von":"mama"`) || len(r.Gekappt) != 0 {
+		t.Fatalf("own fields without at, detail, findings: %v %v", r.Eigenes, r.Gekappt)
+	}
+	os.WriteFile(p, []byte(`{"detail":"d","wartet":0,"riesig":"`+strings.Repeat("x", EigenesMax)+`"}`), 0o644)
+	if r := ReadStatus(st, svc); string(r.Eigenes["wartet"]) != "0" || r.Eigenes["riesig"] != nil || len(r.Gekappt) != 1 || r.Gekappt[0] != "riesig" {
+		t.Fatalf("a field over the cap is left out and named: %v %v", r.Eigenes, r.Gekappt)
+	}
+}
