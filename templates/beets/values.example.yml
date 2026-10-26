@@ -4,6 +4,6 @@ AUDIOBOOKS: /mnt/data/stacks/file-share/data/audiobooks   # Audiobookshelf's fol
 MUSIK_MELDEN: "true"              # the Musik-Eingang's message per upload through the Bote; "false": none
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer; empty without the Bote
 MUSIK_BESTAND: "true"             # the one-time sort of the music already there (#727), in chunks; "false": none
-BESTAND_JE_LAUF: "30"             # songs per run (or 25 minutes), a run 20 minutes after the last one ended; MusicBrainz at 1 request per 3 s sets the pace
+BESTAND_JE_LAUF: "30"             # songs per run (or 25 minutes), three runs an hour; MusicBrainz at 1 request per 3 s sets the pace
 BESTAND_GESPROCHEN_VORSCHLAG: "Paul Panzer; Dieter Nuhr; Mario Barth; Rüdiger Hoffmann; Otto Waalkes; Oliver Kalkofe; Mundstuhl; Helge Schneider; Mike Krüger; Monty Python; Bill Cosby; Bernd das Brot; Die Sendung mit der Maus; Augsburger Puppenkiste; Terry Pratchett; Stephen Hawking; Gerhard Schröder; Soundclips"   # music folders that look like spoken word: never sorted as music, proposed for Audiobookshelf (laib status beets)
 BESTAND_GESPROCHEN: ""            # the folders the owner confirmed as spoken word ("A; B"): the next run moves them into AUDIOBOOKS, merged, never over a file

@@ -1,9 +1,10 @@
 [Unit]
-Description=beets: den Musikbestand einsortieren, 20 Minuten nach jeder Etappe (#727)
+Description=beets: den Musikbestand einsortieren, dreimal in der Stunde (#727)
 
 [Timer]
-OnActiveSec=10min
-OnUnitInactiveSec=20min
+# owner 2026-10-26: three runs an hour, start to start; a run still going
+# when the next is due lets that one pass (systemd starts no second)
+OnCalendar=*:00/20
 RandomizedDelaySec=60
 
 [Install]

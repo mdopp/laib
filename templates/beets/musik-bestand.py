@@ -1,7 +1,7 @@
 """The Bestand (#727): the music an earlier run left unsorted is sorted once,
 in the background. It runs inside the beets container (beets-bestand.service,
 `podman exec -i … python3 -` with this file on stdin), from
-beets-bestand.timer 20 minutes after the previous run ended, one run at a
+beets-bestand.timer three times an hour (:00, :20, :40), one run at a
 time (a lock), niced and on idle I/O.
 
 What it sorts: every song in a folder named like „Unbekanntes Album“,

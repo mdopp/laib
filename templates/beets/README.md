@@ -179,8 +179,9 @@ Bestand's overlay is `move: yes`, and what beets skips is not left where it
 was but moved, visibly, into a review folder, `_unklar`: a run that does
 nothing shows as songs in `_unklar`, never as an unchanged tree.
 
-**How it works:** `beets-bestand.timer` starts `beets-bestand.service` 10
-minutes after boot and 20 minutes after each run ended; it runs
+**How it works:** `beets-bestand.timer` starts `beets-bestand.service`
+three times an hour (:00, :20, :40; owner 2026-10-26), a run still going
+lets the next pass; it runs
 `musik-bestand.py` inside the beets container (the script on stdin), one at
 a time (`/config/bestand/lauf.lock`), at nice 19 and on idle I/O, set inside
 the container where beet and fpcalc run.
