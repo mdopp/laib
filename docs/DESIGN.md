@@ -251,8 +251,9 @@ a script that runs on the box (post-deploy, a host unit, an `Exec*` line in
 a container unit), `policy.yml`, `secrets.age`, `ignore.yml`, `box.yml`
 roles and friends, a public route or a weaker login, a path without login,
 hand-written Caddy, a token (`mint`) or an external secret, another
-service's secret, a host folder as a volume, a port opened to the LAN or
-to other machines, `Network=host`, podman arguments and other privileges,
+service's secret, a host folder as a volume or another service's folder
+(#666), a port opened to the LAN or to other machines, `Network=host`,
+podman arguments and other privileges,
 a program from a different image repository, a restriction taken away,
 data taken out of the backup, a removed service, a file Laib does not know,
 a symlink, a state that does not load. Such a proposal is class `human`:

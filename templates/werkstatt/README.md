@@ -4,7 +4,9 @@ The one dev container (docs/DESIGN.md "Werkstatt"). v0 carries what
 ServiceBay's `claude-dev` SSH path carried: a persistent `/workspace` with the
 checkouts, Claude Code, pi, gh, git, tmux and sshd on port 2222 for the
 Claude Code mobile app. Every session gets Laib as an MCP server as the
-`claude` hand.
+`claude` hand. With file-share installed, `/workspace` is also the LAN share
+`\\<box>\werkstatt`, for the LLDAP admins only (#666): what they write there
+is dev's, as Samba hands each new file to its folder's owner.
 
 v1 (issue #8): the autoloop runs as a second container of the same image
 (`werkstatt-autoloop`): pi works tickets labelled `pi:ready` in

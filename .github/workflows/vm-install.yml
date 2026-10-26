@@ -772,7 +772,7 @@ jobs:
           grep -q "^anna [1-9]" "$A/status" || { echo "anna's password was not set"; journalctl --user -u file-share-samba.service --no-pager | tail -20; exit 1; }
           if grep -qF -- "$PW" <<<"$(journalctl --user -u file-share-samba.service --no-pager)"; then echo "the password is in the log"; exit 1; fi
           # smbclient from the samba image, the credentials in a file (-A), as anna
-          smb() { printf 'username=%s\npassword=%s\n' "$1" "$2" > /tmp/smb.cred; rc=0; podman run --rm --network host --security-opt label=disable -v /tmp/smb.cred:/cred:ro -v /etc/hostname:/hn:ro --entrypoint smbclient docker.io/servercontainers/samba:latest //127.0.0.1/data -A /cred -c "$3" >/tmp/smb.out 2>&1 || rc=$?; rm -f /tmp/smb.cred; return $rc; }
+          smb() { printf 'username=%s\npassword=%s\n' "$1" "$2" > /tmp/smb.cred; rc=0; podman run --rm --network host --security-opt label=disable -v /tmp/smb.cred:/cred:ro -v /etc/hostname:/hn:ro --entrypoint smbclient docker.io/servercontainers/samba:latest "//127.0.0.1/${SHARE:-data}" -A /cred -c "$3" >/tmp/smb.out 2>&1 || rc=$?; rm -f /tmp/smb.cred; return $rc; }
           smb anna "$PW" "put /hn anna.txt" || { echo "anna cannot log in with the password from Haus's channel"; cat /tmp/smb.out; exit 1; }
           f=/mnt/data/stacks/file-share/data/anna.txt; test -f "$f"; [ "$(stat -c %U "$f")" = core ] || { echo "anna's file is not core's: $(stat -c %U "$f")"; exit 1; }
           echo "anna logged in with the password set through Haus's channel and wrote anna.txt, owned by core"
@@ -781,6 +781,22 @@ jobs:
           systemctl --user restart file-share-samba.service; sleep 15
           smb anna "$PW" "ls anna.txt" || { echo "anna cannot log in after a samba restart"; cat /tmp/smb.out; exit 1; }
           echo "anna logs in after a restart of samba"
+          # #666: the Werkstatt share is the admins' only. The workspace is dev's (uid 1000 in the
+          # Werkstatt) as its entrypoint makes it; what an admin writes there stays dev's
+          W=/mnt/data/stacks/werkstatt/workspace; test -d "$W"; podman unshare chown 1000:1000 "$W"
+          SHARE=werkstatt smb anna "$PW" "ls" && { echo "anna, family only, opens the werkstatt share"; exit 1; }
+          SHARE=werkstatt smb samba "$(sec laib.file-share.file-share-samba.ACCOUNT_samba)" "ls" && { echo "the shared account opens the werkstatt share"; exit 1; }
+          echo "the werkstatt share refuses anna (family) and the shared account"
+          adm=$(gql '{"query":"{ groups { id displayName } }"}' | grep -o '"id":[0-9]*,"displayName":"admins"' | sed 's/"id":\([0-9]*\).*/\1/'); test -n "$adm"
+          gql "{\"query\":\"mutation { addUserToGroup(userId:\\\"anna\\\", groupId:$adm){ ok } }\"}" >/dev/null
+          systemctl --user restart file-share-samba-members.service
+          for i in $(seq 1 30); do grep -qx anna "$A/admins" 2>/dev/null && break; sleep 2; done
+          grep -qx anna "$A/admins" || { echo "anna, now in admins, is not in samba's admin list"; journalctl --user -u file-share-samba-members.service --no-pager | tail -20; exit 1; }
+          # the group follows within a tick of samba-accounts.sh (30 s)
+          for i in $(seq 1 30); do SHARE=werkstatt smb anna "$PW" "put /hn anna.txt" && break; sleep 2; done
+          test -f "$W/anna.txt" || { echo "anna, an admin, cannot write to the werkstatt share"; cat /tmp/smb.out; journalctl --user -u file-share-samba.service --no-pager | grep "samba: " | tail -10; exit 1; }
+          u=$(podman unshare stat -c %u "$W/anna.txt"); [ "$u" = 1000 ] || { echo "anna's file in the werkstatt share is uid $u in the Werkstatt, not dev's 1000"; exit 1; }
+          echo "anna, an admin, wrote anna.txt to the werkstatt share; it is dev's (uid 1000 in the Werkstatt)"
           # the shared account stays
           smb samba "$(sec laib.file-share.file-share-samba.ACCOUNT_samba)" "ls" || { echo "the shared account no longer logs in"; cat /tmp/smb.out; exit 1; }
           echo "the shared account still logs in"
