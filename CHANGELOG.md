@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.41.1](https://github.com/mdopp/laib/compare/v0.41.0...v0.41.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **pages:** the key page shows each step of the restart after Hinterlegen ([1a8f42b](https://github.com/mdopp/laib/commit/1a8f42bca4e6188803110005d92ffd38d7dd7db7))
+* **pages:** the key page shows each step of the restart after Hinterlegen ([e5601fc](https://github.com/mdopp/laib/commit/e5601fcccfb56d94aaeed7ebd5744b3902cd47d5)), closes [#768](https://github.com/mdopp/laib/issues/768)
+
 ## [0.41.0](https://github.com/mdopp/laib/compare/v0.40.0...v0.41.0) (2026-10-26)
 
 
