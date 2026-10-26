@@ -111,6 +111,40 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   (`lease/laib-status.json`, gelb in `laib status` and diag). A container
   the providing service does not have is still refused at start.
 
+## Images (#697)
+
+Presets that read images: `gemma-4-12b`, `gemma-4-e4b`.
+
+A preset reads images when it has an `mmproj` in `presets.json` (the
+vision projector, from the preset's own repo; post-deploy fetches it,
+pre-start renders `mmproj = /models/…` into `presets.ini`). The others
+are text only here, and the router refuses an `image_url` for them.
+
+| Preset | Weights | mmproj |
+|---|---|---|
+| `gemma-4-12b` | `gemma-4-12B-it-Q4_0.gguf` (7.2 GB) + drafter `mtp-gemma-4-12B-it-Q8_0.gguf` (465 MB) | `mmproj-gemma-4-12B-it-Q8_0.gguf` (159 MB) |
+| `gemma-4-e4b` | `gemma-4-E4B-it-Q4_0.gguf` (4.6 GB) + drafter (99 MB) | `mmproj-gemma-4-E4B-it-Q8_0.gguf` (560 MB) |
+
+Neither is the household model, so a consumer takes a lease for it
+first, sends the images, renews while it works and gives the card back
+(the household model reloads afterwards; `--models-max 1` keeps one model
+loaded). `gemma-4-12b` takes the `shared` window: nothing is stopped,
+the voice stays on the GPU. From a pod, with the model key:
+
+```
+POST host.containers.internal:11435/api/model-lease   {"model":"gemma-4-12b","holder":"haus","ttl_s":900}
+POST ${MODEL_URL}/chat/completions   {"model":"gemma-4-12b","messages":[{"role":"user","content":[
+       {"type":"text","text":"Katalognummer, Label, Künstler, Titel?"},
+       {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,…"}}]}]}
+DELETE host.containers.internal:11435/api/model-lease   {"holder":"haus"}
+```
+
+Without the lease the request is a 409 naming the household model.
+Whether the 12B with its projector, the drafter and a 128k q8_0 cache
+fits the 16 GB card, and how fast it reads a photo, only the box can say:
+an estimate (weights 7.9 GB, KV ~1.3 GB at 128k) leaves room, a measured
+load (`offloaded`, `CUDA0` in the llama log) is the answer.
+
 ## Prompt eval: the knobs and how to measure them (#525)
 
 Qwen 3.6 35B-A3B read prompts at ~270–410 t/s on the Kraftwerk's 16 GB
