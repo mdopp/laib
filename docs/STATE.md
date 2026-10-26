@@ -547,7 +547,8 @@ With `dns.provider` (and no `tls: internal`) Caddy gets **one** certificate
 for `*.<domain>` by DNS-01 and none per name: a new route has a valid
 certificate at once, needs no public DNS record (the LAN finds it through
 AdGuard's `*.<domain>` rewrite), and its name does not appear in the public
-certificate-transparency logs. A name with no route is closed (`abort`).
+certificate-transparency logs. A name with no route proxies nowhere and answers
+a German 404 page with the way to the start page (#480).
 The bare domain gets its own certificate only when a route uses it
 (`redirectFrom: ["@"]`); Caddy keeps one certificate per name, so apex and
 wildcard are two. A two-level name (`a.b.<domain>`) is not under the

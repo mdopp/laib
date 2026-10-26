@@ -12,8 +12,15 @@ port-forward edges in the network map); Laib does not know the router exists.
 Without the forward nothing changes for a LAN-only (`exposure: internal`)
 name: Caddy answers any source outside the private ranges with 403 before
 Authelia. What the person sees is a German page saying the name works only
-in the home WLAN, and a link to Haus, which works on the road (#480). Laib
-has no VPN; that is the "anything else" below.
+in the home WLAN, and a link to Haus, which works on the road (#480). A
+device at home that resolves the public address (Android's Private DNS, a
+browser's secure DNS, iCloud Private Relay) comes back through the router,
+which hands Caddy its public address: the page names the address Caddy saw
+and that cause. Laib has no VPN; that is the "anything else" below.
+
+A service that does not answer (restarting, paused, Authelia down) gets a
+German "antwortet gerade nicht" page with the status Caddy had (502, 503,
+504) instead of an empty 502.
 
 - Once per box: forward TCP 80 and 443 on the router to the box's LAN IP
   (`box.yml lanIp`). Certificates use HTTP-01 (ADR 0007, amendment
