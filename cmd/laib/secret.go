@@ -93,40 +93,8 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		if bound { // nothing changes: the old value keeps working (#353)
 			return env.Fail(fmt.Errorf("%s is bound to its app's data: the app reads it only when it creates its data, so a new value here locks it out. Change it inside the app first (its admin page, or ALTER ROLE for a database), then `laib secret set %s` with that same value and `laib apply`", name, name))
 		}
-		sec[name] = secrets.Generate()
-		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
-			return env.Fail(err)
-		}
-		journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "secret", Result: "info", Detail: "rotate " + name})
-		// Every service that references the secret, or declares it, gets applied.
-		var touched []string
-		for _, svcName := range st.ServiceNames() {
-			svc := st.Services[svcName]
-			uses := false
-			for _, v := range svc.Values {
-				if v.Secret == name {
-					uses = true
-				}
-			}
-			for _, d := range svc.Contract.Secrets {
-				if d.Name == name {
-					uses = true
-				}
-			}
-			if svc.Contract.OIDC != nil && strings.HasPrefix(name, "OIDC_") {
-				uses = true
-			}
-			if uses {
-				touched = append(touched, svcName)
-			}
-		}
+		touched, code := apply.SetSecret(ctx, env, st, name, secrets.Generate(), "secret rotate "+name)
 		fmt.Fprintf(env.W(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
-		code := cli.ExitOK
-		for _, svcName := range st.Order(touched) {
-			if c := apply.ApplyLocked(ctx, env, st, svcName, "secret rotate "+name); c != cli.ExitOK {
-				code = c
-			}
-		}
 		return code
 	}
 	return env.Fail(fmt.Errorf("unknown secret subcommand %q", args[0]))
