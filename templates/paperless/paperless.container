@@ -16,7 +16,27 @@ Environment=PAPERLESS_URL=https://paperless.${DOMAIN}
 Environment=PAPERLESS_CSRF_TRUSTED_ORIGINS=https://paperless.${DOMAIN}
 Environment=PAPERLESS_SECRET_KEY=${SECRET_KEY}
 Environment=PAPERLESS_OCR_LANGUAGE=${OCR_LANGUAGE}
-Environment=PAPERLESS_OCR_MODE=auto
+# redo (#567): 11 of 19 documents kept a scanner's or an upside-down page's letter
+# salad as their text under auto; redo recognises every page again and keeps a
+# born-digital PDF's own text (force rasterises it). Paperless turns deskew off under redo.
+Environment=PAPERLESS_OCR_MODE=${OCR_MODE}
+Environment=PAPERLESS_OCR_ROTATE_PAGES=${OCR_ROTATE_PAGES}
+Environment=PAPERLESS_OCR_DESKEW=${OCR_DESKEW}
+# Paperless' AI (#567): suggestions and the document chat from the household model through
+# the model role's proxy, the embeddings for the chat's index through the same proxy (it
+# hands /v1/embeddings to llama-embed, owner 2026-10-24: no port of its own for pods).
+# post-deploy clears these fields in Paperless' own settings, which would win over these.
+Environment=PAPERLESS_AI_ENABLED=${AI_ENABLED}
+Environment=PAPERLESS_AI_LLM_BACKEND=openai-like
+Environment=PAPERLESS_AI_LLM_ENDPOINT=${MODEL_URL}
+Environment=PAPERLESS_AI_LLM_API_KEY=${MODEL_KEY}
+Environment=PAPERLESS_AI_LLM_MODEL=${AI_MODEL}
+Environment=PAPERLESS_AI_LLM_OUTPUT_LANGUAGE=${AI_LANGUAGE}
+Environment=PAPERLESS_AI_LLM_CONTEXT_SIZE=${AI_CONTEXT}
+Environment=PAPERLESS_AI_LLM_REQUEST_TIMEOUT=${AI_TIMEOUT}
+Environment=PAPERLESS_AI_LLM_EMBEDDING_BACKEND=${AI_EMBED_BACKEND}
+Environment=PAPERLESS_AI_LLM_EMBEDDING_MODEL=${AI_EMBED_MODEL}
+Environment=PAPERLESS_AI_LLM_EMBEDDING_CHUNK_SIZE=${AI_EMBED_CHUNK}
 # a folder in the consume folder is a tag (#521): the Bote files a document as
 # Bote/<sender>/<title>.pdf, so it gets the tags Bote and the sender; a folder
 # copied in over the share or by laib-import is filed and tagged the same

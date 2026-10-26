@@ -2,6 +2,19 @@ IMAGE: ghcr.io/paperless-ngx/paperless-ngx:latest
 DB_IMAGE: docker.io/library/postgres:16
 REDIS_IMAGE: docker.io/library/redis:7
 OCR_LANGUAGE: deu+eng
+OCR_MODE: redo                          # auto kept a scanner's letter salad (#567); force rasterises every PDF; off: no OCR
+OCR_ROTATE_PAGES: "true"                # upside-down and sideways scans
+OCR_DESKEW: "true"                      # crooked scans (Paperless skips it under redo)
+# Paperless' AI (#567): the household model through the model role (MODEL_URL, MODEL_KEY), the
+# embeddings for the document chat through the same proxy. Without a model on the box: "false".
+AI_ENABLED: "true"
+AI_MODEL: qwen3.6-35b-a3b               # the household model: others need a lease Paperless does not take
+AI_LANGUAGE: de                         # the suggestions' language
+AI_CONTEXT: "16384"                     # tokens of a document the model reads
+AI_TIMEOUT: "300"                       # seconds: Qwen on a long document
+AI_EMBED_BACKEND: openai-like           # llama-embed through the proxy; huggingface: on Paperless' CPU
+AI_EMBED_MODEL: nomic-embed-text        # the llama template's EMBED_ALIAS
+AI_EMBED_CHUNK: "300"                   # below llama-embed's 512-token batch, which refuses a longer piece
 CONSUME: /mnt/data/stacks/file-share/data/paperless-consume
 ADMIN_USER: admin
 DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD

@@ -21,8 +21,9 @@ PERMS = ["%s_%s" % (a, m) for m in MODELS for a in ("view", "add", "change", "de
 class Fake:
     """Paperless' mail endpoints: accounts and rules in memory, the test answers ok/refused"""
 
-    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None, groups=None, perms=None):
+    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None, groups=None, perms=None, config=None, fields=None):
         self.accounts, self.rules, self.test_ok, self.calls, self.tested = accounts or [], rules or [], test_ok, [], []
+        self.config, self.fields = config if config is not None else [{"id": 1}], fields if fields is not None else []
         self.tasks, self.queries, self.processed = tasks or [], [], []
         self.groups, self.perms = groups if groups is not None else [], PERMS if perms is None else perms
         fake = self
@@ -47,7 +48,10 @@ class Fake:
                 path, _, query = self.path.partition("?")
                 fake.calls.append((method, path, body))
                 fake.queries.append((path, query, self.headers.get("Accept", "")))
-                coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules, "/api/groups/": fake.groups}
+                coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules, "/api/groups/": fake.groups,
+                        "/api/custom_fields/": fake.fields, "/api/config/": fake.config}
+                if path == "/api/config/" and method == "GET":   # Paperless' settings: one row, a plain list
+                    return self.send(200, fake.config)
                 if path == "/api/ui_settings/" and method == "GET":
                     return self.send(200, {"user": {"id": 1, "username": "admin", "is_superuser": True}, "settings": {}, "permissions": fake.perms})
                 if path == "/api/groups/" and method in ("POST", "PATCH") or path.startswith("/api/groups/") and method == "PATCH":
@@ -323,6 +327,46 @@ class PaperlessMail(unittest.TestCase):
         self.assertTrue(execs)
         for l in execs:
             self.assertIn(" --user paperless ", l)
+
+
+class PaperlessAI(unittest.TestCase):
+    """#567: Paperless' AI and OCR are values. Paperless takes a field of its own settings over the
+    environment, so setup clears the fields the template sets (the owner switched the AI on by hand
+    there, 2026-10-22); the contract fields exist for the family to fill; AI without a model stops."""
+    setUp, run_setup = PaperlessMail.setUp, PaperlessMail.run_setup
+
+    def test_hand_settings_give_way_to_the_values(self):
+        fake = Fake(config=[{"id": 1, "ai_enabled": True, "llm_backend": "openai-like", "llm_api_key": "**********",
+                             "llm_embedding_backend": "huggingface", "mode": "force", "deskew": True,
+                             "rotate_pages": None, "output_type": "pdfa", "barcodes_enabled": True}])
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", "AI_ENABLED": "true", "MODEL_URL": "http://host.containers.internal:11435/v1"}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        patch = [c[2] for c in fake.calls if c[:2] == ("PATCH", "/api/config/1/")]
+        self.assertEqual(patch, [{"ai_enabled": None, "deskew": None, "llm_api_key": None, "llm_backend": None,
+                                  "llm_embedding_backend": None, "mode": None}])
+        # what the template does not set stays the owner's
+        self.assertEqual((fake.config[0]["output_type"], fake.config[0]["barcodes_enabled"]), ("pdfa", True))
+        fake.calls.clear()
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual([c for c in fake.writes() if c[1].startswith("/api/config/")], [])
+
+    def test_the_contract_fields_are_made_once(self):
+        fake = Fake(fields=[{"id": 1, "name": "vertragsnummer", "data_type": "string"}])
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        names = {f["name"]: f["data_type"] for f in fake.fields}
+        self.assertEqual(len(fake.fields), 8, names)   # the hand-made one taken, not doubled
+        self.assertEqual((names["Nächster Kündigungstermin"], names["Betrag"], names["vertragsnummer"]), ("date", "monetary", "string"))
+        fake.calls.clear()
+        self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
+        self.assertEqual([c for c in fake.writes() if c[1] == "/api/custom_fields/"], [])
+
+    def test_ai_without_a_model_stops_before_paperless_is_asked(self):
+        fake = Fake()
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", "AI_ENABLED": "true", "MODEL_URL": ""}, password="")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("AI_ENABLED", r.stderr)
+        self.assertEqual(fake.calls, [])
 
 
 if __name__ == "__main__":

@@ -90,6 +90,13 @@ foundry-chronicle. All address `127.0.0.1:<PORT>` from host services and
   also lists every GGUF file in its models dir, and those are left out. A
   request for a raw file id is a 404 (`model_not_found`) naming the
   presets (#395).
+- **Embeddings through the proxy (#567).** `POST /v1/embeddings` goes to
+  llama-embed (laib-lease's `EMBED_URL`, default `127.0.0.1:11436`),
+  whatever model it names, so a pod (Paperless) embeds at
+  `host.containers.internal:11435` and llama-embed's own port stays on the
+  host's loopback (owner, 2026-10-24: no port opened to pods). While a
+  window that stops `model/embed` stands, it is a 409 naming the holder and
+  the end; an embedding never counts as a person asking (#550).
 - **A pinned llama.cpp (#423).** `IMAGE` is a build tag with its digest
   (`server-cuda-bNNNNN@sha256:…`), and the units have no `AutoUpdate`:
   llama.cpp renames flags between builds (`--draft-max` became
