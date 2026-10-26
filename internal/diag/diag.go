@@ -53,6 +53,9 @@ type Finding struct {
 	// undone, in German, for its Inbox card (#759: a device restarts).
 	Effect string `json:"effect,omitempty"`
 	Undo   string `json:"undo,omitempty"`
+	// Does: what the repair does, the card's headline (#746), when the
+	// status file knows it better than laib (the wake word a flash plays)
+	Does string `json:"does,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -169,8 +172,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
 		}
 	}
-	for _, f := range append(servicebayFindings(env, st, sec), append(deviceFindings(env, st), keyFindings(st, sec)...)...) { // #665: ServiceBay's data dir, until it goes; device-held secrets
-		if only == "" || f.Service == only { // laib repair servicebay <svc> asks for one service
+	for _, f := range append(deviceFindings(env, st), keyFindings(st, sec)...) { // device-held secrets (#665)
+		if only == "" || f.Service == only { // laib repair secret <svc> asks for one service
 			out = append(out, f)
 		}
 	}

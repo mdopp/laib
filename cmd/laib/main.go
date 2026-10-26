@@ -86,7 +86,6 @@ func init() {
 		{Name: "version", Tier: "read", Help: "print the version", Run: cmdVersion},
 		{Name: "self", Tier: "apply", Help: "rollback: the previous binaries back and the units restarted (humans only)", Run: cmdSelf},
 		{Name: "family-card", Tier: "read", Help: "print the one-page card for the family: what the box does, what to do when it is down, whom to call", Run: pages.FamilyCard},
-		{Name: "servicebay", Tier: "destroy", Help: "remove: ServiceBay's old data dir goes, once no secret has a value from it, after a snapshot of it (#665, humans only; laib repair servicebay proposes it)", Run: diag.ServiceBay},
 		{Name: "flash", Tier: "destroy", Help: "<service>: start its <service>-flash.service, which writes firmware onto a device, after a snapshot, and answer at once (#759, humans only; laib repair proposes it)", Run: envelope.Flash},
 		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
 		{Name: "person_invite", Tier: "apply", Help: "<user> --first F --last L --email E [--group family|admins] [--resend] [--signal +49…]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back; --signal proposes the number for box.yml people (`laib person invite`)", Run: cmdPersonInvite},
@@ -174,9 +173,4 @@ func cmdVersion(_ context.Context, env *cliEnv, _ []string) int {
 	}
 	fmt.Fprintln(env.W(), "laib", Version)
 	return 0
-}
-
-func fail(err error) int {
-	fmt.Fprintln(os.Stderr, "laib:", strings.TrimSpace(err.Error()))
-	return 1
 }

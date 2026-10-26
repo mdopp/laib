@@ -57,7 +57,8 @@ class Launcher(unittest.TestCase):
             self.assertEqual(env["PI_WEB_HOST"], "0.0.0.0", "podman forwards to the container's address, not its loopback")
             self.assertEqual(env["PI_WEB_ALLOW_HOSTS"].split(",")[0], "pi.dopp.test")
             self.assertEqual(env["PI_WEB_ALLOW_ORIGINS"], "https://pi.dopp.test")
-            self.assertNotIn("PI_WEB_TOKEN", env, "Authelia is the gate, not a shared password")
+            self.assertEqual(env["PI_WEB_TOKEN"], "", "Authelia is the gate, not a shared password; empty beats a saved one")
+            self.assertEqual(env["PI_WEB_INSECURE_NO_AUTH"], "1", "pi-web-ui makes up a token on 0.0.0.0, and a token lets every Host through (#765)")
             self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", env, "the Claude login reached pi")
             self.assertEqual(env["LAIB_TOKEN_FILE"], "/run/laib/pi-token", "`laib` in pi's shell would speak as claude")
 

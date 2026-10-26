@@ -222,7 +222,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	switch {
 	case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
 		d.Summary = p.News[0]
-	case p.Boxless() && p.Evidence != "": // a repair: the finding it answers (#759)
+	case p.Boxless() && p.Does != "": // a repair: what it does (#746)
+		d.Summary = p.Does
+	case p.Boxless() && p.Evidence != "": // a repair filed before #746: the finding it answers (#759)
 		d.Summary = "Reparieren: " + p.Evidence
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))

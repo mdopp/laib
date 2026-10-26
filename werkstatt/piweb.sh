@@ -10,7 +10,12 @@
 #
 # No PI_WEB_TOKEN: Authelia is the gate, the port is published on the
 # host's loopback only (werkstatt.container), and pi-web-ui refuses a Host
-# that is not pi.<domain> (PI_WEB_ALLOW_HOSTS).
+# that is not pi.<domain> (PI_WEB_ALLOW_HOSTS). Its host check only holds
+# while it has no token (host-guard.js: a token lets every Host through), so
+# since 0.112 (#765) two things keep it off: PI_WEB_INSECURE_NO_AUTH=1, or
+# pi-web-ui makes up a token itself for a non-loopback listener and the
+# allow-list goes with it; and an empty PI_WEB_TOKEN, which beats a token
+# saved in ~/.pi-web/server-config.json by its /setup page.
 set -euo pipefail
 # the entrypoint's values for this process: the domain, the model, the pi hand (0600, /run/laib)
 ENV_FILE="${WERKSTATT_PI_WEB_ENV:-/run/laib/pi-web.env}"
@@ -51,6 +56,7 @@ export PI_WEB_DATA_DIR="$HOME/.pi-web" PI_WEB_ALLOW_HOSTS="$host,127.0.0.1,local
 export LAIB_TOKEN_FILE=/run/laib/pi-token
 # the SDK installed beside it (/opt/pi-web), the same pi version as the CLI
 export PI_WEB_SDK=bundled
+export PI_WEB_TOKEN= PI_WEB_INSECURE_NO_AUTH=1
 # the Claude login and the shell's claude hand are not pi's
-unset PI_WEB_TOKEN CLAUDE_CODE_OAUTH_TOKEN
+unset CLAUDE_CODE_OAUTH_TOKEN
 exec pi-web-ui --no-browser

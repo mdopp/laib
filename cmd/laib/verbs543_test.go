@@ -25,3 +25,15 @@ func TestEveryAgentVerbIsOnePolicyMayName(t *testing.T) {
 		}
 	}
 }
+
+// #751: ServiceBay's data dir went 2026-10-26, and its verb with it.
+func TestServiceBayIsAnUnknownVerb(t *testing.T) {
+	for _, v := range mcp.Verbs {
+		if v.Name == "servicebay" {
+			t.Fatal("the servicebay verb is still in the table")
+		}
+	}
+	if rc := runArgs([]string{"servicebay", "remove"}); rc != 1 {
+		t.Fatalf("laib servicebay remove: exit %d, want 1 (unknown verb)", rc)
+	}
+}

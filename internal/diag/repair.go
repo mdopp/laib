@@ -45,6 +45,16 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(fmt.Errorf("keine Reparatur für %s %s: laib diag zeigt, was sich reparieren lässt", args[0], svc))
 	}
 	cmdline := "laib " + strings.Join(f.Repair, " ")
+	open, _ := proposal.List(cli.InboxDir(env), true)
+	for _, q := range open { // #771: one repair for one finding, whichever hand files it
+		if q.Finding == key(*f) && strings.HasSuffix(q.Reason, " — "+cmdline) {
+			if env.JSON {
+				return cli.Emit(env, q)
+			}
+			fmt.Fprintf(env.W(), "Vorschlag #%d wartet schon auf Freigabe: danach läuft %s.\n", q.ID, cmdline)
+			return cli.ExitOK
+		}
+	}
 	reason := "Reparieren: " + f.Detail + " — " + cmdline
 	name := "repairs/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,3 @@\n+# %s\n+\n+%s\n", name, reason, cmdline)
@@ -58,7 +68,7 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	if err == nil { // the finding it answers is the one laib measures afterwards (#544)
 		undo := cmp.Or(f.Undo, "nichts zurückzunehmen: laib führt nur "+cmdline+" aus")
-		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: undo})
+		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: undo, Does: does(*f)})
 	}
 	if err != nil {
 		return env.Fail(err)
@@ -69,6 +79,42 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	fmt.Fprintf(env.W(), "Vorschlag #%d angelegt: nach der Freigabe durch einen Menschen läuft %s.\n", p.ID, cmdline)
 	return cli.ExitOK
+}
+
+// does is what a repair does, in the owner's words, for its card's
+// headline (#746): from the verb, the finding's service and its own words.
+func does(f Finding) string {
+	a, svc := f.Repair, proposal.Title(f.Service)
+	switch a[0] {
+	case "secret":
+		what := "Das Geheimnis " + a[2] + " von " + svc
+		switch strings.TrimPrefix(a[2], strings.ToUpper(strings.ReplaceAll(f.Service, "-", "_"))+"_") {
+		case "DB_PASSWORD":
+			what = "Das Passwort der " + svc + "-Datenbank"
+		case "ADMIN_PASSWORD":
+			what = "Das Admin-Passwort von " + svc
+		case "PASSWORD":
+			what = "Das Passwort von " + svc
+		}
+		if a[1] == "zurueck" {
+			return what + " bekommt den Wert vor der Erneuerung zurück"
+		}
+		return what + " wird erneuert; danach prüft die Box, ob " + svc + " läuft"
+	case "flash":
+		return cmp.Or(f.Does, "Neue Firmware von "+proposal.Title(a[1])+" wird auf das Gerät gespielt")
+	case "restart":
+		return proposal.Title(a[1]) + " wird neu gestartet"
+	case "servicebay":
+		return "Der alte ServiceBay-Ordner wird gelöscht (vorher gesichert)"
+	case "operator":
+		return "Der Operator wird eingeschaltet, mit einem frischen Zugang"
+	case "backup":
+		if len(a) == 2 {
+			return "Die Box prüft ihre Sicherung und stellt probeweise daraus wieder her"
+		}
+		return "Die Box macht jetzt eine Sicherung"
+	}
+	return "Die Box wird wieder auf den gespeicherten Stand gebracht" // apply
 }
 
 // key is a finding's identity for an anchor (#544): probe and service.
