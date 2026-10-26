@@ -2,7 +2,7 @@
   "household": "qwen3.6-35b-a3b",
   "presets": [
     {"alias": "gemma-4-e4b", "label": "Gemma 4 E4B", "repo": "ggml-org/gemma-4-E4B-it-GGUF", "file": "gemma-4-E4B-it-Q4_0.gguf", "draft": "mtp-gemma-4-E4B-it-Q8_0.gguf", "mmproj": "mmproj-gemma-4-E4B-it-Q8_0.gguf", "ctx": 32768, "draftMax": 4},
-    {"alias": "gemma-4-12b", "label": "Gemma 4 12B", "repo": "ggml-org/gemma-4-12B-it-GGUF", "file": "gemma-4-12B-it-Q4_0.gguf", "draft": "mtp-gemma-4-12B-it-Q8_0.gguf", "ctx": 131072, "draftMax": 4, "cacheK": "q8_0", "cacheV": "q8_0"},
+    {"alias": "gemma-4-12b", "label": "Gemma 4 12B", "repo": "ggml-org/gemma-4-12B-it-GGUF", "file": "gemma-4-12B-it-Q4_0.gguf", "draft": "mtp-gemma-4-12B-it-Q8_0.gguf", "mmproj": "mmproj-gemma-4-12B-it-Q8_0.gguf", "ctx": 131072, "draftMax": 4, "cacheK": "q8_0", "cacheV": "q8_0"},
     {"alias": "qwen3.6-35b-a3b", "label": "Qwen 3.6 35B-A3B", "repo": "unsloth/Qwen3.6-35B-A3B-GGUF", "file": "Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf", "draftRepo": "ggml-org/Qwen3.6-35B-A3B-GGUF", "draft": "mtp-Qwen3.6-35B-A3B-Q4_0.gguf", "ctx": 131072, "draftMax": 4, "cacheK": "q8_0", "cacheV": "q8_0", "batch": 4096, "ubatch": 2048, "flashAttn": true},
     {"alias": "qwen3.8-27b", "label": "Qwen 3.8 27B", "repo": "unsloth/Qwen3.8-27B-GGUF", "file": "Qwen3.8-27B-UD-IQ3_XXS.gguf", "draftRepo": "ggml-org/Qwen3.8-27B-GGUF", "draft": "mtp-Qwen3.8-27B-Q4_0.gguf", "ctx": 81920, "draftMax": 8, "cacheK": "q8_0", "cacheV": "q4_0", "ubatch": 256}
   ],
