@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.40.0](https://github.com/mdopp/laib/compare/v0.39.3...v0.40.0) (2026-10-26)
+
+
+### Features
+
+* **diag:** the owner may remove the old ServiceBay dir with carried values left ([#665](https://github.com/mdopp/laib/issues/665)) ([13b0517](https://github.com/mdopp/laib/commit/13b0517131dd86007dff6e4120dc31e6178947b3))
+
+
+### Bug Fixes
+
+* **template:** media post-deploy tries again when Jellyfin drops the connection ([#756](https://github.com/mdopp/laib/issues/756)) ([efdecef](https://github.com/mdopp/laib/commit/efdecef48f5d8165e2fae9358b611a414b6a737b))
+
 ## [0.39.3](https://github.com/mdopp/laib/compare/v0.39.2...v0.39.3) (2026-10-26)
 
 
