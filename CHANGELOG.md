@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.38.0](https://github.com/mdopp/laib/compare/v0.37.0...v0.38.0) (2026-10-26)
+
+
+### Features
+
+* **diag:** a carried secret laib can rotate is a repair the owner approves in the Inbox ([#665](https://github.com/mdopp/laib/issues/665)) ([c1af7da](https://github.com/mdopp/laib/commit/c1af7da3ccf3fe6b9c9e543cdfffc3bede7769b4))
+* **diag:** name the secrets still equal to ServiceBay's, and remove its dir ([a39d274](https://github.com/mdopp/laib/commit/a39d274985fffec3e1c6820d45107b1fe382d3d9)), closes [#665](https://github.com/mdopp/laib/issues/665)
+* **diag:** rotate a carried secret as an Inbox repair ([792f369](https://github.com/mdopp/laib/commit/792f3696d407ee8a1a367f480d4fba30a848b1dd))
+* rotate the passwords carried from ServiceBay, then remove its data dir ([e2567ec](https://github.com/mdopp/laib/commit/e2567ec86a8a0a8012409df78bb29da45f174f47))
+* **secret:** rotate a data-bound secret inside the app through its hook ([30b9f50](https://github.com/mdopp/laib/commit/30b9f50d5113e6e0171c1b7e9ee07385eb214591)), closes [#665](https://github.com/mdopp/laib/issues/665)
+* **template:** beets sorts the music already there, once and in chunks ([d2bd684](https://github.com/mdopp/laib/commit/d2bd684036695d400426008ad35e4969d4e35812))
+* **template:** beets sorts the music already there, once and in chunks ([9ce7f5d](https://github.com/mdopp/laib/commit/9ce7f5d99881c3cdaffa410711354ca92d6dac4d)), closes [#727](https://github.com/mdopp/laib/issues/727)
+* **template:** embeddinggemma for llama-embed and Paperless ([693c7e2](https://github.com/mdopp/laib/commit/693c7e2808be10da3b57b2191a132280b90b64ea))
+* **template:** haus gets the Discogs app key and secret, one account per person ([5865d77](https://github.com/mdopp/laib/commit/5865d775fbb7bf4473b24c3148f3b87ef2f1a5fd))
+* **template:** haus gets the household's Discogs app key and secret, one account per person ([#696](https://github.com/mdopp/laib/issues/696), haus[#138](https://github.com/mdopp/laib/issues/138)) ([d7ad630](https://github.com/mdopp/laib/commit/d7ad63092593e6d876c3836eb18de4231d5cde42))
+* **template:** llama-embed serves embeddinggemma and fetches it; Paperless embeds with it ([e52688d](https://github.com/mdopp/laib/commit/e52688dedc5c6a09a171c2231332ab407c748540))
+* **template:** paperless: renew notice dates, end-of-period notice, the owner told on the reminder day, letter salad recognised again ([94e79cf](https://github.com/mdopp/laib/commit/94e79cfd8cf0010283976b6037ed64f0af2f186f))
+* **template:** paperless: renew passed notice dates, end-of-period notice, the owner told on the reminder day, letter salad recognised again ([c4e9029](https://github.com/mdopp/laib/commit/c4e9029641833ae55560b696e259407f2c05427c)), closes [#721](https://github.com/mdopp/laib/issues/721)
+* **template:** the carried admin and database passwords rotate in their apps ([11ab065](https://github.com/mdopp/laib/commit/11ab065cf22835d3940d710bf491912f10938011)), closes [#665](https://github.com/mdopp/laib/issues/665)
+
+
+### Bug Fixes
+
+* **template:** home-assistant: Laib owns trusted_proxies (loopback + HA_TRUSTED_PROXIES) ([278a03b](https://github.com/mdopp/laib/commit/278a03b8f63c7415aa0de16bab42488e3d48dd2d))
+* **template:** home-assistant: Laib owns trusted_proxies, loopback plus HA_TRUSTED_PROXIES ([c9d201c](https://github.com/mdopp/laib/commit/c9d201c3705ad356f21cfa3cee824eed8d1d1f75)), closes [#729](https://github.com/mdopp/laib/issues/729)
+
 ## [0.37.0](https://github.com/mdopp/laib/compare/v0.36.1...v0.37.0) (2026-10-26)
 
 
