@@ -13,8 +13,8 @@ AI_LANGUAGE: de                         # the suggestions' language
 AI_CONTEXT: "16384"                     # tokens of a document the model reads
 AI_TIMEOUT: "300"                       # seconds: Qwen on a long document
 AI_EMBED_BACKEND: openai-like           # llama-embed through the proxy; huggingface: on Paperless' CPU
-AI_EMBED_MODEL: nomic-embed-text        # the llama template's EMBED_ALIAS
-AI_EMBED_CHUNK: "300"                   # below llama-embed's 512-token batch, which refuses a longer piece
+AI_EMBED_MODEL: embeddinggemma          # the llama template's EMBED_ALIAS; multilingual (haus#13: 28 of 30 German paraphrases, nomic-embed-text 7)
+AI_EMBED_CHUNK: "300"                   # well below llama-embed's 2048-token batch, which refuses a longer piece
 # contract data and notice reminders (#709, paperless-vertraege.py): the document types and tags
 # that make a document a contract, the household's own names; the reminder this many days before
 # the notice must be in, in Haus's Haushalt (without Haus: none)

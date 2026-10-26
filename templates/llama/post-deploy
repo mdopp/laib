@@ -48,5 +48,9 @@ for p in presets["presets"]:
         files.append((p["repo"], p["mmproj"]))
     for repo, name in files:
         ok = fetch(repo, name) and ok
+# llama-embed's model (EMBED_REPO/EMBED_FILE): fetched like the presets' weights, so a changed
+# embedding model arrives with its apply instead of by hand
+if os.environ.get("EMBED_REPO") and os.environ.get("EMBED_FILE"):
+    ok = fetch(os.environ["EMBED_REPO"], os.environ["EMBED_FILE"]) and ok
 print(f"weights for {len(presets['presets'])} presets complete: {ok}")
 sys.exit(0 if ok else 1)

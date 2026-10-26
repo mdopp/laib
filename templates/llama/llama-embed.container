@@ -8,7 +8,7 @@ Network=host
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/llama/models:/models:z
-Exec=--host 127.0.0.1 --port ${EMBED_PORT} --embeddings -m /models/${EMBED_FILE} --alias ${EMBED_ALIAS} --ctx-size 2048
+Exec=--host 127.0.0.1 --port ${EMBED_PORT} --embeddings -m /models/${EMBED_FILE} --alias ${EMBED_ALIAS} --ctx-size 2048 --batch-size 2048 --ubatch-size 2048
 # no AutoUpdate: the image is pinned by tag and digest (ADR 0019 §4, #423); a new llama.cpp build is a proposal
 
 [Service]
