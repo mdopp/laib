@@ -72,9 +72,10 @@ Environment=HAUS_JELLYFIN_TOKEN=${JELLYFIN_TOKEN}
 # usage-metrics the token renders empty and Haus counts nothing
 Environment=HAUS_USAGE_URL=${USAGE_URL}
 Environment=HAUS_USAGE_TOKEN=${USAGE_TOKEN}
-# the music wish list's Discogs (#696): the household's personal access token, set by the owner on the box page;
-# empty without it, and the wish list neither says "habt ihr schon auf Vinyl" nor fills the wantlist
-Environment=HAUS_DISCOGS_TOKEN=${DISCOGS_TOKEN}
+# the music wish list's Discogs (#696, haus#138): the household's Discogs app, set by the owner on the box page;
+# each person connects their own account in Haus (OAuth, tokens in Haus' data dir); empty: no Discogs
+Environment=HAUS_DISCOGS_KEY=${DISCOGS_KEY}
+Environment=HAUS_DISCOGS_SECRET=${DISCOGS_SECRET}
 # the app's camera uploads, straight into Paperless's inbox (haus#10)
 Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
