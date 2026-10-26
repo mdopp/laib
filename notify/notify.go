@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"mime"
 	"net"
 	"net/http"
@@ -60,14 +59,14 @@ type run struct {
 // tell is one message to the owner, named by its subject: through the Bote's
 // channels first (bote-notify picks the person's first reachable one), by
 // mail only when that fails or there is no Bote (#441), once, and not after
-// GiveUp since its first failure (#659). A poll rides along to bote-notify
-// only (#509). chat: the chat took it; err nil: the owner has it, or with
-// no chat never will.
-func (r *run) tell(subject, body string, poll map[string]any) (chat bool, err error) {
+// GiveUp since its first failure (#659). An empty body makes the subject
+// the whole message, in the chat and in the mail (#778). chat: the chat took
+// it; err nil: the owner has it, or with no chat never will.
+func (r *run) tell(subject, body string) (chat bool, err error) {
 	c, s := r.c, r.seen
 	r.tried[subject] = true
 	if c.chat() {
-		if err = post(r.ctx, c, subject, body, poll); err == nil {
+		if err = post(r.ctx, c, subject, body); err == nil {
 			return true, nil
 		}
 		r.note("mitteilung an "+c.Person, err)
@@ -115,11 +114,14 @@ const maxBody, maxText = 4096, 1000
 var errBusy = errors.New("Bote: 429, zu viele Mitteilungen in dieser Minute")
 
 // post sends one message to bote-notify, its text cut until it fits.
-func post(ctx context.Context, c Config, subject, body string, poll map[string]any) error {
+func post(ctx context.Context, c Config, subject, body string) error {
+	text := subject
+	if body != "" {
+		text += "\n\n" + body
+	}
 	var b bytes.Buffer
 	for n := maxText; ; n = n * 9 / 10 {
-		msg := map[string]any{"an": c.Person, "text": cut(subject+"\n\n"+body, n)}
-		maps.Copy(msg, poll)
+		msg := map[string]any{"an": c.Person, "text": cut(text, n)}
 		b.Reset()
 		enc := json.NewEncoder(&b)
 		enc.SetEscapeHTML(false)
@@ -299,7 +301,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
-		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles.", nil); err == nil {
+		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles."); err == nil {
 			for _, k := range keys {
 				seen.Mailed[k] = true
 			}
@@ -325,7 +327,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		}
 		seen.Updates = now
 		if len(ups) > 0 {
-			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n", nil); e != nil {
+			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n"); e != nil {
 				seen.Updates, err = time.Time{}, e
 			}
 		}
@@ -366,17 +368,16 @@ func (r *run) eingang() {
 			os.Remove(f)
 			continue
 		}
-		if chat, err := r.tell("Laib: "+cmp.Or(m.Betreff, "Mitteilung"), m.Text, nil); chat || err == nil {
+		if chat, err := r.tell("Laib: "+cmp.Or(m.Betreff, "Mitteilung"), m.Text); chat || err == nil {
 			os.Remove(f)
 		}
 	}
 }
 
-// proposals tells the owner each open proposal once (#441). One that is not
-// destructive says how to decide it in the chat (the relay acts on the
-// owner's verified identity); a destroy, a removal or what the review marks
-// for a human only links the Inbox, where Authelia asks for the second
-// factor: the chat never approves those (ADR 0016).
+// proposals tells the owner each open proposal once (#441), as one line
+// (#778, owner 2026-10-26): „Freigabe #N: <headline> · <Inbox>“. The Inbox
+// is the only place a proposal is decided (ADR 0012), so the message carries
+// nothing to decide with: no impact lines, no decision words, no poll.
 func (r *run) proposals() error {
 	c, seen := r.c, r.seen.Proposals
 	text, err := call(r.ctx, c, "laib_inbox", map[string]any{})
@@ -385,13 +386,9 @@ func (r *run) proposals() error {
 		return err
 	}
 	var open []struct {
-		ID                  int
-		Reason, Tier, Class string
-		Card                struct {
-			Summary    string
-			Impact     []string
-			Reversible string
-		}
+		ID     int
+		Reason string
+		Card   struct{ Summary string }
 	}
 	if err := json.Unmarshal([]byte(text), &open); err != nil {
 		err = fmt.Errorf("laib_inbox: %w", err)
@@ -404,28 +401,10 @@ func (r *run) proposals() error {
 		if seen[p.ID] {
 			continue
 		}
-		// the decision line comes second: bote-notify cuts a long text at the end
-		body := cmp.Or(p.Card.Summary, p.Reason)
-		var poll map[string]any // on Signal, bote-notify adds Freigeben / Ablehnen / Später (#509)
-		if p.Tier == "destroy" || p.Class == "human" || p.Class == "remove" {
-			body += "\nDas entscheidest du nur in der Inbox, mit dem zweiten Faktor: " + c.InboxURL
-		} else {
-			body += fmt.Sprintf("\nIm Chat: »gib #%d frei« oder »lehne #%d ab«. Oder in der Inbox: %s", p.ID, p.ID, c.InboxURL)
-			poll = map[string]any{"vorschlag": p.ID, "frage": cut(fmt.Sprintf("Vorschlag #%d: %s", p.ID, cmp.Or(p.Card.Summary, p.Reason)), 200)}
-		}
-		for n, i := range p.Card.Impact { // a review's hundred lines are the Inbox's (#659)
-			if n == 5 {
-				body += fmt.Sprintf("\n- … und %d weitere in der Inbox", len(p.Card.Impact)-n)
-				break
-			}
-			body += "\n- " + i
-		}
-		if p.Card.Reversible != "" {
-			body += "\nRückgängig: " + p.Card.Reversible
-		}
+		headline := strings.Join(strings.Fields(cmp.Or(p.Card.Summary, p.Reason)), " ")
 		// one that fails blocks no other; it is told again on the next run,
 		// on the chat until the chat takes it (#659)
-		chat, e := r.tell(fmt.Sprintf("Laib: Vorschlag #%d", p.ID), body, poll)
+		chat, e := r.tell(fmt.Sprintf("Freigabe #%d: %s · %s", p.ID, headline, c.InboxURL), "")
 		if chat || e == nil && !c.chat() {
 			seen[p.ID] = true
 		} else if e != nil {
@@ -441,8 +420,14 @@ func (r *run) proposals() error {
 }
 
 // send: SMTP_SECURITY tls is implicit TLS (465); starttls and none upgrade
-// when the server offers it.
+// when the server offers it. An empty body: the subject is the whole mail,
+// subject and body alike (#778).
 func send(c Config, subject, body string) error {
+	if body == "" {
+		body = subject
+	} else {
+		subject += " (" + c.Domain + ")"
+	}
 	// SMTP_FROM is Authelia's sender, "Name <addr>": the envelope takes the
 	// bare address, else Gmail answers 555 5.5.2 (#659)
 	from, err := mail.ParseAddress(cmp.Or(c.SMTPFrom, c.SMTPUser))
@@ -491,7 +476,7 @@ func send(c Config, subject, body string) error {
 		return err
 	}
 	fmt.Fprintf(w, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
-		from, c.MailTo, mime.QEncoding.Encode("utf-8", subject+" ("+c.Domain+")"), time.Now().Format(time.RFC1123Z), strings.ReplaceAll(body, "\n", "\r\n"))
+		from, c.MailTo, mime.QEncoding.Encode("utf-8", subject), time.Now().Format(time.RFC1123Z), strings.ReplaceAll(body, "\n", "\r\n"))
 	if err := w.Close(); err != nil {
 		return err
 	}
