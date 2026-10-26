@@ -497,6 +497,8 @@ class FakeHA(BaseHTTPRequestHandler):
             if t == "http/config":
                 return ok({"stable": HA["http"], "pending": HA["http_pending"], "active_config_type": "pending" if HA["http_pending"] else "stable"})
             if t == "http/config/configure":
+                if HA.get("http_refuse"):
+                    return err("home_assistant_error", "refused")
                 if set(m["config"]) & {"created_at", "error", "error_message"}:
                     return err("invalid_format", "extra keys not allowed")   # HTTP_STORAGE_SCHEMA
                 HA["http_pending"] = m["config"]
@@ -1375,7 +1377,7 @@ class LoginSperre(Hook):
         fresh(onboarded=("laib", ADMIN_PW))
         p, _, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(HA["http_calls"], [])
+        self.assertEqual(HA["http_calls"], ["http/config"], "read for the proxy trust, nothing written")
         self.assertNotIn("HA_LOGIN_SPERRE", log)
 
     def test_a_number_turns_the_ban_on_keeps_the_rest_and_is_promoted_once(self):
@@ -1397,23 +1399,88 @@ class LoginSperre(Hook):
         p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "aus"})
         self.assertEqual((p.returncode, HA["http"]["login_attempts_threshold"]), (0, -1), log)
 
-    def test_without_a_trusted_proxy_it_is_refused(self):
-        # HA would see Caddy's 127.0.0.1 for every login from outside and ban everyone, the family's apps too
+    def test_without_the_proxy_trust_it_comes_with_the_ban_in_one_restart(self):
+        # #724: post-deploy sets the trust itself, so the ban never sees Caddy's 127.0.0.1 for every login
         fresh(onboarded=("laib", ADMIN_PW))
         HA["http"]["use_x_forwarded_for"] = False
         p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "5"})
-        self.assertNotEqual(p.returncode, 0, log)
-        self.assertNotIn("http/config/configure", HA["http_calls"])
-        self.assertIn("HA_LOGIN_SPERRE", log)
-        self.assertIn("X-Forwarded-For", log)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], ["http/config", "http/config/configure", "http/config/promote"], log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["login_attempts_threshold"]), (True, 5), log)
 
     def test_a_value_that_is_no_number_is_refused(self):
         fresh(onboarded=("laib", ADMIN_PW))
         p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "fünf"})
         self.assertNotEqual(p.returncode, 0, log)
-        self.assertEqual(HA["http_calls"], [])
+        self.assertEqual(HA["http_calls"], ["http/config"])
         self.assertIn("HA_LOGIN_SPERRE", log)
 
+
+HA_DEFAULT_HTTP = {"use_x_forwarded_for": False, "trusted_proxies": [], "ip_ban_enabled": True, "login_attempts_threshold": -1,
+                   "server_port": 8123, "cors_allowed_origins": ["https://cast.home-assistant.io"], "created_at": "2026-10-26T08:00:00+00:00",
+                   "error": None, "error_message": None}
+
+
+class ProxyTrust(Hook):
+    """#724: Caddy, on this host, reaches HA on 127.0.0.1. HA answers a forwarded request from a proxy it
+    does not trust with 400, so post-deploy makes HA trust loopback (use_x_forwarded_for, trusted_proxies
+    127.0.0.1/32 and ::1/128) through its HTTP config store, and nothing wider"""
+
+    def test_a_fresh_home_assistant_trusts_loopback_once(self):
+        fresh()
+        HA["http"] = dict(HA_DEFAULT_HTTP)
+        p, handed, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], ["http/config", "http/config/configure", "http/config/promote"], log)
+        self.assertIsNone(HA["http_pending"], "not promoted: HA reverts it after five minutes")
+        self.assertTrue(HA["http"]["use_x_forwarded_for"])
+        self.assertEqual(HA["http"]["trusted_proxies"], ["127.0.0.1/32", "::1/128"], "loopback only, nothing wider")
+        self.assertEqual(HA["http"]["cors_allowed_origins"], ["https://cast.home-assistant.io"], "HA's other HTTP settings were lost")
+        self.assertIn("trusts Caddy now", log)
+        HA["http_calls"].clear()
+        p, _, log = self.run_hook(tokens=handed)
+        self.assertEqual((p.returncode, HA["http_calls"]), (0, ["http/config"]), "a second apply restarted Home Assistant again: " + log)
+
+    def test_a_home_assistant_without_any_http_setting_stored(self):
+        fresh()
+        HA["http"] = {}
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "::1/128"]), log)
+
+    def test_the_trust_from_servicebay_is_kept_as_it_is(self):
+        # the box's own .storage/http, carried from ServiceBay: 127.0.0.1 and the private ranges; no restart, no ::1 added
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"].update(trusted_proxies=["127.0.0.1/32", "192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"])
+        before = dict(HA["http"])
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], ["http/config"], log)
+        self.assertEqual(HA["http"], before)
+        self.assertIn("trusts Caddy on 127.0.0.1 (X-Forwarded-For): as set", log)
+
+    def test_the_owners_own_proxy_stays_and_loopback_is_added(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"].update(trusted_proxies=["10.0.0.0/8"])
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http"]["trusted_proxies"], ["10.0.0.0/8", "127.0.0.1/32", "::1/128"], log)
+
+    def test_forwarded_for_off_is_turned_on_and_the_list_kept(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"]["use_x_forwarded_for"] = False
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "10.0.0.0/8", "::1/128"]), log)
+
+    def test_a_refused_configure_is_red_not_green(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"] = dict(HA_DEFAULT_HTTP, created_at="x")
+        HA["http_refuse"] = True
+        p, _, log = self.run_hook()
+        self.assertNotEqual(p.returncode, 0, log)
+        self.assertIn("proxy trust", log)
+        self.assertFalse(HA["http"]["use_x_forwarded_for"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Home Assistant ist auch auf einer neu eingerichteten Box gleich von unterwegs erreichbar und sieht, von wo sich jemand anmeldet
 Wenn der Admin es einschaltet, sperrt Home Assistant eine Adresse nach zu vielen falschen Anmeldungen
 Erweiterungen für Home Assistant, die du freigibst, werden jetzt wirklich installiert und danach geprüft, ob Home Assistant sie laden kann
 ${PERSONA_DISPLAY} darf die Namen deiner Geräte in Home Assistant lesen

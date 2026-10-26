@@ -1069,52 +1069,78 @@ def zuhause():
     print("home-assistant: home set from box.yml zuhause (" + ", ".join(want) + ")")
 
 
-def login_ban():
-    """HA_LOGIN_SPERRE (#703): Home Assistant bans an address after that many failed logins, "aus" never,
-    empty leaves it as it is (the default). Since 2026.8 HA keeps it in its own HTTP config store and ignores
-    a YAML http: block, so it goes through http/config, configure and promote, as ServiceBay set the proxy
-    trust there (#2573); configure restarts HA into it on trial and an unpromoted one reverts after five
-    minutes. Only when HA reads the client from Caddy's X-Forwarded-For: otherwise every login from outside
-    is 127.0.0.1 to HA, and a ban would lock out everyone. A ban HA sets also locks out a consumer on
-    127.0.0.1 whose token went stale (the check, Haus, the Bote): the counter in templates/auth tells the
-    owner of every ban HA logs."""
+CADDY = ("127.0.0.1/32", "::1/128")   # Caddy, on this host, reaches HA on loopback (#724); nothing wider is Laib's to trust
+
+
+def trusts_caddy(conf):
+    """HA reads the client from Caddy's X-Forwarded-For: use_x_forwarded_for, and 127.0.0.1 in trusted_proxies"""
+    nets = []
+    for net in conf.get("trusted_proxies") or []:
+        try:
+            nets.append(ipaddress.ip_network(net, strict=False))
+        except ValueError:
+            pass
+    return bool(conf.get("use_x_forwarded_for")) and any(ipaddress.ip_address("127.0.0.1") in t for t in nets)
+
+
+def http_settings():
+    """Home Assistant's HTTP settings, in its own store since 2026.8 (it ignores a YAML http: block), set
+    through http/config, configure and promote as ServiceBay set the proxy trust there (#2573); configure
+    restarts HA into it on trial and an unpromoted one reverts after five minutes. One configure for all,
+    only when something differs, so an apply that changes nothing does not restart HA.
+
+    The proxy trust (#724), always: Caddy reaches HA on 127.0.0.1, and HA answers a forwarded request from
+    a proxy it does not trust with 400 and logs every client as 127.0.0.1. Kept as it is while HA reads the
+    client from X-Forwarded-For and trusts 127.0.0.1 (the owner's own entries, ServiceBay's private ranges on
+    a migrated box, stay); else use_x_forwarded_for and 127.0.0.1/32 and ::1/128 are added, nothing wider.
+
+    HA_LOGIN_SPERRE (#703): Home Assistant bans an address after that many failed logins, "aus" never, empty
+    leaves it as it is (the default). Only with the proxy trust: otherwise every login from outside is
+    127.0.0.1 to HA, and a ban would lock out everyone. A ban HA sets also locks out a consumer on 127.0.0.1
+    whose token went stale (the check, Haus, the Bote): the counter in templates/auth tells the owner of
+    every ban HA logs. Returns what is not set, or None."""
+    problems = []
     want = E.get("HA_LOGIN_SPERRE", "").strip().lower()
-    if not want:
-        return None
-    if want != "aus" and not (want.isdigit() and int(want) >= 1):
-        return f"HA_LOGIN_SPERRE={want!r}: a number of failed logins (like 5), aus, or empty"
-    n = -1 if want == "aus" else int(want)
+    n = None
+    if want == "aus":
+        n = -1
+    elif want.isdigit() and int(want) >= 1:
+        n = int(want)
+    elif want:
+        problems.append(f"HA_LOGIN_SPERRE={want!r}: a number of failed logins (like 5), aus, or empty")
     ws = WS(admin_session())
     try:
         cur = ws("http/config") or {}
         stable = {k: v for k, v in (cur.get("stable") or {}).items() if k not in ("created_at", "error", "error_message")}
-        if stable.get("login_attempts_threshold") == n and (n < 0 or stable.get("ip_ban_enabled")):
-            print(f"home-assistant: HA_LOGIN_SPERRE {want}: as set")
-            return None
-        trusted = []
-        for net in stable.get("trusted_proxies") or []:
-            try:
-                trusted.append(ipaddress.ip_network(net, strict=False))
-            except ValueError:
-                pass
-        if n > 0 and not (stable.get("use_x_forwarded_for") and any(ipaddress.ip_address("127.0.0.1") in t for t in trusted)):
-            return ("HA_LOGIN_SPERRE NOT set: Home Assistant does not read the client from X-Forwarded-For behind Caddy "
-                    "(use_x_forwarded_for, trusted_proxies 127.0.0.1), so it would ban Caddy and with it everyone")
-        res = ws("http/config/configure", config=dict(stable, ip_ban_enabled=True if n > 0 else stable.get("ip_ban_enabled", True),
-                                                     login_attempts_threshold=n)) or {}
+        conf = dict(stable)
+        if not trusts_caddy(conf):
+            have = conf.get("trusted_proxies") or []
+            conf["use_x_forwarded_for"] = True
+            conf["trusted_proxies"] = have + [c for c in CADDY if c not in have]
+        if n is not None:
+            conf["login_attempts_threshold"] = n
+            if n > 0:
+                conf["ip_ban_enabled"] = True
+        if conf == stable:
+            print("home-assistant: trusts Caddy on 127.0.0.1 (X-Forwarded-For): as set" + (f"; HA_LOGIN_SPERRE {want}: as set" if n is not None else ""))
+            return "; ".join(problems) or None
+        res = ws("http/config/configure", config=conf) or {}
     finally:
         ws.close()
     if res.get("restart"):
         time.sleep(float(E.get("HA_RETRY_SECONDS", "5")))
         if not ha_up(WAIT):
-            return "HA_LOGIN_SPERRE: Home Assistant did not come back from the restart into it; it reverts in five minutes"
+            return "; ".join(problems + ["Home Assistant did not come back from the restart into its HTTP settings; they revert in five minutes"])
     ws = WS(admin_session())
     try:
         ws("http/config/promote")
     finally:
         ws.close()
-    print(f"home-assistant: HA_LOGIN_SPERRE {want}: " + (f"Home Assistant bans an address after {n} failed logins" if n > 0 else "no bans"))
-    return None
+    if not trusts_caddy(stable):
+        print("home-assistant: trusts Caddy now: use_x_forwarded_for, trusted_proxies " + ", ".join(conf["trusted_proxies"]))
+    if n is not None:
+        print(f"home-assistant: HA_LOGIN_SPERRE {want}: " + (f"Home Assistant bans an address after {n} failed logins" if n > 0 else "no bans"))
+    return "; ".join(problems) or None
 
 
 try:
@@ -1159,9 +1185,9 @@ except (RuntimeError, OSError, ValueError, KeyError) as e:  # the old tokens sta
     hand_retired()
     print(f"home-assistant: old tokens NOT revoked: {type(e).__name__}: {e}", file=sys.stderr)
 try:
-    sperre = login_ban()
-except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran: the owner asked for it
-    sperre = f"HA_LOGIN_SPERRE NOT set: {type(e).__name__}: {e}"
+    sperre = http_settings()
+except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran: without the proxy trust home.<domain> answers 400
+    sperre = f"HTTP settings NOT set (the proxy trust for Caddy, HA_LOGIN_SPERRE): {type(e).__name__}: {e}"
 if sperre:
     print("home-assistant: " + sperre, file=sys.stderr)
     extensions.append(sperre)
