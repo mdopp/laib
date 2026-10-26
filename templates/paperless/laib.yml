@@ -33,7 +33,8 @@ oidc:
   redirectUris: ["https://paperless.${DOMAIN}/accounts/oidc/authelia/login/callback/"]
 secrets:
   - name: PAPERLESS_DB_PASSWORD
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): post-deploy: ALTER ROLE through psql in paperless-db
   - name: PAPERLESS_SECRET_KEY
   - name: PAPERLESS_ADMIN_PASSWORD
     login: {user: "${ADMIN_USER}", host: paperless, note: "Paperless-Admin"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)

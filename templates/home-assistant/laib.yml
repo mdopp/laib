@@ -28,7 +28,8 @@ secrets:
   # one that works on its own user is kept, any other is replaced
   - name: HA_ADMIN_PASSWORD          # HA_ADMIN_USER's: generated, and post-deploy onboards a fresh HA with it; on a box from ServiceBay, carried
     login: {user: "${HA_ADMIN_USER}", host: home, note: "Home-Assistant-Admin"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): post-deploy: HA's change_password as the admin
   - name: HA_BOTE_PASSWORD           # the non-admin user bote's, which post-deploy creates
   - name: HA_CHECK_PASSWORD          # the non-admin user laib-pruefung's („Laib-Prüfung“, #591): only post-deploy logs in with it, to mint HA_TOKEN
   - name: HA_HAUS_PASSWORD           # the user haus's („Haus“, administrator, #591): the same, for HAUS_HA_TOKEN

@@ -17,7 +17,8 @@ routes:
 secrets:
   - name: ADGUARD_ADMIN_PASSWORD
     login: {user: "${ADMIN_USER}", host: dns, note: "AdGuard Home"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): pre-start: the user's hash in AdGuardHome.yaml
 data:
   - path: ${DATA_DIR}/adguard/conf
   - path: ${DATA_DIR}/adguard/work

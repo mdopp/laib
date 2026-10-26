@@ -17,10 +17,12 @@ routes:
       }
 secrets:
   - name: IMMICH_DB_PASSWORD
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): post-deploy: ALTER ROLE through psql in immich-db
   - name: IMMICH_ADMIN_PASSWORD      # the admin post-deploy signs up on a fresh Immich; on a box from ServiceBay, carried (#254)
     login: {user: "${ADMIN_EMAIL}", host: photos, note: "Immich-Admin (leer: admin@<Domain>)"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
-    dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
+    dataBound: true                 # read only when the app makes its data (#353)
+    rotate: true                    # laib secret rotate changes it in the app first (#665): post-deploy: Immich's change-password as the admin
   - name: IMMICH_API_KEY             # minted by post-deploy: system config only, so the family login is re-set on every apply (#254)
     external: true
     optional: true

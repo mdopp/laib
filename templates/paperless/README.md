@@ -131,7 +131,7 @@ index (`10 2 * * *`) waits for the next night.
 | `AI_ENABLED` | `"true"` | the AI on; `"false"` on a box without a model, else post-deploy stops: Paperless' client without an endpoint asks OpenAI's |
 | `AI_MODEL` | `qwen3.6-35b-a3b` | the household model; another needs a lease Paperless does not take |
 | `AI_LANGUAGE`, `AI_CONTEXT`, `AI_TIMEOUT` | `de`, `16384`, `300` | the suggestions' language, the tokens of a document read, the seconds Qwen gets |
-| `AI_EMBED_BACKEND`, `AI_EMBED_MODEL` | `openai-like`, `nomic-embed-text` | llama-embed through the proxy; `huggingface` and a sentence-transformers model run on Paperless' CPU instead |
+| `AI_EMBED_BACKEND`, `AI_EMBED_MODEL` | `openai-like`, `embeddinggemma` | llama-embed through the proxy; `huggingface` and a sentence-transformers model run on Paperless' CPU instead |
 | `AI_EMBED_CHUNK` | `"300"` | tokens per piece: llama-embed refuses a piece beyond its 512-token batch |
 | `OCR_MODE` | `redo` | every page recognised again, a born-digital PDF's own text kept; `auto` kept a scanner's letter salad on 11 of 19 documents; `force` rasterises every PDF |
 | `OCR_ROTATE_PAGES`, `OCR_DESKEW` | `"true"` | upside-down and crooked scans (Paperless skips deskew under `redo`) |

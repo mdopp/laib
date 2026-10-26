@@ -477,6 +477,18 @@ value and `laib apply`. A secret a hook sets inside the app on every apply
 (the LDAP read-only accounts, MQTT, Samba, HA's bote) is not data-bound and
 rotates.
 
+With `rotate: true` beside `dataBound: true` (#665) the template's hook can
+change it inside the app, and `laib secret rotate` does: the new value waits
+in `secrets.age` as `<NAME>.next`, the services that declare it apply, and
+their hook gets it as `LAIB_ROTATE_<NAME>` next to the current
+`LAIB_SECRET_<NAME>`. The hook changes it in the app (an admin API with the
+current one, `ALTER ROLE` through `laib-exec` from a 0600 file, never argv)
+and prints `laib-secret: <NAME>=<new>` once the app took it; a hand-back
+after a failed `laib-exec` of the same hook is not taken. Without the
+hand-back the old value stays and `<NAME>.next` goes; with it, a red apply
+rotates back once, the same way. A hook that finds the new value working
+already only hands it back, so a run after a dropped session finishes it.
+
 ### Secrets that may stay unset
 
 A contract secret with `external: true` must be in `secrets.age` before

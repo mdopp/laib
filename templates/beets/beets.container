@@ -13,6 +13,8 @@ Volume=${DATA_DIR}/beets/config:/config:z
 # fails on an entry core does not own, #230); labelling off for this container
 SecurityLabelDisable=true
 Volume=${MUSIC}:/music
+# the Bestand (#727) moves the spoken word the owner confirmed into Audiobookshelf's folder
+Volume=${AUDIOBOOKS}:/audiobooks
 # the Musik-Eingang (#639): beets-eingang.service imports from here
 Volume=${DATA_DIR}/file-share/data/musik-eingang:/eingang
 # no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)

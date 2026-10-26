@@ -1,0 +1,10 @@
+[Unit]
+Description=beets: den Musikbestand einsortieren, 20 Minuten nach jeder Etappe (#727)
+
+[Timer]
+OnActiveSec=10min
+OnUnitInactiveSec=20min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
