@@ -288,7 +288,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	}
 	var technical []string
 	for _, v := range values {
-		if len(p.News) > 0 { // the template's values: its news says what they bring
+		if len(p.News) > 0 && v.Op == "-" { // #696: a value whose secret the template retired
+			technical = append(technical, title(v.Service)+": "+v.Key+" entfällt, die Vorlage braucht es nicht mehr (bisher "+valueWord(v.Old)+")")
+		} else if len(p.News) > 0 { // the template's values: its news says what they bring
 			technical = append(technical, title(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else if v.Op == "-" {
 			d.Changes = append(d.Changes, Line{"−", title(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
@@ -612,6 +614,9 @@ func servicesOf(p *Proposal) []string {
 	sort.Strings(out)
 	return out
 }
+
+// Title is title for the pages (the key page, #696).
+func Title(name string) string { return title(name) }
 
 // title: a service name as people say it (paperless → Paperless, home-assistant → Home Assistant).
 func title(name string) string {
