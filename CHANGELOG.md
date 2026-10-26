@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.3](https://github.com/mdopp/laib/compare/v0.39.2...v0.39.3) (2026-10-26)
+
+
+### Bug Fixes
+
+* **render:** put ldap. behind Authelia, skip only the portal ([0e74bde](https://github.com/mdopp/laib/commit/0e74bdecbc7d1792f25b9141f36f51231db9e1d4))
+
 ## [0.39.2](https://github.com/mdopp/laib/compare/v0.39.1...v0.39.2) (2026-10-26)
 
 
