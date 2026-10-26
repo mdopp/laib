@@ -41,11 +41,13 @@ laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern J
 laib zuhause show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]
                                      the household's address, box.yml zuhause (#561): show prints the block only; set replaces
                                      the whole block as a box.yml proposal of class human (the owner approves, never the caller);
-                                     it is the value at the path box.yml:zuhause (#598): a hand with a verb list needs that path grant
+                                     it is the value at the path box.yml:zuhause (#598); laib-haushalt serves it behind the door
+                                     and proposes it as the haushalt hand (#677): the verb grant is what a caller needs
 laib person signal <user> <+49…>    a person's Signal number in box.yml people (#596): sets the signal: channel, or changes
                                      the one there, as a box.yml proposal of class human; `laib person invite … --signal +49…`
                                      files the same one before it makes the account (a number the loader refuses stops both);
-                                     it is the value at box.yml:people.<user>.signal (#598): a hand with a verb list needs people.*.signal
+                                     it is the value at box.yml:people.<user>.signal (#598); laib-haushalt serves it behind the door
+                                     (#677); invite --signal stays in the kernel: a hand with a verb list needs people.*.signal for it
 laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> | suchen | pruefen | probe [--person p]
                                      the scan service (#568): status prints its status file; the rest is an order file in
                                      ${DATA_DIR}/scan/auftrag/ the service picks up: a stack from the SANE scanner, after a jam

@@ -1,7 +1,7 @@
 // Package haushalt is the program laib-haushalt (ADR 0026, #598): the
 // household verbs that read what the door hands over, leave an order for a
-// service, file a proposal or tell one person something — scan, net geraete
-// and tell. It runs in its own
+// service, file a proposal or tell one person something — scan, net geraete,
+// tell, zuhause and person signal (#677). It runs in its own
 // container (ADR 0027): the kernel checks hand, tier and verb, then hands
 // each call over HTTP on 127.0.0.1 with the caller's actor, the verb's
 // ceiling and the facts the verbs need. A proposal goes back to laib over
@@ -37,6 +37,7 @@ type Call struct {
 	Ceiling string       `json:"ceiling"`
 	LanIP   string       `json:"lanIp"`
 	Scan    *ScanService `json:"scan,omitempty"`
+	Zuhause *Zuhause     `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause (#677)
 }
 
 // ScanService is the service that provides scan, as laib reads it from its state:
@@ -65,7 +66,7 @@ type Env struct {
 	Journal io.Writer
 }
 
-// Run is one verb: scan …, net geraete … or tell ….
+// Run is one verb: scan …, net geraete …, tell …, zuhause … or person_signal ….
 func Run(ctx context.Context, env *Env, args []string) int {
 	switch {
 	case len(args) > 0 && args[0] == "scan":
@@ -74,8 +75,12 @@ func Run(ctx context.Context, env *Env, args []string) int {
 		return NetDevices(env, args[2:])
 	case len(args) > 0 && args[0] == "tell":
 		return Tell(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "zuhause":
+		return cmdZuhause(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "person_signal":
+		return cmdPersonSignal(ctx, env, args[1:])
 	}
-	return env.fail(errors.New("usage: scan … | net geraete … | tell … (the kernel serves them as laib scan, laib net geraete, laib tell)"))
+	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal)"))
 }
 
 // Handler serves the door: POST /call with the door's key, GET /health.

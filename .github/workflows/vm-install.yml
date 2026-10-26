@@ -38,7 +38,7 @@ name: vm-install
 on:
   push:
     branches: [main]
-    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, notify/**, haushalt/**, cmd/laib-lease/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
+    paths: [usb/**, stick/**, scripts/install-box.sh, cmd/laib/**, internal/**, operator/**, notify/**, haushalt/**, lease/**, templates/**, scripts/vm/**, .github/workflows/vm-install.yml]
   pull_request:   # every PR: a train runs the VM, a single PR gets the `not run` check
   workflow_dispatch:
 concurrency:
@@ -138,7 +138,7 @@ jobs:
           echo "pushed $HOOKS"
       - name: this commit's images of laib's own programs, pushed so the box can pull them (ADR 0027)
         run: |
-          for i in "operator/Containerfile $OPERATOR_IMAGE" "notify/Containerfile $NOTIFY_IMAGE" "haushalt/Containerfile $HAUSHALT_IMAGE" "cmd/laib-lease/Containerfile $LEASE_IMAGE"; do
+          for i in "operator/Containerfile $OPERATOR_IMAGE" "notify/Containerfile $NOTIFY_IMAGE" "haushalt/Containerfile $HAUSHALT_IMAGE" "lease/Containerfile $LEASE_IMAGE"; do
             set -- $i
             podman build -q -t "$2" -f "$1" . && podman push -q "$2"
             echo "pushed $2"

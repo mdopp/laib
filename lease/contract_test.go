@@ -19,7 +19,7 @@ import (
 
 func shippedConfig(t *testing.T, router string) Config {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "templates", "llama", "presets.json"))
+	b, err := os.ReadFile(filepath.Join("..", "templates", "llama", "presets.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -140,29 +140,9 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	return cli.ExitOK
 }
 
-// cmdPersonSignal: `laib person signal <user> <+49…>`, a person's Signal number in box.yml
-// people as a proposal a human approves, as invite --signal files it (#596).
-func cmdPersonSignal(ctx context.Context, env *cliEnv, args []string) int {
-	if len(args) != 2 {
-		return env.Fail(errors.New("usage: laib person signal <user> <+49…>"))
-	}
-	st, err := cli.LoadState(env)
-	if err != nil {
-		return env.Fail(err)
-	}
-	id, err := proposeSignal(ctx, env, st, args[0], args[1])
-	if err != nil {
-		return env.Fail(err)
-	}
-	msg := fmt.Sprintf("Vorschlag #%d: nach der Freigabe durch einen Menschen darf %s dem Boten auf Signal schreiben.", id, args[0])
-	if env.JSON {
-		return cli.Emit(env, map[string]any{"proposal": id, "message": msg})
-	}
-	fmt.Fprintln(env.W(), msg)
-	return cli.ExitOK
-}
-
-// proposeSignal is people.<user>.signal as a proposal (#598); the loader checks the number.
+// proposeSignal is people.<user>.signal as a proposal (#598), for invite
+// --signal; the loader checks the number. `laib person signal` files the same
+// path from laib-haushalt, behind the door (#677).
 func proposeSignal(ctx context.Context, env *cliEnv, st *state.State, user, number string) (int, error) {
 	return inbox.ProposeAt(ctx, env, st, "person", "Die Signal-Nummer von "+user+" eintragen (box.yml people)",
 		map[string]*yaml.Node{"box.yml:people." + user + ".signal": {Kind: yaml.ScalarNode, Value: number}})

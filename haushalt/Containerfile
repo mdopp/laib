@@ -1,5 +1,5 @@
 # laib-haushalt in its container (ADR 0027): the household verbs behind
-# laib's verb door (ADR 0026), scan and net geraete. It gets no more of the
+# laib's verb door (ADR 0026): scan, net geraete, tell, zuhause and person signal. It gets no more of the
 # box than the scan service's orders folder, the door's key and its own
 # propose-only token; it reads none of laib's files.
 # One static binary on distroless/static, no shell, and the IEEE OUI list

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/lease"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/sysd"
 	"github.com/mdopp/laib/internal/token"
@@ -82,31 +82,46 @@ func TestTheLeasePausesThroughLaibAndResumeBringsTheUnitsBack(t *testing.T) {
 	}
 }
 
-// The lease's own client (internal/lease MCP) against laib serve's MCP, as
-// its container calls it: status names the services with their roles and
-// units, pause and resume act, note lands in the journal as the lease.
+// The lease's calls as its own client sends them (lease/laib.go; the
+// lease imports nothing of the kernel and the kernel nothing of it, #677,
+// so lease/laib677_test.go pins the same argument strings on its side):
+// status names the services with their units, pause and resume act, note
+// lands in the journal as the lease.
 func TestTheLeaseReachesLaibOverMCPWithItsHand(t *testing.T) {
 	env, _ := testBox(t)
 	store, _ := token.Load(cli.TokenPath(env))
 	tok, _, _ := store.Mint("lease", 0, "test")
 	srv := httptest.NewServer(mcp.Handler(env))
 	t.Cleanup(srv.Close)
-	box := lease.MCP{URL: srv.URL, Token: tok}
 	ctx := context.Background()
-	svcs, err := box.Services(ctx)
-	if err != nil || !slices.ContainsFunc(svcs, func(s lease.Service) bool { _, ok := s.Units["whoami.service"]; return s.Name == "whoami" && ok }) {
-		t.Fatalf("status over MCP: %v %+v", err, svcs)
+	ask := func(tool, args string) (string, error) {
+		return mcp.Ask(ctx, srv.Client(), srv.URL, tok, tool, args)
 	}
-	if err := box.Pause(ctx, lease.Hold{Service: "whoami", Until: time.Now().Add(10 * time.Minute), Reason: "Grafikkarte reserviert für bote („full“)", Stop: []string{"whoami.service"}}); err != nil {
+	type service struct { // lease.Service
+		Name  string            `json:"name"`
+		Units map[string]string `json:"units"`
+	}
+	text, err := ask("status", "")
+	var st struct {
+		Services []service `json:"services"`
+	}
+	if err != nil || json.Unmarshal([]byte(text), &st) != nil || !slices.ContainsFunc(st.Services, func(s service) bool {
+		_, ok := s.Units["whoami.service"]
+		return s.Name == "whoami" && ok
+	}) {
+		t.Fatalf("status over MCP: %v %s", err, text)
+	}
+	until := time.Now().Add(10 * time.Minute).UTC().Format(time.RFC3339)
+	if _, err := ask("pause", `"whoami" "--until" "`+until+`" "--stop" "whoami.service" "Grafikkarte reserviert für bote („full“)"`); err != nil {
 		t.Fatal(err)
 	}
 	if pz, ok := apply.Paused(env.Paths)["whoami"]; !ok || pz.By != "lease" || !strings.Contains(pz.Reason, "„full“") {
 		t.Fatalf("the pause over MCP: %+v", pz)
 	}
-	if err := box.Note(ctx, "bote hält die Grafikkarte seit 21 min"); err != nil {
+	if _, err := ask("note", `"--kind" "watch" "bote hält die Grafikkarte seit 21 min"`); err != nil {
 		t.Fatal(err)
 	}
-	if err := box.Resume(ctx, "whoami"); err != nil {
+	if _, err := ask("resume", `"whoami"`); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := apply.Paused(env.Paths)["whoami"]; ok {
@@ -118,7 +133,7 @@ func TestTheLeaseReachesLaibOverMCPWithItsHand(t *testing.T) {
 	}) {
 		t.Fatalf("the note is not in the journal as the lease: %+v", es)
 	}
-	if err := (lease.MCP{URL: srv.URL, Token: "laib_lease_wrong"}).Resume(ctx, "whoami"); err == nil {
+	if _, err := mcp.Ask(ctx, srv.Client(), srv.URL, "laib_lease_wrong", "resume", `"whoami"`); err == nil {
 		t.Fatal("a wrong token reached laib")
 	}
 }
