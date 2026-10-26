@@ -42,15 +42,32 @@ class Decide(unittest.TestCase):
     def test_laib_reads_where_the_wake_word_stands(self):
         # #309: the Box page and diag read laib-status.json, which the trainer
         # writes on every change; laib names no template
-        for state, reason, want in (("training", "", "wird trainiert"), ("done", "Modell gebaut", "trainiert"),
+        for state, reason, want in (("training", "", "wird trainiert"), ("done", "Modell gebaut", "trainiert, noch nicht auf dem Gerät"),
                                     ("failed", "beim Schritt „Modell trainieren“: der Speicher hat nicht gereicht.",
                                      "Training fehlgeschlagen beim Schritt „Modell trainieren“")):
             trainer.write_status(self.out, "hey_joshua", state, "Hey Joshua", "r1", reason)
             s = json.loads((self.out / "laib-status.json").read_text())
             self.assertIn(want, s["detail"])
             self.assertTrue(s["at"].endswith("Z"))
-            self.assertEqual(len(s["findings"]), 1 if state == "failed" else 0)
+            self.assertEqual(len(s["findings"]), 0 if state == "training" else 1)
         self.assertEqual(s["findings"][0]["severity"], "gelb")
+
+    def test_done_is_not_on_the_device_until_it_is_measured(self):
+        # #759: „trainiert“ read as done, and the Voice PE still had only Solaris
+        trainer.write_status(self.out, "hey_joshua", "done", "Hey Joshua", "r1", "Modell gebaut")
+        s = json.loads((self.out / "laib-status.json").read_text())
+        self.assertEqual(s["detail"], "Wake-Word „Hey Joshua“ trainiert, noch nicht auf dem Gerät")
+        self.assertEqual(s["phrase"], "Hey Joshua")
+        f = s["findings"][0]
+        self.assertEqual((f["severity"], f["topic"], f["unmeasured"]), ("info", "wakeword", True), "no Box-Aufgabe closes on the trainer's word")
+
+    def test_a_restart_keeps_what_stimme_names_measured(self):
+        measured = {"detail": "Wake-Word „Hey Joshua“ auf dem Gerät", "phrase": "Hey Joshua", "geraet": True, "findings": []}
+        (self.out / "laib-status.json").write_text(json.dumps(measured))
+        trainer.show_done(self.out, "Hey Joshua")
+        self.assertEqual(json.loads((self.out / "laib-status.json").read_text()), measured)
+        trainer.show_done(self.out, "Hallo Hal")   # a new phrase: the old measurement is not its
+        self.assertIn("Hallo Hal", json.loads((self.out / "laib-status.json").read_text())["detail"])
 
 
 class Positives(unittest.TestCase):

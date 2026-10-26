@@ -4,6 +4,9 @@ provides: [esphome]
 upstream: [https://github.com/esphome/esphome, https://esphome.io/]   # where the Operator's web search looks first (#544)
 # ESPHome dashboard and OTA for the Voice PE devices and other ESP boards.
 # Host network for mDNS discovery and OTA (carve-out).
+# esphome-flash.service (#759) puts the house persona's wake word, trained by
+# Stimme, onto the devices: only `laib flash esphome` starts it, after a human
+# approved Stimme's repair in the Inbox; it reads stimme/micro on the host.
 hostNetwork: true
 routes:
   - host: esphome
