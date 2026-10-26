@@ -69,6 +69,15 @@ pipeline's language; a part that works stays as the owner chose it. A
 pipeline whose agent is Frage prefers HA's local intents (#557, ADR 0015):
 "Mach Bambi aus" is HA's intent in about a second, Frage answers the rest.
 
+The names as Whisper writes them (#760): HA's own intents missed „Schalte
+Sofa-Licht aus“ for a light named „Sofalicht“. home-assistant-names.py gives
+every entity exposed to Assist the hyphenated and the split spelling of each
+compound in its name and aliases, with the token of HA's user „Laib-Namen“
+(HA_NAMES_TOKEN, an administrator: entity_registry/update is admin-only);
+this hook runs it once, home-assistant-names.timer every 15 minutes. Frage's
+prompt carries the devices' names (a template HA renders), so a command the
+intents still miss gets „Meinst du …?“ instead of a web search.
+
 The family's calendars (#495): Home Assistant reads Radicale as its own
 account `homeassistant` (seeded by auth, HA_RADICALE_PASSWORD), whose home
 templates/kalender fills with copies of the family's calendars. This hook adds
@@ -78,7 +87,7 @@ hand-made ~/ha-caldav.sh).
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
-import base64, ipaddress, json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
+import base64, ipaddress, json, os, socket, struct, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
 BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
@@ -104,6 +113,7 @@ MACHINES = {
     "BOTE_HA_TOKEN": ("laib: bote", "bote", "Bote", False, "HA_BOTE_PASSWORD"),  # Assist API only
     "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
     "STIMME_HA_TOKEN": ("laib: stimme", "stimme", "Stimme", False, "HA_STIMME_PASSWORD"),  # the entity, area and floor registries: every user may list them
+    "HA_NAMES_TOKEN": ("laib: namen", "laib-namen", "Laib-Namen", True, "HA_NAMES_PASSWORD"),  # #760: the spellings as aliases, entity_registry/update is admin-only
 }
 RETIRED = [tuple(w.split("=", 1)) for w in E.get("LAIB_SECRET_HA_RETIRED_TOKENS", "").split() if "=" in w]  # (secret, old token)
 RETIRED_AT_START = list(RETIRED)
@@ -483,12 +493,49 @@ def strangers():
         print("home-assistant: in Home Assistant and not Laib's (the owner decides, nothing deleted, #591): " + "; ".join(out))
 
 
+NAMES_TOKEN = ""   # the user Laib-Namen's, once main() has it (#760)
+
+
 def main():
-    global session
+    global session, NAMES_TOKEN
     session = next((E["LAIB_SECRET_" + n] for n in ("HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
     for secret in ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
         machine(secret)
-    print("home-assistant: tokens for the check, Haus, the Automat, the Bote and Stimme work, each on its own user")
+    NAMES_TOKEN = machine("HA_NAMES_TOKEN")[0]
+    print("home-assistant: tokens for the check, Haus, the Automat, the Bote, Stimme and the names work, each on its own user")
+
+
+# Frage's prompt (#760): HA renders it as a template on every request, so its second line is the names of what
+# Assist switches as HA has them now; a device command HA's intents missed gets the nearest ones from Frage
+# („Meinst du „Sofalicht“?“). No LLM API on the agent: with one HA hands GetState and media to it, not its intents.
+SPOKEN = "['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'vacuum', 'valve', 'scene']"
+FRAGE_PROMPT = ("Antworte kurz, auf Deutsch, zum Vorlesen.\n"
+                "Geräte: {{ states | selectattr('domain', 'in', " + SPOKEN + ") | map(attribute='name') | join('; ') }}")
+FRAGE_OLD_PROMPTS = ("Antworte kurz, auf Deutsch, zum Vorlesen.",)   # Laib's own before #760: replaced; any other is the owner's
+
+
+def frage_prompt(tok, entry_id, sub):
+    """the agent Frage's prompt FRAGE_PROMPT, unless the owner wrote one; its data is in HA's storage only"""
+    try:
+        with open(HA_STORAGE) as f:
+            subs = next((e.get("subentries") or [] for e in json.load(f)["data"]["entries"] if e.get("entry_id") == entry_id), [])
+        data = dict(next(s for s in subs if s.get("subentry_id") == sub["subentry_id"])["data"])
+    except (OSError, ValueError, KeyError, TypeError, StopIteration) as e:
+        print(f"home-assistant: Frage's prompt NOT checked: HA's config entries are not readable ({type(e).__name__})", file=sys.stderr)
+        return
+    if data.get("prompt") == FRAGE_PROMPT:
+        return
+    if data.get("prompt") not in FRAGE_OLD_PROMPTS:
+        print("home-assistant: Frage's prompt is the owner's: it stays (without its line „Geräte: …“ Frage names no nearest device, #760)")
+        return
+    st, flow = call("POST", "/api/config/config_entries/subentries/flow",
+                    {"handler": [entry_id, "conversation"], "subentry_id": sub["subentry_id"]}, token=tok)
+    if st != 200 or (flow or {}).get("type") != "form":
+        raise RuntimeError(f"the agent Frage's reconfigure did not start: {(flow or {}).get('reason') or st}")
+    st, done = call("POST", "/api/config/config_entries/subentries/flow/" + flow["flow_id"], dict(data, prompt=FRAGE_PROMPT), token=tok)
+    if (done or {}).get("reason") != "reconfigure_successful":
+        raise RuntimeError(f"Frage's prompt was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
+    print("home-assistant: Frage's prompt names the devices now (#760)")
 
 
 def frage_agent():
@@ -522,7 +569,9 @@ def frage_agent():
         subs = ws("config_entries/subentries/list", entry_id=entry["entry_id"])
     finally:
         ws.close()
-    if any(s.get("subentry_type") == "conversation" and s.get("title") == "Frage" for s in subs):
+    have = next((s for s in subs if s.get("subentry_type") == "conversation" and s.get("title") == "Frage"), None)
+    if have:
+        frage_prompt(tok, entry["entry_id"], have)
         print("home-assistant: conversation agent Frage is there")
         return
     for _ in range(10):  # a fresh entry loads asynchronously; until then the subentry flow aborts
@@ -533,7 +582,7 @@ def frage_agent():
         if st != 200 or (flow or {}).get("type") != "form":
             raise RuntimeError(f"the conversation agent's flow did not start: {(flow or {}).get('reason') or st}")
         st, done = call("POST", "/api/config/config_entries/subentries/flow/" + flow["flow_id"],
-                        {"name": "Frage", "model": "frage", "prompt": "Antworte kurz, auf Deutsch, zum Vorlesen."}, token=tok)
+                        {"name": "Frage", "model": "frage", "prompt": FRAGE_PROMPT}, token=tok)
         if (done or {}).get("type") != "create_entry":
             raise RuntimeError(f"the conversation agent Frage was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
         print("home-assistant: conversation agent Frage added (Ollama integration, model frage); "
@@ -802,6 +851,22 @@ def voice(stimme):
 
 
 HA_CONFIG = os.path.dirname(os.path.dirname(HA_STORAGE))   # HA's /config, at its host path (a data path of this service)
+
+
+def spellings():
+    """#760: home-assistant-names.py once, as its timer runs it every 15 minutes: the spellings Whisper writes
+    („Sofa-Licht“ for „Sofalicht“) as aliases, with the token of the user Laib-Namen, on stdin's environment"""
+    if not os.path.isdir(HA_CONFIG):
+        print(f"home-assistant: no {HA_CONFIG}: the spellings wait for home-assistant-names.timer")
+        return
+    script = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "home-assistant-names.py")
+    p = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=120,
+                       env={"PATH": E.get("PATH", "/usr/bin"), "HA_URL": BASE, "HA_TOKEN": NAMES_TOKEN,
+                            "NAMES_STATE": os.path.join(HA_CONFIG, ".laib-aliases.json")})
+    for line in (p.stdout + p.stderr).splitlines():
+        print("home-assistant: " + line, file=sys.stderr if p.returncode else sys.stdout)
+    if p.returncode:
+        print("home-assistant: the spellings NOT set: home-assistant-names.timer tries again", file=sys.stderr)
 GONE = ("unavailable", "unknown")
 
 
@@ -1269,6 +1334,10 @@ try:
     voice(stimme)
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the pipelines stay as they were; the check names what is missing
     print(f"home-assistant: the persona's Assist pipeline NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
+try:
+    spellings()
+except (OSError, subprocess.SubprocessError) as e:  # the timer tries again in 15 minutes
+    print(f"home-assistant: the spellings NOT set: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     music_assistant()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; laib diag lists what Music Assistant lacks

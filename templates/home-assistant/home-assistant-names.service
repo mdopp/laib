@@ -1,0 +1,17 @@
+# The names as Whisper writes them (#760): home-assistant-names.py runs inside the running
+# Home Assistant container and gives every entity exposed to Assist the hyphenated and the
+# split spelling of each compound in its name as aliases („Sofa-Licht“ for „Sofalicht“),
+# with the token post-deploy mints for HA's user „Laib-Namen“ (an administrator:
+# entity_registry/update is admin-only). Laib's own aliases are written down in
+# /config/.laib-aliases.json; the owner's are never touched. Home Assistant not running:
+# nothing to do. The token reaches podman through the environment, never on argv.
+[Unit]
+Description=Home Assistant: the spellings Whisper writes, as aliases
+After=home-assistant.service
+
+[Service]
+Type=oneshot
+Environment=HA_TOKEN=${NAMES_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/home-assistant/home-assistant-names.py
+ExecStart=/bin/sh -c 'systemctl --user -q is-active home-assistant.service || { echo "Home Assistant is not running: the spellings wait"; exit 0; }; exec /usr/bin/podman exec -i -e HA_TOKEN systemd-home-assistant python3 -'
+TimeoutStartSec=120

@@ -118,13 +118,15 @@ class WS:
 
 
 def clean(*groups) -> list:
-    """vocabulary.clean_names: in order, whitespace collapsed, each name once (case-insensitive)"""
+    """vocabulary.clean_names: in order, whitespace collapsed, each name once (case-insensitive); „Sofa-Licht“
+    and „Sofa Licht“, the spellings home-assistant adds for „Sofalicht“ (#760), are the same name to Whisper"""
     out, seen = [], set()
     for g in groups:
         for v in g or ():
             name = " ".join(v.split()) if isinstance(v, str) else ""
-            if name and name.lower() not in seen:
-                seen.add(name.lower())
+            key = name.lower().replace("-", "").replace(" ", "")
+            if name and key not in seen:
+                seen.add(key)
                 out.append(name)
     return out
 

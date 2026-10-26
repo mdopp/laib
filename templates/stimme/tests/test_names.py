@@ -59,6 +59,13 @@ class Prompt(unittest.TestCase):
         # areas and floors holding something exposed, then the areas with nothing exposed, then the rest (sensors)
         self.assertEqual(p, "Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer, Stube, Badezimmer, PV Anlage, Erdgeschoss, Küche, Obergeschoss, PV Leistung.")
 
+    def test_the_spellings_home_assistant_adds_cost_no_budget(self):
+        # #760: home-assistant-names.py adds „Sofa-Licht“ and „Sofa Licht“ for „Sofalicht“, for HA's intents;
+        # Whisper writes them anyway, and each would take a name's place in its 200 tokens
+        house = json.loads(json.dumps(HOUSE))
+        house["entries"]["light.dimmer_2_5"]["aliases"] += ["Sofa-Licht", "Sofa Licht"]
+        self.assertEqual(names.prompt(names.fetch(FakeWS(house))), names.prompt(names.fetch(FakeWS(HOUSE))))
+
     def test_a_name_late_in_the_alphabet_survives_a_full_prompt(self):
         """the box: 50 exposed things, areas first, cut at the T of the entity ids — light.wohnzimmer_bambi lost"""
         many = dict(HOUSE, registry=[ent(f"light.a{i:02}", area="wohnzimmer") for i in range(40)] + [ent("light.wohnzimmer_bambi", area="wohnzimmer")],
