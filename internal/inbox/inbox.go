@@ -281,19 +281,13 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), p.Tier) {
 		return cli.Refused(env, fmt.Sprintf("%s may not decide a %s-tier proposal", env.Actor, p.Tier))
 	}
-	if approve && !policy.IsHuman(st.Policy, proposal.Hand(env.Actor)) && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
+	if approve && !policy.IsHuman(proposal.Hand(env.Actor)) && policy.NeedsHuman(st.Policy, p.Tier, p.Class) {
 		why := strings.Join(p.Reasons, "; ")
 		if why == "" {
 			why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"
 		}
 		fmt.Fprintf(env.Errw(), "laib: %s may not approve #%d — nur ein Mensch: %s\n", env.Actor, p.ID, why)
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d abgelehnt für %s: nur ein Mensch — %s", p.ID, env.Actor, why)})
-		return cli.ExitRefused
-	}
-	// the chat decides only what is not destructive (#441, ADR 0016): what the review marks
-	// for a human, a removal and every destroy are the Inbox's, behind the second factor
-	if approve && proposal.Hand(env.Actor) != "human" && (p.Tier == "destroy" || p.Class == "human" || p.Class == "remove") {
-		fmt.Fprintf(env.Errw(), "laib: #%d nur in der Inbox, mit dem zweiten Faktor: https://%s.%s/inbox\n", p.ID, st.Box.Laib.Host, st.Box.Domain)
 		return cli.ExitRefused
 	}
 	if !approve {

@@ -8,7 +8,7 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// #469: signal-cli runs as its own daemon (Hermes and the relay speak it),
+// #469: signal-cli runs as its own daemon (Hermes and bote-notify speak it),
 // which has no QR endpoint, so the Box page tells the two ways to give the
 // Bote its number: registered on a number only it uses (a spare landline by
 // voice call, no second SIM — the Kraftwerk's way), or linked to a phone.

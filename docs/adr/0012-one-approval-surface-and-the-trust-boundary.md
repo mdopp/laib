@@ -3,7 +3,7 @@
 Applies when you add a button to a Solaris card, read `LAIB_ACTOR` for a
 permission decision, or expose a Laib page or listener anywhere.
 
-- **Status:** Accepted, 2026-10-09; confirmed by ADR 0019 (2026-10-12): the Box page, the Signal relay and Haus `/box` are one inbox, and no LLM holds a token that can approve (#68).
+- **Status:** Accepted, 2026-10-09; confirmed by ADR 0019 (2026-10-12): the Box page, the Signal relay and Haus `/box` are one inbox, and no LLM holds a token that can approve (#68). Amended 2026-10-26 (#778): the relay is gone; the Inbox is the only approval surface.
 
 ## Context
 
@@ -58,3 +58,26 @@ own homeserver. What the Matrix identity rests on, and what it does not,
 is in ADR 0016's amendment of the same date. Telegram never approves. A
 Matrix that fails its check is refused on its own; the relay, its Signal
 path and the Box page stay up.
+
+## Amendment 2026-10-26 (#778): the Inbox alone
+
+Owner decision 2026-10-26 („B3“, #751): approvals happen only in the Inbox
+(`laib.<domain>/inbox`, behind Authelia's second factor). The relay
+(`cmd/relay`, `internal/relay`, the `bote-relay` container and its image),
+the `approver` hand, the Signal poll and 👍/👎 votes (#509) and the verdicts
+on Matrix and Discord (#184, #463) are removed. §1 now reads: **one approval
+surface, the Box page's Inbox**; a card or a chat message links to it, and
+nothing else decides. The host shell (§2) stays the human it always was.
+
+- The chat is told, not asked: laib-notify sends a new proposal as one line,
+  „Freigabe #N: <headline> · <Inbox link>“, on the owner's channel, with the
+  same line as the mail's subject and body when no channel answers.
+- Only the hand `human` counts as a human (`policy.IsHuman`). A policy.yml
+  from before still loads with its `approver: {…, human: true}` line (the
+  loader ignores the unknown key); the mark counts for nothing, so that
+  token can no longer approve what only a human may. The hand itself is the
+  owner's to remove, with a policy proposal; the default policy no longer
+  has it and the defaults sync (#575) never adds it back.
+- Rollback: an older release still renders its own bote template with the
+  relay and its `laib-relay:latest` image, which stays on ghcr; the box's
+  bote template changes only with a template update the owner approves.

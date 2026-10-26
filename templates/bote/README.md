@@ -11,19 +11,27 @@ Signal, Matrix, Telegram and Discord are each optional; at least one is set. A
 channel is on while its value is set, and an unset one leaves no container
 and no line in Hermes' `.env` (laib.yml `when:` and `channels:`):
 
-| Channel | On while | Secret | Who may talk | Approvals |
+| Channel | On while | Secret | Who may talk | Home channel |
 |---|---|---|---|---|
 | Signal | `SIGNAL_ACCOUNT` (the Bote's number) | none (linked device, QR) | `SIGNAL_ALLOWED_USERS` | `ADMIN_NUMBER` |
-| Matrix | `MATRIX_HOMESERVER` | `BOTE_MATRIX_TOKEN` | `MATRIX_ALLOWED_USERS` | `ADMIN_MXID` in `ADMIN_ROOM` |
-| Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | never |
-| Discord | `DISCORD_ALLOWED_USERS` | `BOTE_DISCORD_TOKEN` | `DISCORD_ALLOWED_USERS` | `ADMIN_DISCORD_ID` in `ADMIN_DISCORD_CHANNEL` (#463) |
+| Matrix | `MATRIX_HOMESERVER` | `BOTE_MATRIX_TOKEN` | `MATRIX_ALLOWED_USERS` | `ADMIN_ROOM` |
+| Telegram | `TELEGRAM_ALLOWED_USERS` | `BOTE_TELEGRAM_TOKEN` | `TELEGRAM_ALLOWED_USERS` | — |
+| Discord | `DISCORD_ALLOWED_USERS` | `BOTE_DISCORD_TOKEN` | `DISCORD_ALLOWED_USERS` | — |
 
-`bote-signal` runs only with Signal, `bote-relay` only with `ADMIN_NUMBER`
-or `ADMIN_MXID` (both empty in the example: set yours to approve in the
-chat). `laib plan` refuses, before anything restarts: a person in box.yml
-`people` with a target on a channel the Bote does not have, `ADMIN_NUMBER`
-without Signal, `ADMIN_MXID` without Matrix or `ADMIN_ROOM`, and Matrix,
-Telegram or Discord without its token (laib.yml `requires:`); it prints each container
+**No channel approves (#778, owner 2026-10-26).** A proposal is decided only
+in the Inbox (`laib.<domain>/inbox`, behind Authelia's second factor); the
+chat gets one line per new proposal, „Freigabe #N: <headline> · <Inbox
+link>“, from laib-notify. Until #778 a `bote-relay` container read
+„gib #N frei“, Signal polls and 👍/👎 from `ADMIN_NUMBER`, `ADMIN_MXID` and
+`ADMIN_DISCORD_ID` with the `approver` hand's token; it is gone, and so are
+those values but the two home channels. `ADMIN_NUMBER` and `ADMIN_ROOM`
+stay: Hermes' home channel (`SIGNAL_HOME_CHANNEL`, `MATRIX_HOME_ROOM`),
+where it tells the owner, for instance, of a dropped sender.
+
+`bote-signal` runs only with Signal. `laib plan` refuses, before anything
+restarts: a person in box.yml `people` with a target on a channel the Bote
+does not have, `ADMIN_NUMBER` without Signal, and Matrix, Telegram or
+Discord without its token (laib.yml `requires:`); it prints each container
 it leaves off as `AUS:`. The `pre-start` hook writes Hermes' `.env` and
 bote-notify's copy before the containers start, so a channel switched off
 is gone before Hermes reads it; `post-deploy` renders the rest and runs
@@ -35,23 +43,15 @@ no direct chat for a user id, so the state refuses `@user:server` (#189).
 
 **Matrix**, once: give the Bote its own **plain user** account on your
 homeserver: not a server admin, and not an application-service token
-(either can act as other users, so the Bote could pose as you; the relay
-refuses an account Synapse's admin API answers for). Log it in once to get
+(either can act as other users, so the Bote could pose as you). Log it in once to get
 a token (a new device; do not take the token of an Element session):
 `curl -s -XPOST https://<homeserver>/_matrix/client/v3/login -d
 '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"<bote>"},"password":"…","initial_device_display_name":"Bote"}'`,
 then `laib secret set BOTE_MATRIX_TOKEN` with its `access_token`. The Bote
 speaks Matrix **unencrypted only** (`MATRIX_E2EE_MODE=off`, ADR 0016
-amendment 2026-10-14): create rooms with it with encryption off. For
-approvals, create one more unencrypted room with only you and the Bote,
-put its id (`!…:server`, Room settings → Advanced) into `ADMIN_ROOM` and
-your Matrix ID into `ADMIN_MXID`; your account must be on the same
-homeserver as the Bote's. Otherwise the relay refuses Matrix with a
-journal line and keeps Signal running; it checks again every minute. It
-also stops Matrix approvals when that room turns encrypted or someone else
-joins. Whoever runs that homeserver, and every session or leaked token of
-your Matrix account, can approve as you: run your own homeserver if you
-approve on Matrix, and log out sessions you do not use.
+amendment 2026-10-14): create rooms with it with encryption off. For the
+home room, create one unencrypted room with only you and the Bote and put
+its id (`!…:server`, Room settings → Advanced) into `ADMIN_ROOM`.
 
 **Signal off** (`SIGNAL_ACCOUNT: ""`): `bote-signal` goes, and with it
 signal-cli's port 8085 (neither published nor declared, #190); its data does
@@ -78,19 +78,12 @@ Copy User ID). A bot is public; the list keeps others out, and an
 unlisted user gets no answer. A person's Discord target in box.yml
 `people` is the id of their **DM channel** with the bot
 (`discord:<channel id>`; right-click the DM → Copy Channel ID), which
-exists once they wrote to it. **Verdicts on Discord (#463)**: put your own
-user id into `ADMIN_DISCORD_ID` (it must be in `DISCORD_ALLOWED_USERS`) and
-your DM with the bot into `ADMIN_DISCORD_CHANNEL`. The relay then reads that
-DM itself through Discord's API, with the bot token, and acts only on a
-message Discord names you as the author of, in that DM alone. As on Signal,
-it acts only on what is not destructive (#441); the rest gets the Inbox link.
-Turn on two-factor login for your Discord account: whoever has it decides
-in the chat as you. A bot token without `DISCORD_ALLOWED_USERS` leaves
+exists once they wrote to it. A bot token without `DISCORD_ALLOWED_USERS` leaves
 Discord off (no line in `.env`), as with Telegram.
 
 **The Bote's Signal number (#469).** `bote-signal` runs signal-cli's own
 HTTP daemon (`signal-cli-native … daemon --http 127.0.0.1:8080`), which is
-what Hermes and the relay speak (`/api/v1/check`, `/api/v1/events`,
+what Hermes speaks (`/api/v1/check`, `/api/v1/events`,
 `/api/v1/rpc`). It does not run the image's REST API, so there is no QR
 endpoint, and the image's own health check (the REST API's `/v1/health`)
 would keep it unhealthy: the unit's `HealthCmd` asks the daemon's
@@ -124,20 +117,8 @@ Without a number at all, Discord or Matrix work.
 1. Give the Bote its Signal number (Signal only): the Box page
    (`laib.<domain>`) → **Bote verbinden** prints the steps (above, #469).
 2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`: read, propose, note, escalate)
-   and `BOTE_APPROVER_TOKEN` (hand `approver`: approve, reject, inbox,
-   status, note — nothing else) are minted on `laib add bote`. **Hermes
-   holds no token that can approve** (#48): "gib #17 frei" / "lehne #17 ab"
-   are read by the `bote-relay` container straight from signal-cli's event
-   stream and from the admin's Matrix room, acted on only when the sender
-   is `ADMIN_NUMBER` on Signal or `ADMIN_MXID` in `ADMIN_ROOM` (#184),
-   answered with the proposal's consequence. Anyone else trying it gets a
-   journal line and no reply; Telegram never approves. On Signal a
-   proposal the chat may decide also comes as a poll (Freigeben /
-   Ablehnen / Später, #509): bote-notify keeps its timestamp in
-   `bote/umfragen/umfragen.json`, and the relay counts the admin's vote,
-   or a 👍/👎 on the poll, by the same rules, once, then closes the poll.
-   Destructive proposals, removals and class `human` get no poll, only the
-   Inbox link with the second factor. The Automat's writes and deletes execute only with
+   is minted on `laib add bote`. **Nothing in the pod holds a token that can
+   approve** (#48, #778): approvals happen only in the Inbox. The Automat's writes and deletes execute only with
    the four-digit code its first answer names; deleted automations are
    kept under `bote/automat/geloescht` for `automation_wiederherstellen`.
 3. Who may talk (#586): everyone in box.yml `people` with a `signal:` id
@@ -155,12 +136,11 @@ Without a number at all, Discord or Matrix work.
    `people` without a `signal:` id, and gives the sentence to answer with
    („Anna (+49…) ist oma“); the Bote, reading that answer, proposes the
    number with `laib_person_signal` and names the proposal; the owner
-   approves it in the Inbox (class human: no poll), and the restart that
+   approves it in the Inbox, and the restart that
    follows lets the number talk. Hermes notices each sender once per
    gateway run, and the dropped message itself is not kept: the person
-   sends it again. The relay and Hermes both
-   listen to signal-cli's daemon (`/api/v1/events`, which serves every
-   subscriber; Hermes also uses `/api/v1/rpc`) — the `bote-signal`
+   sends it again. Hermes listens to signal-cli's daemon
+   (`/api/v1/events`; it also uses `/api/v1/rpc`) — the `bote-signal`
    container must run `signal-cli daemon --http` (#54 checks the image).
 
 4. The house as a tool: in Home Assistant add the integration **Model
@@ -262,8 +242,7 @@ to the domains the family touches. The SOUL tells the model to take
 **How much the Laib tools are trusted is a value** (#524), `LAIB_TOOLS_TRUST`
 in `values.yml`: `untrusted` (the default) has Hermes ask the person in the
 chat before `propose`, `note` and `escalate`; `full` does not. Either way
-the hand `bote` can only propose, and approving stays the Inbox's or the
-relay's (#48). Before #524 the hook wrote `untrusted` itself, so every
+the hand `bote` can only propose, and approving stays the Inbox's (#778). Before #524 the hook wrote `untrusted` itself, so every
 template update undid an owner's `full`; a template update keeps a value
 (docs/STATE.md). Any other word fails the hook.
 

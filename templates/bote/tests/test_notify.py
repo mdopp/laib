@@ -42,8 +42,7 @@ class Notify(unittest.TestCase):
                                  send=[sys.executable, str(self.tmp / "fake.py"), "send"],
                                  hermes_src=str(self.src), hermes_home=str(self.tmp / "home"),
                                  max_text=40, max_body=512, per_person=3, total=5,
-                                 channel_timeout=1, deadline=3,
-                                 polls=str(self.tmp / "umfragen.json"), log=self.lines.append)
+                                 channel_timeout=1, deadline=3, log=self.lines.append)
         self.srv = notify.server(self.cfg, ("127.0.0.1", 0))
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.srv.server_port}/mitteilung"
@@ -202,7 +201,7 @@ class Notify(unittest.TestCase):
         (self.src / ".env").write_text("SIGNAL_HTTP_URL=http://127.0.0.1:1\nSIGNAL_ACCOUNT=+491\n")
         self.assertEqual(health(), 503)
 
-        # #469: Hermes and the relay speak signal-cli's own daemon (daemon --http), whose
+        # #469: Hermes and bote-notify speak signal-cli's own daemon (daemon --http), whose
         # health is /api/v1/check; bbernhard's REST API (/v1/about only) is not it
         for path, want in (("/api/v1/check", 200), ("/v1/about", 503)):
             class Daemon(http.server.BaseHTTPRequestHandler):
@@ -242,34 +241,16 @@ class Notify(unittest.TestCase):
         (self.src / ".env").write_text(f"SIGNAL_HTTP_URL=http://127.0.0.1:{d.server_port}\nSIGNAL_ACCOUNT=+491\n")
         return got
 
-    def test_a_proposal_on_signal_gets_a_poll_and_its_timestamp_is_kept(self):
-        # #509: Freigeben / Ablehnen / Später as a poll after the text, the timestamp → the proposal for the relay
+    def test_a_proposal_is_a_message_and_never_a_poll(self):
+        # #778: approvals only in the Inbox. An older laib-notify still sends vorschlag/frage
+        # (#509); the text goes out, and nothing else reaches signal-cli: no poll to vote on
         got = self.rpc_daemon()
-        code, body = self.post({"an": "mama", "text": "Laib: Vorschlag #17", "vorschlag": 17, "frage": "Vorschlag #17: whoami bekommt ein neues Image"})
-        self.assertEqual((code, body.get("umfrage")), (200, True), body)
-        self.assertEqual([c["to"] for c in self.calls()], ["signal:+4917012345678"], "the text goes out first, as always")
-        p = got[0]["params"]
-        self.assertEqual(got[0]["method"], "sendPollCreate")
-        self.assertEqual((p["account"], p["recipient"], p["option"], p["noMulti"]), ("+491", ["+4917012345678"], ["Freigeben", "Ablehnen", "Später"], True))
-        self.assertEqual(p["question"], "Vorschlag #17: whoami bekommt ein neues Image")
-        self.assertEqual(json.loads((self.tmp / "umfragen.json").read_text()), {"1792533068940": {"vorschlag": 17}})
-        # the file stays small: only the newest polls
-        self.srv.cfg.keep_polls, self.srv.cfg.per_person = 2, 10
-        for n in (18, 19):
-            self.post({"an": "mama", "text": f"Vorschlag #{n}", "vorschlag": n, "frage": f"Vorschlag #{n}"})
-        self.assertEqual(sorted(v["vorschlag"] for v in json.loads((self.tmp / "umfragen.json").read_text()).values()), [18, 19])
-
-    def test_no_poll_without_a_proposal_off_signal_or_when_the_daemon_refuses(self):
-        got = self.rpc_daemon()
-        self.post({"an": "mama", "text": "Waschmaschine fertig"})
-        self.post({"an": "papa", "text": "Vorschlag #17", "vorschlag": 17, "frage": "Vorschlag #17"})   # telegram
-        self.post({"an": "mama", "text": "Vorschlag #17", "vorschlag": "17", "frage": "Vorschlag #17"})  # not an id
+        code, body = self.post({"an": "mama", "text": "Freigabe #17: whoami bekommt ein neues Image · https://laib.example/inbox", "vorschlag": 17, "frage": "Vorschlag #17"})
+        self.assertEqual((code, body), (200, {"ok": True, "kanal": "signal"}))
+        self.assertEqual([c["to"] for c in self.calls()], ["signal:+4917012345678"])
         self.assertEqual(got, [])
         self.assertFalse((self.tmp / "umfragen.json").exists())
-        got = self.rpc_daemon(fail=True)
-        code, body = self.post({"an": "mama", "text": "Vorschlag #17", "vorschlag": 17, "frage": "Vorschlag #17"})
-        self.assertEqual((code, body.get("umfrage")), (200, False), "a failed poll does not fail the message: it says gib #17 frei")
-        self.assertFalse((self.tmp / "umfragen.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

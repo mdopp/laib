@@ -6,31 +6,30 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// #48: a hand may be limited to a few verbs (the approver: approve, reject,
-// inbox, status, note), and a hand may count as a human — the relay behind
-// the admin's verified Signal number — so its verdicts decide what only a
-// human may allow.
+// #48: a hand may be limited to a few verbs (notify: diag, updates, inbox,
+// note). Since #778 only the human counts as one: a policy.yml from before
+// that marks the relay's approver `human: true` loads, and the mark is ignored.
 func TestHandVerbsAndHumanStatus(t *testing.T) {
 	p := state.Policy{Hands: map[string]state.Hand{
-		"ops":      {Ceiling: "apply"},
-		"approver": {Ceiling: "apply", Human: true, Verbs: []string{"approve", "reject", "inbox", "status", "note"}},
-		"human":    {Ceiling: "destroy"},
+		"ops":    {Ceiling: "apply"},
+		"notify": {Ceiling: "propose", Verbs: []string{"diag", "updates", "inbox", "note"}},
+		"human":  {Ceiling: "destroy"},
 	}}
 	if !MayVerb(p, "ops", "exec") || !MayVerb(p, "ops", "approve") {
 		t.Fatal("a hand without a verb list may use every verb its ceiling reaches")
 	}
-	if !MayVerb(p, "approver", "approve") || !MayVerb(p, "approver", "inbox") {
-		t.Fatal("the approver may approve and read the inbox")
+	if !MayVerb(p, "notify", "inbox") || !MayVerb(p, "notify", "note") {
+		t.Fatal("notify may read the inbox and note")
 	}
-	for _, v := range []string{"exec", "write", "restore", "apply", "propose", "rollback"} {
-		if MayVerb(p, "approver", v) {
-			t.Fatalf("the approver may %s", v)
+	for _, v := range []string{"exec", "write", "restore", "apply", "propose", "rollback", "approve"} {
+		if MayVerb(p, "notify", v) {
+			t.Fatalf("notify may %s", v)
 		}
 	}
 	if MayVerb(p, "nobody", "status") {
 		t.Fatal("an unknown hand may use verbs")
 	}
-	if !IsHuman(p, "human") || !IsHuman(p, "approver") || IsHuman(p, "ops") {
+	if !IsHuman("human") || IsHuman("approver") || IsHuman("ops") {
 		t.Fatal("human status wrong")
 	}
 	// an unknown verb no longer fails the policy: a rollback must load what a newer laib wrote

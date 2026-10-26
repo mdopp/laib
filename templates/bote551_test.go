@@ -10,7 +10,7 @@ import (
 // daemon in the signal-cli-rest-api image (#469), and inherits the image's
 // HEALTHCHECK, which asks the REST API's /v1/health: a path the daemon
 // does not serve. The check asks the daemon where Exec makes it listen, on
-// the path Hermes and the relay depend on, and fails on an HTTP error
+// the path Hermes and bote-notify depend on, and fails on an HTTP error
 // (curl without -f exits 0 on a 404: a probe that cannot fail).
 func TestBoteSignalHealthAsksTheDaemonItRuns(t *testing.T) {
 	unit := readT(t, "bote/bote-signal.container")

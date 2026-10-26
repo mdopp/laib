@@ -1,4 +1,4 @@
-package mcp
+package main
 
 import (
 	"bytes"
@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-// Ask calls one laib tool with a token, the way the relay reaches laib
-// serve (laib-lease has its own client since #677): the tool's text, or
-// its error text as the error.
-func Ask(ctx context.Context, h *http.Client, url, token, tool, args string) (string, error) {
+// askMCP calls one laib tool with a token over HTTP, the way a program on
+// the box reaches laib serve: the tool's text, or its error text as the
+// error. A test's client since the relay, its last production user, went (#778).
+func askMCP(ctx context.Context, h *http.Client, url, token, tool, args string) (string, error) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
 		"params": map[string]any{"name": "laib_" + tool, "arguments": map[string]string{"args": args}}})
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))

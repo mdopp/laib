@@ -12,11 +12,8 @@ rate-limited; the log names the person, the platform, the exit code and a
 short prefix of the text, never the target, Hermes' output or the whole
 text.
 
-A proposal the chat may decide (#509) comes with {"vorschlag": N, "frage":
-"…"}: when the message went out on Signal, a poll Freigeben / Ablehnen /
-Später follows it (signal-cli's sendPollCreate), and its timestamp is kept
-with N in umfragen.json, the only Bote messages the relay counts a vote or
-a 👍/👎 on. The text says "gib #N frei" too, so a failed poll loses nothing.
+A new proposal is one line like any other message (#778): approvals happen
+only in the Inbox, so there is no poll and no vote to count.
 POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
 sends a photo or PDF someone sent with "ablegen", with the same bearer, and
 this writes it into Paperless' consume folder as Bote/<sender>/<title>.<ext>
@@ -42,8 +39,6 @@ class Config:
     channel_timeout: float = 20            # one channel's hermes send
     deadline: float = 50                   # all channels together; HA's rest_command waits 60 s
     log: object = print
-    polls: str = "/umfragen/umfragen.json"  # timestamp → proposal, read by the relay (#509)
-    keep_polls: int = 50
     consume: str = "/consume"              # Paperless' consume folder (#521); missing: /ablage answers 503
     max_file: int = 25 << 20               # one document, as Haus' upload (haus#10)
     owner: tuple = (1000, 1000)            # Paperless' user (paperless.container USERMAP_UID): it removes what it filed
@@ -116,41 +111,6 @@ def signal_env(cfg):
     except OSError:
         pass
     return env.get("SIGNAL_HTTP_URL", ""), env.get("SIGNAL_ACCOUNT", "")
-
-
-_polls_lock = threading.Lock()
-
-
-def poll(cfg, number, vorschlag, frage):
-    """A poll after a proposal's message on Signal (#509); its timestamp → the
-    proposal in cfg.polls. False when there is no Signal or the daemon refused."""
-    url, account = signal_env(cfg)
-    if not url or not account:
-        return False
-    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "sendPollCreate", "params": {
-        "account": account, "recipient": [number], "question": frage[:200],
-        "option": ["Freigeben", "Ablehnen", "Später"], "noMulti": True}}).encode()
-    try:
-        req = urllib.request.Request(url.rstrip("/") + "/api/v1/rpc", data=body, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            ts = int(json.loads(r.read())["result"]["timestamp"])
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        cfg.log(f"umfrage: #{vorschlag} nicht gesendet: {type(e).__name__}")
-        return False
-    with _polls_lock:
-        try:
-            with open(cfg.polls) as f:
-                polls = json.load(f)
-        except (OSError, ValueError):
-            polls = {}
-        polls[str(ts)] = {"vorschlag": vorschlag}
-        polls = dict(sorted(polls.items(), key=lambda kv: int(kv[0]))[-cfg.keep_polls:])
-        tmp = cfg.polls + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(polls, f)
-        os.replace(tmp, cfg.polls)
-    cfg.log(f"umfrage: #{vorschlag} gesendet")
-    return True
 
 
 # what Paperless files and the Bote takes, by its first bytes, with the extension it gets
@@ -285,11 +245,7 @@ class Handler(BaseHTTPRequestHandler):
         cfg.log(f"mitteilung: an={person} kanal={kanal or '-'} {'ok' if ch else 'fehlgeschlagen'} text={text[:12]!r}…")
         if not ch:
             return self.reply(502, {"fehler": "kein Kanal hat die Mitteilung angenommen"})
-        out = {"ok": True, "kanal": kanal}
-        vorschlag, frage = msg.get("vorschlag"), msg.get("frage")
-        if kanal == "signal" and type(vorschlag) is int and isinstance(frage, str) and frage.strip():
-            out["umfrage"] = poll(cfg, ch.split(":", 1)[1], vorschlag, frage.strip())
-        return self.reply(200, out)
+        return self.reply(200, {"ok": True, "kanal": kanal})
 
     def ablage(self, cfg):
         """{titel, plattform, absender, name, daten: base64} → {ok, titel} (#521)"""
@@ -335,8 +291,7 @@ def server(cfg, addr):
 def main():
     host, _, port = os.environ.get("NOTIFY_LISTEN", "0.0.0.0:8645").rpartition(":")
     cfg = Config(token=os.environ.get("NOTIFY_TOKEN", ""), hermes_src=os.environ.get("NOTIFY_HERMES", "/hermes"),
-                 consume=os.environ.get("NOTIFY_CONSUME", "/consume"),
-                 polls=os.environ.get("NOTIFY_POLLS", "/umfragen/umfragen.json"), log=lambda m: print(m, flush=True))
+                 consume=os.environ.get("NOTIFY_CONSUME", "/consume"), log=lambda m: print(m, flush=True))
     if not cfg.token:
         print("bote-notify: NOTIFY_TOKEN ist leer, jede Mitteilung wird abgelehnt", file=sys.stderr, flush=True)
     print(f"bote-notify: {host}:{port}", flush=True)

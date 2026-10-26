@@ -20,7 +20,8 @@ diagnostics. Most of its jobs now have a better home:
 
 - **Conversation:** the Bote talks with people on Signal, Matrix, Telegram,
   Discord and more (Hermes' gateway, ADR 0016).
-- **Approvals:** they reach the admin through the relay (ADR 0012, #48).
+- **Approvals:** the chat tells the admin of a new proposal in one line
+  with the Inbox link; the Inbox decides (ADR 0012, #778).
 - **Pages:** Haus's pages run in any browser (haus#22, haus#24).
 
 What only the app does well is the widgets. The Home Assistant app's

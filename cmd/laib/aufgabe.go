@@ -79,9 +79,9 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintln(env.W(), strings.TrimRight(line, " "))
 		}
 		return cli.ExitOK
-	case act == "add" && !slices.Contains([]string{"ops", "claude", "haus"}, hand) && !policy.IsHuman(st.Policy, hand):
+	case act == "add" && !slices.Contains([]string{"ops", "claude", "haus"}, hand) && !policy.IsHuman(hand):
 		return cli.Refused(env, hand+" darf keine Box-Aufgaben anlegen: das dürfen ops, claude, Haus und Menschen")
-	case act != "add" && hand != "claude" && hand != "haus" && !policy.IsHuman(st.Policy, hand):
+	case act != "add" && hand != "claude" && hand != "haus" && !policy.IsHuman(hand):
 		return cli.Refused(env, hand+" darf Box-Aufgaben nicht abhaken oder zurückstellen: das dürfen Menschen, claude und Haus")
 	}
 	var a aufgaben.Aufgabe

@@ -6,18 +6,15 @@ SIGNAL_ACCOUNT: "+4915112345678"          # Signal: the Bote's own number, E.164
 SIGNAL_ALLOWED_USERS: "+4915198765432"    # who else may talk to the Bote on Signal, comma-separated (ADR 0016 §5); everyone in box.yml people with a signal: id may anyway (#586)
 MATRIX_HOMESERVER: ""                     # Matrix: the Bote's homeserver, https://matrix.example.org; secret BOTE_MATRIX_TOKEN
 MATRIX_ALLOWED_USERS: ""                  # who may talk to the Bote on Matrix, comma-separated Matrix IDs
-MATRIX_TOKEN: !secret BOTE_MATRIX_TOKEN   # the relay reads the admin's room with it
+MATRIX_TOKEN: !secret BOTE_MATRIX_TOKEN
 TELEGRAM_ALLOWED_USERS: ""                # Telegram: who may talk to the bot, numeric user ids, plus box.yml people's telegram: ids (#586); secret BOTE_TELEGRAM_TOKEN
 TELEGRAM_TOKEN: !secret BOTE_TELEGRAM_TOKEN
 DISCORD_ALLOWED_USERS: ""                 # Discord: who may talk to the bot, numeric user ids (#421); secret BOTE_DISCORD_TOKEN
 DISCORD_TOKEN: !secret BOTE_DISCORD_TOKEN
-# Approvals (ADR 0016 §3, #441, #463): the relay acts on these identities only, and only on what is not
-# destructive; Telegram never approves.
+# Hermes' home channel: where the Bote writes the admin of its own accord. Approvals happen only in
+# the Inbox (#778), never in a chat.
 ADMIN_NUMBER: ""                          # the admin's Signal number, E.164; needs Signal
-ADMIN_MXID: ""                            # the admin's Matrix ID, on the Bote's own homeserver; needs Matrix
-ADMIN_ROOM: ""                            # the unencrypted room with only the admin and the Bote, !id:server
-ADMIN_DISCORD_ID: ""                      # the owner's Discord user id; needs Discord, and the id in DISCORD_ALLOWED_USERS (#463)
-ADMIN_DISCORD_CHANNEL: ""                 # the owner's DM channel with the bot (Copy Channel ID on the DM)
+ADMIN_ROOM: ""                            # the admin's unencrypted Matrix room with the Bote, !id:server; needs Matrix
 MODEL_NAME: qwen3.6-35b-a3b
 THINKING_MODEL: qwen3.6-35b-a3b
 COMPACT_TOKENS: 32000                     # Hermes compresses a conversation once a prompt passes this many tokens (#502, README "Speed")
@@ -30,10 +27,8 @@ HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` to
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_AUTOMAT_HA_TOKEN
 HA_TOKEN: !secret BOTE_HA_TOKEN                 # minted by Home Assistant's post-deploy (#349): the non-admin user bote
 AUTOMAT_HA_TOKEN: !secret BOTE_AUTOMAT_HA_TOKEN # minted the same: an administrator's, for the Automat only
-RELAY_IMAGE: ghcr.io/mdopp/laib-relay:latest      # the approval relay (#48)
 PERSONA_IMAGE: ghcr.io/mdopp/laib-persona:latest  # the persona engine (ADR 0020); today Joshua
-APPROVER_TOKEN: !secret BOTE_APPROVER_TOKEN
 LAIB_MCP_URL: http://host.containers.internal:5900/mcp
-LAIB_TOOLS_TRUST: untrusted                    # the Laib tools in Hermes (#524): untrusted asks in the chat before propose, note, escalate; full does not (approving stays the Inbox's or the relay's, #48)
+LAIB_TOOLS_TRUST: untrusted                    # the Laib tools in Hermes (#524): untrusted asks in the chat before propose, note, escalate; full does not (approving stays the Inbox's, #778)
 USAGE_URL: http://host.containers.internal:8094  # usage-metrics (#266): tool calls, turns, unanswered turns; used only with its token
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN         # bote-notify (#177): Home Assistant sends it with rest_command.mitteilung

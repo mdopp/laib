@@ -22,15 +22,12 @@ fi
 # (gateway/config_env.py, plugins/platforms/*/plugin.yaml, 2026-10-14).
 SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" MATRIX_HOMESERVER="${MATRIX_HOMESERVER:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}"
 DISCORD_ALLOWED_USERS="${DISCORD_ALLOWED_USERS:-}"
-ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}" ADMIN_DISCORD_ID="${ADMIN_DISCORD_ID:-}"
+ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_ROOM="${ADMIN_ROOM:-}"
 if [ -z "$SIGNAL_ACCOUNT$MATRIX_HOMESERVER$TELEGRAM_ALLOWED_USERS$DISCORD_ALLOWED_USERS" ]; then echo "bote: kein Kanal (SIGNAL_ACCOUNT, MATRIX_HOMESERVER, TELEGRAM_ALLOWED_USERS oder DISCORD_ALLOWED_USERS)" >&2; exit 1; fi
 if [ -n "$MATRIX_HOMESERVER" ] && [ -z "${LAIB_SECRET_BOTE_MATRIX_TOKEN:-}" ]; then echo "bote: Matrix ohne Token: laib secret set BOTE_MATRIX_TOKEN" >&2; exit 1; fi
 if [ -n "$TELEGRAM_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_TELEGRAM_TOKEN:-}" ]; then echo "bote: Telegram ohne Token: laib secret set BOTE_TELEGRAM_TOKEN" >&2; exit 1; fi
 if [ -n "$DISCORD_ALLOWED_USERS" ] && [ -z "${LAIB_SECRET_BOTE_DISCORD_TOKEN:-}" ]; then echo "bote: Discord ohne Token: laib secret set BOTE_DISCORD_TOKEN" >&2; exit 1; fi
 if [ -n "$ADMIN_NUMBER" ] && [ -z "$SIGNAL_ACCOUNT" ]; then echo "bote: ADMIN_NUMBER braucht Signal (SIGNAL_ACCOUNT)" >&2; exit 1; fi
-# the owner's Discord id must be one the Bote talks to (#463): the allowed list is the identity the chat knows
-if [ -n "$ADMIN_DISCORD_ID" ]; then case ",${DISCORD_ALLOWED_USERS// /}," in *",$ADMIN_DISCORD_ID,"*) ;; *) echo "bote: ADMIN_DISCORD_ID steht nicht in DISCORD_ALLOWED_USERS" >&2; exit 1;; esac; fi
-if [ -n "$ADMIN_MXID" ] && { [ -z "$MATRIX_HOMESERVER" ] || [ -z "$ADMIN_ROOM" ]; }; then echo "bote: ADMIN_MXID braucht Matrix (MATRIX_HOMESERVER) und ADMIN_ROOM" >&2; exit 1; fi
 # Who may talk (#586): the value, plus everyone in box.yml people with an id on the platform
 # (render/people/people.json; a change there restarts the pod and runs this again). Signal's
 # number and a Telegram DM's chat id are the sender's id; a Matrix or Discord target is a room or
@@ -89,8 +86,8 @@ done
     echo "MATRIX_HOMESERVER=$MATRIX_HOMESERVER"
     echo "MATRIX_ACCESS_TOKEN=$LAIB_SECRET_BOTE_MATRIX_TOKEN"
     [ -z "${MATRIX_ALLOWED_USERS:-}" ] || echo "MATRIX_ALLOWED_USERS=$MATRIX_ALLOWED_USERS"
-    # unencrypted rooms only (ADR 0016 §3): bote-notify's `hermes send` and the relay share the
-    # Bote's token, and a second process on an E2EE device would take its to-device keys
+    # unencrypted rooms only (ADR 0016 §3): bote-notify's `hermes send` shares the Bote's
+    # token, and a second process on an E2EE device would take its to-device keys
     echo "MATRIX_E2EE_MODE=off"
     [ -z "$ADMIN_ROOM" ] || echo "MATRIX_HOME_ROOM=$ADMIN_ROOM"
   fi

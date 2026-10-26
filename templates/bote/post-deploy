@@ -9,7 +9,6 @@ mkdir -p "$H"
 MODEL_URL="${MODEL_URL:?MODEL_URL builtin missing}"
 "$(dirname "$0")/pre-start"   # the channels and both .env files (#184)
 SIGNAL_ACCOUNT="${SIGNAL_ACCOUNT:-}" TELEGRAM_ALLOWED_USERS="${TELEGRAM_ALLOWED_USERS:-}" DISCORD_ALLOWED_USERS="${DISCORD_ALLOWED_USERS:-}"
-ADMIN_NUMBER="${ADMIN_NUMBER:-}" ADMIN_MXID="${ADMIN_MXID:-}" ADMIN_ROOM="${ADMIN_ROOM:-}" ADMIN_DISCORD_ID="${ADMIN_DISCORD_ID:-}"
 # Only MCP servers that answer are rendered (#54): a server Hermes cannot
 # reach would be a tool the model is told it has. Any HTTP answer counts
 # (401, 405 are answers); a connection error leaves the entry out and says so.
@@ -93,17 +92,6 @@ if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ] && [ -n "$PEOPLE" ]; then
   MITTEILUNG="
 Sagt jemand \"Sag mir Bescheid, wenn …\" (oder \"sag Mama Bescheid, wenn …\"), leg das mit automat als Automation an: der Auslöser ist das Ereignis, die Aktion ist rest_command.mitteilung mit data {an: <person>, text: <kurze Mitteilung>}. <person> ist, wer fragt, oder die genannte Person, und nur eine von: $PEOPLE. Ist unklar, wer gemeint ist, frag nach. Wie jede Automation: erst der Entwurf in Worten, geschrieben wird erst mit dem Code, den automat nennt."
 fi
-# Who approves (ADR 0016 §3, #184): the relay reads the admin's verified identities; Telegram and Discord never approve (#421).
-WHO=""
-[ -z "$ADMIN_NUMBER" ] || WHO="von $ADMIN_NUMBER auf Signal"
-[ -z "$ADMIN_MXID" ] || WHO="${WHO:+$WHO und }von $ADMIN_MXID im Matrix-Raum $ADMIN_ROOM"
-[ -z "$ADMIN_DISCORD_ID" ] || WHO="${WHO:+$WHO und }vom Admin in seinem Discord-Direktchat mit dir"
-if [ -n "$WHO" ]; then APPROVALS="\"gib #17 frei\" oder \"lehne #17 ab\" liest das Relais direkt, nur $WHO, und entscheidet"
-else APPROVALS="im Chat gibt es keine Freigaben, der Admin entscheidet auf der Box-Seite"; fi
-NIE=""
-[ -z "$TELEGRAM_ALLOWED_USERS" ] || NIE="Telegram"
-[ -z "$DISCORD_ALLOWED_USERS" ] || [ -n "$ADMIN_DISCORD_ID" ] || NIE="${NIE:+$NIE und }Discord"
-[ -z "$NIE" ] || APPROVALS="$APPROVALS (über $NIE nie)"
 # What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
 # turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
 # without its sender. The model marks that turn; the plugin strips the mark before anyone sees it.
@@ -259,9 +247,9 @@ Ein Spruch der Figur ersetzt nie die Antwort: wer etwas sagt oder fragt, bekommt
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${HA_RULE}${FRAGE_RULE}${MITTEILUNG}
 Du kannst dir über ein Gespräch hinaus nichts merken: bittet dich jemand, etwas zu behalten, sag, dass du es dir nicht merken kannst${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.
-Freigaben kannst du nicht erteilen und sollst es nicht versuchen: ${APPROVALS}; du erklärst nur, was im Vorschlag steht (laib inbox).
+Freigaben kannst du nicht erteilen und sollst es nicht versuchen: im Chat gibt es keine Freigaben, der Admin entscheidet nur in der Inbox; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
-Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und jeden neuen Vorschlag mit seiner Nummer. Fragt der Admin dazu, lies den Stand mit laib (laib inbox, laib diag, laib status), statt ihn zu raten, und erklär die Möglichkeiten und ihre Folgen. Entscheiden tut er selbst: was nicht zerstört, mit "gib #N frei" im Chat; Löschen, Entfernen und was nur ein Mensch erlauben darf nur in der Inbox, mit dem zweiten Faktor. Schick ihm dann den Link aus der Mitteilung.
+Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und jeden neuen Vorschlag als eine Zeile „Freigabe #N: … · Link“. Fragt der Admin dazu, lies den Stand mit laib (laib inbox, laib diag, laib status), statt ihn zu raten, und erklär die Möglichkeiten und ihre Folgen. Entscheiden tut er selbst, nur in der Inbox, mit dem zweiten Faktor; schreibt er „gib #N frei“, sag ihm das und schick ihm den Link aus der Mitteilung.
 Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}${ABLAGE}
 SOUL
 fi

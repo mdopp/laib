@@ -95,7 +95,7 @@ func TestTheLeaseReachesLaibOverMCPWithItsHand(t *testing.T) {
 	t.Cleanup(srv.Close)
 	ctx := context.Background()
 	ask := func(tool, args string) (string, error) {
-		return mcp.Ask(ctx, srv.Client(), srv.URL, tok, tool, args)
+		return askMCP(ctx, srv.Client(), srv.URL, tok, tool, args)
 	}
 	type service struct { // lease.Service
 		Name  string            `json:"name"`
@@ -133,7 +133,7 @@ func TestTheLeaseReachesLaibOverMCPWithItsHand(t *testing.T) {
 	}) {
 		t.Fatalf("the note is not in the journal as the lease: %+v", es)
 	}
-	if _, err := mcp.Ask(ctx, srv.Client(), srv.URL, "laib_lease_wrong", "resume", `"whoami"`); err == nil {
+	if _, err := askMCP(ctx, srv.Client(), srv.URL, "laib_lease_wrong", "resume", `"whoami"`); err == nil {
 		t.Fatal("a wrong token reached laib")
 	}
 }

@@ -451,14 +451,15 @@ hand's ceiling or verb list refuses one of its `tools:` (probe `skill`,
 `laib skill pause <name>`, or a state-repo `skills/<name>.yml` without it.
 A capable model's `more:` tools are extras and never a finding.
 
-### Hands with a verb list, and the approver
+### Hands with a verb list
 
-`policy.yml` may limit a hand to a few verbs (`verbs: [approve, reject,
-inbox, status, note]`) and mark it `human: true`, so its verdicts count as
-a human's. `laib init` ships the `approver` hand with exactly that: the
-Signal relay's token (#48) — it can decide and nothing else, and it acts
-only on the admin's verified number. Over MCP the tool list and every call
-honour the verb list.
+`policy.yml` may limit a hand to a few verbs (`notify: {ceiling: propose,
+verbs: [diag, updates, inbox, note]}`). Over MCP the tool list and every
+call honour the verb list. Only the hand `human` counts as a human: the
+Inbox (`human:<Remote-User>`) and the host shell decide what only a human
+may (#778). The `approver` hand of the Signal relay (#48) is gone; an old
+policy.yml that still has it, with `human: true`, loads, and the mark
+counts for nothing — the owner removes the hand with a policy proposal.
 
 A hand may name another in `session:` (#380, ADR 0006 amendment). It may
 then get a token of that hand per session with `laib_session <name>`: the
