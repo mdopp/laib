@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.35.0](https://github.com/mdopp/laib/compare/v0.34.1...v0.35.0) (2026-10-26)
+
+
+### Features
+
+* **policy:** the haus hand gets aufgabe from the defaults ([e4fa776](https://github.com/mdopp/laib/commit/e4fa776291e4cdd1698821c2b97993a24109eb7e))
+* **policy:** the haus hand gets aufgabe from the defaults ([824f182](https://github.com/mdopp/laib/commit/824f1828604e6f551ba91ee9b50ad64cd896b428)), closes [#674](https://github.com/mdopp/laib/issues/674)
+* **status:** pass a status file's own fields on for one named service ([8c29b88](https://github.com/mdopp/laib/commit/8c29b88029891940a61655f27a9eab6e08127a07))
+* **status:** pass a status file's own fields on for one named service ([3a704e7](https://github.com/mdopp/laib/commit/3a704e73d0dded530cedefaa82015107615846a8)), closes [#688](https://github.com/mdopp/laib/issues/688)
+* **template:** media gives Haus a music-only Jellyfin account and its token ([2c3eff3](https://github.com/mdopp/laib/commit/2c3eff348ebb33a5730f44d08972c8914f5bf520))
+* **template:** media gives Haus a music-only Jellyfin account and its token ([c2106a9](https://github.com/mdopp/laib/commit/c2106a978ca5bcdbc4786df208221fd42bede9c5)), closes [#695](https://github.com/mdopp/laib/issues/695)
+
+
+### Bug Fixes
+
+* **proposal:** a news-only template update is taken over, not proposed ([#698](https://github.com/mdopp/laib/issues/698)) ([cbc8a2d](https://github.com/mdopp/laib/commit/cbc8a2dd417f15274149bbcd85f6bd5c78182c50))
+* **proposal:** a template update that only brings news is taken over, not proposed ([837d718](https://github.com/mdopp/laib/commit/837d718313530bcba19c10378223d652f7570872)), closes [#698](https://github.com/mdopp/laib/issues/698)
+
 ## [0.34.1](https://github.com/mdopp/laib/compare/v0.34.0...v0.34.1) (2026-10-25)
 
 
