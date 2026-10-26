@@ -21,9 +21,6 @@ func TestADeviceHeldSecretIsNeverARotateRepairAndOffersZurueck(t *testing.T) {
 		"ha":        {Name: "ha", Contract: state.Contract{Secrets: []state.Secret{{Name: "MQTT_PASSWORD", External: true}}}},
 	}}
 	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
-	if _, fix, repair := carriedFix(st, "MQTT_PASSWORD", nil); repair != nil || !strings.Contains(fix, "Geräte") {
-		t.Fatalf("a device-held secret offered as a rotate repair: %q %v", fix, repair)
-	}
 	if inbox.Repairable(st, []string{"secret", "rotate", "MQTT_PASSWORD"}) {
 		t.Fatal("a device-held secret is repairable by rotation")
 	}
@@ -43,23 +40,5 @@ func TestADeviceHeldSecretIsNeverARotateRepairAndOffersZurueck(t *testing.T) {
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: "human:owner", Verb: "secret", Result: "info", Detail: "secret zurück MQTT_PASSWORD"})
 	if fs := deviceFindings(env, st); len(fs) != 0 {
 		t.Fatalf("put back, no finding: %+v", fs)
-	}
-}
-
-// HA: the hook could not log in with the value Laib holds, so the app did
-// not take the rotation. Offering the same repair again fails the same way:
-// the owner gets the how-to instead.
-func TestARotationTheAppRefusedIsTheOwnersHowTo(t *testing.T) {
-	st := &state.State{Services: map[string]*state.Service{
-		"home-assistant": {Name: "home-assistant", Contract: state.Contract{Secrets: []state.Secret{{Name: "HA_ADMIN_PASSWORD", DataBound: true, Rotate: true}}}},
-	}}
-	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
-	if _, _, repair := carriedFix(st, "HA_ADMIN_PASSWORD", lastSecret(env)); repair == nil {
-		t.Fatal("before any try, the rotation is a repair")
-	}
-	journal.Append(env.Paths.Journal, journal.Entry{Actor: "human:owner", Verb: "secret", Result: "red", Detail: "secret rotate HA_ADMIN_PASSWORD: von der App nicht übernommen"})
-	_, fix, repair := carriedFix(st, "HA_ADMIN_PASSWORD", lastSecret(env))
-	if repair != nil || !strings.Contains(fix, "von Hand") || !strings.Contains(fix, "laib secret set HA_ADMIN_PASSWORD") {
-		t.Fatalf("a refused rotation offered again: %q %v", fix, repair)
 	}
 }

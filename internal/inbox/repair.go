@@ -30,13 +30,13 @@ var RunVerb func(ctx context.Context, env *cli.Env, argv []string) int
 // Repairable: the repairs diag offers. Nothing else runs from repairs/.
 func Repairable(st *state.State, argv []string) bool {
 	switch strings.Join(argv, " ") {
-	case "apply", "backup", "backup check", "operator enable", "servicebay remove", "servicebay remove --trotzdem":
+	case "apply", "backup", "backup check", "operator enable":
 		return true
 	}
-	if len(argv) == 3 && argv[0] == "secret" && (argv[1] == "rotate" || argv[1] == "zurueck") { // #665: a carried secret laib can rotate, a device-held one back
+	if len(argv) == 3 && argv[0] == "secret" && argv[1] == "zurueck" { // #665: a device-held secret goes back
 		for _, svc := range st.Services {
 			for _, s := range svc.Contract.Secrets {
-				if s.Name == argv[2] && !s.External && (argv[1] == "zurueck" && !s.DataBound || argv[1] == "rotate" && !s.Devices && (!s.DataBound || s.Rotate)) {
+				if s.Name == argv[2] && !s.External && !s.DataBound {
 					return true
 				}
 			}
