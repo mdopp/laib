@@ -783,27 +783,136 @@ def voice(stimme):
         ws.close()
 
 
+HA_CONFIG = os.path.dirname(os.path.dirname(HA_STORAGE))   # HA's /config, at its host path (a data path of this service)
+GONE = ("unavailable", "unknown")
+
+
+def update_state(eid, until, ready):
+    """(HTTP status, state) of an update entity once ready(state) holds, or the last answer at until.
+    After a restart, which every approved change brings (laib snapshots Home Assistant stopped, #40),
+    HA answers before HACS has set its update entities up: /api/states/<eid> is 404 for a while (#528)"""
+    while True:
+        st, s = call("GET", "/api/states/" + eid, token=admin_session())
+        if st == 200 and s and ready(s):
+            return st, s
+        if time.monotonic() >= until:
+            return st, s
+        time.sleep(RETRY)
+
+
+def storage(key):
+    """data of one of HA's .storage files, or None"""
+    try:
+        with open(os.path.join(os.path.dirname(HA_STORAGE), key), encoding="utf-8") as f:
+            return json.load(f).get("data")
+    except (OSError, ValueError):
+        return None
+
+
+def hacs_domain(eid):
+    """the integration domain behind a HACS update entity: its unique id is HACS's repository id"""
+    ent = next((e for e in (storage("core.entity_registry") or {}).get("entities") or [] if e.get("entity_id") == eid), None)
+    if not ent or ent.get("platform") != "hacs":
+        return None
+    repo = ((storage("hacs.repositories") or {}).get(str(ent.get("unique_id"))) or {})
+    return repo.get("domain") if repo.get("category") == "integration" else None
+
+
+def manifest(path):
+    try:
+        with open(os.path.join(path, "manifest.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def straighten():
+    """every custom integration where Home Assistant loads it, custom_components/<domain>/manifest.json (#528).
+    HACS 2.0.5 unpacked marq24/ha-senec-v3 one level too deep: custom_components/senec/__init__.py a dummy
+    (the repository's custom_components/__init__.py), the integration in custom_components/senec/senec/,
+    and HA said "Integration not found". One whose manifest.json lies one level down, with its own domain,
+    is moved up; what HACS left on top is kept in .laib-<domain>-sicherung/<time>/. (straightened, broken)"""
+    cc = os.path.join(HA_CONFIG, "custom_components")
+    try:
+        names = sorted(n for n in os.listdir(cc) if not n.startswith((".", "_")) and os.path.isdir(os.path.join(cc, n)))
+    except OSError:
+        return [], []
+    done, broken = [], []
+    for domain in names:
+        base = os.path.join(cc, domain)
+        if manifest(base):
+            continue
+        nested = next((n for n in (os.path.join(base, domain), os.path.join(base, "custom_components", domain))
+                       if (manifest(n) or {}).get("domain") == domain), None)
+        if not nested:
+            broken.append(f"Erweiterung {domain}: custom_components/{domain}/manifest.json fehlt, Home Assistant lädt sie nicht. "
+                          "In HACS neu herunterladen, dann laib apply home-assistant")
+            continue
+        keep = os.path.join(HA_CONFIG, f".laib-{domain}-sicherung", time.strftime("%Y-%m-%dT%H-%M-%SZ", time.gmtime()))
+        os.makedirs(keep)
+        tmp = os.path.join(cc, f".laib-{domain}-gerade")
+        os.rename(nested, tmp)                          # out of base first: nested may be base/<domain>
+        os.rename(base, os.path.join(keep, domain))     # the dummy and whatever else HACS put on top
+        os.rename(tmp, base)
+        print(f"home-assistant: Erweiterung {domain} lag eine Ebene zu tief ({os.path.relpath(nested, HA_CONFIG)}), gerade gezogen; "
+              f"was darüber lag, liegt in {os.path.relpath(keep, HA_CONFIG)}")
+        done.append(domain)
+    return done, broken
+
+
 def install_updates():
     """HA_INSTALL (#528): the extensions a person approved, "update.a=1.2,update.b=3.0"
     as the Operator proposed them from home-assistant-check.py (laib snapshotted
     Home Assistant before this apply). Each is installed only while Home
-    Assistant still offers exactly that version; then Home Assistant restarts
-    once, as a custom integration needs. Device firmware is never proposed."""
+    Assistant still offers exactly that version, and waited for until HACS has
+    downloaded it (HA's service call returns before). Then every custom
+    integration must lie where HA loads it (straighten); an approved one whose
+    manifest says another version is said. Home Assistant restarts once, as a
+    custom integration needs. Device firmware is never proposed. Returns what
+    is broken: the hook is red for it after the other steps ran."""
     want = [w.split("=", 1) for w in E.get("HA_INSTALL", "").split(",") if "=" in w]
-    installed = []
+    installed, broken = [], []
     for eid, ver in want:
-        st, s = call("GET", "/api/states/" + eid, token=admin_session())
+        st, s = update_state(eid, time.monotonic() + WAIT, lambda s: s.get("state") not in GONE)
         a = (s or {}).get("attributes") or {}
-        if st != 200 or (s or {}).get("state") != "on" or a.get("latest_version") != ver:
+        if st != 200 or (s or {}).get("state") in GONE:
+            broken.append(f"{eid}: Home Assistant kennt diese Erweiterung nicht (HTTP {st}, {(s or {}).get('state') or 'kein Zustand'}, "
+                          f"{WAIT:.0f} s gewartet); den Vorschlag neu machen lassen, sobald laib diag sie wieder anbietet")
+            continue
+        if a.get("installed_version") == ver:
+            print(f"home-assistant: {eid} {ver}: schon installiert")
+            continue
+        if s.get("state") != "on" or a.get("latest_version") != ver:
             print(f"home-assistant: {eid} {ver}: nichts zu installieren (installiert: {a.get('installed_version')}, angeboten: {a.get('latest_version')})")
             continue
-        st, _ = call("POST", "/api/services/update/install", {"entity_id": eid}, token=admin_session())
+        body = {"entity_id": eid}
+        if int(a.get("supported_features") or 0) & 2:   # UpdateEntityFeature.SPECIFIC_VERSION
+            body["version"] = ver
+        st, _ = call("POST", "/api/services/update/install", body, token=admin_session())
         if st != 200:
-            raise RuntimeError(f"update.install {eid} {ver}: HTTP {st}")
-        installed.append(f"{eid} {ver}")
+            broken.append(f"update.install {eid} {ver}: HTTP {st}")
+            continue
+        st, s = update_state(eid, time.monotonic() + WAIT, lambda s: not (s.get("attributes") or {}).get("in_progress")
+                             and (s.get("state") == "off" or (s.get("attributes") or {}).get("installed_version") != a.get("installed_version")))
+        if ((s or {}).get("attributes") or {}).get("in_progress"):
+            broken.append(f"{eid} {ver}: nach {WAIT:.0f} s lädt Home Assistant noch; laib apply home-assistant, wenn es fertig ist")
+            continue
+        installed.append((eid, ver))
+    straightened, bad = straighten()
+    broken += bad
+    for eid, ver in installed:
+        domain = hacs_domain(eid)
+        if domain is None:
+            continue   # not a HACS integration (or HA has not written its registry): straighten looked at every folder
+        have = (manifest(os.path.join(HA_CONFIG, "custom_components", domain)) or {}).get("version")
+        if have and have != ver:
+            print(f"home-assistant: {domain}: installiert ist {have}, freigegeben war {ver} (HACS lädt, was es für das Neueste hält)")
     if installed:
+        print("home-assistant: installiert: " + ", ".join(f"{e} {v}" for e, v in installed))
+    if installed or straightened:
         call("POST", "/api/services/homeassistant/restart", {}, token=admin_session())
-        print("home-assistant: installiert: " + ", ".join(installed) + "; Home Assistant startet neu")
+        print("home-assistant: Home Assistant startet neu")
+    return broken
 
 
 def ma(command, **args):
@@ -969,9 +1078,11 @@ try:
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; the calendars come with the next apply
     print(f"home-assistant: CalDAV entry NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
 try:
-    install_updates()
-except (RuntimeError, OSError, ValueError) as e:
-    red(f"HA_INSTALL: {type(e).__name__}: {e}")
+    extensions = install_updates()
+except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran
+    extensions = [f"HA_INSTALL: {type(e).__name__}: {e}"]
+for line in extensions:
+    print("home-assistant: " + line, file=sys.stderr)
 stimme, undone = {}, None
 try:
     stimme = again(stimme_wyoming)
@@ -1000,5 +1111,5 @@ except (RuntimeError, OSError, ValueError, KeyError) as e:  # the old tokens sta
     hand_retired()
     print(f"home-assistant: old tokens NOT revoked: {type(e).__name__}: {e}", file=sys.stderr)
 strangers()
-if undone:
-    red(undone)
+if undone or extensions:
+    red("; ".join(([undone] if undone else []) + extensions))

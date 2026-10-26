@@ -125,9 +125,10 @@ class PreStart(unittest.TestCase):
         contract = (T / "laib.yml").read_text()
         self.assertRegex(contract, r"(?s)oidc:[^\n]*\n\s+clientId: homeassistant.*/auth/oidc/callback.*tokenEndpointAuthMethod: client_secret_post")
         self.assertIn("OIDC_SECRET: !secret OIDC_HOMEASSISTANT_SECRET", (T / "values.example.yml").read_text())
-        # the config is pre-start's: it must be there before Home Assistant starts; post-deploy only mints the tokens (#349)
+        # the config is pre-start's: it must be there before Home Assistant starts; post-deploy only mints the tokens (#349).
+        # It may move a HACS integration HACS unpacked one level too deep (#528), never auth_oidc, pre-start's
         hook = (T / "post-deploy").read_text()
-        self.assertFalse(any(w in hook for w in ("configuration.yaml", "packages/", "custom_components")), "post-deploy writes config")
+        self.assertFalse(any(w in hook for w in ("configuration.yaml", "packages/", "auth_oidc")), "post-deploy writes config")
 
     def test_the_zwave_network_keys_are_the_containers_alone(self):
         # #664: zwave-js-ui's settings.json holds the S0/S2 network keys and was 0644 on the box, with

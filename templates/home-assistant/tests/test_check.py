@@ -83,13 +83,13 @@ EVERYTHING = [{"domain": d, "title": t} for d, t in [("wyoming", "whisper"), ("w
 
 
 class Check(unittest.TestCase):
-    def run_check(self, token, url, zwave="", rc=0, ma_token="", ma_url="http://127.0.0.1:1"):
-        d = tempfile.mkdtemp()
+    def run_check(self, token, url, zwave="", rc=0, ma_token="", ma_url="http://127.0.0.1:1", config=None):
+        d = config or tempfile.mkdtemp()
         out = os.path.join(d, ".laib-status.json")
         # the unit feeds the script on stdin, as `podman exec -i … python3 -` does
         p = subprocess.run([sys.executable, "-"], stdin=open(SCRIPT), capture_output=True, text=True,
                            env=dict(os.environ, HA_TOKEN=token, HA_URL=url, LAIB_STATUS_FILE=out, ZWAVE_URL=zwave,
-                                    MA_TOKEN=ma_token, MA_URL=ma_url))
+                                    MA_TOKEN=ma_token, MA_URL=ma_url, HA_CONFIG=d))
         self.assertEqual(p.returncode, rc, p.stdout + p.stderr)
         return json.loads(Path(out).read_text())
 
@@ -273,6 +273,21 @@ class Check(unittest.TestCase):
         self.assertIn("https://github.com/x/senec/releases/tag/2026.10.0", offer[0]["detail"], "the proposal carries the release notes")
         self.assertNotIn("firmware", offer[0]["fix"])
         self.assertFalse([f for f in r["findings"] if "hacs" in f["detail"].lower()], "an extension that is current is no finding")
+
+    def test_an_extension_home_assistant_cannot_load_is_a_finding(self):
+        # #528: HACS 2.0.5 unpacked marq24/ha-senec-v3 one level too deep; HA said "Integration not found"
+        d = tempfile.mkdtemp()
+        cc = Path(d, "custom_components")
+        for path in ("senec/senec/manifest.json", "meross_lan/manifest.json", "kaputt/__init__.py", "__pycache__/x.pyc"):
+            (cc / path).parent.mkdir(parents=True, exist_ok=True)
+            (cc / path).write_text("{}")
+        srv, _ = fake_ha(EVERYTHING)
+        r = self.run_check("tok", f"http://127.0.0.1:{srv.server_port}", config=d)
+        found = {f["detail"]: f["fix"] for f in r["findings"] if f["detail"].startswith("Erweiterung")}
+        self.assertEqual(found, {"Erweiterung senec: Home Assistant lädt sie nicht, sie liegt eine Ebene zu tief":
+                                 "laib apply home-assistant: zieht sie gerade und startet Home Assistant neu",
+                                 "Erweiterung kaputt: Home Assistant lädt sie nicht, ihr fehlt die manifest.json":
+                                 "in HACS neu herunterladen, dann laib apply home-assistant"}, r)
 
     def test_music_assistant_is_green_only_set_up_with_titles_and_players(self):
         # #526: the integration's entry in HA was the whole check; Music Assistant stood on SETUP REQUIRED behind it
