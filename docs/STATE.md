@@ -457,6 +457,14 @@ before forward-auth (`order request_header first`), so the only
 gets none at all, and its app must not trust one (#231,
 `internal/render/auth231_test.go`).
 
+Every route with `auth` other than `none` sits behind Authelia, the sso
+service's own routes too: `ldap.` (LLDAP's admin UI, `two_factor`, admins)
+asks Authelia's two factors after the LAN check, then LLDAP's own login
+(owner, 2026-10-26). The one exception is the route that is Authelia's
+portal (the sso service's first route, `auth.`): it never forward-auths, as
+a portal behind itself is a loop. LLDAP's LDAP port 3890 is no route and
+not behind Caddy (`internal/render/ldap2fa_test.go`).
+
 ### Secrets that are a human's login (#441)
 
 `login: {user, host, path?, note?}` on a contract secret marks it as a login
