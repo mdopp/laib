@@ -12,51 +12,50 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/mdopp/laib/internal/state"
 )
 
 // templateService reads a real template (laib.yml provides, the unit
-// files) into a state.Service, so unit names come from the same rule the
-// kernel uses (UnitNames) and a renamed template fails this test.
-func templateService(t *testing.T, name string) *state.Service {
+// files) as laib status lists it, so a renamed template fails this test.
+// The unit names follow Quadlet's rule, as the kernel's state.UnitNames
+// does (x.container is x.service, x.pod is x-pod.service, a .service
+// without [Install] is a oneshot and no unit); the lease imports nothing
+// of the kernel (#677), so the rule is written out here.
+func templateService(t *testing.T, name string) Service {
 	t.Helper()
-	dir := filepath.Join("..", "..", "templates", name)
-	svc := &state.Service{Name: name, Units: map[string]string{}}
+	dir := filepath.Join("..", "templates", name)
+	svc := Service{Name: name, Units: map[string]string{}}
 	contract, err := os.ReadFile(filepath.Join(dir, "laib.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if m := regexp.MustCompile(`(?m)^provides:\s*\[([^\]]*)\]`).FindStringSubmatch(string(contract)); m != nil {
 		for _, p := range strings.Split(m[1], ",") {
-			svc.Contract.Provides = append(svc.Contract.Provides, strings.TrimSpace(p))
+			svc.Provides = append(svc.Provides, strings.TrimSpace(p))
 		}
 	}
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		switch filepath.Ext(e.Name()) {
-		case ".container", ".pod", ".kube", ".service":
-			b, _ := os.ReadFile(filepath.Join(dir, e.Name()))
-			svc.Units[e.Name()] = string(b)
+		file := e.Name()
+		base := strings.TrimSuffix(file, filepath.Ext(file))
+		switch filepath.Ext(file) {
+		case ".container", ".kube":
+			svc.Units[base+".service"] = "active"
+		case ".pod":
+			svc.Units[base+"-pod.service"] = "active"
+		case ".service":
+			if b, _ := os.ReadFile(filepath.Join(dir, file)); strings.Contains(string(b), "[Install]") {
+				svc.Units[file] = "active"
+			}
 		}
 	}
 	return svc
 }
 
 // realServices are the real templates as laib status lists them: their
-// names, roles and units (UnitNames, the kernel's rule).
+// names, roles and units.
 func realServices(t *testing.T) []Service {
 	t.Helper()
-	var out []Service
-	for _, name := range []string{"stimme", "llama"} {
-		svc := templateService(t, name)
-		units := map[string]string{}
-		for _, u := range svc.UnitNames() {
-			units[u] = "active"
-		}
-		out = append(out, Service{Name: name, Provides: svc.Contract.Provides, Units: units})
-	}
-	return out
+	return []Service{templateService(t, "stimme"), templateService(t, "llama")}
 }
 
 func config42(t *testing.T, router string) Config {

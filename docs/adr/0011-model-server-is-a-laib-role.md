@@ -63,7 +63,7 @@ lease is Laib's own, and consumers adapt to it when they move to Laib (ADR
 the consumers that asked for them (`foundry`, and `thinking`/`coding` as
 aliases), which ADR 0021 rule 4 rules out. No old name stays.
 
-From here on, this section is the contract. `internal/lease/contract_test.go`
+From here on, this section is the contract. `lease/contract_test.go`
 pins it against the shipped `presets.json`.
 
 **Ask for a model, not a window.** `model` is a preset alias, and the lease

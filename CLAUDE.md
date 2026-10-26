@@ -17,8 +17,10 @@ them.
    cannot verify on the box, say so in those words.
 3. **KISS, and the kernel grows only on purpose.** Every program has a
    production-line cap in `scripts/loc.sh` with its reason next to the
-   number: the kernel 16,400 (raised 2026-10-22, #561; 16,000 since 2026-10-19, #443), the Operator 3,000, and one for each program
-   that left the kernel (ADR 0005 amendment #309, ADR 0023). Tests are not
+   number: the kernel 20,000 (#609), the Operator 3,000, and one for each program
+   that left the kernel (ADR 0005 amendment #309, ADR 0023): stick, frage,
+   automat, persona, mcpserver, disk, notify, haushalt and, since #677, the
+   lease. Tests are not
    capped. At 95 % CI warns and opens the
    "Kern-Diät" issue; crossing a cap means raising it in the same PR, with
    its reason and the owner's approval. Lines count as gofmt writes them:

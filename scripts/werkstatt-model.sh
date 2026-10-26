@@ -18,7 +18,7 @@ fail() { echo "FAIL: $*" >&2; echo "--- what reached the fake:" >&2; cat "$WORK/
 
 [ -n "${WERKSTATT_IMAGE:-}" ] || podman build -q -t "$IMG" "$ROOT/werkstatt" >/dev/null
 
-# the lease (internal/lease: POST/GET/DELETE /api/model-lease, the key as bearer)
+# the lease (lease/: POST/GET/DELETE /api/model-lease, the key as bearer)
 # and the proxy (/v1/models marks allowed_in_mode; chat streams)
 cat > "$WORK/fake.py" <<'PY'
 import json, sys, time

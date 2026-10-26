@@ -115,7 +115,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: cmd/laib-lease/Containerfile
+          file: lease/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-lease:${{ needs.release-please.outputs.tag }}
       - uses: actions/attest-build-provenance@v2

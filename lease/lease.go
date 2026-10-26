@@ -40,8 +40,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/mdopp/laib/internal/boxfs"
 )
 
 // Preset is one model the router serves.
@@ -328,7 +326,7 @@ func (s *Server) writeStatus(l *Lease) error {
 	}
 	b, _ := json.MarshalIndent(map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "detail": detail, "findings": findings}, "", "  ")
 	os.MkdirAll(s.cfg.LeaseDir, 0o755)
-	return boxfs.WriteAtomic(filepath.Join(s.cfg.LeaseDir, "laib-status.json.tmp"), filepath.Join(s.cfg.LeaseDir, "laib-status.json"), b, 0o644)
+	return writeAtomic(filepath.Join(s.cfg.LeaseDir, "laib-status.json.tmp"), filepath.Join(s.cfg.LeaseDir, "laib-status.json"), b, 0o644)
 }
 
 func (s *Server) leasePath() string { return filepath.Join(s.cfg.LeaseDir, "lease.json") }
@@ -349,7 +347,7 @@ func (s *Server) read() *Lease {
 func (s *Server) write(l *Lease) error {
 	os.MkdirAll(s.cfg.LeaseDir, 0o755)
 	b, _ := json.MarshalIndent(l, "", "  ")
-	if err := boxfs.WriteAtomic(s.leasePath()+".tmp", s.leasePath(), b, 0o644); err != nil {
+	if err := writeAtomic(s.leasePath()+".tmp", s.leasePath(), b, 0o644); err != nil {
 		return err
 	}
 	return s.writeStatus(l)

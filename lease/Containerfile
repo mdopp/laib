@@ -11,7 +11,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-lease ./cmd/laib-lease
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-lease ./lease/cmd/laib-lease
 FROM gcr.io/distroless/static-debian12
 COPY --from=build /laib-lease /laib-lease
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib

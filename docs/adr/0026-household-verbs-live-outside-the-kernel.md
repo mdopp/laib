@@ -67,3 +67,15 @@ meet it over MCP, files or HTTP and never by import: the Operator
   but not hot, so this does not matter.
 - Until the move is done, a household verb that must land goes into the
   kernel under the current cap, with this ADR named in its PR.
+
+## Note (#677): where §4 stands
+
+Behind the door: `scan`, `net geraete`, `tell`, and since #677 `zuhause`
+and `person_signal`. laib-haushalt proposes their box.yml paths with
+`laib propose --path` as the `haushalt` hand, whose built-in grant names
+`zuhause` and `people.*.signal`; a caller needs the verb grant, as for
+every door verb. Still in the kernel, on purpose: `person_invite`,
+`person_pending` and `calendar`. They run the identity or kalender
+template's tool with that service's secrets (LLDAP's admin password,
+Authelia's data, an ICS address in secrets.age), and a program behind the
+door gets no secret of the box (ADR 0027).

@@ -84,7 +84,7 @@ and `diag` (~50). A template should bring these itself.
 | Program | Lines | Runs |
 |---|---:|---|
 | `cmd/laib-stick` + `internal/stick` | 1,468 | on the laptop; builds the install stick |
-| `cmd/laib-lease` + `internal/lease` | 908 | the llama template's sidecar: policy proxy and GPU lease (ADR 0011); **stays** (owner, 2026-10-17): it pauses services and journals like a hand of the kernel |
+| `cmd/laib-lease` + `internal/lease` | 908 | the llama template's sidecar: policy proxy and GPU lease (ADR 0011); **stays** (owner, 2026-10-17): it pauses services and journals like a hand of the kernel. Reversed 2026-10-26, #677: see "The lease leaves" below |
 | `cmd/persona` + `internal/persona` | 701 | the Bote's persona engine (ADR 0020), an image in the bote pod; the reason for the 16k raise above |
 | `cmd/automat` + `internal/automat` | 421 | the Bote's HA-automation MCP tool, an image |
 | `cmd/frage` + `internal/frage` | 261 | the "was ist …" tool (ADR 0015), an image |
@@ -107,7 +107,8 @@ for Go code before `operator/` existed.
    mcpserver 200). Each budget keeps the rule that tests are at most equal
    to production. `relay` stays in the kernel because it is invariant §2e;
    `lease` stays because it writes the kernel's pause markers and journal
-   (`internal/lease`, `cmd/laib-lease` unchanged).
+   (`internal/lease`, `cmd/laib-lease` unchanged). That reason is gone since
+   ADR 0027: the lease moved out on #677 (below).
 2. **`cmd/laib` becomes thin.** It keeps `main`, the verb table, `cliEnv` and
    argument glue, about 400 lines. The verbs move into packages with one
    responsibility each:
@@ -245,3 +246,30 @@ owner's decision of 2026-10-17. The owner (mdopp) raised the cap to
 production lines" (the Decision above, ADR 0023 §1) is dropped for every
 program; `scripts/loc.sh` still prints the test count, and caps only
 production lines.
+
+### The lease leaves, and three household verbs go behind the door (owner, 2026-10-26, #677)
+
+At 19,744 of 20,000 the 95 % warning opened #677 again. The owner chose
+"a+b":
+
+- **(a) The lease is its own program, `lease/`** (`laib-lease`, budget
+  1,300). The 2026-10-17 reason for keeping it — it writes the kernel's
+  pause markers and journal — has not held since ADR 0027 (#624): it runs
+  in its container and pauses, resumes and notes through laib's MCP as the
+  `lease` hand, like any program outside the kernel. It brings its own
+  ~40-line MCP client and atomic write instead of importing `internal/mcp`
+  and `internal/boxfs`; its tests resolve the real templates' units
+  without `internal/state`. The image name (`ghcr.io/mdopp/laib-lease`) and
+  the release's pin (`render.LeaseImage`) are unchanged.
+- **(b) `zuhause` and `person_signal` are served by laib-haushalt** behind
+  the verb door (ADR 0026 §4), with their names and shapes; laib-haushalt
+  proposes the box.yml path with `laib propose --path` as the `haushalt`
+  hand, which holds `zuhause` and `people.*.signal` in code. `person_pending`
+  and `person_invite` stay in the kernel: both run the identity template's
+  tool in the hooks image with its secrets (LLDAP's admin password,
+  Authelia's data), which laib-haushalt must not get (ADR 0027). Haushalt's
+  budget rises to 920.
+
+Kernel 19,744 → 18,580 (the lease 1,076, the two verbs 88); lease 1,154,
+haushalt 610 → 736.
+

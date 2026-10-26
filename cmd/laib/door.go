@@ -37,6 +37,7 @@ type doorCall struct {
 	Ceiling string    `json:"ceiling"`
 	LanIP   string    `json:"lanIp"`
 	Scan    *doorScan `json:"scan,omitempty"`
+	Zuhause any       `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause only (#677)
 }
 
 // doorScan is the service that provides scan: its status file as it wrote
@@ -64,6 +65,9 @@ func door(ctx context.Context, env *cliEnv, prog, tier string, argv []string) in
 		return env.Fail(err)
 	}
 	call := doorCall{Argv: argv, JSON: env.JSON, Actor: env.Actor, Ceiling: ceiling, LanIP: st.Box.LanIP}
+	if argv[0] == "zuhause" {
+		call.Zuhause = st.Box.Zuhause
+	}
 	if name, status, orders := render.ScanFolder(st); name != "" {
 		call.Scan = &doorScan{Name: name, Orders: orders}
 		if b, err := os.ReadFile(status); status != "" && err == nil {
