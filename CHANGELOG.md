@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.39.0](https://github.com/mdopp/laib/compare/v0.38.0...v0.39.0) (2026-10-26)
+
+
+### Features
+
+* **paperless:** keep the household's own people out of the AI's correspondents ([2f63161](https://github.com/mdopp/laib/commit/2f631611d3ed200b9dbda3d5bac5666d3e7331d0)), closes [#737](https://github.com/mdopp/laib/issues/737)
+* **paperless:** keep the household's own people out of the AI's correspondents ([#737](https://github.com/mdopp/laib/issues/737)) ([0198ef9](https://github.com/mdopp/laib/commit/0198ef972ffedc9004b956e4e0f7154fbd21fa89))
+
+
+### Bug Fixes
+
+* **diag:** carried secrets behind unreadable files stay findings until rotated, and laib repair servicebay &lt;svc&gt; finds them ([#665](https://github.com/mdopp/laib/issues/665)) ([2797a31](https://github.com/mdopp/laib/commit/2797a31fb870174c4b24ae685b7b00b405afe52f))
+* **template:** home-assistant waits for RUNNING before it changes the HTTP settings ([a4e9385](https://github.com/mdopp/laib/commit/a4e938598461b788c7f08718117ba02831e85beb))
+
 ## [0.38.0](https://github.com/mdopp/laib/compare/v0.37.0...v0.38.0) (2026-10-26)
 
 
