@@ -7,6 +7,7 @@ package pages
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,6 +73,9 @@ type ServiceStatus struct {
 	Detail string            `json:"detail,omitempty"`
 	// Provides are its roles: laib-lease finds the units a window stops by them (ADR 0027)
 	Provides []string `json:"provides,omitempty"`
+	// Eigenes: the status file's own fields, for one named service (#688)
+	Eigenes map[string]json.RawMessage `json:"eigenes,omitempty"`
+	Gekappt []string                   `json:"eigenes_gekappt,omitempty"`
 }
 
 // BootUnclean is set by serve after its first comparison when the box did
@@ -169,6 +173,8 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 		var one []ServiceStatus
 		for _, row := range rows {
 			if row.Name == args[0] {
+				rep := diag.ReadStatus(st, st.Services[row.Name])
+				row.Eigenes, row.Gekappt = rep.Eigenes, rep.Gekappt
 				one = append(one, row)
 			}
 		}
