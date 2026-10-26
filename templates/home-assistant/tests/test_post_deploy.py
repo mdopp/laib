@@ -34,7 +34,7 @@ def fresh(onboarded=None):
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
               registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None,
               restarts=0, preferred=None, wake_words={}, intents={}, deleted=[], late={}, progress={}, unpack=None,
-              http={"use_x_forwarded_for": True, "trusted_proxies": ["127.0.0.1/32", "10.0.0.0/8"], "ip_ban_enabled": True,
+              http={"use_x_forwarded_for": True, "trusted_proxies": ["127.0.0.1/32", "::1/128"], "ip_ban_enabled": True,
                     "login_attempts_threshold": -1, "server_port": 8123, "cors_allowed_origins": ["https://cast.home-assistant.io"],
                     "created_at": "2026-08-06T18:47:33+00:00", "error": None, "error_message": None},
               http_pending=None, http_calls=[])
@@ -1386,7 +1386,7 @@ class LoginSperre(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((HA["http"]["ip_ban_enabled"], HA["http"]["login_attempts_threshold"]), (True, 5), log)
         self.assertEqual(HA["http"]["cors_allowed_origins"], ["https://cast.home-assistant.io"], "the owner's own HTTP settings were lost")
-        self.assertEqual(HA["http"]["trusted_proxies"], ["127.0.0.1/32", "10.0.0.0/8"])
+        self.assertEqual(HA["http"]["trusted_proxies"], ["127.0.0.1/32", "::1/128"])
         self.assertIsNone(HA["http_pending"], "not promoted: HA reverts it after five minutes")
         self.assertIn("bans an address after 5 failed logins", log)
         HA["http_calls"].clear()
@@ -1448,30 +1448,75 @@ class ProxyTrust(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "::1/128"]), log)
 
-    def test_the_trust_from_servicebay_is_kept_as_it_is(self):
-        # the box's own .storage/http, carried from ServiceBay: 127.0.0.1 and the private ranges; no restart, no ::1 added
+    def test_the_private_ranges_from_servicebay_are_reduced_to_loopback(self):
+        # #729: the box's own .storage/http, carried from ServiceBay: 127.0.0.1 and the private ranges, so a LAN
+        # device talking to HA on 8123 could claim any address in X-Forwarded-For. Laib owns the list: one restart
         fresh(onboarded=("laib", ADMIN_PW))
         HA["http"].update(trusted_proxies=["127.0.0.1/32", "192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"])
-        before = dict(HA["http"])
-        p, _, log = self.run_hook()
+        p, handed, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(HA["http_calls"], ["http/config"], log)
-        self.assertEqual(HA["http"], before)
-        self.assertIn("trusts Caddy on 127.0.0.1 (X-Forwarded-For): as set", log)
+        self.assertEqual(HA["http_calls"], ["http/config", "http/config/configure", "http/config/promote"], log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "::1/128"]), log)
+        self.assertEqual(HA["http"]["cors_allowed_origins"], ["https://cast.home-assistant.io"], "HA's other HTTP settings were lost")
+        self.assertIn("192.168.0.0/16", log, "the log names what was removed")
+        HA["http_calls"].clear()
+        p, _, log = self.run_hook(tokens=handed)
+        self.assertEqual((p.returncode, HA["http_calls"]), (0, ["http/config"]), "a second apply restarted Home Assistant again: " + log)
 
-    def test_the_owners_own_proxy_stays_and_loopback_is_added(self):
+    def test_an_entry_of_its_own_is_removed_and_loopback_is_added(self):
         fresh(onboarded=("laib", ADMIN_PW))
         HA["http"].update(trusted_proxies=["10.0.0.0/8"])
         p, _, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(HA["http"]["trusted_proxies"], ["10.0.0.0/8", "127.0.0.1/32", "::1/128"], log)
+        self.assertEqual(HA["http"]["trusted_proxies"], ["127.0.0.1/32", "::1/128"], log)
 
-    def test_forwarded_for_off_is_turned_on_and_the_list_kept(self):
+    def test_forwarded_for_off_is_turned_on(self):
         fresh(onboarded=("laib", ADMIN_PW))
         HA["http"]["use_x_forwarded_for"] = False
         p, _, log = self.run_hook()
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "10.0.0.0/8", "::1/128"]), log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "::1/128"]), log)
+
+    def test_the_owners_extra_proxy_from_the_value_stays(self):
+        # #729: HA_TRUSTED_PROXIES, the owner's own proxies in values.yml; a bare address is a /32
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"].update(trusted_proxies=["127.0.0.1/32", "192.168.0.0/16", "10.0.0.0/8"])
+        extra = {"HA_TRUSTED_PROXIES": "192.168.178.2, 10.0.0.0/8"}
+        p, handed, log = self.run_hook(extra=extra)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(sorted(HA["http"]["trusted_proxies"]), sorted(["127.0.0.1/32", "::1/128", "192.168.178.2/32", "10.0.0.0/8"]), log)
+        HA["http_calls"].clear()
+        p, _, log = self.run_hook(tokens=handed, extra=extra)
+        self.assertEqual((p.returncode, HA["http_calls"]), (0, ["http/config"]), "the same value twice restarts Home Assistant again: " + log)
+
+    def test_the_same_set_in_another_order_is_no_change(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"].update(trusted_proxies=["10.0.0.0/8", "::1/128", "127.0.0.1/32"])
+        before = dict(HA["http"])
+        p, _, log = self.run_hook(extra={"HA_TRUSTED_PROXIES": "10.0.0.0/8"})
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], ["http/config"], "no change, no restart: " + log)
+        self.assertEqual(HA["http"], before)
+        self.assertIn("as set", log)
+
+    def test_a_value_that_is_no_address_is_refused_in_german(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"].update(trusted_proxies=["127.0.0.1/32", "192.168.0.0/16"])
+        before = dict(HA["http"])
+        p, _, log = self.run_hook(extra={"HA_TRUSTED_PROXIES": "192.168.0.0/16, das ganze LAN"})
+        self.assertNotEqual(p.returncode, 0, log)
+        self.assertIn("HA_TRUSTED_PROXIES", log)
+        self.assertIn("keine IP-Adresse", log)
+        self.assertEqual(HA["http_calls"], ["http/config"], "a refused value changes nothing: " + log)
+        self.assertEqual(HA["http"], before)
+
+    def test_a_refused_value_on_a_fresh_home_assistant_still_trusts_loopback(self):
+        # without the trust home.<domain> answers 400: a typo in the value must not cost the household HA
+        fresh()
+        HA["http"] = dict(HA_DEFAULT_HTTP)
+        p, _, log = self.run_hook(extra={"HA_TRUSTED_PROXIES": "300.1.1.1"})
+        self.assertNotEqual(p.returncode, 0, log)
+        self.assertEqual((HA["http"]["use_x_forwarded_for"], HA["http"]["trusted_proxies"]), (True, ["127.0.0.1/32", "::1/128"]), log)
 
     def test_a_refused_configure_is_red_not_green(self):
         fresh(onboarded=("laib", ADMIN_PW))
