@@ -78,7 +78,7 @@ hand-made ~/ha-caldav.sh).
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
-import base64, json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
+import base64, ipaddress, json, os, socket, struct, sys, time, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
 BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
@@ -1069,6 +1069,54 @@ def zuhause():
     print("home-assistant: home set from box.yml zuhause (" + ", ".join(want) + ")")
 
 
+def login_ban():
+    """HA_LOGIN_SPERRE (#703): Home Assistant bans an address after that many failed logins, "aus" never,
+    empty leaves it as it is (the default). Since 2026.8 HA keeps it in its own HTTP config store and ignores
+    a YAML http: block, so it goes through http/config, configure and promote, as ServiceBay set the proxy
+    trust there (#2573); configure restarts HA into it on trial and an unpromoted one reverts after five
+    minutes. Only when HA reads the client from Caddy's X-Forwarded-For: otherwise every login from outside
+    is 127.0.0.1 to HA, and a ban would lock out everyone. A ban HA sets also locks out a consumer on
+    127.0.0.1 whose token went stale (the check, Haus, the Bote): the counter in templates/auth tells the
+    owner of every ban HA logs."""
+    want = E.get("HA_LOGIN_SPERRE", "").strip().lower()
+    if not want:
+        return None
+    if want != "aus" and not (want.isdigit() and int(want) >= 1):
+        return f"HA_LOGIN_SPERRE={want!r}: a number of failed logins (like 5), aus, or empty"
+    n = -1 if want == "aus" else int(want)
+    ws = WS(admin_session())
+    try:
+        cur = ws("http/config") or {}
+        stable = {k: v for k, v in (cur.get("stable") or {}).items() if k not in ("created_at", "error", "error_message")}
+        if stable.get("login_attempts_threshold") == n and (n < 0 or stable.get("ip_ban_enabled")):
+            print(f"home-assistant: HA_LOGIN_SPERRE {want}: as set")
+            return None
+        trusted = []
+        for net in stable.get("trusted_proxies") or []:
+            try:
+                trusted.append(ipaddress.ip_network(net, strict=False))
+            except ValueError:
+                pass
+        if n > 0 and not (stable.get("use_x_forwarded_for") and any(ipaddress.ip_address("127.0.0.1") in t for t in trusted)):
+            return ("HA_LOGIN_SPERRE NOT set: Home Assistant does not read the client from X-Forwarded-For behind Caddy "
+                    "(use_x_forwarded_for, trusted_proxies 127.0.0.1), so it would ban Caddy and with it everyone")
+        res = ws("http/config/configure", config=dict(stable, ip_ban_enabled=True if n > 0 else stable.get("ip_ban_enabled", True),
+                                                     login_attempts_threshold=n)) or {}
+    finally:
+        ws.close()
+    if res.get("restart"):
+        time.sleep(float(E.get("HA_RETRY_SECONDS", "5")))
+        if not ha_up(WAIT):
+            return "HA_LOGIN_SPERRE: Home Assistant did not come back from the restart into it; it reverts in five minutes"
+    ws = WS(admin_session())
+    try:
+        ws("http/config/promote")
+    finally:
+        ws.close()
+    print(f"home-assistant: HA_LOGIN_SPERRE {want}: " + (f"Home Assistant bans an address after {n} failed logins" if n > 0 else "no bans"))
+    return None
+
+
 try:
     zuhause()
 except (RuntimeError, OSError, ValueError) as e:  # the tokens stand; HA keeps the location it has
@@ -1110,6 +1158,13 @@ try:
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the old tokens stay retired: the next apply revokes them
     hand_retired()
     print(f"home-assistant: old tokens NOT revoked: {type(e).__name__}: {e}", file=sys.stderr)
+try:
+    sperre = login_ban()
+except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran: the owner asked for it
+    sperre = f"HA_LOGIN_SPERRE NOT set: {type(e).__name__}: {e}"
+if sperre:
+    print("home-assistant: " + sperre, file=sys.stderr)
+    extensions.append(sperre)
 strangers()
 if undone or extensions:
     red("; ".join(([undone] if undone else []) + extensions))

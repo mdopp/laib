@@ -777,6 +777,11 @@ jobs:
           f=/mnt/data/stacks/file-share/data/anna.txt; test -f "$f"; [ "$(stat -c %U "$f")" = core ] || { echo "anna's file is not core's: $(stat -c %U "$f")"; exit 1; }
           echo "anna logged in with the password set through Haus's channel and wrote anna.txt, owned by core"
           smb anna wrong "ls" && { echo "a wrong password logs in"; exit 1; }
+          # #703: the failed login is one auth_audit line in samba's journal, with the name and the address, for the auth counter
+          for i in $(seq 1 10); do journalctl --user -u file-share-samba.service --since -3min --no-pager -o cat > /tmp/smb703.log || true; grep -q "status \[NT_STATUS_WRONG_PASSWORD\]" /tmp/smb703.log && break; sleep 1; done
+          grep -q "\[anna\] .* status \[NT_STATUS_WRONG_PASSWORD\] .* remote host \[ipv4:127.0.0.1:" /tmp/smb703.log || { echo "samba logs no failed login (SAMBA_CONF_LOG_LEVEL auth_audit:2)"; tail -20 /tmp/smb703.log; exit 1; }
+          if grep -q "status \[NT_STATUS_OK\]" /tmp/smb703.log; then echo "samba logs every successful login too (auth_audit above 2)"; exit 1; fi
+          echo "samba logged the failed login of anna for the auth counter, and no success"
           # a restart: the passdb stays, the POSIX side is made again
           systemctl --user restart file-share-samba.service; sleep 15
           smb anna "$PW" "ls anna.txt" || { echo "anna cannot log in after a samba restart"; cat /tmp/smb.out; exit 1; }

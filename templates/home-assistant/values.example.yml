@@ -8,6 +8,7 @@ BOTE_NOTIFY_URL: http://127.0.0.1:8645/mitteilung  # rest_command.mitteilung: HA
 MA_TOKEN: !secret HA_MUSIC_ASSISTANT_TOKEN     # Music Assistant's token for HA (#526): the check reads MA with it; empty without MA
 HA_TOKEN: !secret HA_TOKEN                     # minted by post-deploy (#349): home-assistant-check reads the integrations with it (#55)
 HA_INSTALL: ""                                 # #528: extensions a person approved, "update.x=1.2,…": post-deploy installs them (the Operator proposes it)
+HA_LOGIN_SPERRE: ""                            # #703: Home Assistant bans an address after this many failed logins (5), aus: never; empty leaves HA as it is. Off by default: a ban also locks out a consumer on 127.0.0.1 whose token went stale (README)
 HA_ADMIN_USER: laib                            # the administrator post-deploy onboards a fresh HA as and logs in as (#349); from ServiceBay: its OSCAR_HA_ADMIN_USERNAME
 OIDC_SECRET: !secret OIDC_HOMEASSISTANT_SECRET   # auth_oidc's client secret, AUTH_OIDC_SECRET in HA's environment (#253)
 # christiaangoossens/hass-oidc-auth, the tag archive and its SHA-256 (ServiceBay pinned the same, its #2453): an update is a values change

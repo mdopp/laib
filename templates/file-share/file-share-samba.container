@@ -18,6 +18,10 @@ Environment="SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read o
 # the Werkstatt's dev: a checkout stays dev's, git and the Werkstatt go on writing
 Environment="SAMBA_VOLUME_CONFIG_werkstatt=[werkstatt]; path=/werkstatt; browseable=yes; read only=no; valid users=@admins; access based share enum=yes; force user=root; force group=root; inherit owner=unix only"
 Environment="SAMBA_GLOBAL_STANZA=server min protocol = SMB2"
+# a failed login is one "Auth: … status [NT_STATUS_WRONG_PASSWORD] … remote host […]" line in the journal
+# (Samba's auth_audit at level 2, failures only; level 3 would log every success): the auth template's
+# counter reads it and tells the owner when one device keeps trying (#703)
+Environment="SAMBA_CONF_LOG_LEVEL=1 auth_audit:2"
 # the family's accounts (#296): samba-accounts.sh runs beside smbd under the image's runit;
 # the member list comes from file-share-samba-members, the passwords from Haus, both in samba-accounts/
 Exec=/bin/sh -c "install -D -m 755 /laib/samba-accounts.sh /container/config/runit/accounts/run && exec runsvdir -P /container/config/runit"

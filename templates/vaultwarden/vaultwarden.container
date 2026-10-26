@@ -9,6 +9,10 @@ Environment=DOMAIN=https://vault.${DOMAIN}
 Environment=SIGNUPS_ALLOWED=${SIGNUPS}
 Environment=ADMIN_TOKEN=${ADMIN_TOKEN}
 Environment=ROCKET_PORT=8222
+# the client's address from Caddy's X-Forwarded-For (Vaultwarden's default X-Real-IP Caddy does not send):
+# a failed login logs "IP: <client>", which the auth template's counter reads (#703); Vaultwarden takes
+# the header only from a non-global peer (IP_HEADER_TRUSTED_PROXIES local), so nobody outside can set it
+Environment=IP_HEADER=X-Forwarded-For
 Environment=SSO_ENABLED=true
 Environment=SSO_ONLY=false
 Environment=SSO_AUTHORITY=https://auth.${DOMAIN}
