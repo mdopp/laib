@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.37.0](https://github.com/mdopp/laib/compare/v0.36.1...v0.37.0) (2026-10-26)
+
+
+### Features
+
+* **template:** failed logins at the other doors, and the mail when the Bote is away ([f09316c](https://github.com/mdopp/laib/commit/f09316c4fedb8db7f17b1a034e70b5d24b080256))
+* **template:** failed logins at the other doors, and the mail when the Bote is away ([b4893aa](https://github.com/mdopp/laib/commit/b4893aaede5e3d9a7d63e958d6718df35b8a01ef)), closes [#703](https://github.com/mdopp/laib/issues/703)
+* **template:** paperless reads contract data and reminds before notice dates ([8715b42](https://github.com/mdopp/laib/commit/8715b4221157ebae1197254fae357601bc2ac889))
+* **template:** paperless reads contract data and reminds before notice dates ([f89415a](https://github.com/mdopp/laib/commit/f89415a1b176d86ab1e3c3e9d36c57e12f110ad1)), closes [#709](https://github.com/mdopp/laib/issues/709)
+
+
+### Bug Fixes
+
+* **pages:** hide stale proposals a later one answered, git output in Details ([0728945](https://github.com/mdopp/laib/commit/072894523856bc31f6d86878c37e435acb3c1610))
+* **pages:** hide stale proposals a later one answered, git output in Details ([cf5b893](https://github.com/mdopp/laib/commit/cf5b89370029a2a0e576619fdc4eefe409353db4)), closes [#716](https://github.com/mdopp/laib/issues/716)
+* **template:** file-share smbd logs to the journal at all, so failed logins reach the counter ([0875877](https://github.com/mdopp/laib/commit/0875877a24b58f923f470bb2122c39f53b9f8240)), closes [#703](https://github.com/mdopp/laib/issues/703)
+* **template:** home-assistant trusts Caddy on loopback, set in HA's HTTP store ([a786203](https://github.com/mdopp/laib/commit/a786203c433e3b41f3c241643256d971ab5add39))
+* **template:** home-assistant trusts Caddy on loopback, set in HA's HTTP store ([1667107](https://github.com/mdopp/laib/commit/166710770da8fdca2ada0b4da28b2e1589cffdd6)), closes [#724](https://github.com/mdopp/laib/issues/724)
+
 ## [0.36.1](https://github.com/mdopp/laib/compare/v0.36.0...v0.36.1) (2026-10-26)
 
 
