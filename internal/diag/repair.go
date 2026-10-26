@@ -48,6 +48,10 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 	name := "repairs/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,3 @@\n+# %s\n+\n+%s\n", name, reason, cmdline)
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{Patch: patch}, inbox.JudgeFor(st, env.Actor))
+	if err == nil && proposal.VerbTier[f.Repair[0]] == "destroy" { // #665: only the Inbox approves it
+		p.Tier = "destroy"
+		err = proposal.Save(cli.InboxDir(env), p)
+	}
 	if err == nil { // the finding it answers is the one laib measures afterwards (#544)
 		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: "nichts zurückzunehmen: laib führt nur " + cmdline + " aus"})
 	}

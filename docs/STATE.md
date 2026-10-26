@@ -477,6 +477,18 @@ value and `laib apply`. A secret a hook sets inside the app on every apply
 (the LDAP read-only accounts, MQTT, Samba, HA's bote) is not data-bound and
 rotates.
 
+With `rotate: true` beside `dataBound: true` (#665) the template's hook can
+change it inside the app, and `laib secret rotate` does: the new value waits
+in `secrets.age` as `<NAME>.next`, the services that declare it apply, and
+their hook gets it as `LAIB_ROTATE_<NAME>` next to the current
+`LAIB_SECRET_<NAME>`. The hook changes it in the app (an admin API with the
+current one, `ALTER ROLE` through `laib-exec` from a 0600 file, never argv)
+and prints `laib-secret: <NAME>=<new>` once the app took it; a hand-back
+after a failed `laib-exec` of the same hook is not taken. Without the
+hand-back the old value stays and `<NAME>.next` goes; with it, a red apply
+rotates back once, the same way. A hook that finds the new value working
+already only hands it back, so a run after a dropped session finishes it.
+
 ### Secrets that may stay unset
 
 A contract secret with `external: true` must be in `secrets.age` before
@@ -547,7 +559,8 @@ With `dns.provider` (and no `tls: internal`) Caddy gets **one** certificate
 for `*.<domain>` by DNS-01 and none per name: a new route has a valid
 certificate at once, needs no public DNS record (the LAN finds it through
 AdGuard's `*.<domain>` rewrite), and its name does not appear in the public
-certificate-transparency logs. A name with no route is closed (`abort`).
+certificate-transparency logs. A name with no route proxies nowhere and answers
+a German 404 page with the way to the start page (#480).
 The bare domain gets its own certificate only when a route uses it
 (`redirectFrom: ["@"]`); Caddy keeps one certificate per name, so apex and
 wildcard are two. A two-level name (`a.b.<domain>`) is not under the

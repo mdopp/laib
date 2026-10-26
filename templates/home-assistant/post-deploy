@@ -1015,7 +1015,33 @@ def music_assistant():
     print(f"home-assistant: Music Assistant integration signed in again ({ha_flow(tok, dict(flows[0], type='form'))})")
 
 
+def rotate_admin():
+    """#665: `laib secret rotate HA_ADMIN_PASSWORD` hands the new value over as LAIB_ROTATE_HA_ADMIN_PASSWORD.
+    The administrator changes it in Home Assistant itself (HA lets only the owner of a login do that),
+    and it is handed back once HA took it; without the hand-back Laib keeps the old one. Idempotent:
+    a run that finds the new one working already only hands it back."""
+    global PW, session
+    new = E.get("LAIB_ROTATE_HA_ADMIN_PASSWORD", "")
+    if not new or new == PW:
+        return
+    if not login(USER, new):
+        s = login(USER, PW)
+        if not s:
+            red(f"HA_ADMIN_PASSWORD NOT rotated: {USER} cannot log in with the one Laib holds; it stays")
+        ws = WS(s)
+        try:
+            ws("config/auth_provider/homeassistant/change_password", current_password=PW, new_password=new)
+        except RuntimeError as e:
+            red(f"HA_ADMIN_PASSWORD NOT rotated, Home Assistant refused: {e}; the old one stays")
+        finally:
+            ws.close()
+    print("laib-secret: HA_ADMIN_PASSWORD=" + new)
+    print(f"home-assistant: the password of {USER} changed in Home Assistant (laib secret rotate)")
+    PW, session = new, None
+
+
 try:
+    rotate_admin()
     main()
 except (RuntimeError, OSError, ValueError) as e:  # an API's refusal, a dropped connection: its words, never a value
     red(f"{type(e).__name__}: {e}")
@@ -1069,7 +1095,7 @@ def zuhause():
     print("home-assistant: home set from box.yml zuhause (" + ", ".join(want) + ")")
 
 
-CADDY = ("127.0.0.1/32", "::1/128")   # Caddy, on this host, reaches HA on loopback (#724); nothing wider is Laib's to trust
+CADDY = ("127.0.0.1/32", "::1/128")   # Caddy, on this host, reaches HA on loopback (#724)
 
 
 def trusts_caddy(conf):
@@ -1083,16 +1109,55 @@ def trusts_caddy(conf):
     return bool(conf.get("use_x_forwarded_for")) and any(ipaddress.ip_address("127.0.0.1") in t for t in nets)
 
 
+def wanted_proxies(problems):
+    """#729: the proxies HA trusts, exactly: loopback (Caddy) and HA_TRUSTED_PROXIES, the owner's own (comma-
+    separated addresses or CIDRs; a bare address is a /32 or /128). None, with a problem, when the value holds
+    anything else: then the list HA has is not touched, so a typo neither drops a proxy the owner meant nor
+    trusts a range nobody did."""
+    want = list(CADDY)
+    bad = []
+    for part in E.get("HA_TRUSTED_PROXIES", "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            net = str(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            bad.append(part)
+            continue
+        if net not in want:
+            want.append(net)
+    if bad:
+        problems.append("HA_TRUSTED_PROXIES: " + ", ".join(repr(b) for b in bad) + " ist keine IP-Adresse und kein Netz "
+                        "(z. B. 192.168.178.2 oder 10.0.0.0/8, mehrere mit Komma); Home Assistants Proxy-Liste bleibt, wie sie ist")
+        return None
+    return want
+
+
+def proxy_set(entries):
+    """the entries as networks, order-insensitive; one HA cannot read is no network (and so not wanted)"""
+    out = set()
+    for e in entries or []:
+        try:
+            out.add(str(ipaddress.ip_network(e, strict=False)))
+        except (ValueError, TypeError):
+            out.add(repr(e))
+    return out
+
+
 def http_settings():
     """Home Assistant's HTTP settings, in its own store since 2026.8 (it ignores a YAML http: block), set
     through http/config, configure and promote as ServiceBay set the proxy trust there (#2573); configure
     restarts HA into it on trial and an unpromoted one reverts after five minutes. One configure for all,
     only when something differs, so an apply that changes nothing does not restart HA.
 
-    The proxy trust (#724), always: Caddy reaches HA on 127.0.0.1, and HA answers a forwarded request from
-    a proxy it does not trust with 400 and logs every client as 127.0.0.1. Kept as it is while HA reads the
-    client from X-Forwarded-For and trusts 127.0.0.1 (the owner's own entries, ServiceBay's private ranges on
-    a migrated box, stay); else use_x_forwarded_for and 127.0.0.1/32 and ::1/128 are added, nothing wider.
+    The proxy trust (#724, #729): Laib owns trusted_proxies. Caddy reaches HA on 127.0.0.1, and HA answers a
+    forwarded request from a proxy it does not trust with 400 and logs every client as 127.0.0.1. So
+    use_x_forwarded_for is on and trusted_proxies is exactly 127.0.0.1/32, ::1/128 and HA_TRUSTED_PROXIES;
+    anything else is removed (ServiceBay's private ranges on a migrated box: HA is on the host network, and a
+    trusted LAN range lets any device there claim another address in X-Forwarded-For, and steer the login
+    alerts of #703). The same set in another order is no change. A value that is no address leaves the list
+    as it is (red), only adding loopback where HA does not trust Caddy at all.
 
     HA_LOGIN_SPERRE (#703): Home Assistant bans an address after that many failed logins, "aus" never, empty
     leaves it as it is (the default). Only with the proxy trust: otherwise every login from outside is
@@ -1108,15 +1173,21 @@ def http_settings():
         n = int(want)
     elif want:
         problems.append(f"HA_LOGIN_SPERRE={want!r}: a number of failed logins (like 5), aus, or empty")
+    proxies = wanted_proxies(problems)
     ws = WS(admin_session())
     try:
         cur = ws("http/config") or {}
         stable = {k: v for k, v in (cur.get("stable") or {}).items() if k not in ("created_at", "error", "error_message")}
         conf = dict(stable)
-        if not trusts_caddy(conf):
-            have = conf.get("trusted_proxies") or []
+        have = stable.get("trusted_proxies") or []
+        if proxies is None:
+            if not trusts_caddy(conf):
+                conf["use_x_forwarded_for"] = True
+                conf["trusted_proxies"] = have + [c for c in CADDY if c not in have]
+        else:
             conf["use_x_forwarded_for"] = True
-            conf["trusted_proxies"] = have + [c for c in CADDY if c not in have]
+            if proxy_set(have) != set(proxies):
+                conf["trusted_proxies"] = proxies
         if n is not None:
             conf["login_attempts_threshold"] = n
             if n > 0:
@@ -1136,8 +1207,10 @@ def http_settings():
         ws("http/config/promote")
     finally:
         ws.close()
-    if not trusts_caddy(stable):
-        print("home-assistant: trusts Caddy now: use_x_forwarded_for, trusted_proxies " + ", ".join(conf["trusted_proxies"]))
+    gone = sorted(proxy_set(stable.get("trusted_proxies")) - proxy_set(conf.get("trusted_proxies")))
+    if not trusts_caddy(stable) or conf.get("trusted_proxies") != stable.get("trusted_proxies"):
+        print("home-assistant: trusts Caddy now: use_x_forwarded_for, trusted_proxies " + ", ".join(conf["trusted_proxies"])
+              + (" (no longer trusted: " + ", ".join(gone) + ")" if gone else ""))
     if n is not None:
         print(f"home-assistant: HA_LOGIN_SPERRE {want}: " + (f"Home Assistant bans an address after {n} failed logins" if n > 0 else "no bans"))
     return "; ".join(problems) or None

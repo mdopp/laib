@@ -182,5 +182,27 @@ class Measure(unittest.TestCase):
         self.assertGreater(len(seen["messages"][0]["content"].split()), 5000)
 
 
+
+class EmbedWeights(unittest.TestCase):
+    def test_post_deploy_fetches_the_embedding_model(self):
+        """llama-embed's model arrives with its apply (embeddinggemma, haus#13), not by hand"""
+        with tempfile.TemporaryDirectory() as d:
+            hook = Path(d, "hook"); hook.mkdir()
+            (hook / "post-deploy").write_text((T / "post-deploy").read_text())
+            (hook / "presets.json").write_text(json.dumps({"household": "x", "presets": []}))
+            env = dict(os.environ, LAIB_DATA_DIR=d, EMBED_REPO="ggml-org/embeddinggemma-300M-GGUF", EMBED_FILE="embeddinggemma-300M-Q8_0.gguf",
+                       HTTPS_PROXY="http://127.0.0.1:9", https_proxy="http://127.0.0.1:9")
+            r = subprocess.run([sys.executable, str(hook / "post-deploy")], env=env, capture_output=True, text=True, timeout=60)
+            self.assertIn("embeddinggemma-300M-Q8_0.gguf", r.stdout + r.stderr)
+            self.assertNotEqual(r.returncode, 0, "a failed embed download must fail the hook")
+            Path(d, "llama", "models", "embeddinggemma-300M-Q8_0.gguf").write_text("w")
+            r = subprocess.run([sys.executable, str(hook / "post-deploy")], env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_the_default_embedding_model_reads_german(self):
+        v = (T / "values.example.yml").read_text()
+        self.assertIn("EMBED_ALIAS: embeddinggemma", v)
+        self.assertIn("--ubatch-size 2048", (T / "llama-embed.container").read_text())
+
 if __name__ == "__main__":
     unittest.main()

@@ -532,26 +532,33 @@ func LogoutURL(st *state.State) string {
 	return "https://" + fqdn(st, host) + "/logout"
 }
 
-// denyPage is a 403 a person can read (#480): German, the household look
-// (#382), the reason and the way out. Caddy fills {http.request.host}.
-func denyPage(indent, title, body string) string {
+// denyPage is a denial a person can read (#480): German, the household look
+// (#382), the reason and the way out, with its status. Caddy fills
+// {http.request.host}.
+func denyPage(indent, title, body, status string) string {
 	const css = `:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}` +
 		`body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}`
 	return indent + "header Content-Type \"text/html; charset=utf-8\"\n" + indent + "respond <<HTML\n" + indent + "\t<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><meta name=color-scheme content=\"dark light\"><title>" +
-		title + "</title><style>" + css + "</style></head><body><main>" + body + "</main></body></html>\n" + indent + "\tHTML 403\n"
+		title + "</title><style>" + css + "</style></head><body><main>" + body + "</main></body></html>\n" + indent + "\tHTML " + status + "\n"
 }
 
-// denySnippets are the two 403s as snippets: lanonly for a LAN-only name
+// denySnippets are the denials as snippets: lanonly for a LAN-only name
 // reached from outside (after the unchanged LAN check, before Authelia),
-// denied for a login whose account may not open the name.
+// denied for a login whose account may not open the name, down for a
+// service (or Authelia) that does not answer, unknown for a name without a
+// route under the wildcard certificate.
 func denySnippets(st *state.State) string {
 	home := ""
 	if u := HausURL(st); u != "" {
 		home = `<p><a href="` + u + `">Zur Startseite</a> <span class=muted>– die geht auch unterwegs</span></p>`
 	}
-	lan := "<h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p>" + home
+	lan := "<h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p><p class=muted>Du bist doch im WLAN zu Hause? Dann fragt dein Gerät einen fremden Namensdienst (am Handy „Privates DNS“, im Browser „Sicheres DNS“, am iPhone „Privat-Relay“) und kommt über das Internet: die Box sieht die Adresse {http.request.remote.host}. Das abschalten, dann geht es.</p>" + home
 	deny := "<h1>Kein Zugang mit diesem Konto</h1><p>Du bist angemeldet, aber dein Konto darf {http.request.host} nicht öffnen. Manche Seiten sind nur für die Admins der Box.</p><p><a href=\"" + LogoutURL(st) + "?rd=https://{http.request.host}/\">Abmelden und mit einem anderen Konto anmelden</a></p>" + home
-	return "(lanonly) {\n\thandle {\n" + denyPage("\t\t", "Nur zu Hause", lan) + "\t}\n}\n\n(denied) {\n" + denyPage("\t", "Kein Zugang", deny) + "}\n\n"
+	down := "<h1>{http.request.host} antwortet gerade nicht</h1><p>Der Dienst dahinter startet vermutlich gerade neu, nach einem Update oder einer Reparatur. Das dauert meist nur eine Minute.</p><p><b>So geht es:</b> kurz warten und die Seite neu laden. Bleibt es länger so, sag den Admins der Box Bescheid.</p>" + home
+	unknown := "<h1>Diese Adresse gibt es auf dieser Box nicht</h1><p>Unter {http.request.host} läuft kein Dienst, vielleicht ein Tippfehler oder ein altes Lesezeichen.</p><p><a href=\"" + StartURL(st) + "\">Zur Startseite</a></p>"
+	return "(lanonly) {\n\thandle {\n" + denyPage("\t\t", "Nur zu Hause", lan, "403") + "\t}\n}\n\n(denied) {\n" + denyPage("\t", "Kein Zugang", deny, "403") +
+		"}\n\n(down) {\n\thandle_errors 502 503 504 {\n" + denyPage("\t\t", "Gerade nicht erreichbar", down, "{err.status_code}") +
+		"\t}\n}\n\n(unknown) {\n" + denyPage("\t", "Unbekannte Adresse", unknown, "404") + "}\n\n"
 }
 
 // PublicResolvers answer what Let's Encrypt sees, not the LAN's rewrites:
@@ -595,7 +602,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	if st.Box.Roles.Proxy != "" {
 		// Laib's own page: LAN only, Authelia, and a proxy secret so the pages
 		// trust Remote-User only when it arrived through Caddy (ADR 0012).
-		fmt.Fprintf(&b, "%s {\n%s\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host), stripRemote)
+		fmt.Fprintf(&b, "%s {\n%s\timport down\n\t@lan remote_ip private_ranges\n\thandle @lan {\n", fqdn(st, st.Box.Laib.Host), stripRemote)
 		if st.Box.Roles.SSO != "" {
 			b.WriteString("\t\timport authelia\n")
 		}
@@ -604,13 +611,13 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 	if dns01 {
 		// one wildcard certificate: Caddy (2.10+) then gets none per name, a
 		// new route has a certificate at once and no name reaches the CT logs;
-		// a name without a route is closed
-		fmt.Fprintf(&b, "*.%s {\n%s\tabort\n}\n\n", st.Box.Domain, stripRemote)
+		// a name without a route proxies nowhere and says so (#480)
+		fmt.Fprintf(&b, "*.%s {\n%s\timport unknown\n}\n\n", st.Box.Domain, stripRemote)
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, r := range svc.Contract.Routes {
-			fmt.Fprintf(&b, "%s {\n%s", fqdn(st, r.Host), stripRemote)
+			fmt.Fprintf(&b, "%s {\n%s\timport down\n", fqdn(st, r.Host), stripRemote)
 			indent := "\t"
 			if r.Exposure == "internal" {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")

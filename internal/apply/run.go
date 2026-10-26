@@ -168,6 +168,11 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 	handed := res.NewSecrets
 	for round := 0; len(handed) > 0; round++ {
 		maps.Copy(sec, handed)
+		for k, v := range handed { // #665: a rotation the app took is done
+			if sec[k+".next"] == v {
+				delete(sec, k+".next")
+			}
+		}
 		if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
 			return env.Fail(err)
 		}

@@ -299,6 +299,10 @@ type Secret struct {
 	// login), and no hook changes it inside the app: `laib secret rotate`
 	// refuses it, a new value would lock the app out (#353).
 	DataBound bool `yaml:"dataBound"`
+	// Rotate: the template's hook changes a dataBound secret inside the app
+	// (#665): `laib secret rotate` hands it the new value as
+	// LAIB_ROTATE_<NAME> and takes it once the hook hands it back.
+	Rotate bool `yaml:"rotate"`
 	// Login: the secret is a human's login (#441): the recovery sheet lists
 	// it, `laib recovery-sheet --vaultwarden` exports it with its password.
 	Login *Login `yaml:"login"`

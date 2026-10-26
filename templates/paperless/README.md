@@ -131,7 +131,7 @@ index (`10 2 * * *`) waits for the next night.
 | `AI_ENABLED` | `"true"` | the AI on; `"false"` on a box without a model, else post-deploy stops: Paperless' client without an endpoint asks OpenAI's |
 | `AI_MODEL` | `qwen3.6-35b-a3b` | the household model; another needs a lease Paperless does not take |
 | `AI_LANGUAGE`, `AI_CONTEXT`, `AI_TIMEOUT` | `de`, `16384`, `300` | the suggestions' language, the tokens of a document read, the seconds Qwen gets |
-| `AI_EMBED_BACKEND`, `AI_EMBED_MODEL` | `openai-like`, `nomic-embed-text` | llama-embed through the proxy; `huggingface` and a sentence-transformers model run on Paperless' CPU instead |
+| `AI_EMBED_BACKEND`, `AI_EMBED_MODEL` | `openai-like`, `embeddinggemma` | llama-embed through the proxy; `huggingface` and a sentence-transformers model run on Paperless' CPU instead |
 | `AI_EMBED_CHUNK` | `"300"` | tokens per piece: llama-embed refuses a piece beyond its 512-token batch |
 | `OCR_MODE` | `redo` | every page recognised again, a born-digital PDF's own text kept; `auto` kept a scanner's letter salad on 11 of 19 documents; `force` rasterises every PDF |
 | `OCR_ROTATE_PAGES`, `OCR_DESKEW` | `"true"` | upside-down and crooked scans (Paperless skips deskew under `redo`) |
@@ -181,17 +181,52 @@ settings (the household model through the proxy, marked
   made. A period it cannot read is a line in the unit's journal. Without
   Haus (`HAUS_HAUSHALT_TOKEN`) no reminder is made and none is recorded,
   so the first run after `laib add haus` makes them.
+- **"zum Monats-/Quartals-/Jahresende"** (#721). A period "zum Monatsende",
+  "zum Quartalsende", "zum Ende eines Kalendervierteljahres", "zum
+  Halbjahresende" or "zum Jahresende" keeps its rule in the field ("3 Monate
+  zum Quartalsende"). With the notice date at such an end, a period of months
+  reaches back to a month's end: 1 Monat zum Monatsende before 28.02. is
+  31.01., not 28.01. A notice date that is no such end (15.02. with "zum
+  Quartalsende") is counted back by the day, never moved later, and the
+  document gets `prüfen` and a note, once.
+- **Renewing** (#721). A notice date that has passed moves on by the renewal
+  the contract's own text names ("verlängert sich jeweils um 12 Monate",
+  "um ein weiteres Jahr"), term by term until it lies ahead, a month's end
+  kept (29.02.2024 + 1 Jahr is 28.02.2025); the note quotes the words and
+  says to empty the field once the contract is cancelled. The fields
+  Vertragsbeginn, Vertragsende and Zahlungsintervall are no evidence of the
+  renewal (a two-year contract often renews by one year, a yearly one is
+  paid monthly), so a text that names no renewal, or two ("um 12 oder um 24
+  Monate"), changes nothing: the tag `prüfen` and a note, once per date.
+- **The message on the reminder day** (#721). On the reminder's day, and
+  until the notice must be in, the owner (box.yml `notify.person`) gets one
+  message per document and notice date through the Bote, e.g. on Signal:
+  „Laib: Kündigung prüfen: Stromvertrag“, an empty line, then „Stromvertrag
+  (Stadtwerke …). Kündigen bis 31.12.2026 (Kündigungstermin 31.03.2027).
+  https://paperless.…/documents/12/details“. The script prints it as
+  `meldung {json}`; `paperless-vertraege.sh`, the unit's host part, writes
+  it into laib-notify's `eingang/` (`/mnt/data/laib/notify/eingang`, #703),
+  which tells it through the Bote first, else by mail, once. Paperless needs
+  no token for it, and the container never reaches bote-notify, which
+  listens on the host's loopback only. Without Haus the message still comes.
+- **Letter salad** (#721). A document whose text is letter salad (fewer
+  than half its tokens word-shaped, or short tokens with almost none of the
+  common German or English words; a text under 30 words is not judged, an
+  invoice of numbers is not salad) is recognised again through Paperless'
+  own reprocess (the values' `OCR_MODE`), once, at most three a run, with a
+  note. Still salad a day after: the tag `prüfen` and a note to scan the
+  original again. A contract of salad is not read until its text reads.
+  Every run looks at each document's text once (its hash is kept).
 - **The record.** `laib-vertraege.json` in Paperless' data folder (backed
-  up): per document what was filled and not taken, per reminder its day.
+  up): per document what was filled and not taken, per reminder its day,
+  the messages told, the dates marked, each text's verdict.
   `journalctl --user -u paperless-vertraege` has one line per document and
   reminder.
 
-Not here (the follow-up issue): the Bote telling a reminder over Signal,
-renewing a notice date after it passed, questions to the documents through
-the Bote or Haus, keeping the household's own people out of the AI's
-correspondent suggestions (Paperless 3.0 has no setting for it), and a check
-for unusable text.
+Not here (follow-up issues): questions to the documents through the Bote
+or Haus, and keeping the household's own people out of the AI's
+correspondent suggestions (Paperless 3.0 has no setting for it).
 
 A document recognised before keeps its text: to recognise it again, select
 it in Paperless and reprocess it from the document actions (the values'
-mode applies).
+mode applies); the timer does that by itself for letter salad.

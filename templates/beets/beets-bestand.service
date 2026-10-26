@@ -1,0 +1,22 @@
+# The Bestand (#727): musik-bestand.py runs inside the running beets container
+# and sorts, once and in chunks, the music an earlier run left unsorted (unknown
+# albums, unknown artists, nameless files at the top) through beets with
+# move: yes; what beets is not sure about goes to music/_unklar. It nices itself
+# (19) and asks for idle I/O inside the container, where beet and fpcalc run:
+# a Nice= here would only slow the podman client. One run at a time (a lock);
+# a run stops after BESTAND_JE_LAUF songs or BESTAND_MINUTEN minutes, the next
+# one goes on where the tree stands. The spoken word the owner confirmed in
+# BESTAND_GESPROCHEN moves to the audiobooks folder; nothing is deleted.
+[Unit]
+Description=beets: den Musikbestand einsortieren, in Etappen
+After=beets.service
+
+[Service]
+Type=oneshot
+Environment=MUSIK_BESTAND=${MUSIK_BESTAND}
+Environment=BESTAND_JE_LAUF=${BESTAND_JE_LAUF}
+Environment="BESTAND_GESPROCHEN_VORSCHLAG=${BESTAND_GESPROCHEN_VORSCHLAG}"
+Environment="BESTAND_GESPROCHEN=${BESTAND_GESPROCHEN}"
+StandardInput=file:%h/.config/containers/systemd/beets/musik-bestand.py
+ExecStart=/usr/bin/podman exec -i -e MUSIK_BESTAND -e BESTAND_JE_LAUF -e BESTAND_GESPROCHEN_VORSCHLAG -e BESTAND_GESPROCHEN systemd-beets python3 -
+TimeoutStartSec=1h
