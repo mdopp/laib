@@ -213,14 +213,14 @@ func Handler(c Config) http.Handler {
 		}},
 	}).Handler())
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
-		q, _, ok := lastQuestion(w, r)
+		q, system, _, ok := lastQuestion(w, r)
 		if !ok {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"id": "frage-" + fmt.Sprint(time.Now().UnixNano()), "object": "chat.completion", "model": "frage",
-			"choices": []map[string]any{{"index": 0, "finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": c.spoken(r.Context(), q)}}},
+			"choices": []map[string]any{{"index": 0, "finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": c.spoken(r.Context(), q, system)}}},
 		})
 	})
 	// The Ollama API's few routes Home Assistant's Ollama integration uses
@@ -232,7 +232,7 @@ func Handler(c Config) http.Handler {
 			"size": 0, "digest": "frage", "details": map[string]string{"family": "frage", "format": "", "parameter_size": ""}}}})
 	})
 	mux.HandleFunc("POST /api/chat", func(w http.ResponseWriter, r *http.Request) {
-		q, stream, ok := lastQuestion(w, r)
+		q, system, stream, ok := lastQuestion(w, r)
 		if !ok {
 			return
 		}
@@ -243,7 +243,7 @@ func Handler(c Config) http.Handler {
 			}
 			return m
 		}
-		text := c.spoken(r.Context(), q)
+		text := c.spoken(r.Context(), q, system)
 		if !stream {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(chunk(text, true))
@@ -258,7 +258,11 @@ func Handler(c Config) http.Handler {
 }
 
 // spoken is Ask's answer, or a sentence about the failure: never silence on a speaker.
-func (c Config) spoken(ctx context.Context, q string) string {
+// A device command HA's intents missed is answered without a search (#760).
+func (c Config) spoken(ctx context.Context, q, system string) string {
+	if text, ok := device(q, system); ok {
+		return text
+	}
 	a, err := c.Ask(ctx, q)
 	if err != nil {
 		return "Das konnte ich gerade nicht nachschlagen: " + err.Error()
@@ -267,8 +271,8 @@ func (c Config) spoken(ctx context.Context, q string) string {
 }
 
 // lastQuestion reads a chat request (OpenAI's or Ollama's): the last user
-// message is the question; stream is Ollama's flag, true unless sent false.
-func lastQuestion(w http.ResponseWriter, r *http.Request) (q string, stream, ok bool) {
+// message is the question, system HA's prompt; stream is Ollama's flag, true unless sent false.
+func lastQuestion(w http.ResponseWriter, r *http.Request) (q, system string, stream, ok bool) {
 	var in struct {
 		Messages []struct {
 			Role    string `json:"role"`
@@ -278,13 +282,15 @@ func lastQuestion(w http.ResponseWriter, r *http.Request) (q string, stream, ok 
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
-		return "", false, false
+		return "", "", false, false
 	}
 	for i := len(in.Messages) - 1; i >= 0; i-- {
-		if in.Messages[i].Role == "user" {
+		if in.Messages[i].Role == "user" && q == "" {
 			q = in.Messages[i].Content
-			break
+		}
+		if in.Messages[i].Role == "system" {
+			system = in.Messages[i].Content
 		}
 	}
-	return q, in.Stream == nil || *in.Stream, true
+	return q, system, in.Stream == nil || *in.Stream, true
 }

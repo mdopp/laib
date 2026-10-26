@@ -67,3 +67,26 @@ Bote the agent people talk to, in Signal and in the Sprechen field (Hermes'
 OpenAI-compatible API, port 8642 in the bote pod). Frage stays Assist's
 conversation agent for sentences no intent matched, and the Bote's `frage`
 tool.
+
+## Amendment 2026-10-26 (#760): a device command that misses is answered, not searched
+
+„Schalte Sofa-Licht aus“ missed HA's intents (the light is „Sofalicht“) and
+reached Frage, which searched the web. Two parts, neither puts an LLM in the
+switching path (§1):
+
+1. **Names as Whisper writes them.** home-assistant gives each entity exposed
+   to Assist the hyphenated and split spellings of a German compound as
+   aliases (a fixed list of device nouns, never a guess), marks which ones it
+   added, and never touches the owner's.
+2. **Frage answers a missed command honestly.** A sentence shaped like a
+   command („Schalte …“, „… aus“) gets no search: Frage says which device it
+   did not find and names the nearest from its prompt's line „Geräte: …“, a
+   template HA renders with the names of what Assist switches. Frage never
+   switches.
+
+Rejected: HA's Assist API (`llm_hass_api`) on the agent Frage, to let it see
+or call the devices — with an LLM API HA filters its own GetState and
+media-search intents out of the local path and hands them to the agent
+(assist_pipeline `_async_local_fallback_intent_filter`), so „Spiel …“ would
+leave Music Assistant for Frage. And a model behind the lease that switches
+by guessing a name is what §1 ruled out.
