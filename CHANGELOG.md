@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.41.0](https://github.com/mdopp/laib/compare/v0.40.0...v0.41.0) (2026-10-26)
+
+
+### Features
+
+* Assist hears compounds as Whisper writes them; a missed command gets an honest answer ([d7f8d6e](https://github.com/mdopp/laib/commit/d7f8d6ef325a7cc3249403ca64f2c4eadf4f7e9c))
+* **frage:** a missed device command gets an honest answer, not a web search ([0f85a58](https://github.com/mdopp/laib/commit/0f85a58834b5c5f9d2e28486b9b717d554216c39))
+* **pages:** the key page shows only the owner's keys, in the template's words, each with its own link ([dd8567d](https://github.com/mdopp/laib/commit/dd8567d51cc5ee53834f4088c350aa2df2528283))
+* **stimme:** flash the trained wake word onto the Voice PE after the owner approves ([37bb09d](https://github.com/mdopp/laib/commit/37bb09d0e01df43a409a3659f1fa21f3f58e0391))
+* **stimme:** flash the trained wake word onto the Voice PE after the owner approves ([a271dc4](https://github.com/mdopp/laib/commit/a271dc4dbae248e00edba96fefec0c16e775b6c5)), closes [#759](https://github.com/mdopp/laib/issues/759)
+* **template:** home-assistant adds the spellings Whisper writes as aliases ([5495498](https://github.com/mdopp/laib/commit/5495498883fa6851f54a620baa6cde4c73b70bd1))
+
+
+### Bug Fixes
+
+* **keys:** template update drops a retired secret's value; the key page is owner-grade with a deep link per key ([0aebb1d](https://github.com/mdopp/laib/commit/0aebb1de60725765086a8dadc391853c290e62d5))
+* **proposal:** a template update drops a value whose secret the template retired ([540eb89](https://github.com/mdopp/laib/commit/540eb89ba687c97d5a56e88b80cc993b8c86c32c))
+* **werkstatt:** pin pi-web-ui to 0.111.0; the token sentence names the names user ([9481739](https://github.com/mdopp/laib/commit/9481739108df45f7c8c285716332b7ccc7d98b33))
+
 ## [0.40.0](https://github.com/mdopp/laib/compare/v0.39.3...v0.40.0) (2026-10-26)
 
 
