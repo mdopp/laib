@@ -13,6 +13,7 @@ provides: [werkstatt]
 secrets:
   - name: WERKSTATT_SSH_PASSWORD
   - name: CLAUDE_CODE_OAUTH_TOKEN   # claude setup-token: model requests only, no Remote Control; yields to a claude.ai login in the home (#498)
+    owner: {label: "Werkstatt: Zugang für Claude Code", warum: "Damit arbeitet Claude Code in der Werkstatt.", hilfe: "Auf einem Rechner mit Claude Code „claude setup-token“ ausführen, anmelden und das Token kopieren, das es zeigt."}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
   - name: LAIB_WERKSTATT_TOKEN   # minted on `laib add` as the werkstatt hand: it can only get a claude token per session (#380, ADR 0006)
     external: true
@@ -20,8 +21,10 @@ secrets:
   - name: LAIB_PI_TOKEN
     external: true               # laib token mint pi --note werkstatt
   - name: WERKSTATT_GIT_TOKEN
+    owner: {label: "Werkstatt: GitHub-Zugang", warum: "Damit holt die Werkstatt Code und schlägt Änderungen als Pull Request vor.", hilfe: "Auf GitHub unter Settings → Developer settings → Fine-grained tokens ein Token anlegen: Contents lesen und schreiben, Issues lesen, Pull requests lesen und schreiben.", link: "https://github.com/settings/personal-access-tokens/new"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true               # the dev container's fine-grained GitHub PAT: Contents rw, Issues r, Pull requests rw
   - name: WERKSTATT_PI_GIT_TOKEN
+    owner: {label: "Werkstatt: GitHub-Zugang für pi", warum: "Pi bekommt einen eigenen, engeren Zugang als die Werkstatt.", hilfe: "Ein zweites Fine-grained Token wie das der Werkstatt, nur für die Repos, an denen pi arbeitet; nie dasselbe Token.", link: "https://github.com/settings/personal-access-tokens/new"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true               # pi's own PAT, limited to AUTOLOOP_REPOS: Contents rw (branch push, claim ref), Issues r, Pull requests rw — never the dev token (#44)
 data:
   - path: ${DATA_DIR}/werkstatt/workspace

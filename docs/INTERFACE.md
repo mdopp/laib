@@ -303,15 +303,34 @@ page that names the cards; it approves exactly those, one after the other,
 each with its own run, so a red one is taken back alone.
 
 „Schlüssel hinterlegen“ (`/schluessel`, #696, linked from Status) is the
-owner's `laib secret set` without a console: a choice of the secrets the
-templates declare external (never one the box generates or mints), each
-with the services that use it and „fehlt“ or „gesetzt, wird ersetzt“, and a
-password field. Saving stores the value like `laib secret rotate` does
-(under the apply lock, committed on main, journaled by name) and applies
-every service that uses it; the page says „<NAME> gespeichert, <dienst> neu
-gestartet“ or why not. The value is never shown, journaled or logged. It is
-behind the same guard as Freigeben, refuses a cross-site form, and no token
-reaches it (`secret` is not an MCP verb).
+owner's `laib secret set` without a console, and the one place the keys
+live. It offers only the secrets a template marks `owner:` (docs/STATE.md),
+never one the box generates or a hook mints: per service, each key by its
+German label, what it brings, „fehlt“ or „hinterlegt“ (never the value) and
+the env name in small print, with „Hinterlegen“ or „Ersetzen“ to its own
+form.
+
+**One key's form, the deep link:**
+`https://<laib host>.<domain>/schluessel?name=<NAME>[&zurueck=<url>]`
+opens exactly that key: label, what it brings, where to get it (the
+template's how-to and link), whether it is there, and the password field.
+Other places that need a key link here instead of explaining
+`laib secret set`: a diag finding `schluessel` names a missing key whose use
+Laib can see (a set value `requires` it, or the DNS-01 token) with this
+link (`render.KeyLink`); an app links it from its own settings (Haus'
+Discogs settings, haus#148: `name=HAUS_DISCOGS_KEY` and `HAUS_DISCOGS_SECRET`,
+`zurueck=https://haus.<domain>/discogs`). `zurueck` is offered as „Zurück“,
+also after saving, only when it is `https://` on the box's domain or a
+name under it; anything else (another site, `http://`, `//host`) is
+dropped, so the link is no open redirect. A name the page may not set
+answers „Diesen Schlüssel kann die Box-Seite nicht setzen.“
+
+Saving stores the value like `laib secret rotate` does (under the apply
+lock, committed on main, journaled by name) and applies every service that
+uses it; the key's page says „<label> hinterlegt, <Dienst> neu gestartet“
+or why not, reloading while it runs. The value is never shown, journaled or
+logged. It is behind the same guard as Freigeben, refuses a cross-site
+form, and no token reaches it (`secret` is not an MCP verb).
 
 Journal: one line per entry, filter by service and actor. Nothing else.
 
