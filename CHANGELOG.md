@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.1](https://github.com/mdopp/laib/compare/v0.39.0...v0.39.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **diag:** the move's own laib secret set is no renewal of a carried secret ([#665](https://github.com/mdopp/laib/issues/665)) ([255a6ed](https://github.com/mdopp/laib/commit/255a6ed15e643c1d1906ce92273bdbed7e92b9bd))
+
 ## [0.39.0](https://github.com/mdopp/laib/compare/v0.38.0...v0.39.0) (2026-10-26)
 
 
