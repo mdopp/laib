@@ -303,6 +303,10 @@ type Secret struct {
 	// (#665): `laib secret rotate` hands it the new value as
 	// LAIB_ROTATE_<NAME> and takes it once the hook hands it back.
 	Rotate bool `yaml:"rotate"`
+	// Devices: devices on the LAN hold it too (MQTT's, Samba's), so a new
+	// value locks them out until each gets it by hand: never a rotate
+	// repair, and after a rotation diag offers `laib secret zurueck` (#665).
+	Devices bool `yaml:"devices"`
 	// Login: the secret is a human's login (#441): the recovery sheet lists
 	// it, `laib recovery-sheet --vaultwarden` exports it with its password.
 	Login *Login `yaml:"login"`

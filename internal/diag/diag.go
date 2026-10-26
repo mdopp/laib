@@ -165,7 +165,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
 		}
 	}
-	for _, f := range servicebayFindings(env, st, sec) { // #665: ServiceBay's data dir, until it goes
+	for _, f := range append(servicebayFindings(env, st, sec), deviceFindings(env, st)...) { // #665: ServiceBay's data dir, until it goes; device-held secrets
 		if only == "" || f.Service == only { // laib repair servicebay <svc> asks for one service
 			out = append(out, f)
 		}

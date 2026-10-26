@@ -16,13 +16,14 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
 )
 
 // cmdSecret: `laib secret set <NAME>` reads the value from stdin (one line)
 // so it never lands in a shell history; `laib secret list` prints names only.
 func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.Fail(errors.New("usage: laib secret set <NAME> (value on stdin) | list | rotate <NAME>"))
+		return env.Fail(errors.New("usage: laib secret set <NAME> (value on stdin) | list | rotate <NAME> | zurueck <NAME>"))
 	}
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -81,13 +82,8 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		if _, ok := sec[name]; !ok {
 			return env.Fail(fmt.Errorf("no secret %s", name))
 		}
-		external, bound, inApp := false, false, false
-		for _, d := range render.SecretNames(st) {
-			if d.Name == name {
-				external, bound, inApp = external || d.External, bound || d.DataBound, inApp || d.Rotate
-			}
-		}
-		if external {
+		owned, bound, inApp := secretDecl(st, name)
+		if !owned {
 			return env.Fail(fmt.Errorf("%s is external: obtain a new value and use `laib secret set`", name))
 		}
 		if bound && !inApp { // nothing changes: the old value keeps working (#353)
@@ -117,6 +113,45 @@ func cmdSecret(ctx context.Context, env *cliEnv, args []string) int {
 		}
 		fmt.Fprintf(env.W(), "rotiert: %s · betroffen: %s\n", name, strings.Join(touched, ", "))
 		return code
+	case "zurueck":
+		// #665: the value before the last rotation, from the state repo's
+		// history, for a secret devices still hold. Humans only.
+		if len(args) != 2 {
+			return env.Fail(errors.New("usage: laib secret zurueck <NAME>"))
+		}
+		if proposal.Hand(env.Actor) != "human" {
+			return cli.Refused(env, "only a human puts a secret back")
+		}
+		name := args[1]
+		if _, bound, _ := secretDecl(st, name); bound {
+			return env.Fail(fmt.Errorf("%s is bound to its app's data: a rotation that went red went back already; otherwise change it in the App and `laib secret set %s`", name, name))
+		}
+		enc, err := proposal.Before(ctx, env.Paths.State, "secrets.age", "secret rotate "+name)
+		was := map[string]string{}
+		if err == nil && enc != nil {
+			was, err = secrets.Decrypt(enc, env.Paths.Key)
+		}
+		if err != nil {
+			return env.Fail(err)
+		}
+		if was[name] == "" {
+			return env.Fail(fmt.Errorf("%s: keine Rotation im State-Repo, kein alter Wert", name))
+		}
+		touched, code := apply.SetSecret(ctx, env, st, name, was[name], "secret zurück "+name)
+		fmt.Fprintf(env.W(), "zurück: %s hat wieder den Wert vor der Rotation · betroffen: %s\n", name, strings.Join(touched, ", "))
+		return code
 	}
 	return env.Fail(fmt.Errorf("unknown secret subcommand %q", args[0]))
+}
+
+// secretDecl: what a secret's own declarations say. An external one is a
+// consumer's (#665: music-assistant's of media's JELLYFIN_ADMIN_PASSWORD);
+// a secret only consumers name is not laib's to change.
+func secretDecl(st *state.State, name string) (owned, bound, inApp bool) {
+	for _, d := range render.SecretNames(st) {
+		if d.Name == name && !d.External {
+			owned, bound, inApp = true, bound || d.DataBound, inApp || d.Rotate
+		}
+	}
+	return owned, bound, inApp
 }
