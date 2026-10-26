@@ -74,6 +74,7 @@ type Config struct {
 	// and their units, pause and resume; main wires it to MCP, tests to a fake.
 	Laib      Box           `json:"-"`
 	RouterURL string        `json:"-"`
+	EmbedURL  string        `json:"-"` // llama-embed, where /v1/embeddings goes (#567); default 127.0.0.1:11436
 	LeaseDir  string        `json:"-"`
 	Token     string        `json:"-"` // bearer for POST/DELETE on the lease API (#42)
 	Renew     time.Duration `json:"-"` // a holder renews within this, or loses the card
@@ -149,6 +150,7 @@ type Server struct {
 	cfg      Config
 	mu       sync.Mutex
 	proxy    *httputil.ReverseProxy
+	embed    *httputil.ReverseProxy // llama-embed (#567)
 	client   *http.Client
 	warmed   sync.Map                       // preset → answered once: GET does not ask the router again
 	units    map[string][]string            // mode → resolved unit names, sorted
@@ -233,6 +235,11 @@ func New(cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, proxy: httputil.NewSingleHostReverseProxy(u), client: &http.Client{Timeout: 10 * time.Minute}}
 	s.proxy.FlushInterval = -1 // token streams
+	e, err := url.Parse(cmp.Or(cfg.EmbedURL, "http://127.0.0.1:11436"))
+	if err != nil {
+		return nil, err
+	}
+	s.embed = httputil.NewSingleHostReverseProxy(e)
 	if err := s.connect(context.Background()); err != nil {
 		return nil, err
 	}
@@ -841,6 +848,10 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 		s.catalogue(w, r)
 		return
 	}
+	if r.URL.Path == "/v1/embeddings" || r.URL.Path == "/embeddings" {
+		s.embeddings(w, r)
+		return
+	}
 	if r.Method != http.MethodPost {
 		s.proxy.ServeHTTP(w, r)
 		return
@@ -874,6 +885,21 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
 		s.human.Store(time.Now().Unix())
 	}
 	s.proxy.ServeHTTP(w, r)
+}
+
+// embeddings go to llama-embed, so a pod reaches it through this proxy
+// and its own port stays on the host's loopback (#567, owner 2026-10-24).
+// The router knows no embedding preset, so the model is not checked; a
+// window that stops model/embed refuses while it stands. An embedding is
+// indexing, never a person asking (#550).
+func (s *Server) embeddings(w http.ResponseWriter, r *http.Request) {
+	if l := s.read(); l != nil && (l.Mode == Exclusive || slices.Contains(s.cfg.Modes[l.Mode].Stops, "model/embed")) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"message": "Die Einbettungen ruhen: " + s.reason(l) + ". Danach wieder versuchen."}})
+		return
+	}
+	s.embed.ServeHTTP(w, r)
 }
 
 func (s *Server) denial(model, mode string, allowed []string, holder string) map[string]any {

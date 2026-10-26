@@ -300,6 +300,17 @@ something runs. „Alle freigeben“ (two or more open cards) is one confirmatio
 page that names the cards; it approves exactly those, one after the other,
 each with its own run, so a red one is taken back alone.
 
+„Schlüssel hinterlegen“ (`/schluessel`, #696, linked from Status) is the
+owner's `laib secret set` without a console: a choice of the secrets the
+templates declare external (never one the box generates or mints), each
+with the services that use it and „fehlt“ or „gesetzt, wird ersetzt“, and a
+password field. Saving stores the value like `laib secret rotate` does
+(under the apply lock, committed on main, journaled by name) and applies
+every service that uses it; the page says „<NAME> gespeichert, <dienst> neu
+gestartet“ or why not. The value is never shown, journaled or logged. It is
+behind the same guard as Freigeben, refuses a cross-site form, and no token
+reaches it (`secret` is not an MCP verb).
+
 Journal: one line per entry, filter by service and actor. Nothing else.
 
 The pages are server-rendered HTML from `laib serve`, behind Caddy and

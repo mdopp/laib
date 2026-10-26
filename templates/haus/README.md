@@ -45,6 +45,14 @@ ABS for new episodes every 15 minutes and tells each subscriber with
 through bote-notify); it offers the message once `laib_tell` is in its
 tools/list.
 
+Discogs (#696): the music wish list reads the household's Discogs
+collection ("habt ihr schon auf Vinyl"), puts record wishes on its wantlist
+and marks a wish arrived once the record is in the collection, with
+`HAUS_DISCOGS_TOKEN`, the Discogs account's personal access token. The owner
+creates it at discogs.com (Settings, Developers) and sets it on the box page,
+„Schlüssel hinterlegen“; without it the wish list has no Discogs, all else
+stays.
+
 Music wishes (#695): Haus asks Jellyfin at `HAUS_JELLYFIN_URL` with
 `HAUS_JELLYFIN_TOKEN` whether a shared song is there already, and every 15
 minutes whether an open wish arrived. The token is a user token, not an API

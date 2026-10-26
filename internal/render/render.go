@@ -254,6 +254,25 @@ func SecretNames(st *state.State) []state.Secret {
 	return out
 }
 
+// SecretUsers are the services that reference a secret in a value or
+// declare it, OIDC secrets for their client (#17): what applies again
+// when its value changes.
+func SecretUsers(st *state.State, name string) []string {
+	var out []string
+	for _, svcName := range st.ServiceNames() {
+		svc := st.Services[svcName]
+		uses := slices.ContainsFunc(svc.Contract.Secrets, func(d state.Secret) bool { return d.Name == name }) ||
+			svc.Contract.OIDC != nil && strings.HasPrefix(name, "OIDC_")
+		for _, v := range svc.Values {
+			uses = uses || v.Secret == name
+		}
+		if uses {
+			out = append(out, svcName)
+		}
+	}
+	return st.Order(out)
+}
+
 func variables(st *state.State, svc *state.Service, secrets map[string]string) map[string]string {
 	vars := map[string]string{
 		"DOMAIN":   st.Box.Domain,

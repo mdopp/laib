@@ -135,6 +135,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	mux.HandleFunc("/abmelden", Abmelden(env))
 	mux.HandleFunc("/inbox", guard(Inbox(env)))
 	mux.HandleFunc("/inbox/alle", guard(ApproveAll(env)))
+	mux.HandleFunc("/schluessel", guard(Keys(env))) // a key from outside, by the owner (#696)
 	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(Decision(env)))
 	// "jetzt prüfen" (#309): the service's check, started without waiting
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -394,6 +395,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	if bote {
 		b.WriteString(`<p><a href="/bote/link">Bote verbinden</a></p>`)
 	}
+	b.WriteString(`<p><a href="/schluessel">Schlüssel hinterlegen</a></p>`)
 	if rd.Lock != "" {
 		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
 	}

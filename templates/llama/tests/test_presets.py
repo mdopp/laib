@@ -116,6 +116,28 @@ class Presets(unittest.TestCase):
         self.assertEqual((q.get("batch-size"), q.get("ubatch-size"), q.get("flash-attn")), ("4096", "2048", "on"), q)
 
 
+    def test_gemma_12b_reads_images(self):
+        """#697: Haus reads a record's catalogue number off 1-4 photos. Gemma 4
+        12B is multimodal, but without an mmproj the router loads it text only
+        and an image_url is refused. The mmproj comes from the preset's own
+        repo (post-deploy fetches it from there) and is rendered into
+        presets.ini, as gemma-4-e4b's is."""
+        shipped = json.loads((T / "presets.json").read_text())
+        p = {x["alias"]: x for x in shipped["presets"]}["gemma-4-12b"]
+        self.assertEqual(p.get("mmproj"), "mmproj-gemma-4-12B-it-Q8_0.gguf", p)
+        self.assertEqual(p["repo"], "ggml-org/gemma-4-12B-it-GGUF")
+        self.assertEqual(sections(render(shipped))["gemma-4-12b"].get("mmproj"), "/models/mmproj-gemma-4-12B-it-Q8_0.gguf")
+
+    def test_the_readme_names_the_presets_that_read_images(self):
+        """#697: consumers (Haus) pick an image model by the README's list;
+        it is the presets with an mmproj, no more and no fewer."""
+        shipped = json.loads((T / "presets.json").read_text())
+        want = sorted(x["alias"] for x in shipped["presets"] if x.get("mmproj"))
+        m = re.search(r"(?m)^Presets that read images: (.+)\.$", (T / "README.md").read_text())
+        self.assertIsNotNone(m, "README.md needs the line 'Presets that read images: `a`, `b`.'")
+        self.assertEqual(sorted(re.findall(r"`([^`]+)`", m.group(1))), want)
+
+
 class Measure(unittest.TestCase):
     """#525: measure.py is how the box compares a preset before and after."""
 

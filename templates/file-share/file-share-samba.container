@@ -13,6 +13,10 @@ Environment=SHARE_USER=${SHARE_USER}
 # force user: every write is the container's root, the box's core, as File Browser's and
 # Syncthing's are, so one person's file is everyone's to change, and the tree stays core's (#230)
 Environment="SAMBA_VOLUME_CONFIG_data=[data]; path=/data; browseable=yes; read only=no; force user=root; force group=root"
+# the Werkstatt's workspace (#666): the LLDAP admins only (the group samba-accounts.sh keeps),
+# unlisted for everyone else. smbd writes as root and hands each new file to its folder's owner,
+# the Werkstatt's dev: a checkout stays dev's, git and the Werkstatt go on writing
+Environment="SAMBA_VOLUME_CONFIG_werkstatt=[werkstatt]; path=/werkstatt; browseable=yes; read only=no; valid users=@admins; access based share enum=yes; force user=root; force group=root; inherit owner=unix only"
 Environment="SAMBA_GLOBAL_STANZA=server min protocol = SMB2"
 # the family's accounts (#296): samba-accounts.sh runs beside smbd under the image's runit;
 # the member list comes from file-share-samba-members, the passwords from Haus, both in samba-accounts/
@@ -22,6 +26,7 @@ Volume=./samba-accounts.sh:/laib/samba-accounts.sh:ro
 # fails on an entry core does not own, #230); labelling off for this container
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/file-share/data:/data
+Volume=${DATA_DIR}/werkstatt/workspace:/werkstatt
 Volume=${DATA_DIR}/file-share/samba-private:/var/lib/samba/private:z
 Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
 AutoUpdate=registry

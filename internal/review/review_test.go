@@ -173,6 +173,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a file outside the services", func(t *testing.T, d string) {
 			write(t, d, ".gitignore", "services/\n", 0o644)
 		}, "außerhalb der Dienste"},
+		{"another service's folder (#666)", func(t *testing.T, d string) {
+			edit(t, d, "services/whoami/laib.yml", "data: []\n", "data:\n  - path: ${DATA_DIR}/auth/lldap\n    backup: false\n")
+		}, "Zugriff auf einen Ordner von auth"},
 		{"a removed service", func(t *testing.T, d string) {
 			os.RemoveAll(filepath.Join(d, "services/whoami"))
 		}, "entfernt den Dienst whoami"},
@@ -195,6 +198,12 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		}, ""},
 		{"a health URL", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/laib.yml", "http: http://127.0.0.1:8080/", "http: http://127.0.0.1:8080/health")
+		}, ""},
+		{"its own folder", func(t *testing.T, d string) {
+			edit(t, d, "services/whoami/laib.yml", "data: []\n", "data:\n  - path: ${DATA_DIR}/whoami/data\n")
+		}, ""},
+		{"a folder of the household's shared tree (ADR 0017)", func(t *testing.T, d string) {
+			edit(t, d, "services/whoami/laib.yml", "data: []\n", "data:\n  - path: ${DATA_DIR}/file-share/data/notes\n    backup: false\n")
 		}, ""},
 		{"a restriction added", func(t *testing.T, d string) {
 			edit(t, d, "services/caddy/caddy.container", "[Container]\n", "[Container]\nReadOnly=true\n")

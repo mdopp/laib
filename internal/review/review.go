@@ -247,6 +247,9 @@ func dirs(base, changed string) Result {
 			bc = b.Contract
 		}
 		r.contract(name, bc, a.Contract, existed, mints)
+		if existed {
+			r.foreignData(name, bc.Data, a.Contract.Data, ast)
+		}
 		r.values(name, ast, b, a, existed)
 		if existed {
 			r.Changes = append(r.Changes, valueChanges(name, b.Values, a.Values)...)
@@ -417,6 +420,20 @@ func changedBoxKeys(basePath, changedPath string) []string {
 		out = append(out, "(unverändert im Inhalt, anders geschrieben)")
 	}
 	return out
+}
+
+// foreignData (#666): a running service that gains a folder of another
+// service reaches that service's data, as a host folder would; the shared
+// tree file-share/data is everyone's by design (ADR 0017).
+func (r *Result) foreignData(svc string, before, after []state.DataPath, st *state.State) {
+	for _, d := range after {
+		owner, _, _ := strings.Cut(strings.TrimPrefix(d.Path, "${DATA_DIR}/"), "/")
+		if _, other := st.Services[owner]; !other || owner == svc || strings.HasPrefix(d.Path, "${DATA_DIR}/file-share/data/") ||
+			slices.ContainsFunc(before, func(b state.DataPath) bool { return b.Path == d.Path }) {
+			continue
+		}
+		r.Human = append(r.Human, fmt.Sprintf("Zugriff auf einen Ordner von %s aus %s (%s)", owner, svc, d.Path))
+	}
 }
 
 func authRank(a string) int {
