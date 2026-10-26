@@ -132,7 +132,7 @@ splitting a command line, so quotes and spaces survive:
 
 | Tool | Parameters |
 |---|---|
-| `laib_status` | `service?`, `fresh?` (a boolean) → `{ready, services, at}`; `at` (RFC3339) is when the answer was measured, up to 30 s old (#593) |
+| `laib_status` | `service?`, `fresh?` (a boolean) → `{ready, services, at}`; `at` (RFC3339) is when the answer was measured, up to 30 s old (#593). With `service`, its row carries the status file's own fields (all but `at`, `detail`, `findings`) as written, under `eigenes`, at most 32 KiB; a field past the cap is left out and named in `eigenes_gekappt` (#688). Beets: `services[0].eigenes = {wartet, letzte: [{at, eingang, von, titel, alben, namen, ordner, nicht_importiert: [{datei, grund}]}], …}`, newest upload first |
 | `laib_diag` | `service?` |
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
