@@ -53,3 +53,33 @@ on 2026-10-24 (owner: "Altlasten können weg"); they too live in git history.
 
 What stays: the general disk import `scripts/laib-import.py`, and the code
 comments that say which ServiceBay rule a Laib rule came from.
+
+## Amendment 2026-10-26: the carried values are rotated, then the data dir goes (#665)
+
+The passwords `carry-servicebay-secrets.sh` carried (LLDAP's and Immich's,
+Jellyfin's, AdGuard's and Home Assistant's admins, the Immich and Paperless
+databases, Authelia's storage key, MQTT and the share) still sit readable in
+ServiceBay's data dir beside the data dir (`/mnt/data/servicebay`): in
+plaintext in its unit history, 116 files, and sealed in `config.json` with
+`secret.key` next to it. Owner, 2026-10-25: rotate them now and delete the
+dir right after, not 30 days after migration day.
+
+- `laib diag`, probe `servicebay`, names every secret whose current value is
+  still in that dir, plain or unsealed with its key, by name and service, never
+  the value. With none left it names the dir, with `laib servicebay remove` as
+  the repair. This is the one place the kernel reads ServiceBay's store, and
+  only to measure that nothing of it is still in use; probe and verb live in
+  `internal/diag/servicebay.go` and go with the dir.
+- A data-bound secret (#353) rotates when its template marks it `rotate: true`:
+  `laib secret rotate` keeps the new value aside (`<NAME>.next` in secrets.age),
+  hands it to the template's hook as `LAIB_ROTATE_<NAME>`, and takes it only
+  when the hook hands it back (the app took it); a hand-back after a failed
+  `laib-exec` is not taken. A red apply after the change rotates back, once.
+  This is general, not ServiceBay's, and stays.
+- `scripts/rotate-carried.sh` (throw-away, goes with the dir) orders the
+  rotations, one service at a time, green before and after, and stops at the
+  first red; what the owner's devices or a provider hold (MQTT, the share, a
+  mail password) and Authelia's storage key are the owner's, with `--wie`.
+- `laib servicebay remove` (tier destroy, humans only, so the Inbox only)
+  refuses while a secret still has a value from the dir: the snapshot it takes
+  first (restic, tag `pre-destroy`) must hold dead values only.

@@ -148,6 +148,8 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(200, JF["users"][b["Name"]])
         if p.startswith("/Users/Password?userId="):   # Jellyfin 10.9+: an admin sets another user's password without the old one
             u = next(u for u in JF["users"].values() if u["Id"] == p.split("=", 1)[1])
+            if u["Id"] == "u-admin" and b.get("CurrentPw") != u["pw"]:   # its own only with the current one
+                return self.reply(403)
             u["pw"] = b["NewPw"]
             return self.reply(204)
         if m := re.fullmatch(r"/Users/([^/]+)/Policy", p):
@@ -246,6 +248,27 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn(LDAP_PW, p.stdout + p.stderr)
         p = self.run_hook()
         self.assertEqual((p.returncode, JF["installs"], JF["restarts"]), (0, 1, 1), p.stdout + p.stderr)
+
+    def test_a_rotation_changes_the_admin_password_in_jellyfin_and_hands_it_back(self):
+        # #665: the admin password carried from ServiceBay, rotated: Jellyfin takes it first, then Laib
+        self.run_hook()
+        new = "-jf-admin-rotated-665"
+        p = self.run_hook(LAIB_ROTATE_JELLYFIN_ADMIN_PASSWORD=new)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("laib-secret: JELLYFIN_ADMIN_PASSWORD=" + new, p.stdout.splitlines())
+        self.assertEqual(JF["users"]["admin"]["pw"], new, "Jellyfin still has the old one")
+        self.assertNotIn(new, "\n".join(l for l in (p.stdout + p.stderr).splitlines() if not l.startswith("laib-secret: ")))
+        p = self.run_hook(LAIB_ROTATE_JELLYFIN_ADMIN_PASSWORD=new)   # again, before laib stored it: only handed back
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("laib-secret: JELLYFIN_ADMIN_PASSWORD=" + new, p.stdout.splitlines())
+
+    def test_a_rotation_jellyfin_refuses_keeps_the_old_one(self):
+        self.run_hook()
+        JF["users"]["admin"]["pw"] = "changed in the app"
+        p = self.run_hook(LAIB_ROTATE_JELLYFIN_ADMIN_PASSWORD="-jf-admin-rotated-665")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertNotIn("laib-secret: JELLYFIN_ADMIN_PASSWORD", p.stdout)
+        self.assertIn("NOT rotated", p.stderr)
 
     def test_an_empty_jellyfin_gets_musik_filme_serien_from_what_it_sees(self):
         # #651: the hook asked os.path.isdir in its own container, where the share is not mounted, so a new

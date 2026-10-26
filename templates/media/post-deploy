@@ -94,6 +94,24 @@ try:
 except urllib.error.HTTPError as e:
     red(f"wizard step failed: {e.code}")
 
+# 1b. #665: `laib secret rotate JELLYFIN_ADMIN_PASSWORD` hands the new value over; the admin changes it in
+# Jellyfin itself (its own password wants the current one) and hands it back once Jellyfin took it, else
+# Laib keeps the old one. A run that finds the new one working already only hands it back.
+NEXT = E.get("LAIB_ROTATE_JELLYFIN_ADMIN_PASSWORD", "")
+if NEXT and NEXT != ADMIN_PW:
+    try:
+        req("POST", "/Users/AuthenticateByName", {"Username": ADMIN, "Pw": NEXT})
+    except urllib.error.HTTPError:
+        try:
+            t = req("POST", "/Users/AuthenticateByName", {"Username": ADMIN, "Pw": ADMIN_PW})["AccessToken"]
+            me = req("GET", "/Users/Me", token=t)
+            req("POST", f"/Users/Password?userId={me['Id']}", {"CurrentPw": ADMIN_PW, "NewPw": NEXT}, token=t)
+        except urllib.error.HTTPError as e:
+            red(f"JELLYFIN_ADMIN_PASSWORD NOT rotated: Jellyfin answered {e.code}; the old one stays")
+    print("laib-secret: JELLYFIN_ADMIN_PASSWORD=" + NEXT)
+    print(f"jellyfin: the password of {ADMIN} changed (laib secret rotate)")
+    ADMIN_PW = NEXT
+
 # 2. login as admin
 token = req("POST", "/Users/AuthenticateByName", {"Username": ADMIN, "Pw": ADMIN_PW})["AccessToken"]
 

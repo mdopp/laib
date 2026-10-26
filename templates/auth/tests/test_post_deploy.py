@@ -139,12 +139,12 @@ class PostDeploy(unittest.TestCase):
             s.shutdown()
             s.server_close()
 
-    def run_hook(self, users, groups, ok=True, modify="take", op="core", **secrets):
+    def run_hook(self, users, groups, ok=True, modify="take", op="core", extra=None, admin=None, **secrets):
         secrets = dict(SECRETS, **secrets)
         STATE["users"], STATE["groups"], STATE["adds"] = users, groups, []
-        LDAP["pw"], LDAP["set"], LDAP["binds"], LDAP["modify"] = {ADMIN_DN: secrets["LLDAP_ADMIN_PASSWORD"]}, [], [], modify
+        LDAP["pw"], LDAP["set"], LDAP["binds"], LDAP["modify"] = {ADMIN_DN: admin or secrets["LLDAP_ADMIN_PASSWORD"]}, [], [], modify
         env = dict(os.environ, LAIB_DOMAIN="vm.test", BASE_DN=BASE_DN, OPERATOR_USER=op, OPERATOR_EMAIL="core@vm.test",
-                   **{"LAIB_SECRET_" + k: v for k, v in secrets.items()})
+                   **{"LAIB_SECRET_" + k: v for k, v in secrets.items()}, **(extra or {}))
         p = subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         if not ok:
             self.assertNotEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -171,6 +171,24 @@ class PostDeploy(unittest.TestCase):
         # and each account binds with it afterwards: a set that did not take is red, not "seeded"
         for uid in ("core", "radicale", "file-share", "jellyfin"):
             self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
+
+    def test_a_rotation_changes_the_admin_password_in_lldap_first(self):
+        # #665: LLDAP_ADMIN_PASSWORD, carried from ServiceBay, rotated: the admin sets it for itself
+        # over LDAP, then hands it back, and the rest of the run already binds with it
+        new = "-adm1n-rotated-665"
+        out = self.run_hook([], [], extra={"LAIB_ROTATE_LLDAP_ADMIN_PASSWORD": new})
+        self.assertEqual(LDAP["pw"][ADMIN_DN], new, LDAP)
+        self.assertIn("laib-secret: LLDAP_ADMIN_PASSWORD=" + new, out.splitlines())
+        self.assertNotIn(new, "\n".join(l for l in out.splitlines() if not l.startswith("laib-secret: ")))
+        self.assertEqual(LDAP["pw"].get("uid=radicale,ou=people," + BASE_DN), SECRETS["RADICALE_LDAP_PASSWORD"], "seeding stopped after the rotation")
+        # a run before took it already (the session died before laib stored it): only handed back
+        out = self.run_hook([], [], admin=new, extra={"LAIB_ROTATE_LLDAP_ADMIN_PASSWORD": new})
+        self.assertIn("laib-secret: LLDAP_ADMIN_PASSWORD=" + new, out.splitlines())
+
+    def test_a_rotation_lldap_refuses_keeps_the_old_one(self):
+        err = self.run_hook([], [], ok=False, modify="refuse", extra={"LAIB_ROTATE_LLDAP_ADMIN_PASSWORD": "-adm1n-rotated-665"})
+        self.assertIn("NOT rotated", err)
+        self.assertEqual(LDAP["pw"][ADMIN_DN], SECRETS["LLDAP_ADMIN_PASSWORD"])
 
     def test_haus_gets_its_radicale_account(self):
         # laib#418: Haus reads and writes the household calendar as its own
