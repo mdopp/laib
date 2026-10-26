@@ -165,8 +165,10 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
 		}
 	}
-	if only == "" { // #665: ServiceBay's data dir, until it goes
-		out = append(out, servicebayFindings(st, sec)...)
+	for _, f := range servicebayFindings(env, st, sec) { // #665: ServiceBay's data dir, until it goes
+		if only == "" || f.Service == only { // laib repair servicebay <svc> asks for one service
+			out = append(out, f)
+		}
 	}
 	// Disk pressure on the data dir and the system's writable root (/var: on
 	// CoreOS / is the immutable, "full" composefs and would always read red).

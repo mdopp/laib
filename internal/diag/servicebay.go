@@ -21,8 +21,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
@@ -111,7 +113,32 @@ func unseal(key []byte, m [][]byte) []byte {
 	return plain
 }
 
-func servicebayFindings(st *state.State, sec map[string]string) []Finding {
+// carriedAtMove: the secrets the move carried (scripts/carry-servicebay-secrets.sh,
+// last in 0203ec07). When part of the old dir cannot be read, a carried one
+// laib has not rotated or set since may still be there in plaintext.
+var carriedAtMove = []string{"ADGUARD_ADMIN_PASSWORD", "AUTHELIA_STORAGE_KEY", "HA_ADMIN_PASSWORD", "IMMICH_ADMIN_PASSWORD", "IMMICH_DB_PASSWORD",
+	"JELLYFIN_ADMIN_PASSWORD", "LLDAP_ADMIN_PASSWORD", "MQTT_PASSWORD", "PAPERLESS_DB_PASSWORD", "SAMBA_PASSWORD"}
+
+// renewed: the secrets the journal shows set or rotated (not rotated back) since the move.
+func renewed(env *cli.Env) map[string]bool {
+	out := map[string]bool{}
+	all, _ := journal.Read(env.Paths.Journal, time.Time{})
+	for _, e := range all {
+		if e.Verb != "secret" {
+			continue
+		}
+		f := strings.Fields(strings.TrimSuffix(e.Detail, ": zurück"))
+		switch {
+		case len(f) >= 3 && f[0] == "secret" && f[1] == "rotate":
+			out[f[2]] = !strings.HasSuffix(e.Detail, ": zurück")
+		case len(f) >= 2 && f[0] == "set":
+			out[f[1]] = true
+		}
+	}
+	return out
+}
+
+func servicebayFindings(env *cli.Env, st *state.State, sec map[string]string) []Finding {
 	dir := ServiceBayDir(st)
 	names, unread, err := Carried(dir, sec, 256<<20) // diag runs often: a look, not a scan
 	if errors.Is(err, fs.ErrNotExist) {
@@ -126,6 +153,14 @@ func servicebayFindings(st *state.State, sec map[string]string) []Finding {
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: n + " hat noch den Wert aus ServiceBay, lesbar in " + dir, Fix: fix, Repair: repair})
 	}
 	if unread > 0 {
+		done := renewed(env)
+		for _, n := range carriedAtMove {
+			if slices.Contains(names, n) || done[n] || sec[n] == "" {
+				continue
+			}
+			svc, fix, repair := carriedFix(st, n)
+			out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: fmt.Sprintf("%s kann noch den Wert aus ServiceBay haben: %d Dateien in %s sind für Laib nicht lesbar, und erneuert wurde es seit dem Umzug nicht", n, unread, dir), Fix: fix, Repair: repair})
+		}
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Detail: fmt.Sprintf("%d Dateien in %s hat Laib nicht gelesen (nicht lesbar, oder über 256 MiB): ob dort noch ein Passwort von heute liegt, ist offen; laib servicebay remove liest alles", unread, dir), Unmeasured: true})
 	}
 	if len(out) == 0 {
