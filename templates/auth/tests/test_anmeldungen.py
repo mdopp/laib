@@ -224,6 +224,128 @@ class Anmeldungen(unittest.TestCase):
         self.run_it(NOW + 400)
         self.assertEqual(len(self.messages()), 2)
 
+    # #703: the other login doors, from their units' journal (journalctl -o json, as anmeldungen.sh exports it)
+    def journal(self, door, lines, start=0):
+        d = self.state / "journal"
+        d.mkdir(exist_ok=True)
+        with open(d / f"{door}.json", "w") as f:
+            for n, (ago, msg) in enumerate(lines, start):
+                f.write(json.dumps({"__CURSOR": f"s=abc;i={n + 1:x};b=1;m=1;t=1;x=1", "__REALTIME_TIMESTAMP": str((NOW - ago) * 1_000_000),
+                                    "MESSAGE": msg}) + "\n")
+
+    def vw(self, user, ip):
+        return f"[2026-10-25 18:10:00.123][vaultwarden::api::identity][ERROR] Username or password is incorrect. Try again. IP: {ip}. Username: {user}."
+
+    def smb(self, user, ip, status="NT_STATUS_WRONG_PASSWORD"):
+        return (f"  Auth: [SMB2,(null)] user [WORKGROUP]\\[{user}] at [Sun, 25 Oct 2026 18:10:00.123456 UTC] with [NTLMv2] status [{status}] "
+                f"workstation [LAPTOP] remote host [ipv4:{ip}:51234] mapped to [WORKGROUP]\\[{user}]. local host [ipv4:10.0.0.2:445] ")
+
+    def ha(self, ip):
+        return (f"2026-10-25 18:10:00.123 WARNING (MainThread) [homeassistant.components.http.ban] Login attempt or request with invalid "
+                f"authentication from host-{ip} ({ip}). Requested URL: '/auth/login_flow/abc'. (Mozilla/5.0)")
+
+    def test_vaultwarden_ten_failures_from_outside_give_one_message(self):
+        self.journal("vaultwarden", [(3000 - i * 300, self.vw("anna@example.home", "192.0.2.60")) for i in range(10)]
+                     + [(10, "[vaultwarden::api::web::_][WARN] Parameter guard `p: PathBuf` is forwarding: BadStart('.').")])
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(len(m), 1, m)
+        t = m[0]["text"]
+        for want in ("⚠️ Vaultwarden (Passwörter): 10 Fehlversuche für „anna@example.home“ in der letzten Stunde.",
+                     "Woher: 192.0.2.60 (von außen).", "Warst du das?", "Master-Passwort"):
+            self.assertIn(want, t)
+        self.assertNotIn("Brute Force", t)
+        self.assertIn("Vaultwarden", m[0]["betreff"])
+        self.assertEqual(len(self.notes("incident")), 1)
+        self.assertEqual((self.state / "journal" / "vaultwarden.cursor").read_text().strip(), "s=abc;i=b;b=1;m=1;t=1;x=1")
+        # the same incident on the next run: counted, not sent again
+        (self.state / "meldungen.jsonl").unlink()
+        (self.state / "notizen.tsv").unlink()
+        self.journal("vaultwarden", [(-60, self.vw("anna@example.home", "192.0.2.60"))], start=11)
+        self.run_it(NOW + 300)
+        self.assertEqual((self.messages(), self.notes("incident")), ([], []))
+
+    def test_vaultwarden_five_names_read_as_brute_force_and_the_admin_page_counts(self):
+        lines = [(600 - i * 60, self.vw(n, "192.0.2.61")) for i, n in enumerate(("a@x.test", "b@x.test", "c@x.test", "d@x.test"))]
+        lines.append((100, "[2026-10-25 18:10:00.123][vaultwarden::api::admin][ERROR] Invalid admin token. IP: 192.0.2.61"))
+        self.journal("vaultwarden", lines)
+        self.run_it()
+        t = self.messages()[0]["text"]
+        self.assertIn("für 5 Benutzernamen", t)
+        self.assertIn("„Admin-Seite“", t)
+        self.assertIn("Sieht nach Brute Force aus.", t)
+
+    def test_vaultwarden_from_the_lan_is_only_a_note(self):
+        self.journal("vaultwarden", [(3000 - i * 200, self.vw("anna@example.home", "10.0.0.8")) for i in range(12)])
+        self.run_it()
+        self.assertEqual(self.messages(), [])
+        w = self.notes("watch")
+        self.assertEqual(len(w), 1, w)
+        self.assertIn("Vaultwarden", w[0])
+
+    def test_samba_counts_in_the_lan_too(self):
+        # the share has no door to the outside: a device in the Heimnetz trying passwords is the case
+        self.journal("samba", [(3000 - i * 300, self.smb("anna", "10.0.0.9")) for i in range(10)]
+                     + [(5, self.smb("anna", "10.0.0.9", "NT_STATUS_OK")), (4, self.smb("", "10.0.0.9", "NT_STATUS_NO_SUCH_USER")),
+                        (3, "[2026/10/25 18:10:00.123456,  2] ../../auth/auth_log.c:860(log_authentication_event_human_readable)")])
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(len(m), 1, m)
+        t = m[0]["text"]
+        for want in ("⚠️ Netzlaufwerk (Samba): 10 Fehlversuche für „anna“ in der letzten Stunde.", "Woher: 10.0.0.9 (aus dem Heimnetz).",
+                     "Warst du das?", "alten Passwort"):
+            self.assertIn(want, t)
+
+    def test_samba_nine_failures_are_a_note(self):
+        self.journal("samba", [(3000 - i * 300, self.smb("anna", "10.0.0.9")) for i in range(9)])
+        self.run_it()
+        self.assertEqual(self.messages(), [])
+        self.assertIn("Samba", self.notes("watch")[0])
+
+    def test_home_assistant_failures_and_its_ban_are_one_message(self):
+        lines = [(3000 - i * 300, self.ha("192.0.2.70")) for i in range(10)]
+        lines.append((20, "2026-10-25 18:10:00.123 WARNING (MainThread) [homeassistant.components.http.ban] Banned IP 192.0.2.70 for too many login attempts"))
+        self.journal("home-assistant", lines)
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(len(m), 1, m)
+        t = m[0]["text"]
+        for want in ("🔒 Home Assistant hat 192.0.2.70 gesperrt", "10 Fehlversuche", "Woher: 192.0.2.70 (von außen).", "Warst du das?", "ip_bans.yaml"):
+            self.assertIn(want, t)
+
+    def test_home_assistant_without_its_ban_names_the_value_that_turns_it_on(self):
+        self.journal("home-assistant", [(3000 - i * 300, self.ha("192.0.2.71")) for i in range(10)])
+        self.run_it()
+        t = self.messages()[0]["text"]
+        self.assertIn("⚠️ Home Assistant: 10 Fehlversuche in der letzten Stunde", t)
+        self.assertIn("HA_LOGIN_SPERRE", t)
+        self.assertNotIn("„", t, "Home Assistant logs no user name")
+
+    def test_a_door_and_authelia_from_one_address_are_two_doors(self):
+        for i in range(10):
+            self.log("bob", "192.0.2.80", 3500 - i * 360)
+        self.journal("vaultwarden", [(3000 - i * 300, self.vw("bob@example.home", "192.0.2.80")) for i in range(10)])
+        self.run_it()
+        self.assertEqual(len(self.messages()), 2)
+
+    def test_a_door_name_cannot_break_the_note(self):
+        self.journal("vaultwarden", [(100, self.vw("eve\\n\\tx\x1b[2J", "192.0.2.90"))])
+        self.run_it()
+        for line in (self.state / "notizen.tsv").read_text().splitlines():
+            self.assertEqual(line.count("\t"), 1, line)
+            self.assertNotIn("\x1b", line)
+
+    def test_without_a_person_but_with_mail_the_message_is_written_for_the_mail(self):
+        self.env.update(NOTIFY_PERSON="", SMTP_HOST="smtp.example.home")
+        for i in range(5):
+            self.log("anna", "192.0.2.10", 300 - i * 30)
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(len(m), 1, m)
+        self.assertEqual(m[0]["an"], "")
+        self.assertIn("anna", m[0]["betreff"])
+        self.assertIn("per Mail", self.notes("incident")[0])
+
 
 class FakeBote(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
@@ -316,6 +438,74 @@ class Sender(unittest.TestCase):
         self.assertEqual(self.srv.got, [])
         self.assertFalse((self.state / "meldungen.jsonl").exists())
         self.assertEqual(len(self.laib_log.read_text().splitlines()), 1)
+
+    def eingang(self):
+        d = Path(self.env["NOTIFY_EINGANG"])
+        return sorted((json.loads(f.read_text()) for f in d.glob("*.json")), key=lambda m: m["text"]) if d.exists() else []
+
+    def write_b(self, text, at, betreff="Anmeldung gesperrt: anna (18:10)"):
+        with open(self.state / "meldungen.jsonl", "a") as f:
+            f.write(json.dumps({"an": "mama", "text": text, "betreff": betreff, "at": at}) + "\n")
+
+    def test_a_bote_away_for_15_minutes_hands_the_message_to_laib_notify(self):
+        import time
+        self.env.update(NOTIFY_URL="http://127.0.0.1:9/mitteilung", SMTP_HOST="smtp.example.home",
+                        NOTIFY_EINGANG=str(Path(self.tmp.name) / "notify" / "eingang"))
+        self.write_b("frisch", int(time.time()) - 60)
+        self.write_b("alt", int(time.time()) - 16 * 60)
+        self.melden()
+        self.assertEqual([m["text"] for m in self.eingang()], ["alt"])
+        self.assertEqual(self.eingang()[0]["betreff"], "Anmeldung gesperrt: anna (18:10)")
+        rest = (self.state / "meldungen.jsonl").read_text().splitlines()
+        self.assertEqual([json.loads(l)["text"] for l in rest], ["frisch"])
+        self.assertEqual([f.name for f in Path(self.env["NOTIFY_EINGANG"]).iterdir() if not f.name.endswith(".json")], [],
+                         "only whole files: laib-notify never reads half of one")
+
+    def test_without_the_bote_but_with_mail_it_goes_to_laib_notify_at_once(self):
+        import time
+        self.env.update(NOTIFY_TOKEN="", SMTP_HOST="smtp.example.home", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.write_b("eins", int(time.time()))
+        self.melden()
+        self.assertEqual(self.srv.got, [])
+        self.assertEqual([m["text"] for m in self.eingang()], ["eins"])
+        self.assertFalse((self.state / "meldungen.jsonl").exists())
+
+    def test_a_person_the_bote_does_not_know_goes_to_laib_notify(self):
+        import time
+        self.srv.code = 404
+        self.env.update(SMTP_HOST="smtp.example.home", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.write_b("eins", int(time.time()))
+        self.melden()
+        self.assertEqual([m["text"] for m in self.eingang()], ["eins"])
+
+    def test_without_mail_an_old_message_waits_for_the_bote_until_a_day(self):
+        import time
+        self.env.update(NOTIFY_URL="http://127.0.0.1:9/mitteilung", SMTP_HOST="", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.write_b("alt", int(time.time()) - 16 * 60)
+        self.melden()
+        self.assertEqual(self.eingang(), [])
+        self.assertEqual(len((self.state / "meldungen.jsonl").read_text().splitlines()), 1)
+
+    def test_zaehlen_exports_each_door_after_its_cursor(self):
+        d = Path(self.tmp.name)
+        jlog = d / "journalctl.argv"
+        fake_j = d / "journalctl"
+        fake_j.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >>"{jlog}"\necho "{{}}"\n')
+        fake_j.chmod(0o755)
+        fake_p = d / "podman"
+        fake_p.write_text("#!/bin/sh\ncat >/dev/null\n")
+        fake_p.chmod(0o755)
+        (self.state / "journal").mkdir()
+        (self.state / "journal" / "vaultwarden.cursor").write_text("s=abc;i=5\n")
+        env = dict(self.env, PODMAN=str(fake_p), JOURNALCTL=str(fake_j), ANMELDUNGEN_IMAGE="x", ANMELDUNGEN_SKRIPT=str(SCRIPT))
+        p = subprocess.run(["sh", str(SENDER), "zaehlen"], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        calls = jlog.read_text().splitlines()
+        self.assertTrue(any("-u vaultwarden.service" in c and "--after-cursor s=abc;i=5" in c for c in calls), calls)
+        self.assertTrue(any("-u file-share-samba.service" in c and "--since -1h" in c for c in calls), calls)
+        self.assertTrue(any("-u home-assistant.service" in c for c in calls), calls)
+        self.assertTrue(all("--user" in c and "-o json" in c for c in calls), calls)
+        self.assertTrue((self.state / "journal" / "samba.json").exists())
 
 
 class PreStartRegulation(unittest.TestCase):

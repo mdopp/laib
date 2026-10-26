@@ -33,7 +33,11 @@ def fresh(onboarded=None):
     HA.update(users={}, creds={}, tokens={}, names={}, codes={}, flows={}, logins=[], onboarding=set(), core={}, core_updates=0, n=0,
               entries=[], subentries={}, not_loaded=0, states={}, calls=[], ma_url="", ma_reauth=False,
               registry=[], pipelines=[], pipeline_updates=[], engines={"stt": [], "tts": []}, wyoming_up={}, reloads=[], storage=None,
-              restarts=0, preferred=None, wake_words={}, intents={}, deleted=[], late={}, progress={}, unpack=None)
+              restarts=0, preferred=None, wake_words={}, intents={}, deleted=[], late={}, progress={}, unpack=None,
+              http={"use_x_forwarded_for": True, "trusted_proxies": ["127.0.0.1/32", "10.0.0.0/8"], "ip_ban_enabled": True,
+                    "login_attempts_threshold": -1, "server_port": 8123, "cors_allowed_origins": ["https://cast.home-assistant.io"],
+                    "created_at": "2026-08-06T18:47:33+00:00", "error": None, "error_message": None},
+              http_pending=None, http_calls=[])
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -486,6 +490,20 @@ class FakeHA(BaseHTTPRequestHandler):
             lang = m.get("language") or ""
             return ok({"providers": [dict(x, supported_languages=[l for l in x["supported_languages"] if l.split("_")[0].split("-")[0] == lang])
                                      for x in HA["engines"][kind]]})
+        if t.startswith("http/config"):   # HA 2026.8's HTTP config store (#703; ServiceBay #2573 drove the same commands)
+            HA["http_calls"].append(t)
+            if not is_admin(uid):
+                return err("unauthorized", "admin only")
+            if t == "http/config":
+                return ok({"stable": HA["http"], "pending": HA["http_pending"], "active_config_type": "pending" if HA["http_pending"] else "stable"})
+            if t == "http/config/configure":
+                if set(m["config"]) & {"created_at", "error", "error_message"}:
+                    return err("invalid_format", "extra keys not allowed")   # HTTP_STORAGE_SCHEMA
+                HA["http_pending"] = m["config"]
+                return ok({"restart": True})
+            if t == "http/config/promote" and HA["http_pending"]:
+                HA["http"], HA["http_pending"] = dict(HA["http_pending"], created_at="now"), None
+                return ok()
         if t == "config/core/update":
             HA["core"].update({k: v for k, v in m.items() if k not in ("id", "type")})
             HA["core_updates"] += 1
@@ -523,7 +541,7 @@ class Hook(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
 
     def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
-                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60", voice=None):
+                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60", voice=None, extra=None):
         HA["ma_url"] = ma
         env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
@@ -537,6 +555,7 @@ class Hook(unittest.TestCase):
             env["LAIB_SECRET_" + name] = value
         env.update(zuhause or {})
         env.update(voice or {})
+        env.update(extra or {})
         p = subprocess.run([str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + "\n" + p.stderr).splitlines() if not l.startswith("laib-secret: "))
@@ -1345,6 +1364,55 @@ class MusicAssistant(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertIn("Music Assistant NOT connected", log)
         self.assertEqual(self.entries(), [])
+
+
+class LoginSperre(Hook):
+    """#703: HA_LOGIN_SPERRE, Home Assistant's own ban (http ip_ban_enabled,
+    login_attempts_threshold), in HA's HTTP config store since 2026.8 (the
+    YAML http: block is ignored there): http/config, configure, promote"""
+
+    def test_empty_leaves_home_assistant_as_it_is(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        p, _, log = self.run_hook()
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], [])
+        self.assertNotIn("HA_LOGIN_SPERRE", log)
+
+    def test_a_number_turns_the_ban_on_keeps_the_rest_and_is_promoted_once(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "5"})
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual((HA["http"]["ip_ban_enabled"], HA["http"]["login_attempts_threshold"]), (True, 5), log)
+        self.assertEqual(HA["http"]["cors_allowed_origins"], ["https://cast.home-assistant.io"], "the owner's own HTTP settings were lost")
+        self.assertEqual(HA["http"]["trusted_proxies"], ["127.0.0.1/32", "10.0.0.0/8"])
+        self.assertIsNone(HA["http_pending"], "not promoted: HA reverts it after five minutes")
+        self.assertIn("bans an address after 5 failed logins", log)
+        HA["http_calls"].clear()
+        p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "5"})
+        self.assertEqual((p.returncode, HA["http_calls"]), (0, ["http/config"]), "the same value twice restarts Home Assistant again: " + log)
+
+    def test_aus_turns_it_off(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"]["login_attempts_threshold"] = 5
+        p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "aus"})
+        self.assertEqual((p.returncode, HA["http"]["login_attempts_threshold"]), (0, -1), log)
+
+    def test_without_a_trusted_proxy_it_is_refused(self):
+        # HA would see Caddy's 127.0.0.1 for every login from outside and ban everyone, the family's apps too
+        fresh(onboarded=("laib", ADMIN_PW))
+        HA["http"]["use_x_forwarded_for"] = False
+        p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "5"})
+        self.assertNotEqual(p.returncode, 0, log)
+        self.assertNotIn("http/config/configure", HA["http_calls"])
+        self.assertIn("HA_LOGIN_SPERRE", log)
+        self.assertIn("X-Forwarded-For", log)
+
+    def test_a_value_that_is_no_number_is_refused(self):
+        fresh(onboarded=("laib", ADMIN_PW))
+        p, _, log = self.run_hook(extra={"HA_LOGIN_SPERRE": "fünf"})
+        self.assertNotEqual(p.returncode, 0, log)
+        self.assertEqual(HA["http_calls"], [])
+        self.assertIn("HA_LOGIN_SPERRE", log)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@
 // pings the outside watchdog while laib's readiness is not red (#57), and it
 // tells the owner a red that stays ten minutes, once per incident, what is
 // behind once a week (#393, "Was ist veraltet" #528) and each new proposal
-// (#441). It tells them through the Bote's channels first (bote-notify, the person
+// (#441), and what a template could not get to them itself (eingang/,
+// #703). It tells them through the Bote's channels first (bote-notify, the person
 // in box.yml notify.person) and by mail only when no channel is reachable
 // (#441, ADR 0016). It reads laib over MCP as the notify hand (diag,
 // updates, inbox, note) and /ready; it decides nothing and imports nothing
@@ -36,7 +37,7 @@ import (
 // Config is the unit's environment.
 type Config struct {
 	MCPURL, ReadyURL, Token                                            string
-	Home                                                               string // NOTIFY_HOME, its own folder (ADR 0027): mail.json and watchdog.last, which laib's /ready reads
+	Home                                                               string // NOTIFY_HOME, its own folder (ADR 0027): mail.json and watchdog.last, which laib's /ready reads; eingang/ (#703)
 	WatchdogURL                                                        string
 	MailTo, Domain                                                     string
 	SMTPHost, SMTPPort, SMTPSecurity, SMTPUser, SMTPFrom, SMTPPassword string
@@ -262,6 +263,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		json.Unmarshal(b, &seen)
 	}
 	r := &run{ctx: ctx, c: c, now: now, seen: &seen, tried: map[string]bool{}}
+	r.eingang()
 	text, err := call(ctx, c, "laib_diag", map[string]any{})
 	if err != nil {
 		return err
@@ -345,6 +347,29 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	b, _ := json.Marshal(seen)
 	os.WriteFile(path, b, 0o600)
 	return err
+}
+
+// eingang tells what a template handed over because its own way to the
+// owner failed (#703: the failed-login counter while the Bote is away), one
+// JSON file per message in Home/eingang, {"betreff", "text", "at"}: as the
+// rest, the Bote first, else one mail. The file goes once it is told, or
+// after a day; one that is unreadable at once.
+func (r *run) eingang() {
+	files, _ := filepath.Glob(filepath.Join(r.c.Home, "eingang", "*.json"))
+	for _, f := range files {
+		var m struct {
+			Betreff, Text string
+			At            int64
+		}
+		b, err := os.ReadFile(f)
+		if err != nil || json.Unmarshal(b, &m) != nil || strings.TrimSpace(m.Text) == "" || r.now.Sub(time.Unix(m.At, 0)) > GiveUp {
+			os.Remove(f)
+			continue
+		}
+		if chat, err := r.tell("Laib: "+cmp.Or(m.Betreff, "Mitteilung"), m.Text, nil); chat || err == nil {
+			os.Remove(f)
+		}
+	}
 }
 
 // proposals tells the owner each open proposal once (#441). One that is not
