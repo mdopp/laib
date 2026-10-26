@@ -28,6 +28,16 @@ func Repairable(st *state.State, argv []string) bool {
 	case "apply", "backup", "backup check", "operator enable", "servicebay remove":
 		return true
 	}
+	if len(argv) == 3 && argv[0] == "secret" && argv[1] == "rotate" { // #665: a carried secret laib can rotate
+		for _, svc := range st.Services {
+			for _, s := range svc.Contract.Secrets {
+				if s.Name == argv[2] && !s.External && (!s.DataBound || s.Rotate) {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	return len(argv) == 2 && argv[0] == "restart" && st.Services[argv[1]] != nil
 }
 

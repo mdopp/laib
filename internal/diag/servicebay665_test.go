@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -81,17 +82,21 @@ func TestServiceBayFindingsNameTheSecretNotItsValue(t *testing.T) {
 		t.Fatalf("want one finding per carried secret: %+v", fs)
 	}
 	for _, f := range fs {
-		if f.Probe != "servicebay" || f.Severity != "gelb" || f.Repair != nil {
-			t.Fatalf("a carried secret is a yellow servicebay finding without a repair (rotation is a human's at the console): %+v", f)
+		if f.Probe != "servicebay" || f.Severity != "gelb" {
+			t.Fatalf("a carried secret is a yellow servicebay finding: %+v", f)
 		}
 		if strings.Contains(f.Detail+f.Fix, "-pw-665") {
 			t.Fatalf("a value in a finding: %+v", f)
 		}
 	}
-	if fs[0].Service != "immich" || !strings.Contains(fs[0].Detail, "IMMICH_DB_PASSWORD") || !strings.Contains(fs[0].Fix, "rotate-carried.sh immich") {
-		t.Fatalf("immich's database password rotates through its hook: %+v", fs[0])
+	// the owner works in the Inbox, not at the console: a secret laib can rotate is a repair a human approves
+	if fs[0].Service != "immich" || !strings.Contains(fs[0].Detail, "IMMICH_DB_PASSWORD") || !slices.Equal(fs[0].Repair, []string{"secret", "rotate", "IMMICH_DB_PASSWORD"}) {
+		t.Fatalf("immich's database password rotates as an approved repair: %+v", fs[0])
 	}
-	if fs[1].Service != "media" || !strings.Contains(fs[1].Fix, "in der App") {
+	if !inbox.Repairable(st, fs[0].Repair) || inbox.Repairable(st, []string{"secret", "rotate", "JELLYFIN_ADMIN_PASSWORD"}) || inbox.Repairable(st, []string{"secret", "rotate", "NOPE"}) {
+		t.Fatalf("only a declared secret laib can rotate is repairable")
+	}
+	if fs[1].Service != "media" || fs[1].Repair != nil || !strings.Contains(fs[1].Fix, "in der App") {
 		t.Fatalf("a data-bound secret without a hook is the owner's, in the app: %+v", fs[1])
 	}
 
