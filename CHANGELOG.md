@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.1](https://github.com/mdopp/laib/compare/v0.36.0...v0.36.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **lease:** the GPU lease is its own program, zuhause and person_signal run behind the verb door; the kernel has room again ([#677](https://github.com/mdopp/laib/issues/677)) ([b6a1605](https://github.com/mdopp/laib/commit/b6a160582f6830d73731619f55799820feef7c19))
+
 ## [0.36.0](https://github.com/mdopp/laib/compare/v0.35.0...v0.36.0) (2026-10-26)
 
 
