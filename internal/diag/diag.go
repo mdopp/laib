@@ -53,6 +53,9 @@ type Finding struct {
 	// undone, in German, for its Inbox card (#759: a device restarts).
 	Effect string `json:"effect,omitempty"`
 	Undo   string `json:"undo,omitempty"`
+	// Does: what the repair does, the card's headline (#746), when the
+	// status file knows it better than laib (the wake word a flash plays)
+	Does string `json:"does,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and

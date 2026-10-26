@@ -30,7 +30,7 @@ import (
 // device's YAML and uploads over the air.
 const deviceFinding = `{"at":"%s","detail":"Wake-Word „Hey Joshua“ trainiert, noch nicht auf dem Gerät","phrase":"Hey Joshua","geraet":false,
 "findings":[{"severity":"gelb","detail":"Wake-Word „Hey Joshua“ trainiert, noch nicht auf dem Gerät „Voice 0907c9“","fix":"laib repair status stimme",
-"repair":["flash","esphome"],"topic":"wakeword","effect":"Der Lautsprecher startet neu und ist etwa 2 Minuten still, danach hört er auf „Hey Joshua“.",
+"repair":["flash","esphome"],"topic":"wakeword","does":"„Hey Joshua“ wird auf den Lautsprecher gespielt","effect":"Der Lautsprecher startet neu und ist etwa 2 Minuten still, danach hört er auf „Hey Joshua“.",
 "undo":"Ein anderes Wake-Word kommt nur mit einem neuen Aufspielen zurück."}]}`
 
 func flashBox(t *testing.T) (*cliEnv, func() []string) {
@@ -99,7 +99,7 @@ func TestTheWakeWordReachesTheDeviceOnlyAfterTheOwnerApproves(t *testing.T) {
 		t.Fatalf("want one open destroy for a human, nothing flashed yet: %+v", open)
 	}
 	card := proposal.Card(open[0], "box.test")
-	if !strings.Contains(card.Summary, "noch nicht auf dem Gerät") || !slices.ContainsFunc(card.Impact, func(s string) bool { return strings.Contains(s, "etwa 2 Minuten still") }) ||
+	if card.Summary != "„Hey Joshua“ wird auf den Lautsprecher gespielt" || !strings.Contains(card.Why, "noch nicht auf dem Gerät") || !slices.ContainsFunc(card.Impact, func(s string) bool { return strings.Contains(s, "etwa 2 Minuten still") }) ||
 		!strings.HasPrefix(card.Reversible, "Nicht mit einem Tipp rückgängig") || !strings.Contains(card.Reversible, "neuen Aufspielen") {
 		t.Fatalf("the card must say what happens to the device and that a tap does not undo it: %+v", card)
 	}

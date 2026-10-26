@@ -236,7 +236,7 @@ func Decision(env *cli.Env) http.HandlerFunc {
 			argv = append(argv, why)
 		}
 		setDecision(n, cmp.Or(map[string]string{"approve": "wird freigegeben …", "reject": "wird abgelehnt …"}[decision], "wird zurückgenommen …"))
-		go decide(env, webActor(r), n, decision, argv, 0)
+		go decide(env, webActor(r), n, decision, argv, 15*time.Minute) // like a human at the shell (#753)
 		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
 	}
 }

@@ -7,13 +7,17 @@
 package inbox
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
@@ -62,8 +66,18 @@ func RunRepairs(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 			continue
 		}
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "info", Detail: fmt.Sprintf("#%d von %s: %s", p.ID, p.Actor, last)})
-		if c := RunVerb(ctx, env, argv); c != cli.ExitOK {
-			code = c
+		// approved on the page like at the shell: after the work before it (#753, env.Wait)
+		for until := time.Now().Add(env.Wait); apply.LockHolder(env.Paths) != "" && time.Now().Before(until); {
+			time.Sleep(time.Second)
+		}
+		var errs strings.Builder
+		run := *env
+		run.ErrOut = io.MultiWriter(env.Errw(), &errs)
+		if c := RunVerb(ctx, &run, argv); c != cli.ExitOK { // what failed, and why, in the journal and on the card (#753)
+			lines := strings.Split(strings.TrimSpace(errs.String()), "\n")
+			p.Because, code = "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", c)), c
+			proposal.Save(cli.InboxDir(env), p)
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "red", Detail: fmt.Sprintf("#%d: %s %s", p.ID, last, p.Because)})
 		}
 	}
 	return code

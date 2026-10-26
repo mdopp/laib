@@ -124,6 +124,8 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 		return "fängt gleich an", "gelb", true
 	case p.Outcome == "rolled-back":
 		return strings.TrimSuffix("zurückgenommen, "+p.Because, ", "), "rot", false
+	case p.Because != "": // a repair whose verb failed (#753)
+		return p.Because, "rot", false
 	}
 	return "fertig", "grün", false
 }
