@@ -735,7 +735,15 @@ jobs:
           # #369: max's session survives a restart of the auth pod (Authelia's sessions in the pod's Valkey, on disk)
           files() { curl -s --cacert "$root" --capath "$none" --resolve files.vm.test:443:127.0.0.1 -b /tmp/jar -o /dev/null -w "%{http_code}" https://files.vm.test/ || true; }
           [ "$(files)" = 200 ] || { echo "max's session does not open files.vm.test: $(files)"; exit 1; }
-          systemctl --user restart auth-pod.service
+          # #480: max is family, the box page is for admins: the denied page with its way out, not a bare 403
+          page() { curl -s --cacert "$root" --capath "$none" --resolve "$1:443:127.0.0.1" -b /tmp/jar -o /tmp/page.html -w "%{http_code}" "https://$1/" || true; }
+          code=$(page laib.vm.test); echo "laib.vm.test as max, a family member -> HTTP $code"
+          [ "$code" = 403 ] && grep -q "Kein Zugang mit diesem Konto" /tmp/page.html && grep -qF "https://auth.vm.test/logout?rd=https://laib.vm.test/" /tmp/page.html || { echo "a family member on the box page meets no denied page (#480)"; head -c 800 /tmp/page.html; exit 1; }
+          # #480: Authelia down is the down page with the status Caddy had, not an empty 502; stop and start is the #369 restart below
+          systemctl --user stop auth-pod.service
+          code=$(page files.vm.test); echo "files.vm.test while the auth pod is stopped -> HTTP $code"
+          [ "$code" = 502 ] && grep -q "antwortet gerade nicht" /tmp/page.html || { echo "a stopped Authelia is no down page (#480)"; head -c 800 /tmp/page.html; exit 1; }
+          systemctl --user start auth-pod.service
           for i in $(seq 1 60); do [ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9091/api/health || true)" = 200 ] && break; sleep 2; done
           code=$(files); echo "files.vm.test with max's session after a restart of the auth pod -> HTTP $code"
           [ "$code" = 200 ] || { echo "the restart logged max out (#369)"; podman logs --tail 20 systemd-auth-authelia; exit 1; }

@@ -9,7 +9,7 @@
 	handle {
 		header Content-Type "text/html; charset=utf-8"
 		respond <<HTML
-			<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Nur zu Hause</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p></main></body></html>
+			<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Nur zu Hause</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p><p class=muted>Du bist doch im WLAN zu Hause? Dann fragt dein Gerät einen fremden Namensdienst (am Handy „Privates DNS“, im Browser „Sicheres DNS“, am iPhone „Privat-Relay“) und kommt über das Internet: die Box sieht die Adresse {http.request.remote.host}. Das abschalten, dann geht es.</p></main></body></html>
 			HTML 403
 	}
 }
@@ -19,6 +19,22 @@
 	respond <<HTML
 		<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Kein Zugang</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Kein Zugang mit diesem Konto</h1><p>Du bist angemeldet, aber dein Konto darf {http.request.host} nicht öffnen. Manche Seiten sind nur für die Admins der Box.</p><p><a href="https://auth.nuc.home/logout?rd=https://{http.request.host}/">Abmelden und mit einem anderen Konto anmelden</a></p></main></body></html>
 		HTML 403
+}
+
+(down) {
+	handle_errors 502 503 504 {
+		header Content-Type "text/html; charset=utf-8"
+		respond <<HTML
+			<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Gerade nicht erreichbar</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>{http.request.host} antwortet gerade nicht</h1><p>Der Dienst dahinter startet vermutlich gerade neu, nach einem Update oder einer Reparatur. Das dauert meist nur eine Minute.</p><p><b>So geht es:</b> kurz warten und die Seite neu laden. Bleibt es länger so, sag den Admins der Box Bescheid.</p></main></body></html>
+			HTML {err.status_code}
+	}
+}
+
+(unknown) {
+	header Content-Type "text/html; charset=utf-8"
+	respond <<HTML
+		<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><title>Unbekannte Adresse</title><style>:root{--bg:#070709;--card:#14141A;--ink:#F0F0F0;--muted:#94A3B8;--accent:#F97316}@media (prefers-color-scheme: light){:root{--bg:#F1F5F9;--card:#FFFFFF;--ink:#0F172A;--muted:#64748B;--accent:#EA580C}}body{margin:0 auto;max-width:34rem;padding:1.5rem 1rem;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{background:var(--card);border-left:4px solid var(--accent);border-radius:12px;padding:.25rem 1.25rem}h1{font-size:1.15rem}a{color:var(--accent)}.muted{color:var(--muted)}</style></head><body><main><h1>Diese Adresse gibt es auf dieser Box nicht</h1><p>Unter {http.request.host} läuft kein Dienst, vielleicht ein Tippfehler oder ein altes Lesezeichen.</p><p><a href="https://laib.nuc.home/">Zur Startseite</a></p></main></body></html>
+		HTML 404
 }
 
 (authelia) {
@@ -34,6 +50,7 @@
 
 laib.nuc.home {
 	request_header -Remote-*
+	import down
 	@lan remote_ip private_ranges
 	handle @lan {
 		import authelia
@@ -46,6 +63,7 @@ laib.nuc.home {
 
 dns.nuc.home {
 	request_header -Remote-*
+	import down
 	@lan remote_ip private_ranges
 	handle @lan {
 		import authelia
@@ -56,11 +74,13 @@ dns.nuc.home {
 
 auth.nuc.home {
 	request_header -Remote-*
+	import down
 	reverse_proxy 127.0.0.1:9091
 }
 
 ldap.nuc.home {
 	request_header -Remote-*
+	import down
 	@lan remote_ip private_ranges
 	handle @lan {
 		reverse_proxy 127.0.0.1:17170
@@ -70,6 +90,7 @@ ldap.nuc.home {
 
 whoami.nuc.home {
 	request_header -Remote-*
+	import down
 	@lan remote_ip private_ranges
 	handle @lan {
 		@bypass path /napi/*
