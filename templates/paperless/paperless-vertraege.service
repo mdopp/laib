@@ -1,0 +1,22 @@
+# Contract data and notice reminders (#709): paperless-vertraege.py runs inside
+# the running Paperless container, as the paperless user (never root, as
+# paperless-check), with Paperless' own admin and its AI settings from the
+# container's environment: the household model through the model role's proxy,
+# marked as background work. It fills only the empty contract fields of the
+# documents VERTRAG_ARTEN names, and makes a reminder in Haus's Haushalt
+# before each notice date. Haus's token reaches podman through the
+# environment, never on argv; without Haus no reminder is made. Hourly from
+# the timer; the record in Paperless' data folder keeps it from asking twice.
+[Unit]
+Description=Paperless: Vertragsdaten lesen, an Kündigungen erinnern
+After=paperless.service
+
+[Service]
+Type=oneshot
+Environment=VERTRAG_ARTEN=${VERTRAG_ARTEN}
+Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
+Environment=HAUSHALT_URL=${HAUSHALT_URL}
+Environment=HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/paperless/paperless-vertraege.py
+ExecStart=/usr/bin/podman exec -i --user paperless -e VERTRAG_ARTEN -e VERTRAG_VORLAUF_TAGE -e HAUSHALT_URL -e HAUSHALT_TOKEN systemd-paperless python3 -
+TimeoutStartSec=2h
