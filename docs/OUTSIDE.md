@@ -50,7 +50,8 @@ used the link yet. `--signal +49…` also proposes the person's Signal number
 for box.yml `people` (#596), approved by a human like any box.yml change;
 `laib person signal <user> +49…` sets or changes it later. The haus hand may invite into `family` only: an admin is
 a human's call at the console. Removing someone stays LLDAP's admin UI
-(`ldap.`). The tool doing the LLDAP and Authelia work is the auth template's
+(`ldap.`, at home only, behind Authelia's two factors and then LLDAP's own
+login). The tool doing the LLDAP and Authelia work is the auth template's
 `person.py`, run in the hooks image like a hook. `dopp.cloud` and `www.`
 redirect to `haus.` (the haus route's `redirectFrom`), so the old entry point
 still leads somewhere.

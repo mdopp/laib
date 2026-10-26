@@ -525,11 +525,16 @@ func StartURL(st *state.State) string {
 // LogoutURL is Authelia's logout (#480); its rd, escaped, is where the
 // login afterwards returns to.
 func LogoutURL(st *state.State) string {
-	host := "auth"
+	return "https://" + fqdn(st, portalHost(st)) + "/logout"
+}
+
+// portalHost is Authelia's portal: the sso service's first route, as
+// ssoPort is its port.
+func portalHost(st *state.State) string {
 	if svc, ok := st.Services[st.Box.Roles.SSO]; ok && len(svc.Contract.Routes) > 0 {
-		host = svc.Contract.Routes[0].Host
+		return svc.Contract.Routes[0].Host
 	}
-	return "https://" + fqdn(st, host) + "/logout"
+	return "auth"
 }
 
 // denyPage is a denial a person can read (#480): German, the household look
