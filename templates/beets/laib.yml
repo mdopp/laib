@@ -7,6 +7,10 @@ upstream: [https://github.com/beetbox/beets, https://beets.readthedocs.io/]   # 
 # musik-eingang folder (a song, an album folder, a .zip) goes into the
 # library once a minute with beet import -q (beets-eingang.timer,
 # musik-eingang.py); Jellyfin sees it through its realtime monitor.
+# The Bestand (#727): beets-bestand.timer sorts, once and in chunks, what an
+# earlier run left unsorted (musik-bestand.py, move: yes, the unsure into
+# music/_unklar), and moves the spoken word the owner confirmed to
+# Audiobookshelf's folder.
 after: [file-share]              # its folders are mounted here (#36)
 routes:
   - host: beets
@@ -24,7 +28,7 @@ data:
     backup: false                                    # transient: the music goes into music/
 health:
   http: http://127.0.0.1:8337/
-status:                            # the Musik-Eingang: what the last run imported and what it kept back, per upload (#639)
+status:                            # the Musik-Eingang: what the last run imported and what it kept back, per upload (#639); the Bestand's progress and proposal (#727)
   file: ${DATA_DIR}/beets/config/laib-status.json
   check: beets-eingang.service
 ports:

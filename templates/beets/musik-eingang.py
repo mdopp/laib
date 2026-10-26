@@ -41,6 +41,8 @@ The status, ${DATA_DIR}/beets/config/laib-status.json (laib status beets,
 Haus): {"at", "detail", "einzelheiten", "findings", "wartet",
 "letzte": [{"at", "eingang", "von", "titel", "alben", "namen", "ordner",
 "nicht_importiert": [{"datei", "grund"}]}]}, the newest upload first.
+The Bestand's line and findings (#727) come from musik-bestand.py's
+bestand/stand.json: this script is the status file's one writer.
 Stdlib only: the image (linuxserver/beets) has python3 and beet, no
 unzip, no 7z, no unrar.
 """
@@ -408,6 +410,38 @@ def zeile(lauf):
     return "Musik-Eingang: " + teil + (", %s nicht importiert" % mehrzahl(n, "Datei", "Dateien") if n else "")
 
 
+def zahl(n):
+    return "{:,}".format(n).replace(",", ".")
+
+
+def bestand_zeile(b):
+    """the Bestand's line (#727), from musik-bestand.py's state; "" when there is nothing to sort"""
+    if not b or not b.get("gesamt"):
+        return ""
+    return "Bestand: %s%s von %s einsortiert, %s unklar" % ("fertig, " if b.get("fertig") else "", zahl(b["einsortiert"]),
+                                                         zahl(b["gesamt"]), zahl(b["unklar"]))
+
+
+def bestand_befunde(b):
+    """the songs to look through in music/_unklar, the spoken word waiting for the owner's yes (#727)"""
+    aus = []
+    if b.get("unklar"):
+        aus.append({"severity": "info", "detail": "Bestand: %s nicht sicher erkannt" % mehrzahl(b["unklar"], "Lied", "Lieder"),
+                    "fix": "sie liegen in music/_unklar/<Interpret>/, LIESMICH.txt sagt warum; richtig benannt wieder in "
+                           "musik-eingang legen, dann sortiert beets sie ein", "einzelheiten": b.get("einzelheiten", "")})
+    g = b.get("gesprochen") or {}
+    if g.get("vorschlag"):
+        liste = "; ".join(g["vorschlag"])
+        aus.append({"severity": "info", "detail": "Gesprochenes für Audiobookshelf, wartet auf dein Ja: %s" % liste,
+                    "fix": 'Stimmt die Liste, setze in den Werten von beets BESTAND_GESPROCHEN: "%s" (was keine Musik ist; '
+                           'Musik daraus weglassen). Erst dann zieht der nächste Lauf diese Ordner aus music nach audiobooks; '
+                           'bis dahin bleiben sie, wie sie sind' % liste, "einzelheiten": ""})
+    for x in g.get("probleme") or []:
+        aus.append({"severity": "gelb", "detail": "Gesprochenes: %s nicht ganz verschoben" % x["name"], "fix": x["grund"],
+                    "einzelheiten": ""})
+    return aus
+
+
 def status(alt, lauf, wartet, hinweis=""):
     if lauf is None:
         lauf, letzte = alt.get("lauf"), alt.get("letzte", [])
@@ -422,6 +456,10 @@ def status(alt, lauf, wartet, hinweis=""):
                          "detail": "Musik-Eingang: %s nicht importiert" % mehrzahl(lauf["nicht"], "Datei", "Dateien"),
                          "fix": "sie liegen in musik-eingang/%s/, der Grund steht in GRUND.txt; berichtigt wieder in musik-eingang legen" % lauf["ordner"],
                          "einzelheiten": lauf["einzelheiten"]})
+    bestand = lies(os.path.join(DATA, "bestand", "stand.json"), {})
+    if bestand_zeile(bestand):
+        detail += " · " + bestand_zeile(bestand)
+    findings += bestand_befunde(bestand)
     schreib(STATUS, {"at": jetzt_utc(), "detail": detail, "einzelheiten": "\n\n".join(x for x in (lauf["einzelheiten"] if lauf else "", hinweis) if x),
                      "findings": findings, "eingang": "musik-eingang", "wartet": wartet, "lauf": lauf, "letzte": letzte})
 
