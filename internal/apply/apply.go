@@ -582,6 +582,7 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 	defer cancel()
 	out, err := RunHook(hctx, spec)
 	var kept []string
+	execFailed := false
 	own := map[string]bool{}
 	for _, u := range svc.UnitNames() {
 		if strings.HasSuffix(u, ".service") && !strings.HasSuffix(u, "-pod.service") {
@@ -592,6 +593,10 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 		switch {
 		case strings.HasPrefix(line, "laib-secret: "):
 			if k, v, ok := strings.Cut(strings.TrimPrefix(line, "laib-secret: "), "="); ok && k != "" {
+				if _, rotating := secrets[k+".next"]; rotating && execFailed { // #665: the app may not have taken it
+					kept = append(kept, "laib-secret "+k+" nicht übernommen: ein laib-exec davor ist gescheitert")
+					continue
+				}
 				newSecrets[k] = v
 			}
 		case strings.HasPrefix(line, "laib-exec: "):
@@ -599,24 +604,27 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 			red := render.Redact(render.Redact(render.Output{"l": line}, secrets), newSecrets)["l"]
 			if red != line { // podman's argv shows in ps to every user on the box (#214)
 				kept = append(kept, "laib-exec refused (a secret on argv: hand it over on stdin or in a file): "+red)
+				execFailed = true
 				err = errors.Join(err, fmt.Errorf("laib-exec refused: a secret on argv: %s", red))
 				continue
 			}
 			if len(f) < 2 || !own[f[0]] {
 				kept = append(kept, "laib-exec refused (not one of "+svc.Name+"'s containers): "+line)
+				execFailed = true
 				err = errors.Join(err, fmt.Errorf("laib-exec refused: %s", line))
 				continue
 			}
 			o, e := sysd.Run(hctx, "podman", append([]string{"exec", f[0]}, f[1:]...)...)
 			kept = append(kept, "laib-exec "+f[0]+" "+f[1]+": "+tailOf(o, 200))
 			if e != nil {
+				execFailed = true
 				err = errors.Join(err, fmt.Errorf("laib-exec %s: %w", f[1], e))
 			}
 		default:
 			kept = append(kept, line)
 		}
 	}
-	tail := tailOf(strings.Join(kept, "\n"), 2000)
+	tail := tailOf(render.Redact(render.Redact(render.Output{"t": strings.Join(kept, "\n")}, secrets), newSecrets)["t"], 2000) // what an app echoes (#665)
 	if err != nil {
 		return Check{Service: svc.Name, What: phase, OK: false, Detail: err.Error() + "\n" + tail}, true
 	}
@@ -650,6 +658,9 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 	}
 	for _, sec := range svc.Contract.Secrets {
 		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
+		if v, ok := secrets[sec.Name+".next"]; ok && sec.Rotate { // #665: the value to set inside the app
+			env = append(env, "LAIB_ROTATE_"+sec.Name+"="+v)
+		}
 	}
 	envFile, err := os.CreateTemp(paths.Home, ".hook-env-*")
 	if err != nil {
