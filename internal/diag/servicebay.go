@@ -120,8 +120,10 @@ var carriedAtMove = []string{"ADGUARD_ADMIN_PASSWORD", "AUTHELIA_STORAGE_KEY", "
 	"JELLYFIN_ADMIN_PASSWORD", "LLDAP_ADMIN_PASSWORD", "MQTT_PASSWORD", "PAPERLESS_DB_PASSWORD", "SAMBA_PASSWORD"}
 
 // renewed: the secrets the journal shows set or rotated (not rotated back) since the move.
+// A name's first set is the move's own (carry-servicebay-secrets.sh ran laib secret set),
+// so only a later set counts.
 func renewed(env *cli.Env) map[string]bool {
-	out := map[string]bool{}
+	out, seen := map[string]bool{}, map[string]bool{}
 	all, _ := journal.Read(env.Paths.Journal, time.Time{})
 	for _, e := range all {
 		if e.Verb != "secret" {
@@ -132,7 +134,8 @@ func renewed(env *cli.Env) map[string]bool {
 		case len(f) >= 3 && f[0] == "secret" && f[1] == "rotate":
 			out[f[2]] = !strings.HasSuffix(e.Detail, ": zurück")
 		case len(f) >= 2 && f[0] == "set":
-			out[f[1]] = true
+			out[f[1]] = seen[f[1]]
+			seen[f[1]] = true
 		}
 	}
 	return out

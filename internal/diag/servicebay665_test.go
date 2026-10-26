@@ -133,6 +133,8 @@ func TestUnreadFilesKeepTheCarriedSecretsLaibHasNotRenewed(t *testing.T) {
 	}}
 	env := &cli.Env{Paths: boxfs.Paths{Journal: t.TempDir()}}
 	sec := map[string]string{"PAPERLESS_DB_PASSWORD": "today-665"}
+	// the move itself ran laib secret set (the box's journal, 2026-10-18): that is no renewal
+	journal.Append(env.Paths.Journal, journal.Entry{Actor: "human:core", Verb: "secret", Result: "info", Detail: "set PAPERLESS_DB_PASSWORD"})
 	fs := servicebayFindings(env, st, sec)
 	if len(fs) < 1 || fs[0].Service != "paperless" || !slices.Equal(fs[0].Repair, []string{"secret", "rotate", "PAPERLESS_DB_PASSWORD"}) || strings.Contains(fs[0].Detail, "today-665") {
 		t.Fatalf("an unrenewed carried secret behind unreadable files is a repair: %+v", fs)
