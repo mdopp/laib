@@ -288,6 +288,19 @@ class PaperlessMail(unittest.TestCase):
         with open(out) as f:
             return json.load(f)
 
+    def test_household_correspondents_left_without_documents_are_a_yellow_finding(self):
+        # #737: paperless-vertraege.py cleared a household person off its documents; the correspondent
+        # stays (Paperless marks none as the AI's), the owner deletes it, the status says which
+        with open(os.path.join(self.tmp, "laib-vertraege.json"), "w") as f:
+            json.dump({"korrespondenten": {"leer": ["Erika Mustermann", "Familie Mustermann"]}}, f)
+        st = self.run_check(Fake(), {})
+        [f] = st["findings"]
+        self.assertEqual(f["severity"], "gelb")
+        self.assertIn("„Erika Mustermann“, „Familie Mustermann“", f["detail"])
+        self.assertIn("Korrespondenten", f["fix"])
+        os.remove(os.path.join(self.tmp, "laib-vertraege.json"))
+        self.assertEqual(self.run_check(Fake(), {})["findings"], [], "no record: nothing to say")
+
     def test_a_failed_consume_is_a_yellow_finding(self):
         # 2026-10-22: a mail was fetched, its attachment not filed (PermissionError in the scratch
         # dir); the inbox check stayed green. A failed consume Paperless still lists is yellow.

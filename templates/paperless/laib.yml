@@ -17,7 +17,9 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # (#709): the contract fields from a contract's text, only the empty ones,
 # and a reminder in Haus's Haushalt before each notice date; a passed notice
 # date moved on by the renewal the text names, the owner told on the reminder
-# day through laib-notify's eingang, letter salad recognised again (#721).
+# day through laib-notify's eingang, letter salad recognised again (#721);
+# a household person cleared off the documents the AI gave them as
+# correspondent (#737).
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless

@@ -16,7 +16,7 @@ EINGANG=${NOTIFY_EINGANG:-${LAIB_HOME:-/mnt/data/laib}/notify/eingang}
 RC=$(mktemp) || exit 1
 n=0
 {
-	${PODMAN:-/usr/bin/podman} exec -i --user paperless -e VERTRAG_ARTEN -e VERTRAG_VORLAUF_TAGE -e HAUSHALT_URL -e HAUSHALT_TOKEN \
+	${PODMAN:-/usr/bin/podman} exec -i --user paperless -e VERTRAG_ARTEN -e VERTRAG_VORLAUF_TAGE -e HAUSHALT_URL -e HAUSHALT_TOKEN -e HAUSHALT_NAMEN \
 		-e PYTHONUNBUFFERED=1 systemd-paperless python3 - <"${VERTRAEGE_SKRIPT:?paperless-vertraege.py}"
 	echo $? >"$RC"
 } | while IFS= read -r z || [ -n "$z" ]; do

@@ -30,7 +30,9 @@ The check is Paperless' own connection test (POST /api/mail_accounts/test/
 with the account's id: Paperless logs in with the stored password), and
 the consume tasks Paperless lists as failed and nobody dismissed (a mail's
 attachment, a file from the consume folder or an upload not filed): yellow,
-with the file and Paperless' reason. What it cannot see: a rule that
+with the file and Paperless' reason; and the household's correspondents
+paperless-vertraege.py left without documents (#737, its record beside the
+status file): yellow, for the owner to delete. What it cannot see: a rule that
 matches nothing (a wrong recipient), and a failure someone dismissed.
 
 setup ends by asking Paperless to fetch now (POST /api/mail_accounts/<id>/
@@ -237,13 +239,31 @@ def failed_consumes(api):
                     "fehlgeschlagenen Eintrag löschen, beim nächsten Abruf holt Paperless sie neu), dann die Aufgabe verwerfen"}]
 
 
-def check(api):
-    """the status: whether Paperless can log in to the mailbox the values name, and the
-    documents it fetched or was given but could not file"""
+def check(api, status):
+    """the status: whether Paperless can log in to the mailbox the values name, the
+    documents it fetched or was given but could not file, and the household's
+    correspondents paperless-vertraege.py left without documents"""
     r = inbox(api)
     if not any("lehnt den Admin" in f["detail"] for f in r["findings"]):
         r["findings"] += failed_consumes(api)
-    return r
+    return r | {"findings": r["findings"] + leere_absender(os.path.join(os.path.dirname(status), "laib-vertraege.json"))}
+
+
+def leere_absender(record):
+    """#737: a household person paperless-vertraege.py cleared off its documents stays a
+    correspondent (Paperless marks none as made by its AI), for the owner to delete"""
+    try:
+        with open(record, encoding="utf-8") as f:
+            leer = (json.load(f).get("korrespondenten") or {}).get("leer") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not leer:
+        return []
+    return [{"severity": "gelb",
+             "detail": "Absender aus dem Haushalt ohne Dokumente: %s (laib hat sie von den Dokumenten genommen, die KI hatte "
+                       "sie als Absender eingetragen)" % ", ".join("„%s“" % n for n in leer[:10]),
+             "fix": "in Paperless unter Korrespondenten löschen, wenn sie niemand braucht; laib löscht keine, "
+                    "weil Paperless nicht kennzeichnet, welche die KI angelegt hat"}]
 
 
 def inbox(api):
@@ -336,7 +356,7 @@ if __name__ == "__main__":
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
         status = E.get("LAIB_STATUS_FILE", "/usr/src/paperless/data/laib-status.json")
         r = None
-    r = r or check(api)
+    r = r or check(api, status)
     write(status, r)
     for f in r["findings"]:
         print("%s: %s" % (f["severity"], f["detail"]))
