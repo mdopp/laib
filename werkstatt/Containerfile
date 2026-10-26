@@ -6,8 +6,7 @@
 FROM docker.io/library/node:22-bookworm-slim
 ARG PI_VERSION=latest
 ARG CLAUDE_VERSION=latest
-# pinned: 0.112.0 (2026-10-26) answers a foreign Host with 200 — the host check of #384 fails (werkstatt-model.sh)
-ARG PI_WEB_VERSION=0.111.0
+ARG PI_WEB_VERSION=latest
 # pi-web-ui (#384) goes in its own tree (/opt/pi-web) beside its pi SDK: a global
 # install leaves the SDK's own packages (pi-tui) out of its reach and it does not start
 RUN apt-get update && apt-get install -y --no-install-recommends \

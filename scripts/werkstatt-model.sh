@@ -137,8 +137,17 @@ piweb_fail() { podman logs --tail 40 werkstatt-piweb-test >&2 || true; fail "$@"
 for _ in $(seq 90); do curl -fsS -H 'Host: pi.boot.test' "http://127.0.0.1:$PW/api/health" >/dev/null 2>&1 && break; sleep 1; done
 curl -fsS -H 'Host: pi.boot.test' "http://127.0.0.1:$PW/api/health" > "$WORK/health.json" || piweb_fail "pi-web-ui does not answer for pi.boot.test"
 echo "pi-web-ui: $(cat "$WORK/health.json")"
-code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.test' "http://127.0.0.1:$PW/api/health")
-[ "$code" = 403 ] || piweb_fail "pi-web-ui answered $code for a foreign Host; only pi.<domain> may reach it"
+# the host guard is the first middleware, before the token check that exempts
+# /api/health, so a foreign Host gets 403 on every route; the page itself is
+# probed too, so a health route the vendor exempts cannot hide a hole (#765).
+# pi.<domain> must get the page without a token: Authelia is the gate, and a
+# token pi-web-ui made up itself would also switch its host check off.
+for path in /api/health /; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.test' "http://127.0.0.1:$PW$path")
+  [ "$code" = 403 ] || piweb_fail "pi-web-ui answered $code on $path for a foreign Host; only pi.<domain> may reach it"
+done
+code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pi.boot.test' "http://127.0.0.1:$PW/")
+[ "$code" = 200 ] || piweb_fail "pi-web-ui answered $code on / for pi.boot.test; behind Authelia it needs no token of its own"
 cat > "$WORK/chat.mjs" <<'JS'
 // one chat over pi-web-ui's websocket, as the browser does it: hello, the
 // model list, the household model, one prompt; every message is printed
