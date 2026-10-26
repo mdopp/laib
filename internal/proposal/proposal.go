@@ -68,6 +68,7 @@ type Anchor struct {
 	Finding  string   `json:"finding,omitempty"`
 	Evidence string   `json:"evidence,omitempty"`
 	Undo     string   `json:"undo,omitempty"`
+	Does     string   `json:"does,omitempty"` // a repair's: what it does, the card's headline (#746)
 	Sources  []string `json:"sources,omitempty"`
 }
 

@@ -252,6 +252,7 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
     if off:
         findings.append({"severity": "gelb", "detail": f"{trained} „{', '.join(off)}“", "topic": "wakeword", "repair": FLASH,
                          "fix": "laib repair status stimme: nach deiner Freigabe in der Inbox spielt Laib es auf",
+                         "does": f"„{phrase}“ wird auf den Lautsprecher gespielt",
                          "effect": f"Laib baut die Firmware des Lautsprechers mit „{phrase}“ neu und spielt sie auf: er startet dabei neu "
                                    f"und ist etwa 2 Minuten still, danach hört er auf „{phrase}“.",
                          "undo": "Zurück nur mit einem neuen Aufspielen in ESPHome; seine YAML von vorher liegt daneben (….yaml.laib-vorher)."})
