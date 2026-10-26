@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.41.2](https://github.com/mdopp/laib/compare/v0.41.1...v0.41.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* **inbox:** repair cards say what runs, a failed repair says why, one repair per finding ([5b27b20](https://github.com/mdopp/laib/commit/5b27b209646bf23495807d7de368d05da5daf832))
+* **inbox:** repair cards say what runs, a failed repair says why, one repair per finding ([5582a43](https://github.com/mdopp/laib/commit/5582a438ec5c82ef7c22daa1fac3c7946bdc848f))
+* **werkstatt:** pi-web-ui 0.112 keeps its host check; unpin ([#765](https://github.com/mdopp/laib/issues/765)) ([65e6327](https://github.com/mdopp/laib/commit/65e63279ff81889a060a7b01c603f09c57e00884))
+* **werkstatt:** pi-web-ui 0.112 keeps its host check: no token, not even its own ([#765](https://github.com/mdopp/laib/issues/765)) ([a75e838](https://github.com/mdopp/laib/commit/a75e838b6fb8462cfb808b88ee295c4567e65e7a))
+
 ## [0.41.1](https://github.com/mdopp/laib/compare/v0.41.0...v0.41.1) (2026-10-26)
 
 
