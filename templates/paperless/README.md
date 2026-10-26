@@ -113,3 +113,38 @@ Paperless records it as processed (failed) and does not flag it. To file
 it: Einstellungen → E-Mail, at the rule open the processed mails, delete
 the failed entry; the next fetch takes the mail again. Then dismiss the
 failed task under Dateiaufgaben, which turns diag's yellow off.
+
+## The AI and the text recognition (#567)
+
+Paperless' AI (3.0: suggestions for title, correspondent, type, tags and
+dates; the document chat) runs on the household model through the model
+role, as every other consumer's model does: `PAPERLESS_AI_LLM_ENDPOINT` is
+`${MODEL_URL}` (the proxy at `host.containers.internal:11435/v1`), the key
+`${MODEL_KEY}`. The embeddings for the chat's index go to the same proxy,
+which hands `/v1/embeddings` to llama-embed (owner, 2026-10-24: through the
+lease, no port opened to pods). While a window that stops llama-embed
+stands (`full`), the proxy refuses them with 409 and Paperless' nightly
+index (`10 2 * * *`) waits for the next night.
+
+| Value | Default | What it does |
+|---|---|---|
+| `AI_ENABLED` | `"true"` | the AI on; `"false"` on a box without a model, else post-deploy stops: Paperless' client without an endpoint asks OpenAI's |
+| `AI_MODEL` | `qwen3.6-35b-a3b` | the household model; another needs a lease Paperless does not take |
+| `AI_LANGUAGE`, `AI_CONTEXT`, `AI_TIMEOUT` | `de`, `16384`, `300` | the suggestions' language, the tokens of a document read, the seconds Qwen gets |
+| `AI_EMBED_BACKEND`, `AI_EMBED_MODEL` | `openai-like`, `nomic-embed-text` | llama-embed through the proxy; `huggingface` and a sentence-transformers model run on Paperless' CPU instead |
+| `AI_EMBED_CHUNK` | `"300"` | tokens per piece: llama-embed refuses a piece beyond its 512-token batch |
+| `OCR_MODE` | `redo` | every page recognised again, a born-digital PDF's own text kept; `auto` kept a scanner's letter salad on 11 of 19 documents; `force` rasterises every PDF |
+| `OCR_ROTATE_PAGES`, `OCR_DESKEW` | `"true"` | upside-down and crooked scans (Paperless skips deskew under `redo`) |
+
+Paperless takes a field of its own settings (Einstellungen → Konfiguration)
+over the environment, so post-deploy clears the AI and OCR fields these
+values set: a field changed there by hand is reset on the next apply, the
+others stay. It also makes the contract fields once (custom fields, found
+by name, never changed): Anbieter, Vertragsnummer, Vertragsbeginn,
+Vertragsende, Kündigungsfrist, Nächster Kündigungstermin, Betrag,
+Zahlungsintervall. The family fills them; reading them out of a contract
+and the reminders before a notice date are not built yet (#567's follow-up).
+
+A document recognised before keeps its text: to recognise it again, select
+it in Paperless and reprocess it from the document actions (the values'
+mode applies).

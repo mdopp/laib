@@ -26,6 +26,7 @@ func main() {
 		log.Fatal("laib-lease: presets.json: ", err)
 	}
 	cfg.RouterURL = boxfs.Env("ROUTER_URL", "http://127.0.0.1:11434")
+	cfg.EmbedURL = os.Getenv("EMBED_URL") // llama-embed (#567)
 	cfg.LeaseDir = boxfs.Env("LEASE_DIR", "/lease")
 	cfg.Token = os.Getenv("LEASE_TOKEN")
 	if d, err := time.ParseDuration(boxfs.Env("LEASE_RENEW", "10m")); err == nil {

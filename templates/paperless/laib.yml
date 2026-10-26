@@ -11,7 +11,9 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # consume folder is the file share's paperless-consume, so a scan dropped
 # there is filed. Postgres and Redis in the pod. The mail inbox (#521):
 # post-deploy makes Paperless' IMAP account and rule from PAPERLESS_MAIL_*,
-# paperless-check.service says in diag when Paperless cannot get in.
+# paperless-check.service says in diag when Paperless cannot get in. The AI
+# and OCR are values (#567): the household model and llama-embed through the
+# model role's proxy, OCR redo with rotation.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless

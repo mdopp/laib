@@ -8,7 +8,9 @@ from a script by hand:
   setup  post-deploy, on every apply: makes the household's groups admins
          and family with their permissions (GROUPS), makes or updates the
          account and the rule from PAPERLESS_MAIL_* (the password from the
-         secret PAPERLESS_MAIL_PASSWORD), then checks. An empty
+         secret PAPERLESS_MAIL_PASSWORD), then checks; clears the AI and OCR
+         fields of Paperless' own settings that the values set, and makes
+         the contract fields (#567). An empty
          PAPERLESS_MAIL_HOST changes nothing of Paperless' mail: an account
          made by hand stays.
   check  paperless-check.service, inside the Paperless container
@@ -180,6 +182,33 @@ def groups(api):
         print("paperless: Gruppe %s ergänzt um %d Rechte" % (name, len(missing)))
 
 
+# Paperless' AI and OCR come from the values, as environment (#567). Paperless takes a field of
+# its own settings (Einstellungen → Konfiguration, ApplicationConfiguration) over the environment,
+# so setup clears the fields the template sets: the values rule, a field set there by hand is
+# reset on the next apply (as the mail rule). The others stay the owner's.
+OWNED = ("ai_enabled", "llm_backend", "llm_model", "llm_api_key", "llm_endpoint", "llm_embedding_backend",
+         "llm_embedding_model", "llm_embedding_endpoint", "llm_embedding_chunk_size", "llm_context_size",
+         "llm_request_timeout", "llm_output_language", "mode", "rotate_pages", "deskew")
+# the contract fields (#567): made once each, found by name, never changed; the family fills them
+CONTRACT = [("Anbieter", "string"), ("Vertragsnummer", "string"), ("Vertragsbeginn", "date"), ("Vertragsende", "date"),
+            ("Kündigungsfrist", "string"), ("Nächster Kündigungstermin", "date"), ("Betrag", "monetary"),
+            ("Zahlungsintervall", "string")]
+
+
+def config(api):
+    rows = api("GET", "/api/config/") or []
+    for row in rows if isinstance(rows, list) else rows.get("results", []):
+        hand = {k: None for k in OWNED if row.get(k) not in (None, "")}
+        if hand:
+            api("PATCH", "/api/config/%d/" % row["id"], hand)
+            print("paperless: in Paperless' Konfiguration von Hand gesetzt, jetzt aus den Werten:", ", ".join(sorted(hand)))
+    have = {f.get("name", "").casefold() for f in api.all("/api/custom_fields/")}
+    for name, kind in CONTRACT:
+        if name.casefold() not in have:
+            api("POST", "/api/custom_fields/", {"name": name, "data_type": kind})
+            print("paperless: Feld %s angelegt" % name)
+
+
 def failed_consumes(api):
     """findings for the documents Paperless could not file and still lists as failed
     (a task nobody dismissed): from mail, the consume folder or an upload alike.
@@ -292,11 +321,16 @@ def up(api):
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "check"
     if mode == "setup":   # post-deploy, in the hooks image on the host network
+        if E.get("AI_ENABLED", "").strip().lower() == "true" and not E.get("MODEL_URL"):
+            # Paperless' AI client without an endpoint asks OpenAI's: no document leaves the box by default
+            raise SystemExit("paperless: AI_ENABLED ist true, aber die Box hat kein Modell (keine Rolle model, kein box.yml model.url): "
+                             "in services/paperless/values.yml AI_ENABLED: \"false\" setzen oder ein Modell einrichten, dann laib apply paperless")
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_PAPERLESS_ADMIN_PASSWORD"])
         status = os.path.join(E["LAIB_DATA_DIR"], "paperless", "data", "laib-status.json")
         r = up(api)   # a refused admin is a finding, not a red apply: Paperless runs, the groups and the inbox wait
         if r is None:
             groups(api)
+            config(api)
             setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
     else:                 # inside the Paperless container: its own admin from its environment
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
