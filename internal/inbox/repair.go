@@ -25,7 +25,7 @@ var RunVerb func(ctx context.Context, env *cli.Env, argv []string) int
 // Repairable: the repairs diag offers. Nothing else runs from repairs/.
 func Repairable(st *state.State, argv []string) bool {
 	switch strings.Join(argv, " ") {
-	case "apply", "backup", "backup check", "operator enable", "servicebay remove":
+	case "apply", "backup", "backup check", "operator enable", "servicebay remove", "servicebay remove --trotzdem":
 		return true
 	}
 	if len(argv) == 3 && argv[0] == "secret" && (argv[1] == "rotate" || argv[1] == "zurueck") { // #665: a carried secret laib can rotate, a device-held one back
