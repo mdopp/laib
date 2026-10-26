@@ -122,8 +122,8 @@ func servicebayFindings(st *state.State, sec map[string]string) []Finding {
 	}
 	var out []Finding
 	for _, n := range names {
-		svc, fix := carriedFix(st, n)
-		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: n + " hat noch den Wert aus ServiceBay, lesbar in " + dir, Fix: fix})
+		svc, fix, repair := carriedFix(st, n)
+		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Service: svc, Detail: n + " hat noch den Wert aus ServiceBay, lesbar in " + dir, Fix: fix, Repair: repair})
 	}
 	if unread > 0 {
 		out = append(out, Finding{Severity: "gelb", Probe: "servicebay", Detail: fmt.Sprintf("%d Dateien in %s hat Laib nicht gelesen (nicht lesbar, oder über 256 MiB): ob dort noch ein Passwort von heute liegt, ist offen; laib servicebay remove liest alles", unread, dir), Unmeasured: true})
@@ -134,20 +134,21 @@ func servicebayFindings(st *state.State, sec map[string]string) []Finding {
 	return out
 }
 
-// carriedFix: the service that declares name and the way to rotate it.
-func carriedFix(st *state.State, name string) (string, string) {
+// carriedFix: the service that declares name, the way to rotate it, and the
+// repair a human approves in the Inbox when laib can rotate it itself (#665).
+func carriedFix(st *state.State, name string) (string, string, []string) {
 	for _, svc := range st.ServiceNames() {
 		for _, s := range st.Services[svc].Contract.Secrets {
 			switch {
 			case s.Name != name || s.External:
 			case s.DataBound && !s.Rotate:
-				return svc, "in der App ändern, dann laib secret set " + name + " und laib apply " + svc + " (scripts/rotate-carried.sh --wie " + name + ")"
+				return svc, "in der App ändern, dann laib secret set " + name + " und laib apply " + svc + " (scripts/rotate-carried.sh --wie " + name + ")", nil
 			default:
-				return svc, "scripts/rotate-carried.sh " + svc + " (laib secret rotate " + name + ", dann grün geprüft)"
+				return svc, "laib repair servicebay " + svc + ": nach der Freigabe läuft laib secret rotate " + name + ", dann grün geprüft", []string{"secret", "rotate", name}
 			}
 		}
 	}
-	return "", "beim Anbieter ein neues setzen, dann laib secret set " + name + " (Wert auf stdin)"
+	return "", "beim Anbieter ein neues setzen, dann laib secret set " + name + " (Wert auf stdin)", nil
 }
 
 // ServiceBay is `laib servicebay remove` (destroy, humans only): the old
