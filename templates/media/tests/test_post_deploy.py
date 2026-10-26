@@ -21,7 +21,7 @@ def fresh():
     JF.clear()
     JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
               config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0, types={}, deleted=[],
-              media={"music", "movies"})   # the folders Jellyfin sees under its own /media mount (#651)
+              media={"music", "movies"}, tokens={}, minted=0)   # the folders Jellyfin sees under its own /media mount (#651)
     SIDE.clear()
     SIDE.update(abs_token="abs-key-1", ma_token="ma-tok-1", abs_libs=[], abs_totals={}, radios=0)
 
@@ -48,7 +48,18 @@ class FakeJellyfin(BaseHTTPRequestHandler):
     def token(self):
         return 'Token="tok"' in (self.headers.get("Authorization") or "")
 
+    def bearer(self):
+        m = re.search(r'Token="([^"]*)"', self.headers.get("Authorization") or "")
+        return m and m.group(1)
+
     def do_GET(self):
+        if self.path == "/Users/Me":                 # whose token this is; a non-admin user's own token answers too
+            t = self.bearer()
+            if t == "tok":
+                return self.reply(200, JF["users"]["admin"])
+            if t not in JF["tokens"]:
+                return self.reply(401)
+            return self.reply(200, next(u for u in JF["users"].values() if u["Name"] == JF["tokens"][t][0]))
         if self.path == "/health":
             return self.reply(200)
         if self.path == "/System/Info/Public":
@@ -92,9 +103,17 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(204)
         if p == "/Users/AuthenticateByName":
             u = JF["users"].get(b["Username"])
-            if not u or u["pw"] != b["Pw"]:
+            if not u or u["pw"] != b["Pw"] or (u.get("Policy") or {}).get("IsDisabled"):
                 return self.reply(401)
-            return self.reply(200, {"AccessToken": "tok"})
+            if u["Id"] == "u-admin":
+                return self.reply(200, {"AccessToken": "tok"})
+            # any other user gets a token of its own; Jellyfin logs out the one this user's device held before
+            dev = re.search(r'DeviceId="([^"]*)"', self.headers["Authorization"]).group(1)
+            JF["tokens"] = {t: v for t, v in JF["tokens"].items() if v != (u["Name"], dev)}
+            JF["minted"] += 1
+            t = f"jf-{u['Name']}-{JF['minted']}"
+            JF["tokens"][t] = (u["Name"], dev)
+            return self.reply(200, {"AccessToken": t})
         if not self.token():
             return self.reply(401)
         if p.startswith("/Library/VirtualFolders?"):
@@ -223,7 +242,7 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn("uid=admin", x, "the plugin binds as the LLDAP admin")
         self.assertEqual((JF["installs"], JF["restarts"]), (1, 1), "the plugin was not installed and loaded")
         self.assertTrue(JF["config"]["QuickConnectAvailable"])
-        self.assertEqual(set(JF["users"]), {"admin"}, "a shared login was created next to the family's own")
+        self.assertEqual(set(JF["users"]), {"admin", "haus"}, "a shared login was created next to the family's own")   # haus: Haus' own, hidden (#695)
         self.assertNotIn(LDAP_PW, p.stdout + p.stderr)
         p = self.run_hook()
         self.assertEqual((p.returncode, JF["installs"], JF["restarts"]), (0, 1, 1), p.stdout + p.stderr)
@@ -284,7 +303,7 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn(HA_PW, p.stdout + p.stderr)
         # the next apply changes nothing; a new secret is the account's new password
         p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD=HA_PW)
-        self.assertEqual((p.returncode, JF["created"]), (0, 1), p.stdout + p.stderr)
+        self.assertEqual((p.returncode, JF["created"]), (0, 2), p.stdout + p.stderr)   # homeassistant and haus (#695), once each
         p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD="ha-svc-pw-new")
         self.assertEqual((p.returncode, JF["users"]["homeassistant"]["pw"]), (0, "ha-svc-pw-new"), p.stdout + p.stderr)
 
@@ -302,6 +321,62 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(JF["option_posts"], 1)
         p = self.run_hook()
         self.assertEqual((p.returncode, JF["option_posts"]), (0, 1), p.stdout + p.stderr)
+
+    # #695: Haus checks a wished song against the household's music, read only. Jellyfin's API keys have no
+    # levels (each acts as an administrator), so Haus gets the token of a Jellyfin user of its own, `haus`:
+    # hidden, no administrator, the music libraries only, no playback, download or deletion.
+    def handed(self, p):
+        return dict(re.findall(r"^laib-secret: ([A-Z_]+)=(\S+)$", p.stdout, re.M))
+
+    def test_haus_gets_a_music_only_account_and_its_token(self):
+        JF["media"] = {"music", "movies", "tv"}
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        u = JF["users"].get("haus")
+        self.assertIsNotNone(u, "no Jellyfin account for Haus")
+        pol = u["Policy"]
+        self.assertFalse(pol["IsAdministrator"], "Haus reads as a Jellyfin administrator")
+        self.assertTrue(pol["IsHidden"], "Haus' account shows on the TV's login screen")
+        musik = next(i for n, i in JF["folders"] if n == "Musik")
+        self.assertEqual((pol["EnableAllFolders"], pol["EnabledFolders"]), (False, [musik]), "Haus sees more than the music")
+        for no in ("EnableMediaPlayback", "EnableContentDownloading", "EnableContentDeletion", "EnableRemoteControlOfOtherUsers"):
+            self.assertIs(pol.get(no), False, f"Haus' account keeps {no}")
+        tok = self.handed(p).get("HAUS_JELLYFIN_TOKEN")
+        self.assertIn(tok, JF["tokens"], "the handed-back token is none Jellyfin knows")
+        self.assertEqual(JF["tokens"][tok][0], "haus", "the token is not Haus' account's")
+        self.assertNotEqual(JF["tokens"][tok][1], "laib-post-deploy", "Haus' token shares the hook's device, the hook's next login logs it out")
+        self.assertIn("HAUS_JELLYFIN_TOKEN minted (new)", p.stdout)
+        # a token that still works is kept: no new one, none handed back, the old one valid
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_TOKEN=tok)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("HAUS_JELLYFIN_TOKEN", self.handed(p))
+        self.assertNotIn(" minted", p.stdout)
+        self.assertIn(tok, JF["tokens"])
+        self.assertEqual(JF["created"], 1, "a second account for Haus")
+        # one Jellyfin refuses (its device removed in the dashboard) is replaced
+        JF["tokens"].pop(tok)
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_TOKEN=tok)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        new = self.handed(p).get("HAUS_JELLYFIN_TOKEN")
+        self.assertTrue(new and new != tok and JF["tokens"].get(new, ("",))[0] == "haus", p.stdout)
+        self.assertIn("HAUS_JELLYFIN_TOKEN minted (replaces one Jellyfin refuses)", p.stdout)
+        self.assertEqual([t for t, v in JF["tokens"].items() if v[0] == "haus"], [new], "an old token of Haus still works")
+
+    def test_an_existing_haus_account_is_cut_back_to_the_music(self):
+        # one made by hand, an administrator who sees everything, gets the music only; spoken word is no music (#646)
+        ids = self.box()
+        JF["users"]["haus"] = {"Name": "haus", "Id": "u-haus", "pw": "by-hand", "Policy": {
+            "IsAdministrator": True, "EnableAllFolders": True, "EnabledFolders": [], "EnableMediaPlayback": True,
+            "AuthenticationProviderId": "Default", "PasswordResetProviderId": "Default"}}
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        pol = JF["users"]["haus"]["Policy"]
+        self.assertFalse(pol["IsAdministrator"] or pol["EnableAllFolders"] or pol["EnableMediaPlayback"])
+        self.assertEqual(sorted(pol["EnabledFolders"]), sorted([ids["Music"], ids["Music (cdopp)"]]),
+                         "Haus sees other libraries than the music")
+        self.assertEqual(JF["created"], 0)
+        self.assertIn("HAUS_JELLYFIN_TOKEN", self.handed(p))
+        self.assertNotIn("by-hand", p.stdout + p.stderr)
 
     def test_a_server_still_starting_behind_a_green_health_is_waited_for(self):
         JF["starting"], JF["wizard503"] = 3, 2

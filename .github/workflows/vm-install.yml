@@ -941,6 +941,13 @@ jobs:
                 echo "jellyfin login as core with a wrong password: HTTP $code"; [ "$code" = 401 ] || exit 1
                 [ "$(curl -s http://127.0.0.1:8096/QuickConnect/Enabled)" = true ] || { echo "Quick Connect is off"; exit 1; }
                 echo "quick connect on"
+                # #695: Haus' account (hidden, music only) and its token, minted against this real Jellyfin; the next
+                # apply keeps it, which it does only when Jellyfin answers /Users/Me with that token as user haus
+                grep -q "HAUS_JELLYFIN_TOKEN minted (new)" /tmp/add-media.txt || { echo "HAUS_JELLYFIN_TOKEN was not minted"; exit 1; }
+                if grep -q "laib-secret" /tmp/add-media.txt; then echo "a token is in the apply output"; exit 1; fi
+                $L apply media | tee /tmp/apply-media2.txt
+                if grep -q "HAUS_JELLYFIN_TOKEN minted" /tmp/apply-media2.txt; then echo "the token Haus got does not work in Jellyfin: minted again"; exit 1; fi
+                echo "media: Haus has a music-only Jellyfin account and a token that works (#695)"
                 $L remove media >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
                 podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true

@@ -20,8 +20,17 @@ new users — not anyone's private library.
 Music and video only (#646, docs/SERVICES.md): ServiceBay's twin libraries
 ("Music2" beside "Music", the same folders) go, and Hörbücher, Podcasts and
 Radio go once the owner set SPOKEN_WORD=audiobookshelf and Audiobookshelf
-and Music Assistant answer with them; until then they stay."""
-import json, os, re, sys, time, urllib.parse, urllib.request, urllib.error
+and Music Assistant answer with them; until then they stay.
+
+Haus reads the household's music (#695): whether a wished song is there
+already. Jellyfin's API keys have no levels, each acts as an administrator,
+so Haus gets no key but the token of a Jellyfin user of its own, `haus`:
+hidden, no administrator, the music libraries only, no playback, download
+or deletion. Its password is random and nobody's; the token is handed back
+as HAUS_JELLYFIN_TOKEN, the haus template renders it. A token that still
+works is kept; one Jellyfin refuses (its device removed in the dashboard)
+is replaced: a new random password, a new login on Haus' own device."""
+import json, os, re, secrets, sys, time, urllib.parse, urllib.request, urllib.error
 
 E = os.environ
 BASE = E.get("JELLYFIN_URL", "http://127.0.0.1:8096")
@@ -41,8 +50,8 @@ MOVED = {"/media/audiobooks": ("book", "/audiobooks", "Hörbücher"), "/media/po
          "/media/radio": ("radio", None, "Radio")}
 
 
-def req(method, path, body=None, token=None, raw=False):
-    h = {"Content-Type": "application/json", "Authorization": CLIENT + (f', Token="{token}"' if token else "")}
+def req(method, path, body=None, token=None, raw=False, client=CLIENT):
+    h = {"Content-Type": "application/json", "Authorization": client + (f', Token="{token}"' if token else "")}
     r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method=method)
     for _ in range(60):  # while Jellyfin finishes its start it answers 503, /health already up (vm-install run 39031896537)
         try:
@@ -289,6 +298,42 @@ if HA_PW:
     if not logs_in(HA_USER, HA_PW):
         red(f"the jellyfin account {HA_USER} does not log in with JELLYFIN_HA_PASSWORD: Home Assistant's entry gets 401")
     print(f"jellyfin account {HA_USER} logs in: Home Assistant's Jellyfin entry uses it")
+# 7. Haus' own account (#695): music only, read only; its token on a device of its own, so the logins
+# above (device laib-post-deploy) never log it out, and the check identifies as that same device
+HAUS_USER, HAUS_TOKEN = "haus", E.get("LAIB_SECRET_HAUS_JELLYFIN_TOKEN", "")
+HAUS_CLIENT = 'MediaBrowser Client="Haus", Device="Haus", DeviceId="laib-haus", Version="1"'
+music = [f["ItemId"] for f in req("GET", "/Library/VirtualFolders", token=token)
+         if (f.get("CollectionType") == "music" or f.get("Name") == "Musik")
+         and not any(x.rstrip("/") in MOVED for x in f.get("Locations") or [])]   # spoken word is no music (#646)
+u = next((u for u in req("GET", "/Users", token=token) if u["Name"] == HAUS_USER), None)
+if not u:
+    u = req("POST", "/Users/New", {"Name": HAUS_USER, "Password": secrets.token_urlsafe(32)}, token=token)
+    print("jellyfin account created:", HAUS_USER, "(Haus': reads the music, nothing else)")
+pol = u.get("Policy") or {}
+want = {**pol, "IsAdministrator": False, "IsHidden": True, "IsDisabled": False, "EnableAllFolders": False, "EnabledFolders": music,
+        **dict.fromkeys(("EnableMediaPlayback", "EnableContentDownloading", "EnableContentDeletion", "EnableRemoteControlOfOtherUsers",
+                         "EnableSharedDeviceControl", "EnableLiveTvAccess", "EnableLiveTvManagement", "EnablePublicSharing"), False)}
+if want != pol:
+    req("POST", f"/Users/{u['Id']}/Policy", want, token=token)
+    print(f"jellyfin account {HAUS_USER} sees the music only ({len(music)} libraries), no administrator, no playback")
+
+
+def haus_token_works(t):
+    try:
+        return bool(t) and req("GET", "/Users/Me", token=t, client=HAUS_CLIENT).get("Name") == HAUS_USER
+    except urllib.error.HTTPError as e:
+        if e.code not in (401, 403):
+            raise
+        return False
+
+
+if not haus_token_works(HAUS_TOKEN):
+    pw = secrets.token_urlsafe(32)
+    req("POST", f"/Users/Password?userId={u['Id']}", {"NewPw": pw}, token=token)
+    new = req("POST", "/Users/AuthenticateByName", {"Username": HAUS_USER, "Pw": pw}, client=HAUS_CLIENT)["AccessToken"]
+    print(f"laib-secret: HAUS_JELLYFIN_TOKEN={new}")
+    print("media: HAUS_JELLYFIN_TOKEN minted (" + ("replaces one Jellyfin refuses" if HAUS_TOKEN else "new")
+          + "): Laib re-applies Haus, which finds the household's music")
 if held:  # the owner switched, the replacement is not there: say so, never green while the libraries stay (#646)
     red("SPOKEN_WORD=audiobookshelf, but these stay in Jellyfin until their replacement answers: " + " | ".join(held))
 print("jellyfin provisioned: the family logs in with LLDAP, Quick Connect on, local admin kept")
