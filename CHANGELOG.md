@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.2](https://github.com/mdopp/laib/compare/v0.39.1...v0.39.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* **secret:** put a device-held secret back to its value before the rotation ([bf92507](https://github.com/mdopp/laib/commit/bf925076a8d959c8cbb26602b91cd69e3a53b1a0))
+* **secret:** put a device-held secret back to its value before the rotation ([32d6271](https://github.com/mdopp/laib/commit/32d6271dff058f4f86ea0b5e0d95c539c4c9ebdc)), closes [#665](https://github.com/mdopp/laib/issues/665)
+
 ## [0.39.1](https://github.com/mdopp/laib/compare/v0.39.0...v0.39.1) (2026-10-26)
 
 
