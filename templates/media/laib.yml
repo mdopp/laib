@@ -11,7 +11,8 @@ upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   #
 # Audiobooks, Podcasts and Radio libraries. The hook completes the first-run wizard, creates the local admin
 # (break-glass), registers the libraries Musik, Filme and Serien for the
 # folders Jellyfin itself sees under /media (#651), and logs the family in with their LLDAP
-# accounts through the LDAP-Authentication plugin (#256), Quick Connect on.
+# accounts through the LDAP-Authentication plugin (#256), Quick Connect on,
+# and gives Haus a hidden account that reads the music only and its token (#695).
 after: [auth, file-share]        # LLDAP's read-only account (#256); the share's folders are mounted here (#36)
 routes:
   - host: media
@@ -31,6 +32,9 @@ secrets:
     external: true
     optional: true
   - name: HA_MUSIC_ASSISTANT_TOKEN    # minted by music-assistant (#526): media only asks with it whether the radio stations are there (#646)
+    external: true
+    optional: true
+  - name: HAUS_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user haus (hidden, music only, no administrator), handed back; haus reads the music with it
     external: true
     optional: true
   - name: JELLYFIN_HA_PASSWORD        # Home Assistant's own Jellyfin account `homeassistant` (#375), not an LLDAP login; laib secret set, the same in HA's entry; without it no account

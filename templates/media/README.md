@@ -11,6 +11,17 @@ LLDAP login, Home Assistant's account).
   shows in Jellyfin without a scan. Neue Lieder erscheinen damit kurz nach
   dem Import von selbst in Jellyfin.
 
+- **Haus reads the music** (#695): Haus checks a wished song against the
+  household's music. Jellyfin's API keys have no levels (each acts as an
+  administrator), so post-deploy keeps a Jellyfin user `haus` instead:
+  hidden, no administrator, `EnabledFolders` the music libraries only (the
+  ones Music Assistant's account sees, spoken word left out), no playback,
+  download or deletion. Its password is random and stored nowhere; its
+  token, logged in on the device `laib-haus`, goes back as
+  `HAUS_JELLYFIN_TOKEN`. A token that still works is kept (`GET /Users/Me`
+  as that device); one Jellyfin refuses, e.g. its device removed in the
+  dashboard, is replaced by a new random password and a new login.
+
 - **Music and video only** (#646, docs/SERVICES.md): Symfonium's shuffle
   played audiobooks, podcasts and radio between the music.
   - **ServiceBay's twins go.** post-deploy removes a library whose name
