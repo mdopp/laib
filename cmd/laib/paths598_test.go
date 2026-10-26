@@ -97,7 +97,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	if p == nil || p.Class != "human" || !strings.Contains(p.Reason, "haus +zuhause +people.*.signal") {
 		t.Fatalf("%+v", p)
 	}
-	if diff := proposal.Diff(ctx, env.Paths.State, p); strings.Count(diff, "\n+  ") != 1 || !strings.Contains(diff, "note, tell], paths: [zuhause, people.*.signal]}") {
+	if diff := proposal.Diff(ctx, env.Paths.State, p); strings.Count(diff, "\n+  ") != 1 || !strings.Contains(diff, "note, tell, aufgabe], paths: [zuhause, people.*.signal]}") {
 		t.Fatalf("not the one line:\n%s", diff)
 	}
 	if again := sync(); again != nil {
