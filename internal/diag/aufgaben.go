@@ -18,7 +18,9 @@ import (
 // silence is an unmeasured raid finding). Any other probe's absence may
 // only mean it did not run — a service not installed, /boot not readable,
 // a DNS check not configured — so its task is checked off by a person.
-var closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid"}
+// status (#759): the template's own status file, read on every full diag;
+// a finding it marks unmeasured, or no file, closes nothing.
+var closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid", "status"}
 
 // cover marks the findings an open Box-Aufgabe covers: info, „zurückgestellt
 // → Box-Aufgabe #N“, until its erinnern day, then gelb with „erinnert“. A
@@ -67,10 +69,22 @@ func gone(fs []Finding, tasks []aufgaben.Aufgabe) []int {
 	return out
 }
 
+// unmeasuredStatus: fs and, for each service whose status file is not
+// there, that it measured nothing (#759): a template's status closes a task
+// only by what it wrote; one that says it could not look marks itself.
+func unmeasuredStatus(st *state.State, fs []Finding) []Finding {
+	for _, n := range st.ServiceNames() {
+		if svc := st.Services[n]; state.StatusPath(st, svc) != "" && !ReadStatus(st, svc).Found {
+			fs = append(fs, Finding{Probe: "status", Service: n, Unmeasured: true})
+		}
+	}
+	return fs
+}
+
 // closeGone checks off what gone finds, as laib, one journal line each.
 func closeGone(env *cli.Env, st *state.State, fs []Finding) {
 	tasks, err := aufgaben.Load(st.Dir)
-	ids := gone(fs, tasks)
+	ids := gone(unmeasuredStatus(st, slices.Clip(fs)), tasks)
 	if err != nil || len(ids) == 0 {
 		return
 	}

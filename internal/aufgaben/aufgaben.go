@@ -175,6 +175,15 @@ func Defer(list []Aufgabe, id int, day string) error {
 	return nil
 }
 
+// Link sets an open task's befund (#759).
+func Link(list []Aufgabe, id int, befund string) error {
+	a, err := find(list, id)
+	if err == nil {
+		a.Befund = befund
+	}
+	return err
+}
+
 // Counts: the open tasks, and of them the due ones.
 func Counts(list []Aufgabe, today string) (open, due int) {
 	for _, a := range list {

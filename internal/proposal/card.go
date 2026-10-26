@@ -222,6 +222,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	switch {
 	case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
 		d.Summary = p.News[0]
+	case p.Boxless() && p.Evidence != "": // a repair: the finding it answers (#759)
+		d.Summary = "Reparieren: " + p.Evidence
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
@@ -345,6 +347,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 
 	// --- how it is undone
 	switch {
+	case p.Tier == "destroy": // #759: a flashed device, a deleted folder
+		d.Reversible = "Nicht mit einem Tipp rückgängig."
 	case len(p.Adds) > 0:
 		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
 	case len(handOrder) == 1:

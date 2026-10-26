@@ -49,6 +49,10 @@ type Finding struct {
 	Unmeasured bool `json:"unmeasured,omitempty"`
 	// Aufgabe: the open Box-Aufgabe that covers it (#667).
 	Aufgabe int `json:"aufgabe,omitempty"`
+	// Effect and Undo: what the repair does to the household and how it is
+	// undone, in German, for its Inbox card (#759: a device restarts).
+	Effect string `json:"effect,omitempty"`
+	Undo   string `json:"undo,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
