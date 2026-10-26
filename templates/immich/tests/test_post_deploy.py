@@ -7,7 +7,7 @@ needs the admin's password once: it mints an API key limited to the system
 config and hands it back (`laib-secret:`), so a later password change in the
 app does not lock it out. A secret left in Immich's database by ServiceBay
 is simply overwritten: no carry-over of the old OIDC secret."""
-import json, os, subprocess, threading, unittest
+import json, os, subprocess, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -72,6 +72,11 @@ class FakeImmich(BaseHTTPRequestHandler):
             if IMMICH["admin"] != (b.get("email"), b.get("password")):
                 return self.reply(401, {"message": "Incorrect email or password"})
             return self.reply(201, {"accessToken": "session-1", "userEmail": b["email"], "isAdmin": True})
+        if self.path == "/api/auth/change-password":   # the user's own, with the current one
+            if self.who() != ["all"] or IMMICH["admin"][1] != b.get("password"):
+                return self.reply(401, {"message": "Wrong password"})
+            IMMICH["admin"] = (IMMICH["admin"][0], b["newPassword"])
+            return self.reply(200, {"email": IMMICH["admin"][0]})
         if self.path == "/api/api-keys":
             if self.who() != ["all"]:
                 return self.reply(401, {})
@@ -139,6 +144,39 @@ class PostDeploy(unittest.TestCase):
         IMMICH["config"]["oauth"]["clientSecret"] = "drifted"          # a restore of an older database
         p = self.run_hook(key=key, ADMIN_EMAIL="anna@example.org")
         self.assertEqual((p.returncode, self.oauth()["clientSecret"]), (0, OIDC), p.stdout + p.stderr)
+
+    def test_a_rotation_changes_the_admin_password_in_immich_and_hands_it_back(self):
+        # #665: the admin password carried from ServiceBay, rotated through Immich's own change-password
+        IMMICH["admin"] = ("anna@example.org", PW)
+        new = "-admin-rotated-665"
+        p = self.run_hook(ADMIN_EMAIL="anna@example.org", LAIB_ROTATE_IMMICH_ADMIN_PASSWORD=new)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(IMMICH["admin"][1], new)
+        self.assertIn("laib-secret: IMMICH_ADMIN_PASSWORD=" + new, p.stdout.splitlines())
+        p = self.run_hook(ADMIN_EMAIL="anna@example.org", LAIB_ROTATE_IMMICH_ADMIN_PASSWORD=new)   # taken already: handed back
+        self.assertIn("laib-secret: IMMICH_ADMIN_PASSWORD=" + new, p.stdout.splitlines())
+        IMMICH["admin"] = ("anna@example.org", "changed-in-the-app")
+        p = self.run_hook(ADMIN_EMAIL="anna@example.org", LAIB_ROTATE_IMMICH_ADMIN_PASSWORD=new)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertNotIn("laib-secret: IMMICH_ADMIN_PASSWORD", p.stdout)
+
+    def test_a_rotation_of_the_database_password_goes_through_psql_from_a_file(self):
+        # #665: ALTER ROLE in immich-db; the value in a 0600 file in pgdata, never on argv (#214),
+        # the hand-back after the psql that must run through and before the file goes
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "immich", "pgdata"))
+            IMMICH["admin"] = ("anna@example.org", PW)
+            new = "db-rotated-665"
+            p = self.run_hook(ADMIN_EMAIL="anna@example.org", LAIB_DATA_DIR=d, LAIB_SECRET_IMMICH_DB_PASSWORD="db-carried",
+                              LAIB_ROTATE_IMMICH_DB_PASSWORD=new)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            lines = [l for l in p.stdout.splitlines() if l.startswith(("laib-exec: ", "laib-secret: IMMICH_DB"))]
+            self.assertEqual([l.split()[0] + " " + l.split()[2] if l.startswith("laib-exec") else l for l in lines],
+                             ["laib-exec: psql", "laib-secret: IMMICH_DB_PASSWORD=" + new, "laib-exec: rm"])
+            self.assertTrue(all(new not in l for l in lines if l.startswith("laib-exec")), "the password on argv")
+            f = os.path.join(d, "immich", "pgdata", ".laib-rotate.sql")
+            self.assertEqual(open(f).read(), f"ALTER ROLE postgres PASSWORD '{new}';\n")
+            self.assertEqual(os.stat(f).st_mode & 0o777, 0o600)
 
     def test_no_key_and_a_refused_login_is_red_and_says_what_to_set(self):
         IMMICH["admin"] = ("anna@example.org", "something-else")

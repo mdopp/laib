@@ -426,6 +426,12 @@ class FakeHA(BaseHTTPRequestHandler):
             return ok({"wake_words": [{"id": w, "name": w, "phrase": None} for w in HA["wake_words"][m["entity_id"]]]})
         if t == "conversation/agent/homeassistant/debug":   # conversation/http.py: recognized, never executed
             return ok({"results": [HA["intents"].get(((m.get("language") or "").split("-")[0], s)) for s in m["sentences"]]})
+        if t == "config/auth_provider/homeassistant/change_password":   # the login's owner, with the current one
+            name = username(uid)
+            if not name or HA["creds"][name][0] != m["current_password"]:
+                return err("invalid_current_password", "Invalid current password")
+            HA["creds"][name] = (m["new_password"], uid)
+            return ok()
         if not is_admin(uid):
             return err("unauthorized", "Unauthorized")
         if t == "config/auth/list":
@@ -712,6 +718,30 @@ class PostDeploy(Hook):
             self.assertNotIn("k-" + secret, log)
         self.assertEqual(len(HA["users"]), users + 4, "a user deleted, or more than Laib-Prüfung, Haus, Bote-Automat and Stimme added")
         self.assertIn(secret, HA["tokens"])
+
+    def test_a_rotation_changes_the_admin_password_in_home_assistant_and_hands_it_back(self):
+        # #665: the password carried from ServiceBay, rotated: HA takes the new one, and only then does Laib
+        fresh(onboarded=("oscar", ADMIN_PW))
+        new = "-ha-admin-rotated-665"
+        p, handed, log = self.run_hook(user="oscar", extra={"LAIB_ROTATE_HA_ADMIN_PASSWORD": new})
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(handed.get("HA_ADMIN_PASSWORD"), new, log)
+        self.assertEqual(HA["creds"]["oscar"][0], new, "Home Assistant still has the old one")
+        self.assertNotIn(new, log)
+        # a second run (the session died before laib stored it): HA has it already, it is only handed back
+        p, again, log = self.run_hook(user="oscar", extra={"LAIB_ROTATE_HA_ADMIN_PASSWORD": new})
+        self.assertEqual((p.returncode, again.get("HA_ADMIN_PASSWORD")), (0, new), log)
+        # the rollback: the old value handed over as the new one, from the new one Laib now holds
+        p, back, log = self.run_hook(user="oscar", password=new, extra={"LAIB_ROTATE_HA_ADMIN_PASSWORD": ADMIN_PW})
+        self.assertEqual((p.returncode, back.get("HA_ADMIN_PASSWORD"), HA["creds"]["oscar"][0]), (0, ADMIN_PW, ADMIN_PW), log)
+
+    def test_a_rotation_without_a_working_login_keeps_the_old_one(self):
+        fresh(onboarded=("oscar", "changed in the app"))
+        p, handed, log = self.run_hook(user="oscar", extra={"LAIB_ROTATE_HA_ADMIN_PASSWORD": "-ha-admin-rotated-665"})
+        self.assertNotEqual(p.returncode, 0)
+        self.assertNotIn("HA_ADMIN_PASSWORD", handed)
+        self.assertIn("NOT rotated", log)
+        self.assertEqual(HA["creds"]["oscar"][0], "changed in the app")
 
     def test_no_admin_login_and_no_token_is_red_and_says_what_to_set(self):
         fresh(onboarded=("oscar", "the real one"))

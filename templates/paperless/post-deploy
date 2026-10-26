@@ -5,4 +5,16 @@
 # Paperless' API, then writes the status laib shows. Idempotent; an empty
 # PAPERLESS_MAIL_HOST changes nothing of Paperless' mail.
 set -euo pipefail
+# #665: `laib secret rotate PAPERLESS_DB_PASSWORD` hands the new value over: ALTER ROLE through psql in
+# paperless-db over its local socket, from a 0600 file in pgdata (never argv, #214); laib takes the
+# hand-back only when that psql ran through, and Paperless gets it with the restart that follows.
+next=${LAIB_ROTATE_PAPERLESS_DB_PASSWORD:-}
+if [ -n "$next" ] && [ "$next" != "${LAIB_SECRET_PAPERLESS_DB_PASSWORD:-}" ]; then
+  q="'"
+  (umask 077 && printf "ALTER ROLE paperless PASSWORD '%s';\n" "${next//$q/$q$q}" > "$LAIB_DATA_DIR/paperless/pgdata/.laib-rotate.sql")
+  echo "laib-exec: systemd-paperless-db psql -q -v ON_ERROR_STOP=1 -U paperless -d paperless -f /var/lib/postgresql/data/.laib-rotate.sql"
+  echo "laib-secret: PAPERLESS_DB_PASSWORD=$next"
+  echo "laib-exec: systemd-paperless-db rm -f /var/lib/postgresql/data/.laib-rotate.sql"
+  echo "paperless: the database password changes (laib secret rotate); Paperless takes it with its restart"
+fi
 exec python3 "$(dirname "$0")/paperless-mail.py" setup

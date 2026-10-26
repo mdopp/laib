@@ -6,7 +6,9 @@ AdGuardHome.yaml is pre-start's."""
 import base64, json, os, socket, struct, sys, time, urllib.request
 
 E = os.environ
-user, pw = E.get("ADMIN_USER", "admin"), E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
+# a rotation (#665): pre-start set the new one in AdGuardHome.yaml before the restart; had it not, it was red
+# and this hook does not run
+user, pw = E.get("ADMIN_USER", "admin"), E.get("LAIB_ROTATE_ADGUARD_ADMIN_PASSWORD") or E["LAIB_SECRET_ADGUARD_ADMIN_PASSWORD"]
 BASE = E.get("ADGUARD_URL", "http://127.0.0.1:8083")
 auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
 
