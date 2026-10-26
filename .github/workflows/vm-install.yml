@@ -911,6 +911,14 @@ jobs:
                 # an admin-only call (the automation config API of HA): Haus is let through (no such automation: 404), the Bote refused
                 code=$(ha HAUS /api/config/automation/config/laib-349); echo "Haus, admin-only call -> HTTP $code"; [ "$code" = 404 ]
                 code=$(ha BOTE /api/config/automation/config/laib-349); echo "the Bote, admin-only call -> HTTP $code"; [ "$code" = 401 ] || { echo "the Bote token is an administrator token"; exit 1; }
+                # #724: Caddy forwards home.<domain> to 127.0.0.1:8123 with X-Forwarded-For; HA answers a forwarded
+                # request from a proxy it does not trust with 400. post-deploy set the trust on this fresh HA, so through Caddy it is 200
+                grep -q "trusts Caddy now" /tmp/add-ha.txt || { echo "post-deploy did not make Home Assistant trust Caddy"; exit 1; }
+                root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+                for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --capath "$none" --resolve home.vm.test:443:127.0.0.1 -o /tmp/home-caddy.json -w "%{http_code}" https://home.vm.test/auth/providers || true); [ "$code" = 200 ] && break; sleep 2; done
+                echo "https://home.vm.test/auth/providers through Caddy -> HTTP $code"
+                [ "$code" = 200 ] && grep -q "homeassistant" /tmp/home-caddy.json || { echo "a request through Caddy does not reach Home Assistant"; cat /tmp/home-caddy.json; podman logs --tail 200 systemd-home-assistant 2>&1 | grep -i "reverse proxy\|forwarded" | tail -10; exit 1; }
+                if grep -qi "request from a reverse proxy was received" <<<"$(podman logs systemd-home-assistant 2>&1)"; then echo "Home Assistant logs Caddy as an untrusted reverse proxy"; exit 1; fi
                 # the check lists the integrations with the minted HA_TOKEN
                 systemctl --user start home-assistant-check.service || { journalctl --user -u home-assistant-check.service --no-pager | tail -20; exit 1; }
                 grep -q "\"at\"" "$C/.laib-status.json" || { echo "the check wrote no status file"; ls -la "$C"; exit 1; }
