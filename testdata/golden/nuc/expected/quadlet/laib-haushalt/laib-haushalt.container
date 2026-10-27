@@ -14,6 +14,7 @@ Environment="HAUSHALT_LISTEN=127.0.0.1:5902"
 Environment="LAIB_MCP_URL=http://127.0.0.1:5900/mcp"
 Secret=laib.laib-haushalt.laib-haushalt.LAIB_TOKEN,type=env,target=LAIB_TOKEN
 Secret=laib.laib-haushalt.laib-haushalt.HAUSHALT_KEY,type=env,target=HAUSHALT_KEY
+Secret=laib.laib-haushalt.laib-haushalt.GITHUB_INTAKE_TOKEN,type=env,target=GITHUB_INTAKE_TOKEN
 
 [Service]
 Restart=always

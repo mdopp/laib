@@ -44,7 +44,8 @@ type Box struct {
 	Operator OperatorCfg `yaml:"operator"`
 	// Intake is where wishes and escalations become tickets (#56): a GitHub
 	// repo and the label a wish gets; the token is GITHUB_INTAKE_TOKEN in
-	// secrets.age. Empty = wishes are kept under <home>/wishes.
+	// secrets.age, laib-haushalt's, which files them (#797). Empty = a wish is
+	// kept in the journal.
 	Intake Intake `yaml:"intake"`
 	// Persona is the house's (ADR 0020): the wake word, the speakers' voice,
 	// Haus's start page and the chat default. Joshua when unset.

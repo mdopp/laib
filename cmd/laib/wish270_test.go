@@ -17,15 +17,15 @@ import (
 // the intake issue, rejecting it files nothing.
 func TestAnOperatorWishWaitsForTheAdmin(t *testing.T) {
 	c := newCbox(t)
-	c.intake(t, "mdopp/x")
 	g := newFakeGitHub(t)
+	c.intake(t, "mdopp/x", g)
 	ctx := context.Background()
 	c.env.Actor = "ops"
 	for _, text := range []string{
 		"Den Abfuhrkalender als Antwort für Haus und Bote einrichten.\n\nGesehen: 9 unbeantwortete Fragen zur Müllabfuhr in 7 Tagen.",
 		"Die Energie-Seite von der Startseite nach hinten.\n\nGesehen: 0 Aufrufe in 7 Tagen.",
 	} {
-		if rc := inbox.Wish(ctx, c.env, []string{text}); rc != cli.ExitOK {
+		if rc := c.wish(t, text); rc != cli.ExitOK {
 			t.Fatalf("rc %d", rc)
 		}
 	}

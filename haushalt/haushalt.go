@@ -1,7 +1,7 @@
 // Package haushalt is the program laib-haushalt (ADR 0026, #598): the
 // household verbs that read what the door hands over, leave an order for a
-// service, file a proposal or tell one person something — scan, net geraete,
-// tell, zuhause and person signal (#677). It runs in its own
+// service, file a proposal, tell one person something or file a wish —
+// scan, net geraete, tell, zuhause, person signal (#677) and wish (#797). It runs in its own
 // container (ADR 0027): the kernel checks hand, tier and verb, then hands
 // each call over HTTP on 127.0.0.1 with the caller's actor, the verb's
 // ceiling and the facts the verbs need. A proposal goes back to laib over
@@ -38,6 +38,7 @@ type Call struct {
 	LanIP   string       `json:"lanIp"`
 	Scan    *ScanService `json:"scan,omitempty"`
 	Zuhause *Zuhause     `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause (#677)
+	Intake  *Intake      `json:"intake,omitempty"`  // box.yml intake, for laib wish (#797)
 }
 
 // ScanService is the service that provides scan, as laib reads it from its state:
@@ -58,15 +59,16 @@ type Laib interface {
 // Env is one call's world.
 type Env struct {
 	Call
-	Laib Laib
-	Bote Bote // tell's way to a person (#676)
-	Out  io.Writer
-	Err  io.Writer
+	Laib   Laib
+	Bote   Bote   // tell's way to a person (#676)
+	GitHub GitHub // wish's way to the intake (#797)
+	Out    io.Writer
+	Err    io.Writer
 	// Journal gets one line per entry; the kernel writes each as the caller
 	Journal io.Writer
 }
 
-// Run is one verb: scan …, net geraete …, tell …, zuhause … or person_signal ….
+// Run is one verb: scan …, net geraete …, tell …, zuhause …, person_signal … or wish ….
 func Run(ctx context.Context, env *Env, args []string) int {
 	switch {
 	case len(args) > 0 && args[0] == "scan":
@@ -79,12 +81,14 @@ func Run(ctx context.Context, env *Env, args []string) int {
 		return cmdZuhause(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "person_signal":
 		return cmdPersonSignal(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "wish":
+		return Wish(ctx, env, args[1:])
 	}
-	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal)"))
+	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … | wish … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal, laib wish)"))
 }
 
 // Handler serves the door: POST /call with the door's key, GET /health.
-func Handler(key string, laib Laib, bote Bote) http.Handler {
+func Handler(key string, laib Laib, bote Bote, gh GitHub) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"haushalt": "bereit"})
@@ -101,7 +105,7 @@ func Handler(key string, laib Laib, bote Bote) http.Handler {
 			return
 		}
 		var out, errb, jr bytes.Buffer
-		code := Run(r.Context(), &Env{Call: c, Laib: laib, Bote: bote, Out: &out, Err: &errb, Journal: &jr}, c.Argv)
+		code := Run(r.Context(), &Env{Call: c, Laib: laib, Bote: bote, GitHub: gh, Out: &out, Err: &errb, Journal: &jr}, c.Argv)
 		lines := []json.RawMessage{}
 		for _, l := range bytes.Split(bytes.TrimSpace(jr.Bytes()), []byte("\n")) {
 			if json.Valid(l) {
@@ -133,9 +137,11 @@ func (e *Env) emit(v any) int {
 }
 
 // journal hands one line to the kernel; it sets actor and verb itself.
-func (e *Env) journal(service, reason, detail string) {
+func (e *Env) journal(service, reason, detail string) { e.journalAs("info", service, reason, detail) }
+
+func (e *Env) journalAs(result, service, reason, detail string) {
 	if e.Journal != nil {
-		b, _ := json.Marshal(map[string]string{"service": service, "reason": reason, "result": "info", "detail": detail})
+		b, _ := json.Marshal(map[string]string{"service": service, "reason": reason, "result": result, "detail": detail})
 		e.Journal.Write(append(b, '\n'))
 	}
 }
