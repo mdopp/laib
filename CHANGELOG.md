@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.49.0](https://github.com/mdopp/laib/compare/v0.48.0...v0.49.0) (2026-10-27)
+
+
+### Features
+
+* **operator:** skills are folders, a script does the deterministic steps ([#839](https://github.com/mdopp/laib/issues/839)) ([78acdb8](https://github.com/mdopp/laib/commit/78acdb87182a40dfe97a2995c3006b4df0cfcdf9))
+* **operator:** skills are folders, a script does the deterministic steps ([#839](https://github.com/mdopp/laib/issues/839)) ([1dc317b](https://github.com/mdopp/laib/commit/1dc317b5a83f9dd90a6c65dcf0424459fc51a9a8))
+* **operator:** skills are folders, a YAML and where it helps a script; the model keeps the open-ended work ([#839](https://github.com/mdopp/laib/issues/839)) ([55e437c](https://github.com/mdopp/laib/commit/55e437c62c79041895108cf9fcc4f4ef26c41d01))
+
+
+### Bug Fixes
+
+* **backup:** a declared data path that does not exist yet is left out of the snapshot ([55e437c](https://github.com/mdopp/laib/commit/55e437c62c79041895108cf9fcc4f4ef26c41d01))
+* **backup:** a declared data path that does not exist yet is left out of the snapshot ([7b33ed8](https://github.com/mdopp/laib/commit/7b33ed8c71c91a8849d035b8533de33a2862fb39))
+* **backup:** a declared data path that does not exist yet is left out of the snapshot ([83aeb67](https://github.com/mdopp/laib/commit/83aeb6782d156a6139a3664a20132490940663c2))
+* **operator:** at most 50 skills, each script at most 200 lines ([#839](https://github.com/mdopp/laib/issues/839)) ([55e437c](https://github.com/mdopp/laib/commit/55e437c62c79041895108cf9fcc4f4ef26c41d01))
+* **operator:** at most 50 skills, each script at most 200 lines ([#839](https://github.com/mdopp/laib/issues/839)) ([6aa2d2f](https://github.com/mdopp/laib/commit/6aa2d2fdfb162c4968aad19aecaae9587e21d241))
+* **operator:** at most 50 skills, each script at most 200 lines, instead of one sum ([#839](https://github.com/mdopp/laib/issues/839)) ([431938d](https://github.com/mdopp/laib/commit/431938d789fb11146ae6c55f0ca42f191c751c9d))
+* **werkstatt:** the rejections eval reads a skill from its folder ([#839](https://github.com/mdopp/laib/issues/839)) ([852775a](https://github.com/mdopp/laib/commit/852775aed88d03864e6655b1d6eb9c0628e8b85c))
+
 ## [0.48.0](https://github.com/mdopp/laib/compare/v0.47.0...v0.48.0) (2026-10-27)
 
 
