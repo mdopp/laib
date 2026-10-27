@@ -1,1 +1,2 @@
 IMAGE: ghcr.io/esphome/esphome:latest
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # esphome-check.py, the standard library only (#785)
