@@ -1,0 +1,30 @@
+[Unit]
+Description=Stimme: the wakes (Wyoming, 10301) — between Home Assistant and Whisper, counts them, keeps a false one's audio as a negative (#825)
+After=stimme-whisper.service
+
+[Container]
+# a stock Python, the standard library only: stimme-wakes.py forwards every byte to Whisper and back
+Image=${WAKES_IMAGE}
+Network=host
+Entrypoint=/usr/local/bin/python3
+Exec=/app/stimme-wakes.py
+Environment=TZ=${TZ}
+Environment=WAKES_LISTEN=127.0.0.1:10301
+Environment=WHISPER=127.0.0.1:10300
+Environment=WAKE_ID=${PERSONA_WAKEWORD}
+# quoted: systemd splits an unquoted value at a space (#627)
+Environment="WAKE_PHRASE=${PERSONA_PHRASE}"
+Environment=NEGATIVES_MAX=${WAKE_NEGATIVES_MAX}
+Volume=./stimme-wakes.py:/app/stimme-wakes.py:ro,z
+# the negatives under <wake id>/negativ (household audio: 0600, out of the backups by its CACHEDIR.TAG)
+Volume=${DATA_DIR}/stimme/recordings:/recordings:z
+# the counts per day, laib-wakes.json, which stimme-names writes into Stimme's status
+Volume=${DATA_DIR}/stimme/micro:/micro:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

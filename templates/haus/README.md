@@ -170,3 +170,12 @@ The Box page's admin card "Was wird genutzt" reads it back: the last 30
 days, most and least used, the plain lines, and the sentences the Bote and
 voice could not answer. Without usage-metrics the token renders empty and
 none of it happens.
+
+The wake word (#828, haus#165): Haus' Stimme card records each person saying
+the house persona's phrase into `HAUS_WAKE_RECORDINGS` (`/stimme-aufnahmen`,
+read-write), Stimme's `stimme/recordings/<wake id>/haus/` and nothing else of
+it, as `<person>-<YYYYMMDD-HHMMSS>.wav` (16 kHz mono 16-bit, 0600, through a
+`.<name>.part`). The phrase and the id are in `/persona/<persona>/persona.json`.
+The unit creates the folder 0700 with a `CACHEDIR.TAG` before Haus starts:
+the recordings stay out of the backups. Stimme's trainer reads them; its
+status counts them and offers „neu trainieren“ to the owner (templates/stimme).

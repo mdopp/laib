@@ -341,6 +341,8 @@ class FakeHA(BaseHTTPRequestHandler):
              "data": {"host": b["host"], "port": b["port"]}}
         HA["entries"].append(e)
         ent = {"faster-whisper": "stt.faster_whisper", "piper": "tts.piper", "openwakeword": "wake_word.openwakeword"}[title]
+        if any(r["entity_id"] == ent for r in HA["registry"]):   # HA's second entry of one server: its entity gets _2
+            ent += "_2"
         HA["registry"].append({"entity_id": ent, "config_entry_id": e["entry_id"], "platform": "wyoming", "disabled_by": None})
         HA["states"][ent] = {"state": "unknown"}
         save()
@@ -588,6 +590,7 @@ class Hook(unittest.TestCase):
         env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
                "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
+               "STIMME_WAKES_PORT": "1",   # no stimme-wakes unless a test gives it a port
                "HA_URL": f"http://127.0.0.1:{self.srv.server_port}", "HA_ADMIN_USER": user,
                "LAIB_SECRET_HA_ADMIN_PASSWORD": password, "LAIB_SECRET_HA_BOTE_PASSWORD": bote_password}
         env.update({"LAIB_SECRET_" + k: v for k, v in PASSWORDS.items()})
@@ -1255,6 +1258,29 @@ class Voice(Stimme):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((HA["pipeline_updates"], [c for c in HA["calls"] if "select" in c[0]]), ([], []), "a second run changed something: " + log)
         self.assertIn('Assist pipeline "Joshua" is there', log)
+
+    def test_whisper_goes_through_stimme_wakes_once_it_answers(self):
+        # #825: stimme-wakes sits in front of Whisper and counts the wakes; HA's Whisper entry is the one on its port
+        self.box()
+        wakes = socket.socket()
+        wakes.bind(("127.0.0.1", 0))
+        wakes.listen(8)
+        self.addCleanup(wakes.close)
+        port = wakes.getsockname()[1]
+        HA["wyoming_up"][port] = "faster-whisper"
+        HA["engines"]["stt"].append({"engine_id": "stt.faster_whisper_2", "supported_languages": ["de", "en"]})
+        p, handed, log = self.hook(STIMME_WAKES_PORT=str(port))
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn((port, "faster-whisper"), self.wyoming(), log)
+        self.assertEqual(self.ours()["stt_engine"], "stt.faster_whisper_2", "the persona's pipeline hears through stimme-wakes")
+        self.assertIn(f"Wyoming Whisper added (127.0.0.1:{port}", log)
+        n = len(self.wyoming())
+        p, _, log = self.hook(tokens=handed, STIMME_WAKES_PORT=str(port))
+        self.assertEqual((p.returncode, len(self.wyoming())), (0, n), "a second run added an entry: " + log)
+        wakes.close()   # stimme-wakes away: the next run finds Whisper itself, as before
+        p, _, log = self.hook(tokens=handed, STIMME_WAKES_PORT=str(port))
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(self.ours()["stt_engine"], "stt.faster_whisper", log)
 
     def test_a_dead_wake_word_is_not_carried_and_the_log_says_why(self):
         # solaris was the pipelines' wake word; Stimme's openWakeWord has no such model: a pipeline on it never wakes

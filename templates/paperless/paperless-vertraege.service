@@ -21,12 +21,12 @@ After=paperless.service
 
 [Service]
 Type=oneshot
-Environment=VERTRAG_ARTEN=${VERTRAG_ARTEN}
-Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
-Environment=RECHNUNG_ARTEN=${RECHNUNG_ARTEN}
-Environment=HAUSHALT_URL=${HAUSHALT_URL}
-Environment=HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
-Environment=HAUSHALT_NAMEN=${HAUSHALT_NAMEN}
+Environment="VERTRAG_ARTEN=${VERTRAG_ARTEN}"
+Environment="VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}"
+Environment="RECHNUNG_ARTEN=${RECHNUNG_ARTEN}"
+Environment="HAUSHALT_URL=${HAUSHALT_URL}"
+Environment="HAUSHALT_TOKEN=${HAUSHALT_TOKEN}"
+Environment="HAUSHALT_NAMEN=${HAUSHALT_NAMEN}"
 Environment=VERTRAEGE_SKRIPT=%h/.config/containers/systemd/paperless/paperless-vertraege.py
 ExecStart=/bin/sh %h/.config/containers/systemd/paperless/paperless-vertraege.sh
 TimeoutStartSec=2h

@@ -19,6 +19,8 @@ Phases (each idempotent on its output dir):
   2. real      — fold the household's own recordings in, if any, through the
      same augmentation path; silent, clipped or misencoded clips stay out.
   3. features  — augment (RIR + background) and compute the spectrogram mmaps.
+     household — the false wakes the box kept (stimme-wakes, #825) the same way, as
+     a negative set of this household's rooms and voices, if there are any.
   4. negatives — microWakeWord's pre-generated negative datasets (HF).
   5. train     — mixednet, convert and quantize to the streaming INT8 tflite.
   6. export    — the tflite and the manifest at the chosen probability cutoff.
@@ -53,6 +55,17 @@ MAX_FRAMES = SAMPLE_RATE * 4  # 4 s
 SILENCE_PEAK = 500
 CLIPPED_LEVEL = 32700
 MAX_CLIPPED_SHARE = 0.01
+
+# The false wakes stimme-wakes keeps under recordings/<id>/ (#825): negatives.
+NEGATIVES = "negativ"
+HOUSEHOLD_FEATURES = "household_negative_features"
+# How the household's negatives weigh against microWakeWord's corpora (speech and
+# dinner_party at 10). UNVERIFIED like DEFAULT_REAL_OVERSAMPLE below: a few dozen
+# clips at 3.0 are drawn often, each through a fresh augmentation; the penalty 2.0
+# makes a false accept on this household's rooms cost twice a corpus one. Judge it
+# by the counts in `laib status stimme` after the next run.
+HOUSEHOLD_SAMPLING_WEIGHT = 3.0
+HOUSEHOLD_PENALTY_WEIGHT = 2.0
 
 # How many copies of each resident recording join the positive set.
 #
@@ -182,6 +195,10 @@ def fold_real_positives(run: pathlib.Path, recordings: pathlib.Path | None, over
         return 0
     used = 0
     for wav in sorted(recordings.rglob("*.wav")):
+        if NEGATIVES in wav.relative_to(recordings).parts:   # the false wakes: never a positive (#825)
+            continue
+        if wav.name.startswith("."):   # #828: Haus writes through .<name>.part, a dotfile is never a whole recording
+            continue
         reason = reject_reason(wav)
         if reason is not None:
             sys.stdout.write(f"  skip {wav.name}: {reason}\n")
@@ -193,11 +210,37 @@ def fold_real_positives(run: pathlib.Path, recordings: pathlib.Path | None, over
     return used
 
 
-def build_features(work: pathlib.Path, run: pathlib.Path) -> None:
-    """Augment positives and write the streaming spectrogram feature mmaps."""
-    script = run / "_build_features.py"
-    script.write_text(_FEATURES_SCRIPT.replace("@WORK@", str(work)))
+def build_features(work: pathlib.Path, run: pathlib.Path, source: str = "generated_samples",
+                   target: str = "generated_augmented_features") -> None:
+    """Augment the clips in <run>/<source> and write the streaming spectrogram feature mmaps to <run>/<target>."""
+    script = run / f"_build_{target}.py"
+    script.write_text(_FEATURES_SCRIPT.replace("@WORK@", str(work)).replace("@SOURCE@", source).replace("@TARGET@", target))
     _run([sys.executable, str(script)], cwd=run)
+
+
+def household_negatives(work: pathlib.Path, run: pathlib.Path, negatives: pathlib.Path | None) -> int:
+    """#825: the false wakes the box kept, as a negative feature set; none leaves no set behind.
+    16 kHz mono 16-bit and a quarter second at least; longer is fine, a negative has no length."""
+    clips, features = run / "household_negatives", run / HOUSEHOLD_FEATURES
+    shutil.rmtree(clips, ignore_errors=True)
+    shutil.rmtree(features, ignore_errors=True)
+    used = 0
+    for wav in sorted(negatives.glob("*.wav")) if negatives is not None and negatives.is_dir() else []:
+        try:
+            with wave.open(str(wav), "rb") as w:
+                ok = (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, SAMPLE_RATE) and w.getnframes() >= MIN_FRAMES
+        except (wave.Error, EOFError, OSError):
+            ok = False
+        if not ok:
+            sys.stdout.write(f"  skip negative {wav.name}\n")
+            continue
+        clips.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(wav, clips / f"{used:05d}.wav")
+        used += 1
+    sys.stdout.write(f"{used} false wake(s) from the household as negatives\n")
+    if used:
+        build_features(work, run, clips.name, features.name)
+    return used
 
 
 def fetch_negatives(work: pathlib.Path) -> None:
@@ -221,6 +264,14 @@ def fetch_negatives(work: pathlib.Path) -> None:
 
 
 def write_training_config(work: pathlib.Path, run: pathlib.Path, steps: int) -> pathlib.Path:
+    household = [{
+        "features_dir": str(run / HOUSEHOLD_FEATURES),
+        "sampling_weight": HOUSEHOLD_SAMPLING_WEIGHT,
+        "penalty_weight": HOUSEHOLD_PENALTY_WEIGHT,
+        "truth": False,
+        "truncation_strategy": "random",
+        "type": "mmap",
+    }] if (run / HOUSEHOLD_FEATURES).is_dir() else []
     cfg = {
         "window_step_ms": 10,
         "train_dir": str(run / "trained_models" / "wakeword"),
@@ -265,7 +316,7 @@ def write_training_config(work: pathlib.Path, run: pathlib.Path, steps: int) -> 
                 "truncation_strategy": "split",
                 "type": "mmap",
             },
-        ],
+        ] + household,
         "training_steps": [steps],
         "positive_class_weight": [1],
         "negative_class_weight": [20],
@@ -383,11 +434,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--voice", action="append", required=True, help="Piper voice .onnx (repeatable); grouped by language prefix")
     ap.add_argument("--out", type=pathlib.Path, required=True, help="the produced streaming tflite")
     ap.add_argument("--recordings", type=pathlib.Path, default=None, help="the household's own WAVs of the phrase")
+    ap.add_argument("--negatives", type=pathlib.Path, default=None, help="the household's false wakes, WAVs (#825)")
     ap.add_argument("--positive-samples", type=int, default=2000)
     ap.add_argument("--real-oversample", type=int, default=DEFAULT_REAL_OVERSAMPLE)
     ap.add_argument("--steps", type=int, default=12000)
-    ap.add_argument("--cutoff", type=float, default=0.95)
-    ap.add_argument("--phase", choices=["all", "generate", "real", "features", "negatives", "train", "export"], default="all")
+    ap.add_argument("--cutoff", type=float, default=0.97)  # #825: 0.95 woke on room talk; trainer.py passes WAKE_CUTOFF
+    ap.add_argument("--phase", choices=["all", "generate", "real", "features", "household", "negatives", "train", "export"], default="all")
     args = ap.parse_args(argv)
 
     work = pathlib.Path(args.work)
@@ -408,6 +460,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.phase in ("all", "features"):
         phase("features")
         build_features(work, run)
+    if args.phase in ("all", "household"):
+        phase("household")
+        household_negatives(work, run, args.negatives)
     if args.phase in ("all", "negatives"):
         phase("negatives")
         fetch_negatives(work)
@@ -439,7 +494,7 @@ bg = _nonempty([os.path.join("@WORK@", d) for d in ("fma_16k", "audioset_16k")])
 rir = _nonempty([os.path.join("@WORK@", "mit_rirs")])
 
 clips = Clips(
-    input_directory="generated_samples",
+    input_directory="@SOURCE@",
     file_pattern="*.wav",
     max_clip_duration_s=None,
     remove_silence=False,
@@ -466,7 +521,7 @@ augmenter = Augmentation(
     max_jitter_s=0.205,
 )
 
-out_root = "generated_augmented_features"
+out_root = "@TARGET@"
 os.makedirs(out_root, exist_ok=True)
 for split, split_name, repetition, slide in (
     ("training", "train", 2, 10),

@@ -1,0 +1,16 @@
+# The house persona's wake word trained again (#828): only `laib retrain stimme` starts this,
+# after a human approved the repair Stimme's status offers once enough new recordings are there
+# (laib repair status stimme); no install section and no timer, so apply and restart never do.
+# It moves the model and the manifest the devices were flashed with into micro/vorher (the copy
+# for a way back; a missing file is no failure, a second approval moves nothing), then restarts
+# the trainer, which finds no model and trains. try-restart: a trainer the GPU lease stopped trains
+# when it comes back. The device keeps the old model until the owner approves the flash that
+# stimme-names offers once the new one is there (#759).
+[Unit]
+Description=Stimme: the wake word trained again (after the owner's approval)
+After=stimme-wakeword-trainer.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman unshare sh -c 'cd ${DATA_DIR}/stimme/micro && mkdir -p vorher && for f in ${PERSONA_WAKEWORD}.tflite ${PERSONA_WAKEWORD}.json ${PERSONA_WAKEWORD}.geflasht.json; do if [ -e "$$f" ]; then mv -f "$$f" vorher/; fi; done'
+ExecStart=/usr/bin/systemctl --user try-restart stimme-wakeword-trainer.service
