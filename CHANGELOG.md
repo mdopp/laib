@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.48.0](https://github.com/mdopp/laib/compare/v0.47.0...v0.48.0) (2026-10-27)
+
+
+### Features
+
+* **scan:** document processing runs in Dokumente, its own program; scan/ and the contract helper leave laib (ADR 0028) ([a27f9bc](https://github.com/mdopp/laib/commit/a27f9bc30222b3d3396630583b3c02cbf17b3336))
+* **template:** scan runs Dokumente, documents leave laib (ADR 0028) ([66daa9a](https://github.com/mdopp/laib/commit/66daa9a69f831fb4bec72fb2418e26b68b3e09a4))
+* **template:** scan runs Dokumente, documents leave laib (ADR 0028) ([1462806](https://github.com/mdopp/laib/commit/1462806474b6cc8e74ce492778db6e2b0c4b4561))
+
+
+### Bug Fixes
+
+* **template:** the helper's record stays backed up, in its own folder ([414062a](https://github.com/mdopp/laib/commit/414062ad98df1beb412ed6960fcc4932e6fb3b2e))
+
 ## [0.47.0](https://github.com/mdopp/laib/compare/v0.46.0...v0.47.0) (2026-10-27)
 
 
