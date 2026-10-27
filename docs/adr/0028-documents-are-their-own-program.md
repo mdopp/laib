@@ -35,9 +35,19 @@ image, which laib only runs (a template) and reaches over MCP and HTTP.
      blank pages (from `scan/`);
    - reading contracts and invoices into Paperless' fields, notice and due
      reminders (from `paperless-vertraege.py`), through Paperless' REST API
-     with its own token, no longer inside the Paperless container;
-   - running when a document arrives (a Paperless workflow on „Dokument
-     hinzugefügt“, debounced per stack), with an hourly run as a catch-all;
+     with its own token, no longer inside the Paperless container. The
+     token is a template secret the box generates or stores, for the
+     narrowest Paperless user that can read documents and set their tags,
+     notes and custom fields, never the admin;
+   - running when a document arrives (a Paperless workflow webhook on
+     „Dokument hinzugefügt“, debounced per stack), with an hourly run as a
+     catch-all. The webhook reaches Dokumente only on the pod- or
+     host-internal address, never through caddy;
+   - the household model through the lease's proxy as background work
+     (`X-Laib-Background`), as both parts do today. What they do now carries
+     over unchanged, with its tests: the face-up turn, separator sheets,
+     letterhead and reference recognition, filling only empty fields, the
+     household's exclusions;
    - doing again on its own what failed for a passing reason, a model or
      Paperless away (#831), and saying so instead of asking a person;
    - one status file, read by `laib status`, Haus and the Bote, that says
@@ -54,10 +64,16 @@ image, which laib only runs (a template) and reaches over MCP and HTTP.
 4. **Paperless stays the store** (ADR 0017). `paperless-mail.py` stays with
    Paperless' template: it configures Paperless' own mail fetching.
 
+Dokumente is a container in the sense of ADR 0027: it touches nothing on
+the host, holds its own token and folders, and never the age key or the
+state repo.
+
 ## Consequences
 
 - The move copies `scan/` and the contract files with their history into
-  the new repo once the changes in flight have landed; from then on
+  the new repo once the changes in flight have landed (#830, #831, #833);
+  #833's stopgap trigger (watching the thumbnails folder on a timer) is not
+  carried, the webhook replaces it; from then on
   `scan/` in laib is frozen and later removed.
 - The scan template points at the new image; `paperless-vertraege.*` units
   leave the Paperless template, replaced by the Dokumente service.
