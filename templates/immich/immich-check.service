@@ -14,5 +14,5 @@ Type=oneshot
 Environment=IMMICH_PASSWORD=${ADMIN_PW}
 Environment=ADMIN_EMAIL=${ADMIN_EMAIL}
 StandardInput=file:%h/.config/containers/systemd/immich/immich-check.py
-ExecStart=/usr/bin/podman run --rm -i --name immich-check --network container:systemd-immich --security-opt label=disable -e IMMICH_PASSWORD -e ADMIN_EMAIL -e DOMAIN=${DOMAIN} -e IMMICH_URL=http://127.0.0.1:2283 -e STATUS_DIR=/data -v ${DATA_DIR}/immich/check:/data ${CHECK_IMAGE} python3 -
+ExecStart=/usr/bin/podman run --rm -i --name immich-check --pod immich --security-opt label=disable -e IMMICH_PASSWORD -e ADMIN_EMAIL -e DOMAIN=${DOMAIN} -e IMMICH_URL=http://127.0.0.1:2283 -e STATUS_DIR=/data -v ${DATA_DIR}/immich/check:/data ${CHECK_IMAGE} python3 -
 TimeoutStartSec=2min

@@ -18,5 +18,5 @@ Environment=CH_TELEGRAM=${TELEGRAM_ALLOWED_USERS}
 Environment=CH_DISCORD=${DISCORD_ALLOWED_USERS}
 Environment=USAGE_TOKEN=${USAGE_TOKEN}
 StandardInput=file:%h/.config/containers/systemd/bote/bote-check.py
-ExecStart=/usr/bin/podman run --rm -i --name bote-check --network container:systemd-bote-notify --security-opt label=disable -e CH_SIGNAL -e CH_MATRIX -e CH_TELEGRAM -e CH_DISCORD -e USAGE_TOKEN -e SIGNAL_URL=http://127.0.0.1:8080 -e USAGE_URL=${USAGE_URL} -e STATUS_DIR=/data -v ${DATA_DIR}/bote/check:/data ${CHECK_IMAGE} python3 -
+ExecStart=/usr/bin/podman run --rm -i --name bote-check --pod bote --security-opt label=disable -e CH_SIGNAL -e CH_MATRIX -e CH_TELEGRAM -e CH_DISCORD -e USAGE_TOKEN -e SIGNAL_URL=http://127.0.0.1:8080 -e USAGE_URL=${USAGE_URL} -e STATUS_DIR=/data -v ${DATA_DIR}/bote/check:/data ${CHECK_IMAGE} python3 -
 TimeoutStartSec=2min

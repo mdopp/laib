@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -96,7 +97,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out)); len(errs) > 0 {
+	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out), lintPodNetwork(name, out)); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(env.Errw(), e)
 		}
@@ -269,3 +270,38 @@ func lintHostWrites(name string, out render.Output) []string {
 }
 
 var commandKey = map[string]bool{"ExecStart": true, "ExecStartPre": true, "ExecStartPost": true, "ExecStop": true, "ExecStopPost": true, "ExecReload": true, "ExecCondition": true}
+
+// lintPodNetwork: a container of a pod has no network of its own, so
+// `podman run --network container:<it>` fails with exit 125 („is part of a
+// pod, but container is not“) — the #785 checks of bote, frage and immich
+// went red on the box. Such a one-off joins the pod: --pod <pod>.
+func lintPodNetwork(name string, out render.Output) []string {
+	inPod := map[string]bool{}
+	for key, text := range out {
+		base, ok := strings.CutSuffix(path.Base(key), ".container")
+		if !ok || !strings.HasPrefix(key, "quadlet/"+name+"/") || !strings.Contains(text, "\nPod=") {
+			continue
+		}
+		inPod["systemd-"+base] = true
+		for _, line := range strings.Split(text, "\n") {
+			if n, ok := strings.CutPrefix(strings.TrimSpace(line), "ContainerName="); ok {
+				inPod[n] = true
+			}
+		}
+	}
+	var errs []string
+	for key, text := range out {
+		for _, line := range strings.Split(text, "\n") {
+			k, v, _ := strings.Cut(strings.TrimSpace(line), "=")
+			if !commandKey[k] {
+				continue
+			}
+			for _, f := range strings.Fields(v) {
+				if c, ok := strings.CutPrefix(f, "container:"); ok && inPod[c] {
+					errs = append(errs, fmt.Sprintf("%s: %s joins the network of %s, a container in a pod: podman refuses it (exit 125); use --pod with the pod's name", key, k, c))
+				}
+			}
+		}
+	}
+	return errs
+}
