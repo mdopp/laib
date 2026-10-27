@@ -55,7 +55,7 @@ func init() {
 		{Name: "escalate", Tier: "propose", Help: "<service> \"<was ich weiß>\": context bundle + red journal line for the next hand", Run: envelope.Escalate},
 		{Name: "note", Tier: "propose", Help: "[--kind report|incident|watch] \"<text>\": what a hand concluded; report is the morning report", Run: cmdNote},
 		{Name: "repair", Tier: "propose", Help: "<probe> [service]: a diag finding's repair as a proposal; it runs once a human approves (#441)", Run: diag.Repair},
-		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept on the box without one", Run: inbox.Wish},
+		{Name: "wish", Tier: "propose", Help: "\"<was das Haus braucht>\": the intake — a GitHub issue with the wunsch label (box.yml intake), kept in the journal without one; laib-haushalt files it behind the door (#797), the Operator's waits for the admin as a proposal", Run: cmdWish},
 		{Name: "net", Tier: "read", Help: "[--mermaid] | geraete [--wecken]: every name with its reach, Authelia and target, the direct ports, the host network, the pods' links — from the rendered config (#439); geraete: the LAN's devices from the host's neighbour table (#577)", Run: cmdNet},
 		{Name: "updates", Tier: "read", Help: "[--run|--now]: what is behind — a tag's or pin's newer digest, patch and minor releases (#287), a template's extensions and firmware; --run is laib-images.timer's nightly update of the images without data (#528); --now (tier apply) starts that night's run now, Laib's own update first, without waiting (#578)", Run: cmdUpdates},
 		{Name: "skill", Tier: "read", Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
@@ -103,6 +103,7 @@ func init() {
 		mcp.Verbs[i] = cli.Guard(mcp.Verbs[i])
 	}
 	inbox.Present = diag.Present
+	inbox.Issue = fileIssue                 // escalations and approved wishes, through laib-haushalt (#797)
 	proposal.VerbTier = map[string]string{} // the card says whether a granted verb changes or proposes (#616)
 	for _, v := range mcp.Verbs {
 		proposal.VerbTier[v.Name] = v.Tier

@@ -79,3 +79,23 @@ every door verb. Still in the kernel, on purpose: `person_invite`,
 template's tool with that service's secrets (LLDAP's admin password,
 Authelia's data, an ICS address in secrets.age), and a program behind the
 door gets no secret of the box (ADR 0027).
+
+## Note (#797): wish
+
+`wish` moved behind the door on the owner's decision of 2026-10-27. Its
+secret is not the box's but an outside service's, like the Bote's bearer
+for `tell`: `GITHUB_INTAKE_TOKEN` is declared with box.yml intake and
+rendered into laib-haushalt's unit only, which files every intake ticket,
+the escalations and the wishes the admin approved too (the kernel hands
+those over the same door, `inbox.Issue`). The kernel holds no GitHub
+client. The Operator's wish stays a kernel proposal (ADR 0023 §6): the
+haushalt hand proposes paths only, and a wish is a file. Without an
+intake the wish is kept in the journal, since the program has no folder
+of the box.
+
+`person_invite`, `person_pending` and `calendar` are still in the kernel,
+waiting for the owner (#797): an account in LLDAP and an ICS address in
+secrets.age are not a path proposal. Moving them needs a new mechanism (a
+template hook that carries out an approved invitation, a status file for
+the pending ones) or a secret in the state repo, which the door may not
+get.

@@ -244,6 +244,9 @@ func SecretNames(st *state.State) []state.Secret {
 	}
 	// laib-haushalt's call back (minted on apply) and the door's key (generated), ADR 0027
 	out = append(out, state.Secret{Name: HaushaltToken, External: true, Mint: "haushalt"}, state.Secret{Name: HaushaltKey})
+	if st.Box.Intake.Repo != "" {
+		out = append(out, state.Secret{Name: IntakeToken, External: true, Optional: true}) // laib wish's, laib-haushalt's (#797): laib secret set
+	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		out = append(out, svc.Contract.Secrets...)
@@ -942,7 +945,11 @@ func ownUnit(st *state.State, name, head string, mounts []string, env, sec []str
 // HaushaltToken is laib-haushalt's bearer for its call back, as the
 // haushalt hand; HaushaltKey is how it knows a call came through laib's
 // verb door (ADR 0026, 0027). HaushaltListen is where the door finds it.
+// IntakeToken is the GitHub token laib-haushalt files the intake's tickets
+// with (#56, #797): a fine-grained PAT with Issues write on box.yml
+// intake.repo; the kernel only keeps it.
 const (
+	IntakeToken    = "GITHUB_INTAKE_TOKEN"
 	HaushaltToken  = "LAIB_HAUSHALT_TOKEN"
 	HaushaltKey    = "LAIB_HAUSHALT_KEY"
 	HaushaltListen = "127.0.0.1:5902"
@@ -972,7 +979,8 @@ func ScanFolder(st *state.State) (svc, status, orders string) {
 // (net geraete reads its neighbour table), its token and the door's key as
 // podman secrets. Its one mount is the scan service's orders folder, at the
 // same path (the door names it), shared with the scan container. With a
-// Bote, bote-notify's address and bearer for laib tell.
+// Bote, bote-notify's address and bearer for laib tell; with box.yml
+// intake, the GitHub token for laib wish (#797).
 func haushaltUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
 	var mounts []string
 	if _, _, orders := ScanFolder(st); orders != "" {
@@ -984,6 +992,9 @@ func haushaltUnit(st *state.State, secrets map[string]string) (string, map[strin
 		// laib tell (#676): bote-notify on the host port templates/bote declares, as laib-notify's
 		env = append(env, "BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
 		sec = append(sec, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
+	}
+	if st.Box.Intake.Repo != "" { // laib wish (#797)
+		sec = append(sec, IntakeToken, secretValue(secrets, IntakeToken))
 	}
 	return ownUnit(st, "laib-haushalt", "# Rendered by laib: the household verbs behind the verb door (ADR 0026), in its container (ADR 0027).\n[Unit]\nDescription=Laib haushalt\nAfter=laib.service\n",
 		mounts, env, sec, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")

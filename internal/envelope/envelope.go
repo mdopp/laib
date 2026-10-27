@@ -474,7 +474,7 @@ func Escalate(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	// with an intake the bundle becomes a ticket something reads (#56)
 	detail := p
-	if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), []string{"needs-claude"}); err != nil {
+	if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), "needs-claude"); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
 		detail = url + " (" + p + ")"
