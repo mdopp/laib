@@ -2,3 +2,4 @@ FRAGE_IMAGE: ghcr.io/mdopp/laib-frage:latest
 SEARX_IMAGE: docker.io/searxng/searxng:latest
 MODEL_NAME: qwen3.6-35b-a3b
 SEARX_SECRET: !secret SEARX_SECRET
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # frage-check.py, the standard library only (#785)
