@@ -31,7 +31,7 @@ func TestARepairCardSaysWhatTheRepairDoes(t *testing.T) {
 	if len(open) != 1 {
 		t.Fatalf("want one proposal: %+v", open)
 	}
-	if c := proposal.Card(open[0], "box.test"); c.Summary != "Whoami wird neu gestartet" || !strings.Contains(c.Why, "whoami.service ist") {
+	if c := proposal.Card(open[0], "box.test"); c.Summary != "Testseite wird neu gestartet" || !strings.Contains(c.Why, "whoami.service ist") {
 		t.Fatalf("the headline says what runs, the finding stays in Why: %+v", c)
 	}
 }

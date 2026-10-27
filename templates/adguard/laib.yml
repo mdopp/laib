@@ -1,4 +1,6 @@
 name: adguard
+title: AdGuard
+beschreibung: Namen im Heimnetz, Werbefilter
 template: {registry: builtin, name: adguard, version: 1}
 provides: [dns]
 upstream: [https://github.com/AdguardTeam/AdGuardHome, https://github.com/AdguardTeam/AdGuardHome/wiki]   # where the Operator's web search looks first (#544)
@@ -23,8 +25,14 @@ data:
   - path: ${DATA_DIR}/adguard/conf
   - path: ${DATA_DIR}/adguard/work
     backup: false                # query log and stats
+  - path: ${DATA_DIR}/adguard/check     # adguard-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:8083/control/status
   expect: [401]                 # AdGuard always has a user (pre-start), so its API challenges; 401 is the live answer (#288)
+status:                            # the Box page's line (#785): "in den letzten 24 h: 12.345 Anfragen, 1.234 blockiert (10 %)"
+  file: ${DATA_DIR}/adguard/check/laib-status.json
+  check: adguard-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8083, lan: false}     # the web UI only through Caddy

@@ -67,10 +67,12 @@ type Readiness struct {
 }
 
 type ServiceStatus struct {
-	Name   string            `json:"name"`
-	State  string            `json:"state"` // grün | gelb | rot
-	Units  map[string]string `json:"units"`
-	Detail string            `json:"detail,omitempty"`
+	Name         string            `json:"name"`
+	Title        string            `json:"title,omitempty"`        // the template's plain name, the card's headline (#785)
+	Beschreibung string            `json:"beschreibung,omitempty"` // and its one line of what it is
+	State        string            `json:"state"`                  // grün | gelb | rot
+	Units        map[string]string `json:"units"`
+	Detail       string            `json:"detail,omitempty"`
 	// Provides are its roles: laib-lease finds the units a window stops by them (ADR 0027)
 	Provides []string `json:"provides,omitempty"`
 	// Eigenes: the status file's own fields, for one named service (#688)
@@ -107,7 +109,7 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 	r.Pending = apply.Pending(env.Paths)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
-		row := ServiceStatus{Name: name, State: "grün", Units: map[string]string{}, Provides: svc.Contract.Provides}
+		row := ServiceStatus{Name: name, Title: svc.Contract.Title, Beschreibung: svc.Contract.Beschreibung, State: "grün", Units: map[string]string{}, Provides: svc.Contract.Provides}
 		for _, u := range svc.UnitNames() {
 			a := sysd.Active(ctx, u)
 			row.Units[u] = a

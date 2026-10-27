@@ -1,0 +1,9 @@
+[Unit]
+Description=Immich: laibs Blick auf Fotos, Videos und Konten alle 15 Minuten (#785)
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

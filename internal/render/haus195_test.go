@@ -105,10 +105,10 @@ func TestHausRunsTheLibraryOnItsLoopback(t *testing.T) {
 	if !declared {
 		t.Error("${DATA_DIR}/haus-qmd is not a declared data path with backup: false")
 	}
-	if got := strings.Join(st.Services["haus"].UnitNames(), ","); got != "haus-pod.service,haus-qmd-refresh.timer,haus-qmd.service,haus.service" {
+	if got := strings.Join(st.Services["haus"].UnitNames(), ","); got != "haus-check.timer,haus-pod.service,haus-qmd-refresh.timer,haus-qmd.service,haus.service" {
 		t.Errorf("haus's units are %s: the timer is one, its oneshot is not", got)
 	}
-	if got := strings.Join(st.Services["haus"].Oneshots(), ","); got != "haus-documents-export.service,haus-qmd-refresh.service" {
+	if got := strings.Join(st.Services["haus"].Oneshots(), ","); got != "haus-check.service,haus-documents-export.service,haus-qmd-refresh.service" {
 		t.Errorf("haus's oneshots are %q", got)
 	}
 }

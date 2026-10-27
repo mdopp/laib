@@ -1,4 +1,6 @@
 name: radicale
+title: Kalender
+beschreibung: Termine und Kontakte der Familie
 template: {registry: builtin, name: radicale, version: 1}
 provides: [calendar, contacts]
 upstream: [https://github.com/Kozea/Radicale, https://radicale.org/]   # where the Operator's web search looks first (#544)
@@ -18,7 +20,13 @@ secrets:
 data:
   - path: ${DATA_DIR}/radicale/data
   - path: ${DATA_DIR}/radicale/config   # written by pre-start (#36)
+  - path: ${DATA_DIR}/radicale/check    # radicale-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:5232/
+status:                            # the Box page's line (#785): "2 Kalender, 2 Listen, 1 Adressbuch · 1.263 Einträge"
+  file: ${DATA_DIR}/radicale/check/laib-status.json
+  check: radicale-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 5232, lan: true}        # DAVx⁵ at home

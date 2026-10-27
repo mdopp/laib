@@ -1,4 +1,6 @@
 name: llama
+title: Sprachmodell
+beschreibung: Die KI der Box
 provides: [model]
 upstream: [https://github.com/ggml-org/llama.cpp]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: llama, version: 1}
@@ -27,7 +29,7 @@ data:
     backup: false                # pre-start's copy of presets.json for the lease (#106)
 health:
   http: http://127.0.0.1:11435/health
-status:                          # which roles of the modes nobody provides; laib-lease writes it at every start (#374)
+status:                          # which roles of the modes nobody provides (#374) and which model the router has loaded; laib-lease writes it at start, on a lease change and every 15 minutes (#785)
   file: ${DATA_DIR}/llama/lease/laib-status.json
 ports:
   - {port: 11434, lan: false}    # the router, loopback only

@@ -1,4 +1,6 @@
 name: paperless
+title: Paperless
+beschreibung: Dokumente, durchsuchbar
 template: {registry: builtin, name: paperless, version: 1}
 provides: [documents]
 upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # where the Operator's web search looks first (#544)

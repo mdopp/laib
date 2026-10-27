@@ -1,4 +1,6 @@
 name: haus
+title: Haus
+beschreibung: Seiten und App der Familie
 template: {registry: builtin, name: haus, version: 1}
 provides: [haus]
 # Haus (ADR 0014, mdopp/haus): the family's pages and the companion API the
@@ -62,9 +64,15 @@ data:
     backup: false
   - path: ${DATA_DIR}/file-share/data/musik-eingang   # the app's music uploads for beets' Musik-Eingang (#639): ._<name>.part, then renamed; transient
     backup: false
+  - path: ${DATA_DIR}/haus-check   # haus-check's status file (#785), beside ${DATA_DIR}/haus as haus-qmd: made again every 15 minutes
+    backup: false
   - path: ${DATA_DIR}/file-share/samba-accounts   # where Haus hands a network-drive password to file-share (#296); without file-share no FIFO, no page
     backup: false
 health:
   http: http://127.0.0.1:8650/healthz
+status:                          # the Box page's line (#785): "3 Geräte angemeldet, von 2 Personen · zuletzt aktiv vor 3 min"
+  file: ${DATA_DIR}/haus-check/laib-status.json
+  check: haus-check.service
+  stale: 20m                     # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8650, lan: false}

@@ -121,7 +121,9 @@ class TheUnit(unittest.TestCase):
     def test_only_laib_flash_starts_it(self):
         unit = (T / "esphome-flash.service").read_text()
         self.assertNotIn("[Install]", unit, "a oneshot without [Install]: apply and restart never start it")
-        self.assertNotIn(".timer", " ".join(p.name for p in T.iterdir()))
+        timers = [p.read_text() for p in T.iterdir() if p.suffix == ".timer"]
+        self.assertFalse([t for t in timers if "esphome-flash" in t], "no timer starts the flash (esphome-check's, #785, starts only the check)")
+        self.assertFalse((T / "esphome-flash.timer").exists())
         self.assertIn("${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.tflite", unit, "the host copies stimme's trained model")
         self.assertIn("${DATA_DIR}/esphome/config/models", unit)
         self.assertIn("Environment=WAKE_ID=${PERSONA_WAKEWORD}", unit)

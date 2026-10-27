@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,7 +118,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 		}
 		day, text := LastReport(env)
-		body := statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != "")
+		body := statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != "", r.URL.Query().Get("filter"))
 		for _, w := range st.Warnings { // the box's own warnings, once here, not on every proposal (#616)
 			body += "<p class=gelb>Hinweis: " + html.EscapeString(w) + "</p>"
 		}
@@ -379,8 +380,26 @@ func pageHTML(title, body string) string {
 
 // statusBody is the status page: the box's line, one card per service with
 // its state and note, the last change, the morning report.
-func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, report [2]string, bote bool) string {
+func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, report [2]string, bote bool, show string) string {
 	var b strings.Builder
+	// the owner's filter by state (#785): problems first; a paused service counts green
+	group := func(s string) string {
+		if s == "rot" || s == "gelb" {
+			return s
+		}
+		return "gruen"
+	}
+	rows = slices.Clone(rows)
+	slices.SortStableFunc(rows, func(a, c ServiceStatus) int {
+		return strings.Index("rot gelb gruen", group(a.State)) - strings.Index("rot gelb gruen", group(c.State))
+	})
+	count := map[string]int{"": len(rows)}
+	for _, row := range rows {
+		count[group(row.State)]++
+	}
+	if !slices.Contains([]string{"rot", "gelb", "gruen"}, show) {
+		show = ""
+	}
 	for _, on := range checking {
 		if on {
 			b.WriteString(`<meta http-equiv=refresh content=10>`)
@@ -392,6 +411,21 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 		heard = heard[11:19]
 	}
 	fmt.Fprintf(&b, "<h1>Laib · %s · %d Dienste</h1><p class=muted>Operator %s · zuletzt gehört %s</p>", html.EscapeString(rd.State), rd.Services, html.EscapeString(rd.Operator), heard)
+	b.WriteString("<p class=stand>")
+	for i, f := range [][2]string{{"", "Alle"}, {"rot", "Rot"}, {"gelb", "Gelb"}, {"gruen", "Grün"}} {
+		href, cur := "/", ""
+		if i > 0 {
+			b.WriteString(" · ")
+		}
+		if f[0] != "" {
+			href += "?filter=" + f[0]
+		}
+		if f[0] == show {
+			cur = " aria-current=page"
+		}
+		fmt.Fprintf(&b, `<a href="%s"%s>%s %d</a>`, href, cur, f[1], count[f[0]])
+	}
+	b.WriteString("</p>")
 	if bote {
 		b.WriteString(`<p><a href="/bote/link">Bote verbinden</a></p>`)
 	}
@@ -401,6 +435,9 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	}
 	b.WriteString(filter + "<div class=liste>")
 	for _, row := range rows {
+		if show != "" && group(row.State) != show {
+			continue
+		}
 		var bad []string
 		for u, a := range row.Units {
 			if a != "active" {
@@ -416,7 +453,11 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 				check = "<span class=muted>wird geprüft …</span>"
 			}
 		}
-		fmt.Fprintf(&b, "<div class=\"card %s\" data-f><b>%s</b><span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, html.EscapeString(row.Name), row.State, html.EscapeString(note), check)
+		name := "<b>" + html.EscapeString(row.Name) + "</b>"
+		if row.Title != "" { // the plain name big, what it is beside it, the id small (#785)
+			name = "<b>" + html.EscapeString(row.Title) + "</b><span class=muted>" + html.EscapeString(row.Beschreibung) + "</span><small class=muted>" + html.EscapeString(row.Name) + "</small>"
+		}
+		fmt.Fprintf(&b, "<div class=\"card %s\" data-f>%s<span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, name, row.State, html.EscapeString(note), check)
 	}
 	b.WriteString("</div>")
 	if last != "" {

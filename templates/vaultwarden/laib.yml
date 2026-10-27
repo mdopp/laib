@@ -1,4 +1,6 @@
 name: vaultwarden
+title: Vaultwarden
+beschreibung: Passwörter der Familie
 template: {registry: builtin, name: vaultwarden, version: 1}
 provides: [passwords]
 upstream: [https://github.com/dani-garcia/vaultwarden, https://github.com/dani-garcia/vaultwarden/wiki]   # where the Operator's web search looks first (#544)
@@ -21,7 +23,13 @@ oidc:
 data:
   - path: ${DATA_DIR}/vaultwarden/data
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
+  - path: ${DATA_DIR}/vaultwarden/check     # vaultwarden-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:8222/alive
+status:                            # the Box page's line (#785): "3 Konten, 2 mit zweitem Faktor"
+  file: ${DATA_DIR}/vaultwarden/check/laib-status.json
+  check: vaultwarden-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8222, lan: false}

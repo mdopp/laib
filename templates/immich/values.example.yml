@@ -6,3 +6,5 @@ DB_PASSWORD: !secret IMMICH_DB_PASSWORD
 OIDC_SECRET: !secret OIDC_IMMICH_SECRET   # post-deploy sets it as Immich's OAuth client secret (#254)
 ADMIN_EMAIL: ""                           # Immich's admin; empty: admin@<domain>. On a box from ServiceBay: its IMMICH_ADMIN_EMAIL
 PHOTOS_RO: /mnt/data/stacks/file-share/data/photos
+ADMIN_PW: !secret IMMICH_ADMIN_PASSWORD   # immich-check logs in with it to read the statistics (#785)
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # immich-check.py, the standard library only (#785)

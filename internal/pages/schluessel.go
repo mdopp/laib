@@ -162,7 +162,7 @@ func storeKey(env *cli.Env, actor, name, label, value string) {
 	lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(out.String(), value, "…")), "\n")
 	last := strings.TrimPrefix(lines[len(lines)-1], "laib: ")
 	for i, u := range users {
-		users[i] = proposal.Title(u)
+		users[i] = proposal.Named(u)
 	}
 	switch {
 	case code != cli.ExitOK && len(users) == 0:
@@ -224,7 +224,7 @@ func keysBody(st *state.State, sec map[string]string) string {
 	for _, k := range render.OwnerSecrets(st) {
 		if k.Service != group {
 			group = k.Service
-			fmt.Fprintf(&b, "<h2>%s</h2>", html.EscapeString(cmp.Or(proposal.Title(group), "Die Box")))
+			fmt.Fprintf(&b, "<h2>%s</h2>", html.EscapeString(cmp.Or(proposal.Named(group), "Die Box")))
 		}
 		class, word := there(sec, k.Name)
 		fmt.Fprintf(&b, `<div class="card %s"><b>%s</b><span class=state>%s</span><span class=note>%s<br><small>%s</small></span><a href="/schluessel?name=%s">%s</a></div>%s`,
@@ -249,13 +249,13 @@ func keyForm(st *state.State, sec map[string]string, k *render.OwnerSecret, back
 		return "<h1>Schlüssel hinterlegen</h1><p class=rot>Diesen Schlüssel kann die Box-Seite nicht setzen.</p>" + links + "</p>"
 	}
 	class, word := there(sec, k.Name)
-	fmt.Fprintf(&b, `<h1>%s</h1><p>für %s · <span class=%s>%s</span></p><p>%s</p><p>%s`, html.EscapeString(k.Owner.Label), html.EscapeString(cmp.Or(proposal.Title(k.Service), "die Box")), class, word, html.EscapeString(k.Owner.Warum), html.EscapeString(k.Owner.Hilfe))
+	fmt.Fprintf(&b, `<h1>%s</h1><p>für %s · <span class=%s>%s</span></p><p>%s</p><p>%s`, html.EscapeString(k.Owner.Label), html.EscapeString(cmp.Or(proposal.Named(k.Service), "die Box")), class, word, html.EscapeString(k.Owner.Warum), html.EscapeString(k.Owner.Hilfe))
 	if l := strings.ReplaceAll(k.Owner.Link, "${DOMAIN}", st.Box.Domain); l != "" {
 		fmt.Fprintf(&b, ` <a href="%s" target=_blank rel=noopener>%s</a>`, html.EscapeString(l), html.EscapeString(strings.TrimPrefix(l, "https://")))
 	}
 	b.WriteString("</p>" + keyLine(k.Name))
 	button := map[string]string{"fehlt": "Hinterlegen", "hinterlegt": "Ersetzen"}[word]
 	fmt.Fprintf(&b, `<form method=post action=/schluessel onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird gespeichert …'"><input type=hidden name=name value="%s"><input type=hidden name=zurueck value="%s"><p><label>Schlüssel<br><input type=password name=wert autocomplete=off required placeholder="hier einfügen"></label></p><p><button class=go>%s</button></p></form><p>Die Box speichert ihn verschlüsselt, zeigt ihn nie wieder an und startet danach %s neu.<br><small>%s</small></p>`,
-		html.EscapeString(k.Name), html.EscapeString(back), button, html.EscapeString(cmp.Or(proposal.Title(k.Service), "die Dienste, die ihn brauchen,")), html.EscapeString(k.Name))
+		html.EscapeString(k.Name), html.EscapeString(back), button, html.EscapeString(cmp.Or(proposal.Named(k.Service), "die Dienste, die ihn brauchen,")), html.EscapeString(k.Name))
 	return b.String() + links + "</p>"
 }

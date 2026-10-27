@@ -1,4 +1,6 @@
 name: kalender
+title: Kalender-Abos
+beschreibung: Kalender von außen, nach Radicale
 template: {registry: builtin, name: kalender, version: 1}
 provides: [calendar-mirror]
 # Calendars from outside into Radicale, one way (#495; the owner, 2026-10-21:

@@ -1,0 +1,15 @@
+# caddy's detail line on the Box page (#785): caddy-check.py in a stock Python
+# image, fed on stdin (as kalender-abgleich), on the host's network as Caddy
+# itself (Network=host): its admin API on 127.0.0.1:2019 names the addresses,
+# one TLS handshake per address on 127.0.0.1:443 reads the certificate's end.
+# It writes the status file laib.yml declares. laib starts it when someone
+# looks and the file is older than its stale; the timer every 15 minutes.
+[Unit]
+Description=Caddy: Adressen und Zertifikate für laibs Status
+After=caddy.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/caddy/caddy-check.py
+ExecStart=/usr/bin/podman run --rm -i --name caddy-check --network host --security-opt label=disable -e CADDY_ADMIN=http://127.0.0.1:2019 -e TLS_HOST=127.0.0.1 -e TLS_PORT=443 -e STATUS_DIR=/data -v ${DATA_DIR}/caddy/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min
