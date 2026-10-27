@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
@@ -111,7 +110,7 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	if code, _ := do("POST", "/schluessel", url.Values{"name": {"WHOAMI_KEY"}, "wert": {value}}, "Sec-Fetch-Site", "cross-site"); code != http.StatusForbidden {
 		t.Errorf("a form from another site: %d, want 403", code)
 	}
-	if mcp.Allowed["secret"] {
+	if verb(t, "secret").MCP {
 		t.Error("an agent's MCP reaches the secret verb")
 	}
 	var bodies []string

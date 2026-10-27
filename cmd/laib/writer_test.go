@@ -89,7 +89,7 @@ func TestEscalateCompletesWithALargeInspectBundle(t *testing.T) {
 // #43 (3, 6, 5): diag is an MCP tool; operator enable wires the webhook;
 // a silent operator is red after three ticks, not 'startet' for ever.
 func TestOperatorWiringAndSilence(t *testing.T) {
-	if !mcp.Allowed["diag"] {
+	if !verb(t, "diag").MCP {
 		t.Fatal("the prompt asks for laib_diag; diag must be an MCP tool")
 	}
 	c := newCbox(t)
