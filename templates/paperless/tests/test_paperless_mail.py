@@ -21,11 +21,15 @@ PERMS = ["%s_%s" % (a, m) for m in MODELS for a in ("view", "add", "change", "de
 class Fake:
     """Paperless' mail endpoints: accounts and rules in memory, the test answers ok/refused"""
 
-    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None, groups=None, perms=None, config=None, fields=None):
+    def __init__(self, accounts=None, rules=None, test_ok=True, tasks=None, groups=None, perms=None, config=None, fields=None,
+                 users=None, workflows=None, documents=None):
         self.accounts, self.rules, self.test_ok, self.calls, self.tested = accounts or [], rules or [], test_ok, [], []
         self.config, self.fields = config if config is not None else [{"id": 1}], fields if fields is not None else []
         self.tasks, self.queries, self.processed = tasks or [], [], []
         self.groups, self.perms = groups if groups is not None else [], PERMS if perms is None else perms
+        # ADR 0028: Paperless' users with their passwords, its tokens (one per user, made once), workflows, documents
+        self.users, self.workflows, self.documents = users if users is not None else [], workflows or [], documents or []
+        self.passwords, self.tokens, self.bulk = {}, {}, []
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -49,7 +53,38 @@ class Fake:
                 fake.calls.append((method, path, body))
                 fake.queries.append((path, query, self.headers.get("Accept", "")))
                 coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules, "/api/groups/": fake.groups,
-                        "/api/custom_fields/": fake.fields, "/api/config/": fake.config}
+                        "/api/custom_fields/": fake.fields, "/api/config/": fake.config, "/api/users/": fake.users,
+                        "/api/workflows/": fake.workflows}
+                if path == "/api/users/" and method == "POST" or path.startswith("/api/users/") and method == "PATCH":
+                    if "password" in body:   # Paperless keeps it hashed and answers with stars
+                        fake.passwords[body.get("username") or next(u["username"] for u in fake.users if u["id"] == int(path.split("/")[3]))] = body.pop("password")
+                    unknown = [c for c in body.get("user_permissions", []) if c not in fake.perms]
+                    if unknown:
+                        return self.send(400, {"user_permissions": ["Object with codename=%s does not exist." % unknown[0]]})
+                if path == "/api/token/" and method == "POST":
+                    if fake.passwords.get(body["username"]) != body["password"]:
+                        return self.send(400, {"non_field_errors": ["Unable to log in with provided credentials."]})
+                    return self.send(200, {"token": fake.tokens.setdefault(body["username"], "tok-%s-%d" % (body["username"], len(fake.tokens) + 1))})
+                if path == "/api/documents/" and method == "GET":
+                    owned = [d for d in fake.documents if d.get("owner") is not None] if "owner__isnull=false" in query else fake.documents
+                    if "full_perms=true" not in query:
+                        owned = [{k: v for k, v in d.items() if k != "permissions"} for d in owned]
+                    return self.send(200, {"count": len(owned), "next": None, "results": owned})
+                if path == "/api/documents/bulk_edit/" and method == "POST":
+                    fake.bulk.append(body)
+                    p = body["parameters"]["set_permissions"]
+                    for d in fake.documents:
+                        if d["id"] in body["documents"]:
+                            for act in ("view", "change"):
+                                have = d.setdefault("permissions", {}).setdefault(act, {"users": [], "groups": []})
+                                have["users"] = sorted(set(have["users"]) | set(p[act]["users"])) if body["parameters"]["merge"] else p[act]["users"]
+                    return self.send(200, {"result": "OK"})
+                for base, items in coll.items():
+                    if path.startswith(base) and path != base and method == "DELETE":
+                        items[:] = [o for o in items if o["id"] != int(path[len(base):].strip("/"))]
+                        self.send_response(204)
+                        self.end_headers()
+                        return
                 if path == "/api/config/" and method == "GET":   # Paperless' settings: one row, a plain list
                     return self.send(200, fake.config)
                 if path == "/api/ui_settings/" and method == "GET":
@@ -95,6 +130,9 @@ class Fake:
 
             def do_PATCH(self):
                 self.handle_any("PATCH")
+
+            def do_DELETE(self):
+                self.handle_any("DELETE")
 
         self.srv = HTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
@@ -288,19 +326,6 @@ class PaperlessMail(unittest.TestCase):
         with open(out) as f:
             return json.load(f)
 
-    def test_household_correspondents_left_without_documents_are_a_yellow_finding(self):
-        # #737: paperless-vertraege.py cleared a household person off its documents; the correspondent
-        # stays (Paperless marks none as the AI's), the owner deletes it, the status says which
-        with open(os.path.join(self.tmp, "laib-vertraege.json"), "w") as f:
-            json.dump({"korrespondenten": {"leer": ["Erika Mustermann", "Familie Mustermann"]}}, f)
-        st = self.run_check(Fake(), {})
-        [f] = st["findings"]
-        self.assertEqual(f["severity"], "gelb")
-        self.assertIn("„Erika Mustermann“, „Familie Mustermann“", f["detail"])
-        self.assertIn("Korrespondenten", f["fix"])
-        os.remove(os.path.join(self.tmp, "laib-vertraege.json"))
-        self.assertEqual(self.run_check(Fake(), {})["findings"], [], "no record: nothing to say")
-
     def test_a_failed_consume_is_a_yellow_finding(self):
         # 2026-10-22: a mail was fetched, its attachment not filed (PermissionError in the scratch
         # dir); the inbox check stayed green. A failed consume Paperless still lists is yellow.
@@ -340,6 +365,73 @@ class PaperlessMail(unittest.TestCase):
         self.assertTrue(execs)
         for l in execs:
             self.assertIn(" --user paperless ", l)
+
+
+class Dokumente(unittest.TestCase):
+    """ADR 0028: Paperless' side of Dokumente, made by setup on every apply. The narrowest user (no
+    administrator, exactly its rights), its token handed back as PAPERLESS_TOKEN only when it differs,
+    the workflow „Dokument hinzugefügt“ with the webhook to 8720 and the box's token, and view and
+    change on the documents a person owns. A second run writes nothing."""
+    setUp, run_setup = PaperlessMail.setUp, PaperlessMail.run_setup
+    KEYS = {"LAIB_SECRET_PAPERLESS_DOKUMENTE_PASSWORD": "dok-pw", "LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN": "hook-tok"}
+
+    def setup(self, fake, **extra):
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", **self.KEYS, **extra}, password="")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r
+
+    def test_makes_the_narrowest_user_its_token_and_the_workflow_then_nothing(self):
+        fake = Fake(documents=[{"id": 1, "owner": None}, {"id": 2, "owner": 3, "permissions": {"view": {"users": [3], "groups": []},
+                                                                                                "change": {"users": [3], "groups": []}}}])
+        r = self.setup(fake)
+        [u] = fake.users
+        self.assertEqual((u["username"], u["is_superuser"], u["is_staff"], u["groups"]), ("dokumente", False, False, []))
+        self.assertEqual(set(u["user_permissions"]), {"view_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
+                                                      "view_correspondent", "view_documenttype", "view_customfield", "view_user"})
+        for c in u["user_permissions"]:
+            self.assertFalse(c.startswith(("delete_", "add_document")) or "mail" in c or "workflow" in c or "group" in c or c == "change_user", c)
+        self.assertEqual(fake.passwords["dokumente"], "dok-pw")
+        self.assertIn("laib-secret: PAPERLESS_TOKEN=" + fake.tokens["dokumente"], r.stdout.splitlines())
+        [w] = fake.workflows
+        self.assertEqual((w["name"], w["enabled"], [t["type"] for t in w["triggers"]]), ("Dokument hinzugefügt", True, [2]))
+        assign, hook = w["actions"]
+        self.assertEqual((assign["type"], assign["assign_view_users"], assign["assign_change_users"]), (1, [u["id"]], [u["id"]]))
+        self.assertEqual((hook["type"], hook["webhook"]["url"], hook["webhook"]["headers"]),
+                         (4, "http://host.containers.internal:8720/hook", {"X-Dokumente-Token": "hook-tok"}))
+        # the document a person owns: Dokumente may see and change it, the owner keeps theirs
+        self.assertEqual(sorted(fake.documents[1]["permissions"]["change"]["users"]), sorted([3, u["id"]]))
+        self.assertEqual([b["documents"] for b in fake.bulk], [[2]])
+        # the next apply, with the token handed back: nothing written, nothing handed back
+        fake.calls.clear()
+        r = self.setup(fake, LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"])
+        self.assertEqual([c for c in fake.writes() if c[1] != "/api/token/"], [])
+        self.assertNotIn("laib-secret:", r.stdout)
+
+    def test_a_widened_user_is_narrowed_and_a_foreign_password_set_back(self):
+        fake = Fake(users=[{"id": 5, "username": "dokumente", "is_superuser": True, "is_staff": True, "is_active": True, "groups": [1],
+                            "user_permissions": ["delete_document"]}])
+        fake.passwords["dokumente"] = "by-hand"
+        r = self.setup(fake)
+        u = fake.users[0]
+        self.assertEqual((u["is_superuser"], u["is_staff"], u["groups"]), (False, False, []))
+        self.assertNotIn("delete_document", u["user_permissions"])
+        self.assertEqual(fake.passwords["dokumente"], "dok-pw")
+        self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout)
+
+    def test_a_workflow_that_differs_is_made_again(self):
+        fake = Fake()
+        self.setup(fake)
+        fake.workflows[0]["actions"][1]["webhook"]["headers"] = {"X-Dokumente-Token": "old"}
+        self.setup(fake, LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN="hook-new")
+        [w] = fake.workflows
+        self.assertEqual(w["actions"][1]["webhook"]["headers"], {"X-Dokumente-Token": "hook-new"})
+
+    def test_without_the_hook_token_no_workflow(self):
+        fake = Fake()
+        r = self.setup(fake, LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN="")
+        self.assertEqual(fake.workflows, [])
+        self.assertIn("erst zur vollen Stunde", r.stdout)
+        self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout, "the hourly run still gets its token")
 
 
 class PaperlessAI(unittest.TestCase):

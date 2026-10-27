@@ -1,4 +1,4 @@
-SCAN_IMAGE: ghcr.io/mdopp/laib-scan:latest      # scan/ in this repo (#568); laib-images pulls it nightly
+DOKUMENTE_IMAGE: ghcr.io/mdopp/dokumente:latest  # mdopp/dokumente (ADR 0028), its own repo and CI; laib-images pulls it nightly. A new key, not SCAN_IMAGE: a template update never changes a value a box has
 SCANNER: ""                       # a SANE device: epson2:net:192.168.178.87, or a USB scanner's backend, fujitsu (#801); empty: only the inbox folder
 SCAN_DPI: "300"
 SCAN_MODE: Gray                   # Gray or Color
@@ -10,3 +10,17 @@ SCAN_NOTIFY: ""                   # a person from box.yml people; empty: notify.
 SCAN_KEEP_DAYS: "14"              # the archive of each stack
 MODEL_NAME: qwen3.6-35b-a3b       # the household model
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer; empty without the Bote
+# Paperless through its API (ADR 0028): the helper's own user, made by paperless' post-deploy, which mints its token
+PAPERLESS_URL: http://127.0.0.1:8000              # Paperless' API from the host network
+PAPERLESS_TOKEN: !secret PAPERLESS_TOKEN          # minted by paperless' post-deploy; empty: no contracts, no invoices, no reminders
+PAPERLESS_USER: dokumente                         # that user's name, never one of the household's people
+PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN} # the links in notes and messages
+# contract data and notice reminders (#709): the document types and tags that make a document a contract, the
+# household's own names; the reminder this many days before the notice must be in, in Haus's Haushalt (without Haus: none)
+VERTRAG_ARTEN: Vertrag, Versicherung, Bescheid
+VERTRAG_VORLAUF_TAGE: "28"
+RECHNUNG_ARTEN: Rechnung                          # #818: the document types and tags that make a document an invoice
+HAUSHALT_URL: http://127.0.0.1:8650/mcp/haushalt  # Haus' Haushalt, from the host network
+HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
+HAUSHALT_NAMEN: ""                                # #737: the household's people without a Paperless login, "Vorname Nachname", comma-separated
+DOKUMENTE_WEBHOOK_TOKEN: !secret DOKUMENTE_WEBHOOK_TOKEN   # Paperless' workflow sends it; empty: the hourly run only
