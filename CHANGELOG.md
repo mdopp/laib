@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.44.0](https://github.com/mdopp/laib/compare/v0.43.1...v0.44.0) (2026-10-27)
+
+
+### Features
+
+* **haushalt:** laib wish behind the verb door, the kernel holds no GitHub token ([b2ff30c](https://github.com/mdopp/laib/commit/b2ff30c78968e2b8d7fe3a9c68de1155701809f8))
+* **haushalt:** laib wish behind the verb door, the kernel holds no GitHub token ([96164b9](https://github.com/mdopp/laib/commit/96164b9e2defe2ff7f84431a8109f5eda9d05d3d)), closes [#797](https://github.com/mdopp/laib/issues/797)
+* **haushalt:** laib wish behind the verb door, the kernel holds no GitHub token ([#797](https://github.com/mdopp/laib/issues/797)) ([fe3112f](https://github.com/mdopp/laib/commit/fe3112fe06f4989b767f25805ff50ac3aeb1250d))
+* **operator:** a look's red is an incident, worked in bounded time and shown on the Box page ([4a7ec78](https://github.com/mdopp/laib/commit/4a7ec78f7ff928687766d5a19d213eca4e053a3e))
+* **operator:** a look's red is an incident, worked in bounded time and shown on the Box page ([1defc37](https://github.com/mdopp/laib/commit/1defc378271c7ed0791f542a8133a0b546c2673a)), closes [#792](https://github.com/mdopp/laib/issues/792)
+* **operator:** a look's red is an incident, worked in bounded time and shown on the Box page ([#792](https://github.com/mdopp/laib/issues/792)) ([4690dbe](https://github.com/mdopp/laib/commit/4690dbe60a45b2cd511d38a8ff6873a6958fa251))
+* **pages:** drop /net, /bote/link, family-card, adopt and the morning report from the kernel ([82838db](https://github.com/mdopp/laib/commit/82838db523bc5a3a7f31c4f935cc99738a425186)), closes [#798](https://github.com/mdopp/laib/issues/798)
+* **pages:** drop /net, /bote/link, family-card, adopt and the morning report from the kernel ([#798](https://github.com/mdopp/laib/issues/798)) ([fe3112f](https://github.com/mdopp/laib/commit/fe3112fe06f4989b767f25805ff50ac3aeb1250d))
+* **scan:** a USB scanner, the Fujitsu fi-6130, beside the network Epson ([d5fb25c](https://github.com/mdopp/laib/commit/d5fb25c8edd27c478b4f8103fa4e76c898fb18bd))
+* **scan:** a USB scanner, the Fujitsu fi-6130, beside the network Epson ([321e061](https://github.com/mdopp/laib/commit/321e0610d84db2a120bd31ce30186e7b7b10feec)), closes [#801](https://github.com/mdopp/laib/issues/801)
+* **scan:** a USB scanner, the Fujitsu fi-6130, beside the network Epson ([#801](https://github.com/mdopp/laib/issues/801)) ([fe3112f](https://github.com/mdopp/laib/commit/fe3112fe06f4989b767f25805ff50ac3aeb1250d))
+
+
+### Bug Fixes
+
+* **mcp:** the verb table is the one verb list ([a04a92b](https://github.com/mdopp/laib/commit/a04a92b2324e51c25b4ffe644dd44751e578d58e))
+* **mcp:** the verb table is the one verb list ([8deef5c](https://github.com/mdopp/laib/commit/8deef5c7123c0378fc4ac2b87e2bcb27f3d8c330)), closes [#800](https://github.com/mdopp/laib/issues/800)
+* **mcp:** the verb table is the one verb list ([#800](https://github.com/mdopp/laib/issues/800)) ([fe3112f](https://github.com/mdopp/laib/commit/fe3112fe06f4989b767f25805ff50ac3aeb1250d))
+* **pages:** Alle freigeben leaves destroy and flagged cards for one-by-one approval ([d362393](https://github.com/mdopp/laib/commit/d3623937909c4c19e6c02e359c3224dc634b181e)), closes [#799](https://github.com/mdopp/laib/issues/799)
+* **pages:** Alle freigeben leaves destroy and flagged cards for one-by-one approval ([#799](https://github.com/mdopp/laib/issues/799)) ([fe3112f](https://github.com/mdopp/laib/commit/fe3112fe06f4989b767f25805ff50ac3aeb1250d))
+* **pages:** swap only what runs instead of reloading the whole page ([4690dbe](https://github.com/mdopp/laib/commit/4690dbe60a45b2cd511d38a8ff6873a6958fa251))
+* **pages:** swap only what runs instead of reloading the whole page ([1312fba](https://github.com/mdopp/laib/commit/1312fbaceee659002649bc97be147600e77dacba))
+* **pages:** swap only what runs instead of reloading the whole page ([32526f9](https://github.com/mdopp/laib/commit/32526f99ec296562b0d43ecd59ae7b2355cf144b))
+
 ## [0.43.1](https://github.com/mdopp/laib/compare/v0.43.0...v0.43.1) (2026-10-27)
 
 
