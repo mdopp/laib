@@ -58,7 +58,7 @@ func TestTheVerbsNoAgentReaches(t *testing.T) {
 		}
 	}
 	slices.Sort(off)
-	want := []string{"add", "disk", "flash", "init", "operator", "recovery-sheet", "remove", "secret", "self", "serve", "token"}
+	want := []string{"add", "disk", "flash", "init", "operator", "recovery-sheet", "remove", "retrain", "secret", "self", "serve", "token"} // retrain: humans only, like flash (#828)
 	if !slices.Equal(off, want) {
 		t.Errorf("verbs off MCP: %v, want %v", off, want)
 	}

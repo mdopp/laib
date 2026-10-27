@@ -44,16 +44,28 @@ device was flashed before Laib kept that copy, the status offers the same flash 
 And it carries the numbers: stimme-wakes counts the wakes per day in laib-wakes.json, the
 detail line says „heute 2× geweckt, 2 ohne Befehl“, einzelheiten the last days and how many
 false wakes wait as negatives for the next training. Days are the box's (TZ).
+
+And the household's recordings (#828): Haus writes the family saying the phrase into
+/recordings/<id>/haus as <person>-<YYYYMMDD-HHMMSS>.wav (through a .<name>.part dotfile), the
+false wakes lie under negativ/. The detail counts them per person, and what is new since the
+model's run began (the trainer's „begonnen“, else the model file's time); a clip the trainer
+would not take (16 kHz mono 16-bit, 0.25–4 s) is no new one. With NEU new positives or new
+negatives the status offers „neu trainieren“ first: `laib retrain stimme`, which the owner
+approves in the Inbox; it moves the model aside, the trainer trains, and once the model is
+back the flash above follows. Only counts are printed, never a name.
 """
 import base64
+import calendar
 import json
 import os
 import pathlib
+import re
 import socket
 import struct
 import sys
 import time
 import urllib.parse
+import wave
 
 BUDGET = 200   # vocabulary.DEFAULT_PROMPT_MAX_TOKENS: well under Whisper's hard cap of 223
 SPOKEN = {"light", "switch", "fan", "media_player", "climate", "scene", "todo", "cover", "lock", "vacuum"}  # hass_api.PRIORITY_DOMAINS, and what Assist switches
@@ -231,7 +243,85 @@ def counted(micro) -> tuple:
     return "heute " + day(tage.get(today) or {}), "\n".join(lines)
 
 
-def wake(connect, micro, wid: str, phrase: str) -> None:
+NEGATIVES = "negativ"   # recordings/<id>/negativ: stimme-wakes' false wakes (#825)
+PERSON = re.compile(r"^(.+)-\d{8}-\d{6}$")   # Haus: <person>-<YYYYMMDD-HHMMSS>.wav (#828)
+NEU = (5, 50)          # new positives, new negatives since the run began that offer a retrain (#828)
+RETRAIN = ["retrain", "stimme"]
+
+
+def usable(wav) -> bool:
+    """what the trainer's reject_reason takes by its header: 16 kHz mono 16-bit, 0.25–4 s"""
+    try:
+        with wave.open(str(wav), "rb") as w:
+            return (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 16000) and 4000 <= w.getnframes() <= 64000
+    except (OSError, EOFError, wave.Error):
+        return False
+
+
+def recordings(root, since: float) -> dict:
+    """#828: the recordings under root (recordings/<id>): positives per person, the false wakes, the new ones"""
+    c = {"person": {}, "weitere": 0, "negativ": 0, "neu": 0, "neu_negativ": 0, "unbrauchbar": 0}
+    for wav in sorted(root.rglob("*.wav")) if root.is_dir() else []:
+        try:
+            new = wav.stat().st_mtime > since
+        except OSError:
+            continue
+        if wav.name.startswith("."):   # Haus' temp file
+            continue
+        if NEGATIVES in wav.relative_to(root).parts:
+            c["negativ"] += 1
+            c["neu_negativ"] += new
+            continue
+        m = PERSON.match(wav.stem) if wav.parent.name == "haus" else None
+        if m:
+            c["person"][m.group(1)] = c["person"].get(m.group(1), 0) + 1
+        else:
+            c["weitere"] += 1
+        if not usable(wav):
+            c["unbrauchbar"] += 1
+        elif new:
+            c["neu"] += 1
+    return c
+
+
+def plural(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def since(status: dict, model) -> float:
+    """when the model's run began: the trainer's „begonnen“, else the model file's time"""
+    try:
+        return calendar.timegm(time.strptime(status["begonnen"], "%Y-%m-%dT%H:%M:%SZ"))
+    except (KeyError, TypeError, ValueError):
+        try:
+            return model.stat().st_mtime
+        except OSError:
+            return 0.0
+
+
+def counted_recordings(c: dict, phrase: str) -> tuple:
+    """(the detail's clause, einzelheiten's line, the retrain finding or None)"""
+    pos = sum(c["person"].values()) + c["weitere"]
+    if not pos and not c["negativ"]:
+        return "", "", None
+    who = [f"{p} {n}" for p, n in sorted(c["person"].items())] + ([f"{c['weitere']} weitere"] if c["weitere"] else [])
+    clause = "Aufnahmen: " + ", ".join(who + [plural(c["negativ"], "Fehlalarm", "Fehlalarme")])
+    new = [plural(c["neu"], "neue Aufnahme", "neue Aufnahmen")] + ([plural(c["neu_negativ"], "neuer Fehlalarm", "neue Fehlalarme")] if c["neu_negativ"] else [])
+    clause += "; seit dem Training " + ", ".join(new)
+    line = f"{pos} eigene Aufnahmen, {c['negativ']} Fehlalarme" + (f", {c['unbrauchbar']} unbrauchbar (nicht 16 kHz mono, 16 Bit, 0,25–4 s)" if c["unbrauchbar"] else "")
+    if c["neu"] < NEU[0] and c["neu_negativ"] < NEU[1]:
+        return clause, line, None
+    return clause, line, {
+        "severity": "gelb", "topic": "training", "repair": RETRAIN,
+        "detail": f"{' und '.join(new)} von „{phrase}“ seit dem letzten Training",
+        "fix": f"laib repair status stimme: nach deiner Freigabe in der Inbox trainiert Laib „{phrase}“ neu",
+        "does": f"„{phrase}“ wird mit euren Aufnahmen neu trainiert",
+        "effect": f"Laib legt das jetzige Modell beiseite und trainiert „{phrase}“ neu, mit {pos} eigenen Aufnahmen und {c['negativ']} "
+                  f"Fehlalarmen; das dauert einige Stunden. Danach fragt Laib, ob es auf den Lautsprecher soll; bis dahin hört er mit dem alten.",
+        "undo": "Das bisherige Modell bleibt als Kopie liegen (stimme/micro/vorher), der Lautsprecher behält es, bis du das neue aufspielen lässt."}
+
+
+def wake(connect, micro, wid: str, phrase: str, recorded=pathlib.Path("/recordings")) -> None:
     """#759: Stimme's status (micro/laib-status.json) once the trainer is done: is the phrase on the satellites?"""
     def read(name):
         try:
@@ -239,6 +329,12 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
         except (OSError, ValueError):
             return {}
     done, before = read(f"{wid}.status.json").get("state") == "done" and (micro / f"{wid}.tflite").exists(), read("laib-status.json")
+    if not done and read(f"{wid}.status.json").get("state") == "done":   # #828: moved aside, the trainer has not begun yet
+        moved = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": f"Wake-Word „{phrase}“ wird neu trainiert, sobald der Trainer läuft",
+                 "einzelheiten": "", "findings": [], "phrase": phrase}
+        tmp = micro / "laib-status.json.tmp"
+        tmp.write_text(json.dumps(moved, ensure_ascii=False) + "\n")
+        tmp.replace(micro / "laib-status.json")
     if not done:
         print(f"wake word {wid}: not trained (yet), the trainer's status stays")
         return
@@ -271,7 +367,10 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
         print(f"wake word: Home Assistant does not answer ({type(err).__name__}: {err}), the last look stays")
         return
     trained = f"Wake-Word „{phrase}“ trainiert, noch nicht auf dem Gerät"
-    findings = []
+    c = recordings(recorded / wid, since(read(f"{wid}.status.json"), micro / f"{wid}.tflite"))
+    rclause, rline, retrain = counted_recordings(c, phrase)
+    findings = [retrain] if retrain else []   # first: laib repair status stimme files the first repair, and a retrain's flash follows
+    print(f"recordings: {sum(c['person'].values()) + c['weitere']} positives, {c['negativ']} negatives, {c['neu']} and {c['neu_negativ']} new")
     flashed, want = read(f"{wid}.geflasht.json").get("micro"), read(f"{wid}.json").get("micro")
     stale = on and not off and want and flashed != want   # #825: on the device, but not as trained now
     if stale:
@@ -297,12 +396,15 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
     detail = f"Wake-Word „{phrase}“ auf dem Gerät „{', '.join(n for _, n in on)}“" if on and not off else trained
     clause, einzelheiten = counted(micro)
     detail += f"; {clause}" if clause and on else ""
-    status = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": detail, "einzelheiten": einzelheiten if on else "", "findings": findings,
-              "phrase": phrase, "geraet": bool(on) and not findings, "auf": [e for e, _ in on]}
+    said = detail   # the journal's line: the recordings' clause names people, it stays in the status
+    detail += f"; {rclause}" if rclause else ""
+    einzelheiten = "\n".join(x for x in (einzelheiten if on else "", rline) if x)
+    status = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": detail, "einzelheiten": einzelheiten, "findings": findings,
+              "phrase": phrase, "geraet": bool(on) and not [f for f in findings if f is not retrain], "auf": [e for e, _ in on]}
     tmp = micro / "laib-status.json.tmp"
     tmp.write_text(json.dumps(status, ensure_ascii=False) + "\n")
     tmp.replace(micro / "laib-status.json")
-    print(f"wake word: {detail}")
+    print(f"wake word: {said}")
 
 
 if __name__ == "__main__":

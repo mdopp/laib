@@ -267,6 +267,20 @@ class FalseWakes(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--negatives") + 1], str(self.rec / "hey_x" / "negativ"))
         self.assertEqual(cmd[cmd.index("--cutoff") + 1], "0.97")
 
+    def test_a_done_run_remembers_when_it_began(self):
+        # #828: stimme-names counts the recordings that came after the run began as new
+        trainer.write_status(self.out, "hey_x", "done", "Hey X", "r1", "ok", begonnen="2026-10-27T10:00:00Z")
+        self.assertEqual(json.loads(trainer.status_path(self.out, "hey_x").read_text())["begonnen"], "2026-10-27T10:00:00Z")
+
+    def test_a_model_moved_aside_trains_again(self):
+        # #828: stimme-retrain moves <id>.tflite and <id>.json into vorher/; the status still says done
+        trainer.write_status(self.out, "hey_joshua", "done", "Hey Joshua", "r1", "ok")
+        vorher = self.out / "vorher"
+        vorher.mkdir()
+        for f in ("hey_joshua.tflite", "hey_joshua.json"):
+            (self.out / f).rename(vorher / f)
+        self.assertEqual(trainer.decide(self.out, "Hey Joshua", "hey_joshua", "r1"), "train")
+
     def test_without_false_wakes_the_run_has_no_negatives(self):
         self.assertNotIn("--negatives", self.run_train(False))
 
@@ -308,6 +322,21 @@ class TrainOnNegatives(unittest.TestCase):
         with mock.patch("sys.stdout"):
             self.assertEqual(self.train.fold_real_positives(run, rec, 2), 1)
         self.assertEqual(len(list((run / "generated_samples").glob("real_*.wav"))), 2)
+
+    def test_haus_recordings_are_positives_and_its_temp_files_are_not(self):
+        # #828: Haus writes recordings/<id>/haus/<person>-<YYYYMMDD-HHMMSS>.wav through .<name>.part
+        rec, run = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        self.wav(rec / "haus" / "anna-20261027-120000.wav")
+        self.wav(rec / "haus" / "ben-20261027-120100.wav")
+        self.wav(rec / "haus" / ".ben-20261027-120200.wav.part")
+        self.wav(rec / "haus" / ".ben-20261027-120300.wav")
+        self.wav(rec / "negativ" / "20261027T173935000.wav")
+        with mock.patch("sys.stdout"):
+            self.assertEqual(self.train.fold_real_positives(run, rec, 1), 2)
+        (rec / "haus" / "anna-20261027-120000.wav").unlink()
+        (rec / "haus" / "ben-20261027-120100.wav").unlink()
+        with mock.patch("sys.stdout"):
+            self.assertEqual(self.train.fold_real_positives(run, rec, 1), 0, "negativ/ and the temp files are never positives")
 
     def test_the_household_negatives_are_a_negative_feature_set(self):
         neg, run = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())

@@ -66,6 +66,8 @@ data:
     backup: false
   - path: ${DATA_DIR}/haus-check   # haus-check's status file (#785), beside ${DATA_DIR}/haus as haus-qmd: made again every 15 minutes
     backup: false
+  - path: ${DATA_DIR}/stimme/recordings   # the family saying the wake word (#828): Haus writes <wake id>/haus/<person>-<zeit>.wav, the trainer reads them;
+    backup: false                        # declared here so it exists without stimme. Haus' folder carries a CACHEDIR.TAG: household audio stays out of the backups
   - path: ${DATA_DIR}/file-share/samba-accounts   # where Haus hands a network-drive password to file-share (#296); without file-share no FIFO, no page
     backup: false
 health:

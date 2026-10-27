@@ -16,6 +16,8 @@ EnvironmentFile=${VOICE_ENV}
 Volume=${DATA_DIR}/stimme/whisper:/config:z
 # Stimme's status: stimme-names writes whether the devices run the persona's wake word (#759)
 Volume=${DATA_DIR}/stimme/micro:/micro:z
+# the household's recordings, read-only: stimme-names counts them into that status and offers a retrain (#828)
+Volume=${DATA_DIR}/stimme/recordings:/recordings:ro
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 AutoUpdate=registry

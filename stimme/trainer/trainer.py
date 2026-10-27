@@ -12,8 +12,10 @@ unit, which restarts it. On start the trainer looks at what it left in /out:
   (a new revision), a new trainer build (TRAINER_BUILD) or deleting the status file retries it.
 - anything else, including a run cut by a restart: train.
 
-New false wakes under /recordings/<id>/negativ (stimme-wakes, #825) start no run; the
-next one trains on them as negatives. WAKE_CUTOFF is written into a done model's
+New false wakes under /recordings/<id>/negativ (stimme-wakes, #825) and new recordings
+of the phrase under /recordings/<id>/haus (Haus, #828) start no run; the next one trains
+on them. The owner starts one: stimme-names offers „neu trainieren“, which moves the
+model aside (`laib retrain stimme`, stimme-retrain.service), and this decides to train. WAKE_CUTOFF is written into a done model's
 manifest on start, without training (retune).
 
 It writes <id>.status.json (training, done, failed with a reason) so `laib`
@@ -96,12 +98,15 @@ def status_path(out: pathlib.Path, wake_id: str) -> pathlib.Path:
 
 
 def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: str, reason: str,
-                 einzelheiten: str = "") -> None:
+                 einzelheiten: str = "", begonnen: str = "") -> None:
+    """begonnen: when a done run began (#828); stimme-names counts the recordings after it as new"""
     out.mkdir(parents=True, exist_ok=True)
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = status_path(out, wake_id).with_suffix(".tmp")
-    tmp.write_text(json.dumps({"state": state, "phrase": phrase, "rev": rev, "reason": reason,
-                               "einzelheiten": einzelheiten, "at": at}, ensure_ascii=False) + "\n")
+    s = {"state": state, "phrase": phrase, "rev": rev, "reason": reason, "einzelheiten": einzelheiten, "at": at}
+    if begonnen:
+        s["begonnen"] = begonnen
+    tmp.write_text(json.dumps(s, ensure_ascii=False) + "\n")
     tmp.replace(status_path(out, wake_id))
     write_laib_status(out, state, phrase, reason, at, einzelheiten)
 
@@ -376,11 +381,12 @@ def main() -> int:
         show_waiting(out, wake_id, phrase)
     if what == "train":
         sets = positive_sets(phrase, languages)
+        begonnen = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         write_status(out, wake_id, "training", phrase, rev, "")
         try:
             provision(work, sets)
             model = train(work, out, phrase, wake_id, sets)
-            write_status(out, wake_id, "done", phrase, rev, f"Modell gebaut: {model.name}")
+            write_status(out, wake_id, "done", phrase, rev, f"Modell gebaut: {model.name}", begonnen=begonnen)
             log.info("done: %s", model)
         except _Stopped:
             # left as "training": the next start trains again
