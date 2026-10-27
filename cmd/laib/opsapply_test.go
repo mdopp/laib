@@ -32,6 +32,9 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 	b, _ = os.ReadFile(w)
 	os.WriteFile(w, []byte(strings.Replace(string(b), "data: []", "data:\n  - path: ${DATA_DIR}/whoami", 1)), 0o644)
 	proposal.CommitDirty(context.Background(), c.env.Paths.State, "human:test")
+	// the data path exists, as on a box that runs whoami: a snapshot leaves out one that does not
+	st, _ := cli.LoadState(c.env)
+	os.MkdirAll(filepath.Join(st.Box.DataDir, "whoami"), 0o700)
 	sec, _ := secrets.Load(c.env.Paths.Secrets, c.env.Paths.Key)
 	sec[backup.ResticPassword] = "pw"
 	secrets.Save(c.env.Paths.Secrets, c.env.Paths.Key, sec)
