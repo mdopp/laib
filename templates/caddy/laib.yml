@@ -11,6 +11,12 @@ secrets:
     optional: true               # only with box.yml dns.provider; HTTP-01 and tls: internal need none
 data:
   - path: ${DATA_DIR}/caddy/data
+  - path: ${DATA_DIR}/caddy/check     # caddy-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:2019/metrics
+status:                            # the Box page's line (#785): "14 Adressen · Zertifikate gültig bis 12.01.2027"
+  file: ${DATA_DIR}/caddy/check/laib-status.json
+  check: caddy-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports: []

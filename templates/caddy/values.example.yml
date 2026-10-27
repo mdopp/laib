@@ -1,2 +1,3 @@
 IMAGE: ghcr.io/mdopp/laib-caddy:2
 DNS_TOKEN: !secret DNS_API_TOKEN      # the DNS provider's API token (box.yml dns.provider says which)
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # caddy-check.py, the standard library only (#785)
