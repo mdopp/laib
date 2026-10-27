@@ -21,7 +21,8 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # date moved on by the renewal the text names, the owner told on the reminder
 # day through laib-notify's eingang, letter salad recognised again (#721);
 # a household person cleared off the documents the AI gave them as
-# correspondent (#737).
+# correspondent (#737); an invoice's Betrag, Rechnungsnummer and Fällig am
+# from its text, the same way (#818).
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless

@@ -191,10 +191,10 @@ def groups(api):
 OWNED = ("ai_enabled", "llm_backend", "llm_model", "llm_api_key", "llm_endpoint", "llm_embedding_backend",
          "llm_embedding_model", "llm_embedding_endpoint", "llm_embedding_chunk_size", "llm_context_size",
          "llm_request_timeout", "llm_output_language", "mode", "rotate_pages", "deskew")
-# the contract fields (#567): made once each, found by name, never changed; the family fills them
+# the contract and invoice fields (#567, #818): made once each, found by name, never changed; the family fills them
 CONTRACT = [("Anbieter", "string"), ("Vertragsnummer", "string"), ("Vertragsbeginn", "date"), ("Vertragsende", "date"),
             ("Kündigungsfrist", "string"), ("Nächster Kündigungstermin", "date"), ("Betrag", "monetary"),
-            ("Zahlungsintervall", "string")]
+            ("Zahlungsintervall", "string"), ("Rechnungsnummer", "string"), ("Fällig am", "date")]   # the last two: invoices (#818)
 
 
 def config(api):
