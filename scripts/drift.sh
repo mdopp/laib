@@ -59,8 +59,8 @@ base=$(git merge-base HEAD "${DRIFT_BASE:-origin/main}" 2>/dev/null || true)
 silent=""
 for t in $( [ -n "$base" ] && git diff --name-only "$base" -- 'templates/*/*' | grep -vE '^templates/[^/]+/(tests/|README\.md$|news$)' | cut -d/ -f2 | sort -u); do
   [ -d "templates/$t" ] || continue
-  git diff -U0 "$base" -- "templates/$t" ":(exclude)templates/$t/tests" ":(exclude)templates/$t/README.md" ":(exclude)templates/$t/news" |
-    grep -E '^([+-]|Binary)' | grep -vE '^(\+\+\+|---) ' | grep -qvE '^[+-](title|beschreibung):' || continue
+  [ "$(git diff -U0 "$base" -- "templates/$t" ":(exclude)templates/$t/tests" ":(exclude)templates/$t/README.md" ":(exclude)templates/$t/news" |
+    grep -E '^([+-]|Binary)' | grep -vE '^(\+\+\+|---) ' | grep -cvE '^[+-](title|beschreibung):')" -gt 0 ] || continue
   [ "$(git diff "$base" -- "templates/$t/news" | grep -cE '^\+[^+#]')" -gt 0 ] || silent="${silent}templates/$t changed without a new line in templates/$t/news
 "
 done
