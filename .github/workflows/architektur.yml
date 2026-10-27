@@ -1,5 +1,5 @@
 # README.md's architecture section (owner, 2026-10-27): every day
-# scripts/architektur.sh regenerates it from scripts/loc.sh and templates/;
+# scripts/architektur.sh regenerates it from scripts/loc.sh, skills/ and templates/;
 # when it changed, scripts/architektur-pr.sh opens or updates one PR from
 # bot/architektur with a docs(readme) commit. Nothing is pushed to main.
 name: architektur
