@@ -16,8 +16,10 @@ import (
 
 var (
 	scanActions = []string{"start", "weiter", "abschliessen", "verwerfen", "redo", "suchen", "pruefen", "probe", "einrichten"}
-	// a SANE device as scanimage -L names it; nothing that could break the unit's line (#571)
-	scanGeraet = regexp.MustCompile(`^[a-z0-9_]+:[^"'\\\n\r%$]{1,120}$`)
+	// a SANE device as scanimage -L names it, or a backend alone, which opens its first device: a USB
+	// scanner's numbered name changes when it is switched on again (#801); nothing that could break
+	// the unit's line (#571)
+	scanGeraet = regexp.MustCompile(`^[a-z0-9_]+(:[^"'\\\n\r%$]{1,120})?$`)
 	scanStapel = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$`)
 	scanPerson = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 )
@@ -82,7 +84,7 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 // proposal like any other; Haus decides nothing.
 func scanEinrichten(ctx context.Context, env *Env, svc *ScanService, geraet string) int {
 	if (geraet != "" && !scanGeraet.MatchString(geraet)) || (geraet == "" && svc != nil) {
-		return env.fail(fmt.Errorf("--geraet %q: ein SANE-Gerät wie epson2:net:192.168.1.5, ohne Anführungszeichen, %% und $", geraet))
+		return env.fail(fmt.Errorf("--geraet %q: ein SANE-Gerät wie epson2:net:192.168.1.5 oder fujitsu, ohne Anführungszeichen, %% und $", geraet))
 	}
 	var edit []string
 	reason := "Den Scanner einrichten: SCANNER=" + geraet

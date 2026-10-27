@@ -75,10 +75,15 @@ func TestHausSetsUpTheScannerByProposalOnly(t *testing.T) {
 	if p, err := proposal.Get(env.Paths.Home+"/inbox", id); err != nil || p.Kind != "values" {
 		t.Fatalf("%v: %+v", err, p)
 	}
+	// a USB scanner by its backend alone (#801): SANE opens that backend's first device, and its
+	// numbered name (fujitsu:libusb:001:005) changes when the scanner is switched on again
+	if p, err := proposal.Get(env.Paths.Home+"/inbox", proposed(call(map[string]any{"action": "einrichten", "geraet": "fujitsu"}))); err != nil || p.Kind != "values" {
+		t.Fatalf("%v: %+v", err, p)
+	}
 	if out, code := call(map[string]any{"action": "einrichten"}); code == cli.ExitOK {
 		t.Fatalf("einrichten without a device on an installed scan: %s", out)
 	}
-	for _, bad := range []string{"epson2:net:1.2.3.4\nEnvironment=X=1", `a:"b`, "a:%h", "a:$HOME", "nocolon"} {
+	for _, bad := range []string{"epson2:net:1.2.3.4\nEnvironment=X=1", `a:"b`, "a:%h", "a:$HOME", "Fujitsu", "fujitsu:"} {
 		if out, code := call(map[string]any{"action": "einrichten", "geraet": bad}); code == cli.ExitOK {
 			t.Errorf("%q was proposed: %s", bad, out)
 		}

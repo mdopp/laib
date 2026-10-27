@@ -15,7 +15,7 @@ the message goes to: `scan-eingang/mama/…`. The file moves into the
 stack's archive at once; nothing stays in the inbox. A PDF's own text layer
 is used as it is, and its documents are cut from the original's pages.
 
-**B — a SANE network scanner (optional, `SCANNER` set).** `laib scan start`
+**B — a SANE scanner on the network or the box's USB (optional, `SCANNER` set).** `laib scan start`
 (Haus's „Stapel scannen“, the Bote, the CLI) scans the feeder, duplex as
 `SCAN_DUPLEX` says, over the fixed `SCAN_AREA`. The WF-3540 needs
 `210x297`; SANE's default 215.9×297.18 jams it. Only "out of documents" in
@@ -26,6 +26,30 @@ half-scanned sheet is dropped and scanned again), `abschliessen` files what
 is there, `verwerfen` drops it. A reminder after 30 minutes; dropped after
 a day, with a message. The device's own scan button is not used: the
 WF-3540's never reaches SANE.
+
+The feeder's options follow the device's backend (#801): epson2 and the
+rest take `--source "Automatic Document Feeder" --adf-mode Duplex|Simplex
+--auto-eject=yes`; fujitsu takes `--source "ADF Duplex"|"ADF Front"` and
+fails on the other two. A fujitsu page defaults to Letter, so
+`--page-width`/`--page-height` carry `SCAN_AREA` before `-x`/`-y`, or the
+area is cut to 279 mm.
+
+**A scanner on the box's USB (#801).** `scan.container` passes
+`/dev/bus/usb` whole: libusb opens `/dev/bus/usb/<bus>/<device>` as sysfs
+names it, and both numbers change when the scanner is switched on again,
+so neither one node nor a symlink to it would do. A USB node is root's
+0664; the box's udev rule (`99-laib-scanner.rules`, written by
+`install-box.sh` on every install, vendor and product matched) makes the
+scanner's node core's, which the rootless container opens; every other
+node stays root's. podman passes the nodes there are when the container
+starts: when sysfs shows a USB device whose node the container lacks
+(the scanner switched on later), the idle service writes „neu
+eingeschaltet …“ and exits, `Restart=` brings it back with the node, and
+an order that came in meanwhile waits in `auftrag/`. Once per set of
+missing nodes, so a node podman cannot pass is no restart loop.
+`SCANNER` is the backend alone (`fujitsu`), which opens its first device;
+`fujitsu:libusb:001:005` would be wrong after the next power cycle. A new
+model of scanner needs its vendor and product in the rule.
 
 ## One way through
 
@@ -92,7 +116,9 @@ read by `laib status`, `laib diag`, `laib scan status` and Haus:
 `suche` is the last search, `{"zustand": "läuft | fertig | fehler", "at",
 "detail", "gefragt", "einzelheiten"?, "funde": [{"geraet":
 "epson2:net:192.168.178.87", "name": "Epson PID 0899 flatbed scanner"}]}`;
-a `geraet` goes into `einrichten --geraet` as it is. `gefragt` is how many
+a `geraet` goes into `einrichten --geraet` as it is. A USB find is its
+backend alone (`fujitsu`) while it is the only device of that backend, else
+SANE's numbered name. `gefragt` is how many
 LAN neighbours the search asked directly (#589). `pruefung` is the last
 check, `{"geraet", "ok", "at", "detail", "einzelheiten"?, "probe"?}`: on
 the first start with a new `SCANNER`, on `pruefen` (the device opened,
@@ -121,12 +147,12 @@ files it again (Paperless refuses a document it holds already).
 
 | Value | Default | |
 |---|---|---|
-| `SCANNER` | empty | a SANE device, `epson2:net:192.168.178.87`; `<backend>:net:<host>` is added to the backend's config at start. Empty: only the inbox |
+| `SCANNER` | empty | a SANE device, `epson2:net:192.168.178.87`, or a USB scanner's backend, `fujitsu`; `<backend>:net:<host>` is added to the backend's config at start. Empty: only the inbox |
 | `SCAN_DPI` | 300 | |
 | `SCAN_MODE` | Gray | or Color |
 | `SCAN_AREA` | 210x297 | mm |
 | `SCAN_DUPLEX` | true | |
-| `SCAN_BACK_FIRST` | true | duplex: the WF-3540 delivers each sheet's back first |
+| `SCAN_BACK_FIRST` | true | duplex: the WF-3540 delivers each sheet's back first; a Fujitsu fi its front first, `false` |
 | `SCAN_TAG` | Stapel | the Paperless tag |
 | `SCAN_NOTIFY` | empty | a person from box.yml `people`; empty: `notify.person` |
 | `SCAN_KEEP_DAYS` | 14 | |
@@ -139,7 +165,7 @@ never on argv.
 ## Setting it up
 
 From Haus (haus#77): „Scannen einrichten“ proposes the service; „Scanner
-suchen“ lists what the network answers, „Diesen einrichten“ (or a device
+suchen“ lists what the network and the box's USB answer, „Diesen einrichten“ (or a device
 typed by hand, `epson2:net:<ip>`) sets it, the check follows by itself,
 „Probeseite“ scans one sheet. The search finds epson2 devices (with `net
 autodiscovery`, which the service adds) and eSCL/AirScan devices
