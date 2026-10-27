@@ -18,6 +18,7 @@ func TestTheNetworkMapFollowsTheRenderedRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.Services["whoami"].Units["whoami.container"] += "Environment=LDAP=ldap://host.containers.internal:3890\n"
+	st.Services["auth"].Contract.Routes[0].LoginProbe = "/api/user/info" // #774: laib-app check reads it here
 	n := Net(st)
 	byName := map[string]NetName{}
 	for _, r := range n.Names {
@@ -28,6 +29,9 @@ func TestTheNetworkMapFollowsTheRenderedRules(t *testing.T) {
 	}
 	if r := byName["auth.example.home"]; r.Reach != "LAN+Internet" || r.ForwardAuth || r.Policy != "bypass" {
 		t.Fatalf("the portal itself is not behind forward-auth: %+v", r)
+	}
+	if r := byName["auth.example.home"]; r.LoginProbe != "/api/user/info" {
+		t.Fatalf("an auth: none route carries where its own login refuses: %+v", r)
 	}
 	if r := byName[st.Box.Laib.Host+".example.home"]; r.Reach != "nur LAN" || !r.ForwardAuth || !strings.Contains(r.Upstream, "laib") {
 		t.Fatalf("laib's own page: %+v", r)

@@ -24,6 +24,7 @@ type NetName struct {
 	Subject     string   `json:"subject,omitempty"`
 	Upstream    string   `json:"upstream"` // "<service> 127.0.0.1:<port>", or "→ <name>" for a redirect
 	Bypass      []string `json:"bypass,omitempty"`
+	LoginProbe  string   `json:"loginProbe,omitempty"` // auth: none: where the app's own login refuses (#774)
 }
 
 type NetPort struct {
@@ -95,7 +96,7 @@ func Net(st *state.State) NetMap {
 		for _, r := range c.Routes {
 			owner[r.Port] = name
 			a := rule(rules, fqdn(st, r.Host))
-			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port), Bypass: r.Bypass}
+			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port), Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
 				n.Names = append(n.Names, NetName{Name: strings.TrimPrefix(fqdn(st, h), "@."), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})

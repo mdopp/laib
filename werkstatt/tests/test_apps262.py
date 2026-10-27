@@ -128,11 +128,22 @@ class Check(unittest.TestCase):
         Path(t, "ext").write_text("subjectAltName=DNS:hallo.boot.test\n")
         run("openssl", "x509", "-req", "-in", "leaf.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", "leaf.crt", "-days", "1", "-extfile", "ext")
 
-    def https(self, status, location=""):
+    def setUp(self):
+        self.la.LAIB = str(Path(self.tmp, "no-laib"))   # no box unless a test gives one
+
+    def net(self, **route):
+        """a fake `laib` whose `net` answers like the box's (#774)"""
+        fake = Path(tempfile.mkdtemp(), "laib")
+        names = [{"name": "hallo.boot.test", "reach": "LAN+Internet", **route}]
+        fake.write_text(f"#!/bin/sh\n[ \"$1\" = net ] || exit 3\ncat <<'EOF'\n{json.dumps({'names': names, 'ports': []})}\nEOF\n")
+        fake.chmod(0o755)
+        self.la.LAIB = str(fake)
+
+    def https(self, status, location="", paths=None):
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a): pass
             def do_GET(self):
-                self.send_response(status)
+                self.send_response((paths or {}).get(self.path, status))
                 if location:
                     self.send_header("Location", location)
                 self.send_header("Content-Length", "0"); self.end_headers()
@@ -176,7 +187,38 @@ class Check(unittest.TestCase):
         code, out = self.check("--box", self.https(200))
         self.assertEqual(code, 8, out)
         self.assertIn("not behind Authelia", out)
-        self.assertEqual(self.check("--box", self.https(200), "--open")[0], 0)
+        self.net(forwardAuth=True, policy="one_factor")   # the box says: behind Authelia
+        self.assertEqual(self.check("--box", self.https(200))[0], 8)
+
+    # #774: hoerbuecher. is auth: none (Audiobookshelf logs in itself): the
+    # check reads the route from the box and measures the app's own login
+    def test_an_auth_none_route_is_done_when_the_apps_own_login_refuses(self):
+        self.doh({**self.HOUSE, **self.RECORD})
+        self.net(forwardAuth=False, policy="bypass", loginProbe="/api/me")
+        code, out = self.check("--box", self.https(200, paths={"/api/me": 401}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("/api/me", out)
+        self.assertIn("401", out)
+
+    def test_an_auth_none_route_whose_app_answers_without_a_session_is_not_done(self):
+        self.doh({**self.HOUSE, **self.RECORD})
+        self.net(forwardAuth=False, policy="bypass", loginProbe="/api/me")
+        code, out = self.check("--box", self.https(200))
+        self.assertEqual(code, 8, out)
+        self.assertIn("own login", out)
+
+    def test_an_auth_none_route_without_a_probe_is_not_measured(self):
+        self.doh({**self.HOUSE, **self.RECORD})
+        self.net(forwardAuth=False, policy="bypass")
+        code, out = self.check("--box", self.https(200))
+        self.assertEqual(code, 9, out)
+        self.assertIn("loginProbe", out)
+
+    def test_without_the_box_open_and_the_probe_come_from_the_flags(self):
+        self.doh({**self.HOUSE, **self.RECORD})
+        box = self.https(200, paths={"/api/users/me": 403})
+        self.assertEqual(self.check("--box", box, "--open", "--login-probe", "/api/users/me")[0], 0)
+        self.assertEqual(self.check("--box", box, "--open")[0], 9)
 
     def test_a_certificate_nobody_trusts_is_not_done(self):
         self.doh({**self.HOUSE, **self.RECORD})

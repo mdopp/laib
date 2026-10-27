@@ -13,6 +13,7 @@ routes:
     port: 8123
     exposure: public
     auth: none                     # HA has its own login; the companion app and Voice PE need it
+    loginProbe: /api/              # refused without a session: laib-app check measures the app's own login there (#774)
   - host: zwave
     port: 8091
     exposure: internal

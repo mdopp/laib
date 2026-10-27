@@ -112,4 +112,6 @@ marked in the Inbox card and is the owner's decision.
 
 Lint proves the contract, not the service. A template is done when it is
 green on the box (`laib status`) and its route passes `laib-app check
-<name>.<domain>` (`--open` for `auth: none`).
+<name>.<domain>`. An `auth: none` route declares `loginProbe: <path>`,
+a path the app refuses without a session (401 or 403, an API like
+`/api/me`); the check measures the app's own login there (#774).

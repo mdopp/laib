@@ -285,6 +285,10 @@ type Route struct {
 	// them (#360: the old entry points dopp.cloud and www. to haus.); "@" is
 	// the domain itself.
 	RedirectFrom []string `yaml:"redirectFrom"`
+	// LoginProbe: on an auth: none route, a path the app refuses without a
+	// session (401 or 403); `laib-app check` measures the app's own login
+	// there (#774).
+	LoginProbe string `yaml:"loginProbe"`
 }
 
 // Secret is a declared secret; non-external ones are generated once.

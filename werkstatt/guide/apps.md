@@ -173,7 +173,10 @@ laib-app check <name>.<domain>
   Caddy asks Let's Encrypt on its own once DNS answers and port 80 reaches
   the box; give it a few minutes, `laib logs caddy --since 15m` otherwise.
 - **login:** without a login (and with a forged `Remote-User`) the route
-  sends to `auth.<domain>`. An `auth: none` route is checked with `--open`.
+  sends to `auth.<domain>`. For a route the box renders `auth: none`
+  (`laib net`) the check measures the app's own login instead: the route's
+  `loginProbe`, a path the app refuses without a session, must answer 401
+  or 403. Without a `loginProbe` that is exit 9, not measured.
 
 Only now tell the owner it is done: „<Name> läuft unter https://<name>.<domain>,
 anmelden mit dem Familien-Login.“

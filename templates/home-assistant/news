@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Die Werkstatt prüft jetzt auch nach, dass Home Assistant ohne Anmeldung nichts preisgibt
 Geräte mit zusammengesetzten Namen wie „Sofalicht“ hören jetzt auch auf „Sofa-Licht“ und „Sofa Licht“, und ein Befehl für ein unbekanntes Gerät bekommt eine ehrliche Antwort statt einer Websuche
 Ein Update von Home Assistant wartet jetzt, bis es ganz gestartet ist, bevor es die Weiterleitung einstellt
 Das Admin-Passwort von Home Assistant lässt sich jetzt erneuern, ohne dass das Haus sich aussperrt
