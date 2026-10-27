@@ -25,5 +25,5 @@ data:
   - path: ${DATA_DIR}/file-share/data/paperless-consume  # Paperless' consume folder: the documents go to <SCAN_TAG>/; transient
     backup: false
 health: {none: "a loop over the inbox and the orders, no HTTP endpoint; the unit state and the status file are the check"}
-status:                              # bereit | scannt | wartet-auf-rest | trennt | legt-ab | fertig | fehler, written on every change (#568)
+status:                              # bereit | scannt | wartet-auf-rest | trennt | legt-ab | fertig | fehler, written on every change (#568); idle, every 15 minutes with whether the scanner is on (#785)
   file: ${DATA_DIR}/scan/laib-status.json
