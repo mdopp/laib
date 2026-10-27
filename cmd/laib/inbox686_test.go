@@ -24,6 +24,7 @@ func inboxMux(env *cliEnv) func(method, path string, form url.Values) string {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/inbox", pages.Inbox(env))
 	mux.HandleFunc("/inbox/alle", pages.ApproveAll(env))
+	mux.HandleFunc("GET /inbox/stand", pages.InboxStand(env))
 	mux.HandleFunc("POST /inbox/{id}/{decision}", pages.Decision(env))
 	return func(method, path string, form url.Values) string {
 		r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
@@ -82,10 +83,17 @@ func TestAfterFreigebenTheCardSaysWhatTheBoxDoesUntilDone(t *testing.T) {
 	// the carry writes its first step just after the approval: wait for it, not for a fixed moment
 	var body string
 	until(t, "waiting shown", func() bool { body = do("GET", "/inbox", nil); return strings.Contains(body, "wartet, bis") })
-	for _, w := range []string{"wartet, bis die Box mit der Arbeit davor fertig ist", "http-equiv=refresh"} {
+	for _, w := range []string{"wartet, bis die Box mit der Arbeit davor fertig ist", "data-run>", "fetch(", "<noscript>"} {
 		if !strings.Contains(body, w) {
 			t.Errorf("while it waits the Inbox lacks %q:\n%s", w, body)
 		}
+	}
+	// no reload of the whole page (owner 2026-10-27): only the block of what runs comes again
+	if strings.Contains(body, "http-equiv") {
+		t.Errorf("the Inbox reloads itself as a whole:\n%s", body)
+	}
+	if part := do("GET", "/inbox/stand", nil); !strings.HasPrefix(part, "<div id=laeuft data-run>") || !strings.Contains(part, "wartet, bis") || strings.Contains(part, "<html") || strings.Contains(part, "<script") {
+		t.Errorf("the fragment is not the block of what runs:\n%s", part)
 	}
 	if strings.Contains(body, "/inbox/1/approve") || strings.Contains(body, "/inbox/1/reject") || strings.Contains(body, "/inbox/1/rollback") {
 		t.Errorf("buttons while it waits:\n%s", body)
@@ -98,7 +106,7 @@ func TestAfterFreigebenTheCardSaysWhatTheBoxDoesUntilDone(t *testing.T) {
 	}
 	mu.Unlock()
 	body = do("GET", "/inbox", nil)
-	if !strings.Contains(body, "fertig") || strings.Contains(body, "http-equiv=refresh") || strings.Contains(body, "/inbox/1/approve") {
+	if !strings.Contains(body, "fertig") || strings.Contains(body, "data-run>") || strings.Contains(body, "<script") || strings.Contains(body, "/inbox/1/approve") {
 		t.Errorf("done is not shown as done:\n%s", body)
 	}
 	for _, w := range []string{"..", "Lauf"} {
@@ -128,7 +136,10 @@ func TestARedRunSaysZurückgenommenWeil(t *testing.T) {
 	if got.Outcome != "rolled-back" || !strings.Contains(body, "zurückgenommen, weil w1 danach nicht richtig lief") {
 		t.Errorf("no reason for the rollback: %+v\n%s", got, body)
 	}
-	if strings.Contains(body, "/inbox/1/") || strings.Contains(body, "http-equiv=refresh") {
+	if part := do("GET", "/inbox/stand", nil); strings.Contains(part, "data-run>") || !strings.Contains(part, "zurückgenommen, weil") {
+		t.Errorf("the fragment still says something runs:\n%s", part)
+	}
+	if strings.Contains(body, "/inbox/1/") || strings.Contains(body, "data-run>") {
 		t.Errorf("a decided card keeps buttons or reloads:\n%s", body)
 	}
 }
