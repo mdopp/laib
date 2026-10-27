@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.44.1](https://github.com/mdopp/laib/compare/v0.44.0...v0.44.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **scan:** a stack's documents split by pages numbered as sent, a face-up stack turned, the model's answers kept ([#808](https://github.com/mdopp/laib/issues/808)) ([9920263](https://github.com/mdopp/laib/commit/992026317ab935cf9b3d9b57f465cf8f60e4d55a))
+* **scan:** number pages as sent, keep the model's answers, turn a face-up stack ([40e7536](https://github.com/mdopp/laib/commit/40e75365c22ed81d1d5dc57cae171d567a5b1f43))
+* **scan:** number pages as sent, keep the model's answers, turn a face-up stack ([b9119a3](https://github.com/mdopp/laib/commit/b9119a3bf406b74f6e8c971d7226a1d018bb8601))
+
 ## [0.44.0](https://github.com/mdopp/laib/compare/v0.43.1...v0.44.0) (2026-10-27)
 
 
