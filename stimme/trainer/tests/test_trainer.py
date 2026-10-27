@@ -278,7 +278,10 @@ class TrainOnNegatives(unittest.TestCase):
     def setUpClass(cls):
         import types
         stub = types.SimpleNamespace(safe_dump=lambda d, sort_keys=False: json.dumps(d))   # the config read back as JSON
-        sys.modules.setdefault("yaml", stub)   # PyYAML lives in the image, not necessarily here
+        # PyYAML lives in the image, not necessarily here; the stub must not outlive this class,
+        # or a later test that imports the real yaml gets the stub (one unittest process in CI)
+        cls.modules = mock.patch.dict(sys.modules, {} if "yaml" in sys.modules else {"yaml": stub})
+        cls.modules.start()
         import train
         cls.train = train
         cls.yaml = mock.patch.object(train, "yaml", stub)
@@ -287,6 +290,7 @@ class TrainOnNegatives(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.yaml.stop()
+        cls.modules.stop()
 
     def wav(self, path, frames=8000):
         import wave
