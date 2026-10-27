@@ -2,3 +2,5 @@ IMAGE: ghcr.io/music-assistant/server:latest
 MA_ADMIN_USER: laib                # Music Assistant's built-in administrator post-deploy onboards as (break-glass; the family signs in with Home Assistant)
 JELLYFIN_ADMIN_USER: admin         # media's ADMIN_USER: post-deploy makes Jellyfin's account musicassistant as this administrator
 ABS_TOKEN: !secret ABS_MA_TOKEN    # handed over by audiobookshelf (#646): Music Assistant's Audiobookshelf source; empty without it
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # music-assistant-check.py, the standard library only (#785)
+MA_TOKEN: !secret HA_MUSIC_ASSISTANT_TOKEN   # minted by post-deploy: music-assistant-check reads speakers and titles with it (#785); empty before the first apply
