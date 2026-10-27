@@ -13,6 +13,12 @@ secrets:
 data:
   - path: ${DATA_DIR}/mosquitto/config
   - path: ${DATA_DIR}/mosquitto/data
+  - path: ${DATA_DIR}/mosquitto/check     # mosquitto-check's status file (#785): made again every 15 minutes
+    backup: false
 health: {none: "MQTT speaks no HTTP; the unit state is the check"}
+status:                            # the Box page's line (#785): "5 Geräte und Dienste verbunden", from $SYS
+  file: ${DATA_DIR}/mosquitto/check/laib-status.json
+  check: mosquitto-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 1883, lan: true}
