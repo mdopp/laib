@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.43.0](https://github.com/mdopp/laib/compare/v0.42.1...v0.43.0) (2026-10-27)
+
+
+### Features
+
+* **lease:** measure the router and refresh llama's status every 15 minutes ([7c3208b](https://github.com/mdopp/laib/commit/7c3208b36a3d4fbece8ee9c1b8f74f1ea1d04cdb)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **pages:** plain names on the Box page, a filter by state, and the wake word on the device ([a67ed54](https://github.com/mdopp/laib/commit/a67ed54b86c8e125e2e0b4476d5e73622b56a9db)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **pages:** plain names on the Box page, a filter by state, the wake word on the device ([559720b](https://github.com/mdopp/laib/commit/559720b2bd7a96a9ca9e8be440ecc26c609e3811))
+* **scan:** look again every 15 minutes while idle and say what was seen ([19d5692](https://github.com/mdopp/laib/commit/19d56924d6694df957c56fb27ce0da70a95d952c)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** a measured detail line for every service on the Box page ([eeaedfb](https://github.com/mdopp/laib/commit/eeaedfbb586fcdaabbbd81da6f8e216feb682d3b))
+* **template:** adguard writes its queries and blocked ones as its status line ([edb1d4d](https://github.com/mdopp/laib/commit/edb1d4d135e16f94d2acf7221ebe3756008beb2c)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** bote writes Signal and the week's conversations as its status line ([16aac5f](https://github.com/mdopp/laib/commit/16aac5f923534829e16f762075ccb66b27eb53d4)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** caddy writes its addresses and certificates as its status line ([c93d2ed](https://github.com/mdopp/laib/commit/c93d2edb7fd1e8595d64b8cecdb55e7581fcffef)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** esphome writes its devices and ready updates as its status line ([9d0fa0d](https://github.com/mdopp/laib/commit/9d0fa0d91432b331ac1ded3f046f8a03afc53d79)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** file-share writes its free space, Syncthing and network-drive passwords as its status line ([1653b52](https://github.com/mdopp/laib/commit/1653b52c3ff017667971ba5cdce42f03e03cbc1f)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** frage writes a test search's results as its status line ([31bb980](https://github.com/mdopp/laib/commit/31bb980ac19546df7e4ab7b0de7ff3b54fb6ca9d)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** haus writes its signed-in devices as its status line ([f3d34f2](https://github.com/mdopp/laib/commit/f3d34f233dff75390f6defd3c60a1cb75cc4f88b)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** immich writes its photos, videos and accounts as its status line ([ee0396a](https://github.com/mdopp/laib/commit/ee0396a668b3dbd9091a62132dad994a82585896)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** media writes Jellyfin's library and accounts as its status line ([cbbe764](https://github.com/mdopp/laib/commit/cbbe7648a66fdb0d2b9aebdfca95fb1da4b7aa10)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** mosquitto writes its connected devices as its status line ([b9f530d](https://github.com/mdopp/laib/commit/b9f530d5a9c1198f9d93cce9e564cb9c5f01deab)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** music-assistant writes its speakers and titles as its status line ([036db98](https://github.com/mdopp/laib/commit/036db98168a8404aee825bb1f4fe37eafbfb3fc0)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** radicale writes its calendars and address books as its status line ([88ba783](https://github.com/mdopp/laib/commit/88ba7838c19ffa833d76ec8020cfe8338018c139)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** usage-metrics writes the week's counts as its status line ([ce56fcc](https://github.com/mdopp/laib/commit/ce56fcce694b4c2218b9da2da76b4880f09d19ae)), closes [#785](https://github.com/mdopp/laib/issues/785)
+* **template:** vaultwarden writes its accounts as its status line ([dcc6003](https://github.com/mdopp/laib/commit/dcc60034bc55b2146109577332ab280948159839)), closes [#785](https://github.com/mdopp/laib/issues/785)
+
+
+### Bug Fixes
+
+* **drift:** count instead of an early grep in the title-only check ([#307](https://github.com/mdopp/laib/issues/307)) ([d33d8e4](https://github.com/mdopp/laib/commit/d33d8e455fdf81547f3621ee5dfe591d4cd11491))
+
 ## [0.42.1](https://github.com/mdopp/laib/compare/v0.42.0...v0.42.1) (2026-10-27)
 
 
