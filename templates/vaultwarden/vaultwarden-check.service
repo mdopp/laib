@@ -1,0 +1,17 @@
+# vaultwarden's detail line on the Box page (#785): vaultwarden-check.py in a
+# stock Python image, fed on stdin (as kalender-abgleich), in Vaultwarden's own
+# network namespace, so it asks Vaultwarden on 127.0.0.1:8222 (published on
+# loopback only). It logs in to the admin page with the admin token, reads the
+# accounts and writes the status file laib.yml declares. laib starts it when
+# someone looks and the file is older than its stale; the timer every 15
+# minutes. The token reaches podman through the environment, never on argv.
+[Unit]
+Description=Vaultwarden: Konten für laibs Status
+After=vaultwarden.service
+
+[Service]
+Type=oneshot
+Environment=ADMIN_TOKEN=${ADMIN_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/vaultwarden/vaultwarden-check.py
+ExecStart=/usr/bin/podman run --rm -i --name vaultwarden-check --network container:systemd-vaultwarden --security-opt label=disable -e ADMIN_TOKEN -e VAULTWARDEN_URL=http://127.0.0.1:8222 -e STATUS_DIR=/data -v ${DATA_DIR}/vaultwarden/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min
