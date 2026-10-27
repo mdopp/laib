@@ -19,6 +19,7 @@ routes:
     port: 8096
     exposure: public
     auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP (#256)
+    loginProbe: /Users/Me          # refused without a session: laib-app check measures the app's own login there (#774)
     # no caddy: snippet: Caddy's reverse_proxy streams and passes websockets as it is.
     # The nginx line that stood here ("proxy_buffering off") is no Caddy directive:
     # Caddy refused the whole Caddyfile, so media never applied (vm-install run 38898317486)

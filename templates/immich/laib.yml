@@ -11,6 +11,7 @@ routes:
     port: 2283
     exposure: public
     auth: none                     # the apps do their own login (OIDC via Authelia)
+    loginProbe: /api/users/me      # refused without a session: laib-app check measures the app's own login there (#774)
     caddy: |
       request_body {
         max_size 50GB
