@@ -233,20 +233,22 @@ type Approval struct {
 
 // Contract is services/<name>/laib.yml.
 type Contract struct {
-	Name        string      `yaml:"name"`
-	Template    TemplateRef `yaml:"template"`
-	Routes      []Route     `yaml:"routes"`
-	Secrets     []Secret    `yaml:"secrets"`
-	OIDC        *OIDC       `yaml:"oidc"`
-	Data        []DataPath  `yaml:"data"`
-	Health      Health      `yaml:"health"`
-	Status      *StatusFile `yaml:"status"`
-	Ports       []Port      `yaml:"ports"`
-	GPU         bool        `yaml:"gpu"`
-	HostNetwork bool        `yaml:"hostNetwork"`
-	After       []string    `yaml:"after"`    // services restarted and verified before this one (#12)
-	Needs       []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
-	Provides    []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
+	Name         string      `yaml:"name"`
+	Title        string      `yaml:"title"`        // the plain German name the Box page shows big (#785): Jellyfin, Netzlaufwerk
+	Beschreibung string      `yaml:"beschreibung"` // one short line of what it is: Filme, Serien, Musik
+	Template     TemplateRef `yaml:"template"`
+	Routes       []Route     `yaml:"routes"`
+	Secrets      []Secret    `yaml:"secrets"`
+	OIDC         *OIDC       `yaml:"oidc"`
+	Data         []DataPath  `yaml:"data"`
+	Health       Health      `yaml:"health"`
+	Status       *StatusFile `yaml:"status"`
+	Ports        []Port      `yaml:"ports"`
+	GPU          bool        `yaml:"gpu"`
+	HostNetwork  bool        `yaml:"hostNetwork"`
+	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
+	Needs        []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
+	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
 	// When: a unit file exists only while one of the named values is set (#184).
 	When map[string][]string `yaml:"when"`
 	// Requires: a value that is set needs these set too (#184); a literal is

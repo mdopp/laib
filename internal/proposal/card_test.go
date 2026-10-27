@@ -24,7 +24,7 @@ func TestCardsArePlainGermanAndDefaultToSpaeterWhenRisky(t *testing.T) {
 			"Einstellungen von Bote ändern sich", "nichts Sichtbares", "mit einem Tipp", "Freigeben"},
 		{"a public route", Proposal{ID: 9, Actor: "claude", Reason: "von unterwegs", Kind: "tree", Class: "human", Files: []string{"services/media/laib.yml"},
 			Reasons: []string{"macht media aus dem Internet erreichbar (media)"}},
-			"Media", "aus dem Internet erreichbar", "mit einem Tipp", "Später"},
+			"Jellyfin", "aus dem Internet erreichbar", "mit einem Tipp", "Später"},
 		{"a patch with a hook", Proposal{ID: 10, Actor: "ops", Reason: "Hook repariert", Kind: "patch", Class: "human", Files: []string{"services/frage/post-deploy"},
 			Reasons: []string{"führt ein Skript direkt auf der Box aus (services/frage/post-deploy)"}},
 			"Frage", "direkt auf der Box", "mit einem Tipp", "Später"},

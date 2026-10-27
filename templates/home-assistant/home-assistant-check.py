@@ -267,7 +267,7 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
     (detail, findings)"""
     if not token or not persona:
         return "", []
-    out = []
+    out, wait, on_device = [], "", False
     try:
         ws = WS(base, token)
         try:
@@ -305,8 +305,8 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
                 out.append(("gelb", f"Weckwort: openWakeWord bietet {wake_id}, der Ablauf nutzt {have or 'keins'}", APPLY))
             elif have and offered is not None and have not in offered:
                 out.append(("gelb", f"Weckwort: {have} bietet openWakeWord nicht an, der Ablauf wacht so nie auf", APPLY))
-            else:
-                said += f" · Weckwort {have or 'nur am Gerät'}, bis {wake_id} da ist"
+            else:   # not on the box's engine: a satellite may carry it itself (#759), read below
+                wait = f" · Weckwort {have or 'nur am Gerät'}, bis {wake_id} da ist"
             reg = ws("config/entity_registry/list") or []
         finally:
             ws.close()
@@ -322,8 +322,11 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
         who, options = (st.get("attributes") or {}).get("friendly_name") or r.get("entity_id"), (st.get("attributes") or {}).get("options") or []
         if r.get("translation_key") == "pipeline" and st.get("state") != persona:
             out.append(("gelb", f"Satellit „{who}“: {st.get('state')}, nicht „{persona}“", APPLY))
-        if r.get("translation_key") == "wake_word" and phrase and st.get("state") != phrase and phrase in options:
-            out.append(("gelb", f"Satellit „{who}“: weckt mit {st.get('state')}, kann „{phrase}“", APPLY))
+        if r.get("translation_key") == "wake_word" and phrase and phrase in options:
+            on_device = True   # Stimme's word on the device (#785): never say it is missing
+            if st.get("state") != phrase:
+                out.append(("gelb", f"Satellit „{who}“: weckt mit {st.get('state')}, kann „{phrase}“", APPLY))
+    said += f" · Weckwort „{phrase}“ am Gerät" if wait and on_device else wait
     return said, [{"severity": s, "detail": d, "fix": f} for s, d, f in out]
 
 

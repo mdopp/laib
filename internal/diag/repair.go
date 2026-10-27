@@ -103,7 +103,7 @@ func does(f Finding) string {
 	case "flash":
 		return cmp.Or(f.Does, "Neue Firmware von "+proposal.Title(a[1])+" wird auf das Gerät gespielt")
 	case "restart":
-		return proposal.Title(a[1]) + " wird neu gestartet"
+		return proposal.Named(a[1]) + " wird neu gestartet"
 	case "servicebay":
 		return "Der alte ServiceBay-Ordner wird gelöscht (vorher gesichert)"
 	case "operator":

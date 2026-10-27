@@ -1,4 +1,6 @@
 name: werkstatt
+title: Werkstatt
+beschreibung: Arbeitsplatz der Agenten
 template: {registry: builtin, name: werkstatt, version: 1}
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 # pi in the browser (#384), as ServiceBay's pi-web: pi-web-ui has no login of its

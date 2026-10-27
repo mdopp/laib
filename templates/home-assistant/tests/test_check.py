@@ -371,6 +371,19 @@ class Voice(unittest.TestCase):
         self.assertIn("Weckwort okay_nabu, bis hey_joshua da ist", r["detail"], r)
         self.assertFalse([f for f in r["findings"] if f["severity"] != "info" and "Weckwort" in f["detail"]], r)
 
+    def test_a_wake_word_on_the_device_is_never_said_to_be_missing(self):
+        """#785, #759: Stimme put „Hey Joshua“ onto the Voice PE; the box's openWakeWord still lacks
+        hey_joshua, but the device's select offers the phrase: the line says where the word is."""
+        sel = fake.HA["states"]["select.voice_kueche_wake_word"]
+        sel["attributes"]["options"].append("Hey Joshua")
+        sel["state"] = "Hey Joshua"
+        for have in ("okay_nabu", None):
+            fake.HA["pipelines"][1].update(wake_word_id=have)
+            r = self.check()
+            self.assertIn("Weckwort „Hey Joshua“ am Gerät", r["detail"], r)
+            self.assertNotIn("bis hey_joshua da ist", r["detail"], r)
+            self.assertEqual(self.voice(r), [], r)
+
     def test_a_persona_wake_word_offered_but_unused_is_a_finding_with_the_apply(self):
         fake.HA["wake_words"]["wake_word.openwakeword"].append("hey_joshua")
         r = self.check()

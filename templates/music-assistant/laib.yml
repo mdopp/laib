@@ -1,4 +1,6 @@
 name: music-assistant
+title: Music Assistant
+beschreibung: Musik auf den Lautsprechern
 template: {registry: builtin, name: music-assistant, version: 1}
 provides: [music-players]
 upstream: [https://github.com/music-assistant/server, https://music-assistant.io/]   # where the Operator's web search looks first (#544)

@@ -1,4 +1,6 @@
 name: beets
+title: Musik ordnen
+beschreibung: Erkennt und sortiert neue Musik
 template: {registry: builtin, name: beets, version: 1}
 provides: [music-tagging]
 upstream: [https://github.com/beetbox/beets, https://beets.readthedocs.io/]   # where the Operator's web search looks first (#544)

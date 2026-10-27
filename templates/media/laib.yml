@@ -1,4 +1,6 @@
 name: media
+title: Jellyfin
+beschreibung: Filme, Serien, Musik
 template: {registry: builtin, name: media, version: 1}
 provides: [music, video]
 upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   # where the Operator's web search looks first (#544)

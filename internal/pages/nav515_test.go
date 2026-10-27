@@ -41,7 +41,7 @@ func TestTheBoxPagesWorkOnThePhone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "", [2]string{}, false)
+	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "", [2]string{}, false, "")
 	jour := "<h1>Journal</h1>" + filter + journalBody([]journal.Entry{{T: time.Now(), Actor: "laib", Verb: "apply", Result: "green"}})
 	netz := filter + netBody(render.Net(st))
 	for name, body := range map[string]string{"Status": status, "Journal": jour, "Netz": netz} {

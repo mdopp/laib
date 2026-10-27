@@ -17,12 +17,12 @@ import (
 // file; UPDATE_GOLDEN=1 rewrites it.
 func TestThePagesWearTheHouseholdLook(t *testing.T) {
 	rd := Readiness{State: "bereit", Services: 3, Green: 1, Yellow: 1, Red: 1, Operator: "läuft", LastHeard: "2026-10-19T07:41:05Z"}
-	rows := []ServiceStatus{
-		{Name: "auth", State: "grün", Units: map[string]string{"auth-pod.service": "active"}, Detail: "Passwort-Mails über smtp.example · geprüft vor 3 min"},
-		{Name: "home-assistant", State: "gelb", Units: map[string]string{"home-assistant.service": "active"}, Detail: "fehlt: Jellyfin, Waschmaschine"},
+	rows := []ServiceStatus{ // problems first, as the page sorts them (#785)
 		{Name: "llama", State: "rot", Units: map[string]string{"llama-lease.service": "activating"}},
+		{Name: "home-assistant", State: "gelb", Units: map[string]string{"home-assistant.service": "active"}, Detail: "fehlt: Jellyfin, Waschmaschine"},
+		{Name: "auth", Title: "Anmeldung", Beschreibung: "Konten und zweiter Faktor", State: "grün", Units: map[string]string{"auth-pod.service": "active"}, Detail: "Passwort-Mails über smtp.example · geprüft vor 3 min"},
 	}
-	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "19.10. 07:30 · human:core · apply auth · Session-Speicher", [2]string{"19.10.", "Alles ruhig."}, true)
+	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "19.10. 07:30 · human:core · apply auth · Session-Speicher", [2]string{"19.10.", "Alles ruhig."}, true, "")
 	got := pageHTML("Status", body)
 	golden := "testdata/status.html"
 	if os.Getenv("UPDATE_GOLDEN") != "" {
@@ -51,7 +51,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(cards[1], "fehlt: Jellyfin, Waschmaschine") || !strings.Contains(cards[2], "llama-lease.service=activating") {
+	if !strings.Contains(cards[1], "fehlt: Jellyfin, Waschmaschine") || !strings.Contains(cards[0], "llama-lease.service=activating") {
 		t.Errorf("a card lost its note: %q", cards)
 	}
 	if strings.Contains(got, "<table") {

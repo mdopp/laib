@@ -15,10 +15,11 @@ p{margin:12px 0}a{color:var(--accent)}
 .filter{display:block;width:100%;margin:16px 0 0;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--edge);border-radius:999px;padding:0 16px;min-height:44px}
 .liste{display:grid;gap:8px;margin:12px 0}.liste .card{margin:0}
 .card{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;background:var(--card);border:1px solid var(--edge);border-left:4px solid var(--faint);border-radius:14px;padding:11px 14px;margin:8px 0;min-width:0}
-.card b{font-weight:600}.card .note{color:var(--muted);font-size:.9rem;flex:1 1 12rem;min-width:0}
+.card b{font-weight:600;font-size:1.05rem}.card small{font-size:.75rem}.card .note{color:var(--muted);font-size:.9rem;flex:1 1 12rem;min-width:0}
 .card.grün{border-left-color:var(--ok)}.card.gelb{border-left-color:var(--warn)}.card.rot{border-left-color:var(--bad)}
 .state{font-size:.85rem;font-weight:600}.grün .state{color:var(--ok)}.gelb .state{color:var(--warn)}.rot .state{color:var(--bad)}
 p.gelb,li.gelb{color:var(--warn)}p.rot{color:var(--bad)}.muted{color:var(--muted)}
+.stand{margin:12px 0 0}.stand a{display:inline-block;padding:10px 4px;color:var(--muted)}.stand a[aria-current]{color:var(--accent);font-weight:600}
 section.card{display:block}section.card h2{font-size:1rem;letter-spacing:0;text-transform:none;color:var(--ink);margin:0 0 8px}
 button{font:inherit;font-size:.85rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border:0;border-radius:999px;padding:0 16px;min-height:40px;cursor:pointer;white-space:nowrap}
 button.go{background:var(--accent);color:#fff}

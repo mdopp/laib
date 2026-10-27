@@ -1,4 +1,6 @@
 name: auth
+title: Anmeldung
+beschreibung: Konten und zweiter Faktor
 template: {registry: builtin, name: auth, version: 1}
 provides: [sso, identity]
 upstream: [https://github.com/authelia/authelia, https://www.authelia.com/, https://github.com/lldap/lldap]   # where the Operator's web search looks first (#544)

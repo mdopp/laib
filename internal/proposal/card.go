@@ -3,9 +3,14 @@ package proposal
 import (
 	"cmp"
 	"fmt"
+	"io/fs"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
+
+	"github.com/mdopp/laib/templates"
+	"gopkg.in/yaml.v3"
 )
 
 // A Decision card (#58, #616): what a proposal means, in the words a
@@ -183,7 +188,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	svcs := servicesOf(p)
 	names := make([]string, 0, len(svcs))
 	for _, s := range svcs {
-		names = append(names, title(s))
+		names = append(names, Named(s))
 	}
 	who := strings.Join(names, ", ")
 
@@ -230,7 +235,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
-			adds = append(adds, title(a))
+			adds = append(adds, Named(a))
 		}
 		d.Summary = strings.Join(adds, ", ") + " wird installiert"
 		if len(p.Adds) > 1 {
@@ -254,7 +259,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = "Die Regeln, wer auf der Box was darf, ändern sich"
 	case len(values) == 1:
 		v := values[0]
-		d.Summary = title(v.Service) + ": " + v.Key + " "
+		d.Summary = Named(v.Service) + ": " + v.Key + " "
 		switch {
 		case v.Op == "-":
 			d.Summary += "fällt weg"
@@ -294,18 +299,18 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	var technical []string
 	for _, v := range values {
 		if len(p.News) > 0 && v.Op == "-" { // #696: a value whose secret the template retired
-			technical = append(technical, title(v.Service)+": "+v.Key+" entfällt, die Vorlage braucht es nicht mehr (bisher "+valueWord(v.Old)+")")
+			technical = append(technical, Named(v.Service)+": "+v.Key+" entfällt, die Vorlage braucht es nicht mehr (bisher "+valueWord(v.Old)+")")
 		} else if len(p.News) > 0 { // the template's values: its news says what they bring
-			technical = append(technical, title(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
+			technical = append(technical, Named(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else if v.Op == "-" {
-			d.Changes = append(d.Changes, Line{"−", title(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
+			d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
 		} else {
-			d.Changes = append(d.Changes, Line{"→", title(v.Service) + ": " + v.Key + ": " + valueWord(v.Old) + " → " + valueWord(v.New)})
+			d.Changes = append(d.Changes, Line{"→", Named(v.Service) + ": " + v.Key + ": " + valueWord(v.Old) + " → " + valueWord(v.New)})
 		}
 	}
 	for _, s := range svcs {
 		if slices.ContainsFunc(values, func(v Change) bool { return v.Service == s }) {
-			d.Impact = append(d.Impact, title(s)+" startet dafür kurz neu.")
+			d.Impact = append(d.Impact, Named(s)+" startet dafür kurz neu.")
 		}
 	}
 	// the review's human-only reasons are the visible consequences; the
@@ -624,6 +629,22 @@ func servicesOf(p *Proposal) []string {
 
 // Title is title for the pages (the key page, #696).
 func Title(name string) string { return title(name) }
+
+var builtinTitles = sync.OnceValue(func() map[string]string {
+	out := map[string]string{}
+	dirs, _ := fs.ReadDir(templates.FS, ".")
+	for _, d := range dirs {
+		var c struct{ Title string }
+		if b, err := fs.ReadFile(templates.FS, d.Name()+"/laib.yml"); err == nil && yaml.Unmarshal(b, &c) == nil && c.Title != "" {
+			out[d.Name()] = c.Title
+		}
+	}
+	return out
+})
+
+// Named: a service as the Box page names it, its built-in template's
+// title (media → Jellyfin, #785), else title.
+func Named(service string) string { return cmp.Or(builtinTitles()[service], title(service)) }
 
 // title: a service name as people say it (paperless → Paperless, home-assistant → Home Assistant).
 func title(name string) string {

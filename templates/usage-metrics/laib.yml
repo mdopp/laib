@@ -1,4 +1,6 @@
 name: usage-metrics
+title: Nutzungszähler
+beschreibung: Wie oft was genutzt wird, anonym
 template: {registry: builtin, name: usage-metrics, version: 1}
 provides: [usage-metrics]
 # Aggregate, anonymous usage counters for household apps (mdopp/usage-metrics):

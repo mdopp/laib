@@ -69,7 +69,7 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	var page string
 	until(t, "serve", func() bool { code, body := do("GET", "/schluessel", nil); page = body; return code == http.StatusOK })
 	// the overview: per service, the owner's keys in the template's words, the name in small print
-	for _, w := range []string{"Schlüssel hinterlegen", "<h2>Whoami</h2>", "Whoami: Testschlüssel", "Damit grüßt whoami mit Namen.", "<small>WHOAMI_KEY</small>", "fehlt", `href="/schluessel?name=WHOAMI_KEY"`, "Whoami: Zweiter Schlüssel"} {
+	for _, w := range []string{"Schlüssel hinterlegen", "<h2>Testseite</h2>", "Whoami: Testschlüssel", "Damit grüßt whoami mit Namen.", "<small>WHOAMI_KEY</small>", "fehlt", `href="/schluessel?name=WHOAMI_KEY"`, "Whoami: Zweiter Schlüssel"} {
 		if !strings.Contains(page, w) {
 			t.Errorf("the overview lacks %q:\n%s", w, page)
 		}
@@ -86,7 +86,7 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	// one key's own page, the deep link Haus' settings open (docs/INTERFACE.md)
 	back := "https://haus.example.home/discogs"
 	_, one := do("GET", "/schluessel?"+url.Values{"name": {"WHOAMI_KEY"}, "zurueck": {back}}.Encode(), nil)
-	for _, w := range []string{"<h1>Whoami: Testschlüssel</h1>", "für Whoami", "fehlt", "Damit grüßt whoami mit Namen.", "Bei whoami.example unter Konto anlegen.", `href="https://whoami.example/konto"`, `href="` + back + `">Zurück</a>`, `name=zurueck value="` + back + `"`, "type=password", "autocomplete=off", "<small>WHOAMI_KEY</small>"} {
+	for _, w := range []string{"<h1>Whoami: Testschlüssel</h1>", "für Testseite", "fehlt", "Damit grüßt whoami mit Namen.", "Bei whoami.example unter Konto anlegen.", `href="https://whoami.example/konto"`, `href="` + back + `">Zurück</a>`, `name=zurueck value="` + back + `"`, "type=password", "autocomplete=off", "<small>WHOAMI_KEY</small>"} {
 		if !strings.Contains(one, w) {
 			t.Errorf("the key's own page lacks %q:\n%s", w, one)
 		}
@@ -148,7 +148,7 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	until(t, "applied", func() bool {
 		_, body := do("GET", "/schluessel?"+url.Values{"name": {"WHOAMI_KEY"}, "zurueck": {back}}.Encode(), nil)
 		bodies = append(bodies, body)
-		return strings.Contains(body, "fertig: Whoami läuft mit dem neuen Schlüssel") && strings.Contains(body, ">Zurück</a>")
+		return strings.Contains(body, "fertig: Testseite läuft mit dem neuen Schlüssel") && strings.Contains(body, ">Zurück</a>")
 	})
 	if len(during) == 0 {
 		t.Fatal("whoami was not restarted")

@@ -1,4 +1,6 @@
 name: caddy
+title: Webadressen
+beschreibung: Adressen und Zertifikate der Box
 provides: [proxy]
 upstream: [https://github.com/caddyserver/caddy, https://caddyserver.com/docs/]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: caddy, version: 1}
