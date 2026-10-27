@@ -301,6 +301,32 @@ class PaperlessMail(unittest.TestCase):
         os.remove(os.path.join(self.tmp, "laib-vertraege.json"))
         self.assertEqual(self.run_check(Fake(), {})["findings"], [], "no record: nothing to say")
 
+    def test_the_status_line_says_what_the_contract_helper_did_last(self):
+        # #829: the owner asked where to see what the job did: laib status, the Box page's line
+        def lauf(**l):
+            with open(os.path.join(self.tmp, "laib-vertraege.json"), "w") as f:
+                json.dump({"lauf": {"am": "2026-10-27T13:05:00Z", "vertraege": 0, "rechnungen": 0, "kontakte": 0,
+                                    "erinnerungen": 0, "pruefen": 0, **l}}, f)
+        utc = {"TZ": "UTC", "HEUTE": "2026-10-27"}
+        lauf(rechnungen=3, kontakte=2, pruefen=1)
+        self.assertEqual(self.run_check(Fake(), utc)["detail"],
+                         "Vertragshelfer: zuletzt 13:05, 3 Rechnungen gelesen, 2 Kontakte ergänzt, 1 prüfen")
+        lauf(vertraege=1, rechnungen=1, erinnerungen=1, modell_weg=True)
+        self.assertEqual(self.run_check(Fake(), {**utc, "HEUTE": "2026-10-28"})["detail"],
+                         "Vertragshelfer: zuletzt 27.10. 13:05, 1 Vertrag und 1 Rechnung gelesen, 1 Erinnerung angelegt, "
+                         "das Modell antwortete nicht", "another day: with the date")
+        lauf()
+        self.assertEqual(self.run_check(Fake(), utc)["detail"], "Vertragshelfer: zuletzt 13:05, nichts Neues")
+        lauf(fehlt="Vertragsfelder fehlen")
+        self.assertEqual(self.run_check(Fake(), utc)["detail"], "Vertragshelfer: zuletzt 13:05, Vertragsfelder fehlen")
+        fake = Fake(accounts=[{"id": 1, "imap_server": "imap.strato.de", "username": "webmaster@example.org", "imap_port": 993}],
+                    rules=[{"id": 1, "account": 1, "filter_to": "dokumente@example.org", "enabled": True, "name": "r"}])
+        lauf(rechnungen=2)
+        self.assertEqual(self.run_check(fake, {**utc, **MAIL})["detail"],
+                         "E-Mail-Eingang: dokumente@example.org über imap.strato.de · Vertragshelfer: zuletzt 13:05, 2 Rechnungen gelesen")
+        os.remove(os.path.join(self.tmp, "laib-vertraege.json"))
+        self.assertEqual(self.run_check(Fake(), utc)["detail"], "", "no run yet: nothing to say, as before")
+
     def test_a_failed_consume_is_a_yellow_finding(self):
         # 2026-10-22: a mail was fetched, its attachment not filed (PermissionError in the scratch
         # dir); the inbox check stayed green. A failed consume Paperless still lists is yellow.

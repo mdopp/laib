@@ -32,7 +32,11 @@ the consume tasks Paperless lists as failed and nobody dismissed (a mail's
 attachment, a file from the consume folder or an upload not filed): yellow,
 with the file and Paperless' reason; and the household's correspondents
 paperless-vertraege.py left without documents (#737, its record beside the
-status file): yellow, for the owner to delete. What it cannot see: a rule that
+status file): yellow, for the owner to delete. The status line also says what
+paperless-vertraege.py's last run did, from the same record's lauf (#829):
+„Vertragshelfer: zuletzt 13:05, 3 Rechnungen gelesen, 2 Kontakte ergänzt, 1
+prüfen“; a clock time, not an age, because laib adds the status file's own
+age to the line. What it cannot see: a rule that
 matches nothing (a wrong recipient), and a failure someone dismissed.
 
 setup ends by asking Paperless to fetch now (POST /api/mail_accounts/<id>/
@@ -45,7 +49,7 @@ drops to the paperless user; laib's own exec runs `--user paperless`.
 Status file: {"at", "detail", "findings": [{severity, detail, fix}]}.
 Standard library only: it runs in the hooks image and in Paperless'.
 """
-import base64, json, os, sys, time, urllib.error, urllib.request
+import base64, calendar, json, os, sys, time, urllib.error, urllib.request
 
 E = os.environ
 SECURITY = {"none": 1, "ssl": 2, "starttls": 3}
@@ -247,7 +251,41 @@ def check(api, status):
     r = inbox(api)
     if not any("lehnt den Admin" in f["detail"] for f in r["findings"]):
         r["findings"] += failed_consumes(api)
-    return r | {"findings": r["findings"] + leere_absender(os.path.join(os.path.dirname(status), "laib-vertraege.json"))}
+    record = os.path.join(os.path.dirname(status), "laib-vertraege.json")
+    detail = " · ".join(x for x in (r["detail"], vertragshelfer(record)) if x)
+    return r | {"detail": detail, "findings": r["findings"] + leere_absender(record)}
+
+
+def anzahl(n, eins, viele):
+    return "%d %s" % (n, eins if n == 1 else viele)
+
+
+def vertragshelfer(record):
+    """#829: what paperless-vertraege.py's last run did, one line for laib status and the Box page"""
+    try:
+        with open(record, encoding="utf-8") as f:
+            lauf = json.load(f).get("lauf") or {}
+        t = time.localtime(calendar.timegm(time.strptime(lauf["am"], "%Y-%m-%dT%H:%M:%SZ")))
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return ""
+    heute = E.get("HEUTE") or time.strftime("%Y-%m-%d")
+    wann = time.strftime("%H:%M" if time.strftime("%Y-%m-%d", t) == heute else "%d.%m. %H:%M", t)
+    n = lambda k: int(lauf.get(k) or 0)
+    gelesen = [anzahl(n(k), eins, viele) for k, eins, viele in (("vertraege", "Vertrag", "Verträge"), ("rechnungen", "Rechnung", "Rechnungen")) if n(k)]
+    teile = [" und ".join(gelesen) + " gelesen"] if gelesen else []
+    if n("kontakte"):
+        teile.append(anzahl(n("kontakte"), "Kontakt", "Kontakte") + " ergänzt")
+    if n("erinnerungen"):
+        teile.append(anzahl(n("erinnerungen"), "Erinnerung", "Erinnerungen") + " angelegt")
+    if n("pruefen"):
+        teile.append("%d prüfen" % n("pruefen"))
+    if lauf.get("modell_weg"):
+        teile.append("das Modell antwortete nicht")
+    if lauf.get("weitere"):
+        teile.append("weitere im nächsten Lauf")
+    if lauf.get("fehlt"):
+        teile.append(str(lauf["fehlt"]))
+    return "Vertragshelfer: zuletzt %s, %s" % (wann, ", ".join(teile) or "nichts Neues")
 
 
 def leere_absender(record):

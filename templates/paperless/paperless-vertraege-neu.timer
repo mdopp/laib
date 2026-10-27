@@ -1,0 +1,10 @@
+[Unit]
+Description=Paperless: neue Dokumente bald lesen, alle zwei Minuten nachsehen (#829)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

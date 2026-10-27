@@ -12,8 +12,9 @@
 # documents the AI gave them as correspondent (#737). With Haus it also keeps
 # each document's sender in the family address book (kontakt_ergaenzen, #820). Haus's token reaches podman through the
 # environment, never on argv; without Haus no calendar reminder is made.
-# Hourly from the timer; the record in Paperless' data folder keeps it from
-# asking twice.
+# Hourly from the timer, and soon after new documents from
+# paperless-vertraege-neu (#829); systemd never runs it twice at once. The
+# record in Paperless' data folder keeps it from asking twice.
 [Unit]
 Description=Paperless: Vertrags- und Rechnungsdaten lesen, an Kündigungen erinnern
 After=paperless.service
