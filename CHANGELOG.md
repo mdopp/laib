@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.46.0](https://github.com/mdopp/laib/compare/v0.45.0...v0.46.0) (2026-10-27)
+
+
+### Features
+
+* **paperless:** invoices get Betrag, Rechnungsnummer and Fällig am from their text ([#818](https://github.com/mdopp/laib/issues/818)) ([f8100f2](https://github.com/mdopp/laib/commit/f8100f2d2cfde60a93b77dc50ed41bb11f14d7f3))
+* **paperless:** the sender's contact data goes to the family address book, and invoices get their Verwendungszweck ([#820](https://github.com/mdopp/laib/issues/820)) ([f8100f2](https://github.com/mdopp/laib/commit/f8100f2d2cfde60a93b77dc50ed41bb11f14d7f3))
+* **template:** paperless keeps the senders in the family address book ([d082f17](https://github.com/mdopp/laib/commit/d082f174f4f58e68817f81f3d84b596b5db52475))
+* **template:** paperless keeps the senders in the family address book ([b6fd6c1](https://github.com/mdopp/laib/commit/b6fd6c19e5d6ed84193cf6aa4e58514ca912bada))
+* **template:** paperless reads amount, invoice number and due date out of invoices ([04a8d5c](https://github.com/mdopp/laib/commit/04a8d5c162923c4d4c5f4a762790ff520b89b3e1))
+* **template:** paperless reads amount, invoice number and due date out of invoices ([1285ae5](https://github.com/mdopp/laib/commit/1285ae51eebbbdf813fd13d82f55812185aa2277)), closes [#818](https://github.com/mdopp/laib/issues/818)
+* **template:** paperless reads an invoice's Verwendungszweck ([3c4079a](https://github.com/mdopp/laib/commit/3c4079a56eb3b96ab97cc1963410a006707d5241)), closes [#820](https://github.com/mdopp/laib/issues/820)
+
 ## [0.45.0](https://github.com/mdopp/laib/compare/v0.44.1...v0.45.0) (2026-10-27)
 
 
