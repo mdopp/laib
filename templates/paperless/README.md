@@ -191,6 +191,28 @@ settings (the household model through the proxy, marked
   the document `prüfen`. A document both contract and invoice is asked for
   both, its Betrag as the invoice's. Without the two invoice fields (before
   `laib apply paperless` made them) contracts are read and invoices wait.
+- **The family address book** (#820). With Haus, the same question per
+  contract and invoice also asks for the sender: firm, contact person,
+  phone, e-mail, IBAN and postal address (letterhead, return-address line or
+  footer), plus the recipient block. A value is kept only when its words
+  are in the text and it has its shape; the firm is the sender, never the
+  household: a value in the recipient block, a household person (as above,
+  #737), a login's e-mail, or a number, mail or IBAN the text calls the
+  recipient's („Ihre Rufnummer“, „von Ihrem Konto … abgebucht“, Lastschrift,
+  Mandat) is not taken, nor a street with a household person's name just
+  before it (OCR runs the window envelope's return-address line into the
+  recipient block). An address goes only whole (street, postcode, town; the
+  country when the text names it). Then Haus' Haushalt tool
+  `kontakt_ergaenzen` gets the firm with what was found and the document's
+  Paperless link as `quelle`; Haus adds only what the card lacks. Once per
+  document, also when its text is read again; a document read before #820 is
+  asked once more, for its sender only (its fields stay as they are). When
+  Haus answers that the IBAN differs from the one in the address book, the
+  document gets `prüfen` and a note with Haus' reason (a changed bank account
+  is the fake-invoice trick). A Haus without the tool (before haus#164, or
+  without its address book) or away keeps the contact in the record for the
+  next run, never asking the model again; a tool error is recorded, not
+  retried. Without Haus nothing is asked, sent or recorded.
 - **Reminding.** For a contract with *Nächster Kündigungstermin* and a
   *Kündigungsfrist* it can read (a number and Tage, Wochen, Monate or
   Jahre: "drei Monate zum Ende der Laufzeit" is 3 months), the notice must
@@ -267,7 +289,8 @@ settings (the household model through the proxy, marked
 - **The record.** `laib-vertraege.json` in Paperless' data folder (backed
   up): per document the fields asked, what was filled and not taken (a
   document read before #818 counts as asked for the contract fields, so a
-  contract that is also an invoice is asked once more), per reminder its day,
+  contract that is also an invoice is asked once more), per document its
+  sender's answer from Haus or the contact waiting for it (#820), per reminder its day,
   the messages told, the dates marked, each text's verdict.
   `journalctl --user -u paperless-vertraege` has one line per document and
   reminder.

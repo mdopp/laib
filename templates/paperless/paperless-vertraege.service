@@ -9,7 +9,8 @@
 # Haushalt before each notice date, and on the reminder day hands a message
 # for the owner to laib-notify's eingang/ (the Bote, else mail). It also has
 # letter-salad texts recognised again, and clears a household person off the
-# documents the AI gave them as correspondent (#737). Haus's token reaches podman through the
+# documents the AI gave them as correspondent (#737). With Haus it also keeps
+# each document's sender in the family address book (kontakt_ergaenzen, #820). Haus's token reaches podman through the
 # environment, never on argv; without Haus no calendar reminder is made.
 # Hourly from the timer; the record in Paperless' data folder keeps it from
 # asking twice.
