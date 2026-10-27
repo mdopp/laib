@@ -38,8 +38,9 @@ secrets:
     external: true
     optional: true
 data:
-  - path: ${DATA_DIR}/scan           # the status file, the orders, and the archive: each stack's original or raw pages, plan.json, log; the helper's record laib-vertraege.json (ADR 0028)
-    backup: false                    # transient: SCAN_KEEP_DAYS, the documents themselves live in Paperless. The record is not backed up here: lost, the reminders already made are made once more
+  - path: ${DATA_DIR}/scan           # the status file, the orders, and the archive: each stack's original or raw pages, plan.json, log
+    backup: false                    # transient: SCAN_KEEP_DAYS, the documents themselves live in Paperless
+  - path: ${DATA_DIR}/dokumente      # ADR 0028: the contract helper's record laib-vertraege.json (the reminders made, the messages told, what was read); backed up, as it was in Paperless' data folder
   - path: ${DATA_DIR}/file-share/data/scan-eingang       # the stack inbox, \\<box>\data\scan-eingang; emptied by every stack
     backup: false
   - path: ${DATA_DIR}/file-share/data/paperless-consume  # Paperless' consume folder: the documents go to <SCAN_TAG>/; transient

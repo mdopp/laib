@@ -59,8 +59,7 @@ data:
   - path: ${DATA_DIR}/paperless/media
   - path: ${DATA_DIR}/paperless/pgdata
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
-  - path: ${DATA_DIR}/scan        # ADR 0028: post-deploy moves the contract helper's record to Dokumente once (the scan service's folder)
-    backup: false                 # the scan service's, transient
+  - path: ${DATA_DIR}/dokumente   # ADR 0028: post-deploy moves the contract helper's record to Dokumente once; the scan service mounts it, backed up
 health:
   http: http://127.0.0.1:8000/accounts/login/   # 200 without a login; /api/ challenges (#288)
 status:                             # the mail inbox (#521): whether Paperless gets into the mailbox, in laib diag

@@ -33,8 +33,8 @@ func TestScanNeverRelabelsTheShareAndKeepsNothingInTheBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := regexp.MustCompile(`(?m)^  - path: `).FindAllStringIndex(string(contract), -1)
-	if n := regexp.MustCompile(`(?m)^    backup: false`).FindAllStringIndex(string(contract), -1); len(paths) != 4 || len(n) != len(paths) {
-		t.Errorf("%d data paths, %d with backup: false: every one is transient", len(paths), len(n))
+	if n := regexp.MustCompile(`(?m)^    backup: false`).FindAllStringIndex(string(contract), -1); len(paths) != 5 || len(n) != 4 || !strings.Contains(string(contract), "  - path: ${DATA_DIR}/dokumente ") {
+		t.Errorf("%d data paths, %d with backup: false: all transient but the helper's record in ${DATA_DIR}/dokumente", len(paths), len(n))
 	}
 }
 
@@ -47,7 +47,8 @@ func TestScanRunsDokumenteWithItsHookOffTheLAN(t *testing.T) {
 	values, _ := fs.ReadFile(FS, "scan/values.example.yml")
 	for _, want := range []string{"Image=${DOKUMENTE_IMAGE}", "Environment=DOKUMENTE_LISTEN=0.0.0.0:8720",
 		"Environment=PAPERLESS_TOKEN=${PAPERLESS_TOKEN}", "Environment=DOKUMENTE_WEBHOOK_TOKEN=${DOKUMENTE_WEBHOOK_TOKEN}",
-		"\nVolume=/mnt/data/laib/notify/eingang:/meldungen\n", "AddDevice=/dev/bus/usb", "Network=host"} {
+		"\nVolume=/mnt/data/laib/notify/eingang:/meldungen\n", "AddDevice=/dev/bus/usb", "Network=host",
+		"\nVolume=${DATA_DIR}/dokumente:/dokumente:z\n", "\nEnvironment=VERTRAEGE_FILE=/dokumente/laib-vertraege.json\n"} {
 		if !strings.Contains(string(unit), want) {
 			t.Errorf("scan.container lacks %q", want)
 		}

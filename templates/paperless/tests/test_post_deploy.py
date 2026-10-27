@@ -49,7 +49,7 @@ class RecordMove(unittest.TestCase):
 
     def test_copied_once_and_never_overwritten(self):
         with tempfile.TemporaryDirectory() as d:
-            old, new = Path(d, "paperless", "data", "laib-vertraege.json"), Path(d, "scan", "laib-vertraege.json")
+            old, new = Path(d, "paperless", "data", "laib-vertraege.json"), Path(d, "dokumente", "laib-vertraege.json")
             old.parent.mkdir(parents=True)
             new.parent.mkdir(parents=True)
             old.write_text('{"erinnerungen": {"12": "2026-11-01"}}\n')
@@ -67,10 +67,10 @@ class RecordMove(unittest.TestCase):
 
     def test_without_an_old_record_nothing(self):
         with tempfile.TemporaryDirectory() as d:
-            Path(d, "scan").mkdir()
+            Path(d, "dokumente").mkdir()
             p = self.run_hook(d)
             self.assertEqual(p.returncode, 0, p.stderr)
-            self.assertFalse(Path(d, "scan", "laib-vertraege.json").exists())
+            self.assertFalse(Path(d, "dokumente", "laib-vertraege.json").exists())
 
 
 if __name__ == "__main__":

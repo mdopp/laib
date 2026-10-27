@@ -108,10 +108,12 @@ How laib took the step, where the decision left room:
 - **Port 8720** is Haus's 8650's shape: published on the host (the service
   runs on the host network), `lan: false`, no route.
 - **The record** moves once in paperless' post-deploy, which sees both
-  folders (`${DATA_DIR}/scan` is declared there for it): in the same apply
-  that removes the old timer, before the token is minted, so no run of
-  either helper sees the other's copy. Under `${DATA_DIR}/scan` it is not
-  backed up, where Paperless' data folder was.
+  folders (`${DATA_DIR}/dokumente` is declared there for it): in the same
+  apply that removes the old timer, before the token is minted, so no run
+  of either helper sees the other's copy. `${DATA_DIR}/dokumente` is backed
+  up, as Paperless' data folder was, and the scan service mounts it at
+  `/dokumente` with `VERTRAEGE_FILE=/dokumente/laib-vertraege.json`; the
+  scan's own `/data` stays transient.
 - **Not carried:** paperless-check's yellow finding for household
   correspondents the helper left without documents (#737); it read the
   record beside Paperless' status, which Paperless' container no longer

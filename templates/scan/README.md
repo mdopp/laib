@@ -245,10 +245,10 @@ does in detail is Dokumente's README (`vertraege/`).
 - **Messages** go into laib-notify's eingang
   (`/mnt/data/laib/notify/eingang`, mounted at `/meldungen`), one
   `dokumente-*.json` per reminder, which laib-notify tells the owner.
-- **The record** `laib-vertraege.json` lies in `${DATA_DIR}/scan` beside the
-  status; paperless' post-deploy copied it once from Paperless' data folder
-  when the helper moved. `${DATA_DIR}/scan` is not backed up: a lost record
-  means the reminders already made are made once more.
+- **The record** `laib-vertraege.json` lies in `${DATA_DIR}/dokumente`
+  (backed up, mounted at `/dokumente`, `VERTRAEGE_FILE`), not in the scan's
+  transient `/data`; paperless' post-deploy copied it once from Paperless'
+  data folder when the helper moved.
 - **Values** `VERTRAG_ARTEN`, `VERTRAG_VORLAUF_TAGE`, `RECHNUNG_ARTEN`,
   `HAUSHALT_NAMEN` moved from paperless' values to these; one the owner
   changed there is set here again by hand.

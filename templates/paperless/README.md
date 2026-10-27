@@ -170,7 +170,7 @@ on every apply, each step changing only what differs:
   theirs): `dokumente` gets view and change on them, merged, so the owner's
   and everyone else's stay.
 - **The record moves once**: `laib-vertraege.json` from Paperless' data
-  folder to `${DATA_DIR}/scan`, while Dokumente has none; the old file stays
+  folder to `${DATA_DIR}/dokumente` (backed up), while Dokumente has none; the old file stays
   for a rollback.
 
 The contract and invoice fields (custom fields) are still made here, above.

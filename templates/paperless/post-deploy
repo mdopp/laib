@@ -20,10 +20,10 @@ if [ -n "$next" ] && [ "$next" != "${LAIB_SECRET_PAPERLESS_DB_PASSWORD:-}" ]; th
   echo "paperless: the database password changes (laib secret rotate); Paperless takes it with its restart"
 fi
 # ADR 0028: the contract helper's record moves once, from Paperless' data folder (paperless-vertraege.timer,
-# gone with this template) to Dokumente's, the scan service's, so the reminders made and the messages told
+# gone with this template) to Dokumente's (${DATA_DIR}/dokumente, the scan service mounts it), so the reminders made and the messages told
 # carry over. Only while Dokumente has none: a copy made once is never overwritten, and the old file stays for
 # a rollback. Staged and renamed, so Dokumente never reads half a file.
-old="$LAIB_DATA_DIR/paperless/data/laib-vertraege.json" new="$LAIB_DATA_DIR/scan/laib-vertraege.json"
+old="$LAIB_DATA_DIR/paperless/data/laib-vertraege.json" new="$LAIB_DATA_DIR/dokumente/laib-vertraege.json"
 if [ -f "$old" ] && [ ! -e "$new" ]; then
   cp "$old" "$new.umzug" && mv "$new.umzug" "$new"
   echo "paperless: die Aufzeichnung der Vertragsauswertung ist zu Dokumente umgezogen ($new)"
