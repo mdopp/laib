@@ -41,5 +41,37 @@ class PostDeploy(unittest.TestCase):
             self.assertNotIn("laib-", p.stdout)
 
 
+class RecordMove(unittest.TestCase):
+    """ADR 0028: the contract helper's record moves once from Paperless' data folder to Dokumente's
+    (the scan service's), so the reminders made carry over; never over one Dokumente has, and the old
+    file stays for a rollback."""
+    run_hook = PostDeploy.run_hook
+
+    def test_copied_once_and_never_overwritten(self):
+        with tempfile.TemporaryDirectory() as d:
+            old, new = Path(d, "paperless", "data", "laib-vertraege.json"), Path(d, "dokumente", "laib-vertraege.json")
+            old.parent.mkdir(parents=True)
+            new.parent.mkdir(parents=True)
+            old.write_text('{"erinnerungen": {"12": "2026-11-01"}}\n')
+            p = self.run_hook(d)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(new.read_text(), old.read_text())
+            self.assertIn("umgezogen", p.stdout)
+            self.assertTrue(old.exists(), "the old record stays for a rollback")
+            self.assertFalse(Path(str(new) + ".umzug").exists())
+            new.write_text('{"erinnerungen": {}, "dokumente": {"3": {}}}\n')   # Dokumente's own since
+            p = self.run_hook(d)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertIn('"3"', new.read_text())
+            self.assertNotIn("umgezogen", p.stdout)
+
+    def test_without_an_old_record_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "dokumente").mkdir()
+            p = self.run_hook(d)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertFalse(Path(d, "dokumente", "laib-vertraege.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

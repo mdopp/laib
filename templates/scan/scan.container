@@ -1,9 +1,9 @@
 [Unit]
-Description=Scan: paper stacks into Paperless — the inbox folder or a SANE scanner, split by the household model (#568)
+Description=Dokumente: paper stacks into Paperless, contracts and invoices read, notice dates reminded (ADR 0028, #568)
 After=network-online.target
 
 [Container]
-Image=${SCAN_IMAGE}
+Image=${DOKUMENTE_IMAGE}
 Network=host
 Environment=TZ=${TZ}
 # quoted: an AirScan device name has spaces (#571)
@@ -26,7 +26,28 @@ Environment=MODEL_URL=${MODEL_URL}
 Environment=MODEL_LEASE=${MODEL_LEASE}
 Environment=MODEL_KEY=${MODEL_KEY}
 Environment=MODEL_NAME=${MODEL_NAME}
+# Paperless through its API with the narrowest user's token (ADR 0028), minted by paperless'
+# post-deploy; empty: no evaluation, and the status says so
+Environment=PAPERLESS_URL=${PAPERLESS_URL}
+Environment=PAPERLESS_TOKEN=${PAPERLESS_TOKEN}
+Environment=PAPERLESS_USER=${PAPERLESS_USER}
+Environment=PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
+# contracts and invoices, the notice reminders in Haus's Haushalt (#709, #818, #820, #737)
+Environment="VERTRAG_ARTEN=${VERTRAG_ARTEN}"
+Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
+Environment="RECHNUNG_ARTEN=${RECHNUNG_ARTEN}"
+Environment=HAUSHALT_URL=${HAUSHALT_URL}
+Environment=HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
+Environment="HAUSHALT_NAMEN=${HAUSHALT_NAMEN}"
+# Paperless' workflow „Dokument hinzugefügt“ posts here with this token: from Paperless' pod at
+# host.containers.internal:8720, never from the LAN (laib.yml ports) and never through Caddy (no route);
+# empty: no listener, the hourly run only
+Environment=DOKUMENTE_LISTEN=0.0.0.0:8720
+Environment=DOKUMENTE_WEBHOOK_TOKEN=${DOKUMENTE_WEBHOOK_TOKEN}
 Volume=${DATA_DIR}/scan:/data:z
+# the helper's record, backed up (ADR 0028); /data is the scan's transient folder
+Volume=${DATA_DIR}/dokumente:/dokumente:z
+Environment=VERTRAEGE_FILE=/dokumente/laib-vertraege.json
 # a scanner on the box's USB (#801): libusb opens /dev/bus/usb/<bus>/<device> as sysfs names it, and
 # both numbers change when the scanner is switched on again, so the whole tree goes in, not one node or a
 # symlink to it. podman passes the nodes there are at the start; scan.py restarts once when sysfs shows a
@@ -39,6 +60,10 @@ AddDevice=/dev/bus/usb
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/file-share/data/scan-eingang:/eingang
 Volume=${DATA_DIR}/file-share/data/paperless-consume:/consume
+# laib-notify's eingang (#703): one dokumente-*.json per reminder, which laib-notify tells the owner
+# through the Bote, else by mail. Not relabelled: laib-notify's own mount labels the folder (:Z), and
+# this container runs without labelling (above)
+Volume=/mnt/data/laib/notify/eingang:/meldungen
 AutoUpdate=registry
 
 [Service]

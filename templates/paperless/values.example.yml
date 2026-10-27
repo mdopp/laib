@@ -15,18 +15,6 @@ AI_TIMEOUT: "300"                       # seconds: Qwen on a long document
 AI_EMBED_BACKEND: openai-like           # llama-embed through the proxy; huggingface: on Paperless' CPU
 AI_EMBED_MODEL: embeddinggemma          # the llama template's EMBED_ALIAS; multilingual (haus#13: 28 of 30 German paraphrases, nomic-embed-text 7)
 AI_EMBED_CHUNK: "300"                   # well below llama-embed's 2048-token batch, which refuses a longer piece
-# contract data and notice reminders (#709, paperless-vertraege.py): the document types and tags
-# that make a document a contract, the household's own names; the reminder this many days before
-# the notice must be in, in Haus's Haushalt (without Haus: none)
-VERTRAG_ARTEN: Vertrag, Versicherung, Bescheid
-VERTRAG_VORLAUF_TAGE: "28"
-RECHNUNG_ARTEN: Rechnung                # #818: the document types and tags that make a document an invoice (a title "… - Rechnung …" does too): Betrag, Rechnungsnummer, Fällig am
-HAUSHALT_URL: http://host.containers.internal:8650/mcp/haushalt
-HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
-# the household's own people are never a document's correspondent (#737): Paperless' users count
-# by themselves (their name from the first login); here, comma-separated, the ones without a
-# login, as "Vorname Nachname" (children, a partner who never logs in)
-HAUSHALT_NAMEN: ""
 CONSUME: /mnt/data/stacks/file-share/data/paperless-consume
 ADMIN_USER: admin
 DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD

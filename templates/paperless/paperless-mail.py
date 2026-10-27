@@ -10,7 +10,9 @@ from a script by hand:
          account and the rule from PAPERLESS_MAIL_* (the password from the
          secret PAPERLESS_MAIL_PASSWORD), then checks; clears the AI and OCR
          fields of Paperless' own settings that the values set, and makes
-         the contract fields (#567). An empty
+         the contract fields (#567); makes Paperless' side of Dokumente
+         (ADR 0028, DOKUMENTE): its user, its token, the workflow that
+         tells it of a new document. An empty
          PAPERLESS_MAIL_HOST changes nothing of Paperless' mail: an account
          made by hand stays.
   check  paperless-check.service, inside the Paperless container
@@ -30,9 +32,7 @@ The check is Paperless' own connection test (POST /api/mail_accounts/test/
 with the account's id: Paperless logs in with the stored password), and
 the consume tasks Paperless lists as failed and nobody dismissed (a mail's
 attachment, a file from the consume folder or an upload not filed): yellow,
-with the file and Paperless' reason; and the household's correspondents
-paperless-vertraege.py left without documents (#737, its record beside the
-status file): yellow, for the owner to delete. What it cannot see: a rule that
+with the file and Paperless' reason. What it cannot see: a rule that
 matches nothing (a wrong recipient), and a failure someone dismissed.
 
 setup ends by asking Paperless to fetch now (POST /api/mail_accounts/<id>/
@@ -91,7 +91,7 @@ class API:
             return json.loads(data) if data else None
 
     def all(self, path):
-        out, page = [], path + "?page_size=100"
+        out, page = [], path + ("&" if "?" in path else "?") + "page_size=100"
         while page:
             res = self("GET", page)
             out += res.get("results", [])
@@ -182,6 +182,7 @@ def groups(api):
             continue
         api("PATCH", "/api/groups/%d/" % g["id"], {"permissions": sorted(set(g.get("permissions") or []) | set(perms))})
         print("paperless: Gruppe %s ergänzt um %d Rechte" % (name, len(missing)))
+    return have
 
 
 # Paperless' AI and OCR come from the values, as environment (#567). Paperless takes a field of
@@ -210,6 +211,109 @@ def config(api):
         if name.casefold() not in have:
             api("POST", "/api/custom_fields/", {"name": name, "data_type": kind})
             print("paperless: Feld %s angelegt" % name)
+
+
+# Dokumente (ADR 0028, mdopp/dokumente, run by the scan template) reads contracts and invoices
+# through Paperless' API as its own user, never the admin: it sees and changes documents (their
+# tags, notes, custom field values and correspondent), makes the tags prüfen and korrespondent-ok,
+# reads the names it needs (correspondents, document types, custom field definitions, and the
+# users, so it never takes a household person for a sender, #737). Nothing else: no deleting, no
+# mail, no workflows, no settings, no users or groups.
+DOKUMENTE_USER = "dokumente"
+DOKUMENTE_RECHTE = ["view_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
+                    "view_correspondent", "view_documenttype", "view_customfield", "view_user"]
+WORKFLOW = "Dokument hinzugefügt"
+HOOK_URL = "http://host.containers.internal:8720/hook"   # the scan service's listener on the host, never through Caddy
+
+
+def dokumente(api, have):
+    """Paperless' side of Dokumente: the user with exactly its rights, its token handed back as
+    PAPERLESS_TOKEN (the scan service's), the workflow „Dokument hinzugefügt“ that tells Dokumente
+    of each new document, and its view and change on the documents a person owns (an upload
+    through the web page is only theirs, #231). Each step looks first and changes only what
+    differs, so a second run writes nothing."""
+    pw = E.get("LAIB_SECRET_PAPERLESS_DOKUMENTE_PASSWORD", "")
+    if not pw:
+        print("paperless: kein PAPERLESS_DOKUMENTE_PASSWORD, Dokumente nicht eingerichtet")
+        return
+    want = {"is_superuser": False, "is_staff": False, "is_active": True, "groups": [],
+            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE if c in have)}
+    u = next((x for x in api.all("/api/users/") if x.get("username") == DOKUMENTE_USER), None)
+    if u is None:
+        u = api("POST", "/api/users/", {"username": DOKUMENTE_USER, "first_name": "Dokumente", "password": pw, **want})
+        print("paperless: Benutzer %s für Dokumente angelegt (%d Rechte, kein Administrator)" % (DOKUMENTE_USER, len(want["user_permissions"])))
+    elif any(sorted(u.get(k) or []) != v if isinstance(v, list) else u.get(k) != v for k, v in want.items()):
+        u = api("PATCH", "/api/users/%d/" % u["id"], want)
+        print("paperless: Benutzer %s wieder auf seine Rechte gesetzt" % DOKUMENTE_USER)
+    token = obtain(api, pw)
+    if token is None:   # its password is not the box's (made by hand, or a restored database): the box's wins
+        api("PATCH", "/api/users/%d/" % u["id"], {"password": pw})
+        token = obtain(api, pw)
+    if token is None:
+        raise SystemExit("paperless: der Benutzer %s bekommt mit seinem Passwort keinen Token" % DOKUMENTE_USER)
+    if token != E.get("LAIB_SECRET_PAPERLESS_TOKEN", ""):
+        print("laib-secret: PAPERLESS_TOKEN=" + token)
+        print("paperless: Zugang für Dokumente ausgestellt")
+    workflow(api, u["id"])
+    besitz(api, u["id"])
+
+
+def obtain(api, pw):
+    """the user's token (Paperless makes it once, then hands the same one), None for a wrong password"""
+    try:
+        return api("POST", "/api/token/", {"username": DOKUMENTE_USER, "password": pw})["token"]
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return None
+        raise
+
+
+def workflow(api, uid):
+    """„Dokument hinzugefügt“: Dokumente may see and change the new document, and hears of it at
+    its hook with the box's token; found by name, made again when it differs"""
+    token = E.get("LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN", "")
+    if not token:
+        print("paperless: kein DOKUMENTE_WEBHOOK_TOKEN, Dokumente sieht neue Dokumente erst zur vollen Stunde")
+        return
+    want = {"name": WORKFLOW, "order": 0, "enabled": True,
+            "triggers": [{"type": 2, "sources": [1, 2, 3, 4]}],   # Document Added, from the consume folder, the API, mail and the web page
+            "actions": [{"type": 1, "assign_view_users": [uid], "assign_change_users": [uid]},
+                        {"type": 4, "webhook": {"url": HOOK_URL, "use_params": True, "as_json": False, "params": None, "body": None,
+                                                "headers": {"X-Dokumente-Token": token}, "include_document": False}}]}
+    have = [w for w in api.all("/api/workflows/") if w.get("name") == WORKFLOW]
+    if len(have) == 1 and same(have[0], want):
+        print("paperless: Ablauf %s unverändert" % WORKFLOW)
+        return
+    for w in have:
+        api("DELETE", "/api/workflows/%d/" % w["id"])
+    api("POST", "/api/workflows/", want)
+    print("paperless: Ablauf %s %s" % (WORKFLOW, "erneuert" if have else "angelegt"))
+
+
+def same(w, want):
+    """the parts of a workflow this template sets, compared"""
+    def shape(x):
+        acts = []
+        for a in x.get("actions") or []:
+            h = a.get("webhook") or {}
+            acts.append((a.get("type"), sorted(a.get("assign_view_users") or []), sorted(a.get("assign_change_users") or []),
+                         h.get("url"), h.get("headers") or {}))
+        return (x.get("enabled"), [(t.get("type"), sorted(t.get("sources") or [])) for t in x.get("triggers") or []], acts)
+    return shape(w) == shape(want)
+
+
+def besitz(api, uid):
+    """the documents a person owns: Dokumente may see and change them too (merged, the owner's
+    and the others' permissions stay); asked once per document"""
+    docs = api.all("/api/documents/?owner__isnull=false&full_perms=true&fields=id,permissions")
+    fehlt = [d["id"] for d in docs if uid not in (((d.get("permissions") or {}).get("change") or {}).get("users") or [])]
+    if not fehlt:
+        return
+    api("POST", "/api/documents/bulk_edit/", {"documents": fehlt, "method": "set_permissions",
+                                               "parameters": {"set_permissions": {"view": {"users": [uid], "groups": []},
+                                                                                  "change": {"users": [uid], "groups": []}},
+                                                              "merge": True}})
+    print("paperless: Dokumente darf %d Dokument%s sehen, die einer Person gehören" % (len(fehlt), "" if len(fehlt) == 1 else "e"))
 
 
 def failed_consumes(api):
@@ -241,30 +345,12 @@ def failed_consumes(api):
 
 
 def check(api, status):
-    """the status: whether Paperless can log in to the mailbox the values name, the
-    documents it fetched or was given but could not file, and the household's
-    correspondents paperless-vertraege.py left without documents"""
+    """the status: whether Paperless can log in to the mailbox the values name, and the
+    documents it fetched or was given but could not file"""
     r = inbox(api)
     if not any("lehnt den Admin" in f["detail"] for f in r["findings"]):
         r["findings"] += failed_consumes(api)
-    return r | {"findings": r["findings"] + leere_absender(os.path.join(os.path.dirname(status), "laib-vertraege.json"))}
-
-
-def leere_absender(record):
-    """#737: a household person paperless-vertraege.py cleared off its documents stays a
-    correspondent (Paperless marks none as made by its AI), for the owner to delete"""
-    try:
-        with open(record, encoding="utf-8") as f:
-            leer = (json.load(f).get("korrespondenten") or {}).get("leer") or []
-    except (OSError, ValueError, AttributeError):
-        return []
-    if not leer:
-        return []
-    return [{"severity": "gelb",
-             "detail": "Absender aus dem Haushalt ohne Dokumente: %s (laib hat sie von den Dokumenten genommen, die KI hatte "
-                       "sie als Absender eingetragen)" % ", ".join("„%s“" % n for n in leer[:10]),
-             "fix": "in Paperless unter Korrespondenten löschen, wenn sie niemand braucht; laib löscht keine, "
-                    "weil Paperless nicht kennzeichnet, welche die KI angelegt hat"}]
+    return r
 
 
 def inbox(api):
@@ -350,8 +436,9 @@ if __name__ == "__main__":
         status = os.path.join(E["LAIB_DATA_DIR"], "paperless", "data", "laib-status.json")
         r = up(api)   # a refused admin is a finding, not a red apply: Paperless runs, the groups and the inbox wait
         if r is None:
-            groups(api)
+            have = groups(api)
             config(api)
+            dokumente(api, have)
             setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
     else:                 # inside the Paperless container: its own admin from its environment
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
