@@ -142,7 +142,9 @@ values set: a field changed there by hand is reset on the next apply, the
 others stay. It also makes the contract fields once (custom fields, found
 by name, never changed): Anbieter, Vertragsnummer, Vertragsbeginn,
 Vertragsende, Kündigungsfrist, Nächster Kündigungstermin, Betrag,
-Zahlungsintervall. The family fills them, and so does the timer below.
+Zahlungsintervall, and for invoices (#818) Rechnungsnummer and Fällig am
+(Betrag is the contracts' field). The family fills them, and so does the
+timer below.
 
 ## Contract data and notice reminders (#709)
 
@@ -167,6 +169,57 @@ settings (the household model through the proxy, marked
   does not answer (a window holds the card), the run stops reading and the
   next one asks again. A document recognised again (a new text) is read
   again, still only for its empty fields.
+- **Invoices** (#818). An invoice is a document whose type or one of whose
+  tags is named in `RECHNUNG_ARTEN` (default `Rechnung`), or whose title
+  starts with the scan service's art „Rechnung“ (`2026-05-04 Absender -
+  Rechnung Fassade`, also `Rechnung 4711`; not „Mahnung zur Rechnung“, not
+  „Rechnungskorrektur“). Scanned and mailed ones alike: a mail's invoice
+  counts by its type or tag, or a subject that starts with „Rechnung“. It
+  is read like a contract, in the same run and the same ten, for three
+  fields: **Betrag** (the sum the invoice asks for, `EUR1234.56`),
+  **Rechnungsnummer** (a number OCR split across lines, „Rech.-Nr.: 2026/“
+  „0042“, is joined, never guessed together) and **Fällig am**. The amount
+  must be one its words name („1.234,56 €“, „EUR 87,00“), in euro and above
+  zero: words of a credit note or refund (Gutschrift, Guthaben, erstatten),
+  a minus sign or another currency leave it empty with `prüfen` and a note
+  saying why, never silently. A due date must be a day its words name
+  („zahlbar bis 18.05.2026“, „fällig am 30.06.2026“). A payment term
+  („Zahlungsziel 14 Tage“) counts from the invoice's date, when its words
+  are in the text too, and the note says so (Rechnungsdatum 02.03.2026 und
+  „Zahlungsziel 14 Tage“); a term counted from a day the text does not name
+  (receipt, delivery) or without an invoice date leaves Fällig am empty and
+  the document `prüfen`. **Verwendungszweck** (#820) is the reference the
+  invoice asks to give with the payment („Bitte als Verwendungszweck
+  angeben: …“, „Kassenzeichen“, „Zahlungsreferenz“, a direct debit's
+  „Mandatsreferenz“ too): its words must name one, and never the household's
+  own line (the recipient block, „Ihr Zeichen“, „Ihre Referenz“). An invoice
+  that names none leaves it empty, without `prüfen` and never with the
+  invoice number in its place. An invoice read before #820 is asked once
+  more for it (its filled fields stay). A document both contract and invoice is asked for
+  both, its Betrag as the invoice's. Without the two invoice fields (before
+  `laib apply paperless` made them) contracts are read and invoices wait.
+- **The family address book** (#820). With Haus, the same question per
+  contract and invoice also asks for the sender: firm, contact person,
+  phone, e-mail, IBAN and postal address (letterhead, return-address line or
+  footer), plus the recipient block. A value is kept only when its words
+  are in the text and it has its shape; the firm is the sender, never the
+  household: a value in the recipient block, a household person (as above,
+  #737), a login's e-mail, or a number, mail or IBAN the text calls the
+  recipient's („Ihre Rufnummer“, „von Ihrem Konto … abgebucht“, Lastschrift,
+  Mandat) is not taken, nor a street with a household person's name just
+  before it (OCR runs the window envelope's return-address line into the
+  recipient block). An address goes only whole (street, postcode, town; the
+  country when the text names it). Then Haus' Haushalt tool
+  `kontakt_ergaenzen` gets the firm with what was found and the document's
+  Paperless link as `quelle`; Haus adds only what the card lacks. Once per
+  document, also when its text is read again; a document read before #820 is
+  asked once more, for its sender only (its fields stay as they are). When
+  Haus answers that the IBAN differs from the one in the address book, the
+  document gets `prüfen` and a note with Haus' reason (a changed bank account
+  is the fake-invoice trick). A Haus without the tool (before haus#164, or
+  without its address book) or away keeps the contact in the record for the
+  next run, never asking the model again; a tool error is recorded, not
+  retried. Without Haus nothing is asked, sent or recorded.
 - **Reminding.** For a contract with *Nächster Kündigungstermin* and a
   *Kündigungsfrist* it can read (a number and Tage, Wochen, Monate or
   Jahre: "drei Monate zum Ende der Laufzeit" is 3 months), the notice must
@@ -241,7 +294,10 @@ settings (the household model through the proxy, marked
   `paperless-check` shows it in `laib diag` (yellow) for the owner to
   delete in Paperless.
 - **The record.** `laib-vertraege.json` in Paperless' data folder (backed
-  up): per document what was filled and not taken, per reminder its day,
+  up): per document the fields asked, what was filled and not taken (a
+  document read before #818 counts as asked for the contract fields, so a
+  contract that is also an invoice is asked once more), per document its
+  sender's answer from Haus or the contact waiting for it (#820), per reminder its day,
   the messages told, the dates marked, each text's verdict.
   `journalctl --user -u paperless-vertraege` has one line per document and
   reminder.
