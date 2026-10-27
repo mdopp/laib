@@ -157,6 +157,8 @@ type Server struct {
 	roles    []statusFinding                // the modes' missing roles (#374)
 	services []Service                      // laib status, once laib answered
 	away     string                         // why laib did not answer; "" once it did (ADR 0027)
+	router   string                         // what the router said at the last refresh (#785): its part of the status line
+	silent   string                         // why the router did not answer at the last refresh; "" when it did
 	human    atomic.Int64                   // Unix seconds of the last person's request (#550)
 }
 
@@ -244,11 +246,75 @@ func New(cfg Config) (*Server, error) {
 	if l := s.read(); l != nil && l.Holder == staleRouter {
 		s.Release(context.Background(), staleRouter) // the window a request took before #522
 	}
+	s.router, s.silent = s.measure(context.Background())
 	if err := s.writeStatus(s.read()); err != nil {
 		return nil, err
 	}
 	go s.expiryLoop()
+	go s.refreshLoop()
 	return s, nil
+}
+
+// StatusEvery is how often the lease measures the router and writes its
+// status again (#785): the Box page's age is the age of a measurement.
+const StatusEvery = 15 * time.Minute
+
+func (s *Server) refreshLoop() {
+	for {
+		time.Sleep(StatusEvery)
+		s.Refresh(context.Background())
+	}
+}
+
+// Refresh asks laib again while it was away, measures the router and
+// writes the status file.
+func (s *Server) Refresh(ctx context.Context) {
+	if s.away != "" {
+		s.connect(ctx)
+	}
+	router, silent := s.measure(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.router, s.silent = router, silent
+	s.writeStatus(s.read())
+}
+
+// measure asks the router which models it has loaded, in ten seconds: the
+// status line's part, and why the router did not answer ("" when it did).
+func (s *Server) measure(ctx context.Context) (string, string) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(s.cfg.RouterURL, "/")+"/v1/models", nil)
+	var listing struct {
+		Data []struct {
+			ID     string `json:"id"`
+			Status struct {
+				Value string `json:"value"`
+			} `json:"status"`
+		} `json:"data"`
+	}
+	resp, err := s.client.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			err = fmt.Errorf("HTTP %d", resp.StatusCode)
+		} else {
+			err = json.NewDecoder(resp.Body).Decode(&listing)
+		}
+	}
+	if err != nil {
+		return "Router nicht gemessen", err.Error()
+	}
+	var loaded []string
+	for _, m := range listing.Data {
+		if m.Status.Value == "loaded" {
+			loaded = append(loaded, m.ID)
+		}
+	}
+	if len(loaded) == 0 {
+		return "kein Modell geladen, das erste lädt bei der nächsten Frage", ""
+	}
+	return "geladen: " + strings.Join(loaded, ", "), ""
 }
 
 // connect asks laib for its services and resolves the modes against them.
@@ -323,6 +389,12 @@ func (s *Server) writeStatus(l *Lease) error {
 	}
 	if len(s.roles) > 0 {
 		detail += fmt.Sprintf("; %d Rolle(n) der Modi fehlen", len(s.roles))
+	}
+	if s.router != "" {
+		detail += " · " + s.router
+	}
+	if s.silent != "" {
+		findings = append(findings, statusFinding{"gelb", "Der Modell-Router antwortet nicht (" + s.silent + "): ob ein Modell antwortet, ist offen", "laib logs llama; laib restart llama"})
 	}
 	b, _ := json.MarshalIndent(map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "detail": detail, "findings": findings}, "", "  ")
 	os.MkdirAll(s.cfg.LeaseDir, 0o755)
