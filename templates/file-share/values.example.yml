@@ -6,3 +6,4 @@ SHARE_USER: samba
 SHARE_PW: !secret SAMBA_PASSWORD
 LDAP_PASSWORD: !secret FILE_SHARE_LDAP_PASSWORD
 FILEBROWSER_ADMIN_USER: admin     # the LLDAP account File Browser makes its admin (ServiceBay's default); laib add file-share FILEBROWSER_ADMIN_USER=<you>
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # file-share-check.py, the standard library only (#785)
