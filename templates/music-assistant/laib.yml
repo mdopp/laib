@@ -37,7 +37,13 @@ data:
   - path: ${DATA_DIR}/music-assistant/data
   - path: ${DATA_DIR}/file-share/data/radio      # the house's stations (*.m3u, *.strm): post-deploy reads them (#646); the share backs them up
     backup: false
+  - path: ${DATA_DIR}/music-assistant/check     # music-assistant-check's status file (#785): made again by its timer
+    backup: false
 health:
   http: http://127.0.0.1:8095/
+status:                            # the Box page's line (#785): "8 Lautsprecher, 2 spielen gerade · 24.878 Titel"
+  file: ${DATA_DIR}/music-assistant/check/laib-status.json
+  check: music-assistant-check.service
+  stale: 20m
 ports:
   - {port: 8095, lan: true}        # HA and the speakers at home
