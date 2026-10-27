@@ -1,4 +1,6 @@
 name: mosquitto
+title: Gerätenachrichten
+beschreibung: MQTT für Sensoren und Home Assistant
 template: {registry: builtin, name: mosquitto, version: 1}
 provides: [mqtt]
 upstream: [https://github.com/eclipse/mosquitto, https://mosquitto.org/documentation/]   # where the Operator's web search looks first (#544)

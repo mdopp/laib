@@ -1,4 +1,6 @@
 name: file-share
+title: Netzlaufwerk
+beschreibung: Gemeinsame Ordner im Heimnetz
 template: {registry: builtin, name: file-share, version: 1}
 provides: [files]
 upstream: [https://github.com/syncthing/syncthing, https://docs.syncthing.net/, https://github.com/ServerContainers/samba]   # where the Operator's web search looks first (#544)

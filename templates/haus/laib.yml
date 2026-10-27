@@ -1,4 +1,6 @@
 name: haus
+title: Haus
+beschreibung: Seiten und App der Familie
 template: {registry: builtin, name: haus, version: 1}
 provides: [haus]
 # Haus (ADR 0014, mdopp/haus): the family's pages and the companion API the

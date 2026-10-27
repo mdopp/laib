@@ -1,4 +1,6 @@
 name: esphome
+title: ESPHome
+beschreibung: Firmware für Sprachgeräte und Sensoren
 template: {registry: builtin, name: esphome, version: 1}
 provides: [esphome]
 upstream: [https://github.com/esphome/esphome, https://esphome.io/]   # where the Operator's web search looks first (#544)

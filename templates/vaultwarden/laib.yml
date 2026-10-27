@@ -1,4 +1,6 @@
 name: vaultwarden
+title: Vaultwarden
+beschreibung: Passwörter der Familie
 template: {registry: builtin, name: vaultwarden, version: 1}
 provides: [passwords]
 upstream: [https://github.com/dani-garcia/vaultwarden, https://github.com/dani-garcia/vaultwarden/wiki]   # where the Operator's web search looks first (#544)

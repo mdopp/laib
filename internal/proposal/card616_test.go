@@ -49,14 +49,14 @@ func TestCardsSayWhatChangesAndWhatFollows(t *testing.T) {
 		{"a value", Proposal{ID: 80, Actor: "haus", Reason: "Scanner gefunden", Kind: "values", Class: "values", Tier: "apply",
 			Files:   []string{"services/scan/values.yml"},
 			Changes: []Change{{Op: "~", Service: "scan", Key: "SCANNER", Old: "", New: "epson2:net:192.168.178.87"}}},
-			nil, "Scan: SCANNER wird epson2:net:192.168.178.87",
+			nil, "Scannen: SCANNER wird epson2:net:192.168.178.87",
 			[]string{"SCANNER: (leer) → epson2:net:192.168.178.87"}, "Scan", "gering", "Freigeben"},
 		{"a new service", Proposal{ID: 81, Actor: "ops", Reason: "Dokumente scannen", Kind: "new-service", Class: "new-service", Tier: "apply", Adds: []string{"paperless"},
 			Files: []string{"services/paperless/laib.yml", "box.yml"}, Facts: []string{"paperless ist unter paperless.dopp.home nur im Heimnetz erreichbar"}},
 			nil, "Paperless wird installiert", nil, "nur im Heimnetz", "hoch", "Später"},
 		{"a template update", Proposal{ID: 82, Actor: "laib", Reason: "neue Vorlage", Kind: "template-update", Class: "template-update", Tier: "apply",
 			Files: []string{"services/media/laib.yml"}},
-			nil, "Media bekommt die neue Vorlage", nil, "nichts Sichtbares", "gering", "Freigeben"},
+			nil, "Jellyfin bekommt die neue Vorlage", nil, "nichts Sichtbares", "gering", "Freigeben"},
 	}
 	for _, tc := range cases {
 		c := Card(&tc.p, "dopp.home", tc.box...)

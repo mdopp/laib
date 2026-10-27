@@ -126,23 +126,24 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if err != nil {
 		return fail(err)
 	}
-	if e.Update != nil && !slices.ContainsFunc(p.Files, func(f string) bool { // only news (#698): nothing runs differently, bookkeeping on main
-		return f != "services/"+e.Update.Name+"/"+NewsFile && !strings.HasPrefix(f, "services/"+e.Update.Name+"/"+state.BaseDir+"/")
+	if e.Update != nil && !slices.ContainsFunc(p.Files, func(f string) bool { // only news (#698) or names (#785): nothing runs differently, bookkeeping on main
+		dir := "services/" + e.Update.Name
+		return f != dir+"/"+NewsFile && !strings.HasPrefix(f, dir+"/"+state.BaseDir+"/") && (f != dir+"/laib.yml" || !onlyNames(repo, wt, f))
 	}) {
 		dir := filepath.Join("services", e.Update.Name)
-		for _, f := range []string{NewsFile, filepath.Join(state.BaseDir, NewsFile)} {
+		for _, f := range []string{NewsFile, "laib.yml", filepath.Join(state.BaseDir, NewsFile), filepath.Join(state.BaseDir, "laib.yml")} {
 			b, err := os.ReadFile(filepath.Join(wt, dir, f))
 			if err == nil {
 				err = os.WriteFile(filepath.Join(repo, dir, f), b, 0o644)
 			}
-			if err != nil {
+			if err != nil && !os.IsNotExist(err) {
 				return fail(err)
 			}
 		}
-		if err := CommitPath(ctx, repo, ":(glob)"+dir+"/**/"+NewsFile, "news of template "+e.Update.From+" for "+e.Update.Name+", taken over (#698)", actor); err != nil {
+		if err := CommitPath(ctx, repo, dir, "news and names of template "+e.Update.From+" for "+e.Update.Name+", taken over (#698, #785)", actor); err != nil {
 			return fail(err)
 		}
-		return fail(errors.New("nothing to propose: only the template's news, taken over"))
+		return fail(errors.New("nothing to propose: only the template's news or names, taken over"))
 	}
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
@@ -471,6 +472,18 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 		warn = append(warn, fmt.Sprintf("services/%s: in %s ändern die Box und die Vorlage dieselben Zeilen. Die Vorlage gilt: prüfe im Diff, ob dabei eine Änderung des Besitzers verloren geht.", u.Name, strings.Join(conflicts, ", ")))
 	}
 	return warn, nil
+}
+
+// onlyNames: laib.yml in the worktree differs from main's only in its title
+// or beschreibung lines, the Box page's name (#785).
+func onlyNames(repo, wt, f string) bool {
+	strip := func(root string) []string {
+		b, _ := os.ReadFile(filepath.Join(root, f))
+		return slices.DeleteFunc(strings.Split(string(b), "\n"), func(l string) bool {
+			return strings.HasPrefix(l, "title:") || strings.HasPrefix(l, "beschreibung:")
+		})
+	}
+	return slices.Equal(strip(repo), strip(wt))
 }
 
 // NewsFile is a template's news (#687): one German sentence per change for
