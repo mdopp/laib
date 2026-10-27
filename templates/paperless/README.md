@@ -188,7 +188,14 @@ settings (the household model through the proxy, marked
   are in the text too, and the note says so (Rechnungsdatum 02.03.2026 und
   „Zahlungsziel 14 Tage“); a term counted from a day the text does not name
   (receipt, delivery) or without an invoice date leaves Fällig am empty and
-  the document `prüfen`. A document both contract and invoice is asked for
+  the document `prüfen`. **Verwendungszweck** (#820) is the reference the
+  invoice asks to give with the payment („Bitte als Verwendungszweck
+  angeben: …“, „Kassenzeichen“, „Zahlungsreferenz“, a direct debit's
+  „Mandatsreferenz“ too): its words must name one, and never the household's
+  own line (the recipient block, „Ihr Zeichen“, „Ihre Referenz“). An invoice
+  that names none leaves it empty, without `prüfen` and never with the
+  invoice number in its place. An invoice read before #820 is asked once
+  more for it (its filled fields stay). A document both contract and invoice is asked for
   both, its Betrag as the invoice's. Without the two invoice fields (before
   `laib apply paperless` made them) contracts are read and invoices wait.
 - **The family address book** (#820). With Haus, the same question per

@@ -22,7 +22,7 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # day through laib-notify's eingang, letter salad recognised again (#721);
 # a household person cleared off the documents the AI gave them as
 # correspondent (#737); an invoice's Betrag, Rechnungsnummer and Fällig am
-# from its text, the same way (#818); the sender's firm, contact person,
+# from its text, the same way (#818), and its Verwendungszweck; the sender's firm, contact person,
 # phone, e-mail, IBAN and address into Haus's family address book (#820).
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
