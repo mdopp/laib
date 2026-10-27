@@ -66,8 +66,14 @@ data:
     backup: false
   - path: ${DATA_DIR}/file-share/data/paperless-consume   # Paperless' consume folder: bote-notify files what was sent with "ablegen" (#521); transient
     backup: false
+  - path: ${DATA_DIR}/bote/check     # bote-check's status file (#785): made again by its timer
+    backup: false
 health:
   http: http://127.0.0.1:8645/health # bote-notify, in every Bote; with Signal it asks signal-cli's daemon /api/v1/check (#184, #469)
+status:                            # the Box page's line (#785): "Signal verbunden · letzte 7 Tage: 42 Gespräche, 3 unbeantwortet"
+  file: ${DATA_DIR}/bote/check/laib-status.json
+  check: bote-check.service
+  stale: 20m
 ports:
   - {port: 8085, lan: false, when: [SIGNAL_ACCOUNT]}  # signal-cli REST, loopback only (8080 is whoami, #46); first: the Box page's QR; without Signal neither declared nor published (#190)
   - {port: 8642, lan: false}         # Hermes' OpenAI-compatible API server, with BOTE_API_KEY; published beyond loopback for Haus's Sprechen field (#215)
