@@ -6,9 +6,11 @@
 package pages
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"slices"
@@ -64,6 +66,19 @@ type Readiness struct {
 	// the three guarantees Haus's start page shows the family (haus#2)
 	LastBackup LastBackup `json:"lastBackup"`
 	LastChange LastChange `json:"lastChange"`
+	// what the Operator does now and did today, for the Box pages (#792)
+	OperatorWork OperatorWork `json:"operatorWork"`
+}
+
+// OperatorWork is the Operator's /ready work and its journal lines of
+// today: counts and the newest five in words, "10:31 Neustart bote: rot".
+type OperatorWork struct {
+	diag.OpWork
+	Restarts    int      `json:"restarts"`
+	Proposals   int      `json:"proposals"`
+	Escalations int      `json:"escalations"`
+	Notes       int      `json:"notes"`
+	Today       []string `json:"today,omitempty"`
 }
 
 type ServiceStatus struct {
@@ -87,7 +102,9 @@ var BootUnclean string
 func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readiness, []ServiceStatus) {
 	var rows []ServiceStatus
 	r := Readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: cli.Version}
-	r.Operator, _ = diag.OperatorState(diag.OperatorFacts(ctx, env, st))
+	facts := diag.OperatorFacts(ctx, env, st)
+	r.Operator, _ = diag.OperatorState(facts)
+	r.OperatorWork = operatorToday(env, facts.Work, time.Now())
 	r.LastBackup, r.LastChange = Guarantees(env, st)
 	if holder := apply.LockHolder(env.Paths); holder != "" {
 		r.State, r.Lock = "eingeschränkt", holder
@@ -279,6 +296,63 @@ func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange) {
 		}
 	}
 	return lb, lc
+}
+
+// operatorToday adds what the ops hand did since midnight to its work.
+func operatorToday(env *cli.Env, now diag.OpWork, t time.Time) OperatorWork {
+	w := OperatorWork{OpWork: now}
+	es, _ := journal.Read(env.Paths.Journal, time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
+	for _, e := range es {
+		count := map[string]*int{"restart": &w.Restarts, "propose": &w.Proposals, "repair": &w.Proposals, "escalate": &w.Escalations, "note": &w.Notes}[e.Verb]
+		if e.Actor != "ops" || count == nil {
+			continue
+		}
+		*count++
+		word := map[string]string{"restart": "Neustart", "propose": "Vorschlag", "repair": "Vorschlag", "escalate": "Eskalation", "note": "Notiz"}[e.Verb]
+		line := []rune(fmt.Sprintf("%s %s %s: %s", e.T.Local().Format("15:04"), word, e.Service, cmp.Or(e.Detail, e.Reason, map[string]string{"green": "grün", "red": "rot"}[e.Result])))
+		w.Today = append([]string{string(line[:min(len(line), 160)])}, w.Today...)
+	}
+	w.Today = w.Today[:min(len(w.Today), 5)]
+	return w
+}
+
+// operatorSection is the Box page's Operator part (#792): what it works on,
+// why it waits, what it did today, small and in German.
+func operatorSection(w OperatorWork) string {
+	var b strings.Builder
+	b.WriteString("<h2>Operator</h2>")
+	if w.Incident == "" {
+		b.WriteString("<p class=muted>Gerade kein Vorfall.</p>")
+	} else {
+		fmt.Fprintf(&b, "<p>Arbeitet an: %s · seit %s", html.EscapeString(w.Incident), w.Since.Local().Format("15:04"))
+		if w.Step != "" {
+			fmt.Fprintf(&b, " · zuletzt: %s", html.EscapeString(w.Step))
+		}
+		b.WriteString("</p>")
+	}
+	if w.Waiting != "" || w.Queued > 0 {
+		fmt.Fprintf(&b, "<p class=gelb>Wartet: %s", html.EscapeString(cmp.Or(w.Waiting, "auf den nächsten Versuch")))
+		if w.Queued > 0 {
+			fmt.Fprintf(&b, " · %s in der Warteschlange", plural(w.Queued, "Vorfall", "Vorfälle"))
+		}
+		b.WriteString("</p>")
+	}
+	did := "noch nichts getan"
+	if len(w.Today) > 0 {
+		did = plural(w.Restarts, "Neustart", "Neustarts") + " · " + plural(w.Proposals, "Vorschlag", "Vorschläge") + " · " + plural(w.Escalations, "Eskalation", "Eskalationen") + " · " + plural(w.Notes, "Notiz", "Notizen")
+	}
+	fmt.Fprintf(&b, `<p>Heute: %s · <a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`, did)
+	for _, l := range w.Today {
+		fmt.Fprintf(&b, "<p class=muted>%s</p>", html.EscapeString(l))
+	}
+	return b.String()
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprint(n, " ", many)
 }
 
 // LastReport returns the newest morning report, if any.

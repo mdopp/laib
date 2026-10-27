@@ -137,6 +137,7 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 		reportAt = "07:00"
 	}
 	out := r.drain(ctx, now, skills) // the incidents that waited for the graphics card first (#550)
+	var opened []Trigger
 	for _, sk := range skills {
 		if sk.Status != "active" || sk.Trigger.Event != "" {
 			continue
@@ -156,6 +157,7 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 			kind = "report"
 		}
 		s := r.RunNow(ctx, sk, Trigger{Kind: kind})
+		opened = append(opened, s.opened...)
 		if s.Outcome == "skipped" && sk.Trigger.Every == "" {
 			// a daily or weekly slot is not lost to a busy graphics card (#550):
 			// the next step tries again; an interval skill keeps its interval
@@ -165,6 +167,9 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 			r.saveLast()
 		}
 		out = append(out, s)
+	}
+	for _, tr := range opened { // a look's new reds are incidents (#792)
+		out = append(out, r.Event(ctx, skills, tr)...)
 	}
 	return out
 }

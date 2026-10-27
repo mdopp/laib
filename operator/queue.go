@@ -73,6 +73,9 @@ func (o *Operator) enqueue(ctx context.Context, skill string, tr Trigger, now ti
 
 // waiting is the queue, oldest first.
 func (o *Operator) waiting() []waiting {
+	if o.Home == "" {
+		return nil
+	}
 	dir := filepath.Join(o.Home, "queue")
 	names, _ := filepath.Glob(filepath.Join(dir, "*.json"))
 	var ws []waiting
@@ -108,7 +111,7 @@ func (r *Runner) drain(ctx context.Context, now time.Time, skills []Skill) []Ses
 	if len(ws) == 0 || len(skills) == 0 { // no list while laib is away: nothing is judged
 		return nil
 	}
-	busy := r.Op.LLM.Busy(ctx) != ""
+	busy := r.Op.LLM.Busy(ctx, true)
 	var out []Session
 	for _, w := range ws {
 		i := slices.IndexFunc(skills, func(sk Skill) bool {
@@ -119,9 +122,11 @@ func (r *Runner) drain(ctx context.Context, now time.Time, skills []Skill) []Ses
 			r.Op.drop(ctx, w, "älter als 24 Stunden")
 		case i < 0:
 			r.Op.drop(ctx, w, "die Fähigkeit "+w.Skill+" ist nicht aktiv")
-		case !busy:
+		case !w.Trigger.Escalated && now.Sub(time.Unix(w.Trigger.Queued, 0)) >= incidentWait:
+			r.Op.escalate(ctx, w, busy) // #792: bounded, then the next hand too
+		case busy == "":
 			s := r.RunNow(ctx, skills[i], w.Trigger)
-			if s.Outcome != "skipped" {
+			if s.Outcome != "skipped" && s.Outcome != "error" {
 				os.Remove(w.path)
 			}
 			out = append(out, s)
