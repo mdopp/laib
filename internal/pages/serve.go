@@ -28,6 +28,7 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -99,20 +100,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			return
 		}
 		rd, rows := CollectStatus(r.Context(), env, st)
-		// a status the admin looks at is checked again when it is stale, in
-		// the background (#309); while a check runs the page reloads itself
-		checking := map[string]bool{}
-		for _, name := range st.ServiceNames() {
-			svc := st.Services[name]
-			if svc.Contract.Status == nil || svc.Contract.Status.Check == "" {
-				continue
-			}
-			if diag.Stale(svc, diag.ReadStatus(st, svc), time.Now()) {
-				checking[name] = diag.Refresh(r.Context(), svc)
-			} else {
-				checking[name] = sysd.Active(r.Context(), svc.Contract.Status.Check) == "activating"
-			}
-		}
+		checking := checks(r.Context(), st, true)
 		last := ""
 		if e, ok := journal.Last(env.Paths.Journal); ok {
 			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
@@ -133,10 +121,26 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		page(w, "Bote verbinden", "<h1>Bote verbinden</h1><p>Der Bote braucht eine eigene Signal-Nummer, einmal auf der Box eingerichtet:</p><pre>"+BoteLinkPage(st.Box.DataDir, boteAccount(st))+"</pre><p><a href=\"/\">zurück</a></p>")
 	}))
+	// the Status page's cards for the live script, without starting a check
+	mux.HandleFunc("GET /stand", guard(func(w http.ResponseWriter, r *http.Request) {
+		st, err := cli.LoadState(env)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		_, rows := CollectStatus(r.Context(), env, st)
+		checking, cards := checks(r.Context(), st, false), ""
+		for _, row := range rows {
+			cards += serviceCard(row, checking)
+		}
+		fragment(w, cards)
+	}))
 	mux.HandleFunc("/abmelden", Abmelden(env))
 	mux.HandleFunc("/inbox", guard(Inbox(env)))
 	mux.HandleFunc("/inbox/alle", guard(ApproveAll(env)))
+	mux.HandleFunc("GET /inbox/stand", guard(InboxStand(env)))
 	mux.HandleFunc("/schluessel", guard(Keys(env))) // a key from outside, by the owner (#696)
+	mux.HandleFunc("GET /schluessel/stand", guard(KeysStand))
 	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(Decision(env)))
 	// "jetzt prüfen" (#309): the service's check, started without waiting
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +204,39 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	return cli.ExitOK
+}
+
+// checks: per service with a status check, whether it runs now. refresh
+// starts a stale one first (#309): the page does, its fragment does not.
+func checks(ctx context.Context, st *state.State, refresh bool) map[string]bool {
+	checking := map[string]bool{}
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		if svc.Contract.Status == nil || svc.Contract.Status.Check == "" {
+			continue
+		}
+		if refresh && diag.Stale(svc, diag.ReadStatus(st, svc), time.Now()) {
+			checking[name] = diag.Refresh(ctx, svc)
+		} else {
+			checking[name] = sysd.Active(ctx, svc.Contract.Status.Check) == "activating"
+		}
+	}
+	return checking
+}
+
+// live keeps what runs current without reloading the page, since the
+// owner copies from it (2026-10-27): while the page holds an element
+// marked data-run, it fetches <path>/stand every 3 s and swaps in the
+// answer's top elements by id, never one holding the focus or a
+// selection (that one comes next time), nothing else; it stops once
+// nothing runs or the guard says no. Without JS, the link.
+const live = `<noscript><p><a href="">aktualisieren</a></p></noscript><script>(()=>{const t=()=>setTimeout(async()=>{try{const r=await fetch(location.pathname.replace(/\/$/,"")+"/stand",{cache:"no-store"});if(!r.ok)return;const d=new DOMParser().parseFromString(await r.text(),"text/html"),g=getSelection();let run=d.querySelector("[data-run]");d.body.querySelectorAll(":scope>[id]").forEach(n=>{const o=document.getElementById(n.id);if(!o)return;if(o.contains(document.activeElement)||!g.isCollapsed&&g.getRangeAt(0).intersectsNode(o))run=1;else o.replaceWith(n)});document.querySelector(".filter")?.dispatchEvent(new Event("input"));if(!run)return}catch(e){}t()},3000);t()})()</script>`
+
+// fragment answers the live script: the blocks alone, never cached.
+func fragment(w http.ResponseWriter, body string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprint(w, body)
 }
 
 func resultClass(r string) string {
@@ -375,7 +412,16 @@ func page(w http.ResponseWriter, title, body string) {
 // one embedded file, no request beyond the page itself.
 func pageHTML(title, body string) string {
 	return `<!doctype html><html lang=de><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><meta name=theme-color content="#0c0c0e"><title>Laib · ` +
-		html.EscapeString(title) + "</title><style>\n" + css + "</style></head><body>" + navBar(title) + body + "</body></html>\n"
+		html.EscapeString(title) + "</title><style>\n" + css + "</style></head><body>" + navBar(title) + body + liveIf(body) + "</body></html>\n"
+}
+
+// liveIf is the live script on a page where something runs; escaped text
+// never holds the marker's ">".
+func liveIf(body string) string {
+	if strings.Contains(body, " data-run>") {
+		return live
+	}
+	return ""
 }
 
 // statusBody is the status page: the box's line, one card per service with
@@ -399,12 +445,6 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	}
 	if !slices.Contains([]string{"rot", "gelb", "gruen"}, show) {
 		show = ""
-	}
-	for _, on := range checking {
-		if on {
-			b.WriteString(`<meta http-equiv=refresh content=10>`)
-			break
-		}
 	}
 	heard := rd.LastHeard
 	if len(heard) >= 19 {
@@ -433,31 +473,13 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	if rd.Lock != "" {
 		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
 	}
+	b.WriteString(operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
 	b.WriteString(filter + "<div class=liste>")
 	for _, row := range rows {
 		if show != "" && group(row.State) != show {
 			continue
 		}
-		var bad []string
-		for u, a := range row.Units {
-			if a != "active" {
-				bad = append(bad, u+"="+a)
-			}
-		}
-		sort.Strings(bad)
-		note := strings.TrimSpace(strings.Join(bad, " ") + " " + row.Detail)
-		check := ""
-		if on, ok := checking[row.Name]; ok {
-			check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
-			if on {
-				check = "<span class=muted>wird geprüft …</span>"
-			}
-		}
-		name := "<b>" + html.EscapeString(row.Name) + "</b>"
-		if row.Title != "" { // the plain name big, what it is beside it, the id small (#785)
-			name = "<b>" + html.EscapeString(row.Title) + "</b><span class=muted>" + html.EscapeString(row.Beschreibung) + "</span><small class=muted>" + html.EscapeString(row.Name) + "</small>"
-		}
-		fmt.Fprintf(&b, "<div class=\"card %s\" data-f>%s<span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, name, row.State, html.EscapeString(note), check)
+		b.WriteString(serviceCard(row, checking))
 	}
 	b.WriteString("</div>")
 	if last != "" {
@@ -470,6 +492,31 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 }
 
 // journalBody is the journal's entries, newest first, one row card each.
+// serviceCard is one service on the Status page, by id for the live
+// script; data-run while its check runs.
+func serviceCard(row ServiceStatus, checking map[string]bool) string {
+	var bad []string
+	for u, a := range row.Units {
+		if a != "active" {
+			bad = append(bad, u+"="+a)
+		}
+	}
+	sort.Strings(bad)
+	note := strings.TrimSpace(strings.Join(bad, " ") + " " + row.Detail)
+	check, run := "", ""
+	if on, ok := checking[row.Name]; ok {
+		check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
+		if on {
+			check, run = "<span class=muted>wird geprüft …</span>", " data-run"
+		}
+	}
+	name := "<b>" + html.EscapeString(row.Name) + "</b>"
+	if row.Title != "" { // the plain name big, what it is beside it, the id small (#785)
+		name = "<b>" + html.EscapeString(row.Title) + "</b><span class=muted>" + html.EscapeString(row.Beschreibung) + "</span><small class=muted>" + html.EscapeString(row.Name) + "</small>"
+	}
+	return fmt.Sprintf("<div class=\"card %s\" id=\"svc-%s\" data-f%s>%s<span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, html.EscapeString(row.Name), run, name, row.State, html.EscapeString(note), check)
+}
+
 func journalBody(es []journal.Entry) string {
 	var b strings.Builder
 	b.WriteString("<div class=liste>")

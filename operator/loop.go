@@ -26,6 +26,14 @@ type Trigger struct {
 	// unix seconds, and how often its red came meanwhile
 	Queued int64 `json:"queued,omitempty"`
 	Count  int   `json:"count,omitempty"`
+	// an incident a look opened (#792): the services whose finding offers a
+	// restart, and what its first aid saw and did, for the model and an escalation
+	Restart   []string `json:"restart,omitempty"`
+	Opened    bool     `json:"opened,omitempty"`
+	Aided     bool     `json:"aided,omitempty"`
+	Escalated bool     `json:"escalated,omitempty"`
+	Saw       string   `json:"saw,omitempty"`
+	Done      string   `json:"done,omitempty"`
 }
 
 // Session is one run of a skill: trigger in, tool calls, a note out.
@@ -40,6 +48,7 @@ type Session struct {
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
 	Why      string    `json:"why,omitempty"`      // why it ended red, or was skipped (#550)
+	opened   []Trigger // the incidents a look opened for its new reds (#792)
 }
 
 // Line is the session's log line. A red or an incident session's names
@@ -105,6 +114,7 @@ type Operator struct {
 	// since a look that found nothing new writes no note (#543)
 	Looked  atomic.Int64
 	failing bool // the last session ended in an error: no look is skipped
+	work    work // what it works on now and why it waits, for /ready (#792)
 }
 
 // Run executes one session of a skill for a trigger and records it. Every
@@ -121,6 +131,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	if tr.Kind == "event" {
 		s.Red = []string{tr.Detail}
 		human = tr.waited(now())
+		o.work.begin(tr.Detail, now())
+		defer o.work.begin("", time.Time{})
 	}
 	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
 	defer func() {
@@ -134,6 +146,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 		if s.Outcome != "unchanged" {
 			o.record(s)
+		}
+		if s.Outcome == "error" && tr.Kind == "event" && o.Home != "" {
+			o.enqueue(ctx, sk.Name, tr, now()) // a failed incident waits too, and is escalated in time (#792)
 		}
 	}()
 
@@ -157,6 +172,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					o.remember(mem)
 				}
 				s.Outcome = "unchanged"
+				o.work.wait("") // nothing new is nothing waiting (#792)
 				return s, nil
 			}
 			found, saw = news(fs, raw, mem.Seen[sk.Name]), ids(fs)
@@ -165,10 +181,19 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
 				}
 			}
+			s.opened = o.open(fs, mem)
 			if slices.Contains(sk.Granted, "repair") {
 				human = o.repairs(ctx, &mcp, fs, mem)
 			}
 		}
+	}
+	if tr.Opened && !tr.Aided {
+		var fixed bool
+		if fixed, s.Note, s.Calls = o.firstAid(ctx, &mcp, sk, &tr, now()); fixed {
+			s.Trigger, s.Outcome = tr, "green"
+			return s, nil
+		}
+		s.Trigger = tr
 	}
 	tools, err := mcp.Tools(ctx)
 	if err != nil {
@@ -266,14 +291,17 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	// GPU courtesy (#550): no session into another's window or a cold start;
 	// skipped is no error, the next step tries again; an incident waits in
 	// the queue (owner, 2026-10-24)
-	if why := o.LLM.Busy(ctx); why != "" {
+	// an incident or a daily slot may wake an unloaded model; a look does not (#792)
+	if why := o.LLM.Busy(ctx, tr.Kind != "tick"); why != "" {
 		s.Outcome, s.Why = "skipped", why
+		o.work.wait(why)
 		if tr.Kind == "event" && o.Home != "" {
 			s.Why += "; wartet in der Warteschlange"
 			o.enqueue(ctx, sk.Name, tr, now())
 		}
 		return s, nil
 	}
+	o.work.wait("")
 	user := o.prompt(sk, tr, ctxText)
 	system := SystemPrompt(defs)
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
@@ -395,6 +423,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 			used[mcpName]++
 			s.Calls = append(s.Calls, mcpName+" "+shown)
+			o.work.step("Modell ruft " + mcpName + " auf")
 			var out string
 			var isErr bool
 			if mcpName == "websuche" {
@@ -625,6 +654,9 @@ func (o *Operator) prompt(sk Skill, tr Trigger, ctx string) string {
 	var b strings.Builder
 	if tr.Kind == "event" {
 		fmt.Fprintf(&b, "Auslöser: ein Ereignis. Dienst: %s. Detail: %s\n", tr.Service, tr.Detail)
+		if tr.Done != "" {
+			b.WriteString("Schon getan (Laib, vor dir): " + tr.Done + "\n")
+		}
 	}
 	label := "Kontext der Box:"
 	if sk.Context == "usage" {

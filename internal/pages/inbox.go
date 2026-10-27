@@ -20,7 +20,7 @@ import (
 func Inbox(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		all, err := proposal.List(cli.InboxDir(env), false)
-		var b, list strings.Builder
+		var b strings.Builder
 		b.WriteString("<h1>Inbox</h1>" + filter)
 		if err != nil {
 			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
@@ -29,44 +29,12 @@ func Inbox(env *cli.Env) http.HandlerFunc {
 		if st, err := cli.LoadState(env); err == nil {
 			domain, box = st.Box.Domain, st.Warnings
 		}
-		locked, busy, fresh, n := apply.LockHolder(env.Paths) != "", false, false, 0
-		var open []*proposal.Proposal
-		for _, p := range all {
-			decision := DecisionState(p.ID)
-			if strings.HasPrefix(decision, "fehlgeschlagen") { // #607: the tap and why it did not go through
-				fmt.Fprintf(&b, "<p class=rot>#%d: %s</p>", p.ID, html.EscapeString(decision))
-				decision = ""
-			}
-			if p.Status == "open" && decision == "" {
-				open = append(open, p)
-				continue
-			}
-			text, class, running := progress(p, decision, locked)
-			recent := time.Since(p.Decided) < 15*time.Minute
-			if p.Status != "approved" && !running || !running && !recent && n >= 5 {
-				continue
-			}
-			n, busy, fresh = n+1, busy || running, fresh || recent
-			// the card as it ends (#686): what the box does now, then what came of it; no decision buttons
-			fmt.Fprintf(&list, "<div class=\"card %s\" data-f><b>#%d · %s</b><span class=state>%s</span>", class, p.ID, html.EscapeString(proposal.Card(p, domain).Summary), html.EscapeString(text))
-			if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
-				list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
-			}
-			if text == "fertig" { // what was approved can be taken back (#41)
-				list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
-			}
-			list.WriteString("</div>")
-		}
-		if busy {
-			b.WriteString(`<meta http-equiv=refresh content=3>`)
-		}
+		fails, list, open, n, busy, fresh := decided(all, domain, apply.LockHolder(env.Paths) != "")
+		b.WriteString(fails)
 		if may := approvable(env, open); len(may) > 1 {
 			fmt.Fprintf(&b, `<p><a href="/inbox/alle"><button class=go>Alle freigeben (%d)</button></a></p>`, len(may))
 		}
-		head := "<h2>Zuletzt freigegeben</h2><div class=liste>" + list.String() + "</div>"
-		if busy {
-			head = "<h2>Was die Box gerade macht</h2><div class=liste>" + list.String() + "</div>"
-		}
+		head := laeuft(list, busy)
 		if n > 0 && (busy || fresh) {
 			b.WriteString(head)
 		}
@@ -82,6 +50,62 @@ func Inbox(env *cli.Env) http.HandlerFunc {
 		b.WriteString(staleLines(all))
 		page(w, "Inbox", b.String())
 	}
+}
+
+// InboxStand is the block of what the box does for the live script (#686):
+// the decided cards alone.
+func InboxStand(env *cli.Env) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		all, _ := proposal.List(cli.InboxDir(env), false)
+		domain := ""
+		if st, err := cli.LoadState(env); err == nil {
+			domain = st.Box.Domain
+		}
+		_, list, _, _, busy, _ := decided(all, domain, apply.LockHolder(env.Paths) != "")
+		fragment(w, laeuft(list, busy))
+	}
+}
+
+// laeuft is the decided cards under their heading, by id; data-run while
+// one runs.
+func laeuft(list string, busy bool) string {
+	if busy {
+		return "<div id=laeuft data-run><h2>Was die Box gerade macht</h2><div class=liste>" + list + "</div></div>"
+	}
+	return "<div id=laeuft><h2>Zuletzt freigegeben</h2><div class=liste>" + list + "</div></div>"
+}
+
+// decided sorts the proposals into the taps that failed, the cards of what
+// was decided as they end (#686), and the open ones still to decide.
+func decided(all []*proposal.Proposal, domain string, locked bool) (fails, cards string, open []*proposal.Proposal, n int, busy, fresh bool) {
+	var b, list strings.Builder
+	for _, p := range all {
+		decision := DecisionState(p.ID)
+		if strings.HasPrefix(decision, "fehlgeschlagen") { // #607: the tap and why it did not go through
+			fmt.Fprintf(&b, "<p class=rot>#%d: %s</p>", p.ID, html.EscapeString(decision))
+			decision = ""
+		}
+		if p.Status == "open" && decision == "" {
+			open = append(open, p)
+			continue
+		}
+		text, class, running := progress(p, decision, locked)
+		recent := time.Since(p.Decided) < 15*time.Minute
+		if p.Status != "approved" && !running || !running && !recent && n >= 5 {
+			continue
+		}
+		n, busy, fresh = n+1, busy || running, fresh || recent
+		// the card as it ends (#686): what the box does now, then what came of it; no decision buttons
+		fmt.Fprintf(&list, "<div class=\"card %s\" data-f><b>#%d · %s</b><span class=state>%s</span>", class, p.ID, html.EscapeString(proposal.Card(p, domain).Summary), html.EscapeString(text))
+		if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
+			list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
+		}
+		if text == "fertig" { // what was approved can be taken back (#41)
+			list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
+		}
+		list.WriteString("</div>")
+	}
+	return b.String(), list.String(), open, n, busy, fresh
 }
 
 // staleLines are the stale proposals still to act on (#716). One a later
@@ -111,7 +135,7 @@ func staleLines(all []*proposal.Proposal) string {
 
 // progress is what an Inbox card says about a decision taken (#686): the
 // tap on its way, the run's step while a run holds the lock, waiting, or
-// how it ended. running: the page reloads itself, and no button shows.
+// how it ended. running: its block comes again, and no button shows.
 func progress(p *proposal.Proposal, decision string, locked bool) (text, class string, running bool) {
 	switch {
 	case decision != "":

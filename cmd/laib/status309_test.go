@@ -63,8 +63,27 @@ func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
 	if !strings.Contains(page, "fehlt: CalDAV · geprüft vor 2 h") {
 		t.Fatalf("the page shows the status with its age:\n%s", page)
 	}
-	if !strings.Contains(page, "wird geprüft") || !strings.Contains(page, "http-equiv=refresh") {
-		t.Fatalf("a stale status is being checked and the page reloads:\n%s", page)
+	if !strings.Contains(page, "wird geprüft") || !strings.Contains(page, "data-run>") || !strings.Contains(page, "fetch(") || strings.Contains(page, "http-equiv") {
+		t.Fatalf("a stale status is being checked and only its card comes again, not the page:\n%s", page)
+	}
+	// the fragment: the service cards alone, behind the same guard, GET only
+	if resp, err := do("GET", "/stand"); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("the fragment: %v %v", err, resp)
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if part := string(body); !strings.HasPrefix(part, `<div class="card `) || !strings.Contains(part, `id="svc-whoami"`) || strings.Contains(part, "<html") || strings.Contains(part, "<h1") {
+			t.Fatalf("the fragment is not the service cards alone:\n%s", part)
+		}
+	}
+	for _, path := range []string{"/stand", "/inbox/stand", "/schluessel/stand"} {
+		req, _ := http.NewRequest("GET", "http://"+addr+path, nil)
+		if resp, err := http.DefaultTransport.RoundTrip(req); err != nil || resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s without the proxy secret: %v %v, want 403", path, err, resp)
+		}
+	}
+	if resp, _ := do("POST", "/stand"); resp == nil || resp.StatusCode == http.StatusOK {
+		t.Errorf("the fragment takes a POST: %v", resp)
 	}
 	started := func() int {
 		return strings.Count(strings.Join(c.calls, "\n"), "systemctl --user start --no-block whoami-check.service")

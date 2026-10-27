@@ -40,7 +40,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 	if regexp.MustCompile(`(src|href)="?https?://|@import|url\(`).MatchString(got) {
 		t.Error("the page makes an external request (a font, a stylesheet)")
 	}
-	cards := regexp.MustCompile(`(?s)<div class="card (grün|gelb|rot)" data-f>.*?</div>`).FindAllString(got, -1)
+	cards := regexp.MustCompile(`(?s)<div class="card (grün|gelb|rot)" id="svc-[^"]+" data-f>.*?</div>`).FindAllString(got, -1)
 	if len(cards) != 3 {
 		t.Fatalf("want one card per service, got %d:\n%s", len(cards), got)
 	}

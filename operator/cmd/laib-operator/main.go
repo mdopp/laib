@@ -145,7 +145,8 @@ func main() {
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		// looked: the last look that ended without an error, the heartbeat
 		// when nothing new was worth a note (#543)
-		ready := map[string]any{"operator": "bereit"}
+		// work: what it works on now and why it waits, for the Box page (#792)
+		ready := map[string]any{"operator": "bereit", "work": op.Work()}
 		if t := op.Looked.Load(); t > 0 {
 			ready["looked"] = time.Unix(t, 0).UTC()
 		}

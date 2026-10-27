@@ -35,9 +35,20 @@ type OpFacts struct {
 	Answers      bool
 	LastNote     time.Time
 	Looked       time.Time // /ready's last look without an error (#543)
+	Work         OpWork    // /ready's work: what it does now and why it waits (#792)
 	EnabledAt    time.Time // the last `operator enable` in the journal
 	Tick         time.Duration
 	Now          time.Time
+}
+
+// OpWork is the Operator's /ready work (operator.Work): the incident it
+// works on, since when, its last step, why it waits, how many wait.
+type OpWork struct {
+	Incident string    `json:"incident,omitempty"`
+	Since    time.Time `json:"since,omitzero"`
+	Step     string    `json:"step,omitempty"`
+	Waiting  string    `json:"waiting,omitempty"`
+	Queued   int       `json:"queued,omitempty"`
 }
 
 // OperatorState turns the facts into one word for the readiness line and
@@ -82,10 +93,13 @@ func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
 	f.Unauthorized = !OperatorTokenValid(env)
 	c := &http.Client{Timeout: 2 * time.Second}
 	if resp, err := c.Get("http://127.0.0.1:5901/ready"); err == nil {
-		var ready struct{ Looked time.Time }
+		var ready struct {
+			Looked time.Time
+			Work   OpWork
+		}
 		json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&ready)
 		resp.Body.Close()
-		f.Answers, f.Looked = resp.StatusCode < 500, ready.Looked
+		f.Answers, f.Looked, f.Work = resp.StatusCode < 500, ready.Looked, ready.Work
 	}
 	if es, err := journal.Read(env.Paths.Journal, f.Now.Add(-24*time.Hour)); err == nil {
 		for _, e := range es {
