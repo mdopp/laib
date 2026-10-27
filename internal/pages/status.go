@@ -354,14 +354,3 @@ func plural(n int, one, many string) string {
 	}
 	return fmt.Sprint(n, " ", many)
 }
-
-// LastReport returns the newest morning report, if any.
-func LastReport(env *cli.Env) (string, string) {
-	files, _ := filepath.Glob(filepath.Join(env.Paths.Home, "reports", "*.md"))
-	if len(files) == 0 {
-		return "", ""
-	}
-	last := files[len(files)-1]
-	b, _ := os.ReadFile(last)
-	return strings.TrimSuffix(filepath.Base(last), ".md"), string(b)
-}

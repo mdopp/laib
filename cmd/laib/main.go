@@ -1,8 +1,8 @@
 // Command laib is the one binary: CLI and daemon. It fills the verb table
 // (mcp.Verbs: the single source for `laib help`, the MCP tool list and the
 // tier check) and holds the small verbs that only parse and delegate: plan
-// and apply, journal, note and context, logs, the state repo's init, adopt
-// and ignore, remove, pause, secret, token, operator and self (#309).
+// and apply, journal, note and context, logs, the state repo's init,
+// ignore, remove, pause, secret, token, operator and self (#309).
 // Everything else lives in internal/.
 package main
 
@@ -75,7 +75,6 @@ func init() {
 		{Name: "propose", Tier: "propose", Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--path", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
 		{Name: "approve", Tier: "apply", Help: "<id>: merge a proposal and apply it (never your own)", Flags: []string{}, Run: inbox.Approve},
 		{Name: "reject", Tier: "apply", Help: "<id> [\"<grund>\"]: drop a proposal", Flags: []string{}, Run: inbox.Reject},
-		{Name: "adopt", Tier: "propose", Help: "adopt an unmanaged Quadlet folder into services/", Run: cmdAdopt},
 		{Name: "ignore", Tier: "propose", Help: "record an unmanaged unit as deliberately unmanaged", Run: cmdIgnore},
 		{Name: "session", Tier: "read", Help: "[<name>]: a token of the hand policy.yml names in your session:, with its ttl, for one session (#380)", Run: cmdSession},
 		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] [--note n] | list | revoke <id> (humans only)", Flags: []string{"--ttl", "--note"}, Run: cmdToken},
@@ -85,7 +84,6 @@ func init() {
 		{Name: "serve", Tier: "read", Help: "daemon: /ready, the three pages", Run: pages.Serve},
 		{Name: "version", Tier: "read", Help: "print the version", Run: cmdVersion},
 		{Name: "self", Tier: "apply", Help: "rollback: the previous binaries back and the units restarted (humans only)", Run: cmdSelf},
-		{Name: "family-card", Tier: "read", Help: "print the one-page card for the family: what the box does, what to do when it is down, whom to call", Run: pages.FamilyCard},
 		{Name: "flash", Tier: "destroy", Help: "<service>: start its <service>-flash.service, which writes firmware onto a device, after a snapshot, and answer at once (#759, humans only; laib repair proposes it)", Run: envelope.Flash},
 		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
 		{Name: "person_invite", Tier: "apply", Help: "<user> --first F --last L --email E [--group family|admins] [--resend] [--signal +49…]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back; --signal proposes the number for box.yml people (`laib person invite`)", Run: cmdPersonInvite},

@@ -62,7 +62,7 @@ building a kernel under 15k lines beside it. One user, one migration
 16. Werkstatt: one template with repos, pi, Claude Code, the autoloop, `dev.<domain>`, SSH.
 17. `laib context`: the starter bundle for an agent session.
 18. `laib init`: first setup as a dialogue; USB install stays a script.
-19. `laib adopt`: an unmanaged unit on the box is drift; adopt it or ignore it (ADR 0008).
+19. An unmanaged unit on the box is drift: ignore it or bring it back as a template (ADR 0008; `laib adopt` went with #798).
 20. Only what touches the host runs on it (ADR 0027): `laib`, `laib-disk`,
     `self-update.sh` and the backup. `laib-operator`, `laib-notify` and
     `laib-haushalt` are Quadlet containers laib renders

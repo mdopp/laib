@@ -89,7 +89,7 @@ var verbWords = map[string]string{
 	"write": "Dateien von Diensten schreiben", "exec": "Befehle in Diensten ausführen", "escalate": "um Hilfe rufen",
 	"operator": "den Operator ein- und ausschalten", "rollback": "Änderungen zurücknehmen", "restore": "Daten aus der Sicherung zurückholen",
 	"converge": "die Box wieder in Ordnung bringen", "context": "einen Überblick über die Box holen", "template": "Vorlagen verwalten",
-	"add": "Dienste installieren", "remove": "Dienste entfernen", "propose": "Änderungen vorschlagen", "adopt": "fremde Dienste übernehmen",
+	"add": "Dienste installieren", "remove": "Dienste entfernen", "propose": "Änderungen vorschlagen",
 	"ignore": "fremde Dienste übergehen", "token": "Zugänge ausstellen", "secret": "Geheimnisse setzen", "disk": "Festplatten verwalten",
 	"init": "die Box neu einrichten", "serve": "die Seiten der Box betreiben", "version": "die Version sehen",
 	"pause": "Dienste eine Weile anhalten", "resume": "angehaltene Dienste wieder starten",

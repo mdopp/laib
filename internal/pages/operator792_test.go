@@ -30,14 +30,14 @@ func TestTheBoxPageSaysWhatTheOperatorDoes(t *testing.T) {
 	if w.Restarts != 1 || w.Escalations != 1 || w.Notes != 1 || w.Proposals != 0 || len(w.Today) != 3 || !strings.Contains(w.Today[0], "Eskalation bote") {
 		t.Fatalf("today counts another hand's or another day's lines: %+v", w)
 	}
-	page := statusBody(Readiness{State: "bereit", OperatorWork: w}, nil, nil, "", [2]string{}, false, "")
+	page := statusBody(Readiness{State: "bereit", OperatorWork: w}, nil, nil, "", "")
 	for _, want := range []string{"<h2>Operator</h2>", "Arbeitet an: bote: unit bote-check.service ist failed", "zuletzt: startet bote neu", "Wartet: die Grafikkarte ist vergeben · 1 Vorfall in der Warteschlange",
 		"Heute: 1 Neustart · 0 Vorschläge · 1 Eskalation · 1 Notiz", `href="/inbox"`, `href="/journal"`, "Neustart bote: bote-check.service failed"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the page lacks %q", want)
 		}
 	}
-	if idle := statusBody(Readiness{State: "bereit"}, nil, nil, "", [2]string{}, false, ""); !strings.Contains(idle, "Gerade kein Vorfall.") || strings.Contains(idle, "Wartet") {
+	if idle := statusBody(Readiness{State: "bereit"}, nil, nil, "", ""); !strings.Contains(idle, "Gerade kein Vorfall.") || strings.Contains(idle, "Wartet") {
 		t.Errorf("an idle Operator: %s", idle)
 	}
 }

@@ -88,34 +88,45 @@ what Hermes speaks (`/api/v1/check`, `/api/v1/events`,
 endpoint, and the image's own health check (the REST API's `/v1/health`)
 would keep it unhealthy: the unit's `HealthCmd` asks the daemon's
 `/api/v1/check` instead (#551). pre-start gives `${DATA_DIR}/bote/signal` to the image's user,
-uid 1000. The number is set up once, with the daemon stopped. The Box page
-(**Bote verbinden**) prints the exact commands for this box:
+uid 1000. The number is set up once, on the box as `core`, with the daemon
+stopped. Below, `signal-cli` stands for the image's binary with the data dir
+mounted and the Bote's number (`SIGNAL_ACCOUNT`) as the account:
+
+```sh
+systemctl --user stop bote-signal
+alias signal-cli='podman run --rm -it -v ${DATA_DIR}/bote/signal:/home/.local/share/signal-cli:z --entrypoint /usr/bin/signal-cli-native docker.io/bbernhard/signal-cli-rest-api --config /home/.local/share/signal-cli -a <SIGNAL_ACCOUNT>'
+# … one of the two ways below …
+podman unshare chown -R 1000:1000 ${DATA_DIR}/bote/signal
+systemctl --user start bote-signal
+```
+
+The two ways (until #798 the Box page printed these steps):
 
 - **Registered, without a second SIM** (the Kraftwerk's way). The number is
   the Bote's own, e.g. a spare landline (a Fritz!Box MSN). Signal verifies
   it by voice call. Linking it to the admin's own number is no option: the
   Bote would read every chat of that number. Steps, each `signal-cli`
   being the image's `signal-cli-native` with the data dir mounted:
-  1. `register --captcha` with a captcha from
+  1. `signal-cli register --captcha 'signalcaptcha://…'` with a captcha from
      signalcaptchas.org/registration/generate.html. That is the SMS attempt
      Signal wants first.
-  2. After a minute, `register --voice --captcha`, and pick up the call.
-  3. `verify <code>`.
-  4. `setPin <PIN>`, the registration lock, so nobody can take the number
-     over by voice call.
+  2. After a minute, `signal-cli register --voice --captcha 'signalcaptcha://…'`,
+     and pick up the call.
+  3. `signal-cli verify <code>`.
+  4. `signal-cli setPin <PIN>`, the registration lock, so nobody can take the
+     number over by voice call.
 
   The keys live only in `${DATA_DIR}/bote/signal` (and the backups);
   losing them means registering again.
-- **Linked**, to a phone that owns the number: `link -n Bote` prints a
-  `sgnl://` link. Turn it into a QR (e.g. `qrencode -t ansiutf8 'sgnl://…'`
+- **Linked**, to a phone that owns the number: the same command without
+  `-a <SIGNAL_ACCOUNT>`, then `link -n Bote`, prints a `sgnl://` link. Turn it into a QR (e.g. `qrencode -t ansiutf8 'sgnl://…'`
   on a laptop) and scan it in Signal → Gekoppelte Geräte.
 
 Without a number at all, Discord or Matrix work.
 
 ## Once, by hand
 
-1. Give the Bote its Signal number (Signal only): the Box page
-   (`laib.<domain>`) → **Bote verbinden** prints the steps (above, #469).
+1. Give the Bote its Signal number (Signal only): the steps above (#469).
 2. Tokens: `BOTE_LAIB_TOKEN` (hand `bote`: read, propose, note, escalate)
    is minted on `laib add bote`. **Nothing in the pod holds a token that can
    approve** (#48, #778): approvals happen only in the Inbox. The Automat's writes and deletes execute only with

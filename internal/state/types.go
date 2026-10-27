@@ -118,7 +118,7 @@ type Notify struct {
 // Watchdog: the outside check and the family's contact (#57).
 type Watchdog struct {
 	URL     string `yaml:"url"`     // a healthchecks-style ping URL outside the box
-	Contact string `yaml:"contact"` // "Martin, 0170 …" — printed on the family card
+	Contact string `yaml:"contact"` // "Martin, 0170 …" — was printed on the family card; kept so a box.yml naming it loads (#798)
 }
 
 // Laib is the box page and MCP listener itself (ADR 0012): where it listens,
