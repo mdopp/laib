@@ -31,7 +31,7 @@ func Inbox(env *cli.Env) http.HandlerFunc {
 		}
 		fails, list, open, n, busy, fresh := decided(all, domain, apply.LockHolder(env.Paths) != "")
 		b.WriteString(fails)
-		if may := approvable(env, open); len(may) > 1 {
+		if may, _ := oneByOne(approvable(env, open)); len(may) > 1 {
 			fmt.Fprintf(&b, `<p><a href="/inbox/alle"><button class=go>Alle freigeben (%d)</button></a></p>`, len(may))
 		}
 		head := laeuft(list, busy)
@@ -218,18 +218,47 @@ func approvable(env *cli.Env, open []*proposal.Proposal) []*proposal.Proposal {
 	})
 }
 
+// oneByOne splits off what „Alle freigeben“ leaves for its own Freigeben
+// (#799): what deletes (tier destroy, a removed service) and what the review
+// flagged (class human, a warning). left says which and why, for the page.
+func oneByOne(may []*proposal.Proposal) ([]*proposal.Proposal, string) {
+	var b strings.Builder
+	rest := slices.DeleteFunc(may, func(p *proposal.Proposal) bool {
+		why := ""
+		switch {
+		case p.Tier == "destroy":
+			why = "löscht etwas, das nicht mit einem Tipp zurückkommt"
+		case p.Class == "remove":
+			why = "entfernt einen Dienst"
+		case p.Class == "human":
+			why = "Laib will, dass du ihn dir selbst ansiehst"
+		case len(p.Warnings) > 0:
+			why = "hat einen Hinweis"
+		default:
+			return false
+		}
+		fmt.Fprintf(&b, "<li>#%d · %s: %s</li>", p.ID, html.EscapeString(proposal.Card(p, "").Summary), why)
+		return true
+	})
+	if b.Len() == 0 {
+		return rest, ""
+	}
+	return rest, "<h2>Diese gibst du einzeln frei</h2><p>Jeden mit seinem eigenen Knopf in der Inbox, dort siehst du, was er tut:</p><ul>" + b.String() + "</ul>"
+}
+
 // ApproveAll is „Alle freigeben“ (#686): GET is the one confirmation, the
 // cards it covers by number; POST approves exactly those, one after the
 // other, each with its own run — so a red one is taken back alone — and
 // the Inbox shows each as it is processed. It sits behind the box page's
-// second factor like Freigeben, and no token reaches it.
+// second factor like Freigeben, and no token reaches it. What deletes or
+// what the review flagged it leaves for its own Freigeben (#799).
 func ApproveAll(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		open, _ := proposal.List(cli.InboxDir(env), true)
-		may := approvable(env, open)
+		may, left := oneByOne(approvable(env, open))
 		if r.Method != http.MethodPost {
 			if len(may) == 0 {
-				page(w, "Inbox", "<p>Keine offenen Vorschläge.</p><p><a href=/inbox>Inbox</a></p>")
+				page(w, "Inbox", "<p>Keine Vorschläge, die du gemeinsam freigeben kannst.</p>"+left+"<p><a href=/inbox>Inbox</a></p>")
 				return
 			}
 			var b strings.Builder
@@ -238,7 +267,7 @@ func ApproveAll(env *cli.Env) http.HandlerFunc {
 				c := proposal.Card(p, "")
 				fmt.Fprintf(&b, "<div class=card><input type=hidden name=id value=%d><b>#%d · %s</b><span class=\"risk %s\">%s</span></div>", p.ID, p.ID, html.EscapeString(c.Summary), c.Risk, c.Risk)
 			}
-			fmt.Fprintf(&b, "</div><p><button class=go>Ja, alle %d freigeben</button> <a href=/inbox>Abbrechen</a></p></form>", len(may))
+			fmt.Fprintf(&b, "</div><p><button class=go>Ja, alle %d freigeben</button> <a href=/inbox>Abbrechen</a></p></form>%s", len(may), left)
 			page(w, "Inbox", b.String())
 			return
 		}
