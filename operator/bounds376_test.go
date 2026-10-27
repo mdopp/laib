@@ -36,7 +36,7 @@ func TestAktualisierungProposesOnlyPatchesAndNotesTheRest(t *testing.T) {
 		{Role: "assistant", Content: "fertig"},
 	})
 	var firstUser string
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	op.LLM.Client = &http.Client{Transport: peek(func(body string) {
 		if firstUser == "" {
 			firstUser = body
@@ -88,7 +88,7 @@ func TestTheMechanicsLeftThePrompts(t *testing.T) {
 				t.Errorf("%s: the prompt still carries %q", name, w)
 			}
 		}
-		if b, _ := os.ReadFile("../skills/" + name + ".yml"); !strings.Contains(string(b), "\nlimits:") {
+		if b, _ := os.ReadFile("../skills/" + name + "/skill.yml"); !strings.Contains(string(b), "\nlimits:") {
 			t.Errorf("%s declares no limits", name)
 		}
 	}
@@ -102,7 +102,7 @@ func TestAktualisierungProposesTheHostImageItself(t *testing.T) {
 	updates := `[{"service":"host","key":"stable-nvidia","image":"ostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal","current":"sha256:a287","patch":"sha256:b111"}]`
 	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates})
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "fertig"}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{}, "aktualisierung")
 	s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
 	if err != nil {

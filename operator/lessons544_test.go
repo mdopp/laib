@@ -26,7 +26,7 @@ func TestASolvedIncidentBecomesALessonOnce(t *testing.T) {
 	replies := map[string]string{"laib_inbox": inboxJSON(t, fixed, repaired), "laib_propose": `{"id":13}`}
 	mcp, calls := fakeMCP(t, replies)
 	// no model: a call to this one fails the session
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "none"}, Home: home}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "none"}, Home: home}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "lehre")
 	s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
 	if err != nil {
@@ -59,15 +59,10 @@ func TestALessonThatKeepsFailingIsNamedForRemoval(t *testing.T) {
 	before := opsPast(19, "no-effect", "", 11*24*time.Hour) // before the lesson: not its fault
 	a, b := opsPast(21, "no-effect", "", 5*24*time.Hour), opsPast(22, "rejected", "wieder dasselbe", 2*24*time.Hour)
 	ok := opsPast(23, "effective", "", time.Hour)
-	if got := Stale([]past{ok, b, a, lesson, before}); got != "Lehre lessons/unit-whoami.md hilft nicht: 2 spätere Vorschläge ohne Erfolg (#21, #22), zum Entfernen." {
-		t.Fatalf("%q", got)
-	}
-	if got := Stale([]past{ok, a, lesson, before}); got != "" {
-		t.Fatalf("one failure is no pattern: %q", got)
-	}
+	// the cases themselves are skills/morgenbericht/test_run.py (#839); this is the runner
 	mcp, _ := fakeMCP(t, map[string]string{"laib_inbox": inboxJSON(t, ok, b, a, lesson, before)})
 	llm, _ := recLLM(t, []Message{{Role: "assistant", Content: "Ruhige Nacht."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Now: func() time.Time { return day }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Now: func() time.Time { return day }}
 	s, _ := op.Run(context.Background(), skillFor(t, Trigger{Kind: "report"}, "morgenbericht"), Trigger{Kind: "report"})
 	if !strings.Contains(s.Note, "Lehre lessons/unit-whoami.md hilft nicht") {
 		t.Fatalf("the morning report does not name the lesson: %q", s.Note)

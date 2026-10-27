@@ -252,6 +252,11 @@ mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] fo
 mcp_skill durchsicht tools/list | python3 -c 'import sys,json; n=sorted(t["name"] for t in json.load(sys.stdin)["tools"]); assert n==["laib_logs","laib_note","laib_status","laib_wish"], n' || fail "the log review sees more than read tools, note and wish (#550)"
 mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
 mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
+# a skill's script (#839): durchsicht's run.py against the real server, its calls in its skill's name;
+# a day without error lines asks no model and is recorded once
+LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:5977/v1 OPERATOR_HOME="$WORK/op" OPERATOR_SKILLS="$ROOT/skills" "$OPERATOR" -once durchsicht > "$WORK/durchsicht.json" || { echo "FAIL: durchsicht exit $?"; cat "$WORK/durchsicht.json"; kill $FAKE $SERVE; exit 1; }
+python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="unchanged" and s["script"][0]=="laib_status {}" and any(c.startswith("laib_logs ") for c in s["script"]) and not s["calls"] and not s.get("refused"), s' "$WORK/durchsicht.json" || fail "durchsicht's script did not run through the runner"
+grep -q '"skill":"durchsicht".*"outcome":"unchanged"' "$WORK/op/incidents.jsonl" || fail "a run with nothing to do is not recorded (#839)"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==4, s' "$WORK/op.json"
 # the switch: listed for everyone, set by a human, a commit to policy.yml

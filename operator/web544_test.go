@@ -40,7 +40,7 @@ func fakeFrage(t *testing.T, scoped, open []hit) (*httptest.Server, *[]string) {
 // that may file one, never next to a tool that changes the box, and only
 // where the box runs Frage.
 func TestTheWebIsOfferedOnlyWhereNothingActs(t *testing.T) {
-	op := &Operator{Web: &Web{URL: "http://frage"}}
+	op := &Operator{Skills: "../skills", Web: &Web{URL: "http://frage"}}
 	for name, want := range map[string]bool{"aktualisierung": true, "vorfall": false, "routineblick": false, "morgenbericht": false, "nutzung": false, "lehre": true} {
 		if got := op.offersWeb(skillFor(t, Trigger{}, name)); got != want {
 			t.Errorf("%s: web offered %v, want %v", name, got, want)
@@ -51,7 +51,7 @@ func TestTheWebIsOfferedOnlyWhereNothingActs(t *testing.T) {
 	if op.offersWeb(sk) {
 		t.Error("a session that may restart is offered the web")
 	}
-	if (&Operator{Web: &Web{}}).offersWeb(skillFor(t, Trigger{}, "aktualisierung")) {
+	if (&Operator{Skills: "../skills", Web: &Web{}}).offersWeb(skillFor(t, Trigger{}, "aktualisierung")) {
 		t.Error("the web without Frage")
 	}
 }
@@ -108,7 +108,7 @@ func TestAProposalAfterAWebSearchNamesItsSources(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("3", "laib_note", `{"kind":"watch","text":"immich v1.2.3 vorgeschlagen."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Web: &Web{URL: frage.URL}}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Web: &Web{URL: frage.URL}}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{}, "aktualisierung"), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)

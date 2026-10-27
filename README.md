@@ -253,7 +253,7 @@ disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART a
 haushalt/            laib-haushalt behind the kernel's verb door, a container laib renders (ADR 0027): scan, net geraete, tell, zuhause, person signal and wish, the household verbs (ADR 0026); its own program and budget
 lease/               laib-lease, the model role's policy proxy and GPU lease (ADR 0011), the llama template's container (ADR 0027): its own program and budget (#677)
 notify/              laib-notify, a container on a rendered timer (ADR 0027): the outside watchdog ping and the owner's mail, over MCP as the notify hand; its own program and budget (#443)
-skills/              the Operator's built-in skills, embedded in laib like the templates (ADR 0023)
+skills/              the Operator's built-in skills, a folder each: skill.yml, embedded in laib like the templates, and run.py, run in the Operator's image (ADR 0023, #839)
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop

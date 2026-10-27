@@ -15,7 +15,7 @@ func TestATextToolCallIsNotASuccess(t *testing.T) {
 		{Role: "assistant", Content: "laib_restart whoami"},
 		{Role: "assistant", Content: `{"name":"laib_restart","arguments":{"args":"whoami"}}`},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami", Detail: "red"}, ""), Trigger{Kind: "event", Service: "whoami", Detail: "red"})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestInvalidToolArgumentsAreRejectedNotExecuted(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{call("2", "laib_note", "--kind watch \"nichts\"")}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	if _, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami"}, ""), Trigger{Kind: "event", Service: "whoami"}); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestContextIsBudgeted(t *testing.T) {
 		huge.WriteString("- 12:00 ops note whoami info Routineblick nichts zu tun, Zeile " + strconvQuote(strings.Repeat("x", 40)) + "\n")
 	}
 	huge.WriteString("- 23:59 laib ready red boot: 1 rot LETZTE ZEILE\n")
-	op := &Operator{}
+	op := &Operator{Skills: "../skills"}
 	p := op.prompt(Skill{Prompt: "Routineblick."}, Trigger{Kind: "tick"}, huge.String())
 	if len(p) > 12000 {
 		t.Fatalf("prompt is %d chars; a 32k model cannot take that", len(p))

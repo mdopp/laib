@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+// The log review is durchsicht's script since #839 (skills/durchsicht/run.py,
+// its pattern tests in test_run.py); these run it through the runner, for real.
+
 // The 48 hours a human read on the Kraftwerk (#551), in the shapes the
 // journal had: journalctl -o short-iso lines, most of them INFO on stderr.
 func kraftwerkDay(adguardTimeouts int) map[string]map[string]string {
@@ -126,10 +129,10 @@ func TestDurchsichtShowsOnlyNewRecurringOrGrowingRealErrors(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"watch","text":"AdGuard: 40 PTR-Timeouts."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "durchsicht")
-	if sk.Trigger.Daily == "" || sk.Context != "logs" {
-		t.Fatalf("durchsicht is a daily skill that starts from the logs: %+v", sk)
+	if sk.Trigger.Daily == "" || sk.Run != "run.py" {
+		t.Fatalf("durchsicht is a daily skill whose script reads the logs (#839): %+v", sk)
 	}
 	run := func() (Session, string) {
 		t.Helper()
@@ -182,8 +185,8 @@ func TestDurchsichtShowsOnlyNewRecurringOrGrowingRealErrors(t *testing.T) {
 	// and again: nothing new — no model, no note
 	n := len(*calls)
 	s, user = run()
-	if user != "" || s.Outcome != "unchanged" {
-		t.Fatalf("an unchanged day asks no model: %q %+v", user, s)
+	if user != "" || s.Outcome != "unchanged" || s.Why == "" {
+		t.Fatalf("an unchanged day asks no model, and says why: %q %+v", user, s)
 	}
 	for _, c := range (*calls)[n:] {
 		if strings.HasPrefix(c, "laib_note") || strings.HasPrefix(c, "laib_wish") {
@@ -207,7 +210,7 @@ func TestDurchsichtForgetsAReviewWhoseSessionFailed(t *testing.T) {
 	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "busy", 503) }))
 	t.Cleanup(down.Close)
 	home := t.TempDir()
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: down.URL, Model: "test"}, Home: home, Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: down.URL, Model: "test"}, Home: home, Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "durchsicht")
 	if _, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err == nil {
 		t.Fatal("a model that answers 503 is an error")
@@ -222,30 +225,23 @@ func TestDurchsichtForgetsAReviewWhoseSessionFailed(t *testing.T) {
 	}
 }
 
-// The classifier (#551 point 7): the level a line names decides, else its
-// words; numbers, ids, paths and timestamps are not part of a pattern.
-func TestLogLinePatterns(t *testing.T) {
-	for _, c := range []struct {
-		msg, pattern string
-		real         bool
-	}{
-		{"[2026-10-21 03:11:19 +0200] [1/Thread-7 (process_request_thread)] [INFO] Successful login: 'cdopp'", "", false},
-		{`INFO:     10.88.0.3:50111 - "POST /v1/audio/transcriptions HTTP/1.1" 500 Internal Server Error`, "", false},
-		{"[2026-10-21 03:11:19,120] [INFO] [paperless.consumer] Consuming error-report.pdf", "", false},
-		{"srv  update_slots: id  0 | task 4711 | prompt done, n_past = 812", "", false},
-		{"2026/10/21 03:11:19.123456 [error] dnsproxy: exchanging with 192.168.178.1:53 over udp: i/o timeout", "[error] dnsproxy: exchanging with <ip> over udp: i/o timeout", true},
-		{"[03:11:19] [ERR] [42] MediaBrowser.Providers.Music.AudioFileProber: End of file: /media/cdopp/music/8f3a9c2e41b7.1.aac", "[ERR] [<n>] MediaBrowser.Providers.Music.AudioFileProber: End of file: <pfad>", true},
-		{"[03:11:19] [WRN] [12] Jellyfin.Server: slow response", "", false},
-		{`{"level":"error","ts":1729560679.1,"logger":"http.handlers.reverse_proxy","msg":"aborting with incomplete response","request":{"remote_ip":"192.168.178.20"},"error":"reading: context canceled"}`, "http.handlers.reverse_proxy: aborting with incomplete response (reading: context canceled)", true},
-		{"2026-10-21 03:11:19.552 ERROR (MainThread) [homeassistant.components.websocket_api.http.connection] [140234] Unauthorized: Bote", "ERROR (MainThread) [homeassistant.components.websocket_api.http.connection] [<n>] Unauthorized: Bote", true},
-		{"AttributeError: 'NoneType' object has no attribute 'speech'", "AttributeError: 'NoneType' object has no attribute 'speech'", true},
-		{"sse: write tcp 127.0.0.1:8650->127.0.0.1:51234: write: transport endpoint is not connected", "sse: write tcp <ip>-><ip>: write: transport endpoint is not connected", true},
-		{"thumbnail 0b5c7f2e-9d41-4c3a-b8e6-1f2a3b4c5d6e failed after 3 attempts", "thumbnail <id> failed after <n> attempts", true},
-		{"    at Sharp.toFile (/usr/src/app/node_modules/sharp/lib/output.js:90:5)", "", false},
-	} {
-		got, real := logPattern(c.msg)
-		if real != c.real || (real && got != c.pattern) {
-			t.Errorf("%s\n got  %v %q\n want %v %q", c.msg, real, got, c.real, c.pattern)
-		}
+// #839: a review that waited for the graphics card is not remembered
+// either. Before, a skipped review kept its patterns as told, and the retry
+// at the next step found nothing new: the morning's review was lost, which
+// is how durchsicht "left almost no trace" while the model was not loaded.
+func TestDurchsichtForgetsAReviewThatWaited(t *testing.T) {
+	day := kraftwerkDay(40)
+	mcp, _ := reviewMCP(t, &day)
+	lease, catalogue := werkstatt, loaded
+	llm, asked := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "AdGuard: 40 PTR-Timeouts."}})
+	var user string
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen", Client: &http.Client{Transport: peek(func(b string) { user = b })}}, Home: t.TempDir(), Typed: true}
+	sk := skillFor(t, Trigger{Kind: "tick"}, "durchsicht")
+	if s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err != nil || s.Outcome != "skipped" {
+		t.Fatalf("the card is lent: %+v %v", s, err)
+	}
+	lease = household
+	if s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err != nil || s.Outcome != "green" || *asked != 1 || !strings.Contains(user, "neu, adguard.service, 40×") {
+		t.Fatalf("the review that waited is news at the next step: %+v %v\n%s", s, err, user)
 	}
 }

@@ -13,14 +13,14 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// skillBox is a state repo with skills/<name>.yml files and the ops hand at
+// skillBox is a state repo with skills/<name>/skill.yml files and the ops hand at
 // a ceiling; statuses is policy.yml skills.
 func skillBox(t *testing.T, ceiling string, files, statuses map[string]string) (*cliEnv, *state.State) {
 	t.Helper()
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, "skills"), 0o755)
 	for n, c := range files {
-		if err := os.WriteFile(filepath.Join(dir, "skills", n+".yml"), []byte(c), 0o644); err != nil {
+		os.MkdirAll(filepath.Join(dir, "skills", n), 0o755)
+		if err := os.WriteFile(filepath.Join(dir, "skills", n, "skill.yml"), []byte(c), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

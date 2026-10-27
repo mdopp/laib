@@ -26,7 +26,7 @@ func TestASessionWritesItsNoteOnce(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("4", "laib_note", note)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	tr := Trigger{Kind: "event", Service: "whoami", Detail: "whoami: health red"}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestARedSessionsLineSaysWhatWasRedAndWhatCameOfIt(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_propose", `{"reason":"jellyfin neu","service":"jellyfin","key":"IMAGE","value":"j:1.2","finding":"unit jellyfin","evidence":"unit failed","undo":"IMAGE zurück"}`)}},
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("2", "laib_diag", `{}`)}}, // loops until the limit
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
 	tr := Trigger{Kind: "event", Service: "jellyfin", Detail: "jellyfin: apply: unit failed"}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestALooksContextIsSmallWhateverTheWindow(t *testing.T) {
 	})
 	var sizes []int
 	var user string
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test", Client: &http.Client{Transport: sized{&sizes}}}, Home: t.TempDir(), Window: 131072}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test", Client: &http.Client{Transport: sized{&sizes}}}, Home: t.TempDir(), Window: 131072}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	before, _ := op.budgets()
 	if _, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err != nil {
@@ -186,7 +186,7 @@ func TestNoSessionWhileTheGraphicsCardIsElsewhereOrCold(t *testing.T) {
 		{Role: "assistant", Content: "fertig"},
 	})
 	mcp, calls := fakeMCP(t, map[string]string{"laib_diag": "[" + watchdog + "]"})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
 	look := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	for _, c := range []struct{ lease, catalogue, why string }{
 		{werkstatt, loaded, "werkstatt"},
@@ -218,7 +218,7 @@ func TestASkippedDailySkillTriesAgainAtTheNextStep(t *testing.T) {
 	lease, catalogue := werkstatt, loaded
 	llm, asked := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "Bericht: alles ruhig."}})
 	mcp, _ := fakeMCP(t, nil)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
 	report := skillFor(t, Trigger{Kind: "report"}, "")
 	r := &Runner{Op: op}
 	r.LoadLast()
@@ -242,7 +242,7 @@ func TestAnUpdateOrFirmwareIsNoNewsForTheLook(t *testing.T) {
 	replies := map[string]string{"laib_diag": "[" + watchdog + "]"}
 	mcp, _ := fakeMCP(t, replies)
 	llm, asked := recLLM(t, []Message{{Role: "assistant", Content: "Der Wächter fehlt."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	if s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); err != nil || s.Outcome != "green" {
 		t.Fatalf("%+v %v", s, err)

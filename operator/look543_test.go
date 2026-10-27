@@ -64,7 +64,7 @@ func TestAnUnchangedLookAsksNoModelAndARepairIsProposedOnce(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"watch","text":"Zwei Punkte sind gelb."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 
 	s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
@@ -110,7 +110,7 @@ func TestOnlyWhatChangedReachesTheModel(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("2", "laib_note", `{"kind":"watch","text":"gesehen"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	run := func() {
 		t.Helper()
@@ -154,7 +154,7 @@ func TestRedIsNotTheLooksAndARefusedRepairIsSaidOnce(t *testing.T) {
 	replies := map[string]string{"laib_diag": "[" + red + "," + restoreTest + "]", "laib_repair": "Budget: repair ist der Fähigkeit routineblick nicht gewährt"}
 	mcp, calls := fakeMCP(t, replies)
 	llm, _ := recLLM(t, []Message{{Role: "assistant", Content: "Eins ist rot."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	s, _ := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
 	if got := strings.Join(*calls, "\n"); strings.Contains(got, `"probe":"unit"`) || countPrefix(*calls, "laib_repair") != 1 {
@@ -178,7 +178,7 @@ func TestAFailedSessionIsNotSkippedNorABeat(t *testing.T) {
 	replies := map[string]string{"laib_diag": "[" + watchdog + "]"}
 	mcp, _ := fakeMCP(t, replies)
 	llm, asked := recLLM(t, []Message{{Role: "assistant", Content: "Gelb: kein Wächter."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	look := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	op.Run(context.Background(), look, Trigger{Kind: "tick"})
 	op.LLM.URL = "http://127.0.0.1:1" // the model goes away
@@ -213,7 +213,7 @@ func TestTheReportNamesAnOwnersItemOnce(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("2", "laib_note", `{"kind":"report","text":"Bericht"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "report"}, "morgenbericht")
 	for range 2 {
 		if s, err := op.Run(context.Background(), sk, Trigger{Kind: "report"}); err != nil || s.Outcome == "unchanged" {

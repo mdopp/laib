@@ -36,9 +36,17 @@ func main() {
 		Usage: &operator.Usage{URL: os.Getenv("USAGE_METRICS_URL"), Token: os.Getenv("USAGE_METRICS_TOKEN")},
 		// rendered into the unit when the box runs Frage (#544): the web, read through its SearXNG
 		Web: &operator.Web{URL: os.Getenv("FRAGE_URL")},
+		// the built-in skills' folders in the image, their scripts (#839)
+		Skills: env("OPERATOR_SKILLS", "/skills"),
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")
+	}
+	// a skill's script runs as this process's user: it may not read the
+	// token out of /proc (#839)
+	if err := operator.Private(); err != nil {
+		log.Printf("laib-operator: not private (%v): no skill script runs", err)
+		op.Skills = ""
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -17,9 +17,9 @@ for d in $(sed -n '/^## Layout/,/^## /p' README.md | grep -oE '^(cmd|internal|op
 done
 found "README layout" "$missing"
 
-# 2. the Operator's tools are verbs the MCP exposes
+# 2. the Operator's tools are verbs the MCP exposes, also those its skills' scripts call (#839)
 lacking=""
-for t in $(grep -ohE 'laib_[a-z_]+' operator/*.go operator/cmd/laib-operator/*.go 2>/dev/null | sort -u); do
+for t in $(grep -ohE 'laib_[a-z_]+' operator/*.go operator/cmd/laib-operator/*.go skills/*/run.py 2>/dev/null | sort -u); do
   v=${t#laib_}
   grep -qE "\{Name: \"$v\", Tier: \"[a-z]+\", MCP: true," cmd/laib/main.go || lacking="$lacking$t is no MCP row of the verb table
 "
