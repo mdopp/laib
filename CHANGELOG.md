@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.1](https://github.com/mdopp/laib/compare/v0.43.0...v0.43.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **template:** the bote, frage and immich checks join their pod; lint refuses a network join into a pod member ([4ae43b2](https://github.com/mdopp/laib/commit/4ae43b2be9d557930c7266fdb9d54a87aabe4a34))
+
 ## [0.43.0](https://github.com/mdopp/laib/compare/v0.42.1...v0.43.0) (2026-10-27)
 
 
