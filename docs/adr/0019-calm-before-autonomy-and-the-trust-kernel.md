@@ -66,9 +66,9 @@ wrong.
 5. **An outside watchdog and a paper card.** `laib serve` (since #443 its
    program `laib-notify`, on a five-minute timer) pings an outside
    check while readiness is not red; silence becomes a push to the admin's
-   phone; `laib family-card` prints "Wenn die Box nicht geht" and
-   `laib recovery-sheet` the age key, the restic password, the repo and
-   four steps (#79, #74).
+   phone; `laib recovery-sheet` prints the age key, the restic password, the repo and
+   four steps (#79, #74). The family card (`laib family-card`) left the
+   kernel with #798.
 6. **Decisions in plain language.** Every approval shows the consequence in
    one sentence, whether it is reversible, who asked and why, and "Später"
    first for risky classes; the diff sits behind "Details" (#78).

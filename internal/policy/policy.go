@@ -114,9 +114,10 @@ func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
 // laib stops and asks a human: a flapping service is a bug, not a chore.
 const ConvergeBudget = 3
 
-// KnownVerbs is every verb of the CLI (cmd/laib's table), so policy.yml can
-// name them in a hand's verb list and be validated without importing it.
-var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "repair": true, "wish": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "net": true, "person_invite": true, "person_pending": true, "person_signal": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true, "pause": true, "resume": true, "aufgabe": true, "tell": true}
+// KnownVerbs is every verb of the CLI, so policy.yml can name them in a
+// hand's verb list without importing it: cmd/laib fills it from its verb
+// table in init (#800).
+var KnownVerbs = map[string]bool{}
 
 // MayVerb reports whether a hand may use a verb at all: a hand with a verb
 // list is limited to it (notify: diag, updates, inbox, note), a hand

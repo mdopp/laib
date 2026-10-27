@@ -5,11 +5,11 @@ template: {registry: builtin, name: scan, version: 1}
 provides: [scan]
 # Paper stacks into Paperless (#568): a stack is a file in the share's
 # scan-eingang folder (a scanner that scans to a network folder) or a run
-# of a SANE network scanner; each page is turned, read and judged blank,
+# of a SANE scanner, on the network or the box's USB (#801); each page is turned, read and judged blank,
 # the household model splits the pages into documents, and each document
 # goes into Paperless' consume folder under the SCAN_TAG tag. One stack at
 # a time, one closing message per stack (FERTIG, WARTET, ABGEBROCHEN or
-# FEHLER) through bote-notify. Host network: the SANE scanner on the LAN,
+# FEHLER) through bote-notify. Host network: a SANE scanner on the LAN,
 # the model's lease and bote-notify on the box's loopback. Haus, the Bote
 # and the CLI order a scan with `laib scan` (an order file in auftrag/).
 hostNetwork: true

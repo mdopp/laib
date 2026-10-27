@@ -94,7 +94,7 @@ func backTo(st *state.State, raw string) string {
 // value into secrets.age and applies what uses it (apply.SetSecret, as
 // `laib secret rotate`), detached from the request. It sits behind the box
 // page's guard like Freigeben, refuses a form from another site, and no
-// agent token reaches it (the secret verb is not in mcp.Allowed).
+// agent token reaches it (the secret verb is no MCP row).
 func Keys(env *cli.Env) http.HandlerFunc {
 	cop := http.NewCrossOriginProtection()
 	return func(w http.ResponseWriter, r *http.Request) {

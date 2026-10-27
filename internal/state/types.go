@@ -44,7 +44,8 @@ type Box struct {
 	Operator OperatorCfg `yaml:"operator"`
 	// Intake is where wishes and escalations become tickets (#56): a GitHub
 	// repo and the label a wish gets; the token is GITHUB_INTAKE_TOKEN in
-	// secrets.age. Empty = wishes are kept under <home>/wishes.
+	// secrets.age, laib-haushalt's, which files them (#797). Empty = a wish is
+	// kept in the journal.
 	Intake Intake `yaml:"intake"`
 	// Persona is the house's (ADR 0020): the wake word, the speakers' voice,
 	// Haus's start page and the chat default. Joshua when unset.
@@ -117,7 +118,7 @@ type Notify struct {
 // Watchdog: the outside check and the family's contact (#57).
 type Watchdog struct {
 	URL     string `yaml:"url"`     // a healthchecks-style ping URL outside the box
-	Contact string `yaml:"contact"` // "Martin, 0170 …" — printed on the family card
+	Contact string `yaml:"contact"` // "Martin, 0170 …" — was printed on the family card; kept so a box.yml naming it loads (#798)
 }
 
 // Laib is the box page and MCP listener itself (ADR 0012): where it listens,

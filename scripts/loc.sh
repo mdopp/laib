@@ -64,7 +64,7 @@ budget notify 600 notify        # laib-notify: the watchdog ping and the owner's
 # the kernel; 610 lines, room for the next verb of that size
 # haushalt 920: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): laib zuhause and laib person
 # signal move behind the door out of the kernel (ADR 0026 §4); 736 lines, plus about a quarter
-budget haushalt 920 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677)
+budget haushalt 920 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client

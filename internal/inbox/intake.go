@@ -1,18 +1,13 @@
-// The wish path (#56, ADR 0023 §6): `laib wish`, the Operator's wish as a
-// proposal, filing approved wishes and escalations as GitHub issues in
-// box.yml intake.repo.
+// The wish path (#56, ADR 0023 §6): the Operator's wish as a proposal, and
+// filing approved wishes and escalations as tickets in box.yml intake.repo
+// through laib-haushalt (#797), which serves `laib wish` itself.
 
 package inbox
 
 import (
-	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,61 +16,23 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/proposal"
-	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 )
 
-// TokenSecret is the GitHub token's name in secrets.age: a fine-grained
-// PAT with Issues write on box.yml intake.repo, nothing else.
-const TokenSecret = "GITHUB_INTAKE_TOKEN"
+// Issue files a ticket in box.yml intake.repo and returns its URL; an
+// empty intake means "not configured" (ok=false, no error). laib-haushalt
+// files it behind the verb door with its own token (#797): the kernel reads
+// no GitHub token. Set by cmd/laib.
+var Issue func(ctx context.Context, env *cli.Env, st *state.State, title, body, label string) (url string, ok bool, err error)
 
-// GitHubAPI is swapped in tests.
-var GitHubAPI = "https://api.github.com"
+// WishLabel is the label a wish gets.
+func WishLabel(st *state.State) string { return cmp.Or(st.Box.Intake.Label, "wunsch") }
 
-// Issue files an issue in the intake repo and returns its URL. An
-// empty intake means "not configured" (ok=false, no error).
-func Issue(ctx context.Context, env *cli.Env, st *state.State, title, body string, labels []string) (url string, ok bool, err error) {
-	if st.Box.Intake.Repo == "" {
-		return "", false, nil
-	}
-	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
-	if err != nil {
-		return "", true, err
-	}
-	tok := sec[TokenSecret]
-	if tok == "" {
-		return "", true, fmt.Errorf("intake %s: no %s in secrets.age (laib secret set %s)", st.Box.Intake.Repo, TokenSecret, TokenSecret)
-	}
-	payload, _ := json.Marshal(map[string]any{"title": title, "body": body, "labels": labels})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(GitHubAPI, "/")+"/repos/"+st.Box.Intake.Repo+"/issues", bytes.NewReader(payload))
-	if err != nil {
-		return "", true, err
-	}
-	req.Header.Set("Authorization", "Bearer "+tok)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
-	if err != nil {
-		return "", true, fmt.Errorf("intake %s: %w", st.Box.Intake.Repo, err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != http.StatusCreated {
-		return "", true, fmt.Errorf("intake %s: HTTP %d: %s", st.Box.Intake.Repo, resp.StatusCode, cli.Tail(string(raw), 200))
-	}
-	var out struct {
-		URL string `json:"html_url"`
-	}
-	json.Unmarshal(raw, &out)
-	return out.URL, true, nil
-}
-
-func wishLabel(st *state.State) string { return cmp.Or(st.Box.Intake.Label, "wunsch") }
-
-// wishProposal: the Operator's wish waits for the admin (ADR 0023 §6). It
+// WishProposal: the Operator's wish waits for the admin (ADR 0023 §6). It
 // is a proposal that adds wishes/<time>.md — class human in the review —
-// and approving it files the intake issue (fileWishes).
-func wishProposal(ctx context.Context, env *cli.Env, st *state.State, title, body string) int {
+// and approving it files the intake issue (FileWishes). Every other hand's
+// wish laib-haushalt files behind the verb door (#797).
+func WishProposal(ctx context.Context, env *cli.Env, st *state.State, title, body string) int {
 	name := "wishes/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
 	lines := strings.Split("# "+title+"\n\n"+body, "\n")
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
@@ -102,7 +59,7 @@ func FileWishes(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 		title = strings.TrimPrefix(title, "# ")
 		body = strings.TrimSpace(body) + fmt.Sprintf("\n\nFreigegeben von %s (#%d).", env.Actor, p.ID)
 		entry := journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: title}
-		url, ok, err := Issue(ctx, env, st, title, body, []string{wishLabel(st)})
+		url, ok, err := Issue(ctx, env, st, title, body, WishLabel(st))
 		switch {
 		case err != nil:
 			entry.Result, entry.Detail = "red", err.Error()
@@ -113,56 +70,4 @@ func FileWishes(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 		}
 		cli.Record(env, st, entry)
 	}
-}
-
-// Wish is the intake (#56): "Ich brauche einen Dienst, der …" becomes a
-// GitHub issue with the intake label — never pi:ready, a person triages it
-// first. Without an intake the wish is kept under <home>/wishes and the
-// journal says that nobody reads it yet.
-func Wish(ctx context.Context, env *cli.Env, args []string) int {
-	text := strings.TrimSpace(strings.Join(args, " "))
-	if text == "" {
-		return env.Fail(errors.New("usage: laib wish \"<was das Haus braucht>\""))
-	}
-	st, err := cli.LoadState(env)
-	if err != nil {
-		return env.Fail(err)
-	}
-	first := text
-	if i := strings.IndexAny(first, ".\n"); i > 0 {
-		first = first[:i]
-	}
-	if len([]rune(first)) > 70 {
-		first = string([]rune(first)[:70]) + "…"
-	}
-	title := "Wunsch: " + first
-	body := text + "\n\n— aufgenommen über `laib wish` von " + env.Actor + " auf " + st.Box.Domain + ", " + time.Now().Format("02.01.2006 15:04") + ".\n\nNächster Schritt: ein Mensch schneidet daraus ein Ticket mit Akzeptanzkriterien und setzt dann `pi:ready` oder baut es selbst (#56)."
-	if proposal.Hand(env.Actor) == "ops" {
-		return wishProposal(ctx, env, st, title, body)
-	}
-	url, ok, err := Issue(ctx, env, st, title, body, []string{wishLabel(st)})
-	if err != nil {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "red", Reason: first, Detail: err.Error()})
-		return env.Fail(err)
-	}
-	if !ok {
-		dir := filepath.Join(env.Paths.Home, "wishes")
-		os.MkdirAll(dir, 0o755)
-		p := filepath.Join(dir, time.Now().UTC().Format("2006-01-02T15-04-05")+".md")
-		if err := os.WriteFile(p, []byte("# "+title+"\n\n"+body+"\n"), 0o644); err != nil {
-			return env.Fail(err)
-		}
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: first, Detail: "kein Intake in box.yml: der Wunsch liegt unter " + p + ", bis jemand ihn liest"})
-		if env.JSON {
-			return cli.Emit(env, map[string]string{"file": p, "issue": ""})
-		}
-		fmt.Fprintf(env.W(), "aufgeschrieben: %s (kein Intake konfiguriert — box.yml intake.repo)\n", p)
-		return cli.ExitOK
-	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: first, Detail: url})
-	if env.JSON {
-		return cli.Emit(env, map[string]string{"issue": url})
-	}
-	fmt.Fprintln(env.W(), "aufgenommen:", url)
-	return cli.ExitOK
 }

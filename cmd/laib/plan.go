@@ -43,7 +43,7 @@ func cmdPlan(ctx context.Context, env *cliEnv, args []string) int {
 		}
 	}
 	for _, u := range p.Unmanaged {
-		fmt.Fprintf(env.W(), "nicht verwaltet: %s   (laib adopt %s | laib ignore %s)\n", u, u, u)
+		fmt.Fprintf(env.W(), "nicht verwaltet: %s   (laib ignore %s | als Vorlage: laib propose --add)\n", u, u)
 	}
 	for _, c := range p.Conflicts {
 		fmt.Fprintf(env.W(), "KONFLIKT: %s   (erst die andere Quelle stoppen und entfernen, dann apply)\n", c)

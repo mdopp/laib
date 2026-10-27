@@ -27,8 +27,15 @@ Environment=MODEL_LEASE=${MODEL_LEASE}
 Environment=MODEL_KEY=${MODEL_KEY}
 Environment=MODEL_NAME=${MODEL_NAME}
 Volume=${DATA_DIR}/scan:/data:z
+# a scanner on the box's USB (#801): libusb opens /dev/bus/usb/<bus>/<device> as sysfs names it, and
+# both numbers change when the scanner is switched on again, so the whole tree goes in, not one node or a
+# symlink to it. podman passes the nodes there are at the start; scan.py restarts once when sysfs shows a
+# device this container lacks. The host's udev rule (install-box.sh, 99-laib-scanner.rules) makes only
+# the scanner core's; every other node stays root's, readable but not usable from here.
+AddDevice=/dev/bus/usb
 # the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry
-# core does not own, #230); labelling off for this container, as bote-notify's
+# core does not own, #230); labelling off for this container, as bote-notify's. It is also what lets
+# a container_t process open the USB scanner (#417)
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/file-share/data/scan-eingang:/eingang
 Volume=${DATA_DIR}/file-share/data/paperless-consume:/consume

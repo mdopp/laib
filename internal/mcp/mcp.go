@@ -24,14 +24,6 @@ import (
 // of the apply lock the mutating verbs hold.
 var Mu sync.RWMutex
 
-// Allowed are the verbs an agent may reach at all. serve, init and token are
-// the box's own business; secret set would put a value into a transcript.
-var Allowed = map[string]bool{
-	"status": true, "inbox": true, "plan": true, "apply": true, "journal": true, "context": true, "logs": true, "note": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true,
-	"template": true, "propose": true, "approve": true, "reject": true, "rollback": true, "converge": true, "backup": true, "restore": true, "adopt": true, "ignore": true, "version": true, "diag": true, "wish": true, "repair": true, "skill": true, "updates": true, "net": true,
-	"person_invite": true, "person_pending": true, "person_signal": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true, "pause": true, "resume": true, "aufgabe": true, "tell": true,
-}
-
 // DoorHands are the hands of programs behind the verb door, with the
 // ceiling their calls back run under whatever they send (ADR 0027):
 // laib-haushalt proposes, and the dial applies nothing it proposes.
@@ -144,7 +136,7 @@ func Handler(env *cli.Env) http.HandlerFunc {
 func Tools(st *state.State, hand string) []map[string]any {
 	var tools []map[string]any
 	for _, v := range Verbs {
-		if !Allowed[v.Name] || !policy.Allowed(st.Policy, hand, v.Tier) || !policy.MayVerb(st.Policy, hand, v.Name) {
+		if !v.MCP || !policy.Allowed(st.Policy, hand, v.Tier) || !policy.MayVerb(st.Policy, hand, v.Name) {
 			continue
 		}
 		tools = append(tools, map[string]any{
@@ -179,7 +171,7 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 			v = &Verbs[i]
 		}
 	}
-	if v == nil || !Allowed[verbName] {
+	if v == nil || !v.MCP {
 		return "unknown tool " + name, cli.ExitUsage
 	}
 	if !policy.Allowed(st.Policy, hand, v.Tier) {

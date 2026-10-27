@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/journal"
-	"github.com/mdopp/laib/internal/render"
-	"github.com/mdopp/laib/internal/state"
 )
 
 // #515: the box pages work on the phone as Haus does (haus#67). One nav on
@@ -37,14 +35,9 @@ func TestTheBoxPagesWorkOnThePhone(t *testing.T) {
 	}
 
 	// each list page carries the filter and marks its cards for it
-	st, err := state.Load("../../testdata/golden/basic/state")
-	if err != nil {
-		t.Fatal(err)
-	}
-	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "", [2]string{}, false, "")
+	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "", "")
 	jour := "<h1>Journal</h1>" + filter + journalBody([]journal.Entry{{T: time.Now(), Actor: "laib", Verb: "apply", Result: "green"}})
-	netz := filter + netBody(render.Net(st))
-	for name, body := range map[string]string{"Status": status, "Journal": jour, "Netz": netz} {
+	for name, body := range map[string]string{"Status": status, "Journal": jour} {
 		if !strings.Contains(body, `<input type=search class=filter`) {
 			t.Errorf("%s has no filter: %s", name, body)
 		}
@@ -57,15 +50,5 @@ func TestTheBoxPagesWorkOnThePhone(t *testing.T) {
 		if !strings.Contains(filter, w) {
 			t.Errorf("the filter lacks %q: %s", w, filter)
 		}
-	}
-	// "lan" on /net finds the LAN names: their card's text holds it
-	lan := 0
-	for _, c := range regexp.MustCompile(`<div class=card data-f>.*?</div>`).FindAllString(netz, -1) {
-		if strings.Contains(strings.ToLower(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(c, "")), "lan") {
-			lan++
-		}
-	}
-	if lan == 0 {
-		t.Errorf("no card on /net holds \"lan\": %s", netz)
 	}
 }

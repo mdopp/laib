@@ -1,7 +1,7 @@
 # laib-haushalt in its container (ADR 0027): the household verbs behind
-# laib's verb door (ADR 0026): scan, net geraete, tell, zuhause and person signal. It gets no more of the
-# box than the scan service's orders folder, the door's key and its own
-# propose-only token; it reads none of laib's files.
+# laib's verb door (ADR 0026): scan, net geraete, tell, zuhause, person signal and wish. It gets no more of the
+# box than the scan service's orders folder, the door's key, its own
+# propose-only token and, with an intake, the GitHub token for wishes (#797); it reads none of laib's files.
 # One static binary on distroless/static, no shell, and the IEEE OUI list
 # net geraete names the makers by (Alpine's hwdata-net, as the box's
 # /usr/share/hwdata/oui.txt). It runs as the container's root, which
