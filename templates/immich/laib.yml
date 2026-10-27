@@ -36,8 +36,14 @@ data:
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
   - path: ${DATA_DIR}/immich/model-cache
     backup: false
+  - path: ${DATA_DIR}/immich/check     # immich-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:2283/api/server/ping
+status:                            # the Box page's line (#785): "18.300 Fotos, 1.200 Videos · 412 GB · 3 Konten"
+  file: ${DATA_DIR}/immich/check/laib-status.json
+  check: immich-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 2283, lan: true}        # the apps at home
 gpu: true
