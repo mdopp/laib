@@ -36,6 +36,14 @@ Gerät“. A device that offers it for the first time gets it selected, once; a
 later choice by hand stays (home-assistant's post-deploy selects it on its next
 run too). No satellite, or one Home Assistant does not reach, is no
 measurement: the status says so and closes no Box-Aufgabe.
+
+A device that offers the phrase runs the model as it was flashed (#825): esphome's flash
+unit leaves <id>.geflasht.json, the manifest it compiled in, beside the trained one. When
+the trained manifest's settings (WAKE_CUTOFF, the next training) differ from it, or a
+device was flashed before Laib kept that copy, the status offers the same flash again.
+And it carries the numbers: stimme-wakes counts the wakes per day in laib-wakes.json, the
+detail line says „heute 2× geweckt, 2 ohne Befehl“, einzelheiten the last days and how many
+false wakes wait as negatives for the next training. Days are the box's (TZ).
 """
 import base64
 import json
@@ -208,6 +216,21 @@ def main(path: str, token: str, connect) -> int:
 FLASH = ["flash", "esphome"]   # the builtin esphome template's flash unit; laib repair offers it only where there is one
 
 
+def counted(micro) -> tuple:
+    """#825: (the detail's clause, einzelheiten) from stimme-wakes' counts; nothing without them"""
+    try:
+        c = json.loads((micro / "laib-wakes.json").read_text())
+        tage = c.get("tage") or {}
+    except (OSError, ValueError, AttributeError):
+        return "", ""
+    day = lambda t: f"{t.get('geweckt', 0)}× geweckt, {t.get('ohne', 0)} ohne Befehl" if t.get("geweckt") else "nicht geweckt"
+    today = time.strftime("%Y-%m-%d")
+    lines = [f"{d[8:10]}.{d[5:7]}.: {day(tage[d])}" for d in sorted(tage, reverse=True)[:7]]
+    neg = int(c.get("gegenbeispiele") or 0)
+    lines.append(f"{neg} Fehlalarme als Gegenbeispiele für das nächste Training gesammelt" if neg else "noch kein Fehlalarm als Gegenbeispiel gesammelt")
+    return "heute " + day(tage.get(today) or {}), "\n".join(lines)
+
+
 def wake(connect, micro, wid: str, phrase: str) -> None:
     """#759: Stimme's status (micro/laib-status.json) once the trainer is done: is the phrase on the satellites?"""
     def read(name):
@@ -249,6 +272,18 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
         return
     trained = f"Wake-Word „{phrase}“ trainiert, noch nicht auf dem Gerät"
     findings = []
+    flashed, want = read(f"{wid}.geflasht.json").get("micro"), read(f"{wid}.json").get("micro")
+    stale = on and not off and want and flashed != want   # #825: on the device, but not as trained now
+    if stale:
+        was = f"Schwelle {flashed.get('probability_cutoff')}" if isinstance(flashed, dict) else "ein älterer Stand"
+        findings.append({"severity": "gelb", "topic": "wakeword", "repair": FLASH,
+                         "detail": f"Der Lautsprecher „{', '.join(n for _, n in on)}“ hört noch mit der alten Einstellung auf „{phrase}“ ({was}, "
+                                   f"trainiert ist Schwelle {want.get('probability_cutoff')})",
+                         "fix": "laib repair status stimme: nach deiner Freigabe in der Inbox spielt Laib es neu auf",
+                         "does": f"„{phrase}“ wird mit der neuen Einstellung auf den Lautsprecher gespielt",
+                         "effect": f"Laib baut die Firmware des Lautsprechers neu und spielt sie auf: er startet dabei neu und ist etwa 2 Minuten "
+                                   f"still, danach wacht er seltener auf, wenn niemand „{phrase}“ gesagt hat.",
+                         "undo": "Zurück nur mit einem neuen Aufspielen in ESPHome; seine YAML von vorher liegt daneben (….yaml.laib-vorher)."})
     if off:
         findings.append({"severity": "gelb", "detail": f"{trained} „{', '.join(off)}“", "topic": "wakeword", "repair": FLASH,
                          "fix": "laib repair status stimme: nach deiner Freigabe in der Inbox spielt Laib es auf",
@@ -260,7 +295,9 @@ def wake(connect, micro, wid: str, phrase: str) -> None:
         findings.append({"severity": "info", "topic": "wakeword", "unmeasured": True, "fix": "Lautsprecher einschalten, in Home Assistant einbinden",
                          "detail": f"„{', '.join(away)}“ antwortet Home Assistant nicht" if away else "kein Gerät mit Wake-Word in Home Assistant"})
     detail = f"Wake-Word „{phrase}“ auf dem Gerät „{', '.join(n for _, n in on)}“" if on and not off else trained
-    status = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": detail, "einzelheiten": "", "findings": findings,
+    clause, einzelheiten = counted(micro)
+    detail += f"; {clause}" if clause and on else ""
+    status = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "detail": detail, "einzelheiten": einzelheiten if on else "", "findings": findings,
               "phrase": phrase, "geraet": bool(on) and not findings, "auf": [e for e, _ in on]}
     tmp = micro / "laib-status.json.tmp"
     tmp.write_text(json.dumps(status, ensure_ascii=False) + "\n")

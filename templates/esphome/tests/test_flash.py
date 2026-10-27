@@ -129,6 +129,14 @@ class TheUnit(unittest.TestCase):
         self.assertIn("Environment=WAKE_ID=${PERSONA_WAKEWORD}", unit)
         self.assertIn("StandardInput=file:%h/.config/containers/systemd/esphome/esphome-flash.py", unit)
 
+    def test_stimme_learns_which_manifest_the_devices_run(self):
+        # #825: a new cutoff in the trained manifest offers the flash again; only a flash that went
+        # through says what the devices run now (ExecStartPost runs only after a green ExecStart)
+        unit = (T / "esphome-flash.service").read_text()
+        post = [l for l in unit.splitlines() if l.startswith("ExecStartPost=")]
+        self.assertEqual(post, ["ExecStartPost=/usr/bin/podman unshare cp -f ${DATA_DIR}/esphome/config/models/${PERSONA_WAKEWORD}.json "
+                                "${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.geflasht.json"])
+
 
 if __name__ == "__main__":
     unittest.main()
