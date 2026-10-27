@@ -22,7 +22,7 @@ func TestNoSessionRightAfterAPersonAskedTheModel(t *testing.T) {
 	lease, catalogue := asked(30*time.Second), loaded
 	llm, n := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "fertig"}})
 	mcp, _ := fakeMCP(t, map[string]string{"laib_diag": "[" + watchdog + "]"})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
 	look := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	s, err := op.Run(context.Background(), look, Trigger{Kind: "tick"})
 	if err != nil || s.Outcome != "skipped" || !strings.Contains(s.Why, "Person") || *n != 0 {

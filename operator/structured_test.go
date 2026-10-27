@@ -47,7 +47,7 @@ func TestStructuredArgumentsPassThrough(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"incident","text":"whoami: \"bind: in use\", Neustart 03:12"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	op.LLM.Client = &http.Client{Transport: tools(func(d []ToolDef) { offered = d })}
 	sk := Skill{Name: "x", Status: "active", Tools: []string{"status", "note"}, Granted: []string{"status", "note"}, Output: "note", Prompt: "p"}
 	s, err := op.Run(context.Background(), sk, Trigger{Kind: "tick"})

@@ -43,7 +43,7 @@ func skillFindings(sks []skill.Skill) []Finding {
 		}
 		out = append(out, Finding{Severity: "gelb", Probe: "skill",
 			Detail: fmt.Sprintf("Fähigkeit %s läuft ohne %s, ihre Aufgabe bleibt liegen (%s): %s", s.Name, list, strings.TrimSuffix(s.Description, "."), strings.Join(whys, "; ")),
-			Fix:    fmt.Sprintf("deine Wahl: %s, oder laib skill pause %s, oder eine skills/%s.yml im State-Repo ohne %s", strings.Join(grants, " und "), s.Name, s.Name, list)})
+			Fix:    fmt.Sprintf("deine Wahl: %s, oder laib skill pause %s, oder eine skills/%s/skill.yml im State-Repo ohne %s", strings.Join(grants, " und "), s.Name, s.Name, list)})
 	}
 	return out
 }

@@ -1,5 +1,5 @@
-# Lessons from solved incidents (#544, ADR 0023 amendment): once a day the
-# runner looks at the incident sessions (vorfall) whose proposal made its
+# Lessons from solved incidents (#544, ADR 0023 amendment): once a day its
+# script (run.py, #839) looks at the incident sessions (vorfall) whose proposal made its
 # finding go away, as laib measured it, and proposes each as a lesson —
 # lessons/<probe>-<service>.md in the state repo, with the finding, the
 # cause the session saw and what fixed it. A lesson is class human: only
@@ -8,6 +8,9 @@
 description: Einmal am Tag — aus einem gelösten Vorfall eine Lehre vorschlagen, die der Admin freigibt.
 trigger: {daily: "${REPORT_AT}"}
 tools: [propose, note]
+run: run.py
+context: none
+modell: nein     # the script alone: a lesson is what laib measured, no model
 output: propose
 lessons: vorfall
 prompt: |

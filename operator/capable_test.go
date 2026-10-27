@@ -31,7 +31,7 @@ func TestACapableModelGetsTheSkillsWiderTools(t *testing.T) {
 		mcp, _ := fakeMCP(t, nil)
 		var offered []ToolDef
 		llm := fakeLLM(t, []Message{{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"incident","text":"x"}`)}}, {Role: "assistant", Content: "fertig"}})
-		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: typed}
+		op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: typed}
 		op.LLM.Client = &http.Client{Transport: tools(func(d []ToolDef) { offered = d })}
 		tr := Trigger{Kind: "event", Service: "whoami"}
 		if _, err := op.Run(context.Background(), sk, tr); err != nil {
@@ -52,7 +52,7 @@ func TestACapableModelGetsTheSkillsWiderTools(t *testing.T) {
 func TestACapableModelsAnswerIsNotATextCall(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "restart war nicht nötig, whoami ist seit 03:14 grün."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: false}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: false}
 	tr := Trigger{Kind: "event", Service: "whoami"}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil || s.Outcome != "green" || !strings.Contains(s.Note, "seit 03:14") {

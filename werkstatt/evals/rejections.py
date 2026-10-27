@@ -26,7 +26,7 @@ FREE = {"nicht jetzt", "später", "spaeter"}  # a free no: not a lesson (#544)
 
 def skill_tools(name):
     """The laib_ tools a built-in skill may call: tools and more."""
-    text = (ROOT / "skills" / f"{name}.yml").read_text()
+    text = (ROOT / "skills" / name / "skill.yml").read_text()  # a skill is a folder (#839)
     tools = []
     for key in ("tools", "more"):
         m = re.search(rf"^{key}: \[([^\]]*)\]", text, re.M)

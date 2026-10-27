@@ -25,7 +25,7 @@ func skillFor(t *testing.T, tr Trigger, name string) Skill {
 	if name == "" {
 		name = "routineblick"
 	}
-	b, err := os.ReadFile(filepath.Join("..", "skills", name+".yml"))
+	b, err := os.ReadFile(filepath.Join("..", "skills", name, "skill.yml"))
 	var sk Skill
 	if err == nil {
 		err = yaml.Unmarshal(b, &sk)
@@ -91,7 +91,7 @@ var garden = Skill{Name: "gartenblick", Source: "state", Status: "active", Descr
 // tool call — however long it has been due.
 func TestAPausedSkillNeverRuns(t *testing.T) {
 	mcp, calls := skillMCP(t)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: noteOnly(t).URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: noteOnly(t).URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	r := &Runner{Op: op, Last: map[string]time.Time{}}
 	paused := garden
 	paused.Status = "paused"
@@ -110,7 +110,7 @@ func TestAPausedSkillNeverRuns(t *testing.T) {
 // narrow it. Not before its interval, and not twice in one.
 func TestAnAddedSkillRunsOnItsTrigger(t *testing.T) {
 	mcp, calls := skillMCP(t)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: noteOnly(t).URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: noteOnly(t).URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	r := &Runner{Op: op, Last: map[string]time.Time{}}
 	start := time.Date(2026, 10, 16, 9, 0, 0, 0, time.Local)
 	if got := r.Step(context.Background(), start, []Skill{garden}); len(got) != 0 {

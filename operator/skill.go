@@ -27,6 +27,8 @@ type Skill struct {
 	Limits      map[string]int `json:"limits"`  // tool → calls per session (#376)
 	Updates     string         `json:"updates"` // patch: the runner reads updates and offers only those (#376)
 	Lessons     string         `json:"lessons"` // vorfall: the runner proposes lessons, no model (#544)
+	Run         string         `json:"run"`     // run.py: the skill's script, its deterministic steps (#839)
+	Modell      string         `json:"modell"`  // frei (default) | urteil | nein: where the model decides (#839)
 	Status      string         `json:"status"`
 	Granted     []string       `json:"granted"`
 }
@@ -48,6 +50,10 @@ func (m *MCP) Skills(ctx context.Context) ([]Skill, error) {
 	var out []Skill
 	return out, json.Unmarshal([]byte(text), &out)
 }
+
+// verdicts are what a judgement writes (modell: urteil, #839): the script
+// did the reading, the model decides what comes of it.
+var verdicts = []string{"note", "wish", "propose", "repair", "escalate"}
 
 var weekdays = map[string]int{"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
 

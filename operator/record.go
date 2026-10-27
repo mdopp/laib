@@ -103,21 +103,6 @@ func Record(all []past) string {
 	return out + " Schlag nichts vor, was so schon abgelehnt wurde oder ohne Wirkung blieb.\n"
 }
 
-// Rate is the morning report's line (#544): the last 30 days' rate.
-func Rate(all []past, now time.Time) string {
-	var month []past
-	for _, p := range mine(all) {
-		if now.Sub(p.Created) <= 30*24*time.Hour {
-			month = append(month, p)
-		}
-	}
-	n, by, _ := tally(month)
-	if n == 0 {
-		return ""
-	}
-	return fmt.Sprintf("Vorschläge des Operators, 30 Tage: %d von %d wirksam (%d %%); %s.", by["effective"], n, by["effective"]*100/n, words(by))
-}
-
 // proposalID reads the number of the proposal a propose or repair call
 // filed from its answer (JSON over MCP, or the sentence).
 var proposalID = regexp.MustCompile(`(?:"id":\s*|#)([0-9]+)`)

@@ -239,7 +239,7 @@ skill's vocabulary.
 
 `laib skill list` (MCP `laib_skill`, read tier) lists every skill — the
 built-ins in `skills/` of this repo, embedded in `laib`, and the state
-repo's `skills/*.yml` — with its status (`aktiv`, `ruht`, `verweigert`),
+repo's `skills/<name>/skill.yml` (#839) — with its status (`aktiv`, `ruht`, `verweigert`),
 its granted tools and, per tool it does not get, why. The Operator sends
 `X-Laib-Skill: <name>` with every call of a session: `tools/list` then
 answers the skill's granted tools only, and a call outside them — or any
@@ -448,7 +448,7 @@ numbers (an age or a percentage is not a new finding).
 hand's ceiling or verb list refuses one of its `tools:` (probe `skill`,
 #543): "Fähigkeit sicherung läuft ohne backup, ihre Aufgabe bleibt liegen
 …", with the owner's choice as the fix — grant the verb in `policy.yml`,
-`laib skill pause <name>`, or a state-repo `skills/<name>.yml` without it.
+`laib skill pause <name>`, or a state-repo `skills/<name>/skill.yml` without it.
 A capable model's `more:` tools are extras and never a finding.
 
 ### Hands with a verb list

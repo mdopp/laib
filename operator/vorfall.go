@@ -22,16 +22,52 @@ const incidentWait = 30 * time.Minute
 // Work is what the Operator does now, for /ready and the Box page: the
 // incident, since when, its last step, why it waits, how many wait.
 type Work struct {
-	Incident string    `json:"incident,omitempty"`
-	Since    time.Time `json:"since,omitzero"`
-	Step     string    `json:"step,omitempty"`
-	Waiting  string    `json:"waiting,omitempty"`
-	Queued   int       `json:"queued,omitempty"`
+	Incident string         `json:"incident,omitempty"`
+	Since    time.Time      `json:"since,omitzero"`
+	Step     string         `json:"step,omitempty"`
+	Waiting  string         `json:"waiting,omitempty"`
+	Queued   int            `json:"queued,omitempty"`
+	Skills   map[string]Ran `json:"skills,omitempty"` // each skill's last run (#839)
+}
+
+// Ran is a skill's last run as /ready and the Box page show it (#839):
+// when, how it ended and why, and what it caused.
+type Ran struct {
+	At      time.Time `json:"at"`
+	Outcome string    `json:"outcome"`
+	Why     string    `json:"why,omitempty"`
+	Caused  string    `json:"caused,omitempty"`
 }
 
 type work struct {
 	mu sync.Mutex
 	w  Work
+}
+
+// ran keeps a session as its skill's last run.
+func (k *work) ran(s Session) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	var c []string
+	if s.Note != "" && s.Outcome != "error" {
+		c = append(c, "Notiz")
+	}
+	for _, n := range s.Proposed {
+		c = append(c, fmt.Sprintf("#%d", n))
+	}
+	for v, word := range map[string]string{"laib_restart": "Neustart", "laib_wish": "Wunsch", "laib_escalate": "Eskalation"} {
+		if n := countPrefix(slices.Concat(s.Calls, s.Script), v); n > 0 {
+			c = append(c, fmt.Sprintf("%d× %s", n, word))
+		}
+	}
+	if len(s.Refused) > 0 {
+		c = append(c, fmt.Sprintf("%d verweigert", len(s.Refused)))
+	}
+	slices.Sort(c)
+	if k.w.Skills == nil {
+		k.w.Skills = map[string]Ran{}
+	}
+	k.w.Skills[s.Skill] = Ran{At: s.Started, Outcome: s.Outcome, Why: clip(s.Why), Caused: strings.Join(c, ", ")}
 }
 
 func (k *work) begin(incident string, at time.Time) {

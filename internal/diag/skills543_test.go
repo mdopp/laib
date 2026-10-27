@@ -38,7 +38,7 @@ func TestDiagSaysWhenThePolicyKeepsASkillFromItsJob(t *testing.T) {
 		t.Fatalf("sicherung without backup: %+v", got)
 	}
 	// the owner's command, not a hand edit of policy.yml (#575); diag grants nothing itself
-	for _, want := range []string{`laib propose --grant ops backup "Fähigkeit sicherung braucht backup"`, "laib skill pause sicherung", "skills/sicherung.yml"} {
+	for _, want := range []string{`laib propose --grant ops backup "Fähigkeit sicherung braucht backup"`, "laib skill pause sicherung", "skills/sicherung/skill.yml"} {
 		if !strings.Contains(s.Fix, want) {
 			t.Errorf("the fix lacks the choice %q: %s", want, s.Fix)
 		}

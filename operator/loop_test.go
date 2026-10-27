@@ -108,7 +108,7 @@ func TestIncidentSessionLooksThenRestartsThenNotes(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{call("3", "laib_note", `--kind incident "whoami war rot (exit 1), Neustart um 03:12, jetzt grün."`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami", Detail: "health red"}, ""), Trigger{Kind: "event", Service: "whoami", Detail: "health red"})
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestBudgetAnswerTurnsTheSessionRedAndEscalationCounts(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{call("2", "laib_escalate", `whoami "Budget weg, Neustart hilft nicht"`)}},
 		{Role: "assistant", Content: "eskaliert"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "event", Service: "whoami"}, ""), Trigger{Kind: "event", Service: "whoami"})
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestBudgetAnswerTurnsTheSessionRedAndEscalationCounts(t *testing.T) {
 func TestTooManyCallsEndsRed(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
 	llm := fakeLLM(t, []Message{{Role: "assistant", ToolCalls: []ToolCall{call("x", "laib_status", "")}}}) // loops forever
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), MaxCalls: 4}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestTooManyCallsEndsRed(t *testing.T) {
 
 func TestWrongTokenIsAnError(t *testing.T) {
 	mcp, _ := fakeMCP(t, nil)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "nope"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "x"}}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "nope"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "x"}}
 	if _, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"}); err == nil {
 		t.Fatal("expected an auth error")
 	}

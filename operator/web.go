@@ -36,6 +36,8 @@ var general = func() []string {
 	return d.General
 }()
 
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
 // acting: a session that may change the box is never offered the web.
 var acting = []string{"apply", "restart", "exec", "write"}
 

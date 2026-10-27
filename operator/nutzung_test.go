@@ -87,7 +87,7 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("7", "laib_note", `{"kind":"watch","text":"Drei Vorschläge zur Nutzung angelegt."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true,
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true,
 		Usage: &Usage{URL: fakeUsage(t, usageWeek).URL, Token: "um-token"}}
 	op.LLM.Client = &http.Client{Transport: peek(func(body string) {
 		if firstUser == "" {
@@ -127,7 +127,7 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 // skill says so in one note, asks no model and proposes nothing.
 func TestNutzungWithoutUsageMetricsNotesAndProposesNothing(t *testing.T) {
 	mcp, calls := fakeMCP(t, nil)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: "http://127.0.0.1:1", Model: "test"}, Home: t.TempDir(), Typed: true}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{}, "nutzung"), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)

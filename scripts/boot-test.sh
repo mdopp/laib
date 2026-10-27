@@ -199,6 +199,14 @@ grep -q "/mnt/data/laib/operator=/operator" <<<"$mounts" || { echo "FAIL: the Op
 TOKV="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.laib-operator.laib-operator.LAIB_TOKEN)"
 [ -n "$TOKV" ] || { echo "FAIL: no podman secret with the Operator's token"; exit 1; }
 if grep -rqF -- "$TOKV" "$LAIB_QUADLET/laib-operator" || grep -qF -- "$TOKV" <<<"$(podman inspect "$OPC" --format "{{.Config.CreateCommand}}")"; then echo "FAIL: the Operator's token is in its unit or on podman run's argv"; exit 1; fi
+# #839: a skill's script in the image as it ships — its Python, its door (laibskill.py), the review's
+# run.py, talking over stdin and stdout as the runner does — and the Operator's /proc closed to a
+# process of its own user in the container: the token stays out of a script's reach
+printf '%s\n%s\n' '{"skill":{"name":"durchsicht"},"trigger":{"kind":"tick"},"state":null,"now":""}' '{"text":"laib weg","error":true}' \
+  | podman exec -i "$OPC" python3 -I -S -B -X utf8 /skills/laibskill.py /skills/durchsicht/run.py > "$WORK/script.out" || { echo "FAIL: durchsicht's script does not run in the image"; cat "$WORK/script.out"; exit 1; }
+grep -q '"call": "laib_status"' "$WORK/script.out" && grep -q 'laib status nicht lesbar (laib weg)' "$WORK/script.out" || { echo "FAIL: the script in the image did not speak the runner's channel"; cat "$WORK/script.out"; exit 1; }
+if podman exec "$OPC" python3 -I -S -c 'open("/proc/1/environ","rb").read()' >/dev/null 2>&1; then echo "FAIL: a process in the Operator's container reads its environment (#839)"; exit 1; fi
+podman exec "$OPC" python3 -I -S -c 'open("/proc/self/environ","rb").read()' >/dev/null 2>&1 || { echo "FAIL: the control: a process cannot read even its own /proc"; exit 1; }
 LAIB_ACTOR=human:boot "$BIN" operator disable >/dev/null || { echo "FAIL: operator disable exit $?"; exit 1; }
 [ "$(systemctl --user is-active laib-operator.service)" != active ] || { echo "FAIL: the Operator still runs after disable"; exit 1; }
 # #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it

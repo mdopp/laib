@@ -16,7 +16,7 @@ services/
     pre-start, post-deploy   hooks (from the template)
     .template/        the template's files as the last add or update copied them in (#511)
     rendered/         written only by laib: the files as they are on the box
-skills/<name>.yml     an Operator skill added or replaced on this box (ADR 0023)
+skills/<name>/skill.yml  an Operator skill added or replaced on this box (ADR 0023, #839)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
 lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
 ignore.yml            units on the box that are deliberately unmanaged
@@ -235,23 +235,47 @@ classed as any other (a box.yml change waits for a human).
 A hand never approves its own proposal. `destroy` requires a human on the box
 page or a Solaris card; a token cannot approve.
 
-## skills/<name>.yml (optional)
+## skills/<name>/skill.yml (optional)
 
-An Operator skill (ADR 0023): `description` (German, one sentence),
+An Operator skill (ADR 0023) is a folder (#839): `skill.yml`, and for a
+built-in skill, where it helps, `run.py`. A state repo's folder has no
+script: only the Operator's image brings one, and a folder with a `run.py`
+is refused, as is a file the old way, `skills/<name>.yml`, whose reason
+names the new place. `skill.yml` has `description` (German, one sentence),
 `trigger` (one of `every: 10m`, `daily: "07:00"`, `weekly: "Mo 08:00"`,
 `event: red`; `${TICK}` and `${REPORT_AT}` are `box.yml operator.tick` and
 `reportAt`), `tools` (kernel verbs from `status diag logs inspect look read
 journal context inbox plan note escalate propose wish restart exec write
 apply updates backup`; `note` required), `more` (tools only a capable model gets, checked
-the same way, #286), `context` (`box`, `usage`, or `logs`: the runner reads
-the services' error lines itself and needs `status` and `logs`, #550), `output` (`note`,
-`report`, `propose`) and `prompt`. The mechanics are fields the Operator's
-runner enforces, never prompt prose (#376): `limits` (a cap per tool and
-session, `{propose: 3}`) and, for an updates skill, `updates: patch` (the
-runner reads `updates` itself, shows and allows only the patch values, and
-writes the minor versions and the registry errors into the note), and
-`lessons: vorfall` (#544: the runner proposes a lesson for each incident
-session whose proposal laib measured as effective; no model runs). An
+the same way, #286), `context` (`box`: the `laib context` bundle; `usage`:
+usage-metrics' answers, read by the runner, handed to the script; `none`:
+only what the script prepared), `output` (`note`, `report`, `propose`),
+`prompt`, and two fields of #839: `run: run.py` (the skill's script, built-in
+only) and `modell`, where the model decides — `frei` (the default: the
+agentic loop with every granted tool, as before scripts; the incident and
+the looks), `urteil` (one judgement on what the script prepared, offered
+only the tools that write it: `note`, `wish`, `propose`, `repair`,
+`escalate`) or `nein` (the script alone; it needs `run`). The owner, on
+#839: „ich möchte, dass wir die Problemlösungskompetenzen eines LLMs
+behalten“ — a script gathers, counts, compares, renders and guards; what is
+open-ended stays the model's.
+
+A script (`skills/<name>/run.py`, Python standard library only) defines
+`run(s)` and, when its result names `checks`, `check(s, tool, args)`. It
+reaches the box only through `s.call("laib_<verb>", **args)`: the runner
+makes each call in the skill's name, refuses a tool the skill is not
+granted and one over its `limits` (the script's count apart from the
+model's), and records every call (`script`) and every refusal (`refused`)
+in the session. It returns `laibskill.done(...)`: an `outcome` ends the
+session without a model; otherwise `context` is what the model sees,
+`human` is added to the note, `state` is kept for the next run unless the
+session failed or waited, and `checks` names the tools whose model calls
+`check` vets. `skills/laibskill.py` is its one door. The mechanics are fields the Operator's
+runner and the skill's script enforce, never prompt prose (#376): `limits` (a cap per tool and
+session, `{propose: 3}`) and, for an updates skill, `updates: patch` (its
+proposals answer an update, not a finding, #544), and `lessons: vorfall`
+(the runner hands the script that skill's sessions, from which it proposes
+a lesson for each incident whose proposal laib measured as effective). An
 interval skill granted `diag` is a look (#543): the runner reads diag
 first, asks no model while the findings are the ones its last good session
 saw, and, granted `repair`, proposes each non-red finding's repair once
