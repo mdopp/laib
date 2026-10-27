@@ -90,7 +90,7 @@ func cmdPersonInvite(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	if *group == "admins" && !policy.IsHuman(st.Policy, proposal.Hand(env.Actor)) {
+	if *group == "admins" && !policy.IsHuman(proposal.Hand(env.Actor)) {
 		return cli.Refused(env, "Admins lädt nur ein Mensch an der Konsole ein (laib person invite "+user+" … --group admins): ein Admin-Zugang ist mehr als ein neuer Bewohner")
 	}
 	g, r := *group, "0"

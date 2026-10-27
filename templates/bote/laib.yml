@@ -3,22 +3,18 @@ template: {registry: builtin, name: bote, version: 1}
 provides: [bote]
 # The Bote (ADR 0016): Hermes as stock on Signal, Matrix, Telegram and/or
 # Discord (#184, #421: each optional, at least one), the Laib MCP as the hand `bote`, the
-# Haus "Haushalt" MCP and Frage as tools. Up to six containers in one pod:
+# Haus "Haushalt" MCP and Frage as tools. Up to five containers in one pod:
 # hermes, signal-cli's daemon (only with Signal), the Automat (HA
-# automations, #26), the approval relay (#48: code that sees the sender
-# decides; only with an approval identity; Hermes holds no token that can
-# approve), the persona engine (ADR 0020) and notify (ADR 0022 §3: a
-# message for a person from box.yml people, on their channel, with
-# `hermes send`), which share loopback.
+# automations, #26), the persona engine (ADR 0020) and notify (ADR 0022 §3:
+# a message for a person from box.yml people, on their channel, with
+# `hermes send`), which share loopback. Nothing in the pod can approve:
+# approvals happen only in the Inbox (#778, ADR 0012).
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 routes: []
 secrets:
   - name: BOTE_LAIB_TOKEN            # minted on `laib add bote` as the bote hand (propose, note, escalate)
     external: true
     mint: bote
-  - name: BOTE_APPROVER_TOKEN        # the relay's token (#48): minted on add as the approver hand — approve, reject, inbox, status, note, nothing else
-    external: true
-    mint: approver
   - name: BOTE_MODEL_KEY             # only for a cloud model
     owner: {label: "Bote: Sprachmodell in der Cloud", warum: "Nur nötig, wenn der Bote das Sprachmodell eines Anbieters statt des eigenen der Box nutzen soll.", hilfe: "Beim Anbieter des Modells einen API-Schlüssel anlegen und hier einfügen."}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
@@ -51,14 +47,11 @@ secrets:
     optional: true
 when:                                # a container exists only while one of its values is set (#184)
   bote-signal.container: [SIGNAL_ACCOUNT]
-  bote-relay.container: [ADMIN_NUMBER, ADMIN_MXID, ADMIN_DISCORD_ID]   # Telegram never approves; Discord only the owner in their DM (#463)
 requires:                            # a set value needs these set too: literals at load, secrets at plan (#184)
   ADMIN_NUMBER: [SIGNAL_ACCOUNT]
-  ADMIN_MXID: [MATRIX_HOMESERVER, ADMIN_ROOM]
   MATRIX_HOMESERVER: [MATRIX_TOKEN]
   TELEGRAM_ALLOWED_USERS: [TELEGRAM_TOKEN]
   DISCORD_ALLOWED_USERS: [DISCORD_TOKEN]
-  ADMIN_DISCORD_ID: [DISCORD_ALLOWED_USERS, ADMIN_DISCORD_CHANNEL, DISCORD_TOKEN]
 channels:                            # where the Bote talks and bote-notify delivers, each on while its value is set (#184)
   signal: SIGNAL_ACCOUNT
   matrix: MATRIX_HOMESERVER
@@ -70,8 +63,6 @@ data:
   - path: ${DATA_DIR}/bote/automat   # automations deleted through the Automat, kept for restore
   - path: ${DATA_DIR}/bote/persona   # the persona engine's list of the Bote's tools, written by post-deploy
   - path: ${DATA_DIR}/bote/notify    # bote-notify's .env: the platform credentials only, written by post-deploy (#177)
-    backup: false
-  - path: ${DATA_DIR}/bote/umfragen  # umfragen.json: bote-notify's poll timestamps → proposals, the relay reads it (#509)
     backup: false
   - path: ${DATA_DIR}/file-share/data/paperless-consume   # Paperless' consume folder: bote-notify files what was sent with "ablegen" (#521); transient
     backup: false

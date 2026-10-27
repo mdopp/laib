@@ -273,3 +273,11 @@ At 19,744 of 20,000 the 95 % warning opened #677 again. The owner chose
 Kernel 19,744 → 18,580 (the lease 1,076, the two verbs 88); lease 1,154,
 haushalt 610 → 736.
 
+
+## Amendment 2026-10-26 (#778): the relay leaves the trust kernel
+
+Owner decision 2026-10-26 („B3“, #751): approvals only in the Inbox. The
+row `internal/relay` + `cmd/relay` of the 2026-10-17 table is gone with the
+relay; invariant §2e is now kept by the kernel alone (only the hand `human`
+approves, ADR 0019 amendment of the same date). `internal/mcp`'s client,
+whose last production user the relay was, moved into the tests.

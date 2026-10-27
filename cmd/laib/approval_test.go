@@ -196,53 +196,6 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 	}
 }
 
-// #48: the approver hand (the Signal relay behind the admin's verified number)
-// can decide and do nothing else. Since #441 (owner, 2026-10-19) it decides
-// in the chat only what is not destructive: a human-class proposal (here a
-// script on the host) is refused with the Inbox's link, and approved there.
-func TestTheApproverHandDecidesLikeAHumanAndNothingElse(t *testing.T) {
-	ctx := context.Background()
-	env, data := testBox(t)
-	ran := filepath.Join(data, "ran-on-the-host")
-	var hooks []string // hooks run in the hooks image since #36, never on the host
-	realHook := apply.RunHook
-	t.Cleanup(func() { apply.RunHook = realHook })
-	apply.RunHook = func(_ context.Context, h apply.HookSpec) (string, error) {
-		hooks = append(hooks, h.Image+" "+strings.Join(h.Command, " "))
-		return "", nil
-	}
-	st, err := cli.LoadState(env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	patch := "diff --git a/services/whoami/post-deploy b/services/whoami/post-deploy\nnew file mode 100755\n--- /dev/null\n+++ b/services/whoami/post-deploy\n@@ -0,0 +1,2 @@\n+#!/bin/sh\n+touch \"$LAIB_DATA_DIR/ran-on-the-host\"\n"
-	if out, code := mcp.Call(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `"whoami braucht ein Einrichtungs-Skript"`, "patch": patch}); code != cli.ExitOK {
-		t.Fatalf("propose: %d %s", code, out)
-	}
-	open, _ := proposal.List(cli.InboxDir(env), true)
-	id := strconv.Itoa(open[0].ID)
-	for _, verb := range []string{"laib_exec", "laib_write", "laib_restore", "laib_propose"} {
-		if out, code := mcp.Call(ctx, env, st, "approver", verb, map[string]any{"args": "whoami -- true"}); code == cli.ExitOK {
-			t.Fatalf("the approver could %s: %s", verb, out)
-		}
-	}
-	if out, code := mcp.Call(ctx, env, st, "approver", "laib_approve", map[string]any{"args": id}); code != cli.ExitRefused || !strings.Contains(out, "nur in der Inbox") {
-		t.Fatalf("the chat approved a script on the host (#441: only the Inbox): %d %s", code, out)
-	}
-	if len(hooks) != 0 {
-		t.Fatalf("a refused verdict ran the script: %v", hooks)
-	}
-	if code := cmdApproveFor(t, &cliEnv{Paths: env.Paths, Actor: "human:martin"}, id); code != cli.ExitOK {
-		t.Fatalf("the Inbox's verdict was refused: %d", code)
-	}
-	if _, err := os.Stat(ran); err == nil {
-		t.Fatal("the script ran on the host: hooks run in the hooks image (#36)")
-	}
-	if len(hooks) != 1 || !strings.HasSuffix(hooks[0], "services/whoami/post-deploy") {
-		t.Fatalf("the approved script must run once, in the hooks image: %v", hooks)
-	}
-}
-
 // #528: a new image of a service with data (its container lacks
 // AutoUpdate=registry, its data has a database) is never the dial's: the
 // proposal waits for a person — inbox and Signal, it is no "human" class —

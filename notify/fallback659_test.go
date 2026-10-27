@@ -156,10 +156,10 @@ func TestAProposalWithAHundredImpactsReachesTheChatAndBlocksNoOther(t *testing.T
 		t.Fatalf("both proposals reach the chat: %v", got)
 	}
 	s := got[0]["text"]
-	if !strings.Contains(s, "Vorschlag #102") || !strings.Contains(s, "https://laib.e2e.home/inbox") || !strings.Contains(s, "x0=") || !strings.Contains(s, "weitere in der Inbox") {
-		t.Errorf("the long one is shortened and points to the Inbox: %q", s)
+	if s != "Freigabe #102: Auth: 5 Einstellungen ändern sich · https://laib.e2e.home/inbox" { // #778: the impacts are the Inbox's
+		t.Errorf("the long one is one line pointing to the Inbox: %q", s)
 	}
-	if !strings.Contains(got[1]["text"], "Vorschlag #99") {
+	if !strings.Contains(got[1]["text"], "Freigabe #99") {
 		t.Errorf("the older one too: %v", got[1])
 	}
 }
@@ -177,7 +177,7 @@ func TestAProposalReachesTheChatOnceTheBoteIsBack(t *testing.T) {
 	now := time.Now()
 	Sweep(context.Background(), c, now)
 	Sweep(context.Background(), c, now.Add(5*time.Minute))
-	if _, mails := g.got(); len(mails) != 1 || !strings.Contains(mails[0], "Vorschlag #100") {
+	if _, mails := g.got(); len(mails) != 1 || !strings.Contains(mails[0], "Freigabe #100") {
 		t.Fatalf("the chat down: one mail, not one per run: %q", mails)
 	}
 	b.down = false
@@ -185,7 +185,7 @@ func TestAProposalReachesTheChatOnceTheBoteIsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	Sweep(context.Background(), c, now.Add(15*time.Minute))
-	if got := b.messages(); len(got) != 1 || !strings.Contains(got[0]["text"], "Vorschlag #100") {
+	if got := b.messages(); len(got) != 1 || !strings.Contains(got[0]["text"], "Freigabe #100") {
 		t.Fatalf("the Bote back: the proposal reaches the chat, once: %v", got)
 	}
 	if _, mails := g.got(); len(mails) != 1 {

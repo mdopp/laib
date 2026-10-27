@@ -35,7 +35,7 @@ surface, the web chat as a primary surface.
 | Install, update, roll back, back up | Laib | proposals and the dial, timers, journal |
 | Notice a red, look inside, fix it, learn | Operator | `inspect`, `exec`, `restart`, values, journal; morning report |
 | Escalate what it cannot fix | Operator → Werkstatt (Claude) | ticket with context bundle; result as PR or journal line |
-| Talk with the family, answer, relay, approve as the admin | Bote | Signal; Sprechen field; cards in Haus |
+| Talk with the family, answer, tell the admin of a proposal (deciding is the Inbox's, #778) | Bote | Signal; Sprechen field; cards in Haus |
 | Switch, time, play, answer "was ist" by voice | Home Assistant Assist + Stimme + Frage | the speaker answers; no LLM for intents |
 | Show state, switch by tap, pin favorites | Haus + Haus-Android | pages, widgets, tile |
 | Build a template, a migration, a fix nobody has | Werkstatt: pi first, Claude for the hard ones | PR to the household registry; human merges |
@@ -80,7 +80,8 @@ command.
 ### Admin
 
 - **Signal with the Bote:** "was gibt's Neues" (the morning report), "wie
-  geht's der Box", "gib #17 frei", "frag Claude, warum …".
+  geht's der Box", "frag Claude, warum …"; a new proposal arrives as
+  „Freigabe #17: … · <Inbox link>“ and is decided in the Inbox (#778).
 - **Box page** `laib.<domain>`: Status, Inbox with Freigeben/Ablehnen,
   Journal. Also as cards on Haus's Box page: Operator "was ich gerade tue",
   Was läuft by purpose, Werkstatt tickets, Wakeword training, resident
@@ -163,8 +164,8 @@ are not the plan. What runs now is `docs/ZIELBILD.md`; the way there was #23 and
 nur intern." It knows the template exists, proposes with `--add` as
 `bote`, and sends you the card. (A wish with no template behind it goes
 through `laib wish` instead: a GitHub issue with the `wunsch` label that a
-person cuts into a ticket, #56.) You answer "gib #17 frei"; your number is
-you; Laib merges, applies, verifies, the hook creates the admin user, the
+person cuts into a ticket, #56.) You tap the link and approve #17 in the
+Inbox, with the second factor (#778); Laib merges, applies, verifies, the hook creates the admin user, the
 journal is green, the Bote writes "Läuft unter paperless.deinedomain, SSO
 ist drauf."
 

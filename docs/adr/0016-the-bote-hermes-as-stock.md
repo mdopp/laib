@@ -231,3 +231,18 @@ sees the sender decides, never Hermes or the model.
   channel.
 - Telegram still never decides. The same construction would work there
   but has not been asked for.
+
+## Amendment 2026-10-26 (#778): §3 is withdrawn — the chat decides nothing
+
+Owner decision 2026-10-26 („B3“, #751): approvals only in the Inbox. §3
+("approval by verified number") and its amendments of 2026-10-11, 2026-10-14
+(Matrix), 2026-10-19 (#441, #463) and the poll of #509 no longer hold: the
+relay and the `approver` hand are gone, and no channel (Signal, Matrix,
+Telegram, Discord) approves. The channels stay chat channels for the Bote;
+`ADMIN_NUMBER` and `ADMIN_ROOM` stay as Hermes' home channel, `ADMIN_MXID`,
+`ADMIN_DISCORD_ID` and `ADMIN_DISCORD_CHANNEL` have no use any more. A new
+proposal reaches the owner as one line, „Freigabe #N: <headline> · <Inbox
+link>“ — no impact lines, no decision words, no poll. The SOUL tells the
+Bote that the chat has no approvals and to send the Inbox link when asked.
+Matrix stays unencrypted (bote-notify's `hermes send` still shares the
+Bote's token).

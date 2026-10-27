@@ -39,7 +39,7 @@ func TestStatefulTemplatesDoNotAutoUpdate(t *testing.T) {
 			}
 		}
 	}
-	for _, u := range []string{"haus/haus.container", "frage/frage.container", "bote/bote-relay.container", "bote/bote-persona.container", "bote/bote-automat.container", "werkstatt/werkstatt.container", "caddy/caddy.container", "stimme/stimme-wakeword-trainer.container"} {
+	for _, u := range []string{"haus/haus.container", "frage/frage.container", "bote/bote-persona.container", "bote/bote-automat.container", "werkstatt/werkstatt.container", "caddy/caddy.container", "stimme/stimme-wakeword-trainer.container"} {
 		if b, _ := os.ReadFile(filepath.Join("..", "..", "templates", u)); !strings.Contains(string(b), "\nAutoUpdate=registry") {
 			t.Errorf("%s: Laib's own image without data must carry AutoUpdate=registry, or nobody updates it (#528)", u)
 		}

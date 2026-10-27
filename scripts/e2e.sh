@@ -351,7 +351,7 @@ HOOKDIR="$WORK/hooks"; mkdir -p "$HOOKDIR"
 ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >"$WORK/bote.out" ) || fail "bote hook"
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >"$WORK/bote.out" ) || fail "bote hook"
 if grep -q "HUMAN_TOKEN\|laib-admin" "$HOOKDIR/bote/hermes/config.yaml" "$HOOKDIR/bote/hermes/.env"; then fail "hermes holds a token that can approve (#48)"; fi
 grep -q "SIGNAL_ACCOUNT=+491" "$HOOKDIR/bote/hermes/.env" || fail "bote .env"
 # #178: inside the pod signal-cli listens on 8080; 8085 is only the host's side of PublishPort
@@ -378,7 +378,7 @@ for k, v in rows.items():
     names = {x.strip() for x in v.split(",") if x.strip()}
     assert names and not (names & bad), (k, names & bad)
 PY
-grep -q "+492" "$HOOKDIR/bote/hermes/SOUL.md" || fail "bote soul names the admin"
+grep -q "im Chat gibt es keine Freigaben" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL lets the chat approve (#778)"
 [ "$(stat -c %a "$HOOKDIR/bote/hermes/.env")" = 600 ] || fail "bote .env not 0600"
 # #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
@@ -422,24 +422,24 @@ grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's 
 if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Signal-only Bote has Matrix or Telegram entries (#184)"; fi
 bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
-  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_MXID= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= DISCORD_ALLOWED_USERS= ADMIN_DISCORD_ID= \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= \
+  SIGNAL_ACCOUNT= SIGNAL_ALLOWED_USERS= ADMIN_NUMBER= MATRIX_HOMESERVER= MATRIX_ALLOWED_USERS= ADMIN_ROOM= TELEGRAM_ALLOWED_USERS= DISCORD_ALLOWED_USERS= \
   "$@" ./post-deploy > "$WORK/bote-ch.out" 2>&1 ); }
-bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home ADMIN_MXID=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
+bote_ch MATRIX_HOMESERVER=https://hs.e2e.home MATRIX_ALLOWED_USERS=@admin:e2e.home 'ADMIN_ROOM=!raum:e2e.home' \
   LAIB_SECRET_BOTE_MATRIX_TOKEN=mx_tok || fail "bote hook with Matrix only"
 for want in "MATRIX_HOMESERVER=https://hs.e2e.home" "MATRIX_ACCESS_TOKEN=mx_tok" "MATRIX_ALLOWED_USERS=@admin:e2e.home" "MATRIX_E2EE_MODE=off" "MATRIX_HOME_ROOM=!raum:e2e.home"; do
   grep -qx "$want" "$HOOKDIR/bote/hermes/.env" || fail "a Matrix Bote's .env lacks $want (#184)"
 done
 if grep -q "^SIGNAL_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Matrix-only Bote has Signal or Telegram entries (#184)"; fi
 grep -qx "MATRIX_ACCESS_TOKEN=mx_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-notify gets the Matrix credentials (#184)"
-grep -q "@admin:e2e.home" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names the admin's Matrix ID as the one who approves (#184)"
+grep -q "im Chat gibt es keine Freigaben" "$HOOKDIR/bote/hermes/SOUL.md" || fail "a Matrix SOUL lets the chat approve (#778)"
 if grep -q "+49" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "a Matrix-only SOUL names a phone number (#184)"; fi
 bote_ch TELEGRAM_ALLOWED_USERS=123456 LAIB_SECRET_BOTE_TELEGRAM_TOKEN=tg_tok || fail "bote hook with Telegram only"
 grep -qx "TELEGRAM_BOT_TOKEN=tg_tok" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks its bot token (#184)"
 grep -qx "TELEGRAM_ALLOWED_USERS=123456" "$HOOKDIR/bote/hermes/.env" || fail "a Telegram Bote's .env lacks who may talk (#184)"
 if grep -q "^SIGNAL_\|^MATRIX_" "$HOOKDIR/bote/hermes/.env"; then fail "a Telegram-only Bote has Signal or Matrix entries (#184)"; fi
 grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the approval rule holds without an approval channel"
-grep -q "Box-Seite" "$HOOKDIR/bote/hermes/SOUL.md" || fail "without Signal or Matrix approvals the SOUL points at the Box page (#184)"
+grep -q "der Admin entscheidet nur in der Inbox" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL does not point at the Inbox (#778)"
 if bote_ch MATRIX_HOMESERVER=https://hs.e2e.home; then fail "Matrix without BOTE_MATRIX_TOKEN must fail the hook (#184)"; fi
 grep -q "BOTE_MATRIX_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Matrix token (#184)"
 if bote_ch TELEGRAM_ALLOWED_USERS=123456; then fail "Telegram without BOTE_TELEGRAM_TOKEN must fail the hook (#184)"; fi
@@ -450,14 +450,12 @@ grep -qx "DISCORD_BOT_TOKEN=dc_tok" "$HOOKDIR/bote/hermes/.env" || fail "a Disco
 grep -qx "DISCORD_ALLOWED_USERS=112233445566778899" "$HOOKDIR/bote/hermes/.env" || fail "a Discord Bote's .env lacks who may talk (#421)"
 if grep -q "^SIGNAL_\|^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Discord-only Bote has other channels' entries (#421)"; fi
 grep -qx "DISCORD_BOT_TOKEN=dc_tok" "$HOOKDIR/bote/notify/.env" || fail "bote-notify gets the Discord credentials (#421)"
-grep -q "über Discord nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL says Discord never approves (#421)"
 if bote_ch DISCORD_ALLOWED_USERS=112233445566778899; then fail "Discord without BOTE_DISCORD_TOKEN must fail the hook (#421)"; fi
 grep -q "BOTE_DISCORD_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the missing Discord token (#421)"
-# #463: the owner's verdicts on Discord: their id must be on the allowed list, and the SOUL names who decides
-if bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=999; then fail "an owner id not on DISCORD_ALLOWED_USERS must fail the hook (#463)"; fi
-bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=112233445566778899 || fail "bote hook with the owner on Discord: $(cat "$WORK/bote-ch.out")"
-grep -q "Discord-Direktchat" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL does not say the owner decides in the Discord DM (#463)"
-if grep -q "über Discord nie" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL still says Discord never decides (#463)"; fi
+# #778: no chat approves; a box's values.yml from before keeps ADMIN_MXID and ADMIN_DISCORD_ID (a template
+# update never drops a plain value), and the hook ignores them
+bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=999 ADMIN_MXID=@admin:e2e.home || fail "a leftover approval identity fails the hook (#778): $(cat "$WORK/bote-ch.out")"
+if grep -q "999\|Direktchat\|Relais" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL still names a chat that decides (#778)"; fi
 # #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
 mkdir -p "$WORK/render/persona/hal"
 printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"
@@ -465,7 +463,7 @@ printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/
   LAIB_RENDER_DIR="$WORK/render" PERSONA=hal \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
 grep -q "Du bist HAL, ruhig und höflich" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks as the house persona's style.md (#127)"
 if grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "another house persona still says Joshua (#127)"; fi
 for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "Laibs Persona sieht jede Nachricht vor dir" "FIGUR"; do
@@ -482,7 +480,7 @@ FRAGE_PID=$!; sleep 0.5; FRAGE_PORT=$(cat "$WORK/frage.port")
 ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= \
   LAIB_SECRET_BOTE_HA_TOKEN=ha_y HA_URL=http://127.0.0.1:8123 \
   FRAGE_URL="http://127.0.0.1:$FRAGE_PORT/mcp" HAUSHALT_MCP_URL="http://127.0.0.1:1/mcp" ./post-deploy > "$WORK/bote-hook.out" ) || fail "bote hook with frage"
 kill $FRAGE_PID 2>/dev/null || true
@@ -509,7 +507,7 @@ HH_PID=$!; sleep 0.5; HH_PORT=$(cat "$WORK/hh.port")
 bote_hh() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= \
   LAIB_SECRET_HAUS_HAUSHALT_TOKEN="$1" HAUSHALT_MCP_URL="http://127.0.0.1:$HH_PORT/mcp/haushalt" ./post-deploy > "$WORK/bote-hh.out" ) || fail "bote hook with a haushalt"; }
 bote_hh hh_tok
 grep -q "^  haushalt:" "$HOOKDIR/bote/hermes/config.yaml" || fail "a Haushalt that accepts the token is wired (#170)"
@@ -528,7 +526,7 @@ printf '{"mama":["signal:+4917012345678","telegram:123"],"papa":["telegram:456"]
 bote_people() { ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
   LAIB_RENDER_DIR="$WORK/render" MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_APPROVER_TOKEN=laib_approver_z LAIB_SECRET_BOTE_MODEL_KEY= \
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= \
   LAIB_SECRET_BOTE_HA_TOKEN="$1" LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN="$1" HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with people"; }
 bote_people ha_y
 grep -q "Sag mir Bescheid, wenn" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL turns 'sag mir Bescheid' into an automation (#177)"
@@ -646,7 +644,7 @@ last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.
 B="$LAIB_HOME/state/services/bote"; mkdir -p "$B"
 cp "$ROOT"/templates/bote/* "$B/" 2>/dev/null || true; mv "$B/values.example.yml" "$B/values.yml"; rm -f "$B/README.md"
 grep -q "^laib:" "$LAIB_HOME/state/box.yml" || printf 'laib: {listen: 0.0.0.0}\n' >> "$LAIB_HOME/state/box.yml"
-for s in BOTE_LAIB_TOKEN BOTE_APPROVER_TOKEN; do echo "tok_$s" | LAIB_ACTOR=human:e2e "$BIN" secret set "$s" >/dev/null; done
+for s in BOTE_LAIB_TOKEN; do echo "tok_$s" | LAIB_ACTOR=human:e2e "$BIN" secret set "$s" >/dev/null; done
 python3 -c '
 import http.server
 class H(http.server.BaseHTTPRequestHandler):
@@ -660,7 +658,7 @@ grep -q "^SIGNAL_HTTP_URL=" "$WORK/data/bote/notify/.env" || fail "bote-notify h
 test -f "$LAIB_QUADLET/bote/bote-signal.container" || fail "no signal-cli unit while Signal is on"
 kill "$(cat "$WORK/signal.pid")"; rm "$WORK/signal.pid"   # the Signal side is gone
 sed -i -e 's|^SIGNAL_ACCOUNT:.*|SIGNAL_ACCOUNT: ""|' -e 's|^MATRIX_HOMESERVER:.*|MATRIX_HOMESERVER: https://hs.e2e.home|' \
-  -e 's|^ADMIN_MXID:.*|ADMIN_MXID: "@admin:e2e.home"|' -e 's|^ADMIN_ROOM:.*|ADMIN_ROOM: "!raum:e2e.home"|' "$B/values.yml"
+  -e 's|^ADMIN_ROOM:.*|ADMIN_ROOM: "!raum:e2e.home"|' "$B/values.yml"
 echo mx_tok | LAIB_ACTOR=human:e2e "$BIN" secret set BOTE_MATRIX_TOKEN >/dev/null
 "$BIN" plan > "$WORK/plan.out" 2>&1 || fail "plan with Matrix only: $(cat "$WORK/plan.out")"
 grep -q "bote-signal.container.*SIGNAL_ACCOUNT" "$WORK/plan.out" || fail "plan does not say why bote-signal is off: $(cat "$WORK/plan.out")"

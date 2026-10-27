@@ -119,8 +119,8 @@ const ConvergeBudget = 3
 var KnownVerbs = map[string]bool{"status": true, "inbox": true, "diag": true, "repair": true, "wish": true, "plan": true, "apply": true, "inspect": true, "read": true, "look": true, "write": true, "exec": true, "restart": true, "start": true, "stop": true, "backups": true, "escalate": true, "note": true, "operator": true, "logs": true, "rollback": true, "backup": true, "restore": true, "converge": true, "journal": true, "context": true, "template": true, "add": true, "remove": true, "propose": true, "approve": true, "reject": true, "adopt": true, "ignore": true, "token": true, "secret": true, "disk": true, "init": true, "serve": true, "version": true, "skill": true, "updates": true, "net": true, "person_invite": true, "person_pending": true, "person_signal": true, "session": true, "calendar": true, "zuhause": true, "scan": true, "state": true, "pause": true, "resume": true, "aufgabe": true, "tell": true}
 
 // MayVerb reports whether a hand may use a verb at all: a hand with a verb
-// list is limited to it (the approver: approve, reject, inbox, status,
-// note), a hand without one may use anything its ceiling reaches (#48).
+// list is limited to it (notify: diag, updates, inbox, note), a hand
+// without one may use anything its ceiling reaches (#48).
 func MayVerb(p state.Policy, hand, verb string) bool {
 	h, ok := p.Hands[hand]
 	if !ok {
@@ -129,12 +129,11 @@ func MayVerb(p state.Policy, hand, verb string) bool {
 	return len(h.Verbs) == 0 || slices.Contains(h.Verbs, verb)
 }
 
-// IsHuman reports whether a hand's verdicts count as a human's: the human
-// on the shell, and a hand policy.yml marks `human: true` — the relay that
-// acts only on the admin's verified Signal number (#48).
-func IsHuman(p state.Policy, hand string) bool {
-	return hand == "human" || p.Hands[hand].Human
-}
+// IsHuman reports whether a hand's verdicts count as a human's: only the
+// human, on the shell or in the Inbox (human:<Remote-User>). Since #778 no
+// other hand does: a policy.yml from before that marks the relay's approver
+// `human: true` still loads, and the mark counts for nothing.
+func IsHuman(hand string) bool { return hand == "human" }
 
 // MayPath reports whether a hand may propose a value at a path
 // ("box.yml:people.mama.signal"; no file means box.yml, #598): a hand with

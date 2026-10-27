@@ -9,8 +9,9 @@ import (
 )
 
 // A Decision card (#58, #616): what a proposal means, in the words a
-// non-technical admin can judge — the same card on the Box page, in the
-// Bote's relay, in `laib inbox` and in `laib_inbox`'s JSON. Built
+// non-technical admin can judge — the same card on the Box page (the
+// Inbox, the one place a proposal is decided, #778), in `laib inbox` and in
+// `laib_inbox`'s JSON. Built
 // mechanically from the classified change, never by a model. Four parts:
 // what changes (Changes), what it means (Impact), who wants it and why
 // (Why), how it is undone (Reversible); a weight (Risk), and the technical
@@ -63,7 +64,7 @@ var VerbTier map[string]string
 var handWords = map[string][2]string{
 	"haus": {"Haus", "die Familienseiten"}, "bote": {"der Bote", "Signal"}, "ops": {"der Operator", ""},
 	"claude": {"Claude in der Werkstatt", ""}, "pi": {"pi", ""}, "laib": {"Laib", ""},
-	"notify": {"die Benachrichtigung", "über den Boten oder per Mail"}, "approver": {"die Freigabe über Signal", ""},
+	"notify": {"die Benachrichtigung", "über den Boten oder per Mail"}, "approver": {"die alte Freigabe über Signal", "bis #778"},
 	"werkstatt": {"die Werkstatt", ""}, "resident": {"die Bewohner", ""}, "human": {"ein Mensch", ""},
 	"haushalt": {"die Haushaltsbefehle", "Scan und Geräte im Heimnetz"}, "lease": {"die Grafikkarten-Lease", "hält Dienste an, solange ein großes Modell die Karte braucht"},
 }

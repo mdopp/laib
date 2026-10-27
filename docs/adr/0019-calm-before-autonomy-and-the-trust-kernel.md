@@ -53,7 +53,8 @@ wrong.
    (d) one lock with an owner, held from the first stop to the last verify
    (#73);
    (e) no LLM holds a token that can approve — the relay that sees the
-   sender's number decides (#68).
+   sender's number decides (#68). *(Amended 2026-10-26, #778: the relay is
+   gone; only a human in the Inbox or on the host shell approves.)*
 3. **Three guarantees the family can see** on Haus's start page, in plain
    words: "Alles läuft" (or what does not, and that someone is on it) ·
    "Letzte Sicherung: heute 03:12, an zwei Orten" · "Letzte Änderung: … —
@@ -169,3 +170,14 @@ minute apply waited nine minutes before it was even recorded.
 - The worker lives in the `laib` binary, not in a unit: the CLI, the Signal
   relay (through `laib approve`), MCP and `laib serve` reach it the same
   way, and the shell keeps seeing its apply when the lock is free.
+
+## Amendment 2026-10-26 (#778): invariant (e) without the relay
+
+Owner decision 2026-10-26 („B3“, #751): approvals only in the Inbox. (e)
+now reads: **no token approves what only a human may, and only the human
+approves at all** — the Inbox (`human:<Remote-User>` behind Authelia's
+second factor) and the host shell. The relay, the trust kernel's one
+program outside `laib`, is removed with its `approver` hand; `IsHuman` is
+the hand `human` and nothing else, and a `human: true` left in an old
+policy.yml counts for nothing (`TestApprovalsAreTheInboxsAlone`). The run
+worker of the amendment above is reached by the CLI, MCP and `laib serve`.

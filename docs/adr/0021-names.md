@@ -34,15 +34,15 @@ which kind of name goes where.
    (`${DATA_DIR}/bote`), the secret prefix (`BOTE_`) and its hand where it
    has one. The services are Bote, Haus, Stimme, Frage and Werkstatt, plus
    the plain upstream ones (immich, radicale, …).
-4. **A mechanism is named for what it does, in English**: relay, lease,
-   approver, persona (the engine), watchdog. A mechanism is never named
+4. **A mechanism is named for what it does, in English**: lease,
+   persona (the engine), watchdog. A mechanism is never named
    after the persona, the person or the box it serves first. Programs this
    repo builds are imaged as `laib-<program>` and run as `<pod>-<program>`.
 5. **A Bote tool is named for the system it reaches**: `laib`, `ha`,
    `frage`, `haushalt`, `automat`, `persona`. The directory label the
    family reads is separate and German.
 6. **A hand is named for who holds it**: `human`, `resident`, `ops`, `pi`,
-   `claude`, `bote`, `approver`, `haus`.
+   `claude`, `bote`, `haus`.
 7. **Upstream products keep their names**: Hermes, Home Assistant,
    signal-cli, Caddy, Authelia, Piper, Whisper, openWakeWord,
    microWakeWord, SearXNG.
@@ -66,7 +66,6 @@ which kind of name goes where.
 | Werkstatt | the dev container: Claude Code and pi, and the autoloop that works issues | `templates/werkstatt`, `werkstatt/` |
 | Bote | the agent people write to, on Signal and in Haus's Sprechen field | `templates/bote` (ADR 0016) |
 | Hermes | the upstream agent the Bote is built from, as stock | container `bote-hermes` |
-| relay | approvals by the admin's verified number, code not model | `cmd/relay`, container `bote-relay` |
 | Automat | Home Assistant automations as a Bote tool | `automat/`, container `bote-automat`, tool `automat` |
 | notify | a message for a person on their chat channel, sent by the Bote with `hermes send` (ADR 0022 §3); Home Assistant calls it as `rest_command.mitteilung` | `templates/bote/notify.py`, container `bote-notify` |
 | persona (engine) | where a person stands in the Bote: directory, levels, context, gimmicks | `persona/`, container `bote-persona`, tool `persona` |
