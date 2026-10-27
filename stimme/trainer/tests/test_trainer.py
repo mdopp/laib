@@ -221,5 +221,113 @@ class TrainsOnTheCPU(unittest.TestCase):
     def test_gpu_on_request(self):
         self.assertNotEqual(self.run_train(WAKEWORD_DEVICE="gpu").get("CUDA_VISIBLE_DEVICES"), "-1")
 
+class FalseWakes(unittest.TestCase):
+    """#825: „Hey Joshua“ woke on room talk at 0.95. WAKE_CUTOFF goes into a trained model's
+    manifest without training, and the false wakes stimme-wakes kept under negativ/ are
+    negatives on the next run, never positives; they start no run themselves."""
+
+    def setUp(self):
+        self.out, self.rec = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        (self.out / "hey_joshua.tflite").write_bytes(b"x")
+        (self.out / "hey_joshua.json").write_text(json.dumps({"model": "hey_joshua.tflite", "micro": {"probability_cutoff": 0.95, "sliding_window_size": 5}}))
+
+    def cut(self):
+        return json.loads((self.out / "hey_joshua.json").read_text())["micro"]
+
+    def test_the_cutoff_is_rewritten_without_training(self):
+        self.assertTrue(trainer.retune(self.out, "hey_joshua", 0.97))
+        self.assertEqual(self.cut(), {"probability_cutoff": 0.97, "sliding_window_size": 5})
+        self.assertFalse(trainer.retune(self.out, "hey_joshua", 0.97), "the same cutoff wrote the file again")
+        self.assertEqual(trainer.decide(self.out, "Hey Joshua", "hey_joshua", "r1"), "done")
+
+    def test_the_cutoff_comes_from_the_values(self):
+        for value, want in (("0.98", 0.98), ("", 0.97), ("hoch", 0.97), ("1", 0.97), ("0.2", 0.97)):
+            with mock.patch.dict(os.environ, {"WAKE_CUTOFF": value}):
+                self.assertEqual(trainer.cutoff(), want, value)
+
+    def test_new_negatives_start_no_run(self):
+        neg = self.rec / "hey_joshua" / "negativ"
+        neg.mkdir(parents=True)
+        (neg / "a.wav").write_bytes(b"RIFF")
+        self.assertEqual(trainer.decide(self.out, "Hey Joshua", "hey_joshua", "r1"), "done")
+
+    def run_train(self, negatives):
+        if negatives:
+            neg = self.rec / "hey_x" / "negativ"
+            neg.mkdir(parents=True)
+            (neg / "a.wav").write_bytes(b"RIFF")
+        seen = {}
+        with mock.patch.dict(os.environ, {"WAKEWORD_RECORDINGS": str(self.rec), "WAKE_CUTOFF": "0.97"}), \
+                mock.patch.object(trainer, "_run", lambda cmd, cwd=None, env=None: seen.update(cmd=cmd)):
+            trainer.train(pathlib.Path(tempfile.mkdtemp()), self.out, "Hey X", "hey_x", [])
+        return seen["cmd"]
+
+    def test_the_next_run_trains_on_them(self):
+        cmd = self.run_train(True)
+        self.assertEqual(cmd[cmd.index("--negatives") + 1], str(self.rec / "hey_x" / "negativ"))
+        self.assertEqual(cmd[cmd.index("--cutoff") + 1], "0.97")
+
+    def test_without_false_wakes_the_run_has_no_negatives(self):
+        self.assertNotIn("--negatives", self.run_train(False))
+
+
+class TrainOnNegatives(unittest.TestCase):
+    """train.py: the negatives are their own feature set, never folded in as positives"""
+
+    @classmethod
+    def setUpClass(cls):
+        import types
+        stub = types.SimpleNamespace(safe_dump=lambda d, sort_keys=False: json.dumps(d))   # the config read back as JSON
+        sys.modules.setdefault("yaml", stub)   # PyYAML lives in the image, not necessarily here
+        import train
+        cls.train = train
+        cls.yaml = mock.patch.object(train, "yaml", stub)
+        cls.yaml.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.yaml.stop()
+
+    def wav(self, path, frames=8000):
+        import wave
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(path), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\x00\x30" * frames)
+
+    def test_a_false_wake_is_never_a_positive(self):
+        rec, run = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        self.wav(rec / "mama.wav")
+        self.wav(rec / "negativ" / "20261027T173935000.wav")
+        with mock.patch("sys.stdout"):
+            self.assertEqual(self.train.fold_real_positives(run, rec, 2), 1)
+        self.assertEqual(len(list((run / "generated_samples").glob("real_*.wav"))), 2)
+
+    def test_the_household_negatives_are_a_negative_feature_set(self):
+        neg, run = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        self.wav(neg / "a.wav", frames=16000 * 5)
+        self.wav(neg / "b.wav", frames=100)   # too short
+        built = []
+        with mock.patch("sys.stdout"), mock.patch.object(self.train, "build_features",
+                                                          lambda work, r, source, target: built.append((source, target)) or (r / target).mkdir()):
+            self.assertEqual(self.train.household_negatives(run, run, neg), 1)
+        self.assertEqual(built, [("household_negatives", "household_negative_features")])
+        cfg = json.loads(self.train.write_training_config(run, run, 100).read_text())
+        own = [f for f in cfg["features"] if f["features_dir"].endswith("household_negative_features")]
+        self.assertEqual(len(own), 1)
+        self.assertIs(own[0]["truth"], False)
+        with mock.patch("sys.stdout"):
+            self.assertEqual(self.train.household_negatives(run, run, None), 0)
+        cfg = json.loads(self.train.write_training_config(run, run, 100).read_text())
+        self.assertFalse([f for f in cfg["features"] if "household" in f["features_dir"]], "a set from a run before stayed")
+
+    def test_the_features_script_reads_the_set_it_is_given(self):
+        script = self.train._FEATURES_SCRIPT
+        self.assertIn('input_directory="@SOURCE@"', script)
+        self.assertIn('out_root = "@TARGET@"', script)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 # stimme — the Wyoming set for Home Assistant Assist (ADR 0015)
 
-Whisper on 10300, Piper on 10200, openWakeWord on 10400, all on the host
+Whisper on 10300 (Home Assistant reaches it through stimme-wakes on 10301,
+below), Piper on 10200, openWakeWord on 10400, all on the host
 network so Home Assistant reaches them at `127.0.0.1`. Nobody adds them in
 HA by hand: home-assistant's post-deploy adds a Wyoming entry for each
 server that answers, once, found by host and port, and points an Assist
@@ -72,6 +73,43 @@ post-deploy selects the phrase on its next run too; the persona's Assist
 pipeline uses `<id>` as its server wake word only once openWakeWord here
 offers it (a model in `stimme/wakeword`), and none rather than a dead one
 until then (templates/home-assistant, #634).
+
+**False wakes** (#825). On its first day the Voice PE woke twice in ten
+minutes on room talk („Auf Wiedersehen.“): the model had only heard Piper.
+Three things answer that:
+
+- *The cutoff.* `WAKE_CUTOFF` (values.yml, default 0.97; the first model was
+  exported at 0.95) is how sure the device must be. The trainer writes it into a
+  trained model's manifest `<id>.json` on start, without training. The device runs
+  the manifest it was flashed with: esphome's flash unit leaves a copy,
+  `<id>.geflasht.json`, after every flash that went through, and while the two
+  differ (or a device was flashed before that copy existed) Stimme's status offers
+  the same flash again, through the same repair and approval. The Voice PE's own
+  „Wake word sensitivity“ select is no knob for this: its firmware sets the
+  cutoffs of okay_nabu, hey_jarvis and hey_mycroft by their ids, never a model
+  flashed beside them (home-assistant-voice-pe's `wake_word_sensitivity`).
+- *The negatives.* `stimme-wakes` (127.0.0.1:10301, Home Assistant's Whisper
+  entry) forwards every byte to Whisper on 10300 and back and reads the events on
+  the side. A transcript that starts with neither the persona's name nor a command
+  (`COMMANDS` in `stimme-wakes.py`) is a wake without a command: its audio goes to
+  `stimme/recordings/<id>/negativ/` (0600, the newest `WAKE_NEGATIVES_MAX`, the
+  folder's `CACHEDIR.TAG` keeps it out of the nightly backup: household audio stays
+  on the box). „Fehlalarm“ right after a wake (within ten minutes) marks that wake
+  too. A transcription within 30 s of the last one is a follow-up, no wake. The
+  trainer folds the negatives in as their own negative feature set on its next run
+  (never as positives); nothing starts a run for them. What the device streams is
+  what follows the trigger, so a negative is the room around a false wake, not
+  necessarily the sound that woke it.
+- *The numbers.* stimme-wakes counts the wakes per day in
+  `stimme/micro/laib-wakes.json`; stimme-names writes „heute 2× geweckt, 2 ohne
+  Befehl“ into the status line and the last days into `einzelheiten`. Any
+  transcription through Home Assistant's Whisper entry counts, also a press of the
+  device's button. Nothing it hears is printed; Whisper's own log still has the
+  text it heard.
+
+The household's own recordings of the phrase (positives, „sag fünfmal Hey
+Joshua“) are `stimme/recordings/<id>/*.wav` beside `negativ/`; nothing records
+them yet.
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says

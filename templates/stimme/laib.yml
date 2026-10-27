@@ -6,7 +6,7 @@ provides: [voice]
 upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/wyoming-faster-whisper, https://github.com/rhasspy/wyoming-openwakeword]   # where the Operator's web search looks first (#544)
 # The Wyoming set Home Assistant Assist speaks (ADR 0015): Whisper (STT),
 # Piper (TTS, German voice), openWakeWord (the trained wake word), and the
-# wake-word trainer. Host network so HA finds them at 127.0.0.1. On the
+# wake-word trainer, and stimme-wakes in front of Whisper (#825). Host network so HA finds them at 127.0.0.1. On the
 # GPU box Whisper and the trainer take the card and follow the lease's
 # voice-device.env (cpu while a mode holds the card); on a box without a
 # GPU set the CPU image and device in values.yml.
@@ -24,7 +24,7 @@ data:
     backup: false
   - path: ${DATA_DIR}/stimme/wakeword  # openWakeWord's custom models (streaming satellites): keep
   - path: ${DATA_DIR}/stimme/micro     # the house persona's microWakeWord model for the Voice PE, with its status: keep
-  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional)
+  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional); <wake id>/negativ the false wakes' audio, which restic leaves out (CACHEDIR.TAG, #825)
   - path: ${DATA_DIR}/stimme/trainer   # sources, voices, negatives, checkpoints: gigabytes, rebuilt
     backup: false
 health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}
@@ -32,6 +32,7 @@ status:                            # where the house persona's wake word stands;
   file: ${DATA_DIR}/stimme/micro/laib-status.json
 ports:
   - {port: 10300, lan: false}      # whisper
+  - {port: 10301, lan: false}      # stimme-wakes, in front of Whisper: Home Assistant's Whisper entry (#825)
   - {port: 10200, lan: false}      # piper: on 0.0.0.0 for pods (host.containers.internal), never the LAN (#242)
   - {port: 10400, lan: false}      # openwakeword
 gpu: true
