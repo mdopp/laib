@@ -162,7 +162,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 			return env.Fail(err)
 		}
 	}
-	paths := render.BackupPaths(st, env.Paths.State, env.Paths.Journal)
+	paths := present(render.BackupPaths(st, env.Paths.State, env.Paths.Journal))
 	// quiesce: true paths (databases, #40) are snapshotted with their service
 	// stopped — under the lock and paused, so converge keeps its hands off
 	unlock, code := apply.TakeLock(env, st, "backup")
@@ -222,6 +222,17 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	return cli.ExitOK
 }
 
+// present keeps the paths that exist. A declared data path a template has
+// not created yet holds nothing to lose; handed to restic it reads as a
+// source it could not read, and the snapshot before that very update went
+// red (paperless declaring dokumente's folder, 2026-10-27).
+func present(paths []string) []string {
+	return slices.DeleteFunc(paths, func(p string) bool {
+		_, err := os.Stat(p)
+		return errors.Is(err, os.ErrNotExist)
+	})
+}
+
 // Pre is the snapshot before an intervention: the service's backed-up
 // paths, tagged (pre-repair before a hand's repair, pre-update before an
 // approved change to a service with data, #528) and kept a week. quiesce
@@ -229,7 +240,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 // them again. It fails closed — no target or a failed snapshot refuse verb
 // — unless policy.yml says `envelope.snapshot: optional` (#35).
 func Pre(ctx context.Context, env *cli.Env, st *state.State, svc *state.Service, verb, tag string, quiesce bool) int {
-	paths := state.SnapshotPaths(st, svc)
+	paths := present(state.SnapshotPaths(st, svc))
 	optional := st.Policy.Envelope.Snapshot == "optional"
 	if len(paths) == 0 {
 		return cli.ExitOK
