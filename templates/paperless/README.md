@@ -153,6 +153,20 @@ Paperless container, as the paperless user, with Paperless' own admin and AI
 settings (the household model through the proxy, marked
 `X-Laib-Background: paperless`, so it never counts as a person asking).
 
+- **Soon after new documents (#829).** `paperless-vertraege-neu.timer`
+  looks every two minutes, from the host, at Paperless' thumbnails folder
+  (`media/documents/thumbnails`), which changes with every document
+  Paperless files. Changed since the last run started and quiet for two
+  minutes: it starts the same run. A stack of 13 scans is one run, a
+  document filed during a run one more; the hourly timer stays the
+  catch-all. Nothing runs in the container for it: no post-consume script
+  (laib writes no executable file into a container, and a failing one
+  would fail Paperless' consume task), no mount, no workflow.
+- **What the last run did (#829).** `laib status paperless` and the Box
+  page: „Vertragshelfer: zuletzt 13:05, 3 Rechnungen gelesen, 2 Kontakte
+  ergänzt, 1 prüfen“, after the mail inbox's line. A run ends by starting
+  `paperless-check`, so the line is fresh when the run is through.
+
 - **Which documents.** A contract is a document whose document type or one
   of whose tags is named in `VERTRAG_ARTEN` (default `Vertrag, Versicherung,
   Bescheid`; the household's own names, compared without case).
@@ -298,7 +312,8 @@ settings (the household model through the proxy, marked
   document read before #818 counts as asked for the contract fields, so a
   contract that is also an invoice is asked once more), per document its
   sender's answer from Haus or the contact waiting for it (#820), per reminder its day,
-  the messages told, the dates marked, each text's verdict.
+  the messages told, the dates marked, each text's verdict, and `lauf`:
+  what the last run did, for the status line.
   `journalctl --user -u paperless-vertraege` has one line per document and
   reminder.
 

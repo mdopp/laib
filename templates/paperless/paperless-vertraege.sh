@@ -11,7 +11,26 @@
 # podman exec and the file).
 #
 # Haus's token reaches podman by name from the unit's environment (-e NAME),
-# never on argv. The unit's exit code is the script's.
+# never on argv. The unit's exit code is the script's. A run marks its start in
+# VERTRAEGE_STAND and ends by refreshing the status (paperless-check), so laib
+# status shows it at once (#829).
+#
+# "neu" (#829), from paperless-vertraege-neu.timer every two minutes: Paperless
+# writes a thumbnail for each document it files, so its thumbnails folder
+# changes with every new document, without a script or a mount in the
+# container. Changed after the last run's start and quiet for RUHE seconds:
+# start the run (paperless-vertraege.service, which systemd never runs twice
+# at once). A stack of 13 documents is one run; one filed during a run, one
+# more. Nothing to see (no folder yet): nothing, the hourly timer stays.
+SYSTEMCTL=${SYSTEMCTL:-/usr/bin/systemctl}
+STAND=${VERTRAEGE_STAND:-${XDG_STATE_HOME:-$HOME/.local/state}/laib/paperless-vertraege}
+if [ "${1:-}" = neu ]; then
+	neu=$(stat -c %Y "${VORSCHAU:?the thumbnails folder}" 2>/dev/null) || exit 0
+	alt=$(stat -c %Y "$STAND" 2>/dev/null) || alt=0
+	[ "$neu" -gt "$alt" ] && [ $(($(date +%s) - neu)) -ge "${RUHE:-120}" ] || exit 0
+	exec "$SYSTEMCTL" --user start --no-block paperless-vertraege.service
+fi
+mkdir -p "${STAND%/*}" && touch "$STAND"
 EINGANG=${NOTIFY_EINGANG:-${LAIB_HOME:-/mnt/data/laib}/notify/eingang}
 RC=$(mktemp) || exit 1
 n=0
@@ -36,4 +55,5 @@ n=0
 done
 rc=$(cat "$RC")
 rm -f "$RC"
+"$SYSTEMCTL" --user start --no-block paperless-check.service || echo "vertraege: Stand nicht aufgefrischt" >&2
 exit "${rc:-1}"

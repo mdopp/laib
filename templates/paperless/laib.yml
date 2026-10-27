@@ -23,7 +23,9 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # a household person cleared off the documents the AI gave them as
 # correspondent (#737); an invoice's Betrag, Rechnungsnummer and Fällig am
 # from its text, the same way (#818), and its Verwendungszweck; the sender's firm, contact person,
-# phone, e-mail, IBAN and address into Haus's family address book (#820).
+# phone, e-mail, IBAN and address into Haus's family address book (#820);
+# soon after new documents too, paperless-vertraege-neu.timer (#829), and its
+# last run in the status line.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
   - host: paperless
@@ -62,7 +64,7 @@ data:
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
 health:
   http: http://127.0.0.1:8000/accounts/login/   # 200 without a login; /api/ challenges (#288)
-status:                             # the mail inbox (#521): whether Paperless gets into the mailbox, in laib diag
+status:                             # the mail inbox (#521): whether Paperless gets into the mailbox, in laib diag; the contract helper's last run (#829)
   file: ${DATA_DIR}/paperless/data/laib-status.json
   check: paperless-check.service
   stale: 30m                        # the timer runs hourly; a look starts a check when it is older

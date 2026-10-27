@@ -1,0 +1,17 @@
+# New documents read soon after Paperless filed them (#829), not only on the
+# hourly run: paperless-vertraege.sh neu looks at Paperless' thumbnails folder,
+# which changes with every document it files, and starts
+# paperless-vertraege.service once the folder changed after that run's last
+# start and has been quiet for RUHE seconds, so a stack of documents is one
+# run. A look from the host: a stat, no podman exec, nothing in the container.
+# It never fails, and logs nothing while there is nothing to start.
+[Unit]
+Description=Paperless: neue Dokumente, Vertragsdaten bald lesen
+
+[Service]
+Type=oneshot
+Environment="VORSCHAU=${DATA_DIR}/paperless/media/documents/thumbnails"
+Environment=RUHE=120
+ExecStart=/bin/sh %h/.config/containers/systemd/paperless/paperless-vertraege.sh neu
+LogLevelMax=notice
+TimeoutStartSec=30
