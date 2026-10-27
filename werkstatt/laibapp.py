@@ -7,9 +7,11 @@ runs commands instead of re-deriving them from prose.
       registry repo; the repo itself (CI, README, AGENTS.md) on first use
   laib-app register <git-url> ["<grund>"]
       propose the repo as the box's template registry (box.yml registries), once
-  laib-app check <name>.<domain> [--cafile F] [--open]
-      is the route done: public DNS, the certificate, the login. Exit 0 done,
-      8 a check failed (the output says what to do), 9 could not measure
+  laib-app check <name>.<domain> [--cafile F] [--open] [--login-probe PATH]
+      is the route done: public DNS, the certificate, the login — Authelia's,
+      or for an auth: none route (`laib net`) the app's own at its
+      loginProbe. Exit 0 done, 8 a check failed (the output says what to
+      do), 9 could not measure
 
 The guide is /opt/werkstatt/guide/apps.md.
 """
@@ -21,6 +23,7 @@ SCAFFOLD = Path(os.environ.get("LAIB_APP_SCAFFOLD") or "/opt/werkstatt/scaffold"
 DEFAULT_REPO = os.environ.get("LAIB_APP_REPO") or "/workspace/laib-apps"
 REGISTRY = "apps"
 DOH = os.environ.get("LAIB_APP_DOH") or "https://cloudflare-dns.com/dns-query"
+LAIB = os.environ.get("LAIB_APP_LAIB") or "laib"   # the box's routes: `laib net` (#774)
 BOX = os.environ.get("LAIB_APP_BOX") or "host.containers.internal"   # Caddy, on the box's host network
 NAME_RE = re.compile(r"^[a-z][a-z0-9]{1,29}$")
 DONE, FAILED, UNMEASURED = 0, 8, 9
@@ -195,27 +198,58 @@ class _Via(http.client.HTTPSConnection):
         self.sock = self._ctx.wrap_socket(socket.create_connection(box_addr(self._box), timeout=10), server_hostname=self.host)
 
 
-def check_login(fqdn: str, box: str, ctx: ssl.SSLContext, open_route: bool) -> tuple[int, str]:
+def fetch(fqdn: str, box: str, ctx: ssl.SSLContext, path: str) -> tuple[int, str, str]:
+    """(status, Location, start of the body) of a GET without a session"""
+    c = _Via(fqdn, box, ctx)
+    c.request("GET", path, headers={"Remote-User": "laib-app-check"})   # a forged login must not get through
+    try:
+        r = c.getresponse()
+        return r.status, r.getheader("Location") or "", r.read(400).decode("utf-8", "replace")
+    finally:
+        c.close()
+
+
+def box_route(fqdn: str) -> tuple[dict | None, str]:
+    """the route as the box renders it (`laib net`, #439, #774), or why not"""
+    try:
+        p = subprocess.run([LAIB, "net"], capture_output=True, text=True, timeout=60)
+        if p.returncode != 0:
+            return None, f"`laib net` failed: {(p.stderr or p.stdout).strip()[:200]}"
+        names = json.loads(p.stdout).get("names") or []
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        return None, f"`laib net` did not answer: {e}"
+    return next((n for n in names if n.get("name") == fqdn), None), f"{fqdn} is not among the box's routes (`laib net`)"
+
+
+def check_login(fqdn: str, box: str, ctx: ssl.SSLContext, open_route: bool, probe: str = "", why: str = "") -> tuple[int, str]:
     domain = fqdn.split(".", 1)[1]
     try:
-        c = _Via(fqdn, box, ctx)
-        c.request("GET", "/", headers={"Remote-User": "laib-app-check"})   # a forged login must not get through
-        r = c.getresponse()
-        loc = r.getheader("Location") or ""
-        body = r.read(400).decode("utf-8", "replace")
+        status, loc, body = fetch(fqdn, box, ctx, "/")
     except (OSError, ssl.SSLError, http.client.HTTPException) as e:
         return UNMEASURED, f"https://{fqdn}/ did not answer through {box}: {e}"
-    if open_route:
-        if r.status >= 500:
-            return FAILED, f"https://{fqdn}/ answers {r.status}: the app is down (`laib status`, `laib logs`)"
-        return DONE, f"https://{fqdn}/ answers {r.status} without Authelia (auth: none — the app logs in itself)"
-    if r.status in (301, 302, 303, 307) and urllib.parse.urlparse(loc).hostname == "auth." + domain:
+    if open_route:   # auth: none: nothing is in front of the app, its own login is what counts
+        if status >= 500:
+            return FAILED, f"https://{fqdn}/ answers {status}: the app is down (`laib status`, `laib logs`)"
+        if not probe:
+            return UNMEASURED, (f"https://{fqdn}/ answers {status} without Authelia (auth: none), the app's own login is not measured: "
+                                "the route declares no loginProbe (a path the app refuses without a session); --login-probe PATH")
+        path = "/" + probe.lstrip("/")
+        try:
+            got, loc, body = fetch(fqdn, box, ctx, path)
+        except (OSError, ssl.SSLError, http.client.HTTPException) as e:
+            return UNMEASURED, f"https://{fqdn}{path} did not answer through {box}: {e}"
+        if got in (401, 403):
+            return DONE, f"auth: none, the app logs in itself: https://{fqdn}/ answers {status}, {path} without a session {got}"
+        return FAILED, (f"https://{fqdn}{path} answers {got} {loc} without a session: the app's own login does not hold, and with "
+                        f"auth: none nothing else is in front of it ({body[:80]!r})")
+    if status in (301, 302, 303, 307) and urllib.parse.urlparse(loc).hostname == "auth." + domain:
         return DONE, f"without a login https://{fqdn}/ sends to {urllib.parse.urlparse(loc).hostname} (Authelia)"
-    if r.status == 401:
+    if status == 401:
         return DONE, f"without a login https://{fqdn}/ answers 401 (Authelia)"
-    if r.status == 403 and not loc:
+    if status == 403 and not loc:
         return FAILED, f"https://{fqdn}/ answers 403: an internal route seen from outside the home network, or the group is wrong"
-    return FAILED, f"https://{fqdn}/ answers {r.status} {loc} without a login: the route is not behind Authelia ({body[:80]!r})"
+    note = f"; the box's routes could not be read ({why}): an auth: none route takes --open --login-probe PATH" if why else ""
+    return FAILED, f"https://{fqdn}/ answers {status} {loc} without a login: the route is not behind Authelia ({body[:80]!r}){note}"
 
 
 def cmd_check(a) -> int:
@@ -226,7 +260,10 @@ def cmd_check(a) -> int:
     ctx = tls_context(a.cafile)
     results = [("dns", check_dns(fqdn, target)), ("cert", check_cert(fqdn, a.box, ctx))]
     if results[1][1][0] == DONE:
-        results.append(("login", check_login(fqdn, a.box, ctx, a.open)))
+        route, why = (None, "") if a.open else box_route(fqdn)
+        open_route = a.open or (route is not None and not route.get("forwardAuth"))
+        probe = a.login_probe or (route or {}).get("loginProbe", "")
+        results.append(("login", check_login(fqdn, a.box, ctx, open_route, probe, "" if route else why)))
     else:
         results.append(("login", (UNMEASURED, "not asked: without a valid certificate no browser gets that far")))
     codes = set()
@@ -258,7 +295,8 @@ def main(argv: list[str]) -> int:
     c.add_argument("--box", default=BOX, help="where Caddy answers, host[:port] (default: the box, port 443)")
     c.add_argument("--cafile", default=os.environ.get("LAIB_APP_CAFILE"))
     c.add_argument("--target", help="the name the house's public IP has (default: the last two labels)")
-    c.add_argument("--open", action="store_true", help="a route with auth: none")
+    c.add_argument("--open", action="store_true", help="a route with auth: none, when the box cannot say (default: `laib net`)")
+    c.add_argument("--login-probe", default="", help="auth: none: a path the app refuses without a session (default: the route's loginProbe)")
     a = ap.parse_args(argv)
     return {"new": cmd_new, "register": cmd_register, "check": cmd_check}[a.cmd](a)
 

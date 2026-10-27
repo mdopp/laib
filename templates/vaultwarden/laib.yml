@@ -10,6 +10,7 @@ routes:
     port: 8222
     exposure: public
     auth: none
+    loginProbe: /api/accounts/profile   # refused without a session: laib-app check measures the app's own login there (#774)
 secrets:
   - name: VAULTWARDEN_ADMIN_TOKEN
     login: {user: admin, host: vault, path: /admin, note: "Vaultwardens Admin-Seite: nur das Token zählt"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)

@@ -26,6 +26,7 @@ routes:
     port: 8000
     exposure: internal
     auth: none                     # Paperless logs in itself, through Authelia's OIDC; the apps use tokens (#55, #231)
+    loginProbe: /api/documents/    # refused without a session: laib-app check measures the app's own login there (#774)
     caddy: |
       request_body {
         max_size 500MB

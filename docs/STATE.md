@@ -444,6 +444,13 @@ trusts `Remote-User` only when the header matches (ADR 0012 §3). The
 secret is one of the service's own declared secrets; the loader refuses a
 route naming one the service does not declare.
 
+### The app's own login
+
+`loginProbe: <path>` on an `auth: none` route names a path the app
+refuses without a session (401 or 403). Laib renders nothing from it;
+`laib net` carries it, and `laib-app check` measures the app's own login
+there instead of Authelia's (#774).
+
 ### Names that only redirect
 
 `redirectFrom: ["@", www]` on a route makes Caddy answer those names with a

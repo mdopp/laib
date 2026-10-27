@@ -14,6 +14,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -518,7 +519,7 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 	}
 	for _, s := range a.Secrets {
 		old, had := bsec[s.Name]
-		if had && old == s {
+		if had && reflect.DeepEqual(old, s) { // by value: owner and login are pointers (#782)
 			continue
 		}
 		if s.Mint != "" {

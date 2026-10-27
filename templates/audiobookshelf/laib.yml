@@ -16,6 +16,7 @@ routes:
     port: 13378
     exposure: public
     auth: none                     # ABS does its own login (OIDC via Authelia); forward-auth would break its apps
+    loginProbe: /api/me            # refused without a session: laib-app check measures the app's own login there (#774)
 secrets:
   - name: ABS_ROOT_PASSWORD
     login: {user: root, host: hoerbuecher, note: "Audiobookshelf"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
