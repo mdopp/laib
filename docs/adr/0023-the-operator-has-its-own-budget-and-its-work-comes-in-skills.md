@@ -16,7 +16,9 @@ check about an agent's task before it runs.
   amended 2026-10-22 (#550): no session within two minutes of a person's
   model request;
   amended 2026-10-24 (#550): a look without news is silent, an incident
-  waits for the graphics card
+  waits for the graphics card;
+  amended 2026-10-27 (#792): a look's red is an incident, its first steps
+  need no model, and it is escalated in bounded time
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -539,3 +541,58 @@ incident on a gaming evening is handled when the card is back instead of
 waiting for its next red, which a red that stays red only sends again
 after the ten-minute debounce. What it costs: about 150 Operator lines.
 ServiceBay had no Operator on the GPU to compare with.
+
+## Amendment 2026-10-27 — a look's red is an incident, worked in bounded time (#792)
+
+The owner, on the box (v0.43.0): „Drei Services sind rot. ER (der Operator)
+soll das lösen. Aber ich weiß nicht, wo ich sehe, ob er es macht.“
+bote-check, frage-check and immich-check failed at 10:30 after a green
+apply and stayed red for hours; the journal had one Operator line in six
+hours, the Box page said „Operator läuft“. Two causes, both measured on
+the box: a failed oneshot (a template's check timer) writes no red
+journal line, so no event reached `vorfall` — red was "vorfall's", but
+only a journal red opened one; and the look that did see the reds was
+skipped every tick, as was the 07:00 morning report, because the router
+had unloaded the idle household model (`/v1/models`: `unloaded`, lease
+`haushalt`, nobody asking) and no session makes the cold start (the
+amendment of 2026-10-22). The skips counted as looks, so the heartbeat
+said „läuft“. What changes, code and not prompt:
+
+- **A red a look sees for the first time opens an incident.** The look's
+  new reds (not the Operator's own probe) are one `vorfall` trigger, as a
+  cascade within a minute is; a red is opened once and again only after it
+  went away (`findings.json`).
+- **Its first steps need no model.** For such an incident the runner reads
+  each service's last log line (`laib logs --since 1h`), runs the
+  `restart` diag's finding offers when the skill is granted it — the
+  kernel's verb inside the envelope, journalled as always — and reads diag
+  again. Nothing red any more ends the incident; otherwise the model gets
+  it with „Schon getan“ in its trigger. Either way one note in German says
+  what was seen, what was done and what comes next. A journal red keeps
+  today's path, model first.
+- **An incident may wake an unloaded model; a look does not.** An unloaded
+  model is a router that went idle, not someone else's window; the lease,
+  a model loading and a person's request in the last two minutes still
+  make a session wait. The morning report may wake it too.
+- **Bounded.** An incident waiting 30 minutes (`incidentWait`) — the card
+  lent, or its sessions failing, which now wait in the queue too — is
+  `laib escalate`d once per service still red, with what the first aid saw
+  and why it waited; it stays queued for the model, and one no longer red
+  is dropped with a note.
+- **The owner sees it.** `/ready` of the Operator carries `work`: the
+  incident it works on, since when, its last step, why the last session
+  waited, how many wait. The kernel reads it with the heartbeat, adds the
+  ops hand's journal lines of the day (restarts, proposals, escalations,
+  notes, the newest five) and shows both as the Box page's „Operator“
+  section and as `operatorWork` in `laib_status`, for Haus.
+
+Weighed against before (#246): the family gets a red handled — a restart
+within the next look, an escalation within half an hour — instead of a
+red that waited for someone to talk to the Bote. Maintenance gets easier:
+the page says what the Operator does and why it waits, instead of „läuft“
+over an empty journal. What it costs: a cold start on an incident (about a
+minute of loading the household model, which then answers the next
+person warm), a runner note before the model's note in an incident a look
+opened, and about 270 Operator and 90 kernel lines. ServiceBay's diagnose
+showed the restart beside the probe and a human clicked it; the runner now
+does that click where the policy grants it.

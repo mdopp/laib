@@ -110,7 +110,10 @@ const personQuiet = 2 * time.Minute
 // model is loading, the router reports it not loaded, or a person asked
 // the model less than personQuiet ago (the proxy's last_human_at). A model
 // without the lease proxy in front (no /api/model-lease) is never busy.
-func (l *LLM) Busy(ctx context.Context) string {
+// With cold an unloaded model is no reason (#792): the router unloads it
+// when idle, and an incident that waited for someone else to warm it
+// waited all day.
+func (l *LLM) Busy(ctx context.Context, cold bool) string {
 	base := strings.TrimSuffix(strings.TrimRight(l.URL, "/"), "/v1")
 	client := l.Client
 	if client == nil {
@@ -150,7 +153,9 @@ func (l *LLM) Busy(ctx context.Context) string {
 			Status struct{ Value string }
 		}
 	}
-	get("/v1/models", &models)
+	if !cold {
+		get("/v1/models", &models)
+	}
 	for _, m := range models.Data {
 		if m.ID == l.Model && m.Status.Value != "" && m.Status.Value != "loaded" {
 			return "das Modell " + l.Model + " ist nicht geladen (" + m.Status.Value + "); die Sitzung wäre sein Kaltstart"

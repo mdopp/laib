@@ -433,6 +433,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	if rd.Lock != "" {
 		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
 	}
+	b.WriteString(operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
 	b.WriteString(filter + "<div class=liste>")
 	for _, row := range rows {
 		if show != "" && group(row.State) != show {
