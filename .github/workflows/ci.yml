@@ -67,5 +67,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/kern-diaet.sh
       - run: scripts/drift.sh
+      - name: README's architecture section is current (a warning only; the daily architektur workflow opens the PR)
+        run: scripts/architektur.sh --check || echo "::warning title=README architecture section::stale; the daily architektur workflow opens its PR, or run scripts/architektur.sh"
       - run: scripts/workflow-syntax.sh
       - run: scripts/e2e.sh
