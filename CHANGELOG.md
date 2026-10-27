@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.45.0](https://github.com/mdopp/laib/compare/v0.44.1...v0.45.0) (2026-10-27)
+
+
+### Features
+
+* **scan:** a stack splits at separator sheets with the PATCH T barcode ([#814](https://github.com/mdopp/laib/issues/814)) ([d8d8df8](https://github.com/mdopp/laib/commit/d8d8df813c5dc3afd04d78adbd73232fec57bd3a))
+* **scan:** split a stack at separator sheets (PATCH T) ([d99d280](https://github.com/mdopp/laib/commit/d99d280e43c018a532aefdd677267fbe420ed516))
+* **scan:** split a stack at separator sheets (PATCH T) ([035fe75](https://github.com/mdopp/laib/commit/035fe75fbdd3ffea5509d4646bbb851532edaf98)), closes [#814](https://github.com/mdopp/laib/issues/814)
+
+
+### Bug Fixes
+
+* **scan:** one sender's documents in a row are as many as their numbers and dates ([8bf535d](https://github.com/mdopp/laib/commit/8bf535d04fc55c887abe6e302053110e917ddd40))
+* **scan:** one sender's documents in a row are as many as their numbers and dates ([6aa8fac](https://github.com/mdopp/laib/commit/6aa8facb2e668edf1eaf90f8ef509f82315dda8e))
+* **scan:** one sender's separate letters stay separate documents ([#808](https://github.com/mdopp/laib/issues/808)) ([7897b4b](https://github.com/mdopp/laib/commit/7897b4b7a46a04ca1520181995c8ca4431d50dbb))
+
 ## [0.44.1](https://github.com/mdopp/laib/compare/v0.44.0...v0.44.1) (2026-10-27)
 
 
