@@ -4,3 +4,4 @@ ADMIN_USER: admin
 ADMIN_PW: !secret JELLYFIN_ADMIN_PASSWORD
 BASE_DN: dc=example,dc=home                      # LLDAP's, as in auth: the plugin's search base (#256)
 SPOKEN_WORD: jellyfin                            # audiobookshelf: Jellyfin drops Hörbücher, Podcasts and Radio once Audiobookshelf and Music Assistant hold them (#646)
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # media-check.py, the standard library only (#785)
