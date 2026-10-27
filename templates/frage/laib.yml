@@ -13,7 +13,13 @@ secrets:
   - name: SEARX_SECRET
 data:
   - path: ${DATA_DIR}/frage/searxng
+  - path: ${DATA_DIR}/frage/check     # frage-check's status file (#785): made again by its timer
+    backup: false
 health:
   http: http://127.0.0.1:8710/health
+status:                            # the Box page's line (#785): "Websuche antwortet: 24 Treffer, 2 Suchmaschinen still (google, brave)"
+  file: ${DATA_DIR}/frage/check/laib-status.json
+  check: frage-check.service
+  stale: 90m
 ports:
   - {port: 8710, lan: false}       # on every address for pods (host.containers.internal), never the LAN (#490)

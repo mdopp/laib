@@ -1,0 +1,9 @@
+[Unit]
+Description=Frage: laibs Probesuche einmal in der Stunde (#785)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

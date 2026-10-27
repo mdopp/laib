@@ -1,0 +1,18 @@
+# file-share's detail line on the Box page (#785): file-share-check.py in a
+# stock Python image, fed on stdin (as kalender-abgleich), on the host network
+# where Syncthing's API listens (127.0.0.1:8384). Read-only mounts, all
+# unlabelled (the share is never relabelled, #230): the share for its free
+# space, Syncthing's config for its API key (read there, sent only in the
+# request header), samba-accounts for who has a password (its status file,
+# never the FIFO). It writes the status file laib.yml declares. laib starts it
+# when someone looks and the file is older than its stale; the timer every 15
+# minutes.
+[Unit]
+Description=Dateifreigabe: Platz, Syncthing und Netzlaufwerk für laibs Status
+After=file-share-syncthing.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/file-share/file-share-check.py
+ExecStart=/usr/bin/podman run --rm -i --name file-share-check --network host --security-opt label=disable -e SHARE_DIR=/share -e SYNCTHING_URL=http://127.0.0.1:8384 -e SYNCTHING_CONFIG=/syncthing/config.xml -e ACCOUNTS_DIR=/samba-accounts -e STATUS_DIR=/data -v ${DATA_DIR}/file-share/data:/share:ro -v ${DATA_DIR}/file-share/syncthing-config:/syncthing:ro -v ${DATA_DIR}/file-share/samba-accounts:/samba-accounts:ro -v ${DATA_DIR}/file-share/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min

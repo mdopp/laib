@@ -1,3 +1,4 @@
 IMAGE: docker.io/library/eclipse-mosquitto:2
 MQTT_USER: homeassistant
 MQTT_PW: !secret MQTT_PASSWORD
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # mosquitto-check.py, the standard library only (#785)

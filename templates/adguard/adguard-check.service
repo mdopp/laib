@@ -1,0 +1,17 @@
+# adguard's detail line on the Box page (#785): adguard-check.py in a stock
+# Python image, fed on stdin (as kalender-abgleich), in AdGuard's network
+# namespace (the host's: AdGuard runs on the host network), so it asks
+# AdGuard on 127.0.0.1:8083. It reads the statistics as the admin and writes
+# the status file laib.yml declares. laib starts it when someone looks and the
+# file is older than its stale; the timer every 15 minutes. The password
+# reaches podman through the environment, never on argv.
+[Unit]
+Description=AdGuard: Anfragen und Blockiertes für laibs Status
+After=adguard.service
+
+[Service]
+Type=oneshot
+Environment=ADGUARD_PASSWORD=${ADMIN_PW}
+StandardInput=file:%h/.config/containers/systemd/adguard/adguard-check.py
+ExecStart=/usr/bin/podman run --rm -i --name adguard-check --network container:systemd-adguard --security-opt label=disable -e ADGUARD_PASSWORD -e ADGUARD_USER=${ADMIN_USER} -e ADGUARD_URL=http://127.0.0.1:8083 -e STATUS_DIR=/data -v ${DATA_DIR}/adguard/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min

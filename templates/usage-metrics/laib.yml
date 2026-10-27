@@ -12,7 +12,13 @@ secrets:
   - name: USAGE_METRICS_TOKEN        # generated; the bearer for /ingest and /summary. A caller's values.yml: !secret USAGE_METRICS_TOKEN
 data:
   - path: ${DATA_DIR}/usage-metrics  # the SQLite counters; ServiceBay's path, so the Kraftwerk's counters carry over as they are
+  - path: ${DATA_DIR}/usage-metrics/check     # usage-metrics-check's status file (#785): made again by its timer
+    backup: false
 health:
   http: http://127.0.0.1:8094/healthz   # open on purpose (no counters in it); 503 once the retention sweep has stopped
+status:                            # the Box page's line (#785): "letzte 7 Tage: 1.234 Zählungen aus bote, haus · 3 unbeantwortete Fragen"
+  file: ${DATA_DIR}/usage-metrics/check/laib-status.json
+  check: usage-metrics-check.service
+  stale: 20m
 ports:
   - {port: 8094, lan: false}         # 8095 is music-assistant's; in-box callers only

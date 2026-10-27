@@ -2,3 +2,4 @@ IMAGE: docker.io/vaultwarden/server:latest
 SIGNUPS: "false"
 ADMIN_TOKEN: !secret VAULTWARDEN_ADMIN_TOKEN
 SSO_SECRET: !secret OIDC_VAULTWARDEN_SECRET
+CHECK_IMAGE: docker.io/library/python:3.13-alpine    # vaultwarden-check.py, the standard library only (#785)
