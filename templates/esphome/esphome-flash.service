@@ -3,7 +3,7 @@
 # repair status stimme); no install section and no timer, so apply and restart never do. The host
 # copies Stimme's trained model next to the device YAMLs (the container mounts only /config),
 # then esphome-flash.py edits each device's micro_wake_word and compiles and uploads it over
-# the air. A failed run leaves the unit failed: laib diag names it, laib logs esphome says why.
+# the air; then it tells Stimme which manifest the devices run. A failed run leaves the unit failed: laib diag names it, laib logs esphome says why.
 [Unit]
 Description=ESPHome: the house persona's wake word onto the devices (after the owner's approval)
 After=esphome.service
@@ -15,5 +15,8 @@ ExecStartPre=/usr/bin/podman unshare mkdir -p ${DATA_DIR}/esphome/config/models
 ExecStartPre=/usr/bin/podman unshare cp -f ${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.tflite ${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.json ${DATA_DIR}/esphome/config/models/
 StandardInput=file:%h/.config/containers/systemd/esphome/esphome-flash.py
 ExecStart=/usr/bin/podman exec -i -e WAKE_ID systemd-esphome python3 -
+# #825: only after every device took it, the manifest compiled in goes back to Stimme as
+# <id>.geflasht.json: stimme-names offers this flash again when the trained one differs (a new cutoff)
+ExecStartPost=/usr/bin/podman unshare cp -f ${DATA_DIR}/esphome/config/models/${PERSONA_WAKEWORD}.json ${DATA_DIR}/stimme/micro/${PERSONA_WAKEWORD}.geflasht.json
 # a Voice PE build from its cache takes minutes, a first one longer
 TimeoutStartSec=45min

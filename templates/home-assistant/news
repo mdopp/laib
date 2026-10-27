@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+${PERSONA_DISPLAY} zählt mit, wie oft der Lautsprecher aufwacht, und lernt aus seinen Fehlalarmen
 Die Box-Seite meldet das Weckwort nicht mehr als fehlend, wenn es schon auf dem Sprachgerät liegt
 Die Werkstatt prüft jetzt auch nach, dass Home Assistant ohne Anmeldung nichts preisgibt
 Geräte mit zusammengesetzten Namen wie „Sofalicht“ hören jetzt auch auf „Sofa-Licht“ und „Sofa Licht“, und ein Befehl für ein unbekanntes Gerät bekommt eine ehrliche Antwort statt einer Websuche
