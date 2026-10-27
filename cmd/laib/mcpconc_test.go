@@ -18,9 +18,9 @@ import (
 func withVerb(t *testing.T, v cli.Verb) {
 	t.Helper()
 	saved := mcp.Verbs
+	v.MCP = true
 	mcp.Verbs = append(append([]cli.Verb(nil), mcp.Verbs...), v)
-	mcp.Allowed[v.Name] = true
-	t.Cleanup(func() { mcp.Verbs = saved; delete(mcp.Allowed, v.Name) })
+	t.Cleanup(func() { mcp.Verbs = saved })
 }
 
 // #289: read verbs over MCP run side by side — two calls are inside the

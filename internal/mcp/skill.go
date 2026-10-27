@@ -23,14 +23,14 @@ import (
 // an MCP verb and the hand's ceiling and verb list reach it.
 func SkillsFor(env *cli.Env, st *state.State, hand string) []skill.Skill {
 	return skill.Grant(skill.Load(skills.FS, env.Paths.State), st.Policy.Skills, func(v string) string {
-		tier := ""
+		tier, exposed := "", false
 		for _, x := range Verbs {
 			if x.Name == v {
-				tier = x.Tier
+				tier, exposed = x.Tier, x.MCP
 			}
 		}
 		switch {
-		case !Allowed[v]:
+		case !exposed:
 			return "kein MCP-Werkzeug"
 		case !policy.Allowed(st.Policy, hand, tier):
 			return fmt.Sprintf("Stufe %s über der Decke %s von %s", tier, st.Policy.Hands[hand].Ceiling, hand)

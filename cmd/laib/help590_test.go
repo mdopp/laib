@@ -115,7 +115,7 @@ func TestMcpHelpRunsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, v := range mcp.Verbs {
-		if !mcp.Allowed[v.Name] {
+		if !v.MCP {
 			continue
 		}
 		before := homeSnapshot(t, c.env.Paths.Home)

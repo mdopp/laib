@@ -50,7 +50,7 @@ func TestTheAdminPageKeepsOnlyApproveKeysAndRepair(t *testing.T) {
 			t.Errorf("the verb table still has %s", v.Name)
 		}
 	}
-	if mcp.Allowed["adopt"] || policy.KnownVerbs["adopt"] {
+	if policy.KnownVerbs["adopt"] {
 		t.Error("adopt is still a verb an agent or policy.yml may name")
 	}
 }

@@ -179,6 +179,9 @@ type Verb struct {
 	// MCP it takes no lock: what it changes in laib comes back as its own
 	// call, which takes it.
 	Door bool
+	// MCP: an agent reaches it over MCP, under its hand's ceiling and verb
+	// list; without it the verb is the shell's alone (#800)
+	MCP bool
 }
 
 // Guard is every verb's front door (#590): --help or -h shows the usage and

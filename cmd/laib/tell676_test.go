@@ -44,7 +44,7 @@ func TestHausTellsOnePersonThroughTheDoor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !policy.KnownVerbs["tell"] || !mcp.Allowed["tell"] {
+	if !policy.KnownVerbs["tell"] || !verb(t, "tell").MCP {
 		t.Fatal("tell is not a verb an agent may reach and policy.yml may name")
 	}
 	if !slices.ContainsFunc(mcp.Tools(st, "haus"), func(tool map[string]any) bool { return tool["name"] == "laib_tell" }) {
