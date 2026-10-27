@@ -1,0 +1,17 @@
+# usage-metrics' detail line on the Box page (#785): usage-metrics-check.py in
+# a stock Python image, fed on stdin (as kalender-abgleich). It asks
+# usage-metrics where every pod does, host.containers.internal:8094, with the
+# service's own bearer, for the last 7 days' counts and unanswered sentences,
+# and writes the status file laib.yml declares. laib starts it when someone
+# looks and the file is older than its stale; the timer every 15 minutes. The
+# token reaches podman through the environment, never on argv.
+[Unit]
+Description=usage-metrics: die Zählungen der Woche für laibs Status
+After=usage-metrics.service
+
+[Service]
+Type=oneshot
+Environment=USAGE_TOKEN=${TOKEN}
+StandardInput=file:%h/.config/containers/systemd/usage-metrics/usage-metrics-check.py
+ExecStart=/usr/bin/podman run --rm -i --name usage-metrics-check --security-opt label=disable -e USAGE_TOKEN -e USAGE_URL=http://host.containers.internal:8094 -e STATUS_DIR=/data -v ${DATA_DIR}/usage-metrics/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min
