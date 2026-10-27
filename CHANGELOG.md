@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.42.0](https://github.com/mdopp/laib/compare/v0.41.2...v0.42.0) (2026-10-27)
+
+
+### Features
+
+* **inbox:** approvals only in the Inbox; the relay and the chat's verdicts go ([#778](https://github.com/mdopp/laib/issues/778)) ([892dbaf](https://github.com/mdopp/laib/commit/892dbaf19d7aec4b7993dd73f06f25c66315576b))
+
+
+### Bug Fixes
+
+* **notify:** a new proposal is one line, Freigabe #N: headline · Inbox ([#778](https://github.com/mdopp/laib/issues/778)) ([76cb3e9](https://github.com/mdopp/laib/commit/76cb3e9cbec3988ff57f0b7a18f3f731dbaa30a0))
+
 ## [0.41.2](https://github.com/mdopp/laib/compare/v0.41.1...v0.41.2) (2026-10-26)
 
 
