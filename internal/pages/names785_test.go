@@ -15,7 +15,7 @@ func TestACardShowsThePlainNameBigAndTheIdSmall(t *testing.T) {
 		{Name: "echo", State: "grün", Units: map[string]string{}},
 	}
 	body := statusBody(Readiness{State: "bereit"}, rows, nil, "", [2]string{}, false, "")
-	cards := regexp.MustCompile(`(?s)<div class="card grün" data-f>.*?</div>`).FindAllString(body, -1)
+	cards := regexp.MustCompile(`(?s)<div class="card grün" id="svc-[^"]+" data-f>.*?</div>`).FindAllString(body, -1)
 	if len(cards) != 2 {
 		t.Fatalf("want two cards: %s", body)
 	}

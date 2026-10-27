@@ -130,12 +130,14 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	}
 
 	// #768: while whoami restarts, the page says what the box does now, how long it takes, and reloads itself
-	var during []string
+	var during, parts []string
 	run := sysd.Run
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		if name == "systemctl" && slices.Contains(args, "restart") && slices.Contains(args, "whoami.service") {
 			_, p := do("GET", "/schluessel?name=WHOAMI_KEY", nil)
 			during = append(during, p)
+			_, part := do("GET", "/schluessel/stand", nil)
+			parts = append(parts, part)
 		}
 		return run(ctx, name, args...)
 	}
@@ -154,12 +156,25 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 		t.Fatal("whoami was not restarted")
 	}
 	bodies = append(bodies, during...)
-	for _, w := range []string{"Schlüssel gespeichert ✓", "startet whoami …", "unter einer Minute", "Du musst nichts tun, die Seite aktualisiert sich", "http-equiv=refresh"} {
+	for _, w := range []string{"Schlüssel gespeichert ✓", "startet whoami …", "unter einer Minute", "Du musst nichts tun, die Seite aktualisiert sich", "data-run>", "fetch(", "<noscript>"} {
 		if !strings.Contains(during[0], w) {
 			t.Errorf("while whoami restarts the page lacks %q:\n%s", w, during[0])
 		}
 	}
-	if done := bodies[len(bodies)-len(during)-1]; !strings.Contains(done, "prüft, ob whoami läuft ✓") || strings.Contains(done, "http-equiv=refresh") || strings.Contains(done, "Du musst nichts tun") {
+	// no reload of the whole page (owner 2026-10-27): only the key's progress comes again, never the form
+	if strings.Contains(during[0], "http-equiv") {
+		t.Errorf("the key page reloads itself as a whole:\n%s", during[0])
+	}
+	if part := parts[0]; !strings.HasPrefix(part, `<div id="key-WHOAMI_KEY" data-run>`) || !strings.Contains(part, "startet whoami …") || strings.Contains(part, "<html") || strings.Contains(part, "<form") || strings.Contains(part, "password") {
+		t.Errorf("the fragment is not the key's progress alone:\n%s", part)
+	}
+	if code, _ := do("GET", "/schluessel/stand", nil, "X-Laib-Proxy", "falsch"); code != http.StatusForbidden {
+		t.Errorf("the fragment without the proxy secret: %d, want 403", code)
+	}
+	if code, _ := do("POST", "/schluessel/stand", nil); code == http.StatusOK {
+		t.Errorf("the fragment takes a POST: %d", code)
+	}
+	if done := bodies[len(bodies)-len(during)-1]; !strings.Contains(done, "prüft, ob whoami läuft ✓") || strings.Contains(done, "data-run>") || strings.Contains(done, "<script") || strings.Contains(done, "Du musst nichts tun") {
 		t.Errorf("done does not show its steps, or still reloads:\n%s", done)
 	}
 	if _, page = do("GET", "/schluessel", nil); !strings.Contains(page, "hinterlegt") || !strings.Contains(page, ">Ersetzen</a>") {
@@ -190,8 +205,11 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	until(t, "red", func() bool {
 		_, body := do("GET", "/schluessel?name=WHOAMI_KEY", nil)
 		bodies = append(bodies, body)
-		return strings.Contains(body, "fehlgeschlagen, weil whoami danach nicht richtig lief") && !strings.Contains(body, "http-equiv=refresh")
+		return strings.Contains(body, "fehlgeschlagen, weil whoami danach nicht richtig lief") && !strings.Contains(body, "data-run>")
 	})
+	if _, part := do("GET", "/schluessel/stand", nil); strings.Contains(part, "data-run>") || strings.Contains(part, value) {
+		t.Errorf("the fragment still runs, or shows the value:\n%s", part)
+	}
 	sysd.Run = run
 
 	// never shown, never journaled, never logged, never in a commit message

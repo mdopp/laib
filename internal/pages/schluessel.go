@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -179,7 +180,7 @@ func storeKey(env *cli.Env, actor, name, label, value string) {
 }
 
 // keyLine: how saving one key goes, step by step while it runs (#768),
-// with how long it takes, reloading the page; then how it ended. Never
+// with how long it takes, its block coming again; then how it ended. Never
 // the value.
 func keyLine(name string) string {
 	keyState.Lock()
@@ -190,7 +191,9 @@ func keyLine(name string) string {
 	}
 	var b strings.Builder
 	if r.end == "" {
-		b.WriteString(`<meta http-equiv=refresh content=3><p>Das dauert meist unter einer Minute, manchmal zwei. Du musst nichts tun, die Seite aktualisiert sich.</p>`)
+		fmt.Fprintf(&b, `<div id="key-%s" data-run><p>Das dauert meist unter einer Minute, manchmal zwei. Du musst nichts tun, die Seite aktualisiert sich.</p>`, html.EscapeString(name))
+	} else {
+		fmt.Fprintf(&b, `<div id="key-%s">`, html.EscapeString(name))
 	}
 	for _, s := range r.done {
 		b.WriteString("<p class=grün>" + html.EscapeString(s) + " ✓</p>")
@@ -203,7 +206,20 @@ func keyLine(name string) string {
 	default:
 		b.WriteString("<p class=grün>" + html.EscapeString(r.end) + "</p>")
 	}
-	return b.String()
+	return b.String() + "</div>"
+}
+
+// KeysStand is every key's progress for the live script (#768), never a
+// value: the page swaps in the ones it shows.
+func KeysStand(w http.ResponseWriter, r *http.Request) {
+	keyState.Lock()
+	names := slices.Sorted(maps.Keys(keyState.m))
+	keyState.Unlock()
+	var b strings.Builder
+	for _, name := range names {
+		b.WriteString(keyLine(name))
+	}
+	fragment(w, b.String())
 }
 
 // keyState words: hinterlegt or fehlt, never the value.
