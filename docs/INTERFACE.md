@@ -100,7 +100,7 @@ laib context [--since 24h] [--full]  starter bundle for an agent session; by def
                                      not green, the open proposals (`open`), the journal's newest 30 lines without the looks, each cut
                                      to a line (`omitted`: how many it left out); --full is the whole bundle
 laib template list|lint|add <git>    registries and the contract check
-laib adopt <unit> | laib ignore <unit>
+laib ignore <unit>                   an unmanaged unit, deliberately left alone (ADR 0008)
 laib token mint <hand> | list | revoke <id>   humans only
 laib secret set <NAME> | list        value on stdin, never an argument; list prints names only
 laib init                            first setup as a dialogue
@@ -232,7 +232,7 @@ search returned, else all of them — so laib makes it class human.
 
 A tool is in the menu only if the skill is granted its verb (`ops` at
 ceiling `propose` gets no `restart`). `approve`, `reject`, `restore`,
-`rollback`, `converge`, `template`, `adopt`, `apply`, `remove` are in no
+`rollback`, `converge`, `template`, `apply`, `remove` are in no
 skill's vocabulary.
 
 ### Skills (ADR 0023)

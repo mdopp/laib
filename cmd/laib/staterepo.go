@@ -20,36 +20,6 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-func cmdAdopt(_ context.Context, env *cliEnv, args []string) int {
-	if len(args) != 1 {
-		return env.Fail(errors.New("usage: laib adopt <quadlet folder>"))
-	}
-	name := args[0]
-	src := filepath.Join(env.Paths.Quadlet, name)
-	dst := filepath.Join(env.Paths.State, "services", name)
-	if _, err := os.Stat(dst); err == nil {
-		return env.Fail(fmt.Errorf("services/%s exists already", name))
-	}
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return env.Fail(err)
-	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return env.Fail(err)
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		b, _ := os.ReadFile(filepath.Join(src, e.Name()))
-		os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
-	}
-	contract := fmt.Sprintf("name: %s\ntemplate: {registry: adopted, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata: []\nports: []\n", name, name)
-	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
-	fmt.Fprintf(env.W(), "adopted %s → services/%s. Fill laib.yml (routes, secrets, data), then laib plan %s.\n", name, name, name)
-	return cli.ExitOK
-}
-
 func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
 	if len(args) != 1 {
 		return env.Fail(errors.New("usage: laib ignore <unit>"))

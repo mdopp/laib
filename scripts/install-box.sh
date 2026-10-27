@@ -440,5 +440,5 @@ case "$ready" in
     echo "running: $TAG";;
   *) echo "the running laib predates /ready's version field; the file on disk is $TAG" >&2;;
 esac
-echo "next: /var/opt/laib/laib plan   (shows every unit on the box as 'nicht verwaltet' until adopted or ignored)"
+echo "next: /var/opt/laib/laib plan   (shows every unit on the box as 'nicht verwaltet' until ignored or brought back as a template)"
 echo "      /var/opt/laib/laib operator enable   (mints the ops token and starts the operator; needs a model)"

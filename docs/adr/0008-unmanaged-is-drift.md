@@ -22,3 +22,9 @@ together is the adopting agent's judgement.
 
 About fifty lines and two verbs replace the builder. During the migration
 (ADR 0010) ServiceBay's units are listed under `ignore.yml` until each moves.
+
+## Amendment (#798, 2026-10-27)
+
+`laib adopt` is gone: a migration leftover, no use in a week. An unmanaged
+unit is still drift; it is ignored (`laib ignore`) or comes back as a
+template (`laib propose --add`), never copied in as it is.

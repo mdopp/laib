@@ -75,6 +75,39 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		}
 	}
 	go inbox.Carry(context.Background(), &cli.Env{Paths: env.Paths, Actor: "laib"}) // a run a restart cut off before it applied what waits (#609)
+	mux := Routes(env, guard)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return env.Fail(err)
+	}
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdown)
+	}()
+	// Boot comparison (#9): bereit only once units and files match the state.
+	if st, err := cli.LoadState(env); err == nil {
+		r, _ := CollectStatus(ctx, env, st)
+		if r.Red > 0 || r.Drift > 0 {
+			BootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: BootUnclean})
+		} else {
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
+		}
+	}
+	journal.Append(env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
+	fmt.Fprintln(env.Errw(), "laib serve: listening on", addr)
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		return env.Fail(err)
+	}
+	return cli.ExitOK
+}
+
+// Routes are the daemon's routes: /mcp, /ready and the pages, each page
+// behind guard (Caddy's secret header in Serve).
+func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", mcp.Handler(env))
 	mux.HandleFunc("/v1/", FleetLock(env, time.Now))
@@ -105,21 +138,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		if e, ok := journal.Last(env.Paths.Journal); ok {
 			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
 		}
-		day, text := LastReport(env)
-		body := statusBody(rd, rows, checking, last, [2]string{day, text}, BoteSignalBase(st) != "", r.URL.Query().Get("filter"))
+		body := statusBody(rd, rows, checking, last, r.URL.Query().Get("filter"))
 		for _, w := range st.Warnings { // the box's own warnings, once here, not on every proposal (#616)
 			body += "<p class=gelb>Hinweis: " + html.EscapeString(w) + "</p>"
 		}
 		page(w, "Status", body)
-	}))
-	// how the Bote gets its Signal number (#469): registered or linked, with signal-cli once
-	mux.HandleFunc("/bote/link", guard(func(w http.ResponseWriter, r *http.Request) {
-		st, err := cli.LoadState(env)
-		if err != nil || BoteSignalBase(st) == "" {
-			http.Error(w, "kein Bote mit Signal auf dieser Box", http.StatusNotFound)
-			return
-		}
-		page(w, "Bote verbinden", "<h1>Bote verbinden</h1><p>Der Bote braucht eine eigene Signal-Nummer, einmal auf der Box eingerichtet:</p><pre>"+BoteLinkPage(st.Box.DataDir, boteAccount(st))+"</pre><p><a href=\"/\">zurück</a></p>")
 	}))
 	// the Status page's cards for the live script, without starting a check
 	mux.HandleFunc("GET /stand", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -166,44 +189,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 		b.WriteString(journalBody(es))
 		page(w, "Journal", b.String())
 	}))
-
-	// the network as the rendered config makes it (#439), one card per name
-	mux.HandleFunc("/net", guard(func(w http.ResponseWriter, r *http.Request) {
-		st, err := cli.LoadState(env)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
-		}
-		page(w, "Netz", "<h1>Netz</h1>"+filter+netBody(render.Net(st)))
-	}))
-
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return env.Fail(err)
-	}
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		srv.Shutdown(shutdown)
-	}()
-	// Boot comparison (#9): bereit only once units and files match the state.
-	if st, err := cli.LoadState(env); err == nil {
-		r, _ := CollectStatus(ctx, env, st)
-		if r.Red > 0 || r.Drift > 0 {
-			BootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
-			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: BootUnclean})
-		} else {
-			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
-		}
-	}
-	journal.Append(env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
-	fmt.Fprintln(env.Errw(), "laib serve: listening on", addr)
-	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		return env.Fail(err)
-	}
-	return cli.ExitOK
+	return mux
 }
 
 // checks: per service with a status check, whether it runs now. refresh
@@ -356,7 +342,6 @@ var tabs = []struct{ name, href, icon string }{
 	{"Status", "/", `<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M3 11h18M8 15h2"/>`},
 	{"Inbox", "/inbox", `<path d="M4 13l2.5-8h11l2.5 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/>`},
 	{"Journal", "/journal", `<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>`},
-	{"Netz", "/net", `<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5.5M12 12l6 5.5"/>`},
 	{"Abmelden", "/abmelden", `<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/>`},
 }
 
@@ -378,27 +363,6 @@ func navBar(current string) string {
 // filter narrows a list page to the cards (data-f) whose text holds what is
 // typed, without a reload, case-insensitive (#515).
 const filter = `<input type=search class=filter placeholder="Filtern, z. B. lan, immich, 8083" aria-label=Filtern oninput="const q=this.value.toLowerCase();document.querySelectorAll('[data-f]').forEach(e=>e.hidden=!e.textContent.toLowerCase().includes(q))">`
-
-func netBody(n render.NetMap) string {
-	var b strings.Builder
-	b.WriteString("<div class=liste>")
-	for _, r := range n.Names {
-		auth := "meldet sich selbst an"
-		if r.ForwardAuth {
-			auth = "Authelia vorab: " + strings.TrimSpace(r.Policy+" "+r.Subject)
-		}
-		fmt.Fprintf(&b, "<div class=card data-f><b>%s</b><span class=state>%s</span><span class=note>%s · %s</span></div>\n", html.EscapeString(r.Name), r.Reach, html.EscapeString(auth), html.EscapeString(r.Upstream))
-	}
-	b.WriteString("</div><h2>Ports</h2><div class=liste>")
-	for _, p := range n.Ports {
-		fmt.Fprintf(&b, "<div class=card data-f><b>%d</b><span class=state>%s</span><span class=note>%s</span></div>\n", p.Port, p.Reach, html.EscapeString(p.Service))
-	}
-	b.WriteString("</div>")
-	for _, l := range n.Links {
-		fmt.Fprintf(&b, "<p class=muted data-f>%s → %s über host.containers.internal:%d</p>", html.EscapeString(l.From), html.EscapeString(l.To), l.Port)
-	}
-	return b.String()
-}
 
 //go:embed laib.css
 var css string
@@ -425,8 +389,8 @@ func liveIf(body string) string {
 }
 
 // statusBody is the status page: the box's line, one card per service with
-// its state and note, the last change, the morning report.
-func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, report [2]string, bote bool, show string) string {
+// its state and note, the last change; the morning report is Haus's (#798).
+func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, show string) string {
 	var b strings.Builder
 	// the owner's filter by state (#785): problems first; a paused service counts green
 	group := func(s string) string {
@@ -466,9 +430,6 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 		fmt.Fprintf(&b, `<a href="%s"%s>%s %d</a>`, href, cur, f[1], count[f[0]])
 	}
 	b.WriteString("</p>")
-	if bote {
-		b.WriteString(`<p><a href="/bote/link">Bote verbinden</a></p>`)
-	}
 	b.WriteString(`<p><a href="/schluessel">Schlüssel hinterlegen</a></p>`)
 	if rd.Lock != "" {
 		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
@@ -484,9 +445,6 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	b.WriteString("</div>")
 	if last != "" {
 		fmt.Fprintf(&b, "<p class=muted>Letzte Änderung %s</p>", html.EscapeString(last))
-	}
-	if report[0] != "" {
-		fmt.Fprintf(&b, "<h2>Morgenbericht %s</h2><pre>%s</pre>", html.EscapeString(report[0]), html.EscapeString(report[1]))
 	}
 	return b.String()
 }

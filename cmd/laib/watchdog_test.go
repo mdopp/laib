@@ -52,24 +52,3 @@ func TestDiagIsYellowWithoutAWatchdog(t *testing.T) {
 		t.Fatal("no watchdog.url must be yellow: when the box dies, nobody is told")
 	}
 }
-
-// #57 (2): the paper card for the family — one page, German, with the
-// unplug-and-wait instruction and whom to call.
-func TestFamilyCardIsOnePageInGerman(t *testing.T) {
-	c := newCbox(t)
-	b, _ := os.ReadFile(filepath.Join(c.env.Paths.State, "box.yml"))
-	os.WriteFile(filepath.Join(c.env.Paths.State, "box.yml"), append(b, []byte("watchdog:\n  contact: Martin, 0170 1234567\n")...), 0o644)
-	out := captureStdout(t, func() {
-		if rc := pages.FamilyCard(context.Background(), c.env, nil); rc != cli.ExitOK {
-			t.Errorf("rc %d", rc)
-		}
-	})
-	for _, want := range []string{"<html", "Wenn die Box nicht geht", "10 Sekunden", "5 Minuten", "Martin, 0170 1234567", "Stick", "Alles läuft"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("the family card lacks %q:\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "laib ") || strings.Contains(out, "systemctl") {
-		t.Fatal("the family card is not for admins: no commands")
-	}
-}

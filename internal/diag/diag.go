@@ -169,7 +169,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, Finding{Severity: "gelb", Probe: "drift", Detail: fmt.Sprintf("%d Dateien weichen vom State ab: %s", len(files), strings.Join(files, ", ")), Fix: "laib plan && laib apply", Repair: []string{"apply"}})
 		}
 		for _, u := range p.Unmanaged {
-			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib adopt " + u + " | laib ignore " + u})
+			out = append(out, Finding{Severity: "info", Probe: "drift", Detail: "nicht verwaltet: " + u, Fix: "laib ignore " + u + " | als Vorlage: laib propose --add"})
 		}
 	}
 	for _, f := range append(deviceFindings(env, st), keyFindings(st, sec)...) { // device-held secrets (#665)
