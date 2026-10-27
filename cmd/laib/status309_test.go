@@ -72,7 +72,7 @@ func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
 	} else {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if part := string(body); !strings.HasPrefix(part, `<div id="svc-`) || !strings.Contains(part, `id="svc-whoami"`) || strings.Contains(part, "<html") || strings.Contains(part, "<h1") {
+		if part := string(body); !strings.HasPrefix(part, `<div class="card `) || !strings.Contains(part, `id="svc-whoami"`) || strings.Contains(part, "<html") || strings.Contains(part, "<h1") {
 			t.Fatalf("the fragment is not the service cards alone:\n%s", part)
 		}
 	}
