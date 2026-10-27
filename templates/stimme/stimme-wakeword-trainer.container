@@ -13,8 +13,11 @@ Environment="WAKE_PHRASE=${PERSONA_PHRASE}"
 Environment=WAKE_ID=${PERSONA_WAKEWORD}
 Environment=WAKE_LANGUAGES=${PERSONA_LANGUAGES}
 Environment=PERSONA_REV=${PERSONA_REV}
+# #825: the cutoff the manifest carries; a change rewrites <id>.json without training, the device takes it with the next flash
+Environment=WAKE_CUTOFF=${WAKE_CUTOFF}
 Volume=${DATA_DIR}/stimme/trainer:/work:z
 Volume=${DATA_DIR}/stimme/micro:/out:z
+# the household's own WAVs of the phrase, and under negativ/ the false wakes stimme-wakes kept (#825)
 Volume=${DATA_DIR}/stimme/recordings:/recordings:ro,z
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true

@@ -4,6 +4,9 @@ WHISPER_LANG: de
 PIPER_IMAGE: docker.io/rhasspy/wyoming-piper:latest
 OPENWAKEWORD_IMAGE: docker.io/rhasspy/wyoming-openwakeword:latest
 # the wake word and the Piper voice come from the house persona (box.yml persona, ADR 0020)
+WAKE_CUTOFF: "0.97"                                        # #825: how sure the Voice PE must be it heard the wake word (0.95 woke on room talk twice in 10 min); a change takes the next flash (laib repair status stimme)
+WAKE_NEGATIVES_MAX: "200"                                  # #825: how many false wakes' audio stimme-wakes keeps as negatives for the next training, the oldest go
+WAKES_IMAGE: docker.io/library/python:3.13-alpine         # stimme-wakes.py, the standard library only (#825)
 TRAINER_IMAGE: ghcr.io/mdopp/laib-wakeword-trainer:latest  # stimme/trainer in this repo (#128)
 VOICE_ENV: /mnt/data/stacks/llama/lease/voice-device.env  # written by laib-lease; a CPU box points at a file with WHISPER_DEVICE=cpu
 HA_TOKEN: !secret STIMME_HA_TOKEN  # minted by home-assistant's post-deploy for HA's non-admin user stimme: the names Whisper hears (stimme-names)
