@@ -20,6 +20,7 @@ AI_EMBED_CHUNK: "300"                   # well below llama-embed's 2048-token ba
 # the notice must be in, in Haus's Haushalt (without Haus: none)
 VERTRAG_ARTEN: Vertrag, Versicherung, Bescheid
 VERTRAG_VORLAUF_TAGE: "28"
+RECHNUNG_ARTEN: Rechnung                # #818: the document types and tags that make a document an invoice (a title "… - Rechnung …" does too): Betrag, Rechnungsnummer, Fällig am
 HAUSHALT_URL: http://host.containers.internal:8650/mcp/haushalt
 HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
 # the household's own people are never a document's correspondent (#737): Paperless' users count

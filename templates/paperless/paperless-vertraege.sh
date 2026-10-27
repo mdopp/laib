@@ -1,5 +1,5 @@
 #!/bin/sh
-# Contract data and notice reminders (#709, #721), the host's part.
+# Contract and invoice data, notice reminders (#709, #721, #818), the host's part.
 # paperless-vertraege.service runs it hourly: it feeds paperless-vertraege.py on
 # stdin into the running Paperless container, as the paperless user (never
 # root), and passes the script's lines on to the unit's journal. A line
@@ -16,7 +16,7 @@ EINGANG=${NOTIFY_EINGANG:-${LAIB_HOME:-/mnt/data/laib}/notify/eingang}
 RC=$(mktemp) || exit 1
 n=0
 {
-	${PODMAN:-/usr/bin/podman} exec -i --user paperless -e VERTRAG_ARTEN -e VERTRAG_VORLAUF_TAGE -e HAUSHALT_URL -e HAUSHALT_TOKEN -e HAUSHALT_NAMEN \
+	${PODMAN:-/usr/bin/podman} exec -i --user paperless -e VERTRAG_ARTEN -e VERTRAG_VORLAUF_TAGE -e RECHNUNG_ARTEN -e HAUSHALT_URL -e HAUSHALT_TOKEN -e HAUSHALT_NAMEN \
 		-e PYTHONUNBUFFERED=1 systemd-paperless python3 - <"${VERTRAEGE_SKRIPT:?paperless-vertraege.py}"
 	echo $? >"$RC"
 } | while IFS= read -r z || [ -n "$z" ]; do

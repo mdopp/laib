@@ -368,8 +368,9 @@ class PaperlessAI(unittest.TestCase):
         r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
         self.assertEqual(r.returncode, 0, r.stderr)
         names = {f["name"]: f["data_type"] for f in fake.fields}
-        self.assertEqual(len(fake.fields), 8, names)   # the hand-made one taken, not doubled
+        self.assertEqual(len(fake.fields), 10, names)   # the hand-made one taken, not doubled
         self.assertEqual((names["Nächster Kündigungstermin"], names["Betrag"], names["vertragsnummer"]), ("date", "monetary", "string"))
+        self.assertEqual((names["Rechnungsnummer"], names["Fällig am"]), ("string", "date"), "#818: the invoice fields")
         fake.calls.clear()
         self.run_setup(fake, {"PAPERLESS_MAIL_HOST": ""}, password="")
         self.assertEqual([c for c in fake.writes() if c[1] == "/api/custom_fields/"], [])

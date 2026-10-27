@@ -3,7 +3,8 @@
 # paperless user (never root, as paperless-check), with Paperless' own admin
 # and its AI settings from the container's environment: the household model
 # through the model role's proxy, marked as background work. It fills only the
-# empty contract fields of the documents VERTRAG_ARTEN names, moves a passed
+# empty contract fields of the documents VERTRAG_ARTEN names and the invoice
+# fields of those RECHNUNG_ARTEN or the title names (#818), moves a passed
 # notice date on by the renewal the text names, makes a reminder in Haus's
 # Haushalt before each notice date, and on the reminder day hands a message
 # for the owner to laib-notify's eingang/ (the Bote, else mail). It also has
@@ -13,13 +14,14 @@
 # Hourly from the timer; the record in Paperless' data folder keeps it from
 # asking twice.
 [Unit]
-Description=Paperless: Vertragsdaten lesen, an Kündigungen erinnern
+Description=Paperless: Vertrags- und Rechnungsdaten lesen, an Kündigungen erinnern
 After=paperless.service
 
 [Service]
 Type=oneshot
 Environment=VERTRAG_ARTEN=${VERTRAG_ARTEN}
 Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
+Environment=RECHNUNG_ARTEN=${RECHNUNG_ARTEN}
 Environment=HAUSHALT_URL=${HAUSHALT_URL}
 Environment=HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
 Environment=HAUSHALT_NAMEN=${HAUSHALT_NAMEN}
