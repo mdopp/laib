@@ -1,0 +1,15 @@
+# esphome's detail line on the Box page (#785): esphome-check.py in a stock
+# Python image, fed on stdin (as kalender-abgleich), on the host network where
+# the dashboard listens (6052). It reads the dashboard's device list, never
+# builds or uploads, and writes the status file laib.yml declares. laib starts
+# it when someone looks and the file is older than its stale; the timer every
+# 15 minutes.
+[Unit]
+Description=ESPHome: Geräte und Updates für laibs Status
+After=esphome.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/esphome/esphome-check.py
+ExecStart=/usr/bin/podman run --rm -i --name esphome-check --network host --security-opt label=disable -e ESPHOME_URL=http://127.0.0.1:6052 -e STATUS_DIR=/data -v ${DATA_DIR}/esphome/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min
