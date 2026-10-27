@@ -339,9 +339,12 @@ It also writes the box's own config, on every box and on every run (#281):
 journald persistent with at most 4G and four weeks
 (`/etc/systemd/journald.conf.d/50-laib.conf`) and podman's log driver pinned
 to journald (`~/.config/containers/containers.conf.d/50-laib.conf`), so a
-container's output is in `laib logs`. The stick's Ignition does not carry
-them: the first boot runs this script, so there is one source. `laib diag`
-is red while either is missing; `install-box.sh --box-config` writes only them.
+container's output is in `laib logs`, and a udev rule that makes a USB
+scanner's node core's, so the rootless scan service can open it
+(`/etc/udev/rules.d/99-laib-scanner.rules`, matched by vendor and product,
+#801). The stick's Ignition does not carry them: the first boot runs this
+script, so there is one source. `laib diag` is red while either of the first
+two is missing; `install-box.sh --box-config` writes only these.
 
 What CI already proves (workflow `vm-install`): the stick's ISO boots in a
 KVM guest, installs CoreOS, reboots, the first boot fetches and runs

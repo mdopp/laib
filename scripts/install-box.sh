@@ -63,6 +63,20 @@ box_config() {
     [ -z "$s" ] || sudo systemctl restart systemd-journald   # it reads its config only at start
     echo "journald: persistent, at most 4G and four weeks"
   fi
+  # A scanner on the box's USB (#801): the scan container is core's (rootless) and a USB node is
+  # root's 0664, so libusb cannot open it for use. The rule makes the scanner's node core's, matched
+  # by vendor and product, since the node changes with every power cycle; every other USB node stays
+  # root's. One line per scanner the household has: 04c5:114f is the Fujitsu fi-6130. The Z-Wave
+  # stick's rule comes with the stick's Ignition (usb/fedora-coreos.bu); this one reaches a box in use.
+  want="$(printf '%s\n' '# laib (#801): a USB scanner is core'"'"'s, for the rootless scan service' \
+    'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="04c5", ATTR{idProduct}=="114f", OWNER="core"')"
+  if [ "$(cat "$etc/udev/rules.d/99-laib-scanner.rules" 2>/dev/null)" != "$want" ]; then
+    $s mkdir -p "$etc/udev/rules.d"
+    printf '%s\n' "$want" | $s tee "$etc/udev/rules.d/99-laib-scanner.rules" >/dev/null
+    # a scanner plugged in already takes the rule now, not at the next power cycle
+    [ -z "$s" ] || { sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=04c5 --attr-match=idProduct=114f; } || true
+    echo "udev: a USB scanner (Fujitsu fi-6130) is core's, for the scan service"
+  fi
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
   # OS updates (#368): Zincati stages an update and asks laib before it
