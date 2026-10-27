@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.42.1](https://github.com/mdopp/laib/compare/v0.42.0...v0.42.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **werkstatt:** check an auth: none route by the app's own login, and judge only what a policy patch changes ([0b3dff8](https://github.com/mdopp/laib/commit/0b3dff88698b11bf1ebdff53429093f32f1ebfae))
+* **werkstatt:** check auth: none routes by the app's own login; review judges only what a policy patch changes ([d9d7ac2](https://github.com/mdopp/laib/commit/d9d7ac2adc4de6a6e7f5c180aa61d332408aed00))
+
 ## [0.42.0](https://github.com/mdopp/laib/compare/v0.41.2...v0.42.0) (2026-10-27)
 
 
