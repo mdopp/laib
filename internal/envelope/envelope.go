@@ -333,29 +333,45 @@ func Start(ctx context.Context, env *cli.Env, args []string) int {
 // answers at once. The unit's result is laib diag's and laib logs'; what
 // the device runs afterwards, the template's status measures.
 func Flash(ctx context.Context, env *cli.Env, args []string) int {
+	return oneshot(ctx, env, args, "flash", "spielt Firmware auf ein Gerät", "hat nichts aufzuspielen",
+		"%s spielt auf (%s): das dauert einige Minuten, das Gerät startet dabei neu. Wie es ausging: laib diag, laib logs %s\n")
+}
+
+// Retrain is `laib retrain <service>` (#828, destroy, humans only; laib
+// repair proposes it): it starts the service's <service>-retrain.service,
+// which moves the trained model aside (the copy stays) so its trainer
+// trains again, after a snapshot, and answers at once.
+func Retrain(ctx context.Context, env *cli.Env, args []string) int {
+	return oneshot(ctx, env, args, "retrain", "lässt ein Modell neu trainieren", "hat nichts neu zu trainieren",
+		"%s trainiert neu (%s): das dauert Stunden, bis dahin bleibt das alte Modell auf dem Gerät. Wie es steht: laib status %s\n")
+}
+
+// oneshot starts a service's <service>-<verb>.service for a human (flash,
+// retrain): the unit does the work, laib answers at once.
+func oneshot(ctx context.Context, env *cli.Env, args []string, verb, what, none, started string) int {
 	if len(args) != 1 {
-		return env.Fail(errors.New("usage: laib flash <service>   (laib repair schlägt es vor, ein Mensch gibt es frei)"))
+		return env.Fail(errors.New("usage: laib " + verb + " <service>   (laib repair schlägt es vor, ein Mensch gibt es frei)"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
-		return cli.Refused(env, "nur ein Mensch spielt Firmware auf ein Gerät: laib repair schlägt es in der Inbox vor")
+		return cli.Refused(env, "nur ein Mensch "+what+": laib repair schlägt es in der Inbox vor")
 	}
 	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
-	unit := svc.Name + "-flash.service"
+	unit := svc.Name + "-" + verb + ".service"
 	if !slices.Contains(svc.Oneshots(), unit) {
-		return env.Fail(fmt.Errorf("%s hat nichts aufzuspielen (kein %s)", svc.Name, unit))
+		return env.Fail(fmt.Errorf("%s %s (kein %s)", svc.Name, none, unit))
 	}
-	if code := envelope(ctx, env, st, svc, "flash", unit); code != cli.ExitOK {
+	if code := envelope(ctx, env, st, svc, verb, unit); code != cli.ExitOK {
 		return code
 	}
 	if _, err := sysd.Run(ctx, "systemctl", "--user", "start", "--no-block", unit); err != nil {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "flash", Service: svc.Name, Result: "red", Detail: unit + ": " + err.Error()})
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: unit + ": " + err.Error()})
 		return env.Fail(err)
 	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "flash", Service: svc.Name, Result: "info", Detail: unit + " gestartet"})
-	fmt.Fprintf(env.W(), "%s spielt auf (%s): das dauert einige Minuten, das Gerät startet dabei neu. Wie es ausging: laib diag, laib logs %s\n", svc.Name, unit, svc.Name)
+	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "info", Detail: unit + " gestartet"})
+	fmt.Fprintf(env.W(), started, svc.Name, unit, svc.Name)
 	return cli.ExitOK
 }
 

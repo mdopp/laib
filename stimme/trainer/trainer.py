@@ -12,6 +12,12 @@ unit, which restarts it. On start the trainer looks at what it left in /out:
   (a new revision), a new trainer build (TRAINER_BUILD) or deleting the status file retries it.
 - anything else, including a run cut by a restart: train.
 
+New false wakes under /recordings/<id>/negativ (stimme-wakes, #825) and new recordings
+of the phrase under /recordings/<id>/haus (Haus, #828) start no run; the next one trains
+on them. The owner starts one: stimme-names offers „neu trainieren“, which moves the
+model aside (`laib retrain stimme`, stimme-retrain.service), and this decides to train. WAKE_CUTOFF is written into a done model's
+manifest on start, without training (retune).
+
 It writes <id>.status.json (training, done, failed with a reason) so `laib`
 and a person can see where it stands, and the model atomically when done.
 A failed run says why in two registers (#588, #627): a German sentence for
@@ -92,12 +98,15 @@ def status_path(out: pathlib.Path, wake_id: str) -> pathlib.Path:
 
 
 def write_status(out: pathlib.Path, wake_id: str, state: str, phrase: str, rev: str, reason: str,
-                 einzelheiten: str = "") -> None:
+                 einzelheiten: str = "", begonnen: str = "") -> None:
+    """begonnen: when a done run began (#828); stimme-names counts the recordings after it as new"""
     out.mkdir(parents=True, exist_ok=True)
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = status_path(out, wake_id).with_suffix(".tmp")
-    tmp.write_text(json.dumps({"state": state, "phrase": phrase, "rev": rev, "reason": reason,
-                               "einzelheiten": einzelheiten, "at": at}, ensure_ascii=False) + "\n")
+    s = {"state": state, "phrase": phrase, "rev": rev, "reason": reason, "einzelheiten": einzelheiten, "at": at}
+    if begonnen:
+        s["begonnen"] = begonnen
+    tmp.write_text(json.dumps(s, ensure_ascii=False) + "\n")
     tmp.replace(status_path(out, wake_id))
     write_laib_status(out, state, phrase, reason, at, einzelheiten)
 
@@ -168,6 +177,7 @@ class _Stopped(Exception):
 # The steps, as train.py announces them ("== phase: <name>") and as the
 # family reads them; provisioning is everything before train.py.
 STEPS = {"provision": "Vorbereiten", "generate": "Beispiele erzeugen", "real": "eigene Aufnahmen",
+         "household": "Fehlalarme aus dem Haus",
          "features": "Merkmale berechnen", "negatives": "Gegenbeispiele laden",
          "train": "Modell trainieren", "export": "Modell schreiben"}
 TAIL_LINES = 40
@@ -300,6 +310,9 @@ def train(work: pathlib.Path, out: pathlib.Path, phrase: str, wake_id: str, sets
     recordings = pathlib.Path(os.environ.get("WAKEWORD_RECORDINGS", "/recordings")) / wake_id
     if recordings.is_dir():
         cmd += ["--recordings", str(recordings)]
+    if any((recordings / NEGATIVES).glob("*.wav")):   # #825: the false wakes stimme-wakes kept
+        cmd += ["--negatives", str(recordings / NEGATIVES)]
+    cmd += ["--cutoff", str(cutoff())]
     # the CPU by default (2026-10-24): the card holds the household model and
     # Whisper, and the run died validating with no memory left on it. The
     # model is small; the CPU takes hours longer and nobody loses the GPU.
@@ -308,6 +321,42 @@ def train(work: pathlib.Path, out: pathlib.Path, phrase: str, wake_id: str, sets
         env["CUDA_VISIBLE_DEVICES"] = "-1"
     _run(cmd, env=env)
     return out / f"{wake_id}.tflite"
+
+
+NEGATIVES = "negativ"   # under recordings/<id>/: stimme-wakes' false wakes, negatives, never positives (#825)
+CUTOFF = 0.97          # #825: 0.95 woke on room talk twice in ten minutes
+
+
+def cutoff() -> float:
+    """WAKE_CUTOFF (values.yml): how sure the device must be; one it cannot use is the default"""
+    try:
+        c = float(os.environ.get("WAKE_CUTOFF") or CUTOFF)
+    except ValueError:
+        c = -1
+    if not 0.5 <= c < 1:
+        log.warning("WAKE_CUTOFF %r is no probability between 0.5 and 1: %s", os.environ.get("WAKE_CUTOFF"), CUTOFF)
+        return CUTOFF
+    return c
+
+
+def retune(out: pathlib.Path, wake_id: str, c: float) -> bool:
+    """#825: a trained model's manifest at the cutoff asked for, without training again; the device
+    takes it with the next flash, which stimme-names offers once the flashed one differs"""
+    path = out / f"{wake_id}.json"
+    try:
+        manifest = json.loads(path.read_text())
+        micro = manifest["micro"]
+    except (OSError, ValueError, KeyError, TypeError):
+        log.warning("%s is not readable: its cutoff stays", path)
+        return False
+    if micro.get("probability_cutoff") == round(c, 3):
+        return False
+    log.info("probability_cutoff %s -> %s in %s", micro.get("probability_cutoff"), round(c, 3), path.name)
+    micro["probability_cutoff"] = round(c, 3)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(manifest, indent=2) + "\n")
+    tmp.replace(path)
+    return True
 
 
 def main() -> int:
@@ -326,16 +375,18 @@ def main() -> int:
     what = decide(out, phrase, wake_id, rev)
     log.info("wake word %r (%s), persona rev %s: %s", phrase, wake_id, rev, what)
     if what == "done":  # a model from an earlier run, or a phrase that came back
+        retune(out, wake_id, cutoff())
         show_done(out, phrase)
     elif what == "wait":  # the failed run's reason stays what laib shows
         show_waiting(out, wake_id, phrase)
     if what == "train":
         sets = positive_sets(phrase, languages)
+        begonnen = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         write_status(out, wake_id, "training", phrase, rev, "")
         try:
             provision(work, sets)
             model = train(work, out, phrase, wake_id, sets)
-            write_status(out, wake_id, "done", phrase, rev, f"Modell gebaut: {model.name}")
+            write_status(out, wake_id, "done", phrase, rev, f"Modell gebaut: {model.name}", begonnen=begonnen)
             log.info("done: %s", model)
         except _Stopped:
             # left as "training": the next start trains again

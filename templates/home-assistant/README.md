@@ -4,7 +4,10 @@ Home Assistant, Z-Wave JS UI and the Matter server on the host network.
 What belongs here from ADR 0015, configured in HA after install: MQTT
 for mosquitto. The rest is not clicked together. The Wyoming integrations
 for Stimme (Whisper 10300, Piper 10200, openWakeWord 10400 on
-`STIMME_HOST`, default `127.0.0.1`): post-deploy adds an entry for each
+`STIMME_HOST`, default `127.0.0.1`; Whisper through stimme-wakes on 10301
+when that answers, which counts the wakes and keeps a false one's audio,
+#825, else Whisper itself, so a Whisper entry on 10300 from before stays
+beside the new one): post-deploy adds an entry for each
 server that answers, once, found by host and port in HA's
 `.storage/core.config_entries` (the REST API does not show an entry's data,
 and HA's Wyoming flow would take a server twice); an entry from before on

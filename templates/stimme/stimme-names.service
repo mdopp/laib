@@ -6,7 +6,8 @@
 # stopped stays stopped and reads the new names when it comes back.
 # The token reaches podman through the environment, never on argv.
 # It also writes Stimme's status: whether the satellites run the persona's wake word
-# (#759, stimme-names.py wake), in stimme/micro, which Whisper mounts at /micro.
+# (#759, stimme-names.py wake), in stimme/micro, which Whisper mounts at /micro, with the
+# wakes per day stimme-wakes counts (#825); TZ makes „heute“ the box's day.
 [Unit]
 Description=Stimme: the household's names for Whisper
 After=stimme-whisper.service
@@ -16,6 +17,7 @@ Type=oneshot
 Environment=HA_TOKEN=${HA_TOKEN}
 Environment=WAKE_ID=${PERSONA_WAKEWORD}
 Environment="WAKE_PHRASE=${PERSONA_PHRASE}"
+Environment=TZ=${TZ}
 StandardInput=file:%h/.config/containers/systemd/stimme/stimme-names.py
-ExecStart=/bin/sh -c 'systemctl --user -q is-active stimme-whisper.service || { echo "Whisper is not running: the names wait for its next start"; exit 0; }; out=$$(/usr/bin/podman exec -i -e HA_TOKEN -e WAKE_ID -e WAKE_PHRASE systemd-stimme-whisper python3 -) || { echo "$$out"; exit 1; }; echo "$$out"; case "$$out" in *"names changed"*) systemctl --user try-restart stimme-whisper.service;; esac'
+ExecStart=/bin/sh -c 'systemctl --user -q is-active stimme-whisper.service || { echo "Whisper is not running: the names wait for its next start"; exit 0; }; out=$$(/usr/bin/podman exec -i -e HA_TOKEN -e WAKE_ID -e WAKE_PHRASE -e TZ systemd-stimme-whisper python3 -) || { echo "$$out"; exit 1; }; echo "$$out"; case "$$out" in *"names changed"*) systemctl --user try-restart stimme-whisper.service;; esac'
 TimeoutStartSec=120
