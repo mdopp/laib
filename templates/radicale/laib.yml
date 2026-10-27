@@ -1,4 +1,6 @@
 name: radicale
+title: Kalender
+beschreibung: Termine und Kontakte der Familie
 template: {registry: builtin, name: radicale, version: 1}
 provides: [calendar, contacts]
 upstream: [https://github.com/Kozea/Radicale, https://radicale.org/]   # where the Operator's web search looks first (#544)

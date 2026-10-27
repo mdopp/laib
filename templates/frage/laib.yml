@@ -1,4 +1,6 @@
 name: frage
+title: Fragen
+beschreibung: Websuche mit Zusammenfassung
 template: {registry: builtin, name: frage, version: 1}
 provides: [frage]
 upstream: [https://github.com/searxng/searxng, https://docs.searxng.org/]   # where the Operator's web search looks first (#544)

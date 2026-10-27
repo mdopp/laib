@@ -1,4 +1,6 @@
 name: bote
+title: Bote
+beschreibung: Der Assistent in Signal und Co.
 template: {registry: builtin, name: bote, version: 1}
 provides: [bote]
 # The Bote (ADR 0016): Hermes as stock on Signal, Matrix, Telegram and/or

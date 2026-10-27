@@ -1,4 +1,6 @@
 name: llama
+title: Sprachmodell
+beschreibung: Die KI der Box
 provides: [model]
 upstream: [https://github.com/ggml-org/llama.cpp]   # where the Operator's web search looks first (#544)
 template: {registry: builtin, name: llama, version: 1}

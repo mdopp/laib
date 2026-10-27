@@ -1,4 +1,6 @@
 name: stimme
+title: Stimme
+beschreibung: Hören, Sprechen, Weckwort
 template: {registry: builtin, name: stimme, version: 1}
 provides: [voice]
 upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/wyoming-faster-whisper, https://github.com/rhasspy/wyoming-openwakeword]   # where the Operator's web search looks first (#544)

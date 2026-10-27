@@ -1,4 +1,6 @@
 name: adguard
+title: AdGuard
+beschreibung: Namen im Heimnetz, Werbefilter
 template: {registry: builtin, name: adguard, version: 1}
 provides: [dns]
 upstream: [https://github.com/AdguardTeam/AdGuardHome, https://github.com/AdguardTeam/AdGuardHome/wiki]   # where the Operator's web search looks first (#544)

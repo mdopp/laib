@@ -1,4 +1,6 @@
 name: audiobookshelf
+title: Audiobookshelf
+beschreibung: Hörbücher, Hörspiele, Podcasts
 template: {registry: builtin, name: audiobookshelf, version: 1}
 provides: [audiobooks, podcasts]
 upstream: [https://github.com/advplyr/audiobookshelf, https://www.audiobookshelf.org/docs]   # where the Operator's web search looks first (#544)
