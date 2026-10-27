@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.47.0](https://github.com/mdopp/laib/compare/v0.46.0...v0.47.0) (2026-10-27)
+
+
+### Features
+
+* **stimme:** the family's own recordings of the wake word from Haus, and a retrain the owner approves ([#828](https://github.com/mdopp/laib/issues/828)) ([9cbfdbc](https://github.com/mdopp/laib/commit/9cbfdbcdd0f637266a9fd61a03a22f0445b878af))
+* **template:** household recordings of the wake word from Haus, and a retrain the owner approves ([287863f](https://github.com/mdopp/laib/commit/287863fc516e2a55412d79cb5d0b3bf23a7ec2a8)), closes [#828](https://github.com/mdopp/laib/issues/828)
+
+
+### Bug Fixes
+
+* **stimme:** fewer false wakes, kept as negatives for the next training, counted per day ([#825](https://github.com/mdopp/laib/issues/825)) ([9cbfdbc](https://github.com/mdopp/laib/commit/9cbfdbcdd0f637266a9fd61a03a22f0445b878af))
+* **template:** fewer false wakes on Hey Joshua, learn from them, count them ([3b66a00](https://github.com/mdopp/laib/commit/3b66a00d026e9d4f78cac579dc5946583e77db18))
+
 ## [0.46.0](https://github.com/mdopp/laib/compare/v0.45.0...v0.46.0) (2026-10-27)
 
 
