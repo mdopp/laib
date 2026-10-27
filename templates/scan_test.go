@@ -33,7 +33,34 @@ func TestScanNeverRelabelsTheShareAndKeepsNothingInTheBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := regexp.MustCompile(`(?m)^  - path: `).FindAllStringIndex(string(contract), -1)
-	if n := strings.Count(string(contract), "backup: false"); len(paths) != 3 || n != len(paths) {
-		t.Errorf("%d data paths, %d with backup: false: every one is transient", len(paths), n)
+	if n := regexp.MustCompile(`(?m)^    backup: false`).FindAllStringIndex(string(contract), -1); len(paths) != 4 || len(n) != len(paths) {
+		t.Errorf("%d data paths, %d with backup: false: every one is transient", len(paths), len(n))
+	}
+}
+
+// ADR 0028: the program is Dokumente's image; Paperless' hook reaches it on 8720 from its pod,
+// which the LAN never does and Caddy never routes; laib-notify's eingang is mounted without a
+// relabel (laib-notify's own :Z labels it); the two tokens are the scan service's secrets.
+func TestScanRunsDokumenteWithItsHookOffTheLAN(t *testing.T) {
+	unit, _ := fs.ReadFile(FS, "scan/scan.container")
+	contract, _ := fs.ReadFile(FS, "scan/laib.yml")
+	values, _ := fs.ReadFile(FS, "scan/values.example.yml")
+	for _, want := range []string{"Image=${DOKUMENTE_IMAGE}", "Environment=DOKUMENTE_LISTEN=0.0.0.0:8720",
+		"Environment=PAPERLESS_TOKEN=${PAPERLESS_TOKEN}", "Environment=DOKUMENTE_WEBHOOK_TOKEN=${DOKUMENTE_WEBHOOK_TOKEN}",
+		"\nVolume=/mnt/data/laib/notify/eingang:/meldungen\n", "AddDevice=/dev/bus/usb", "Network=host"} {
+		if !strings.Contains(string(unit), want) {
+			t.Errorf("scan.container lacks %q", want)
+		}
+	}
+	if !strings.Contains(string(contract), "- {port: 8720, lan: false}") || !strings.Contains(string(contract), "routes: []") {
+		t.Error("8720 must be declared lan: false, and scan has no route")
+	}
+	for _, s := range []string{"PAPERLESS_TOKEN", "DOKUMENTE_WEBHOOK_TOKEN"} {
+		if !strings.Contains(string(contract), "- name: "+s) || !strings.Contains(string(values), "!secret "+s) {
+			t.Errorf("%s is not the scan service's secret", s)
+		}
+	}
+	if !strings.Contains(string(values), "DOKUMENTE_IMAGE: ghcr.io/mdopp/dokumente:latest") {
+		t.Error("the image is not Dokumente's")
 	}
 }
