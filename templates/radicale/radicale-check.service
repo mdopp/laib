@@ -1,0 +1,15 @@
+# radicale's detail line on the Box page (#785): radicale-check.py in a stock
+# Python image, fed on stdin (as kalender-abgleich), with Radicale's storage
+# mounted read-only and no network: it counts the calendars, lists, address
+# books and their entries and writes the status file laib.yml declares. laib
+# starts it when someone looks and the file is older than its stale; the
+# timer every 15 minutes.
+[Unit]
+Description=Radicale: Kalender und Adressbücher für laibs Status
+After=radicale.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/radicale/radicale-check.py
+ExecStart=/usr/bin/podman run --rm -i --name radicale-check --network none --security-opt label=disable -e RADICALE_DATA=/radicale -e STATUS_DIR=/data -v ${DATA_DIR}/radicale/data:/radicale:ro -v ${DATA_DIR}/radicale/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min
