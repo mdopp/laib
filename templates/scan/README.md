@@ -55,8 +55,17 @@ model of scanner needs its vendor and product in the rule.
 
 1. Each page: Tesseract's orientation (turned at confidence ≥ 2), OCR `deu`,
    brightness. Blank is bright with fewer than 4 words, or a back page whose
-   front shows through: mirrored, the OCR reads clearly more.
-2. The household model (`MODEL_NAME`, through the lease's proxy, JSON,
+   front shows through: mirrored, the OCR reads clearly more. A page whose
+   Code 128 or QR code reads exactly `PATCH T` (Paperless-ngx' default
+   `CONSUMER_BARCODE_STRING`; Haus prints these sheets) is a separator, never
+   blank (libzbar, after the turn, before the blank check, #814).
+2. A stack with a separator: the documents are the runs between separators,
+   the separators and blank pages dropped, after a face-up stack was turned
+   round (#808). The model only names each run (kind, sender, date, title);
+   one it cannot name is filed as „Dokument“, still split. `plan.json` lists
+   the separators' pages under `trennblaetter`; the closing message adds
+   „3 Trennblätter erkannt.“ A stack without one goes on to step 3.
+3. The household model (`MODEL_NAME`, through the lease's proxy, JSON,
    temperature 0.1) marks for each page whether a new document starts, and
    names each document's kind, sender, date and title. Documents are the runs
    from one start to the next, never page groups the model makes up. A page
@@ -64,7 +73,7 @@ model of scanner needs its vendor and product in the rule.
    to another mode the service waits up to 30 minutes. A model that fails or
    answers nonsense gives one document "Stapel unsortiert": nothing is lost.
    Above 40 pages the stack goes in overlapping windows of 30.
-3. One PDF per document into Paperless' consume folder,
+4. One PDF per document into Paperless' consume folder,
    `<consume>/<SCAN_TAG>/` (the folder is the tag), staged as `._scan-*.part`
    and renamed whole. A name taken gets ` (2)`.
 4. The closing message through bote-notify, to the order's person, else the
