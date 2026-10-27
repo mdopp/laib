@@ -22,7 +22,7 @@ func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 	inbox := `[{"id":3,"reason":"vaultwarden: neues Image docker.io/vaultwarden/server:latest (sha256:vw2)"}]`
 	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates, "laib_diag": diag, "laib_inbox": inbox})
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "fertig"}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{}, "aktualisierung"), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestAktualisierungLeavesLaibsOwnRowAlone(t *testing.T) {
 	updates := `[{"service":"laib","image":"laib","current":"v0.11.1","latest":"v0.16.0","error":"v0.16.0 zurückgenommen: nach dem Update nicht grün","auto":true}]`
 	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates, "laib_diag": `[]`, "laib_inbox": `[]`})
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "fertig"}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{}, "aktualisierung"), Trigger{Kind: "tick"})
 	if err != nil {
 		t.Fatal(err)

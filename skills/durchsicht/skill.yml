@@ -1,21 +1,23 @@
 # The log review (#550 point 6, #551): what a human did on the Kraftwerk
 # — 48 hours of the journal's err lines, most of them INFO a container
 # wrote to stderr, and among them a few real errors that came back every
-# day. The runner does the reading (context logs): every service's
+# day. Its script does the reading (run.py, #839): every service's
 # warnings and errors of the last 24 hours (laib logs --priority warning),
 # a line's own level decides, else its words, so the journal's err is not
 # trusted; lines become patterns with numbers, ids, paths and timestamps
-# taken out, counted per unit, compared with the last review
-# (OPERATOR_HOME/durchsicht.json). The model sees only what is new (three
-# times or more), recurring (seen in the last review too) or growing (at
-# least doubled), each with an example line. Nothing of that: no model, no
-# note. Daily, before the morning report, which then carries the note; a
-# week of logs would not fit the line cap and a broken setting would wait
-# up to seven days.
+# taken out, counted per unit, compared with the last review (the
+# script's state, kept by the runner). The model sees only what is new
+# (three times or more), recurring (seen in the last review too) or
+# growing (at least doubled), each with an example line. Nothing of that:
+# no model, no note. Daily, before the morning report, which then carries
+# the note; a week of logs would not fit the line cap and a broken setting
+# would wait up to seven days.
 description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
 trigger: {daily: "06:30"}
 tools: [status, logs, wish, note]
-context: logs
+run: run.py
+context: none
+modell: urteil   # the script read the logs; the model judges the patterns
 output: note
 limits: {wish: 3}
 prompt: |

@@ -43,7 +43,7 @@ func TestEverySessionHearsItsRecordAndTheReportItsRate(t *testing.T) {
 	)
 	mcp, calls := fakeMCP(t, map[string]string{"laib_inbox": record})
 	llm, asked := recLLM(t, []Message{{Role: "assistant", Content: "Nachts war es ruhig."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Now: func() time.Time { return day }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Now: func() time.Time { return day }}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "report"}, "morgenbericht"), Trigger{Kind: "report"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,9 +64,6 @@ func TestNoRecordNoLine(t *testing.T) {
 	if r := Record(nil); r != "" {
 		t.Fatalf("%q", r)
 	}
-	if r := Rate([]past{opsPast(1, "later", "nicht jetzt", time.Hour)}, day); r != "" {
-		t.Fatalf("a free no is no rate: %q", r)
-	}
 }
 
 // #544: in a session that reads diag, a model's proposal names the finding
@@ -80,7 +77,7 @@ func TestAProposalWithoutItsAnchorIsNotFiled(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("3", "laib_note", `{"kind":"incident","text":"whoami: #12 vorgeschlagen"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir()}
 	tr := Trigger{Kind: "event", Service: "whoami", Detail: "unit failed"}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil {

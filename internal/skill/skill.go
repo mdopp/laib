@@ -1,5 +1,5 @@
 // Package skill is the registry of the Operator's skills (ADR 0023): the
-// built-in files and the state repo's skills/, each checked against the
+// built-in folders and the state repo's skills/, each checked against the
 // skill vocabulary and granted only the tools the hand's ceiling reaches.
 // The Operator runs skills; the kernel decides what they may call.
 package skill
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -34,7 +35,7 @@ type Skill struct {
 	Trigger     Trigger  `yaml:"trigger" json:"trigger"`
 	Tools       []string `yaml:"tools" json:"tools"`
 	More        []string `yaml:"more" json:"more,omitempty"` // tools only a capable model gets (#286), checked like tools
-	Context     string   `yaml:"context" json:"context"`     // box | usage | logs
+	Context     string   `yaml:"context" json:"context"`     // box | usage | none
 	Output      string   `yaml:"output" json:"output"`       // note | report | propose
 	Prompt      string   `yaml:"prompt" json:"prompt"`
 	// The mechanics the Operator's runner enforces, never prompt prose
@@ -46,6 +47,16 @@ type Skill struct {
 	// Lessons: vorfall — the runner proposes a lesson for each incident
 	// session whose proposal made its finding go away (#544), no model
 	Lessons string `yaml:"lessons" json:"lessons,omitempty"`
+	// Run: run.py — the skill's own script (#839), the deterministic steps
+	// before the model; only a built-in skill has one, shipped in the
+	// Operator's image, and it calls nothing the skill is not granted
+	Run string `yaml:"run" json:"run,omitempty"`
+	// Modell: where the model decides (#839, owner: „die
+	// Problemlösungskompetenzen eines LLMs behalten“) — frei, the default:
+	// the agentic loop with every granted tool, as before scripts; urteil:
+	// one judgement on what the script prepared, with only the tools that
+	// write it; nein: the script alone, no model
+	Modell string `yaml:"modell" json:"modell"`
 
 	Status  string            `yaml:"-" json:"status"` // active | paused | refused
 	Granted []string          `yaml:"-" json:"granted"`
@@ -67,21 +78,37 @@ var (
 	weeklyRe = regexp.MustCompile(`^(Mo|Di|Mi|Do|Fr|Sa|So) ([01][0-9]|2[0-3]):[0-5][0-9]$`)
 )
 
-// Load reads the built-in skills and the state repo's skills/*.yml; a state
-// file with a built-in's name replaces it. A file that does not parse is a
-// refused skill, never an error for the box.
+// Load reads the built-in skills and the state repo's skills/<name>/skill.yml;
+// a state folder with a built-in's name replaces it. A file that does not
+// parse is a refused skill, never an error for the box; so is a state
+// folder with a script (only the image brings one) and a file the old way,
+// skills/<name>.yml, which says where it goes now.
 func Load(builtin fs.FS, stateDir string) []Skill {
 	byName := map[string]Skill{}
-	files, _ := fs.Glob(builtin, "*.yml")
+	files, _ := fs.Glob(builtin, "*/skill.yml")
 	for _, f := range files {
+		name := path.Dir(f)
 		b, err := fs.ReadFile(builtin, f)
-		byName[strings.TrimSuffix(f, ".yml")] = parse(strings.TrimSuffix(f, ".yml"), "builtin", b, err)
+		s := parse(name, "builtin", b, err)
+		if _, err := fs.Stat(builtin, name+"/run.py"); s.Run != "" && err != nil && s.Refused == "" {
+			s.Refused = "run: " + s.Run + " fehlt im Ordner der Fähigkeit"
+		}
+		byName[name] = s
 	}
-	local, _ := filepath.Glob(filepath.Join(stateDir, "skills", "*.yml"))
+	local, _ := filepath.Glob(filepath.Join(stateDir, "skills", "*", "skill.yml"))
 	for _, f := range local {
 		b, err := os.ReadFile(f)
+		name := filepath.Base(filepath.Dir(f))
+		s := parse(name, "state", b, err)
+		if _, err := os.Stat(filepath.Join(filepath.Dir(f), "run.py")); (s.Run != "" || err == nil) && s.Refused == "" {
+			s.Refused = "ein Skript (run.py) bringt nur eine eingebaute Fähigkeit mit, im Image des Operators (#839)"
+		}
+		byName[name] = s
+	}
+	flat, _ := filepath.Glob(filepath.Join(stateDir, "skills", "*.yml"))
+	for _, f := range flat {
 		name := strings.TrimSuffix(filepath.Base(f), ".yml")
-		byName[name] = parse(name, "state", b, err)
+		byName[name] = Skill{Name: name, Source: "state", Refused: "eine Fähigkeit ist ein Ordner: skills/" + name + "/skill.yml statt skills/" + name + ".yml (#839)"}
 	}
 	out := make([]Skill, 0, len(byName))
 	for _, s := range byName {
@@ -156,12 +183,20 @@ func check(s *Skill) string {
 	if s.Context == "" {
 		s.Context = "box"
 	}
-	if s.Context != "box" && s.Context != "usage" && s.Context != "logs" {
-		return fmt.Sprintf("context %q: box, usage oder logs", s.Context)
+	if s.Context != "box" && s.Context != "usage" && s.Context != "none" {
+		return fmt.Sprintf("context %q: box, usage oder none", s.Context)
 	}
-	// logs: the runner reads every service's error lines itself (#550)
-	if s.Context == "logs" && (!slices.Contains(s.Tools, "status") || !slices.Contains(s.Tools, "logs")) {
-		return "context logs braucht status und logs in tools"
+	if s.Run != "" && s.Run != "run.py" {
+		return fmt.Sprintf("run %q: das Skript einer Fähigkeit heißt run.py", s.Run)
+	}
+	if s.Modell == "" {
+		s.Modell = "frei"
+	}
+	switch {
+	case s.Modell != "frei" && s.Modell != "urteil" && s.Modell != "nein":
+		return fmt.Sprintf("modell %q: frei, urteil oder nein", s.Modell)
+	case s.Modell != "frei" && s.Run == "":
+		return "modell " + s.Modell + " braucht ein Skript (run: run.py), das vorbereitet, was das Modell beurteilt"
 	}
 	switch s.Output {
 	case "note", "report":

@@ -21,7 +21,7 @@ func TestALookThatFindsNothingNewWritesNoNote(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("1", "laib_note", `{"kind":"watch","text":"gelb"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	look := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
 	run := func() Session {
 		t.Helper()
@@ -71,7 +71,7 @@ func TestAnIncidentWaitsForTheGraphicsCardAndRunsAfterwards(t *testing.T) {
 	mcp, calls := fakeMCP(t, nil)
 	home := t.TempDir()
 	clock := time.Date(2026, 10, 24, 20, 0, 0, 0, time.Local)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: home, Now: func() time.Time { return clock }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: home, Now: func() time.Time { return clock }}
 	vorfall := skillFor(t, Trigger{Kind: "event"}, "")
 	r := &Runner{Op: op}
 	for _, d := range []string{"jellyfin: apply: unit failed after 3 s", "jellyfin: apply: unit failed after 7 s"} {
@@ -86,7 +86,7 @@ func TestAnIncidentWaitsForTheGraphicsCardAndRunsAfterwards(t *testing.T) {
 	}
 
 	// a restart: a new runner over the same folder; the card is still lent
-	r = &Runner{Op: &Operator{MCP: op.MCP, LLM: op.LLM, Home: home, Now: op.Now}}
+	r = &Runner{Op: &Operator{Skills: "../skills", MCP: op.MCP, LLM: op.LLM, Home: home, Now: op.Now}}
 	r.LoadLast()
 	clock = clock.Add(time.Hour)
 	if ss := r.Step(context.Background(), clock, []Skill{vorfall}); len(ss) != 0 || *asked != 0 || len(queued(t, home)) != 2 {
@@ -111,7 +111,7 @@ func TestTheQueueIsBounded(t *testing.T) {
 	mcp, calls := fakeMCP(t, nil)
 	home := t.TempDir()
 	clock := time.Date(2026, 10, 24, 8, 0, 0, 0, time.Local)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: home, Now: func() time.Time { return clock }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: home, Now: func() time.Time { return clock }}
 	vorfall := skillFor(t, Trigger{Kind: "event"}, "")
 	r := &Runner{Op: op}
 	for i := range queueMax + 3 {

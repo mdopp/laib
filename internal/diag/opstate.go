@@ -49,6 +49,13 @@ type OpWork struct {
 	Step     string    `json:"step,omitempty"`
 	Waiting  string    `json:"waiting,omitempty"`
 	Queued   int       `json:"queued,omitempty"`
+	// each skill's last run (#839): when, how it ended and why, what it caused
+	Skills map[string]struct {
+		At      time.Time `json:"at"`
+		Outcome string    `json:"outcome"`
+		Why     string    `json:"why,omitempty"`
+		Caused  string    `json:"caused,omitempty"`
+	} `json:"skills,omitempty"`
 }
 
 // OperatorState turns the facts into one word for the readiness line and
@@ -97,7 +104,7 @@ func OperatorFacts(ctx context.Context, env *cli.Env, st *state.State) OpFacts {
 			Looked time.Time
 			Work   OpWork
 		}
-		json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&ready)
+		json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&ready)
 		resp.Body.Close()
 		f.Answers, f.Looked, f.Work = resp.StatusCode < 500, ready.Looked, ready.Work
 	}

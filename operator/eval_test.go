@@ -31,7 +31,7 @@ func TestEvalScriptedIncidents(t *testing.T) {
 			srv := fakeLLM(t, inc.Script)
 			llm = &LLM{URL: srv.URL, Model: "test"}
 		}
-		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: llm, Home: t.TempDir()}
+		op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: llm, Home: t.TempDir()}
 		return op.Run(ctx, skillFor(t, inc.Trigger, inc.Skill), inc.Trigger)
 	})
 	if rep.Wrong != 0 {

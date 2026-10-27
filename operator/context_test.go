@@ -40,11 +40,11 @@ func TestALargeWindowKeepsTheMiddleAndWholeResults(t *testing.T) {
 			huge.WriteString("panic: runtime error: STACKTRACE IN DER MITTE\n")
 		}
 	}
-	big := &Operator{Typed: true, Window: 131072}
+	big := &Operator{Skills: "../skills", Typed: true, Window: 131072}
 	if p := big.prompt(Skill{Prompt: "x"}, Trigger{Kind: "tick"}, huge.String()); !strings.Contains(p, "STACKTRACE IN DER MITTE") {
 		t.Fatal("the middle of the context was cut at 131k")
 	}
-	small := &Operator{Typed: true, Window: 32768}
+	small := &Operator{Skills: "../skills", Typed: true, Window: 32768}
 	if p := small.prompt(Skill{Prompt: "x"}, Trigger{Kind: "tick"}, huge.String()); len(p) > 7000 {
 		t.Fatalf("a 32k model's context grew to %d chars", len(p))
 	}
@@ -57,7 +57,7 @@ func TestALargeWindowKeepsTheMiddleAndWholeResults(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("2", "laib_note", `{"kind":"watch","text":"gelesen"}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Window: 131072}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true, Window: 131072}
 	op.LLM.Client = &http.Client{Transport: lastTool(func(c string) { seen = c })}
 	tr := Trigger{Kind: "event", Service: "whoami"}
 	if _, err := op.Run(context.Background(), skillFor(t, tr, ""), tr); err != nil {
@@ -93,7 +93,7 @@ func (f lastTool) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestThinkingIsNotTheNote(t *testing.T) {
 	mcp, calls := fakeMCP(t, nil)
 	llm := fakeLLM(t, []Message{{Role: "assistant", Content: "<think>laib_restart whoami wäre falsch, alles grün</think>\nAlles grün um 07:10."}})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Window: 131072}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Window: 131072}
 	s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "tick"}, ""), Trigger{Kind: "tick"})
 	if err != nil || s.Outcome != "green" || s.Note != "Alles grün um 07:10." {
 		t.Fatalf("%+v %v %v", s, err, *calls)

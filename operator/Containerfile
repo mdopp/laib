@@ -1,8 +1,10 @@
 # laib-operator in its container (ADR 0027): the box's admin agent (ADR
 # 0013). It asks a model and reads the web (ADR 0025), so it gets no more
 # of the box than its folder and its token.
-# One static binary on distroless/static: CA certificates for https (the
-# model, the watchdog, SMTP) and tzdata, no shell. It runs as the
+# One static binary on distroless/python3: CA certificates for https (the
+# model, the watchdog, SMTP) and tzdata, no shell; Python 3 and its
+# standard library for the skills' scripts (#839, skills/<name>/run.py),
+# which it runs through skills/laibskill.py, their one door. It runs as the
 # container's root, which rootless podman maps to core: it owns its folder
 # as the host unit did. Laib renders the unit (internal/render ownUnit).
 FROM golang:1.27-alpine AS build
@@ -11,7 +13,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-operator ./operator/cmd/laib-operator
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/python3-debian12
 COPY --from=build /laib-operator /laib-operator
+COPY skills /skills
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
 ENTRYPOINT ["/laib-operator"]

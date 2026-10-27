@@ -18,7 +18,9 @@ check about an agent's task before it runs.
   amended 2026-10-24 (#550): a look without news is silent, an incident
   waits for the graphics card;
   amended 2026-10-27 (#792): a look's red is an incident, its first steps
-  need no model, and it is escalated in bounded time
+  need no model, and it is escalated in bounded time;
+  amended 2026-10-27 (#839): a skill is a folder, a built-in one may carry
+  a script for its deterministic steps, and each says where the model decides
 - **Deciders:** the owner (mdopp): "Löse den Operator heraus und gib ihm
   eigene Grenzen. Und evtl. werden solche Fähigkeiten auch ein Plugin.
   Welche, die man aktivieren, hinzufügen oder ruhen lassen kann." — and on
@@ -596,3 +598,87 @@ person warm), a runner note before the model's note in an incident a look
 opened, and about 270 Operator and 90 kernel lines. ServiceBay's diagnose
 showed the restart beside the probe and a human clicked it; the runner now
 does that click where the policy grants it.
+
+## Amendment 2026-10-27 — a skill is a folder; a script does the deterministic steps, the model keeps the judgement (#839)
+
+The owner, on #839: „Skills: A, reine Dateien, und können auch Code
+beinhalten, wenn das hilfreich ist, um deterministisch vorzugehen.“ — and,
+the same day: „Ja, aber ich möchte, dass wir die Problemlösungskompetenzen
+eines LLMs behalten.“ This replaces §3's "A skill is never code" for the
+built-in skills.
+
+Before: five skills needed skill-specific Go in `operator/` (the log
+review, the usage report, the lessons, the update patches, the report's
+lines), which put the Operator at 2,991 of its 3,000 lines; every new skill
+cost Operator code and a release.
+
+- **A skill is a folder:** `skills/<name>/skill.yml` and, where it helps,
+  `run.py`. The kernel embeds the `skill.yml` files as before and refuses a
+  state repo's folder with a script, and a state file the old way
+  (`skills/<name>.yml`), with the reason. Scripts come only from this repo,
+  reviewed, in the Operator's image (`/skills`), pinned by the release like
+  the rest of it; agent output still never reaches execution (ADR 0019 §2a).
+- **Where the model decides is a field:** `modell: frei` (the default and
+  the old behaviour: the agentic loop with every granted tool — `vorfall`,
+  `routineblick`, `morgenbericht`, `sicherung`), `urteil` (one judgement on
+  what the script prepared, offered only the tools that write it —
+  `durchsicht`, `nutzung`, `aktualisierung`) or `nein` (the script alone —
+  `lehre`, which never asked a model). A script gathers, counts, compares,
+  renders and guards; diagnosing, choosing the next tool, trying again and
+  escalating stay the model's. A skill without a script runs as before.
+- **The trust stays where it was.** The kernel grants a skill's tools and
+  checks every call made in its name (§4); nothing of that moved. The
+  runner starts the script (`python3 -I -S -B`, standard library only)
+  with an empty environment, the scripts' folder as its working directory
+  and the start on stdin; the script's only door is one JSON line per call
+  over stdin and stdout (`skills/laibskill.py`). The runner refuses a tool
+  the skill is not granted, one over its `limits` (counted apart from the
+  model's) and a second note, and records each refusal with the session;
+  what it lets through goes out through the Operator's MCP client in the
+  skill's name, so the kernel checks it again. The script gets no token, no
+  address and none of the Operator's files; what it keeps between runs the
+  runner keeps for it (`OPERATOR_HOME/skills/<name>.json`), and the
+  runner hands it what the skill reads besides its tools (its record, a
+  report's due tasks, `lessons:` sessions, usage-metrics' answers). The
+  Operator process is undumpable, so a process of its user in the container
+  cannot read its environment or memory through `/proc` (the container
+  drops every capability); an audit hook in `laibskill.py` refuses the
+  network, other programs, native code and every file outside the scripts
+  and the standard library. The hook is defence in depth, not the
+  boundary (PEP 578): the boundary is that a script holds no credential and
+  is this repo's code.
+- **A script may vet the model's calls.** When its result names `checks`,
+  the script stays while the model works and answers for each of the
+  model's calls of those tools whether it may run: `nutzung` keeps a
+  family member's sentence out of a wish, `aktualisierung` lets only the
+  offered patch versions through.
+- **Every run is recorded once** in `incidents.jsonl`, also one with
+  nothing to do (`unchanged`, with why) — ran, skipped and why, the
+  script's calls and refusals, the proposals, the note — and `/ready`'s
+  `work.skills` carries each skill's last run, which `laib status` shows as
+  `operatorWork.skills`. After four weeks it shows which skills earn their
+  place.
+- **A run that waited keeps no state.** A review the graphics card made
+  wait used to keep its patterns as told, and the retry found nothing new;
+  a script's state is kept only when its session neither failed nor waited.
+
+Weighed against before (#246): maintenance gets easier — a skill's
+deterministic steps are one file next to its `skill.yml`, tested alone
+(`skills/*/test_run.py`), and the Operator's Go is the runner: 2,991 lines
+before, 2,773 after; the scripts are counted on their own line in
+`scripts/loc.sh`. The family is not worse off: the same sessions, notes and
+proposals; the incident and the looks keep their loop. What it costs:
+Python in the Operator's image (distroless/python3 instead of
+distroless/static, about 19 MB more to pull, compressed), one interpreter
+start per scripted run, a second language in the Operator.
+
+Rejected: *a declarative step list the Go runner executes* — the steps that
+moved (pattern grouping, record arithmetic, the patch offers) would be Go
+primitives under another name, so the Operator would keep its skill code;
+*scripts from the state repo* — code an agent could propose, for no case
+today; *a network namespace for the script* — the container drops the
+capability it needs; *Landlock* needs none, but has to be applied between
+fork and exec, which Go's `os/exec` cannot do without the Operator
+re-executing itself as a helper. Not yet: the script holds nothing to use
+the network with; revisit when a script reads text it could act on.
+

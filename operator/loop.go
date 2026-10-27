@@ -9,7 +9,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,7 +46,9 @@ type Session struct {
 	Duration int64     `json:"ms"`
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
-	Why      string    `json:"why,omitempty"`      // why it ended red, or was skipped (#550)
+	Why      string    `json:"why,omitempty"`      // why it ended red, was skipped or had nothing to do (#550, #839)
+	Script   []string  `json:"script,omitempty"`   // the calls its script made, apart from the model's (#839)
+	Refused  []string  `json:"refused,omitempty"`  // the calls its script asked for and did not get (#839)
 	opened   []Trigger // the incidents a look opened for its new reds (#792)
 }
 
@@ -109,6 +110,7 @@ type Operator struct {
 	Window int
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
 	Web    *Web   // Frage's search, for a session that only proposes (#544)
+	Skills string // OPERATOR_SKILLS: the built-in skills' folders in the image, their scripts (#839)
 	// Looked is the unix time of the last session or look that ended
 	// without an error; /ready says it, the kernel's heartbeat reads it,
 	// since a look that found nothing new writes no note (#543)
@@ -144,9 +146,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mem.Seen[sk.Name] = saw
 			o.remember(mem)
 		}
-		if s.Outcome != "unchanged" {
-			o.record(s)
-		}
+		o.record(s) // every run once, also one with nothing to do (#839)
 		if s.Outcome == "error" && tr.Kind == "event" && o.Home != "" {
 			o.enqueue(ctx, sk.Name, tr, now()) // a failed incident waits too, and is escalated in time (#792)
 		}
@@ -154,6 +154,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 
 	mcp := *o.MCP
 	mcp.Skill = sk.Name
+	g := &gate{sk: sk, mcp: &mcp, s: &s, used: map[string]int{}}
 	// a look skill (#543) — an interval skill that reads diag — asks no
 	// model and writes no note while diag says what its last session saw;
 	// a finding diag offers a repair for becomes a proposal first
@@ -171,7 +172,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					maps.DeleteFunc(mem.Repaired, func(id, _ string) bool { return !slices.Contains(cur, id) })
 					o.remember(mem)
 				}
-				s.Outcome = "unchanged"
+				s.Outcome, s.Why = "unchanged", "nichts Neues seit dem letzten Blick"
 				o.work.wait("") // nothing new is nothing waiting (#792)
 				return s, nil
 			}
@@ -195,14 +196,66 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}
 		s.Trigger = tr
 	}
+	// what the skill reads besides its tools: its record, a report's due
+	// tasks, the sessions its lessons come from, the usage data (#839) —
+	// read by the runner, handed to its script
+	all := o.history(ctx)
+	data := map[string]any{"history": all}
+	if sk.Lessons != "" {
+		data["sessions"] = o.sessions(sk.Lessons)
+	}
+	if sk.Output == "report" {
+		data["due"], _, _ = o.MCP.Call(ctx, "laib_aufgabe", map[string]any{"action": "list", "faellig": true}) // #667
+	}
+	if sk.Context == "usage" {
+		err := errors.New("usage-metrics ist auf dieser Box nicht eingerichtet")
+		if o.Usage != nil && o.Usage.URL != "" && o.Usage.Token != "" {
+			data["usage"], err = o.Usage.Read(ctx, 7)
+		}
+		if err != nil {
+			s.Outcome, s.Note = "idle", "Nutzungsdaten nicht erreichbar: "+err.Error()+". Keine Vorschläge."
+			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
+			return s, nil
+		}
+	}
+	var ctxText string
+	if sk.Run != "" {
+		// the skill's script (#839): its deterministic steps, through the
+		// gate; its result ends the session or is the model's context, and
+		// its state is kept unless the session fails or waits
+		res, err := o.script(ctx, g, tr, now(), data)
+		if err != nil {
+			return s, err
+		}
+		defer func() {
+			if s.Outcome != "error" && s.Outcome != "skipped" {
+				o.keep(sk.Name, res.State)
+			}
+		}()
+		if g.end != nil {
+			defer g.end()
+		}
+		if res.Outcome == "" && sk.Modell == "nein" {
+			return s, errors.New("modell: nein, aber das Skript übergibt an das Modell")
+		}
+		if res.Outcome != "" {
+			s.Outcome, s.Why, s.Note = res.Outcome, res.Why, cmp.Or(s.Note, res.Note)
+			return s, nil
+		}
+		ctxText, human = res.Context, strings.TrimSpace(human+" "+res.Human)
+	} else if sk.Context == "usage" {
+		b, _ := json.Marshal(data["usage"])
+		ctxText = string(b)
+	}
 	tools, err := mcp.Tools(ctx)
 	if err != nil {
 		return s, fmt.Errorf("tools: %w", err)
 	}
 	granted := map[string]bool{}
 	for _, g := range sk.Granted {
-		// a small model keeps the short menu: the skill's more tools are for a capable one (#286)
-		if !o.Typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g) {
+		// a small model keeps the short menu: the skill's more tools are for a capable one (#286);
+		// a judgement (modell: urteil, #839) gets only what writes its verdict: the script read
+		if (!o.Typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g)) && (sk.Modell != "urteil" || slices.Contains(verdicts, g)) {
 			granted["laib_"+g] = true
 		}
 	}
@@ -223,71 +276,18 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	for _, d := range defs {
 		offered[d.Function.Name] = true
 	}
-	// the context: the box's bundle, or usage-metrics for a usage skill —
-	// without it the skill says so once and asks no model
-	var ctxText string
-	var sentences []string
-	if sk.Context == "usage" {
-		err := errors.New("usage-metrics ist auf dieser Box nicht eingerichtet")
-		if o.Usage != nil && o.Usage.URL != "" && o.Usage.Token != "" {
-			ctxText, sentences, err = o.Usage.Read(ctx, 7)
-		}
-		if err != nil {
-			s.Outcome, s.Note = "idle", "Nutzungsdaten nicht erreichbar: "+err.Error()+". Keine Vorschläge."
-			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
-			return s, nil
-		}
-	} else if sk.Context == "logs" {
-		// the log review (#550): the runner's patterns, not the box's context;
-		// nothing new asks no model, a failed session is not remembered
-		var remember func()
-		if ctxText, remember = o.review(ctx, &mcp); ctxText == "" {
-			remember()
-			s.Outcome = "unchanged"
-			return s, nil
-		}
-		defer func() {
-			if s.Outcome != "error" {
-				remember()
-			}
-		}()
-	} else {
-		ctxText, _, _ = o.MCP.Call(ctx, "laib_context", map[string]any{})
+	if sk.Context != "usage" && sk.Context != "none" {
+		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
 		if web != nil {
-			web.upstream = upstreamOf(ctxText)
+			web.upstream = upstreamOf(box)
 		}
 		if look {
-			ctxText = lookBundle(found, ctxText)
+			box = lookBundle(found, box)
 		}
+		ctxText = strings.TrimSpace(ctxText + "\n" + box)
 	}
-	// the record (#544): what came of its last proposals, for every session;
-	// the morning report also carries the month's rate
-	all := o.history(ctx)
+	// the record (#544): what came of its last proposals, for every session
 	ctxText = Record(all) + ctxText
-	if sk.Output == "report" {
-		due, _, _ := o.MCP.Call(ctx, "laib_aufgabe", map[string]any{"action": "list", "faellig": true}) // #667
-		human = strings.TrimSpace(human + " " + Rate(all, now()) + " " + Stale(all) + " " + dueLine(due))
-	}
-	// a lessons skill (#544) asks no model: the runner files the lessons
-	if sk.Lessons == "vorfall" {
-		s.Outcome, s.Note = "idle", cmp.Or(o.lessons(ctx, &mcp, all), "Keine neue Lehre: kein Vorfall, dessen Befund seitdem weg ist.")
-		mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
-		return s, nil
-	}
-	// an updates skill (#376): the runner reads the updates, the model sees
-	// and may propose only the patch values, the rest goes into the note
-	offers := map[string]string{}
-	if sk.Updates == "patch" {
-		var list, h string
-		list, h, offers = o.patches(ctx, &mcp)
-		human = strings.TrimSpace(human + " " + h)
-		if len(offers) == 0 {
-			s.Outcome, s.Note = "idle", strings.TrimSpace("Keine Patch-Versionen zum Vorschlagen. "+human)
-			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
-			return s, nil
-		}
-		ctxText = list + "\n" + ctxText
-	}
 	// GPU courtesy (#550): no session into another's window or a cold start;
 	// skipped is no error, the next step tries again; an incident waits in
 	// the queue (owner, 2026-10-24)
@@ -309,9 +309,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	if max <= 0 {
 		max = 12
 	}
-	textCalls := 0
-	noted := false
-	used := map[string]int{} // calls per tool, for the skill's limits (#376)
+	textCalls, before := 0, len(s.Calls) // the model's calls, after the first aid's
 	for pass := 0; pass <= max; pass++ {
 		reply, err := o.LLM.Chat(ctx, msgs, defs)
 		if err != nil {
@@ -334,7 +332,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		if len(reply.ToolCalls) == 0 {
 			// The model stopped without a note: write one for it so the day
 			// is never silent.
-			if !noted {
+			if !g.noted {
 				note := strings.TrimSpace(reply.Content)
 				if note == "" {
 					note = "Sitzung ohne Notiz beendet."
@@ -368,39 +366,23 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				continue
 			}
 			shown := shownArgs(args)
-			if mcpName == "laib_wish" {
-				// a suggestion becomes a ticket: with numbers, and never a family
-				// member's sentence word for word (#270); the cap is the skill's limits
-				why := ""
-				if saw, ok := args["saw"].(string); ok && !strings.ContainsAny(saw, "0123456789") {
-					why = "saw braucht Zahlen — was hast du gezählt?"
-				} else if quotes(shown, sentences) {
-					why = "der Vorschlag zitiert einen Satz der Familie wörtlich — nenne Thema und Anzahl, nicht den Satz"
-				}
-				if why != "" {
-					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
-					continue
-				}
+			// a suggestion becomes a ticket: with numbers (#270); a proposal has its
+			// anchor (#544); and what the skill's script vets, it vets (#839)
+			why := ""
+			if saw, ok := args["saw"].(string); mcpName == "laib_wish" && ok && !strings.ContainsAny(saw, "0123456789") {
+				why = "saw braucht Zahlen — was hast du gezählt?"
 			}
-			if why := unanchored(sk, mcpName, args); why != "" {
+			if why = cmp.Or(why, unanchored(sk, mcpName, args), g.check(mcpName, args)); why != "" {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: " + why})
 				continue
 			}
-			if mcpName == "laib_propose" && sk.Updates == "patch" {
-				service, _ := args["service"].(string)
-				key, _ := args["key"].(string)
-				if v, _ := args["value"].(string); v == "" || offers[service+" "+key] != v {
-					msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: vorschlagen kannst du nur die Patch-Versionen oben, service, key und value genau so"})
-					continue
-				}
-			}
-			if mcpName == "laib_note" && noted {
+			if mcpName == "laib_note" && g.noted {
 				// a session's note is written once (#550): a model repeating it
 				// put the same note five times into the journal within 14 s
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "nicht ausgeführt: die Notiz dieser Sitzung steht schon — beende die Sitzung"})
 				continue
 			}
-			if n := sk.Limits[strings.TrimPrefix(mcpName, "laib_")]; n > 0 && used[mcpName] >= n {
+			if n := sk.Limits[strings.TrimPrefix(mcpName, "laib_")]; n > 0 && g.used[mcpName] >= n {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: fmt.Sprintf("nicht ausgeführt: höchstens %d Mal %s in dieser Sitzung — schreib jetzt die Notiz", n, strings.TrimPrefix(mcpName, "laib_"))})
 				continue
 			}
@@ -417,11 +399,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				args["sources"] = src // what it rests on is named, and a human decides (#544)
 				shown = shownArgs(args)
 			}
-			if len(s.Calls) >= max {
+			if len(s.Calls)-before >= max {
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: "Limit an Tool-Aufrufen erreicht: schreibe jetzt die Notiz (note) oder eskaliere (escalate)."})
 				continue
 			}
-			used[mcpName]++
+			g.used[mcpName]++
 			s.Calls = append(s.Calls, mcpName+" "+shown)
 			o.work.step("Modell ruft " + mcpName + " auf")
 			var out string
@@ -459,7 +441,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				if t, ok := args["text"].(string); ok {
 					s.Note = t
 				}
-				noted = true
+				g.noted = true
 				if s.Outcome == "error" {
 					s.Outcome = "green"
 				}
@@ -470,8 +452,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 		}
 	}
-	s.Outcome, s.Why = "red", fmt.Sprintf("abgebrochen nach %d Aufrufen", len(s.Calls))
-	if !noted { // the session's one note (#550): a note written stands, the log line says the rest
+	s.Outcome, s.Why = "red", fmt.Sprintf("abgebrochen nach %d Aufrufen", len(s.Calls)-before)
+	if !g.noted { // the session's one note (#550): a note written stands, the log line says the rest
 		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": strings.TrimSpace("Sitzung nach zu vielen Schritten abgebrochen; siehe Journal. " + human)})
 	}
 	return s, nil
@@ -492,88 +474,6 @@ func unanchored(sk Skill, tool string, args map[string]any) string {
 	}
 	return ""
 }
-
-// patches reads laib updates for an updates skill (#376): the list the
-// model is shown, the note's lines for a human (minor versions, registry
-// errors) and the offers, "service key" → the one value it may propose.
-func (o *Operator) patches(ctx context.Context, mcp *MCP) (list, human string, offers map[string]string) {
-	offers = map[string]string{}
-	out, isErr, err := mcp.Call(ctx, "laib_updates", map[string]any{})
-	var ups []struct {
-		Service, Key, Image, Current, Patch, Minor, Error, Digest string
-		Auto                                                      bool
-	}
-	if err != nil || isErr || json.Unmarshal([]byte(out), &ups) != nil {
-		return "", "Aktualisierungen nicht lesbar: " + firstLine(cmp.Or(out, fmt.Sprint(err))) + ".", offers
-	}
-	var b, h strings.Builder
-	b.WriteString("Patch-Versionen, die du vorschlagen kannst:\n")
-	// the runner's own proposals (#528), each once while it is open: a new
-	// image of a service with data (pinned by its digest; the review asks a
-	// person and laib snapshots first), and what a service's status offers
-	// as one value (Home Assistant's extensions); firmware is only reported
-	var open []struct{ Reason string }
-	if text, _, err := mcp.Call(ctx, "laib_inbox", map[string]any{}); err == nil {
-		json.Unmarshal([]byte(text), &open)
-	}
-	propose := func(what string, args map[string]any) {
-		if slices.ContainsFunc(open, func(p struct{ Reason string }) bool { return p.Reason == args["reason"] }) {
-			fmt.Fprintf(&h, " %s: der Vorschlag ist noch offen.", what)
-		} else if out, isErr, err := mcp.Call(ctx, "laib_propose", args); err != nil || isErr {
-			fmt.Fprintf(&h, " %s ließ sich nicht vorschlagen: %s.", what, firstLine(cmp.Or(out, fmt.Sprint(err))))
-		} else {
-			fmt.Fprintf(&h, " %s vorgeschlagen, für einen Menschen.", what)
-		}
-	}
-	for _, u := range ups {
-		if u.Digest != "" && !u.Auto {
-			what := fmt.Sprintf("%s: neues Image %s:%s", u.Service, u.Image, u.Current)
-			propose(what, map[string]any{"reason": what + " (" + u.Digest + ")", "service": u.Service, "key": u.Key, "value": u.Image + ":" + u.Current + "@" + u.Digest})
-		}
-	}
-	diagText, _, _ := mcp.Call(ctx, "laib_diag", map[string]any{})
-	var findings []struct{ Probe, Service, Detail, Fix string }
-	json.Unmarshal([]byte(diagText), &findings)
-	for _, f := range findings {
-		if m := offerFix.FindStringSubmatch(f.Fix); f.Probe == "status" && m != nil && m[1] == f.Service {
-			propose(f.Service+": "+f.Detail, map[string]any{"reason": f.Service + ": " + f.Detail, "service": m[1], "key": m[2], "value": m[3]})
-		} else if f.Probe == "status" && strings.HasPrefix(f.Detail, "Firmware: ") {
-			fmt.Fprintf(&h, " %s: %s.", f.Service, f.Detail)
-		}
-	}
-	for _, u := range ups {
-		if u.Service == "laib" {
-			continue // Laib's own update is self-update.sh's (#547), no proposal
-		}
-		if u.Service == "host" && u.Patch != "" {
-			// the host image (#368): the runner proposes it itself, a human approves
-			patch := fmt.Sprintf("--- a/host/image\n+++ b/host/image\n@@ -1,2 +1,2 @@\n # tag: %s\n-%s@%s\n+%s@%s\n", u.Key, u.Image, u.Current, u.Image, u.Patch)
-			out, isErr, err := mcp.Call(ctx, "laib_propose", map[string]any{"reason": "Host-Image " + u.Key + ": " + u.Current + " → " + u.Patch, "patch": patch})
-			if err != nil || isErr {
-				fmt.Fprintf(&h, " Host-Image %s → %s ließ sich nicht vorschlagen: %s.", u.Key, u.Patch, firstLine(cmp.Or(out, fmt.Sprint(err))))
-			} else {
-				fmt.Fprintf(&h, " Host-Image %s → %s vorgeschlagen, für einen Menschen.", u.Key, u.Patch)
-			}
-			continue
-		}
-		if u.Patch != "" {
-			offers[u.Service+" "+u.Key] = u.Image + ":" + u.Patch
-			fmt.Fprintf(&b, "- service %s, key %s, value %s:%s (jetzt %s)\n", u.Service, u.Key, u.Image, u.Patch, u.Current)
-		}
-		if u.Minor != "" {
-			fmt.Fprintf(&h, " %s: Minor-Version %s (jetzt %s) für einen Menschen.", u.Service, u.Minor, u.Current)
-		}
-		if u.Error != "" {
-			fmt.Fprintf(&h, " %s: Registry nicht lesbar (%s).", u.Service, u.Error)
-		}
-	}
-	return b.String(), strings.TrimSpace(h.String()), offers
-}
-
-// offerFix is a status finding's fix that is one value proposal (#528), the
-// runner files it as it stands: Home Assistant's check names the extensions
-// to install this way (templates/home-assistant/home-assistant-check.py).
-var offerFix = regexp.MustCompile(`^laib propose --set services/([a-z0-9-]+)/values\.yml:([A-Z][A-Z0-9_]*)=(\S+)$`)
 
 // SmallModel decides the interface (#286): OPERATOR_INTERFACE when set
 // (typed = small, cli = capable), else the window — up to 32k tokens a
@@ -761,6 +661,7 @@ func SystemPrompt(defs []ToolDef) string {
 }
 
 func (o *Operator) record(s Session) {
+	o.work.ran(s)
 	if o.Home == "" {
 		return
 	}

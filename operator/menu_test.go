@@ -27,7 +27,7 @@ func TestStructuredIncidentSessionRunsEndToEnd(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{tcall("4", "laib_note", `{"kind":"incident","text":"03:12 whoami: Port \"belegt\", Neustart grün."}`)}},
 		{Role: "assistant", Content: "fertig"},
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	tr := Trigger{Kind: "event", Service: "whoami", Detail: "unit whoami.service failed"}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestEvalStructuredIncidents(t *testing.T) {
 	rep := RunEval(context.Background(), "scripted", incidents, func(ctx context.Context, inc Incident) (Session, error) {
 		mcp, _ := fakeMCP(t, inc.Replies)
 		srv := fakeLLM(t, inc.Script)
-		op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: srv.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
+		op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: srv.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 		if inc.Usage != nil {
 			op.Usage = &Usage{URL: fakeUsage(t, inc.Usage).URL, Token: "um-token"}
 		}

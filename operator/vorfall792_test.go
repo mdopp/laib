@@ -33,7 +33,7 @@ func TestARedFindingInALookBecomesAnIncidentTheOperatorWorks(t *testing.T) {
 	})
 	mcp, calls := fakeMCP(t, map[string]string{"laib_diag": "[" + redBote + "]", "laib_logs": boteLogs, "laib_restart": "rot: bote-check.service failed"})
 	clock := time.Date(2026, 10, 27, 10, 31, 0, 0, time.Local)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir(), Now: func() time.Time { return clock }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir(), Now: func() time.Time { return clock }}
 	skills := []Skill{skillFor(t, Trigger{Kind: "tick"}, "routineblick"), skillFor(t, Trigger{Kind: "event"}, "")}
 	r := &Runner{Op: op}
 	r.LoadLast()
@@ -68,7 +68,7 @@ func TestAnIncidentThatCannotReachTheModelIsEscalatedInBoundedTime(t *testing.T)
 	llm, asked := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "fertig"}})
 	mcp, calls := fakeMCP(t, map[string]string{"laib_diag": "[" + redBote + "]", "laib_logs": boteLogs})
 	clock := time.Date(2026, 10, 27, 10, 31, 0, 0, time.Local)
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir(), Now: func() time.Time { return clock }}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir(), Now: func() time.Time { return clock }}
 	skills := []Skill{skillFor(t, Trigger{Kind: "tick"}, "routineblick"), skillFor(t, Trigger{Kind: "event"}, "")}
 	r := &Runner{Op: op}
 	r.LoadLast()
@@ -116,7 +116,7 @@ func TestARestartThatClearsTheRedNeedsNoModel(t *testing.T) {
 			replies["laib_diag"] = "[]"
 		}
 	})
-	op := &Operator{MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
+	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL + "/v1", Model: "qwen"}, Home: t.TempDir()}
 	tr := Trigger{Kind: "event", Service: "bote", Detail: "bote: unit bote-check.service ist failed", Restart: []string{"bote"}, Opened: true}
 	s, err := op.Run(context.Background(), skillFor(t, tr, ""), tr)
 	if err != nil || s.Outcome != "green" || *asked != 0 || countPrefix(*calls, "laib_note") != 1 || !strings.Contains(s.Note, "nichts davon mehr rot") {

@@ -96,7 +96,7 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 			write(t, d, "host/image", "# tag: stable-nvidia\nostree-unverified-registry:ghcr.io/ublue-os/ucore-minimal@sha256:b111\n", 0o644)
 		}, "Betriebssystem der Box"},
 		{"a skill for the Operator", func(t *testing.T, d string) {
-			write(t, d, "skills/gartenblick.yml", "description: x\n", 0o644)
+			write(t, d, "skills/gartenblick/skill.yml", "description: x\n", 0o644)
 		}, "gibt dem Operator eine Fähigkeit"},
 		{"policy.yml", func(t *testing.T, d string) {
 			edit(t, d, "policy.yml", "pi: {ceiling: propose}", "pi: {ceiling: apply}")

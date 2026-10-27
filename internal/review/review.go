@@ -209,7 +209,7 @@ func dirs(base, changed string) Result {
 			say("ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket", p)
 		case parts[0] == "lessons" && len(parts) == 2:
 			say("eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)", p)
-		case parts[0] == "skills" && len(parts) == 2:
+		case parts[0] == "skills":
 			say("gibt dem Operator eine Fähigkeit oder ändert eine (%s): was er tun darf, entscheidet ein Mensch (ADR 0023)", p)
 		default:
 			say("ändert eine Datei, die Laib nicht kennt: %s", p)

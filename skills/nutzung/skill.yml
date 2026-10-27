@@ -1,10 +1,14 @@
 # Weekly usage suggestions (#270, ADR 0023): reads usage-metrics, proposes
 # at most three improvements; each waits in the inbox and becomes a
 # Werkstatt ticket when the admin approves it. It changes nothing itself.
+# #839: the runner reads usage-metrics with its own token, the script
+# renders the week and keeps a family member's sentence out of a wish.
 description: Einmal pro Woche — was die Familie nutzt und was ihr fehlt; Vorschläge, die der Admin freigibt.
 trigger: {weekly: "Mo 08:00"}
 tools: [wish, note]
 context: usage
+run: run.py
+modell: urteil   # the script renders the week; the model judges what to suggest
 output: propose
 limits: {wish: 3}                # the runner refuses a fourth (#376)
 prompt: |
