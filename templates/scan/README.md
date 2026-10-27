@@ -70,8 +70,18 @@ model of scanner needs its vendor and product in the rule.
    names each document's kind, sender, date and title. Documents are the runs
    from one start to the next, never page groups the model makes up. A page
    the model calls blank goes only when it is bright. While the card is lent
-   to another mode the service waits up to 30 minutes. A model that fails or
-   answers nonsense gives one document "Stapel unsortiert": nothing is lost.
+   to another mode the service waits up to 30 minutes. A model that answers
+   nonsense gives one document "Stapel unsortiert": nothing is lost. A model
+   that fails (the connection dropped, a timeout, a 5xx, the card lent past
+   the wait; #831) files nothing: the stack waits in its archive, ends
+   `nachholen` with „Das Trennen wird nachgeholt, sobald das Hausmodell
+   wieder antwortet.“, and the service splits it again by itself once the
+   model answers (the card free and the router behind the lease's proxy
+   listing the model, asked at most once a minute), 10 minutes, 1 hour and
+   4 hours after each failure, at most 3 tries within a day. Its outcome
+   replaces the `nachholen` line under `letzte`. Only after the third failed
+   try, or a day without an answer, does it go to Paperless as „Stapel
+   unsortiert“, saying so. A restart keeps the wait; `redo` ends it at once.
    Above 40 pages the stack goes in overlapping windows of 30.
 4. One PDF per document into Paperless' consume folder,
    `<consume>/<SCAN_TAG>/` (the folder is the tag), staged as `._scan-*.part`
@@ -116,7 +126,8 @@ read by `laib status`, `laib diag`, `laib scan status` and Haus:
   "stapel": "2026-10-22T10-12-40",
   "person": "mama",
   "findings": [{"severity": "gelb", "detail": "…", "fix": "laib scan redo --stapel …"}],
-  "letzte": [{"stapel": "…", "ende": "fertig | abgebrochen | fehler", "quelle": "scanner | ordner",
+  "nachholen": [{"stapel": "…", "versuche": 1, "naechster": "…", "grund": "Remote end closed connection without response"}],
+  "letzte": [{"stapel": "…", "ende": "fertig | nachholen | abgebrochen | fehler", "quelle": "scanner | ordner",
               "datei": "Scan_0001.pdf", "at": "…", "seiten": 38, "leer": 9, "meldung": "…",
               "dokumente": [{"titel": "2023-05-01 Mosel - Rechnung", "datei": "2023-05-01 Mosel - Rechnung.pdf"}]}]
 }
