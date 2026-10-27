@@ -11,5 +11,5 @@ After=frage-searx.service
 [Service]
 Type=oneshot
 StandardInput=file:%h/.config/containers/systemd/frage/frage-check.py
-ExecStart=/usr/bin/podman run --rm -i --name frage-check --network container:systemd-frage-searx --security-opt label=disable -e SEARX_URL=http://127.0.0.1:8888 -e STATUS_DIR=/data -v ${DATA_DIR}/frage/check:/data ${CHECK_IMAGE} python3 -
+ExecStart=/usr/bin/podman run --rm -i --name frage-check --pod frage --security-opt label=disable -e SEARX_URL=http://127.0.0.1:8888 -e STATUS_DIR=/data -v ${DATA_DIR}/frage/check:/data ${CHECK_IMAGE} python3 -
 TimeoutStartSec=2min
