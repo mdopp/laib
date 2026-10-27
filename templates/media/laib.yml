@@ -47,8 +47,14 @@ data:
   - path: ${DATA_DIR}/media/jellyfin-config
   - path: ${DATA_DIR}/media/jellyfin-cache
     backup: false
+  - path: ${DATA_DIR}/media/check     # media-check's status file (#785): made again every 15 minutes
+    backup: false
 health:
   http: http://127.0.0.1:8096/health
+status:                            # the Box page's line (#785): "412 Filme, 38 Serien, 2.737 Lieder · 4 Konten der Familie"
+  file: ${DATA_DIR}/media/check/laib-status.json
+  check: media-check.service
+  stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8096, lan: true}        # LAN clients (TV, Symfonium at home) talk to it directly
 gpu: true
