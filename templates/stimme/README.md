@@ -107,9 +107,28 @@ Three things answer that:
   device's button. Nothing it hears is printed; Whisper's own log still has the
   text it heard.
 
-The household's own recordings of the phrase (positives, „sag fünfmal Hey
-Joshua“) are `stimme/recordings/<id>/*.wav` beside `negativ/`; nothing records
-them yet.
+**The household's own recordings** (#828). Haus records the family saying the
+phrase (its Stimme card) into `stimme/recordings/<id>/haus/` as
+`<person>-<YYYYMMDD-HHMMSS>.wav`: 16 kHz, mono, 16-bit PCM, 0.25–4 s, 0600,
+written through a `.<name>.part` dotfile. The haus template mounts that one
+folder read-write at `/stimme-aufnahmen` (`HAUS_WAKE_RECORDINGS`); it creates it
+0700 with a `CACHEDIR.TAG` before Haus starts, so restic leaves it out like
+`negativ/` (household audio stays on the box). Every container involved runs as
+its root, the box's user `core` on the host. The trainer folds every `*.wav`
+under `<id>/` in as positives except `negativ/` and dotfiles.
+No run starts by itself. stimme-names (in Whisper's container, which mounts the
+recordings read-only) counts them in the status line: per person (from the file
+name), the false wakes, and what is new since the model's run began (the
+trainer's `begonnen` in `<id>.status.json`, else the model file's time); a clip
+the trainer would not take counts as `unbrauchbar`, never as new. With at least
+5 new recordings or 50 new false wakes the status offers „neu trainieren“
+first: `laib repair status stimme` puts `laib retrain stimme` into the Inbox (a
+destroy, only a human approves it). Approved, `stimme-retrain.service` moves
+`<id>.tflite`, `<id>.json` and `<id>.geflasht.json` into `stimme/micro/vorher/`
+(the way back: copy them back while no new model is there) and try-restarts the
+trainer, which trains. The device keeps the old model; once the new one is
+there, the flash above is offered (no `geflasht.json`: „ein älterer Stand“).
+Only counts reach the journal, never a name or a sound.
 
 A box without a GPU: `WHISPER_IMAGE: docker.io/rhasspy/wyoming-whisper`,
 `WHISPER_MODEL: small-int8`, and `VOICE_ENV` pointing at a file that says

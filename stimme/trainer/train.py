@@ -197,6 +197,8 @@ def fold_real_positives(run: pathlib.Path, recordings: pathlib.Path | None, over
     for wav in sorted(recordings.rglob("*.wav")):
         if NEGATIVES in wav.relative_to(recordings).parts:   # the false wakes: never a positive (#825)
             continue
+        if wav.name.startswith("."):   # #828: Haus writes through .<name>.part, a dotfile is never a whole recording
+            continue
         reason = reject_reason(wav)
         if reason is not None:
             sys.stdout.write(f"  skip {wav.name}: {reason}\n")

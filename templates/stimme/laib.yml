@@ -24,7 +24,7 @@ data:
     backup: false
   - path: ${DATA_DIR}/stimme/wakeword  # openWakeWord's custom models (streaming satellites): keep
   - path: ${DATA_DIR}/stimme/micro     # the house persona's microWakeWord model for the Voice PE, with its status: keep
-  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional); <wake id>/negativ the false wakes' audio, which restic leaves out (CACHEDIR.TAG, #825)
+  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional); <wake id>/haus what Haus records (#828), <wake id>/negativ the false wakes' audio: both left out by restic (CACHEDIR.TAG, #825)
   - path: ${DATA_DIR}/stimme/trainer   # sources, voices, negatives, checkpoints: gigabytes, rebuilt
     backup: false
 health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}

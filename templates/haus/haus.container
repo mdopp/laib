@@ -101,9 +101,18 @@ Environment=HAUS_SAMBA_DIR=/samba-accounts
 # shown to people as \\<address>\data and smb://<address>/data, never used to connect
 Environment=HAUS_SAMBA_HOST=${LAN_IP}
 Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
+# the family saying the wake word (#828, haus#165): Haus writes <person>-<YYYYMMDD-HHMMSS>.wav, 0600, through
+# .<name>.part; Stimme's trainer folds them in as positives, stimme-names counts them and offers a retrain the
+# owner approves. Only this folder of stimme's recordings, never negativ/; the phrase and the id Haus reads
+# from /persona/<persona>/persona.json. Both run as the container's root, the box's user core on the host
+Environment=HAUS_WAKE_RECORDINGS=/stimme-aufnahmen
+Volume=${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus:/stimme-aufnahmen
 AutoUpdate=registry
 
 [Service]
+# the folder exists before podman binds it, 0700, and restic (--exclude-caches) leaves it out like negativ/
+ExecStartPre=/usr/bin/podman unshare mkdir -p -m 0700 ${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus
+ExecStartPre=/usr/bin/podman unshare sh -c 'echo "Signature: 8a477f597d28d172789f06886806bc55" > ${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus/CACHEDIR.TAG'
 Restart=always
 
 [Install]
