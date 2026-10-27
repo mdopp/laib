@@ -49,12 +49,21 @@ budget kernel 20000 cmd internal
 budget operator 3000 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
-# their one door, with them. 1,000: the skill-specific Go they replace, about 750 lines, plus a
-# quarter, as for the programs that left the kernel (#309); the owner's to confirm on #839
+# their one door, with them. The owner, 2026-10-27, #839: no more than 50 skills, each of a
+# sensible size — so the caps are per skill (a run.py of at most 200 lines; the largest at the
+# move was 149) and on the count, not one sum that a few big skills could fill.
 py=$(find skills -name '*.py' ! -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
 pyt=$(find skills -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
-[ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  (cap 1000)"
-[ "$py" -lt 1000 ] || { echo "skill scripts over 1000 lines (#839)"; bad=1; }
+n=$(find skills -mindepth 2 -maxdepth 2 -name skill.yml | wc -l)
+[ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  skills: $n (cap 50, each run.py 200)"
+[ "$n" -le 50 ] || { echo "more than 50 skills (#839)"; bad=1; }
+for f in skills/*/run.py; do
+  [ -f "$f" ] || continue
+  l=$(wc -l < "$f")
+  [ "$l" -le 200 ] || { echo "$f has $l lines, a skill script is at most 200 (#839)"; bad=1; }
+done
+door=$(wc -l < skills/laibskill.py)
+[ "$door" -le 250 ] || { echo "skills/laibskill.py has $door lines, the scripts' door is at most 250 (#839)"; bad=1; }
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
 budget stick 1800 stick         # the laptop's install-stick builder, 1,468
 budget frage 400 frage          # "was ist …", 261
