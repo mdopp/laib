@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
@@ -56,6 +56,9 @@ type Finding struct {
 	// Does: what the repair does, the card's headline (#746), when the
 	// status file knows it better than laib (the wake word a flash plays)
 	Does string `json:"does,omitempty"`
+	// Say is what it means to a person, in one plain sentence (#855): the
+	// red mail and a repair's card show it, Detail and Fix stay for the admin.
+	Say string `json:"say,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -81,6 +84,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	if only == "" {
 		settle(env, st, findings)
 		closeGone(env, st, findings)
+		keep(env.Paths.Home, findings, time.Now()) // what the mail reads, for the pages (#856)
 	}
 	if toJournal {
 		// #13: after an auto-update. Red findings become red journal lines
@@ -138,24 +142,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		if Stale(svc, rep, time.Now()) {
 			Refresh(ctx, svc)
 		}
-		for _, f := range rep.Findings {
-			if a := Age(rep.At, time.Now()); a != "" {
-				f.Detail += " (" + a + ")"
-			}
-			out = append(out, f)
-		}
-		if h := svc.Contract.Health.HTTP; h != "" {
-			client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h, nil)
-			resp, err := client.Do(req)
-			if err != nil {
-				out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: err.Error(), Fix: "laib logs " + name, Repair: []string{"restart", name}})
-			} else {
-				resp.Body.Close()
-				if !svc.Contract.Health.Answers(resp.StatusCode) {
-					out = append(out, Finding{Severity: "rot", Probe: "health", Service: name, Detail: resp.Status, Fix: "laib logs " + name, Repair: []string{"restart", name}})
-				}
-			}
+		out = append(out, SelfFindings(rep, time.Now())...)
+		if f := Health(ctx, svc); f != nil {
+			out = append(out, *f)
 		}
 	}
 	// Drift: the box differs from the state. Not red: apply fixes it.
@@ -177,20 +166,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, f)
 		}
 	}
-	// Disk pressure on the data dir and the system's writable root (/var: on
-	// CoreOS / is the immutable, "full" composefs and would always read red).
-	for _, path := range uniq([]string{st.Box.DataDir, "/var"}) {
-		var fs syscall.Statfs_t
-		if err := syscall.Statfs(path, &fs); err != nil {
-			continue
-		}
-		free := float64(fs.Bavail) / float64(fs.Blocks) * 100
-		switch {
-		case free < 5:
-			out = append(out, Finding{Severity: "rot", Probe: "disk", Detail: fmt.Sprintf("%s hat nur %.1f%% frei", path, free)})
-		case free < 15:
-			out = append(out, Finding{Severity: "gelb", Probe: "disk", Detail: fmt.Sprintf("%s hat %.1f%% frei", path, free)})
-		}
+	out = append(out, DiskPressure(st.Box.DataDir)...)
+	if f := NFTables(apply.FirewallState(ctx, env.Paths)); f != nil {
+		out = append(out, *f)
 	}
 	// The Operator: enabled but silent or down is the failure nobody notices.
 	if _, f := OperatorState(OperatorFacts(ctx, env, st)); f != nil {
@@ -239,34 +217,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	if st.Box.Watchdog.URL == "" {
 		out = append(out, Finding{Severity: "gelb", Probe: "watchdog", Detail: "kein Wächter außerhalb der Box (box.yml watchdog.url): wenn die Box ausfällt, erfährt es niemand", Fix: "einen healthchecks-artigen Ping-URL eintragen (eigener Dienst oder ein freier Anbieter); laib serve meldet sich alle fünf Minuten, Stille wird draußen zum Push"})
 	}
-	// The backup target: none is yellow, one on the data disk itself is a nudge
-	// for a week and yellow after it (#40) — a risk, not damage (owner 2026-10-25:
-	// „Rot bleibt rot“, so a deferred Box-Aufgabe can cover it; a failed off-box copy stays red).
-	bf := backupFacts(env)
-	installed, lastCheck, lastGreen, lastOffsite, lastRun := bf.installed, bf.RestoreTest, bf.LastGreen, bf.Offsite, bf.Nightly.Result
-	switch repo := st.Box.Backup.Repo; {
-	case st.Box.Backup.Offsite != nil && repo != "":
-		if time.Since(lastOffsite) > 48*time.Hour { // #391: the copy off the data disk is the one a dead disk leaves
-			out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "keine frische Kopie außer Haus (" + st.Box.Backup.Offsite.Repo + ") seit mehr als 48 Stunden: ein Plattenausfall nähme alles mit", Fix: "laib journal --verb backup (reason offsite); NAS erreichbar? laib backup", Topic: "offsite"})
-		}
-	case repo == "":
-		out = append(out, Finding{Severity: "gelb", Probe: "backup", Detail: "kein Backup-Ziel (box.yml backup.repo): keine Snapshots, der Operator sichert nicht vor Reparaturen", Fix: "backup.repo setzen, z.B. /mnt/data/backup/restic oder sftp:nas:/backup/laib"})
-	case strings.HasPrefix(repo, "/") && strings.HasPrefix(repo, filepath.Dir(st.Box.DataDir)):
-		out = append(out, Finding{Severity: localOnlySeverity(installed), Probe: "backup", Detail: "Backup liegt nur auf der Datenplatte (" + repo + "): schützt vor Fehlern, nicht vor Plattenverlust", Fix: "Repo auf NAS oder USB (box.yml backup.repo), oder ein Spiegel (laib disk add)", Topic: "offsite"})
-	}
-	// a failed or stale nightly backup (#393: it is what the owner gets a mail for)
-	if st.Box.Backup.Repo != "" && (lastRun == "red" || !installed.IsZero() && time.Since(installed) > 36*time.Hour && time.Since(lastGreen) > 36*time.Hour) {
-		what := map[bool]string{true: "ist noch nie gelaufen"}[lastGreen.IsZero()]
-		out = append(out, Finding{Severity: "rot", Probe: "backup", Detail: "die letzte Sicherung " + cmp.Or(what, "ist fehlgeschlagen oder älter als 36 Stunden"), Fix: "laib journal (verb backup); laib backup", Repair: []string{"backup"}})
-	}
-	if st.Box.Backup.Repo != "" {
-		if _, err := os.Stat(filepath.Join(env.Paths.Home, "recovery-sheet.confirmed")); err != nil {
-			out = append(out, Finding{Severity: "gelb", Probe: "recovery", Detail: "das Wiederherstellungsblatt (age-Schlüssel, restic-Passwort) ist nicht als gesichert bestätigt: ohne es ist das Backup nach Plattenverlust unlesbar", Fix: "laib recovery-sheet  → ausdrucken, dann laib recovery-sheet --confirm"})
-		}
-		if lastCheck.IsZero() || time.Since(lastCheck) > 35*24*time.Hour {
-			out = append(out, Finding{Severity: "gelb", Probe: "restore-test", Detail: "kein grüner Wiederherstellungstest in den letzten 35 Tagen (laib backup check: restic check + Probe-Restore)", Fix: "laib backup check; der Timer laib-backup-check läuft monatlich", Repair: []string{"backup", "check"}})
-		}
-	}
+	_, backup := Backup(env, st)
+	out = append(out, backup...)
 	// The delegated ACME challenge (#378): a wrong CNAME fails every renewal, silently.
 	if a := st.Box.DNS.ChallengeAlias; a != "" && only == "" {
 		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
@@ -279,6 +231,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	}
 	if tasks, err := aufgaben.Load(st.Dir); err == nil { // #667: what the owner deferred
 		out = cover(out, tasks, time.Now().Format(time.DateOnly))
+	}
+	for i := range out {
+		out[i].Say = Say(out[i])
 	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })

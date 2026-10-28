@@ -265,7 +265,8 @@ func (c Config) spoken(ctx context.Context, q, system string) string {
 	}
 	a, err := c.Ask(ctx, q)
 	if err != nil {
-		return "Das konnte ich gerade nicht nachschlagen: " + err.Error()
+		fmt.Println("frage:", err) // the raw error for the container's log, a sentence for the speaker (#855)
+		return "Das konnte ich gerade nicht nachschlagen. Versuch es in ein paar Minuten noch einmal."
 	}
 	return a.Answer
 }

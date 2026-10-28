@@ -173,7 +173,7 @@ One coupling needs more than a move:
   for months, and that is the failure #309 describes.
 - **Why not tighter (14,000, the plan's first number):** with the lease
   staying it would leave 850 lines; it would be met the way 16,000 was, by
-  squeezing, which is a review finding (#309).
+  squeezing, which is no fix (#309).
 - Crossing the cap means raising it in the same PR, with its one-line reason
   in `loc.sh` and the owner's approval (#309).
 

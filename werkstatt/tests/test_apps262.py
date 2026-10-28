@@ -123,9 +123,11 @@ class Check(unittest.TestCase):
         if not shutil.which("openssl"):
             raise unittest.SkipTest("no openssl")
         run = lambda *a: subprocess.run(a, cwd=t, check=True, capture_output=True)
-        run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.crt", "-days", "2", "-subj", "/O=Test CA/CN=test ca")
+        run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.crt", "-days", "2", "-subj", "/O=Test CA/CN=test ca",
+            # Python 3.13 verifies strictly (VERIFY_X509_STRICT): a CA needs its key usage
+            "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign")
         run("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", "leaf.key", "-out", "leaf.csr", "-subj", "/CN=hallo.boot.test")
-        Path(t, "ext").write_text("subjectAltName=DNS:hallo.boot.test\n")
+        Path(t, "ext").write_text("subjectAltName=DNS:hallo.boot.test\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nauthorityKeyIdentifier=keyid\nsubjectKeyIdentifier=hash\n")
         run("openssl", "x509", "-req", "-in", "leaf.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", "leaf.crt", "-days", "1", "-extfile", "ext")
 
     def setUp(self):

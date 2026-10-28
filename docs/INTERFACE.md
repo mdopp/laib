@@ -184,13 +184,13 @@ dropped from its reply. The built-in skills' menus:
 | Skill | Trigger | Menu |
 |---|---|---|
 | `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543); when it runs, its context is what diag found and the journal's last 15 entries without the Operator's notes, in its own budget (9,000 chars, each result 4,000) whatever the window; Home Assistant's `Update: …`/`Firmware: …` findings are `aktualisierung`'s and wake no look (#550) |
-| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792) |
-| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
+| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
+| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` — when the model fails, the runner writes the report its script made from status and journal (#858) |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
 | `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
-| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
+| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_note` — no model (#858): its script runs `laib backup check` (the canary restore), reads the week's backups and writes the note, an incident when the check is red or no backup was green for a day; the morning report reads it (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
 --all --limit 0` as the ops hand and puts the last ten measured proposals before the
@@ -262,6 +262,19 @@ the hand's ceiling and verb list reach it. `laib skill enable|pause
 is what the *client* renders when the call fails). `lock` names what holds
 apply when `eingeschränkt`: `apply:media` or `gpu:werkstatt`.
 
+The guarantees are the same object in `/ready` and in `laib status --json`
+`.ready` (#856, one verdict for every surface):
+
+- `red` counts red services; each red row of `.services` carries `red`, its
+  reasons beyond the units (`"health: 502 Bad Gateway"`).
+- `problems` lists what is red beyond one service: disk, backup, firewall,
+  and the last whole `laib diag` run's slow probes with its time.
+- `lastBackup`: `at` (the last green backup), `repos` (places: 2 while the
+  off-box copy is under 48 h old), `ok` (green, and no backup finding red),
+  `onlyOnDataDisk` (the one place is the disk it protects), `problem` (why
+  not `ok`), `text` (the fact in one neutral German sentence).
+- `lastChange`: the last approved proposal (`proposal`, `summary`, `at`).
+
 ## The box page: three pages
 
 Status:
@@ -296,7 +309,7 @@ After „Freigeben“ the card leaves the open ones at once and stands, without
 buttons, under „Was die Box gerade macht“ with the step the run that carries
 it writes on the proposal (`step`, #686): „wartet, bis die Box mit der
 Arbeit davor fertig ist“, „sichert immich“, „startet immich“, „prüft, ob
-immich läuft“; then „fertig“ (with „Zurücknehmen“) or „zurückgenommen, weil
+immich läuft“; then „fertig“ (with „Zurücknehmen“ where it undoes something, #852) or „zurückgenommen, weil
 immich danach nicht richtig lief“. The page reloads itself every 3 s while
 something runs. „Alle freigeben“ (two or more open cards) is one confirmation
 page that names the cards; it approves exactly those, one after the other,
@@ -427,12 +440,15 @@ verdicts stay the admin's (`laib token mint human`).
 
 The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
 the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
-`läuft`, `stumm` (running but neither a note nor a look for three ticks:
+`läuft`, `stumm` (running but no work done for three ticks:
 model unreachable or a tick hangs), `antwortet nicht`, `fehlt` (enabled but
 the unit is down). `laib diag` turns the last four into findings. A look
 that found nothing new writes no note (#543); the Operator's own `/ready`
-(`{"looked": …}`) says when its last session or look ended without an
-error, and that counts like a note. After a failed session no look is
+(`{"looked": …}`) says when its last session or look did work — ended
+neither in an error nor skipped nor as a fallback (#858) — and that is the
+heartbeat; the newest ops note counts only while `/ready` says none, right
+after a restart. A daily or weekly slot that waits or fails writes one
+line with its reason (#858); that line is no heartbeat. After a failed session no look is
 skipped, so a model that stops answering still turns the state `stumm`. An
 enabled operator that does nothing is never silent.
 
@@ -488,11 +504,16 @@ Every open proposal is shown as the same card — on the Box page, in
 unter paperless.<domain> nur im Heimnetz erreichbar“), **what it means for
 the family** (the review's reasons: aus dem Internet erreichbar, ohne
 Anmeldung, ein Laib-Schlüssel, ein Skript auf der Box …, or „nichts
-Sichtbares“), **whether it can be undone** („Zurücknehmen“: files back,
-data stays; a new service is stopped and removed, its data stays), **who
-proposed it and why** (quoted), and **the safe default**: for a risky
-class (human, a new service, a minted token) the first button is „Später“
-and the diff sits behind „Details“. The card is built mechanically from
+Sichtbares“), **whether it can be undone**, computed by
+`proposal.Undoing` from the tier, whether it changes files or only runs a
+verb, and whether a snapshot precedes it (#852): „Zurücknehmen“ brings the
+files back and the data stay; a new service is stopped and removed, its data
+stay; a service with data gets its program back with one tap, its data only
+from the snapshot laib takes first; a repair, a wish and the destroy tier have
+no „Zurücknehmen“ and say what stays. **Who proposed it and why** (quoted),
+and **the safe default**: for a risky class (human, a new service, a minted
+token, a service with data, the destroy tier) the first button is „Später“,
+„Freigeben“ loses its accent, and the diff sits behind „Details“. The card is built mechanically from
 the classified change (`proposal.Card`), never by a model. What the
 proposer saw (`evidence`) follows its reason, and its way back (`undo`)
 follows laib's own.
@@ -545,6 +566,20 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
+A red run that touched a service with data (its pre-update snapshot taken,
+the apply red) restores nothing by itself (#853, ADR 0019 §4 as amended):
+the old program comes back, the data stay as the update left them, and each
+proposal of the run says so with the snapshot's time („Das alte Programm
+läuft wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung
+von 14:05 liegt bereit.“). Laib files two proposals of its own, named on
+the run's proposals as `restore` and `forward` and offered on their cards
+as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
+<snapshot> <service>` for each snapshot of the run) and „Nach vorne
+reparieren“ (a repair running `laib rollback <revert>` for each revert of
+a proposal with data: its change on again, the data untouched, no new
+snapshot). A forward that verifies red leaves its red journal line, which
+the Operator opens as an incident and escalates after 30 minutes as for
+#792; the restore stays open beside it, its snapshot kept a week.
 `laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
 (apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
@@ -567,7 +602,9 @@ hour.
 reverted (`-m 1`) without touching `secrets.age` — services that stay keep
 the secrets their data was made with, services that leave the state lose
 theirs — and one apply follows. The Box page offers it as „Zurücknehmen“
-next to the last five freed proposals. `laib rollback <commit>` validates
+next to the last five freed proposals it undoes something for (#852: not a
+repair or the destroy tier); `/ready`'s `lastChange.reversible` is the same
+answer. `laib rollback <commit>` validates
 the argument (`git rev-parse --verify --end-of-options`) and reverts a
 merge commit with `-m 1`. An approve merges in a temporary worktree: a
 conflict never reaches `main`, the merged result must load and render, and

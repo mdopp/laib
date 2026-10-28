@@ -47,6 +47,13 @@ One tool, one declaration per service, one key.
   and the journal first, then every service in dependency order with its
   units stopped and its paths replaced, then one apply — all under the one
   lock, each service paused for converge meanwhile.
+- **A red update does not restore by itself** (#853). The run that applies
+  an update of a service with data snapshots it first (`pre-update`, kept a
+  week); when the run goes red, the old program comes back and the data
+  stay as the update left them. The Inbox says so with the snapshot's time
+  and offers „Sicherung zurückspielen“ (`laib restore <snapshot> <service>`
+  as a proposal) and „Nach vorne reparieren“ (the new version on again, the
+  data kept). An automatic restore waits for a green restore drill (#438).
 - **The recovery sheet.** `laib recovery-sheet` prints one page: the age
   key, the restic repo, the restic password and the four steps. The key and
   the password both live on the data disk and inside the encrypted repo, so

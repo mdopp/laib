@@ -26,6 +26,7 @@ type Decision struct {
 	Changes    []Line   `json:"changes"`            // before → after, + and −, in words
 	Impact     []string `json:"impact"`             // what it means for the family
 	Reversible string   `json:"reversible"`         // whether and how it can be undone
+	Undoable   bool     `json:"undoable"`           // „Zurücknehmen“ undoes what it changed (#852)
 	Why        string   `json:"why"`                // who proposed it and why, quoted
 	Risk       string   `json:"risk"`               // gering | mittel | hoch
 	RiskWhy    string   `json:"riskWhy"`            // one sentence why
@@ -230,8 +231,10 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = p.News[0]
 	case p.Boxless() && p.Does != "": // a repair: what it does (#746)
 		d.Summary = p.Does
-	case p.Boxless() && p.Evidence != "": // a repair filed before #746: the finding it answers (#759)
+	case p.Boxless() && p.Evidence != "" && !Technical(p.Evidence): // a repair filed before #746: the finding it answers (#759)
 		d.Summary = "Reparieren: " + p.Evidence
+	case p.Boxless():
+		d.Summary = "Laib schlägt eine Reparatur vor"
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
@@ -257,6 +260,12 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = "Was Laib allein entscheiden darf, ändert sich"
 	case policyChange:
 		d.Summary = "Die Regeln, wer auf der Box was darf, ändern sich"
+	case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855)
+		v, ver := values[0], tag(values[0].New)
+		if v.Old != "" {
+			ver = tag(v.Old) + " → " + ver
+		}
+		d.Summary = Named(v.Service) + " bekommt eine neue Version: " + ver
 	case len(values) == 1:
 		v := values[0]
 		d.Summary = Named(v.Service) + ": " + v.Key + " "
@@ -353,25 +362,24 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Impact = append(d.Impact[:impactMax:impactMax], fmt.Sprintf("und %d weitere (unter Technische Details)", n))
 	}
 
-	// --- how it is undone
-	switch {
-	case p.Tier == "destroy": // #759: a flashed device, a deleted folder
-		d.Reversible = "Nicht mit einem Tipp rückgängig."
-	case len(p.Adds) > 0:
-		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
-	case len(handOrder) == 1:
-		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): " + HandName(handOrder[0], false) + " darf danach wieder nur das Bisherige. Daten bleiben."
-	case len(values) > 0 && p.Kind != "template-update":
-		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): der Wert von vorher kommt zurück, Daten bleiben."
-	default:
-		d.Reversible = "Rückgängig mit einem Tipp („Zurücknehmen“): die Dateien von vorher kommen zurück, Daten bleiben."
-	}
-	if p.Undo != "" { // what the proposer says undoes it (#544), next to laib's own way back
-		d.Reversible += " Laut Vorschlag: " + p.Undo
+	// --- how it is undone, computed (#852); a command the proposer gives under Details (#855)
+	d.Undoable, d.Reversible = Undoing(p)
+	if p.Undo != "" && Technical(p.Undo) {
+		technical = append(technical, "laut Vorschlag rückgängig mit: "+p.Undo)
 	}
 
-	// --- who and why
-	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), p.Reason)
+	// --- who and why; a repair's reason carries the finding and the command (#853, #855)
+	reason, _, _ := strings.Cut(p.Reason, " — laib ")
+	if p.Boxless() && p.Does != "" {
+		reason = p.Does
+	}
+	if Technical(reason) || reason != p.Reason {
+		technical = append(technical, "Grund: "+p.Reason)
+	}
+	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), reason)
+	if Technical(reason) {
+		d.Why = upper(actorName(p.Actor)) + " schlägt das vor; den Grund in seinen Worten findest du unter Technische Details."
+	}
 	if p.Kind == "template-update" && who != "" { // the reason is a command (#687): what the template brings instead
 		d.Why = fmt.Sprintf("%s schlägt die neue Vorlage von %s vor", upper(actorName(p.Actor)), who)
 		if len(p.News) > 0 {
@@ -379,12 +387,15 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		}
 		d.Why += "."
 	}
-	if p.Evidence != "" {
+	if p.Evidence != "" && Technical(p.Evidence) {
+		technical = append(technical, "gesehen: "+p.Evidence)
+	} else if p.Evidence != "" {
 		d.Why += " — gesehen: " + p.Evidence
 	}
 
 	// --- the weight, and the safe default that follows from it
-	d.Risky = p.Class == "human" || len(p.Adds) > 0 || len(p.Mints) > 0
+	data := len(p.Snapshot) > 0 && len(p.Adds) == 0 // a service with data: its data do not come back with a tap (#852)
+	d.Risky = p.Class == "human" || len(p.Adds) > 0 || len(p.Mints) > 0 || data || p.Tier == "destroy"
 	exposed := slices.ContainsFunc(p.Reasons, func(r string) bool {
 		return strings.Contains(r, "aus dem Internet erreichbar") || strings.Contains(r, "ohne Anmeldung") || strings.Contains(r, "schwächt die Anmeldung")
 	})
@@ -395,12 +406,18 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Risk, d.RiskWhy = "hoch", "Ein Programm bekommt einen eigenen Schlüssel zur Box."
 	case exposed:
 		d.Risk, d.RiskWhy = "hoch", "Etwas wird von außen oder ohne Anmeldung erreichbar."
+	case p.Tier == "destroy":
+		d.Risk, d.RiskWhy = "mittel", "Es lässt sich nicht zurücknehmen."
+	case data:
+		d.Risk, d.RiskWhy = "mittel", "Ein Dienst mit Daten ändert sich; seine Daten kommen nicht mit einem Tipp zurück."
 	case d.Risky && policyChange:
 		d.Risk, d.RiskWhy = "mittel", "Es ändert, wer auf der Box was darf."
 	case d.Risky && slices.Contains(p.Files, "box.yml"):
 		d.Risk, d.RiskWhy = "mittel", "Es ändert Einstellungen der ganzen Box."
 	case d.Risky:
 		d.Risk, d.RiskWhy = "mittel", "Laib kann die Folgen nicht allein beurteilen."
+	case !d.Undoable:
+		d.Risk, d.RiskWhy = "gering", "Ein einmaliger Schritt, nichts Bleibendes."
 	default:
 		d.Risk, d.RiskWhy = "gering", "Eine Einstellung, mit einem Tipp zurückzunehmen."
 	}
@@ -439,6 +456,65 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	return d
 }
 
+// Undoing is how p is undone (#852), the one answer its card's text, its
+// „Zurücknehmen“, its weight and /ready read: from its tier, whether it
+// changes the box's files or only runs a verb (a repair, a wish), and
+// whether laib snapshots a service with data first. oneTap: „Zurücknehmen“
+// undoes what it changed.
+func Undoing(p *Proposal) (oneTap bool, text string) {
+	if p.Boxless() { // only a verb runs, or a wish goes out: reverting the file undoes neither
+		_, cmdline, _ := strings.Cut(p.Reason, " — laib ")
+		verb, _, _ := strings.Cut(cmdline, " ")
+		text = cmp.Or(actionWords[verb], "Laib führt nur einen Befehl aus; „Zurücknehmen“ macht ihn nicht ungeschehen.")
+		if slices.ContainsFunc(p.Files, func(f string) bool { return strings.HasPrefix(f, "wishes/") }) {
+			text = "Ein Wunsch geht an die Werkstatt; an der Box ändert sich dadurch nichts, es gibt nichts zurückzunehmen."
+		}
+		if p.Undo != "" && !strings.HasPrefix(p.Undo, "nichts zurückzunehmen") && !Technical(p.Undo) { // the finding's own way back (#759); a command stays in Details (#855)
+			text += " " + upper(p.Undo)
+		}
+		return false, text
+	}
+	var hands []string
+	for _, c := range p.Changes {
+		if c.Hand != "" && !slices.Contains(hands, c.Hand) {
+			hands = append(hands, c.Hand)
+		}
+	}
+	switch {
+	case p.Tier == "destroy": // #759: a deleted folder
+		return false, "Das lässt sich nicht zurücknehmen: was dabei gelöscht oder überschrieben wird, bleibt weg."
+	case len(p.Adds) > 0:
+		text = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
+	case len(p.Snapshot) > 0: // review.data: the program comes back, the data only from the snapshot (#528, #853)
+		names := make([]string, 0, len(p.Snapshot))
+		for _, s := range p.Snapshot {
+			names = append(names, Named(s))
+		}
+		text = "Das Programm von vorher kommt mit einem Tipp („Zurücknehmen“) zurück, die Daten nicht: sie bleiben auf dem neuen Stand. Laib sichert " + strings.Join(names, ", ") + " direkt davor; aus dieser Sicherung kommen die Daten von vorher zurück."
+	case len(hands) == 1:
+		text = "Rückgängig mit einem Tipp („Zurücknehmen“): " + HandName(hands[0], false) + " darf danach wieder nur das Bisherige. Daten bleiben."
+	case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Service != "" }) && p.Kind != "template-update":
+		text = "Rückgängig mit einem Tipp („Zurücknehmen“): der Wert von vorher kommt zurück, Daten bleiben."
+	default:
+		text = "Rückgängig mit einem Tipp („Zurücknehmen“): die Dateien von vorher kommen zurück, Daten bleiben."
+	}
+	if p.Undo != "" && !Technical(p.Undo) { // what the proposer says undoes it (#544), next to laib's own way back; a command stays in Details (#855)
+		text += " Laut Vorschlag: " + p.Undo
+	}
+	return true, text
+}
+
+// actionWords: what stays after a repair's verb ran (#852).
+var actionWords = map[string]string{
+	"restart":    "Ein Neustart ändert nichts Bleibendes; es gibt nichts zurückzunehmen.",
+	"backup":     "Eine Sicherung ändert nichts an den Diensten; es gibt nichts zurückzunehmen.",
+	"flash":      "Die neue Firmware bleibt auf dem Gerät; „Zurücknehmen“ spielt die alte nicht zurück.",
+	"retrain":    "Das Modell wird neu trainiert; das alte liegt als Kopie daneben, „Zurücknehmen“ holt es nicht zurück.",
+	"servicebay": "Der alte Ordner ist danach gelöscht; zurück kommt er nur aus der Sicherung, die Laib vorher macht.",
+	"restore":    "Die Daten von vorher ersetzen die von jetzt.",
+	"rollback":   "Die Daten fasst Laib dabei nicht an; nur das Programm wechselt wieder auf die neue Version.",
+}
+
 // linesMax: the single lines Details lists (#687); the rest is in the diff.
 const linesMax = 12
 
@@ -463,6 +539,15 @@ func orUnset(s string) string {
 }
 
 // valueWord: a value as the card shows it; a secret by its name only.
+// tag is an image's version, the part after its last colon: v1.11 of
+// docker.io/traefik/whoami:v1.11; the value itself when it has none.
+func tag(image string) string {
+	if i := strings.LastIndex(image, ":"); i >= 0 && !strings.Contains(image[i:], "/") {
+		return image[i+1:]
+	}
+	return image
+}
+
 func valueWord(v string) string {
 	if name, ok := strings.CutPrefix(v, "!secret "); ok {
 		return "ein Geheimnis (" + name + ")"
