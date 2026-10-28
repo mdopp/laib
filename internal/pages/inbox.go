@@ -100,7 +100,7 @@ func decided(all []*proposal.Proposal, domain string, locked bool) (fails, cards
 		if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
 			list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
 		}
-		if text == "fertig" { // what was approved can be taken back (#41)
+		if undo, _ := proposal.Undoing(p); text == "fertig" && undo { // what was approved can be taken back (#41), where that undoes something (#852)
 			list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
 		}
 		list.WriteString("</div>")
@@ -191,7 +191,11 @@ func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposa
 	for _, w := range c.Warnings {
 		fmt.Fprintf(b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 	}
-	approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
+	accent := "go"
+	if c.Risky { // „Später“ is the safe default: „Freigeben“ does not read as one (#852)
+		accent = ""
+	}
+	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
 	// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
 	reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
 	later := "<a href=\"/\"><button>Später</button></a>"

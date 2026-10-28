@@ -292,7 +292,8 @@ func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange) {
 			}
 		}
 		if last != nil {
-			lc = LastChange{Proposal: last.ID, Summary: proposal.Card(last, st.Box.Domain).Summary, At: last.Decided.UTC().Format(time.RFC3339), Reversible: true}
+			c := proposal.Card(last, st.Box.Domain) // reversible: the card's own answer, and not once it was taken back (#852)
+			lc = LastChange{Proposal: last.ID, Summary: c.Summary, At: last.Decided.UTC().Format(time.RFC3339), Reversible: c.Undoable && last.Outcome != "rolled-back"}
 		}
 	}
 	return lb, lc
