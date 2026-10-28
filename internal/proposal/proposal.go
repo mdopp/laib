@@ -59,6 +59,11 @@ type Proposal struct {
 	Settled      time.Time `json:"settled,omitempty"`
 	Step         string    `json:"step,omitempty"`    // what the run that carries it does now, for the Inbox (#686)
 	Because      string    `json:"because,omitempty"` // why that run took it back, in the owner's words (#686)
+	// a red run with data (#853): laib's two proposals the card offers, the
+	// run's snapshot back („Sicherung zurückspielen“) and its change on
+	// again with the data as they are („Nach vorne reparieren“)
+	Restore int `json:"restore,omitempty"`
+	Forward int `json:"forward,omitempty"`
 }
 
 // Anchor is what a proposal answers (#544): the diag finding it should make
