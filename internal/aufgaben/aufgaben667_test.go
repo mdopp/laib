@@ -45,7 +45,7 @@ func TestTheListRoundTripsThroughTheStateRepo(t *testing.T) {
 	now := time.Date(2026, 10, 25, 9, 0, 0, 0, time.Local)
 	var got Aufgabe
 	err := Update(ctx, dir, "claude", func(list []Aufgabe) ([]Aufgabe, string, error) {
-		list, got = Add(list, Aufgabe{Titel: "Wächter von außen", Warum: "fällt die Box aus, erfährt es niemand", Erinnern: "2026-12-01", Befund: "watchdog"}, "claude", now)
+		list, got = Add(list, Aufgabe{Titel: "Wächter von außen", Warum: "fällt die Box aus, erfährt es niemand", Erinnern: "2026-12-01", FertigWenn: "watchdog"}, "claude", now)
 		return list, "aufgabe add #1", nil
 	})
 	if err != nil {
@@ -65,7 +65,7 @@ func TestTheListRoundTripsThroughTheStateRepo(t *testing.T) {
 		t.Fatalf("only aufgaben.yml is committed, the human's box.yml edit stays uncommitted: %q", s)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, File))
-	for _, want := range []string{"titel: Wächter von außen", "erinnern: \"2026-12-01\"", "befund: watchdog", "seit: \"2026-10-25\""} {
+	for _, want := range []string{"titel: Wächter von außen", "erinnern: \"2026-12-01\"", "fertig_wenn: watchdog", "seit: \"2026-10-25\""} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("aufgaben.yml lacks %q:\n%s", want, b)
 		}

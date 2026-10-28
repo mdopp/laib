@@ -13,15 +13,6 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// closable are the probes whose silence is a measurement (#667): each runs
-// on every full diag and says so when it cannot look (raid: laib-disk's
-// silence is an unmeasured raid finding). Any other probe's absence may
-// only mean it did not run — a service not installed, /boot not readable,
-// a DNS check not configured — so its task is checked off by a person.
-// status (#759): the template's own status file, read on every full diag;
-// a finding it marks unmeasured, or no file, closes nothing.
-var closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid", "status"}
-
 // cover marks the findings an open Box-Aufgabe covers: info, „zurückgestellt
 // → Box-Aufgabe #N“, until its erinnern day, then gelb with „erinnert“. A
 // red stays red: a deferral silences a nudge, never damage. An unmeasured
@@ -29,7 +20,7 @@ var closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid"
 func cover(fs []Finding, tasks []aufgaben.Aufgabe, today string) []Finding {
 	for i, f := range fs {
 		j := slices.IndexFunc(tasks, func(a aufgaben.Aufgabe) bool {
-			return a.Open() && !f.Unmeasured && aufgaben.Match(a.Befund, f.Probe, f.Service, f.Topic)
+			return a.Open() && !f.Unmeasured && aufgaben.Match(a.FertigWenn, f.Probe, f.Service, f.Topic)
 		})
 		if j < 0 {
 			continue
@@ -56,12 +47,12 @@ func cover(fs []Finding, tasks []aufgaben.Aufgabe, today string) []Finding {
 func gone(fs []Finding, tasks []aufgaben.Aufgabe) []int {
 	var out []int
 	for _, a := range tasks {
-		probe, _, _ := strings.Cut(a.Befund, " ")
-		if !a.Open() || !slices.Contains(closable, probe) {
+		probe, _, _ := strings.Cut(a.FertigWenn, " ")
+		if !a.Open() || !aufgaben.ClosesItself(a.FertigWenn) {
 			continue
 		}
 		if !slices.ContainsFunc(fs, func(f Finding) bool {
-			return f.Probe == probe && f.Unmeasured || aufgaben.Match(a.Befund, f.Probe, f.Service, f.Topic)
+			return f.Probe == probe && f.Unmeasured || aufgaben.Match(a.FertigWenn, f.Probe, f.Service, f.Topic)
 		}) {
 			out = append(out, a.ID)
 		}
@@ -88,7 +79,7 @@ func closeGone(env *cli.Env, st *state.State, fs []Finding) {
 	if err != nil || len(ids) == 0 {
 		return
 	}
-	const how = "von Laib erledigt: Befund weg"
+	const how = "Befund weg"
 	err = aufgaben.Update(context.Background(), st.Dir, "laib", func(list []aufgaben.Aufgabe) ([]aufgaben.Aufgabe, string, error) {
 		for _, id := range ids {
 			aufgaben.Done(list, id, "laib", how, time.Now())

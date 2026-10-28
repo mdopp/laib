@@ -15,7 +15,7 @@ import (
 // status that says it could not look, or a status file that is not there,
 // closes nothing.
 func TestAStatusFindingClosesItsTaskOnlyWhenMeasuredGone(t *testing.T) {
-	task := []aufgaben.Aufgabe{{ID: 4, Titel: "Voice PE flashen", Befund: "status wakeword"}}
+	task := []aufgaben.Aufgabe{{ID: 4, Titel: "Voice PE flashen", FertigWenn: "status wakeword"}}
 	there := []Finding{{Severity: "gelb", Probe: "status", Service: "stimme", Topic: "wakeword"}}
 	if got := cover(slices.Clone(there), task, "2026-10-26"); got[0].Aufgabe != 4 || got[0].Severity != "info" {
 		t.Fatalf("the task covers the device finding: %+v", got[0])

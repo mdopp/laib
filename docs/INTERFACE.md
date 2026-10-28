@@ -31,13 +31,17 @@ laib escalate <service> "<was ich weiß>"       context bundle + red journal lin
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
-laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"]
+laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT]
+            [--fertig-wenn "<probe> [<dienst|thema>]"] [--fuer admins|alle|person:<login>] [--weg /seite|gespraech]
             | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>
                                      the Box-Aufgaben (#667): the owner's to-dos that are box topics, not code, in the state repo's
                                      aufgaben.yml (docs/STATE.md). Bookkeeping, no proposal: each change is one commit of that file
                                      on main and one journal line (verb aufgabe). ops, claude, Haus and humans add; humans, claude and
-                                     Haus (for an admin, --von <user>) check off and defer. A befund defers that diag finding
-                                     until erinnern, and laib ticks the task off once diag measures it gone; list shows the open ones, --alle the done too, --faellig the due ones
+                                     Haus (for the logged-in person, --von <login>) check off and defer. A fertig_wenn (old name
+                                     --befund) defers that diag finding until erinnern, and laib ticks the task off once diag
+                                     measures it gone; list shows the open ones, --alle the done too, --faellig the due ones.
+                                     --fuer and --weg (#878): who it is for and its guided way; Haus and the Bote see a
+                                     person's own only for that person (--von)
 laib zuhause show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]
                                      the household's address, box.yml zuhause (#561): show prints the block only; set replaces
                                      the whole block as a box.yml proposal of class human (the owner approves, never the caller);
@@ -158,7 +162,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_calendar` | `action` (`subscribe`, `every`, `unsubscribe`, `list`), `person?`, `name?` (a-z 0-9 -), `kind?` (`google`, `abo`), `title?`, `every?` (`30m`, `12h`, `30d`: how often this calendar is fetched, #619; empty: Google every run, a public abo every 30 days), `stdin`: the ICS address (subscribe only; kept in secrets.age as KALENDER_ABOS, in no answer) → `{message, abos: [{person, name, kind, title, since, every?}]}`; the kalender template mirrors each into `<person>/google-<name>` or `<person>/abo-<name>` (#495) |
 | `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The haus hand calls it from the admins' form, by its verb and its path grant `zuhause` (#598); Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
 | `laib_scan` | `action` (`status`, `start`, `weiter`, `abschliessen`, `verwerfen`, `redo`, `suchen`, `pruefen`, `probe`, `einrichten`), `geraet?` (einrichten: a SANE device; the answer is `{proposal, class, message}`), `person?` (whom the closing message is for; empty: `notify.person`), `stapel?` (redo: `JJJJ-MM-TTThh-mm-ss`) → status: the service's status file as it is (templates/scan/README.md); otherwise `{message}`. Tier propose: the haus hand by its verbs, the Bote by its ceiling (#568) |
-| `laib_aufgabe` | `action` (`list`, `add`, `erledigt`, `zurueckstellen`); add: `titel`, `warum?`, `erinnern?` (`JJJJ-MM-TT`), `befund?` (`<probe> [<service or topic>]` from `laib_diag`, e.g. `raid`, `watchdog`, `backup offsite`); erledigt: `id`; zurueckstellen: `id`, `erinnern`; `von?` (Haus only: the admin it acts for, recorded as `haus:<user>`); list: `alle?`, `faellig?` (booleans). list → `{offen, faellig, aufgaben: [task]}`; the others → `{message, aufgabe: task}`; task = `{id, titel, warum?, seit, von, erinnern?, befund?, erledigt?: {am, von, wie?}}` (dates `JJJJ-MM-TT`). Tier propose; add for ops, claude, haus and humans, the rest for humans, claude and haus; Haus needs `aufgabe` in its verbs (#667) |
+| `laib_aufgabe` | `action` (`list`, `zeigen`, `add`, `erledigt`, `zurueckstellen`); add: `titel`, `warum?`, `erinnern?` (`JJJJ-MM-TT`), `fertig_wenn?` (`<probe> [<service or topic>]` from `laib_diag`, e.g. `raid`, `watchdog`, `backup offsite`; `befund?` is its old name), `fuer?` (`admins`, the default; `alle`; `person:<login>`), `weg?` (a Haus path such as `/stimme`, or `gespraech`); zeigen, erledigt: `id`; zurueckstellen: `id`, `erinnern`; `von?` (Haus and the Bote: the login of the person they act for; Haus's changes are recorded as `haus:<login>`); list: `alle?`, `faellig?` (booleans). list → `{offen, faellig, aufgaben: [task]}`; the others → `{message, aufgabe: task}`; task: see "Box-Aufgaben for Haus" below. Tier propose; add for ops, claude, haus and humans, erledigt and zurueckstellen for humans, claude and haus, list and zeigen for every hand with the verb; Haus needs `aufgabe` in its verbs (#667) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
@@ -249,6 +253,63 @@ the verb is in the skill vocabulary (`status diag logs inspect look read
 journal context inbox note escalate propose wish restart exec write`) and
 the hand's ceiling and verb list reach it. `laib skill enable|pause
 <name>` (humans only) writes `policy.yml skills` and commits.
+
+## Box-Aufgaben for Haus (#878, haus#188)
+
+Haus builds Mehr → „Einrichtung“, /aufgaben and the quiet line on Start
+from `laib_aufgabe`; the Box page keeps the admins' tasks.
+
+A task, as `list` and `zeigen` return it:
+
+```json
+{
+  "id": 7,
+  "titel": "Stimme aufnehmen",
+  "warum": "damit Joshua dich an der Stimme erkennt",
+  "seit": "2026-10-28",
+  "von": "haus:mdopp",
+  "fuer": "person:anna",
+  "weg": {"seite": "/stimme"},
+  "erinnern": "2026-11-15",
+  "fertig_wenn": "status stimme",
+  "erledigt": {"am": "2026-10-30", "von": "laib", "wie": "Befund weg"}
+}
+```
+
+- `fuer` is always there: `admins` (every task from before #878), `alle`,
+  or `person:<login>` (Authelia's `Remote-User`).
+- `weg` is missing, `{"seite": "<path>"}` (a Haus page that leads through
+  it), or `{"gespraech": true}` (Haus offers „Gemeinsam mit Joshua“ and
+  opens the Bote with „Aufgabe #7 mit dir erledigen“, below).
+- `fertig_wenn` is missing or the finding that closes the task by itself;
+  `erledigt` is missing while it is open. `erledigt.von` is `laib` when
+  diag closed it (`wie`: „Befund weg“), `haus:<login>` when Haus ticked
+  it off for someone.
+- `befund`, the key before #878, is no longer in the answer; `befund` is
+  still taken as an argument.
+
+**Who sees what.** Haus calls with `von`: the login of the person who is
+looking. The kernel answers with the tasks for `admins`, for `alle` and
+for `person:<von>`; another person's task is not in `list`, and `zeigen`,
+`erledigt` and `zurueckstellen` answer „Box-Aufgabe #N gibt es nicht“ for
+it. Without `von`, Haus gets the admins' and everyone's only. `offen` and
+`faellig` count what the caller sees. The kernel does not know Authelia's
+groups: Haus shows the `admins` ones to admins (the Box page), the
+`alle` and `person:` ones under Einrichtung and /aufgaben. The Bote's hand
+follows the same rule; a human, claude, ops and laib see every task.
+
+- Einrichtung: `list` with `von`, keep `fuer` `alle` or `person:<von>`.
+- /aufgaben: the same with `alle: true`, open and done.
+- Start: Einrichtung's list; laib_status's `aufgaben` and `aufgabenFaellig`
+  count only the tasks that are nobody's own.
+
+**The guided conversation.** For `{"gespraech": true}` Haus sends the Bote
+(Hermes' API server, as the Sprechen field does, with the person's system
+line) the message „Aufgabe #7 mit dir erledigen“. The Bote reads the task
+with `laib_aufgabe` `zeigen` (`id`, `von`: the person), leads step by step,
+checks each step with laib's read tools (`laib_diag`, `laib_status`), and
+proposes what changes the box; it never ticks the task off: `fertig_wenn`
+or the person does (templates/bote/README.md).
 
 ## Readiness: `/ready`
 
