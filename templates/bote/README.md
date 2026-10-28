@@ -236,6 +236,21 @@ list as every platform) plus the MCP servers. Hermes logs a warning at
 start that the API server is network-accessible. That is expected here:
 the port is off the LAN and needs the key.
 
+## A Box-Aufgabe with the Bote (#878)
+
+A Box-Aufgabe whose `weg` is `gespraech` (docs/INTERFACE.md, "Box-Aufgaben
+for Haus") is done together with the Bote: Haus's „Gemeinsam mit Joshua“
+sends „Aufgabe #N mit dir erledigen“ over the Sprechen field's API server.
+The persona engine takes the person to the top level (whatever tool's level
+they were on), with every tool, and adds `AUFGABE: N`; the plugin skips
+Home Assistant for it and tells the model to read the task with
+`laib_aufgabe` (`zeigen`, `id`, `von`: the person's login), say in one
+sentence what it is about, and lead step by step, checking each step with
+laib's read tools, proposing what changes the box and handing code work to
+the Werkstatt (`laib_wish`). The Bote's hand sees only that person's own
+tasks besides the admins' and everyone's, and it never ticks one off: Laib
+does when the finding is gone, or the person in Haus.
+
 ## Tools: only what answers, and a budget (#54)
 
 The hook probes every MCP URL at apply time (any HTTP answer counts, a

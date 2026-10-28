@@ -32,6 +32,8 @@ def answer(line):
         return "UNKNOWN COMMAND.\nVALID: LIST GAMES, PLAY <GAME>, HELP\n\nJOSHUA>"
     if line == "Ist das Licht in der Küche an?":
         return "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>"
+    if line == "Aufgabe #7 mit dir erledigen":
+        return "WEITER: -\nPROMPT: JOSHUA>\nAUFGABE: 7"
     if line == "Wer bist du?":
         return "WEITER: -\nPROMPT: OMA>\nFIGUR: Du bist Oma Erna, warm und geduldig."
     return "WEITER: -\nPROMPT: JOSHUA>"
@@ -85,6 +87,15 @@ class PersonaPlugin(Base):
         self.assertEqual(out, "```\n" + MENU + "\n```")
         self.assertIn("context", ctx)
         self.assertEqual(CALLS, [{"eingabe": "Menü", "sitzung": "+4917012345", "sprache": "de"}])
+
+    def test_a_task_conversation_tells_the_model_to_read_the_task_and_lead(self):
+        # #878: Haus's „Gemeinsam mit Joshua“; the model reads the task with laib and leads, HA is not asked
+        with mock.patch.object(self.p, "_ha") as ha:
+            ctx, out = self.turn("Aufgabe #7 mit dir erledigen", "Bei Box-Aufgabe #7 geht es um deine Stimme.", sender="haus:anna", platform="api_server")
+        ha.assert_not_called()
+        for want in ("Box-Aufgabe #7", "laib_aufgabe", "action zeigen, id 7", "Schritt für Schritt", "laib_diag", "Abhaken tust du sie nicht"):
+            self.assertIn(want, ctx["context"])
+        self.assertIn(out, (None, "Bei Box-Aufgabe #7 geht es um deine Stimme."))
 
     def test_help_reaches_the_person_as_plain_text(self):
         # #863: the engine's help is words for the person, no screen: no code block, the model's words never
