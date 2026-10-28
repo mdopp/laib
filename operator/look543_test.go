@@ -171,9 +171,10 @@ func TestRedIsNotTheLooksAndARefusedRepairIsSaidOnce(t *testing.T) {
 }
 
 // A session that failed is no reason to stay quiet: after a model that did
-// not answer (here the morning report's), the look asks it again every tick
-// instead of skipping, and the heartbeat stops until one answers — so
-// diag's "stumm" still says it, as before #543.
+// not answer (here the morning report's, which falls back to one without
+// the model, #858), the look asks it again every tick instead of skipping,
+// and the heartbeat stops until one answers — so diag's "stumm" still says
+// it, as before #543.
 func TestAFailedSessionIsNotSkippedNorABeat(t *testing.T) {
 	replies := map[string]string{"laib_diag": "[" + watchdog + "]"}
 	mcp, _ := fakeMCP(t, replies)
@@ -183,8 +184,8 @@ func TestAFailedSessionIsNotSkippedNorABeat(t *testing.T) {
 	op.Run(context.Background(), look, Trigger{Kind: "tick"})
 	op.LLM.URL = "http://127.0.0.1:1" // the model goes away
 	op.Looked.Store(0)
-	if _, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "report"}, ""), Trigger{Kind: "report"}); err == nil {
-		t.Fatal("the report without a model is an error")
+	if s, err := op.Run(context.Background(), skillFor(t, Trigger{Kind: "report"}, ""), Trigger{Kind: "report"}); err != nil || s.Outcome != "fallback" {
+		t.Fatalf("the report without a model falls back: %+v %v", s, err)
 	}
 	if s, err := op.Run(context.Background(), look, Trigger{Kind: "tick"}); err == nil || s.Outcome == "unchanged" {
 		t.Fatalf("after a failure, unchanged findings hid a model that does not answer: %+v", s)

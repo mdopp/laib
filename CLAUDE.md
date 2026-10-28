@@ -23,8 +23,8 @@ them.
    lease. Tests are not
    capped. At 95 % CI warns and opens the
    "Kern-Diät" issue; crossing a cap means raising it in the same PR, with
-   its reason and the owner's approval. Lines count as gofmt writes them:
-   squeezing code to fit is a review finding, not a fix. No gate until
+   its reason and the owner's approval. Lines count as gofmt writes them,
+   and CI fails on a file gofmt would change. No gate until
    something recurs. Three similar lines beat a premature abstraction. No
    feature flags for cases that cannot happen.
 
@@ -45,8 +45,10 @@ them.
 - **Conventional Commits**, paren-free subjects beyond `(scope)`. Scopes mirror
   the path: `feat(render)`, `fix(apply)`, `docs(adr)`, `feat(template)`.
 - **Releases via release-please only.** Never bump a version by hand.
-- **A renderer change ships with its golden file.** A PR that touches
-  `internal/render` and no `testdata/golden` fails review.
+- **A renderer change ships with its golden file.** `TestGolden`
+  (`internal/render/render_test.go`) renders every case under
+  `testdata/golden` and fails on a file that differs, is missing or is new;
+  it sees what those cases render, no more.
 - **Weigh a change against what worked before.** Rethinking is welcome, but
   the new solution must be easier to maintain or more pleasant for the family,
   and neither noticeably worse (owner, 2026-10-16, #246). Before replacing a
@@ -57,7 +59,8 @@ them.
   the family or an agent triggers answers at once, shows its progress and
   ends visibly where it began — done, an error with its reason and the
   next step, or waiting with a choice. A silent button, an endless spinner
-  or a raw error fails review; phone first.
+  or a raw error is a bug; phone first. #854 makes it a test over every
+  POST route, #855 a lint for raw text.
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
   check. Not the first time.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
@@ -65,6 +68,28 @@ them.
 - **Finish the work.** Done means merged, released, applied on the box and
   verified green. If the operator must decide something, ask with concrete
   options, as early as you know, then carry on.
+
+## The rules and the checks that hold them
+
+Nobody reviews a PR before it merges (#866): a rule is held by a check that
+runs in CI in seconds, or it is a guideline and says so. No rule here
+"fails review".
+
+| Rule | Check |
+|---|---|
+| Each program under its cap, no import across the boundaries | `scripts/loc.sh` |
+| Lines as gofmt writes them | `gofmt -l` in `ci.yml` |
+| A skill: at most 50, each `run.py` at most 200 lines (#839) | `scripts/loc.sh` |
+| A renderer change ships with its golden file | `TestGolden` |
+| The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
+| A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
+| Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
+| Every touch answers at once (#588) | #854, #855 |
+
+Guidelines, no check: issues first, Conventional Commits, releases via
+release-please, weighing a change against what worked before, regression ⇒
+gate, no secrets in the tree, finishing the work. Proof on the box (rule 2)
+is the box's, not CI's.
 
 ## Language
 
