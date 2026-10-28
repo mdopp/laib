@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.52.0](https://github.com/mdopp/laib/compare/v0.51.0...v0.52.0) (2026-10-28)
+
+
+### Features
+
+* **scan:** a stack can be „nur für mich“, filed for the person who scanned it ([edf355f](https://github.com/mdopp/laib/commit/edf355f3ed1d0dda1cffc0b2f14ecdd474a90e70))
+* **scan:** fuer on start, whom a scanned stack belongs to ([3cfb226](https://github.com/mdopp/laib/commit/3cfb226f7b2b66145df22ce935269bb25c36b7c1))
+* **scan:** fuer on start, whom a scanned stack belongs to ([4e590e0](https://github.com/mdopp/laib/commit/4e590e02d3f8095ece94ed7ab76377ec800fdeed))
+
+
+### Bug Fixes
+
+* **paperless:** dokumente may add documents, for a „nur für mich“ stack ([9767b0b](https://github.com/mdopp/laib/commit/9767b0bd4f147e3c9443fa50b417bae147964654))
+* **paperless:** dokumente may add documents, for a „nur für mich“ stack ([48131f1](https://github.com/mdopp/laib/commit/48131f14a03aa7ec73bcc9c4b429e9188524c641))
+* **release:** release-please reads its config, so the version lines bump ([edf355f](https://github.com/mdopp/laib/commit/edf355f3ed1d0dda1cffc0b2f14ecdd474a90e70))
+* **release:** release-please reads its config, so the version lines bump ([9aae238](https://github.com/mdopp/laib/commit/9aae238e7fdb3bb378fd91de8f0f6d135499a6bc))
+* **release:** release-please reads its config, so the version lines bump ([ce7739e](https://github.com/mdopp/laib/commit/ce7739ecb904862b616b4611b44544683342ac50))
+
 ## [0.51.0](https://github.com/mdopp/laib/compare/v0.50.0...v0.51.0) (2026-10-28)
 
 
