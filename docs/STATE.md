@@ -644,14 +644,38 @@ aufgaben:
     warum: fällt die Box aus, erfährt es niemand
     seit: "2026-10-25"
     von: claude
+    fuer: admins                  # who it is for: admins, alle or person:<login> (#878)
     erinnern: "2026-12-01"        # from this day diag reminds again
-    befund: watchdog              # the diag finding it covers: probe [service|topic]
+    fertig_wenn: watchdog         # the diag finding it covers: probe [service|topic]
+  - id: 3
+    titel: Stimme aufnehmen
+    seit: "2026-10-28"
+    von: haus:mdopp
+    fuer: person:anna
+    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878)
   - id: 1
     titel: TOTP für mdopp prüfen
     seit: "2026-10-25"
     von: human:core
+    fuer: admins
     erledigt: {am: "2026-10-26", von: haus:mdopp}
 ```
+
+- **For whom (#878).** `fuer` is `admins` (also when missing: every task
+  from before #878), `alle`, or `person:<login>`, the Authelia/LLDAP login,
+  which is also the person's name in box.yml `people`. A person's task is
+  theirs: Haus and the Bote act for one person (`--von`) and see the
+  admins', everyone's and that person's own; another person's task is to
+  them as if it were not there (list, zeigen, erledigt, zurueckstellen).
+  The kernel enforces this by the caller's hand, not Haus. A human, claude,
+  ops and laib see the whole list; any other hand none of the personal ones.
+- **The guided way (#878).** `weg` is a Haus page that leads through it
+  (`seite`, a path) or a conversation with the Bote (`gespraech: true`):
+  Haus offers „Gemeinsam mit Joshua“, which opens a conversation with
+  „Aufgabe #N mit dir erledigen“ (templates/bote/README.md).
+- An aufgaben.yml from before loads unchanged: a missing `fuer` is
+  `admins`, the old key `befund` is `fertig_wenn`; the next change writes
+  both under their new names.
 
 - **Why the state repo, committed directly.** The list is the box's, so it
   is backed up and versioned with it. A change is bookkeeping, not desired
@@ -665,16 +689,23 @@ aufgaben:
   orders (ADR 0027), never the state repo, and diag, which is the kernel,
   reads the list on every run. A door program that only proposes could not
   tick a task off without an approval.
-- **diag.** A finding that an open task's `befund` covers is shown at
+- **diag.** A finding that an open task's `fertig_wenn` covers is shown at
   severity info with „zurückgestellt → Box-Aufgabe #N“ and carries
   `aufgabe: N`; from its `erinnern` day it is gelb with „erinnert“. A red
   stays red: a deferral silences a nudge, never damage. A finding that could
   not be measured (`unmeasured`, e.g. laib-disk silent) is never covered.
   When a full diag measures the finding gone, laib checks the task off
-  („von Laib erledigt: Befund weg“), but only for the probes whose absence
-  is a measurement: watchdog, backup, recovery, restore-test, raid. Every
-  other task is ticked off by a person.
-- `befund` matches a finding by its probe and its service or topic
-  (`backup offsite`); a befund without one covers only findings without one.
-- Readiness carries `aufgaben` and `aufgabenFaellig`; the morning report
-  names the due ones.
+  (`erledigt: {von: laib, wie: "Befund weg"}`, one journal line `aufgabe`
+  „erledigt #N: Befund weg“ as laib), whoever the task is for, but only for
+  the probes whose absence is a measurement: watchdog, backup, recovery,
+  restore-test, raid, status (`aufgaben.Closable`). Every other task is
+  ticked off by a person; `laib aufgabe add` says so when its fertig_wenn
+  is on another probe. Every full diag is that pass (the Operator's look
+  skills and laib-notify run one on their rounds); there is no separate
+  nightly job.
+- `fertig_wenn` matches a finding by its probe and its service or topic
+  (`backup offsite`); one without either covers only findings without one.
+- Readiness carries `aufgaben` and `aufgabenFaellig`, counting the tasks
+  that are nobody's own (the admins' and everyone's); the morning report
+  names the due ones. A person's own count is laib_aufgabe's `offen` for
+  them.

@@ -137,7 +137,7 @@ func TestATasksBefundIsSetAfterwards(t *testing.T) {
 		t.Fatalf("befund: %d", code)
 	}
 	b, _ := os.ReadFile(filepath.Join(env.Paths.State, "aufgaben.yml"))
-	if !strings.Contains(string(b), "befund: status wakeword") {
+	if !strings.Contains(string(b), "fertig_wenn: status wakeword") {
 		t.Fatalf("aufgaben.yml: %s", b)
 	}
 }

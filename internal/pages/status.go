@@ -67,7 +67,7 @@ type Readiness struct {
 	Pending   []string `json:"pending,omitempty"`  // services whose activation an apply still owes (#39)
 	Version   string   `json:"version"`            // of the running laib: the update path checks it (#37)
 	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
-	Aufgaben  int      `json:"aufgaben"`           // open Box-Aufgaben (#667), the owner's to-dos on the box
+	Aufgaben  int      `json:"aufgaben"`           // open Box-Aufgaben (#667) that are nobody's own (#878): the admins' and everyone's
 	Faellig   int      `json:"aufgabenFaellig"`    // of them, the ones whose reminder day has come
 	// Problems: what is red beyond one service (disk, backup, firewall,
 	// and the last whole diag's slow probes), one line each (#856)
@@ -122,6 +122,7 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 	r.Firewall = apply.FirewallState(ctx, env.Paths)
 	r.Watchdog = watchdogState(env, st)
 	if list, err := aufgaben.Load(env.Paths.State); err == nil {
+		list = slices.DeleteFunc(list, func(a aufgaben.Aufgabe) bool { return !aufgaben.Sees(a, false, "") }) // a person's own count for them, in laib_aufgabe
 		r.Aufgaben, r.Faellig = aufgaben.Counts(list, now.Format(time.DateOnly))
 	}
 	if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil {

@@ -7,6 +7,7 @@
 package aufgaben
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -29,14 +30,79 @@ const File = "aufgaben.yml"
 
 // Aufgabe is one task. Dates are the box's local days, YYYY-MM-DD.
 type Aufgabe struct {
-	ID       int       `yaml:"id" json:"id"`
-	Titel    string    `yaml:"titel" json:"titel"`
-	Warum    string    `yaml:"warum,omitempty" json:"warum,omitempty"`
-	Seit     string    `yaml:"seit" json:"seit"`
-	Von      string    `yaml:"von" json:"von"`                               // who added it
-	Erinnern string    `yaml:"erinnern,omitempty" json:"erinnern,omitempty"` // from this day on diag reminds again
-	Befund   string    `yaml:"befund,omitempty" json:"befund,omitempty"`     // the diag finding it covers: "<probe> [<service|topic>]"
-	Erledigt *Erledigt `yaml:"erledigt,omitempty" json:"erledigt,omitempty"`
+	ID       int    `yaml:"id" json:"id"`
+	Titel    string `yaml:"titel" json:"titel"`
+	Warum    string `yaml:"warum,omitempty" json:"warum,omitempty"`
+	Seit     string `yaml:"seit" json:"seit"`
+	Von      string `yaml:"von" json:"von"`                               // who added it
+	Fuer     string `yaml:"fuer" json:"fuer"`                             // who it is for (#878): admins, alle or person:<uid>
+	Weg      *Weg   `yaml:"weg,omitempty" json:"weg,omitempty"`           // the guided way (#878)
+	Erinnern string `yaml:"erinnern,omitempty" json:"erinnern,omitempty"` // from this day on diag reminds again
+	// FertigWenn is the diag finding it covers and whose absence closes it
+	// (#667, #878): "<probe> [<service|topic>]"; Befund is its old key.
+	FertigWenn string    `yaml:"fertig_wenn,omitempty" json:"fertig_wenn,omitempty"`
+	Befund     string    `yaml:"befund,omitempty" json:"-"`
+	Erledigt   *Erledigt `yaml:"erledigt,omitempty" json:"erledigt,omitempty"`
+}
+
+// Weg is how a task is done (#878): a Haus page that leads through it, or
+// a conversation with the Bote; one of the two.
+type Weg struct {
+	Seite     string `yaml:"seite,omitempty" json:"seite,omitempty"`
+	Gespraech bool   `yaml:"gespraech,omitempty" json:"gespraech,omitempty"`
+}
+
+// Who a task is for (#878); a person's is "person:<uid>".
+const (
+	Admins = "admins"
+	Alle   = "alle"
+)
+
+var (
+	fuerRe  = regexp.MustCompile(`^person:[a-z0-9][a-z0-9._-]{0,63}$`)
+	seiteRe = regexp.MustCompile(`^/[a-z0-9][a-z0-9/_-]{0,63}$`)
+)
+
+// Fuer checks who a task is for.
+func Fuer(s string) error {
+	if s != Admins && s != Alle && !fuerRe.MatchString(s) {
+		return fmt.Errorf("%q: für wen die Aufgabe ist, ist admins, alle oder person:<login>, z. B. person:anna", s)
+	}
+	return nil
+}
+
+// ParseWeg reads a weg: a Haus page's path, or gespraech.
+func ParseWeg(s string) (*Weg, error) {
+	switch {
+	case s == "gespraech":
+		return &Weg{Gespraech: true}, nil
+	case seiteRe.MatchString(s):
+		return &Weg{Seite: s}, nil
+	}
+	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Haus (/stimme) oder gespraech (gemeinsam mit dem Boten)", s)
+}
+
+// Sees: may a caller see a task? whole: its hand sees the whole list;
+// otherwise it acts for person (Haus, the Bote; "" for nobody) and sees
+// the admins' and everyone's, and of the personal ones only that person's.
+func Sees(a Aufgabe, whole bool, person string) bool {
+	uid, own := strings.CutPrefix(cmp.Or(a.Fuer, Admins), "person:")
+	return whole || !own || person != "" && uid == person
+}
+
+// Closable are the probes whose silence is a measurement (#667): each runs
+// on every full diag and says so when it cannot look (raid: laib-disk's
+// silence is an unmeasured raid finding). Any other probe's absence may
+// only mean it did not run — a service not installed, /boot not readable,
+// a DNS check not configured — so its task is checked off by a person.
+// status (#759): the template's own status file, read on every full diag;
+// a finding it marks unmeasured, or no file, closes nothing.
+var Closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid", "status"}
+
+// ClosesItself: does diag check a task with this fertig_wenn off?
+func ClosesItself(fertigWenn string) bool {
+	probe, _, _ := strings.Cut(fertigWenn, " ")
+	return slices.Contains(Closable, probe)
 }
 
 // Erledigt: when and by whom; Wie says how, when it was not a person's tick.
@@ -101,6 +167,10 @@ func Load(stateDir string) ([]Aufgabe, error) {
 	if err := yaml.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("%s: %v", File, err)
 	}
+	for i := range f.Aufgaben { // #878: a list from before
+		a := &f.Aufgaben[i]
+		a.Fuer, a.FertigWenn, a.Befund = cmp.Or(a.Fuer, Admins), cmp.Or(a.FertigWenn, a.Befund), ""
+	}
 	return f.Aufgaben, nil
 }
 
@@ -137,7 +207,7 @@ func Add(list []Aufgabe, a Aufgabe, by string, now time.Time) ([]Aufgabe, Aufgab
 	for _, x := range list {
 		a.ID = max(a.ID, x.ID+1)
 	}
-	a.Seit, a.Von, a.Erledigt = now.Format(time.DateOnly), by, nil
+	a.Seit, a.Von, a.Fuer, a.Erledigt = now.Format(time.DateOnly), by, cmp.Or(a.Fuer, Admins), nil
 	return append(list, a), a
 }
 
@@ -175,11 +245,11 @@ func Defer(list []Aufgabe, id int, day string) error {
 	return nil
 }
 
-// Link sets an open task's befund (#759).
+// Link sets an open task's fertig_wenn (#759).
 func Link(list []Aufgabe, id int, befund string) error {
 	a, err := find(list, id)
 	if err == nil {
-		a.Befund = befund
+		a.FertigWenn = befund
 	}
 	return err
 }
