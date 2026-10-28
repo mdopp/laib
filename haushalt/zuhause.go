@@ -77,8 +77,8 @@ func cmdZuhause(ctx context.Context, env *Env, args []string) int {
 			lines = append(lines, k+": "+v)
 		}
 	}
-	return env.proposeAt(ctx, "box.yml:zuhause="+strings.Join(lines, "\n"), "Die Adresse des Haushalts ändern (box.yml zuhause)",
-		"Vorschlag #%d: die neue Adresse gilt nach der Freigabe durch einen Menschen.")
+	return env.propose(ctx, "", "Die Adresse des Haushalts ändern (box.yml zuhause)",
+		"Vorschlag #%d: die neue Adresse gilt nach der Freigabe durch einen Menschen.", "--path", "box.yml:zuhause="+strings.Join(lines, "\n"))
 }
 
 // cmdPersonSignal: `laib person signal <user> <+49…>` (#596, #677), a
@@ -95,26 +95,26 @@ func cmdPersonSignal(ctx context.Context, env *Env, args []string) int {
 	if strings.ContainsAny(number, "\" \n") {
 		return env.fail(fmt.Errorf("%q ist keine Signal-Nummer (+49…)", number))
 	}
-	return env.proposeAt(ctx, "box.yml:people."+user+".signal="+number, "Die Signal-Nummer von "+user+" eintragen (box.yml people)",
-		"Vorschlag #%d: nach der Freigabe durch einen Menschen darf "+user+" dem Boten auf Signal schreiben.")
+	return env.propose(ctx, "", "Die Signal-Nummer von "+user+" eintragen (box.yml people)",
+		"Vorschlag #%d: nach der Freigabe durch einen Menschen darf "+user+" dem Boten auf Signal schreiben.", "--path", "box.yml:people."+user+".signal="+number)
 }
 
-// proposeAt files `laib propose --path <at> "<reason>"` as the haushalt
-// hand under the verb's ceiling and answers {proposal, message}. The
+// propose files `laib propose <edit…> "<reason>"` as the haushalt hand
+// under the verb's ceiling and answers {proposal, class, message}. The
 // reason reaches the inbox, the journal and the owner's chat: no address,
 // no number.
-func (e *Env) proposeAt(ctx context.Context, at, reason, msg string) int {
+func (e *Env) propose(ctx context.Context, service, reason, msg string, edit ...string) int {
 	if e.Laib == nil {
 		return e.fail(errors.New("laib-haushalt has no way back to laib (LAIB_MCP_URL, LAIB_TOKEN)"))
 	}
-	id, _, err := e.Laib.Propose(ctx, e.Ceiling, "--path", at, reason)
+	id, class, err := e.Laib.Propose(ctx, e.Ceiling, append(edit, reason)...)
 	if err != nil {
 		return e.fail(err)
 	}
-	e.journal("", reason, fmt.Sprintf("#%d wartet auf Freigabe", id))
+	e.journal(service, reason, fmt.Sprintf("#%d (%s) wartet auf Freigabe", id, class))
 	msg = fmt.Sprintf(msg, id)
 	if e.JSON {
-		return e.emit(map[string]any{"proposal": id, "message": msg})
+		return e.emit(map[string]any{"proposal": id, "class": class, "message": msg})
 	}
 	fmt.Fprintln(e.Out, msg)
 	return exitOK

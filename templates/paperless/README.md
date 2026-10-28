@@ -155,7 +155,8 @@ README). Paperless' side, made by post-deploy (`paperless-mail.py setup`)
 on every apply, each step changing only what differs:
 
 - **The user `dokumente`**, no administrator, no staff, in no group, with
-  exactly these rights: view and change documents, view and add notes and
+  exactly these rights: view, add and change documents (add: a „nur für
+  mich“ stack is uploaded through the API and handed to its person), view and add notes and
   tags, view correspondents, document types, custom fields and users (so a
   household person is never taken for a sender). Its password is the box's
   `PAPERLESS_DOKUMENTE_PASSWORD`; a different one is set back.

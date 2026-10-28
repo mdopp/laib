@@ -25,7 +25,7 @@ var (
 )
 
 // Scan: `laib scan [status] | start | weiter | abschliessen | verwerfen |
-// redo --stapel <zeit> | suchen | pruefen | probe` [--person p] (#568, #571).
+// redo --stapel <zeit> | suchen | pruefen | probe` [--person p] [--fuer person|haushalt] (#568, #571).
 // Status is the scan service's status file as it wrote it; every other
 // action is an order file in its data folder, ${DATA_DIR}/scan/auftrag/,
 // which the service picks up within seconds. `einrichten [--geraet d]` is a
@@ -41,8 +41,9 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 	fs.SetOutput(io.Discard)
 	person := fs.String("person", "", "")
 	stapel := fs.String("stapel", "", "")
+	fuer := fs.String("fuer", "", "") // start: person or haushalt (owner 2026-10-28, haus#191); written as given
 	geraet := fs.String("geraet", "", "")
-	usage := errors.New("usage: laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> | suchen | pruefen | probe [--person p] | einrichten [--geraet <sane-gerät>]")
+	usage := errors.New("usage: laib scan [status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> | suchen | pruefen | probe [--person p] [--fuer person|haushalt] | einrichten [--geraet <sane-gerät>]")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 || (act != "status" && !slices.Contains(scanActions, act)) {
 		return env.fail(usage)
 	}
@@ -64,9 +65,13 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 		return env.fail(fmt.Errorf("redo braucht --stapel <zeit> (JJJJ-MM-TTThh-mm-ss): %w", usage))
 	case *person != "" && !scanPerson.MatchString(*person):
 		return env.fail(fmt.Errorf("--person %q: ein Name aus box.yml people, klein", *person))
+	case *fuer != "" && (act != "start" || (*fuer != "person" && *fuer != "haushalt")):
+		return env.fail(fmt.Errorf("--fuer %q: nur bei start, person oder haushalt", *fuer))
+	case *fuer == "person" && *person == "":
+		return env.refused("„Nur für mich“ braucht die Person: für wen der Stapel ist, fehlt.")
 	}
 	dir := svc.Orders
-	order, _ := json.Marshal(map[string]string{"aktion": act, "stapel": *stapel, "person": *person, "von": env.Actor, "at": time.Now().UTC().Format(time.RFC3339)})
+	order, _ := json.Marshal(map[string]string{"aktion": act, "stapel": *stapel, "person": *person, "fuer": *fuer, "von": env.Actor, "at": time.Now().UTC().Format(time.RFC3339)})
 	name := fmt.Sprintf("%d", time.Now().UnixNano())
 	// written whole, then renamed: the service never reads half an order
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -97,13 +102,5 @@ func scanEinrichten(ctx context.Context, env *Env, svc *ScanService, geraet stri
 	} else {
 		edit = []string{"--set", "services/" + svc.Name + "/values.yml:SCANNER=" + geraet}
 	}
-	if env.Laib == nil {
-		return env.fail(errors.New("laib-haushalt has no way back to laib (LAIB_MCP_URL, LAIB_TOKEN)"))
-	}
-	id, class, err := env.Laib.Propose(ctx, env.Ceiling, append(edit, reason)...)
-	if err != nil {
-		return env.fail(err)
-	}
-	env.journal("scan", reason, fmt.Sprintf("#%d (%s)", id, class))
-	return env.emit(map[string]any{"proposal": id, "class": class, "message": fmt.Sprintf("Vorschlag #%d liegt im Eingang: %s.", id, reason)})
+	return env.propose(ctx, "scan", reason, "Vorschlag #%d liegt im Eingang: "+reason+".", edit...)
 }
