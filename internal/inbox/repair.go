@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
@@ -66,18 +65,16 @@ func RunRepairs(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 			continue
 		}
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "info", Detail: fmt.Sprintf("#%d von %s: %s", p.ID, p.Actor, last)})
-		// approved on the page like at the shell: after the work before it (#753, env.Wait)
-		for until := time.Now().Add(env.Wait); apply.LockHolder(env.Paths) != "" && time.Now().Before(until); {
-			time.Sleep(time.Second)
-		}
+		apply.AwaitLock(env) // approved on the page like at the shell: after the work before it (#753, env.Wait)
 		var errs strings.Builder
 		run := *env
 		run.ErrOut = io.MultiWriter(env.Errw(), &errs)
 		if c := RunVerb(ctx, &run, argv); c != cli.ExitOK { // what failed, and why, in the journal and on the card (#753)
 			lines := strings.Split(strings.TrimSpace(errs.String()), "\n")
-			p.Because, code = "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", c)), c
+			raw := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("Code %d", c))
+			p.Because, code = "fehlgeschlagen: "+proposal.Plain(raw), c // the words on the card, the raw line in the journal (#855)
 			proposal.Save(cli.InboxDir(env), p)
-			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "red", Detail: fmt.Sprintf("#%d: %s %s", p.ID, last, p.Because)})
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "red", Detail: fmt.Sprintf("#%d: %s fehlgeschlagen: %s", p.ID, last, raw)})
 		}
 	}
 	return code

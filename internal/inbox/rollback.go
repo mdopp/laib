@@ -30,10 +30,7 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
 		return cli.ExitOK
 	}
-	// a shell approve waits for the run before it (env.Wait), which may carry this one too
-	for until := time.Now().Add(env.Wait); apply.LockHolder(env.Paths) != "" && time.Now().Before(until); {
-		time.Sleep(time.Second)
-	}
+	apply.AwaitLock(env) // a shell approve waits for the run before it (env.Wait), which may carry this one too
 	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
 		return cli.ExitOK
 	}
@@ -150,8 +147,9 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 		arg = args[0]
 	}
 	if strings.HasPrefix(arg, "-") {
-		return env.Fail(fmt.Errorf("%q is not a commit", arg))
+		return env.Fail(fmt.Errorf("%q ist kein Commit", arg))
 	}
+	apply.AwaitLock(env) // behind the work before it, like an approve (#854)
 	unlock, code := apply.TakeLock(env, st, "rollback")
 	if code != cli.ExitOK {
 		return code
@@ -160,7 +158,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 	if strings.HasPrefix(arg, "#") {
 		id, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
 		if err != nil {
-			return env.Fail(fmt.Errorf("%q is not a proposal", arg))
+			return env.Fail(fmt.Errorf("%q ist keine Vorschlagsnummer", arg))
 		}
 		subject, err := RevertProposal(ctx, env, st, id, "")
 		if err != nil {
@@ -174,7 +172,7 @@ func Rollback(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	sha, err := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
 	if err != nil || strings.TrimSpace(sha) == "" {
-		return env.Fail(fmt.Errorf("unknown commit %q", arg))
+		return env.Fail(fmt.Errorf("Commit %q gibt es nicht", arg))
 	}
 	sha = strings.TrimSpace(sha)
 	subject, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "log", "-1", "--format=%h %s", "--end-of-options", sha)
@@ -206,24 +204,24 @@ func RevertProposal(ctx context.Context, env *cli.Env, st *state.State, id int, 
 	}
 	merge, err := g("log", "--format=%H", "--grep=^approve #"+strconv.Itoa(id)+" by ", "-n", "1", "main")
 	if err != nil || strings.TrimSpace(merge) == "" {
-		return "", fmt.Errorf("no approve of #%d in the state's history", id)
+		return "", fmt.Errorf("keine Freigabe von #%d in der Geschichte des States: nichts zurückzunehmen", id)
 	}
 	merge = strings.TrimSpace(merge)
 	before := st.ServiceNames()
 	if out, err := g("revert", "--no-commit", "-m", "1", merge); err != nil {
 		g("revert", "--abort")
-		return "", fmt.Errorf("revert of #%d: %s", id, out)
+		return "", fmt.Errorf("#%d lässt sich nicht zurücknehmen, git revert sagt: %s", id, out)
 	}
 	// secrets.age stays what it is: the services still there keep the
 	// secrets their data was made with
 	g("checkout", "HEAD", "--", "secrets.age")
 	if out, err := g("commit", "-q", "-m", fmt.Sprintf("rollback #%d", id)); err != nil {
 		g("revert", "--abort")
-		return "", fmt.Errorf("rollback commit: %s", out)
+		return "", fmt.Errorf("Rücknahme nicht gespeichert, git commit sagt: %s", out)
 	}
 	after, err := cli.LoadState(env)
 	if err != nil {
-		return "", fmt.Errorf("the state without #%d does not load: %w", id, err)
+		return "", fmt.Errorf("der State ohne #%d lädt nicht: %w", id, err)
 	}
 	gone := map[string]bool{}
 	for _, n := range before {

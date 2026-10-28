@@ -55,7 +55,7 @@ func fwBox(t *testing.T, rendered bool, loaded bool) (*cliEnv, *state.State, *[]
 func TestReadinessIsRestrictedWhenTheFirewallTableIsMissing(t *testing.T) {
 	env, st, _ := fwBox(t, true, false)
 	r, _ := pages.CollectStatus(context.Background(), env, st)
-	if r.State != "eingeschränkt" || !strings.Contains(r.Lock, "firewall") || r.Firewall != "fehlt" {
+	if r.State != "eingeschränkt" || !strings.Contains(r.Lock, "Firewall") || r.Firewall != "fehlt" {
 		t.Fatalf("a rendered ruleset that is not in the kernel must restrict readiness: %+v", r)
 	}
 	env, st, _ = fwBox(t, true, true)

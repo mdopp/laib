@@ -115,7 +115,7 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 		r.Aufgaben, r.Faellig = aufgaben.Counts(list, time.Now().Format(time.DateOnly))
 	}
 	if r.Firewall == "fehlt" && r.Lock == "" {
-		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
+		r.State, r.Lock = "eingeschränkt", "Die Firewall der Box ist nicht geladen; Laib lädt sie beim nächsten Aufräumen. Steht das in zehn Minuten noch hier, sieh im Journal nach." // #855: the command is converge's
 	}
 	if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil {
 		if p, err := plan.Compute(ctx, st, sec, env.Paths, ""); err == nil {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -91,7 +92,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	if st, err := cli.LoadState(env); err == nil {
 		r, _ := CollectStatus(ctx, env, st)
 		if r.Red > 0 || r.Drift > 0 {
-			BootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
+			BootUnclean = fmt.Sprintf("Nach dem Start ist die Box nicht ganz wie eingestellt: %d Dienste rot, %d Dateien weichen ab. Laib gleicht das beim nächsten Aufräumen an; sieh auf der Status-Seite nach.", r.Red, r.Drift)
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: BootUnclean})
 		} else {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
@@ -116,7 +117,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"state": "eingeschränkt", "lock": "state: " + err.Error()})
+			json.NewEncoder(w).Encode(map[string]string{"state": "eingeschränkt", "lock": proposal.NotReadable})
 			return
 		}
 		rd, _ := CollectStatus(r.Context(), env, st)
@@ -129,7 +130,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 		}
 		st, err := cli.LoadState(env)
 		if err != nil {
-			page(w, "Status", "<p class=rot>State nicht lesbar: "+html.EscapeString(err.Error())+"</p>")
+			page(w, "Status", failure(proposal.NotReadable, err.Error()))
 			return
 		}
 		rd, rows := CollectStatus(r.Context(), env, st)
@@ -148,7 +149,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 	mux.HandleFunc("GET /stand", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			http.Error(w, proposal.NotReadable, http.StatusServiceUnavailable)
 			return
 		}
 		_, rows := CollectStatus(r.Context(), env, st)
@@ -169,12 +170,13 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			http.Error(w, proposal.NotReadable, http.StatusServiceUnavailable)
 			return
 		}
 		svc, ok := st.Services[r.PathValue("service")]
 		if !ok || !diag.Refresh(r.Context(), svc) {
-			http.Error(w, "kein Check für diesen Dienst", http.StatusNotFound)
+			w.WriteHeader(http.StatusNotFound)
+			page(w, "Status", "<p class=rot>Für diesen Dienst gibt es keine Prüfung. <a href=/>Zurück zur Status-Seite</a></p>")
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -184,7 +186,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 		var b strings.Builder
 		b.WriteString("<h1>Journal · 7 Tage</h1>" + filter)
 		if err != nil {
-			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
+			b.WriteString(failure("Das Journal lässt sich gerade nicht ganz lesen. Lade die Seite in einer Minute noch einmal.", err.Error()))
 		}
 		b.WriteString(journalBody(es))
 		page(w, "Journal", b.String())
@@ -215,8 +217,33 @@ func checks(ctx context.Context, st *state.State, refresh bool) map[string]bool 
 // marked data-run, it fetches <path>/stand every 3 s and swaps in the
 // answer's top elements by id, never one holding the focus or a
 // selection (that one comes next time), nothing else; it stops once
-// nothing runs or the guard says no. Without JS, the link.
-const live = `<noscript><p><a href="">aktualisieren</a></p></noscript><script>(()=>{const t=()=>setTimeout(async()=>{try{const r=await fetch(location.pathname.replace(/\/$/,"")+"/stand",{cache:"no-store"});if(!r.ok)return;const d=new DOMParser().parseFromString(await r.text(),"text/html"),g=getSelection();let run=d.querySelector("[data-run]");d.body.querySelectorAll(":scope>[id]").forEach(n=>{const o=document.getElementById(n.id);if(!o)return;if(o.contains(document.activeElement)||!g.isCollapsed&&g.getRangeAt(0).intersectsNode(o))run=1;else o.replaceWith(n)});document.querySelector(".filter")?.dispatchEvent(new Event("input"));if(!run)return}catch(e){}t()},3000);t()})()</script>`
+// nothing runs. It never stops silently (#854): a non-OK answer, five
+// failed polls in a row or a wait past liveLimit say so under the nav,
+// with the time of the last state. Without JS, the link.
+const live = `<noscript><p><a href="">aktualisieren</a></p></noscript><script>(()=>{let n=0,s=new Date();const a=Date.now(),h=()=>s.toTimeString().slice(0,5),say=m=>document.querySelector("nav").insertAdjacentHTML("afterend","<p class=rot>"+m+"</p>"),off=()=>say("Keine Verbindung zur Box – Stand von "+h()+". Lade die Seite neu, sobald die Box wieder erreichbar ist."),t=()=>setTimeout(async()=>{if(Date.now()-a>` + liveLimit + `)return say("Das dauert länger als gedacht – Stand von "+h()+". Lade die Seite neu oder sieh im Journal nach.");try{const r=await fetch(location.pathname.replace(/\/$/,"")+"/stand",{cache:"no-store"});if(!r.ok)return off();const d=new DOMParser().parseFromString(await r.text(),"text/html"),g=getSelection();let run=d.querySelector("[data-run]");d.body.querySelectorAll(":scope>[id]").forEach(n=>{const o=document.getElementById(n.id);if(!o)return;if(o.contains(document.activeElement)||!g.isCollapsed&&g.getRangeAt(0).intersectsNode(o))run=1;else o.replaceWith(n)});document.querySelector(".filter")?.dispatchEvent(new Event("input"));s=new Date();n=0;if(!run)return}catch(e){if(++n>4)return off()}t()},3000);t()})()</script>`
+
+// liveLimit is how long the live script waits, in ms: 20 minutes, what
+// frist tells the person.
+const liveLimit = "1200000"
+
+// frist is the limit a wait states (#854): how long it usually takes, and
+// that the page stops waiting after liveLimit and says so.
+func frist(usually string) string {
+	return "<small class=frist>" + usually + " Du musst nichts tun, die Seite aktualisiert sich; nach 20 Minuten hört sie auf zu warten und sagt es dir.</small>"
+}
+
+// failure is a red line in words with the raw text under Details (#855).
+func failure(say, raw string) string {
+	return "<p class=rot>" + html.EscapeString(say) + "</p>" + details(raw)
+}
+
+// details is the raw text, for the admin, behind a tap (#855).
+func details(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	return "<details><summary>Details</summary><pre>" + html.EscapeString(raw) + "</pre></details>"
+}
 
 // fragment answers the live script: the blocks alone, never cached.
 func fragment(w http.ResponseWriter, body string) {
@@ -244,11 +271,11 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		id, decision := r.PathValue("id"), r.PathValue("decision")
 		n, err := strconv.Atoi(id)
 		if err != nil {
-			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(id)+" ist keine Nummer</p><p><a href=/inbox>Inbox</a></p>")
+			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: „"+html.EscapeString(id)+"“ ist keine Nummer eines Vorschlags. Zurück zur <a href=/inbox>Inbox</a>.</p>")
 			return
 		}
 		if p, err := proposal.Get(cli.InboxDir(env), n); err != nil {
-			page(w, "Inbox", "<p class=rot>Entscheidung fehlgeschlagen: "+html.EscapeString(err.Error())+"</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>")
+			page(w, "Inbox", failure(fmt.Sprintf("Entscheidung fehlgeschlagen: Vorschlag #%d gibt es nicht (mehr). Lade die Inbox neu.", n), err.Error())+"<p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>")
 			return
 		} else if decision != "rollback" && p.Status != "open" {
 			page(w, "Inbox", fmt.Sprintf("<p>#%d ist schon %s, von %s, um %s.</p><p><a href=/inbox>Inbox</a> · <a href=/journal>Journal</a></p>",
@@ -259,6 +286,7 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		if why := strings.TrimSpace(r.FormValue("grund")); why != "" && decision == "reject" {
 			argv = append(argv, why)
 		}
+		setFailed(cli.InboxDir(env), n, "", "")
 		setDecision(n, cmp.Or(map[string]string{"approve": "wird freigegeben …", "reject": "wird abgelehnt …"}[decision], "wird zurückgenommen …"))
 		go decide(env, webActor(r), n, decision, argv, 15*time.Minute) // like a human at the shell (#753)
 		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
@@ -292,10 +320,40 @@ func setDecision(id int, s string) {
 	}
 }
 
+// failures are the taps that ended red (#607, #854), per inbox: the Inbox
+// shows each where its card was for 15 minutes, in words (#855), the raw
+// line under Details and in the journal.
+var failures = struct {
+	sync.Mutex
+	m map[string]failed
+}{m: map[string]failed{}}
+
+type failed struct {
+	say, raw string
+	at       time.Time
+}
+
+func setFailed(dir string, id int, say, raw string) {
+	failures.Lock()
+	defer failures.Unlock()
+	if say == "" {
+		delete(failures.m, dir+"#"+strconv.Itoa(id))
+	} else {
+		failures.m[dir+"#"+strconv.Itoa(id)] = failed{say, raw, time.Now()}
+	}
+}
+
+func failedTap(dir string, id int) (failed, bool) {
+	failures.Lock()
+	defer failures.Unlock()
+	f, ok := failures.m[dir+"#"+strconv.Itoa(id)]
+	return f, ok && time.Since(f.at) < 15*time.Minute
+}
+
 // wait: how long an approve's run waits for the lock (Alle freigeben, #686).
 func decide(env *cli.Env, actor string, id int, decision string, argv []string, wait time.Duration) {
 	var errOut strings.Builder
-	ctx, webEnv := context.Background(), &cli.Env{Paths: env.Paths, Actor: actor, ErrOut: &errOut, Wait: wait}
+	ctx, webEnv := context.Background(), &cli.Env{Paths: env.Paths, Actor: actor, Out: io.Discard, ErrOut: &errOut, Wait: wait}
 	var code int
 	if decision == "rollback" {
 		code = inbox.Rollback(ctx, webEnv, []string{"#" + strconv.Itoa(id)})
@@ -303,10 +361,11 @@ func decide(env *cli.Env, actor string, id int, decision string, argv []string, 
 		setDecision(id, "") // approved: from here the proposal says it waits for its run
 		code = inbox.Carry(ctx, webEnv)
 	}
-	if code != cli.ExitOK && code != cli.ExitRed {
+	if code != cli.ExitOK && code != cli.ExitRed { // first the failure, then the tap is no longer on its way
 		lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
-		setDecision(id, "fehlgeschlagen: "+cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("exit %d", code)))
-		return
+		raw := strings.TrimPrefix(lines[len(lines)-1], "laib: ")
+		setFailed(cli.InboxDir(env), id, "fehlgeschlagen: "+proposal.Plain(raw), raw)
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: actor, Verb: decision, Result: "red", Detail: fmt.Sprintf("#%d auf der Box-Seite: %s (Code %d)", id, raw, code)})
 	}
 	setDecision(id, "")
 }
@@ -329,7 +388,7 @@ func Abmelden(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
 		if err != nil {
-			http.Error(w, "State nicht lesbar: "+err.Error(), http.StatusServiceUnavailable)
+			http.Error(w, proposal.NotReadable, http.StatusServiceUnavailable)
 			return
 		}
 		back := "https://" + st.Box.Laib.Host + "." + st.Box.Domain + "/"
@@ -431,8 +490,10 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	}
 	b.WriteString("</p>")
 	b.WriteString(`<p><a href="/schluessel">Schlüssel hinterlegen</a></p>`)
-	if rd.Lock != "" {
-		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
+	if rd.Lock != "" && strings.Contains(rd.Lock, " pid ") { // a run holds the lock: in words, who under Details (#855)
+		b.WriteString("<p class=gelb>Die Box arbeitet gerade an einer Änderung; das dauert meist ein paar Minuten.</p>" + details("gesperrt durch "+rd.Lock))
+	} else if rd.Lock != "" {
+		fmt.Fprintf(&b, "<p class=gelb>%s</p>", html.EscapeString(rd.Lock))
 	}
 	b.WriteString(operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
 	b.WriteString(filter + "<div class=liste>")
@@ -460,19 +521,23 @@ func serviceCard(row ServiceStatus, checking map[string]bool) string {
 		}
 	}
 	sort.Strings(bad)
-	note := strings.TrimSpace(strings.Join(bad, " ") + " " + row.Detail)
+	note, units := row.Detail, "" // which unit is how: under Details (#855)
+	if len(bad) > 0 {
+		note = strings.TrimSuffix(map[bool]string{true: "startet gerade", false: "läuft nicht; sieh in der Inbox nach, ob eine Reparatur wartet"}[row.State == "gelb"]+" · "+note, " · ")
+		units = details(strings.Join(bad, " "))
+	}
 	check, run := "", ""
 	if on, ok := checking[row.Name]; ok {
 		check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`
 		if on {
-			check, run = "<span class=muted>wird geprüft …</span>", " data-run"
+			check, run = "<span class=muted>wird geprüft …</span>"+frist("Meist ist die Prüfung in einer Minute fertig."), " data-run"
 		}
 	}
 	name := "<b>" + html.EscapeString(row.Name) + "</b>"
 	if row.Title != "" { // the plain name big, what it is beside it, the id small (#785)
 		name = "<b>" + html.EscapeString(row.Title) + "</b><span class=muted>" + html.EscapeString(row.Beschreibung) + "</span><small class=muted>" + html.EscapeString(row.Name) + "</small>"
 	}
-	return fmt.Sprintf("<div class=\"card %s\" id=\"svc-%s\" data-f%s>%s<span class=state>%s</span><span class=note>%s</span>%s</div>\n", row.State, html.EscapeString(row.Name), run, name, row.State, html.EscapeString(note), check)
+	return fmt.Sprintf("<div class=\"card %s\" id=\"svc-%s\" data-f%s>%s<span class=state>%s</span><span class=note>%s</span>%s%s</div>\n", row.State, html.EscapeString(row.Name), run, name, row.State, html.EscapeString(note), check, units)
 }
 
 func journalBody(es []journal.Entry) string {
