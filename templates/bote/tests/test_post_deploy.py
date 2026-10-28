@@ -229,6 +229,27 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("Antwortet jemand auf eine Mitteilung von Laib", soul)
         self.assertIn("box.yml people", soul)
 
+    def test_an_escalation_is_offered_as_what_it_is_for_every_sender(self):
+        """#863 (owner, 2026-10-28): an escalation through the Bote goes to the owner as a Box-Aufgabe,
+        never into a public repo (the kernel files it so, whoever wrote). The SOUL is one for every
+        sender, so it offers exactly that: handing the question to the admin, not asking Claude."""
+        _, _, soul = self.hook()
+        line = next(l for l in soul.splitlines() if "laib escalate" in l)
+        self.assertIn("an den Admin weiterzugeben", line)
+        self.assertIn("Box-Aufgabe", line)
+        self.assertIn("verlässt das Haus", line)
+        self.assertNotIn("Claude", soul)
+
+    def test_the_soul_and_the_concept_agree_on_memory(self):
+        """#863: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
+        promised a memory per number. Nothing is configured (README, "Memory"): both say so."""
+        _, _, soul = self.hook()
+        self.assertIn("Du kannst dir über ein Gespräch hinaus nichts merken", soul)
+        konzept = (HOOK.parent.parent.parent / "docs" / "KONZEPT.md").read_text()
+        self.assertNotIn("memory namespace", konzept)
+        self.assertNotIn("Honcho", konzept)
+        self.assertIn("nothing beyond a conversation", konzept)
+
     def test_an_answer_naming_who_a_number_is_becomes_a_proposal(self):
         """#596: the owner answers Laib's notice about a dropped sender with "+49… ist mama"; the
         SOUL has the Bote propose it with laib_person_signal, and the owner approves it."""

@@ -1,7 +1,7 @@
 # Laib — the interface
 
 Laib has exactly one interface, the CLI. The MCP surface, the three pages and
-the Solaris cards are views on it.
+the messages to the owner are views on it.
 
 ## CLI
 
@@ -27,9 +27,9 @@ laib restart <service>               restart + verify (envelope)
 laib start <service>                 start its units, lift a stop's pause, verify (envelope, #441)
 laib stop <service> [--until 2h] ["<grund>"]   stop its units and pause the service, at most a day; converge leaves it alone (envelope, #441); off for good is laib remove
 laib backups                         read: the last nightly backup (green/red, when, why), the last green one, the off-box copy, the restore test, with diag's backup findings and their fix (#441)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
-laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the approver; any other command in repairs/ is refused (#441)
+laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"]
             | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>
@@ -118,7 +118,7 @@ service, a reason or a commit. What follows `--` is the container
 command's own. The MCP tool list is generated from the same verb
 table (`mcpVerbs` names which of them an agent may reach at all), and
 `scripts/drift.sh` in CI checks that every tool the Operator's prompt
-names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+names is one of them. The `ops` hand is the Operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
 proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
@@ -184,13 +184,13 @@ dropped from its reply. The built-in skills' menus:
 | Skill | Trigger | Menu |
 |---|---|---|
 | `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543); when it runs, its context is what diag found and the journal's last 15 entries without the Operator's notes, in its own budget (9,000 chars, each result 4,000) whatever the window; Home Assistant's `Update: …`/`Firmware: …` findings are `aktualisierung`'s and wake no look (#550) |
-| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792) |
-| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
+| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
+| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` — when the model fails, the runner writes the report its script made from status and journal (#858) |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
 | `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
-| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
+| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_note` — no model (#858): its script runs `laib backup check` (the canary restore), reads the week's backups and writes the note, an incident when the check is red or no backup was green for a day; the morning report reads it (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
 --all --limit 0` as the ops hand and puts the last ten measured proposals before the
@@ -262,6 +262,19 @@ the hand's ceiling and verb list reach it. `laib skill enable|pause
 is what the *client* renders when the call fails). `lock` names what holds
 apply when `eingeschränkt`: `apply:media` or `gpu:werkstatt`.
 
+The guarantees are the same object in `/ready` and in `laib status --json`
+`.ready` (#856, one verdict for every surface):
+
+- `red` counts red services; each red row of `.services` carries `red`, its
+  reasons beyond the units (`"health: 502 Bad Gateway"`).
+- `problems` lists what is red beyond one service: disk, backup, firewall,
+  and the last whole `laib diag` run's slow probes with its time.
+- `lastBackup`: `at` (the last green backup), `repos` (places: 2 while the
+  off-box copy is under 48 h old), `ok` (green, and no backup finding red),
+  `onlyOnDataDisk` (the one place is the disk it protects), `problem` (why
+  not `ok`), `text` (the fact in one neutral German sentence).
+- `lastChange`: the last approved proposal (`proposal`, `summary`, `at`).
+
 ## The box page: three pages
 
 Status:
@@ -280,7 +293,7 @@ Offene Vorschläge 1                                           [Inbox]
 Inbox:
 
 ```
-Vorschlag #17   von ops (Solaris)   Stufe: apply   braucht: Admin
+Vorschlag #17   von ops (der Operator)   Stufe: apply   braucht: Admin
 
   Paperless für die Familie, nur intern
   + services/paperless/values.yml
@@ -339,19 +352,18 @@ Authelia (`admins`). Caddy adds `X-Laib-Proxy: <secret>`; without it the pages
 answer 403, so a process on the box cannot forge `Remote-User` (ADR 0012).
 No JavaScript framework; a form post per button.
 
-## Solaris cards
+## Messages to the owner
 
-The admin sees the Inbox as a card that links to `laib.<domain>/inbox`; the
-decision happens there, behind Authelia (ADR 0012). Plus two more cards:
+laib-notify writes the owner (`box.yml notify.person`) through the Bote, by
+mail when no channel answers (#441): an incident red for ten minutes, the
+image updates, and each new proposal as „Freigabe #N: <headline> · <Inbox
+link>“. The decision happens in the Inbox, behind Authelia's second factor
+(ADR 0012, #778); no chat approves.
 
-- **Ops report** (morning): "Alles grün, ein Zertifikat in 6 Tagen fällig, ich
-  habe Vorschlag #18 vorbereitet."
-- **Escalation**: "Das verstehe ich nicht. Claude dazuholen? Das Kontextpaket
-  liegt bereit." Accepting creates a ticket labelled `needs-claude` with the
-  output of `laib context` attached.
-
-Solaris renders the readiness state in its chat header from `/ready` and says
-once when the state changes.
+An escalation is the context bundle under `/mnt/data/laib/escalations` and
+a red journal line. The Operator's also becomes a `needs-claude` ticket in
+`box.yml intake.repo`; the Bote's becomes a Box-Aufgabe for the owner and
+never a ticket (#863). Haus reads the readiness state from `/ready`.
 
 ## MCP
 
@@ -427,12 +439,15 @@ verdicts stay the admin's (`laib token mint human`).
 
 The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
 the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
-`läuft`, `stumm` (running but neither a note nor a look for three ticks:
+`läuft`, `stumm` (running but no work done for three ticks:
 model unreachable or a tick hangs), `antwortet nicht`, `fehlt` (enabled but
 the unit is down). `laib diag` turns the last four into findings. A look
 that found nothing new writes no note (#543); the Operator's own `/ready`
-(`{"looked": …}`) says when its last session or look ended without an
-error, and that counts like a note. After a failed session no look is
+(`{"looked": …}`) says when its last session or look did work — ended
+neither in an error nor skipped nor as a fallback (#858) — and that is the
+heartbeat; the newest ops note counts only while `/ready` says none, right
+after a restart. A daily or weekly slot that waits or fails writes one
+line with its reason (#858); that line is no heartbeat. After a failed session no look is
 skipped, so a model that stops answering still turns the state `stumm`. An
 enabled operator that does nothing is never silent.
 
@@ -550,6 +565,20 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
+A red run that touched a service with data (its pre-update snapshot taken,
+the apply red) restores nothing by itself (#853, ADR 0019 §4 as amended):
+the old program comes back, the data stay as the update left them, and each
+proposal of the run says so with the snapshot's time („Das alte Programm
+läuft wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung
+von 14:05 liegt bereit.“). Laib files two proposals of its own, named on
+the run's proposals as `restore` and `forward` and offered on their cards
+as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
+<snapshot> <service>` for each snapshot of the run) and „Nach vorne
+reparieren“ (a repair running `laib rollback <revert>` for each revert of
+a proposal with data: its change on again, the data untouched, no new
+snapshot). A forward that verifies red leaves its red journal line, which
+the Operator opens as an incident and escalates after 30 minutes as for
+#792; the restore stays open beside it, its snapshot kept a week.
 `laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
 (apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;

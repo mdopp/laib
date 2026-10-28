@@ -68,7 +68,7 @@ func Repair(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	if err == nil { // the finding it answers is the one laib measures afterwards (#544)
 		undo := cmp.Or(f.Undo, "nichts zurückzunehmen: laib führt nur "+cmdline+" aus")
-		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Detail, Undo: undo, Does: does(*f)})
+		err = inbox.Anchor(cli.InboxDir(env), p, proposal.Anchor{Finding: key(*f), Evidence: f.Say, Undo: undo, Does: does(*f)}) // the raw finding stays in the reason (#855)
 	}
 	if err != nil {
 		return env.Fail(err)

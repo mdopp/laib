@@ -25,7 +25,7 @@ button{font:inherit;font-size:.85rem;font-weight:600;color:var(--accent);backgro
 button.go{background:var(--accent);color:#fff}
 form{display:inline;margin:0}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:.8rem/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-details summary{cursor:pointer;color:var(--muted)}
+details summary{cursor:pointer;color:var(--muted)}.frist{display:block;flex-basis:100%;color:var(--muted);font-size:.8rem;margin:4px 0}
 @media (max-width:600px){.card .note{flex-basis:100%}}
 @media (min-width:900px){body{max-width:none;margin:0 15rem 0 0;padding:8px 32px 32px}
 .tabs{left:auto;top:0;width:13rem;flex-direction:column;justify-content:flex-start;gap:4px;padding:24px 12px;border-top:0;border-left:1px solid var(--line)}

@@ -113,13 +113,14 @@ class Session:
         self._out.flush()
 
 
-def done(outcome="", why="", note="", context="", human="", state=None, checks=()):
+def done(outcome="", why="", note="", context="", human="", state=None, checks=(), fallback=""):
     """What a script hands back. outcome set (unchanged, idle, green): the
     session ends without a model; else the model sees context. human is
     added to the session's note; state is kept for the next run when the
     session does not fail or wait (None keeps the last); checks are the
-    tools whose model calls the script's check() vets."""
-    return {"outcome": outcome, "why": why, "note": note, "context": context, "human": human, "state": state, "checks": list(checks)}
+    tools whose model calls the script's check() vets; fallback is the note
+    the runner writes when the model fails (#858)."""
+    return {"outcome": outcome, "why": why, "note": note, "context": context, "human": human, "state": state, "checks": list(checks), "fallback": fallback}
 
 
 def first_line(s):

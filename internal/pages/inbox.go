@@ -23,14 +23,13 @@ func Inbox(env *cli.Env) http.HandlerFunc {
 		var b strings.Builder
 		b.WriteString("<h1>Inbox</h1>" + filter)
 		if err != nil {
-			b.WriteString("<p class=rot>" + html.EscapeString(err.Error()) + "</p>")
+			b.WriteString(failure("Die Box kann die Vorschläge gerade nicht ganz lesen. Lade die Seite in einer Minute noch einmal.", err.Error()))
 		}
 		domain, box := "", []string(nil)
 		if st, err := cli.LoadState(env); err == nil {
 			domain, box = st.Box.Domain, st.Warnings
 		}
-		fails, list, open, n, busy, fresh := decided(all, domain, apply.LockHolder(env.Paths) != "")
-		b.WriteString(fails)
+		list, open, n, busy, fresh := decided(all, cli.InboxDir(env), domain, apply.LockHolder(env.Paths) != "")
 		if may, _ := oneByOne(approvable(env, open)); len(may) > 1 {
 			fmt.Fprintf(&b, `<p><a href="/inbox/alle"><button class=go>Alle freigeben (%d)</button></a></p>`, len(may))
 		}
@@ -61,38 +60,43 @@ func InboxStand(env *cli.Env) http.HandlerFunc {
 		if st, err := cli.LoadState(env); err == nil {
 			domain = st.Box.Domain
 		}
-		_, list, _, _, busy, _ := decided(all, domain, apply.LockHolder(env.Paths) != "")
+		list, _, _, busy, _ := decided(all, cli.InboxDir(env), domain, apply.LockHolder(env.Paths) != "")
 		fragment(w, laeuft(list, busy))
 	}
 }
 
 // laeuft is the decided cards under their heading, by id; data-run while
-// one runs.
+// one runs, with its limit (#854).
 func laeuft(list string, busy bool) string {
 	if busy {
-		return "<div id=laeuft data-run><h2>Was die Box gerade macht</h2><div class=liste>" + list + "</div></div>"
+		return "<div id=laeuft data-run><h2>Was die Box gerade macht</h2>" + frist("Meist ist sie in ein, zwei Minuten fertig, mit Arbeit davor auch länger.") + "<div class=liste>" + list + "</div></div>"
 	}
-	return "<div id=laeuft><h2>Zuletzt freigegeben</h2><div class=liste>" + list + "</div></div>"
+	return "<div id=laeuft><h2>Zuletzt entschieden</h2><div class=liste>" + list + "</div></div>"
 }
 
-// decided sorts the proposals into the taps that failed, the cards of what
-// was decided as they end (#686), and the open ones still to decide.
-func decided(all []*proposal.Proposal, domain string, locked bool) (fails, cards string, open []*proposal.Proposal, n int, busy, fresh bool) {
-	var b, list strings.Builder
+// decided sorts the proposals into the cards of what was decided as they
+// end (#686) — a tap that failed among them, where its card was, with its
+// reason (#854) — and the open ones still to decide.
+func decided(all []*proposal.Proposal, dir, domain string, locked bool) (cards string, open []*proposal.Proposal, n int, busy, fresh bool) {
+	var list strings.Builder
 	for _, p := range all {
 		decision := DecisionState(p.ID)
-		if strings.HasPrefix(decision, "fehlgeschlagen") { // #607: the tap and why it did not go through
-			fmt.Fprintf(&b, "<p class=rot>#%d: %s</p>", p.ID, html.EscapeString(decision))
-			decision = ""
-		}
+		f, failed := failedTap(dir, p.ID)
+		failed = failed && decision == ""
 		if p.Status == "open" && decision == "" {
-			open = append(open, p)
-			continue
+			open = append(open, p) // a failed tap's card keeps its buttons there
+			if !failed {
+				continue
+			}
 		}
 		text, class, running := progress(p, decision, locked)
-		recent := time.Since(p.Decided) < 15*time.Minute
-		if p.Status != "approved" && !running || !running && !recent && n >= 5 {
+		done := text == "fertig"
+		recent := failed || time.Since(p.Decided) < 15*time.Minute
+		if !(running || failed || p.Status == "approved" || p.Status == "rejected" && recent) || !running && !recent && n >= 5 {
 			continue
+		}
+		if failed {
+			text, class = f.say, "rot"
 		}
 		n, busy, fresh = n+1, busy || running, fresh || recent
 		// the card as it ends (#686): what the box does now, then what came of it; no decision buttons
@@ -100,12 +104,25 @@ func decided(all []*proposal.Proposal, domain string, locked bool) (fails, cards
 		if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
 			list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
 		}
-		if undo, _ := proposal.Undoing(p); text == "fertig" && undo { // what was approved can be taken back (#41), where that undoes something (#852)
+		if undo, _ := proposal.Undoing(p); done && undo { // what was approved can be taken back (#41), where that undoes something (#852)
 			list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
+		}
+		for _, way := range []struct { // a red run with data (#853): its two ways on, laib's proposals, while they are open
+			id    int
+			label string
+		}{{p.Restore, "Sicherung zurückspielen"}, {p.Forward, "Nach vorne reparieren"}} {
+			if way.id != 0 && slices.ContainsFunc(all, func(q *proposal.Proposal) bool {
+				return q.ID == way.id && q.Status == "open" && DecisionState(q.ID) == ""
+			}) {
+				list.WriteString(DecisionForm(way.id, "approve", way.label, ""))
+			}
+		}
+		if failed {
+			list.WriteString(details(f.raw))
 		}
 		list.WriteString("</div>")
 	}
-	return b.String(), list.String(), open, n, busy, fresh
+	return list.String(), open, n, busy, fresh
 }
 
 // staleLines are the stale proposals still to act on (#716). One a later
@@ -140,14 +157,20 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 	switch {
 	case decision != "":
 		return decision, "gelb", true
+	case p.Status == "rejected": // #854: a no ends visibly, like a yes
+		return "abgelehnt", "info", false
 	case p.Step != "" && locked:
 		return p.Step + " …", "gelb", true
 	case p.Outcome == "waiting" && locked:
 		return "wartet, bis die Box mit der Arbeit davor fertig ist", "gelb", true
 	case p.Outcome == "waiting":
 		return "fängt gleich an", "gelb", true
-	case p.Outcome == "rolled-back":
-		return strings.TrimSuffix("zurückgenommen, "+p.Because, ", "), "rot", false
+	case p.Outcome == "rolled-back" && p.Because == "": // taken back on request: done, not red
+		return "zurückgenommen", "info", false
+	case p.Outcome == "rolled-back" && strings.Contains(p.Because, "Journal"):
+		return "zurückgenommen, " + p.Because, "rot", false
+	case p.Outcome == "rolled-back": // and the next step (#854)
+		return "zurückgenommen, " + p.Because + ". Die Box ist wieder wie vorher; was schiefging, steht im Journal.", "rot", false
 	case p.Because != "": // a repair whose verb failed (#753)
 		return p.Because, "rot", false
 	}
@@ -197,7 +220,7 @@ func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposa
 	}
 	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
 	// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
-	reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
+	reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject onsubmit=\"const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'\"><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
 	later := "<a href=\"/\"><button>Später</button></a>"
 	if c.Risky {
 		fmt.Fprintf(b, "<p>%s %s %s</p>", later, approve, reject)

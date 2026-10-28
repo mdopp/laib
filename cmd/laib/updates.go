@@ -39,7 +39,7 @@ func cmdUpdates(ctx context.Context, env *cliEnv, args []string) int {
 	if holder := apply.LockHolder(env.Paths); holder != "" {
 		return cli.Refused(env, "gesperrt durch "+holder+": der Update-Lauf wartet, bis die Sperre frei ist")
 	}
-	if r, _ := pages.CollectStatus(ctx, env, st); r.State != "bereit" || r.Red > 0 {
+	if r, _ := pages.CollectStatus(ctx, env, st); r.State != "bereit" || r.Red > 0 || r.Firewall == "fehlt" {
 		return cli.Refused(env, fmt.Sprintf("laib ist nicht grün (%s, %d rot): erst laib diag", r.State, r.Red))
 	}
 	if out, err := sysd.Run(ctx, "systemctl", "--user", "start", "--no-block", "laib-images.service"); err != nil {

@@ -6,7 +6,9 @@ loop with its tools (modell: frei); this script only adds what must always be
 there: the month's rate of the Operator's proposals (#544), a lesson that
 keeps failing, named for removal (#544), and the due Box-Aufgaben (#667).
 The runner hands the inbox (data.history) and laib aufgabe list --faellig
-(data.due).
+(data.due). #858: a failing model consumed the slot with no report; the
+script also reads status and journal and hands a report written from them,
+which the runner writes when the model fails.
 """
 
 import json
@@ -17,6 +19,7 @@ import laibskill
 from laibskill import field
 
 COUNTED = ["effective", "no-effect", "rolled-back", "rejected"]  # "later" and "applied" are neither
+RESULT = {"green": "grün", "red": "rot"}
 WORD = {"effective": "wirksam", "no-effect": "ohne Wirkung", "rolled-back": "zurückgenommen", "rejected": "abgelehnt"}
 
 
@@ -89,7 +92,39 @@ def due_line(text):
     return "Fällige Box-Aufgaben: " + ", ".join(f"#{field(a, 'id', 0)} {field(a, 'titel')}" for a in tasks) + "."
 
 
+def hm(s, tz):
+    """A journal time as the box's clock, or "?"."""
+    d = when(s)
+    return d.astimezone(tz).strftime("%H:%M") if d.year > 1 else "?"
+
+
+def fallback(status, journal, now):
+    """A report from laib status and the journal's last 24 hours, red first,
+    for a morning whose model failed (#858)."""
+    ready, services = field(status, "ready", {}), field(status, "services", []) or []
+    red = [f"{field(x, 'name')} ({field(x, 'detail')})" if field(x, "detail") else field(x, "name") for x in services if field(x, "state") == "rot"]
+    said = [f"Morgenbericht ohne Modell, aus Status und Journal: Laib {field(ready, 'state', 'unbekannt')}, "
+            f"{field(ready, 'services', len(services))} Dienste, {field(ready, 'red', len(red))} rot, {field(ready, 'yellow', 0)} gelb."]
+    if red:
+        said.append("Rot: " + ", ".join(red) + ".")
+    journal = journal if isinstance(journal, list) else []
+    backups = [e for e in journal if field(e, "verb") == "backup"]
+    if backups:
+        b = backups[-1]
+        said.append(f"Letzte Sicherung {hm(field(b, 't'), now.tzinfo)}: {RESULT.get(field(b, 'result'), field(b, 'result'))}.")
+    reds = [e for e in journal if field(e, "result") == "red"]
+    if reds:
+        shown = [" ".join(x for x in (hm(field(e, "t"), now.tzinfo), field(e, "verb"), field(e, "service"), laibskill.one_line(field(e, "detail"))[:120]) if x) for e in reds[-5:]]
+        said.append(f"Im Journal der Nacht {len(reds)} {'roter Eintrag' if len(reds) == 1 else 'rote Einträge'}: " + "; ".join(shown) + ".")
+    else:
+        said.append(f"Im Journal der Nacht {len(journal)} Einträge, keiner rot.")
+    return " ".join(said)
+
+
 def run(s):
     history = s.data.get("history") or []
     lines = [rate(history, when(s.now)), stale(history), due_line(s.data.get("due"))]
-    return laibskill.done(human=" ".join(x for x in lines if x))
+    human = " ".join(x for x in lines if x)
+    status = s.call("laib_status").json() or {}
+    journal = s.call("laib_journal", since="24h").json()
+    return laibskill.done(human=human, fallback=(fallback(status, journal, when(s.now)) + " " + human).strip())

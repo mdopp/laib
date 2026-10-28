@@ -52,7 +52,7 @@ laib:                             # the box page and /mcp (ADR 0012); all option
   group: admins
 gpu:
   present: true
-  owner: solaris                  # the service that holds the lease
+  owner: llama                    # the service that holds the lease (the model role, ADR 0011)
 backup:
   repo: /mnt/data/backup/restic
   schedule: "03:00"
@@ -80,7 +80,8 @@ model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
   lease: http://192.168.1.20:11435/api/model-lease
-intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797)
+intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797);
+                                  # the Bote's escalations never: they are Box-Aufgaben for the owner (#863)
   repo: mdopp/laib
   label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator's container (ADR 0013, 0027); laib operator enable sets this
@@ -111,7 +112,12 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change. `${NOTIFY_PERSON}` is
 `notify.person`, whom a service tells when its values name nobody (the
-scan service's closing message, #568).
+scan service's closing message, #568). `${BOTE_SIGNAL}` is the number the
+household writes to on Signal: the value a service names under
+`channels.signal` (the Bote's `SIGNAL_ACCOUNT`), E.164 or empty; Haus shows
+it on Willkommen as `HAUS_BOTE_SIGNAL` (haus#175). It is household data on
+the box: a unit carries it, a repo or a test never (fakes like
+`+4915100000000`).
 
 `zuhause` is the household's address, once for every template that needs
 it (#561): Home Assistant's home, a solar forecast, a waste calendar. The
@@ -232,8 +238,10 @@ at any path. A path grant is a policy.yml change, so the owner decides it,
 like a verb grant; what the proposal changes is still reviewed and
 classed as any other (a box.yml change waits for a human).
 
-A hand never approves its own proposal. `destroy` requires a human on the box
-page or a Solaris card; a token cannot approve.
+A hand never approves its own proposal. What only a human may approve —
+`destroy`, a `human` or `remove` class, a tier with `approvals … by: human` —
+waits for the Inbox or the host shell; an agent hand whose ceiling holds
+`approve` may approve the rest (ADR 0019 (e), #865).
 
 ## skills/<name>/skill.yml (optional)
 

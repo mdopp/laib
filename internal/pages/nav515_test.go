@@ -35,7 +35,7 @@ func TestTheBoxPagesWorkOnThePhone(t *testing.T) {
 	}
 
 	// each list page carries the filter and marks its cards for it
-	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "", "")
+	status := statusBody(Readiness{State: "bereit"}, []ServiceStatus{{Name: "immich", State: "grün"}}, nil, "")
 	jour := "<h1>Journal</h1>" + filter + journalBody([]journal.Entry{{T: time.Now(), Actor: "laib", Verb: "apply", Result: "green"}})
 	for name, body := range map[string]string{"Status": status, "Journal": jour} {
 		if !strings.Contains(body, `<input type=search class=filter`) {
