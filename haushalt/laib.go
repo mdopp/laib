@@ -19,18 +19,42 @@ type MCP struct {
 	URL, Token string
 }
 
-// Propose files `laib propose <args>`; the args are quoted one by one (a
-// SANE device name has blanks, never a quote).
+// Propose files `laib propose <args>`.
 func (m MCP) Propose(ctx context.Context, ceiling string, args ...string) (int, string, error) {
+	var p struct {
+		ID    int    `json:"id"`
+		Class string `json:"class"`
+	}
+	err := m.call(ctx, "laib_propose", ceiling, args, &p)
+	if err == nil && p.ID == 0 {
+		err = errors.New("laib propose answered without a number")
+	}
+	return p.ID, p.Class, err
+}
+
+// Aufgabe adds `laib aufgabe <args>` and returns the task's number (#883).
+func (m MCP) Aufgabe(ctx context.Context, ceiling string, args ...string) (int, error) {
+	var p struct {
+		Aufgabe struct {
+			ID int `json:"id"`
+		} `json:"aufgabe"`
+	}
+	err := m.call(ctx, "laib_aufgabe", ceiling, args, &p)
+	return p.Aufgabe.ID, err
+}
+
+// call runs one of laib's tools with args quoted one by one (a SANE device
+// name has blanks, never a quote) and decodes its answer into out.
+func (m MCP) call(ctx context.Context, tool, ceiling string, args []string, out any) error {
 	if m.URL == "" || m.Token == "" {
-		return 0, "", errors.New("laib-haushalt has no token for laib (LAIB_TOKEN): laib apply mints it")
+		return errors.New("laib-haushalt has no token for laib (LAIB_TOKEN): laib apply mints it")
 	}
 	quoted := make([]string, len(args))
 	for i, a := range args {
 		quoted[i] = `"` + strings.ReplaceAll(a, `"`, "") + `"`
 	}
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-		"params": map[string]any{"name": "laib_propose", "arguments": map[string]string{"args": strings.Join(quoted, " ")}}})
+		"params": map[string]any{"name": tool, "arguments": map[string]string{"args": strings.Join(quoted, " ")}}})
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
@@ -38,7 +62,7 @@ func (m MCP) Propose(ctx context.Context, ceiling string, args ...string) (int, 
 	req.Header.Set("X-Laib-Ceiling", ceiling)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, "", fmt.Errorf("laib antwortet nicht (%s): %w", m.URL, err)
+		return fmt.Errorf("laib antwortet nicht (%s): %w", m.URL, err)
 	}
 	defer resp.Body.Close()
 	var r struct {
@@ -50,15 +74,10 @@ func (m MCP) Propose(ctx context.Context, ceiling string, args ...string) (int, 
 		} `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || len(r.Result.Content) == 0 {
-		return 0, "", fmt.Errorf("laib propose: HTTP %d, %v", resp.StatusCode, err)
+		return fmt.Errorf("%s: HTTP %d, %v", tool, resp.StatusCode, err)
 	}
-	text := r.Result.Content[0].Text
-	var p struct {
-		ID    int    `json:"id"`
-		Class string `json:"class"`
+	if text := r.Result.Content[0].Text; r.Result.IsError || json.Unmarshal([]byte(text), out) != nil {
+		return errors.New(strings.TrimSpace(text))
 	}
-	if r.Result.IsError || json.Unmarshal([]byte(text), &p) != nil || p.ID == 0 {
-		return 0, "", errors.New(strings.TrimSpace(text))
-	}
-	return p.ID, p.Class, nil
+	return nil
 }

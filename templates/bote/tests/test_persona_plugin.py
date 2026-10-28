@@ -96,6 +96,10 @@ class PersonaPlugin(Base):
         for want in ("Box-Aufgabe #7", "laib_aufgabe", "action zeigen, id 7", "Schritt für Schritt", "laib_diag", "Abhaken tust du sie nicht"):
             self.assertIn(want, ctx["context"])
         self.assertIn(out, (None, "Bei Box-Aufgabe #7 geht es um deine Stimme."))
+        # #883: a wish goes to the admin as a Box-Aufgabe, not on to the Werkstatt
+        self.assertIn("laib_wish", ctx["context"])
+        self.assertIn("an den Admin", ctx["context"])
+        self.assertNotIn("Werkstatt weiter", ctx["context"])
 
     def test_help_reaches_the_person_as_plain_text(self):
         # #863: the engine's help is words for the person, no screen: no code block, the model's words never

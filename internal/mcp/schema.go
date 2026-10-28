@@ -65,7 +65,8 @@ var mcpParams = map[string][]mcpParam{
 		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true},
 		{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen"},
-		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"}},
+		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"},
+		{name: "von", typ: "string", desc: "nur der Bote: der Login der Person, die sich das wünscht; ihr Wunsch geht als Box-Aufgabe an den Admin"}},
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
 	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"}},
@@ -269,6 +270,9 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		}
 		if val["better"] != "" {
 			text += "\nBesser wird: " + betterText[val["better"]]
+		}
+		if val["von"] != "" {
+			return []string{"--von", val["von"], text}, stdin, nil
 		}
 		return []string{text}, stdin, nil
 	}

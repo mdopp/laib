@@ -240,6 +240,16 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("verlässt das Haus", line)
         self.assertNotIn("Claude", soul)
 
+    def test_a_wish_goes_to_the_admin_as_a_box_aufgabe(self):
+        """#883 (owner, 2026-10-28): a wish through the Bote is a Box-Aufgabe for the admins with who asked,
+        never a ticket: the owner decides what goes on to the Werkstatt. The SOUL says so to every sender."""
+        _, _, soul = self.hook()
+        line = next(l for l in soul.splitlines() if "laib_wish" in l)
+        self.assertIn("an den Admin", line)
+        self.assertIn("Box-Aufgabe", line)
+        self.assertIn("von", line)
+        self.assertNotIn("Werkstatt weiter", soul)
+
     def test_the_soul_and_the_concept_agree_on_memory(self):
         """#863: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
         promised a memory per number. Nothing is configured (README, "Memory"): both say so."""
