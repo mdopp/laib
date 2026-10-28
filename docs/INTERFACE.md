@@ -550,6 +550,20 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
+A red run that touched a service with data (its pre-update snapshot taken,
+the apply red) restores nothing by itself (#853, ADR 0019 §4 as amended):
+the old program comes back, the data stay as the update left them, and each
+proposal of the run says so with the snapshot's time („Das alte Programm
+läuft wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung
+von 14:05 liegt bereit.“). Laib files two proposals of its own, named on
+the run's proposals as `restore` and `forward` and offered on their cards
+as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
+<snapshot> <service>` for each snapshot of the run) and „Nach vorne
+reparieren“ (a repair running `laib rollback <revert>` for each revert of
+a proposal with data: its change on again, the data untouched, no new
+snapshot). A forward that verifies red leaves its red journal line, which
+the Operator opens as an incident and escalates after 30 minutes as for
+#792; the restore stays open beside it, its snapshot kept a week.
 `laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
 (apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;

@@ -358,7 +358,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	d.Undoable, d.Reversible = Undoing(p)
 
 	// --- who and why
-	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), p.Reason)
+	reason, _, _ := strings.Cut(p.Reason, " — laib ") // a repair's command is in the details, not in the words (#853)
+	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), reason)
 	if p.Kind == "template-update" && who != "" { // the reason is a command (#687): what the template brings instead
 		d.Why = fmt.Sprintf("%s schlägt die neue Vorlage von %s vor", upper(actorName(p.Actor)), who)
 		if len(p.News) > 0 {
@@ -488,6 +489,8 @@ var actionWords = map[string]string{
 	"flash":      "Die neue Firmware bleibt auf dem Gerät; „Zurücknehmen“ spielt die alte nicht zurück.",
 	"retrain":    "Das Modell wird neu trainiert; das alte liegt als Kopie daneben, „Zurücknehmen“ holt es nicht zurück.",
 	"servicebay": "Der alte Ordner ist danach gelöscht; zurück kommt er nur aus der Sicherung, die Laib vorher macht.",
+	"restore":    "Die Daten von vorher ersetzen die von jetzt.",
+	"rollback":   "Die Daten fasst Laib dabei nicht an; nur das Programm wechselt wieder auf die neue Version.",
 }
 
 // linesMax: the single lines Details lists (#687); the rest is in the diff.
