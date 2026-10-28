@@ -111,7 +111,12 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change. `${NOTIFY_PERSON}` is
 `notify.person`, whom a service tells when its values name nobody (the
-scan service's closing message, #568).
+scan service's closing message, #568). `${BOTE_SIGNAL}` is the number the
+household writes to on Signal: the value a service names under
+`channels.signal` (the Bote's `SIGNAL_ACCOUNT`), E.164 or empty; Haus shows
+it on Willkommen as `HAUS_BOTE_SIGNAL` (haus#175). It is household data on
+the box: a unit carries it, a repo or a test never (fakes like
+`+4915100000000`).
 
 `zuhause` is the household's address, once for every template that needs
 it (#561): Home Assistant's home, a solar forecast, a waste calendar. The

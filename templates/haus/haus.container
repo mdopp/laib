@@ -57,6 +57,9 @@ Environment=HAUS_LLM_KEY=${MODEL_KEY}
 # without the Bote the key renders empty and Haus shows no field
 Environment=HAUS_BOTE_URL=${BOTE_URL}
 Environment=HAUS_BOTE_KEY=${BOTE_KEY}
+# Willkommen's „Joshua auf Signal“ (haus#175): the number the household writes to the Bote on, laib's
+# BOTE_SIGNAL builtin (the Bote's SIGNAL_ACCOUNT); empty without Signal, and then Willkommen names no number
+Environment=HAUS_BOTE_SIGNAL=${BOTE_SIGNAL}
 # podcasts by link (#676, haus#123): Audiobookshelf as this pod reaches it and the key of its user haus
 # (an administrator: subscribing and checking for new episodes are admin-only in ABS); minted by
 # audiobookshelf's post-deploy, empty without ABS, and then Haus shows no podcast page

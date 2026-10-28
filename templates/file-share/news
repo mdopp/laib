@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Löscht jemand auf dem Handy oder Laptop eine Datei, die mit der Box abgeglichen wird, hebt die Box sie noch 30 Tage auf
 Auf der Box-Seite steht bei der Dateifreigabe, wie viel Platz noch frei ist, welche Geräte Syncthing gerade erreicht und wer fürs Netzlaufwerk ein Passwort hat
 Das Passwort des Netzlaufwerks wird nicht mehr von allein erneuert, denn eure Geräte kennen es
 Versucht ein Gerät immer wieder vergeblich, sich am Netzlaufwerk anzumelden, bekommt der Admin eine Nachricht

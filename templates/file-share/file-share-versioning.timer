@@ -1,0 +1,10 @@
+[Unit]
+Description=Dateifreigabe: Syncthings Versionierung jede Stunde prüfen (haus#174)
+
+[Timer]
+OnBootSec=5min
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
