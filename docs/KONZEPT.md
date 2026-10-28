@@ -176,8 +176,8 @@ journal is green, the Bote writes "Läuft unter paperless.deinedomain, SSO
 ist drauf."
 
 **A red at three in the morning.** Auto-update pulls a new Immich;
-`diag --journal` finds the health red; the Operator's next tick (ten
-minutes; a webhook is planned, not wired) picks it up; it
+`diag --journal` finds the health red; the red line reaches the
+Operator through the webhook (or its ten-minute tick does); it
 inspects, reads the log, sees a changed config key, writes the fix into
 the service's config (envelope: snapshot first), restarts, verify green,
 journal: what it did and why. The morning report says it in two lines.
@@ -203,5 +203,5 @@ runtime for voice (Hermes serves text only, as stock).
 ADR 0001 (state repo, one verb, repair in two halves) · 0002 (Quadlet,
 one binary) · 0006 (identities) · 0007 (Caddy) · 0011 (model role) · 0012
 (approval surfaces, trust boundary) · 0013 (the agent is the operator) ·
-0014 (Operator, Solaris, Haus are three programs) · 0015 (voice is
+0014 (Operator, Solaris, Haus are three programs; Solaris since retired) · 0015 (voice is
 Assist; Solaris retired) · 0016 (the Bote; Hermes as stock).

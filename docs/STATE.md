@@ -52,7 +52,7 @@ laib:                             # the box page and /mcp (ADR 0012); all option
   group: admins
 gpu:
   present: true
-  owner: solaris                  # the service that holds the lease
+  owner: llama                    # the service that holds the lease (the model role, ADR 0011)
 backup:
   repo: /mnt/data/backup/restic
   schedule: "03:00"
@@ -233,8 +233,10 @@ at any path. A path grant is a policy.yml change, so the owner decides it,
 like a verb grant; what the proposal changes is still reviewed and
 classed as any other (a box.yml change waits for a human).
 
-A hand never approves its own proposal. `destroy` requires a human on the box
-page or a Solaris card; a token cannot approve.
+A hand never approves its own proposal. What only a human may approve —
+`destroy`, a `human` or `remove` class, a tier with `approvals … by: human` —
+waits for the Inbox or the host shell; an agent hand whose ceiling holds
+`approve` may approve the rest (ADR 0019 (e), #865).
 
 ## skills/<name>/skill.yml (optional)
 

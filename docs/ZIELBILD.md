@@ -22,9 +22,9 @@ history.
   (#368). The previous proven deployment stays as the rollback.
   firewalld, which uCore turns on, is masked: Laib's nftables table is the
   one firewall (#445).
-- **Laib:** release v0.9.0 (`version.txt`). Its rollout on the box is
-  checked item by item in #436; which binary runs now: auf der Box zu
-  prüfen.
+- **Laib:** release v0.49.0 <!-- x-release-please-version --> in this repo
+  (`version.txt`, bumped by release-please). Which binary runs on the box
+  (`laib version`): auf der Box zu prüfen.
 - **State and journal:** `/mnt/data/laib/state`, `/mnt/data/laib/journal`
   (`docs/STATE.md`). The data disk is an mdadm RAID1 with XFS. It runs with
   one member, which `laib diag` reports (`docs/BACKUP.md`).
@@ -42,8 +42,8 @@ The built-ins in `templates/` replace every unit ServiceBay ran
 
 The boot check after the rebase saw 17 of 17 services green (#368, 2026-10-19).
 Which services the state holds today, `laib status` says: auf der Box zu
-prüfen. Solaris' units ran on as ServiceBay units, ignored (`laib
-ignore`), until Phase 5: `scripts/solaris-off.py --do` stops and parks
+prüfen. The retired Solaris' units ran on as ServiceBay units, ignored
+(`laib ignore`), until Phase 5: `scripts/solaris-off.py --do` stops and parks
 them, takes their ignore.yml lines out, adds Stimme and lets Home
 Assistant's post-deploy wire Stimme's Wyoming entries (#540, the
 script's docstring is the runbook; in git history since 2026-10-24); their data stays 30 days.
@@ -61,9 +61,8 @@ stays 30 days after migration day.
   registered on a spare landline number, with hand fixes in the state
   (#469).
 - **The Werkstatt** (pi, Claude Code, the autoloop) replaces `claude-dev`
-  and `pi-web`. It is built (#402, #405, #407) but rolled back on the box;
-  until it runs, claude-dev and pi-web stay on their ServiceBay units as
-  bridges (#160, #436).
+  and `pi-web` (#402, #405, #407; the rollout check #436 is closed). Whether
+  the bridges on ServiceBay units are gone: auf der Box zu prüfen.
 - **The chat is the interface** (owner, 2026-10-19, #441): "Das Interface
   ist jetzt der Chat, das heißt aber nicht, dass die Daten deshalb falsch
   sein dürfen." What ServiceBay showed on web pages comes back as Laib
@@ -73,12 +72,14 @@ stays 30 days after migration day.
   approved only in Laib's Inbox with two factors; the chat tells about it
   and sends the link. The decisions per feature are in `docs/DESIGN.md`,
   "ServiceBay's features, decided".
-- **Laib's own pages** (`admin.<domain>`: Status, Inbox, Journal, Netz)
-  are the admins' and the one place where approvals happen (ADR 0012).
-- **Mail to the owner** for a service red for ten minutes, a failed or
-  stale backup, and the weekly image updates goes out with Authelia's SMTP
-  settings (#393). Routing through the Bote's channels, with mail as the
-  fallback, is being built (#457).
+- **Laib's own pages** (`laib.<domain>`, the default of `box.yml
+  laib.host`: Status, Inbox, Journal, Netz) are the admins' and the one
+  place where approvals happen (ADR 0012, #778). Which host the Kraftwerk's
+  box.yml sets: auf der Box zu prüfen.
+- **Messages to the owner** for a service red for ten minutes, a failed or
+  stale backup, the weekly image updates and each new proposal go through
+  the Bote first, by mail with Authelia's SMTP settings when no channel
+  answers (#393, #457).
 
 ## Backup
 
@@ -144,29 +145,10 @@ Whether they are gone: auf der Box zu prüfen.
 
 ## What is still open
 
-From #160:
-
-- the household services' adoption and Stimme with its first wake-word
-  training (#128);
-- the Werkstatt on the box (#436);
-- the Operator, Frage and Haus's data from the NUC;
-- ADR 0015's check 1 (Assist sentences);
-- the Voice PE satellites (#30);
-- Solaris the agent off (#540; `scripts/solaris-off.py` is in git history
-  since 2026-10-24) and its data deleted 30 days later;
-- ServiceBay's data dir deleted after 30 days.
-
-Elsewhere:
-
-- **#368:** the host image pin and its update proposal in Laib. The digest
-  lives in the state, and moving it is a proposal like a service image
-  (ADR 0024, part 1). Also a VM run of a deliberately broken deployment.
-- **#469:** the Bote's Signal container runs the REST API instead of
-  signal-cli's daemon; the template needs the box's hand fixes.
-- **#470:** the Bote answers slowly (a 7k-token context, a persona round
-  per message, thinking before every reply).
-- **#471:** Hermes wraps every MCP result as untrusted, so Joshua's persona
-  screens and games never reach the person verbatim.
-- **#436:** every issue closed since v0.7.0 is checked on the box, and the
-  night's bridges and hand edits are removed. An issue closes only after
-  its check there.
+The issue tracker (`gh issue list -R mdopp/laib`); the review of
+2026-10-28 orders the work in #851. What this list named until then is
+closed: #30, #128, #368 (the host image), #436 (the rollout check), #457,
+#469, #470, #471 and #540 (the retired Solaris off on the Kraftwerk).
+Whether each holds on the box: auf der Box zu prüfen. Still waiting on a
+date: ServiceBay's data dir and the retired Solaris' data, deleted 30
+days after they were switched off.

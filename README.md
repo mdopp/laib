@@ -21,15 +21,18 @@ layer (ADR 0010).
   and reloads systemd. Restart policy and timers are systemd's; image updates
   are laib's own nightly run, verified, with the previous image back on red (#528).
 - **The agent is the operator; Laib is its hands, memory and safety net.**
-  Laib has no LLM code. The household agent (Solaris) watches, looks inside
-  containers, corrects and reports; the coding agents in the Werkstatt (pi,
+  Laib has no LLM code. The Operator, the box's admin agent, watches, looks
+  inside containers, corrects and reports; the Bote talks with the family;
+  the coding agents in the Werkstatt (pi,
   Claude Code) build what is missing. All speak the same CLI, exposed as
   MCP. Every action is journaled and reversible: snapshot before, verify
   after, rollback on red, a budget against loops. Only the irreversible
   waits for a human (ADR 0013).
-- **Three human surfaces, one conversation.** Solaris is where you talk. The
-  Werkstatt (`dev.<domain>`) is where things get built. The box page
-  (`laib.<domain>`) has three pages: Status, Inbox, Journal.
+- **Three human surfaces, one conversation.** The Bote is where you talk
+  (Signal, Haus's Sprechen field), Haus is where the family looks and
+  switches. The Werkstatt (`dev.<domain>`) is where things get built. The
+  box page (`laib.<domain>`) has the Status, the Inbox, where approvals
+  happen, and the Journal.
 
 ## Architecture
 
@@ -280,18 +283,20 @@ docs/                KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, INSTA
 testdata/golden      renderer golden files
 ```
 
-## Stand (2026-10-11)
+## Stand
 
-Nothing has run on a real box yet. What exists and how far it is proven:
+Laib v0.49.0 <!-- x-release-please-version -->; the Kraftwerk runs Laib since
+migration day (2026-10-19). What exists and how far CI proves it (what runs
+on the box now: `laib status`, and `docs/ZIELBILD.md`):
 
 | Piece | Where | Proof |
 |---|---|---|
 | Kernel: state repo, plan/apply, converge, operator verbs, MCP, pages | `cmd/laib`, `internal/` | unit + golden tests, e2e with shims, real Quadlet on a runner |
 | The stick: `laib-stick`, first boot, data disk (RAID1, one member) | `stick/`, `usb/` | CI `vm-install`: KVM guest installs CoreOS, reboots, `laib` ready, mirror joins, reinstall keeps data |
 | First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
-| Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; never against a real model |
+| Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
-| Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against fake Laib and Solaris |
+| Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
 | 25 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
@@ -306,7 +311,7 @@ runs there and what is open is `docs/ZIELBILD.md`.
    constructs, division of labour, interfaces by user group, models.
    [`docs/DESIGN.md`](docs/DESIGN.md) is the kernel's design underneath.
 2. [`docs/INTERFACE.md`](docs/INTERFACE.md) — the CLI, the MCP surface, the
-   three pages, the Solaris cards, the readiness signal.
+   three pages, the messages to the owner, the readiness signal.
 3. [`docs/STATE.md`](docs/STATE.md) — the state repo layout and every file's
    schema.
 4. [`docs/adr/`](docs/adr/) — the decisions. Read the index in
@@ -315,8 +320,9 @@ runs there and what is open is `docs/ZIELBILD.md`.
 5. [`docs/adr/0010-one-migration-no-compat.md`](docs/adr/0010-one-migration-no-compat.md)
    — the one-shot move from ServiceBay (done 2026-10-19; its runbook and
    scripts are in git history).
-6. [`docs/DEKONSTRUKTION.md`](docs/DEKONSTRUKTION.md) — how Solaris and the
-   Android app split into Solaris, Haus, Stimme and the Laib Operator.
+6. [`docs/DEKONSTRUKTION.md`](docs/DEKONSTRUKTION.md) — history: how the
+   retired Solaris and its Android app were cut into Haus, Stimme, the Bote
+   and the Laib Operator.
 7. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the
    "a service for the family" sequence.
 8. [`docs/SERVICES.md`](docs/SERVICES.md) — what runs on the box today
@@ -338,7 +344,8 @@ via Ignition at `/var/opt/laib/laib` and runs as a systemd user service of the
 
 ## Status
 
-Founded 2026-10-08; reviewed 2026-10-11 (#31, worked through #60). Nothing
-has run on a real box yet: the VM job is the proof, the NUC trial (#23) is
-the first real run. The Kraftwerk moved from ServiceBay to Laib on
-2026-10-19 (ADR 0010); see `docs/ZIELBILD.md` for what runs and `docs/REVIEW.md` for what is proven and what is not.
+Founded 2026-10-08; reviewed 2026-10-11 (#31, worked through #60) and
+2026-10-28 (#851). The NUC trial (#23) was the first real run; the Kraftwerk
+moved from ServiceBay to Laib on 2026-10-19 (ADR 0010). What runs there is
+`docs/ZIELBILD.md`; `docs/REVIEW.md` is the review brief of 2026-10-11, kept
+as history.

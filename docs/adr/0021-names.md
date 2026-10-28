@@ -87,6 +87,19 @@ which kind of name goes where.
 |---|---|---|
 | ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
 
+### Retired names
+
+A name here is past: a current doc (README.md, CLAUDE.md, `docs/*.md`)
+names it only where its line, its section or its file says so
+(`scripts/drift.sh` check 8, #865). New code never takes one on.
+
+| Name | Ended | Instead |
+|---|---|---|
+| Solaris | 2026-10-14, ADR 0015, ADR 0022 | the Bote (chat), Haus (pages, cards), the Operator (the admin agent) |
+| Balthasar | 2026-10-13 | Joshua |
+| relay | 2026-10-26, #778 | the Inbox: approvals happen only there |
+| approver | 2026-10-26, #778 (the relay's hand) | the hand `human` in the Inbox |
+
 Ended (2026-10-14, ADR 0022): Solaris, `sol_device_`, `cloud.dopp.solaris://`
 and `/napi/servicebay` — nothing of the Solaris app is carried; the new app
 has its own names. Ended (2026-10-13): `solaris-wakeword-trainer` and Balthasar. #128 built
