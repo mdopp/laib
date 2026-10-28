@@ -620,10 +620,10 @@ cost Operator code and a release.
   the rest of it; agent output still never reaches execution (ADR 0019 §2a).
 - **Where the model decides is a field:** `modell: frei` (the default and
   the old behaviour: the agentic loop with every granted tool — `vorfall`,
-  `routineblick`, `morgenbericht`, `sicherung`), `urteil` (one judgement on
+  `routineblick`, `morgenbericht`; `sicherung` until #858), `urteil` (one judgement on
   what the script prepared, offered only the tools that write it —
   `durchsicht`, `nutzung`, `aktualisierung`) or `nein` (the script alone —
-  `lehre`, which never asked a model). A script gathers, counts, compares,
+  `lehre`, which never asked a model, and `sicherung` since #858). A script gathers, counts, compares,
   renders and guards; diagnosing, choosing the next tool, trying again and
   escalating stay the model's. A skill without a script runs as before.
 - **The trust stays where it was.** The kernel grants a skill's tools and
@@ -682,3 +682,39 @@ fork and exec, which Go's `os/exec` cannot do without the Operator
 re-executing itself as a helper. Not yet: the script holds nothing to use
 the network with; revisit when a script reads text it could act on.
 
+
+## Amendment 2026-10-28 — what the Operator must always do is the runner's (#858)
+
+The review of 2026-10-28 (#851) found duties that lived in prompt prose or
+not at all, against CLAUDE.md rule 1. Each is now code, with a scripted-model
+test in `operator/duties858_test.go`:
+
+- **A daily or weekly slot may wake an unloaded model.** Every skill but the
+  report ran as a `tick`, and a tick never wakes it, so `durchsicht`,
+  `aktualisierung` and `nutzung` could not load the model. Their trigger is
+  now `slot`; only a look (an interval skill) stays a `tick`.
+- **A slot that waits or fails is one journal line** with its reason, once
+  while it keeps waiting or failing, again after it ran. The heartbeat moves
+  only on work done: a skipped session and a fallback do not move `/ready`'s
+  `looked`, and the kernel counts `looked` before any note, so that line is
+  no heartbeat.
+- **The weekly backup sample is `sicherung`'s script** (`modell: nein`): it
+  calls `laib backup check` every week, reads the week's backups and writes
+  the note, an incident when the check is red or no backup was green for a
+  day. Red, deviating and stale are rules; the morning report's model reads
+  the note.
+- **A morning report whose model fails falls back.** Its script hands a
+  report from status and journal (`fallback`), and the runner writes it
+  when the model errs or ends red; the session ends `fallback`.
+- **A `vorfall` that ends red is escalated by the runner**, once, for each
+  of its services, unless the model escalated; the session stays red and
+  its line says „eskaliert“.
+- **A prompt names only tools on its menu**, for the small and the capable
+  model alike, against the kernel's verb table (`set_value`, `suggest` and
+  `diagnose` were not tools; `repair` moved from `more` into `vorfall`'s
+  tools, it only proposes).
+
+The open-ended work stays the model's: `vorfall` and `routineblick` keep
+their loop. Weighed against before (#246): nothing the family sees gets
+worse; a red backup, a lost slot and a failed incident are written down by
+code instead of hoped for.

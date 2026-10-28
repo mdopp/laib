@@ -184,13 +184,13 @@ dropped from its reply. The built-in skills' menus:
 | Skill | Trigger | Menu |
 |---|---|---|
 | `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543); when it runs, its context is what diag found and the journal's last 15 entries without the Operator's notes, in its own budget (9,000 chars, each result 4,000) whatever the window; Home Assistant's `Update: …`/`Firmware: …` findings are `aktualisierung`'s and wake no look (#550) |
-| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792) |
-| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` |
+| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply` — for a look's red the runner first reads each service's last log line, runs the `restart` diag offers when granted, looks again and notes in German what it saw and did; still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
+| `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` — when the model fails, the runner writes the report its script made from status and journal (#858) |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
 | `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
-| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_diag`, `laib_note` — the canary restore and the week's backups; a red goes into the morning report (#287) |
+| `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_note` — no model (#858): its script runs `laib backup check` (the canary restore), reads the week's backups and writes the note, an incident when the check is red or no backup was green for a day; the morning report reads it (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox
 --all --limit 0` as the ops hand and puts the last ten measured proposals before the
@@ -427,12 +427,15 @@ verdicts stay the admin's (`laib token mint human`).
 
 The readiness line (`laib status`, `/ready`, the Status page, Haus) carries
 the Operator's state: `aus` (not enabled), `startet` (enabled, no note yet),
-`läuft`, `stumm` (running but neither a note nor a look for three ticks:
+`läuft`, `stumm` (running but no work done for three ticks:
 model unreachable or a tick hangs), `antwortet nicht`, `fehlt` (enabled but
 the unit is down). `laib diag` turns the last four into findings. A look
 that found nothing new writes no note (#543); the Operator's own `/ready`
-(`{"looked": …}`) says when its last session or look ended without an
-error, and that counts like a note. After a failed session no look is
+(`{"looked": …}`) says when its last session or look did work — ended
+neither in an error nor skipped nor as a fallback (#858) — and that is the
+heartbeat; the newest ops note counts only while `/ready` says none, right
+after a restart. A daily or weekly slot that waits or fails writes one
+line with its reason (#858); that line is no heartbeat. After a failed session no look is
 skipped, so a model that stops answering still turns the state `stumm`. An
 enabled operator that does nothing is never silent.
 
