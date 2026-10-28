@@ -24,8 +24,11 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
+        # no release-type input: with it the action ignores release-please-config.json,
+        # and the extra-files (README, ZIELBILD version lines, drift check 9) never bump
         with:
-          release-type: simple
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
   binary:
     needs: release-please
     if: needs.release-please.outputs.released == 'true'
