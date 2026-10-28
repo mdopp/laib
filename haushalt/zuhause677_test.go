@@ -27,6 +27,11 @@ func (p *proposals) Propose(_ context.Context, ceiling string, args ...string) (
 	return len(p.calls), "human", nil
 }
 
+// Aufgabe: no verb here adds a Box-Aufgabe (wish883_test's tasks does).
+func (p *proposals) Aufgabe(context.Context, string, ...string) (int, error) {
+	return 0, errors.New("unexpected laib aufgabe")
+}
+
 func run677(t *testing.T, laib Laib, z *Zuhause, args ...string) (map[string]any, int, string, string) {
 	t.Helper()
 	var out, errb, jr bytes.Buffer

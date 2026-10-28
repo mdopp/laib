@@ -131,6 +131,12 @@ How the last two moves were made:
   actor is `haushalt`; the journal line names the caller. A verb served
   behind the door takes no MCP lock — its call back takes it, which
   would otherwise wait for the call it is part of.
+- **Amendment (#883, owner 2026-10-28): the hand adds one kind of
+  Box-Aufgabe.** The Bote's `laib wish` is a task for the admins, not a
+  ticket, and only the kernel writes `aufgaben.yml`; so the `haushalt` hand
+  also has `aufgabe` (fixed in code, `state.HaushaltHand`). The kernel lets
+  it add, never tick off or defer, and records as `von` the caller
+  laib-haushalt names (`--von bote:<login>`), the way Haus's `--von` is.
 - **The oui list is in the image.** Distroless has none; the image takes
   Alpine's `hwdata-net` (`/usr/share/hwdata/oui.txt`), so makers stay
   named without a mount of the host's file.

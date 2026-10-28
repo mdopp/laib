@@ -23,9 +23,9 @@ import (
 // | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"`
 // (#667, #759, #878): the box's to-do list in the state repo's
 // aufgaben.yml. Bookkeeping, not a change of the box: no proposal, one
-// commit and one journal line per change. ops, claude, Haus and humans add;
-// humans, claude and Haus (for the logged-in person, --von) check off and
-// defer. Haus and the Bote act for one person (--von): they see the admins'
+// commit and one journal line per change. ops, claude, Haus, humans and
+// laib-haushalt (the Bote's wish, #883) add; humans, claude and Haus (for
+// the logged-in person, --von) check off and defer. Haus and the Bote act for one person (--von): they see the admins'
 // and everyone's tasks and only that person's own (#878). In the kernel,
 // not behind the verb door (ADR 0026): it writes the state repo, which
 // laib-haushalt's container never mounts (ADR 0027), and diag reads it to
@@ -54,6 +54,8 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 	by := env.Actor
 	if v := val["--von"]; v != "" && hand == "haus" {
 		by = "haus:" + v // the person Haus acts for
+	} else if v != "" && hand == "haushalt" {
+		by = v // the caller laib-haushalt acts for, as the door named it: the Bote's wish (#883)
 	}
 	// #878: a person's tasks are theirs; Haus and the Bote see them only for
 	// the person they act for, every other hand short of the whole list none
@@ -109,7 +111,7 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			fmt.Fprintln(env.W(), strings.TrimRight(line, " "))
 		}
 		return cli.ExitOK
-	case act == "add" && !slices.Contains([]string{"ops", "claude", "haus"}, hand) && !policy.IsHuman(hand):
+	case act == "add" && !slices.Contains([]string{"ops", "claude", "haus", "haushalt"}, hand) && !policy.IsHuman(hand):
 		return cli.Refused(env, hand+" darf keine Box-Aufgaben anlegen: das dürfen ops, claude, Haus und Menschen")
 	case act != "add" && hand != "claude" && hand != "haus" && !policy.IsHuman(hand):
 		return cli.Refused(env, hand+" darf Box-Aufgaben nicht abhaken oder zurückstellen: das dürfen Menschen, claude und Haus")

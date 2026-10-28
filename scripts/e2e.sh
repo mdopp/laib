@@ -389,7 +389,9 @@ grep -q "im Chat gibt es keine Freigaben" "$HOOKDIR/bote/hermes/SOUL.md" || fail
 # #54: only MCP servers that answer are rendered, and the SOUL names only the tools the Bote has
 if grep -q "haushalt:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "an unset Haushalt must not be configured (#54)"; fi
 if grep -qi "haushalt\|Gedächtnis\|(frage\|automat\|haus:\|(ha:" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL promises a tool the Bote does not have (#54)"; fi
-grep -q "nicht merken\|erinnere mich nicht\|vergesse" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say what the Bote does not remember (#54)"
+# #884: memory is on and one for the household; the SOUL says so instead of denying it
+grep -q "alle in diesem Zuhause sehen dasselbe" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL must say its memory is shared (#884)"
+if grep -q "nichts merken" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL must not deny the memory it has (#884)"; fi
 # #470: the chat answers without thinking (Hermes reads extra_body only from a custom_providers entry
 # matched by provider and base_url: agent/agent_init.py), /model denken thinks, through its own named entry
 python3 - "$HOOKDIR/bote/hermes/config.yaml" <<'PY' || fail "the Bote's chat thinks before every answer, or denken does not (#470)"
