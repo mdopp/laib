@@ -72,6 +72,9 @@ type Readiness struct {
 	// Problems: what is red beyond one service (disk, backup, firewall,
 	// and the last whole diag's slow probes), one line each (#856)
 	Problems []string `json:"problems,omitempty"`
+	// Says: each problem in one plain sentence, for the pages (#855); the
+	// same findings, index by index
+	Says []string `json:"-"`
 	// the three guarantees Haus's start page shows the family (haus#2)
 	LastBackup LastBackup `json:"lastBackup"`
 	LastChange LastChange `json:"lastChange"`
@@ -223,7 +226,7 @@ func judge(r Readiness, f facts) (Readiness, []ServiceStatus) {
 			}
 			continue
 		}
-		r.Problems = append(r.Problems, strings.TrimPrefix(x.Service+": "+x.Detail, ": "))
+		r.Problems, r.Says = append(r.Problems, strings.TrimPrefix(x.Service+": "+x.Detail, ": ")), append(r.Says, diag.Say(x))
 		if x.Probe == "backup" && x.Topic != "offsite" && lb.Problem == "" {
 			lb.Problem = x.Detail
 		}

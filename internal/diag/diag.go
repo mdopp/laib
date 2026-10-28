@@ -56,6 +56,9 @@ type Finding struct {
 	// Does: what the repair does, the card's headline (#746), when the
 	// status file knows it better than laib (the wake word a flash plays)
 	Does string `json:"does,omitempty"`
+	// Say is what it means to a person, in one plain sentence (#855): the
+	// red mail and a repair's card show it, Detail and Fix stay for the admin.
+	Say string `json:"say,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -228,6 +231,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	}
 	if tasks, err := aufgaben.Load(st.Dir); err == nil { // #667: what the owner deferred
 		out = cover(out, tasks, time.Now().Format(time.DateOnly))
+	}
+	for i := range out {
+		out[i].Say = Say(out[i])
 	}
 	rank := map[string]int{"rot": 0, "gelb": 1, "info": 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Severity] < rank[out[j].Severity] })

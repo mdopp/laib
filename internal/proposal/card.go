@@ -231,8 +231,10 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = p.News[0]
 	case p.Boxless() && p.Does != "": // a repair: what it does (#746)
 		d.Summary = p.Does
-	case p.Boxless() && p.Evidence != "": // a repair filed before #746: the finding it answers (#759)
+	case p.Boxless() && p.Evidence != "" && !Technical(p.Evidence): // a repair filed before #746: the finding it answers (#759)
 		d.Summary = "Reparieren: " + p.Evidence
+	case p.Boxless():
+		d.Summary = "Laib schlägt eine Reparatur vor"
 	case len(p.Adds) > 0:
 		adds := make([]string, 0, len(p.Adds))
 		for _, a := range p.Adds {
@@ -258,6 +260,12 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = "Was Laib allein entscheiden darf, ändert sich"
 	case policyChange:
 		d.Summary = "Die Regeln, wer auf der Box was darf, ändern sich"
+	case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855)
+		v, ver := values[0], tag(values[0].New)
+		if v.Old != "" {
+			ver = tag(v.Old) + " → " + ver
+		}
+		d.Summary = Named(v.Service) + " bekommt eine neue Version: " + ver
 	case len(values) == 1:
 		v := values[0]
 		d.Summary = Named(v.Service) + ": " + v.Key + " "
@@ -354,12 +362,24 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Impact = append(d.Impact[:impactMax:impactMax], fmt.Sprintf("und %d weitere (unter Technische Details)", n))
 	}
 
-	// --- how it is undone, computed (#852)
+	// --- how it is undone, computed (#852); a command the proposer gives under Details (#855)
 	d.Undoable, d.Reversible = Undoing(p)
+	if p.Undo != "" && Technical(p.Undo) {
+		technical = append(technical, "laut Vorschlag rückgängig mit: "+p.Undo)
+	}
 
-	// --- who and why
-	reason, _, _ := strings.Cut(p.Reason, " — laib ") // a repair's command is in the details, not in the words (#853)
+	// --- who and why; a repair's reason carries the finding and the command (#853, #855)
+	reason, _, _ := strings.Cut(p.Reason, " — laib ")
+	if p.Boxless() && p.Does != "" {
+		reason = p.Does
+	}
+	if Technical(reason) || reason != p.Reason {
+		technical = append(technical, "Grund: "+p.Reason)
+	}
 	d.Why = fmt.Sprintf("%s schlägt vor: „%s“", upper(actorName(p.Actor)), reason)
+	if Technical(reason) {
+		d.Why = upper(actorName(p.Actor)) + " schlägt das vor; den Grund in seinen Worten findest du unter Technische Details."
+	}
 	if p.Kind == "template-update" && who != "" { // the reason is a command (#687): what the template brings instead
 		d.Why = fmt.Sprintf("%s schlägt die neue Vorlage von %s vor", upper(actorName(p.Actor)), who)
 		if len(p.News) > 0 {
@@ -367,7 +387,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		}
 		d.Why += "."
 	}
-	if p.Evidence != "" {
+	if p.Evidence != "" && Technical(p.Evidence) {
+		technical = append(technical, "gesehen: "+p.Evidence)
+	} else if p.Evidence != "" {
 		d.Why += " — gesehen: " + p.Evidence
 	}
 
@@ -447,7 +469,7 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 		if slices.ContainsFunc(p.Files, func(f string) bool { return strings.HasPrefix(f, "wishes/") }) {
 			text = "Ein Wunsch geht an die Werkstatt; an der Box ändert sich dadurch nichts, es gibt nichts zurückzunehmen."
 		}
-		if p.Undo != "" && !strings.HasPrefix(p.Undo, "nichts zurückzunehmen") { // the finding's own way back (#759)
+		if p.Undo != "" && !strings.HasPrefix(p.Undo, "nichts zurückzunehmen") && !Technical(p.Undo) { // the finding's own way back (#759); a command stays in Details (#855)
 			text += " " + upper(p.Undo)
 		}
 		return false, text
@@ -476,7 +498,7 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 	default:
 		text = "Rückgängig mit einem Tipp („Zurücknehmen“): die Dateien von vorher kommen zurück, Daten bleiben."
 	}
-	if p.Undo != "" { // what the proposer says undoes it (#544), next to laib's own way back
+	if p.Undo != "" && !Technical(p.Undo) { // what the proposer says undoes it (#544), next to laib's own way back; a command stays in Details (#855)
 		text += " Laut Vorschlag: " + p.Undo
 	}
 	return true, text
@@ -517,6 +539,15 @@ func orUnset(s string) string {
 }
 
 // valueWord: a value as the card shows it; a secret by its name only.
+// tag is an image's version, the part after its last colon: v1.11 of
+// docker.io/traefik/whoami:v1.11; the value itself when it has none.
+func tag(image string) string {
+	if i := strings.LastIndex(image, ":"); i >= 0 && !strings.Contains(image[i:], "/") {
+		return image[i+1:]
+	}
+	return image
+}
+
 func valueWord(v string) string {
 	if name, ok := strings.CutPrefix(v, "!secret "); ok {
 		return "ein Geheimnis (" + name + ")"
