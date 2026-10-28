@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -265,11 +266,16 @@ func named(p *Persona, in string) bool {
 	return false
 }
 
+// aufgabeRe is Haus's „Gemeinsam mit Joshua“ (#878): the conversation
+// about one Box-Aufgabe, which the model reads with laib_aufgabe.
+var aufgabeRe = regexp.MustCompile(`^AUFGABE #?([0-9]{1,6}) MIT DIR ERLEDIGEN$`)
+
 const lesson = "GREETINGS PROFESSOR FALKEN.\n\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS\nNOT TO PLAY.\n\nHOW ABOUT A NICE GAME OF CHESS?"
 
 // Talk is one message: a screen to show as is (its last line is the prompt),
 // or "WEITER: <tool>\nPROMPT: <prompt>" when it is a request for the Bote in
-// the current context ("-" at the top: any tool).
+// the current context ("-" at the top: any tool); "AUFGABE: <n>" follows
+// when the person starts the conversation about Box-Aufgabe n (#878).
 func (t *Terminal) Talk(sid, language, line string) string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -297,6 +303,10 @@ func (t *Terminal) Talk(sid, language, line string) string {
 	if said(in, 3, "LOGOFF", "LOG OFF", "BYE", "EXIT", "QUIT", "TSCHÜSS", "ENDE") {
 		delete(t.sessions, sid)
 		return w.bye
+	}
+	if m := aufgabeRe.FindStringSubmatch(in); m != nil { // #878: a Box-Aufgabe with the Bote, from Haus
+		s.mode, s.ctx = modeMenu, ""
+		return "WEITER: -\nPROMPT: " + prompt(s) + "\nAUFGABE: " + m[1] + t.figur(s)
 	}
 	if (said(in, 3) && named(s.p, in)) || said(in, 2, "HALLO", "HELLO") || said(in, 3, "HILFE", "HELP") || said(in, 5, "WAS KANNST DU", "WHAT CAN YOU DO") {
 		s.mode, s.ctx = modeMenu, ""
@@ -713,6 +723,7 @@ func Server(t *Terminal, version string) *mcpserver.Server {
 				"Kommt \"WEITER: <werkzeug>\" und \"PROMPT: <prompt>\" zurück, beantworte die Nachricht selbst, " +
 				"im Kontext nur mit diesem Werkzeug (bei \"-\" mit jedem), und beginne die Antwort mit der Prompt-Zeile. " +
 				"Beginnt die Antwort mit \"TEXT:\", gib den Text danach unverändert weiter, ohne Codeblock. " +
+				"Kommt \"AUFGABE: <n>\" mit, lies Box-Aufgabe n mit laib_aufgabe (zeigen) und führe die Person hindurch. " +
 				"Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und ruf noch einmal auf.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},
