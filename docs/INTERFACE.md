@@ -262,6 +262,19 @@ the hand's ceiling and verb list reach it. `laib skill enable|pause
 is what the *client* renders when the call fails). `lock` names what holds
 apply when `eingeschränkt`: `apply:media` or `gpu:werkstatt`.
 
+The guarantees are the same object in `/ready` and in `laib status --json`
+`.ready` (#856, one verdict for every surface):
+
+- `red` counts red services; each red row of `.services` carries `red`, its
+  reasons beyond the units (`"health: 502 Bad Gateway"`).
+- `problems` lists what is red beyond one service: disk, backup, firewall,
+  and the last whole `laib diag` run's slow probes with its time.
+- `lastBackup`: `at` (the last green backup), `repos` (places: 2 while the
+  off-box copy is under 48 h old), `ok` (green, and no backup finding red),
+  `onlyOnDataDisk` (the one place is the disk it protects), `problem` (why
+  not `ok`), `text` (the fact in one neutral German sentence).
+- `lastChange`: the last approved proposal (`proposal`, `summary`, `at`).
+
 ## The box page: three pages
 
 Status:
@@ -296,7 +309,7 @@ After „Freigeben“ the card leaves the open ones at once and stands, without
 buttons, under „Was die Box gerade macht“ with the step the run that carries
 it writes on the proposal (`step`, #686): „wartet, bis die Box mit der
 Arbeit davor fertig ist“, „sichert immich“, „startet immich“, „prüft, ob
-immich läuft“; then „fertig“ (with „Zurücknehmen“) or „zurückgenommen, weil
+immich läuft“; then „fertig“ (with „Zurücknehmen“ where it undoes something, #852) or „zurückgenommen, weil
 immich danach nicht richtig lief“. The page reloads itself every 3 s while
 something runs. „Alle freigeben“ (two or more open cards) is one confirmation
 page that names the cards; it approves exactly those, one after the other,
@@ -491,11 +504,16 @@ Every open proposal is shown as the same card — on the Box page, in
 unter paperless.<domain> nur im Heimnetz erreichbar“), **what it means for
 the family** (the review's reasons: aus dem Internet erreichbar, ohne
 Anmeldung, ein Laib-Schlüssel, ein Skript auf der Box …, or „nichts
-Sichtbares“), **whether it can be undone** („Zurücknehmen“: files back,
-data stays; a new service is stopped and removed, its data stays), **who
-proposed it and why** (quoted), and **the safe default**: for a risky
-class (human, a new service, a minted token) the first button is „Später“
-and the diff sits behind „Details“. The card is built mechanically from
+Sichtbares“), **whether it can be undone**, computed by
+`proposal.Undoing` from the tier, whether it changes files or only runs a
+verb, and whether a snapshot precedes it (#852): „Zurücknehmen“ brings the
+files back and the data stay; a new service is stopped and removed, its data
+stay; a service with data gets its program back with one tap, its data only
+from the snapshot laib takes first; a repair, a wish and the destroy tier have
+no „Zurücknehmen“ and say what stays. **Who proposed it and why** (quoted),
+and **the safe default**: for a risky class (human, a new service, a minted
+token, a service with data, the destroy tier) the first button is „Später“,
+„Freigeben“ loses its accent, and the diff sits behind „Details“. The card is built mechanically from
 the classified change (`proposal.Card`), never by a model. What the
 proposer saw (`evidence`) follows its reason, and its way back (`undo`)
 follows laib's own.
@@ -548,6 +566,20 @@ whole: each of its merges is reverted, newest first, each proposal is
 `rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
 #4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
 again to be approved alone.
+A red run that touched a service with data (its pre-update snapshot taken,
+the apply red) restores nothing by itself (#853, ADR 0019 §4 as amended):
+the old program comes back, the data stay as the update left them, and each
+proposal of the run says so with the snapshot's time („Das alte Programm
+läuft wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung
+von 14:05 liegt bereit.“). Laib files two proposals of its own, named on
+the run's proposals as `restore` and `forward` and offered on their cards
+as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
+<snapshot> <service>` for each snapshot of the run) and „Nach vorne
+reparieren“ (a repair running `laib rollback <revert>` for each revert of
+a proposal with data: its change on again, the data untouched, no new
+snapshot). A forward that verifies red leaves its red journal line, which
+the Operator opens as an incident and escalates after 30 minutes as for
+#792; the restore stays open beside it, its snapshot kept a week.
 `laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
 (apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;
@@ -570,7 +602,9 @@ hour.
 reverted (`-m 1`) without touching `secrets.age` — services that stay keep
 the secrets their data was made with, services that leave the state lose
 theirs — and one apply follows. The Box page offers it as „Zurücknehmen“
-next to the last five freed proposals. `laib rollback <commit>` validates
+next to the last five freed proposals it undoes something for (#852: not a
+repair or the destroy tier); `/ready`'s `lastChange.reversible` is the same
+answer. `laib rollback <commit>` validates
 the argument (`git rev-parse --verify --end-of-options`) and reverts a
 merge commit with `-m 1`. An approve merges in a temporary worktree: a
 conflict never reaches `main`, the merged result must load and render, and

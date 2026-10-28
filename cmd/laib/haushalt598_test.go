@@ -27,6 +27,14 @@ func TestMain(m *testing.M) {
 		os.Exit(runArgs(os.Args[1:]))
 	}
 	os.Setenv("LAIB_TEST_AS_LAIB", "1")
+	// git's automatic gc and maintenance repack a test's state repo in the
+	// background, mid-test: a watcher then sees files change that laib never
+	// touched, and TempDir's cleanup finds .git not empty
+	os.Setenv("GIT_CONFIG_COUNT", "2")
+	os.Setenv("GIT_CONFIG_KEY_0", "gc.auto")
+	os.Setenv("GIT_CONFIG_VALUE_0", "0")
+	os.Setenv("GIT_CONFIG_KEY_1", "maintenance.auto")
+	os.Setenv("GIT_CONFIG_VALUE_1", "false")
 	code := m.Run()
 	if haushaltDir != "" {
 		os.RemoveAll(haushaltDir)

@@ -12,6 +12,8 @@ prove before the Kraftwerk moves.
   inside the envelope — see the amendment under Consequences.
   Amended 2026-10-23 (#609): an approve is a merge, a run applies what
   was approved, batched, and rolls it back as a whole on red.
+  Amended 2026-10-28 (#853): a red run rolls back the program, not the
+  data; the snapshot is offered back, never restored by itself.
 - **Deciders:** operator (mdopp), on the review's measure: good UX,
   resilience, agentic operation — for people who mostly do not think
   technically and are afraid of breaking something.
@@ -61,8 +63,10 @@ wrong.
    Rückgängig". Rückgängig is `laib rollback #N` (#75); the fields come
    from `/ready` (#80, haus#4).
 4. **Updates are proposals.** Images are pinned by tag and digest, an update
-   is a proposal with a snapshot before, verify after, image and data
-   rollback on red; backup and update never share the 03:00 slot (#77).
+   is a proposal with a snapshot before, verify after, image rollback on
+   red and the data's snapshot offered back, never restored by itself;
+   backup and update never share the 03:00 slot (#77). *(Amended
+   2026-10-28, #853: see the amendment below.)*
 5. **An outside watchdog and a paper card.** `laib serve` (since #443 its
    program `laib-notify`, on a five-minute timer) pings an outside
    check while readiness is not red; silence becomes a push to the admin's
@@ -181,3 +185,25 @@ program outside `laib`, is removed with its `approver` hand; `IsHuman` is
 the hand `human` and nothing else, and a `human: true` left in an old
 policy.yml counts for nothing (`TestApprovalsAreTheInboxsAlone`). The run
 worker of the amendment above is reached by the CLI, MCP and `laib serve`.
+
+## Amendment 2026-10-28 (#853): on red the program comes back, the data are offered back
+
+§4 promised „image *and data* rollback on red“. The run reverted its merges
+and applied again, but never restored the snapshot it took, so after a
+database-migrating update the old program started on migrated data while the
+card said „Daten bleiben“. Owner decision 2026-10-28: (b), plus a way
+forward; (a), an automatic restore, waits for a green restore drill (#438).
+
+- **No automatic restore.** A red run brings the old program back and leaves
+  the data as the update left them.
+- **It says so.** Each proposal of the run reads „Das alte Programm läuft
+  wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung von
+  HH:MM liegt bereit.“, with the snapshot's real time; the journal says the
+  same.
+- **Two ways on, one tap each**, both proposals laib files itself and the
+  human approves in the Inbox (no new approval surface, no new verb):
+  „Sicherung zurückspielen“ runs `laib restore <snapshot> <service>`;
+  „Nach vorne reparieren“ runs `laib rollback` of the run's revert, so the
+  new version is on again and the data are not touched. A forward that is
+  still red leaves its red journal line, the Operator's incident (#792:
+  bounded, escalated after 30 minutes); the restore stays open beside it.

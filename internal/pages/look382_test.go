@@ -16,13 +16,14 @@ import (
 // and note on one line, readable on a phone. The status page is a golden
 // file; UPDATE_GOLDEN=1 rewrites it.
 func TestThePagesWearTheHouseholdLook(t *testing.T) {
-	rd := Readiness{State: "bereit", Services: 3, Green: 1, Yellow: 1, Red: 1, Operator: "läuft", LastHeard: "2026-10-19T07:41:05Z"}
+	rd := Readiness{State: "bereit", Services: 3, Green: 1, Yellow: 1, Red: 1, Operator: "läuft", LastHeard: "2026-10-19T07:41:05Z",
+		LastBackup: LastBackup{OK: true, Text: "Letzte Sicherung 19.10. 03:30, an einem Ort."}, LastChange: LastChange{Proposal: 12, Summary: "Anmeldung: Session-Speicher", At: "2026-10-19T05:30:00Z"}}
 	rows := []ServiceStatus{ // problems first, as the page sorts them (#785)
 		{Name: "llama", State: "rot", Units: map[string]string{"llama-lease.service": "activating"}},
 		{Name: "home-assistant", State: "gelb", Units: map[string]string{"home-assistant.service": "active"}, Detail: "fehlt: Jellyfin, Waschmaschine"},
 		{Name: "auth", Title: "Anmeldung", Beschreibung: "Konten und zweiter Faktor", State: "grün", Units: map[string]string{"auth-pod.service": "active"}, Detail: "Passwort-Mails über smtp.example · geprüft vor 3 min"},
 	}
-	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "19.10. 07:30 · human:core · apply auth · Session-Speicher", "")
+	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "")
 	got := pageHTML("Status", body)
 	golden := "testdata/status.html"
 	if os.Getenv("UPDATE_GOLDEN") != "" {

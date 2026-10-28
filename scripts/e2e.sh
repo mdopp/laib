@@ -66,6 +66,7 @@ echo "restic $@" >> "${SYSTEMCTL_LOG:-/dev/null}"
 [ -n "${SHIM_RESTIC_FAIL:-}" ] && { echo "Fatal: unable to open repository (shim)" >&2; exit 1; }
 # a repo exists only after init (#40: backupPrep asks for the sheet's password when it does)
 case "$1" in
+  backup) echo "snapshot 4f9a2c1e saved";;   # restic's last line; a red run offers it back by its id (#853)
   init) touch "${SYSTEMCTL_LOG%/*}/restic.initialized";;
   cat) [ -f "${SYSTEMCTL_LOG%/*}/restic.initialized" ] || { echo "Fatal: repository does not exist"; exit 1; };;
 esac
@@ -643,6 +644,29 @@ C="$(SHIM_RESTIC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" restore 0123abcd caddy)
 C="$(SHIM_PODMAN_EXEC_FAIL=1 LAIB_ACTOR=human:e2e code "$BIN" exec caddy -- true)"
 [ "$C" = 2 ] || fail "failed exec: exit $C, want 2 (red): $(cat "$WORK/red.out")"
 last exec caddy | python3 -c 'import sys,json; e=json.load(sys.stdin); assert e.get("result")=="red", e'
+# a red update of a service with data (#853): no restore by itself; each card says where the data
+# are and which snapshot is there, and laib files „Sicherung zurückspielen“ and „Nach vorne reparieren“
+T="$LAIB_HOME/state/services/tresor"; mkdir -p "$T" "$WORK/data/tresor"
+printf 'name: tresor\ndata:\n  - path: %s/data/tresor\n    quiesce: true\n' "$WORK" > "$T/laib.yml"
+echo "IMAGE: docker.io/vaultwarden/server:1.30" > "$T/values.yml"
+printf '[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n' > "$T/tresor.container"
+LAIB_ACTOR=human:e2e "$BIN" apply --reason "e2e: tresor" >/dev/null || fail "tresor apply exit $?"
+LAIB_ACTOR=ops "$BIN" propose --set services/tresor/values.yml:IMAGE=docker.io/vaultwarden/server:1.31 "e2e: tresor neu" >/dev/null || fail "tresor propose"
+ID="$("$BIN" inbox --json | python3 -c 'import sys,json; print([p for p in json.load(sys.stdin) if p["reason"]=="e2e: tresor neu"][0]["id"])')"
+RESTORES="$(grep -c "^restic restore" "$SYSTEMCTL_LOG" || true)"
+C="$(SHIM_FAILED_UNITS="tresor.service" LAIB_ACTOR=human:e2e code "$BIN" approve "$ID")"
+[ "$C" = 2 ] || fail "the red tresor update: exit $C, want 2: $(cat "$WORK/red.out")"
+[ "$(grep -c "^restic restore" "$SYSTEMCTL_LOG" || true)" = "$RESTORES" ] || fail "a red run restored by itself (#853)"
+"$BIN" inbox "$ID" --json | python3 -c '
+import sys,json,subprocess
+p=json.load(sys.stdin)
+assert p["outcome"]=="rolled-back" and "Die Daten sind auf dem Stand nach dem Update; die Sicherung von " in p["because"] and p.get("restore") and p.get("forward"), p
+' || fail "the red card does not say where the data are, or files no restore and forward (#853)"
+R="$("$BIN" inbox "$ID" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); print(p["restore"], p["forward"])')"
+for n in $R; do
+  "$BIN" inbox "$n" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["status"]=="open" and p["actor"]=="laib", p' || fail "#$n is not laib's open proposal (#853)"
+done
+grep -q "laib restore 4f9a2c1e tresor" <<<"$(git -C "$LAIB_HOME/state" diff "main...$("$BIN" inbox "${R%% *}" --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["branch"])')")" || fail "the restore does not name the run's snapshot (#853)"
 # --- 15. #184 (B1): a Bote switched from Signal to Matrix applies green with no hand edit: pre-start
 # renders the channel .env files before the units start, so neither Hermes nor the health check reads
 # the last Signal config. bote-notify serves the pod's health; a fake signal-cli daemon (/api/v1/check, #469) answers while Signal is on.
