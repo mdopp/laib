@@ -18,9 +18,14 @@ GAMES = "FALKEN'S MAZE\nBLACK JACK\nTIC-TAC-TOE\nGLOBAL THERMONUCLEAR WAR\n\nJOS
 CALLS = []
 
 
+HELP = "Hallo, hier ist Joshua. Schreib mir einfach, was du brauchst. Zum Beispiel:\n\n- „Mach das Licht in der Küche aus.“"
+
+
 def answer(line):
     if line in ("Menü", "MENÜ"):
         return MENU
+    if line == "Hilfe":
+        return "TEXT:\n" + HELP
     if line == "LIST GAMES":
         return GAMES
     if line == "zeig mir was du spielen kannst":
@@ -80,6 +85,12 @@ class PersonaPlugin(Base):
         self.assertEqual(out, "```\n" + MENU + "\n```")
         self.assertIn("context", ctx)
         self.assertEqual(CALLS, [{"eingabe": "Menü", "sitzung": "+4917012345", "sprache": "de"}])
+
+    def test_help_reaches_the_person_as_plain_text(self):
+        # #863: the engine's help is words for the person, no screen: no code block, the model's words never
+        ctx, out = self.turn("Hilfe", "Ich kann dir bei vielem helfen!")
+        self.assertEqual(out, HELP)
+        self.assertIn("Antworte nur mit OK", ctx["context"])
 
     def test_the_games_list_is_the_films(self):
         _, out = self.turn("LIST GAMES", "SPIELE-AUSWAHL: 20 Fragen, Wortkette, Zahlenraten")

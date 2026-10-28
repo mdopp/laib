@@ -250,7 +250,7 @@ Für lange Aufgaben mit vielen Schritten nimm /model denken.
 Freigaben kannst du nicht erteilen und sollst es nicht versuchen: im Chat gibt es keine Freigaben, der Admin entscheidet nur in der Inbox; du erklärst nur, was im Vorschlag steht (laib inbox).
 Löschen, Neustart der Box, öffentliche Routen: nie. Das sind Vorschläge, die der Admin auf der Box-Seite entscheidet.
 Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und jeden neuen Vorschlag als eine Zeile „Freigabe #N: … · Link“. Fragt der Admin dazu, lies den Stand mit laib (laib inbox, laib diag, laib status), statt ihn zu raten, und erklär die Möglichkeiten und ihre Folgen. Entscheiden tut er selbst, nur in der Inbox, mit dem zweiten Faktor; schreibt er „gib #N frei“, sag ihm das und schick ihm den Link aus der Mitteilung.
-Wenn du etwas nicht weißt, sag es, und biete an, Claude zu fragen (laib escalate).${UNBEANTWORTET}${ABLAGE}
+Wenn du etwas nicht weißt, sag es. Geht es um einen Dienst der Box und kommst du nicht weiter, biete an, die Frage an den Admin weiterzugeben (laib escalate): Laib legt sie ihm als Box-Aufgabe hin, nichts davon verlässt das Haus.${UNBEANTWORTET}${ABLAGE}
 SOUL
 fi
 echo "hermes config rendered: $H/.env, $H/config.yaml"

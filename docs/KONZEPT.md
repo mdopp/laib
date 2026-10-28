@@ -13,7 +13,7 @@ written down.
 |---|---|---|---|
 | **Laib** | the control plane: state repo, plan/apply/converge, proxy, SSO, DNS, model role, backup, journal, inbox, `/mcp` | `mdopp/laib` | one binary, user service |
 | **Operator** | the box's admin agent: watches, inspects, corrects inside the envelope, escalates, writes the morning report (ADR 0013) | `mdopp/laib` `operator/` | template `operator` |
-| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house, box, questions, memory, approvals as you (ADR 0016) | Hermes, stock, configured by a template | template `bote` |
+| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house and questions for everyone, the box for the admin's number only; no memory beyond a conversation; approves nothing (ADR 0016, #778, #863) | Hermes, stock, configured by a template | template `bote` |
 | **Haus** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/haus` | template `haus` |
 | **Haus-Android** | the phone: TWA of Haus plus native widgets and the quick-settings tile | `mdopp/haus-android` | app |
 | **Home Assistant** | the house brain: devices, automations, Assist (intents, timers, media via Music Assistant) | upstream | template `home-assistant` |
@@ -39,7 +39,7 @@ surface, the web chat as a primary surface.
 | Switch, time, play, answer "was ist" by voice | Home Assistant Assist + Stimme + Frage | the speaker answers; no LLM for intents |
 | Show state, switch by tap, pin favorites | Haus + Haus-Android | pages, widgets, tile |
 | Build a template, a migration, a fix nobody has | Werkstatt: pi first, Claude for the hard ones | PR to the household registry; human merges |
-| Decide the irreversible | the human | Box page or verified Signal: remove, reboot, public route, money, external secrets |
+| Decide the irreversible | the human | the Inbox (behind Authelia's second factor) or the host shell: remove, reboot, public route, money, external secrets (#778) |
 | Keep the knowledge | the journal (facts), the Haus memory (household), the Laib docs and ADRs (decisions), the Werkstatt transcripts (how) | all searchable |
 
 ## Hands, tiers, tokens
@@ -47,15 +47,16 @@ surface, the web chat as a primary surface.
 | Hand | Who | Ceiling | May | Never |
 |---|---|---|---|---|
 | resident | family through Haus | read | see status cards | change the box |
-| bote | the Bote | read + propose | read box state and journal; propose; everything in the house via HA; Frage; memory | approve (its own token) |
+| bote | the Bote | read + propose | read box state and journal; propose; everything in the house via HA; Frage; escalate, which lands with the owner as a Box-Aufgabe (#863) | approve; file a ticket in a repo |
 | ops | the Operator | apply | all of class 1 and 2 (ADR 0013) inside the envelope | remove, reboot, public routes, secrets, tokens |
 | pi | the Werkstatt's local coder | propose | propose template updates and values | apply |
 | claude | Claude in the Werkstatt | apply, TTL | everything ops may, plus writing templates and migrations | class 3 |
-| human | you, on the Box page, the host shell, or your verified Signal number | destroy | everything | — |
+| human | you, in the Inbox or on the host shell | destroy | everything | — |
 
-Tokens come from `laib token mint <hand>` by a human; the Bote's approval
-token is a `human` token bound to one Signal number, revocable with one
-command.
+Tokens come from `laib token mint <hand>` by a human. No token approves
+what only a human may; an agent hand with `approve` in its ceiling (ops,
+claude) may approve a proposal that is not human-class and not its own
+(ADR 0019 (e), amended 2026-10-28, #865).
 
 ## Interfaces by user group
 
@@ -70,8 +71,12 @@ command.
   is a card.
 - **Widgets:** Geräte, Energie, Kamera, Schloss, Aktive Geräte,
   Mitteilungen; the quick-settings tile opens Sprechen.
-- **Signal (optional per family member):** the Bote with their own memory
-  namespace; house and questions, no box.
+- **Signal (optional per family member):** the Bote; house and questions,
+  no box: its directory and its help offer the box to the admin's number
+  only (#863). It remembers nothing beyond a conversation; what should
+  stay goes into the Haushalt (calendar, notes). A question it cannot
+  answer about a service goes to the owner as a Box-Aufgabe, never
+  out of the house.
 
 ### Guests
 
@@ -80,7 +85,8 @@ command.
 ### Admin
 
 - **Signal with the Bote:** "was gibt's Neues" (the morning report), "wie
-  geht's der Box", "frag Claude, warum …"; a new proposal arrives as
+  geht's der Box"; a question the Bote cannot answer becomes a Box-Aufgabe
+  (#863), and Claude is asked in the Werkstatt; a new proposal arrives as
   „Freigabe #17: … · <Inbox link>“ and is decided in the Inbox (#778).
 - **Box page** `laib.<domain>`: Status, Inbox with Freigeben/Ablehnen,
   Journal. Also as cards on Haus's Box page: Operator "was ich gerade tue",
@@ -101,7 +107,7 @@ command.
   large preset (qwen3.6-35b-a3b, 131k context, MTP drafter) for a
   hard question and fall back to the household preset when the card is
   busy.
-- **Claude:** through the Werkstatt as `claude`; receives escalations
+- **Claude:** through the Werkstatt as `claude`; receives the Operator's escalations
   with `laib context`; answers come back as PRs, journal lines and, via
   the Bote, on Signal.
 - **pi:** Werkstatt tickets labelled `pi:ready`; proposes, never applies;
@@ -126,12 +132,12 @@ command.
 | Timers, alarms | Home Assistant | voice | HA | the speaker |
 | Notes | Markdown files in the file share (Syncthing) | you with any app, the Bote | Haus search (memory library), the Bote | Haus Notizen, any phone app |
 | Documents | Paperless | scanner, import | Haus, the Bote | Paperless, Haus |
-| What the Bote knows about you | Hermes memory (Honcho), per number | the Bote | the Bote | none |
+| What the Bote knows about you | nothing beyond a conversation: no memory is configured (`templates/bote/README.md`, "Memory") | — | — | — |
 
 Agents reach all of it through one MCP source, **Haushalt**, served by
 Haus (calendar, contacts, notes, document search, memory search); Claude
-mounts the same source in the Werkstatt. The Bote remembers *about* you,
-never *for* you.
+mounts the same source in the Werkstatt. The Bote remembers nothing about
+you beyond a conversation; what should stay, it puts in the Haushalt.
 
 ## Models and the card
 
