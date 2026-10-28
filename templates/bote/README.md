@@ -290,9 +290,15 @@ the hand `bote` can only propose, and approving stays the Inbox's (#778). Before
 template update undid an owner's `full`; a template update keeps a value
 (docs/STATE.md). Any other word fails the hook.
 
-**Memory:** nothing is configured. The SOUL says so in plain words — the
-Bote remembers nothing beyond a conversation and says so when asked to —
-and points to the Haushalt (calendar, notes) once Haus serves it.
+**Memory (#884):** Hermes' `memory` and `session_search` are on, the owner's
+decision of 2026-10-28. Both are per Hermes profile, and the Bote runs one
+profile: one `MEMORY.md`/`USER.md` reaches every later conversation, and
+`session_search` finds every person's past sessions in one `state.db`. Nothing
+keeps people apart there. The SOUL says so in plain words and asks the model
+not to keep or retell one person's things to another; that is a prompt, not a
+guarantee. Personal things belong in the person's Haushalt (calendar, notes).
+A profile per person (Hermes' `profile_routes`) is the way to real separation,
+open on #884.
 
 ## Filing into Paperless: "ablegen" (#521)
 

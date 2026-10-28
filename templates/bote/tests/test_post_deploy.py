@@ -254,7 +254,8 @@ class PostDeploy(unittest.TestCase):
         """#863: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
         promised a memory per number. Nothing is configured (README, "Memory"): both say so."""
         _, _, soul = self.hook()
-        self.assertIn("Du kannst dir über ein Gespräch hinaus nichts merken", soul)
+        self.assertIn("es gibt nur ein Gedächtnis für den ganzen Haushalt", soul)
+        self.assertNotIn("nichts merken", soul)   # #884: memory is on, the SOUL must not deny it
         konzept = (HOOK.parent.parent.parent / "docs" / "KONZEPT.md").read_text()
         self.assertNotIn("memory namespace", konzept)
         self.assertNotIn("Honcho", konzept)
