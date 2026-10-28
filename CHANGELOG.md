@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.50.0](https://github.com/mdopp/laib/compare/v0.49.0...v0.50.0) (2026-10-28)
+
+
+### Features
+
+* **aufgaben:** for whom, the guided way and done when the finding is gone ([145f3c4](https://github.com/mdopp/laib/commit/145f3c4edf5088ec5f29a53ffddd524eb35e1787))
+* **aufgaben:** for whom, the guided way and done when the finding is gone ([ebd273f](https://github.com/mdopp/laib/commit/ebd273faa48eb449bc24d4a315ef39a5b897f02d))
+* **aufgaben:** tasks for a person or everyone, a way to do them, and they close themselves ([#878](https://github.com/mdopp/laib/issues/878)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **bote:** a Box-Aufgabe done together with the Bote ([2ca0d6d](https://github.com/mdopp/laib/commit/2ca0d6d9e36537e855a60e41fe977dccbb0245f8))
+* **bote:** a Box-Aufgabe done together with the Bote ([#878](https://github.com/mdopp/laib/issues/878)) ([d17407a](https://github.com/mdopp/laib/commit/d17407a8c454f360762d1d1896e6b52703b6b079))
+* **file-share:** 30 days of versions on the shared folders; Haus gets the Bote's Signal number ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **inbox:** a red run with data offers the snapshot back or a repair forward, never a silent restore ([#853](https://github.com/mdopp/laib/issues/853)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **template:** Syncthing keeps deletions 30 days, Haus gets the Bote's Signal number ([5c5605f](https://github.com/mdopp/laib/commit/5c5605fa269fb0d85a3caf73bf351d6537815771))
+* **template:** Syncthing keeps deletions 30 days, Haus gets the Bote's Signal number ([6c3d820](https://github.com/mdopp/laib/commit/6c3d820cedb4b2540f029ae58e8df46dcd137aa5))
+
+
+### Bug Fixes
+
+* **bote:** a family member's escalation is a Box-Aufgabe; docs say what is true ([#863](https://github.com/mdopp/laib/issues/863), [#865](https://github.com/mdopp/laib/issues/865)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **bote:** escalations stay in the house, plain help; docs say what is true today ([ac72f73](https://github.com/mdopp/laib/commit/ac72f733fadda20256f75083fe14c605cd0489f1))
+* **bote:** plain help, the box for the admin only, escalations stay in the house ([b9979e4](https://github.com/mdopp/laib/commit/b9979e421941f0269bb7634578421647198538c0))
+* **drift:** no early grep in the retired-names check ([#307](https://github.com/mdopp/laib/issues/307)) ([61934f9](https://github.com/mdopp/laib/commit/61934f951e265fddb1981c4c7aa2a7333ed3f014))
+* **drift:** the History banner check reads with awk, no pipe ([#307](https://github.com/mdopp/laib/issues/307)) ([6480742](https://github.com/mdopp/laib/commit/648074265aa56deedf08900a06cea4f88d7ecaaf))
+* **inbox:** a red run with data says where the data are and offers restore or forward ([71b2aff](https://github.com/mdopp/laib/commit/71b2aff155d4ef97cbdadd266aeb6497bdda840a))
+* **inbox:** a red run with data says where the data are and offers restore or forward ([14b44c6](https://github.com/mdopp/laib/commit/14b44c63adcc6d9c4894ff104e1acaff989cdd78)), closes [#853](https://github.com/mdopp/laib/issues/853)
+* **inbox:** reversibility is computed, not promised ([#852](https://github.com/mdopp/laib/issues/852)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **operator:** the Operator's duties run in the runner; every house rule names its check ([f171bfc](https://github.com/mdopp/laib/commit/f171bfc071e442d185228272c4b13d93d914fbf7))
+* **operator:** what must always happen runs in code; house rules are checks ([#858](https://github.com/mdopp/laib/issues/858), [#866](https://github.com/mdopp/laib/issues/866)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **operator:** what the Operator must always do runs in the runner ([f89ffc3](https://github.com/mdopp/laib/commit/f89ffc3d717a85cfe003ddae02d65ee91acb2545))
+* **pages:** every tap ends visibly, and no technical text reaches people ([#854](https://github.com/mdopp/laib/issues/854), [#855](https://github.com/mdopp/laib/issues/855)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **pages:** every tap ends visibly, and people read sentences, not raw errors ([9039c45](https://github.com/mdopp/laib/commit/9039c45304e1a6805d4715b2fdbe541468c8bbdb))
+* **pages:** every tap ends visibly, and people read sentences, not raw errors ([81aad63](https://github.com/mdopp/laib/commit/81aad63abe41d48cd8d8188d4db7f76a50ee4b94))
+* **pages:** one verdict for readiness, red, the backup and the last change ([347f4bb](https://github.com/mdopp/laib/commit/347f4bba74127d4ffde51ef91cfd2ed36a6f544f))
+* **pages:** one verdict for readiness, red, the backup and the last change ([f245133](https://github.com/mdopp/laib/commit/f245133050f5b33a72d2436263edc29368070050)), closes [#856](https://github.com/mdopp/laib/issues/856)
+* **pages:** one verdict for readiness, the backup and the last change on every surface ([#856](https://github.com/mdopp/laib/issues/856)) ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+* **proposal:** compute how a proposal is undone, show Zurücknehmen only where it undoes something ([8c9be25](https://github.com/mdopp/laib/commit/8c9be255cf067cfd0ca70d613fffbfff20d80fa7))
+* **proposal:** compute how a proposal is undone, show Zurücknehmen only where it undoes something ([1a806c0](https://github.com/mdopp/laib/commit/1a806c0d8a7e0d13f09d4068b21d5fa614e7a9fe)), closes [#852](https://github.com/mdopp/laib/issues/852)
+* **template:** radicale caches logins instead of binding LLDAP per request ([c5effa3](https://github.com/mdopp/laib/commit/c5effa3fbf0cf1a11db4874525c43552724259a5))
+* **template:** radicale caches logins instead of binding LLDAP per request ([10fbe09](https://github.com/mdopp/laib/commit/10fbe0973f5344e7922534c2d3ccdbcfea8434ee))
+
+
+### Performance Improvements
+
+* **radicale:** logins are cached for 15 minutes ([082e9ea](https://github.com/mdopp/laib/commit/082e9ea9671ce1e26add9c3bbbabd17eaafda157))
+
 ## [0.49.0](https://github.com/mdopp/laib/compare/v0.48.0...v0.49.0) (2026-10-27)
 
 
