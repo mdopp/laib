@@ -75,7 +75,7 @@ if [ -z "$retired" ]; then
   found "retired name" "docs/adr/0021-names.md has no table \"Retired names\""
 else
   names=$(echo "$retired" | paste -sd'|' -)
-  found "retired name" "$(for f in README.md docs/*.md; do [ -f "$f" ] && ! head -6 "$f" | grep -qF '**History.**' && echo "$f"; done | xargs -r awk -v names="$names" '
+  found "retired name" "$(for f in README.md docs/*.md; do [ -f "$f" ] && [ "$(head -6 "$f" | grep -cF '**History.**')" -eq 0 ] && echo "$f"; done | xargs -r awk -v names="$names" '
     FNR == 1 { past = 0 }
     /^#+ / { past = ($0 ~ /[Hh]istory|[Mm]oved out|[Rr]etired|[Gg]one|[Ee]nded|[Ss]uperseded/) }
     past { next }
