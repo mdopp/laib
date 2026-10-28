@@ -31,8 +31,8 @@ func TestARepairCardSaysWhatTheRepairDoes(t *testing.T) {
 	if len(open) != 1 {
 		t.Fatalf("want one proposal: %+v", open)
 	}
-	if c := proposal.Card(open[0], "box.test"); c.Summary != "Testseite wird neu gestartet" || !strings.Contains(c.Why, "whoami.service ist") {
-		t.Fatalf("the headline says what runs, the finding stays in Why: %+v", c)
+	if c := proposal.Card(open[0], "box.test"); c.Summary != "Testseite wird neu gestartet" || !strings.Contains(c.Why, "Testseite läuft nicht") || !strings.Contains(c.Details, "whoami.service ist") {
+		t.Fatalf("the headline says what runs, the finding in words in Why, the unit under Details (#855): %+v", c)
 	}
 }
 
@@ -86,10 +86,11 @@ func TestAFailedRepairSaysWhyAndAPageApprovalWaitsForTheLock(t *testing.T) {
 	}
 	es, _ := journal.Read(env.Paths.Journal, time.Time{})
 	if !slices.ContainsFunc(es, func(e journal.Entry) bool {
-		return e.Verb == "repair" && e.Result == "red" && strings.Contains(e.Detail, "laib restart whoami") && strings.Contains(e.Detail, strings.TrimPrefix(p.Because, "fehlgeschlagen: "))
+		return e.Verb == "repair" && e.Result == "red" && strings.Contains(e.Detail, "laib restart whoami") && strings.Contains(e.Detail, "fehlgeschlagen: Code ")
 	}) {
 		t.Fatalf("the journal must say which repair failed and why: %+v", es)
 	}
+	plainEnough(t, "the failed repair's card", p.Because) // the words on the card, the raw line in the journal (#855)
 	if page := inboxMux(env)("GET", "/inbox", nil); !strings.Contains(page, p.Because) {
 		t.Fatalf("the card does not say why: %s", page)
 	}

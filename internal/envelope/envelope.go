@@ -146,7 +146,8 @@ func envelope(ctx context.Context, env *cli.Env, st *state.State, svc *state.Ser
 	if snapped {
 		return cli.ExitOK
 	}
-	return backup.Pre(ctx, env, st, svc, verb, "pre-repair", false)
+	_, code := backup.Pre(ctx, env, st, svc, verb, "pre-repair", false)
+	return code
 }
 
 func Inspect(ctx context.Context, env *cli.Env, args []string) int {

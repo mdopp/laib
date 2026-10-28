@@ -5,6 +5,7 @@ Description=Sprecher: speaks as ${PERSONA_DISPLAY}
 Image=${IMAGE}
 Environment=PERSONA=${PERSONA}
 Environment=PERSONA_REV=${PERSONA_REV}
+Environment=BOTE_SIGNAL=${BOTE_SIGNAL}
 Exec=--wake ${PERSONA_WAKEWORD} --phrase "${PERSONA_PHRASE}" --voice ${PERSONA_VOICE}
 Volume=/mnt/data/laib/render/persona:/personas:ro,z
 

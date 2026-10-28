@@ -88,8 +88,8 @@ func Judge(inc Incident, s Session) EvalResult {
 		r.Pass, r.Why = false, fmt.Sprintf("outcome %s, want %s", s.Outcome, inc.Expect.Outcome)
 		return r
 	}
-	for _, w := range inc.Expect.CallsContain {
-		if !strings.Contains(strings.ToLower(strings.Join(s.Calls, "\n")), strings.ToLower(w)) {
+	for _, w := range inc.Expect.CallsContain { // the model's calls or its skill script's (#858)
+		if !strings.Contains(strings.ToLower(strings.Join(append(s.Calls, s.Script...), "\n")), strings.ToLower(w)) {
 			r.Pass, r.Why = false, "no call says "+w
 			return r
 		}

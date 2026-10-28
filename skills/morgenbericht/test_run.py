@@ -42,5 +42,23 @@ class Lines(unittest.TestCase):
             self.assertEqual(run.due_line(none), "")
 
 
+class Fallback(unittest.TestCase):
+    """#858: a failing model consumed the slot with no report."""
+
+    def test_red_first_from_status_and_journal(self):
+        status = {"ready": {"state": "bereit", "services": 3, "green": 2, "yellow": 0, "red": 1},
+                  "services": [{"name": "jellyfin", "state": "rot", "detail": "unit failed"}, {"name": "immich", "state": "grün"}]}
+        journal = [{"t": "2026-10-21T02:00:00Z", "verb": "backup", "result": "green"},
+                   {"t": "2026-10-21T03:10:00Z", "verb": "apply", "service": "jellyfin", "result": "red", "detail": "unit\nfailed"}]
+        now = run.when("2026-10-21T07:00:00+02:00")
+        self.assertEqual(run.fallback(status, journal, now),
+                         "Morgenbericht ohne Modell, aus Status und Journal: Laib bereit, 3 Dienste, 1 rot, 0 gelb. Rot: jellyfin (unit failed). "
+                         "Letzte Sicherung 04:00: grün. Im Journal der Nacht 1 roter Eintrag: 05:10 apply jellyfin unit failed.")
+
+    def test_nothing_readable_is_still_a_report(self):
+        text = run.fallback({}, None, run.when(DAY))
+        self.assertTrue(text.startswith("Morgenbericht ohne Modell") and "0 Einträge, keiner rot" in text, text)
+
+
 if __name__ == "__main__":
     unittest.main()

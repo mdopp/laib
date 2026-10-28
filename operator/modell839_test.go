@@ -34,8 +34,9 @@ func (m menus) RoundTrip(r *http.Request) (*http.Response, error) {
 // the looks keep the agentic loop with every granted tool; a script only
 // prepares a judgement or, for lehre as before, works alone.
 func TestEachSkillSaysWhereTheModelDecides(t *testing.T) {
-	for name, want := range map[string]string{"vorfall": "frei", "routineblick": "frei", "morgenbericht": "frei", "sicherung": "frei",
-		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "nein"} {
+	for name, want := range map[string]string{"vorfall": "frei", "routineblick": "frei", "morgenbericht": "frei",
+		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "nein",
+		"sicherung": "nein"} { // #858: the weekly sample ran only when the model called it
 		sk := skillFor(t, Trigger{}, name)
 		if got := cmpOr(sk.Modell, "frei"); got != want {
 			t.Errorf("%s: modell %s, want %s", name, got, want)

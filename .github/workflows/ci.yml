@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: lines as gofmt writes them, the count scripts/loc.sh caps (#866)
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test -race ./...
       - name: authelia's own verdict on the rendered access rules (#249) and the SMTP notifier (#359)

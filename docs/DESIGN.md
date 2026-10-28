@@ -361,11 +361,27 @@ first line of the box page, Haus (which reads `/ready`) and the first line of
 | `eingeschränkt` | daemon answers, apply is locked (an apply is running, or the Werkstatt holds the GPU) | ask, read, propose, approve (it applies with the next run, #609) |
 | `nicht erreichbar` | no answer since time X | the Bote and Haus still answer; what needs Laib waits |
 
+Readiness is about what you can do, not about what is red. A red service, a
+full disk, a failed backup or a missing firewall leave it `bereit`; they are
+the red count and the red lines beside it (#856).
+
+One function computes the verdict (`pages.judge`, #856), and every surface
+reads it: `/ready`, the Status page, `laib status` (and `--json`, which Haus
+reads over `laib_status`). It holds the state, what is red, the last backup
+with its places, its age and why it does not hold, and the last change (the
+last approved proposal). Red is what `laib diag` finds red, the probes the mail
+reads: units, health, the service's own status file, disk pressure, the
+backup, the firewall and the Operator are probed on every look; the slow ones
+(RAID, SMART, the certificate, the box's config) come from the last whole
+`laib diag` run, with its time. The backup holds while it is green and no
+backup finding is red (failed, or older than 36 h); a stale copy off the box
+lowers its places to one.
+
 Laib and the agents are separate processes. If Laib falls, the Bote still
 talks, but its Laib tools do not answer. After a reboot, systemd starts
-Laib, Laib compares the units against the rendered state and reports
-`bereit` only when the comparison is clean. Anything that did not come up is the first line of Status and a proposal
-in the Inbox, never a log line you have to find.
+Laib, Laib compares the units against the rendered state and journals the
+result. Anything that did not come up is red on the first lines of Status and
+a proposal in the Inbox, never a log line you have to find.
 
 Every card says what changes, what it means for the family, how it is undone
 and its risk; a snapshot before the change is among its warnings, and the
