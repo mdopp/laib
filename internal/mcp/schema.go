@@ -96,6 +96,7 @@ var mcpParams = map[string][]mcpParam{
 		desc: "status: was der Scanner gerade tut; start: einen Stapel scannen; nach einem Abbruch weiter, abschliessen oder verwerfen; redo: einen Stapel aus dem Archiv neu trennen; suchen: Scanner im Netz und am USB der Box suchen; pruefen: den Scanner ohne Papier prüfen; probe: eine Probeseite, nicht nach Paperless; einrichten: ein Vorschlag für den Scanner"},
 		{name: "geraet", typ: "string", flag: "--geraet", desc: "einrichten: das SANE-Gerät aus suche.funde oder von Hand, epson2:net:192.168.1.5 oder für einen USB-Scanner sein Backend, fujitsu"},
 		{name: "person", typ: "string", flag: "--person", desc: "wem die Abschlussmeldung gilt (box.yml people); leer: notify.person"},
+		{name: "fuer", typ: "string", flag: "--fuer", enum: []string{"person", "haushalt"}, desc: "start: wem der Stapel gehört; person: nur der Person in person, die anderen in der Familie sehen ihn nicht; leer: dem Haushalt"},
 		{name: "stapel", typ: "string", flag: "--stapel", desc: "redo: der Stapel, JJJJ-MM-TTThh-mm-ss"}},
 	"aufgabe": {{name: "action", typ: "string", enum: []string{"list", "zeigen", "add", "erledigt", "zurueckstellen"}, required: true,
 		desc: "list: die offenen Box-Aufgaben; zeigen: eine; add: eine neue (ops, claude, Haus); erledigt, zurueckstellen: abhaken oder die Erinnerung verschieben (Menschen, claude, Haus)"},
