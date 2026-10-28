@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.51.0](https://github.com/mdopp/laib/compare/v0.50.0...v0.51.0) (2026-10-28)
+
+
+### Features
+
+* **bote:** a family member's wish is a Box-Aufgabe for the admins ([#883](https://github.com/mdopp/laib/issues/883)) ([56acde2](https://github.com/mdopp/laib/commit/56acde22ebb040a07cab37087d892dca36ba7b38))
+
+
+### Bug Fixes
+
+* **bote:** the Bote says truthfully that its memory is one for the household ([#884](https://github.com/mdopp/laib/issues/884)) ([56acde2](https://github.com/mdopp/laib/commit/56acde22ebb040a07cab37087d892dca36ba7b38))
+* **bote:** the memory sentence names no tool the e2e check forbids ([#54](https://github.com/mdopp/laib/issues/54), [#884](https://github.com/mdopp/laib/issues/884)) ([04a3c78](https://github.com/mdopp/laib/commit/04a3c784611710dfd60e89e8559777a3144b1800))
+* **bote:** the SOUL says what is true about memory ([#884](https://github.com/mdopp/laib/issues/884)) ([c6429c0](https://github.com/mdopp/laib/commit/c6429c0f9d11124982225576c7d1105a3af987f7))
+* **haushalt:** the Bote's wish is a Box-Aufgabe for the admins ([9f07bba](https://github.com/mdopp/laib/commit/9f07bba127a64127f5c810363d0fb1a3d3c8a1ad))
+* **haushalt:** the Bote's wish is a Box-Aufgabe for the admins ([14c98e7](https://github.com/mdopp/laib/commit/14c98e7fc002ca753399b0d8b88215b68ec0277f)), closes [#883](https://github.com/mdopp/laib/issues/883)
+
 ## [0.50.0](https://github.com/mdopp/laib/compare/v0.49.0...v0.50.0) (2026-10-28)
 
 
