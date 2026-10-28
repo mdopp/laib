@@ -102,13 +102,5 @@ func scanEinrichten(ctx context.Context, env *Env, svc *ScanService, geraet stri
 	} else {
 		edit = []string{"--set", "services/" + svc.Name + "/values.yml:SCANNER=" + geraet}
 	}
-	if env.Laib == nil {
-		return env.fail(errors.New("laib-haushalt has no way back to laib (LAIB_MCP_URL, LAIB_TOKEN)"))
-	}
-	id, class, err := env.Laib.Propose(ctx, env.Ceiling, append(edit, reason)...)
-	if err != nil {
-		return env.fail(err)
-	}
-	env.journal("scan", reason, fmt.Sprintf("#%d (%s)", id, class))
-	return env.emit(map[string]any{"proposal": id, "class": class, "message": fmt.Sprintf("Vorschlag #%d liegt im Eingang: %s.", id, reason)})
+	return env.propose(ctx, "scan", reason, "Vorschlag #%d liegt im Eingang: "+reason+".", edit...)
 }

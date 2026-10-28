@@ -32,9 +32,10 @@ func TestHausSetsUpTheScannerByProposalOnly(t *testing.T) {
 		t.Helper()
 		var got struct {
 			Proposal int    `json:"proposal"`
+			Class    string `json:"class"`
 			Message  string `json:"message"`
 		}
-		if code != cli.ExitOK || json.Unmarshal([]byte(out), &got) != nil || got.Proposal == 0 || !strings.Contains(got.Message, "Vorschlag") {
+		if code != cli.ExitOK || json.Unmarshal([]byte(out), &got) != nil || got.Proposal == 0 || got.Class == "" || !strings.Contains(got.Message, "Vorschlag") {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 		return got.Proposal
