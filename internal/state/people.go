@@ -99,3 +99,17 @@ func (st *State) PeopleRev() string {
 	h := sha256.Sum256([]byte(st.PeopleJSON()))
 	return hex.EncodeToString(h[:])[:12]
 }
+
+// BoteSignal is the builtin BOTE_SIGNAL (haus#175): the number the household
+// writes to on Signal, the value a service names under channels.signal (the
+// Bote's SIGNAL_ACCOUNT). E.164 or empty: Haus shows it, so never a value
+// that only looks like a number.
+func (st *State) BoteSignal() string {
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		if key := svc.Contract.Channels["signal"]; key != "" && e164.MatchString(svc.Values[key].Literal) {
+			return svc.Values[key].Literal
+		}
+	}
+	return ""
+}

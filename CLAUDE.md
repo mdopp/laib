@@ -59,8 +59,9 @@ them.
   the family or an agent triggers answers at once, shows its progress and
   ends visibly where it began — done, an error with its reason and the
   next step, or waiting with a choice. A silent button, an endless spinner
-  or a raw error is a bug; phone first. #854 makes it a test over every
-  POST route, #855 a lint for raw text.
+  or a raw error is a bug; phone first. A test runs every POST route of
+  the pages (#854); raw text goes through `proposal.Plain` and under
+  Details, and a lint holds it there (#855).
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
   check. Not the first time.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
@@ -84,7 +85,8 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
 | Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
-| Every touch answers at once (#588) | #854, #855 |
+| Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
+| No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
 
 Guidelines, no check: issues first, Conventional Commits, releases via
 release-please, weighing a change against what worked before, regression ⇒

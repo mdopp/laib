@@ -49,6 +49,7 @@ type session struct {
 	lang  string // de or en
 	last  time.Time
 	p     *Persona // who speaks to this person
+	admin bool     // the admin's number: the box's level is offered (#863)
 }
 
 // Cast is who speaks to whom: the house persona, and per Signal number another
@@ -58,6 +59,19 @@ type Cast struct {
 	ByName  map[string]*Persona
 	Chat    map[string]string         // number → persona name
 	Resolve func(label string) string // the session's label (a profile name) → its number; "" when unknown or ambiguous
+	Admins  []string                  // the admin's numbers (the Bote's ADMIN_NUMBER): only they are offered the box (#863)
+}
+
+// Admin: the session is the admin's number, or a label that resolves to it.
+// Anyone else, an empty or ambiguous label too, is family.
+func (c Cast) Admin(sid string) bool {
+	if sid == "" {
+		return false
+	}
+	if slices.Contains(c.Admins, sid) {
+		return true
+	}
+	return c.Resolve != nil && slices.Contains(c.Admins, c.Resolve(sid)) && c.Resolve(sid) != ""
 }
 
 // For is the persona of one session: its id is the number, or the name
@@ -272,7 +286,7 @@ func (t *Terminal) Talk(sid, language, line string) string {
 	in = strings.TrimRight(in, ".!?")
 	s, ok := t.sessions[sid]
 	if !ok {
-		s = &session{lang: "en", p: t.cast.For(sid)}
+		s = &session{lang: "en", p: t.cast.For(sid), admin: t.cast.Admin(sid)}
 		t.sessions[sid] = s
 	}
 	if _, known := lang[language]; known {
@@ -284,8 +298,11 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		delete(t.sessions, sid)
 		return w.bye
 	}
-	if (said(in, 3) && named(s.p, in)) || said(in, 2, "HALLO", "HELLO") || said(in, 3, "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY", "HILFE", "HELP") ||
-		said(in, 5, "WAS KANNST DU", "WHAT CAN YOU DO", "SHALL WE PLAY", "WOLLEN WIR EIN SPIEL") {
+	if (said(in, 3) && named(s.p, in)) || said(in, 2, "HALLO", "HELLO") || said(in, 3, "HILFE", "HELP") || said(in, 5, "WAS KANNST DU", "WHAT CAN YOU DO") {
+		s.mode, s.ctx = modeMenu, ""
+		return t.help(s)
+	}
+	if said(in, 3, "MENÜ", "MENU", "VERZEICHNIS", "DIRECTORY") || said(in, 5, "SHALL WE PLAY", "WOLLEN WIR EIN SPIEL") {
 		s.mode, s.ctx = modeMenu, ""
 		return t.directory(s, w)
 	}
@@ -303,7 +320,7 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		s.ctx = ""
 		return t.directory(s, w)
 	}
-	tools := t.tools()
+	tools := t.tools(s)
 	if s.ctx == "" {
 		n := -1
 		if v, err := strconv.Atoi(in); err == nil {
@@ -425,11 +442,49 @@ func word(m map[string]string, k string) string {
 	return strings.ToUpper(k)
 }
 
-func (t *Terminal) tools() []string {
+// tools are the Bote's tools this person is offered: the box (laib) only
+// to the admin (#863).
+func (t *Terminal) tools(s *session) []string {
 	if t.caps == nil {
 		return nil
 	}
-	return t.caps()
+	return slices.DeleteFunc(t.caps(), func(k string) bool { return k == "laib" && !s.admin })
+}
+
+// examples: a sentence per tool, in the order help offers them, then the
+// games and two the model answers alone, so there are always five (#863).
+var examples = map[string][][2]string{
+	"de": {{"ha", "Mach das Licht in der Küche aus."}, {"haushalt", "Erinnere mich morgen um acht an den Müll."},
+		{"frage", "Wie hoch ist die Zugspitze?"}, {"automat", "Sag mir Bescheid, wenn die Waschmaschine fertig ist."},
+		{"laib", "Wie geht es der Box?"}, {games, "Wollen wir ein Spiel spielen?"},
+		{"", "Schreib mir eine Einkaufsliste für Pfannkuchen."}, {"", "Wie sagt man ‚Guten Morgen‘ auf Englisch?"},
+		{"", "Erklär mir in zwei Sätzen, wie ein Regenbogen entsteht."}, {"", "Hilf mir, eine kurze Geburtstagskarte zu schreiben."}},
+	"en": {{"ha", "Turn off the kitchen light."}, {"haushalt", "Remind me tomorrow at eight to take out the bin."},
+		{"frage", "How high is the Zugspitze?"}, {"automat", "Tell me when the washing machine is done."},
+		{"laib", "How is the box doing?"}, {games, "Shall we play a game?"},
+		{"", "Write me a shopping list for pancakes."}, {"", "How do you say ‘good morning’ in German?"},
+		{"", "Explain in two sentences how a rainbow forms."}, {"", "Help me write a short birthday card."}},
+}
+
+// help is plain words for the person, no terminal (#863): who speaks, and
+// five sentences to send as they are. "TEXT:" tells the Bote's plugin to
+// pass it on unchanged and without a code block.
+func (t *Terminal) help(s *session) string {
+	intro, open, close := "Hallo, hier ist %s. Schreib mir einfach, was du brauchst, so wie du es einem Menschen sagen würdest. Zum Beispiel:", "„", "“"
+	if s.lang == "en" {
+		intro, open, close = "Hello, this is %s. Just write what you need, the way you would tell a person. For example:", "“", "”"
+	}
+	have := t.tools(s)
+	var b strings.Builder
+	fmt.Fprintf(&b, intro+"\n", s.p.Display)
+	n := 0
+	for _, e := range examples[s.lang] {
+		if n < 5 && (e[0] == "" || slices.Contains(have, e[0]) || e[0] == games && gamesOn(s.p)) {
+			b.WriteString("\n- " + open + e[1] + close)
+			n++
+		}
+	}
+	return "TEXT:\n" + b.String()
 }
 
 func (t *Terminal) directory(s *session, w words) string {
@@ -438,7 +493,7 @@ func (t *Terminal) directory(s *session, w words) string {
 		b.WriteString(w.greet + "\n\n")
 	}
 	b.WriteString(w.dir + "\n" + strings.Repeat("-", len([]rune(w.dir))) + "\n")
-	tools := t.tools()
+	tools := t.tools(s)
 	for i, k := range tools {
 		fmt.Fprintf(&b, "  %d  %-28s (%s)\n", i+1, word(w.labels, k), word(w.levels, k))
 	}
@@ -657,6 +712,7 @@ func Server(t *Terminal, version string) *mcpserver.Server {
 				"Kommt ein Bildschirm zurück, zeig ihn unverändert in einem Codeblock. " +
 				"Kommt \"WEITER: <werkzeug>\" und \"PROMPT: <prompt>\" zurück, beantworte die Nachricht selbst, " +
 				"im Kontext nur mit diesem Werkzeug (bei \"-\" mit jedem), und beginne die Antwort mit der Prompt-Zeile. " +
+				"Beginnt die Antwort mit \"TEXT:\", gib den Text danach unverändert weiter, ohne Codeblock. " +
 				"Steht VALID: im Bildschirm, übersetze frei formulierte Wörter in einen dieser Befehle und ruf noch einmal auf.",
 			Schema: map[string]any{"type": "object", "required": []string{"eingabe"}, "properties": map[string]any{
 				"eingabe": map[string]any{"type": "string", "description": "die Nachricht der Person, unverändert"},

@@ -66,5 +66,34 @@ for t in $( [ -n "$base" ] && git diff --name-only "$base" -- 'templates/*/*' | 
 done
 found "template news" "$(printf %s "$silent")"
 
+# 8. docs say what is true today (#865): a retired name (ADR 0021's table
+# "Retired names") stands in a current doc (README.md, docs/*.md) only where
+# its line, its section or its file (**History.** in its first lines) says
+# it is past. The ADRs are history by nature and not read.
+retired=$(sed -n '/^### Retired names/,/^#/p' docs/adr/0021-names.md 2>/dev/null | sed -nE 's/^\| `?([A-Za-z][A-Za-z0-9_-]*)`? \|.*/\1/p' | grep -vx Name || true)
+if [ -z "$retired" ]; then
+  found "retired name" "docs/adr/0021-names.md has no table \"Retired names\""
+else
+  names=$(echo "$retired" | paste -sd'|' -)
+  found "retired name" "$(for f in README.md docs/*.md; do [ -f "$f" ] && ! awk 'NR<=6 && index($0, "**History.**") {f=1} END {exit !f}' "$f" && echo "$f"; done | xargs -r awk -v names="$names" '
+    FNR == 1 { past = 0 }
+    /^#+ / { past = ($0 ~ /[Hh]istory|[Mm]oved out|[Rr]etired|[Gg]one|[Ee]nded|[Ss]uperseded/) }
+    past { next }
+    /[Rr]etire|[Rr]emoved|is gone|are gone|was gone|[Ee]nded|until #|[Hh]istory|[Ss]uperseded|[Pp]redecessor|[Mm]oved out|ADR 0015|#778/ { next }
+    { if (match($0, "(^|[^A-Za-z0-9_-])(" names ")([^A-Za-z0-9_-]|$)")) print FILENAME ":" FNR ": " substr($0, RSTART, RLENGTH + 40) }
+  ')"
+fi
+
+# 9. the version the docs name is version.txt's (#865): release-please bumps
+# every line marked x-release-please-version in its extra-files, so each of
+# those files has one, and none carries another version.
+ver=$(tr -d ' \n' < version.txt 2>/dev/null)
+extra=$(python3 -c 'import json,sys; print("\n".join(f for p in json.load(open(sys.argv[1]))["packages"].values() for f in p.get("extra-files", [])))' release-please-config.json 2>/dev/null || true)
+off=""
+for f in $extra; do grep -q 'x-release-please-version' "$f" 2>/dev/null || off="$off$f is in release-please's extra-files but has no x-release-please-version line
+"; done
+off="$off$(grep -rn 'x-release-please-version' README.md docs/*.md 2>/dev/null | grep -v "$ver" | sed "s/\$/ (version.txt: $ver)/" || true)"
+found "docs version" "$(printf %s "$off")"
+
 [ "$bad" -eq 0 ] && echo "drift: none"
 exit $bad

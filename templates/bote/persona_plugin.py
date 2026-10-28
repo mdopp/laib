@@ -19,6 +19,8 @@ rewritten or dropped. Here the engine sees each message before the model:
   none (#510: "JOSHUA>" above "Bambi ist aus." was out of place). With
   nothing to route (any tool, the top level, no FIGUR) the plugin adds no
   context: the user turn is the person's words alone (#520).
+- TEXT (the help, #863): plain words for the person, which
+  transform_llm_output passes on as they are, without a code block;
 - Home Assistant first (#520, ADR 0015): a message that is no screen goes to
   HA's conversation API (agent conversation.home_assistant, its own intents)
   before the model. action_done (it switched) or query_answer (a state
@@ -37,7 +39,7 @@ scheduled job is no person and is left alone. Stdlib only.
 import json, os, re, sys, threading, urllib.request
 
 _lock = threading.Lock()
-_turns = {}  # turn id -> (kind, payload, session); kind: screen | valid | weiter | ha
+_turns = {}  # turn id -> (kind, payload, session); kind: screen | text | valid | weiter | ha
 
 
 def _url():
@@ -165,6 +167,10 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
         if r.get("FIGUR"):
             ctx += "\nFIGUR: " + r["FIGUR"]
         return {"context": ctx}
+    if answer.startswith("TEXT:\n"):
+        with _lock:
+            _turns[key] = ("text", answer[len("TEXT:\n"):], session)
+        return {"context": "Persona: Der Person wird ein Text gezeigt, den Laib selbst schreibt. Antworte nur mit OK."}
     valid = re.search(r"(?m)^VALID:\s*(.+)$", answer)
     with _lock:
         _turns[key] = ("valid" if valid else "screen", answer, session)
@@ -195,7 +201,7 @@ def on_output(response_text=None, session_id=None, turn_id=None, **_):
     if turn is None:
         return _unframed(response_text)
     kind, payload, session = turn
-    if kind == "ha":
+    if kind in ("ha", "text"):
         return payload
     if kind == "screen":
         return _block(payload)

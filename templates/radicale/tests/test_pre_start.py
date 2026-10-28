@@ -38,6 +38,16 @@ class Rights(unittest.TestCase):
         self.assertEqual(cfg["rights"]["type"], "from_file")
         self.assertEqual(cfg["rights"]["file"], "/config/rights", "the config dir is /config in the container")
         self.rules = rights((Path(d) / "radicale" / "config" / "rights").read_text())
+        self.auth = cfg["auth"]
+
+    def test_logins_are_cached_and_a_password_change_lands_within_minutes(self):
+        # every request is an LDAP bind against LLDAP, 0.13-0.30 s each (2026-10-28): Radicale (>= 3.4.0)
+        # keeps a login for a while, so a session's later requests skip the bind; the expiries are seconds
+        self.assertEqual(self.auth["type"], "ldap")
+        self.assertEqual(self.auth["cache_logins"], "true")
+        ok, failed = int(self.auth["cache_successful_logins_expiry"]), int(self.auth["cache_failed_logins_expiry"])
+        self.assertEqual(ok, 900, "a changed or removed password still works this long")
+        self.assertEqual(failed, 90)
 
     def test_everyone_owns_their_own_and_nobody_elses(self):
         self.assertIn("w", allowed(self.rules, "anna", "anna/kalender"))

@@ -23,7 +23,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("persona: %v", err)
 	}
-	if acct := os.Getenv("SIGNAL_ACCOUNT"); acct != "" && len(cast.Chat) > 0 {
+	if n := os.Getenv("ADMIN_NUMBER"); n != "" {
+		cast.Admins = []string{n} // only the admin is offered the box (#863)
+	}
+	if acct := os.Getenv("SIGNAL_ACCOUNT"); acct != "" && len(cast.Chat)+len(cast.Admins) > 0 {
 		cast.Resolve = persona.SignalContacts(env("SIGNAL_URL", "http://127.0.0.1:8080"), acct, nil) // signal-cli in the pod (#127)
 	}
 	t := persona.New(func() []string {
