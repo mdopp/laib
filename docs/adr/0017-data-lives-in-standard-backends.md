@@ -65,3 +65,23 @@ Setup, so dass wir Adressen auch nachträglich ändern können."
   coordinates are entered (Haus's form: a map pin, or a lookup the person
   starts knowingly, saying where it goes). A template that needs
   coordinates and finds only an address says so and changes nothing.
+
+## Amendment 2026-10-28 (#893): a person's health data has no standard backend here
+
+Gesundheit (`mdopp/gesundheit`) reads lab sheets and reports out of Paperless
+into a timeline per person and takes a short daily note. The documents stay
+in Paperless (§1). The values read and the daily notes are a person's own
+and private: the share's `notes` folder is the family's (Samba, Syncthing,
+File Browser read it all), Radicale holds appointments, Home Assistant
+devices, so none of the backends in §1 keeps something one person may see
+and another may not.
+
+- **Gesundheit keeps them itself**, under `${DATA_DIR}/gesundheit`, one
+  folder per person (plain JSON, backed up), exportable as CSV and
+  deletable per person. Per-person data a program keeps for lack of a
+  per-person backend is the pattern Haus set with `favoriten.json`.
+- **Agents stay clients** (§2): the Bote reaches it over its MCP with one
+  bearer, names a person by login, and never sees one person's data for
+  another. Haus links to it and holds nothing.
+- Paperless' administrators see every document (ADR 0028, „Nur für mich“);
+  the page says so.

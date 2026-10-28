@@ -16,6 +16,9 @@ AI_EMBED_BACKEND: openai-like           # llama-embed through the proxy; hugging
 AI_EMBED_MODEL: embeddinggemma          # the llama template's EMBED_ALIAS; multilingual (haus#13: 28 of 30 German paraphrases, nomic-embed-text 7)
 AI_EMBED_CHUNK: "300"                   # well below llama-embed's 2048-token batch, which refuses a longer piece
 CONSUME: /mnt/data/stacks/file-share/data/paperless-consume
+# the document types of medical records (laib#893): made once each, for Paperless' AI to suggest and for
+# Gesundheit to read; the gesundheit template's BEFUND_ARTEN names the same
+PAPERLESS_BEFUND_ARTEN: Befund,Arztbrief,Labor,Röntgen,Atemtest,Lungenfunktion
 ADMIN_USER: admin
 DB_PASSWORD: !secret PAPERLESS_DB_PASSWORD
 SECRET_KEY: !secret PAPERLESS_SECRET_KEY
