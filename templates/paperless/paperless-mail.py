@@ -220,7 +220,8 @@ def config(api):
 # users, so it never takes a household person for a sender, #737). Nothing else: no deleting, no
 # mail, no workflows, no settings, no users or groups.
 DOKUMENTE_USER = "dokumente"
-DOKUMENTE_RECHTE = ["view_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
+# add_document: a „nur für mich“ stack goes in through the API, owned by dokumente until it hands it on
+DOKUMENTE_RECHTE = ["view_document", "add_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
                     "view_correspondent", "view_documenttype", "view_customfield", "view_user"]
 WORKFLOW = "Dokument hinzugefügt"
 HOOK_URL = "http://host.containers.internal:8720/hook"   # the scan service's listener on the host, never through Caddy
