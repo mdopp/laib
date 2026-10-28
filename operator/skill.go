@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,20 @@ func (m *MCP) Skills(ctx context.Context) ([]Skill, error) {
 // did the reading, the model decides what comes of it.
 var verdicts = []string{"note", "wish", "propose", "repair", "escalate"}
 
+// menu is what the model is offered of the granted tools: a small model
+// keeps the short menu, the skill's more tools are for a capable one
+// (#286); a judgement (modell: urteil, #839) gets only what writes its
+// verdict, the script read.
+func (sk Skill) menu(typed bool) map[string]bool {
+	m := map[string]bool{}
+	for _, g := range sk.Granted {
+		if (!typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g)) && (sk.Modell != "urteil" || slices.Contains(verdicts, g)) {
+			m["laib_"+g] = true
+		}
+	}
+	return m
+}
+
 var weekdays = map[string]int{"Mo": 0, "Di": 1, "Mi": 2, "Do": 3, "Fr": 4, "Sa": 5, "So": 6}
 
 // Due says whether a scheduled skill's slot has come since its last run:
@@ -102,6 +117,7 @@ type Runner struct {
 	Tick     string // OPERATOR_TICK, for ${TICK}; default 10m
 	ReportAt string // OPERATOR_REPORT_AT, for ${REPORT_AT}; default 07:00
 	Last     map[string]time.Time
+	told     map[string]bool // the slots whose waiting or failing is journaled (#858)
 	mu       sync.Mutex
 }
 
@@ -158,12 +174,16 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 		}
 		r.Last[sk.Name] = now
 		r.saveLast()
-		kind := "tick"
+		// a daily or weekly slot may wake an unloaded model, a look does not (#858)
+		kind := "slot"
 		if sk.Output == "report" {
 			kind = "report"
+		} else if sk.Trigger.Every != "" {
+			kind = "tick"
 		}
 		s := r.RunNow(ctx, sk, Trigger{Kind: kind})
 		opened = append(opened, s.opened...)
+		r.trace(ctx, sk, s)
 		if s.Outcome == "skipped" && sk.Trigger.Every == "" {
 			// a daily or weekly slot is not lost to a busy graphics card (#550):
 			// the next step tries again; an interval skill keeps its interval
@@ -178,6 +198,29 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 		out = append(out, r.Event(ctx, skills, tr)...)
 	}
 	return out
+}
+
+// trace is a slot that waits or fails, one journal line with its reason
+// (#858): once while it keeps waiting or failing, again after it ran.
+func (r *Runner) trace(ctx context.Context, sk Skill, s Session) {
+	if r.told == nil {
+		r.told = map[string]bool{}
+	}
+	if s.Outcome != "skipped" && s.Outcome != "error" {
+		delete(r.told, sk.Name)
+		return
+	}
+	if r.told[sk.Name] {
+		return
+	}
+	r.told[sk.Name] = true
+	text := fmt.Sprintf("Die Fähigkeit %s wartet: %s. Laib versucht es wieder, bis es läuft.", sk.Name, s.Why)
+	if s.Outcome == "error" {
+		text = fmt.Sprintf("Die Fähigkeit %s ist gescheitert: %s. Laib versucht es zum nächsten Termin wieder.", sk.Name, firstLine(s.Note))
+	}
+	mcp := *r.Op.MCP
+	mcp.Skill = sk.Name
+	mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": text})
 }
 
 // Event runs every active event skill for a red.

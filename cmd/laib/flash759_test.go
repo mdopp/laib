@@ -100,7 +100,7 @@ func TestTheWakeWordReachesTheDeviceOnlyAfterTheOwnerApproves(t *testing.T) {
 	}
 	card := proposal.Card(open[0], "box.test")
 	if card.Summary != "„Hey Joshua“ wird auf den Lautsprecher gespielt" || !strings.Contains(card.Why, "noch nicht auf dem Gerät") || !slices.ContainsFunc(card.Impact, func(s string) bool { return strings.Contains(s, "etwa 2 Minuten still") }) ||
-		!strings.HasPrefix(card.Reversible, "Nicht mit einem Tipp rückgängig") || !strings.Contains(card.Reversible, "neuen Aufspielen") {
+		card.Undoable || !strings.Contains(card.Reversible, "„Zurücknehmen“ spielt die alte nicht zurück") || !strings.Contains(card.Reversible, "neuen Aufspielen") { // #852
 		t.Fatalf("the card must say what happens to the device and that a tap does not undo it: %+v", card)
 	}
 	id := strconv.Itoa(open[0].ID)
@@ -137,7 +137,7 @@ func TestATasksBefundIsSetAfterwards(t *testing.T) {
 		t.Fatalf("befund: %d", code)
 	}
 	b, _ := os.ReadFile(filepath.Join(env.Paths.State, "aufgaben.yml"))
-	if !strings.Contains(string(b), "befund: status wakeword") {
+	if !strings.Contains(string(b), "fertig_wenn: status wakeword") {
 		t.Fatalf("aufgaben.yml: %s", b)
 	}
 }

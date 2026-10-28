@@ -270,11 +270,11 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	var findings []struct{ Severity, Probe, Service, Detail, Fix string }
+	var findings []struct{ Severity, Probe, Service, Detail, Fix, Say string }
 	if err := json.Unmarshal([]byte(text), &findings); err != nil {
 		return fmt.Errorf("laib_diag: %w", err)
 	}
-	red := map[string]string{}
+	red, says := map[string]string{}, map[string]string{} // the raw lines for Details, the plain sentence on top (#855)
 	for _, f := range findings {
 		if f.Severity == "rot" {
 			k, line := f.Probe+" "+f.Service, "- "+strings.TrimSpace(f.Service+" "+f.Detail)
@@ -282,15 +282,16 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 				line += " → " + f.Fix
 			}
 			red[k] = strings.TrimSpace(red[k] + "\n" + line)
+			says[k] = "- " + cmp.Or(f.Say, strings.TrimSpace(f.Service+" "+f.Detail))
 		}
 	}
-	var lines, keys []string
+	var lines, details, keys []string
 	for k, d := range red {
 		if seen.Red[k].IsZero() {
 			seen.Red[k] = now
 		}
 		if now.Sub(seen.Red[k]) >= RedFor && !seen.Mailed[k] {
-			lines, keys = append(lines, d), append(keys, k)
+			lines, details, keys = append(lines, says[k]), append(details, d), append(keys, k)
 		}
 	}
 	for k := range seen.Red {
@@ -301,7 +302,9 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
-		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nlaib diag zeigt alles."); err == nil {
+		sort.Strings(details)
+		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+
+			"\n\nWas du tun kannst: Sieh auf der Box-Seite unter Status nach; liegt in der Inbox eine Reparatur, gib sie frei.\n\nDetails für den, der sich darum kümmert:\n"+strings.Join(details, "\n")); err == nil {
 			for _, k := range keys {
 				seen.Mailed[k] = true
 			}

@@ -1,0 +1,17 @@
+# Syncthing's 30 days (haus#174): file-share-versioning.py in a stock Python
+# image, fed on stdin (as file-share-check), on the host network where
+# Syncthing's API listens (127.0.0.1:8384). One mount, read-only and
+# unlabelled: Syncthing's config for its API key (sent only in the request
+# header). It sets simple versioning on every folder without one and on the
+# folder defaults; a folder that has versioning is left alone, so a run on a
+# box that has it changes nothing. Its timer runs it every hour, which also
+# reaches a folder someone added without versioning.
+[Unit]
+Description=Dateifreigabe: Syncthing hebt Gelöschtes 30 Tage auf
+After=file-share-syncthing.service
+
+[Service]
+Type=oneshot
+StandardInput=file:%h/.config/containers/systemd/file-share/file-share-versioning.py
+ExecStart=/usr/bin/podman run --rm -i --name file-share-versioning --network host --security-opt label=disable -e SYNCTHING_URL=http://127.0.0.1:8384 -e SYNCTHING_CONFIG=/syncthing/config.xml -v ${DATA_DIR}/file-share/syncthing-config:/syncthing:ro ${CHECK_IMAGE} python3 -
+TimeoutStartSec=2min

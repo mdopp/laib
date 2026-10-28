@@ -8,7 +8,7 @@
 # Crossing a cap means raising it in the same PR, with its reason next to
 # the number and the owner's approval; at 95 % this warns, and on main CI
 # opens or updates the "Kern-Diät" issue (scripts/kern-diaet.sh). Lines are
-# counted as gofmt writes them: squeezing code to fit is a review finding.
+# counted as gofmt writes them; CI fails on a file gofmt would change (#866).
 #
 # --diet prints that issue's body and exits 0 when the kernel is at 95 % or
 # more, 3 when it is not.

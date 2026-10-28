@@ -4,6 +4,9 @@
 # their own collections, as owner_only did, and every user reads and writes the entries of the household's
 # calendar and address book, which are Haus's account's (haus/haushalt, haus/haushalt-kontakte; the auth
 # template seeds `haus`); the calendar mirrors (#495) belong to the account `kalender`. Rewritten on every apply.
+# Login cache (Radicale >= 3.4.0, expiries in seconds): LLDAP's password check makes every bind 0.13-0.30 s, so a
+# login is kept 15 min and a wrong one 90 s. The cache keys on user and password: a new password binds at once and
+# replaces the entry; an old or removed one keeps working until its entry is 15 min old (a restart clears it).
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
 cat > "$C/config" <<CFG
@@ -18,6 +21,9 @@ ldap_reader_dn = uid=radicale,ou=people,${BASE_DN}
 ldap_secret = ${LAIB_SECRET_RADICALE_LDAP_PASSWORD}
 ldap_filter = (&(objectClass=person)(uid={0}))
 ldap_user_attribute = uid
+cache_logins = true
+cache_successful_logins_expiry = 900
+cache_failed_logins_expiry = 90
 [rights]
 type = from_file
 file = /config/rights

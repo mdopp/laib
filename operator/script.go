@@ -34,10 +34,14 @@ type scriptResult struct {
 	Human   string          `json:"human"`   // added to the session's note
 	State   json.RawMessage `json:"state"`   // kept for the next run when the session does not fail
 	Checks  []string        `json:"checks"`  // the tools whose model calls the script vets before they run
+
+	// the note the runner writes when the model fails (#858): a report
+	// from status and journal, so the slot is never silent
+	Fallback string `json:"fallback"`
 }
 
 const (
-	scriptTime  = 10 * time.Minute // a script's whole run
+	scriptTime  = 20 * time.Minute // a script's whole run: one MCP call may take 15 (sicherung's restic check, #858)
 	scriptCalls = 200              // its calls; a loop that never ends is an error
 )
 

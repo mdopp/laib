@@ -84,8 +84,10 @@ func TestAProposalNamesAFindingDiagShowsAndAWebSourceMakesItHuman(t *testing.T) 
 	if p.Class != "human" || !slices.ContainsFunc(p.Reasons, func(r string) bool { return strings.Contains(r, "Quelle aus dem Netz") }) {
 		t.Fatalf("a proposal resting on the web is a human's: class %s %q", p.Class, p.Reasons)
 	}
-	if c := proposal.Card(p, "example.org"); !strings.Contains(c.Why, "manifest unknown") || !strings.Contains(c.Reversible, "laib rollback") {
-		t.Fatalf("the card shows what was seen and the way back: %+v", c)
+	// what was seen and the proposer's way back are commands and raw text: under Details (#855)
+	if c := proposal.Card(p, "example.org"); strings.Contains(c.Why, "manifest unknown") || strings.Contains(c.Reversible, "laib rollback") ||
+		!strings.Contains(c.Details, "gesehen: manifest unknown") || !strings.Contains(c.Details, "laib rollback") {
+		t.Fatalf("the card keeps what was seen and the way back under Details: %+v", c)
 	}
 }
 

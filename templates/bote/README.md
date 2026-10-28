@@ -26,7 +26,17 @@ link>“, from laib-notify. Until #778 a `bote-relay` container read
 `ADMIN_DISCORD_ID` with the `approver` hand's token; it is gone, and so are
 those values but the two home channels. `ADMIN_NUMBER` and `ADMIN_ROOM`
 stay: Hermes' home channel (`SIGNAL_HOME_CHANNEL`, `MATRIX_HOME_ROOM`),
-where it tells the owner, for instance, of a dropped sender.
+where it tells the owner, for instance, of a dropped sender. The persona
+engine gets `ADMIN_NUMBER` too: only that number (or a Signal profile name
+that resolves to it) is offered the box (#863, "Joshua" below).
+
+**An escalation stays in the house (#863, owner 2026-10-28).** The Bote's
+`laib escalate` never becomes a ticket in `box.yml intake.repo`, whoever
+wrote: laib puts it on the owner's Box-Aufgaben („Frage aus dem Boten: …“),
+with the context bundle under `/mnt/data/laib/escalations` named in it. The
+hand `bote` cannot tell the admin from the family, so the rule holds for
+both; the admin asks Claude in the Werkstatt. The SOUL offers exactly that:
+handing the question to the admin.
 
 `bote-signal` runs only with Signal. `laib plan` refuses, before anything
 restarts: a person in box.yml `people` with a target on a channel the Bote
@@ -226,6 +236,21 @@ list as every platform) plus the MCP servers. Hermes logs a warning at
 start that the API server is network-accessible. That is expected here:
 the port is off the LAN and needs the key.
 
+## A Box-Aufgabe with the Bote (#878)
+
+A Box-Aufgabe whose `weg` is `gespraech` (docs/INTERFACE.md, "Box-Aufgaben
+for Haus") is done together with the Bote: Haus's „Gemeinsam mit Joshua“
+sends „Aufgabe #N mit dir erledigen“ over the Sprechen field's API server.
+The persona engine takes the person to the top level (whatever tool's level
+they were on), with every tool, and adds `AUFGABE: N`; the plugin skips
+Home Assistant for it and tells the model to read the task with
+`laib_aufgabe` (`zeigen`, `id`, `von`: the person's login), say in one
+sentence what it is about, and lead step by step, checking each step with
+laib's read tools, proposing what changes the box and handing code work to
+the Werkstatt (`laib_wish`). The Bote's hand sees only that person's own
+tasks besides the admins' and everyone's, and it never ticks one off: Laib
+does when the finding is gone, or the person in Haus.
+
 ## Tools: only what answers, and a budget (#54)
 
 The hook probes every MCP URL at apply time (any HTTP answer counts, a
@@ -394,8 +419,15 @@ Issue: the Bote on the NUC (#23, phase 2).
 ## Joshua (#119, #122)
 
 The Bote's persona is Joshua, the WOPR from WarGames, in the person's
-language. "Was kannst du?" (or "Joshua", "Menü") shows the WOPR main
-directory: the Bote's real tools by number, then SPIELE. A number enters
+language. "Hilfe", "Hallo", "Was kannst du?" or "Joshua" get plain words:
+who speaks and five sentences to send as they are, from the tools that are
+wired (#863). WOPR is the games' easter egg: "Wollen wir ein Spiel
+spielen?" or "Menü" shows the WOPR main directory: the Bote's real tools by
+number, then SPIELE. The box's level (BOX-STATUS UND VORSCHLÄGE) and the
+box's example in the help are the admin's number's only (`ADMIN_NUMBER`);
+every other sender, Haus's Sprechen field too, sees neither. That is what
+the engine offers; the model still answers a family member who asks about
+the box with the hand `bote`'s read verbs. A number enters
 that context; the prompt shows where you are (`JOSHUA/GERÄTE>`; the family reads words, never tool names, ADR 0021), the Bote
 answers with that tool until ZURÜCK (one level up) or MENÜ. Under SPIELE:
 the film's list, tic-tac-toe (it never loses; 0 players plays itself) and
@@ -414,7 +446,8 @@ it first. Its `pre_llm_call` asks the engine with every message (the
 sender's id as the session) and puts the routing into the user turn as a
 "Persona: …" line. A **screen** (the directory, the film's list, a board)
 is the answer, verbatim in a code block, through `transform_llm_output`,
-whatever the model wrote. A screen with **VALID:** asks the model to
+whatever the model wrote; **TEXT:** (the help) is the answer the same way,
+as plain words without the code block. A screen with **VALID:** asks the model to
 translate the person's words into one of the commands; the engine's answer
 to that command is what the person gets. **WEITER** (a request for one of
 the Bote's tools) goes to the model with the context; inside a menu level

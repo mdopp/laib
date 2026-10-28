@@ -1,5 +1,9 @@
 # Deconstructing Solaris and solaris-android, with Laib
 
+**History.** The cut of 2026-10-10, kept as it was written. Solaris is
+retired (ADR 0015), the Bote is the household's chat (ADR 0016) and Haus
+the surface; what runs now is `docs/ZIELBILD.md`.
+
 A fresh cut, 2026-10-10. The operator asked for sensible, maintainable
 constructs and gave the one observation that changes everything: *the web
 chat is rarely used; what is used is switching things and finding state —

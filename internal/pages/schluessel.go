@@ -30,9 +30,9 @@ var keyState = struct {
 }{m: map[string]*keyRun{}}
 
 type keyRun struct {
-	done     []string
-	now, end string
-	red      bool
+	done          []string
+	now, end, raw string // raw: what failed, never the value, under Details (#855)
+	red           bool
 }
 
 // keyStep: the box does s now. Before the key is saved it only replaces
@@ -55,15 +55,16 @@ func keyStep(name, s string) {
 	}
 }
 
-// keyEnd: how it ended; the step on its way counts as done.
-func keyEnd(name, s string, red bool) {
+// keyEnd: how it ended; the step on its way counts as done. raw is what
+// failed, for Details.
+func keyEnd(name, s, raw string, red bool) {
 	keyState.Lock()
 	defer keyState.Unlock()
 	r := keyState.m[name]
 	if r.now != "" && len(r.done) > 0 {
 		r.done = append(r.done, r.now)
 	}
-	r.now, r.end, r.red = "", s, red
+	r.now, r.end, r.raw, r.red = "", s, raw, red
 }
 
 // keyFor: the owner's key of that name (#696), or nil when the page may
@@ -104,7 +105,7 @@ func Keys(env *cli.Env) http.HandlerFunc {
 			sec, err = secrets.Load(env.Paths.Secrets, env.Paths.Key)
 		}
 		if err != nil {
-			page(w, "Schlüssel", "<p class=rot>State nicht lesbar: "+html.EscapeString(err.Error())+"</p>")
+			page(w, "Schlüssel", failure(proposal.NotReadable, err.Error()))
 			return
 		}
 		name, back, note := r.FormValue("name"), backTo(st, r.FormValue("zurueck")), ""
@@ -116,11 +117,11 @@ func Keys(env *cli.Env) http.HandlerFunc {
 			value, actor, key := strings.TrimSpace(r.PostFormValue("wert")), webActor(r), keyFor(st, name)
 			switch {
 			case key == nil:
-				note = "<p class=rot>Diesen Schlüssel kann die Box-Seite nicht setzen.</p>"
+				note = "<p class=rot>Diesen Schlüssel kann die Box-Seite nicht setzen. Zurück zur <a href=/schluessel>Übersicht</a>.</p>"
 			case value == "":
-				note = "<p class=rot>Kein Schlüssel eingegeben.</p>"
+				note = "<p class=rot>Kein Schlüssel eingegeben: füge ihn ins Feld ein und tippe noch einmal.</p>"
 			case !policy.Allowed(st.Policy, "human", "apply"):
-				note = "<p class=rot>Dieses Konto darf keine Schlüssel setzen.</p>"
+				note = "<p class=rot>Dieses Konto darf keine Schlüssel setzen. Frag den, der die Box betreut.</p>"
 			default:
 				keyStep(name, "wird gespeichert")
 				go storeKey(env, actor, name, key.Owner.Label, value)
@@ -148,7 +149,7 @@ func storeKey(env *cli.Env, actor, name, label, value string) {
 	webEnv := &cli.Env{Paths: env.Paths, Actor: actor, Out: &out, ErrOut: &out}
 	st, err := cli.LoadState(webEnv)
 	if err != nil {
-		keyEnd(name, "fehlgeschlagen: "+err.Error(), true)
+		keyEnd(name, "fehlgeschlagen: "+proposal.NotReadable, err.Error(), true)
 		return
 	}
 	because := ""
@@ -167,15 +168,17 @@ func storeKey(env *cli.Env, actor, name, label, value string) {
 	}
 	switch {
 	case code != cli.ExitOK && len(users) == 0:
-		keyEnd(name, "fehlgeschlagen, nicht gespeichert: "+last, true)
+		keyEnd(name, "fehlgeschlagen, nicht gespeichert: "+proposal.Plain(last), last, true)
+	case code != cli.ExitOK && because != "":
+		keyEnd(name, "fehlgeschlagen, weil "+because+". "+label+" bleibt gespeichert; sieh im Journal nach, was die Box dazu sagt.", last, true)
 	case code != cli.ExitOK:
-		keyEnd(name, "fehlgeschlagen, weil "+cmp.Or(because, last)+". "+label+" bleibt gespeichert.", true)
+		keyEnd(name, "fehlgeschlagen: "+proposal.Plain(last)+" "+label+" bleibt gespeichert.", last, true)
 	case len(users) == 0:
-		keyEnd(name, "fertig: "+label+" hinterlegt, kein Dienst muss neu starten", false)
+		keyEnd(name, "fertig: "+label+" hinterlegt, kein Dienst muss neu starten", "", false)
 	case len(users) == 1:
-		keyEnd(name, "fertig: "+users[0]+" läuft mit dem neuen Schlüssel", false)
+		keyEnd(name, "fertig: "+users[0]+" läuft mit dem neuen Schlüssel", "", false)
 	default:
-		keyEnd(name, "fertig: "+strings.Join(users, ", ")+" laufen mit dem neuen Schlüssel", false)
+		keyEnd(name, "fertig: "+strings.Join(users, ", ")+" laufen mit dem neuen Schlüssel", "", false)
 	}
 }
 
@@ -191,7 +194,7 @@ func keyLine(name string) string {
 	}
 	var b strings.Builder
 	if r.end == "" {
-		fmt.Fprintf(&b, `<div id="key-%s" data-run><p>Das dauert meist unter einer Minute, manchmal zwei. Du musst nichts tun, die Seite aktualisiert sich.</p>`, html.EscapeString(name))
+		fmt.Fprintf(&b, `<div id="key-%s" data-run><p>%s</p>`, html.EscapeString(name), frist("Das dauert meist unter einer Minute, manchmal zwei."))
 	} else {
 		fmt.Fprintf(&b, `<div id="key-%s">`, html.EscapeString(name))
 	}
@@ -202,7 +205,7 @@ func keyLine(name string) string {
 	case r.end == "":
 		b.WriteString("<p class=gelb>" + html.EscapeString(r.now) + " …</p>")
 	case r.red:
-		b.WriteString("<p class=rot>" + html.EscapeString(r.end) + "</p>")
+		b.WriteString(failure(r.end, r.raw))
 	default:
 		b.WriteString("<p class=grün>" + html.EscapeString(r.end) + "</p>")
 	}

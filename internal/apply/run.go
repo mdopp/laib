@@ -78,6 +78,18 @@ func TakeLock(env *cli.Env, st *state.State, verb string) (func(), int) {
 	}, cli.ExitOK
 }
 
+// AwaitLock waits up to env.Wait for the work before it (#609): an
+// approve, a repair or a rollback at the shell or on the page queues behind
+// the lock instead of failing (#854), and says so once.
+func AwaitLock(env *cli.Env) {
+	for until, said := time.Now().Add(env.Wait), false; LockHolder(env.Paths) != "" && time.Now().Before(until); time.Sleep(time.Second) {
+		if !said {
+			fmt.Fprintf(env.W(), "wartet, bis die Box mit der Arbeit davor fertig ist (höchstens %d Minuten) …\n", int(env.Wait.Minutes()))
+			said = true
+		}
+	}
+}
+
 // ApplyHeld is apply under a lock the caller holds.
 func ApplyHeld(ctx context.Context, env *cli.Env, st *state.State, only, reason string) int {
 

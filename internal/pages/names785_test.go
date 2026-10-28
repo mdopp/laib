@@ -14,7 +14,7 @@ func TestACardShowsThePlainNameBigAndTheIdSmall(t *testing.T) {
 		{Name: "media", Title: "Jellyfin", Beschreibung: "Filme, Serien, Musik", State: "grün", Units: map[string]string{}},
 		{Name: "echo", State: "grün", Units: map[string]string{}},
 	}
-	body := statusBody(Readiness{State: "bereit"}, rows, nil, "", "")
+	body := statusBody(Readiness{State: "bereit"}, rows, nil, "")
 	cards := regexp.MustCompile(`(?s)<div class="card grün" id="svc-[^"]+" data-f>.*?</div>`).FindAllString(body, -1)
 	if len(cards) != 2 {
 		t.Fatalf("want two cards: %s", body)
@@ -42,7 +42,7 @@ func TestTheStatusPageFiltersByStateAndShowsProblemsFirst(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	all := statusBody(Readiness{State: "bereit"}, rows, nil, "", "")
+	all := statusBody(Readiness{State: "bereit"}, rows, nil, "")
 	for _, w := range []string{`<a href="/" aria-current=page>Alle 5</a>`, `<a href="/?filter=rot">Rot 1</a>`, `<a href="/?filter=gelb">Gelb 2</a>`, `<a href="/?filter=gruen">Grün 2</a>`} {
 		if !strings.Contains(all, w) {
 			t.Errorf("the filter lacks %s:\n%s", w, all)
@@ -55,12 +55,12 @@ func TestTheStatusPageFiltersByStateAndShowsProblemsFirst(t *testing.T) {
 		t.Errorf("order %q, want rot, gelb, then grün", got)
 	}
 	for show, want := range map[string]string{"rot": "d", "gelb": "b e", "gruen": "a c", "quatsch": "d b e a c"} {
-		body := statusBody(Readiness{State: "bereit"}, rows, nil, "", show)
+		body := statusBody(Readiness{State: "bereit"}, rows, nil, show)
 		if got := names(body); got != want {
 			t.Errorf("?filter=%s shows %q, want %q", show, got, want)
 		}
 	}
-	if gelb := statusBody(Readiness{}, rows, nil, "", "gelb"); !strings.Contains(gelb, `<a href="/?filter=gelb" aria-current=page>Gelb 2</a>`) {
+	if gelb := statusBody(Readiness{}, rows, nil, "gelb"); !strings.Contains(gelb, `<a href="/?filter=gelb" aria-current=page>Gelb 2</a>`) {
 		t.Errorf("the chosen filter is not marked:\n%s", gelb)
 	}
 }

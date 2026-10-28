@@ -52,7 +52,7 @@ laib:                             # the box page and /mcp (ADR 0012); all option
   group: admins
 gpu:
   present: true
-  owner: solaris                  # the service that holds the lease
+  owner: llama                    # the service that holds the lease (the model role, ADR 0011)
 backup:
   repo: /mnt/data/backup/restic
   schedule: "03:00"
@@ -80,7 +80,8 @@ model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
   lease: http://192.168.1.20:11435/api/model-lease
-intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797)
+intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797);
+                                  # the Bote's escalations never: they are Box-Aufgaben for the owner (#863)
   repo: mdopp/laib
   label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator's container (ADR 0013, 0027); laib operator enable sets this
@@ -111,7 +112,12 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `${PERSONA_REV}` come from the house persona. A unit that carries
 `PERSONA_REV` is restarted on any persona change. `${NOTIFY_PERSON}` is
 `notify.person`, whom a service tells when its values name nobody (the
-scan service's closing message, #568).
+scan service's closing message, #568). `${BOTE_SIGNAL}` is the number the
+household writes to on Signal: the value a service names under
+`channels.signal` (the Bote's `SIGNAL_ACCOUNT`), E.164 or empty; Haus shows
+it on Willkommen as `HAUS_BOTE_SIGNAL` (haus#175). It is household data on
+the box: a unit carries it, a repo or a test never (fakes like
+`+4915100000000`).
 
 `zuhause` is the household's address, once for every template that needs
 it (#561): Home Assistant's home, a solar forecast, a waste calendar. The
@@ -232,8 +238,10 @@ at any path. A path grant is a policy.yml change, so the owner decides it,
 like a verb grant; what the proposal changes is still reviewed and
 classed as any other (a box.yml change waits for a human).
 
-A hand never approves its own proposal. `destroy` requires a human on the box
-page or a Solaris card; a token cannot approve.
+A hand never approves its own proposal. What only a human may approve —
+`destroy`, a `human` or `remove` class, a tier with `approvals … by: human` —
+waits for the Inbox or the host shell; an agent hand whose ceiling holds
+`approve` may approve the rest (ADR 0019 (e), #865).
 
 ## skills/<name>/skill.yml (optional)
 
@@ -636,14 +644,38 @@ aufgaben:
     warum: fällt die Box aus, erfährt es niemand
     seit: "2026-10-25"
     von: claude
+    fuer: admins                  # who it is for: admins, alle or person:<login> (#878)
     erinnern: "2026-12-01"        # from this day diag reminds again
-    befund: watchdog              # the diag finding it covers: probe [service|topic]
+    fertig_wenn: watchdog         # the diag finding it covers: probe [service|topic]
+  - id: 3
+    titel: Stimme aufnehmen
+    seit: "2026-10-28"
+    von: haus:mdopp
+    fuer: person:anna
+    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878)
   - id: 1
     titel: TOTP für mdopp prüfen
     seit: "2026-10-25"
     von: human:core
+    fuer: admins
     erledigt: {am: "2026-10-26", von: haus:mdopp}
 ```
+
+- **For whom (#878).** `fuer` is `admins` (also when missing: every task
+  from before #878), `alle`, or `person:<login>`, the Authelia/LLDAP login,
+  which is also the person's name in box.yml `people`. A person's task is
+  theirs: Haus and the Bote act for one person (`--von`) and see the
+  admins', everyone's and that person's own; another person's task is to
+  them as if it were not there (list, zeigen, erledigt, zurueckstellen).
+  The kernel enforces this by the caller's hand, not Haus. A human, claude,
+  ops and laib see the whole list; any other hand none of the personal ones.
+- **The guided way (#878).** `weg` is a Haus page that leads through it
+  (`seite`, a path) or a conversation with the Bote (`gespraech: true`):
+  Haus offers „Gemeinsam mit Joshua“, which opens a conversation with
+  „Aufgabe #N mit dir erledigen“ (templates/bote/README.md).
+- An aufgaben.yml from before loads unchanged: a missing `fuer` is
+  `admins`, the old key `befund` is `fertig_wenn`; the next change writes
+  both under their new names.
 
 - **Why the state repo, committed directly.** The list is the box's, so it
   is backed up and versioned with it. A change is bookkeeping, not desired
@@ -657,16 +689,23 @@ aufgaben:
   orders (ADR 0027), never the state repo, and diag, which is the kernel,
   reads the list on every run. A door program that only proposes could not
   tick a task off without an approval.
-- **diag.** A finding that an open task's `befund` covers is shown at
+- **diag.** A finding that an open task's `fertig_wenn` covers is shown at
   severity info with „zurückgestellt → Box-Aufgabe #N“ and carries
   `aufgabe: N`; from its `erinnern` day it is gelb with „erinnert“. A red
   stays red: a deferral silences a nudge, never damage. A finding that could
   not be measured (`unmeasured`, e.g. laib-disk silent) is never covered.
   When a full diag measures the finding gone, laib checks the task off
-  („von Laib erledigt: Befund weg“), but only for the probes whose absence
-  is a measurement: watchdog, backup, recovery, restore-test, raid. Every
-  other task is ticked off by a person.
-- `befund` matches a finding by its probe and its service or topic
-  (`backup offsite`); a befund without one covers only findings without one.
-- Readiness carries `aufgaben` and `aufgabenFaellig`; the morning report
-  names the due ones.
+  (`erledigt: {von: laib, wie: "Befund weg"}`, one journal line `aufgabe`
+  „erledigt #N: Befund weg“ as laib), whoever the task is for, but only for
+  the probes whose absence is a measurement: watchdog, backup, recovery,
+  restore-test, raid, status (`aufgaben.Closable`). Every other task is
+  ticked off by a person; `laib aufgabe add` says so when its fertig_wenn
+  is on another probe. Every full diag is that pass (the Operator's look
+  skills and laib-notify run one on their rounds); there is no separate
+  nightly job.
+- `fertig_wenn` matches a finding by its probe and its service or topic
+  (`backup offsite`); one without either covers only findings without one.
+- Readiness carries `aufgaben` and `aufgabenFaellig`, counting the tasks
+  that are nobody's own (the admins' and everyone's); the morning report
+  names the due ones. A person's own count is laib_aufgabe's `offen` for
+  them.

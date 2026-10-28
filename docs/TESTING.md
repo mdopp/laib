@@ -44,8 +44,9 @@ Rules:
   is dropped).
 - No ratchets, no invariant scanners at the start. A gate is added the
   second time a shape breaks (`CLAUDE.md`, regression ⇒ gate).
-- A renderer change without a golden change fails review.
-- `go vet` in CI, plus `scripts/drift.sh` (docs vs code: layout, the
+- A renderer change without its golden change fails `TestGolden`
+  (`internal/render`), for what the golden cases render (#866).
+- `gofmt -l` and `go vet` in CI, plus `scripts/drift.sh` (docs vs code: layout, the
   Operator's tools, ports, counts, tracked artifacts, the release
   manifest); nothing else.
 
