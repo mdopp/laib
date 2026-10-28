@@ -58,7 +58,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 			t.Errorf("laib_aufgabe lacks %s", p)
 		}
 	}
-	if e := props["action"].(map[string]any)["enum"]; !slices.Equal(e.([]string), []string{"list", "add", "erledigt", "zurueckstellen"}) {
+	if e := props["action"].(map[string]any)["enum"]; !slices.Equal(e.([]string), []string{"list", "zeigen", "add", "erledigt", "zurueckstellen"}) {
 		t.Errorf("action enum %v", e)
 	}
 	if !slices.Equal(schema["required"].([]string), []string{"action"}) {
@@ -66,7 +66,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 	}
 
 	got, out, code := callAufgabe(t, env, "ops", map[string]any{"action": "add", "titel": "Wächter von außen", "warum": "fällt die Box aus, erfährt es niemand", "erinnern": "2026-12-01", "befund": "watchdog"})
-	if code != cli.ExitOK || got.Aufgabe.ID != 1 || got.Aufgabe.Von != "ops" || got.Aufgabe.Befund != "watchdog" || !strings.Contains(got.Message, "#1") {
+	if code != cli.ExitOK || got.Aufgabe.ID != 1 || got.Aufgabe.Von != "ops" || got.Aufgabe.FertigWenn != "watchdog" || !strings.Contains(got.Message, "#1") {
 		t.Fatalf("ops add: exit %d: %s", code, out)
 	}
 	if _, out, code := callAufgabe(t, env, "bote", map[string]any{"action": "add", "titel": "x"}); code == cli.ExitOK {
@@ -143,7 +143,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 		t.Fatalf("watchdog still found: %v", f)
 	}
 	list, _ := aufgaben.Load(env.Paths.State)
-	if e := list[0].Erledigt; e == nil || e.Von != "laib" || !strings.Contains(e.Wie, "Befund weg") {
+	if e := list[0].Erledigt; e == nil || e.Von != "laib" || e.Wie != "Befund weg" {
 		t.Fatalf("the watchdog task is not closed by laib: %+v", list[0])
 	}
 	if list[2].Erledigt != nil {

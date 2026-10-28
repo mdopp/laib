@@ -10,10 +10,10 @@ import (
 )
 
 var tasks667 = []aufgaben.Aufgabe{
-	{ID: 1, Titel: "Wächter von außen", Befund: "watchdog", Erinnern: "2026-12-01"},
-	{ID: 2, Titel: "Zweite Datenplatte", Befund: "raid"},
-	{ID: 3, Titel: "Sicherung außer Haus", Befund: "backup offsite", Erinnern: "2026-11-01"},
-	{ID: 4, Titel: "erledigt", Befund: "boot", Erledigt: &aufgaben.Erledigt{Am: "2026-10-20", Von: "claude"}},
+	{ID: 1, Titel: "Wächter von außen", FertigWenn: "watchdog", Erinnern: "2026-12-01"},
+	{ID: 2, Titel: "Zweite Datenplatte", FertigWenn: "raid"},
+	{ID: 3, Titel: "Sicherung außer Haus", FertigWenn: "backup offsite", Erinnern: "2026-11-01"},
+	{ID: 4, Titel: "erledigt", FertigWenn: "boot", Erledigt: &aufgaben.Erledigt{Am: "2026-10-20", Von: "claude"}},
 }
 
 // #667: a finding an open Box-Aufgabe covers is info, „zurückgestellt →
@@ -63,9 +63,9 @@ func TestACoveredFindingIsDeferredUntilItsReminder(t *testing.T) {
 // measurement at all, never closes one.
 func TestATaskClosesOnlyWhenItsFindingIsMeasuredGone(t *testing.T) {
 	open := append(slices.Clone(tasks667[:3]),
-		aufgaben.Aufgabe{ID: 5, Titel: "Dienst", Befund: "unit immich"},
+		aufgaben.Aufgabe{ID: 5, Titel: "Dienst", FertigWenn: "unit immich"},
 		aufgaben.Aufgabe{ID: 6, Titel: "ohne Befund"},
-		aufgaben.Aufgabe{ID: 7, Titel: "acme", Befund: "acme"})
+		aufgaben.Aufgabe{ID: 7, Titel: "acme", FertigWenn: "acme"})
 	// watchdog configured, offsite copy exists, the RAID probe silent
 	fs := []Finding{{Severity: "gelb", Probe: "raid", Detail: "laib-disk antwortet nicht", Unmeasured: true}}
 	if got := gone(fs, open); !slices.Equal(got, []int{1, 3}) {
