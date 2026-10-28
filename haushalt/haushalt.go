@@ -51,9 +51,11 @@ type ScanService struct {
 	Orders string  `json:"orders"`
 }
 
-// Laib is the way back: a proposal as the haushalt hand, under a ceiling.
+// Laib is the way back as the haushalt hand, under a ceiling: a proposal,
+// or a Box-Aufgabe for the admins (the Bote's wish, #883).
 type Laib interface {
 	Propose(ctx context.Context, ceiling string, args ...string) (id int, class string, err error)
+	Aufgabe(ctx context.Context, ceiling string, args ...string) (id int, err error)
 }
 
 // Env is one call's world.

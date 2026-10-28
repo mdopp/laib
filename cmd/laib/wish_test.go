@@ -76,7 +76,7 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 	c := newCbox(t)
 	g := newFakeGitHub(t)
 	c.intake(t, "mdopp/x", g)
-	c.env.Actor = "bote"
+	c.env.Actor = "claude" // the Bote's is a Box-Aufgabe (#883)
 	if rc := c.wish(t, "Ich brauche einen Dienst, der Rezepte sammelt", "und mit dem Handy teilt"); rc != cli.ExitOK {
 		t.Fatalf("rc %d", rc)
 	}
@@ -90,7 +90,7 @@ func TestWishFilesAnIssueWithTheIntakeLabel(t *testing.T) {
 	if title, _ := in["title"].(string); !strings.HasPrefix(title, "Wunsch: Ich brauche einen Dienst") {
 		t.Fatalf("title %q", title)
 	}
-	if body, _ := in["body"].(string); !strings.Contains(body, "Rezepte sammelt und mit dem Handy teilt") || !strings.Contains(body, "bote") {
+	if body, _ := in["body"].(string); !strings.Contains(body, "Rezepte sammelt und mit dem Handy teilt") || !strings.Contains(body, "claude") {
 		t.Fatalf("body %q", body)
 	}
 	labels, _ := in["labels"].([]any)

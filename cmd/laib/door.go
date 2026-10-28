@@ -66,9 +66,10 @@ type doorScan struct {
 
 // door hands the call to the program's container (ADR 0027) on 127.0.0.1,
 // with the door's key from secrets.age. It holds no token of laib's: the
-// program calls laib back with its own (the haushalt hand, propose only),
-// under the ceiling sent here — propose, or the verb's own lower tier — and
-// the dial applies nothing it proposes. What it would journal comes back
+// program calls laib back with its own (the haushalt hand: propose, and
+// the Bote's wish as a Box-Aufgabe, #883), under the ceiling sent here —
+// propose, or the verb's own lower tier — and the dial applies nothing it
+// proposes. What it would journal comes back
 // with the answer; the kernel writes it as the caller, under the verb.
 func door(ctx context.Context, env *cliEnv, prog, tier string, argv []string) int {
 	ceiling := "propose"

@@ -37,7 +37,7 @@ func newGitHub(t *testing.T) *gitHub {
 func run797(t *testing.T, gh GitHub, in *Intake, args ...string) (map[string]string, int, string, string) {
 	t.Helper()
 	var out, errb, jr bytes.Buffer
-	env := &Env{Call: Call{JSON: true, Actor: "bote", Ceiling: "propose", Intake: in}, GitHub: gh, Out: &out, Err: &errb, Journal: &jr}
+	env := &Env{Call: Call{JSON: true, Actor: "claude", Ceiling: "propose", Intake: in}, GitHub: gh, Out: &out, Err: &errb, Journal: &jr}
 	code := Run(context.Background(), env, args)
 	var reply map[string]string
 	json.Unmarshal(out.Bytes(), &reply)
@@ -63,7 +63,7 @@ func TestAWishBecomesAnIssueWithThisProgramsToken(t *testing.T) {
 	if title, _ := in["title"].(string); !strings.HasPrefix(title, "Wunsch: Ich brauche einen Dienst") {
 		t.Fatalf("title %q", title)
 	}
-	if body, _ := in["body"].(string); !strings.Contains(body, "Rezepte sammelt und mit dem Handy teilt") || !strings.Contains(body, "bote") || !strings.Contains(body, "nuc.home") {
+	if body, _ := in["body"].(string); !strings.Contains(body, "Rezepte sammelt und mit dem Handy teilt") || !strings.Contains(body, "claude") || !strings.Contains(body, "nuc.home") {
 		t.Fatalf("body %q", body)
 	}
 	if labels, _ := in["labels"].([]any); len(labels) != 1 || labels[0] != "wunsch" {
