@@ -75,7 +75,7 @@ func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lb, _ := pages.Guarantees(b.env, st); lb.Repos != 2 {
+	if lb, _, _ := pages.Guarantees(b.env, st); lb.Repos != 2 {
 		t.Fatalf("a fresh off-box copy is a second place: %+v", lb)
 	}
 	if f := backupFinding(b, st, "außer Haus"); f != nil {
@@ -99,7 +99,7 @@ func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 	os.RemoveAll(b.env.Paths.Journal)
 	journal.Append(b.env.Paths.Journal, journal.Entry{T: time.Now().Add(-72 * time.Hour), Actor: "laib", Verb: "backup", Reason: "offsite", Result: "green"})
 	journal.Append(b.env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "backup", Result: "green"})
-	if lb, _ := pages.Guarantees(b.env, st); lb.Repos != 1 {
+	if lb, _, _ := pages.Guarantees(b.env, st); lb.Repos != 1 {
 		t.Fatalf("a stale off-box copy is no second place: %+v", lb)
 	}
 	if f := backupFinding(b, st, "außer Haus"); f == nil || f.Severity != "rot" {

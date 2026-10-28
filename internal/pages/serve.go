@@ -90,9 +90,8 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	// Boot comparison (#9): bereit only once units and files match the state.
 	if st, err := cli.LoadState(env); err == nil {
 		r, _ := CollectStatus(ctx, env, st)
-		if r.Red > 0 || r.Drift > 0 {
-			BootUnclean = fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)
-			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: BootUnclean})
+		if r.Red > 0 || r.Drift > 0 { // what did not come up is red on Status; readiness stays about apply (#856)
+			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)})
 		} else {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
 		}
@@ -133,12 +132,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 			return
 		}
 		rd, rows := CollectStatus(r.Context(), env, st)
-		checking := checks(r.Context(), st, true)
-		last := ""
-		if e, ok := journal.Last(env.Paths.Journal); ok {
-			last = fmt.Sprintf("%s · %s · %s %s · %s", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
-		}
-		body := statusBody(rd, rows, checking, last, r.URL.Query().Get("filter"))
+		body := statusBody(rd, rows, checks(r.Context(), st, true), r.URL.Query().Get("filter"))
 		for _, w := range st.Warnings { // the box's own warnings, once here, not on every proposal (#616)
 			body += "<p class=gelb>Hinweis: " + html.EscapeString(w) + "</p>"
 		}
@@ -389,8 +383,9 @@ func liveIf(body string) string {
 }
 
 // statusBody is the status page: the box's line, one card per service with
-// its state and note, the last change; the morning report is Haus's (#798).
-func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, last string, show string) string {
+// its state and note, the backup and the last change, all from the one
+// verdict (#856); the morning report is Haus's (#798).
+func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, show string) string {
 	var b strings.Builder
 	// the owner's filter by state (#785): problems first; a paused service counts green
 	group := func(s string) string {
@@ -434,6 +429,10 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 	if rd.Lock != "" {
 		fmt.Fprintf(&b, "<p class=gelb>gesperrt durch %s</p>", html.EscapeString(rd.Lock))
 	}
+	for _, p := range rd.Problems {
+		fmt.Fprintf(&b, "<p class=rot>%s</p>", html.EscapeString(p))
+	}
+	fmt.Fprintf(&b, "<p class=%s>%s</p>", map[bool]string{true: "muted", false: "rot"}[rd.LastBackup.OK], html.EscapeString(rd.LastBackup.Text))
 	b.WriteString(operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
 	b.WriteString(filter + "<div class=liste>")
 	for _, row := range rows {
@@ -443,8 +442,8 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, la
 		b.WriteString(serviceCard(row, checking))
 	}
 	b.WriteString("</div>")
-	if last != "" {
-		fmt.Fprintf(&b, "<p class=muted>Letzte Änderung %s</p>", html.EscapeString(last))
+	if c := lastChange(rd.LastChange); c != "" {
+		fmt.Fprintf(&b, "<p class=muted>Letzte Änderung %s</p>", html.EscapeString(c))
 	}
 	return b.String()
 }
@@ -460,7 +459,7 @@ func serviceCard(row ServiceStatus, checking map[string]bool) string {
 		}
 	}
 	sort.Strings(bad)
-	note := strings.TrimSpace(strings.Join(bad, " ") + " " + row.Detail)
+	note := strings.TrimSpace(strings.Join(append(bad, row.Red...), " ") + " " + row.Detail)
 	check, run := "", ""
 	if on, ok := checking[row.Name]; ok {
 		check = `<form method=post action="/check/` + html.EscapeString(row.Name) + `"><button>jetzt prüfen</button></form>`

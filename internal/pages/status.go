@@ -34,7 +34,13 @@ import (
 type LastBackup struct {
 	At    string `json:"at,omitempty"` // RFC3339
 	Repos int    `json:"repos"`        // places: the configured repo counts one, the off-box repo a second while its copy is under 48 h old
-	OK    bool   `json:"ok"`
+	// OK: a green backup and no red backup finding (failed, or older than
+	// 36 h); a stale off-box copy lowers Repos instead (#856)
+	OK bool `json:"ok"`
+	// OnlyOnDataDisk: the one place is the data disk it protects
+	OnlyOnDataDisk bool   `json:"onlyOnDataDisk,omitempty"`
+	Problem        string `json:"problem,omitempty"` // why it is not OK, diag's red finding
+	Text           string `json:"text"`              // the fact in one neutral sentence, as Laib's pages say it
 }
 
 // LastChange: the last applied proposal in plain words (the card's summary).
@@ -63,6 +69,9 @@ type Readiness struct {
 	Watchdog  string   `json:"watchdog"`           // kein Wächter | noch nie gemeldet | zuletzt gemeldet 12:05 (#57)
 	Aufgaben  int      `json:"aufgaben"`           // open Box-Aufgaben (#667), the owner's to-dos on the box
 	Faellig   int      `json:"aufgabenFaellig"`    // of them, the ones whose reminder day has come
+	// Problems: what is red beyond one service (disk, backup, firewall,
+	// and the last whole diag's slow probes), one line each (#856)
+	Problems []string `json:"problems,omitempty"`
 	// the three guarantees Haus's start page shows the family (haus#2)
 	LastBackup LastBackup `json:"lastBackup"`
 	LastChange LastChange `json:"lastChange"`
@@ -88,6 +97,7 @@ type ServiceStatus struct {
 	State        string            `json:"state"`                  // grün | gelb | rot
 	Units        map[string]string `json:"units"`
 	Detail       string            `json:"detail,omitempty"`
+	Red          []string          `json:"red,omitempty"` // why it is red beyond its units: "health: 502 Bad Gateway" (#856)
 	// Provides are its roles: laib-lease finds the units a window stops by them (ADR 0027)
 	Provides []string `json:"provides,omitempty"`
 	// Eigenes: the status file's own fields, for one named service (#688)
@@ -95,36 +105,43 @@ type ServiceStatus struct {
 	Gekappt []string                   `json:"eigenes_gekappt,omitempty"`
 }
 
-// BootUnclean is set by serve after its first comparison when the box did
-// not come up matching the state (#9); cleared by the next clean check.
-var BootUnclean string
-
+// CollectStatus reads the box and gives the one verdict (#856) that /ready,
+// the Status page, laib status and Haus show: judge decides, from facts.
 func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readiness, []ServiceStatus) {
-	var rows []ServiceStatus
-	r := Readiness{State: "bereit", LastHeard: time.Now().UTC().Format(time.RFC3339), Version: cli.Version}
-	facts := diag.OperatorFacts(ctx, env, st)
-	r.Operator, _ = diag.OperatorState(facts)
-	r.OperatorWork = operatorToday(env, facts.Work, time.Now())
-	r.LastBackup, r.LastChange = Guarantees(env, st)
-	if holder := apply.LockHolder(env.Paths); holder != "" {
-		r.State, r.Lock = "eingeschränkt", holder
-	}
+	now := time.Now()
+	r := Readiness{LastHeard: now.UTC().Format(time.RFC3339), Version: cli.Version}
+	op := diag.OperatorFacts(ctx, env, st)
+	f := facts{now: now, lock: apply.LockHolder(env.Paths)}
+	var opFinding *diag.Finding
+	r.Operator, opFinding = diag.OperatorState(op)
+	r.OperatorWork = operatorToday(env, op.Work, now)
+	f.backup, f.change, f.found = Guarantees(env, st)
 	r.Firewall = apply.FirewallState(ctx, env.Paths)
 	r.Watchdog = watchdogState(env, st)
 	if list, err := aufgaben.Load(env.Paths.State); err == nil {
-		r.Aufgaben, r.Faellig = aufgaben.Counts(list, time.Now().Format(time.DateOnly))
-	}
-	if r.Firewall == "fehlt" && r.Lock == "" {
-		r.State, r.Lock = "eingeschränkt", "firewall: table inet laib fehlt im Kernel (laib converge --force lädt sie)"
+		r.Aufgaben, r.Faellig = aufgaben.Counts(list, now.Format(time.DateOnly))
 	}
 	if sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key); err == nil {
 		if p, err := plan.Compute(ctx, st, sec, env.Paths, ""); err == nil {
 			r.Drift = len(p.Changes)
 		}
 	}
+	for _, x := range []*diag.Finding{opFinding, diag.NFTables(r.Firewall)} {
+		if x != nil {
+			f.found = append(f.found, *x)
+		}
+	}
+	f.found = append(f.found, diag.DiskPressure(st.Box.DataDir)...)
+	f.found = append(f.found, diag.Kept(env.Paths.Home)...)
+	names := st.ServiceNames()
+	health := make([]*diag.Finding, len(names)) // in parallel: one slow service does not hold the page
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() { health[i] = diag.Health(ctx, st.Services[name]) })
+	}
 	paused := apply.Paused(env.Paths)
 	r.Pending = apply.Pending(env.Paths)
-	for _, name := range st.ServiceNames() {
+	for _, name := range names {
 		svc := st.Services[name]
 		row := ServiceStatus{Name: name, Title: svc.Contract.Title, Beschreibung: svc.Contract.Beschreibung, State: "grün", Units: map[string]string{}, Provides: svc.Contract.Provides}
 		for _, u := range svc.UnitNames() {
@@ -145,9 +162,11 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 				row.Units[u], row.State = a, "rot"
 			}
 		}
-		if rep := diag.ReadStatus(st, svc); rep.Detail != "" {
+		rep := diag.ReadStatus(st, svc)
+		f.found = append(f.found, diag.SelfFindings(rep, now)...)
+		if rep.Detail != "" {
 			row.Detail = rep.Detail
-			if a := diag.Age(rep.At, time.Now()); a != "" {
+			if a := diag.Age(rep.At, now); a != "" {
 				row.Detail += " · " + a
 			}
 		} else if svc.Contract.Status != nil && !rep.Found {
@@ -158,8 +177,62 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 			row.Detail = fmt.Sprintf("von %s bis %s %s", pz.By, pz.Until.Local().Format("02.01. 15:04"), pz.Reason)
 			r.Paused = append(r.Paused, fmt.Sprintf("%s von %s bis %s", name, pz.By, pz.Until.Local().Format("02.01. 15:04")))
 		}
-		rows = append(rows, row)
-		r.Services++
+		f.rows = append(f.rows, row)
+	}
+	wg.Wait()
+	for _, h := range health {
+		if h != nil {
+			f.found = append(f.found, *h)
+		}
+	}
+	return judge(r, f)
+}
+
+// facts are what CollectStatus read, for judge.
+type facts struct {
+	now    time.Time
+	lock   string // the apply lock's holder
+	rows   []ServiceStatus
+	found  []diag.Finding // diag's findings: live, and the last whole run's slow ones
+	backup LastBackup     // At, Repos and OnlyOnDataDisk as read
+	change LastChange
+}
+
+// judge is the one verdict (#856). Readiness is what docs/DESIGN.md says:
+// eingeschränkt while apply is locked, else bereit. A red finding of one
+// service makes it red with its reason (a unit's is its units' own line);
+// any other is a problem line; the backup holds only while no backup
+// finding is red. A paused service stays paused.
+func judge(r Readiness, f facts) (Readiness, []ServiceStatus) {
+	r.State, r.Lock = "bereit", f.lock
+	if f.lock != "" {
+		r.State = "eingeschränkt"
+	}
+	rows, at := f.rows, map[string]int{}
+	for i, row := range rows {
+		at[row.Name] = i
+	}
+	lb := f.backup
+	for _, x := range f.found {
+		if x.Severity != "rot" || x.Probe == "unit" && x.Service != "" {
+			continue
+		}
+		if i, ok := at[x.Service]; ok {
+			if rows[i].State != "pausiert" {
+				rows[i].State, rows[i].Red = "rot", append(rows[i].Red, x.Probe+": "+x.Detail)
+			}
+			continue
+		}
+		r.Problems = append(r.Problems, strings.TrimPrefix(x.Service+": "+x.Detail, ": "))
+		if x.Probe == "backup" && x.Topic != "offsite" && lb.Problem == "" {
+			lb.Problem = x.Detail
+		}
+	}
+	lb.OK = lb.At != "" && lb.Problem == ""
+	lb.Text = backupText(lb)
+	r.LastBackup, r.LastChange = lb, f.change
+	r.Services, r.Green, r.Yellow, r.Red = len(rows), 0, 0, 0
+	for _, row := range rows {
 		switch row.State {
 		case "grün", "pausiert":
 			r.Green++
@@ -169,13 +242,29 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 			r.Red++
 		}
 	}
-	if r.Red == 0 && r.Drift == 0 {
-		BootUnclean = ""
-	}
-	if BootUnclean != "" && r.Lock == "" {
-		r.State, r.Lock = "eingeschränkt", BootUnclean
-	}
 	return r, rows
+}
+
+// backupText is the backup in one neutral sentence: when, how many places,
+// and why it does not hold. The family's words are Haus's (haus#173).
+func backupText(lb LastBackup) string {
+	at, err := time.Parse(time.RFC3339, lb.At)
+	if err != nil {
+		return "Noch keine Sicherung."
+	}
+	s := "Letzte Sicherung " + at.Local().Format("02.01. 15:04")
+	switch {
+	case lb.Repos >= 2:
+		s += ", an zwei Orten"
+	case lb.OnlyOnDataDisk:
+		s += ", an einem Ort: auf der Datenplatte, die sie sichert"
+	case lb.Repos == 1:
+		s += ", an einem Ort"
+	}
+	if p := []rune(lb.Problem); len(p) > 0 {
+		s += ". " + strings.ToUpper(string(p[0])) + string(p[1:])
+	}
+	return s + "."
 }
 
 func Status(ctx context.Context, env *cli.Env, args []string) int {
@@ -206,6 +295,9 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 	if r.Lock != "" {
 		fmt.Fprintf(env.W(), "  gesperrt durch: %s\n", r.Lock)
 	}
+	for _, p := range r.Problems {
+		fmt.Fprintf(env.W(), "  rot: %s\n", p)
+	}
 	if r.Aufgaben > 0 {
 		fmt.Fprintf(env.W(), "  Box-Aufgaben: %d offen, %d fällig (laib aufgabe list)\n", r.Aufgaben, r.Faellig)
 	}
@@ -216,13 +308,17 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(env.W(), " %s=%s", u, a)
 			}
 		}
+		if len(row.Red) > 0 {
+			fmt.Fprintf(env.W(), " %s", strings.Join(row.Red, "; "))
+		}
 		if row.Detail != "" { // what the template says about itself, as the Box page shows it (#359)
 			fmt.Fprintf(env.W(), " %s", row.Detail)
 		}
 		fmt.Fprintln(env.W())
 	}
-	if e, ok := journal.Last(env.Paths.Journal); ok {
-		fmt.Fprintf(env.W(), "Letzte Änderung  %s  %s  %s %s  %s\n", e.T.Local().Format("02.01. 15:04"), e.Actor, e.Verb, e.Service, e.Reason)
+	fmt.Fprintf(env.W(), "Sicherung  %s\n", r.LastBackup.Text)
+	if c := lastChange(r.LastChange); c != "" {
+		fmt.Fprintf(env.W(), "Letzte Änderung  %s\n", c)
 	}
 	return cli.ExitOK
 }
@@ -262,26 +358,20 @@ func kept(ctx context.Context, env *cli.Env, st *state.State, fresh bool) (Readi
 	return c.r, slices.Clone(c.rows), c.at
 }
 
-// Guarantees reads the last successful backup from the journal and the
-// last approved proposal from the inbox (haus#2).
-func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange) {
+// Guarantees reads the last successful backup and diag's backup findings,
+// and the last approved proposal from the inbox (haus#2).
+func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange, []diag.Finding) {
 	var lb LastBackup
-	var offsite time.Time
-	if es, err := journal.Read(env.Paths.Journal, time.Time{}); err == nil {
-		for _, e := range es {
-			if e.Verb == "backup" && e.Result == "green" && e.Reason == "" {
-				lb = LastBackup{At: e.T.UTC().Format(time.RFC3339), OK: true}
-			}
-			if e.Verb == "backup" && e.Result == "green" && e.Reason == "offsite" {
-				offsite = e.T
-			}
-		}
+	bf, found := diag.Backup(env, st)
+	if !bf.LastGreen.IsZero() {
+		lb.At = bf.LastGreen.UTC().Format(time.RFC3339)
 	}
 	if st.Box.Backup.Repo != "" {
 		lb.Repos = 1
-		if st.Box.Backup.Offsite != nil && time.Since(offsite) < 48*time.Hour { // the second place counts while its copy is fresh (#391)
+		if st.Box.Backup.Offsite != nil && time.Since(bf.Offsite) < 48*time.Hour { // the second place counts while its copy is fresh (#391)
 			lb.Repos = 2
 		}
+		lb.OnlyOnDataDisk = lb.Repos == 1 && diag.OnlyOnDataDisk(st)
 	}
 	var lc LastChange
 	if ps, err := proposal.List(cli.InboxDir(env), false); err == nil {
@@ -295,7 +385,16 @@ func Guarantees(env *cli.Env, st *state.State) (LastBackup, LastChange) {
 			lc = LastChange{Proposal: last.ID, Summary: proposal.Card(last, st.Box.Domain).Summary, At: last.Decided.UTC().Format(time.RFC3339), Reversible: true}
 		}
 	}
-	return lb, lc
+	return lb, lc, found
+}
+
+// lastChange is the last applied change in one line: when, what, which proposal.
+func lastChange(c LastChange) string {
+	at, err := time.Parse(time.RFC3339, c.At)
+	if err != nil || c.Summary == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s · %s (#%d)", at.Local().Format("02.01. 15:04"), c.Summary, c.Proposal)
 }
 
 // operatorToday adds what the ops hand did since midnight to its work.
