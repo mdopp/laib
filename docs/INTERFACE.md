@@ -262,6 +262,19 @@ the hand's ceiling and verb list reach it. `laib skill enable|pause
 is what the *client* renders when the call fails). `lock` names what holds
 apply when `eingeschränkt`: `apply:media` or `gpu:werkstatt`.
 
+The guarantees are the same object in `/ready` and in `laib status --json`
+`.ready` (#856, one verdict for every surface):
+
+- `red` counts red services; each red row of `.services` carries `red`, its
+  reasons beyond the units (`"health: 502 Bad Gateway"`).
+- `problems` lists what is red beyond one service: disk, backup, firewall,
+  and the last whole `laib diag` run's slow probes with its time.
+- `lastBackup`: `at` (the last green backup), `repos` (places: 2 while the
+  off-box copy is under 48 h old), `ok` (green, and no backup finding red),
+  `onlyOnDataDisk` (the one place is the disk it protects), `problem` (why
+  not `ok`), `text` (the fact in one neutral German sentence).
+- `lastChange`: the last approved proposal (`proposal`, `summary`, `at`).
+
 ## The box page: three pages
 
 Status:
