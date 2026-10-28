@@ -19,6 +19,9 @@ rewritten or dropped. Here the engine sees each message before the model:
   none (#510: "JOSHUA>" above "Bambi ist aus." was out of place). With
   nothing to route (any tool, the top level, no FIGUR) the plugin adds no
   context: the user turn is the person's words alone (#520).
+- AUFGABE (#878): with WEITER, the person starts the conversation about one
+  Box-Aufgabe (Haus's „Gemeinsam mit Joshua“); the context tells the model to
+  read it with laib_aufgabe and lead through it, step by step;
 - TEXT (the help, #863): plain words for the person, which
   transform_llm_output passes on as they are, without a code block;
 - Home Assistant first (#520, ADR 0015): a message that is no screen goes to
@@ -114,9 +117,19 @@ def _routing(text):
     out = {}
     for line in text.splitlines():
         key, _, value = line.partition(":")
-        if key in ("WEITER", "PROMPT", "FIGUR"):
+        if key in ("WEITER", "PROMPT", "FIGUR", "AUFGABE"):
             out[key] = value.strip()
     return out
+
+
+# #878: Haus's „Gemeinsam mit Joshua“ sends „Aufgabe #N mit dir erledigen“; the engine names the task,
+# and this is how the Bote leads through it. It reads the task and checks with laib; it never ticks it off.
+_AUFGABE = ("Aufgabe: Die Person möchte Box-Aufgabe #%(n)s mit dir erledigen. Lies sie zuerst mit laib_aufgabe "
+            "(action zeigen, id %(n)s, von: der Login der Person, die dir schreibt) und sag in einem Satz, worum es geht und warum. "
+            "Gibt es sie nicht, sag das und hör auf. Dann führe die Person Schritt für Schritt hindurch: ein Schritt pro Nachricht, "
+            "warte auf ihre Antwort. Prüf jeden Schritt mit laib (laib_diag, laib_status), statt ihn zu raten. Was die Box ändert, "
+            "schlägst du vor (laib_propose); Arbeit am Code gibst du an die Werkstatt weiter (laib_wish). Abhaken tust du sie nicht: "
+            "das tut Laib, wenn ihr Befund weg ist, oder die Person in Haus.")
 
 
 def _block(screen):
@@ -134,7 +147,7 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
     key = turn_id or session_id
     if answer is None or answer.startswith("WEITER:"):
         r = _routing(answer or "")
-        handled = _ha(line) if r.get("WEITER", "-") in ("", "-", "ha") else None
+        handled = _ha(line) if r.get("WEITER", "-") in ("", "-", "ha") and not r.get("AUFGABE") else None
         if handled:
             speech, switched = handled
             prompt = r.get("PROMPT", "") if "/" in r.get("PROMPT", "") else ""
@@ -154,7 +167,7 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
             prompt = ""   # the terminal prompt belongs to menus and games, not to a free answer (#510)
         with _lock:
             _turns[key] = ("weiter", prompt, session)
-        if not prompt and tool in ("", "-") and not r.get("FIGUR"):
+        if not prompt and tool in ("", "-") and not r.get("FIGUR") and not r.get("AUFGABE"):
             # #520: nothing to route, so the user turn stays the person's words alone. With a "Persona: …"
             # paragraph under "Bambi aus" the turn was a message plus an instruction, and Qwen without
             # thinking answered with Hermes' steer frame around the words instead of switching.
@@ -164,6 +177,8 @@ def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, pla
             ctx += " Beginne die Antwort mit der Zeile " + prompt
         elif top:
             ctx += " Schreib keine Zeile %s davor." % top
+        if r.get("AUFGABE"):
+            ctx += "\n" + _AUFGABE % {"n": r["AUFGABE"]}
         if r.get("FIGUR"):
             ctx += "\nFIGUR: " + r["FIGUR"]
         return {"context": ctx}
