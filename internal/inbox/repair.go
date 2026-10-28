@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
@@ -45,7 +46,37 @@ func Repairable(st *state.State, argv []string) bool {
 	if len(argv) == 2 && (argv[0] == "flash" || argv[0] == "retrain") { // #759: a flash unit writes firmware onto a device; #828: a retrain unit trains its model again
 		return st.Services[argv[1]] != nil && slices.Contains(st.Services[argv[1]].Oneshots(), argv[1]+"-"+argv[0]+".service")
 	}
+	if len(argv) == 3 && argv[0] == "restore" { // #853: a red run's snapshot of a service with data back
+		svc := st.Services[argv[2]]
+		return hexID(argv[1]) && svc != nil && len(state.SnapshotPaths(st, svc)) > 0
+	}
+	if len(argv) == 2 && argv[0] == "rollback" { // #853: a red run's revert taken back, its change on again
+		return hexID(argv[1])
+	}
 	return len(argv) == 2 && argv[0] == "restart" && st.Services[argv[1]] != nil
+}
+
+// hexID: a snapshot's or a commit's id, never a name or an option.
+func hexID(s string) bool {
+	return len(s) >= 7 && len(s) <= 64 && strings.Trim(s, "0123456789abcdef") == ""
+}
+
+// fileRepair files repairs laib offers itself (#853) as one proposal of
+// laib's, one file per command line, so a human approves them with one
+// tap: does is the card's headline, undo its way back, facts what it means.
+func fileRepair(ctx context.Context, env *cli.Env, st *state.State, does, reason, undo string, facts, cmdlines []string) (*proposal.Proposal, error) {
+	var patch strings.Builder
+	stamp := time.Now().UTC().Format("2006-01-02T15-04-05.000000")
+	for i, c := range cmdlines {
+		name := fmt.Sprintf("repairs/%s-%d.md", stamp, i+1)
+		fmt.Fprintf(&patch, "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,3 @@\n+# %s\n+\n+%s\n", name, does, c)
+	}
+	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), "laib", reason+" — "+cmdlines[0], proposal.Edit{Patch: patch.String()}, JudgeFor(st, "laib"))
+	if err != nil {
+		return nil, err
+	}
+	p.Facts = append(p.Facts, facts...)
+	return p, Anchor(cli.InboxDir(env), p, proposal.Anchor{Undo: undo, Does: does})
 }
 
 // RunRepairs runs the repairs an approved proposal adds, as the approver.
@@ -73,6 +104,9 @@ func RunRepairs(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 			lines := strings.Split(strings.TrimSpace(errs.String()), "\n")
 			raw := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("Code %d", c))
 			p.Because, code = "fehlgeschlagen: "+proposal.Plain(raw), c // the words on the card, the raw line in the journal (#855)
+			if argv[0] == "rollback" && c == cli.ExitRed {              // #853: forward, and still red
+				p.Because = "Die neue Version ist wieder aufgespielt, läuft aber noch nicht richtig. " + onward(st, true) + " Die Sicherung liegt weiter bereit."
+			}
 			proposal.Save(cli.InboxDir(env), p)
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "red", Detail: fmt.Sprintf("#%d: %s fehlgeschlagen: %s", p.ID, last, raw)})
 		}

@@ -137,7 +137,8 @@ func TestAValueChangeHeadlineSaysWhatChanges(t *testing.T) {
 }
 
 // #855: the readiness lock read „firewall: table inet laib fehlt im Kernel
-// (laib converge --force lädt sie)“.
+// (laib converge --force lädt sie)“; since #856 the missing firewall is a
+// red line on Status, in words, diag's line under Details.
 func TestTheReadinessLockSpeaksPlainly(t *testing.T) {
 	env, _ := testBox(t)
 	os.MkdirAll(filepath.Dir(apply.FirewallFile(env.Paths)), 0o755)
@@ -150,12 +151,13 @@ func TestTheReadinessLockSpeaksPlainly(t *testing.T) {
 		}
 		return prev(ctx, name, args...)
 	}
-	st, _ := cli.LoadState(env)
-	rd, _ := pages.CollectStatus(context.Background(), env, st)
-	if rd.Lock == "" {
-		t.Fatalf("no lock for a missing firewall: %+v", rd)
+	mux := pages.Routes(env, func(h http.HandlerFunc) http.HandlerFunc { return h }) // since #856 it is red on Status, not a lock
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if !strings.Contains(visibleText(w.Body.String()), "Firewall") {
+		t.Fatalf("the missing firewall is not on the Status page:\n%s", visibleText(w.Body.String()))
 	}
-	plainEnough(t, "the readiness lock", rd.Lock)
+	plainEnough(t, "the Status page without its firewall", w.Body.String())
 }
 
 // #855: what diag finds reaches people (the red mail, a repair's card) as

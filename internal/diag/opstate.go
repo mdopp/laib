@@ -23,8 +23,9 @@ import (
 // in `laib operator status`, which nobody runs when all seems fine.
 //
 // Inputs: box.yml says enabled; the user unit is active; /ready on the
-// operator's port answers; its stored bearer still opens MCP (#500); the newest journal note by ops, or the
-// last look /ready reports (a look that found nothing new writes no note, #543), is younger than three ticks.
+// operator's port answers; its stored bearer still opens MCP (#500); the last work /ready reports (a look
+// that found nothing new writes no note, #543), or without it the newest journal note by ops, is younger
+// than three ticks.
 
 type OpFacts struct {
 	Enabled    bool
@@ -61,7 +62,9 @@ type OpWork struct {
 // OperatorState turns the facts into one word for the readiness line and
 // at most one diag finding.
 func OperatorState(f OpFacts) (string, *Finding) {
-	if f.Looked.After(f.LastNote) {
+	// /ready's last work is the heartbeat; a note counts only without it:
+	// a slot that waits writes one, and that is no work done (#858)
+	if !f.Looked.IsZero() {
 		f.LastNote = f.Looked
 	}
 	switch {

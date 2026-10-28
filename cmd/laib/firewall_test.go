@@ -51,12 +51,13 @@ func fwBox(t *testing.T, rendered bool, loaded bool) (*cliEnv, *state.State, *[]
 }
 
 // The ruleset lives in kernel memory and the rendered file never changes
-// across a reboot: readiness must look at the kernel, not at the file (#37).
-func TestReadinessIsRestrictedWhenTheFirewallTableIsMissing(t *testing.T) {
+// across a reboot: the status must look at the kernel, not at the file (#37).
+// A missing table is red; readiness stays about apply (DESIGN.md, #856).
+func TestTheStatusIsRedWhenTheFirewallTableIsMissing(t *testing.T) {
 	env, st, _ := fwBox(t, true, false)
 	r, _ := pages.CollectStatus(context.Background(), env, st)
-	if r.State != "eingeschränkt" || !strings.Contains(r.Lock, "Firewall") || r.Firewall != "fehlt" {
-		t.Fatalf("a rendered ruleset that is not in the kernel must restrict readiness: %+v", r)
+	if r.State != "bereit" || r.Lock != "" || r.Firewall != "fehlt" || !strings.Contains(strings.Join(r.Problems, " "), "Firewall") {
+		t.Fatalf("a rendered ruleset that is not in the kernel must be red: %+v", r)
 	}
 	env, st, _ = fwBox(t, true, true)
 	r, _ = pages.CollectStatus(context.Background(), env, st)

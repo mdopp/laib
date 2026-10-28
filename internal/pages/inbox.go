@@ -104,8 +104,18 @@ func decided(all []*proposal.Proposal, dir, domain string, locked bool) (cards s
 		if p.Recomputed { // its branch no longer merged; laib applied its intent to the current main (#637)
 			list.WriteString("<span class=note>neu berechnet auf dem aktuellen Stand</span>")
 		}
-		if done { // what was approved can be taken back (#41)
+		if undo, _ := proposal.Undoing(p); done && undo { // what was approved can be taken back (#41), where that undoes something (#852)
 			list.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
+		}
+		for _, way := range []struct { // a red run with data (#853): its two ways on, laib's proposals, while they are open
+			id    int
+			label string
+		}{{p.Restore, "Sicherung zurückspielen"}, {p.Forward, "Nach vorne reparieren"}} {
+			if way.id != 0 && slices.ContainsFunc(all, func(q *proposal.Proposal) bool {
+				return q.ID == way.id && q.Status == "open" && DecisionState(q.ID) == ""
+			}) {
+				list.WriteString(DecisionForm(way.id, "approve", way.label, ""))
+			}
 		}
 		if failed {
 			list.WriteString(details(f.raw))
@@ -204,7 +214,11 @@ func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposa
 	for _, w := range c.Warnings {
 		fmt.Fprintf(b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 	}
-	approve := DecisionForm(p.ID, "approve", "Freigeben", "go")
+	accent := "go"
+	if c.Risky { // „Später“ is the safe default: „Freigeben“ does not read as one (#852)
+		accent = ""
+	}
+	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
 	// a no asks for its reason (#544): the Operator learns from it; "Später" stays free
 	reject := fmt.Sprintf("<form method=post action=/inbox/%d/reject onsubmit=\"const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'\"><input name=grund maxlength=200 placeholder=\"Warum nicht? (kurz)\"> <button>Ablehnen</button></form>", p.ID)
 	later := "<a href=\"/\"><button>Später</button></a>"

@@ -74,3 +74,19 @@ func TestALookWithoutANoteIsAHeartbeat(t *testing.T) {
 		t.Fatalf("an old look is silence: %s %+v", state, finding)
 	}
 }
+
+// #858: a slot that waits for the graphics card writes one line, an ops
+// note; that note is no heartbeat. While the Operator says when it last did
+// work (/ready's looked), that is the heartbeat; a note counts only when it
+// cannot say, right after a restart.
+func TestANoteIsNoHeartbeatWhileTheOperatorSaysWhenItWorked(t *testing.T) {
+	now := time.Now()
+	f := OpFacts{Enabled: true, UnitActive: true, Answers: true, LastNote: now.Add(-2 * time.Minute), Looked: now.Add(-45 * time.Minute), Now: now, Tick: 10 * time.Minute}
+	if state, finding := OperatorState(f); state != "stumm" || finding == nil {
+		t.Fatalf("a skip line hid an Operator that did no work for 45 minutes: %s %+v", state, finding)
+	}
+	f.Looked = time.Time{}
+	if state, _ := OperatorState(f); state != "läuft" {
+		t.Fatalf("without /ready's looked a fresh note is the heartbeat: %s", state)
+	}
+}

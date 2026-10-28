@@ -73,21 +73,24 @@ func Carry(ctx context.Context, env *cli.Env) int {
 			proposal.Save(cli.InboxDir(env), p)
 		}
 	}()
-	run := ""
+	run, snaps, ran := "", []snap(nil), false
 	for _, p := range batch {
 		run += fmt.Sprintf(", #%d", p.ID)
 		for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the run touches it, fail closed
 			if svc := st.Services[name]; svc != nil && code == cli.ExitOK {
 				say("sichert "+name, false)
-				if code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true); code != cli.ExitOK {
+				id, at := "", time.Now() // restic's time of the snapshot is its start
+				if id, code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true); code != cli.ExitOK {
 					because = "weil die Sicherung von " + name + " nicht ging"
+				} else if id != "" {
+					snaps = append(snaps, snap{name, id, at})
 				}
 			}
 		}
 	}
 	run = fmt.Sprintf("%s (%s..%s)", run[2:], strings.TrimSpace(from), strings.TrimSpace(to))
 	if code == cli.ExitOK {
-		code = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+run)
+		code, ran = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+run), true
 	}
 	for _, p := range batch {
 		p.Outcome, p.Batch = "", run
@@ -110,7 +113,10 @@ func Carry(ctx context.Context, env *cli.Env) int {
 	if st, err = cli.LoadState(env); err != nil {
 		return env.Fail(err)
 	}
-	apply.ApplyHeld(ctx, env, st, "", "rollback "+run)
+	back := apply.ApplyHeld(ctx, env, st, "", "rollback "+run) == cli.ExitOK
+	if ran && len(snaps) > 0 { // the run touched services with data: their snapshots are there, nothing restores by itself (#853)
+		offer(ctx, env, batch, snaps, back)
+	}
 	return code
 }
 
@@ -265,4 +271,91 @@ func lastChange(ctx context.Context, repo string) string {
 		}
 	}
 	return "HEAD"
+}
+
+// snap is a service's snapshot a run took before it touched it (#853).
+type snap struct {
+	svc, id string
+	at      time.Time
+}
+
+// offer is a red run's two ways on for its services with data (#853,
+// owner 2026-10-28; ADR 0019 §4 as amended): the old program is back, the
+// data are as the update left them, and nothing restores by itself. Its
+// cards say so with the snapshots' times, and laib files the two
+// proposals they offer: „Sicherung zurückspielen“ (the snapshots back,
+// laib restore) and „Nach vorne reparieren“ (the run's changes to those
+// services on again with the data as they are, laib rollback of the
+// revert; a red verify is the Operator's incident, #792).
+func offer(ctx context.Context, env *cli.Env, batch []*proposal.Proposal, snaps []snap, back bool) {
+	st, err := cli.LoadState(env)
+	if err != nil {
+		return
+	}
+	var names, ats, restores, forwards []string
+	for _, s := range snaps {
+		names = append(names, proposal.Named(s.svc))
+		ats = append(ats, s.at.Format("15:04"))
+		restores = append(restores, "laib restore "+s.id+" "+s.svc)
+	}
+	who, at, kept := strings.Join(names, ", "), "der Sicherung von "+ats[0], "Die Sicherung von "+ats[0]+" bleibt eine Woche lang bereit."
+	ready := "die Sicherung von " + ats[0] + " liegt bereit"
+	if len(snaps) > 1 {
+		var each []string
+		for i := range names {
+			each = append(each, names[i]+" ("+ats[i]+")")
+		}
+		at, kept = "den Sicherungen von "+strings.Join(ats, ", "), "Die Sicherungen bleiben eine Woche lang bereit."
+		ready = "die Sicherungen von " + strings.Join(each, ", ") + " liegen bereit"
+	}
+	old := "Das alte Programm läuft wieder."
+	if !back {
+		old = "Das alte Programm ist wieder aufgespielt, läuft aber noch nicht richtig."
+	}
+	told := old + " Die Daten sind auf dem Stand nach dem Update; " + ready + "."
+	for _, p := range batch {
+		if len(p.Snapshot) == 0 {
+			continue
+		}
+		sha, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "log", "--format=%H", "--grep=^rollback #"+strconv.Itoa(p.ID)+"$", "-n", "1", "main")
+		if sha = strings.TrimSpace(sha); sha != "" {
+			forwards = append(forwards, "laib rollback "+sha)
+		}
+	}
+	r, rerr := fileRepair(ctx, env, st, who+": Daten aus "+at+" zurückspielen", "Das Update von "+who+" lief nicht. "+told, "Die Daten von jetzt sichert Laib vorher; aus dieser Sicherung kommen sie zurück, nicht mit einem Tipp.", nil, restores)
+	var f *proposal.Proposal
+	if len(forwards) > 0 {
+		f, _ = fileRepair(ctx, env, st, who+": nach vorne reparieren, die neue Version wieder aufspielen", "Das Update von "+who+" lief nicht. Statt die Sicherung zurückzuspielen, kommt die neue Version wieder auf die Daten nach dem Update.",
+			"Zurück zum alten Stand geht es danach mit „Sicherung zurückspielen“.", []string{onward(st, false), kept}, forwards)
+	}
+	for _, p := range batch {
+		p.Because = strings.TrimSuffix(p.Because, ".") + ". " + told
+		if rerr == nil {
+			p.Restore = r.ID
+		}
+		if f != nil {
+			p.Forward = f.ID
+		}
+		proposal.Save(cli.InboxDir(env), p)
+	}
+	detail := told + " Nichts wird von selbst zurückgespielt."
+	if rerr != nil {
+		detail += " Der Vorschlag, die Sicherung zurückzuspielen, ging nicht: " + rerr.Error()
+	}
+	cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "rollback", Result: "info", Detail: detail})
+}
+
+// onward is what follows „Nach vorne reparieren“ when the new version
+// still does not run (#853): the Operator's incident, bounded as #792.
+// red: it is already red, said as a fact rather than as a condition.
+func onward(st *state.State, red bool) string {
+	switch {
+	case st.Box.Operator.Enabled && red:
+		return "Der Operator arbeitet das als Vorfall ab; kommt er 30 Minuten lang nicht dazu, holt er Hilfe."
+	case st.Box.Operator.Enabled:
+		return "Läuft sie danach nicht, arbeitet der Operator das als Vorfall ab; kommt er 30 Minuten lang nicht dazu, holt er Hilfe."
+	case red:
+		return "Der Operator ist ausgeschaltet: es bleibt so, bis jemand nachsieht."
+	}
+	return "Läuft sie danach nicht, bleibt sie so, bis jemand nachsieht: der Operator ist ausgeschaltet."
 }

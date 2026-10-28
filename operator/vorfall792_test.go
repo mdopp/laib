@@ -95,7 +95,8 @@ func TestAnIncidentThatCannotReachTheModelIsEscalatedInBoundedTime(t *testing.T)
 	if countPrefix(*calls, "laib_escalate") != 1 || *asked != 0 || op.Work().Queued != 1 {
 		t.Fatalf("escalated again, asked the model (%d) or dropped the incident: %+v", *asked, op.Work())
 	}
-	if n := countPrefix(*calls, "laib_note"); n != 1 || !strings.Contains(strings.Join(*calls, "\n"), "eskaliere ich") {
+	// the incident's note once, and the look that waited for the card one line (#858)
+	if n := countPrefix(*calls, "laib_note"); n != 2 || strings.Count(all, "eskaliere ich") != 1 || !strings.Contains(strings.Join(*calls, "\n"), "routineblick wartet") {
 		t.Fatalf("the waiting incident's note is not there once: %d", n)
 	}
 }

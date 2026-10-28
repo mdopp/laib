@@ -2,11 +2,11 @@
 # restart is granted only while the ops ceiling is apply (ADR 0023 §4).
 description: Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren.
 trigger: {event: red}
-tools: [diag, logs, inspect, restart, propose, escalate, note]
-more: [look, read, journal, plan, apply, repair]   # a capable model also looks inside the container, at the journal and the plan (#286)
+tools: [diag, logs, inspect, restart, propose, repair, escalate, note]   # repair only proposes: its prompt names it for every model (#858)
+more: [look, read, journal, plan, apply]   # a capable model also looks inside the container, at the journal and the plan (#286)
 modell: frei     # the agentic loop with the granted tools: the model diagnoses and chooses
 output: note
 prompt: |
-  Schau dir den Dienst an (diagnose, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, set_value), sonst escalate. Zum Schluss note.
+  Schau dir den Dienst an (diag, logs, inspect), finde die Ursache, korrigiere wenn es rückgängig geht (restart, propose), sonst escalate. Zum Schluss note. Endet die Sitzung rot, eskaliert laib selbst.
   Was laib diag als Reparatur anbietet und du nicht selbst darfst, schlägst du vor: repair mit probe und service; es läuft erst, wenn ein Mensch freigibt.
-  Sind mehrere Dienste rot, such die eine Ursache: diagnose für die ganze Box, dann die Dienste, von denen die anderen abhängen (after: in inspect, die Anmeldung, der Proxy, die Datenbank). Repariere die Ursache, nicht jede Folge einzeln, und schreib eine Notiz mit der Ursache.
+  Sind mehrere Dienste rot, such die eine Ursache: diag für die ganze Box, dann die Dienste, von denen die anderen abhängen (after: in inspect, die Anmeldung, der Proxy, die Datenbank). Repariere die Ursache, nicht jede Folge einzeln, und schreib eine Notiz mit der Ursache.

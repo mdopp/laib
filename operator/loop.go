@@ -18,7 +18,7 @@ import (
 
 // Trigger is why a session starts.
 type Trigger struct {
-	Kind    string `json:"kind"` // event | tick | report | manual
+	Kind    string `json:"kind"` // event | tick (a look) | slot (daily, weekly) | report | manual
 	Service string `json:"service,omitempty"`
 	Detail  string `json:"detail,omitempty"`
 	// an incident that waited for the graphics card (#550): since when, in
@@ -42,7 +42,7 @@ type Session struct {
 	Trigger  Trigger   `json:"trigger"`
 	Calls    []string  `json:"calls"`
 	Note     string    `json:"note"`
-	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged | skipped
+	Outcome  string    `json:"outcome"` // green | red | escalated | idle | error | unchanged | skipped | fallback
 	Duration int64     `json:"ms"`
 	Proposed []int     `json:"proposed,omitempty"` // the proposals this session filed (#544)
 	Red      []string  `json:"red,omitempty"`      // what was red: the event's detail, a look's red findings (#550)
@@ -78,7 +78,7 @@ func (s Session) Line() string {
 	case countPrefix(s.Calls, "laib_restart") > 0:
 		result = "neu gestartet"
 	}
-	if s.Outcome == "escalated" {
+	if s.Outcome == "escalated" || countPrefix(slices.Concat(s.Calls, s.Script), "laib_escalate") > 0 {
 		result += ", eskaliert"
 	}
 	return l + " — " + what + " → " + result
@@ -139,7 +139,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	mem, saw := o.memory(), []string(nil) // saw: the findings this session read (#543)
 	defer func() {
 		s.Duration = time.Since(s.Started).Milliseconds()
-		if o.failing = s.Outcome == "error"; !o.failing {
+		// the heartbeat moves on work done, not on a skipped session (#858)
+		if o.failing = s.Outcome == "error" || s.Outcome == "fallback"; !o.failing && s.Outcome != "skipped" {
 			o.Looked.Store(now().Unix())
 		}
 		if saw != nil && !o.failing && s.Outcome != "unchanged" && s.Outcome != "skipped" {
@@ -155,6 +156,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	mcp := *o.MCP
 	mcp.Skill = sk.Name
 	g := &gate{sk: sk, mcp: &mcp, s: &s, used: map[string]int{}}
+	fallback := "" // the note its script prepared for a model that fails (#858)
+	defer func() { err = o.duties(ctx, &mcp, g, tr, fallback, err) }()
 	// a look skill (#543) — an interval skill that reads diag — asks no
 	// model and writes no note while diag says what its last session saw;
 	// a finding diag offers a repair for becomes a proposal first
@@ -242,7 +245,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			s.Outcome, s.Why, s.Note = res.Outcome, res.Why, cmp.Or(s.Note, res.Note)
 			return s, nil
 		}
-		ctxText, human = res.Context, strings.TrimSpace(human+" "+res.Human)
+		ctxText, human, fallback = res.Context, strings.TrimSpace(human+" "+res.Human), res.Fallback
 	} else if sk.Context == "usage" {
 		b, _ := json.Marshal(data["usage"])
 		ctxText = string(b)
@@ -251,14 +254,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	if err != nil {
 		return s, fmt.Errorf("tools: %w", err)
 	}
-	granted := map[string]bool{}
-	for _, g := range sk.Granted {
-		// a small model keeps the short menu: the skill's more tools are for a capable one (#286);
-		// a judgement (modell: urteil, #839) gets only what writes its verdict: the script read
-		if (!o.Typed || !slices.Contains(sk.More, g) || slices.Contains(sk.Tools, g)) && (sk.Modell != "urteil" || slices.Contains(verdicts, g)) {
-			granted["laib_"+g] = true
-		}
-	}
+	granted := sk.menu(o.Typed)
 	var mine []Tool
 	for _, t := range tools {
 		if granted[t.Name] {
@@ -457,6 +453,37 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": strings.TrimSpace("Sitzung nach zu vielen Schritten abgebrochen; siehe Journal. " + human)})
 	}
 	return s, nil
+}
+
+// duties are what the runner does when a session ends, whatever the model
+// did (#858, CLAUDE.md rule 1): a model that failed gets its script's
+// fallback note written, and an incident that ended red is escalated, once:
+// the session stays red, the escalation is the runner's call.
+func (o *Operator) duties(ctx context.Context, mcp *MCP, g *gate, tr Trigger, fallback string, err error) error {
+	s := g.s
+	why := s.Why
+	if err != nil {
+		why = err.Error()
+	}
+	if fallback != "" && !g.noted && (s.Outcome == "error" || s.Outcome == "red") {
+		kind := map[bool]string{true: "report", false: "watch"}[g.sk.Output == "report"]
+		text := fallback + " (Ohne Modell geschrieben: " + firstLine(why) + ".)"
+		if _, isErr, e := mcp.Call(ctx, "laib_note", map[string]any{"kind": kind, "text": text}); e == nil && !isErr {
+			s.Outcome, s.Note, s.Why, g.noted = "fallback", text, firstLine(why), true
+			return nil
+		}
+	}
+	if tr.Kind != "event" || s.Outcome != "red" || !slices.Contains(g.sk.Granted, "escalate") {
+		return err
+	}
+	if countPrefix(s.Calls, "laib_escalate") == 0 {
+		summary := strings.TrimSpace(fmt.Sprintf("Vorfall %s endete rot: %s. %s", clip(tr.Detail), why, clip(s.Note)))
+		for _, svc := range tr.services() {
+			s.Script = append(s.Script, "laib_escalate "+svc)
+			mcp.Call(ctx, "laib_escalate", map[string]any{"service": svc, "summary": summary})
+		}
+	}
+	return err
 }
 
 // unanchored says why a model's proposal may not be filed (#544): in a

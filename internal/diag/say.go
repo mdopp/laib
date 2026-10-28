@@ -20,6 +20,7 @@ var says = map[string]string{
 	"box":          "Die Box ist nicht ganz so eingerichtet, wie Laib es braucht.",
 	"boot-check":   "Ein misslungenes System-Update nimmt die Box nicht von selbst zurück.",
 	"firewall":     "Eine zweite Firewall sperrt die Dienste der Box aus dem Heimnetz aus.",
+	"nftables":     "Die Firewall der Box ist nicht geladen; Laib lädt sie beim nächsten Aufräumen.",
 	"watchdog":     "Fällt die Box aus, merkt es niemand von außen.",
 	"backup":       "Mit der Sicherung stimmt etwas nicht.",
 	"recovery":     "Das Wiederherstellungsblatt ist noch nicht als gesichert bestätigt.",
