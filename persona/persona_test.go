@@ -32,9 +32,19 @@ func joshua() Cast {
 	return Cast{House: p}
 }
 
+// term is Joshua with the box and the web search; "p" is the admin's
+// session, so its directory has the box level (#863).
 func term() *Terminal {
-	t := New(func() []string { return []string{"laib", "frage"} }, joshua())
-	return t
+	c := joshua()
+	c.Admins = []string{"p"}
+	return New(func() []string { return []string{"laib", "frage"} }, c)
+}
+
+// asAdmin is Joshua with sid as the admin's (#863).
+func asAdmin(sid string) Cast {
+	c := joshua()
+	c.Admins = []string{sid}
+	return c
 }
 
 func hal() *Persona {
@@ -44,8 +54,8 @@ func hal() *Persona {
 // #126: the engine is generic; a persona without gimmicks has a plain
 // directory with its own name in the prompt, and no games.
 func TestASecondPersonaWithoutGimmicks(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage"} }, Cast{House: hal()})
-	out := j.Talk("p", "en", "What can you do?")
+	j := New(func() []string { return []string{"laib", "frage"} }, Cast{House: hal(), Admins: []string{"p"}})
+	out := j.Talk("p", "en", "menu")
 	for _, want := range []string{"GOOD AFTERNOON.", "DIRECTORY", "1  BOX STATUS AND PROPOSALS", "2  WEB SEARCH WITH SOURCES"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing:\n%s", want, out)
@@ -61,8 +71,8 @@ func TestASecondPersonaWithoutGimmicks(t *testing.T) {
 	if out := j.Talk("p", "en", "play tic-tac-toe"); out != "WEITER: -\nPROMPT: HAL>" {
 		t.Fatalf("without the game gimmicks a game is a question for the Bote:\n%s", out)
 	}
-	if out := j.Talk("p", "en", "hal"); !strings.Contains(out, "DIRECTORY") {
-		t.Fatalf("the persona's name opens the directory:\n%s", out)
+	if out := j.Talk("p", "en", "hal"); !strings.HasPrefix(out, "TEXT:\nHello, this is HAL.") {
+		t.Fatalf("the persona's name is a hello with help (#863):\n%s", out)
 	}
 }
 
@@ -106,8 +116,9 @@ func TestLoadCastFromTheRenderedPackages(t *testing.T) {
 }
 
 // #119: the trigger opens WOPR's prompt: what the system can do, then games.
+// Since #863 the persona's name alone is help; the game's line and MENU are WOPR.
 func TestTheTriggerOpensThePromptWithCapabilitiesAndGames(t *testing.T) {
-	for _, in := range []string{"Shall we play a game?", "Wollen wir ein Spiel spielen?", "Joshua"} {
+	for _, in := range []string{"Shall we play a game?", "Wollen wir ein Spiel spielen?", "Menu"} {
 		out := term().Input("p", in)
 		for _, want := range []string{"GREETINGS PROFESSOR FALKEN.", "WOPR MAIN DIRECTORY", "1  BOX STATUS AND PROPOSALS", "2  WEB SEARCH WITH SOURCES", "3  GAMES", "ENTER SELECTION", "SHALL WE PLAY A GAME?"} {
 			if !strings.Contains(out, want) {
@@ -119,7 +130,7 @@ func TestTheTriggerOpensThePromptWithCapabilitiesAndGames(t *testing.T) {
 
 func TestListGamesEndsWithGlobalThermonuclearWar(t *testing.T) {
 	j := term()
-	j.Input("p", "Joshua")
+	j.Input("p", "Menu")
 	out := j.Input("p", "list games")
 	if !strings.Contains(out, "FALKEN'S MAZE") || !strings.Contains(out, "TIC-TAC-TOE") {
 		t.Fatalf("the film's list:\n%s", out)
@@ -175,7 +186,7 @@ func TestZeroPlayersIsAlwaysADraw(t *testing.T) {
 
 func TestGlobalThermonuclearWarEndsWithNotToPlay(t *testing.T) {
 	j := term()
-	j.Input("p", "Joshua")
+	j.Input("p", "Menu")
 	out := j.Input("p", "play global thermonuclear war")
 	if !strings.Contains(out, "WOULDN'T YOU PREFER A GOOD GAME OF CHESS?") {
 		t.Fatalf("the film's question first:\n%s", out)
@@ -201,7 +212,7 @@ func TestGlobalThermonuclearWarEndsWithNotToPlay(t *testing.T) {
 
 func TestLogoffEndsTheSessionAndAnIdleOneExpires(t *testing.T) {
 	j := term()
-	j.Input("p", "Joshua")
+	j.Input("p", "Menu")
 	if out := j.Input("p", "logoff"); !strings.Contains(out, "GOODBYE") {
 		t.Fatalf("logoff:\n%s", out)
 	}
@@ -232,8 +243,8 @@ func TestTheToolPassesTextThrough(t *testing.T) {
 // shows where, and you stay there until ZURÜCK or MENÜ. Where you are is
 // this code; a request inside a context goes back to the Bote as WEITER.
 func TestLevelsWithContext(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, joshua())
-	out := j.Talk("anna", "de", "Was kannst du?")
+	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, asAdmin("anna"))
+	out := j.Talk("anna", "de", "Menü")
 	for _, want := range []string{"WOPR HAUPTVERZEICHNIS", "1  BOX-STATUS UND VORSCHLÄGE", "3  LICHT, SCHALTER, MUSIK", "(GERÄTE)", "5  SPIELE"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing:\n%s", want, out)
@@ -281,14 +292,14 @@ func TestGamesAreALevelAndZurueckLeavesAGame(t *testing.T) {
 	if out := j.Talk("p", "de", "menü"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
 		t.Fatalf("MENÜ goes to the top:\n%s", out)
 	}
-	if out := j.Talk("p", "de", "Joshua"); !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
-		t.Fatalf("JOSHUA shows the directory:\n%s", out)
+	if out := j.Talk("p", "de", "Joshua"); !strings.HasPrefix(out, "TEXT:\nHallo, hier ist Joshua.") {
+		t.Fatalf("JOSHUA is a hello with help (#863):\n%s", out)
 	}
 }
 
 func TestTheDirectorySpeaksThePersonsLanguage(t *testing.T) {
 	j := term()
-	out := j.Talk("p", "en", "What can you do?")
+	out := j.Talk("p", "en", "Menu")
 	for _, want := range []string{"WOPR MAIN DIRECTORY", "1  BOX STATUS AND PROPOSALS", "3  GAMES", "JOSHUA>"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing:\n%s", want, out)
@@ -301,11 +312,11 @@ func TestTheDirectorySpeaksThePersonsLanguage(t *testing.T) {
 
 func TestTheToolTakesTheLanguageAndDefaultsToGerman(t *testing.T) {
 	srv := Server(term(), "test")
-	out, _ := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Was kannst du?", "sitzung": "Anna"})
+	out, _ := srv.Tools[0].Call(nil, map[string]any{"eingabe": "Menü", "sitzung": "Anna"})
 	if !strings.Contains(out, "WOPR HAUPTVERZEICHNIS") {
 		t.Fatalf("german by default:\n%s", out)
 	}
-	out, _ = srv.Tools[0].Call(nil, map[string]any{"eingabe": "What can you do?", "sitzung": "Bob", "sprache": "en"})
+	out, _ = srv.Tools[0].Call(nil, map[string]any{"eingabe": "Menu", "sitzung": "Bob", "sprache": "en"})
 	if !strings.Contains(out, "WOPR MAIN DIRECTORY") {
 		t.Fatalf("english when asked:\n%s", out)
 	}
@@ -352,7 +363,7 @@ func TestANameResolvesToItsNumbersPersona(t *testing.T) {
 // #510: the games' number in the directory is no games command; it showed
 // nothing and went to the Bote, which listed Laib's operator skills as games.
 func TestTheGamesNumberShowsTheList(t *testing.T) {
-	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, joshua())
+	j := New(func() []string { return []string{"laib", "frage", "ha", "automat"} }, asAdmin("anna"))
 	j.Talk("anna", "de", "Menü")
 	out := j.Talk("anna", "de", "5")
 	if strings.HasPrefix(out, "WEITER") || !strings.Contains(out, "GLOBAL THERMONUCLEAR WAR") || !strings.HasSuffix(out, "JOSHUA/SPIELE>") {
@@ -382,8 +393,8 @@ func TestASentenceIsARequestNotAPersonaLine(t *testing.T) {
 		}
 	}
 	for line, want := range map[string]string{"logoff": "AUF WIEDERSEHEN.", "Tschüss Joshua!": "AUF WIEDERSEHEN.", "bye": "AUF WIEDERSEHEN.",
-		"Hallo": "WOPR HAUPTVERZEICHNIS", "Hallo Joshua": "WOPR HAUPTVERZEICHNIS", "Was kannst du?": "WOPR HAUPTVERZEICHNIS",
-		"Joshua": "WOPR HAUPTVERZEICHNIS", "Wollen wir ein Spiel spielen?": "WOPR HAUPTVERZEICHNIS"} {
+		"Hallo": "Hallo, hier ist Joshua.", "Hallo Joshua": "Hallo, hier ist Joshua.", "Was kannst du?": "Hallo, hier ist Joshua.",
+		"Joshua": "Hallo, hier ist Joshua.", "Hilfe": "Hallo, hier ist Joshua.", "Wollen wir ein Spiel spielen?": "WOPR HAUPTVERZEICHNIS"} {
 		j := term()
 		if out := j.Talk("p", "de", line); !strings.Contains(out, want) {
 			t.Errorf("%q: want %q:\n%s", line, want, out)

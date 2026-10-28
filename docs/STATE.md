@@ -52,7 +52,7 @@ laib:                             # the box page and /mcp (ADR 0012); all option
   group: admins
 gpu:
   present: true
-  owner: solaris                  # the service that holds the lease
+  owner: llama                    # the service that holds the lease (the model role, ADR 0011)
 backup:
   repo: /mnt/data/backup/restic
   schedule: "03:00"
@@ -80,7 +80,8 @@ model:                            # a box without a model role (ADR 0018)
   url: http://192.168.1.20:11435/v1
   keySecret: MODEL_API_KEY        # only for a cloud API
   lease: http://192.168.1.20:11435/api/model-lease
-intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797)
+intake:                           # wishes and escalations become tickets (#56); laib-haushalt files them with GITHUB_INTAKE_TOKEN from secrets.age (#797);
+                                  # the Bote's escalations never: they are Box-Aufgaben for the owner (#863)
   repo: mdopp/laib
   label: wunsch                   # a person triages; pi:ready is set by hand
 operator:                         # laib-operator's container (ADR 0013, 0027); laib operator enable sets this
@@ -237,8 +238,10 @@ at any path. A path grant is a policy.yml change, so the owner decides it,
 like a verb grant; what the proposal changes is still reviewed and
 classed as any other (a box.yml change waits for a human).
 
-A hand never approves its own proposal. `destroy` requires a human on the box
-page or a Solaris card; a token cannot approve.
+A hand never approves its own proposal. What only a human may approve —
+`destroy`, a `human` or `remove` class, a tier with `approvals … by: human` —
+waits for the Inbox or the host shell; an agent hand whose ceiling holds
+`approve` may approve the rest (ADR 0019 (e), #865).
 
 ## skills/<name>/skill.yml (optional)
 

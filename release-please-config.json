@@ -1,5 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "simple",
-  "packages": { ".": { "include-component-in-tag": false } }
+  "packages": {
+    ".": {
+      "include-component-in-tag": false,
+      "extra-files": [
+        "README.md",
+        "docs/ZIELBILD.md"
+      ]
+    }
+  }
 }

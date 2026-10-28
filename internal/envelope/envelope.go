@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
@@ -489,19 +490,39 @@ func Escalate(ctx context.Context, env *cli.Env, args []string) int {
 	if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
 		return env.Fail(err)
 	}
-	// with an intake the bundle becomes a ticket something reads (#56)
-	detail := p
-	if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), "needs-claude"); err != nil {
+	// with an intake the bundle becomes a ticket something reads (#56); the
+	// Bote's goes to the owner as a Box-Aufgabe, never to a repo (#863)
+	detail, out := p, map[string]any{"file": p, "issue": ""}
+	if proposal.Hand(env.Actor) == "bote" {
+		var a aufgaben.Aufgabe
+		err = aufgaben.Update(ctx, env.Paths.State, env.Actor, func(list []aufgaben.Aufgabe) ([]aufgaben.Aufgabe, string, error) {
+			list, a = aufgaben.Add(list, aufgaben.Aufgabe{Titel: "Frage aus dem Boten: " + firstLine(strings.Join(args[1:], " "), 150),
+				Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
+			return list, fmt.Sprintf("aufgabe add #%d %s", a.ID, a.Titel), nil
+		})
+		if detail, out["aufgabe"] = fmt.Sprintf("Box-Aufgabe #%d (%s)", a.ID, p), a.ID; err != nil {
+			detail, out["aufgabe"] = p+" (Box-Aufgabe rot: "+err.Error()+")", nil
+		}
+	} else if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), "needs-claude"); err != nil {
 		detail = p + " (Intake rot: " + err.Error() + ")"
 	} else if ok {
-		detail = url + " (" + p + ")"
+		detail, out["issue"] = url+" ("+p+")", url
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "escalate", Service: svc.Name, Result: "red", Reason: strings.Join(args[1:], " "), Detail: detail})
 	if env.JSON {
-		return cli.Emit(env, map[string]string{"file": p, "issue": strings.TrimSuffix(strings.Split(detail, " (")[0], p)})
+		return cli.Emit(env, out)
 	}
 	fmt.Fprintln(env.W(), "eskaliert:", detail)
 	return cli.ExitOK
+}
+
+// firstLine is s on one line, cut after n runes: a Box-Aufgabe's title.
+func firstLine(s string, n int) string {
+	r := []rune(strings.Join(strings.Fields(s), " "))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
 }
 
 // pickContainer resolves --container to one of the service's own containers,

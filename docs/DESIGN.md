@@ -29,16 +29,18 @@ building a kernel under 15k lines beside it. One user, one migration
    that needs understanding is a proposal by a hand, and the autonomy dial
    in `policy.yml` says which classes laib may approve itself, with rollback
    on a red verify. See "Repair" below.
-4. **Hands, not users** (ADR 0006, ADR 0013). Four agent identities:
-   `resident`, `ops`, `pi`, `claude`. Each has a token and a tier ceiling in
-   `policy.yml`. The `ops` hand is the operator: it observes without limit
-   and corrects inside an automatic envelope. Only the irreversible is a
-   request to a human: removing, rebooting, exposing to the internet. No
-   token can approve its own request.
+4. **Hands, not users** (ADR 0006, ADR 0013). Every agent and program
+   acts as a hand: `resident`, `ops`, `pi`, `claude`, `bote`, `haus` and the
+   program hands in `policy.yml`. Each has a token and a tier ceiling there.
+   The `ops` hand is the operator: it observes without limit and corrects
+   inside an automatic envelope. Only the irreversible is a request to a
+   human: removing, rebooting, exposing to the internet. No hand approves
+   its own proposal, and none approves what only a human may (ADR 0019 (e)).
 5. **Laib is deterministic, agents are operators** (ADR 0001, ADR 0013). No
-   LLM code in the kernel. Solaris hosts the local model that is the
-   operator; the Werkstatt hosts the coding agents; Claude connects through
-   the Werkstatt. All of them speak the CLI, exposed as MCP generated from
+   LLM code in the kernel. The Operator (`operator/`, its own container,
+   ADR 0013, 0027) is the box's local model acting as the hand `ops`; the
+   Werkstatt hosts the coding agents; Claude connects through the
+   Werkstatt. All of them speak the CLI, exposed as MCP generated from
    the CLI definition, and every action they take is journaled and
    reversible. Laib is their hands, memory and safety net, not their gate.
 
@@ -89,10 +91,10 @@ state or the journal, not as web pages.
 - Credential self-heal and 36 diagnose probes with action buttons. About ten probe scripts remain. One-click repairs come back through the chat, not a button (owner, mdopp, 2026-10-19, #441): a finding's `repair` verb becomes a proposal with `laib repair`, and it runs once a human approves.
 - 64 hand-written MCP tools and the in-code policy table.
 - Learning proposals, the Hermes and Claude-dev modules, the chat embed.
-- The portal with access requests; onboarding is a Solaris card.
+- The portal with access requests; onboarding residents against LLDAP is a card on Haus's Box page.
 - The Go TUI.
 - The Fritz!Box poller, the disk-import worker, the unmanaged bundle builder. The disk import is a Werkstatt skill (`importing-an-old-disk`) with `scripts/laib-import.py` for the copy (#456).
-- socket.io, email notifications, health-check CRUD. Health lives in the template; messages go through Solaris.
+- socket.io, email notifications, health-check CRUD. Health lives in the template; messages to the owner go through laib-notify: the Bote first, mail as the fallback (#441).
 - Multi-node operation and the SSH pool. Laib is one box (ADR 0003).
 - pi-web and claude-dev as separate templates, the laptop-side autoloop, the public MCP origin for Claude.
 - Hermes, unless it clears the threshold in ADR 0009.
@@ -158,7 +160,7 @@ effect. Apply, wait, poll, flip back, snapshot and notify are done by `laib`.
 
 Within the agent column:
 
-| Task | Local model (Solaris `ops`) | Claude (via Werkstatt) |
+| Task | Local model (the Operator, `ops`) | Claude (via Werkstatt) |
 |---|---|---|
 | Watch state, logs, health; triage | yes, always on | no |
 | Look inside: inspect, read, exec for looking | yes | yes |
@@ -177,8 +179,8 @@ hand is stopped and `escalate` is the way on.
 ## Every touch answers at once
 
 UX is part of the feature, not a polish pass after it (owner, 2026-10-23,
-#588). Every touch — a button in Haus, a card in the Inbox, a Solaris
-answer, a verb's reply — answers at once, shows its progress, and ends
+#588). Every touch — a button in Haus, a card in the Inbox, an answer of
+the Bote, a verb's reply — answers at once, shows its progress, and ends
 visibly where it began, in one of three states:
 
 - **done**, with what is now true;
@@ -196,9 +198,10 @@ never showed that answer. The search worked; the feature did not.
 
 ## The user's path
 
-"Ich hätte gern Paperless für die Familie, nur intern." Solaris asks the one
-question, writes the plan into the state repo as a proposal, shows the card
-with the diff. Approval, `laib apply`, answer: "Läuft unter
+"Ich hätte gern Paperless für die Familie, nur intern." The Bote asks the one
+question, writes the plan into the state repo as a proposal, and laib-notify
+sends the admin the card's line with the Inbox link. Approval in the Inbox
+(#778), the run applies it, answer: "Läuft unter
 paperless.<domain>, SSO ist drauf." If no template exists, the request becomes
 a ticket for the Werkstatt, a PR, a merge, and then the same path. The user sees
 the same card both times and never chooses the agent; a router does:
@@ -277,7 +280,9 @@ runs only in the service's own containers; `look` runs a read-only command
 there without budget or snapshot, because looking is unbounded.
 
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
-on Solaris's own cadence; red lines also reach it through the webhook. Its
+on its tick (`operator.tick`, ten minutes); red lines also reach it through
+the webhook (`notify.url`, which `laib operator enable` points at the
+Operator's `/event`). Its
 job is triage and proposals, never apply.
 
 **The market.** Suggesting a better tool is judgement work for the
@@ -287,10 +292,11 @@ journal and, if it convinces, a template PR. It never installs anything.
 
 ## When there is no template
 
-The user's path does not change; the first hop does. Solaris finds no
+The user's path does not change; the first hop does. The Bote finds no
 template in `laib template list` (built-ins plus every registry) and says
 so: "Dafür gibt es noch kein Template, ich lege ein Ticket für die
-Werkstatt an." The ticket carries the upstream link and the wish in the
+Werkstatt an." That is `laib wish` (#56): a ticket in `box.yml intake.repo`
+with the `wunsch` label. The ticket carries the upstream link and the wish in the
 user's words. In the Werkstatt:
 
 1. The router picks the hand: pi for an upstream compose file that maps
@@ -299,7 +305,7 @@ user's words. In the Werkstatt:
 2. The agent writes the folder (units, `laib.yml` with routes, secrets,
    data, health, ports, `provides`), runs `laib template lint`, and opens a
    PR against the household registry.
-3. A human merges. `laib template sync` pulls it; Solaris sees it in the
+3. A human merges. `laib template sync` pulls it; the Bote sees it in the
    list and asks: "Das Template ist da, soll ich es vorschlagen?" Then the
    ordinary path: `laib propose --add`, Inbox, apply.
 
@@ -329,31 +335,31 @@ Two sprawls, one rule each.
 - **Agent tools.** The verb table is the only source of MCP tools, filtered
   by the hand's ceiling; `serve`, `init`, `token` and `secret` are never
   tools; templates cannot add tools. A new verb needs a recurrence, like a
-  new probe. The count stays visible in `tools/list`. Solaris learned the
-  cost once: two thirds of a 12k-token prefill were tool definitions.
+  new probe. The count stays visible in `tools/list`. Solaris, the retired agent,
+  learned the cost once: two thirds of a 12k-token prefill were tool
+  definitions.
 
-## Solaris and the GPU
+## The agents and the GPU
 
 The model server, router, policy proxy and the lease endpoint are the Laib
-template `llama` with the role `model` (ADR 0011). Solaris is a client of the
-lease and keeps the judgement about when to ask for a mode. `box.yml`
+template `llama` with the role `model` (ADR 0011). Consumers ask the lease
+for a preset: the Bote may ask for the large one for a hard question and
+falls back to the household preset when the card is busy. `box.yml`
 declares the GPU so `laib plan` shows a conflict before apply. The
-Werkstatt's working window is a systemd timer; deciding to postpone a ticket
-because of movie night is Solaris's call, because only Solaris knows the
-calendar. The `ops` profile always runs on the household model and never takes
-the lease.
+Werkstatt's working window is a systemd timer. The Operator always runs on
+the household preset and never takes the lease.
 
 ## Readiness
 
 Laib has one state with three values, shown in the same place everywhere: the
-first line of the box page, the header of the Solaris chat, the first line of
-`laib status`, and the spoken answer to "Laib?".
+first line of the box page, Haus (which reads `/ready`) and the first line of
+`laib status`.
 
 | State | Means | What you can do |
 |---|---|---|
 | `bereit` | daemon answers, state repo readable, apply possible | everything |
 | `eingeschränkt` | daemon answers, apply is locked (an apply is running, or the Werkstatt holds the GPU) | ask, read, propose, approve (it applies with the next run, #609) |
-| `nicht erreichbar` | no answer since time X | Solaris still answers and tells you |
+| `nicht erreichbar` | no answer since time X | the Bote and Haus still answer; what needs Laib waits |
 
 Readiness is about what you can do, not about what is red. A red service, a
 full disk, a failed backup or a missing firewall leave it `bereit`; they are
@@ -371,12 +377,13 @@ backup, the firewall and the Operator are probed on every look; the slow ones
 backup finding is red (failed, or older than 36 h); a stale copy off the box
 lowers its places to one.
 
-Solaris and Laib are two processes. If Laib falls, the conversation stays and
-says so, with the last journal line. After a reboot, systemd starts Laib, Laib
-compares the units against the rendered state and journals the result.
-Solaris says once: "Laib ist wieder da, 12 Dienste grün." Anything that did
-not come up is red on the first lines of Status and a proposal in the Inbox,
-never a log line you have to find.
+Laib and the agents are separate processes. If Laib falls, the Bote still
+talks, but its Laib tools do not answer. After a reboot, systemd starts
+Laib, Laib compares the units against the rendered state and journals the
+result. Anything that did not come up is red on the first lines of Status and
+a proposal in the Inbox, never a log line you have to find.
 
-Every card says its tier, who must approve, and whether a snapshot precedes it.
-No action's consequences are learned after the click.
+Every card says what changes, what it means for the family, how it is undone
+and its risk; a snapshot before the change is among its warnings, and the
+tier sits under Details (#856). No action's consequences are learned after
+the click.

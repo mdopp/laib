@@ -3,7 +3,7 @@
 Applies when you add a button to a Solaris card, read `LAIB_ACTOR` for a
 permission decision, or expose a Laib page or listener anywhere.
 
-- **Status:** Accepted, 2026-10-09; confirmed by ADR 0019 (2026-10-12): the Box page, the Signal relay and Haus `/box` are one inbox, and no LLM holds a token that can approve (#68). Amended 2026-10-26 (#778): the relay is gone; the Inbox is the only approval surface.
+- **Status:** Accepted, 2026-10-09; confirmed by ADR 0019 (2026-10-12): the Box page, the Signal relay and Haus `/box` are one inbox, and no LLM holds a token that can approve (#68). Amended 2026-10-26 (#778): the relay is gone; the Inbox is the only approval surface. Amended 2026-10-28 (#865, ADR 0019 (e)): no token approves what only a human may; the agent hands ops and claude may approve any other proposal but their own.
 
 ## Context
 

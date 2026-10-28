@@ -1,7 +1,7 @@
 # Laib — the interface
 
 Laib has exactly one interface, the CLI. The MCP surface, the three pages and
-the Solaris cards are views on it.
+the messages to the owner are views on it.
 
 ## CLI
 
@@ -27,9 +27,9 @@ laib restart <service>               restart + verify (envelope)
 laib start <service>                 start its units, lift a stop's pause, verify (envelope, #441)
 laib stop <service> [--until 2h] ["<grund>"]   stop its units and pause the service, at most a day; converge leaves it alone (envelope, #441); off for good is laib remove
 laib backups                         read: the last nightly backup (green/red, when, why), the last green one, the off-box copy, the restore test, with diag's backup findings and their fix (#441)
-laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set
+laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish "<was das Haus braucht>"             the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
-laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the approver; any other command in repairs/ is refused (#441)
+laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib aufgabe list [--alle] [--faellig] | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--befund "<probe> [<dienst|thema>]"]
             | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>
@@ -118,7 +118,7 @@ service, a reason or a commit. What follows `--` is the container
 command's own. The MCP tool list is generated from the same verb
 table (`mcpVerbs` names which of them an agent may reach at all), and
 `scripts/drift.sh` in CI checks that every tool the Operator's prompt
-names is one of them. The `ops` hand in Solaris is the operator (ADR 0013): it sees every verb
+names is one of them. The `ops` hand is the Operator (ADR 0013): it sees every verb
 up to `apply`, including `inspect`, `read`, `exec`, `write`, `restart`,
 `escalate` and `propose`. What it never sees: `approve` of its own
 proposals, `token`, `secret`, `serve`, `init`. `remove` is above its
@@ -293,7 +293,7 @@ Offene Vorschläge 1                                           [Inbox]
 Inbox:
 
 ```
-Vorschlag #17   von ops (Solaris)   Stufe: apply   braucht: Admin
+Vorschlag #17   von ops (der Operator)   Stufe: apply   braucht: Admin
 
   Paperless für die Familie, nur intern
   + services/paperless/values.yml
@@ -352,19 +352,18 @@ Authelia (`admins`). Caddy adds `X-Laib-Proxy: <secret>`; without it the pages
 answer 403, so a process on the box cannot forge `Remote-User` (ADR 0012).
 No JavaScript framework; a form post per button.
 
-## Solaris cards
+## Messages to the owner
 
-The admin sees the Inbox as a card that links to `laib.<domain>/inbox`; the
-decision happens there, behind Authelia (ADR 0012). Plus two more cards:
+laib-notify writes the owner (`box.yml notify.person`) through the Bote, by
+mail when no channel answers (#441): an incident red for ten minutes, the
+image updates, and each new proposal as „Freigabe #N: <headline> · <Inbox
+link>“. The decision happens in the Inbox, behind Authelia's second factor
+(ADR 0012, #778); no chat approves.
 
-- **Ops report** (morning): "Alles grün, ein Zertifikat in 6 Tagen fällig, ich
-  habe Vorschlag #18 vorbereitet."
-- **Escalation**: "Das verstehe ich nicht. Claude dazuholen? Das Kontextpaket
-  liegt bereit." Accepting creates a ticket labelled `needs-claude` with the
-  output of `laib context` attached.
-
-Solaris renders the readiness state in its chat header from `/ready` and says
-once when the state changes.
+An escalation is the context bundle under `/mnt/data/laib/escalations` and
+a red journal line. The Operator's also becomes a `needs-claude` ticket in
+`box.yml intake.repo`; the Bote's becomes a Box-Aufgabe for the owner and
+never a ticket (#863). Haus reads the readiness state from `/ready`.
 
 ## MCP
 
