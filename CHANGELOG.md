@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.54.1](https://github.com/mdopp/laib/compare/v0.54.0...v0.54.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **paperless:** the record types belong to nobody, so dokumente and gesundheit see them ([#912](https://github.com/mdopp/laib/issues/912)) ([b8c9d6e](https://github.com/mdopp/laib/commit/b8c9d6ed09c6a536254c5aefc747959df4ce0135))
+
 ## [0.54.0](https://github.com/mdopp/laib/compare/v0.53.1...v0.54.0) (2026-10-29)
 
 
