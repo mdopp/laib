@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # README's architecture section (owner, 2026-10-27): the five layers as a
-# mermaid flowchart, then a table per layer with links to the code and the
-# lines of each program against its cap. Rewrites only what stands between
-# <!-- architektur:begin --> and <!-- architektur:end --> in README.md.
+# blueprint (docs/architektur.svg, a dark twin for GitHub's dark theme; the
+# owner's „Bauplan“, #899), then a table per layer with links to the code
+# and the lines of each program against its cap. Rewrites only what stands
+# between <!-- architektur:begin --> and <!-- architektur:end --> in
+# README.md, and the two SVG files.
 #
 # Sources: scripts/loc.sh for lines and caps, skills/*/skill.yml for the
 # Operator's skills (and each one's run.py for its lines), templates/*/laib.yml for the
@@ -13,9 +15,9 @@
 # placeholder and a warning on stderr. Same tree, same bytes: no dates, C
 # sort order.
 #
-# --check exits 1 when README.md is not what this script writes, and
-# changes nothing. A daily workflow (.github/workflows/architektur.yml)
-# runs it and opens the PR that brings README.md up to date.
+# --check exits 1 when README.md or an SVG is not what this script writes,
+# and changes nothing. A daily workflow (.github/workflows/architektur.yml)
+# runs it and opens the PR that brings them up to date.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export LC_ALL=C
@@ -43,12 +45,15 @@ budget() { # budget <prod> <cap>: "2,991 / 3,000", bold and marked at 95 % or mo
   elif [ "$(($1 * 100))" -ge "$(($2 * 95))" ]; then echo "**$s, at 95 % or more**"
   else echo "$s"; fi
 }
-id() { echo "$1" | tr -c 'A-Za-z0-9\n' '_'; }
-grid() { # grid <cols> <id…>: invisible links that stack a subgraph's nodes in rows
-  local cols=$1 i; shift
-  local ids=("$@")
-  for ((i = 0; i + cols < ${#ids[@]}; i++)); do echo "    ${ids[i]} ~~~ ${ids[i + cols]}"; done
-}
+esc() { local s=$1; s=${s//&/\&amp;}; s=${s//</\&lt;}; s=${s//>/\&gt;}; s=${s//\"/\&quot;}; echo "$s"; }
+
+# --- the family's own programs: own repos, run as a template ---------------
+# <name>|<repo>|<what it is, for the table>|<two short words for the picture>
+own=(
+  "Haus|mdopp/haus|the family's pages and app, the Box page; runs as the \`haus\` template|pages and app of the family"
+  "Dokumente|mdopp/dokumente|scanner, splitting stacks, separator sheets, reading invoices and contracts|scan, split, read invoices"
+  "Gesundheit|mdopp/gesundheit|medical records from Paperless as a timeline per person, the daily note (#893); its template comes from the \`apps\` registry|medical records as a timeline"
+)
 
 # --- the programs beside the kernel: what scripts/loc.sh budgets ----------
 declare -A role=(
@@ -99,6 +104,21 @@ for f in cmd/laib/*.go; do
   case "$claimed" in *" $f "*) ;; *) rest="$rest $f";; esac
 done
 parts+=("The verbs|cmd/laib|the one binary, CLI and daemon (\`laib serve\`): the verb table and the verbs no part above holds|${rest# }")
+declare -A partlines
+kernelsum=0
+for p in "${parts[@]}"; do
+  IFS='|' read -r title paths _ extra <<<"$p"
+  if [ "$title" = "The verbs" ]; then
+    # shellcheck disable=SC2086
+    c=$(lines $extra)
+  else
+    # shellcheck disable=SC2086
+    c=$(lines $(for x in $paths; do [ -e "$x" ] && echo "$x"; done))
+  fi
+  partlines[$title]=$c
+  kernelsum=$((kernelsum + c))
+done
+[ "$kernelsum" = "$kernel" ] || warn "the kernel's parts add up to $kernelsum lines, scripts/loc.sh counts $kernel"
 
 # --- the services: one per template ---------------------------------------
 field() { sed -nE "s/^$1:[[:space:]]*//p" "$2" | head -1 | sed -E 's/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/[[:space:]]+$//'; }
@@ -191,54 +211,129 @@ for d in skills/*/; do
   [ -f "${d}skill.yml" ] && skills+=("$(basename "$d")")
 done
 
+# --- the blueprint: docs/architektur.svg, light and dark (#899) ------------
+# The five layers as one picture, drawn from the lists the tables use: the
+# own programs, loc.sh's budgets, the kernel's parts with their lines, the
+# templates' titles. An <img> gets no page CSS, so colours are fixed in the
+# file and there is one file per theme; README's <picture> picks. Widths are
+# estimated from character counts (about 0.55 em per character), nothing is
+# measured, so every label is kept short.
+svgfiles=(docs/architektur.svg docs/architektur-dark.svg)
+svg() { # svg light|dark
+  local theme=$1
+  local bg panel fg muted line kern kernsoft prog progsoft eigen eigensoft dienst dienstsoft aussen aussensoft warn
+  if [ "$theme" = dark ]; then
+    bg="#0d1117" panel="#161b22" fg="#e6edf3" muted="#9aa8a0" line="#30363d"
+    kern="#7fc4a2" kernsoft="#1f3329" prog="#93afe0" progsoft="#1f2838" eigen="#e0b07c" eigensoft="#33281c"
+    dienst="#b4b4c4" dienstsoft="#26262e" aussen="#e09abd" aussensoft="#33212b" warn="#f0a067"
+  else
+    bg="#ffffff" panel="#ffffff" fg="#1d2420" muted="#5d6a63" line="#c9d1cb"
+    kern="#2f6b52" kernsoft="#e3efe8" prog="#3d5a8a" progsoft="#e4eaf4" eigen="#8a5a2b" eigensoft="#f3e9dd"
+    dienst="#5f5f6e" dienstsoft="#ececf1" aussen="#7a3b5c" aussensoft="#f2e4eb" warn="#a5561b"
+  fi
+  local font="font-family=\"-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif\""
+  rect() { echo "  <rect x=\"$1\" y=\"$2\" width=\"$3\" height=\"$4\" rx=\"$5\" fill=\"$6\" stroke=\"$7\"${8:+ stroke-width=\"$8\"}/>"; }
+  text() { # text <x> <y> <size> <fill> <weight|-> <anchor|-> <text>
+    echo "  <text x=\"$1\" y=\"$2\" font-size=\"$3\" fill=\"$4\"${5:+ font-weight=\"$5\"}${6:+ text-anchor=\"$6\"}>$(esc "$7")</text>"
+  }
+  arrow() { echo "  <path d=\"M$1 $2 L$1 $3\" stroke=\"$muted\" stroke-width=\"1.6\" fill=\"none\" marker-end=\"url(#ar)\"/>"; }
+  local -i W=1000 L=20 R=980 y i r c cols bw x0 rows
+  local name prod cap sub title a b o n
+
+  # the rows: 1 family, 2 own programs and programs beside the kernel, 3 kernel, 4 services
+  local -a pn ps on os
+  while read -r name prod cap; do pn+=("$name"); ps+=("$(num "$prod") / $(num "$cap")"); done <<<"$programs"
+  pn+=("stimme/trainer"); ps+=("$(num "$(find stimme/trainer -name '*.py' ! -path '*/tests/*' -exec cat {} + | wc -l | tr -d ' ')") Python")
+  for o in "${own[@]}"; do IFS='|' read -r name _ _ sub <<<"$o"; on+=("$name"); os+=("$sub"); done
+  local -i ownw progx progw h2 kcols=4 krows h3 h4 y1 y2 y3 y4 H xa xb oy
+  ownw=$((16 + ${#on[@]} * 132 + 4)); progx=$((L + ownw + 20)); progw=$((R - L - ownw - 20))
+  cols=4; rows=$(( (${#pn[@]} + cols - 1) / cols ))
+  h2=$((38 + rows * 54 + 6)); [ "$h2" -ge 150 ] || h2=150
+  krows=$(( (${#parts[@]} + kcols - 1) / kcols )); h3=$((40 + krows * 64 + 2))
+  local -a sl; local cur=""
+  for n in "${services[@]}"; do
+    title=$(field title "templates/$n/laib.yml")
+    if [ -n "$cur" ] && [ $(( ${#cur} + ${#title} + 3 )) -gt 112 ]; then sl+=("$cur"); cur=""; fi
+    cur="${cur:+$cur · }$title"
+  done
+  [ -z "$cur" ] || sl+=("$cur")
+  h4=$((40 + ${#sl[@]} * 24 + 2))
+  y1=16; y2=$((y1 + 70 + 24)); y3=$((y2 + h2 + 32)); y4=$((y3 + h3 + 28)); H=$((y4 + h4 + 16))
+
+  echo "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 $W $H\" width=\"$W\" height=\"$H\" $font role=\"img\" aria-label=\"The five layers of a Laib box: family and devices, the own programs, the programs beside the kernel, the Laib kernel, the services from templates\">"
+  echo "  <!-- generated by scripts/architektur.sh (#899); edit the script, not this file -->"
+  echo "  <defs><marker id=\"ar\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path d=\"M0,0 L10,5 L0,10 z\" fill=\"$muted\"/></marker></defs>"
+  rect 0 0 "$W" "$H" 0 "$bg" none
+  # 1 family and devices
+  rect "$L" "$y1" $((R - L)) 70 10 "$aussensoft" "$aussen"
+  text $((L + 16)) $((y1 + 24)) 13 "$aussen" 600 "" "FAMILY AND DEVICES"
+  text $((L + 16)) $((y1 + 50)) 14 "$fg" "" "" "phone and browser  ·  Signal  ·  speakers with their wake word  ·  scanner on USB  ·  lights, switches, sensors"
+  # 2 own programs
+  rect "$L" "$y2" "$ownw" "$h2" 10 "$eigensoft" "$eigen"
+  text $((L + 16)) $((y2 + 24)) 13 "$eigen" 600 "" "OWN PROGRAMS, OWN REPOS"
+  oy=$((y2 + 38 + (h2 - 38 - 16 - 96) / 2)) # the boxes centred in the band's height
+  for ((i = 0; i < ${#on[@]}; i++)); do
+    x0=$((L + 16 + i * 132))
+    rect "$x0" "$oy" 120 96 8 "$panel" "$eigen"
+    text $((x0 + 60)) $((oy + 34)) 15 "$fg" 600 middle "${on[i]}"
+    # the short line in two, split at the space nearest its middle
+    sub=${os[i]}; a=${sub:0:$(( ${#sub} / 2 + 1 ))}; a=${a% *}; b=${sub:${#a}}; b=${b# }
+    text $((x0 + 60)) $((oy + 56)) 11 "$muted" "" middle "$a"
+    text $((x0 + 60)) $((oy + 72)) 11 "$muted" "" middle "$b"
+  done
+  # 2 programs beside the kernel
+  rect "$progx" "$y2" "$progw" "$h2" 10 "$progsoft" "$prog"
+  text $((progx + 16)) $((y2 + 24)) 13 "$prog" 600 "" "PROGRAMS BESIDE THE KERNEL  ·  LAIB REPO, OWN CAPS"
+  bw=$(( (progw - 32 - (cols - 1) * 10) / cols ))
+  for ((i = 0; i < ${#pn[@]}; i++)); do
+    r=$((i / cols)); c=$((i % cols)); x0=$((progx + 16 + c * (bw + 10))); y=$((y2 + 38 + r * 54))
+    rect "$x0" "$y" "$bw" 44 7 "$panel" "$prog"
+    text $((x0 + bw / 2)) $((y + 19)) 13 "$fg" 600 middle "${pn[i]}"
+    read -r prod _ cap <<<"${ps[i]//,/}"
+    if [ -n "$cap" ] && [ $((prod * 100)) -ge $((cap * 95)) ]; then # at 95 % or more: the number in the warning colour, as the table marks it
+      text $((x0 + bw / 2)) $((y + 35)) 11 "$warn" 600 middle "${ps[i]}"
+    else
+      text $((x0 + bw / 2)) $((y + 35)) 11 "$muted" "" middle "${ps[i]}"
+    fi
+  done
+  # 3 the kernel
+  rect "$L" "$y3" $((R - L)) "$h3" 12 "$kernsoft" "$kern" 2
+  text $((L + 16)) $((y3 + 26)) 13 "$kern" 600 "" "LAIB KERNEL  ·  the part the house trusts  ·  $(num "$kernel") of $(num "$kernelcap") lines"
+  bw=$(( (R - L - 32 - (kcols - 1) * 12) / kcols ))
+  for ((i = 0; i < ${#parts[@]}; i++)); do
+    IFS='|' read -r title _ _ _ <<<"${parts[i]}"
+    r=$((i / kcols)); c=$((i % kcols)); x0=$((L + 16 + c * (bw + 12))); y=$((y3 + 40 + r * 64))
+    rect "$x0" "$y" "$bw" 54 7 "$panel" "$kern"
+    text $((x0 + bw / 2)) $((y + 22)) 13 "$fg" 600 middle "$title"
+    text $((x0 + bw / 2)) $((y + 40)) 11 "$muted" "" middle "$(num "${partlines[$title]}") lines"
+  done
+  # 4 the services
+  rect "$L" "$y4" $((R - L)) "$h4" 10 "$dienstsoft" "$dienst"
+  text $((L + 16)) $((y4 + 24)) 13 "$dienst" 600 "" "${#services[@]} SERVICES FROM TEMPLATES  ·  Laib sets them up, checks them, backs them up"
+  for ((i = 0; i < ${#sl[@]}; i++)); do text $((L + 16)) $((y4 + 52 + i * 24)) 13 "$fg" "" "" "${sl[i]}"; done
+  # the arrows, labelled beside them
+  xa=$((L + ownw / 2)); xb=$((progx + progw / 2))
+  arrow "$xa" $((y1 + 70)) $((y2 - 2));            text $((xa + 8)) $((y2 - 8)) 11 "$muted" "" "" "types, talks"
+  arrow "$xb" $((y1 + 70)) $((y2 - 2));            text $((xb + 8)) $((y2 - 8)) 11 "$muted" "" "" "writes, calls"
+  arrow "$xa" $((y2 + h2)) $((y3 - 2));            text $((xa + 8)) $((y3 - 10)) 11 "$muted" "" "" "asks, proposes over MCP"
+  arrow "$xb" $((y2 + h2)) $((y3 - 2));            text $((xb + 8)) $((y3 - 10)) 11 "$muted" "" "" "reads, repairs through verbs"
+  arrow $((L + 290)) $((y3 + h3)) $((y4 - 2));     text $((L + 298)) $((y4 - 8)) 11 "$muted" "" "" "sets up"
+  arrow $((L + 662)) $((y3 + h3)) $((y4 - 2));     text $((L + 670)) $((y4 - 8)) 11 "$muted" "" "" "checks, backs up"
+  echo "</svg>"
+}
+
 # --- the section -----------------------------------------------------------
 section() {
-  local name prod cap p title paths what extra pid ids n tt link d
+  local name prod cap p title paths what n link d
   echo "$begin"
   echo "<!-- generated by scripts/architektur.sh from scripts/loc.sh, skills/ and templates/; edit the script, not this part -->"
   echo
-  echo "Five layers. The family uses its programs and the services; the programs beside the kernel and the family's own programs reach the box only through Laib's verbs; the kernel sets up, checks and backs up every service. Lines are production lines as \`scripts/loc.sh\` counts them, against each program's cap."
+  echo "Five layers. The family uses its programs and the services; the programs beside the kernel and the family's own programs reach the box only through Laib's verbs; the kernel sets up, checks and backs up every service. Lines are production lines as \`scripts/loc.sh\` counts them, against each program's cap. The picture is [\`docs/architektur.svg\`](docs/architektur.svg), drawn by the same script."
   echo
-  echo '```mermaid'
-  echo "flowchart TB"
-  echo "  family[\"Family and devices<br/>phone and browser · Signal · speakers · scanner · lights, switches, sensors\"]"
-  echo "  subgraph own[\"Own programs, own repos\"]"
-  echo "    own_haus[\"Haus<br/>pages and app of the family\"]"
-  echo "    own_dokumente[\"Dokumente<br/>scan, split, read invoices\"]"
-  echo "  end"
-  echo "  subgraph progs[\"Programs beside the kernel · laib repo, own caps\"]"
-  ids=()
-  while read -r name prod cap; do
-    pid=p_$(id "$name"); ids+=("$pid")
-    echo "    $pid[\"$name<br/>$(num "$prod") / $(num "$cap")\"]"
-  done <<<"$programs"
-  echo "    p_trainer[\"stimme/trainer<br/>wake-word training\"]"; ids+=(p_trainer)
-  grid 4 "${ids[@]}"
-  echo "  end"
-  echo "  subgraph kern[\"Laib kernel · $(num "$kernel") / $(num "$kernelcap") lines\"]"
-  ids=()
-  for p in "${parts[@]}"; do
-    IFS='|' read -r title _ _ <<<"$p"
-    pid=k_$(id "$title"); ids+=("$pid")
-    echo "    $pid[\"$title\"]"
-  done
-  grid 4 "${ids[@]}"
-  echo "  end"
-  echo "  subgraph svcs[\"${#services[@]} services from templates\"]"
-  ids=()
-  for n in "${services[@]}"; do
-    tt=$(field title "templates/$n/laib.yml"); tt=${tt//\"/#quot;}
-    pid=s_$(id "$n"); ids+=("$pid")
-    echo "    $pid[\"$tt<br/>${first[$n]:-—}\"]"
-  done
-  grid 5 "${ids[@]}"
-  echo "  end"
-  echo "  family -->|types, talks| own"
-  echo "  family -->|writes, calls| svcs"
-  echo "  own -->|asks, proposes over MCP| kern"
-  echo "  progs -->|reads, repairs through verbs| kern"
-  echo "  kern -->|sets up, checks, backs up| svcs"
-  echo '```'
+  echo "<picture>"
+  echo "  <source media=\"(prefers-color-scheme: dark)\" srcset=\"docs/architektur-dark.svg\">"
+  echo "  <img alt=\"The five layers of a Laib box: family and devices, the own programs, the programs beside the kernel, the Laib kernel, the services from templates\" src=\"docs/architektur.svg\" width=\"1000\">"
+  echo "</picture>"
   echo
   echo "**The one rule that holds it together:** a hand calls a verb; what lies above the hand's ceiling becomes a proposal in the Inbox; the human class (new services, keys, programs, removal) is approved only by a human, the low-risk rest by the box itself; then Laib applies, verifies and writes the journal."
   echo
@@ -256,8 +351,11 @@ section() {
   echo
   echo "| Program | Repo | What it is |"
   echo "|---|---|---|"
-  echo "| Haus | [mdopp/haus](https://github.com/mdopp/haus) | the family's pages and app, the Box page; runs as the \`haus\` template |"
-  echo "| Dokumente | [mdopp/dokumente](https://github.com/mdopp/dokumente) | scanner, splitting stacks, separator sheets, reading invoices and contracts |"
+  local o repo
+  for o in "${own[@]}"; do
+    IFS='|' read -r name repo what _ <<<"$o"
+    echo "| $name | [$repo](https://github.com/$repo) | $what |"
+  done
   echo
   echo "### Programs beside the kernel"
   echo
@@ -299,26 +397,20 @@ section() {
   echo
   echo "| Part | What it does | Code | Lines |"
   echo "|---|---|---|---:|"
-  local sum=0 links c
+  local links
   for p in "${parts[@]}"; do
-    IFS='|' read -r title paths what extra <<<"$p"
+    IFS='|' read -r title paths what _ <<<"$p"
     links=""
     if [ "$title" = "The verbs" ]; then
       links="[\`cmd/laib\`](cmd/laib/)"
-      # shellcheck disable=SC2086
-      c=$(lines $extra)
     else
       for x in $paths; do
         [ -e "$x" ] || { warn "kernel part $title: $x does not exist"; continue; }
         if [ -d "$x" ]; then links="${links:+$links, }[\`${x#internal/}\`]($x/)"; else links="${links:+$links, }[\`${x#cmd/laib/}\`]($x)"; fi
       done
-      # shellcheck disable=SC2086
-      c=$(lines $(for x in $paths; do [ -e "$x" ] && echo "$x"; done))
     fi
-    sum=$((sum + c))
-    echo "| $title | $what | $links | $(num "$c") |"
+    echo "| $title | $what | $links | $(num "${partlines[$title]}") |"
   done
-  [ "$sum" = "$kernel" ] || warn "the kernel's parts add up to $sum lines, scripts/loc.sh counts $kernel"
   echo
   echo "### Services from templates"
   echo
@@ -332,20 +424,24 @@ section() {
   echo "$end"
 }
 
-new=$(mktemp)
-trap 'rm -f "$new" "$new.section"' EXIT
-section >"$new.section"
-awk -v b="$begin" -v e="$end" -v f="$new.section" '
+new=$(mktemp -d)
+trap 'rm -rf "$new"' EXIT
+section >"$new/section"
+awk -v b="$begin" -v e="$end" -v f="$new/section" '
   $0 == b { while ((getline l < f) > 0) print l; skip = 1; next }
   $0 == e { skip = 0; next }
-  !skip' README.md >"$new"
-rm -f "$new.section"
+  !skip' README.md >"$new/README.md"
+svg light >"$new/architektur.svg"
+svg dark >"$new/architektur-dark.svg"
+stale=""
+for f in README.md "${svgfiles[@]}"; do cmp -s "$new/$(basename "$f")" "$f" 2>/dev/null || stale="$stale $f"; done
 if [ -n "$check" ]; then
-  cmp -s "$new" README.md && { echo "architektur: README.md is current"; exit 0; }
-  echo "architektur: README.md's architecture section is stale; run scripts/architektur.sh" >&2
-  diff -u README.md "$new" >&2 || true
+  [ -n "$stale" ] || { echo "architektur: README.md and ${svgfiles[*]} are current"; exit 0; }
+  echo "architektur: stale:$stale; run scripts/architektur.sh" >&2
+  diff -u README.md "$new/README.md" >&2 || true
   exit 1
 fi
-cmp -s "$new" README.md && { echo "architektur: README.md already current"; exit 0; }
-cat "$new" >README.md
-echo "architektur: README.md updated"
+[ -n "$stale" ] || { echo "architektur: README.md and ${svgfiles[*]} already current"; exit 0; }
+mkdir -p docs
+for f in $stale; do cp "$new/$(basename "$f")" "$f"; done
+echo "architektur: updated$stale"
