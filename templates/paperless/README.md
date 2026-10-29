@@ -207,8 +207,10 @@ and gets exactly Dokumente's shape from this template's post-deploy
   it only Dokumente's action, Gesundheit reads hourly).
 - **The document types** of `PAPERLESS_BEFUND_ARTEN` (Befund, Arztbrief,
   Labor, Röntgen, Atemtest, Lungenfunktion) are made when missing, found by
-  name, never changed: Paperless' AI suggests them, Gesundheit reads
-  documents of these types (or tags of the same names).
+  name, never renamed; they belong to nobody (`owner: null`), because a type
+  the admin owns is invisible to `dokumente` and `gesundheit` (one owned
+  from before is handed to everybody once). Paperless' AI suggests them,
+  Gesundheit reads documents of these types (or tags of the same names).
 - Without `PAPERLESS_GESUNDHEIT_PASSWORD` (the gesundheit template not
   installed) nothing of this is made and post-deploy says so; Dokumente goes
   on alone.
