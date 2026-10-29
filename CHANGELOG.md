@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.53.0](https://github.com/mdopp/laib/compare/v0.52.0...v0.53.0) (2026-10-29)
+
+
+### Features
+
+* **paperless,bote:** Gesundheit as Paperless' second client, the Bote's gesundheit tool, ADR 0017 amendment ([#895](https://github.com/mdopp/laib/issues/895)) ([dc47596](https://github.com/mdopp/laib/commit/dc475964760f38bca58d0bc40c661da56fe397a4))
+
 ## [0.52.0](https://github.com/mdopp/laib/compare/v0.51.0...v0.52.0) (2026-10-28)
 
 
