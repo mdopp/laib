@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+„Nur für mich“ beim Scannen geht jetzt: Paperless ließ das Programm Dokumente vorher nicht nachsehen, was es darf, und der Stapel startete nicht.
 Paperless gibt Arztunterlagen (Laborblätter, Befunde, Arztbriefe) an das neue Programm Gesundheit weiter, das die Werte pro Person als Verlauf zeigt; es bekommt dafür einen eigenen Zugang, der nur Dokumente lesen und markieren darf, und Paperless kennt jetzt die Dokumenttypen Befund, Arztbrief, Labor, Röntgen, Atemtest und Lungenfunktion.
 Für „Nur für mich“ darf das Programm Dokumente Stapel selbst in Paperless ablegen und sie dann der Person übergeben
 Paperless sagt dem neuen Programm Dokumente Bescheid, sobald ein Dokument dazukommt; Verträge und Rechnungen liest jetzt Dokumente mit einem eigenen Zugang, der nur Dokumente sehen und ihre Felder ausfüllen darf.

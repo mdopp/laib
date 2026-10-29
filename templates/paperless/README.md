@@ -158,7 +158,10 @@ on every apply, each step changing only what differs:
   exactly these rights: view, add and change documents (add: a „nur für
   mich“ stack is uploaded through the API and handed to its person), view and add notes and
   tags, view correspondents, document types, custom fields and users (so a
-  household person is never taken for a sender). Its password is the box's
+  household person is never taken for a sender), and its own UI settings
+  (`view_uisettings`: Paperless guards `/api/ui_settings/` with it, where a
+  client reads which permissions it has; without it Paperless answers 403
+  and a „nur für mich“ stack never starts). Its password is the box's
   `PAPERLESS_DOKUMENTE_PASSWORD`; a different one is set back.
 - **Its token**, Paperless' own (`/api/token/`), handed back as
   `PAPERLESS_TOKEN`, the scan service's secret, only when it differs.

@@ -388,7 +388,8 @@ class Dokumente(unittest.TestCase):
         [u] = fake.users
         self.assertEqual((u["username"], u["is_superuser"], u["is_staff"], u["groups"]), ("dokumente", False, False, []))
         self.assertEqual(set(u["user_permissions"]), {"view_document", "add_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
-                                                      "view_correspondent", "view_documenttype", "view_customfield", "view_user"})
+                                                      "view_correspondent", "view_documenttype", "view_customfield", "view_user", "view_uisettings"})
+        # view_uisettings: Paperless guards /api/ui_settings/ with it, where a client reads its own permissions
         # add_document since „nur für mich“ (owner 2026-10-28): dokumente uploads a private stack itself; delete stays out
         for c in u["user_permissions"]:
             self.assertFalse(c.startswith("delete_") or "mail" in c or "workflow" in c or "group" in c or c == "change_user", c)

@@ -233,7 +233,10 @@ KUNDEN = [
 DOKUMENTE_USER = KUNDEN[0]["user"]
 # add_document: a „nur für mich“ stack goes in through the API, owned by dokumente until it hands it on
 DOKUMENTE_RECHTE = ["view_document", "add_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
-                    "view_correspondent", "view_documenttype", "view_customfield", "view_user"]
+                    "view_correspondent", "view_documenttype", "view_customfield", "view_user",
+                    # its own /api/ui_settings/ (Paperless guards it with view_uisettings): the client reads
+                    # its permissions there before a „nur für mich“ stack; without it Paperless answers 403
+                    "view_uisettings"]
 WORKFLOW = "Dokument hinzugefügt"
 HOOK_URL = KUNDEN[0]["hook"]
 # the document types that are medical records (laib#893): made once each, found by name, never
