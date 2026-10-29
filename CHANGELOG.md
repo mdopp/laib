@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.54.0](https://github.com/mdopp/laib/compare/v0.53.1...v0.54.0) (2026-10-29)
+
+
+### Features
+
+* **envelope:** the budget is policy.yml envelope.budget, and a refused action does not count ([#910](https://github.com/mdopp/laib/issues/910)) ([48b61cc](https://github.com/mdopp/laib/commit/48b61cc8660fcd91b9f5cb82617461e9a88dc421))
+
 ## [0.53.1](https://github.com/mdopp/laib/compare/v0.53.0...v0.53.1) (2026-10-29)
 
 
