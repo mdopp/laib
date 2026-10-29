@@ -356,11 +356,17 @@ def befunde(api):
     """the document types of medical records (laib#893), from PAPERLESS_BEFUND_ARTEN: made when
     missing, found by name, never changed; Paperless' AI then has them to suggest"""
     arten = [a.strip() for a in E.get("PAPERLESS_BEFUND_ARTEN", BEFUND_ARTEN).split(",") if a.strip()]
-    have = {t.get("name", "").casefold() for t in api.all("/api/document_types/")}
+    have = {t.get("name", "").casefold(): t for t in api.all("/api/document_types/")}
     for name in arten:
-        if name.casefold() not in have:
-            api("POST", "/api/document_types/", {"name": name, "matching_algorithm": 0})
+        t = have.get(name.casefold())
+        if t is None:
+            # owner None: a type the admin owns is invisible to dokumente and gesundheit (object
+            # permissions), and Gesundheit read 0 documents on the box for a day (gesundheit#3)
+            api("POST", "/api/document_types/", {"name": name, "matching_algorithm": 0, "owner": None})
             print("paperless: Dokumenttyp %s angelegt" % name)
+        elif t.get("owner") is not None:
+            api("PATCH", "/api/document_types/%d/" % t["id"], {"owner": None})
+            print("paperless: Dokumenttyp %s gehört jetzt allen" % t["name"])
 
 
 def failed_consumes(api):

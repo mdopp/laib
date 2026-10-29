@@ -452,7 +452,7 @@ class Gesundheit(unittest.TestCase):
 
     def test_two_clients_one_workflow_both_tokens(self):
         fake = Fake(documents=[{"id": 2, "owner": 3, "permissions": {"view": {"users": [3], "groups": []}, "change": {"users": [3], "groups": []}}}],
-                    types=[{"id": 1, "name": "Rechnung"}, {"id": 2, "name": "labor"}])
+                    types=[{"id": 1, "name": "Rechnung"}, {"id": 2, "name": "labor", "owner": 3}])
         r = self.setup(fake)
         dok, ges = fake.users
         self.assertEqual((dok["username"], ges["username"], ges["is_superuser"], ges["groups"]), ("dokumente", "gesundheit", False, []))
@@ -467,8 +467,11 @@ class Gesundheit(unittest.TestCase):
         self.assertEqual((hook_dok["webhook"]["url"], hook_dok["webhook"]["headers"]), ("http://host.containers.internal:8720/hook", {"X-Dokumente-Token": "hook-tok"}))
         self.assertEqual((hook_ges["webhook"]["url"], hook_ges["webhook"]["headers"]), ("http://host.containers.internal:18529/hook", {"X-Gesundheit-Token": "ges-hook"}))
         self.assertEqual(sorted(fake.documents[0]["permissions"]["change"]["users"]), sorted([3, dok["id"], ges["id"]]))
-        # the record types: made when missing, found by name whatever the case, the others untouched
+        # the record types: made when missing, found by name whatever the case, the others untouched;
+        # nobody's, so dokumente and gesundheit see them (the admin-owned „labor“ from before is handed to all)
         self.assertEqual([t["name"] for t in fake.types], ["Rechnung", "labor", "Befund", "Arztbrief", "Röntgen", "Atemtest", "Lungenfunktion"])
+        self.assertEqual([t.get("owner") for t in fake.types[1:]], [None] * 6)
+        self.assertIn("paperless: Dokumenttyp labor gehört jetzt allen", lines)
         # the next apply with both tokens handed back: nothing written
         fake.calls.clear()
         r = self.setup(fake, LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"], LAIB_SECRET_PAPERLESS_GESUNDHEIT_TOKEN=fake.tokens["gesundheit"])
