@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.53.1](https://github.com/mdopp/laib/compare/v0.53.0...v0.53.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **paperless:** let dokumente read its own permissions, so „nur für mich“ starts ([#904](https://github.com/mdopp/laib/issues/904)) ([bdf6346](https://github.com/mdopp/laib/commit/bdf63461155706e33c99dd99e280f08aed82b7c5))
+
 ## [0.53.0](https://github.com/mdopp/laib/compare/v0.52.0...v0.53.0) (2026-10-29)
 
 
