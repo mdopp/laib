@@ -11,9 +11,9 @@ import (
 
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
-	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -93,7 +93,7 @@ func TestTheOperatorsApplyIsRefusedOutsideTheEnvelope(t *testing.T) {
 		t.Fatalf("the Operator applied without a proposal: rc %d", rc)
 	}
 	id := opsPropose(t, c, "docker.io/traefik/whoami:v1.12")
-	for range envelope.RepairBudget {
+	for range policy.DefaultBudget {
 		journal.Append(c.env.Paths.Journal, journal.Entry{Actor: "ops", Verb: "restart", Service: "whoami", Result: "green"})
 	}
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitRefused {

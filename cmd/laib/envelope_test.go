@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
@@ -188,7 +189,7 @@ func TestSnapshotPathsSkipBackupFalse(t *testing.T) {
 // #35 (4): one unparsable journal line reset the budget to zero.
 func TestACorruptJournalLineDoesNotResetTheBudget(t *testing.T) {
 	env, data, _ := envBox(t)
-	for i := 0; i < envelope.RepairBudget; i++ {
+	for i := 0; i < policy.DefaultBudget; i++ {
 		journal.Append(env.Paths.Journal, journal.Entry{T: time.Now().Add(-10 * time.Minute), Actor: "ops", Verb: "exec", Service: "whoami", Result: "info"})
 	}
 	day := filepath.Join(env.Paths.Journal, time.Now().UTC().Format("2006-01-02")+".jsonl")

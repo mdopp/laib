@@ -40,9 +40,9 @@ import (
 // snapshot once per service per hour, journal with output, a budget, verify
 // where it applies. Class 3 (irreversible) is not here; it is a proposal.
 
-// RepairBudget: mutating operator actions per service per hour before laib
-// stops the hand and asks a human.
-const RepairBudget = 8
+// The budget of mutating operator actions per service per hour before laib
+// stops the hand and asks a human is policy.Budget (policy.yml
+// envelope.budget, eight by default, #35).
 
 // containerName is Quadlet's default name for a .container unit.
 func containerName(unit string) string { return "systemd-" + strings.TrimSuffix(unit, ".service") }
@@ -120,27 +120,11 @@ func envelope(ctx context.Context, env *cli.Env, st *state.State, svc *state.Ser
 	if skipped > 0 {
 		fmt.Fprintf(env.Errw(), "laib: %d unlesbare Journalzeilen übersprungen\n", skipped)
 	}
-	used, snapped := 0, false
-	for _, e := range recent {
-		if e.Service != svc.Name {
-			continue
-		}
-		switch e.Verb {
-		case "exec", "write", "restart", "start", "stop":
-			used++
-		case "apply": // the Operator's own applies (#286); a human's never count
-			if e.Actor == env.Actor {
-				used++
-			}
-		case "snapshot":
-			if e.Result == "info" {
-				snapped = true
-			}
-		}
-	}
-	if used >= RepairBudget {
-		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: fmt.Sprintf("Budget erschöpft (%d/h). Ein Mensch muss ran: %s", RepairBudget, detail)})
-		fmt.Fprintf(env.Errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, RepairBudget, svc.Name)
+	used, snapped := spent(recent, svc.Name, env.Actor)
+	budget := policy.Budget(st.Policy)
+	if used >= budget {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: fmt.Sprintf("%s%d/h). Ein Mensch muss ran: %s", refused, budget, detail)})
+		fmt.Fprintf(env.Errw(), "laib: Budget für %s erschöpft (%d Eingriffe in der letzten Stunde). laib escalate %s \"…\" ist der Weg weiter.\n", svc.Name, budget, svc.Name)
 		return cli.ExitRefused
 	}
 	if snapped {
@@ -674,4 +658,34 @@ func OpsApply(ctx context.Context, env *cli.Env, st *state.State, args []string)
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "apply", Service: name, Result: result, Reason: p.Reason, Detail: fmt.Sprintf("#%d selbst angewendet", n)})
 	}
 	return code
+}
+
+// refused opens the journal line of an action the budget turned away.
+const refused = "Budget erschöpft ("
+
+// spent counts the service's mutating actions of the last hour and whether
+// a pre-repair snapshot was taken in it. An action the budget refused did
+// nothing and does not count (2026-10-29: refusals extended a lockout by
+// an hour each); a human's apply never counts, the Operator's own do (#286).
+func spent(recent []journal.Entry, service, actor string) (used int, snapped bool) {
+	for _, e := range recent {
+		if e.Service != service {
+			continue
+		}
+		switch e.Verb {
+		case "exec", "write", "restart", "start", "stop":
+			if !(e.Result == "red" && strings.HasPrefix(e.Detail, refused)) {
+				used++
+			}
+		case "apply":
+			if e.Actor == actor {
+				used++
+			}
+		case "snapshot":
+			if e.Result == "info" {
+				snapped = true
+			}
+		}
+	}
+	return used, snapped
 }

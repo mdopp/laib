@@ -190,6 +190,11 @@ type Policy struct {
 // Envelope tunes the operator's envelope.
 type Envelope struct {
 	Snapshot string `yaml:"snapshot"`
+	// Budget is how many mutating actions (exec, write, restart, start, stop,
+	// the Operator's applies) one service takes per hour from all hands
+	// together before laib stops them and asks a human; 0 means the default
+	// of eight (#35). The owner raised theirs to 20 on 2026-10-29.
+	Budget int `yaml:"budget"`
 }
 
 // Hand is one agent identity.
