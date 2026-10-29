@@ -104,6 +104,7 @@ done
   echo "MODEL_API_KEY=${LAIB_SECRET_BOTE_MODEL_KEY:-llama}"
   echo "HA_TOKEN=${LAIB_SECRET_BOTE_HA_TOKEN:-}"
   echo "HAUSHALT_TOKEN=${LAIB_SECRET_HAUS_HAUSHALT_TOKEN:-}"
+  echo "GESUNDHEIT_TOKEN=${LAIB_SECRET_GESUNDHEIT_BOTE_TOKEN:-}"
   # the plugin laib-journal (#591) notes who switched in HA: to Laib with LAIB_TOKEN, the context id from HA
   echo "LAIB_MCP_URL=${LAIB_MCP_URL:-http://host.containers.internal:5900/mcp}"
   echo "HA_URL=${HA_URL:-http://host.containers.internal:8123}"

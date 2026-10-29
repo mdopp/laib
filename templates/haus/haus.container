@@ -18,6 +18,7 @@ Environment=HAUS_ENERGY_TOTALS=${ENERGY_TOTALS}
 Environment=HAUS_STT_PROVIDER=${STT_PROVIDER}
 Environment=HAUS_STT_LANGUAGE=${STT_LANGUAGE}
 Environment=HAUS_HA_PUBLIC_URL=${HA_PUBLIC_URL}
+Environment=HAUS_GESUNDHEIT_URL=${GESUNDHEIT_URL}
 Environment=HAUS_ENERGY_STATS=${ENERGY_STATS}
 Environment=HAUS_COVER_INVERTED=${COVER_INVERTED}
 # the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder

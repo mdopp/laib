@@ -21,6 +21,7 @@ COMPACT_TOKENS: 32000                     # Hermes compresses a conversation onc
 LAIB_TOKEN: !secret BOTE_LAIB_TOKEN
 MODEL_KEY: !secret BOTE_MODEL_KEY
 HAUSHALT_MCP_URL: http://host.containers.internal:8650/mcp/haushalt   # Haus's Haushalt (haus#11): calendar, notes, reminders; left out until Haus answers with the token (#170)
+GESUNDHEIT_MCP_URL: http://host.containers.internal:18529/mcp   # Gesundheit (laib#893): the daily note and a person's values; left out until it answers with the token
 FRAGE_URL: http://host.containers.internal:8710/mcp         # Frage as an MCP tool (templates/frage serves /mcp); left out when it does not answer
 PAPERLESS_URL: http://host.containers.internal:8000   # "ablegen" with a photo or PDF files it into Paperless (#521); left out when Paperless does not answer
 HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` tool and the Automat (used once its tokens are minted)
