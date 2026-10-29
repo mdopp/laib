@@ -214,6 +214,9 @@ hands:
   human:    { ceiling: destroy }
 approvals:
   destroy: { by: human, snapshot: required }
+envelope:                       # the class-2 envelope (docs/DESIGN.md "The envelope fails closed")
+  snapshot: required            # required | optional: a pre-repair snapshot before the hour's first action
+  budget: 8                     # mutating actions per service per hour, all hands together; a refused one does not count
 autonomy:                       # the repair dial (docs/DESIGN.md "Repair")
   converge: on                  # ten-minute loop: re-apply drift, restart inactive units, budget 3/h
   values: auto                  # auto | proposal; auto = laib applies and rolls back on red

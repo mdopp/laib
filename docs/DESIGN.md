@@ -268,8 +268,10 @@ decision is journaled as `laib approve` with the proposing hand named, so
 "who changed this?" has an answer.
 
 **The envelope fails closed (#35).** Every class-2 action (`write`, `exec`,
-`restart`) runs inside it: the budget (eight per service per hour) is read
-from the journal, and a journal that cannot be read refuses the action;
+`restart`) runs inside it: the budget (`policy.yml envelope.budget`, eight
+per service per hour by default, shared by all hands; a refused action does
+not count) is read from the journal, and a journal that cannot be read
+refuses the action;
 the first action of an hour takes a restic snapshot of the service's
 backed-up data paths (`backup: false` paths are not snapshotted; pre-repair
 snapshots are kept seven days), and a missing backup target or a failed

@@ -71,6 +71,9 @@ func Validate(p state.Policy) error {
 	if e := p.Envelope.Snapshot; e != "" && e != "required" && e != "optional" {
 		return fmt.Errorf("policy.yml: envelope.snapshot must be required or optional")
 	}
+	if b := p.Envelope.Budget; b < 0 || b > 1000 {
+		return fmt.Errorf("policy.yml: envelope.budget must be between 1 and 1000 (0: the default of %d)", DefaultBudget)
+	}
 	for name, v := range p.Skills {
 		if v != "active" && v != "paused" {
 			return fmt.Errorf("policy.yml: skills.%s must be active or paused", name)
@@ -109,6 +112,19 @@ func Auto(p state.Policy, class string) bool {
 
 // ConvergeOn reports whether the converge loop is enabled (default off).
 func ConvergeOn(p state.Policy) bool { return p.Autonomy["converge"] == "on" }
+
+// DefaultBudget is the envelope's budget of mutating actions per service
+// per hour when policy.yml names none (#35); Budget reads the policy.
+const DefaultBudget = 8
+
+// Budget is the envelope's budget for this box: policy.yml envelope.budget,
+// else DefaultBudget.
+func Budget(p state.Policy) int {
+	if p.Envelope.Budget > 0 {
+		return p.Envelope.Budget
+	}
+	return DefaultBudget
+}
 
 // ConvergeBudget is how many converge applies per hour are allowed before
 // laib stops and asks a human: a flapping service is a bug, not a chore.

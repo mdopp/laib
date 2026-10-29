@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -50,5 +51,28 @@ func TestJailKeepsReadsInsideTheServiceData(t *testing.T) {
 	}
 	if err := read(bare, filepath.Join(data, "media", "x")); err == nil {
 		t.Fatal("other service's folder allowed")
+	}
+}
+
+// The budget counts what ran, not what it refused: 2026-10-29 eight
+// refusals in a row kept paperless locked for an hour longer than the eight
+// actions did. A human's apply never counts, the Operator's own do.
+func TestSpentCountsActionsNotRefusals(t *testing.T) {
+	recent := []journal.Entry{
+		{Service: "paperless", Verb: "exec", Result: "info"},
+		{Service: "paperless", Verb: "exec", Result: "red", Detail: "exit status 1"},
+		{Service: "paperless", Verb: "exec", Result: "red", Detail: refused + "8/h). Ein Mensch muss ran: exec"},
+		{Service: "paperless", Verb: "restart", Result: "red", Detail: refused + "8/h). Ein Mensch muss ran: restart"},
+		{Service: "paperless", Verb: "apply", Actor: "ops"},
+		{Service: "paperless", Verb: "apply", Actor: "human:mdopp"},
+		{Service: "paperless", Verb: "snapshot", Result: "info"},
+		{Service: "scan", Verb: "exec", Result: "info"},
+	}
+	used, snapped := spent(recent, "paperless", "ops")
+	if used != 3 || !snapped {
+		t.Fatalf("used %d snapped %v, want 3 true", used, snapped)
+	}
+	if used, _ := spent(recent, "scan", "ops"); used != 1 {
+		t.Fatalf("scan used %d", used)
 	}
 }
