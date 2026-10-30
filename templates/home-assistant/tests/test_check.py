@@ -343,7 +343,7 @@ class Voice(unittest.TestCase):
         H["wake_words"] = {"wake_word.openwakeword": ["okay_nabu"]}
         hit = lambda name: {"intent": {"name": name}, "match": True, "source": "builtin"}
         H["intents"] = {("de", "Wie spät ist es"): hit("HassGetCurrentTime"), ("de", "Stelle einen Timer auf 5 Minuten"): hit("HassStartTimer"),
-                        ("de", "Spiele Einslive"): hit("MassPlayMediaAssist"), ("de", "Spiele Musik von Queen"): hit("MassPlayMediaAssist"),
+                        ("de", "Spiele Einslive"): hit("LaibRadio"), ("de", "Spiele Musik von Queen"): hit("LaibMusik"),
                         ("de", "Schalte Sofalicht ein"): hit("HassTurnOn")}
         H["registry"] = [{"entity_id": "light.sofa", "platform": "hue", "disabled_by": None, "options": {"conversation": {"should_expose": True}}},{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
                          {"entity_id": "select.voice_kueche_wake_word", "platform": "esphome", "translation_key": "wake_word", "disabled_by": None}]
@@ -433,6 +433,11 @@ class Voice(unittest.TestCase):
         details = " | ".join(f["detail"] for f in r["findings"] if f["severity"] == "gelb")
         self.assertIn("„Spiele Einslive“ wird nicht erkannt", details, r)
         self.assertIn("„Was ist ein Igel“ nimmt HassGetState, nicht Frage", details, r)
+        # #933: the media sentences are Laib's own (pre-start): another intent taking them is no pass
+        fake.HA["intents"][("de", "Spiele Musik von Queen")] = {"intent": {"name": "HassMediaSearchAndPlay"}, "match": True}
+        r = self.check()
+        details = " | ".join(f["detail"] for f in r["findings"] if f["severity"] == "gelb")
+        self.assertIn("„Spiele Musik von Queen“ nimmt HassMediaSearchAndPlay, nicht LaibMusik", details, r)
 
     def test_without_an_exposed_switch_the_switch_is_said_unmeasured(self):
         fake.HA["registry"][0]["options"] = {}
