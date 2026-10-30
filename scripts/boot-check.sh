@@ -41,7 +41,8 @@ make_room() {
   [ -n "$free" ] || { say "/boot not measured: no cleanup"; return 0; }
   [ "$free" -lt "$NEED_MIB" ] || return 0
   [ -n "$back" ] || { say "/boot has $free MiB free, and there is no rollback deployment to remove"; return 0; }
-  if grep -qE '\((staged|pending)\)' <<<"$st" || ! sed -n '/^[* ] [^ ]* [0-9a-f]\{8,\}\.[0-9]/{p;q}' <<<"$st" | grep -q '^\*'; then
+  local first; first="$(sed -n '/^[* ] [^ ]* [0-9a-f]\{8,\}\.[0-9]/{p;q}' <<<"$st")"   # the first deployment listed
+  if grep -qE '\((staged|pending)\)' <<<"$st" || [ "${first:0:1}" != "*" ]; then
     say "/boot has $free MiB free, but a deployment is staged: the cleanup waits for a proven boot without one"; return 0
   fi
   if e="$(rpm-ostree cleanup -r 2>&1)"; then
