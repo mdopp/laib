@@ -3,4 +3,5 @@ ADMIN_USER: admin
 ADMIN_PW: !secret ADGUARD_ADMIN_PASSWORD
 UPSTREAMS: "https://dns.quad9.net/dns-query https://dns.google/dns-query"
 PTR_UPSTREAMS: ""                 # who answers PTR for LAN addresses; empty: the default gateway (the router), when AdGuard has none set (#551)
+QUERYLOG_DAYS: 7                  # how many days AdGuard keeps its query log, 1 to 365 (#901); AdGuard's own default is 90
 CHECK_IMAGE: docker.io/library/python:3.13-alpine    # adguard-check.py, the standard library only (#785)
