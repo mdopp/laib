@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Gesundheit darf seine eigene Notiz an einem Arztdokument ersetzen, damit dort immer nur eine steht, mit der Abschrift des Blatts, wenn es aus dem Bild gelesen wurde.
 Paperless merkt sich bei jedem gescannten Dokument, aus welchem Stapel es kommt, damit die Scan-Seite einen Stapel so zeigt, wie er in Paperless wirklich ist.
 Die Dokumenttypen für Arztunterlagen (Befund, Labor, Arztbrief …) sind jetzt für alle sichtbar; vorher sah Gesundheit sie nicht und las deshalb nichts.
 „Nur für mich“ beim Scannen geht jetzt: Paperless ließ das Programm Dokumente vorher nicht nachsehen, was es darf, und der Stapel startete nicht.

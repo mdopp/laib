@@ -199,7 +199,10 @@ and gets exactly Dokumente's shape from this template's post-deploy
 (`paperless-mail.py kunden`):
 
 - **The user `gesundheit`**, no administrator, with Dokumente's rights
-  (`DOKUMENTE_RECHTE`: documents, notes, tags, the names it reads), its
+  (`DOKUMENTE_RECHTE`: documents, notes, tags, the names it reads) and one
+  more, `delete_note` (gesundheit#5: its one note per document, with the
+  transcript of a page read from its image, is replaced on every reading,
+  and Paperless cannot edit a note; Gesundheit deletes only notes it wrote), its
   password `PAPERLESS_GESUNDHEIT_PASSWORD` generated here; its token minted
   from `/api/token/` and handed back as `PAPERLESS_GESUNDHEIT_TOKEN` (the
   gesundheit template declares it `external, optional`, so the two template
