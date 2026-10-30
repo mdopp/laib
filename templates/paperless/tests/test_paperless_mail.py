@@ -456,7 +456,9 @@ class Gesundheit(unittest.TestCase):
         r = self.setup(fake)
         dok, ges = fake.users
         self.assertEqual((dok["username"], ges["username"], ges["is_superuser"], ges["groups"]), ("dokumente", "gesundheit", False, []))
-        self.assertEqual(set(ges["user_permissions"]), set(dok["user_permissions"]))
+        # gesundheit#5: Gesundheit replaces its one note per document; Paperless cannot edit a note
+        self.assertEqual(set(ges["user_permissions"]), set(dok["user_permissions"]) | {"delete_note"})
+        self.assertNotIn("delete_note", dok["user_permissions"])
         self.assertEqual(fake.passwords["gesundheit"], "ges-pw")
         lines = r.stdout.splitlines()
         self.assertIn("laib-secret: PAPERLESS_TOKEN=" + fake.tokens["dokumente"], lines)

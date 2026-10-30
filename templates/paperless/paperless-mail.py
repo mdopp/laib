@@ -220,7 +220,7 @@ def config(api):
 # documents (their tags, notes, custom field values, correspondent and owner), makes tags (prüfen,
 # korrespondent-ok, gesundheit), reads the names it needs (correspondents, document types, custom
 # field definitions, and the users, so it never takes a household person for a sender, #737, and
-# knows whose a sheet is). Nothing else: no deleting, no mail, no workflows, no settings, no users
+# knows whose a sheet is). Nothing else: no deleting (except Gesundheit its own note, gesundheit#5), no mail, no workflows, no settings, no users
 # or groups. One workflow „Dokument hinzugefügt“ gives every client view and change on each new
 # document and posts to each client's hook with its own token.
 KUNDEN = [
@@ -229,7 +229,11 @@ KUNDEN = [
      "ohne_hook": "Dokumente sieht neue Dokumente erst zur vollen Stunde"},   # the scan service's listener on the host, never through Caddy
     {"user": "gesundheit", "name": "Gesundheit", "passwort": "PAPERLESS_GESUNDHEIT_PASSWORD", "token": "PAPERLESS_GESUNDHEIT_TOKEN",
      "hook": "http://host.containers.internal:18529/hook", "header": "X-Gesundheit-Token", "hook_token": "GESUNDHEIT_WEBHOOK_TOKEN",
-     "ohne_hook": "Gesundheit sieht neue Befunde erst zur vollen Stunde"},   # the gesundheit template's inner port (laib#894)
+     "ohne_hook": "Gesundheit sieht neue Befunde erst zur vollen Stunde",   # the gesundheit template's inner port (laib#894)
+     # gesundheit#5: its one note per document (the transcript of a page read from its image) is
+     # replaced on every reading; Paperless cannot edit a note, so the old one is deleted. Only
+     # this client, only notes: it deletes no document, and only notes it wrote itself
+     "dazu": ["delete_note"]},
 ]
 DOKUMENTE_USER = KUNDEN[0]["user"]
 # add_document: a „nur für mich“ stack goes in through the API, owned by dokumente until it hands it on
@@ -276,7 +280,7 @@ def benutzer(api, have, k, pw):
     """one client's user (no administrator, exactly its rights, the box's password) and its token,
     printed as laib-secret when it differs from the one the box has"""
     want = {"is_superuser": False, "is_staff": False, "is_active": True, "groups": [],
-            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE if c in have)}
+            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE + k.get("dazu", []) if c in have)}
     u = next((x for x in api.all("/api/users/") if x.get("username") == k["user"]), None)
     if u is None:
         u = api("POST", "/api/users/", {"username": k["user"], "first_name": k["name"], "password": pw, **want})
