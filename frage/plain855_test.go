@@ -28,8 +28,12 @@ func TestAFailedLookupIsSpokenPlainly(t *testing.T) {
 				t.Errorf("spoken aloud: %q carries %q", said, raw)
 			}
 		}
-		if !strings.Contains(said, "nicht nachschlagen") || !strings.Contains(said, "noch einmal") {
-			t.Errorf("no sentence with a next step: %q", said)
+		want := "nicht nachschlagen" // the model failed
+		if c.SearxURL == "http://127.0.0.1:1" {
+			want = "nicht ans Internet" // the search failed (#864)
+		}
+		if !strings.Contains(said, want) || !strings.Contains(said, "noch einmal") {
+			t.Errorf("no sentence with %q and a next step: %q", want, said)
 		}
 	}
 }

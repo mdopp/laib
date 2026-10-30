@@ -341,10 +341,13 @@ class Voice(unittest.TestCase):
                            "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "okay_nabu"}]
         H["preferred"] = "p-j"
         H["wake_words"] = {"wake_word.openwakeword": ["okay_nabu"]}
-        H["intents"] = {("de", "Wie spät ist es"): {"intent": {"name": "HassGetCurrentTime"}, "match": True, "source": "builtin"}}
-        H["registry"] = [{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
+        hit = lambda name: {"intent": {"name": name}, "match": True, "source": "builtin"}
+        H["intents"] = {("de", "Wie spät ist es"): hit("HassGetCurrentTime"), ("de", "Stelle einen Timer auf 5 Minuten"): hit("HassStartTimer"),
+                        ("de", "Spiele Einslive"): hit("MassPlayMediaAssist"), ("de", "Spiele Musik von Queen"): hit("MassPlayMediaAssist"),
+                        ("de", "Schalte Sofalicht ein"): hit("HassTurnOn")}
+        H["registry"] = [{"entity_id": "light.sofa", "platform": "hue", "disabled_by": None, "options": {"conversation": {"should_expose": True}}},{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
                          {"entity_id": "select.voice_kueche_wake_word", "platform": "esphome", "translation_key": "wake_word", "disabled_by": None}]
-        H["states"] = {"select.voice_kueche_pipeline": {"state": "Joshua", "attributes": {"options": ["preferred", "Joshua"], "friendly_name": "Küche Assistent"}},
+        H["states"] = {"light.sofa": {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}, "select.voice_kueche_pipeline": {"state": "Joshua", "attributes": {"options": ["preferred", "Joshua"], "friendly_name": "Küche Assistent"}},
                        "select.voice_kueche_wake_word": {"state": "Okay Nabu", "attributes": {"options": ["no_wake_word", "Okay Nabu"]}}}
 
     def check(self, **env):
@@ -416,6 +419,25 @@ class Voice(unittest.TestCase):
         fake.HA["pipelines"].pop()
         r = self.check()
         self.assertIn("Sprache: kein Ablauf „Joshua“", r["detail"], r)
+
+    def test_the_five_intents_are_recognized_as_text_and_nothing_switches(self):
+        """#864: ADR 0015's five intents (timer, Einslive, music, „was ist …“, a switch) through HA's
+        conversation API as text: recognized, never executed; „was ist …“ must reach Frage."""
+        r = self.check()
+        self.assertIn("Absichten: 5 von 5 erkannt", r["detail"], r)
+        self.assertEqual(fake.HA["calls"], [], "the check switched something")
+        fake.HA["intents"].pop(("de", "Spiele Einslive"))
+        fake.HA["intents"][("de", "Was ist ein Igel")] = {"intent": {"name": "HassGetState"}, "match": True}
+        r = self.check()
+        self.assertIn("Absichten: 3 von 5 erkannt", r["detail"], r)
+        details = " | ".join(f["detail"] for f in r["findings"] if f["severity"] == "gelb")
+        self.assertIn("„Spiele Einslive“ wird nicht erkannt", details, r)
+        self.assertIn("„Was ist ein Igel“ nimmt HassGetState, nicht Frage", details, r)
+
+    def test_without_an_exposed_switch_the_switch_is_said_unmeasured(self):
+        fake.HA["registry"][0]["options"] = {}
+        r = self.check()
+        self.assertIn("Absichten: 4 von 4 erkannt · Schalter nicht geprüft", r["detail"], r)
 
     def test_without_the_persona_no_voice_line(self):
         r = self.check(VOICE_PERSONA="")
