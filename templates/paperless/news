@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Paperless merkt sich bei jedem gescannten Dokument, aus welchem Stapel es kommt, damit die Scan-Seite einen Stapel so zeigt, wie er in Paperless wirklich ist.
 Die Dokumenttypen für Arztunterlagen (Befund, Labor, Arztbrief …) sind jetzt für alle sichtbar; vorher sah Gesundheit sie nicht und las deshalb nichts.
 „Nur für mich“ beim Scannen geht jetzt: Paperless ließ das Programm Dokumente vorher nicht nachsehen, was es darf, und der Stapel startete nicht.
 Paperless gibt Arztunterlagen (Laborblätter, Befunde, Arztbriefe) an das neue Programm Gesundheit weiter, das die Werte pro Person als Verlauf zeigt; es bekommt dafür einen eigenen Zugang, der nur Dokumente lesen und markieren darf, und Paperless kennt jetzt die Dokumenttypen Befund, Arztbrief, Labor, Röntgen, Atemtest und Lungenfunktion.

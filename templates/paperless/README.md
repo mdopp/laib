@@ -177,7 +177,12 @@ on every apply, each step changing only what differs:
   folder to `${DATA_DIR}/dokumente` (backed up), while Dokumente has none; the old file stays
   for a rollback.
 
-The contract and invoice fields (custom fields) are still made here, above.
+The contract and invoice fields (custom fields) are still made here, above,
+and so is **`Stapel`** (text, #909): Dokumente writes into it, on every
+document it files, the id of the scanned stack the document came from (the
+stack's start time, for example `2026-10-29T17-07-46`). Haus lists a stack's
+documents by it straight from Paperless, so a document renamed, split or
+merged there stays under its stack and a deleted one is gone.
 
 Not here (follow-up issues): questions to the documents through the Bote
 or Haus; upstream, a Paperless setting for names its AI must not suggest.
