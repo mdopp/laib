@@ -329,6 +329,7 @@ status:                                # what the service says about itself beyo
   file: ${DATA_DIR}/paperless/laib-status.json   # {"at", "detail", "findings": [{severity, detail, fix}]}; further fields reach laib_status <service> as eigenes (#688)
   check: paperless-check.service        # optional: a oneshot that refreshes it
   stale: 5m                             # older than this, a look starts the check (default 5m)
+  busy: {field: zustand, values: [scannt], grace: 30m}   # optional (#908): mid-work by its own word; see below
 ports:
   - { port: 8000, lan: false }          # nftables drop on physical interfaces
   - { port: 8025, lan: false, when: [MAIL_HOST] }   # only while MAIL_HOST is set (#190)
@@ -355,6 +356,17 @@ diag or the Box page and the file is older than `stale`. The page shows the
 last state and reloads until the new one lands, and offers "jetzt prüfen".
 A slow timer of the template keeps it fresh for the morning report. The
 kernel names no template.
+
+`busy` names a field of the status file and its values that say the
+service is mid-work (scan: `zustand: scannt`, a stack it would lose). While
+the file says so and is younger than `grace` (default 30m), diag shows its
+unit and health reds as gelb, "wartet: scan scannt, längstens bis 18:26",
+with no repair, and a hand's restart or stop waits with that journal line;
+a person (the shell, the Inbox, Haus) restarts at once. A file that has said
+"busy" for longer than the grace is stuck: the red is red again. In the
+same way diag shows a red as info, wartet, while an apply activates the
+service (the lock is held and its marker names it) or a pause holds it
+(#907); the Operator's look leaves those alone.
 
 `when` names a unit file and the values that switch it on. While none of
 them is set, the unit is gone from the load: not rendered, not verified,

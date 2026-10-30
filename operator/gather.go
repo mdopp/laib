@@ -38,3 +38,11 @@ func (g *Gatherer) Add(service, detail string) {
 		g.Fire(tr)
 	})
 }
+
+// Opens: a red the kernel posts opens an incident unless it is ours, an
+// escalation, a hand's exec or write — its command, not the service (#908:
+// a quoting error restarted scan mid-stack) — or an action the budget refused.
+func Opens(verb, actor, result, detail string) bool {
+	acted := strings.Contains(" exec write restart start stop flash retrain ", " "+verb+" ")
+	return result == "red" && actor != "ops" && verb != "escalate" && verb != "notify" && verb != "exec" && verb != "write" && !(acted && strings.HasPrefix(detail, "Budget erschöpft ("))
+}

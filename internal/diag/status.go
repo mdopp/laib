@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -126,4 +128,54 @@ func Refresh(ctx context.Context, svc *state.Service) bool {
 	}
 	_, err := sysd.Run(ctx, "systemctl", "--user", "start", "--no-block", s.Check)
 	return err == nil
+}
+
+// Busy is what the service is doing by its own word (#908), when its units
+// run and its status file's busy field names a busy value and said so
+// within the grace: "scan scannt, längstens bis 18:26"; else "". A restart
+// mid-stack lost the owner's scan; one that has said nothing for the grace
+// is stuck, and one whose unit is down works on nothing.
+func Busy(ctx context.Context, svc *state.Service, rep Report, now time.Time) string {
+	s := svc.Contract.Status
+	if s == nil || s.Busy == nil || !rep.Found || slices.ContainsFunc(svc.UnitNames(), func(u string) bool { return sysd.Active(ctx, u) != "active" }) {
+		return ""
+	}
+	var v string
+	json.Unmarshal(rep.Eigenes[s.Busy.Field], &v)
+	grace, _ := time.ParseDuration(cmp.Or(s.Busy.Grace, "30m"))
+	if until := rep.At.Add(grace); slices.Contains(s.Busy.Values, v) && now.Before(until) {
+		return fmt.Sprintf("%s %s, längstens bis %s", svc.Name, v, until.Local().Format("15:04"))
+	}
+	return ""
+}
+
+// held is why a service's red is expected now (#907): an apply activates
+// it (the lock is held and its marker names the service) or a hand paused
+// it (laib stop, the lease). An apply that died holds nothing: its lock is
+// gone with it.
+func held(env *cli.Env, name string) string {
+	if h := apply.LockHolder(env.Paths); h != "" && slices.Contains(apply.Pending(env.Paths), name) {
+		return "ein Apply richtet " + name + " gerade ein (" + h + ")"
+	}
+	if p, ok := apply.Paused(env.Paths)[name]; ok {
+		return "pausiert von " + p.By + " bis " + p.Until.Local().Format("02.01. 15:04")
+	}
+	return ""
+}
+
+// hold marks a service's unit and health reds as expected (#907, #908):
+// info while it is held, gelb while it is busy — a look leaves the first
+// alone and notes the second — with the reason and no repair. A red that
+// outlives the hold is red again, with a new identity for the look.
+func hold(fs []Finding, held, busy string) []Finding {
+	sev, why := "info", held
+	if why == "" {
+		sev, why = "gelb", busy
+	}
+	for i := range fs {
+		if why != "" {
+			fs[i].Severity, fs[i].Wartet, fs[i].Repair, fs[i].Detail = sev, why, nil, fs[i].Detail+" — wartet: "+why
+		}
+	}
+	return fs
 }

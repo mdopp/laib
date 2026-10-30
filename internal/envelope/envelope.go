@@ -25,6 +25,7 @@ import (
 	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
@@ -377,6 +378,15 @@ func units(ctx context.Context, env *cli.Env, verb string, args []string) int {
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
 		return cli.Refused(env, env.Actor+" may not "+verb)
 	}
+	// mid-work by its own word (#908): a hand's restart or stop waits, a
+	// person's tap (the shell, the Inbox, Haus) does it at once
+	if h := proposal.Hand(env.Actor); verb != "start" && h != "human" && h != "haus" {
+		if b := diag.Busy(ctx, svc, diag.ReadStatus(st, svc), time.Now()); b != "" {
+			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "info", Detail: waits + b})
+			fmt.Fprintf(env.Errw(), "laib: %s%s; kein %s mitten in der Arbeit. Danach erneut, oder ein Mensch.\n", waits, b, verb)
+			return cli.ExitLocked
+		}
+	}
 	if code := envelope(ctx, env, st, svc, verb, verb); code != cli.ExitOK {
 		return code
 	}
@@ -660,8 +670,9 @@ func OpsApply(ctx context.Context, env *cli.Env, st *state.State, args []string)
 	return code
 }
 
-// refused opens the journal line of an action the budget turned away.
-const refused = "Budget erschöpft ("
+// refused opens the journal line of an action the budget turned away,
+// waits one a busy service put off (#908).
+const refused, waits = "Budget erschöpft (", "wartet: "
 
 // spent counts the service's mutating actions of the last hour and whether
 // a pre-repair snapshot was taken in it. An action the budget refused did
@@ -674,7 +685,7 @@ func spent(recent []journal.Entry, service, actor string) (used int, snapped boo
 		}
 		switch e.Verb {
 		case "exec", "write", "restart", "start", "stop":
-			if !(e.Result == "red" && strings.HasPrefix(e.Detail, refused)) {
+			if !(e.Result == "red" && strings.HasPrefix(e.Detail, refused)) && !strings.HasPrefix(e.Detail, waits) {
 				used++
 			}
 		case "apply":

@@ -375,6 +375,16 @@ type StatusFile struct {
 	File  string `yaml:"file"`  // under ${DATA_DIR}
 	Check string `yaml:"check"` // a .service of the template without [Install]
 	Stale string `yaml:"stale"` // a duration, default 5m
+	Busy  *Busy  `yaml:"busy"`  // #908: mid-work by its own word, no repair restart
+}
+
+// Busy names the status file's field and its values that say the service
+// is mid-work (scan: zustand scannt), and how long after the file's at
+// that is believed (default 30m): a red waits that long, then is red.
+type Busy struct {
+	Field  string   `yaml:"field"`
+	Values []string `yaml:"values"`
+	Grace  string   `yaml:"grace"`
 }
 
 type Health struct {

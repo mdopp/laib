@@ -23,6 +23,7 @@ type finding struct {
 	Service  string   `json:"service"`
 	Detail   string   `json:"detail"`
 	Repair   []string `json:"repair"`
+	Wartet   string   `json:"wartet"` // why diag expects this red now (#907, #908)
 }
 
 var digits = regexp.MustCompile(`[0-9]+`)
@@ -61,11 +62,13 @@ func parseDiag(text string) ([]finding, []json.RawMessage, bool) {
 
 // forLook drops what the weekly aktualisierung reports (#550, #528): Home
 // Assistant's "Update: …" and "Firmware: …" status findings. A new version
-// is no news for the ten-minute look and wakes no model there.
+// is no news for the ten-minute look and wakes no model there. Nor is a red
+// diag expects while an apply or a pause holds the service (#907): the look
+// leaves it alone, and its return as red is news.
 func forLook(fs []finding, raw []json.RawMessage) ([]finding, []json.RawMessage) {
 	kf, kr := []finding{}, []json.RawMessage{}
 	for i, f := range fs {
-		if f.Probe == "status" && f.Severity == "info" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")) {
+		if f.Probe == "status" && f.Severity == "info" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")) || f.Severity == "info" && f.Wartet != "" {
 			continue
 		}
 		kf, kr = append(kf, f), append(kr, raw[i])
