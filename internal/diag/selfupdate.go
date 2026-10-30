@@ -51,7 +51,7 @@ func selfUpdateFindings(home, bin string, now time.Time) []Finding {
 	r, ok := ReadSelfUpdate(home)
 	switch {
 	case !ok && now.Sub(script.ModTime()) > 8*24*time.Hour:
-		return f("self-update.sh liegt seit mehr als acht Tagen da und hat nie berichtet", "journalctl --user -u laib-images (ExecStartPre); bash /var/opt/laib/self-update.sh von Hand zeigt, wo es aufhört")
+		return f("self-update.sh liegt seit mehr als acht Tagen da und hat nie berichtet", "laib logs updates (ExecStartPre); bash /var/opt/laib/self-update.sh von Hand zeigt, wo es aufhört")
 	case !ok:
 		return nil // the first night is still ahead
 	case r.Result == "failed":
@@ -61,7 +61,7 @@ func selfUpdateFindings(home, bin string, now time.Time) []Finding {
 	case !r.BehindSince.IsZero() && now.Sub(r.BehindSince) > 14*24*time.Hour:
 		return f(fmt.Sprintf("Laib läuft seit %d Tagen hinter %s: %s", int(now.Sub(r.BehindSince).Hours()/24), r.Latest, r.Detail), "laib diag zeigt, was nicht grün ist; die Selbst-Aktualisierung wartet auf eine ruhige Nacht")
 	case now.Sub(r.At) > 8*24*time.Hour:
-		return f(fmt.Sprintf("Laib hat seit %d Tagen nicht nach einem neuen Release gesehen", int(now.Sub(r.At).Hours()/24)), "systemctl --user status laib-images.timer; journalctl --user -u laib-images")
+		return f(fmt.Sprintf("Laib hat seit %d Tagen nicht nach einem neuen Release gesehen", int(now.Sub(r.At).Hours()/24)), "laib logs updates")
 	}
 	return nil
 }

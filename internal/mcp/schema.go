@@ -31,7 +31,7 @@ var mcpParams = map[string][]mcpParam{
 	"status": {optSvc, {name: "fresh", typ: "boolean", flag: "--fresh", desc: "neu messen statt des Stands unter 30 s (at)"}},
 	"diag":   {optSvc},
 	"repair": {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
-	"logs": {svcParam, sinceParam, {name: "grep", typ: "string", flag: "--grep", desc: "nur Zeilen, die dieses Muster (RE2) treffen, gefiltert vor dem Schnitt (#916); klein geschrieben = Groß/klein egal"},
+	"logs": {{name: "service", typ: "string", desc: "der Dienst, oder Laib selbst: laib, operator, notify, updates, haushalt, backup (#947)", required: true}, sinceParam, {name: "grep", typ: "string", flag: "--grep", desc: "nur Zeilen, die dieses Muster (RE2) treffen, gefiltert vor dem Schnitt (#916); klein geschrieben = Groß/klein egal"},
 		{name: "lines", typ: "string", flag: "--lines", desc: "höchstens so viele Zeilen je Unit, die neuesten (200)"}},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},

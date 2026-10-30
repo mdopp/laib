@@ -15,13 +15,21 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 )
 
+// ownUnits are Laib's own user units, read under short names like a
+// service's (#947: the Operator's own log was out of reach in #944). A
+// service of the same name wins.
+var ownUnits = map[string][]string{
+	"laib": {"laib.service"}, "operator": {"laib-operator.service"}, "notify": {"laib-notify.service", "laib-notify.timer"},
+	"updates": {"laib-images.service", "laib-images.timer"}, "haushalt": {"laib-haushalt.service"}, "backup": {"laib-backup.service", "laib-backup-check.service"},
+}
+
 // cmdLogs reads journald for every unit of a service, secrets redacted
 // (ADR 0003: journald is the agent).
 func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.Fail(errors.New("usage: laib logs <service> [--since 1h] [--lines 200] [--priority warning] [--grep muster]"))
+		return env.Fail(errors.New("usage: laib logs <service|laib|operator|notify|updates|haushalt|backup> [--since 1h] [--lines 200] [--priority warning] [--grep muster]"))
 	}
-	_, svc, err := envelope.LoadSvc(env, args[0])
+	units, err := logUnits(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -56,7 +64,6 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	out := map[string]string{}
-	units := append(svc.UnitNames(), svc.Oneshots()...) // a timer's failed run is read here (#195)
 	for _, unit := range units {
 		jargs := []string{"--user", "-u", unit, "--since", "-" + since, "--no-pager", "-o", "short-iso"}
 		if re == nil {
@@ -85,4 +92,17 @@ func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintf(env.W(), "── %s ──\n%s\n", unit, out[unit])
 	}
 	return cli.ExitOK
+}
+
+// logUnits: a service's units and its oneshots (a timer's failed run is read
+// here, #195), else Laib's own units of that name.
+func logUnits(env *cliEnv, name string) ([]string, error) {
+	_, svc, err := envelope.LoadSvc(env, name)
+	if err == nil {
+		return append(svc.UnitNames(), svc.Oneshots()...), nil
+	}
+	if own, ok := ownUnits[name]; ok {
+		return own, nil
+	}
+	return nil, err
 }

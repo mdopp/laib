@@ -78,14 +78,14 @@ func OperatorState(f OpFacts) (string, *Finding) {
 	case !f.Enabled:
 		return "aus", &Finding{Severity: "gelb", Probe: "operator", Detail: "Operator nicht aktiviert: niemand repariert nachts, kein Morgenbericht", Fix: "laib operator enable", Repair: []string{"operator", "enable"}}
 	case !f.UnitActive:
-		return "fehlt", &Finding{Severity: "rot", Probe: "operator", Detail: "Operator ist aktiviert, aber laib-operator.service läuft nicht", Fix: "journalctl --user -u laib-operator; laib operator enable"}
+		return "fehlt", &Finding{Severity: "rot", Probe: "operator", Detail: "Operator ist aktiviert, aber laib-operator.service läuft nicht", Fix: "laib logs operator; laib operator enable"}
 	case f.Unauthorized:
 		return "abgewiesen", &Finding{Severity: "rot", Probe: "operator", Detail: "Der Operator läuft mit einem widerrufenen oder fehlenden ops-Token: jeder Aufruf an laib endet mit 401", Fix: "laib operator enable (prägt ein neues Token)", Repair: []string{"operator", "enable"}}
 	case !f.Answers:
-		return "antwortet nicht", &Finding{Severity: "rot", Probe: "operator", Detail: "laib-operator.service läuft, aber der Operator antwortet nicht auf 127.0.0.1:5901", Fix: "journalctl --user -u laib-operator"}
+		return "antwortet nicht", &Finding{Severity: "rot", Probe: "operator", Detail: "laib-operator.service läuft, aber der Operator antwortet nicht auf 127.0.0.1:5901", Fix: "laib logs operator"}
 	case f.LastNote.IsZero() && !f.EnabledAt.IsZero() && f.Now.Sub(f.EnabledAt) > 3*f.Tick:
 		// enabled a while ago and never a note: the model does not answer or the loop is broken (#43)
-		return "stumm", &Finding{Severity: "rot", Probe: "operator", Detail: fmt.Sprintf("Operator seit %s aktiviert und noch keine einzige Notiz (Takt %s): Modell nicht erreichbar oder die Schleife läuft nicht", f.Now.Sub(f.EnabledAt).Round(time.Minute), f.Tick), Fix: "journalctl --user -u laib-operator; laib operator status"}
+		return "stumm", &Finding{Severity: "rot", Probe: "operator", Detail: fmt.Sprintf("Operator seit %s aktiviert und noch keine einzige Notiz (Takt %s): Modell nicht erreichbar oder die Schleife läuft nicht", f.Now.Sub(f.EnabledAt).Round(time.Minute), f.Tick), Fix: "laib logs operator; laib operator status"}
 	case f.LastNote.IsZero():
 		return "startet", nil // no note yet: right after enable; the next tick decides
 	case f.Now.Sub(f.LastNote) > 3*f.Tick && f.Work.Waiting != "":
@@ -93,7 +93,7 @@ func OperatorState(f OpFacts) (string, *Finding) {
 		// cold household model after llama restarted, a window, a person's cache
 		return "wartet", &Finding{Severity: "info", Probe: "operator", Detail: fmt.Sprintf("Operator wartet seit %s mit seinem Blick: %s", f.Now.Sub(f.LastNote).Round(time.Minute), f.Work.Waiting), Wartet: f.Work.Waiting}
 	case f.Now.Sub(f.LastNote) > 3*f.Tick:
-		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator | journalctl --user -u laib-operator"}
+		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator"}
 	}
 	return "läuft", nil
 }
