@@ -60,5 +60,15 @@ class Fallback(unittest.TestCase):
         self.assertTrue(text.startswith("Morgenbericht ohne Modell") and "0 Einträge, keiner rot" in text, text)
 
 
+class ModelUse(unittest.TestCase):
+    def test_the_last_24_hours(self):  # #859
+        ss = [{"skill": "vorfall", "started": "2026-10-20T22:00:00Z", "in": 5000, "out": 200, "modelMs": 90000},
+              {"skill": "routineblick", "started": "2026-10-21T03:00:00.5Z", "in": 1000, "out": 50, "modelMs": 30000},
+              {"skill": "routineblick", "started": "2026-10-19T03:00:00Z", "in": 9, "out": 9, "modelMs": 9},
+              {"skill": "lehre", "started": "2026-10-21T06:00:00Z", "outcome": "idle"}]
+        self.assertEqual(run.model_line(ss, run.when(DAY)), "Modell in 24 Stunden: 2 Sitzungen, 6000 Token gelesen, 250 geschrieben, 2 Minuten.")
+        self.assertEqual(run.model_line([], run.when(DAY)), "Modell in 24 Stunden: keine Sitzung des Operators.")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -28,6 +28,17 @@ type Work struct {
 	Waiting  string         `json:"waiting,omitempty"`
 	Queued   int            `json:"queued,omitempty"`
 	Skills   map[string]Ran `json:"skills,omitempty"` // each skill's last run (#839)
+	Model    *Today         `json:"model,omitempty"`  // the model's use today (#859)
+}
+
+// Today is what the sessions of one day cost the model (#859): how many
+// asked it, tokens in and out, milliseconds waited for its replies.
+type Today struct {
+	Day      string `json:"day"`
+	Sessions int    `json:"sessions"`
+	In       int    `json:"in"`
+	Out      int    `json:"out"`
+	Ms       int64  `json:"ms"`
 }
 
 // Ran is a skill's last run as /ready and the Box page show it (#839):
@@ -68,6 +79,13 @@ func (k *work) ran(s Session) {
 		k.w.Skills = map[string]Ran{}
 	}
 	k.w.Skills[s.Skill] = Ran{At: s.Started, Outcome: s.Outcome, Why: clip(s.Why), Caused: strings.Join(c, ", ")}
+	if day := s.Started.Local().Format(time.DateOnly); s.ModelMs > 0 {
+		if k.w.Model == nil || k.w.Model.Day != day {
+			k.w.Model = &Today{Day: day}
+		}
+		t := k.w.Model
+		t.Sessions, t.In, t.Out, t.Ms = t.Sessions+1, t.In+s.In, t.Out+s.Out, t.Ms+s.ModelMs
+	}
 }
 
 func (k *work) begin(incident string, at time.Time) {

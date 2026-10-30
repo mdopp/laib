@@ -25,6 +25,9 @@ type Trigger struct {
 	// unix seconds, and how often its red came meanwhile
 	Queued int64 `json:"queued,omitempty"`
 	Count  int   `json:"count,omitempty"`
+	// its replays that failed, and not before when the next runs (#859)
+	Tries int   `json:"tries,omitempty"`
+	Next  int64 `json:"next,omitempty"`
 	// an incident a look opened (#792): the services whose finding offers a
 	// restart, and what its first aid saw and did, for the model and an escalation
 	Restart   []string `json:"restart,omitempty"`
@@ -49,7 +52,11 @@ type Session struct {
 	Why      string    `json:"why,omitempty"`      // why it ended red, was skipped or had nothing to do (#550, #839)
 	Script   []string  `json:"script,omitempty"`   // the calls its script made, apart from the model's (#839)
 	Refused  []string  `json:"refused,omitempty"`  // the calls its script asked for and did not get (#839)
-	opened   []Trigger // the incidents a look opened for its new reds (#792)
+	// what it cost the model (#859): tokens in and out, milliseconds waited for its replies
+	In      int       `json:"in,omitempty"`
+	Out     int       `json:"out,omitempty"`
+	ModelMs int64     `json:"modelMs,omitempty"`
+	opened  []Trigger // the incidents a look opened for its new reds (#792)
 }
 
 // Line is the session's log line. A red or an incident session's names
@@ -57,6 +64,9 @@ type Session struct {
 // looks in 40 h said only "red".
 func (s Session) Line() string {
 	l := fmt.Sprintf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+	if s.ModelMs > 0 {
+		l += fmt.Sprintf(", Modell %d+%d Token in %dms", s.In, s.Out, s.ModelMs)
+	}
 	if s.Outcome == "skipped" {
 		return l + " — " + s.Why
 	}
@@ -73,6 +83,8 @@ func (s Session) Line() string {
 	}
 	result := "nichts geändert"
 	switch {
+	case len(s.opened) > 0:
+		result = "an den Vorfall übergeben"
 	case len(came) > 0:
 		result = "vorgeschlagen " + strings.Join(came, ", ")
 	case countPrefix(slices.Concat(s.Calls, s.Script), "laib_restart") > 0:
@@ -185,10 +197,29 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
 				}
 			}
-			s.opened = o.open(fs, mem)
+			// a look that opens an incident leaves the model to it (#859): its
+			// reds count as seen, any other news waits for the next look
+			if s.opened = o.open(fs, mem); len(s.opened) > 0 {
+				saw = slices.Clone(last)
+				for _, f := range fs {
+					if mem.Repaired[f.id()] == "vorfall" {
+						saw = append(saw, f.id())
+					}
+				}
+				saw, s.Outcome, s.Why = ids(nil, saw...), "red", "an den Vorfall übergeben"
+				return s, nil
+			}
 			if slices.Contains(sk.Granted, "repair") {
 				human = o.repairs(ctx, &mcp, fs, mem)
 			}
+		}
+	}
+	// a slot that needs the model asks first, before its script works (#859)
+	if (tr.Kind == "slot" || tr.Kind == "report") && sk.Modell != "nein" {
+		if why := o.LLM.Busy(ctx, true); why != "" {
+			s.Outcome, s.Why = "skipped", why
+			o.work.wait(why)
+			return s, nil
 		}
 	}
 	// what the skill reads besides its tools: its record, a report's due
@@ -197,10 +228,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	all := o.history(ctx)
 	data := map[string]any{"history": all}
 	if sk.Lessons != "" {
-		data["sessions"] = o.sessions(sk.Lessons)
+		data["sessions"] = o.sessions(sk.Lessons, time.Time{})
 	}
 	if sk.Output == "report" {
 		data["due"], _, _ = o.MCP.Call(ctx, "laib_aufgabe", map[string]any{"action": "list", "faellig": true}) // #667
+		data["sessions"] = o.sessions("", now().AddDate(0, 0, -31))                                            // the model's use (#859), lessons and recurrence (#861)
 	}
 	if sk.Context == "usage" {
 		err := errors.New("usage-metrics ist auf dieser Box nicht eingerichtet")
@@ -302,7 +334,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	textCalls, before := 0, len(s.Calls) // the model's calls, after the first aid's
 	for pass := 0; pass <= max; pass++ {
-		reply, err := o.LLM.Chat(ctx, msgs, defs)
+		reply, err := o.chat(ctx, &s, msgs, defs)
 		if err != nil {
 			return s, fmt.Errorf("model: %w", err)
 		}
@@ -680,6 +712,15 @@ func SystemPrompt(defs []ToolDef) string {
 	}
 	b.WriteString("\nAntworte knapp. Keine Erklärungen an den Nutzer, nur Tool-Aufrufe und am Ende die Notiz.")
 	return b.String()
+}
+
+// chat is one model reply, its tokens and its time counted on the session (#859).
+func (o *Operator) chat(ctx context.Context, s *Session, msgs []Message, defs []ToolDef) (Message, error) {
+	t := time.Now()
+	reply, err := o.LLM.Chat(ctx, msgs, defs)
+	// a reply takes a millisecond at least: a session that asked the model shows it
+	s.ModelMs, s.In, s.Out = s.ModelMs+max(1, time.Since(t).Milliseconds()), s.In+reply.in, s.Out+reply.out
+	return reply, err
 }
 
 func (o *Operator) record(s Session) {

@@ -445,6 +445,9 @@ func operatorSection(w OperatorWork) string {
 	if len(w.Today) > 0 {
 		did = plural(w.Restarts, "Neustart", "Neustarts") + " · " + plural(w.Proposals, "Vorschlag", "Vorschläge") + " · " + plural(w.Escalations, "Eskalation", "Eskalationen") + " · " + plural(w.Notes, "Notiz", "Notizen")
 	}
+	if t := w.Model; t != nil && t.Day == time.Now().Format(time.DateOnly) { // the model's use (#859)
+		did += fmt.Sprintf(" · Modell: %s, %d Token gelesen, %d geschrieben, %d s", plural(t.Sessions, "Sitzung", "Sitzungen"), t.In, t.Out, t.Ms/1000)
+	}
 	fmt.Fprintf(&b, `<p>Heute: %s · <a href="/inbox">Inbox</a> · <a href="/journal">Journal</a></p>`, did)
 	for _, l := range w.Today {
 		fmt.Fprintf(&b, "<p class=muted>%s</p>", html.EscapeString(l))
