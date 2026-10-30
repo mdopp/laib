@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.56.4](https://github.com/mdopp/laib/compare/v0.56.3...v0.56.4) (2026-10-30)
+
+
+### Bug Fixes
+
+* **home-assistant:** Laib's own sentences for the radio and music by artist ([#933](https://github.com/mdopp/laib/issues/933)) ([ac36f85](https://github.com/mdopp/laib/commit/ac36f855c43c1b678c1824b63a8c37b2c75c063d))
+* **inbox:** the update run proposes the verbs built-in skills need from a narrowed ops ([#932](https://github.com/mdopp/laib/issues/932)) ([7d1b779](https://github.com/mdopp/laib/commit/7d1b779acacb3adeacc1a6afcff28b15f887a1ef))
+* **lease:** warm the household model in the household window, and diag reads a reasoned wait as info ([#931](https://github.com/mdopp/laib/issues/931)) ([11ba07d](https://github.com/mdopp/laib/commit/11ba07df68cb1b27ca3a78a9480a31f877462524))
+
 ## [0.56.3](https://github.com/mdopp/laib/compare/v0.56.2...v0.56.3) (2026-10-30)
 
 
