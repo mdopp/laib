@@ -50,5 +50,6 @@ data:
 health: {none: "a loop over the inbox and the orders, no HTTP endpoint; the unit state and the status file are the check"}
 status:                              # bereit | scannt | wartet-auf-rest | trennt | legt-ab | fertig | fehler, written on every change (#568); idle, every 15 minutes with whether the scanner is on (#785)
   file: ${DATA_DIR}/scan/laib-status.json
+  busy: {field: zustand, values: [scannt, trennt, legt-ab], grace: 30m}   # mid-stack (#908): a restart there fails the stack (wartet-auf-rest survives one); a hand's restart waits up to 30 min after the file last spoke, a person's does not
 ports:
   - {port: 8720, lan: false}         # Paperless' webhook (ADR 0028): from its pod at host.containers.internal, as Haus's 8650; nftables drops it on the LAN, no route through Caddy

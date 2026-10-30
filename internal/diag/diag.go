@@ -59,6 +59,9 @@ type Finding struct {
 	// Say is what it means to a person, in one plain sentence (#855): the
 	// red mail and a repair's card show it, Detail and Fix stay for the admin.
 	Say string `json:"say,omitempty"`
+	// Wartet: why a unit or health red is expected now (#907, #908); it is
+	// then info (an apply, a pause) or gelb (busy), and offers no repair.
+	Wartet string `json:"wartet,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and
@@ -126,14 +129,15 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			continue
 		}
 		svc := st.Services[name]
+		var own []Finding // its unit and health reds
 		for _, u := range svc.UnitNames() {
 			if a := sysd.Active(ctx, u); a != "active" {
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
+				own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		for _, u := range svc.Oneshots() {
 			if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
-				out = append(out, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
+				own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
 			}
 		}
 		// what the service says about itself (#309); a stale one is re-checked
@@ -144,8 +148,9 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		}
 		out = append(out, SelfFindings(rep, time.Now())...)
 		if f := Health(ctx, svc); f != nil {
-			out = append(out, *f)
+			own = append(own, *f)
 		}
+		out = append(out, hold(own, held(env, name), apply.Busy(ctx, st, svc, time.Now()))...)
 	}
 	// Drift: the box differs from the state. Not red: apply fixes it.
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
