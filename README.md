@@ -190,7 +190,7 @@ testdata/golden      renderer golden files
 
 ## Stand
 
-Laib v0.54.1 <!-- x-release-please-version -->; the Kraftwerk runs Laib since
+Laib v0.55.0 <!-- x-release-please-version -->; the Kraftwerk runs Laib since
 migration day (2026-10-19). What exists and how far CI proves it (what runs
 on the box now: `laib status`, and `docs/ZIELBILD.md`):
 

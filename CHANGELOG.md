@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.55.0](https://github.com/mdopp/laib/compare/v0.54.1...v0.55.0) (2026-10-30)
+
+
+### Features
+
+* **logs:** --grep filters the whole window before the cut ([9d15bee](https://github.com/mdopp/laib/commit/9d15bee9023467b16307559f5b93587c2c4e53c0))
+* **logs:** --grep filters the whole window before the cut ([fa6a86d](https://github.com/mdopp/laib/commit/fa6a86d088367be6931e8181a0397c87fc82b6a5)), closes [#916](https://github.com/mdopp/laib/issues/916)
+
+
+### Bug Fixes
+
+* **apply:** the busy word lives with the holds, not in the chore diag ([d9fce1a](https://github.com/mdopp/laib/commit/d9fce1aa8a0ddb62ca2e6c3df8fc18134ce75c14))
+* **durchsicht:** runtime lines and harmless shapes are counted, not raised ([3d1d1d8](https://github.com/mdopp/laib/commit/3d1d1d8e34452100d7492363ae0f61f1dad7cb4e))
+* **durchsicht:** runtime lines and harmless shapes are counted, not raised ([d8ade37](https://github.com/mdopp/laib/commit/d8ade376adcd2fb7568029dd5b16daf1bc33fa03)), closes [#915](https://github.com/mdopp/laib/issues/915)
+* **file-share:** the accounts test stops every fake before it removes fake ([#913](https://github.com/mdopp/laib/issues/913)) ([22faaa9](https://github.com/mdopp/laib/commit/22faaa951fd180ff192e5387d85907338dc91fe3))
+* **file-share:** the accounts test stops every fake before it removes fake ([#913](https://github.com/mdopp/laib/issues/913)) ([c8a3d8a](https://github.com/mdopp/laib/commit/c8a3d8aac3553ce48f865e1fd092d3eab2758716))
+* **inbox:** an Operator's wish reads as a wish, with its text ([#896](https://github.com/mdopp/laib/issues/896)) ([341ae92](https://github.com/mdopp/laib/commit/341ae92fc766d2457763d3c6c8c0b0fb7a36a91f))
+* **inbox:** an Operator's wish reads as a wish, with its text ([#896](https://github.com/mdopp/laib/issues/896)) ([dbc3049](https://github.com/mdopp/laib/commit/dbc30495b41bcf219e617c31e32b36f39ebc9d2c))
+* **operator:** an expected red or a hand's exec is no incident ([457d933](https://github.com/mdopp/laib/commit/457d933a3693e47a1182e8c58b66868c5c217cbc))
+* **operator:** an expected red or a hand's exec is no incident ([23bdce6](https://github.com/mdopp/laib/commit/23bdce6cf86bc43b758c589e5ec2561c62b70cbd))
+
 ## [0.54.1](https://github.com/mdopp/laib/compare/v0.54.0...v0.54.1) (2026-10-29)
 
 
