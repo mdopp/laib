@@ -22,7 +22,7 @@ def fresh():
     JF.clear()
     JF.update(wizard=False, users={}, folders=[], plugins=[], pending=False, restarts=0, installs=0, starting=0, wizard503=0, created=0,
               config={"QuickConnectAvailable": False, "ServerName": "x"}, locations={}, options={}, option_posts=0, types={}, deleted=[],
-              media={"music", "movies"}, tokens={}, minted=0)   # the folders Jellyfin sees under its own /media mount (#651)
+              media={"music", "movies"}, tokens={}, minted=0, keys={})   # the folders Jellyfin sees under its own /media mount (#651)
     SIDE.clear()
     SIDE.update(abs_token="abs-key-1", ma_token="ma-tok-1", abs_libs=[], abs_totals={}, radios=0)
 
@@ -75,8 +75,12 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(200, {"StartupWizardCompleted": JF["wizard"]})
         if self.path == "/Startup/User":
             return self.reply(200, {"Name": "root"})
+        if self.path == "/System/Info":               # an administrator's: the admin's session or an API key (haus#152)
+            return self.reply(200, {"Id": "srv"}) if self.bearer() == "tok" or self.bearer() in JF["keys"] else self.reply(401)
         if not self.token():
             return self.reply(401)
+        if self.path == "/Auth/Keys":
+            return self.reply(200, {"Items": [{"AccessToken": k, "AppName": a} for k, a in JF["keys"].items()], "TotalRecordCount": len(JF["keys"])})
         if self.path.startswith("/Environment/DirectoryContents?"):   # Jellyfin's file browser, admin only
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             if q.get("path") != ["/media"] or q.get("includeDirectories") != ["true"]:
@@ -122,6 +126,10 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(200, {"AccessToken": t})
         if not self.token():
             return self.reply(401)
+        if p.startswith("/Auth/Keys?app="):
+            JF["minted"] += 1
+            JF["keys"][f"key-{JF['minted']}"] = urllib.parse.unquote(p.split("=", 1)[1])
+            return self.reply(204)
         if p.startswith("/Library/VirtualFolders?"):
             name = re.search(r"name=([^&]+)", p).group(1)
             i = f"lib-{len(JF['folders']) + 1}"
@@ -171,6 +179,8 @@ class FakeJellyfin(BaseHTTPRequestHandler):
             return self.reply(400, {"error": "no client identity"})
         if not self.token():
             return self.reply(401)
+        if m := re.fullmatch(r"/Auth/Keys/([^/]+)", self.path):
+            return self.reply(204 if JF["keys"].pop(urllib.parse.unquote(m.group(1)), None) else 404)
         if m := re.fullmatch(r"/Library/VirtualFolders\?name=([^&]+)&refreshLibrary=false", self.path):
             name = urllib.parse.unquote(m.group(1))
             if not any(n == name for n, _ in JF["folders"]):
@@ -387,7 +397,7 @@ class PostDeploy(unittest.TestCase):
         self.assertNotEqual(JF["tokens"][tok][1], "laib-post-deploy", "Haus' token shares the hook's device, the hook's next login logs it out")
         self.assertIn("HAUS_JELLYFIN_TOKEN minted (new)", p.stdout)
         # a token that still works is kept: no new one, none handed back, the old one valid
-        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_TOKEN=tok)
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_TOKEN=tok, LAIB_SECRET_HAUS_JELLYFIN_KEY=self.handed(p)["HAUS_JELLYFIN_KEY"])
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertNotIn("HAUS_JELLYFIN_TOKEN", self.handed(p))
         self.assertNotIn(" minted", p.stdout)
@@ -401,6 +411,26 @@ class PostDeploy(unittest.TestCase):
         self.assertTrue(new and new != tok and JF["tokens"].get(new, ("",))[0] == "haus", p.stdout)
         self.assertIn("HAUS_JELLYFIN_TOKEN minted (replaces one Jellyfin refuses)", p.stdout)
         self.assertEqual([t for t, v in JF["tokens"].items() if v[0] == "haus"], [new], "an old token of Haus still works")
+
+    # haus#152: Gesehen & Gehört reads what each person watched, which only an administrator may: Haus gets one
+    # API key, "Haus (Gesehen)"; a working one is kept, a refused one deleted and minted again, never two
+    def test_haus_gets_one_api_key_for_what_each_person_watched(self):
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        key = self.handed(p).get("HAUS_JELLYFIN_KEY")
+        self.assertEqual(JF["keys"], {key: "Haus (Gesehen)"}, p.stdout)
+        self.assertIn("HAUS_JELLYFIN_KEY minted (new)", p.stdout)
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_KEY=key)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("HAUS_JELLYFIN_KEY", self.handed(p))
+        self.assertEqual(JF["keys"], {key: "Haus (Gesehen)"})
+        # the owner revoked it in the dashboard, and an old one of Haus' lingers: one new key, the old gone
+        JF["keys"] = {"key-stale": "Haus (Gesehen)", "key-other": "Something else"}
+        p = self.run_hook(LAIB_SECRET_HAUS_JELLYFIN_KEY=key)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        new = self.handed(p).get("HAUS_JELLYFIN_KEY")
+        self.assertEqual(JF["keys"], {new: "Haus (Gesehen)", "key-other": "Something else"}, "another app's key was touched, or Haus holds two")
+        self.assertIn("HAUS_JELLYFIN_KEY minted (replaces one Jellyfin refuses)", p.stdout)
 
     def test_an_existing_haus_account_is_cut_back_to_the_music(self):
         # one made by hand, an administrator who sees everything, gets the music only; spoken word is no music (#646)

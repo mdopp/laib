@@ -41,6 +41,9 @@ secrets:
   - name: HAUS_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user haus (hidden, music only, no administrator), handed back; haus reads the music with it
     external: true
     optional: true
+  - name: HAUS_JELLYFIN_KEY           # minted here (haus#152): the API key "Haus (Gesehen)", an administrator's as every Jellyfin key, handed back; haus reads each person's watched films and series with it, nothing else
+    external: true
+    optional: true
   - name: JELLYFIN_HA_PASSWORD        # Home Assistant's own Jellyfin account `homeassistant` (#375), not an LLDAP login; laib secret set, the same in HA's entry; without it no account
     owner: {label: "Jellyfin: Passwort für Home Assistant", warum: "Damit zeigt und steuert Home Assistant, was in Jellyfin läuft.", hilfe: "Ein Passwort, das du dir ausdenkst: die Box legt damit in Jellyfin das Konto „homeassistant“ an. Dasselbe Passwort trägst du in Home Assistant bei der Jellyfin-Integration ein."}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true

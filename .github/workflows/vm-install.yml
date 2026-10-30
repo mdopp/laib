@@ -987,6 +987,10 @@ jobs:
                 if grep -q "laib-secret" /tmp/add-media.txt; then echo "a token is in the apply output"; exit 1; fi
                 $L apply media | tee /tmp/apply-media2.txt
                 if grep -q "HAUS_JELLYFIN_TOKEN minted" /tmp/apply-media2.txt; then echo "the token Haus got does not work in Jellyfin: minted again"; exit 1; fi
+                # haus#152: the API key "Haus (Gesehen)", minted against this real Jellyfin (/Auth/Keys); the next apply keeps it
+                # only when Jellyfin answers /System/Info with it
+                grep -q "HAUS_JELLYFIN_KEY minted (new)" /tmp/add-media.txt || { echo "HAUS_JELLYFIN_KEY was not minted"; exit 1; }
+                if grep -q "HAUS_JELLYFIN_KEY minted" /tmp/apply-media2.txt; then echo "the key Haus got does not work in Jellyfin: minted again"; exit 1; fi
                 echo "media: Haus has a music-only Jellyfin account and a token that works (#695)"
                 $L remove media >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
