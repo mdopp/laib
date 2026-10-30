@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.57.1](https://github.com/mdopp/laib/compare/v0.57.0...v0.57.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **boot-check:** free /boot by removing the rollback once the boot is proven ([b20be76](https://github.com/mdopp/laib/commit/b20be76caa69496b21e971d7376ac0d161c92dce))
+
 ## [0.57.0](https://github.com/mdopp/laib/compare/v0.56.6...v0.57.0) (2026-10-30)
 
 
