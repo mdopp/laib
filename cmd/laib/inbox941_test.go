@@ -145,9 +145,11 @@ var buttonRe = regexp.MustCompile(`<button[^>]*>([^<]*)</button>`)
 // only after the first tap on Ablehnen.
 func TestEveryCardHasTheSameButtonRow(t *testing.T) {
 	env, _ := testBox(t)
-	risky := proposeService(t, env, "w1") // a new service
 	inbox := cli.InboxDir(env)
+	os.MkdirAll(inbox, 0o755)
 	at := time.Now().UTC().Format(time.RFC3339)
+	risky := &proposal.Proposal{ID: 7} // the review flagged it: the owner decides (class human)
+	os.WriteFile(fmt.Sprintf("%s/7.json", inbox), []byte(fmt.Sprintf(`{"id":7,"actor":"ops","branch":"proposal/7","tier":"apply","status":"open","created":%q,"reason":"von unterwegs","files":["services/media/laib.yml"],"class":"human","kind":"tree","reasons":["macht media aus dem Internet erreichbar (media)"]}`, at)), 0o644)
 	os.WriteFile(fmt.Sprintf("%s/%d.json", inbox, 8), []byte(fmt.Sprintf(`{"id":8,"actor":"ops","branch":"proposal/8","tier":"apply","status":"open","created":%q,"reason":"neuer Wert","files":["services/bote/values.yml"],"class":"values","kind":"values","changes":[{"op":"~","service":"bote","key":"MODEL","old":"b","new":"c"}]}`, at)), 0o644)
 	body := inboxMux(env)("GET", "/inbox", nil)
 	if strings.Contains(body, "Später") {
