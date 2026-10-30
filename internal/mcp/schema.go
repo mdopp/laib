@@ -28,10 +28,11 @@ var sinceParam = mcpParam{name: "since", typ: "string", flag: "--since", desc: "
 var cmdParams = []mcpParam{svcParam, {name: "container", typ: "string", flag: "--container", desc: "einer der Container des Dienstes; leer = der erste"}, {name: "command", typ: "array", flag: "--", desc: "das Programm und seine Argumente, je ein Element", required: true}}
 
 var mcpParams = map[string][]mcpParam{
-	"status":   {optSvc, {name: "fresh", typ: "boolean", flag: "--fresh", desc: "neu messen statt des Stands unter 30 s (at)"}},
-	"diag":     {optSvc},
-	"repair":   {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
-	"logs":     {svcParam, sinceParam},
+	"status": {optSvc, {name: "fresh", typ: "boolean", flag: "--fresh", desc: "neu messen statt des Stands unter 30 s (at)"}},
+	"diag":   {optSvc},
+	"repair": {{name: "probe", typ: "string", desc: "die Probe des Befunds aus laib diag, z. B. unit", required: true}, optSvc},
+	"logs": {svcParam, sinceParam, {name: "grep", typ: "string", flag: "--grep", desc: "nur Zeilen, die dieses Muster (RE2) treffen, gefiltert vor dem Schnitt (#916); klein geschrieben = Groß/klein egal"},
+		{name: "lines", typ: "string", flag: "--lines", desc: "höchstens so viele Zeilen je Unit, die neuesten (200)"}},
 	"inspect":  {svcParam},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
 	"state":    {{name: "path", typ: "string", desc: "die Datei im State-Repo, z. B. policy.yml oder services/jellyfin/values.yml; leer = die Liste der Dateien"}},

@@ -72,3 +72,13 @@ func TestLogsGrepFiltersBeforeTheCut(t *testing.T) {
 		t.Fatal("a broken pattern read the journal")
 	}
 }
+
+// #916: --lines is a number; anything else is refused, also next to --grep.
+func TestLogsLinesIsANumber(t *testing.T) {
+	c := newCbox(t)
+	for _, args := range [][]string{{"whoami", "--lines", "--output=export"}, {"whoami", "--lines", "0", "--grep", "x"}} {
+		if rc := cmdLogs(context.Background(), c.env, args); rc == cli.ExitOK {
+			t.Fatalf("%v ran", args)
+		}
+	}
+}

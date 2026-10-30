@@ -53,6 +53,7 @@ func TestMcpArgvFromTypedArguments(t *testing.T) {
 		want []string
 	}{
 		{"logs", map[string]any{"service": "whoami", "since": "2h"}, []string{"whoami", "--since", "2h"}},
+		{"logs", map[string]any{"service": "whoami", "since": "72h", "grep": "VipsJpeg"}, []string{"whoami", "--since", "72h", "--grep", "VipsJpeg"}},
 		{"note", map[string]any{"kind": "incident", "text": `Neustart "grün" um 03:12`}, []string{"--kind", "incident", `Neustart "grün" um 03:12`}},
 		{"propose", map[string]any{"service": "whoami", "key": "IMAGE", "value": "ghcr.io/x/w:1.2", "reason": "Port 8080 \"belegt\""}, []string{"Port 8080 \"belegt\"", "--set", "services/whoami/values.yml:IMAGE=ghcr.io/x/w:1.2"}},
 		{"look", map[string]any{"service": "whoami", "command": []any{"cat", "/etc/a b"}}, []string{"whoami", "--", "cat", "/etc/a b"}},

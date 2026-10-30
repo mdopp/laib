@@ -13,7 +13,7 @@ laib status [service] [--watch] [--fresh]   one line per service; first line is 
 laib journal [--since 24h] [--limit n] [--verb v] [--kind report|incident|watch]
                                      journal entries, oldest first; --verb and --kind (a note's kind) filter, --limit keeps
                                      the newest n, and without --since of any age (#593)
-laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
+laib logs <service> [--since 1h] [--lines 200] [--priority err|warning] [--grep <re2>]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err); --grep reads the whole --since window and keeps the newest --lines lines that match (RE2 on the redacted line; all lower case = any case, #916)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)

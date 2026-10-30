@@ -60,7 +60,7 @@ func init() {
 		{Name: "updates", Tier: "read", MCP: true, Help: "[--run|--now]: what is behind — a tag's or pin's newer digest, patch and minor releases (#287), a template's extensions and firmware; --run is laib-images.timer's nightly update of the images without data (#528); --now (tier apply) starts that night's run now, Laib's own update first, without waiting (#578)", Run: cmdUpdates},
 		{Name: "skill", Tier: "read", MCP: true, Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
 		{Name: "operator", Tier: "apply", Help: "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", Run: cmdOperator},
-		{Name: "logs", Tier: "read", MCP: true, Help: "journald for every unit of a service, secrets redacted (--since 1h)", Run: cmdLogs},
+		{Name: "logs", Tier: "read", MCP: true, Help: "journald for every unit of a service, secrets redacted (--since 1h, --lines 200, --grep <re2> filters before the cut)", Run: cmdLogs},
 		{Name: "rollback", Tier: "apply", MCP: true, Help: "[<commit>]: revert the last (or a given) state commit and apply", Flags: []string{}, Run: inbox.Rollback},
 		{Name: "backup", Tier: "propose", MCP: true, Help: "[check]: restic snapshot of state, journal and declared data paths; check tests a restore", Flags: []string{}, Run: backup.Cmd},
 		{Name: "restore", Tier: "apply", MCP: true, Help: "<snapshot|latest> <service> | --box <snapshot|latest>: restore declared paths, then apply", Flags: []string{"--box"}, Run: backup.Restore},
