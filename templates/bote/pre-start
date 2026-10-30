@@ -70,6 +70,10 @@ if [ -n "$OHNE" ]; then BEISPIEL="${OHNE%%,*}"; OHNE=" Noch ohne Signal-Nummer: 
 # post-deploy's config.yaml), and a model that is busy, lent or unreachable is one German sentence with
 # when to try again, not Hermes' „/retry … hermes doctor on the host“. The raw error stays in Hermes' log.
 MOMENT="Moment … ich bin noch dran."
+# Hermes' restart notices (gateway.shutdown/startup) went to the owner in English with ⚠️ while an
+# apply restarted the Bote (2026-10-30, Inbox #272): one plain German sentence each.
+NEUSTART="Ich starte kurz neu. Was du mir gerade geschrieben hast, schick es mir in ein paar Minuten bitte noch einmal."
+WIEDER="Ich bin wieder da."
 BESETZT="Ich komme gerade nicht an mein Sprachmodell: es ist beschäftigt oder startet neu. Versuch es in ein paar Minuten noch einmal."
 SCHIEF="Das hat gerade nicht geklappt. Versuch es in ein paar Minuten noch einmal; klappt es dann immer noch nicht, sag es dem Admin."
 FEHLER="$(for k in rate_limited auth_failed connection_interrupted unreachable connection_unknown usage_limit_resets provider_kept_failing no_credentials; do
@@ -82,6 +86,12 @@ for lang in en de; do cat > "$H/locales/$lang.yaml" <<YAML
 gateway:
   progress:
     working_heartbeat: "$MOMENT"
+  shutdown:
+    notice_shutdown: "$NEUSTART"
+    notice_restart: "$NEUSTART"
+  startup:
+    restarted: "$WIEDER"
+    online: "$WIEDER"
   errors:
 $FEHLER
   unauthorized:
