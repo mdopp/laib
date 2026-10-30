@@ -140,6 +140,24 @@ class Failures862(unittest.TestCase):
                 self.assertIn("\n  progress:\n    working_heartbeat: \"Moment … ich bin noch dran.\"\n", text)
 
 
+class Restart(unittest.TestCase):
+    """2026-10-30: an apply restarted the Bote and Hermes told the owner on Signal „⚠️ Hermes is
+    shutting down — your current task will be interrupted …“ (gateway.shutdown.notice_*, v0.22.2).
+    The overlay says it in one plain German sentence, and that it is back."""
+
+    def test_the_restart_notices_are_german_and_plain(self):
+        with tempfile.TemporaryDirectory() as d:
+            env_file(d, {})
+            for lang in ("en", "de"):
+                text = (Path(d) / "bote" / "hermes" / "locales" / (lang + ".yaml")).read_text()
+                for key in ("notice_shutdown", "notice_restart"):
+                    self.assertIn("    " + key + ": \"Ich starte kurz neu.", text, key)
+                for key in ("restarted", "online"):
+                    self.assertIn("    " + key + ": \"Ich bin wieder da.\"", text, key)
+                for wrong in ("Hermes is", "⚠️", "Gateway"):
+                    self.assertNotIn(wrong, text)
+
+
 class Personen(unittest.TestCase):
     """#591: the plugin laib-journal names who switched in Home Assistant. Hermes knows the sender's
     id only (a Signal number, a Telegram chat id); pre-start writes box.yml people the other way
