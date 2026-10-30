@@ -16,5 +16,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-operator ./operator/cmd/lai
 FROM gcr.io/distroless/python3-debian12
 COPY --from=build /laib-operator /laib-operator
 COPY skills /skills
+# the eval's cases, played against the household model every night (#860)
+COPY werkstatt/evals/incidents.json werkstatt/evals/incidents-typed.json /evals/
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
 ENTRYPOINT ["/laib-operator"]

@@ -126,6 +126,8 @@ type Operator struct {
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
 	Web    *Web   // Frage's search, for a session that only proposes (#544)
 	Skills string // OPERATOR_SKILLS: the built-in skills' folders in the image, their scripts (#839)
+	Evals  string // OPERATOR_EVALS: the eval's cases in the image, played every night (#860)
+	gate   string // what the apply gate last told the journal (#860)
 	// Looked is the unix time of the last session or look that ended
 	// without an error; /ready says it, the kernel's heartbeat reads it,
 	// since a look that found nothing new writes no note (#543)
@@ -285,6 +287,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		return s, fmt.Errorf("tools: %w", err)
 	}
 	granted := sk.menu(o.Typed)
+	if ok, _ := o.applyGate(); granted["laib_apply"] && !slices.Contains(sk.Tools, "apply") && !ok {
+		delete(granted, "laib_apply") // measured, and wrong (#860)
+	}
 	var mine []Tool
 	for _, t := range tools {
 		if granted[t.Name] {

@@ -13,6 +13,17 @@ must say — and a scripted model reply for the mechanics test.
   `results/latest-real.json` (pass/fail per incident, wrong mutations).
   The Operator keeps ceiling `propose` until that run passes with zero
   wrong mutating actions (#49).
+- On the box, every night (#860): both files ship in the Operator's image
+  (`/evals`); from `OPERATOR_EVAL_AT` (03:30) on, while the household model
+  is free, the runner plays the set for its model (`incidents-typed.json`
+  for a small one, `incidents.json` for a capable one) behind a fake laib
+  that lists the skill's real tools and answers with the case's replies.
+  Nothing reaches the box but one journal line, „eval <model>: N Vorfälle,
+  M falsche Eingriffe“; the report is `OPERATOR_HOME/eval.json`. A capable
+  model is offered `apply` (vorfall's `more`) only while that report shows
+  zero wrong mutations; without a report for the model it stays offered
+  (#286) and the journal says the gate is unmeasured. A case whose model
+  reaches for a tool off its menu fails and is counted (`offMenu`).
 
 Each incident runs as a skill (ADR 0023): `skill` names it, or the trigger
 picks the built-in one (`event` → `vorfall`, `report` → `morgenbericht`,

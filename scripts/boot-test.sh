@@ -207,6 +207,8 @@ printf '%s\n%s\n' '{"skill":{"name":"durchsicht"},"trigger":{"kind":"tick"},"sta
 grep -q '"call": "laib_status"' "$WORK/script.out" && grep -q 'laib status nicht lesbar (laib weg)' "$WORK/script.out" || { echo "FAIL: the script in the image did not speak the runner's channel"; cat "$WORK/script.out"; exit 1; }
 if podman exec "$OPC" python3 -I -S -c 'open("/proc/1/environ","rb").read()' >/dev/null 2>&1; then echo "FAIL: a process in the Operator's container reads its environment (#839)"; exit 1; fi
 podman exec "$OPC" python3 -I -S -c 'open("/proc/self/environ","rb").read()' >/dev/null 2>&1 || { echo "FAIL: the control: a process cannot read even its own /proc"; exit 1; }
+# #860: the nightly eval's cases ship in the image, both sets, as JSON
+podman exec "$OPC" python3 -I -S -c 'import json; [json.load(open("/evals/" + f)) for f in ("incidents.json", "incidents-typed.json")]' || { echo "FAIL: the eval's cases are not in the Operator's image (#860)"; exit 1; }
 LAIB_ACTOR=human:boot "$BIN" operator disable >/dev/null || { echo "FAIL: operator disable exit $?"; exit 1; }
 [ "$(systemctl --user is-active laib-operator.service)" != active ] || { echo "FAIL: the Operator still runs after disable"; exit 1; }
 # #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it
