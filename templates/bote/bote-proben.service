@@ -1,0 +1,19 @@
+# the Bote's nightly probes (#862): bote-check.py with PROBEN=1 sends ten fixed sentences to Hermes'
+# API server in the bote pod (127.0.0.1:8642, BOTE_API_KEY through the environment, never on argv),
+# each in a fresh session, and keeps the reply times and what is wrong in proben.json beside the status
+# file; bote-check shows it on the Box page. One line goes to this unit's journal. Nothing switches.
+[Unit]
+Description=Bote: nächtliche Proben (Antwortzeit, Fakten über frage, Unbekanntes bleibt unbekannt)
+After=bote-hermes.service
+
+[Service]
+Type=oneshot
+Environment=BOTE_API_KEY=${PROBE_KEY}
+Environment=CH_SIGNAL=${SIGNAL_ACCOUNT}
+Environment=CH_MATRIX=${MATRIX_HOMESERVER}
+Environment=CH_TELEGRAM=${TELEGRAM_ALLOWED_USERS}
+Environment=CH_DISCORD=${DISCORD_ALLOWED_USERS}
+Environment=USAGE_TOKEN=${USAGE_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/bote/bote-check.py
+ExecStart=/usr/bin/podman run --rm -i --name bote-proben --pod bote --security-opt label=disable -e PROBEN=1 -e BOTE_API_KEY -e API_URL=http://127.0.0.1:8642/v1 -e CH_SIGNAL -e CH_MATRIX -e CH_TELEGRAM -e CH_DISCORD -e USAGE_TOKEN -e SIGNAL_URL=http://127.0.0.1:8080 -e USAGE_URL=${USAGE_URL} -e STATUS_DIR=/data -v ${DATA_DIR}/bote/check:/data ${CHECK_IMAGE} python3 -
+TimeoutStartSec=30min
