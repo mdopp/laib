@@ -196,7 +196,8 @@ OWNED = ("ai_enabled", "llm_backend", "llm_model", "llm_api_key", "llm_endpoint"
 CONTRACT = [("Anbieter", "string"), ("Vertragsnummer", "string"), ("Vertragsbeginn", "date"), ("Vertragsende", "date"),
             ("Kündigungsfrist", "string"), ("Nächster Kündigungstermin", "date"), ("Betrag", "monetary"),
             ("Zahlungsintervall", "string"), ("Rechnungsnummer", "string"), ("Fällig am", "date"),   # the last three: invoices (#818, #820)
-            ("Verwendungszweck", "string")]
+            ("Verwendungszweck", "string"),
+            ("Stapel", "string")]   # laib#909: Dokumente writes a scan's stack id (2026-10-29T17-07-46); Haus lists a stack by it
 
 
 def config(api):
