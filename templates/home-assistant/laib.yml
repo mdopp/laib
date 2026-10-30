@@ -79,6 +79,8 @@ data:
     quiesce: true                 # a database: stopped while it is snapshotted (#40)
   - path: ${DATA_DIR}/home-assistant/zwave-js
   - path: ${DATA_DIR}/home-assistant/matter
+  - path: ${DATA_DIR}/file-share/data/radio      # the house's stations: pre-start says them as Assist's radio sentence (#933); the share backs them up
+    backup: false
 health:
   http: http://127.0.0.1:8123/
 status:                            # the integrations checklist on the Box page and in diag (#55, #309)

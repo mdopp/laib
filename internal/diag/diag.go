@@ -24,6 +24,7 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/plan"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
@@ -180,7 +181,8 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		out = append(out, *f)
 	}
 	if st.Box.Operator.Enabled && only == "" { // #543: a skill the policy keeps from its job
-		out = append(out, skillFindings(mcp.SkillsFor(env, st, "ops"))...)
+		open, _ := proposal.List(cli.InboxDir(env), true)
+		out = append(out, skillFindings(mcp.SkillsFor(env, st, "ops"), open...)...)
 	}
 	// The data RAID always; the hardware (#59: SMART, the box's temperature)
 	// for the whole box. Both are laib-disk's (#443).

@@ -21,7 +21,7 @@ configuration.yaml is only ever added to.
    (settings.json.servicebay, .sb-bak-…). Each is 0600 for the store's
    owner, the user the zwave container runs as (its root, which is the
    box's core); home-assistant-check names one that others can read."""
-import hashlib, io, os, re, shutil, sys, tarfile, urllib.request
+import hashlib, io, json, os, re, shutil, sys, tarfile, urllib.request
 
 E = os.environ
 C = os.path.join(E["LAIB_DATA_DIR"], "home-assistant", "homeassistant")
@@ -151,4 +151,83 @@ if os.path.isdir(Z):
         if st.st_mode & 0o777 != 0o600:
             os.chmod(p, 0o600)
             print(f"zwave-js/{f}: 0600 (the Z-Wave keys or login, #664; was {st.st_mode & 0o777:04o})")
-print("home-assistant: family login (auth_oidc via Authelia) and rest_command.mitteilung in place")
+# 5. the media sentences (#933, ADR 0015 check 1)
+WORDS = dict(zip("0123456789", ("null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun")))
+
+
+def spoken(name):
+    """how a station's name is said and written by Whisper: as it is, digits as words joined and apart
+    („1LIVE“: „Einslive“, „eins live“), without hassil's template characters"""
+    plain = re.sub(r"\s+", " ", re.sub(r"[^\w\s&'.-]", " ", re.sub(r"\([^)]*\)", " ", name))).strip()
+    out = [plain]
+    if re.search(r"\d", plain):
+        apart = re.sub(r"\s+", " ", re.sub(r"\d", lambda m: " " + WORDS[m.group()] + " ", plain)).strip()
+        out += [apart] + ([apart.replace(" ", "").capitalize()] if " " not in plain else [])
+    return [x for i, x in enumerate(out) if x and x.lower() not in (y.lower() for y in out[:i])]
+
+
+def stations():
+    """the house's stations, as Music Assistant takes them from the share's radio/ (#646): a .strm by its
+    file's name, an .m3u by its #EXTINF names"""
+    d, names = os.path.join(E["LAIB_DATA_DIR"], "file-share", "data", "radio"), []
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if f.endswith(".strm"):
+            names.append(f[:-5])
+        elif f.endswith(".m3u"):
+            with open(os.path.join(d, f), errors="replace") as m3u:
+                names += [l.rsplit(",", 1)[1].strip() for l in m3u if l.startswith("#EXTINF") and "," in l]
+    return [n for i, n in enumerate(names) if n and n not in names[:i]]
+
+
+SAY = "(spielen|abspielen|anmachen|einschalten)"
+intents = {"LaibMusik": {"data": [{"sentences": ["spiel[e] (Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler}",
+                                                 "(Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler} " + SAY]}]}}
+lists = {"laib_kuenstler": {"wildcard": True}}
+if names := stations():
+    intents["LaibRadio"] = {"data": [{"sentences": ["spiel[e] [(den Sender|das Radio|Radio) ]{laib_sender}",
+                                                    "[(den Sender|das Radio|Radio) ]{laib_sender} " + SAY]}]}
+    said, values = set(), []
+    for n in names:   # a name said once: the first station that has it takes it
+        if forms := [x for x in spoken(n) if x.lower() not in said]:
+            said |= {x.lower() for x in forms}
+            values.append({"in": "(" + "|".join(forms) + ")", "out": n})
+    lists["laib_sender"] = {"values": values}
+changed = write("custom_sentences/de/laib_medien.yaml", "# rendered by laib pre-start (templates/home-assistant, #933); do not edit by hand\n"
+                + json.dumps({"language": "de", "intents": intents, "lists": lists}, ensure_ascii=False, indent=2) + "\n")
+# the player: Music Assistant's in the satellite's area, else one named like the area (MA's players have no area of
+# their own: media_player.wohnzimmer_2 is the Wohnzimmer's), else none, and the answer says so
+PLAYER = ("{% set ma = integration_entities('music_assistant') | select('match', 'media_player[.]') | list %}"
+          "{% set a = preferred_area_id | default('', true) %}"
+          "{{ ((ma | select('in', area_entities(a)) | list) + (ma | select('search', a) | list) if a else []) | first | default('') }}")
+
+
+def play(slot, kind, said):
+    return f"""    action:
+      - variables:
+          player: "{PLAYER}"
+      - if: "{{{{ player != '' }}}}"
+        then:
+          - action: music_assistant.play_media
+            target:
+              entity_id: "{{{{ player }}}}"
+            data:
+              media_id: "{{{{ {slot} }}}}"
+              media_type: {kind}
+              enqueue: replace
+      - variables:
+          result:
+            player: "{{{{ player }}}}"
+      - stop: ""
+        response_variable: result
+    speech:
+      text: "{{{{ ('{said} ' ~ {slot} ~ '.') if action_response.player else 'Ich finde hier keinen Lautsprecher.' }}}}"
+"""
+
+
+changed = write("packages/laib_medien.yaml", "# rendered by laib pre-start (templates/home-assistant, #933); do not edit by hand\nintent_script:\n"
+                + "  LaibRadio:\n" + play("laib_sender", "radio", "Ich spiele")
+                + "  LaibMusik:\n" + play("laib_kuenstler", "artist", "Ich spiele Musik von")) or changed
+if changed:
+    write(".laib-sentences-changed", "")   # post-deploy reloads them once (#933)
+    print("custom_sentences/de/laib_medien.yaml: " + (f"{len(names)} Sender" if names else "keine Sender auf der Freigabe") + ", Musik von …")
+print("home-assistant: family login (auth_oidc via Authelia), rest_command.mitteilung and the media sentences in place")

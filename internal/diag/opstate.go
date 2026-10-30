@@ -88,6 +88,10 @@ func OperatorState(f OpFacts) (string, *Finding) {
 		return "stumm", &Finding{Severity: "rot", Probe: "operator", Detail: fmt.Sprintf("Operator seit %s aktiviert und noch keine einzige Notiz (Takt %s): Modell nicht erreichbar oder die Schleife läuft nicht", f.Now.Sub(f.EnabledAt).Round(time.Minute), f.Tick), Fix: "journalctl --user -u laib-operator; laib operator status"}
 	case f.LastNote.IsZero():
 		return "startet", nil // no note yet: right after enable; the next tick decides
+	case f.Now.Sub(f.LastNote) > 3*f.Tick && f.Work.Waiting != "":
+		// a look that waits with its reason answers, it does not hang (#931): a
+		// cold household model after llama restarted, a window, a person's cache
+		return "wartet", &Finding{Severity: "info", Probe: "operator", Detail: fmt.Sprintf("Operator wartet seit %s mit seinem Blick: %s", f.Now.Sub(f.LastNote).Round(time.Minute), f.Work.Waiting), Wartet: f.Work.Waiting}
 	case f.Now.Sub(f.LastNote) > 3*f.Tick:
 		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator | journalctl --user -u laib-operator"}
 	}
