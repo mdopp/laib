@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.56.6](https://github.com/mdopp/laib/compare/v0.56.5...v0.56.6) (2026-10-30)
+
+
+### Bug Fixes
+
+* **inbox:** Zuletzt entschieden shows the five decided last, newest first ([e26d0b3](https://github.com/mdopp/laib/commit/e26d0b30dd85b16abd344cece97627befabcdae5))
+* **inbox:** Zuletzt entschieden shows the newest five, newest first ([475ef41](https://github.com/mdopp/laib/commit/475ef41dda6eb5fb91d5523f27819b444c8febfd))
+
 ## [0.56.5](https://github.com/mdopp/laib/compare/v0.56.4...v0.56.5) (2026-10-30)
 
 
