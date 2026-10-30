@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """adguard post-deploy (#36): the rewrites from render/adguard/rewrites.json
 synced through AdGuard's API on every apply (the service is up and green),
-and the PTR upstream for private addresses (#551). The first
-AdGuardHome.yaml is pre-start's."""
-import base64, json, os, socket, struct, sys, time, urllib.request
+the PTR upstream for private addresses (#551), the user rules that answer
+PTR for 172.16.0.0/12 here (#901) and the query log's retention (#901). The
+first AdGuardHome.yaml is pre-start's."""
+import base64, json, os, re, socket, struct, sys, time, urllib.request
 
 E = os.environ
 # a rotation (#665): pre-start set the new one in AdGuardHome.yaml before the restart; had it not, it was red
@@ -13,9 +14,9 @@ BASE = E.get("ADGUARD_URL", "http://127.0.0.1:8083")
 auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
 
 
-def api(path, body=None):
+def api(path, body=None, method=None):
     req = urllib.request.Request(BASE + "/control" + path, data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Authorization": "Basic " + auth, "Content-Type": "application/json"})
+                                 method=method, headers={"Authorization": "Basic " + auth, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=10) as r:
         raw = r.read()
         return json.loads(raw) if raw else None
@@ -80,3 +81,42 @@ elif want_ptr != have_ptr:
     api("/dns_config", {"local_ptr_upstreams": want_ptr}); print("PTR upstream for private addresses:", " ".join(want_ptr))
 else:
     print("PTR upstream in step:", " ".join(want_ptr))
+
+# PTR for 172.16.0.0/12 (#901): the router does not serve that range and asks
+# its own DNS, which is AdGuard, which forwarded to the router again: a loop
+# until the 2 s timeout, ~10,000 times for 172.16.255.1. AdGuard now answers
+# those itself with NXDOMAIN. A dnsrewrite, not a block: AdGuard counts it as
+# rewritten, so the Box page's "blockiert" stays the ad filter's. The router
+# stays the PTR upstream for everything else (the LAN's names); a 172.16-31
+# network the router or a PTR upstream sits in is left to them. Ours are the
+# marker and the rules of exactly this shape, at the end; every other line is
+# the owner's and stays where it is.
+MARK = "! laib (#901): PTR for 172.16.0.0/12 answered here, the router does not serve it"
+OURS = re.compile(r"^\|\|(\d+)\.172\.in-addr\.arpa\^\$dnstype=PTR,dnsrewrite=NXDOMAIN$")
+lan = {int(m) for a in want_ptr + [gateway(E.get("ROUTE_TABLE", "/proc/net/route")) or ""] for m in re.findall(r"(?<![\d.])172\.(\d+)\.\d+\.\d+", a)}
+ours = [MARK] + [f"||{o}.172.in-addr.arpa^$dnstype=PTR,dnsrewrite=NXDOMAIN" for o in range(16, 32) if o not in lan]
+have_rules = (api("/filtering/status") or {}).get("user_rules") or []
+owners = [r for r in have_rules if not (r.startswith("! laib (#901)") or OURS.match(r))]
+while owners and not owners[-1].strip():
+    owners.pop()
+if owners + ours != have_rules:
+    api("/filtering/set_rules", {"rules": owners + ours}); print(f"PTR for 172.16.0.0/12 answered here: {len(ours) - 1} rules")
+else:
+    print("PTR rules for 172.16.0.0/12 in step")
+
+# the query log (#901): AdGuard keeps 90 days by default, 1.3 GB on the
+# Kraftwerk; QUERYLOG_DAYS (7) is enough to find who asks what. AdGuard takes
+# an hour to a year and only the whole config (enabled and anonymize_client_ip
+# must not be null), so the rest is sent back as it was.
+try:
+    days = int(E.get("QUERYLOG_DAYS") or 7)
+except ValueError:
+    days = 0
+if not 1 <= days <= 365:
+    print(f"query log retention not set: QUERYLOG_DAYS={E.get('QUERYLOG_DAYS')!r} is not 1 to 365 days", file=sys.stderr)
+else:
+    ql = api("/querylog/config") or {}
+    if int(ql.get("interval") or 0) != days * 86400000:
+        api("/querylog/config/update", {**ql, "interval": days * 86400000}, method="PUT"); print(f"query log keeps {days} days")
+    else:
+        print(f"query log in step: {days} days")
