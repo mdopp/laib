@@ -58,6 +58,7 @@ type Session struct {
 	Out     int       `json:"out,omitempty"`
 	ModelMs int64     `json:"modelMs,omitempty"`
 	Lessons []string  `json:"lessons,omitempty"` // the lessons its prompt carried, by finding (#861)
+	OffMenu []string  `json:"offMenu,omitempty"` // the model's calls of tools not on its menu, refused (#860)
 	opened  []Trigger // the incidents a look opened for its new reds (#792)
 }
 
@@ -388,6 +389,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mcpName := tc.Function.Name
 			var args map[string]any
 			if !offered[mcpName] {
+				s.OffMenu = append(s.OffMenu, mcpName+" "+clip(tc.Function.Arguments))
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: mcpName, Content: "nicht ausgeführt: " + mcpName + " ist nicht im Menü der Fähigkeit " + sk.Name})
 				continue
 			}
