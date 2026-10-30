@@ -15,7 +15,11 @@ import laibskill
 REVIEW_LINES = 5000  # per unit and day; a unit that reaches it is "mindestens"
 
 A = re.ASCII  # Go's regexp: \w, \d, \s and \b are ASCII
-JOURNAL_LINE = re.compile(r"^\S+ \S+ [^\s\[:]+(?:\[\d+\])?: (.*)$", A)
+JOURNAL_LINE = re.compile(r"^\S+ \S+ ([^\s\[:]+)(?:\[\d+\])?: (.*)$", A)
+# #915: rootless Podman's network layer and container monitor write into a
+# service's unit; a flow the peer already closed is their line, not the
+# service's error (#903)
+RUNTIME = {"pasta", "passt", "conmon"}
 # the level a line names: level=x, "level":"x", [x] ...
 NAMED_LEVEL = re.compile(r'(?i)(?:\blevel=|"level":\s*"|\blvl=|\[)(trace|debug|dbg|info|inf|notice|warn|warning|wrn|error|err|eror|fatal|ftl|crit|critical|panic)\b', A)
 # ... or as a word in capitals: ERROR (MainThread), INFO:, LOG [Api]
@@ -88,6 +92,28 @@ def log_pattern(msg):
     return msg, True
 
 
+def harmless(s):
+    """The log shapes the owner or a ticket answered as harmless: ignore.yml's
+    logs (laib ignore --log, #915), per service; and what to say about it."""
+    r = s.call("laib_state", args="ignore.yml")
+    if r.error and "is not a file on main" in r.text:
+        return {}, ""
+    d = r.json()
+    if not isinstance(d, dict) or not isinstance(d.get("data", {}), (dict, type(None))):
+        return {}, "ignore.yml nicht lesbar (" + laibskill.first_line(r.text) + "); als harmlos Vermerktes ist mitgezählt."
+    marks, bad = {}, 0
+    for e in ((d.get("data") or {}).get("logs") or []):
+        try:
+            rx = re.compile(e["match"]) if isinstance(e, dict) and e.get("match") and str(e.get("reason", "")).strip() else None
+        except (re.error, TypeError):
+            rx = None
+        if rx is None:
+            bad += 1
+            continue
+        marks.setdefault(str(e.get("service", "")), []).append((rx, str(e["reason"])))
+    return marks, (f"ignore.yml: {bad} Einträge unter logs ohne gültiges Muster oder Grund; sie gelten nicht." if bad else "")
+
+
 def run(s):
     st = s.call("laib_status")
     d = st.json()
@@ -95,6 +121,8 @@ def run(s):
     if not isinstance(services, list):
         return laibskill.done(context="Protokoll-Durchsicht: laib status nicht lesbar (" + laibskill.first_line(st.text) + "). Schreib das in die Notiz.")
     counts, noise, full, unread = {}, {}, {}, []
+    runtime, known_harmless = {}, {}
+    marks, marks_said = harmless(s)
     for svc in services:
         name = svc.get("name", "") if isinstance(svc, dict) else ""
         units = s.call("laib_logs", args=f"{name} --since 24h --lines {REVIEW_LINES} --priority warning").json()
@@ -108,11 +136,19 @@ def run(s):
                 m = JOURNAL_LINE.match(line)
                 if not m:
                     continue
-                p, real = log_pattern(m.group(1))
+                if m.group(1) in RUNTIME:
+                    runtime[unit] = runtime.get(unit, 0) + 1
+                    continue
+                why = next((why for rx, why in marks.get(name, []) if rx.search(m.group(2))), None)
+                if why is not None:
+                    h = known_harmless.setdefault(unit, [0, why])
+                    h[0] += 1
+                    continue
+                p, real = log_pattern(m.group(2))
                 if not real:
                     noise[unit] = noise.get(unit, 0) + 1
                     continue
-                c = counts.setdefault(unit + "\t" + p, {"unit": unit, "pattern": p, "example": m.group(1), "count": 0})
+                c = counts.setdefault(unit + "\t" + p, {"unit": unit, "pattern": p, "example": m.group(2), "count": 0})
                 c["count"] += 1
 
     last = s.state if isinstance(s.state, dict) else {}
@@ -146,4 +182,10 @@ def run(s):
     loud = sorted(noise, key=lambda u: (-noise[u], u))
     if loud:
         out.append("Rauschen (stderr ohne Fehler, nur gezählt): " + ", ".join(f"{u} {noise[u]}" for u in loud[:4]) + ".")
+    if runtime:
+        out.append("Container-Laufzeit (pasta, conmon; nicht der Dienst, nur gezählt): " + ", ".join(f"{u} {runtime[u]}" for u in sorted(runtime, key=lambda u: (-runtime[u], u))[:4]) + ".")
+    if known_harmless:
+        out.append("Als harmlos vermerkt (ignore.yml, nur gezählt): " + ", ".join(f"{u} {n} ({why})" for u, (n, why) in sorted(known_harmless.items())) + ".")
+    if marks_said:
+        out.append(marks_said)
     return laibskill.done(context="\n".join(out) + "\n", state=nxt)

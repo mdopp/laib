@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -18,28 +20,78 @@ import (
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
+	"gopkg.in/yaml.v3"
 )
 
-func cmdIgnore(_ context.Context, env *cliEnv, args []string) int {
-	if len(args) != 1 {
-		return env.Fail(errors.New("usage: laib ignore <unit>"))
+func cmdIgnore(ctx context.Context, env *cliEnv, args []string) int {
+	log := len(args) == 4 && args[0] == "--log" // #915: a log shape answered as harmless
+	if len(args) != 1 && !log {
+		return env.Fail(errors.New("usage: laib ignore <unit> | laib ignore --log <service> <muster> <grund>"))
 	}
 	p := filepath.Join(env.Paths.State, "ignore.yml")
 	b, _ := os.ReadFile(p)
-	content := string(b)
-	if content == "" {
-		content = "units:\n"
+	var doc yaml.Node
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return env.Fail(fmt.Errorf("ignore.yml: %w", err))
 	}
-	if strings.Contains(content, "- "+args[0]+"\n") {
-		fmt.Fprintln(env.W(), "already ignored:", args[0])
-		return cli.ExitOK
+	if len(doc.Content) == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode}}}
 	}
-	content += "  - " + args[0] + "\n"
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+	what, item := args[0], &yaml.Node{Kind: yaml.ScalarNode, Value: args[0]}
+	list := yamlList(doc.Content[0], "units")
+	if log {
+		svc, match, reason := args[1], args[2], strings.TrimSpace(args[3])
+		if st, err := cli.LoadState(env); err != nil || st.Services[svc] == nil {
+			return env.Fail(fmt.Errorf("--log: Dienst %q gibt es nicht", svc))
+		}
+		if _, err := regexp.Compile(match); err != nil || match == "" || reason == "" {
+			return env.Fail(errors.New("--log: ein Muster, das RE2 versteht, und ein Grund, warum es harmlos ist"))
+		}
+		what = svc + " log " + match + ": " + reason
+		item = &yaml.Node{Kind: yaml.MappingNode}
+		for _, kv := range [][2]string{{"service", svc}, {"match", match}, {"reason", reason}} {
+			item.Content = append(item.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: kv[0]}, &yaml.Node{Kind: yaml.ScalarNode, Value: kv[1]})
+		}
+		list = yamlList(doc.Content[0], "logs")
+	}
+	for _, n := range list.Content {
+		var e struct{ Service, Match string }
+		if n.Value == args[0] || log && n.Decode(&e) == nil && e.Service == args[1] && e.Match == args[2] {
+			fmt.Fprintln(env.W(), "already ignored:", what)
+			return cli.ExitOK
+		}
+	}
+	list.Content = append(list.Content, item)
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
 		return env.Fail(err)
 	}
-	fmt.Fprintln(env.W(), "ignored:", args[0])
+	if err := os.WriteFile(p, out.Bytes(), 0o644); err != nil {
+		return env.Fail(err)
+	}
+	// on main at once: the log review reads it there (laib state, #915)
+	if err := proposal.CommitPath(ctx, env.Paths.State, "ignore.yml", "ignore: "+what, env.Actor); err != nil {
+		return env.Fail(fmt.Errorf("ignore.yml geschrieben, aber nicht committet: %w", err))
+	}
+	fmt.Fprintln(env.W(), "ignored:", what)
 	return cli.ExitOK
+}
+
+// yamlList is the sequence under key in a mapping, added when missing.
+func yamlList(m *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			if v := m.Content[i+1]; v.Kind == yaml.SequenceNode {
+				return v
+			}
+			m.Content[i+1] = &yaml.Node{Kind: yaml.SequenceNode} // units: with nothing under it
+			return m.Content[i+1]
+		}
+	}
+	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, &yaml.Node{Kind: yaml.SequenceNode})
+	return m.Content[len(m.Content)-1]
 }
 
 func cmdInit(ctx context.Context, env *cliEnv, args []string) int {
@@ -192,7 +244,14 @@ func cmdState(ctx context.Context, env *cliEnv, args []string) int {
 	})
 	redacted := slices.Sorted(maps.Keys(hit))
 	if env.JSON {
-		return cli.Emit(env, map[string]any{"path": p, "content": text, "redacted": redacted})
+		res := map[string]any{"path": p, "content": text, "redacted": redacted}
+		var data any // a skill script has no YAML parser (#915): the redacted text, parsed
+		if yaml.Unmarshal([]byte(text), &data) == nil && strings.HasSuffix(p, ".yml") {
+			if _, err := json.Marshal(data); err == nil {
+				res["data"] = data
+			}
+		}
+		return cli.Emit(env, res)
 	}
 	fmt.Fprint(env.W(), text)
 	if len(redacted) > 0 {

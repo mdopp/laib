@@ -12,9 +12,13 @@
 # no model, no note. Daily, before the morning report, which then carries
 # the note; a week of logs would not fit the line cap and a broken setting
 # would wait up to seven days.
+# #915: a line the container runtime wrote into the unit (pasta, conmon)
+# is the runtime's, not the service's, and only counted; a shape the
+# owner or a ticket answered as harmless (laib ignore --log, ignore.yml
+# on main, read with laib state) is only counted, with its reason.
 description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
 trigger: {daily: "06:30"}
-tools: [status, logs, wish, note]
+tools: [status, logs, state, wish, note]
 run: run.py
 context: none
 modell: urteil   # the script read the logs; the model judges the patterns

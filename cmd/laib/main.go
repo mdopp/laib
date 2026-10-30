@@ -75,7 +75,7 @@ func init() {
 		{Name: "propose", Tier: "propose", MCP: true, Help: "\"<grund>\" [--set path:KEY=VALUE | --add <template> [--name n] [KEY=VALUE…] | --grant <hand> <verb> | --patch] [--finding f --evidence e --undo u] [--source s]: commit the edit to a proposal branch and an inbox entry", Flags: []string{"--patch", "--set", "--path", "--grant", "--add", "--name", "--finding", "--evidence", "--undo", "--source"}, Run: inbox.Propose},
 		{Name: "approve", Tier: "apply", MCP: true, Help: "<id>: merge a proposal and apply it (never your own)", Flags: []string{}, Run: inbox.Approve},
 		{Name: "reject", Tier: "apply", MCP: true, Help: "<id> [\"<grund>\"]: drop a proposal", Flags: []string{}, Run: inbox.Reject},
-		{Name: "ignore", Tier: "propose", MCP: true, Help: "record an unmanaged unit as deliberately unmanaged", Run: cmdIgnore},
+		{Name: "ignore", Tier: "propose", MCP: true, Help: "<unit>: an unmanaged unit, deliberately unmanaged | --log <service> <re2> <grund>: a log shape answered as harmless (#915)", Run: cmdIgnore},
 		{Name: "session", Tier: "read", MCP: true, Help: "[<name>]: a token of the hand policy.yml names in your session:, with its ttl, for one session (#380)", Run: cmdSession},
 		{Name: "token", Tier: "apply", Help: "mint <hand> [--ttl 8h] [--note n] | list | revoke <id> (humans only)", Flags: []string{"--ttl", "--note"}, Run: cmdToken},
 		{Name: "secret", Tier: "apply", Help: "set <NAME> (value on stdin) | list | rotate <NAME> | zurueck <NAME>", Flags: []string{}, Run: cmdSecret},
