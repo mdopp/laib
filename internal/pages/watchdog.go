@@ -13,9 +13,10 @@ import (
 // The outside watchdog (#57): every surface that could say "something is
 // wrong" runs on the box, so when the box itself is down nobody is told.
 // laib-notify (#443) pings box.yml watchdog.url every five minutes while
-// readiness is not red and writes watchdog.last, which /ready shows; the
+// laib answers /ready and writes watchdog.last, which /ready shows; the
 // outside (a healthchecks-style endpoint) turns fifteen minutes of silence
-// into a push to the admin's phone. A red box stays silent on purpose.
+// into a push to the admin's phone. The ping means „Laib lebt“ only (#857):
+// a red service is the red message's, not a second alarm.
 
 // The stamp lies in laib-notify's own folder, the one its container mounts (ADR 0027).
 func watchdogStamp(env *cli.Env) string {

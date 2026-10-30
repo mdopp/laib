@@ -28,7 +28,7 @@ type Box struct {
 	HostNetwork []string `yaml:"hostNetwork"`
 	Notify      Notify   `yaml:"notify"`
 	// Watchdog is the outside check (#57): serve pings url every five
-	// minutes while readiness is not red; the outside turns silence into a
+	// minutes while laib answers (#857); the outside turns silence into a
 	// push. Contact is whom the family calls when the box is down.
 	Watchdog   Watchdog   `yaml:"watchdog"`
 	Updates    Updates    `yaml:"updates"`
