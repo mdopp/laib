@@ -30,6 +30,8 @@ type bootBox struct {
 	breakAt       int      // the probe path breaks at this port probe of the first round, 0 = never (#481)
 	timeout       string   // LAIB_BOOT_CHECK_TIMEOUT, "" = 1 s
 	denied        bool     // every probe fails as the Kraftwerk's did: the connect is refused locally (Permission denied), not by the port (#481)
+	bootFree      int      // MiB free on /boot as df reports it, 0 = plenty (#949)
+	staged        string   // a deployment above the booted one: "staged" or "pending", "" = none (#949)
 }
 
 const proven, fresh = "aaaa1111aaaa1111", "bbbb2222bbbb2222"
@@ -74,7 +76,11 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 	if !strings.Contains(booted, ".") {
 		booted += ".0" // the deployment's serial
 	}
-	status := "* fedora-coreos " + booted + "\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
+	status := ""
+	if b.staged != "" {
+		status = "  fedora-coreos cccc3333cccc3333.0 (" + b.staged + ")\n    Version: 44.20261026.3.0\n"
+	}
+	status += "* fedora-coreos " + booted + "\n    Version: 44.20261012.3.0\n  fedora-coreos " + proven + ".0 (rollback)\n    Version: 44.20260510.3.1\n"
 	shim(t, b.bin, "ostree", "cat <<'EOF'\n"+status+"EOF")
 	if gpuDriver != "" {
 		shim(t, b.bin, "lspci", `echo "01:00.0 0300: 10de:2204 (rev a1)"`)
@@ -93,6 +99,14 @@ func (b *bootBox) runWith(t *testing.T, booted, gpuDriver, cdiDriver, red, rpmOs
 		shim(t, b.bin, "curl", "exit 7")
 	}
 	shim(t, b.bin, "rpm-ostree", rpmOstree)
+	// #949: /boot as `df -Pk` prints it, from a file the cleanup stand-in may rewrite
+	free := b.bootFree
+	if free == 0 {
+		free = 1000
+	}
+	bootDf := filepath.Join(b.root, "boot.free")
+	os.WriteFile(bootDf, []byte(fmt.Sprint(free*1024)), 0o644)
+	shim(t, b.bin, "df", `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda3 358400 1 %s 90%% /boot\n' "$(cat "$BOOT_DF")"`)
 	shim(t, b.bin, "systemctl", "exit 0")
 	shim(t, b.bin, "runuser", "exit 0")
 	// Fedora CoreOS mounts /sysroot read-only: another deployment's /etc is
@@ -147,7 +161,7 @@ shift; exec "$@"`)
 	}
 	cmd := exec.Command("bash", filepath.Join(b.etc, "laib", "boot-check.sh"))
 	cmd.Env = append(os.Environ(), "PATH="+b.bin+":"+os.Getenv("PATH"), "LAIB_ETC="+b.etc, "LAIB_VAR="+b.vardir, "LAIB_ROOT="+b.root, "LAIB_BOOT_CHECK_TIMEOUT="+to, "LAIB_BOOT_CHECK_INTERVAL=0.2",
-		"LAIB_NFT="+nft, "IPSTATE="+ipst, "IP_BREAK_AT="+fmt.Sprint(b.breakAt), "PROBE_DENIED="+deny)
+		"LAIB_NFT="+nft, "IPSTATE="+ipst, "IP_BREAK_AT="+fmt.Sprint(b.breakAt), "PROBE_DENIED="+deny, "BOOT_DF="+bootDf)
 	o, _ := cmd.CombinedOutput()
 	l, _ := os.ReadFile(b.log)
 	return string(l), string(o)

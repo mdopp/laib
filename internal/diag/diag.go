@@ -339,13 +339,14 @@ func challengeFinding(domain, alias, cname string, err error) *Finding {
 }
 
 // bootFinding: one kernel set (kernel and initramfs) is ~150 MiB on the
-// GPU box (#368); with less free, the next OS update does not fit.
+// GPU box (#368); with less free, the next OS update does not fit. The
+// boot check frees it after the next proven boot (#949).
 func bootFinding(free, size uint64) *Finding {
 	const need = 150 << 20
 	if size == 0 || free >= need {
 		return nil
 	}
-	return &Finding{Severity: "gelb", Probe: "boot", Detail: fmt.Sprintf("/boot hat %d MiB frei, ein Kernel-Satz braucht ~150 MiB: das nächste OS-Update passt nicht", free>>20), Fix: "erst wenn der jetzige Stand bewiesen ist (/var/lib/laib/boot-proven): sudo rpm-ostree cleanup -r räumt den Rückfall-Stand weg"}
+	return &Finding{Severity: "gelb", Probe: "boot", Detail: fmt.Sprintf("/boot hat %d MiB frei, ein Kernel-Satz braucht ~150 MiB: das nächste OS-Update passt nicht", free>>20), Fix: "nichts zu tun: nach dem nächsten bewiesenen Start räumt die Box den alten Rückfall-Stand selbst weg (laib-boot-check, rpm-ostree cleanup -r) und meldet, wie viel dann frei ist"}
 }
 
 func uniq(in []string) []string {

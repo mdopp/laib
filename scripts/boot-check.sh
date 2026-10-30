@@ -27,6 +27,37 @@ st="$(ostree admin status 2>/dev/null)"
 booted="$(sed -n 's/^\* [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\).*/\1/p' <<<"$st")"
 back="$(sed -n 's/^  [^ ]* \([0-9a-f]\{8,\}\.[0-9]*\) (rollback).*/\1/p' <<<"$st")"
 [ -n "$booted" ] || { say "not an ostree deployment: nothing to prove"; exit 0; }
+# #949: a proven boot makes room on /boot for the next kernel set (~150 MiB
+# on the GPU box): when there is less, the rollback deployment goes
+# (rpm-ostree cleanup -r, never the booted one). Only proven: a deployment
+# that is not proven keeps its way back. Never while a deployment is staged
+# or pending, above the booted one: that is the next boot's. After the next
+# update, the proven deployment of today is the rollback again.
+NEED_MIB="${LAIB_BOOT_NEED_MIB:-150}"
+boot_free() { df -Pk /boot 2>/dev/null | awk 'NR == 2 && $4 ~ /^[0-9]+$/ {print int($4 / 1024)}'; }
+make_room() {
+  local free now e
+  free="$(boot_free)"
+  [ -n "$free" ] || { say "/boot not measured: no cleanup"; return 0; }
+  [ "$free" -lt "$NEED_MIB" ] || return 0
+  [ -n "$back" ] || { say "/boot has $free MiB free, and there is no rollback deployment to remove"; return 0; }
+  local first; first="$(sed -n '/^[* ] [^ ]* [0-9a-f]\{8,\}\.[0-9]/{p;q}' <<<"$st")"   # the first deployment listed
+  if grep -qE '\((staged|pending)\)' <<<"$st" || [ "${first:0:1}" != "*" ]; then
+    say "/boot has $free MiB free, but a deployment is staged: the cleanup waits for a proven boot without one"; return 0
+  fi
+  if e="$(rpm-ostree cleanup -r 2>&1)"; then
+    now="$(boot_free)"
+    say "/boot had $free MiB free: rollback deployment removed, now ${now:-?} MiB"
+    if [ -z "$now" ]; then note watch "/boot war voll ($free MiB frei): der alte Rückfall-Stand wurde entfernt, der freie Platz danach ist nicht gemessen"
+    elif [ "$now" -lt "$NEED_MIB" ]; then note incident "/boot war voll ($free MiB frei): der alte Rückfall-Stand wurde entfernt, jetzt $now MiB frei; das reicht noch nicht für einen Kernel-Satz (~$NEED_MIB MiB)"
+    else note watch "/boot war voll ($free MiB frei): der alte Rückfall-Stand wurde entfernt, jetzt $now MiB frei"; fi
+  else
+    e="$(tail -1 <<<"$e")"
+    say "/boot has $free MiB free; rpm-ostree cleanup -r failed: ${e:-no output}"
+    note incident "/boot ist voll ($free MiB frei, ein Kernel-Satz braucht ~$NEED_MIB MiB), aber der alte Rückfall-Stand ließ sich nicht entfernen (rpm-ostree cleanup -r: ${e:-ohne Ausgabe}); das nächste System-Update passt nicht"
+  fi
+  return 0
+}
 # the record: <deployment> <red> <blocked> <the blocked ports, a,b,c>. Before
 # #481 the ports were not named: "<id> <red>" probed nothing (none blocked),
 # "<id> <red> <n>" allows up to n blocked ports, whichever.
@@ -35,7 +66,7 @@ proven=""; base=0; base_blocked=0; base_set=""
 # a boot-proven from before the serial names the bare commit: it meant that commit's deployment
 case "$proven" in *.* | "") ;; *) for d in "$booted" "$back"; do [ "${d%.*}" != "$proven" ] || { proven=$d; break; }; done ;; esac
 base_blocked="${base_blocked:-0}"
-[ "$booted" != "$proven" ] || { say "deployment ${booted:0:12} is the proven one"; exit 0; }
+[ "$booted" != "$proven" ] || { say "deployment ${booted:0:12} is the proven one"; make_room; exit 0; }
 gpu=""; [ -z "$(lspci -n -d 10de: 2>/dev/null)" ] || gpu=1
 why=""; red=0; blocked=0
 # #445: /ready over loopback says nothing about the LAN: a firewall lets
@@ -123,7 +154,7 @@ done
 [ "$rc" != 2 ] || { ok=1; blocked=$base_blocked; set=$base_set; say "reachability from the LAN not checked: $why"; }
 if [ -n "$ok" ] || [ -z "$proven" ]; then
   echo "$booted $red $blocked${set:+ $set}" >"$PROVEN"
-  if [ -n "$ok" ]; then say "deployment ${booted:0:12} proven"; note watch "OS-Stand ${booted:0:12} nach dem Start geprüft: grün"; exit 0; fi
+  if [ -n "$ok" ]; then say "deployment ${booted:0:12} proven"; note watch "OS-Stand ${booted:0:12} nach dem Start geprüft: grün"; make_room; exit 0; fi
   say "baseline ${booted:0:12} recorded although red: $why"
   note incident "OS-Stand ${booted:0:12} als Ausgangsstand gemerkt, aber nicht grün: $why"; exit 0
 fi
