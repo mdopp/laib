@@ -66,10 +66,24 @@ print(", ".join(n for n in sorted(people) if not any(c.startswith("signal:") for
 PY
 )"
 if [ -n "$OHNE" ]; then BEISPIEL="${OHNE%%,*}"; OHNE=" Noch ohne Signal-Nummer: $OHNE."; else BEISPIEL="<Name>"; fi
+# #862: a reply that takes long says „Moment …“ (Hermes' long-running heartbeat, its interval in
+# post-deploy's config.yaml), and a model that is busy, lent or unreachable is one German sentence with
+# when to try again, not Hermes' „/retry … hermes doctor on the host“. The raw error stays in Hermes' log.
+MOMENT="Moment … ich bin noch dran."
+BESETZT="Ich komme gerade nicht an mein Sprachmodell: es ist beschäftigt oder startet neu. Versuch es in ein paar Minuten noch einmal."
+SCHIEF="Das hat gerade nicht geklappt. Versuch es in ein paar Minuten noch einmal; klappt es dann immer noch nicht, sag es dem Admin."
+FEHLER="$(for k in rate_limited auth_failed connection_interrupted unreachable connection_unknown usage_limit_resets provider_kept_failing no_credentials; do
+  echo "    $k: \"$BESETZT\""; done
+for k in generic_failed generic_failed_with_hint stopped_before_finishing no_response previous_turn_cleanup interrupted_before_start; do
+  echo "    $k: \"$SCHIEF\""; done)"
 mkdir -p "$H/locales"
 for lang in en de; do cat > "$H/locales/$lang.yaml" <<YAML
 # rendered by laib pre-start; do not edit by hand (#586, #596)
 gateway:
+  progress:
+    working_heartbeat: "$MOMENT"
+  errors:
+$FEHLER
   unauthorized:
     owner_notice: "Laib hat eine Nachricht von {who} auf {platform} verworfen: der Absender steht bei keiner Person in box.yml people. Wer ist das? Gehört er zum Haushalt, antworte mir hier, etwa „{who} ist $BEISPIEL“.$OHNE Ich schlage seine Nummer dann vor, du gibst den Vorschlag in der Inbox frei, und danach darf er dem Boten schreiben; die verworfene Nachricht schickt er noch einmal. Auf anderen Wegen als Signal trag seine Kennung selbst in box.yml people ein."
 YAML

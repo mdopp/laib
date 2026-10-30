@@ -117,6 +117,29 @@ class OwnerNotice(unittest.TestCase):
         self.assertNotIn("mama", text)
 
 
+class Failures862(unittest.TestCase):
+    """#862: when the model is busy, lent or unreachable, Hermes answered „⚠️ The AI model service isn't
+    reachable … run `hermes doctor` on the host“ (gateway.errors.* in its locales, v0.22.2), and a long
+    reply had no „Moment …“ before 180 s. The overlay says both in one German sentence each."""
+
+    MODEL = ("rate_limited", "auth_failed", "connection_interrupted", "unreachable", "connection_unknown",
+             "usage_limit_resets", "provider_kept_failing", "no_credentials")
+    OTHER = ("generic_failed", "generic_failed_with_hint", "stopped_before_finishing", "no_response")
+
+    def test_every_model_failure_is_one_german_sentence_with_when_to_try_again(self):
+        with tempfile.TemporaryDirectory() as d:
+            env_file(d, {})
+            for lang in ("en", "de"):
+                text = (Path(d) / "bote" / "hermes" / "locales" / (lang + ".yaml")).read_text()
+                errors = text.split("\n  errors:\n", 1)[1].split("\n  unauthorized:", 1)[0]
+                for key in self.MODEL + self.OTHER:
+                    line = next((l for l in errors.splitlines() if l.startswith("    " + key + ": ")), "")
+                    self.assertIn("in ein paar Minuten noch einmal", line, key)
+                for wrong in ("/retry", "hermes doctor", "hermes logs", "{hint}", "⚠️", "AI model"):
+                    self.assertNotIn(wrong, errors)
+                self.assertIn("\n  progress:\n    working_heartbeat: \"Moment … ich bin noch dran.\"\n", text)
+
+
 class Personen(unittest.TestCase):
     """#591: the plugin laib-journal names who switched in Home Assistant. Hermes knows the sender's
     id only (a Signal number, a Telegram chat id); pre-start writes box.yml people the other way

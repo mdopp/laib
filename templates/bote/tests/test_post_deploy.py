@@ -186,6 +186,15 @@ class PostDeploy(unittest.TestCase):
             read = lambda f: (h / f).read_text() if (h / f).exists() else ""
             return p, read("config.yaml"), read("SOUL.md")
 
+    def test_a_long_reply_says_moment_after_thirty_seconds(self):
+        """#862: no „Moment …“ while the model thought for minutes. Hermes' long-running heartbeat
+        (agent.gateway_notify_interval, bridged to HERMES_AGENT_NOTIFY_INTERVAL in gateway/run.py) goes
+        out after 30 s instead of 180; its words are pre-start's locales overlay."""
+        p, conf, _ = self.hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("\nagent:\n  gateway_notify_interval: 30\n", conf)
+        self.assertEqual(conf.count("\nagent:"), 1, "one agent section, or YAML keeps the last")
+
     def test_the_laib_tools_trust_is_the_owners_value(self):
         """#524: the hook wrote trust: untrusted itself, so every template update undid the owner's
         trust: full. It is LAIB_TOOLS_TRUST now (a template update keeps a value), untrusted by default;
