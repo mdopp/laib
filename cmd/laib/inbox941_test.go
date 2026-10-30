@@ -191,3 +191,20 @@ func TestEveryCardHasTheSameButtonRow(t *testing.T) {
 		return p.Status == "rejected" && strings.Contains(cardOf(do("GET", "/inbox", nil), 8), "abgelehnt")
 	})
 }
+
+// Owner, 2026-10-30, on the box: „Die Freigaben fühlen sich falsch herum sortiert an“ — „Zuletzt
+// entschieden“ listed #1–#5 from migration day, oldest first, and none of the day's decisions. It
+// lists the five decided last, the newest at the top.
+func TestZuletztEntschiedenIsTheNewestFiveNewestFirst(t *testing.T) {
+	env, _ := testBox(t)
+	if err := os.MkdirAll(cli.InboxDir(env), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for id := 1; id <= 8; id++ {
+		writeDecided(t, env, id, time.Duration(9-id)*time.Hour) // #1 eight hours ago … #8 one hour ago
+	}
+	got := placesOf(inboxMux(env)("GET", "/inbox", nil))
+	if want := []string{"laeuft", "8", "7", "6", "5", "4"}; !slices.Equal(got, want) {
+		t.Fatalf("places %v, want %v", got, want)
+	}
+}
