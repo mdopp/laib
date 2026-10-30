@@ -13,7 +13,7 @@ laib status [service] [--watch] [--fresh]   one line per service; first line is 
 laib journal [--since 24h] [--limit n] [--verb v] [--kind report|incident|watch]
                                      journal entries, oldest first; --verb and --kind (a note's kind) filter, --limit keeps
                                      the newest n, and without --since of any age (#593)
-laib logs <service> [--since 1h] [--lines 200] [--priority err|warning]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err)
+laib logs <service> [--since 1h] [--lines 200] [--priority err|warning] [--grep <re2>]   journald of every unit, the containers' output in it (podman log driver journald), secrets redacted; --priority is journalctl -p (this level and worse; a container's stderr is err); --grep reads the whole --since window and keeps the newest --lines lines that match (RE2 on the redacted line; all lower case = any case, #916)
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
@@ -105,6 +105,7 @@ laib context [--since 24h] [--full]  starter bundle for an agent session; by def
                                      to a line (`omitted`: how many it left out); --full is the whole bundle
 laib template list|lint|add <git>    registries and the contract check
 laib ignore <unit>                   an unmanaged unit, deliberately left alone (ADR 0008)
+laib ignore --log <service> <re2> <grund>   a log shape answered as harmless (#915): the log review counts it, with its reason, and raises it no more; committed to ignore.yml on main
 laib token mint <hand> | list | revoke <id>   humans only
 laib secret set <NAME> | list        value on stdin, never an argument; list prints names only
 laib init                            first setup as a dialogue
@@ -193,7 +194,7 @@ dropped from its reply. The built-in skills' menus:
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`), each once while open; firmware only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — no model: for each `vorfall` session whose proposal laib measured as effective, the runner proposes `lessons/<probe>-<service>.md` (finding, the cause the session saw, what fixed it), class human, once per finding (#544) |
-| `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
+| `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_state`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; a line the container runtime wrote (`pasta`, `conmon`) and a shape in `ignore.yml`'s `logs` (`laib ignore --log`) are only counted, never a pattern (#915); lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_note` — no model (#858): its script runs `laib backup check` (the canary restore), reads the week's backups and writes the note, an incident when the check is red or no backup was green for a day; the morning report reads it (#287) |
 
 Every session starts with its record (#544): the runner reads `laib inbox

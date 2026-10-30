@@ -74,6 +74,7 @@ type Anchor struct {
 	Evidence string   `json:"evidence,omitempty"`
 	Undo     string   `json:"undo,omitempty"`
 	Does     string   `json:"does,omitempty"` // a repair's: what it does, the card's headline (#746)
+	Wish     string   `json:"wish,omitempty"` // a wish's text in full, the card's body (#896): the file is on the proposal's branch only
 	Sources  []string `json:"sources,omitempty"`
 }
 
@@ -133,6 +134,11 @@ func Waiting(inbox string) []*Proposal {
 	all = slices.DeleteFunc(all, func(p *Proposal) bool { return p.Status != "approved" || p.Outcome != "waiting" })
 	slices.Reverse(all)
 	return all
+}
+
+// wish: a proposal that only adds a wish for the Werkstatt (#896).
+func (p *Proposal) wish() bool {
+	return p.Boxless() && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") })
 }
 
 // Boxless: wishes and repairs only change nothing on the box; no run carries them.

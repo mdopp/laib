@@ -132,8 +132,8 @@ func main() {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
-		if e.Result != "red" || e.Actor == "ops" || e.Verb == "escalate" || e.Verb == "notify" {
-			return // our own reds and escalations do not re-trigger us
+		if !operator.Opens(e.Verb, e.Actor, e.Result, e.Detail) {
+			return // our own reds, escalations, a hand's exec and a refusal open nothing (#908)
 		}
 		key := e.Service
 		if key == "" {

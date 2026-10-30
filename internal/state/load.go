@@ -158,6 +158,11 @@ func loadService(dir string) (*Service, error) {
 		if _, err := time.ParseDuration(cmp.Or(s.Stale, "5m")); err != nil {
 			return nil, fmt.Errorf("services/%s/laib.yml: status.stale %q: %w", svc.Name, s.Stale, err)
 		}
+		if b := s.Busy; b != nil {
+			if _, err := time.ParseDuration(cmp.Or(b.Grace, "30m")); err != nil || b.Field == "" || len(b.Values) == 0 {
+				return nil, fmt.Errorf("services/%s/laib.yml: status.busy wants a field, its values and a grace duration (%q)", svc.Name, b.Grace)
+			}
+		}
 	}
 	return svc, nil
 }
