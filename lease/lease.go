@@ -160,6 +160,7 @@ type Server struct {
 	router   string                         // what the router said at the last refresh (#785): its part of the status line
 	silent   string                         // why the router did not answer at the last refresh; "" when it did
 	human    atomic.Int64                   // Unix seconds of the last person's request (#550)
+	waking   atomic.Bool                    // a warm request for the household model is loading it (#931)
 }
 
 type statusFinding struct {
@@ -246,10 +247,12 @@ func New(cfg Config) (*Server, error) {
 	if l := s.read(); l != nil && l.Holder == staleRouter {
 		s.Release(context.Background(), staleRouter) // the window a request took before #522
 	}
-	s.router, s.silent = s.measure(context.Background())
+	var cold bool
+	s.router, s.silent, cold = s.measure(context.Background())
 	if err := s.writeStatus(s.read()); err != nil {
 		return nil, err
 	}
+	s.wake(cold)
 	go s.expiryLoop()
 	go s.refreshLoop()
 	return s, nil
@@ -272,16 +275,34 @@ func (s *Server) Refresh(ctx context.Context) {
 	if s.away != "" {
 		s.connect(ctx)
 	}
-	router, silent := s.measure(ctx)
+	router, silent, cold := s.measure(ctx)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.router, s.silent = router, silent
 	s.writeStatus(s.read())
+	s.wake(cold)
+}
+
+// wake loads the household model when the router reports it unloaded in the
+// household window (#931): after llama restarts nothing else does — a look
+// never wakes it (#550/#792) — and the first person pays the cold start. One
+// request at a time, in the background; another window's GPU is its holder's.
+func (s *Server) wake(cold bool) {
+	if !cold || s.read() != nil || !s.waking.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer s.waking.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		s.ask(ctx, s.cfg.Household)
+	}()
 }
 
 // measure asks the router which models it has loaded, in ten seconds: the
-// status line's part, and why the router did not answer ("" when it did).
-func (s *Server) measure(ctx context.Context) (string, string) {
+// status line's part, why the router did not answer ("" when it did), and
+// whether it reports the household model unloaded (not loaded, not loading).
+func (s *Server) measure(ctx context.Context) (string, string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(s.cfg.RouterURL, "/")+"/v1/models", nil)
@@ -303,18 +324,20 @@ func (s *Server) measure(ctx context.Context) (string, string) {
 		}
 	}
 	if err != nil {
-		return "Router nicht gemessen", err.Error()
+		return "Router nicht gemessen", err.Error(), false
 	}
 	var loaded []string
+	cold := false
 	for _, m := range listing.Data {
 		if m.Status.Value == "loaded" {
 			loaded = append(loaded, m.ID)
 		}
+		cold = cold || m.ID == s.cfg.Household && !slices.Contains([]string{"", "loaded", "loading"}, m.Status.Value)
 	}
 	if len(loaded) == 0 {
-		return "kein Modell geladen, das erste lädt bei der nächsten Frage", ""
+		return "kein Modell geladen, das erste lädt bei der nächsten Frage", "", cold
 	}
-	return "geladen: " + strings.Join(loaded, ", "), ""
+	return "geladen: " + strings.Join(loaded, ", "), "", cold
 }
 
 // connect asks laib for its services and resolves the modes against them.
@@ -898,6 +921,15 @@ func (s *Server) warm(ctx context.Context, alias string) bool {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
+	if !s.ask(ctx, alias) {
+		return false
+	}
+	s.warmed.Store(alias, true)
+	return true
+}
+
+// ask sends the preset one token's request; true when the router answered.
+func (s *Server) ask(ctx context.Context, alias string) bool {
 	body, _ := json.Marshal(map[string]any{"model": alias, "max_tokens": 1, "messages": []map[string]string{{"role": "user", "content": "hi"}}})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(s.cfg.RouterURL, "/")+"/v1/chat/completions", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -906,11 +938,7 @@ func (s *Server) warm(ctx context.Context, alias string) bool {
 		return false
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-	s.warmed.Store(alias, true)
-	return true
+	return resp.StatusCode == http.StatusOK
 }
 
 func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request) {
