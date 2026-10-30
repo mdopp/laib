@@ -1,16 +1,21 @@
 package apply
 
 import (
+	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/internal/state"
+	"github.com/mdopp/laib/internal/sysd"
 )
 
 // ErrLocked means another apply holds the lock (state `eingeschränkt`).
@@ -144,4 +149,33 @@ func Paused(paths boxfs.Paths) map[string]Pause {
 		out[p.Service] = p
 	}
 	return out
+}
+
+// Busy is what the service is doing by its own word (#908), when its units
+// run and its status file's busy field (laib.yml status.busy) names a busy
+// value and said so within the grace: "scan scannt, längstens bis 18:26";
+// else "". A restart mid-stack lost the owner's scan; one that has said
+// nothing for the grace is stuck, and one whose unit is down works on
+// nothing. diag holds its reds, the envelope a hand's restart.
+func Busy(ctx context.Context, st *state.State, svc *state.Service, now time.Time) string {
+	s, p := svc.Contract.Status, state.StatusPath(st, svc)
+	if s == nil || s.Busy == nil || slices.ContainsFunc(svc.UnitNames(), func(u string) bool { return sysd.Active(ctx, u) != "active" }) {
+		return ""
+	}
+	var f map[string]any
+	b, err := os.ReadFile(p)
+	fi, serr := os.Stat(p)
+	if err != nil || serr != nil || json.Unmarshal(b, &f) != nil {
+		return ""
+	}
+	v, _ := f[s.Busy.Field].(string)
+	at, err := time.Parse(time.RFC3339, fmt.Sprint(f["at"]))
+	if err != nil {
+		at = fi.ModTime()
+	}
+	grace, _ := time.ParseDuration(cmp.Or(s.Busy.Grace, "30m"))
+	if until := at.Add(grace); slices.Contains(s.Busy.Values, v) && now.Before(until) {
+		return fmt.Sprintf("%s %s, längstens bis %s", svc.Name, v, until.Local().Format("15:04"))
+	}
+	return ""
 }

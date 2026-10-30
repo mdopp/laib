@@ -130,25 +130,6 @@ func Refresh(ctx context.Context, svc *state.Service) bool {
 	return err == nil
 }
 
-// Busy is what the service is doing by its own word (#908), when its units
-// run and its status file's busy field names a busy value and said so
-// within the grace: "scan scannt, längstens bis 18:26"; else "". A restart
-// mid-stack lost the owner's scan; one that has said nothing for the grace
-// is stuck, and one whose unit is down works on nothing.
-func Busy(ctx context.Context, svc *state.Service, rep Report, now time.Time) string {
-	s := svc.Contract.Status
-	if s == nil || s.Busy == nil || !rep.Found || slices.ContainsFunc(svc.UnitNames(), func(u string) bool { return sysd.Active(ctx, u) != "active" }) {
-		return ""
-	}
-	var v string
-	json.Unmarshal(rep.Eigenes[s.Busy.Field], &v)
-	grace, _ := time.ParseDuration(cmp.Or(s.Busy.Grace, "30m"))
-	if until := rep.At.Add(grace); slices.Contains(s.Busy.Values, v) && now.Before(until) {
-		return fmt.Sprintf("%s %s, längstens bis %s", svc.Name, v, until.Local().Format("15:04"))
-	}
-	return ""
-}
-
 // held is why a service's red is expected now (#907): an apply activates
 // it (the lock is held and its marker names the service) or a hand paused
 // it (laib stop, the lease). An apply that died holds nothing: its lock is

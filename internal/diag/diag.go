@@ -150,7 +150,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		if f := Health(ctx, svc); f != nil {
 			own = append(own, *f)
 		}
-		out = append(out, hold(own, held(env, name), Busy(ctx, svc, rep, time.Now()))...)
+		out = append(out, hold(own, held(env, name), apply.Busy(ctx, st, svc, time.Now()))...)
 	}
 	// Drift: the box differs from the state. Not red: apply fixes it.
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
