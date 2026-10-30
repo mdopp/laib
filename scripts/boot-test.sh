@@ -159,7 +159,7 @@ FAKE=$!
 LAIB_LISTEN=127.0.0.1:18090 "$BIN" serve >/dev/null 2>&1 & SERVE=$!
 sleep 1
 OPS_TOKEN="$(LAIB_ACTOR=human:boot "$BIN" token mint ops --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
-LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
+LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" OPERATOR_SKILLS="$ROOT/skills" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
 grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }

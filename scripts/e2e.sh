@@ -233,7 +233,7 @@ LAIB_LISTEN=127.0.0.1:5976 "$BIN" serve >/dev/null 2>&1 & SERVE=$!
 sleep 1
 OPS_TOKEN="$(LAIB_ACTOR=human:e2e "$BIN" token mint ops --note e2e --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
 OPERATOR="${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}"
-LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:5977/v1 OPERATOR_HOME="$WORK/op" "$OPERATOR" -once event:caddy > "$WORK/op.json" || { echo "FAIL: operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
+LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:5977/v1 OPERATOR_HOME="$WORK/op" OPERATOR_SKILLS="$ROOT/skills" "$OPERATOR" -once event:caddy > "$WORK/op.json" || { echo "FAIL: operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 # laibctl: the Werkstatt's `laib` shell command against the same server
 printf '%s' "$OPS_TOKEN" > "$WORK/token"; chmod 600 "$WORK/token"
 grep -q "^status" <<<"$(LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN_FILE="$WORK/token" python3 "$ROOT/werkstatt/laibctl.py")" || fail "laibctl list"
