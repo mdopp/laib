@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.56.3](https://github.com/mdopp/laib/compare/v0.56.2...v0.56.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* **beets:** a confirmed spoken-word name moves its folder in any spelling, and out of _unklar too ([#727](https://github.com/mdopp/laib/issues/727)) ([422c372](https://github.com/mdopp/laib/commit/422c372ca14fd4fe28fc27bdb818fdc033322073))
+* **beets:** spoken-word names match in any spelling, and leave _unklar too ([9a0bcc3](https://github.com/mdopp/laib/commit/9a0bcc3955c25c587bc243239b6df7a97fc0e927))
+
 ## [0.56.2](https://github.com/mdopp/laib/compare/v0.56.1...v0.56.2) (2026-10-30)
 
 
