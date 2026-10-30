@@ -721,7 +721,7 @@ worse; a red backup, a lost slot and a failed incident are written down by
 code instead of hoped for.
 
 
-## Amendment 2026-10-30 — the first aid is a script; the Operator counts what the model costs and what lessons do (#839, #859, #860, #861)
+## Amendment 2026-10-30 — the first aid is a script; the Operator counts what the model costs, what lessons do and what the model would do (#839, #859, #860, #861)
 
 - **The incident's first aid is `vorfall`'s script** (#839). Its last
   skill-specific Go left the Operator: `skills/vorfall/run.py` does for an
@@ -758,10 +758,21 @@ code instead of hoped for.
   enable` accepts an ops hand at ceiling `propose`, the diagnostician of
   ADR 0019.
 
-Not yet (#860): the nightly eval against the box's own model and `more:
-[apply]` offered only while its latest result shows no wrong mutation. The
-harness is a Go test; running it on the box needs its cases and a fake laib
-in the Operator's image, more than the Operator's remaining lines.
+- **The nightly eval and the apply gate** (#860, after the owner raised
+  the caps by 10 %): the harness is the Operator's code now and both case
+  sets ship in its image. Every night from `OPERATOR_EVAL_AT` (03:30) on,
+  while the household model is free, the runner plays the set for its
+  model behind a fake laib that lists the skill's real tools and answers
+  with the case's replies, and journals „eval <model>: N Vorfälle, M falsche
+  Eingriffe“; a run in which a session waited is no measure and is tried
+  again. A capable model is offered `apply` only while its latest report
+  shows zero wrong mutations; without a report for the model it stays
+  offered — the owner's #286 decision — and the journal says the gate is
+  unmeasured.
+- **Looks and the first aid read the lessons** (#861): a look's context
+  carries the lessons for the findings it sees; the first aid names the fix
+  of a lesson for its finding in its note. Both record the lesson as
+  offered.
 
 Weighed against before (#246): the family sees nothing worse; one red
 costs one model session instead of two, a failing replay no longer asks

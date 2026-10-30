@@ -41,6 +41,7 @@ type scriptResult struct {
 	// the session's trigger from here on: vorfall's first aid marks it
 	// aided, with what it saw and did, for the model, the queue and an escalation (#792)
 	Trigger *Trigger `json:"trigger"`
+	Lessons []string `json:"lessons"` // the lessons the first aid used, by finding (#861)
 }
 
 const (

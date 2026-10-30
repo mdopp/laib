@@ -9,7 +9,8 @@ green, no model. Still red: the model gets the incident, with what was done
 (trigger.done); the trigger goes back to the runner marked aided, so a
 replay from the queue does not restart again and an escalation says what was
 seen. A red the kernel posted, or one aided already, goes to the model as it
-came.
+came. #861: a lesson the owner let in for the incident's finding is named
+in the note with its fix, and handed back as used.
 """
 
 import json
@@ -60,6 +61,19 @@ def said(tr):
     return out
 
 
+def lessons_for(tr, lessons):
+    """The owner's lessons for the incident's findings (#861): per finding
+    its fix in one line — the condensed lesson's Lösung, or what helped."""
+    out = {}
+    for text in lessons or []:
+        lines = (text or "").splitlines()
+        finding = lines[0][len("# Lehre: "):] if lines and lines[0].startswith("# Lehre: ") else ""
+        if finding in (tr.get("finding") or []):
+            fix = [x.lstrip("- ").strip() for x in lines if x.lstrip("- ").startswith(("Lösung:", "Was half:"))]
+            out[finding] = fix[0] if fix else ""
+    return out
+
+
 def when(s):
     m = re.match(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)$", s or "")
     return datetime.fromisoformat(m.group(1) + m.group(2).replace("Z", "+00:00")) if m else datetime.now(timezone.utc)
@@ -83,11 +97,14 @@ def run(s):
     fixed = bool(done) and "diag" in granted and still_red(s, svcs) == []
     now = when(s.now)
     text = f"Vorfall {now:%H:%M}: {field(tr, 'detail')}.{said(tr)}"
+    taught = lessons_for(tr, s.data.get("lessons"))
+    for finding, fix in taught.items():
+        text += f" Lehre zu {finding}: {fix or 'liegt vor'}."
     if fixed:
         text += " Danach ist nichts davon mehr rot."
     else:
         text += f" Weiter: das Modell sieht nach; ist es um {now + WAIT:%H:%M} noch rot, eskaliere ich."
     s.call("laib_note", kind="incident", text=text)
     if fixed:
-        return laibskill.done(outcome="green", note=text, trigger=tr)
-    return laibskill.done(trigger=tr)
+        return laibskill.done(outcome="green", note=text, trigger=tr, lessons=list(taught))
+    return laibskill.done(trigger=tr, lessons=list(taught))
