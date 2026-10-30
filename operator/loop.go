@@ -126,6 +126,8 @@ type Operator struct {
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
 	Web    *Web   // Frage's search, for a session that only proposes (#544)
 	Skills string // OPERATOR_SKILLS: the built-in skills' folders in the image, their scripts (#839)
+	Evals  string // OPERATOR_EVALS: the eval's cases in the image, played every night (#860)
+	gate   string // what the apply gate last told the journal (#860)
 	// Looked is the unix time of the last session or look that ended
 	// without an error; /ready says it, the kernel's heartbeat reads it,
 	// since a look that found nothing new writes no note (#543)
@@ -248,6 +250,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			return s, nil
 		}
 	}
+	var lessons struct{ Lessons []string }
+	if tr.Opened && !tr.Aided { // the first aid reads the lessons too (#861)
+		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
+		json.Unmarshal([]byte(box), &lessons)
+		data["lessons"] = lessons.Lessons
+	}
 	var ctxText string
 	if sk.Run != "" {
 		// the skill's script (#839): its deterministic steps, through the
@@ -265,8 +273,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		if g.end != nil {
 			defer g.end()
 		}
-		if res.Trigger != nil { // vorfall's first aid, done (#792)
-			tr, s.Trigger = *res.Trigger, *res.Trigger
+		if res.Trigger != nil { // vorfall's first aid, done (#792), with the lessons it used (#861)
+			tr, s.Trigger, s.Lessons = *res.Trigger, *res.Trigger, res.Lessons
 		}
 		if res.Outcome == "" && sk.Modell == "nein" {
 			return s, errors.New("modell: nein, aber das Skript übergibt an das Modell")
@@ -285,6 +293,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		return s, fmt.Errorf("tools: %w", err)
 	}
 	granted := sk.menu(o.Typed)
+	if ok, _ := o.applyGate(); granted["laib_apply"] && !slices.Contains(sk.Tools, "apply") && !ok {
+		delete(granted, "laib_apply") // measured, and wrong (#860)
+	}
 	var mine []Tool
 	for _, t := range tools {
 		if granted[t.Name] {
@@ -302,7 +313,6 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	for _, d := range defs {
 		offered[d.Function.Name] = true
 	}
-	var lessons struct{ Lessons []string }
 	if sk.Context != "usage" && sk.Context != "none" {
 		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
 		json.Unmarshal([]byte(box), &lessons)
@@ -310,7 +320,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			web.upstream = upstreamOf(box)
 		}
 		if look {
-			box = lookBundle(found, box)
+			box = lookBundle(found, box, saw)
 		}
 		ctxText = strings.TrimSpace(ctxText + "\n" + box)
 	}
@@ -332,7 +342,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	o.work.wait("")
 	user := o.prompt(sk, tr, ctxText)
 	for _, l := range lessons.Lessons { // what it was offered, as its prompt carries it (#861)
-		if t := firstLine(l); strings.Contains(user, t) {
+		if t := firstLine(l); strings.Contains(user, t) && !slices.Contains(s.Lessons, strings.TrimPrefix(t, "# Lehre: ")) {
 			s.Lessons = append(s.Lessons, strings.TrimPrefix(t, "# Lehre: "))
 		}
 	}
@@ -577,13 +587,15 @@ const lookCtx, lookResult, lookLines = 9000, 4000, 15
 
 // lookBundle is a look's context: what diag found, as the model would see
 // it, and the journal's last entries without the Operator's own notes —
-// the lease, a backup, a converge are what is news there.
-func lookBundle(found, bundle string) string {
+// the lease, a backup, a converge are what is news there — and the lessons
+// for the findings it saw.
+func lookBundle(found, bundle string, saw []string) string {
 	var c struct {
 		Journal []struct {
 			T                                            time.Time
 			Actor, Verb, Service, Result, Reason, Detail string
 		}
+		Lessons []string
 	}
 	json.Unmarshal([]byte(bundle), &c)
 	var lines []string
@@ -600,6 +612,11 @@ func lookBundle(found, bundle string) string {
 	}
 	slices.Reverse(lines)
 	text := "Befunde (laib diag):\n" + budget(cmp.Or(found, "nicht lesbar"), lookCtx/2) + "\n\nJournal, die letzten Einträge ohne die Notizen des Operators:\n" + strings.Join(lines, "\n")
+	for _, l := range c.Lessons { // the lessons for what it sees (#861), at the end, which the budget keeps
+		if slices.ContainsFunc(saw, func(id string) bool { return "# Lehre: "+label(id) == firstLine(l) }) {
+			text += "\n\nLehre zu einem Befund:\n" + l
+		}
+	}
 	return budget(text, lookCtx)
 }
 

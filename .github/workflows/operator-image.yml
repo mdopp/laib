@@ -5,7 +5,7 @@ name: operator-image
 on:
   push:
     branches: [main]
-    paths: ["operator/**", "skills/**", "go.mod", "go.sum", ".github/workflows/operator-image.yml"]
+    paths: ["operator/**", "skills/**", "werkstatt/evals/incidents*.json", "go.mod", "go.sum", ".github/workflows/operator-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read

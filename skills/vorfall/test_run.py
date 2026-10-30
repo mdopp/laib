@@ -19,7 +19,7 @@ RED = '[{"severity":"rot","probe":"unit","service":"bote","detail":"bote-check.s
 class Fake:
     def __init__(self, trigger, diag_after=RED, granted=("diag", "logs", "restart", "note")):
         self.trigger, self.skill, self.now = trigger, {"granted": list(granted)}, "2026-10-27T10:31:00+01:00"
-        self.calls, self.diag = [], diag_after
+        self.calls, self.diag, self.data = [], diag_after, {}
 
     def call(self, tool, **args):
         self.calls.append((tool, args))
@@ -50,6 +50,14 @@ class FirstAid(unittest.TestCase):
         r = run.run(s)
         self.assertEqual(r["outcome"], "green")
         self.assertIn("Danach ist nichts davon mehr rot.", r["note"])
+
+    def test_the_lesson_for_the_finding_is_named(self):  # #861
+        s = Fake(dict(OPENED, finding=["unit bote"]), diag_after="[]")
+        s.data = {"lessons": ["# Lehre: unit bote\n\n- Ursache: x\n- Lösung: Den Pod neu starten, nicht den Check.", "# Lehre: unit caddy\n\n- Lösung: y"]}
+        r = run.run(s)
+        self.assertIn("Lehre zu unit bote: Lösung: Den Pod neu starten, nicht den Check.", r["note"])
+        self.assertNotIn("caddy", r["note"])
+        self.assertEqual(r["lessons"], ["unit bote"])
 
     def test_unreadable_diag_or_no_restart_is_not_green(self):
         self.assertEqual(run.run(Fake(dict(OPENED), diag_after="laib away"))["outcome"], "")

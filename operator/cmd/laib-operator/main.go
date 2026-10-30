@@ -38,6 +38,8 @@ func main() {
 		Web: &operator.Web{URL: os.Getenv("FRAGE_URL")},
 		// the built-in skills' folders in the image, their scripts (#839)
 		Skills: env("OPERATOR_SKILLS", "/skills"),
+		// the eval's cases in the image, played against the model every night (#860)
+		Evals: env("OPERATOR_EVALS", "/evals"),
 	}
 	if op.MCP.Token == "" || op.LLM.URL == "" {
 		log.Fatal("laib-operator: LAIB_TOKEN and MODEL_URL are required")
@@ -63,7 +65,7 @@ func main() {
 	op.LLM.MaxTokens, _ = strconv.Atoi(env("OPERATOR_MAX_TOKENS", "0"))
 	op.Typed = operator.SmallModel(os.Getenv("OPERATOR_INTERFACE"), op.Window)
 
-	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
+	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00"), EvalAt: env("OPERATOR_EVAL_AT", "03:30")}
 	runner.LoadLast()
 	op.Recount(time.Now()) // the last runs and today's model use survive a restart (#859)
 	// the skills come from the kernel (ADR 0023): which exist, which rest,
