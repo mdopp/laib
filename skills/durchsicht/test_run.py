@@ -19,8 +19,9 @@ spec.loader.exec_module(run)
 class Fake:
     """A session whose laib answers status and logs from a day."""
 
-    def __init__(self, day, state=None, status=None, extra=()):
+    def __init__(self, day, state=None, status=None, extra=(), ignore=None):
         self.day, self.state, self.status, self.extra, self.calls = day, state, status, list(extra), []
+        self.ignore = ignore  # ignore.yml as laib state parses it; None: no such file on main
 
     def call(self, tool, **args):
         self.calls.append((tool, args))
@@ -33,6 +34,12 @@ class Fake:
             if svc not in self.day:
                 return laibskill.Reply("no such service", True)
             return laibskill.Reply(json.dumps(self.day[svc]))
+        if tool == "laib_state":
+            if self.ignore is None:
+                return laibskill.Reply("laib: ignore.yml is not a file on main (laib state lists them; secrets.age is never shown)", True)
+            if isinstance(self.ignore, str):
+                return laibskill.Reply(self.ignore, True)
+            return laibskill.Reply(json.dumps({"path": "ignore.yml", "content": "", "redacted": [], "data": self.ignore}))
         return laibskill.Reply("ok")
 
 
@@ -115,6 +122,62 @@ class Review(unittest.TestCase):
         many = "\n".join(line("caddy", f'{{"level":"error","logger":"x","msg":"boom {i}"}}', i) for i in range(5000))
         r = run.run(Fake({"caddy": {"caddy.service": many}}))
         self.assertIn("caddy.service, mindestens 5000×: x: boom <n>", r["context"])
+
+
+
+# #903: the container runtime's network layer, as the box writes it
+PASTA = [
+    "2026-10-29T05:25:00+00:00 atHome-Server pasta[2914928]: Flow 0 (TCP connection (spliced)): ERROR on epoll_ctl()",
+    "2026-10-29T05:25:01+00:00 atHome-Server pasta[3452444]: : Transport endpoint is not connected",
+    "2026-10-29T05:25:01+00:00 atHome-Server pasta[3452444]: Flow 5 (TCP connection (spliced)): shutdown() on HOST",
+    "2026-10-30T01:15:02+00:00 atHome-Server conmon[2413150]: conmon 9a0522c5e760d6b2947c <nwarn>: Failed to open cgroups file: /sys/fs/cgroup/user.slice/x/memory.events",
+]
+# #901: the one PTR the FritzBox drops
+PTR = '2026/10/29 21:00:{:02d}.000000 [error] dnsproxy: exchange failed upstream=192.168.178.1:53 question=";1.255.16.172.in-addr.arpa. IN PTR" duration=2.00s err="read udp 10.88.0.4:40000->192.168.178.1:53: i/o timeout"'
+HARMLESS = {"logs": [{"service": "adguard", "match": r"in-addr\.arpa\. IN PTR.*i/o timeout", "reason": "die FritzBox beantwortet PTR außerhalb ihres Netzes nicht; DNS lief (#901)"}]}
+
+
+class NotTheServicesOwnError(unittest.TestCase):
+    def test_runtime_lines_alone_are_no_news(self):
+        # #915: pasta and conmon lines in a green service's unit: no wish, no note
+        s = Fake({"bote": {"bote-pod.service": "\n".join(PASTA * 20)}})
+        r = run.run(s)
+        self.assertEqual((r["outcome"], r["why"]), ("unchanged", "keine neuen Fehlermuster"))
+        self.assertEqual(r["state"], {})
+
+    def test_runtime_lines_are_counted_for_the_runtime_next_to_real_news(self):
+        day = {"bote": {"bote-pod.service": "\n".join(PASTA * 5 + [line("bote-notify", "ERROR signal send failed", i) for i in range(3)])}}
+        r = run.run(Fake(day))
+        self.assertIn("neu, bote-pod.service, 3×: ERROR signal send failed", r["context"])
+        self.assertNotIn("epoll_ctl", r["context"])
+        self.assertIn("Container-Laufzeit (pasta, conmon; nicht der Dienst, nur gezählt): bote-pod.service 20.", r["context"])
+
+    def test_a_shape_marked_harmless_is_not_counted_a_new_one_is(self):
+        ptr = "\n".join(line("adguard", PTR.format(i), i) for i in range(40))
+        r = run.run(Fake({"adguard": {"adguard.service": ptr}}, ignore=HARMLESS))
+        self.assertEqual((r["outcome"], r["why"]), ("unchanged", "keine neuen Fehlermuster"))
+        self.assertEqual(r["state"], {})
+
+        other = "\n".join(line("adguard", f"2026/10/29 21:00:{i:02d}.000000 [error] dnsproxy: upstream 192.168.178.1:53 failed: i/o timeout", i) for i in range(5))
+        r = run.run(Fake({"adguard": {"adguard.service": ptr + "\n" + other}}, ignore=HARMLESS))
+        self.assertIn("neu, adguard.service, 5×", r["context"])
+        self.assertNotIn("in-addr.arpa", r["context"])
+        self.assertIn("Als harmlos vermerkt (ignore.yml, nur gezählt): adguard.service 40 (die FritzBox beantwortet PTR", r["context"])
+
+    def test_a_harmless_mark_is_the_services_own(self):
+        ptr = "\n".join(line("caddy", PTR.format(i), i) for i in range(5))
+        r = run.run(Fake({"caddy": {"caddy.service": ptr}}, ignore=HARMLESS))
+        self.assertIn("neu, caddy.service, 5×", r["context"])
+
+    def test_an_unreadable_mark_is_said_and_nothing_is_hidden(self):
+        ptr = "\n".join(line("adguard", PTR.format(i), i) for i in range(5))
+        r = run.run(Fake({"adguard": {"adguard.service": ptr}}, ignore="laib: git show main:ignore.yml: exit 128"))
+        self.assertIn("neu, adguard.service, 5×", r["context"])
+        self.assertIn("ignore.yml nicht lesbar", r["context"])
+        bad = {"logs": [{"service": "adguard", "match": "(", "reason": "x"}, {"service": "adguard", "match": "IN PTR"}]}
+        r = run.run(Fake({"adguard": {"adguard.service": ptr}}, ignore=bad))
+        self.assertIn("neu, adguard.service, 5×", r["context"])
+        self.assertIn("ignore.yml: 2 Einträge unter logs ohne gültiges Muster oder Grund", r["context"])
 
 
 if __name__ == "__main__":
