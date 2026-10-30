@@ -227,7 +227,7 @@ var Present func(ctx context.Context, env *cli.Env, st *state.State, finding str
 // Anchor stores what a proposal answers (#544). A proposal that rests on an
 // outside source is class human: what the web says, a person checks.
 func Anchor(inbox string, p *proposal.Proposal, a proposal.Anchor) error {
-	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && len(a.Sources) == 0 {
+	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 {
 		return nil
 	}
 	p.Anchored(a)
