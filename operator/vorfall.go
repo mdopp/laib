@@ -28,6 +28,17 @@ type Work struct {
 	Waiting  string         `json:"waiting,omitempty"`
 	Queued   int            `json:"queued,omitempty"`
 	Skills   map[string]Ran `json:"skills,omitempty"` // each skill's last run (#839)
+	Model    *Today         `json:"model,omitempty"`  // the model's use today (#859)
+}
+
+// Today is what the sessions of one day cost the model (#859): how many
+// asked it, tokens in and out, milliseconds waited for its replies.
+type Today struct {
+	Day      string `json:"day"`
+	Sessions int    `json:"sessions"`
+	In       int    `json:"in"`
+	Out      int    `json:"out"`
+	Ms       int64  `json:"ms"`
 }
 
 // Ran is a skill's last run as /ready and the Box page show it (#839):
@@ -68,6 +79,13 @@ func (k *work) ran(s Session) {
 		k.w.Skills = map[string]Ran{}
 	}
 	k.w.Skills[s.Skill] = Ran{At: s.Started, Outcome: s.Outcome, Why: clip(s.Why), Caused: strings.Join(c, ", ")}
+	if day := s.Started.Local().Format(time.DateOnly); s.ModelMs > 0 {
+		if k.w.Model == nil || k.w.Model.Day != day {
+			k.w.Model = &Today{Day: day}
+		}
+		t := k.w.Model
+		t.Sessions, t.In, t.Out, t.Ms = t.Sessions+1, t.In+s.In, t.Out+s.Out, t.Ms+s.ModelMs
+	}
 }
 
 func (k *work) begin(incident string, at time.Time) {
@@ -130,12 +148,13 @@ func (o *Operator) open(fs []finding, m *memory) []Trigger {
 			continue
 		}
 		m.Repaired[id] = "vorfall"
-		what := f.Service + ": " + f.Probe + " " + f.Detail
+		what, fd := f.Service+": "+f.Probe+" "+f.Detail, label(id)
 		if tr == nil {
 			tr = &Trigger{Kind: "event", Service: f.Service, Detail: what, Opened: true}
 		} else {
 			tr.Detail += "; " + what
 		}
+		tr.Finding = append(tr.Finding, fd)
 		if len(f.Repair) == 2 && f.Repair[0] == "restart" {
 			tr.Restart = append(tr.Restart, f.Repair[1])
 		}
@@ -148,48 +167,6 @@ func (o *Operator) open(fs []finding, m *memory) []Trigger {
 	}
 	o.remember(m)
 	return []Trigger{*tr}
-}
-
-// firstAid is an opened incident's first steps, without a model: each
-// service's last log line, the restart diag offers where it is granted,
-// and whether it is still red; then a note in German says what it saw and
-// did, and what comes next. It returns whether nothing is red any more.
-func (o *Operator) firstAid(ctx context.Context, mcp *MCP, sk Skill, tr *Trigger, now time.Time) (bool, string, []string) {
-	tr.Aided = true
-	var calls, done []string
-	do := func(step, tool string, args map[string]any) (string, bool) {
-		o.work.step(step)
-		calls = append(calls, tool+" "+shownArgs(args))
-		out, isErr, err := mcp.Call(ctx, tool, args)
-		return cmp.Or(out, fmt.Sprint(err)), err == nil && !isErr
-	}
-	for _, svc := range tr.services() {
-		if slices.Contains(sk.Granted, "logs") {
-			if out, ok := do("liest die Logs von "+svc, "laib_logs", map[string]any{"service": svc, "since": "1h"}); ok && lastLine(out) != "" {
-				tr.Saw = strings.TrimSpace(tr.Saw + " " + svc + ": „" + lastLine(out) + "“")
-			}
-		}
-		if slices.Contains(sk.Granted, "restart") && slices.Contains(tr.Restart, svc) {
-			out, _ := do("startet "+svc+" neu", "laib_restart", map[string]any{"service": svc})
-			done = append(done, svc+" neu gestartet ("+firstLine(cmp.Or(out, "ohne Antwort"))+")")
-		}
-	}
-	tr.Done = cmp.Or(strings.Join(done, ", "), "Logs gelesen")
-	fixed := false
-	if len(done) > 0 && slices.Contains(sk.Granted, "diag") {
-		o.work.step("prüft, ob es wieder grün ist")
-		calls = append(calls, "laib_diag {}")
-		red, known := o.stillRed(ctx, mcp, tr.services())
-		fixed = known && len(red) == 0
-	}
-	text := fmt.Sprintf("Vorfall %s: %s.%s", now.Format("15:04"), tr.Detail, tr.said())
-	if fixed {
-		text += " Danach ist nichts davon mehr rot."
-	} else {
-		text += fmt.Sprintf(" Weiter: das Modell sieht nach; ist es um %s noch rot, eskaliere ich.", now.Add(incidentWait).Format("15:04"))
-	}
-	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": text})
-	return fixed, text, calls
 }
 
 // said is what the first aid saw in the log and did, as sentences.

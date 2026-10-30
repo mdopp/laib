@@ -156,7 +156,11 @@ func TestRedIsNotTheLooksAndARefusedRepairIsSaidOnce(t *testing.T) {
 	llm, _ := recLLM(t, []Message{{Role: "assistant", Content: "Eins ist rot."}})
 	op := &Operator{Skills: "../skills", MCP: &MCP{URL: mcp.URL, Token: "tok"}, LLM: &LLM{URL: llm.URL, Model: "test"}, Home: t.TempDir(), Typed: true}
 	sk := skillFor(t, Trigger{Kind: "tick"}, "routineblick")
-	s, _ := op.Run(context.Background(), sk, Trigger{Kind: "tick"})
+	// the new red opens an incident, and the look leaves the model to it (#859)
+	if s, _ := op.Run(context.Background(), sk, Trigger{Kind: "tick"}); s.Outcome != "red" || len(s.opened) != 1 || countPrefix(*calls, "laib_repair") != 0 {
+		t.Fatalf("a look that opened an incident went on: %+v %v", s, *calls)
+	}
+	s, _ := op.Run(context.Background(), sk, Trigger{Kind: "tick"}) // the next look has the rest
 	if got := strings.Join(*calls, "\n"); strings.Contains(got, `"probe":"unit"`) || countPrefix(*calls, "laib_repair") != 1 {
 		t.Fatalf("want only the restore test's repair: %s", got)
 	}

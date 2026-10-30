@@ -38,6 +38,9 @@ type scriptResult struct {
 	// the note the runner writes when the model fails (#858): a report
 	// from status and journal, so the slot is never silent
 	Fallback string `json:"fallback"`
+	// the session's trigger from here on: vorfall's first aid marks it
+	// aided, with what it saw and did, for the model, the queue and an escalation (#792)
+	Trigger *Trigger `json:"trigger"`
 }
 
 const (
@@ -46,14 +49,15 @@ const (
 )
 
 // gate is one session's door for the calls its code makes: only the
-// skill's granted tools, each within its limit, the note once. Every call
-// and every refusal is recorded in the session.
+// skill's granted tools, each within its limit, its note once — the model
+// has its own, as vorfall's first aid notes before the model looks (#792).
+// Every call and every refusal is recorded in the session.
 type gate struct {
 	sk    Skill
 	mcp   *MCP
 	s     *Session
 	used  map[string]int // calls per tool, the model's and, apart, the script's (#376)
-	noted bool
+	noted bool           // the model's note, or the runner's for it
 	// vet asks the script about a model's call of one of its checks: why
 	// it may not run, or ""; end closes the script after the session
 	vet func(tool string, args map[string]any) string
@@ -75,7 +79,7 @@ func (g *gate) call(ctx context.Context, tool string, args map[string]any) (stri
 		why = tool + " ist der Fähigkeit " + g.sk.Name + " nicht gewährt"
 	case n > 0 && g.used["skript "+tool] >= n: // its own count, the model has its own
 		why = fmt.Sprintf("höchstens %d Mal %s in dieser Sitzung", n, verb)
-	case tool == "laib_note" && g.noted:
+	case tool == "laib_note" && g.used["skript laib_note"] > 0:
 		why = "die Notiz dieser Sitzung steht schon"
 	}
 	if why != "" {
@@ -97,7 +101,6 @@ func (g *gate) call(ctx context.Context, tool string, args map[string]any) (stri
 	}
 	switch {
 	case tool == "laib_note" && !isErr:
-		g.noted = true
 		g.s.Note, _ = args["text"].(string)
 	case tool == "laib_escalate" && !isErr:
 		g.s.Outcome = "escalated"
@@ -152,6 +155,7 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		var m struct {
 			Call string
 			Args map[string]any
+			Ask  string // one short question to the model (#861)
 			Done *scriptResult
 		}
 		if err := dec.Decode(&m); err != nil {
@@ -163,6 +167,13 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		}
 		if n >= scriptCalls {
 			return failed(fmt.Errorf("mehr als %d Aufrufe", scriptCalls))
+		}
+		if m.Ask != "" {
+			text, isErr := o.ask(ctx, g, m.Ask)
+			if err := enc.Encode(map[string]any{"text": text, "error": isErr}); err != nil {
+				return failed(err)
+			}
+			continue
 		}
 		o.work.step("Skript ruft " + m.Call + " auf")
 		text, isErr, refused := g.call(ctx, m.Call, m.Args)
@@ -188,6 +199,21 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		return res, fmt.Errorf("Skript %s: %v %s", g.sk.Name, err, lastLine(errOut.String()))
 	}
 	return res, nil
+}
+
+// ask is a script's short question to the model, without tools (#861):
+// only a skill whose model judges asks, and the session counts its cost.
+func (o *Operator) ask(ctx context.Context, g *gate, q string) (string, bool) {
+	if g.sk.Modell != "urteil" {
+		return "nur eine Fähigkeit mit modell: urteil fragt das Modell", true
+	}
+	o.work.step("Skript fragt das Modell")
+	g.s.Script = append(g.s.Script, "frage "+clip(firstLine(q)))
+	reply, err := o.chat(ctx, g.s, []Message{{Role: "user", Content: q}}, nil)
+	if err != nil {
+		return err.Error(), true
+	}
+	return reply.Content, false
 }
 
 // keep stores a script's state for its next run.

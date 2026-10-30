@@ -12,7 +12,8 @@ runner. Then it calls the script's run(session) and hands back its result.
 
 The channel is one JSON object per line. The runner sends the start
 ({"skill", "trigger", "state", "now", "data"}); the script sends {"call":
-<tool>, "args": {...}} and reads {"text", "error", "refused"}; at the end it
+<tool>, "args": {...}} and reads {"text", "error", "refused"}, or {"ask":
+<prompt>} for one short answer of the model (#861); at the end it
 sends {"done": {...}}. When done names checks, the script stays while the
 model works: for each model call of such a tool the runner sends {"check":
 {"tool", "args"}} and the script's check(s, tool, args) answers {"refuse":
@@ -102,6 +103,16 @@ class Session:
     def call(self, tool, **args):
         """Calls a laib tool in the skill's name; the runner decides whether it may."""
         self._send({"call": tool, "args": args})
+        return self._reply()
+
+    def ask(self, prompt):
+        """One short question to the model, without tools (#861): only a skill
+        whose model judges (modell: urteil) may; the runner counts its tokens.
+        The Reply's text is the answer, or why there is none (error)."""
+        self._send({"ask": prompt})
+        return self._reply()
+
+    def _reply(self):
         line = self._in.readline()
         if not line:
             raise EOFError("the runner closed the channel")
@@ -113,14 +124,16 @@ class Session:
         self._out.flush()
 
 
-def done(outcome="", why="", note="", context="", human="", state=None, checks=(), fallback=""):
+def done(outcome="", why="", note="", context="", human="", state=None, checks=(), fallback="", trigger=None):
     """What a script hands back. outcome set (unchanged, idle, green): the
     session ends without a model; else the model sees context. human is
     added to the session's note; state is kept for the next run when the
     session does not fail or wait (None keeps the last); checks are the
     tools whose model calls the script's check() vets; fallback is the note
-    the runner writes when the model fails (#858)."""
-    return {"outcome": outcome, "why": why, "note": note, "context": context, "human": human, "state": state, "checks": list(checks), "fallback": fallback}
+    the runner writes when the model fails (#858); trigger, when set, is the
+    session's trigger from here on (vorfall's first aid marks it aided)."""
+    return {"outcome": outcome, "why": why, "note": note, "context": context, "human": human, "state": state, "checks": list(checks), "fallback": fallback,
+            "trigger": trigger}
 
 
 def first_line(s):

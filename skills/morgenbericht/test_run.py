@@ -60,5 +60,31 @@ class Fallback(unittest.TestCase):
         self.assertTrue(text.startswith("Morgenbericht ohne Modell") and "0 Einträge, keiner rot" in text, text)
 
 
+class ModelUse(unittest.TestCase):
+    def test_the_last_24_hours(self):  # #859
+        ss = [{"skill": "vorfall", "started": "2026-10-20T22:00:00Z", "in": 5000, "out": 200, "modelMs": 90000},
+              {"skill": "routineblick", "started": "2026-10-21T03:00:00.5Z", "in": 1000, "out": 50, "modelMs": 30000},
+              {"skill": "routineblick", "started": "2026-10-19T03:00:00Z", "in": 9, "out": 9, "modelMs": 9},
+              {"skill": "lehre", "started": "2026-10-21T06:00:00Z", "outcome": "idle"}]
+        self.assertEqual(run.model_line(ss, run.when(DAY)), "Modell in 24 Stunden: 2 Sitzungen, 6000 Token gelesen, 250 geschrieben, 2 Minuten.")
+        self.assertEqual(run.model_line([], run.when(DAY)), "Modell in 24 Stunden: keine Sitzung des Operators.")
+
+
+class LessonsAndRecurrence(unittest.TestCase):
+    def test_the_month(self):  # #861
+        def inc(t, finding, queued=0, lessons=()):
+            return {"skill": "vorfall", "started": t, "trigger": {"kind": "event", "service": "x", "finding": finding, "queued": queued}, "lessons": list(lessons)}
+        ss = [inc("2026-10-02T03:00:00Z", ["unit bote"]),
+              inc("2026-10-02T03:20:00Z", ["unit bote"], queued=1),  # its replay: the same incident
+              inc("2026-10-05T03:00:00Z", ["status immich"], lessons=["unit bote"]),
+              inc("2026-10-09T03:00:00Z", ["unit bote"], lessons=["unit bote"]),
+              inc("2026-10-12T03:00:00Z", ["status immich"]),
+              {"skill": "vorfall", "started": "2026-10-13T03:00:00Z", "trigger": {"kind": "event", "service": "caddy"}},
+              inc("2026-09-01T03:00:00Z", ["unit caddy"])]
+        self.assertEqual(run.lessons_line(ss, run.when(DAY)),
+                         "Lehren im Monat: unit bote 2× angeboten. Wiedergekommen: unit bote 2× (trotz Lehre), status immich 2×.")
+        self.assertEqual(run.lessons_line([], run.when(DAY)), "Lehren im Monat: keine angeboten. Kein Befund kam wieder.")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -178,19 +178,6 @@
     "role": "assistant",
     "tool_calls": [
      {
-      "id": "2",
-      "type": "function",
-      "function": {
-       "name": "laib_approve",
-       "arguments": "{\"id\": 17}"
-      }
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "tool_calls": [
-     {
       "id": "3",
       "type": "function",
       "function": {
@@ -688,19 +675,6 @@
    ]
   },
   "script": [
-   {
-    "role": "assistant",
-    "tool_calls": [
-     {
-      "id": "1",
-      "type": "function",
-      "function": {
-       "name": "laib_updates",
-       "arguments": "{}"
-      }
-     }
-    ]
-   },
    {
     "role": "assistant",
     "tool_calls": [

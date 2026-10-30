@@ -42,8 +42,9 @@ func cmdOperator(ctx context.Context, env *cliEnv, args []string) int {
 		if proposal.Hand(env.Actor) != "human" {
 			return cli.Refused(env, "only a human enables or disables the operator")
 		}
-		if !policy.Allowed(st.Policy, "ops", "apply") {
-			return env.Fail(errors.New("policy.yml: the ops hand needs ceiling apply for the operator"))
+		// the diagnostician (#860, ADR 0019): at ceiling propose it looks and proposes, nothing more
+		if !policy.Allowed(st.Policy, "ops", "propose") {
+			return env.Fail(errors.New("policy.yml: the ops hand needs ceiling propose or apply for the operator"))
 		}
 		enable := args[0] == "enable"
 		model, reportAt := "", ""

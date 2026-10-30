@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -30,9 +31,12 @@ func TestTheBoxPageSaysWhatTheOperatorDoes(t *testing.T) {
 	if w.Restarts != 1 || w.Escalations != 1 || w.Notes != 1 || w.Proposals != 0 || len(w.Today) != 3 || !strings.Contains(w.Today[0], "Eskalation bote") {
 		t.Fatalf("today counts another hand's or another day's lines: %+v", w)
 	}
+	// what the model's sessions cost today (#859), as the Operator's /ready says it
+	json.Unmarshal([]byte(`{"model":{"day":"`+now.Format(time.DateOnly)+`","sessions":2,"in":1200,"out":34,"ms":3400}}`), &w.OpWork)
 	page := statusBody(Readiness{State: "bereit", OperatorWork: w}, nil, nil, "")
 	for _, want := range []string{"<h2>Operator</h2>", "Arbeitet an: bote: unit bote-check.service ist failed", "zuletzt: startet bote neu", "Wartet: die Grafikkarte ist vergeben · 1 Vorfall in der Warteschlange",
-		"Heute: 1 Neustart · 0 Vorschläge · 1 Eskalation · 1 Notiz", `href="/inbox"`, `href="/journal"`, "Neustart bote: bote-check.service failed"} {
+		"Heute: 1 Neustart · 0 Vorschläge · 1 Eskalation · 1 Notiz", `href="/inbox"`, `href="/journal"`, "Neustart bote: bote-check.service failed",
+		"Modell: 2 Sitzungen, 1200 Token gelesen, 34 geschrieben, 3 s"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the page lacks %q", want)
 		}

@@ -35,14 +35,16 @@ func (m menus) RoundTrip(r *http.Request) (*http.Response, error) {
 // prepares a judgement or, for lehre as before, works alone.
 func TestEachSkillSaysWhereTheModelDecides(t *testing.T) {
 	for name, want := range map[string]string{"vorfall": "frei", "routineblick": "frei", "morgenbericht": "frei",
-		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "nein",
+		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "urteil", // #861: the model condenses a lesson
 		"sicherung": "nein"} { // #858: the weekly sample ran only when the model called it
 		sk := skillFor(t, Trigger{}, name)
 		if got := cmpOr(sk.Modell, "frei"); got != want {
 			t.Errorf("%s: modell %s, want %s", name, got, want)
 		}
-		if want == "frei" && name == "vorfall" && sk.Run != "" {
-			t.Errorf("vorfall's loop is the model's, no script ahead of it: %+v", sk)
+		// vorfall's script is the first aid of an opened incident (#792): it
+		// vets no call and narrows no menu, the loop below stays the model's
+		if want == "frei" && name == "vorfall" && sk.Run != "run.py" {
+			t.Errorf("vorfall's first aid is its script: %+v", sk)
 		}
 	}
 }

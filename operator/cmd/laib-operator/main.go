@@ -65,6 +65,7 @@ func main() {
 
 	runner := &operator.Runner{Op: op, Tick: env("OPERATOR_TICK", "10m"), ReportAt: env("OPERATOR_REPORT_AT", "07:00")}
 	runner.LoadLast()
+	op.Recount(time.Now()) // the last runs and today's model use survive a restart (#859)
 	// the skills come from the kernel (ADR 0023): which exist, which rest,
 	// what each may call; the last good list stands while laib is away
 	var skills []operator.Skill
