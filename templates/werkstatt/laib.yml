@@ -23,8 +23,8 @@ secrets:
   - name: LAIB_PI_TOKEN
     external: true               # laib token mint pi --note werkstatt
   - name: WERKSTATT_GIT_TOKEN
-    owner: {label: "Werkstatt: GitHub-Zugang", warum: "Damit holt die Werkstatt Code und schlägt Änderungen als Pull Request vor.", hilfe: "Auf GitHub unter Settings → Developer settings → Fine-grained tokens ein Token anlegen: Contents lesen und schreiben, Issues lesen, Pull requests lesen und schreiben.", link: "https://github.com/settings/personal-access-tokens/new"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
-    external: true               # the dev container's fine-grained GitHub PAT: Contents rw, Issues r, Pull requests rw
+    owner: {label: "Werkstatt: GitHub-Zugang", warum: "Damit holt die Werkstatt Code und schlägt Änderungen als Pull Request vor.", hilfe: "Auf GitHub unter Settings → Developer settings → Fine-grained tokens ein Token anlegen: Contents lesen und schreiben, Issues lesen und schreiben, Pull requests lesen und schreiben.", link: "https://github.com/settings/personal-access-tokens/new"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
+    external: true               # the dev container's fine-grained GitHub PAT: Contents rw, Issues rw (the box check comments, #867), Pull requests rw
   - name: WERKSTATT_PI_GIT_TOKEN
     owner: {label: "Werkstatt: GitHub-Zugang für pi", warum: "Pi bekommt einen eigenen, engeren Zugang als die Werkstatt.", hilfe: "Ein zweites Fine-grained Token wie das der Werkstatt, nur für die Repos, an denen pi arbeitet; nie dasselbe Token.", link: "https://github.com/settings/personal-access-tokens/new"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true               # pi's own PAT, limited to AUTOLOOP_REPOS: Contents rw (branch push, claim ref), Issues r, Pull requests rw — never the dev token (#44)
@@ -34,7 +34,11 @@ data:
   - path: ${DATA_DIR}/werkstatt/ssh-host-keys  # sshd's host keys: the app keeps trusting the box after a restore
   - path: ${DATA_DIR}/werkstatt/cache          # ~/.cache: npm, go, pip — rebuilt on demand
     backup: false
+  - path: ${DATA_DIR}/werkstatt/status         # the entrypoint's status line, written on every start
+    backup: false
 health: {none: "a dev box with no server to probe; the unit state is the check"}
+status:                          # the sessions' permission mode (#898): "Claude-Sitzungen ohne Rückfragen …"
+  file: ${DATA_DIR}/werkstatt/status/laib-status.json
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password
   - {port: 8791, lan: false}     # pi-web-ui, only through Caddy

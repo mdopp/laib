@@ -77,6 +77,10 @@ func TemplateCmd(ctx context.Context, env *cli.Env, args []string) int {
 		if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "propose") {
 			return cli.Refused(env, env.Actor+" may not propose")
 		}
+		// #906: the registries first, so a template fix on main needs no timer; offline the last clone or the built-in stays
+		if _, err := Sync(ctx, env, st); err != nil {
+			fmt.Fprintln(env.Errw(), "registry:", err)
+		}
 		return Update(ctx, env, st, args[1])
 	}
 	return env.Fail(fmt.Errorf("unknown template subcommand %q", args[0]))

@@ -59,6 +59,7 @@ MAX_CLIPPED_SHARE = 0.01
 # The false wakes stimme-wakes keeps under recordings/<id>/ (#825): negatives.
 NEGATIVES = "negativ"
 HOUSEHOLD_FEATURES = "household_negative_features"
+MIN_SPLIT_CLIPS = 10   # fewer and Clips' train/test split leaves an empty side (#825)
 # How the household's negatives weigh against microWakeWord's corpora (speech and
 # dinner_party at 10). UNVERIFIED like DEFAULT_REAL_OVERSAMPLE below: a few dozen
 # clips at 3.0 are drawn often, each through a fresh augmentation; the penalty 2.0
@@ -238,6 +239,12 @@ def household_negatives(work: pathlib.Path, run: pathlib.Path, negatives: pathli
         shutil.copyfile(wav, clips / f"{used:05d}.wav")
         used += 1
     sys.stdout.write(f"{used} false wake(s) from the household as negatives\n")
+    # #825: microWakeWord's Clips splits off a fifth for test and validation, which
+    # leaves no training set below a handful (1 false wake: ValueError, the run
+    # of 2026-10-28). Few clips are repeated up to MIN_SPLIT_CLIPS; a negative seen
+    # twice weighs a little more, which a false wake of this house may.
+    for i in range(used, MIN_SPLIT_CLIPS if 0 < used < MIN_SPLIT_CLIPS else used):
+        shutil.copyfile(clips / f"{i % used:05d}.wav", clips / f"{i:05d}.wav")
     if used:
         build_features(work, run, clips.name, features.name)
     return used

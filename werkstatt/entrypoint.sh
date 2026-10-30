@@ -103,14 +103,39 @@ fi
 # restart. As dev in a clean login shell: profile.d gives it the Claude and
 # Laib tokens from /run/laib, and none of the container's other variables
 # (the SSH password, the git token) reach a session.
+# The permission mode (#898, PERMISSION_MODE default|bypass) is the one
+# variable passed on, and laib status werkstatt shows it.
+case "${WERKSTATT_PERMISSION_MODE:-default}" in bypass) mode=bypass ;; *) mode=default ;; esac
+if [ -d /var/lib/werkstatt-status ]; then
+  if [ "$mode" = bypass ]; then
+    detail="Claude-Sitzungen ohne Rückfragen: jeder Befehl läuft ohne Nachfrage (PERMISSION_MODE bypass)"
+  else
+    detail="Claude-Sitzungen fragen nach, bevor sie etwas ausführen (PERMISSION_MODE default)"
+  fi
+  findings='[]'   # bypass is the owner's choice, and laib diag names it, so nobody forgets it is on
+  [ "$mode" = default ] || findings="[{\"severity\":\"info\",\"detail\":\"$detail\"}]"
+  printf '{"at":"%s","detail":"%s","rueckfragen":"%s","findings":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$detail" "$mode" "$findings" > /var/lib/werkstatt-status/laib-status.json
+fi
 sessions() {
-  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash TERM=xterm-256color PATH=/usr/local/bin:/usr/bin:/bin bash -lc werkstatt-sessions" \
+  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash TERM=xterm-256color PATH=/usr/local/bin:/usr/bin:/bin WERKSTATT_PERMISSION_MODE=$mode bash -lc werkstatt-sessions" \
     || echo "werkstatt: WARNING: the Claude sessions did not start (werkstatt-sessions)" >&2
+}
+# #867: once the box runs a newer release, the issues it closed that name a
+# box probe are checked and commented (werkstatt-boxcheck), about hourly on
+# the sessions' timer, as dev with gh's login or the git token and the laib
+# MCP's read verbs
+boxcheck() {
+  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin LAIB_SESSION=boxcheck bash -lc werkstatt-boxcheck" \
+    || echo "werkstatt: WARNING: werkstatt-boxcheck did not finish, the next hour tries again" >&2
 }
 sessions
 every="${WERKSTATT_SESSIONS_EVERY:-300}"
 if [ "$every" -gt 0 ] 2>/dev/null; then
-  (while sleep "$every"; do sessions; done) &
+  (waited=0; while sleep "$every"; do
+    sessions
+    waited=$((waited + every))
+    if [ "$waited" -ge 3600 ]; then waited=0; boxcheck; fi
+  done) &
 fi
 # sshd's host keys live in their own data path (${DATA_DIR}/werkstatt/ssh-host-keys),
 # root's and 0600: made on the first start, then kept — the app trusts this key

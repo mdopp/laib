@@ -93,7 +93,8 @@ type Peer struct {
 type Registry struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
-	Ref  string `yaml:"ref"` // branch or tag; default main
+	Ref  string `yaml:"ref"`  // branch or tag; default main
+	Path string `yaml:"path"` // the folder of the template folders inside the repo; default templates (#906)
 }
 
 // Updates is the window of laib-images.timer, the nightly image run (#528):

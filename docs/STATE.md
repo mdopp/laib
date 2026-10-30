@@ -66,6 +66,11 @@ dns:                              # DNS-01: one wildcard certificate *.<domain> 
   secretRef: DNS_API_TOKEN        # laib secret set DNS_API_TOKEN (stdin)
   challengeAlias: example-acme.dedyn.io   # only when _acme-challenge.<domain> is a CNAME into the provider's zone
 hostNetwork: [caddy, llama]       # the closed carve-out list (#16)
+registries:                       # Git repos whose template folders are installable (#14, #906)
+  - name: laib                    # registries/<name>, synced by `laib template sync` and before each `laib template update`
+    url: https://github.com/mdopp/laib
+    ref: main                     # branch or tag; default main
+    path: templates               # the folder of the template folders in the repo; default templates
 notify:
   url: http://127.0.0.1:8787/api/laib-events   # red results, proposals, readiness (#15)
   mail: owner@example.home        # laib's mails (#393): red for 10 min, once a week the updates; empty: the sso

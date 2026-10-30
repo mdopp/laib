@@ -11,10 +11,14 @@
 # Before a checkout's first start its onboarding and folder trust are
 # answered in ~/.claude.json (#498, settle below): nobody is at the window.
 #
-# The sessions run in Claude Code's default permission mode: a tool call
-# that needs a permission is asked for in the app. claude-dev also passed
-# --allow-dangerously-skip-permissions; a session reachable from the phone
-# that holds an apply-capable Laib hand does not get that (#383).
+# The permission mode is the owner's value PERMISSION_MODE (#898):
+# `default` asks for a tool call that needs a permission in the app (#383);
+# `bypass` runs every tool call without asking, as claude-dev did, a risk
+# the owner takes knowingly: the session is reachable from the phone and
+# holds an apply-capable Laib hand. The mode is passed on every start, so a
+# `--continue` does not fall back to the mode its conversation last ran in,
+# and in bypass Claude Code's one-time warning is answered in
+# ~/.claude/settings.json (nobody is at the window).
 #
 #   werkstatt-sessions             one pass (idempotent)
 #   werkstatt-sessions off <name>  switch a checkout's session off: a marker
@@ -40,6 +44,10 @@ S="${WERKSTATT_TMUX_SESSION:-claude}"
 CLAUDE="${WERKSTATT_CLAUDE:-claude}"
 CONF="${WERKSTATT_TMUX_CONF:-/etc/tmux.conf}"
 CLAUDE_JSON="${WERKSTATT_CLAUDE_JSON:-$HOME/.claude.json}"
+case "${WERKSTATT_PERMISSION_MODE:-default}" in
+bypass) MODE=--dangerously-skip-permissions ;;
+*) MODE="--permission-mode default" ;;
+esac
 EMPTY=".werkstatt"   # the empty session's window: a leading dot, which no checkout's name has (valid)
 t() { tmux -f "$CONF" "$@"; }
 AS="${WERKSTATT_USER:-dev}"
@@ -64,7 +72,7 @@ start() { # start <name>
   # in a checkout with no conversation yet --continue exits 1: start fresh,
   # unless the session was switched off meanwhile (#498)
   # LAIB_SESSION: the name this session's own claude token is asked for under (#380)
-  cmd="LAIB_SESSION=$q $CLAUDE --continue --remote-control $q || { test -e $off || LAIB_SESSION=$q $CLAUDE --remote-control $q; }"
+  cmd="LAIB_SESSION=$q $CLAUDE $MODE --continue --remote-control $q || { test -e $off || LAIB_SESSION=$q $CLAUDE $MODE --remote-control $q; }"
   # a checkout another uid made (a restore, a root clone): git refuses it otherwise
   git config --global --replace-all --fixed-value safe.directory "$path" "$path" 2>/dev/null || true
   if t has-session -t "=$S" 2>/dev/null; then
@@ -94,8 +102,26 @@ settle() { # settle <path>
   fi
 }
 
+# bypass (#898): Claude Code asks once whether the mode is meant; the
+# owner said so in PERMISSION_MODE, so the answer is written, file kept
+bypass_settled() {
+  local f="$HOME/.claude/settings.json" tmp
+  [ "$MODE" = --dangerously-skip-permissions ] && command -v jq >/dev/null || return 0
+  mkdir -p "$HOME/.claude"
+  [ -s "$f" ] || printf '{}\n' > "$f"
+  jq -e '.skipDangerousModePermissionPrompt == true' "$f" >/dev/null 2>&1 && return 0
+  tmp="$f.werkstatt-$$"
+  if jq '.skipDangerousModePermissionPrompt = true' "$f" > "$tmp" 2>/dev/null; then
+    mv -f "$tmp" "$f"
+  else
+    rm -f "$tmp"
+    echo "werkstatt: WARNING: $f is not JSON, left alone; a bypass session waits at Claude Code's warning" >&2
+  fi
+}
+
 pass() {
   local d name idx
+  bypass_settled
   for d in "$WS"/*/; do
     name=$(basename -- "$d")
     valid "$name" && [ -f "$d/CLAUDE.md" ] && [ ! -e "$OFF/$name" ] || continue
