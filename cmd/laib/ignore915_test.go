@@ -24,12 +24,15 @@ func TestIgnoreRecordsAHarmlessLogShapeWithItsReason(t *testing.T) {
 	}
 	run := func(args ...string) int {
 		e := *env
-		e.Out, e.ErrOut, e.Actor = &bytes.Buffer{}, &bytes.Buffer{}, "claude"
-		return cmdIgnore(ctx, &e, args)
+		var errOut bytes.Buffer
+		e.Out, e.ErrOut, e.Actor = &bytes.Buffer{}, &errOut, "claude"
+		rc := cmdIgnore(ctx, &e, args)
+		t.Logf("ignore %q: %d %s", args, rc, errOut.String())
+		return rc
 	}
 	for _, bad := range [][]string{
-		{"--log", "whoami", `IN PTR`},                    // no reason
-		{"--log", "whoami", `(`, "kaputtes Muster"},      // no RE2
+		{"--log", "whoami", `IN PTR`},                     // no reason
+		{"--log", "whoami", `(`, "kaputtes Muster"},       // no RE2
 		{"--log", "nas", `IN PTR`, "kein solcher Dienst"}, // no such service
 		{"--log", "whoami", ``, "leeres Muster"},
 	} {

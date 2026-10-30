@@ -130,7 +130,8 @@ prompt: |
   `diag`, `logs`, `inspect`, `look`, `read`, `journal`, `context`,
   `inbox`, `plan`, `note`, `escalate`, `propose`, `wish`, `restart`,
   `exec`, `write`, `apply` (the last two added 2026-10-17, see the
-  amendment). `note` is required: every session ends in a note, which is what
+  amendment), `state` (read-only, 2026-10-30: the log review reads
+  `ignore.yml`, #915). `note` is required: every session ends in a note, which is what
   the heartbeat counts. The Operator offers a typed menu entry when its
   verb is granted (`set_value` → `propose`, `suggest` → `wish`); the menu
   stays Operator code, the vocabulary is the kernel's.

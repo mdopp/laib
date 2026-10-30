@@ -19,7 +19,7 @@ services/
 skills/<name>/skill.yml  an Operator skill added or replaced on this box (ADR 0023, #839)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
 lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
-ignore.yml            units on the box that are deliberately unmanaged
+ignore.yml            units on the box that are deliberately unmanaged; logs: shapes answered as harmless, with their reason (laib ignore --log, #915)
 aufgaben.yml          the Box-Aufgaben (#667): the owner's to-dos on the box; laib aufgabe commits it on main, never a proposal
 ```
 
