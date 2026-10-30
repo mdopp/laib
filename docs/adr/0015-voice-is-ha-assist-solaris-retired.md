@@ -12,6 +12,14 @@ household agent, or to route a spoken sentence through an LLM loop.
   first result on the box decides: 5 of 5 accepts this ADR, a miss amends
   §1 with the custom sentences it needs. Check 2 is the integrations row
   „Frage als Gesprächsagent“ of the same check.)*
+  *(2026-10-30, #933: the first box result was 3 of 5 — „Spiele
+  Einslive“ and „Spiele Musik von Queen“ not recognized: HA's German
+  media sentences without a named player need the satellite's area, and
+  Music Assistant's players have none. §1 is amended by Laib's own
+  sentences, LaibRadio and LaibMusik (templates/home-assistant pre-start,
+  README „Radio and music by voice“). Still Proposed: this ADR moves to
+  Accepted only with the check's 5 of 5 measured on the box after that
+  release, not before.)*
 - **Deciders:** operator (mdopp): voice matters; realistically it is
   alarms and timers, Einslive, music from a playlist, "was ist …", and
   switches.

@@ -257,11 +257,11 @@ class WS:
 # a sentence HA's built-in intents know on every box, that needs no device and switches nothing
 PROBE = {"de": "Wie spät ist es", "en": "What time is it"}
 APPLY = "laib apply home-assistant (#634)"
-# ADR 0015's five intents (#864) as text, recognized and never executed: (what, sentence, intent). An empty
-# intent takes any one HA or Music Assistant matches; None: no local intent may take it, so it reaches Frage.
+# ADR 0015's five intents (#864) as text, recognized and never executed: (what, sentence, intent). The media
+# ones are Laib's own sentences (pre-start, #933); None: no local intent may take it, so it reaches Frage.
 # {name} is a light or switch exposed to Assist. What this does not measure: the microphone, Whisper, the music.
-FIVE = [("Timer", "Stelle einen Timer auf 5 Minuten", "HassStartTimer"), ("Einslive", "Spiele Einslive", ""),
-        ("Musik", "Spiele Musik von Queen", ""), ("Frage", "Was ist ein Igel", None), ("Schalter", "Schalte {name} ein", "HassTurnOn")]
+FIVE = [("Timer", "Stelle einen Timer auf 5 Minuten", "HassStartTimer"), ("Einslive", "Spiele Einslive", "LaibRadio"),
+        ("Musik", "Spiele Musik von Queen", "LaibMusik"), ("Frage", "Was ist ein Igel", None), ("Schalter", "Schalte {name} ein", "HassTurnOn")]
 
 
 def five(ws, lang: str, reg: list, states: dict) -> tuple:
@@ -279,10 +279,10 @@ def five(ws, lang: str, reg: list, states: dict) -> tuple:
     ok, out = [], []
     for (what, sentence, want), hit in zip(probes, got + [None] * len(probes)):
         took = ((hit or {}).get("intent") or {}).get("name") if (hit or {}).get("match") else None
-        if (want is None and not took) or (want is not None and took and (not want or took == want)):
+        if (want is None and not took) or (want is not None and took == want):
             ok.append(what)
         else:
-            out.append({"severity": "gelb", "detail": f"Sprache: „{sentence}“ " + (f"nimmt {took}, nicht Frage" if want is None else "wird nicht erkannt"),
+            out.append({"severity": "gelb", "detail": f"Sprache: „{sentence}“ " + (f"nimmt {took}, nicht {want or 'Frage'}" if took else "wird nicht erkannt"),
                         "fix": "eigene Sätze in Home Assistant (ADR 0015, Prüfung 1); laib logs home-assistant"})
     missing = "" if name else " · Schalter nicht geprüft: kein Licht oder Schalter für Assist freigegeben"
     print(f"Absichten: {len(ok)} von {len(probes)} erkannt in {ms} ms: " + ", ".join(ok) + missing, flush=True)  # the unit's journal

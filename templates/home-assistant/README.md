@@ -77,6 +77,36 @@ lokale Befehle aktiv (HassGetCurrentTime in 40 ms) · Weckwort nur am Gerät,
 bis hey_joshua da ist“. It does not measure the microphone, the end of
 speech or Whisper: a spoken test on the device does.
 
+## Radio and music by voice (#933)
+
+The first box result of ADR 0015's five intents was 3 of 5: „Spiele
+Einslive“ and „Spiele Musik von Queen“ were not recognized. Home
+Assistant's own German media sentences (`HassMediaSearchAndPlay`) without a
+named player need the area of the satellite that heard them; the check
+sends text without one, and Music Assistant's players have no area in Home
+Assistant, so even a satellite's sentence would have found no player there.
+pre-start therefore writes Laib's own sentences, a file Laib owns whole,
+`custom_sentences/de/laib_medien.yaml`:
+
+- **LaibRadio**: „Spiel(e) [den Sender | das Radio | Radio] <Sender>“, the
+  stations being the house's, as Music Assistant takes them from the
+  share's `radio/` (#646, the `.strm` names and the `.m3u` `#EXTINF`
+  names), each also as it is said: digits as words, apart and joined
+  („1LIVE“: „eins live“, „Einslive“), no brackets („Deutschlandfunk“).
+- **LaibMusik**: „Spiel(e) Musik | Lieder | Songs | etwas von <Künstler>“,
+  the artist a wildcard.
+
+`packages/laib_medien.yaml` answers them with an `intent_script`: Music
+Assistant's `play_media` (radio by name, artist by name) on Music
+Assistant's player in the satellite's area, else the one named like the
+area (`media_player.wohnzimmer_2` for the Wohnzimmer), else none, and then
+the answer says „Ich finde hier keinen Lautsprecher.“ When pre-start
+changed either file it leaves `.laib-sentences-changed`; post-deploy then
+reloads conversation and intent_script once, or restarts Home Assistant
+when intent_script was not set up at its start. The check counts the two
+sentences only when Laib's intents take them. What it does not measure: that
+the station plays, and on which speaker.
+
 ## The names as Whisper writes them (#760)
 
 „Schalte Sofa-Licht aus“ was heard right and missed HA's own intents: the

@@ -1003,6 +1003,26 @@ def install_updates():
     return broken
 
 
+def sentences():
+    """#933: pre-start wrote Laib's media sentences and their intent_script and left a marker; Home Assistant
+    reads them on a reload, which an apply that changed no unit does not bring. Once per change: conversation's
+    and intent_script's reload, or a restart when intent_script was not in the configuration at HA's start."""
+    marker = os.path.join(HA_CONFIG, ".laib-sentences-changed")
+    if not os.path.exists(marker):
+        return
+    tok = admin_session()
+    st, _ = call("POST", "/api/services/conversation/reload", {}, token=tok)
+    if st != 200:
+        raise RuntimeError(f"conversation.reload: HTTP {st}")
+    st, _ = call("POST", "/api/services/intent_script/reload", {}, token=tok)
+    if st != 200:   # not set up at start: only a restart loads it
+        call("POST", "/api/services/homeassistant/restart", {}, token=tok)
+        print("home-assistant: media sentences new: Home Assistant startet neu (intent_script)")
+    else:
+        print("home-assistant: media sentences reloaded")
+    os.remove(marker)
+
+
 def ma(command, **args):
     """one command on Music Assistant's JSON-RPC API with HA_MUSIC_ASSISTANT_TOKEN"""
     req = urllib.request.Request(MA + "/api", data=json.dumps({"message_id": "laib", "command": command, "args": args}).encode(),
@@ -1359,6 +1379,10 @@ except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran: with
 if sperre:
     print("home-assistant: " + sperre, file=sys.stderr)
     extensions.append(sperre)
+try:
+    sentences()
+except (RuntimeError, OSError, ValueError) as e:   # the marker stays: the next apply reloads them
+    print(f"home-assistant: the media sentences NOT reloaded: {type(e).__name__}: {e}", file=sys.stderr)
 strangers()
 if undone or extensions:
     red("; ".join(([undone] if undone else []) + extensions))

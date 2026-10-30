@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+„Spiele Einslive“ und „Spiele Musik von Queen“ versteht Home Assistant jetzt auch, und die Musik läuft auf dem Lautsprecher im Raum
 Die Box-Seite zeigt jetzt, welche der fünf Sprachbefehle Home Assistant versteht: Timer, Einslive, Musik, „Was ist …“ und Schalter
 ${PERSONA_DISPLAY} zählt mit, wie oft der Lautsprecher aufwacht, und lernt aus seinen Fehlalarmen
 Die Box-Seite meldet das Weckwort nicht mehr als fehlend, wenn es schon auf dem Sprachgerät liegt
