@@ -66,8 +66,12 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 	dir, locked := cli.InboxDir(env), apply.LockHolder(env.Paths) != ""
 	all = slices.Clone(all)
 	slices.SortFunc(all, func(a, b *proposal.Proposal) int { return a.ID - b.ID })
-	var top, ended, older strings.Builder
-	n := 0
+	var top, ended strings.Builder
+	type past struct {
+		at   time.Time
+		html string
+	}
+	var older []past
 	for _, p := range all {
 		decision := taps[p.ID]
 		f, failed := failedTap(dir, p.ID)
@@ -88,7 +92,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 		text, class, running := progress(p, decision, locked)
 		recent := failed || time.Since(p.Decided) < 15*time.Minute
 		here := p.Status == "open" || time.Since(p.Decided) < 15*time.Minute
-		if !(running || failed || p.Status == "approved" || p.Status == "rejected" && recent) || !here && !running && !recent && n >= 5 {
+		if !(running || failed || p.Status == "approved" || p.Status == "rejected" && recent) {
 			continue
 		}
 		if failed {
@@ -100,12 +104,18 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 			ended.WriteString(c)
 			continue
 		}
-		n++
-		older.WriteString(decidedCard(p, all, domain, text, class, running, failed, f.raw, false))
+		older = append(older, past{p.Decided, decidedCard(p, all, domain, text, class, running, failed, f.raw, false)})
 	}
+	// „Zuletzt entschieden“: the five decided last, the newest at the top (owner, 2026-10-30: it
+	// listed #1–#5 from migration day, the cards sorted by id for their places above)
+	slices.SortStableFunc(older, func(a, b past) int { return b.at.Compare(a.at) })
 	bottom = "<div id=laeuft></div>"
-	if n > 0 {
-		bottom = "<div id=laeuft><h2>Zuletzt entschieden</h2><div class=liste>" + older.String() + "</div></div>"
+	if len(older) > 0 {
+		var list strings.Builder
+		for _, o := range older[:min(5, len(older))] {
+			list.WriteString(o.html)
+		}
+		bottom = "<div id=laeuft><h2>Zuletzt entschieden</h2><div class=liste>" + list.String() + "</div></div>"
 	}
 	return top.String(), ended.String(), bottom, open
 }
