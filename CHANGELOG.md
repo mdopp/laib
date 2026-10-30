@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.56.0](https://github.com/mdopp/laib/compare/v0.55.0...v0.56.0) (2026-10-30)
+
+
+### Features
+
+* **bote:** nightly probes measure reply time, frage for facts and the unknown said unknown ([#862](https://github.com/mdopp/laib/issues/862)) ([5fc4086](https://github.com/mdopp/laib/commit/5fc4086ab0cf902ff3f707ba8f08a2de21e0e78b))
+* **home-assistant:** the five intents checked as text; Frage says when it cannot reach the internet ([#864](https://github.com/mdopp/laib/issues/864)) ([01cd9e3](https://github.com/mdopp/laib/commit/01cd9e3879d6003c46a59f49434dacd82d2d8594))
+* **operator:** a nightly eval against the household model gates apply ([#860](https://github.com/mdopp/laib/issues/860)) ([6aa8213](https://github.com/mdopp/laib/commit/6aa8213bd15c06e32e05f73b89097b2853184d79))
+* **operator:** count tokens and model time, back off retries ([#859](https://github.com/mdopp/laib/issues/859)) ([fe50121](https://github.com/mdopp/laib/commit/fe50121c37e3b2f9d3eb7464ce20086ff8092e69))
+* **operator:** lessons condensed by the model, offered and recurring counted ([#861](https://github.com/mdopp/laib/issues/861)) ([d133ae7](https://github.com/mdopp/laib/commit/d133ae7d79ae8d827925f88557c6c3107dbe0d1f))
+* **operator:** looks and the first aid read the lessons ([#861](https://github.com/mdopp/laib/issues/861)) ([7a6056f](https://github.com/mdopp/laib/commit/7a6056f1bb1c6ded971499a7d3a524c45cbba706))
+* **operator:** the eval sees off-menu calls; enable takes the diagnostician ([#860](https://github.com/mdopp/laib/issues/860)) ([5c06d6d](https://github.com/mdopp/laib/commit/5c06d6df01bdfc2bb881ac71416b63b5e2ec5955))
+* **paperless:** a custom field „Stapel“ for Dokumente's stack id ([#909](https://github.com/mdopp/laib/issues/909)) ([b0b0c82](https://github.com/mdopp/laib/commit/b0b0c82c20e3ba4e95f93d11595514b85cc8d34b))
+* **registry:** templates from a registry path, release PR merged by CI ([#906](https://github.com/mdopp/laib/issues/906)) ([49e3ef7](https://github.com/mdopp/laib/commit/49e3ef7710a3b2d72403008df64c1e73d2cdedad))
+* **templates:** Jellyfin API key for Haus' Gesehen & Gehört (haus[#152](https://github.com/mdopp/laib/issues/152)) ([c7e7aab](https://github.com/mdopp/laib/commit/c7e7aab38f61eb6dc197ae6fed338e8eef0ba156))
+* **werkstatt:** the box checks the issues a release closed ([#867](https://github.com/mdopp/laib/issues/867)) ([2f905c3](https://github.com/mdopp/laib/commit/2f905c3954e2cd62ceb3374edee9425b90da1fbc))
+* **werkstatt:** the sessions' permission mode is the owner's value ([#898](https://github.com/mdopp/laib/issues/898)) ([c324763](https://github.com/mdopp/laib/commit/c32476362c9d5e69edd3897d916f837389412fa3))
+
+
+### Bug Fixes
+
+* **bote:** „Moment …“ after 30 s, and a busy model is one German sentence ([#862](https://github.com/mdopp/laib/issues/862)) ([91afbd3](https://github.com/mdopp/laib/commit/91afbd3b427cbbdd66b61e1f801d3d3663eba01c))
+* **notify:** red says since when and who is on it, ends in wieder grün, the ping means Laib lebt ([#857](https://github.com/mdopp/laib/issues/857)) ([a47e4b8](https://github.com/mdopp/laib/commit/a47e4b8a6b2761723c6bab8eac9dd35fe5edc9ba))
+* **stimme:** the wakes are counted after a failed training, and few false wakes train ([#825](https://github.com/mdopp/laib/issues/825)) ([86fb608](https://github.com/mdopp/laib/commit/86fb608722f0147d716265cc6150837377772d2b))
+
 ## [0.55.0](https://github.com/mdopp/laib/compare/v0.54.1...v0.55.0) (2026-10-30)
 
 
