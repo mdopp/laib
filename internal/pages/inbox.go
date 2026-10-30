@@ -210,7 +210,7 @@ func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposa
 		fmt.Fprintf(b, "<li%s>%s</li>", cls, html.EscapeString(i))
 	}
 	b.WriteString("</ul>")
-	fmt.Fprintf(b, "<h3>Wer will das und warum</h3><p>%s</p><h3>Rückgängig</h3><p>%s</p>", html.EscapeString(c.Why), html.EscapeString(c.Reversible))
+	fmt.Fprintf(b, "<h3>Wer will das und warum</h3><p>%s</p><h3>Rückgängig</h3><p>%s</p>", strings.ReplaceAll(html.EscapeString(c.Why), "\n", "<br>"), html.EscapeString(c.Reversible))
 	for _, w := range c.Warnings {
 		fmt.Fprintf(b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 	}

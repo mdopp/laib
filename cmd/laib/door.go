@@ -159,7 +159,11 @@ func fileIssue(ctx context.Context, env *cliEnv, st *state.State, title, body, l
 // (#797). The Operator's wish waits for the admin as a proposal (ADR 0023
 // §6), whose approval files it through the same door (fileIssue).
 func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
-	text := strings.TrimSpace(strings.Join(args, " "))
+	words, von := args, ""
+	if len(words) > 1 && words[0] == "--von" { // the asker, never the title's first words (#896)
+		von, words = words[1], words[2:]
+	}
+	text := strings.TrimSpace(strings.Join(words, " "))
 	if proposal.Hand(env.Actor) != "ops" || text == "" {
 		return door(ctx, env, "haushalt", "propose", append([]string{"wish"}, args...))
 	}
@@ -167,12 +171,22 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
+	by := "vom Operator (" + env.Actor + ")"
+	if von != "" {
+		by += ", gewünscht von " + von + ","
+	}
+	return inbox.WishProposal(ctx, env, st, "Wunsch: "+sentence(text), text+"\n\n— "+by+" auf "+st.Box.Domain+", "+time.Now().Format("02.01.2006 15:04")+".")
+}
+
+// sentence: a wish's first sentence for its title (#896) — up to „. “ or
+// the line's end, never a dot inside a number or an address; 70 runes at most.
+func sentence(text string) string {
 	first, _, _ := strings.Cut(text, "\n")
-	if i := strings.Index(first, "."); i > 0 {
-		first = first[:i]
+	if i := strings.Index(first, ". "); i > 0 {
+		first = first[:i+1]
 	}
 	if r := []rune(first); len(r) > 70 {
 		first = string(r[:70]) + "…"
 	}
-	return inbox.WishProposal(ctx, env, st, "Wunsch: "+first, text+"\n\n— vom Operator ("+env.Actor+") auf "+st.Box.Domain+", "+time.Now().Format("02.01.2006 15:04")+".")
+	return first
 }

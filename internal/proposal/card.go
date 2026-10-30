@@ -229,6 +229,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	switch {
 	case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
 		d.Summary = p.News[0]
+	case p.wish(): // a wish: what it asks the Werkstatt for, nothing on the box (#896)
+		d.Summary = "Wunsch an die Werkstatt: " + strings.TrimPrefix(p.Reason, "Wunsch: ")
 	case p.Boxless() && p.Does != "": // a repair: what it does (#746)
 		d.Summary = p.Does
 	case p.Boxless() && p.Evidence != "" && !Technical(p.Evidence): // a repair filed before #746: the finding it answers (#759)
@@ -391,6 +393,12 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		technical = append(technical, "gesehen: "+p.Evidence)
 	} else if p.Evidence != "" {
 		d.Why += " — gesehen: " + p.Evidence
+	}
+
+	if p.wish() { // the text in full on the card, and what the approval does (#896)
+		technical = append(technical, d.Impact...)
+		d.Impact = []string{"Nach der Freigabe wird daraus ein Ticket; an der Box ändert sich nichts."}
+		d.Why = upper(actorName(p.Actor)) + " wünscht sich: „" + cmp.Or(p.Wish, strings.TrimPrefix(p.Reason, "Wunsch: ")) + "“"
 	}
 
 	// --- the weight, and the safe default that follows from it

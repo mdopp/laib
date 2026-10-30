@@ -37,6 +37,9 @@ func WishProposal(ctx context.Context, env *cli.Env, st *state.State, title, bod
 	lines := strings.Split("# "+title+"\n\n"+body, "\n")
 	patch := fmt.Sprintf("--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n+%s\n", name, len(lines), strings.Join(lines, "\n+"))
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, title, proposal.Edit{Patch: patch}, JudgeFor(st, env.Actor))
+	if err == nil {
+		err = Anchor(cli.InboxDir(env), p, proposal.Anchor{Wish: body}) // the card shows what the admin approves (#896)
+	}
 	if err != nil {
 		return env.Fail(err)
 	}
