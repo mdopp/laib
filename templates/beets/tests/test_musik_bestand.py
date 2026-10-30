@@ -222,6 +222,23 @@ class Bestand(unittest.TestCase):
         self.assertEqual([x["name"] for x in g["probleme"]], ["Erfundener Komiker", "../etc"])
         self.assertEqual(g["vorschlag"], [], "a confirmed name is no longer proposed")
 
+    def test_a_confirmed_name_moves_in_any_spelling_and_out_of_unklar_too(self):
+        """2026-10-30 on the box: the folder was „DIE SENDUNG MIT DER MAUS“, the confirmed name „Die Sendung
+        mit der Maus“; the sort had put part of it into _unklar before the yes, and the move found nothing."""
+        for rel in ("ERFUNDENE SENDUNG/Folge 1/01 teil.mp3", "_unklar/ERFUNDENE SENDUNG/Folge 2/02 teil.mp3"):
+            f = self.musik / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(b"ID3 " + rel.encode())
+        vorher = self.alle()
+        self.run_it(BESTAND_GESPROCHEN_VORSCHLAG="Erfundene Sendung", BESTAND_GESPROCHEN="Erfundene Sendung")
+        self.assertEqual(self.alle(), vorher, "a file went missing in the move")
+        self.assertTrue((self.hoer / "Erfundene Sendung/Folge 1/01 teil.mp3").exists())
+        self.assertTrue((self.hoer / "Erfundene Sendung/Folge 2/02 teil.mp3").exists(), "what _unklar held moves too")
+        self.assertFalse((self.musik / "ERFUNDENE SENDUNG").exists())
+        self.assertFalse((self.musik / "_unklar/ERFUNDENE SENDUNG").exists())
+        g = self.stand()["gesprochen"]
+        self.assertEqual((g["verschoben"], g["probleme"]), (["Erfundene Sendung"], []))
+
     def test_the_status_line_and_findings_through_the_musik_eingang(self):
         self.run_it(BESTAND_JE_LAUF="3")
         (self.root / "eingang").mkdir()
