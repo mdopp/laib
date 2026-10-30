@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.57.0](https://github.com/mdopp/laib/compare/v0.56.6...v0.57.0) (2026-10-30)
+
+
+### Features
+
+* **logs:** laib logs reads Laib's own units ([4b83ef6](https://github.com/mdopp/laib/commit/4b83ef61c52eeaac5b716d6c9860ba6284590fd9))
+* **logs:** laib logs reads Laib's own units ([70baf9f](https://github.com/mdopp/laib/commit/70baf9fd1b551acbef43a65d716efb9f16e41720)), closes [#947](https://github.com/mdopp/laib/issues/947)
+
+
+### Bug Fixes
+
+* **template:** AdGuard answers PTR for 172.16.0.0/12 itself and keeps its query log 7 days ([74bb293](https://github.com/mdopp/laib/commit/74bb29378f54e668f26bc16794dbc12948e3101e))
+* **template:** AdGuard answers PTR for 172.16.0.0/12 itself and keeps its query log 7 days ([43d9fca](https://github.com/mdopp/laib/commit/43d9fcaeb62488dc436d79c33ac32706899500ab))
+
 ## [0.56.6](https://github.com/mdopp/laib/compare/v0.56.5...v0.56.6) (2026-10-30)
 
 
