@@ -4,7 +4,7 @@ checkout with a CLAUDE.md, named after it, `--continue` with a fresh start
 as fallback, a marker that keeps one off across restarts, new checkouts
 picked up by the next pass, a dead session started again. Real tmux, a
 fake claude; the real image under systemd is scripts/boot-werkstatt.sh."""
-import getpass, os, shutil, subprocess, tempfile, time, unittest
+import getpass, json, os, shutil, subprocess, tempfile, time, unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent          # werkstatt/
@@ -64,13 +64,26 @@ class Sessions(unittest.TestCase):
         self.run_()
         self.assertEqual(self.windows(), ["haus", "laib"])
         runs = self.wait_log(2)
-        self.assertIn("laib --continue --remote-control laib", runs)
-        self.assertIn("haus --continue --remote-control haus", runs)
+        self.assertIn("laib --permission-mode default --continue --remote-control laib", runs)
+        self.assertIn("haus --permission-mode default --continue --remote-control haus", runs)
 
-    def test_no_session_gets_the_permission_bypass(self):
-        # reachable from the phone, holding an apply-capable hand (#383)
-        code = [l for l in SCRIPT.read_text().splitlines() if not l.lstrip().startswith("#")]
-        self.assertFalse([l for l in code if "skip-permissions" in l], "a session may bypass Claude Code's permissions")
+    def test_the_permission_mode_is_the_owners_value(self):
+        # #898: default asks (#383); bypass runs without asking, the owner's choice.
+        # Passed on every start, so a --continue does not keep its old mode.
+        self.checkout("laib")
+        self.run_()
+        self.assertIn("laib --permission-mode default --continue --remote-control laib", self.wait_log(1))
+        self.assertFalse((self.home / ".claude" / "settings.json").exists(), "default mode answers no bypass warning")
+        subprocess.run(["tmux", "kill-server"], env=self.env, capture_output=True)
+        self.env["WERKSTATT_PERMISSION_MODE"] = "bypass"
+        self.run_()
+        self.assertIn("laib --dangerously-skip-permissions --continue --remote-control laib", self.wait_log(2))
+        settings = json.loads((self.home / ".claude" / "settings.json").read_text())
+        self.assertIs(settings.get("skipDangerousModePermissionPrompt"), True, "nobody is at the window to accept the warning")
+        self.env["WERKSTATT_PERMISSION_MODE"] = "yes please"
+        subprocess.run(["tmux", "kill-server"], env=self.env, capture_output=True)
+        self.run_()
+        self.assertIn("laib --permission-mode default --continue --remote-control laib", self.wait_log(3)[2:])
 
     def test_a_pass_is_idempotent_and_picks_up_a_new_checkout(self):
         self.checkout("laib")
@@ -100,22 +113,22 @@ class Sessions(unittest.TestCase):
         # started `claude --remote-control flut`: its --continue had ended
         self.checkout("flut")
         self.run_()
-        self.assertEqual(self.wait_log(1), ["flut --continue --remote-control flut"])
+        self.assertEqual(self.wait_log(1), ["flut --permission-mode default --continue --remote-control flut"])
         off = self.home / ".werkstatt" / "no-autostart"
         off.mkdir(parents=True)
         (off / "flut").write_text("")       # the marker, with the window still up
         self.stop_flag.write_text("")       # its --continue ends with an error
         time.sleep(1.5)
-        self.assertEqual(self.log.read_text().splitlines(), ["flut --continue --remote-control flut"],
+        self.assertEqual(self.log.read_text().splitlines(), ["flut --permission-mode default --continue --remote-control flut"],
                          "a switched-off session started itself fresh")
         self.run_()
-        self.assertEqual(self.log.read_text().splitlines(), ["flut --continue --remote-control flut"], "the pass started it")
+        self.assertEqual(self.log.read_text().splitlines(), ["flut --permission-mode default --continue --remote-control flut"], "the pass started it")
 
     def test_the_fresh_start_still_follows_a_failed_continue(self):
         self.checkout("laib")
         self.stop_flag.write_text("")       # --continue fails: no conversation yet
         self.run_()
-        self.assertEqual(self.wait_log(2), ["laib --continue --remote-control laib", "laib --remote-control laib"])
+        self.assertEqual(self.wait_log(2), ["laib --permission-mode default --continue --remote-control laib", "laib --permission-mode default --remote-control laib"])
 
     def test_off_as_another_user_refuses_and_writes_no_marker(self):
         # #498: as root, `off` wrote root's marker, killed nothing in root's
@@ -138,7 +151,7 @@ class Sessions(unittest.TestCase):
         self.fail_flag.unlink()
         out = self.run_()
         self.assertIn("started again", out)
-        self.assertEqual(self.wait_log(3)[-1], "laib --continue --remote-control laib")
+        self.assertEqual(self.wait_log(3)[-1], "laib --permission-mode default --continue --remote-control laib")
 
     def test_an_empty_workspace_still_has_the_session(self):
         self.run_()

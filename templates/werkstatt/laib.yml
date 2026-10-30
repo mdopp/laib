@@ -34,7 +34,11 @@ data:
   - path: ${DATA_DIR}/werkstatt/ssh-host-keys  # sshd's host keys: the app keeps trusting the box after a restore
   - path: ${DATA_DIR}/werkstatt/cache          # ~/.cache: npm, go, pip — rebuilt on demand
     backup: false
+  - path: ${DATA_DIR}/werkstatt/status         # the entrypoint's status line, written on every start
+    backup: false
 health: {none: "a dev box with no server to probe; the unit state is the check"}
+status:                          # the sessions' permission mode (#898): "Claude-Sitzungen ohne Rückfragen …"
+  file: ${DATA_DIR}/werkstatt/status/laib-status.json
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password
   - {port: 8791, lan: false}     # pi-web-ui, only through Caddy
