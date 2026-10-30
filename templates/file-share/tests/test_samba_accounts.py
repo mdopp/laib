@@ -8,7 +8,7 @@ argv and what reached their stdin. The script runs under bash here (the
 image's busybox ash on the box; the VM proves that one, vm-install).
 
 #214: no password on any argv, none in the output."""
-import base64, json, os, shutil, subprocess, sys, tempfile, threading, time, unittest
+import base64, json, os, shutil, signal, subprocess, sys, tempfile, threading, time, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -141,9 +141,19 @@ class Accounts(unittest.TestCase):
         shutil.rmtree(self.root)
 
     def stop(self):
-        if self.proc:
-            self.proc.kill()
-            self.proc.wait()
+        # #913: the script and every fake it started are one process group;
+        # all of it goes, and is gone, before anyone removes the folders
+        if not self.proc:
+            return
+        pgid = self.proc.pid
+        os.killpg(pgid, signal.SIGKILL)
+        self.proc.wait()
+        self.proc = None
+        for _ in range(100):
+            if not running(pgid):
+                return
+            time.sleep(0.05)
+        self.fail(f"the script's processes outlived SIGKILL: group {pgid}")
 
     def start(self, members="anna\nben\n", admins=None):
         if members is not None:
@@ -153,7 +163,7 @@ class Accounts(unittest.TestCase):
         env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", FAKE=str(self.fake), ACCOUNTS_DIR=str(self.dir), SHARE_USER="samba", TICK="1",
                    PASSDB=str(self.fake / "passdb"))
         self.out = open(self.root / "out", "w+")
-        self.proc = subprocess.Popen(["bash", str(ACCOUNTS)], env=env, stdout=self.out, stderr=subprocess.STDOUT)
+        self.proc = subprocess.Popen(["bash", str(ACCOUNTS)], env=env, stdout=self.out, stderr=subprocess.STDOUT, start_new_session=True)
         self.wait(lambda: "in step" in self.output())
 
     def output(self):
@@ -252,6 +262,20 @@ class Accounts(unittest.TestCase):
         self.start(admins="anna\nben\n")
         self.send("set ben " + base64.b64encode(b"pw-ben").decode())
         self.wait(lambda: "ben" in self.group(), "ben in the group")
+
+
+def running(pgid):
+    """Whether a live (not zombie) process is left in group pgid: an
+    orphaned fake's zombie waits for a reaper the container may not run."""
+    for d in Path("/proc").iterdir():
+        try:
+            st = (d / "stat").read_text()
+        except (OSError, ValueError):
+            continue
+        state, _, pgrp = st.rsplit(")", 1)[1].split()[:3]
+        if int(pgrp) == pgid and state != "Z":
+            return True
+    return False
 
 
 def stat_fifo(p):
