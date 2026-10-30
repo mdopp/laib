@@ -137,10 +137,13 @@ class Accounts(unittest.TestCase):
         self.proc = None
 
     def tearDown(self):
+        self.stop()
+        shutil.rmtree(self.root)
+
+    def stop(self):
         if self.proc:
             self.proc.kill()
             self.proc.wait()
-        shutil.rmtree(self.root)
 
     def start(self, members="anna\nben\n", admins=None):
         if members is not None:
@@ -211,6 +214,17 @@ class Accounts(unittest.TestCase):
         (self.dir / "members").write_text("ben\n")
         self.wait(lambda: "anna:" not in (self.fake / "passdb").read_text(), "anna's removal")
         self.assertIn("samba:", (self.fake / "passdb").read_text())
+
+    def test_stop_leaves_no_fake_writing_into_the_folder(self):
+        # #913: the teardown killed bash only; a fake it had started kept
+        # writing into fake while rmtree emptied it ("Directory not empty")
+        self.start()
+        (self.bin / "deluser").write_text('#!/bin/bash\necho "deluser $*" >> "$FAKE/argv"; sleep 0.5; echo late > "$FAKE/late"')
+        (self.dir / "members").write_text("ben\n")
+        self.wait(lambda: "deluser anna" in (self.fake / "argv").read_text(), "deluser started")
+        self.stop()
+        time.sleep(1)
+        self.assertFalse((self.fake / "late").exists(), "a fake still ran after stop()")
 
     def group(self):
         return (self.fake / "admins").read_text().split()
