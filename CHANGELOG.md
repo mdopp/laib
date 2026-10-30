@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.56.1](https://github.com/mdopp/laib/compare/v0.56.0...v0.56.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **bote:** after „weg“ always „wieder da“: the start after a clean stop owes Hermes' back-online notice ([ebbc2bb](https://github.com/mdopp/laib/commit/ebbc2bb0c5816fd30269d75ec40bf2c7b3293219))
+* **bote:** Hermes' restart notices in one German sentence, not „⚠️ Hermes is shutting down“ ([9c73868](https://github.com/mdopp/laib/commit/9c73868c4108eae547b61af9f74e6119c1822f17))
+* **bote:** restart notices in German, and „wieder da“ after every „weg“ ([3d1f4dd](https://github.com/mdopp/laib/commit/3d1f4dd54aabb9d7776373401f0387f11a39b02e))
+
 ## [0.56.0](https://github.com/mdopp/laib/compare/v0.55.0...v0.56.0) (2026-10-30)
 
 
