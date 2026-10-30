@@ -158,7 +158,7 @@ def texte(lied):
 
 class Bestand:
     def __init__(self, ausgenommen):
-        self.ausgenommen = set(ausgenommen)
+        self.ausgenommen = {n.casefold() for n in ausgenommen}  # „DIE SENDUNG MIT DER MAUS“ is „Die Sendung mit der Maus“
         self.behaelter = []   # (folder, target under _unklar, a leftover folder)
         self.lieder = []      # (song, its target under _unklar)
 
@@ -166,7 +166,7 @@ class Bestand:
         """the containers to sort and their songs, fresh from the tree"""
         for name in sorted(os.listdir(MUSIK)):
             p = os.path.join(MUSIK, name)
-            if name.startswith(".") or name == UNKLAR or name in self.ausgenommen or os.path.islink(p):
+            if name.startswith(".") or name == UNKLAR or name.casefold() in self.ausgenommen or os.path.islink(p):
                 continue
             if os.path.isfile(p):
                 if name.lower().endswith(AUDIO):
@@ -317,25 +317,30 @@ def gesprochen(bestaetigt, alt):
     """the confirmed spoken word into the audiobooks folder, merged, never over a file there"""
     verschoben, probleme = list(alt.get("verschoben", [])), []
     for name in bestaetigt:
-        quelle = os.path.join(MUSIK, name)
         if "/" in name or name in (".", "..") or name.startswith(".") or name == UNKLAR:
             probleme.append({"name": name, "grund": "kein Ordnername in der Musik"})
             continue
-        if not os.path.isdir(quelle) or os.path.islink(quelle):
+        # the folder in any spelling („DIE SENDUNG MIT DER MAUS“), and what an earlier sort put into
+        # _unklar before the name was confirmed: all of it goes under the confirmed spelling
+        quellen = [os.path.join(b, n) for b in (MUSIK, os.path.join(MUSIK, UNKLAR)) if os.path.isdir(b)
+                   for n in sorted(os.listdir(b)) if n.casefold() == name.casefold()]
+        quellen = [q for q in quellen if os.path.isdir(q) and not os.path.islink(q)]
+        if not quellen:
             if name not in verschoben:
                 probleme.append({"name": name, "grund": "kein Ordner dieses Namens in der Musik"})
             continue
         geblieben = []
-        for w, ds, ns in os.walk(quelle):
-            ds.sort()
-            for n in sorted(ns):
-                q = os.path.join(w, n)
-                z = os.path.join(HOER, name, os.path.relpath(q, quelle))
-                if os.path.lexists(z):
-                    geblieben.append(os.path.relpath(q, MUSIK))
-                    continue
-                verschiebe(q, z)
-        leere_weg(quelle, quelle)
+        for quelle in quellen:
+            for w, ds, ns in os.walk(quelle):
+                ds.sort()
+                for n in sorted(ns):
+                    q = os.path.join(w, n)
+                    z = os.path.join(HOER, name, os.path.relpath(q, quelle))
+                    if os.path.lexists(z):
+                        geblieben.append(os.path.relpath(q, MUSIK))
+                        continue
+                    verschiebe(q, z)
+            leere_weg(quelle, quelle)
         if geblieben:
             probleme.append({"name": name, "grund": "%d Datei(en) liegen schon gleichnamig in den Hörbüchern und bleiben in der Musik: %s"
                              % (len(geblieben), ", ".join(geblieben[:3]))})
@@ -382,7 +387,8 @@ def main():
     einsortiert, unklar = lauf.zaehle(konfig), zaehle_unklar()
     stand = {"at": jetzt_utc(), "einsortiert": einsortiert, "unklar": unklar, "offen": offen,
              "gesamt": einsortiert + unklar + offen, "fertig": offen == 0, "versuche": lauf.versuche,
-             "gesprochen": {"vorschlag": [n for n in vorschlag if n not in bestaetigt and os.path.isdir(os.path.join(MUSIK, n))],
+             "gesprochen": {"vorschlag": [n for n in vorschlag if n.casefold() not in {b.casefold() for b in bestaetigt}
+                                           and any(m.casefold() == n.casefold() and os.path.isdir(os.path.join(MUSIK, m)) for m in os.listdir(MUSIK))],
                             "verschoben": verschoben, "probleme": probleme},
              "lauf": {"at": jetzt_utc(), "genommen": lauf.genommen, "einsortiert": lauf.einsortiert, "unklar": lauf.unklar},
              "einzelheiten": "\n\n".join(lauf.einzelheiten)}
