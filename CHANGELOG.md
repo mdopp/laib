@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.56.5](https://github.com/mdopp/laib/compare/v0.56.4...v0.56.5) (2026-10-30)
+
+
+### Bug Fixes
+
+* **pages:** Inbox cards keep their place, one button row, reject in two steps ([5787402](https://github.com/mdopp/laib/commit/5787402d9de1ff704c50c384163a09739485e46f))
+* **pages:** Inbox cards keep their place, one button row, reject in two steps ([0a54a8e](https://github.com/mdopp/laib/commit/0a54a8e387e38a4e476ed0761262dbe5383289aa))
+
 ## [0.56.4](https://github.com/mdopp/laib/compare/v0.56.3...v0.56.4) (2026-10-30)
 
 
