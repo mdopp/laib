@@ -189,8 +189,12 @@ visibly where it began, in one of three states:
 
 No silent buttons, no endless spinners (a wait has a limit and then says
 so), no raw error text in front of the family. Phone first: the end state
-fits a phone screen without scrolling to it. An action without these three
-states does not pass review.
+fits a phone screen without scrolling to it. Nobody reviews a PR before it
+merges (#866); checks hold this: `cmd/laib/taps854_test.go` runs every POST
+route of the pages and fails one that ends in none of the three states
+(#854), and the `plain855_test.go` lints keep raw text out of what people
+read (#855). What they do not see (a page's own script, Haus) is a
+guideline, not a gate.
 
 Example: Haus „Scanner einrichten“ showed nothing after the tap. Laib had
 answered in 4 s — no scanner found, enter the address by hand — and Haus
