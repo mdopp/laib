@@ -25,6 +25,7 @@ import (
 	"github.com/mdopp/laib/templates"
 
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
@@ -584,8 +585,33 @@ func ProposeDefaults(ctx context.Context, env *cli.Env, st *state.State) (*propo
 			}
 		}
 	}
-	reason := defaultsReason + strings.Join(adds, ", ")
+	// the built-in skills' own tools a narrowed ops lacks (#932): DefaultPolicy's
+	// ops has no verb list, so the comparison above never sees them; one filed
+	// by hand with diag's command (laib propose --grant) is not asked twice
 	all, _ := proposal.List(cli.InboxDir(env), false)
+	need, by := []string{}, map[string][]string{}
+	for _, sk := range mcp.SkillsFor(env, st, "ops") {
+		for _, t := range sk.Tools {
+			asked := slices.ContainsFunc(all, func(p *proposal.Proposal) bool {
+				return p.Status == "open" && strings.Contains(p.Reason, "Fähigkeit "+sk.Name+" braucht "+t)
+			})
+			if sk.Source == "builtin" && sk.Status == "active" && !asked && strings.HasPrefix(sk.Denied[t], "policy.yml beschränkt") {
+				need, by[t] = append(need, t), append(by[t], sk.Name)
+			}
+		}
+	}
+	slices.Sort(need)
+	if need = slices.Compact(need); len(need) > 0 {
+		if b, err := policy.Grant(text, "ops", false, need...); err == nil {
+			var why []string
+			for _, t := range need {
+				why = append(why, "+"+t+" (Fähigkeit "+strings.Join(by[t], ", ")+")")
+			}
+			text, adds = b, append(adds, "ops "+strings.Join(why, " "))
+			grants = append(grants, proposal.Grant{Hand: "ops", Items: need})
+		}
+	}
+	reason := defaultsReason + strings.Join(adds, ", ")
 	if len(adds) == 0 || slices.ContainsFunc(all, func(p *proposal.Proposal) bool {
 		return (p.Status == "open" && strings.HasPrefix(p.Reason, defaultsReason)) || (p.Status == "rejected" && p.Reason == reason)
 	}) {
