@@ -7,3 +7,4 @@ Das Jellyfin-Passwort für Home Assistant hinterlegst du auf der Box-Seite, mit 
 Startet Jellyfin während eines Updates gerade neu, wartet die Einrichtung kurz, statt abzubrechen
 Das Admin-Passwort von Jellyfin lässt sich jetzt erneuern, ohne dass Filme und Musik ausfallen
 Haus darf in eure Musik schauen und sagt beim Teilen eines Lieds, ob ihr es schon habt
+Haus darf lesen, was jede Person in Jellyfin geschaut hat, damit es ihr das unter „Gesehen & Gehört“ zeigen kann

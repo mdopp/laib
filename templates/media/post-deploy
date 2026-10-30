@@ -29,7 +29,16 @@ hidden, no administrator, the music libraries only, no playback, download
 or deletion. Its password is random and nobody's; the token is handed back
 as HAUS_JELLYFIN_TOKEN, the haus template renders it. A token that still
 works is kept; one Jellyfin refuses (its device removed in the dashboard)
-is replaced: a new random password, a new login on Haus' own device."""
+is replaced: a new random password, a new login on Haus' own device.
+
+Haus' Gesehen & Gehört (haus#152) shows each person what they watched,
+and reading another user's played state needs an administrator: that is
+the one thing Haus gets an API key for, HAUS_JELLYFIN_KEY, named "Haus
+(Gesehen)" in the dashboard. Haus only reads with it (/Users, /Items with
+userId, a search of films and series). A key that still works is kept;
+one Jellyfin refuses is deleted and minted again. This widens #695's line
+on purpose: revoking the key in Jellyfin's dashboard ends it, the next
+apply mints a new one unless the template step is taken out."""
 import http.client
 import json, os, re, secrets, sys, time, urllib.parse, urllib.request, urllib.error
 
@@ -358,6 +367,33 @@ if not haus_token_works(HAUS_TOKEN):
     print(f"laib-secret: HAUS_JELLYFIN_TOKEN={new}")
     print("media: HAUS_JELLYFIN_TOKEN minted (" + ("replaces one Jellyfin refuses" if HAUS_TOKEN else "new")
           + "): Laib re-applies Haus, which finds the household's music")
+# 8. Haus' key for Gesehen & Gehört (haus#152): an API key, as only an administrator reads another user's played state
+KEY_APP, HAUS_KEY = "Haus (Gesehen)", E.get("LAIB_SECRET_HAUS_JELLYFIN_KEY", "")
+
+
+def key_works(k):
+    try:
+        return bool(k) and req("GET", "/System/Info", token=k) is not None
+    except urllib.error.HTTPError as e:
+        if e.code not in (401, 403):
+            raise
+        return False
+
+
+def haus_keys():
+    return [k["AccessToken"] for k in (req("GET", "/Auth/Keys", token=token) or {}).get("Items") or [] if k.get("AppName") == KEY_APP]
+
+
+if not key_works(HAUS_KEY):
+    for k in haus_keys():   # one nobody holds any more: never two keys of Haus'
+        req("DELETE", "/Auth/Keys/" + urllib.parse.quote(k), token=token)
+    req("POST", "/Auth/Keys?app=" + urllib.parse.quote(KEY_APP), token=token)
+    new = haus_keys()
+    if len(new) != 1:
+        red(f"jellyfin: the API key {KEY_APP!r} was not made ({len(new)} found)")
+    print(f"laib-secret: HAUS_JELLYFIN_KEY={new[0]}")
+    print("media: HAUS_JELLYFIN_KEY minted (" + ("replaces one Jellyfin refuses" if HAUS_KEY else "new")
+          + "): Laib re-applies Haus, whose Gesehen & Gehört reads what each person watched")
 if held:  # the owner switched, the replacement is not there: say so, never green while the libraries stay (#646)
     red("SPOKEN_WORD=audiobookshelf, but these stay in Jellyfin until their replacement answers: " + " | ".join(held))
 print("jellyfin provisioned: the family logs in with LLDAP, Quick Connect on, local admin kept")
