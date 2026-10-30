@@ -135,7 +135,10 @@ are text only here, and the router refuses an `image_url` for them.
 Neither is the household model, so a consumer takes a lease for it
 first, sends the images, renews while it works and gives the card back
 (the household model reloads afterwards; `--models-max 1` keeps one model
-loaded). `gemma-4-12b` takes the `shared` window: nothing is stopped,
+loaded). The lease loads it itself (#931): when its measurement, at start
+and every 15 minutes, finds the household model unloaded in the household
+window, it sends it one request — after a window, and after llama restarts,
+when nothing else would (a look of the Operator never wakes it). `gemma-4-12b` takes the `shared` window: nothing is stopped,
 the voice stays on the GPU. From a pod, with the model key:
 
 ```
