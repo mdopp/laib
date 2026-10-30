@@ -1,0 +1,52 @@
+# Release-please's PR merged by CI, not by a hand (#906). The hand that
+# merged it was never a review: it waited for main's vm-install to go green
+# and clicked. This workflow does exactly that, once main's vm-install of
+# main's current head is green: it squash-merges the open
+# release-please--branches--main PR and starts release.yml, which cuts the
+# release and builds the binaries after its own wait for a green vm-install
+# of that code (#604, ADR 0003 unchanged: releases come only from
+# release-please).
+#
+# A merge made with GITHUB_TOKEN starts no push workflow (GitHub's rule
+# against loops), so release.yml is dispatched by name afterwards.
+#
+# Not on PR open: that would release code no VM has run. A commit that
+# touches none of vm-install's paths (docs only) starts no vm-install on
+# main; its release PR waits for the next one or for a dispatch of this.
+name: release-merge
+on:
+  workflow_run:
+    workflows: [vm-install]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: release-merge
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PROVEN: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: merge the open release PR when main's head is the proven one
+        run: |
+          set -euo pipefail
+          head=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if [ -n "$PROVEN" ] && [ "$PROVEN" != "$head" ]; then
+            echo "vm-install proved $PROVEN, main is at $head: the run of $head merges"; exit 0
+          fi
+          pr=$(gh pr list --head release-please--branches--main --base main --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            echo "no open release PR"; exit 0
+          fi
+          gh pr merge "$pr" --squash
+          gh workflow run release.yml --ref main
+          echo "merged #$pr and started release.yml"

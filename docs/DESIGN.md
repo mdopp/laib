@@ -316,13 +316,29 @@ the Werkstatt writes the program too. Program and template go into one app
 registry repo (`mdopp/laib-apps`). The path from scaffold to checked route
 is `werkstatt/guide/apps.md`, and the mechanics are `laib-app` (#262).
 
-Two registries, deliberately: the **built-ins** in this repo hold only the
-platform roles (caddy, authelia, adguard, llama), whoami and the Werkstatt,
-so the kernel repo does not grow with every app; the **household registry**
-(`mdopp/laib-templates`, one Git repo, `laib template lint` in its CI) holds
-everything the family actually uses, including what today sits in
-solarisbay, flutstunde and foundry-chronicle as ServiceBay registries. A
-template never adds a tool, a probe or a page to Laib; it is files.
+Two registries, deliberately: the **built-ins** are embedded in the binary
+(`templates/embed.go`), so a fresh box installs offline (#14); a **registry**
+is a Git repo in `box.yml registries` that `laib template sync` clones into
+`/mnt/data/laib/registries/<name>`. A registry template wins over the
+built-in of the same name, and `laib template update <svc>` (which syncs
+first) proposes its diff only when the content differs.
+
+What is true today (#906): every template still sits in this repo and is
+embedded; the household's are not moved out yet. The box reaches a template
+fix without a kernel release by naming this repo as its registry
+(`{name: laib, url: https://github.com/mdopp/laib, ref: main, path:
+templates}`): a template change merged to main is a proposal after the next
+sync, with no vm-install and no release. The embedded copy stays the floor
+when GitHub is out of reach. The limit: the box reads main's template with
+the kernel it runs, and a `laib.yml` field that kernel does not know is
+ignored, not refused. A template change that needs a kernel change reaches
+the box before that kernel does; its proposal then shows a diff the running
+Laib renders the old way, so it is approved only after `laib updates` has
+the release.
+The aim stays a household registry of its own (`mdopp/laib-templates`,
+#24) holding everything that is not a platform role (caddy, auth, adguard,
+llama, whoami, werkstatt), so the kernel repo does not grow with every app.
+A template never adds a tool, a probe or a page to Laib; it is files.
 
 ## Not a hundred tools for one topic
 
