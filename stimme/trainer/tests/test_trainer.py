@@ -356,6 +356,17 @@ class TrainOnNegatives(unittest.TestCase):
         cfg = json.loads(self.train.write_training_config(run, run, 100).read_text())
         self.assertFalse([f for f in cfg["features"] if "household" in f["features_dir"]], "a set from a run before stayed")
 
+    def test_one_false_wake_still_leaves_a_training_set(self):
+        # #825, 2026-10-28: one false wake, and Clips' split (test 0.2) left the train set empty
+        neg, run = pathlib.Path(tempfile.mkdtemp()), pathlib.Path(tempfile.mkdtemp())
+        self.wav(neg / "a.wav", frames=16000)
+        seen = []
+        with mock.patch("sys.stdout"), mock.patch.object(self.train, "build_features",
+                                                          lambda work, r, source, target: seen.extend(sorted((r / source).glob("*.wav")))):
+            self.assertEqual(self.train.household_negatives(run, run, neg), 1, "the count is the household's, not the copies")
+        self.assertGreaterEqual(len(seen), self.train.MIN_SPLIT_CLIPS)
+        self.assertGreaterEqual(int(len(seen) * 0.8), 1)
+
     def test_the_features_script_reads_the_set_it_is_given(self):
         script = self.train._FEATURES_SCRIPT
         self.assertIn('input_directory="@SOURCE@"', script)

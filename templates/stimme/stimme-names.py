@@ -336,6 +336,14 @@ def wake(connect, micro, wid: str, phrase: str, recorded=pathlib.Path("/recordin
         tmp.write_text(json.dumps(moved, ensure_ascii=False) + "\n")
         tmp.replace(micro / "laib-status.json")
     if not done:
+        # #825: the wakes are counted whatever the trainer did: its line stays, the count follows it
+        cur, (clause, tage) = read("laib-status.json"), counted(micro)
+        if cur and clause:
+            base = cur.get("trainer") or cur.get("detail", "")
+            cur.update(trainer=base, detail=f"{base}; {clause}", geweckt=tage, at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+            tmp = micro / "laib-status.json.tmp"
+            tmp.write_text(json.dumps(cur, ensure_ascii=False) + "\n")
+            tmp.replace(micro / "laib-status.json")
         print(f"wake word {wid}: not trained (yet), the trainer's status stays")
         return
     had = before.get("auf", []) if before.get("phrase") == phrase else []
