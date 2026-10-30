@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.56.2](https://github.com/mdopp/laib/compare/v0.56.1...v0.56.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **paperless:** Gesundheit may delete its own note (gesundheit[#5](https://github.com/mdopp/laib/issues/5)) ([2cd56c1](https://github.com/mdopp/laib/commit/2cd56c1fc5d4dafdb9c2a85696c819a13e296bfa))
+
 ## [0.56.1](https://github.com/mdopp/laib/compare/v0.56.0...v0.56.1) (2026-10-30)
 
 
