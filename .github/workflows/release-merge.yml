@@ -10,13 +10,17 @@
 # A merge made with GITHUB_TOKEN starts no push workflow (GitHub's rule
 # against loops), so release.yml is dispatched by name afterwards.
 #
+# It runs after vm-install and after release (where release-please opens
+# its PR), because either can finish first: a reused vm-install takes a
+# minute. It merges only when main's head has a green vm-install.
+#
 # Not on PR open: that would release code no VM has run. A commit that
 # touches none of vm-install's paths (docs only) starts no vm-install on
 # main; its release PR waits for the next one or for a dispatch of this.
 name: release-merge
 on:
   workflow_run:
-    workflows: [vm-install]
+    workflows: [vm-install, release]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -41,7 +45,14 @@ jobs:
           set -euo pipefail
           head=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
           if [ -n "$PROVEN" ] && [ "$PROVEN" != "$head" ]; then
-            echo "vm-install proved $PROVEN, main is at $head: the run of $head merges"; exit 0
+            echo "this run is about $PROVEN, main is at $head: the run of $head merges"; exit 0
+          fi
+          # either order: vm-install may finish (or be reused) before
+          # release-please has opened its PR, or after; so this runs after
+          # both and merges only when main's head has a green vm-install
+          ok=$(gh run list --workflow vm-install.yml --branch main --commit "$head" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+          if [ "$ok" = 0 ]; then
+            echo "no green vm-install of $head yet: its completion runs this again"; exit 0
           fi
           pr=$(gh pr list --head release-please--branches--main --base main --state open --json number --jq '.[0].number // empty')
           if [ -z "$pr" ]; then
