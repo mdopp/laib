@@ -6,7 +6,7 @@ writes the block as a package Laib owns whole (packages/laib_auth_oidc.yaml,
 the secret from the unit's environment, never in a file). The admin's
 configuration.yaml is only added to. The archive is served here by a fake
 GitHub."""
-import hashlib, io, os, re, subprocess, sys, tarfile, tempfile, threading, unittest
+import hashlib, io, json, os, re, subprocess, sys, tarfile, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -155,6 +155,56 @@ class PreStart(unittest.TestCase):
             f.unlink()
         z.rmdir()
         self.assertEqual(self.run_hook().returncode, 0)
+
+    def test_the_media_sentences_and_their_answers(self):
+        # #933: ADR 0015's check on the box knew 3 of 5: „Spiele Einslive“ and „Spiele Musik von Queen“ were not
+        # recognized. HA's German media sentences without a named player need the satellite's area, and Music
+        # Assistant's players have none, so neither matched. Laib's own sentences take them: the radio by the
+        # house's stations (the share's radio/, as Music Assistant reads them, #646) with how they are said
+        # („1LIVE“ is „Einslive“), the music by artist; an intent_script plays them on the room's player.
+        radio = Path(self.tmp.name) / "file-share" / "data" / "radio"
+        radio.mkdir(parents=True)
+        (radio / "1LIVE.strm").write_text("https://example.invalid/1live.mp3\n")
+        (radio / "NDR 2.strm").write_text("https://example.invalid/ndr2.mp3\n")
+        (radio / "liste.m3u").write_text('#EXTM3U\n#EXTINF:-1 tvg-logo="x", Deutschlandfunk (DLF)\nhttps://example.invalid/dlf\n'
+                                         '#EXTINF:-1, RADIO BOB!\nhttps://example.invalid/bob\n#EXTINF:-1, 1LIVE\nhttps://example.invalid/1live.mp3\n')
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        text = (self.c / "custom_sentences/de/laib_medien.yaml").read_text()
+        self.assertTrue(text.startswith("# "), "a comment says who owns the file")
+        doc = json.loads(text.split("\n", 1)[1])   # JSON is YAML: Home Assistant reads it, the test needs no yaml module
+        self.assertEqual((doc["language"], sorted(doc["intents"])), ("de", ["LaibMusik", "LaibRadio"]))
+        said = {}
+        for v in doc["lists"]["laib_sender"]["values"]:
+            said.setdefault(v["out"], set()).update(x.strip().lower() for x in v["in"].strip("()").split("|"))   # hassil ignores case
+        self.assertEqual(sorted(said), ["1LIVE", "Deutschlandfunk (DLF)", "NDR 2", "RADIO BOB!"], said)
+        self.assertTrue({"1live", "einslive", "eins live"} <= said["1LIVE"], said["1LIVE"])
+        self.assertTrue({"ndr 2", "ndr zwei"} <= said["NDR 2"], said["NDR 2"])
+        for x in set().union(*said.values()):
+            self.assertNotRegex(x, r"[()\[\]{}<>|!]", "a template character in a spoken name")
+        self.assertTrue(doc["lists"]["laib_kuenstler"]["wildcard"])
+        sentences = " ".join(s for i in doc["intents"].values() for d in i["data"] for s in d["sentences"])
+        for want in ("{laib_sender}", "(Musik|Lieder", "{laib_kuenstler}"):
+            self.assertIn(want, sentences)
+        pkg = (self.c / "packages/laib_medien.yaml").read_text()
+        for want in ("intent_script:", "LaibRadio:", "LaibMusik:", "music_assistant.play_media", "media_type: radio", "media_type: artist",
+                     "preferred_area_id", "integration_entities('music_assistant')"):
+            self.assertIn(want, pkg)
+        # post-deploy reloads Home Assistant's sentences once, after they changed
+        self.assertTrue((self.c / ".laib-sentences-changed").exists())
+        (self.c / ".laib-sentences-changed").unlink()
+        before = {p: p.read_bytes() for p in self.c.rglob("*") if p.is_file()}
+        self.assertEqual(self.run_hook().returncode, 0)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.c.rglob("*") if p.is_file()}, "a second run changed files")
+        # no stations on the share: the music sentence alone
+        for f in radio.iterdir():
+            f.unlink()
+        self.assertEqual(self.run_hook().returncode, 0)
+        doc = json.loads((self.c / "custom_sentences/de/laib_medien.yaml").read_text().split("\n", 1)[1])
+        self.assertEqual((sorted(doc["intents"]), "laib_sender" in doc["lists"]), (["LaibMusik"], False))
+        self.assertTrue((self.c / ".laib-sentences-changed").exists())
+        # the hook sees only the declared data paths: the share's stations, read, not backed up twice
+        self.assertRegex((T / "laib.yml").read_text(), r"- path: \$\{DATA_DIR\}/file-share/data/radio[^\n]*\n\s+backup: false")
 
 
 if __name__ == "__main__":
