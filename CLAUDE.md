@@ -67,7 +67,9 @@ them.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
   live only in `secrets.age` on the box.
 - **Finish the work.** Done means merged, released, applied on the box and
-  verified green. If the operator must decide something, ask with concrete
+  verified green. An issue that names its proof as an `Auf der Box:` line
+  with a read-only `laib` command is checked after its release lands,
+  reopened on red (`werkstatt-boxcheck`, #867, `docs/TESTING.md`). If the operator must decide something, ask with concrete
   options, as early as you know, then carry on.
 
 ## The rules and the checks that hold them
