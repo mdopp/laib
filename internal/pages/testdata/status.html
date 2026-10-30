@@ -25,6 +25,9 @@ section.card{display:block}section.card h2{font-size:1rem;letter-spacing:0;text-
 button{font:inherit;font-size:.85rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border:0;border-radius:999px;padding:0 16px;min-height:40px;cursor:pointer;white-space:nowrap}
 button.go{background:var(--accent);color:#fff}
 form{display:inline;margin:0}
+.knoepfe{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0}form.nein{display:grid;gap:8px;margin:0 0 12px}.knoepfe:has(+form.nein:not([hidden])) button[aria-expanded]{opacity:.5}
+form.nein input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:0 12px;min-height:44px}form.nein .knoepfe{margin:0}
+p.risiko{color:var(--warn);font-weight:600}section.card{scroll-margin-top:16px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:.8rem/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 details summary{cursor:pointer;color:var(--muted)}.frist{display:block;flex-basis:100%;color:var(--muted);font-size:.8rem;margin:4px 0}
 @media (max-width:600px){.card .note{flex-basis:100%}}

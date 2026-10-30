@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -282,8 +283,8 @@ func Decision(env *cli.Env) http.HandlerFunc {
 		}
 		setFailed(cli.InboxDir(env), n, "", "")
 		setDecision(n, cmp.Or(map[string]string{"approve": "wird freigegeben …", "reject": "wird abgelehnt …"}[decision], "wird zurückgenommen …"))
-		go decide(env, webActor(r), n, decision, argv, 15*time.Minute) // like a human at the shell (#753)
-		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
+		go decide(env, webActor(r), n, decision, argv, 15*time.Minute)        // like a human at the shell (#753)
+		http.Redirect(w, r, fmt.Sprintf("/inbox#%d", n), http.StatusSeeOther) // back to the card, in its place (#941)
 	}
 }
 
@@ -302,6 +303,13 @@ func DecisionState(id int) string {
 	decisions.Lock()
 	defer decisions.Unlock()
 	return decisions.state[id]
+}
+
+// decisionsNow is every tap on its way, at once.
+func decisionsNow() map[int]string {
+	decisions.Lock()
+	defer decisions.Unlock()
+	return maps.Clone(decisions.state)
 }
 
 func setDecision(id int, s string) {

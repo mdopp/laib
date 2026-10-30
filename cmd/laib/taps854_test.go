@@ -112,6 +112,7 @@ type tapBox struct {
 }
 
 func (b *tapBox) do(method, path string, form url.Values) (int, string, string) {
+	path, _, _ = strings.Cut(path, "#") // a browser keeps the card's anchor (#941) to itself
 	r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()

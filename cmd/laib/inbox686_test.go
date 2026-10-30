@@ -92,8 +92,9 @@ func TestAfterFreigebenTheCardSaysWhatTheBoxDoesUntilDone(t *testing.T) {
 	if strings.Contains(body, "http-equiv") {
 		t.Errorf("the Inbox reloads itself as a whole:\n%s", body)
 	}
-	if part := do("GET", "/inbox/stand", nil); !strings.HasPrefix(part, "<div id=laeuft data-run>") || !strings.Contains(part, "wartet, bis") || strings.Contains(part, "<html") || strings.Contains(part, "<script") {
-		t.Errorf("the fragment is not the block of what runs:\n%s", part)
+	// the card in its place for the live script (#941), not a block of its own
+	if part := do("GET", "/inbox/stand", nil); !strings.HasPrefix(part, fmt.Sprintf(`<section class="card gelb" id=%d data-f data-run>`, p.ID)) || !strings.Contains(part, "wartet, bis") || strings.Contains(part, "<html") || strings.Contains(part, "<script") {
+		t.Errorf("the fragment is not the card of what runs:\n%s", part)
 	}
 	if strings.Contains(body, "/inbox/1/approve") || strings.Contains(body, "/inbox/1/reject") || strings.Contains(body, "/inbox/1/rollback") {
 		t.Errorf("buttons while it waits:\n%s", body)

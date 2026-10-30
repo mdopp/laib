@@ -364,16 +364,23 @@ Vorschlag #17   von ops (der Operator)   Stufe: apply   braucht: Admin
 
   Snapshot vor Apply: ja     Rollback: laib rollback paperless
 
-  [Freigeben]   [Ablehnen]   [In der Werkstatt öffnen]
+  [Freigeben]                                         [Ablehnen]
 ```
 
-After „Freigeben“ the card leaves the open ones at once and stands, without
-buttons, under „Was die Box gerade macht“ with the step the run that carries
+Every card has the same one button row (#941): „Freigeben“ left, „Ablehnen“
+right. „Ablehnen“ takes a second tap: it opens „Warum nicht? (optional)“
+with „Ablehnen bestätigen“ and „Abbrechen“ in place. The open cards stand
+oldest first; „Zuletzt entschieden“ (decisions older than 15 minutes) is
+always at the bottom, so nothing moves when a card is decided.
+
+After „Freigeben“ the card keeps its place and turns, without buttons, into
+what the box does with it — the step the run that carries
 it writes on the proposal (`step`, #686): „wartet, bis die Box mit der
 Arbeit davor fertig ist“, „sichert immich“, „startet immich“, „prüft, ob
 immich läuft“; then „fertig“ (with „Zurücknehmen“ where it undoes something, #852) or „zurückgenommen, weil
-immich danach nicht richtig lief“. The page reloads itself every 3 s while
-something runs. „Alle freigeben“ (two or more open cards) is one confirmation
+immich danach nicht richtig lief“. While something runs the page fetches
+the decided cards every 3 s and swaps each into its place; it never reloads
+as a whole. „Alle freigeben“ (two or more open cards) is one confirmation
 page that names the cards; it approves exactly those, one after the other,
 each with its own run, so a red one is taken back alone.
 
@@ -573,8 +580,9 @@ stay; a service with data gets its program back with one tap, its data only
 from the snapshot laib takes first; a repair, a wish and the destroy tier have
 no „Zurücknehmen“ and say what stays. **Who proposed it and why** (quoted),
 and **the safe default**: for a risky class (human, a new service, a minted
-token, a service with data, the destroy tier) the first button is „Später“,
-„Freigeben“ loses its accent, and the diff sits behind „Details“. The card is built mechanically from
+token, a service with data, the destroy tier) „Freigeben“ loses its accent
+and a risk line stands above the button row (#941; the card's `primary`
+still names „Später“ for the apps that show cards), and the diff sits behind „Details“. The card is built mechanically from
 the classified change (`proposal.Card`), never by a model. What the
 proposer saw (`evidence`) follows its reason, and its way back (`undo`)
 follows laib's own.
@@ -588,8 +596,8 @@ without one is `applied`; `waiting` is approved and not yet applied
 (#609), never settled. `laib rollback #N` or a red run makes it `rolled-back`, and
 `laib reject <id> "<grund>"` `rejected` with the owner's reason
 (`rejectReason`) — „nicht jetzt“ or „später“ is `later`, a free no that
-counts against nobody. The Inbox page asks for the reason next to
-„Ablehnen“; „Später“ stays a link that decides nothing. The Operator
+counts against nobody. The Inbox page asks for the reason, optional,
+after the first tap on „Ablehnen“ (#941); not deciding means leaving the card. The Operator
 reads this record (ADR 0023, amendment #544).
 
 ### `laib look <service> [--container c] -- <command>`
