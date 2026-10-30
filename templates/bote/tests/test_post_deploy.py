@@ -258,15 +258,18 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn("Werkstatt weiter", soul)
 
     def test_the_soul_and_the_concept_agree_on_memory(self):
-        """#863: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
-        promised a memory per number. Nothing is configured (README, "Memory"): both say so."""
+        """#863, #884: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
+        promised a memory per number. Memory is on and one per profile, shared by the whole house
+        (README, "Memory"): the SOUL and KONZEPT.md both say so, and neither denies it."""
         _, _, soul = self.hook()
         self.assertIn("alle in diesem Zuhause sehen dasselbe", soul)
         self.assertNotIn("nichts merken", soul)   # #884: memory is on, the SOUL must not deny it
         konzept = (HOOK.parent.parent.parent / "docs" / "KONZEPT.md").read_text()
         self.assertNotIn("memory namespace", konzept)
         self.assertNotIn("Honcho", konzept)
-        self.assertIn("nothing beyond a conversation", konzept)
+        self.assertNotIn("nothing beyond a conversation", konzept)
+        self.assertNotIn("remembers nothing", konzept)
+        self.assertIn("not kept apart per person (#884)", konzept)
 
     def test_an_answer_naming_who_a_number_is_becomes_a_proposal(self):
         """#596: the owner answers Laib's notice about a dropped sender with "+49… ist mama"; the
