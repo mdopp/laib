@@ -1,9 +1,13 @@
 # The incident session (ADR 0023 §6): what a red event did before skills.
 # restart is granted only while the ops ceiling is apply (ADR 0023 §4).
+# #792, #839: an incident a look opened gets its first aid from the script
+# (run.py) before the model: the last log line, the restart diag offers,
+# diag again, one note; nothing red any more ends it without a model.
 description: Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren.
 trigger: {event: red}
 tools: [diag, logs, inspect, restart, propose, repair, escalate, note]   # repair only proposes: its prompt names it for every model (#858)
 more: [look, read, journal, plan, apply]   # a capable model also looks inside the container, at the journal and the plan (#286)
+run: run.py
 modell: frei     # the agentic loop with the granted tools: the model diagnoses and chooses
 output: note
 prompt: |

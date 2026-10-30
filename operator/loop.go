@@ -75,7 +75,7 @@ func (s Session) Line() string {
 	switch {
 	case len(came) > 0:
 		result = "vorgeschlagen " + strings.Join(came, ", ")
-	case countPrefix(s.Calls, "laib_restart") > 0:
+	case countPrefix(slices.Concat(s.Calls, s.Script), "laib_restart") > 0:
 		result = "neu gestartet"
 	}
 	if s.Outcome == "escalated" || countPrefix(slices.Concat(s.Calls, s.Script), "laib_escalate") > 0 {
@@ -191,14 +191,6 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 		}
 	}
-	if tr.Opened && !tr.Aided {
-		var fixed bool
-		if fixed, s.Note, s.Calls = o.firstAid(ctx, &mcp, sk, &tr, now()); fixed {
-			s.Trigger, s.Outcome = tr, "green"
-			return s, nil
-		}
-		s.Trigger = tr
-	}
 	// what the skill reads besides its tools: its record, a report's due
 	// tasks, the sessions its lessons come from, the usage data (#839) —
 	// read by the runner, handed to its script
@@ -237,6 +229,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		}()
 		if g.end != nil {
 			defer g.end()
+		}
+		if res.Trigger != nil { // vorfall's first aid, done (#792)
+			tr, s.Trigger = *res.Trigger, *res.Trigger
 		}
 		if res.Outcome == "" && sk.Modell == "nein" {
 			return s, errors.New("modell: nein, aber das Skript übergibt an das Modell")

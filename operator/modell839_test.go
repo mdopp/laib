@@ -41,8 +41,10 @@ func TestEachSkillSaysWhereTheModelDecides(t *testing.T) {
 		if got := cmpOr(sk.Modell, "frei"); got != want {
 			t.Errorf("%s: modell %s, want %s", name, got, want)
 		}
-		if want == "frei" && name == "vorfall" && sk.Run != "" {
-			t.Errorf("vorfall's loop is the model's, no script ahead of it: %+v", sk)
+		// vorfall's script is the first aid of an opened incident (#792): it
+		// vets no call and narrows no menu, the loop below stays the model's
+		if want == "frei" && name == "vorfall" && sk.Run != "run.py" {
+			t.Errorf("vorfall's first aid is its script: %+v", sk)
 		}
 	}
 }

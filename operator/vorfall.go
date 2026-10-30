@@ -150,48 +150,6 @@ func (o *Operator) open(fs []finding, m *memory) []Trigger {
 	return []Trigger{*tr}
 }
 
-// firstAid is an opened incident's first steps, without a model: each
-// service's last log line, the restart diag offers where it is granted,
-// and whether it is still red; then a note in German says what it saw and
-// did, and what comes next. It returns whether nothing is red any more.
-func (o *Operator) firstAid(ctx context.Context, mcp *MCP, sk Skill, tr *Trigger, now time.Time) (bool, string, []string) {
-	tr.Aided = true
-	var calls, done []string
-	do := func(step, tool string, args map[string]any) (string, bool) {
-		o.work.step(step)
-		calls = append(calls, tool+" "+shownArgs(args))
-		out, isErr, err := mcp.Call(ctx, tool, args)
-		return cmp.Or(out, fmt.Sprint(err)), err == nil && !isErr
-	}
-	for _, svc := range tr.services() {
-		if slices.Contains(sk.Granted, "logs") {
-			if out, ok := do("liest die Logs von "+svc, "laib_logs", map[string]any{"service": svc, "since": "1h"}); ok && lastLine(out) != "" {
-				tr.Saw = strings.TrimSpace(tr.Saw + " " + svc + ": „" + lastLine(out) + "“")
-			}
-		}
-		if slices.Contains(sk.Granted, "restart") && slices.Contains(tr.Restart, svc) {
-			out, _ := do("startet "+svc+" neu", "laib_restart", map[string]any{"service": svc})
-			done = append(done, svc+" neu gestartet ("+firstLine(cmp.Or(out, "ohne Antwort"))+")")
-		}
-	}
-	tr.Done = cmp.Or(strings.Join(done, ", "), "Logs gelesen")
-	fixed := false
-	if len(done) > 0 && slices.Contains(sk.Granted, "diag") {
-		o.work.step("prüft, ob es wieder grün ist")
-		calls = append(calls, "laib_diag {}")
-		red, known := o.stillRed(ctx, mcp, tr.services())
-		fixed = known && len(red) == 0
-	}
-	text := fmt.Sprintf("Vorfall %s: %s.%s", now.Format("15:04"), tr.Detail, tr.said())
-	if fixed {
-		text += " Danach ist nichts davon mehr rot."
-	} else {
-		text += fmt.Sprintf(" Weiter: das Modell sieht nach; ist es um %s noch rot, eskaliere ich.", now.Add(incidentWait).Format("15:04"))
-	}
-	mcp.Call(ctx, "laib_note", map[string]any{"kind": "incident", "text": text})
-	return fixed, text, calls
-}
-
 // said is what the first aid saw in the log and did, as sentences.
 func (t Trigger) said() string {
 	s := ""
