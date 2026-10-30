@@ -248,6 +248,11 @@ func lintHostWrites(name string, out render.Output) []string {
 			if !commandKey[k] {
 				continue
 			}
+			// a whole line under podman unshare (`podman unshare sh -c '… && … > f'`) writes in podman's
+			// user namespace, every segment of it
+			if w := strings.Fields(v); len(w) > 1 && filepath.Base(strings.TrimLeft(w[0], "-@+!:")) == "podman" && w[1] == "unshare" {
+				continue
+			}
 			// the shell's words, segment by segment: a quote is no boundary, a separator is
 			v = strings.NewReplacer("'", " ", `"`, " ", ">", " > ", ";", "\n", "&&", "\n", "||", "\n", "|", "\n", "$(", "\n", "(", "\n", ")", "\n", "{", "\n", "}", "\n").Replace(v)
 			for _, seg := range strings.Split(v, "\n") {

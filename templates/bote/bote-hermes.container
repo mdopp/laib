@@ -20,6 +20,13 @@ AutoUpdate=registry
 
 [Service]
 Restart=always
+# „wieder da“ after „weg“ (owner, 2026-10-30): a stop sends Hermes' shutdown notice to the home
+# channel and leaves .clean_shutdown, but Hermes says it is back only after a restart it planned
+# itself (.restart_pending.json, v0.22.2). So every start after a clean stop (apply, laib restart,
+# auto-update, reboot) owes that notice; Hermes deletes the marker once delivered. A crash sent no
+# notice and leaves no .clean_shutdown, so it owes none. The folder is the container's: podman unshare.
+# Hermes reads only delivered_targets from the marker, so {} is enough.
+ExecStartPre=-/usr/bin/podman unshare sh -c 'test -f ${DATA_DIR}/bote/hermes/.clean_shutdown && echo {} > ${DATA_DIR}/bote/hermes/.restart_pending.json || true'
 
 [Install]
 WantedBy=default.target
