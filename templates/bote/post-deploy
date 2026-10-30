@@ -238,6 +238,10 @@ tools:
 compression:
   threshold_tokens: ${COMPACT_TOKENS}
 non_interactive_hard_stop_enabled: true
+# #862: a reply that takes longer than 30 s says „Moment …“ (Hermes' long-running heartbeat; its text is
+# pre-start's locales overlay). Signal cannot edit a message, so every further 30 s is one more line.
+agent:
+  gateway_notify_interval: 30
 ${PLUGINS}
 YAML
 # Hermes' 58 bundled skills (apple, devops, social-media, …) do not fit a household (#502): Hermes' own

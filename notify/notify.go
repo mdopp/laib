@@ -1,9 +1,9 @@
 // Package notify is the program laib-notify (#443): what tells the owner
 // when the box cannot. Every five minutes (its timer, rendered by laib) it
-// pings the outside watchdog while laib's readiness is not red (#57), and it
-// tells the owner a red that stays ten minutes, once per incident, what is
-// behind once a week (#393, "Was ist veraltet" #528) and each new proposal
-// (#441), and what a template could not get to them itself (eingang/,
+// pings the outside watchdog while laib answers (#57; „Laib lebt“, #857), and it
+// tells the owner a red that stays ten minutes, once per incident, and its
+// „wieder grün“ (#857), what is behind once a week when it changed (#393,
+// "Was ist veraltet" #528) and each new proposal (#441), and what a template could not get to them itself (eingang/,
 // #703). It tells them through the Bote's channels first (bote-notify, the person
 // in box.yml notify.person) and by mail only when no channel is reachable
 // (#441, ADR 0016). It reads laib over MCP as the notify hand (diag,
@@ -205,31 +205,49 @@ func call(ctx context.Context, c Config, tool string, args map[string]any) (stri
 	return text, nil
 }
 
+// readyInfo is what notify reads of laib's /ready: that it answers, and
+// who is on a red (#857).
+type readyInfo struct {
+	Operator string `json:"operator"`
+	Work     struct {
+		Incident string    `json:"incident"`
+		Since    time.Time `json:"since"`
+	} `json:"operatorWork"`
+}
+
+func ready(ctx context.Context, c Config) (r readyInfo, err error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.ReadyURL, nil)
+	if err != nil {
+		return r, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return r, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return r, fmt.Errorf("/ready: %s", resp.Status)
+	}
+	return r, json.NewDecoder(resp.Body).Decode(&r)
+}
+
 // Ping pings the outside watchdog once (#57); false when nothing was sent
-// (no URL, a red or locked box, an error). A sent ping is stamped for /ready.
+// (no URL, laib not answering or unable to read its state, an error). The
+// ping means „Laib lebt“ and nothing else (#857): a red service is the red
+// message's, so the outside does not raise a second, wrong alarm. A sent
+// ping is stamped for /ready.
 func Ping(ctx context.Context, c Config) bool {
 	if c.WatchdogURL == "" {
 		return false
 	}
-	var r struct {
-		State string `json:"state"`
-		Red   int    `json:"red"`
+	if _, err := ready(ctx, c); err != nil {
+		return false
 	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", c.ReadyURL, nil)
-	resp, err := client.Do(req)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.WatchdogURL, nil)
 	if err != nil {
 		return false
 	}
-	err = json.NewDecoder(resp.Body).Decode(&r)
-	resp.Body.Close()
-	if err != nil || r.Red > 0 || r.State == "eingeschränkt" {
-		return false
-	}
-	req, err = http.NewRequestWithContext(ctx, "GET", c.WatchdogURL, nil)
-	if err != nil {
-		return false
-	}
-	resp, err = (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return false
 	}
@@ -249,6 +267,22 @@ type mailSeen struct {
 	Failing   map[string]time.Time `json:"failing"`   // a message's first failed send, by its subject (#659)
 	ByMail    map[string]bool      `json:"byMail"`    // mailed, or given up on: the chat alone tries again
 	Noted     map[string]time.Time `json:"noted"`     // a failure's last journal note, by its text
+	Said      map[string]string    `json:"said"`      // a told red's plain sentence, for its „wieder grün“ (#857)
+	Listed    string               `json:"listed"`    // the weekly list last told: an unchanged one is not sent again (#857)
+}
+
+// who says who is on a red (#857): the Operator's incident, else whether
+// it looks at all; its incident's own words are for Details.
+func who(rd readyInfo, err error) (string, string) {
+	switch w := rd.Work; {
+	case err != nil:
+		return "Ob sich jemand darum kümmert, weiß die Box gerade nicht.", ""
+	case w.Incident != "":
+		return "Der Operator arbeitet an einem Vorfall, seit " + w.Since.Local().Format("15:04") + ".", "\nOperator: " + w.Incident
+	case rd.Operator == "läuft":
+		return "Der Operator sieht nach; einen Vorfall dazu hat er noch nicht begonnen.", ""
+	}
+	return "Niemand, der Operator arbeitet gerade nicht. Es liegt bei dir.", ""
 }
 
 // Sweep mails a red that stayed RedFor, once per incident, and once a week
@@ -260,17 +294,24 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	}
 	path := filepath.Join(c.Home, "mail.json")
 	seen := mailSeen{Red: map[string]time.Time{}, Mailed: map[string]bool{}, Proposals: map[int]bool{},
-		Failing: map[string]time.Time{}, ByMail: map[string]bool{}, Noted: map[string]time.Time{}}
+		Failing: map[string]time.Time{}, ByMail: map[string]bool{}, Noted: map[string]time.Time{}, Said: map[string]string{}}
 	if b, err := os.ReadFile(path); err == nil {
 		json.Unmarshal(b, &seen)
 	}
+	if seen.Said == nil {
+		seen.Said = map[string]string{}
+	}
+	status := strings.TrimSuffix(c.InboxURL, "inbox") // the Status page, the pages' root
 	r := &run{ctx: ctx, c: c, now: now, seen: &seen, tried: map[string]bool{}}
 	r.eingang()
 	text, err := call(ctx, c, "laib_diag", map[string]any{})
 	if err != nil {
 		return err
 	}
-	var findings []struct{ Severity, Probe, Service, Detail, Fix, Say string }
+	var findings []struct {
+		Severity, Probe, Service, Detail, Fix, Say string
+		Aufgabe                                    int
+	}
 	if err := json.Unmarshal([]byte(text), &findings); err != nil {
 		return fmt.Errorf("laib_diag: %w", err)
 	}
@@ -282,7 +323,10 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 				line += " → " + f.Fix
 			}
 			red[k] = strings.TrimSpace(red[k] + "\n" + line)
-			says[k] = "- " + cmp.Or(f.Say, strings.TrimSpace(f.Service+" "+f.Detail))
+			says[k] = cmp.Or(f.Say, strings.TrimSpace(f.Service+" "+f.Detail))
+			if f.Aufgabe > 0 {
+				says[k] += fmt.Sprintf(" Dazu ist die Box-Aufgabe #%d offen.", f.Aufgabe)
+			}
 		}
 	}
 	var lines, details, keys []string
@@ -291,22 +335,32 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 			seen.Red[k] = now
 		}
 		if now.Sub(seen.Red[k]) >= RedFor && !seen.Mailed[k] {
-			lines, details, keys = append(lines, says[k]), append(details, d), append(keys, k)
+			lines, details, keys = append(lines, "- "+says[k]+" (seit "+seen.Red[k].Local().Format("15:04")+")"), append(details, d), append(keys, k)
 		}
 	}
-	for k := range seen.Red {
+	var green []string // a told red that cleared ends in one line (#857)
+	for k, since := range seen.Red {
 		if _, ok := red[k]; !ok {
+			if seen.Mailed[k] {
+				green = append(green, fmt.Sprintf("- „%s“ ist vorbei: wieder grün nach %d Minuten.", seen.Said[k], int(now.Sub(since).Minutes())))
+			}
 			delete(seen.Red, k)
 			delete(seen.Mailed, k)
+			delete(seen.Said, k)
 		}
+	}
+	if len(green) > 0 {
+		sort.Strings(green)
+		r.tell("Laib: wieder grün", strings.Join(green, "\n")+"\n\nStatus: "+status)
 	}
 	if len(lines) > 0 {
 		sort.Strings(lines)
 		sort.Strings(details)
-		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+
-			"\n\nWas du tun kannst: Sieh auf der Box-Seite unter Status nach; liegt in der Inbox eine Reparatur, gib sie frei.\n\nDetails für den, der sich darum kümmert:\n"+strings.Join(details, "\n")); err == nil {
+		on, raw := who(ready(ctx, c))
+		if _, err = r.tell("Laib: seit 10 Minuten rot", "Auf der Box ist seit mindestens zehn Minuten rot:\n\n"+strings.Join(lines, "\n")+"\n\nWer sich kümmert: "+on+
+			"\n\nWas du tun kannst: Sieh auf der Box-Seite unter Status nach; liegt in der Inbox eine Reparatur, gib sie frei.\nStatus: "+status+"\n\nDetails für den, der sich darum kümmert:\n"+strings.Join(details, "\n")+raw); err == nil {
 			for _, k := range keys {
-				seen.Mailed[k] = true
+				seen.Mailed[k], seen.Said[k] = true, says[k]
 			}
 		}
 	}
@@ -329,9 +383,11 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 			}
 		}
 		seen.Updates = now
-		if len(ups) > 0 {
-			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+strings.Join(ups, "\n")+"\n"); e != nil {
-				seen.Updates, err = time.Time{}, e
+		sort.Strings(ups)
+		if list := strings.Join(ups, "\n"); list != seen.Listed { // only when it changed (#857)
+			seen.Listed = list
+			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+list+"\n"); list != "" && e != nil {
+				seen.Updates, seen.Listed, err = time.Time{}, "", e
 			}
 		}
 	}
@@ -407,7 +463,7 @@ func (r *run) proposals() error {
 		headline := strings.Join(strings.Fields(cmp.Or(p.Card.Summary, p.Reason)), " ")
 		// one that fails blocks no other; it is told again on the next run,
 		// on the chat until the chat takes it (#659)
-		chat, e := r.tell(fmt.Sprintf("Freigabe #%d: %s · %s", p.ID, headline, c.InboxURL), "")
+		chat, e := r.tell(fmt.Sprintf("Freigabe #%d: %s · %s#%d", p.ID, headline, c.InboxURL, p.ID), "") // its card (#857)
 		if chat || e == nil && !c.chat() {
 			seen[p.ID] = true
 		} else if e != nil {

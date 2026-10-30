@@ -13,7 +13,7 @@ written down.
 |---|---|---|---|
 | **Laib** | the control plane: state repo, plan/apply/converge, proxy, SSO, DNS, model role, backup, journal, inbox, `/mcp` | `mdopp/laib` | one binary, user service |
 | **Operator** | the box's admin agent: watches, inspects, corrects inside the envelope, escalates, writes the morning report (ADR 0013) | `mdopp/laib` `operator/` | template `operator` |
-| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house and questions for everyone, the box for the admin's number only; no memory beyond a conversation; approves nothing (ADR 0016, #778, #863) | Hermes, stock, configured by a template | template `bote` |
+| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house and questions for everyone, the box for the admin's number only; one memory shared by everyone who talks to it, not kept apart per person (#884); approves nothing (ADR 0016, #778, #863) | Hermes, stock, configured by a template | template `bote` |
 | **Haus** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/haus` | template `haus` |
 | **Haus-Android** | the phone: TWA of Haus plus native widgets and the quick-settings tile | `mdopp/haus-android` | app |
 | **Home Assistant** | the house brain: devices, automations, Assist (intents, timers, media via Music Assistant) | upstream | template `home-assistant` |
@@ -73,8 +73,9 @@ claude) may approve a proposal that is not human-class and not its own
   Mitteilungen; the quick-settings tile opens Sprechen.
 - **Signal (optional per family member):** the Bote; house and questions,
   no box: its directory and its help offer the box to the admin's number
-  only (#863). It remembers nothing beyond a conversation; what should
-  stay goes into the Haushalt (calendar, notes). A question it cannot
+  only (#863). Its memory and its past conversations are one for the
+  whole house, not kept apart per person (#884); what is personal goes
+  into the person's Haushalt (calendar, notes). A question it cannot
   answer about a service goes to the owner as a Box-Aufgabe, never
   out of the house.
 
@@ -132,12 +133,13 @@ claude) may approve a proposal that is not human-class and not its own
 | Timers, alarms | Home Assistant | voice | HA | the speaker |
 | Notes | Markdown files in the file share (Syncthing) | you with any app, the Bote | Haus search (memory library), the Bote | Haus Notizen, any phone app |
 | Documents | Paperless | scanner, import | Haus, the Bote | Paperless, Haus |
-| What the Bote knows about you | nothing beyond a conversation: no memory is configured (`templates/bote/README.md`, "Memory") | — | — | — |
+| What the Bote knows about you | what it noted and past conversations, one store for the whole house, not per person (#884; `templates/bote/README.md`, "Memory") | the Bote (Hermes `memory`, `session_search`) | the Bote, for everyone who talks to it | — |
 
 Agents reach all of it through one MCP source, **Haushalt**, served by
 Haus (calendar, contacts, notes, document search, memory search); Claude
-mounts the same source in the Werkstatt. The Bote remembers nothing about
-you beyond a conversation; what should stay, it puts in the Haushalt.
+mounts the same source in the Werkstatt. The Bote's own memory is shared
+by everyone who talks to it (#884); what is personal, it puts in the
+person's Haushalt.
 
 ## Models and the card
 

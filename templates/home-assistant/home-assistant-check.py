@@ -257,6 +257,36 @@ class WS:
 # a sentence HA's built-in intents know on every box, that needs no device and switches nothing
 PROBE = {"de": "Wie spät ist es", "en": "What time is it"}
 APPLY = "laib apply home-assistant (#634)"
+# ADR 0015's five intents (#864) as text, recognized and never executed: (what, sentence, intent). An empty
+# intent takes any one HA or Music Assistant matches; None: no local intent may take it, so it reaches Frage.
+# {name} is a light or switch exposed to Assist. What this does not measure: the microphone, Whisper, the music.
+FIVE = [("Timer", "Stelle einen Timer auf 5 Minuten", "HassStartTimer"), ("Einslive", "Spiele Einslive", ""),
+        ("Musik", "Spiele Musik von Queen", ""), ("Frage", "Was ist ein Igel", None), ("Schalter", "Schalte {name} ein", "HassTurnOn")]
+
+
+def five(ws, lang: str, reg: list, states: dict) -> tuple:
+    """#864: the five intents through HA's conversation API, as text (no microphone): which one HA's
+    local intents take, in how many ms. (detail, findings)"""
+    if not lang.startswith("de"):
+        return "", []
+    exposed = [r["entity_id"] for r in reg if r.get("entity_id", "").split(".")[0] in ("light", "switch") and not r.get("disabled_by")
+               and ((r.get("options") or {}).get("conversation") or {}).get("should_expose") is True]
+    name = next((n for e in exposed if (n := ((states.get(e) or {}).get("attributes") or {}).get("friendly_name"))), "")
+    probes = [(w, s.format(name=name), i) for w, s, i in FIVE if name or "{name}" not in s]
+    t0 = time.monotonic()
+    got = (ws("conversation/agent/homeassistant/debug", sentences=[s for _, s, _ in probes], language=lang) or {}).get("results") or []
+    ms = round((time.monotonic() - t0) * 1000)
+    ok, out = [], []
+    for (what, sentence, want), hit in zip(probes, got + [None] * len(probes)):
+        took = ((hit or {}).get("intent") or {}).get("name") if (hit or {}).get("match") else None
+        if (want is None and not took) or (want is not None and took and (not want or took == want)):
+            ok.append(what)
+        else:
+            out.append({"severity": "gelb", "detail": f"Sprache: „{sentence}“ " + (f"nimmt {took}, nicht Frage" if want is None else "wird nicht erkannt"),
+                        "fix": "eigene Sätze in Home Assistant (ADR 0015, Prüfung 1); laib logs home-assistant"})
+    missing = "" if name else " · Schalter nicht geprüft: kein Licht oder Schalter für Assist freigegeben"
+    print(f"Absichten: {len(ok)} von {len(probes)} erkannt in {ms} ms: " + ", ".join(ok) + missing, flush=True)  # the unit's journal
+    return f"Absichten: {len(ok)} von {len(probes)} erkannt" + missing, out
 
 
 def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tuple:
@@ -267,8 +297,11 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
     (detail, findings)"""
     if not token or not persona:
         return "", []
-    out, wait, on_device = [], "", False
+    out, wait, on_device, said5, found5 = [], "", False, "", []
     try:
+        req = urllib.request.Request(base.rstrip("/") + "/api/states", headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            states = {s.get("entity_id"): s for s in json.load(resp)}
         ws = WS(base, token)
         try:
             listed = ws("assist_pipeline/pipeline/list") or {}
@@ -308,11 +341,9 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
             else:   # not on the box's engine: a satellite may carry it itself (#759), read below
                 wait = f" · Weckwort {have or 'nur am Gerät'}, bis {wake_id} da ist"
             reg = ws("config/entity_registry/list") or []
+            said5, found5 = five(ws, lang, reg, states)
         finally:
             ws.close()
-        req = urllib.request.Request(base.rstrip("/") + "/api/states", headers={"Authorization": "Bearer " + token})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            states = {s.get("entity_id"): s for s in json.load(resp)}
     except Exception as err:  # an unreachable or refusing HA is a finding, never a failed unit
         return "Sprache nicht messbar", [{"severity": "gelb", "detail": f"Sprache: nicht messbar ({type(err).__name__}: {err})", "fix": APPLY}]
     for r in reg:   # the satellites' selects, by HA's translation keys (a Voice PE, any Assist satellite)
@@ -327,7 +358,7 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
             if st.get("state") != phrase:
                 out.append(("gelb", f"Satellit „{who}“: weckt mit {st.get('state')}, kann „{phrase}“", APPLY))
     said += f" · Weckwort „{phrase}“ am Gerät" if wait and on_device else wait
-    return said, [{"severity": s, "detail": d, "fix": f} for s, d, f in out]
+    return said + (" · " + said5 if said5 else ""), [{"severity": s, "detail": d, "fix": f} for s, d, f in out] + found5
 
 
 def write(path: str, r: dict) -> None:

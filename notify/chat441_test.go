@@ -92,7 +92,7 @@ func TestTheOwnerHearsInTheChatFirstAndByMailOnlyAsFallback(t *testing.T) {
 	if err := Sweep(context.Background(), c, now.Add(24*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if m := mails(); len(m) != 1 || !strings.Contains(m[0], "Auf der Box ist seit mindestens zehn Minuten rot") {
+	if m := mails(); len(m) != 2 || lastWith(m, "Auf der Box ist seit mindestens zehn Minuten rot") == "" { // and the first one's „wieder grün“ (#857)
 		t.Fatalf("with no channel reachable the incident is mailed: %q", m)
 	}
 }

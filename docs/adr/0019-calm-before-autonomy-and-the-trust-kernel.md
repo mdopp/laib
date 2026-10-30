@@ -77,7 +77,8 @@ wrong.
    2026-10-28, #853: see the amendment below.)*
 5. **An outside watchdog and a paper card.** `laib serve` (since #443 its
    program `laib-notify`, on a five-minute timer) pings an outside
-   check while readiness is not red; silence becomes a push to the admin's
+   check while laib answers (*amended 2026-10-30, #857:* the ping means
+   „Laib lebt“ only; a red service is the red message's); silence becomes a push to the admin's
    phone; `laib recovery-sheet` prints the age key, the restic password, the repo and
    four steps (#79, #74). The family card (`laib family-card`) left the
    kernel with #798.

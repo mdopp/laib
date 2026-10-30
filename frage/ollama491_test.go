@@ -92,7 +92,7 @@ func TestOllamaChatFailureIsASentence(t *testing.T) {
 		Done    bool                     `json:"done"`
 	}
 	json.NewDecoder(resp.Body).Decode(&one)
-	if !one.Done || !strings.Contains(one.Message.Content, "nicht nachschlagen") {
+	if !one.Done || !strings.Contains(one.Message.Content, "nicht ans Internet") { // the search is down (#864)
 		t.Fatalf("%+v", one)
 	}
 }

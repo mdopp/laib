@@ -156,7 +156,7 @@ func TestAProposalWithAHundredImpactsReachesTheChatAndBlocksNoOther(t *testing.T
 		t.Fatalf("both proposals reach the chat: %v", got)
 	}
 	s := got[0]["text"]
-	if s != "Freigabe #102: Auth: 5 Einstellungen ändern sich · https://laib.e2e.home/inbox" { // #778: the impacts are the Inbox's
+	if s != "Freigabe #102: Auth: 5 Einstellungen ändern sich · https://laib.e2e.home/inbox#102" { // #778, its card #857: the impacts are the Inbox's
 		t.Errorf("the long one is one line pointing to the Inbox: %q", s)
 	}
 	if !strings.Contains(got[1]["text"], "Freigabe #99") {

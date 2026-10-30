@@ -182,7 +182,7 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 // diff only behind the technical details.
 func card(b *strings.Builder, r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, box []string) {
 	c := proposal.Card(p, domain, box...)
-	fmt.Fprintf(b, "<section class=card data-f><h2>Vorschlag #%d · %s</h2>", p.ID, html.EscapeString(c.Summary))
+	fmt.Fprintf(b, "<section class=card id=%d data-f><h2>Vorschlag #%d · %s</h2>", p.ID, p.ID, html.EscapeString(c.Summary)) // /inbox#N, where a message links (#857)
 	fmt.Fprintf(b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
 	if c.Decider != "" {
 		fmt.Fprintf(b, " · <strong>%s</strong>", html.EscapeString(c.Decider))

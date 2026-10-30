@@ -629,3 +629,19 @@ argv):
         -d "{\"model\":\"hermes-agent\",\"messages\":[{\"role\":\"user\",\"content\":\"$q\"}]}" http://127.0.0.1:8642/v1/chat/completions
     done; rm /tmp/bote.h
     journalctl --user -u llama -S -5min --no-pager | grep -E "prompt eval time|eval time" | tail -12   # tokens and t/s per call
+
+## Proben (#862)
+
+Every night at 05:30 `bote-proben.service` runs `bote-check.py` with
+`PROBEN=1`: ten fixed sentences go to Hermes' API server, each in its own
+session (`bote-probe-…`), as Haus's Sprechen field sends them. A probe fails
+when there is no answer or an error text, when the reply takes longer than
+`PROBE_LIMIT` (30 s), when a fact question does not call `frage` or name the
+fact, or when the question nobody can know („Wie heißt der Hund meines
+Nachbarn?“) gets an answer instead of „weiß ich nicht“. One line goes to the
+unit's journal (`laib logs bote --grep Bote-Proben`), the result into
+`proben.json`, and the Box page's line says „Proben 9 von 10 (30.10. 05:31),
+Antwort meist 6,1 s“ with a yellow finding per failed probe. Nothing
+switches. Switching is `scripts/bote-schalttest.py`, run by hand. The probes'
+sessions are in Hermes' `state.db` like any other (#884), and they count in
+the usage numbers. A Bote fix closes when its probe is green on the box.

@@ -84,6 +84,7 @@ type fakeLaib struct {
 	bearer   []string
 	srv      *httptest.Server
 	refusals int
+	ready    string // /ready's JSON instead of the default (#857); "503" answers 503
 }
 
 func newFakeLaib(t *testing.T) *fakeLaib {
@@ -91,6 +92,14 @@ func newFakeLaib(t *testing.T) *fakeLaib {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if r.URL.Path == "/ready" && f.ready == "503" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Path == "/ready" && f.ready != "" {
+			w.Write([]byte(f.ready))
+			return
+		}
 		if r.URL.Path == "/ready" {
 			red, state := 0, "bereit"
 			if f.red {
@@ -183,7 +192,7 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	f.red = true
 	sweep(now.Add(30 * time.Minute))
 	sweep(now.Add(41 * time.Minute))
-	if n := len(mails()); n != 3 {
+	if n := len(mails()); n != 4 { // its „wieder grün“ between them (#857)
 		t.Fatalf("a new incident is a new mail: %d", n)
 	}
 	for _, b := range f.bearer {
@@ -212,10 +221,10 @@ func TestAFailedSendIsJournaled(t *testing.T) {
 	}
 }
 
-// #57, moved with the notifier (#443): while readiness is not red the outside
-// watchdog is pinged and the stamp laib's /ready reads is written; a red box
-// stays silent on purpose.
-func TestThePingWhileNotRed(t *testing.T) {
+// #57, moved with the notifier (#443): the outside watchdog is pinged and
+// the stamp laib's /ready reads is written; without a URL nothing is sent.
+// That a red box pings too is #857 (messages857_test.go).
+func TestThePingWritesTheStamp(t *testing.T) {
 	f := newFakeLaib(t)
 	c := f.config(t, "127.0.0.1:1")
 	var pings int
@@ -227,10 +236,6 @@ func TestThePingWhileNotRed(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(c.Home, "watchdog.last")); err != nil || !strings.HasPrefix(string(b), "20") {
 		t.Fatalf("no stamp for /ready: %q %v", b, err)
-	}
-	f.red = true
-	if Ping(context.Background(), c) || pings != 1 {
-		t.Fatal("a red box must not ping: silence is the alarm")
 	}
 	c.WatchdogURL = ""
 	if Ping(context.Background(), c) {
