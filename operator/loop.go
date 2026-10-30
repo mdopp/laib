@@ -36,6 +36,7 @@ type Trigger struct {
 	Escalated bool     `json:"escalated,omitempty"`
 	Saw       string   `json:"saw,omitempty"`
 	Done      string   `json:"done,omitempty"`
+	Finding   []string `json:"finding,omitempty"` // its findings, probe and service: their recurrence (#861)
 }
 
 // Session is one run of a skill: trigger in, tool calls, a note out.
@@ -56,6 +57,7 @@ type Session struct {
 	In      int       `json:"in,omitempty"`
 	Out     int       `json:"out,omitempty"`
 	ModelMs int64     `json:"modelMs,omitempty"`
+	Lessons []string  `json:"lessons,omitempty"` // the lessons its prompt carried, by finding (#861)
 	opened  []Trigger // the incidents a look opened for its new reds (#792)
 }
 
@@ -299,8 +301,10 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	for _, d := range defs {
 		offered[d.Function.Name] = true
 	}
+	var lessons struct{ Lessons []string }
 	if sk.Context != "usage" && sk.Context != "none" {
 		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
+		json.Unmarshal([]byte(box), &lessons)
 		if web != nil {
 			web.upstream = upstreamOf(box)
 		}
@@ -326,6 +330,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	o.work.wait("")
 	user := o.prompt(sk, tr, ctxText)
+	for _, l := range lessons.Lessons { // what it was offered, as its prompt carries it (#861)
+		if t := firstLine(l); strings.Contains(user, t) {
+			s.Lessons = append(s.Lessons, strings.TrimPrefix(t, "# Lehre: "))
+		}
+	}
 	system := SystemPrompt(defs)
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
 	max := o.MaxCalls

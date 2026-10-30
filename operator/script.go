@@ -155,6 +155,7 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		var m struct {
 			Call string
 			Args map[string]any
+			Ask  string // one short question to the model (#861)
 			Done *scriptResult
 		}
 		if err := dec.Decode(&m); err != nil {
@@ -166,6 +167,13 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		}
 		if n >= scriptCalls {
 			return failed(fmt.Errorf("mehr als %d Aufrufe", scriptCalls))
+		}
+		if m.Ask != "" {
+			text, isErr := o.ask(ctx, g, m.Ask)
+			if err := enc.Encode(map[string]any{"text": text, "error": isErr}); err != nil {
+				return failed(err)
+			}
+			continue
 		}
 		o.work.step("Skript ruft " + m.Call + " auf")
 		text, isErr, refused := g.call(ctx, m.Call, m.Args)
@@ -191,6 +199,21 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 		return res, fmt.Errorf("Skript %s: %v %s", g.sk.Name, err, lastLine(errOut.String()))
 	}
 	return res, nil
+}
+
+// ask is a script's short question to the model, without tools (#861):
+// only a skill whose model judges asks, and the session counts its cost.
+func (o *Operator) ask(ctx context.Context, g *gate, q string) (string, bool) {
+	if g.sk.Modell != "urteil" {
+		return "nur eine Fähigkeit mit modell: urteil fragt das Modell", true
+	}
+	o.work.step("Skript fragt das Modell")
+	g.s.Script = append(g.s.Script, "frage "+clip(firstLine(q)))
+	reply, err := o.chat(ctx, g.s, []Message{{Role: "user", Content: q}}, nil)
+	if err != nil {
+		return err.Error(), true
+	}
+	return reply.Content, false
 }
 
 // keep stores a script's state for its next run.

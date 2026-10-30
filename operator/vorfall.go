@@ -148,12 +148,13 @@ func (o *Operator) open(fs []finding, m *memory) []Trigger {
 			continue
 		}
 		m.Repaired[id] = "vorfall"
-		what := f.Service + ": " + f.Probe + " " + f.Detail
+		what, fd := f.Service+": "+f.Probe+" "+f.Detail, label(id)
 		if tr == nil {
 			tr = &Trigger{Kind: "event", Service: f.Service, Detail: what, Opened: true}
 		} else {
 			tr.Detail += "; " + what
 		}
+		tr.Finding = append(tr.Finding, fd)
 		if len(f.Repair) == 2 && f.Repair[0] == "restart" {
 			tr.Restart = append(tr.Restart, f.Repair[1])
 		}

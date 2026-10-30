@@ -35,7 +35,7 @@ func (m menus) RoundTrip(r *http.Request) (*http.Response, error) {
 // prepares a judgement or, for lehre as before, works alone.
 func TestEachSkillSaysWhereTheModelDecides(t *testing.T) {
 	for name, want := range map[string]string{"vorfall": "frei", "routineblick": "frei", "morgenbericht": "frei",
-		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "nein",
+		"durchsicht": "urteil", "nutzung": "urteil", "aktualisierung": "urteil", "lehre": "urteil", // #861: the model condenses a lesson
 		"sicherung": "nein"} { // #858: the weekly sample ran only when the model called it
 		sk := skillFor(t, Trigger{}, name)
 		if got := cmpOr(sk.Modell, "frei"); got != want {
