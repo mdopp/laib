@@ -86,5 +86,91 @@ class Check(unittest.TestCase):
         self.assertTrue(st["findings"][0]["unmeasured"])
 
 
+KEY = "api-key-Pq7"
+
+
+def hermes(answers, delay=0.0):
+    """a fake Hermes API server: per sentence (answer, tools), streamed as SSE"""
+    import time as _t
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.headers.get("Authorization") != "Bearer " + KEY:
+                self.send_response(401); self.end_headers(); return
+            text, tools = answers.get(body["messages"][-1]["content"], ("", []))
+            _t.sleep(delay)
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            for t in tools:
+                self.wfile.write(f"event: hermes.tool.progress\ndata: {json.dumps({'tool': t, 'status': 'running'})}\n\n".encode())
+            self.wfile.write(f"data: {json.dumps({'choices': [{'delta': {'content': text}}]})}\n\ndata: [DONE]\n\n".encode())
+    return serve(H) + "/v1"
+
+
+GOOD = {"Hallo": ("Hallo, hier ist Joshua. Zum Beispiel: …", []), "Hilfe": ("Zum Beispiel: „Licht an“", []),
+        "Wie hoch ist die Zugspitze?": ("Die Zugspitze ist 2.962 m hoch (Quelle: wikipedia).", ["mcp__frage__frage"]),
+        "Was ist die Hauptstadt von Australien?": ("Canberra.", ["mcp__frage__frage"]),
+        "Wer hat die Relativitätstheorie entwickelt?": ("Albert Einstein.", ["mcp__frage__frage"]),
+        "Wie heißt der Hund meines Nachbarn?": ("Das weiß ich nicht.", []), "Welche Lichter sind gerade an?": ("Keine Lichter sind an.", ["mcp__ha__GetLiveContext"]),
+        "Wie spät ist es?": ("Es ist 05:31.", []), "Erzähl mir einen kurzen Witz.": ("Treffen sich zwei …", []), "Danke!": ("Gern!", [])}
+
+
+def probe(api, **env):
+    d = tempfile.mkdtemp()
+    e = {"PATH": os.environ["PATH"], "PROBEN": "1", "API_URL": api, "BOTE_API_KEY": KEY, "STATUS_DIR": d, "SIGNAL_URL": "http://127.0.0.1:9",
+         "USAGE_URL": "http://127.0.0.1:9", "USAGE_TOKEN": ""}
+    e.update(env)
+    r = subprocess.run([sys.executable, "-"], input=SCRIPT.read_text(), text=True, capture_output=True, env=e, timeout=120)
+    with open(os.path.join(d, "laib-status.json")) as f:
+        return r, json.load(f)
+
+
+class Proben(unittest.TestCase):
+    """#862: ten fixed sentences to Hermes' API server nightly: a fact calls frage and names the fact,
+    the unknown is said to be unknown, each reply within the limit and without error text; one line in
+    the unit's journal, the result on the Box page's line, a failed probe a yellow finding."""
+
+    def test_ten_good_answers_are_one_line_and_green(self):
+        r, st = probe(hermes(GOOD))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = [l for l in r.stdout.splitlines() if l.startswith("Bote-Proben:")]
+        self.assertEqual(len(line), 1, r.stdout)
+        self.assertIn("10 von 10", line[0])
+        self.assertIn("Proben 10 von 10", st["detail"])
+        self.assertEqual(st["findings"], [])
+        self.assertNotIn(KEY, r.stdout + json.dumps(st))
+
+    def test_a_fact_from_memory_a_made_up_answer_and_an_error_are_named(self):
+        bad = dict(GOOD)
+        bad["Wie hoch ist die Zugspitze?"] = ("Die Zugspitze ist 2.962 m hoch.", [])   # from memory, no frage
+        bad["Wie heißt der Hund meines Nachbarn?"] = ("Er heißt Bello.", [])         # made up
+        bad["Danke!"] = ("⚠️ The AI model service isn't reachable", [])
+        r, st = probe(hermes(bad))
+        self.assertIn("Proben 7 von 10", st["detail"])
+        found = " | ".join(f["detail"] for f in st["findings"] if f["severity"] == "gelb")
+        self.assertIn("„Zugspitze“: kein frage-Werkzeug", found)
+        self.assertIn("„Unbekannt“: sagt nicht", found)
+        self.assertIn("„Danke“: Fehlertext", found)
+
+    def test_a_slow_reply_fails_its_limit(self):
+        r, st = probe(hermes(GOOD, delay=0.3), PROBE_LIMIT="0.1")
+        self.assertIn("Proben 0 von 10", st["detail"])
+        self.assertIn("zu langsam", st["findings"][0]["detail"])
+
+    def test_no_hermes_is_unmeasured_not_red(self):
+        r, st = probe("http://127.0.0.1:9/v1")
+        self.assertIn("Proben nicht gemessen", st["detail"])
+        self.assertTrue(st["findings"][0]["unmeasured"])
+        self.assertEqual(st["findings"][0]["severity"], "info")
+
+    def test_the_unit_runs_nightly_with_the_key_in_the_environment(self):
+        unit = (SCRIPT.parent / "bote-proben.service").read_text()
+        self.assertIn("-e PROBEN=1 -e BOTE_API_KEY ", unit)
+        self.assertIn("Environment=BOTE_API_KEY=${PROBE_KEY}", unit)
+        self.assertIn("OnCalendar=*-*-* 05:30", (SCRIPT.parent / "bote-proben.timer").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

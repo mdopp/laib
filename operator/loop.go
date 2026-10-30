@@ -25,6 +25,9 @@ type Trigger struct {
 	// unix seconds, and how often its red came meanwhile
 	Queued int64 `json:"queued,omitempty"`
 	Count  int   `json:"count,omitempty"`
+	// its replays that failed, and not before when the next runs (#859)
+	Tries int   `json:"tries,omitempty"`
+	Next  int64 `json:"next,omitempty"`
 	// an incident a look opened (#792): the services whose finding offers a
 	// restart, and what its first aid saw and did, for the model and an escalation
 	Restart   []string `json:"restart,omitempty"`
@@ -33,6 +36,7 @@ type Trigger struct {
 	Escalated bool     `json:"escalated,omitempty"`
 	Saw       string   `json:"saw,omitempty"`
 	Done      string   `json:"done,omitempty"`
+	Finding   []string `json:"finding,omitempty"` // its findings, probe and service: their recurrence (#861)
 }
 
 // Session is one run of a skill: trigger in, tool calls, a note out.
@@ -49,7 +53,13 @@ type Session struct {
 	Why      string    `json:"why,omitempty"`      // why it ended red, was skipped or had nothing to do (#550, #839)
 	Script   []string  `json:"script,omitempty"`   // the calls its script made, apart from the model's (#839)
 	Refused  []string  `json:"refused,omitempty"`  // the calls its script asked for and did not get (#839)
-	opened   []Trigger // the incidents a look opened for its new reds (#792)
+	// what it cost the model (#859): tokens in and out, milliseconds waited for its replies
+	In      int       `json:"in,omitempty"`
+	Out     int       `json:"out,omitempty"`
+	ModelMs int64     `json:"modelMs,omitempty"`
+	Lessons []string  `json:"lessons,omitempty"` // the lessons its prompt carried, by finding (#861)
+	OffMenu []string  `json:"offMenu,omitempty"` // the model's calls of tools not on its menu, refused (#860)
+	opened  []Trigger // the incidents a look opened for its new reds (#792)
 }
 
 // Line is the session's log line. A red or an incident session's names
@@ -57,6 +67,9 @@ type Session struct {
 // looks in 40 h said only "red".
 func (s Session) Line() string {
 	l := fmt.Sprintf("session %s/%s: %s, %d calls, %dms", s.Skill, s.Trigger.Service, s.Outcome, len(s.Calls), s.Duration)
+	if s.ModelMs > 0 {
+		l += fmt.Sprintf(", Modell %d+%d Token in %dms", s.In, s.Out, s.ModelMs)
+	}
 	if s.Outcome == "skipped" {
 		return l + " — " + s.Why
 	}
@@ -73,9 +86,11 @@ func (s Session) Line() string {
 	}
 	result := "nichts geändert"
 	switch {
+	case len(s.opened) > 0:
+		result = "an den Vorfall übergeben"
 	case len(came) > 0:
 		result = "vorgeschlagen " + strings.Join(came, ", ")
-	case countPrefix(s.Calls, "laib_restart") > 0:
+	case countPrefix(slices.Concat(s.Calls, s.Script), "laib_restart") > 0:
 		result = "neu gestartet"
 	}
 	if s.Outcome == "escalated" || countPrefix(slices.Concat(s.Calls, s.Script), "laib_escalate") > 0 {
@@ -111,6 +126,8 @@ type Operator struct {
 	Usage  *Usage // usage-metrics, for a skill with context usage (#270)
 	Web    *Web   // Frage's search, for a session that only proposes (#544)
 	Skills string // OPERATOR_SKILLS: the built-in skills' folders in the image, their scripts (#839)
+	Evals  string // OPERATOR_EVALS: the eval's cases in the image, played every night (#860)
+	gate   string // what the apply gate last told the journal (#860)
 	// Looked is the unix time of the last session or look that ended
 	// without an error; /ready says it, the kernel's heartbeat reads it,
 	// since a look that found nothing new writes no note (#543)
@@ -185,19 +202,30 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 					s.Red = append(s.Red, strings.TrimSpace(f.Probe+" "+f.Service+" "+f.Detail))
 				}
 			}
-			s.opened = o.open(fs, mem)
+			// a look that opens an incident leaves the model to it (#859): its
+			// reds count as seen, any other news waits for the next look
+			if s.opened = o.open(fs, mem); len(s.opened) > 0 {
+				saw = slices.Clone(last)
+				for _, f := range fs {
+					if mem.Repaired[f.id()] == "vorfall" {
+						saw = append(saw, f.id())
+					}
+				}
+				saw, s.Outcome, s.Why = ids(nil, saw...), "red", "an den Vorfall übergeben"
+				return s, nil
+			}
 			if slices.Contains(sk.Granted, "repair") {
 				human = o.repairs(ctx, &mcp, fs, mem)
 			}
 		}
 	}
-	if tr.Opened && !tr.Aided {
-		var fixed bool
-		if fixed, s.Note, s.Calls = o.firstAid(ctx, &mcp, sk, &tr, now()); fixed {
-			s.Trigger, s.Outcome = tr, "green"
+	// a slot that needs the model asks first, before its script works (#859)
+	if (tr.Kind == "slot" || tr.Kind == "report") && sk.Modell != "nein" {
+		if why := o.LLM.Busy(ctx, true); why != "" {
+			s.Outcome, s.Why = "skipped", why
+			o.work.wait(why)
 			return s, nil
 		}
-		s.Trigger = tr
 	}
 	// what the skill reads besides its tools: its record, a report's due
 	// tasks, the sessions its lessons come from, the usage data (#839) —
@@ -205,10 +233,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	all := o.history(ctx)
 	data := map[string]any{"history": all}
 	if sk.Lessons != "" {
-		data["sessions"] = o.sessions(sk.Lessons)
+		data["sessions"] = o.sessions(sk.Lessons, time.Time{})
 	}
 	if sk.Output == "report" {
 		data["due"], _, _ = o.MCP.Call(ctx, "laib_aufgabe", map[string]any{"action": "list", "faellig": true}) // #667
+		data["sessions"] = o.sessions("", now().AddDate(0, 0, -31))                                            // the model's use (#859), lessons and recurrence (#861)
 	}
 	if sk.Context == "usage" {
 		err := errors.New("usage-metrics ist auf dieser Box nicht eingerichtet")
@@ -220,6 +249,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mcp.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": s.Note})
 			return s, nil
 		}
+	}
+	var lessons struct{ Lessons []string }
+	if tr.Opened && !tr.Aided { // the first aid reads the lessons too (#861)
+		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
+		json.Unmarshal([]byte(box), &lessons)
+		data["lessons"] = lessons.Lessons
 	}
 	var ctxText string
 	if sk.Run != "" {
@@ -238,6 +273,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		if g.end != nil {
 			defer g.end()
 		}
+		if res.Trigger != nil { // vorfall's first aid, done (#792), with the lessons it used (#861)
+			tr, s.Trigger, s.Lessons = *res.Trigger, *res.Trigger, res.Lessons
+		}
 		if res.Outcome == "" && sk.Modell == "nein" {
 			return s, errors.New("modell: nein, aber das Skript übergibt an das Modell")
 		}
@@ -255,6 +293,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		return s, fmt.Errorf("tools: %w", err)
 	}
 	granted := sk.menu(o.Typed)
+	if ok, _ := o.applyGate(); granted["laib_apply"] && !slices.Contains(sk.Tools, "apply") && !ok {
+		delete(granted, "laib_apply") // measured, and wrong (#860)
+	}
 	var mine []Tool
 	for _, t := range tools {
 		if granted[t.Name] {
@@ -274,11 +315,12 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	if sk.Context != "usage" && sk.Context != "none" {
 		box, _, _ := o.MCP.Call(ctx, "laib_context", map[string]any{})
+		json.Unmarshal([]byte(box), &lessons)
 		if web != nil {
 			web.upstream = upstreamOf(box)
 		}
 		if look {
-			box = lookBundle(found, box)
+			box = lookBundle(found, box, saw)
 		}
 		ctxText = strings.TrimSpace(ctxText + "\n" + box)
 	}
@@ -299,6 +341,11 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	o.work.wait("")
 	user := o.prompt(sk, tr, ctxText)
+	for _, l := range lessons.Lessons { // what it was offered, as its prompt carries it (#861)
+		if t := firstLine(l); strings.Contains(user, t) && !slices.Contains(s.Lessons, strings.TrimPrefix(t, "# Lehre: ")) {
+			s.Lessons = append(s.Lessons, strings.TrimPrefix(t, "# Lehre: "))
+		}
+	}
 	system := SystemPrompt(defs)
 	msgs := []Message{{Role: "system", Content: system}, {Role: "user", Content: user}}
 	max := o.MaxCalls
@@ -307,7 +354,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	}
 	textCalls, before := 0, len(s.Calls) // the model's calls, after the first aid's
 	for pass := 0; pass <= max; pass++ {
-		reply, err := o.LLM.Chat(ctx, msgs, defs)
+		reply, err := o.chat(ctx, &s, msgs, defs)
 		if err != nil {
 			return s, fmt.Errorf("model: %w", err)
 		}
@@ -352,6 +399,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			mcpName := tc.Function.Name
 			var args map[string]any
 			if !offered[mcpName] {
+				s.OffMenu = append(s.OffMenu, mcpName+" "+clip(tc.Function.Arguments))
 				msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Name: mcpName, Content: "nicht ausgeführt: " + mcpName + " ist nicht im Menü der Fähigkeit " + sk.Name})
 				continue
 			}
@@ -539,13 +587,15 @@ const lookCtx, lookResult, lookLines = 9000, 4000, 15
 
 // lookBundle is a look's context: what diag found, as the model would see
 // it, and the journal's last entries without the Operator's own notes —
-// the lease, a backup, a converge are what is news there.
-func lookBundle(found, bundle string) string {
+// the lease, a backup, a converge are what is news there — and the lessons
+// for the findings it saw.
+func lookBundle(found, bundle string, saw []string) string {
 	var c struct {
 		Journal []struct {
 			T                                            time.Time
 			Actor, Verb, Service, Result, Reason, Detail string
 		}
+		Lessons []string
 	}
 	json.Unmarshal([]byte(bundle), &c)
 	var lines []string
@@ -562,6 +612,11 @@ func lookBundle(found, bundle string) string {
 	}
 	slices.Reverse(lines)
 	text := "Befunde (laib diag):\n" + budget(cmp.Or(found, "nicht lesbar"), lookCtx/2) + "\n\nJournal, die letzten Einträge ohne die Notizen des Operators:\n" + strings.Join(lines, "\n")
+	for _, l := range c.Lessons { // the lessons for what it sees (#861), at the end, which the budget keeps
+		if slices.ContainsFunc(saw, func(id string) bool { return "# Lehre: "+label(id) == firstLine(l) }) {
+			text += "\n\nLehre zu einem Befund:\n" + l
+		}
+	}
 	return budget(text, lookCtx)
 }
 
@@ -685,6 +740,15 @@ func SystemPrompt(defs []ToolDef) string {
 	}
 	b.WriteString("\nAntworte knapp. Keine Erklärungen an den Nutzer, nur Tool-Aufrufe und am Ende die Notiz.")
 	return b.String()
+}
+
+// chat is one model reply, its tokens and its time counted on the session (#859).
+func (o *Operator) chat(ctx context.Context, s *Session, msgs []Message, defs []ToolDef) (Message, error) {
+	t := time.Now()
+	reply, err := o.LLM.Chat(ctx, msgs, defs)
+	// a reply takes a millisecond at least: a session that asked the model shows it
+	s.ModelMs, s.In, s.Out = s.ModelMs+max(1, time.Since(t).Milliseconds()), s.In+reply.in, s.Out+reply.out
+	return reply, err
 }
 
 func (o *Operator) record(s Session) {

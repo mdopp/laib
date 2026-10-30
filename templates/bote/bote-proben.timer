@@ -1,0 +1,9 @@
+[Unit]
+Description=Bote: Proben jede Nacht um 05:30, nach Sicherung und Updates (#862)
+
+[Timer]
+OnCalendar=*-*-* 05:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

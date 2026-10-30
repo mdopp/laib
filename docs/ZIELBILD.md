@@ -74,8 +74,10 @@ stays 30 days after migration day.
   "ServiceBay's features, decided".
 - **Laib's own pages** (`laib.<domain>`, the default of `box.yml
   laib.host`: Status, Inbox, Journal, Netz) are the admins' and the one
-  place where approvals happen (ADR 0012, #778). Which host the Kraftwerk's
-  box.yml sets: auf der Box zu prüfen.
+  place where approvals happen (ADR 0012, #778). The Kraftwerk's box.yml
+  sets `laib: {host: admin}`, so there they are `admin.dopp.cloud`, kept
+  from migration day (read 2026-10-30, #865); `laib.<domain>` in the other
+  docs is the default a fresh box gets.
 - **Messages to the owner** for a service red for ten minutes, a failed or
   stale backup, the weekly image updates and each new proposal go through
   the Bote first, by mail with Authelia's SMTP settings when no channel

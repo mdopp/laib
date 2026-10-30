@@ -60,10 +60,12 @@ COPY scaffold /opt/werkstatt/scaffold
 COPY laibapp.py /usr/local/bin/laib-app
 # one Claude Code Remote Control session per checkout (#383), in the tmux session `claude`
 COPY sessions.sh /usr/local/bin/werkstatt-sessions
+# after a release on the box, its closed issues' box probes (#867)
+COPY boxcheck.py /usr/local/bin/werkstatt-boxcheck
 COPY tmux.conf /etc/tmux.conf
 # pi in the browser (#384): pi-web-ui with the Werkstatt's provider, guide and hand
 COPY piweb.sh /usr/local/bin/werkstatt-pi-web
-RUN chmod +x /usr/local/bin/werkstatt-skills /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-pi-web
+RUN chmod +x /usr/local/bin/werkstatt-skills /usr/local/bin/entrypoint.sh /usr/local/bin/laib /usr/local/bin/pi /usr/local/bin/laib-app /usr/local/bin/werkstatt-sessions /usr/local/bin/werkstatt-boxcheck /usr/local/bin/werkstatt-pi-web
 EXPOSE 22
 VOLUME /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

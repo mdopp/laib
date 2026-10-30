@@ -67,6 +67,15 @@ only. Send it as `Authorization: MediaBrowser Token="…"`. Without media the
 token is empty: the wish list stays, without „hast du schon“ and without
 ticking a wish off by itself.
 
+Gesehen & Gehört (haus#152): the page shows each person the films and series
+they played in Jellyfin and the audiobooks they listened to in Audiobookshelf,
+and puts a wished title on the Radicale list `liste-filme-buecher`. Reading
+another user's played state needs a Jellyfin administrator, so here — and
+only here — Haus holds an API key, `HAUS_JELLYFIN_KEY` ("Haus (Gesehen)" in
+the dashboard), minted by media's post-deploy; Haus only reads with it. The
+books come with `HAUS_ABS_TOKEN` (ABS's user `haus` is an administrator).
+Without the key the page shows the books only; without either, no page.
+
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as
 released, in the haus pod beside Haus (`haus-qmd`), searching the notes
 by words and by meaning. Image `ghcr.io/mdopp/laib-qmd:<qmd version>`

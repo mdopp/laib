@@ -35,3 +35,4 @@ USAGE_URL: http://host.containers.internal:8094  # usage-metrics (#266): tool ca
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN         # bote-notify (#177): Home Assistant sends it with rest_command.mitteilung
 CHECK_IMAGE: docker.io/library/python:3.13-alpine    # bote-check.py, the standard library only (#785)
 USAGE_TOKEN: !secret USAGE_METRICS_TOKEN     # bote-check reads the week's conversations with it (#785); empty without usage-metrics
+PROBE_KEY: !secret BOTE_API_KEY               # bote-proben sends its nightly sentences to Hermes' API server with it (#862)

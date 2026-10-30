@@ -28,7 +28,7 @@ type Box struct {
 	HostNetwork []string `yaml:"hostNetwork"`
 	Notify      Notify   `yaml:"notify"`
 	// Watchdog is the outside check (#57): serve pings url every five
-	// minutes while readiness is not red; the outside turns silence into a
+	// minutes while laib answers (#857); the outside turns silence into a
 	// push. Contact is whom the family calls when the box is down.
 	Watchdog   Watchdog   `yaml:"watchdog"`
 	Updates    Updates    `yaml:"updates"`
@@ -93,7 +93,8 @@ type Peer struct {
 type Registry struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
-	Ref  string `yaml:"ref"` // branch or tag; default main
+	Ref  string `yaml:"ref"`  // branch or tag; default main
+	Path string `yaml:"path"` // the folder of the template folders inside the repo; default templates (#906)
 }
 
 // Updates is the window of laib-images.timer, the nightly image run (#528):

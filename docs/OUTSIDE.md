@@ -69,7 +69,10 @@ one consumer. If a second box ever exists, that box is the canary.
 Everything that can say "something is wrong" runs on the box. So the one
 thing outside is a watchdog: `box.yml watchdog.url` names a
 healthchecks-style ping URL; `laib-notify` (its timer, #443; its container, ADR 0027) pings it every five minutes
-while readiness is not red, and the outside turns fifteen minutes of
-silence into a push to the admin's phone. Readiness shows „Wächter:
+while laib answers, and the outside turns fifteen minutes of
+silence into a push to the admin's phone. The ping means „Laib lebt“ and
+nothing else (#857): a red service is told by laib-notify's red message
+(what is red by its name, since when, who is on it, a link to Status, and
+„wieder grün nach N Minuten“ when it clears), not by a second alarm. Readiness shows „Wächter:
 zuletzt gemeldet 12:05“, diag is yellow without a URL. The paper card for
 the family (`laib family-card`) left the kernel with #798.

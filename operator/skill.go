@@ -1,8 +1,10 @@
 package operator
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,6 +118,7 @@ type Runner struct {
 	Op       *Operator
 	Tick     string // OPERATOR_TICK, for ${TICK}; default 10m
 	ReportAt string // OPERATOR_REPORT_AT, for ${REPORT_AT}; default 07:00
+	EvalAt   string // OPERATOR_EVAL_AT: when the nightly eval may start (#860); default 03:30
 	Last     map[string]time.Time
 	told     map[string]bool // the slots whose waiting or failing is journaled (#858)
 	mu       sync.Mutex
@@ -159,6 +162,7 @@ func (r *Runner) Step(ctx context.Context, now time.Time, skills []Skill) []Sess
 		reportAt = "07:00"
 	}
 	out := r.drain(ctx, now, skills) // the incidents that waited for the graphics card first (#550)
+	r.nightly(ctx, now, skills)
 	var opened []Trigger
 	for _, sk := range skills {
 		if sk.Status != "active" || sk.Trigger.Event != "" {
@@ -243,4 +247,31 @@ func (r *Runner) RunNow(ctx context.Context, sk Skill, tr Trigger) Session {
 		s.Note = err.Error()
 	}
 	return s
+}
+
+// nightly runs the eval once a night (#860), from EvalAt on, while the
+// household model is free; a run that had to wait is tried at the next
+// step. Then the apply gate's state goes to the journal, once each.
+func (r *Runner) nightly(ctx context.Context, now time.Time, skills []Skill) {
+	if r.Op.Evals == "" {
+		return
+	}
+	defer func() {
+		if _, say := r.Op.applyGate(); say != r.Op.gate {
+			if r.Op.gate = say; say != "" {
+				r.Op.MCP.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": say})
+			}
+		}
+	}()
+	last := r.Last["eval"]
+	if len(skills) == 0 || !Due(SkillTrigger{Daily: cmp.Or(r.EvalAt, "03:30")}, now, last, "", "") || r.Op.LLM.Busy(ctx, true) != "" {
+		return
+	}
+	r.Last["eval"] = now
+	if _, err := r.Eval(ctx, skills); errors.Is(err, errWaited) {
+		r.Last["eval"] = last
+	} else if err != nil {
+		r.Op.MCP.Call(ctx, "laib_note", map[string]any{"kind": "watch", "text": "Das nächtliche Eval lief nicht: " + firstLine(err.Error()) + "."})
+	}
+	r.saveLast()
 }

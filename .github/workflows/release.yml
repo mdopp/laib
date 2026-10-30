@@ -11,6 +11,7 @@ name: release
 on:
   push:
     branches: [main]
+  workflow_dispatch:   # release-merge.yml after it merged release-please's PR (#906)
 permissions:
   contents: write
   pull-requests: write

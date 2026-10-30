@@ -135,6 +135,19 @@ class OnTheDevice(unittest.TestCase):
         s = self.look(FakeWS(house(["Okay Nabu", "Hey Joshua"], state="Hey Joshua")))
         self.assertTrue(s["detail"].endswith("; heute nicht geweckt"), s["detail"])
 
+    def test_a_failed_training_still_shows_the_wakes(self):
+        # #825, 2026-10-30: the retrain failed, and the status kept its failure for days without the count
+        (self.micro / "hey_joshua.status.json").write_text(json.dumps({"state": "failed", "phrase": "Hey Joshua"}))
+        failed = {"at": "2026-10-28T07:51:00Z", "detail": "Wake-Word „Hey Joshua“: Training fehlgeschlagen", "einzelheiten": "log", "findings": []}
+        (self.micro / "laib-status.json").write_text(json.dumps(failed))
+        (self.micro / "laib-wakes.json").write_text(json.dumps({"tage": {time.strftime("%Y-%m-%d"): {"geweckt": 8, "ohne": 8}}}))
+        for _ in range(2):   # every 15 minutes: the count is replaced, not appended again
+            s = self.look(FakeWS(house(["Okay Nabu"])))
+        self.assertEqual(s["detail"], "Wake-Word „Hey Joshua“: Training fehlgeschlagen; heute 8× geweckt, 8 ohne Befehl")
+        self.assertEqual(s["einzelheiten"], "log", "the trainer's log stays")
+        self.assertNotEqual(s["at"], failed["at"], "the count is of now: the line is checked now")
+        self.assertIn("8× geweckt", s["geweckt"])
+
     def test_without_counts_the_line_claims_none(self):
         s = self.look(FakeWS(house(["Okay Nabu", "Hey Joshua"], state="Hey Joshua")))
         self.assertNotIn("geweckt", s["detail"])

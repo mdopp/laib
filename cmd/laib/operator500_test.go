@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -90,5 +91,23 @@ func TestOperatorEnableAfterDisableRunsWithAValidToken(t *testing.T) {
 	run("enable")
 	if code := call(); code != http.StatusOK || unauthorized() {
 		t.Fatalf("enable over a revoked token: MCP answers %d", code)
+	}
+}
+
+// #860: the diagnostician phase of ADR 0019 could not be configured — enable
+// refused an ops hand below ceiling apply. Propose is enough now; below it
+// the Operator could not even propose, and enable still refuses.
+func TestOperatorEnableAcceptsTheDiagnostician(t *testing.T) {
+	for ceiling, ok := range map[string]bool{"propose": true, "read": false} {
+		c := newCbox(t)
+		dir := c.env.Paths.State
+		if err := state.SetBlock(filepath.Join(dir, "box.yml"), "model", "url", "http://127.0.0.1:1/v1"); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, "policy.yml"))
+		os.WriteFile(filepath.Join(dir, "policy.yml"), regexp.MustCompile(`ops: \{ceiling: \w+`).ReplaceAll(b, []byte("ops: {ceiling: "+ceiling)), 0o644)
+		if rc := cmdOperator(context.Background(), c.env, []string{"enable"}); (rc == cli.ExitOK) != ok {
+			t.Errorf("ceiling %s: enable rc %d", ceiling, rc)
+		}
 	}
 }

@@ -4,14 +4,16 @@
 # lessons/<probe>-<service>.md in the state repo, with the finding, the
 # cause the session saw and what fixed it. A lesson is class human: only
 # the owner lets it in; then laib context carries it into every session.
-# No model runs; a finding with a lesson proposed once gets none again.
+# #861: the model condenses each lesson in one short question (cause, sign,
+# fix, when not to apply it); no answer keeps the transcription. A finding
+# with a lesson proposed once gets none again.
 description: Einmal am Tag — aus einem gelösten Vorfall eine Lehre vorschlagen, die der Admin freigibt.
 trigger: {daily: "${REPORT_AT}"}
 tools: [propose, note]
 run: run.py
 context: none
-modell: nein     # the script alone: a lesson is what laib measured, no model
+modell: urteil   # the script picks what laib measured; the model condenses it, one short question (#861)
 output: propose
 lessons: vorfall
 prompt: |
-  Lehren aus gelösten Vorfällen: Der Ablauf schlägt sie selbst vor, ohne Modell. Ein Mensch gibt jede frei oder nicht.
+  Lehren aus gelösten Vorfällen: Der Ablauf schlägt sie selbst vor; das Modell verdichtet jede in vier Zeilen. Ein Mensch gibt jede frei oder nicht.

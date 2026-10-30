@@ -57,6 +57,11 @@ type OpWork struct {
 		Why     string    `json:"why,omitempty"`
 		Caused  string    `json:"caused,omitempty"`
 	} `json:"skills,omitempty"`
+	// what the model's sessions cost on Day (#859): tokens in and out, milliseconds
+	Model *struct {
+		Day                   string
+		Sessions, In, Out, Ms int
+	} `json:"model,omitempty"`
 }
 
 // OperatorState turns the facts into one word for the readiness line and

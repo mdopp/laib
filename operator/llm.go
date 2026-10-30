@@ -31,6 +31,13 @@ type Message struct {
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`
+	in, out    int        // the reply's tokens, prompt and completion, as the server counted them (#859)
+}
+
+// usage is what an OpenAI-compatible server says a reply cost.
+type usage struct {
+	In  int `json:"prompt_tokens"`
+	Out int `json:"completion_tokens"`
 }
 
 // ToolCall is the model asking for a tool.
@@ -171,7 +178,8 @@ func (l *LLM) Busy(ctx context.Context, cold bool) string {
 // generated on to the window's end.
 func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Message, error) {
 	budget, wait := cmp.Or(l.MaxTokens, 8192), cmp.Or(l.Timeout, 5*time.Minute)
-	req := map[string]any{"model": l.Model, "messages": msgs, "temperature": 0.2, "max_tokens": budget, "stream": true}
+	req := map[string]any{"model": l.Model, "messages": msgs, "temperature": 0.2, "max_tokens": budget, "stream": true,
+		"stream_options": map[string]any{"include_usage": true}} // the tokens, counted (#859)
 	if len(tools) > 0 {
 		req["tools"] = tools
 		req["tool_choice"] = "auto"
@@ -211,6 +219,7 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Messag
 				Message      Message `json:"message"`
 				FinishReason string  `json:"finish_reason"`
 			} `json:"choices"`
+			Usage usage `json:"usage"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&out)
 		if err == nil && len(out.Choices) == 0 {
@@ -218,6 +227,7 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Messag
 		}
 		if err == nil {
 			m, finish = out.Choices[0].Message, out.Choices[0].FinishReason
+			m.in, m.out = out.Usage.In, out.Usage.Out
 		}
 	}
 	if err != nil {
@@ -270,9 +280,13 @@ func readStream(body io.Reader) (Message, string, error) {
 				} `json:"delta"`
 				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
+			Usage *usage `json:"usage"` // the last chunk's, with include_usage
 		}
 		if err := json.Unmarshal([]byte(data), &ev); err != nil {
 			return Message{}, "", fmt.Errorf("model stream: %w", err)
+		}
+		if ev.Usage != nil {
+			m.in, m.out = ev.Usage.In, ev.Usage.Out
 		}
 		for _, c := range ev.Choices {
 			content.WriteString(c.Delta.Content)

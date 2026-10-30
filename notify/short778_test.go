@@ -26,9 +26,9 @@ func TestANewProposalIsOneLineWithTheInboxLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]bool{
-		"Freigabe #17: whoami bekommt ein neues Image · https://laib.e2e.home/inbox": true,
-		"Freigabe #18: Paperless wird entfernt · https://laib.e2e.home/inbox":        true,
-		"Freigabe #19: Daten löschen · https://laib.e2e.home/inbox":                  true, // no headline: the reason
+		"Freigabe #17: whoami bekommt ein neues Image · https://laib.e2e.home/inbox#17": true,
+		"Freigabe #18: Paperless wird entfernt · https://laib.e2e.home/inbox#18":        true,
+		"Freigabe #19: Daten löschen · https://laib.e2e.home/inbox#19":                  true, // no headline: the reason
 	}
 	got := b.messages()
 	if len(got) != 3 {
@@ -68,7 +68,7 @@ func TestTheMailFallbackIsTheSameLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	line := "Freigabe #123: Joshua kennt jetzt alle Namen deiner Geräte · https://laib.e2e.home/inbox"
+	line := "Freigabe #123: Joshua kennt jetzt alle Namen deiner Geräte · https://laib.e2e.home/inbox#123"
 	if subj, err := new(mime.WordDecoder).DecodeHeader(m.Header.Get("Subject")); err != nil || subj != line {
 		t.Errorf("the subject is the line: %q %v", subj, err)
 	}

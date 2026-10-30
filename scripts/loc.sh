@@ -28,6 +28,9 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# All caps +10 % (kernel 22,000, Operator 3,300, each program's, the skills' 55 / 220 / 275): set by
+# the owner, mdopp, 2026-10-30, on train 2026-10-30b ("Erhöhe alle Grenzen um 10%"): the review
+# issues of #851 landed in one train with the kernel at 19,433, the Operator at 2,941, frage at 399.
 # 20,000: set by the owner, mdopp, 2026-10-23, on #609 (approve is a merge,
 # a red run rolls back its whole batch) asking for 17,000: "Setze die Grenze
 # auf 20k". The kernel stood at 16,944.
@@ -45,8 +48,8 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 20000 cmd internal
-budget operator 3000 operator
+budget kernel 22000 cmd internal
+budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
 # their one door, with them. The owner, 2026-10-27, #839: no more than 50 skills, each of a
@@ -55,25 +58,25 @@ budget operator 3000 operator
 py=$(find skills -name '*.py' ! -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
 pyt=$(find skills -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
 n=$(find skills -mindepth 2 -maxdepth 2 -name skill.yml | wc -l)
-[ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  skills: $n (cap 50, each run.py 200)"
-[ "$n" -le 50 ] || { echo "more than 50 skills (#839)"; bad=1; }
+[ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  skills: $n (cap 55, each run.py 220)"
+[ "$n" -le 55 ] || { echo "more than 55 skills (#839)"; bad=1; }
 for f in skills/*/run.py; do
   [ -f "$f" ] || continue
   l=$(wc -l < "$f")
-  [ "$l" -le 200 ] || { echo "$f has $l lines, a skill script is at most 200 (#839)"; bad=1; }
+  [ "$l" -le 220 ] || { echo "$f has $l lines, a skill script is at most 220 (#839)"; bad=1; }
 done
 door=$(wc -l < skills/laibskill.py)
-[ "$door" -le 250 ] || { echo "skills/laibskill.py has $door lines, the scripts' door is at most 250 (#839)"; bad=1; }
+[ "$door" -le 275 ] || { echo "skills/laibskill.py has $door lines, the scripts' door is at most 275 (#839)"; bad=1; }
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
-budget stick 1800 stick         # the laptop's install-stick builder, 1,468
-budget frage 400 frage          # "was ist …", 261
-budget automat 600 automat      # the Bote's HA automations, 421
-budget persona 900 persona      # the Bote's persona engine, 701
-budget mcpserver 200 mcpserver  # the Bote's tools' MCP server, 111
-budget disk 700 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
+budget stick 1980 stick         # the laptop's install-stick builder, 1,468
+budget frage 440 frage          # "was ist …", 261
+budget automat 660 automat      # the Bote's HA automations, 421
+budget persona 990 persona      # the Bote's persona engine, 701
+budget mcpserver 220 mcpserver  # the Bote's tools' MCP server, 111
+budget disk 770 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
 # notify 600: the owner, mdopp, 2026-10-25 (#659): the chat retried before mail, mail sent right,
 # failures noted once an hour; 501 lines, no honest cut
-budget notify 600 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
+budget notify 660 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
 # behind the kernel's verb door (ADR 0026, #598): the household verbs, each
 # program with its own cap; the kernel's shrank by what moved, 16,889 to 16,695
 # haushalt 700: set by the owner, mdopp, 2026-10-25, on #676 ("1 a"): laib tell (one message to
@@ -81,12 +84,12 @@ budget notify 600 notify        # laib-notify: the watchdog ping and the owner's
 # the kernel; 610 lines, room for the next verb of that size
 # haushalt 920: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): laib zuhause and laib person
 # signal move behind the door out of the kernel (ADR 0026 §4); 736 lines, plus about a quarter
-budget haushalt 920 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797)
+budget haushalt 1012 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
 # and atomic write
-budget lease 1300 lease         # laib-lease: the policy proxy and the GPU lease (#677)
+budget lease 1430 lease         # laib-lease: the policy proxy and the GPU lease (#677)
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other

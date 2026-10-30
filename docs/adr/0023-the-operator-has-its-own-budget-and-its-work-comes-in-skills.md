@@ -719,3 +719,62 @@ The open-ended work stays the model's: `vorfall` and `routineblick` keep
 their loop. Weighed against before (#246): nothing the family sees gets
 worse; a red backup, a lost slot and a failed incident are written down by
 code instead of hoped for.
+
+
+## Amendment 2026-10-30 — the first aid is a script; the Operator counts what the model costs, what lessons do and what the model would do (#839, #859, #860, #861)
+
+- **The incident's first aid is `vorfall`'s script** (#839). Its last
+  skill-specific Go left the Operator: `skills/vorfall/run.py` does for an
+  incident a look opened what `firstAid` did, and hands the trigger back
+  marked aided (`done(trigger=…)`), with what it saw and did, for the
+  model, the queue and an escalation. The script's note is its own; the
+  model keeps its note. The queue, the escalation after 30 minutes and the
+  look stay the runner's.
+- **The model's cost is counted** (#859). A session records the tokens in
+  and out the server reports (`stream_options.include_usage`) and the
+  milliseconds waited for replies; `/ready`'s `work.model` sums the day
+  (seeded from `incidents.jsonl` after a restart), the Box page's Operator
+  section shows it, and the morning report ends with the last 24 hours.
+- **Retries back off** (#859): a queued incident whose replay fails waits 2,
+  4, 8 … minutes, at most an hour.
+- **A slot that needs the model asks first** (#859): a daily or weekly
+  skill with `modell: frei` or `urteil` asks whether the model is free
+  before its script reads anything. A look and an incident keep their
+  model-free steps first; a script that works alone runs while the card is
+  lent.
+- **A look that opens an incident leaves the model to it** (#859): the look
+  ends red („an den Vorfall übergeben“), its reds count as seen, other news
+  waits for the next look. One new red costs one model session, not two.
+- **A script may ask the model one short question** (#861): `s.ask`,
+  without tools, only for `modell: urteil`, counted on the session. `lehre`
+  (now `urteil`) has each lesson condensed: cause, sign, fix, when not to
+  apply it; without an answer the transcription stands, marked.
+- **Lessons are measured** (#861): a session's record names the lessons its
+  prompt carried; an incident a look opened names its findings; once a
+  month the morning report says which lessons were offered and which
+  findings came back, „trotz Lehre“ when a lesson for it had been offered.
+- **The eval sees what it judges** (#860): a model's call of a tool not on
+  its menu is recorded (`offMenu`) and fails the eval case; `laib operator
+  enable` accepts an ops hand at ceiling `propose`, the diagnostician of
+  ADR 0019.
+
+- **The nightly eval and the apply gate** (#860, after the owner raised
+  the caps by 10 %): the harness is the Operator's code now and both case
+  sets ship in its image. Every night from `OPERATOR_EVAL_AT` (03:30) on,
+  while the household model is free, the runner plays the set for its
+  model behind a fake laib that lists the skill's real tools and answers
+  with the case's replies, and journals „eval <model>: N Vorfälle, M falsche
+  Eingriffe“; a run in which a session waited is no measure and is tried
+  again. A capable model is offered `apply` only while its latest report
+  shows zero wrong mutations; without a report for the model it stays
+  offered — the owner's #286 decision — and the journal says the gate is
+  unmeasured.
+- **Looks and the first aid read the lessons** (#861): a look's context
+  carries the lessons for the findings it sees; the first aid names the fix
+  of a lesson for its finding in its note. Both record the lesson as
+  offered.
+
+Weighed against before (#246): the family sees nothing worse; one red
+costs one model session instead of two, a failing replay no longer asks
+the model every minute, and the owner reads the day's model use on the Box
+page instead of in a log review.

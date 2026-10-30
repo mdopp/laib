@@ -53,6 +53,18 @@ func Sync(ctx context.Context, env *cli.Env, st *state.State) ([]string, error) 
 		if err != nil {
 			return lines, fmt.Errorf("registry %s: %s", r.Name, out)
 		}
+		// #906: path names where the template folders sit; every lookup reads <clone>/templates
+		if p := filepath.Clean(r.Path); r.Path != "" && p != "templates" {
+			link := filepath.Join(dir, "templates")
+			_, missing := os.Stat(filepath.Join(dir, p))
+			if fi, err := os.Lstat(link); !filepath.IsLocal(p) || missing != nil || err == nil && fi.Mode()&os.ModeSymlink == 0 {
+				return lines, fmt.Errorf("registry %s: path %s is not a folder of the repo, or the repo has its own templates/", r.Name, r.Path)
+			}
+			os.Remove(link)
+			if err := os.Symlink(p, link); err != nil {
+				return lines, fmt.Errorf("registry %s: %w", r.Name, err)
+			}
+		}
 		head, _ := sysd.Run(ctx, "git", "-C", dir, "rev-parse", "--short", "HEAD")
 		lines = append(lines, r.Name+" @ "+head)
 	}

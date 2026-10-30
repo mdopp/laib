@@ -103,10 +103,25 @@ questions in `~/.claude.json` (#498): `hasCompletedOnboarding` and
 `projects["/workspace/<name>"].hasTrustDialogAccepted`, written only when
 missing, everything else in the file kept. The
 sessions run as `dev` in a clean login shell (the Claude and Laib tokens
-from `/run/laib`, no other variable of the container) and in Claude Code's
-default permission mode: unlike claude-dev, no
-`--allow-dangerously-skip-permissions`, because a session reachable from
-the phone holds the apply-capable `claude` hand, not a read-only token.
+from `/run/laib`, no other variable of the container but the permission
+mode) in the mode the owner set as `PERMISSION_MODE` (#898):
+
+- `default`: Claude Code asks in the app before a tool call that needs a
+  permission (`--permission-mode default`).
+- `bypass`: every tool call runs without asking
+  (`--dangerously-skip-permissions`), as under ServiceBay's claude-dev; the
+  pass also answers Claude Code's one-time warning
+  (`skipDangerousModePermissionPrompt` in `~/.claude/settings.json`).
+  **The risk:** a session reachable from the phone holds the apply-capable
+  `claude` hand and the Werkstatt's GitHub token, so a prompt injected
+  through a web page, an issue or a file runs its commands unasked. The
+  owner chose this knowingly (2026-10-29); Laib's own gate still holds:
+  what is above the `claude` hand's ceiling stays a proposal in the Inbox.
+
+The mode is passed on every start, so a `--continue` does not fall back to
+the mode its conversation last ran in. `laib status werkstatt` shows it
+(„Claude-Sitzungen ohne Rückfragen …“), and in bypass `laib diag` names it.
+A change of the value restarts the container and with it every session.
 `scripts/boot-werkstatt.sh` checks the windows after the first start, a
 restart and an image update.
 

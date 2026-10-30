@@ -34,7 +34,7 @@ triage, run nightly on the box, result in the journal. It lives in
 Rules:
 
 - Production lines are capped per program: the kernel (`cmd/`,
-  `internal/`, under 16,400), the Operator (`operator/`, under 3,000, ADR
+  `internal/`, under 22,000), the Operator (`operator/`, under 3,300, ADR
   0023) and each program that left the kernel (`stick/`, `frage/`,
   `automat/`, `persona/`, `mcpserver/`; #309). `scripts/loc.sh` measures
   each, warns at 95 %, and fails when a program imports the kernel, the
@@ -49,6 +49,24 @@ Rules:
 - `gofmt -l` and `go vet` in CI, plus `scripts/drift.sh` (docs vs code: layout, the
   Operator's tools, ports, counts, tracked artifacts, the release
   manifest); nothing else.
+
+## Done on the box, after the merge (#867)
+
+Issues close at merge; the box gets the release at night. The Werkstatt's
+`werkstatt-boxcheck` (`werkstatt/boxcheck.py`, about hourly on the sessions'
+timer) notices when the box runs a newer release, reads the releases in
+between and takes the issues they name that closed since the older one and
+carry a box probe: a line `Auf der Box: …` in the body, or the label
+`box-check`. A read-only `laib` command in backticks on that line (`laib
+status beets`, `laib diag`; verbs: status, diag, look, logs, read, state,
+net, version, inspect, journal, context) runs: exit 0 comments green, any
+other comments red and reopens the issue. A probe without such a command
+gets one comment „Auf der Box seit vX.Y, nicht automatisch prüfbar“. One
+comment per issue and release; nothing waits on it. It runs in the
+Werkstatt because only there are both hands: the laib MCP and a GitHub
+login that may comment and reopen (gh's login in the kept home, else the
+Werkstatt's token with Issues: write). Write the probe so it can be red:
+`laib status beets` exits 0 whenever beets answers, whatever the line says.
 
 ## The Operator against a model (#43)
 

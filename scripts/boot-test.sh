@@ -159,7 +159,7 @@ FAKE=$!
 LAIB_LISTEN=127.0.0.1:18090 "$BIN" serve >/dev/null 2>&1 & SERVE=$!
 sleep 1
 OPS_TOKEN="$(LAIB_ACTOR=human:boot "$BIN" token mint ops --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
-LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
+LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" OPERATOR_SKILLS="$ROOT/skills" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
 grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
@@ -207,6 +207,8 @@ printf '%s\n%s\n' '{"skill":{"name":"durchsicht"},"trigger":{"kind":"tick"},"sta
 grep -q '"call": "laib_status"' "$WORK/script.out" && grep -q 'laib status nicht lesbar (laib weg)' "$WORK/script.out" || { echo "FAIL: the script in the image did not speak the runner's channel"; cat "$WORK/script.out"; exit 1; }
 if podman exec "$OPC" python3 -I -S -c 'open("/proc/1/environ","rb").read()' >/dev/null 2>&1; then echo "FAIL: a process in the Operator's container reads its environment (#839)"; exit 1; fi
 podman exec "$OPC" python3 -I -S -c 'open("/proc/self/environ","rb").read()' >/dev/null 2>&1 || { echo "FAIL: the control: a process cannot read even its own /proc"; exit 1; }
+# #860: the nightly eval's cases ship in the image, both sets, as JSON
+podman exec "$OPC" python3 -I -S -c 'import json; [json.load(open("/evals/" + f)) for f in ("incidents.json", "incidents-typed.json")]' || { echo "FAIL: the eval's cases are not in the Operator's image (#860)"; exit 1; }
 LAIB_ACTOR=human:boot "$BIN" operator disable >/dev/null || { echo "FAIL: operator disable exit $?"; exit 1; }
 [ "$(systemctl --user is-active laib-operator.service)" != active ] || { echo "FAIL: the Operator still runs after disable"; exit 1; }
 # #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it

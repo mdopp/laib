@@ -8,7 +8,10 @@ keeps failing, named for removal (#544), and the due Box-Aufgaben (#667).
 The runner hands the inbox (data.history) and laib aufgabe list --faellig
 (data.due). #858: a failing model consumed the slot with no report; the
 script also reads status and journal and hands a report written from them,
-which the runner writes when the model fails.
+which the runner writes when the model fails. #859: the Operator's sessions
+of the month (data.sessions) give the day's tokens and model time; #861:
+and, once a month, which lessons they were offered and which findings came
+back.
 """
 
 import json
@@ -92,6 +95,35 @@ def due_line(text):
     return "Fällige Box-Aufgaben: " + ", ".join(f"#{field(a, 'id', 0)} {field(a, 'titel')}" for a in tasks) + "."
 
 
+def model_line(sessions, now):
+    """What the Operator's sessions cost the model in the last 24 hours (#859)."""
+    day = [x for x in sessions if field(x, "modelMs", 0) and now - when(field(x, "started")) <= timedelta(days=1)]
+    if not day:
+        return "Modell in 24 Stunden: keine Sitzung des Operators."
+    n_in, n_out, ms = (sum(field(x, k, 0) for x in day) for k in ("in", "out", "modelMs"))
+    return f"Modell in 24 Stunden: {len(day)} {'Sitzung' if len(day) == 1 else 'Sitzungen'}, {n_in} Token gelesen, {n_out} geschrieben, {ms / 60000:.0f} Minuten."
+
+
+def lessons_line(sessions, now):
+    """Once a month (#861): which lessons the sessions' prompts carried, and
+    which findings came back — an incident's first session per finding,
+    "trotz Lehre" when a session was offered that finding's lesson before."""
+    month = sorted((x for x in sessions if now - when(field(x, "started")) <= timedelta(days=30)), key=lambda x: when(field(x, "started")))
+    used, seen, back, taught = {}, {}, {}, set()
+    for x in month:
+        tr = field(x, "trigger", {})
+        if field(tr, "kind") == "event" and not field(tr, "queued", 0):
+            for f in field(tr, "finding", []) or [field(tr, "service")]:
+                seen[f] = seen.get(f, 0) + 1
+                if seen[f] > 1:
+                    back[f] = back.get(f, "") or (" (trotz Lehre)" if f in taught else "")
+        for le in field(x, "lessons", []) or []:
+            used[le] = used.get(le, 0) + 1
+            taught.add(le)
+    said = "Lehren im Monat: " + (", ".join(f"{k} {n}× angeboten" for k, n in sorted(used.items(), key=lambda kv: -kv[1])) or "keine angeboten") + ". "
+    return said + ("Wiedergekommen: " + ", ".join(f"{f} {seen[f]}×{back[f]}" for f in sorted(back, key=lambda f: -seen[f])) + "." if back else "Kein Befund kam wieder.")
+
+
 def hm(s, tz):
     """A journal time as the box's clock, or "?"."""
     d = when(s)
@@ -123,8 +155,11 @@ def fallback(status, journal, now):
 
 def run(s):
     history = s.data.get("history") or []
-    lines = [rate(history, when(s.now)), stale(history), due_line(s.data.get("due"))]
+    sessions, month = s.data.get("sessions") or [], s.now[:7]
+    lines = [rate(history, when(s.now)), stale(history), due_line(s.data.get("due")), model_line(sessions, when(s.now))]
+    if field(s.state, "month") != month:  # the month's first report
+        lines.append(lessons_line(sessions, when(s.now)))
     human = " ".join(x for x in lines if x)
     status = s.call("laib_status").json() or {}
     journal = s.call("laib_journal", since="24h").json()
-    return laibskill.done(human=human, fallback=(fallback(status, journal, when(s.now)) + " " + human).strip())
+    return laibskill.done(human=human, fallback=(fallback(status, journal, when(s.now)) + " " + human).strip(), state={"month": month})

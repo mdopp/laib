@@ -71,6 +71,10 @@ Environment=HAUS_ABS_TOKEN=${ABS_TOKEN}
 # without media, and then a wish is never „hast du schon“ nor ticked off by itself
 Environment=HAUS_JELLYFIN_URL=${JELLYFIN_URL}
 Environment=HAUS_JELLYFIN_TOKEN=${JELLYFIN_TOKEN}
+# Gesehen & Gehört (haus#152): what each person watched, read with Jellyfin's API key "Haus (Gesehen)"
+# (only an administrator reads another user's played state); minted by media's post-deploy, empty without
+# media, and then the page shows the books from Audiobookshelf only
+Environment=HAUS_JELLYFIN_KEY=${JELLYFIN_KEY}
 # what the family uses (#266): counts per feature and day, never who, flushed every few minutes to
 # usage-metrics as this pod reaches it; the admins' "Was wird genutzt" card reads it back. Without
 # usage-metrics the token renders empty and Haus counts nothing

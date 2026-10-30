@@ -186,6 +186,15 @@ class PostDeploy(unittest.TestCase):
             read = lambda f: (h / f).read_text() if (h / f).exists() else ""
             return p, read("config.yaml"), read("SOUL.md")
 
+    def test_a_long_reply_says_moment_after_thirty_seconds(self):
+        """#862: no „Moment …“ while the model thought for minutes. Hermes' long-running heartbeat
+        (agent.gateway_notify_interval, bridged to HERMES_AGENT_NOTIFY_INTERVAL in gateway/run.py) goes
+        out after 30 s instead of 180; its words are pre-start's locales overlay."""
+        p, conf, _ = self.hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("\nagent:\n  gateway_notify_interval: 30\n", conf)
+        self.assertEqual(conf.count("\nagent:"), 1, "one agent section, or YAML keeps the last")
+
     def test_the_laib_tools_trust_is_the_owners_value(self):
         """#524: the hook wrote trust: untrusted itself, so every template update undid the owner's
         trust: full. It is LAIB_TOOLS_TRUST now (a template update keeps a value), untrusted by default;
@@ -258,15 +267,18 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn("Werkstatt weiter", soul)
 
     def test_the_soul_and_the_concept_agree_on_memory(self):
-        """#863: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
-        promised a memory per number. Nothing is configured (README, "Memory"): both say so."""
+        """#863, #884: the SOUL said the Bote remembers nothing beyond a conversation while KONZEPT.md
+        promised a memory per number. Memory is on and one per profile, shared by the whole house
+        (README, "Memory"): the SOUL and KONZEPT.md both say so, and neither denies it."""
         _, _, soul = self.hook()
         self.assertIn("alle in diesem Zuhause sehen dasselbe", soul)
         self.assertNotIn("nichts merken", soul)   # #884: memory is on, the SOUL must not deny it
         konzept = (HOOK.parent.parent.parent / "docs" / "KONZEPT.md").read_text()
         self.assertNotIn("memory namespace", konzept)
         self.assertNotIn("Honcho", konzept)
-        self.assertIn("nothing beyond a conversation", konzept)
+        self.assertNotIn("nothing beyond a conversation", konzept)
+        self.assertNotIn("remembers nothing", konzept)
+        self.assertIn("not kept apart per person (#884)", konzept)
 
     def test_an_answer_naming_who_a_number_is_becomes_a_proposal(self):
         """#596: the owner answers Laib's notice about a dropped sender with "+49… ist mama"; the

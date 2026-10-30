@@ -18,6 +18,8 @@ Environment=MODEL_KEY=${MODEL_KEY}
 # the web pi (#384): its hand and the name it answers to
 Environment=LAIB_PI_TOKEN=${LAIB_PI_TOKEN}
 Environment=WERKSTATT_DOMAIN=${DOMAIN}
+# the sessions' permission mode (#898): default asks, bypass does not
+Environment=WERKSTATT_PERMISSION_MODE=${PERMISSION_MODE}
 Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
 # dev's home (#241): ~/.claude, ~/.claude.json, dotfiles, history; ~/.cache
 # (npm, go, pip) is its own data path, not backed up; sshd's host keys, made once.
@@ -25,6 +27,8 @@ Volume=${DATA_DIR}/werkstatt/workspace:/workspace:z
 Volume=${DATA_DIR}/werkstatt/home:/home/dev:z
 Volume=${DATA_DIR}/werkstatt/cache:/home/dev/.cache:z
 Volume=${DATA_DIR}/werkstatt/ssh-host-keys:/etc/ssh/keys:z
+# the entrypoint's status line for laib status werkstatt (#898)
+Volume=${DATA_DIR}/werkstatt/status:/var/lib/werkstatt-status:z
 # this container's tokens, not the shared volume (#44)
 Tmpfs=/run/laib
 AutoUpdate=registry

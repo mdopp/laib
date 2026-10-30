@@ -5,6 +5,13 @@ household agent, or to route a spoken sentence through an LLM loop.
 
 - **Status:** Proposed, 2026-10-10 — accepted once the two checks below
   pass on the box.
+  *(2026-10-30, #864: check 1 is now a script, not a deferred task:
+  `home-assistant-check` sends the five intents as text through HA's
+  conversation API, recognized and never executed, and writes „Absichten:
+  N von 5 erkannt“ into the Box page's line and the unit's journal. Its
+  first result on the box decides: 5 of 5 accepts this ADR, a miss amends
+  §1 with the custom sentences it needs. Check 2 is the integrations row
+  „Frage als Gesprächsagent“ of the same check.)*
 - **Deciders:** operator (mdopp): voice matters; realistically it is
   alarms and timers, Einslive, music from a playlist, "was ist …", and
   switches.

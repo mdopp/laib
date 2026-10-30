@@ -124,10 +124,17 @@ func (r *Runner) drain(ctx context.Context, now time.Time, skills []Skill) []Ses
 			r.Op.drop(ctx, w, "die Fähigkeit "+w.Skill+" ist nicht aktiv")
 		case !w.Trigger.Escalated && now.Sub(time.Unix(w.Trigger.Queued, 0)) >= incidentWait:
 			r.Op.escalate(ctx, w, busy) // #792: bounded, then the next hand too
-		case busy == "":
+		case busy == "" && now.Unix() >= w.Trigger.Next:
 			s := r.RunNow(ctx, skills[i], w.Trigger)
 			if s.Outcome != "skipped" && s.Outcome != "error" {
 				os.Remove(w.path)
+			} else if s.Outcome == "error" {
+				// a replay that failed backs off: 2, 4, 8 … minutes, at most an hour (#859)
+				w.Trigger.Tries++
+				w.Trigger.Next = now.Add(min(time.Minute<<w.Trigger.Tries, time.Hour)).Unix()
+				if b, err := json.Marshal(w); err == nil {
+					os.WriteFile(w.path, b, 0o644)
+				}
 			}
 			out = append(out, s)
 		}

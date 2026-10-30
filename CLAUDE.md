@@ -17,7 +17,7 @@ them.
    cannot verify on the box, say so in those words.
 3. **KISS, and the kernel grows only on purpose.** Every program has a
    production-line cap in `scripts/loc.sh` with its reason next to the
-   number: the kernel 20,000 (#609), the Operator 3,000, and one for each program
+   number: the kernel 22,000 (#609, +10 % 2026-10-30), the Operator 3,300, and one for each program
    that left the kernel (ADR 0005 amendment #309, ADR 0023): stick, frage,
    automat, persona, mcpserver, disk, notify, haushalt and, since #677, the
    lease. Tests are not
@@ -67,7 +67,9 @@ them.
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
   live only in `secrets.age` on the box.
 - **Finish the work.** Done means merged, released, applied on the box and
-  verified green. If the operator must decide something, ask with concrete
+  verified green. An issue that names its proof as an `Auf der Box:` line
+  with a read-only `laib` command is checked after its release lands,
+  reopened on red (`werkstatt-boxcheck`, #867, `docs/TESTING.md`). If the operator must decide something, ask with concrete
   options, as early as you know, then carry on.
 
 ## The rules and the checks that hold them
@@ -80,7 +82,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 |---|---|
 | Each program under its cap, no import across the boundaries | `scripts/loc.sh` |
 | Lines as gofmt writes them | `gofmt -l` in `ci.yml` |
-| A skill: at most 50, each `run.py` at most 200 lines (#839) | `scripts/loc.sh` |
+| A skill: at most 55, each `run.py` at most 220 lines (#839, +10 % 2026-10-30) | `scripts/loc.sh` |
 | A renderer change ships with its golden file | `TestGolden` |
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
