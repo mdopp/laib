@@ -40,8 +40,9 @@ func testBox(t *testing.T) (env *cliEnv, dataDir string) {
 		Quadlet: filepath.Join(dir, "quadlet"), Systemd: filepath.Join(dir, "systemd"),
 		Key: filepath.Join(home, "age.key"), Secrets: filepath.Join(home, "state", "secrets.age"), Lock: filepath.Join(home, "apply.lock"),
 	}}
-	real := sysd.Run
-	t.Cleanup(func() { sysd.Run = real })
+	real, realVersion := sysd.Run, inbox.ImageVersion
+	t.Cleanup(func() { sysd.Run, inbox.ImageVersion = real, realVersion })
+	inbox.ImageVersion = func(string) string { return "" } // no registry in a test (#959)
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		switch {
 		case name == "git":

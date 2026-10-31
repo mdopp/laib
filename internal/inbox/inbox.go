@@ -217,9 +217,18 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
+		for i, c := range r.Changes { // a new digest: the versions it carries, for the card's words (#959)
+			if ImageVersion != nil && c.Op == "~" && strings.HasSuffix(c.Key, "IMAGE") && strings.Contains(c.New, "@") {
+				r.Changes[i].OldVersion, r.Changes[i].NewVersion = ImageVersion(c.Old), ImageVersion(c.New)
+			}
+		}
 		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes, Lines: r.Lines}, nil
 	}
 }
+
+// ImageVersion is an image's version label from its registry, "" when it
+// has none or the registry does not answer; main sets it (#959).
+var ImageVersion func(image string) string
 
 // Present says whether laib diag shows a finding ("<probe> <service>")
 // now; main sets it to the diag chore's probes (#544).
