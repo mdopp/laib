@@ -163,6 +163,8 @@ def spoken(name):
     if re.search(r"\d", plain):
         apart = re.sub(r"\s+", " ", re.sub(r"\d", lambda m: " " + WORDS[m.group()] + " ", plain)).strip()
         out += [apart] + ([apart.replace(" ", "").capitalize()] if " " not in plain else [])
+        # the digit kept but apart from the word: Whisper wrote „Spieler 1 live.“ (2026-10-31)
+        out.append(re.sub(r"\s+", " ", re.sub(r"(?<=\d)(?=[^\W\d])|(?<=[^\W\d])(?=\d)", " ", plain)).strip())
     return [x for i, x in enumerate(out) if x and x.lower() not in (y.lower() for y in out[:i])]
 
 
@@ -180,11 +182,13 @@ def stations():
 
 
 SAY = "(spielen|abspielen|anmachen|einschalten)"
-intents = {"LaibMusik": {"data": [{"sentences": ["spiel[e] (Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler}",
+# „Spiele“ as Whisper writes it: „Spieler 1 live.“ (2026-10-31), „Spiel …“, „Spielt …“
+PLAY = "(spiel|spiele|spieler|spielt)"
+intents = {"LaibMusik": {"data": [{"sentences": [PLAY + " (Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler}",
                                                  "(Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler} " + SAY]}]}}
 lists = {"laib_kuenstler": {"wildcard": True}}
 if names := stations():
-    intents["LaibRadio"] = {"data": [{"sentences": ["spiel[e] [(den Sender|das Radio|Radio) ]{laib_sender}",
+    intents["LaibRadio"] = {"data": [{"sentences": [PLAY + " [(den Sender|das Radio|Radio) ]{laib_sender}",
                                                     "[(den Sender|das Radio|Radio) ]{laib_sender} " + SAY]}]}
     said, values = set(), []
     for n in names:   # a name said once: the first station that has it takes it
