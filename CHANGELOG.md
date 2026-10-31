@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.4](https://github.com/mdopp/laib/compare/v0.57.3...v0.57.4) (2026-10-31)
+
+
+### Bug Fixes
+
+* **card:** an image update says its version, never a digest ([9c8688a](https://github.com/mdopp/laib/commit/9c8688a41eee27c6e057167df562459dc66f329c))
+* **card:** an image update says its version, never a digest ([27e3fed](https://github.com/mdopp/laib/commit/27e3fed5275dd374cfd2b8fd0c0587e8f06dbda5)), closes [#959](https://github.com/mdopp/laib/issues/959)
+
 ## [0.57.3](https://github.com/mdopp/laib/compare/v0.57.2...v0.57.3) (2026-10-31)
 
 
