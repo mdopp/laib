@@ -13,13 +13,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-OIDC, ROOT = "laib-abs-oidc-7Hq", "-root-pw-Zt"
+OIDC, ROOT, LDAP_PW = "laib-abs-oidc-7Hq", "-root-pw-Zt", "-abs-ldap-reader-pw-Qx"
 ABS = {}
+LLDAP = {}   # the auth template's LLDAP, as far as the read-only account audiobookshelf sees it
 
 
 def fresh(**over):
+    LLDAP.clear()
+    LLDAP.update(groups={"admins": [], "family": []}, logins=0)
     ABS.clear()
-    ABS.update(init=False, libraries=[], patches=0, client=None, server={"storeMetadataWithItem": False}, users=[], keys=[], n=0, settings={
+    ABS.update(init=False, libraries=[], patches=0, user_patches=[], client=None, server={"storeMetadataWithItem": False}, users=[], keys=[], n=0, settings={
         "authActiveAuthMethods": ["local"], "authOpenIDIssuerURL": None, "authOpenIDAuthorizationURL": None,
         "authOpenIDTokenURL": None, "authOpenIDUserInfoURL": None, "authOpenIDJwksURL": None, "authOpenIDLogoutURL": None,
         "authOpenIDClientID": None, "authOpenIDClientSecret": None, "authOpenIDTokenSigningAlgorithm": "RS256",
@@ -110,6 +113,7 @@ class FakeABS(BaseHTTPRequestHandler):
         b = self.body()
         if self.authed() and (m := re.fullmatch(r"/api/users/([^/]+)", self.path)):
             u = next(u for u in ABS["users"] if u["id"] == m.group(1))
+            ABS["user_patches"].append((u["username"], b))
             u.update({k: v for k, v in b.items() if k in ("type", "isActive", "permissions")})
             return self.reply(200, {"success": True, "user": u})
         if self.path == "/api/settings" and self.authed():
@@ -130,21 +134,51 @@ class FakeABS(BaseHTTPRequestHandler):
         self.reply(200, {"updated": True})
 
 
+class FakeLLDAP(BaseHTTPRequestHandler):
+    """LLDAP's simple login and the one GraphQL query a reader in lldap_strict_readonly may ask."""
+    def log_message(self, *a):
+        pass
+
+    def reply(self, code, body):
+        data = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_POST(self):
+        b = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        if self.path == "/auth/simple/login":
+            if (b.get("username"), b.get("password")) != ("audiobookshelf", LDAP_PW):
+                return self.reply(401, {"error": "invalid credentials"})
+            LLDAP["logins"] += 1
+            return self.reply(200, {"token": "lldap-jwt-1"})
+        if self.path == "/api/graphql" and self.headers.get("Authorization") == "Bearer lldap-jwt-1":
+            return self.reply(200, {"data": {"groups": [{"displayName": g, "users": [{"id": u} for u in us]}
+                                                        for g, us in LLDAP["groups"].items()]}})
+        self.reply(401, {"error": "unauthorized"})
+
+
 class PostDeploy(unittest.TestCase):
     def setUp(self):
         self.srv = HTTPServer(("127.0.0.1", 0), FakeABS)
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.shutdown)
+        self.ldap = HTTPServer(("127.0.0.1", 0), FakeLLDAP)
+        threading.Thread(target=self.ldap.serve_forever, daemon=True).start()
+        self.addCleanup(self.ldap.shutdown)
 
-    def run_hook(self, ma_key="", haus_key=""):
+    def run_hook(self, ma_key="", haus_key="", ldap_pw=LDAP_PW):
         env = dict(os.environ, ABS_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DOMAIN="vm.test",
                    OIDC_SECRET=OIDC, LAIB_SECRET_ABS_ROOT_PASSWORD=ROOT, LAIB_SECRET_ABS_MA_TOKEN=ma_key,
-                   LAIB_SECRET_HAUS_ABS_TOKEN=haus_key)
+                   LAIB_SECRET_HAUS_ABS_TOKEN=haus_key, LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD=ldap_pw,
+                   LLDAP_URL=f"http://127.0.0.1:{self.ldap.server_port}")
         p = subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.handed = dict(l[len("laib-secret: "):].split("=", 1) for l in p.stdout.splitlines() if l.startswith("laib-secret: "))
         rest = "\n".join(l for l in (p.stdout + p.stderr).splitlines() if not l.startswith("laib-secret: "))
-        for v in (OIDC, ROOT, *self.handed.values()):
+        for v in (OIDC, ROOT, LDAP_PW, *self.handed.values()):
             self.assertNotIn(v, rest, "a secret is in the hook's output, which goes to the journal")
         return p
 
@@ -228,6 +262,69 @@ class PostDeploy(unittest.TestCase):
         self.run_hook()
         self.assertEqual([u["type"] for u in ABS["users"] if u["username"] == "haus"], ["admin"])
         self.assertTrue(self.handed.get("HAUS_ABS_TOKEN"))
+
+    # the box's admins are ABS's admins (2026-10-31): an OIDC-registered owner was „user“ in ABS and could make
+    # no API key (admin-only there) for an app like Symfonium. LLDAP's group admins is who administers the box
+    def household(self, admins, family=(), users=()):
+        fresh()
+        ABS["init"] = True
+        LLDAP["groups"].update(admins=list(admins), family=list(family))
+        ABS["users"] = [{"id": "usr-root", "username": "root", "type": "root", "permissions": {}},
+                        *({"id": "usr-" + n, "username": n, "type": t, "permissions": {}} for n, t in users)]
+
+    def types(self):
+        return {u["username"]: u["type"] for u in ABS["users"]}
+
+    def person_patches(self):
+        return [(n, b) for n, b in ABS["user_patches"] if n not in ("haus", "musicassistant")]
+
+    def test_a_box_admin_becomes_an_abs_admin_and_a_second_run_writes_nothing(self):
+        self.household(admins=["admin", "mdopp"], users=[("mdopp", "user")])
+        self.run_hook()
+        self.assertEqual(self.types()["mdopp"], "admin")
+        self.assertEqual(self.person_patches(), [("mdopp", {"type": "admin"})])
+        self.assertEqual(LLDAP["logins"], 1, "the admins were not read from LLDAP")
+        ABS["user_patches"].clear()
+        self.run_hook()
+        self.assertEqual(ABS["user_patches"], [], "an ABS admin was written again")
+
+    def test_an_abs_admin_already_is_not_written(self):
+        self.household(admins=["mdopp"], users=[("mdopp", "admin")])
+        self.run_hook()
+        self.assertEqual((self.types()["mdopp"], self.person_patches()), ("admin", []))
+
+    def test_who_is_no_box_admin_stays_as_they_are_also_an_abs_admin(self):
+        # a demotion is the owner's in ABS, never a surprise of an apply
+        self.household(admins=["mdopp"], family=["cdopp", "oma"], users=[("mdopp", "admin"), ("cdopp", "user"), ("oma", "admin"), ("gast", "guest")])
+        self.run_hook()
+        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "cdopp": "user", "oma": "admin", "gast": "guest", "musicassistant": "user", "haus": "admin"})
+        self.assertEqual(self.person_patches(), [])
+
+    def test_root_and_the_service_accounts_are_never_touched_by_the_admins(self):
+        # names in LLDAP's admins that are ABS's own: root stays root, Music Assistant only listens
+        self.household(admins=["root", "musicassistant", "haus"], users=[("musicassistant", "user"), ("haus", "admin")])
+        self.run_hook()
+        self.assertEqual((self.types()["root"], self.types()["musicassistant"], self.types()["haus"]), ("root", "user", "admin"))
+        self.assertEqual(ABS["user_patches"], [])
+
+    def test_a_box_admin_without_an_abs_account_yet_is_skipped(self):
+        # ABS registers a person at their first OIDC login; the next apply after it makes them admin
+        self.household(admins=["mdopp", "cdopp"], users=[("mdopp", "user")])
+        self.run_hook()
+        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "musicassistant": "user", "haus": "admin"})
+
+    def test_without_the_admins_nothing_changes_and_the_apply_stays_green(self):
+        for case, pw in (("no reader password (auth not updated yet)", ""), ("LLDAP refuses the reader", "a-wrong-one")):
+            with self.subTest(case):
+                self.household(admins=["mdopp"], users=[("mdopp", "user")])
+                p = self.run_hook(ldap_pw=pw)
+                self.assertEqual((self.types()["mdopp"], self.person_patches()), ("user", []))
+                self.assertIn("admins not read", p.stdout + p.stderr)
+        self.household(admins=["mdopp"], users=[("mdopp", "user")])
+        self.ldap.shutdown()
+        self.ldap.server_close()
+        self.run_hook()
+        self.assertEqual(self.types()["mdopp"], "user", "LLDAP down")
 
     def test_libraries_the_owner_made_are_kept_by_their_folder(self):
         fresh()

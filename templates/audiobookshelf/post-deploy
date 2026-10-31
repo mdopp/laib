@@ -27,11 +27,23 @@ there). So on every apply this hook sets the settings from Laib's secret
 through ABS's API (PATCH /api/auth-settings), reads them back, and when they
 changed switches openid off and on, which is what makes ABS drop its cached
 client (MiscController.updateAuthSettings → unuse/init). ABS's own login
-stays on: the fallback when Authelia is down."""
+stays on: the fallback when Authelia is down.
+
+The box's admins are ABS's admins (2026-10-31): ABS registers a person at
+their first OIDC login as „user", and only an admin may make an API key
+(for an app like Symfonium); a person registered through OIDC has no local
+password to fall back on either. The group claim cannot do it (with one, ABS
+refuses everyone not in a group named admin, user or guest), so this hook
+reads LLDAP's group admins with the read-only account audiobookshelf (seeded
+by the auth template, like file-share's) and makes each ABS user of that
+name an admin. Never root, never the service accounts, never a demotion: who
+leaves the admins stays ABS admin until the owner changes it in ABS. LLDAP
+not read: nobody changes, the apply stays green."""
 import json, os, secrets, sys, time, urllib.request, urllib.error
 
 E = os.environ
 BASE = E.get("ABS_URL", "http://127.0.0.1:13378")
+LLDAP = E.get("LLDAP_URL", "http://127.0.0.1:17170")
 PW = E["LAIB_SECRET_ABS_ROOT_PASSWORD"]
 MA_USER, KEY_NAME = "musicassistant", "Music Assistant (laib)"
 LIBRARIES = (("Hörbücher & Hörspiele", "/audiobooks", "book", "audible.de"), ("Podcasts", "/podcasts", "podcast", "itunes"))
@@ -120,6 +132,30 @@ for name, kind, key_name, secret, then in ACCOUNTS:
     new = req("POST", "/api/api-keys", {"name": key_name, "userId": u["id"], "isActive": True}, token=token)["apiKey"]["apiKey"]
     print(f"laib-secret: {secret}={new}")
     print(f"audiobookshelf: {secret} minted (" + ("replaces one ABS refuses" if have else "new") + "): " + then)
+
+# the box's admins (LLDAP's group admins) are ABS's admins: a person ABS registered through OIDC is „user",
+# and API keys are admin-only in ABS. Read with the read-only account audiobookshelf, never as LLDAP's admin
+def box_admins():
+    pw = E.get("LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD", "")
+    if not pw:
+        raise RuntimeError("no password for LLDAP's read-only account audiobookshelf; the auth template seeds it")
+    post = lambda path, body, tok=None: json.load(urllib.request.urlopen(urllib.request.Request(LLDAP + path, data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", **({"Authorization": "Bearer " + tok} if tok else {})}), timeout=10))
+    res = post("/api/graphql", {"query": "{ groups { displayName users { id } } }"}, post("/auth/simple/login", {"username": "audiobookshelf", "password": pw})["token"])
+    if res.get("errors"):
+        raise RuntimeError(res["errors"])
+    return {u["id"] for g in res["data"]["groups"] if g["displayName"] == "admins" for u in g["users"]}
+
+
+try:
+    admins = box_admins()
+except Exception as e:   # urllib's errors name the URL and the status, never the body sent
+    print(f"audiobookshelf: the box's admins not read ({e}): nobody's account type changed", file=sys.stderr)
+else:
+    for u in users:
+        if u.get("username") in admins and u["username"] not in (MA_USER, "haus") and u.get("type") not in ("admin", "root"):
+            req("PATCH", f"/api/users/{u['id']}", {"type": "admin"}, token=token)
+            print(f"audiobookshelf: {u['username']} administers the box, so is an administrator here now")
 
 ok = lambda s: all(s.get(k) == v for k, v in WANT.items()) and "openid" in s.get("authActiveAuthMethods", [])
 if ok(req("GET", "/api/auth-settings", token=token)):
