@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.57.5](https://github.com/mdopp/laib/compare/v0.57.4...v0.57.5) (2026-10-31)
+
+
+### Bug Fixes
+
+* **stimme:** Whisper hears the house's radio stations and „Spiele“ ([ab6326e](https://github.com/mdopp/laib/commit/ab6326e3548e68d55e94cd334e0779f1d81c74a6))
+
 ## [0.57.4](https://github.com/mdopp/laib/compare/v0.57.3...v0.57.4) (2026-10-31)
 
 
