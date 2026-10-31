@@ -35,6 +35,14 @@ of one name („Sofa-Licht“, „Sofa Licht“, the aliases home-assistant adds
 Assistant away keeps the last names; a refused token fails the unit (`laib
 apply home-assistant` mints a new one). `laib look stimme --container
 systemd-stimme-whisper -- cat /config/laib-names.txt` shows what Whisper hears.
+In front of the names go the house's stations with the verb („Spiele
+Einslive, …, Radio Bob, Spiele Musik von“, #961; „Spiele Radio Bob“ came back
+as „Schade van Bion.“), one spoken form each, taken from the list
+home-assistant's pre-start renders for Assist's LaibRadio
+(`custom_sentences/de/laib_medien.yaml`, #933), which the unit reads on the
+host and hands in as `LAIB_SENDER`. They are filled after the device names:
+a full budget cuts stations, never a device. No Home Assistant or no stations
+on the share: the prompt is the names alone.
 
 **The wake word** is the house persona's phrase (Joshua: "Hey Joshua"). The
 HA Voice PE wakes on the device with microWakeWord; openWakeWord here serves

@@ -22,6 +22,12 @@ aiohttp extra this image lacks; here a non-administrator's token reads
 Entities Home Assistant keeps outside its registry (zone.home and the like)
 are left out.
 
+In front go the house's stations with the verb (#961, „Spiele Einslive, …, Radio Bob, Spiele Musik
+von“): „Spiele Radio Bob“ came back as „Schade van Bion.“ They come from the list home-assistant's
+pre-start renders for Assist's LaibRadio (#933), handed in as LAIB_SENDER, so Whisper writes a form Assist
+matches; written first but filled after the named things, so a full budget cuts stations, never a device.
+No list (no Home Assistant, no stations on the share): the prompt is the names alone, as before.
+
 It runs inside the Whisper container (stimme-names.service, `podman exec -i …
 python3 -`), the stdlib only, and prints "names changed" only when the file
 changed: the unit restarts Whisper then, and only then. Home Assistant away
@@ -188,22 +194,55 @@ def counter(cache: str = "/config"):
         return lambda text: len(text) // 2
 
 
-def prompt(tiers, count=lambda text: len(text) // 2) -> str:
-    """vocabulary.RecognitionContext.whisper_prompt: fill in order, stop at the first name that does not fit"""
-    chosen = []
-    for name in clean(*tiers):
-        if count(", ".join(chosen + [name]) + ".") > BUDGET:
+def stations(rendered: str) -> list:
+    """#961: the house's stations, one spoken form each, from the list home-assistant's pre-start renders for
+    Assist's LaibRadio (custom_sentences/de/laib_medien.yaml, #933), so Whisper writes what Assist matches.
+    Its forms are the name, digits as words apart, and for a name without a space joined last („(1LIVE|eins
+    LIVE|Einslive)“): a leading number is said with the word (Einslive), a trailing one apart (SWR3: SWR
+    drei, not Swrdrei). A shouted name is said as a name (RADIO BOB: Radio Bob; NDR stays). No list, no station."""
+    try:
+        values = json.loads(rendered.split("\n", 1)[1] if rendered.startswith("#") else rendered)["lists"]["laib_sender"]["values"]
+    except (ValueError, KeyError, TypeError, IndexError):
+        return []
+    out = []
+    for v in values if isinstance(values, list) else []:
+        forms = [f.strip() for f in str((v or {}).get("in") or "").strip("()").split("|") if f.strip()] if isinstance(v, dict) else []
+        words = [f for f in forms if not re.search(r"\d", f)]
+        said = (words[-1] if forms[0][:1].isdigit() else words[0]) if words else forms[0] if forms else ""
+        alpha = [w for w in said.split() if w.isalpha()]
+        shouted = alpha and all(w.isupper() for w in alpha) and any(len(w) > 3 for w in alpha)
+        out.append(" ".join(w.capitalize() if shouted and w.isalpha() else w for w in said.split()))
+    return clean(out)
+
+
+def frame(said: list) -> list:
+    """#961: the verb in front of the stations and of the music sentence („Spiele Einslive, …, Radio Bob, Spiele
+    Musik von“): „Spiele Radio Bob“ came back as „Schade van Bion.“ The verb once, not before each station: on
+    the box „Spiele“ is two tokens, nine stations with it did not leave room for the music sentence. Without a
+    station Whisper's prompt stays the names alone"""
+    return [f"Spiele {said[0]}"] + said[1:] + ["Spiele Musik von"] if said else []
+
+
+def prompt(tiers, count=lambda text: len(text) // 2, first=()) -> str:
+    """vocabulary.RecognitionContext.whisper_prompt: fill in order, stop at the first name that does not fit.
+    `first` (the stations' frame) is written in front but filled after the named things (#961): a full budget
+    cuts stations, never a device's name"""
+    head, chosen, lead = [], [], set(clean(first))
+    for name in clean(*tiers[:1], first, *tiers[1:]):
+        into = head if name in lead else chosen
+        into.append(name)
+        if count(", ".join(head + chosen) + ".") > BUDGET:
+            into.pop()
             break
-        chosen.append(name)
-    return ", ".join(chosen) + "." if chosen else ""
+    return ", ".join(head + chosen) + "." if head or chosen else ""
 
 
-def main(path: str, token: str, connect) -> int:
+def main(path: str, token: str, connect, sender: str = "") -> int:
     if not token:
         print("no STIMME_HA_TOKEN (laib apply home-assistant mints it): Whisper keeps the names it has")
         return 0
     try:
-        text = prompt(fetch(connect()), counter(os.path.dirname(path)))
+        text = prompt(fetch(connect()), counter(os.path.dirname(path)), frame(stations(sender)))
     except PermissionError as err:
         print(f"stimme-names: {err}: laib apply home-assistant mints a new one", file=sys.stderr)
         return 1
@@ -417,7 +456,7 @@ def wake(connect, micro, wid: str, phrase: str, recorded=pathlib.Path("/recordin
 
 if __name__ == "__main__":
     base, tok = os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", "")
-    code = main(os.environ.get("NAMES_FILE", "/config/laib-names.txt"), tok, lambda: WS(base, tok))
+    code = main(os.environ.get("NAMES_FILE", "/config/laib-names.txt"), tok, lambda: WS(base, tok), os.environ.get("LAIB_SENDER", ""))
     if tok and os.environ.get("WAKE_ID") and os.path.isdir("/micro"):
         wake(lambda: WS(base, tok), pathlib.Path("/micro"), os.environ["WAKE_ID"], os.environ.get("WAKE_PHRASE", ""))
     raise SystemExit(code)
