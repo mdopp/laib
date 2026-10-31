@@ -179,6 +179,8 @@ class PreStart(unittest.TestCase):
             said.setdefault(v["out"], set()).update(x.strip().lower() for x in v["in"].strip("()").split("|"))   # hassil ignores case
         self.assertEqual(sorted(said), ["1LIVE", "Deutschlandfunk (DLF)", "NDR 2", "RADIO BOB!"], said)
         self.assertTrue({"1live", "einslive", "eins live"} <= said["1LIVE"], said["1LIVE"])
+        # 2026-10-31 on the box Whisper wrote „Spieler 1 live.“: the digit apart from the word, and „Spieler“
+        self.assertIn("1 live", said["1LIVE"], said["1LIVE"])
         self.assertTrue({"ndr 2", "ndr zwei"} <= said["NDR 2"], said["NDR 2"])
         for x in set().union(*said.values()):
             self.assertNotRegex(x, r"[()\[\]{}<>|!]", "a template character in a spoken name")
@@ -186,6 +188,8 @@ class PreStart(unittest.TestCase):
         sentences = " ".join(s for i in doc["intents"].values() for d in i["data"] for s in d["sentences"])
         for want in ("{laib_sender}", "(Musik|Lieder", "{laib_kuenstler}"):
             self.assertIn(want, sentences)
+        for heard in ("spieler", "spiel ", "spiele "):   # how Whisper hears „Spiele“: the verb takes them all
+            self.assertIn(heard.strip(), sentences.lower(), heard)
         pkg = (self.c / "packages/laib_medien.yaml").read_text()
         for want in ("intent_script:", "LaibRadio:", "LaibMusik:", "music_assistant.play_media", "media_type: radio", "media_type: artist",
                      "preferred_area_id", "integration_entities('music_assistant')"):
