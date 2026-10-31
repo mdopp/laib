@@ -59,6 +59,10 @@ type Change struct {
 	Key     string `json:"key,omitempty"`
 	Old     string `json:"old,omitempty"`
 	New     string `json:"new,omitempty"`
+	// an image's version labels, old and new, read from its registry when
+	// the proposal is made (#959); "" when it has none
+	OldVersion string `json:"oldVersion,omitempty"`
+	NewVersion string `json:"newVersion,omitempty"`
 }
 
 // VerbTier is each verb's tier, from the verb table (cmd/laib sets it): it
@@ -262,12 +266,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Summary = "Was Laib allein entscheiden darf, ändert sich"
 	case policyChange:
 		d.Summary = "Die Regeln, wer auf der Box was darf, ändern sich"
-	case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855)
-		v, ver := values[0], tag(values[0].New)
-		if v.Old != "" {
-			ver = tag(v.Old) + " → " + ver
-		}
-		d.Summary = Named(v.Service) + " bekommt eine neue Version: " + ver
+	case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855), never a digest (#959)
+		head, _ := imageWords(values[0])
+		d.Summary = Named(values[0].Service) + " bekommt " + head
 	case len(values) == 1:
 		v := values[0]
 		d.Summary = Named(v.Service) + ": " + v.Key + " "
@@ -314,7 +315,11 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		} else if len(p.News) > 0 { // the template's values: its news says what they bring
 			technical = append(technical, Named(v.Service)+": "+v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else if v.Op == "-" {
-			d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(v.Old) + ")"})
+			d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(strings.Split(v.Old, "@")[0]) + ")"})
+		} else if strings.HasSuffix(v.Key, "IMAGE") { // in words; the exact image under Details (#959)
+			_, what := imageWords(v)
+			d.Changes = append(d.Changes, Line{"→", Named(v.Service) + ": " + what})
+			technical = append(technical, v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else {
 			d.Changes = append(d.Changes, Line{"→", Named(v.Service) + ": " + v.Key + ": " + valueWord(v.Old) + " → " + valueWord(v.New)})
 		}
@@ -550,10 +555,31 @@ func orUnset(s string) string {
 // tag is an image's version, the part after its last colon: v1.11 of
 // docker.io/traefik/whoami:v1.11; the value itself when it has none.
 func tag(image string) string {
+	image, _, _ = strings.Cut(image, "@")
 	if i := strings.LastIndex(image, ":"); i >= 0 && !strings.Contains(image[i:], "/") {
 		return image[i+1:]
 	}
 	return image
+}
+
+// imageWords (#959): what an image change brings, as the end of „X bekommt
+// …“ and as the change line — the tag when it moved, else the versions the
+// registry's labels name for the old and the new digest, never a digest.
+func imageWords(v Change) (head, line string) {
+	from, to := tag(v.Old), tag(v.New)
+	switch {
+	case v.Old == "":
+		return "eine neue Version: " + to, "Version " + to
+	case from != to:
+		return "eine neue Version: " + from + " → " + to, "Version " + from + " → " + to
+	case v.OldVersion != "" && v.OldVersion == v.NewVersion:
+		return "einen neu gebauten Stand von " + v.NewVersion, "neu gebauter Stand von " + v.NewVersion
+	case v.OldVersion != "" && v.NewVersion != "":
+		return "ein Update: " + v.OldVersion + " → " + v.NewVersion, "Update " + v.OldVersion + " → " + v.NewVersion
+	case v.NewVersion != "":
+		return "ein Update auf " + v.NewVersion, "Update auf " + v.NewVersion + " („" + to + "“)"
+	}
+	return "ein Update (neuer Stand von „" + to + "“)", "neuer Stand von „" + to + "“"
 }
 
 func valueWord(v string) string {

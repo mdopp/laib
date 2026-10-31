@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -151,6 +153,61 @@ func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (string, s
 		return d, ""
 	}
 	return "", ""
+}
+
+// VersionTimeout bounds one ImageVersion (#959); tests shorten it.
+var VersionTimeout = 5 * time.Second
+
+// ImageVersion (#959) is the version an image's labels name, read from its
+// registry: the manifest (an index's for this platform), then the config
+// blob's labels, the OCI one before the vendors'. "" when it has none or the
+// registry does not answer in time: a card says it without.
+func ImageVersion(image string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), VersionTimeout)
+	defer cancel()
+	host, repo, ref := splitImage(image)
+	if _, pin, ok := strings.Cut(image, "@"); ok {
+		ref = pin
+	}
+	get := func(path string, v any) bool {
+		resp, err := registryGet(ctx, host, repo, path)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v) == nil
+	}
+	type entry struct {
+		Digest   string
+		Platform struct{ OS, Architecture string }
+	}
+	var m struct {
+		Manifests []entry
+		Config    struct{ Digest string }
+	}
+	if host == "" || !get("/manifests/"+ref, &m) {
+		return ""
+	}
+	if len(m.Manifests) > 0 {
+		i := max(0, slices.IndexFunc(m.Manifests, func(x entry) bool {
+			return x.Platform.OS == "linux" && x.Platform.Architecture == runtime.GOARCH
+		}))
+		if d := m.Manifests[i].Digest; !get("/manifests/"+d, &m) {
+			return ""
+		}
+	}
+	var cfg struct {
+		Config struct{ Labels map[string]string }
+	}
+	if m.Config.Digest == "" || !get("/blobs/"+m.Config.Digest, &cfg) {
+		return ""
+	}
+	for _, l := range []string{"org.opencontainers.image.version", "io.hass.version", "org.label-schema.version"} {
+		if v := cfg.Config.Labels[l]; v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // registryTags lists a repository's tags through the registry v2 API, with

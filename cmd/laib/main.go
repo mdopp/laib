@@ -102,8 +102,9 @@ func init() {
 		mcp.Verbs[i] = cli.Guard(mcp.Verbs[i])
 	}
 	inbox.Present = diag.Present
-	inbox.Issue = fileIssue                 // escalations and approved wishes, through laib-haushalt (#797)
-	proposal.VerbTier = map[string]string{} // the card says whether a granted verb changes or proposes (#616)
+	inbox.ImageVersion = registry.ImageVersion // a digest proposal's card says the version (#959)
+	inbox.Issue = fileIssue                    // escalations and approved wishes, through laib-haushalt (#797)
+	proposal.VerbTier = map[string]string{}    // the card says whether a granted verb changes or proposes (#616)
 	for _, v := range mcp.Verbs {
 		proposal.VerbTier[v.Name] = v.Tier
 		policy.KnownVerbs[v.Name] = true // policy.yml may name every verb of the table (#800)
