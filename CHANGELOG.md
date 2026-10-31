@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.57.6](https://github.com/mdopp/laib/compare/v0.57.5...v0.57.6) (2026-10-31)
+
+
+### Bug Fixes
+
+* **home-assistant:** radio/music sentences take „Spieler“ and „1 live“ ([af10991](https://github.com/mdopp/laib/commit/af10991108b61904baaee82acc35e82a2d9b946c))
+* **home-assistant:** the radio and music sentences take how Whisper hears „Spiele“ and „1 live“ ([4400065](https://github.com/mdopp/laib/commit/44000654f34772e0c830f88d4840c1b59fb89aa9))
+* **stimme:** Whisper hears „Schalte … an/aus“ before the names ([30b6cb9](https://github.com/mdopp/laib/commit/30b6cb934728e9e0cb72fb2f6d43b8503fe2c186))
+* **stimme:** Whisper hears „Schalte … an/aus“ before the names ([77671cb](https://github.com/mdopp/laib/commit/77671cb36507a6b19b5dedf187343ef7552cd2ad)), closes [#961](https://github.com/mdopp/laib/issues/961)
+
 ## [0.57.5](https://github.com/mdopp/laib/compare/v0.57.4...v0.57.5) (2026-10-31)
 
 
