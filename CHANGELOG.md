@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.3](https://github.com/mdopp/laib/compare/v0.57.2...v0.57.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* lease and the HTTP programs exit 0 on SIGTERM ([#956](https://github.com/mdopp/laib/issues/956)) ([fd417f2](https://github.com/mdopp/laib/commit/fd417f2a8d21e10f226c6e1abc8791d29b0c8971))
+* lease, haushalt, persona, automat, frage, notify exit 0 on SIGTERM ([#956](https://github.com/mdopp/laib/issues/956)) ([1adf733](https://github.com/mdopp/laib/commit/1adf733a05de3db665312397377f17e5cb5407d3))
+
 ## [0.57.2](https://github.com/mdopp/laib/compare/v0.57.1...v0.57.2) (2026-10-31)
 
 
