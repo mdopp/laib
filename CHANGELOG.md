@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.57.7](https://github.com/mdopp/laib/compare/v0.57.6...v0.57.7) (2026-10-31)
+
+
+### Bug Fixes
+
+* **proposal:** start laib-notify the moment a proposal is filed ([4c71348](https://github.com/mdopp/laib/commit/4c71348cfcb884a9b9bb137564882939fa7702d8))
+
 ## [0.57.6](https://github.com/mdopp/laib/compare/v0.57.5...v0.57.6) (2026-10-31)
 
 
