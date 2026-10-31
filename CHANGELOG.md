@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.2](https://github.com/mdopp/laib/compare/v0.57.1...v0.57.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **diag:** a finished tick is the Operator alive, work keeps its own time ([#944](https://github.com/mdopp/laib/issues/944)) ([08c3e60](https://github.com/mdopp/laib/commit/08c3e605dfc7414ff674d445a4f959261b435200))
+* **diag:** a finished tick is the Operator alive, work keeps its own time ([#944](https://github.com/mdopp/laib/issues/944)) ([d708d36](https://github.com/mdopp/laib/commit/d708d3616e38dce88b156fb4795bdc10a083a562))
+
 ## [0.57.1](https://github.com/mdopp/laib/compare/v0.57.0...v0.57.1) (2026-10-30)
 
 
