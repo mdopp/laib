@@ -22,11 +22,12 @@ aiohttp extra this image lacks; here a non-administrator's token reads
 Entities Home Assistant keeps outside its registry (zone.home and the like)
 are left out.
 
-In front go the house's stations with the verb (#961, „Spiele Einslive, …, Radio Bob, Spiele Musik
-von“): „Spiele Radio Bob“ came back as „Schade van Bion.“ They come from the list home-assistant's
+In front go the verbs (#961): „Schalte das Licht an, Schalte es aus“ („Schalte Bambi an“ came back as
+„Schade van Bion.“ with Bambi in the prompt), then the house's stations („Spiele Einslive, …, Radio Bob,
+Spiele Musik von“). The stations come from the list home-assistant's
 pre-start renders for Assist's LaibRadio (#933), handed in as LAIB_SENDER, so Whisper writes a form Assist
-matches; written first but filled after the named things, so a full budget cuts stations, never a device.
-No list (no Home Assistant, no stations on the share): the prompt is the names alone, as before.
+matches. The verbs are written first but filled after the named things, so a full budget cuts them, never a
+device. No station list (no Home Assistant, no stations on the share): the switching words and the names.
 
 It runs inside the Whisper container (stimme-names.service, `podman exec -i …
 python3 -`), the stdlib only, and prints "names changed" only when the file
@@ -215,18 +216,24 @@ def stations(rendered: str) -> list:
     return clean(out)
 
 
+SWITCH = ["Schalte das Licht an", "Schalte es aus"]   # #961: the verb Assist's most common sentence starts with
+
+
 def frame(said: list) -> list:
-    """#961: the verb in front of the stations and of the music sentence („Spiele Einslive, …, Radio Bob, Spiele
-    Musik von“): „Spiele Radio Bob“ came back as „Schade van Bion.“ The verb once, not before each station: on
-    the box „Spiele“ is two tokens, nine stations with it did not leave room for the music sentence. Without a
-    station Whisper's prompt stays the names alone"""
-    return [f"Spiele {said[0]}"] + said[1:] + ["Spiele Musik von"] if said else []
+    """#961: the verbs in front of the names. First the switching words: „Schalte Bambi an“ came back as „Schade
+    van Bion.“ with Bambi in the prompt, but no „Schalte“; generic, not a device's name twice, 16 tokens on the box.
+    Then the stations and the music sentence („Spiele Einslive, …, Radio Bob, Spiele Musik von“), the verb once,
+    not before each station: on the box „Spiele“ is two tokens, nine stations with it did not leave room for the
+    music sentence. Without a station no „Spiele“"""
+    return SWITCH + ([f"Spiele {said[0]}"] + said[1:] + ["Spiele Musik von"] if said else [])
 
 
 def prompt(tiers, count=lambda text: len(text) // 2, first=()) -> str:
     """vocabulary.RecognitionContext.whisper_prompt: fill in order, stop at the first name that does not fit.
     `first` (the stations' frame) is written in front but filled after the named things (#961): a full budget
     cuts stations, never a device's name"""
+    if not any(clean(*tiers)):
+        return ""   # nothing exposed: no frame around nothing
     head, chosen, lead = [], [], set(clean(first))
     for name in clean(*tiers[:1], first, *tiers[1:]):
         into = head if name in lead else chosen
