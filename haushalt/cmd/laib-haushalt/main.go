@@ -10,9 +10,12 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/haushalt"
@@ -28,5 +31,16 @@ func main() {
 	log.Printf("laib-haushalt: %s, laib at %s", addr, laib.URL)
 	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib, haushalt.Bote{URL: os.Getenv("BOTE_NOTIFY_URL"), Token: os.Getenv("BOTE_NOTIFY_TOKEN")},
 		haushalt.GitHub{API: os.Getenv("GITHUB_API_URL"), Token: os.Getenv("GITHUB_INTAKE_TOKEN")}), ReadHeaderTimeout: 5 * time.Second}
-	log.Fatal(srv.ListenAndServe())
+	// a planned stop is no failure (#956): stop accepting, give what runs 5 s, exit 0
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+	<-ctx.Done()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	srv.Shutdown(ctx)
 }

@@ -3,10 +3,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/frage"
@@ -28,7 +31,18 @@ func main() {
 	addr := env("FRAGE_LISTEN", "0.0.0.0:8710")
 	log.Printf("frage: listening on %s, searx=%s, model=%s", addr, c.SearxURL, c.ModelName)
 	srv := &http.Server{Addr: addr, Handler: frage.Handler(c), ReadHeaderTimeout: 5 * time.Second}
-	log.Fatal(srv.ListenAndServe())
+	// a planned stop is no failure (#956): stop accepting, give what runs 5 s, exit 0
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+	<-ctx.Done()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	srv.Shutdown(ctx)
 }
 
 // env is the variable, or def when it is unset or empty.

@@ -7,6 +7,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/mdopp/laib/notify"
@@ -20,6 +22,8 @@ func main() {
 		BoteURL: e("BOTE_NOTIFY_URL"), BoteToken: e("BOTE_NOTIFY_TOKEN"), Person: e("NOTIFY_PERSON"), InboxURL: e("LAIB_INBOX_URL")}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM) // a stop ends the pass as its limit does (#956)
+	defer stop()
 	notify.Ping(ctx, c)
 	if err := notify.Sweep(ctx, c, time.Now()); err != nil {
 		log.Println("laib-notify:", err)
