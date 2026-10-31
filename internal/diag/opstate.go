@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
@@ -25,7 +26,8 @@ import (
 // Inputs: box.yml says enabled; the user unit is active; /ready on the
 // operator's port answers; its stored bearer still opens MCP (#500); the last work /ready reports (a look
 // that found nothing new writes no note, #543), or without it the newest journal note by ops, is younger
-// than three ticks.
+// than three ticks. Alive is the newest finished run of any skill on /ready
+// (#944): a tick that stopped is gelb, one that only did no work is not.
 
 type OpFacts struct {
 	Enabled    bool
@@ -72,6 +74,17 @@ func OperatorState(f OpFacts) (string, *Finding) {
 	if !f.Looked.IsZero() {
 		f.LastNote = f.Looked
 	}
+	// every finished tick proves it alive, whatever it ended in (#944): an
+	// unchanged look writes no note, a skip and an error do no work
+	alive, last := f.LastNote, ""
+	for _, r := range f.Work.Skills {
+		if r.At.After(alive) {
+			alive, last = r.At, r.Outcome+": "+r.Why
+		}
+	}
+	if f.LastNote.IsZero() {
+		f.LastNote = alive
+	}
 	switch {
 	case !f.Enabled && f.ModelURL == "":
 		return "aus", nil // a box without a model: nothing to expect
@@ -92,8 +105,11 @@ func OperatorState(f OpFacts) (string, *Finding) {
 		// a look that waits with its reason answers, it does not hang (#931): a
 		// cold household model after llama restarted, a window, a person's cache
 		return "wartet", &Finding{Severity: "info", Probe: "operator", Detail: fmt.Sprintf("Operator wartet seit %s mit seinem Blick: %s", f.Now.Sub(f.LastNote).Round(time.Minute), f.Work.Waiting), Wartet: f.Work.Waiting}
-	case f.Now.Sub(f.LastNote) > 3*f.Tick:
-		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick), Fix: "laib logs operator"}
+	case f.Now.Sub(alive) > 3*f.Tick:
+		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator läuft, aber sein letzter Blick ist %s alt (Takt %s): Modell nicht erreichbar oder Tick hängt", f.Now.Sub(alive).Round(time.Minute), f.Tick), Fix: "laib logs operator"}
+	case f.Now.Sub(f.LastNote) > 3*f.Tick && (strings.HasPrefix(last, "error") || strings.HasPrefix(last, "fallback")):
+		// it ticks, but its looks end in an error: no work for three ticks
+		return "stumm", &Finding{Severity: "gelb", Probe: "operator", Detail: fmt.Sprintf("Operator tickt, aber hat seit %s keinen Blick beendet (Takt %s), zuletzt %s", f.Now.Sub(f.LastNote).Round(time.Minute), f.Tick, last), Fix: "laib logs operator"}
 	}
 	return "läuft", nil
 }

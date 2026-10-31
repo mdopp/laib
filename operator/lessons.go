@@ -22,7 +22,8 @@ func (p past) lesson() bool {
 // sessions reads the Operator's own record, oldest first: one skill's
 // sessions ("" every skill's) since a time, those with nothing new left
 // out — what lehre's script learns from (#544) and the morning report
-// counts (#859, #861). Seeds today's model use after a restart, too.
+// counts (#859, #861). Seeds today's model use after a restart, too: "*"
+// is every skill with its unchanged runs, each skill's last finished tick (#944).
 func (o *Operator) sessions(skill string, since time.Time) []Session {
 	if o.Home == "" {
 		return nil
@@ -34,7 +35,7 @@ func (o *Operator) sessions(skill string, since time.Time) []Session {
 	var out []Session
 	for _, line := range strings.Split(string(b), "\n") {
 		var s Session
-		if json.Unmarshal([]byte(line), &s) == nil && (skill == "" || s.Skill == skill) && !s.Started.Before(since) && s.Outcome != "unchanged" {
+		if json.Unmarshal([]byte(line), &s) == nil && (skill == "" || skill == "*" || s.Skill == skill) && !s.Started.Before(since) && (skill == "*" || s.Outcome != "unchanged") {
 			out = append(out, s)
 		}
 	}
@@ -44,7 +45,8 @@ func (o *Operator) sessions(skill string, since time.Time) []Session {
 // Recount seeds each skill's last run and today's model use from the
 // record, after a restart (#839, #859).
 func (o *Operator) Recount(now time.Time) {
-	for _, s := range o.sessions("", time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())) {
+	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	for _, s := range o.sessions("*", time.Unix(min(since.Unix(), now.Add(-time.Hour).Unix()), 0)) {
 		o.work.ran(s)
 	}
 }
