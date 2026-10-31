@@ -95,8 +95,10 @@ sed -i '/^health:/,/^[a-z]/{/http:/d}' "$LAIB_HOME"/state/services/*/laib.yml   
 echo "cf-token" | LAIB_ACTOR=human:e2e "$BIN" secret set DNS_API_TOKEN >/dev/null
 
 # --- 2. a tree proposal by ops, approved by the human (#1)
+N0=$(grep -c "start --no-block laib-notify.service" "$SYSTEMCTL_LOG" || true)
 LAIB_ACTOR=ops "$BIN" propose "e2e: three services" >/dev/null
 grep -q '"status": "open"' <<<"$("$BIN" inbox --json)" || fail "inbox lists the open proposal"
+[ "$(grep -c "start --no-block laib-notify.service" "$SYSTEMCTL_LOG")" = $((N0 + 1)) ] || fail "a new proposal did not start laib-notify once, non-blocking (#968)"
 if LAIB_ACTOR=ops "$BIN" approve 1 >/dev/null 2>&1; then fail "ops approved its own proposal"; fi
 LAIB_ACTOR=human:e2e "$BIN" approve 1 >/dev/null || fail "approve #1 exit $?"
 test -f "$LAIB_QUADLET/whoami/whoami.container" || fail "unit not written"

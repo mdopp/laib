@@ -48,6 +48,12 @@ func Restart(ctx context.Context, unit string) error {
 	return err
 }
 
+// StartNoBlock queues a start and returns at once; a start while the unit
+// runs is a no-op (#968).
+func StartNoBlock(ctx context.Context, unit string) {
+	Run(ctx, "systemctl", "--user", "start", "--no-block", unit)
+}
+
 // Stop stops and disables one unit (used when a service leaves the state).
 func Stop(ctx context.Context, unit string) error {
 	_, err := Run(ctx, "systemctl", "--user", "stop", unit)

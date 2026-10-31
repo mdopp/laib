@@ -496,14 +496,21 @@ func nextID(inbox string) (int, error) {
 	return all[0].ID + 1, nil
 }
 
-// Save writes one inbox entry.
+// Save writes one inbox entry. A new one starts laib-notify at once (#968),
+// so the owner hears of it in seconds, not on the timer's next pass; the
+// timer stays the fallback, so a red start fails nothing.
 func Save(inbox string, p *Proposal) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
 	}
 	path := filepath.Join(inbox, strconv.Itoa(p.ID)+".json")
-	return boxfs.WriteAtomic(path+".tmp", path, b, 0o644)
+	_, had := os.Stat(path)
+	if err := boxfs.WriteAtomic(path+".tmp", path, b, 0o644); err != nil || had == nil {
+		return err
+	}
+	sysd.StartNoBlock(context.Background(), "laib-notify.service")
+	return nil
 }
 
 func now() time.Time { return time.Now().UTC() }
