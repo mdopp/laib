@@ -8,6 +8,9 @@
 # It also writes Stimme's status: whether the satellites run the persona's wake word
 # (#759, stimme-names.py wake), in stimme/micro, which Whisper mounts at /micro, with the
 # wakes per day stimme-wakes counts (#825); TZ makes „heute“ the box's day.
+# The house's stations go in front of the names with the verb (#961): the list home-assistant's
+# pre-start renders for Assist's LaibRadio, read here on the host and handed in as LAIB_SENDER
+# (Whisper does not mount Home Assistant's config); no Home Assistant or no stations, no list.
 [Unit]
 Description=Stimme: the household's names for Whisper
 After=stimme-whisper.service
@@ -19,5 +22,5 @@ Environment=WAKE_ID=${PERSONA_WAKEWORD}
 Environment="WAKE_PHRASE=${PERSONA_PHRASE}"
 Environment=TZ=${TZ}
 StandardInput=file:%h/.config/containers/systemd/stimme/stimme-names.py
-ExecStart=/bin/sh -c 'systemctl --user -q is-active stimme-whisper.service || { echo "Whisper is not running: the names wait for its next start"; exit 0; }; out=$$(/usr/bin/podman exec -i -e HA_TOKEN -e WAKE_ID -e WAKE_PHRASE -e TZ systemd-stimme-whisper python3 -) || { echo "$$out"; exit 1; }; echo "$$out"; case "$$out" in *"names changed"*) systemctl --user try-restart stimme-whisper.service;; esac'
+ExecStart=/bin/sh -c 'systemctl --user -q is-active stimme-whisper.service || { echo "Whisper is not running: the names wait for its next start"; exit 0; }; LAIB_SENDER=$$(cat ${DATA_DIR}/home-assistant/homeassistant/custom_sentences/de/laib_medien.yaml 2>/dev/null); export LAIB_SENDER; out=$$(/usr/bin/podman exec -i -e HA_TOKEN -e LAIB_SENDER -e WAKE_ID -e WAKE_PHRASE -e TZ systemd-stimme-whisper python3 -) || { echo "$$out"; exit 1; }; echo "$$out"; case "$$out" in *"names changed"*) systemctl --user try-restart stimme-whisper.service;; esac'
 TimeoutStartSec=120

@@ -95,6 +95,73 @@ class Prompt(unittest.TestCase):
         self.assertEqual(names.prompt(names.fetch(FakeWS(dict(HOUSE, registry=[], areas=[], floors=[])))), "")
 
 
+# home-assistant's pre-start renders the stations of the share's radio/ as LaibRadio's list (#933): this is the box's
+# custom_sentences/de/laib_medien.yaml of 2026-10-31, the lists only; stimme-names.service hands it in as LAIB_SENDER
+RENDERED = "# rendered by laib pre-start (templates/home-assistant, #933); do not edit by hand\n" + json.dumps({
+    "language": "de", "intents": {}, "lists": {"laib_kuenstler": {"wildcard": True}, "laib_sender": {"values": [
+        {"in": "(1LIVE|eins LIVE|Einslive)", "out": "1LIVE"}, {"in": "(Antenne Niedersachsen)", "out": "Antenne Niedersachsen"},
+        {"in": "(Deutschlandfunk)", "out": "Deutschlandfunk"}, {"in": "(NDR 2|NDR zwei)", "out": "NDR 2"},
+        {"in": "(NDR 2 Niedersachsen|NDR zwei Niedersachsen)", "out": "NDR 2 Niedersachsen"}, {"in": "(radio ffn)", "out": "radio ffn"},
+        {"in": "(WDR 2|WDR zwei)", "out": "WDR 2"}, {"in": "(SWR3|SWR drei|Swrdrei)", "out": "SWR3"},
+        {"in": "(RADIO BOB)", "out": "RADIO BOB!"}]}}}, ensure_ascii=False, indent=2) + "\n"
+SAID = ["Einslive", "Antenne Niedersachsen", "Deutschlandfunk", "NDR zwei", "NDR zwei Niedersachsen", "radio ffn", "WDR zwei", "SWR drei", "Radio Bob"]
+
+
+class Stations(unittest.TestCase):
+    """#961: „Spiele Radio Bob“ came back as „Schade van Bion.“: the prompt had no station and no verb"""
+
+    def test_each_station_once_as_it_is_said(self):
+        # a leading number is said with the word (1LIVE: Einslive), a trailing one apart (SWR3: SWR drei), a shouted
+        # name as a name (RADIO BOB: Radio Bob); each form is one Assist's LaibRadio list accepts
+        self.assertEqual(names.stations(RENDERED), SAID)
+        accepted = {f.lower() for v in json.loads(RENDERED.split("\n", 1)[1])["lists"]["laib_sender"]["values"] for f in v["in"].strip("()").split("|")}
+        self.assertEqual([s for s in SAID if s.lower() not in accepted], [])
+
+    def test_no_station_list_is_no_station(self):
+        for text in ("", "# rendered by laib pre-start\n", "not json", RENDERED.replace("laib_sender", "andere")):
+            self.assertEqual(names.stations(text), [], text[:30])
+
+    def test_the_verb_comes_first_then_the_named_things(self):
+        p = names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations(RENDERED)))
+        self.assertTrue(p.startswith("Spiele Einslive, Antenne Niedersachsen, Deutschlandfunk, NDR zwei, NDR zwei Niedersachsen, radio ffn, "
+                                     "WDR zwei, SWR drei, Radio Bob, Spiele Musik von, Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer"), p)
+
+    def test_without_stations_the_prompt_is_unchanged(self):
+        before = names.prompt(names.fetch(FakeWS(HOUSE)))
+        self.assertEqual(names.frame([]), [])
+        self.assertEqual(names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations(""))), before)
+
+    def test_the_device_names_keep_their_place_and_the_budget_holds(self):
+        """the box: 137 of the 200 tokens are the device tier; the stations take what is left, never a device's place"""
+        count = lambda text: len(text) // 3
+        many = dict(HOUSE, registry=[ent(f"light.a{i:02}", area="wohnzimmer") for i in range(55)] + [ent("light.wohnzimmer_bambi", area="wohnzimmer")],
+                    states=[{"entity_id": f"light.a{i:02}", "attributes": {"friendly_name": f"Licht {i}"}} for i in range(55)]
+                    + [{"entity_id": "light.wohnzimmer_bambi", "attributes": {"friendly_name": "Bambi"}}])
+        tiers = names.fetch(FakeWS(many))
+        alone, framed = names.prompt(tiers, count), names.prompt(tiers, count, first=names.frame(names.stations(RENDERED)))
+        devices = [n for n in tiers[0] if n + "," in alone + "," or n + "." in alone]
+        self.assertIn("Bambi", devices)
+        for n in devices:
+            self.assertIn(n, framed, "a device name lost its place to a station")
+        self.assertIn("Spiele Einslive", framed, "a full budget took every station, the first fits")
+        self.assertNotIn("Radio Bob", framed, "the test's budget was not full: it measured nothing")
+        self.assertLessEqual(count(framed), names.BUDGET)
+        self.assertTrue(framed.startswith("Spiele Einslive, "), framed)
+        for budget_text in (alone, framed):
+            self.assertLessEqual(count(budget_text), names.BUDGET)
+
+    def test_the_station_list_reaches_the_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            with redirect_stdout(io.StringIO()):
+                names.main(os.path.join(d, "laib-names.txt"), "tok", lambda: FakeWS(HOUSE), RENDERED)
+            self.assertTrue(Path(d, "laib-names.txt").read_text().startswith("Spiele Einslive, "))
+            out = io.StringIO()
+            with redirect_stdout(out):
+                names.main(os.path.join(d, "laib-names.txt"), "tok", lambda: FakeWS(HOUSE))
+            self.assertIn("names changed", out.getvalue(), "the stations gone, the prompt kept them")
+            self.assertEqual(Path(d, "laib-names.txt").read_text(), names.prompt(names.fetch(FakeWS(HOUSE))))
+
+
 class Run(unittest.TestCase):
     def run_main(self, d, ws):
         out = io.StringIO()
@@ -159,6 +226,16 @@ class Units(unittest.TestCase):
         self.assertIn("-e HA_TOKEN", u)
         self.assertNotIn("${HA_TOKEN}", u.split("ExecStart=", 1)[1], "the token on podman's argv")
         self.assertIn("OnCalendar=", (T / "stimme-names.timer").read_text())
+
+    def test_the_names_unit_hands_in_assists_station_list(self):
+        """#961: the stations as LaibRadio renders them, read on the host (Whisper does not mount Home Assistant's config);
+        a box without Home Assistant or without stations hands in nothing"""
+        u = (T / "stimme-names.service").read_text()
+        run = u.split("ExecStart=", 1)[1]
+        self.assertIn("${DATA_DIR}/home-assistant/homeassistant/custom_sentences/de/laib_medien.yaml", run)
+        self.assertIn("2>/dev/null", run.split("laib_medien.yaml", 1)[1].split(";", 1)[0])
+        self.assertIn("-e LAIB_SENDER", run)
+        self.assertIn('os.environ.get("LAIB_SENDER"', (T / "stimme-names.py").read_text())
 
     def test_the_token_is_declared_external_and_optional(self):
         c = (T / "laib.yml").read_text()
