@@ -14,7 +14,8 @@ DOMAIN = E["LAIB_DOMAIN"]
 op = E["OPERATOR_USER"]
 READERS = [("radicale", "RADICALE_LDAP_PASSWORD", "Radicale (Lesekonto)"),
            ("file-share", "FILE_SHARE_LDAP_PASSWORD", "Netzlaufwerk (Lesekonto)"),
-           ("jellyfin", "JELLYFIN_LDAP_PASSWORD", "Jellyfin (Lesekonto)")]   # its LDAP plugin's bind (#256)
+           ("jellyfin", "JELLYFIN_LDAP_PASSWORD", "Jellyfin (Lesekonto)"),   # its LDAP plugin's bind (#256)
+           ("audiobookshelf", "AUDIOBOOKSHELF_LDAP_PASSWORD", "Audiobookshelf (Lesekonto)")]   # who administers the box is ABS admin
 # service accounts that log into a service, not into the directory: no group (#418)
 ACCOUNTS = [("haus", "HAUS_RADICALE_PASSWORD", "Haus (Haushalt-Kalender)"),   # owns the household's calendar in Radicale
             ("kalender", "KALENDER_RADICALE_PASSWORD", "Kalender-Abgleich (Abos, Google)"),   # writes the calendar mirrors (#495)

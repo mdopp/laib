@@ -20,7 +20,7 @@ STATE = {"users": [], "groups": [], "adds": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
            "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw",
-           "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
+           "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw", "AUDIOBOOKSHELF_LDAP_PASSWORD": "-abs-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
 # "take", "swallow" (success, nothing stored) or "refuse" (insufficientAccessRights)
@@ -168,8 +168,11 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("file-share", STATE["users"])
         self.assertEqual(LDAP["pw"].get("uid=jellyfin,ou=people," + BASE_DN), SECRETS["JELLYFIN_LDAP_PASSWORD"], LDAP)
         self.assertIn("jellyfin", STATE["users"])
+        # audiobookshelf's reader: who is in admins, so they are ABS admins too
+        self.assertEqual(LDAP["pw"].get("uid=audiobookshelf,ou=people," + BASE_DN), SECRETS["AUDIOBOOKSHELF_LDAP_PASSWORD"], LDAP)
+        self.assertIn("audiobookshelf", STATE["users"])
         # and each account binds with it afterwards: a set that did not take is red, not "seeded"
-        for uid in ("core", "radicale", "file-share", "jellyfin"):
+        for uid in ("core", "radicale", "file-share", "jellyfin", "audiobookshelf"):
             self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
 
     def test_a_rotation_changes_the_admin_password_in_lldap_first(self):

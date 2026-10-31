@@ -23,6 +23,17 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
   `HAUS_ABS_TOKEN` beside `HAUS_ABS_URL`, so the same apply gives Haus
   its podcast page. A key that still works is kept, as Music Assistant's.
 - The family's login (OIDC), rewritten from Laib's secret on every apply.
+- **The box's admins are ABS admins.** ABS registers a person at their
+  first OIDC login as „user", and only an admin may make an API key (for
+  an app like Symfonium). On every apply post-deploy reads LLDAP's group
+  `admins` with the read-only account `audiobookshelf` (seeded by the auth
+  template, `AUDIOBOOKSHELF_LDAP_PASSWORD`) and sets each ABS user of that
+  name to admin. A box admin who never logged in to ABS has no account
+  yet: the next apply after their first login makes them admin. Never
+  touched: `root`, `musicassistant`, `haus`, and anyone who is not a box
+  admin. Nobody is demoted: who leaves the admins stays ABS admin until
+  the owner changes it in ABS (Einstellungen → Benutzer). LLDAP not read:
+  nothing changes, the apply stays green and says so.
 
 ## The care: `abs-pflege.py`
 
