@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.8](https://github.com/mdopp/laib/compare/v0.57.7...v0.57.8) (2026-10-31)
+
+
+### Bug Fixes
+
+* **audiobookshelf:** the box's admins are ABS admins ([5d61319](https://github.com/mdopp/laib/commit/5d61319cf11b8675c377776f59c0b6dc04b1f266))
+* **audiobookshelf:** the box's admins are ABS admins ([#971](https://github.com/mdopp/laib/issues/971)) ([7fb6c5c](https://github.com/mdopp/laib/commit/7fb6c5cf267155f92a12c5d54ce53eb888e77820))
+
 ## [0.57.7](https://github.com/mdopp/laib/compare/v0.57.6...v0.57.7) (2026-10-31)
 
 
