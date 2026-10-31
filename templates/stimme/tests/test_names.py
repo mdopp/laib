@@ -123,13 +123,23 @@ class Stations(unittest.TestCase):
 
     def test_the_verb_comes_first_then_the_named_things(self):
         p = names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations(RENDERED)))
-        self.assertTrue(p.startswith("Spiele Einslive, Antenne Niedersachsen, Deutschlandfunk, NDR zwei, NDR zwei Niedersachsen, radio ffn, "
+        self.assertTrue(p.startswith("Schalte das Licht an, Schalte es aus, Spiele Einslive, Antenne Niedersachsen, Deutschlandfunk, NDR zwei, NDR zwei Niedersachsen, radio ffn, "
                                      "WDR zwei, SWR drei, Radio Bob, Spiele Musik von, Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer"), p)
 
-    def test_without_stations_the_prompt_is_unchanged(self):
+    def test_without_stations_the_switching_words_still_lead(self):
+        """#961: „Schalte Bambi an“ came back as „Schade van Bion.“ with Bambi in the prompt: the verb was not.
+        The switching words lead whatever the share holds; no station, no „Spiele“"""
         before = names.prompt(names.fetch(FakeWS(HOUSE)))
-        self.assertEqual(names.frame([]), [])
-        self.assertEqual(names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations(""))), before)
+        self.assertEqual(names.frame([]), ["Schalte das Licht an", "Schalte es aus"])
+        p = names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations("")))
+        self.assertEqual(p, "Schalte das Licht an, Schalte es aus, " + before)
+        self.assertNotIn("Spiele", p)
+        self.assertRegex(p, r"\bSchalte\b.*\ban\b.*\baus\b")
+
+    def test_no_names_no_frame(self):
+        """Home Assistant exposes nothing: no prompt at all, not a frame around nothing"""
+        empty = names.fetch(FakeWS(dict(HOUSE, registry=[], areas=[], floors=[])))
+        self.assertEqual(names.prompt(empty, first=names.frame(names.stations(RENDERED))), "")
 
     def test_the_device_names_keep_their_place_and_the_budget_holds(self):
         """the box: 137 of the 200 tokens are the device tier; the stations take what is left, never a device's place"""
@@ -142,11 +152,11 @@ class Stations(unittest.TestCase):
         devices = [n for n in tiers[0] if n + "," in alone + "," or n + "." in alone]
         self.assertIn("Bambi", devices)
         for n in devices:
-            self.assertIn(n, framed, "a device name lost its place to a station")
+            self.assertIn(n, framed, "a device name lost its place to the frame")
         self.assertIn("Spiele Einslive", framed, "a full budget took every station, the first fits")
         self.assertNotIn("Radio Bob", framed, "the test's budget was not full: it measured nothing")
         self.assertLessEqual(count(framed), names.BUDGET)
-        self.assertTrue(framed.startswith("Spiele Einslive, "), framed)
+        self.assertTrue(framed.startswith("Schalte das Licht an, Schalte es aus, Spiele Einslive, "), framed)
         for budget_text in (alone, framed):
             self.assertLessEqual(count(budget_text), names.BUDGET)
 
@@ -154,12 +164,12 @@ class Stations(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with redirect_stdout(io.StringIO()):
                 names.main(os.path.join(d, "laib-names.txt"), "tok", lambda: FakeWS(HOUSE), RENDERED)
-            self.assertTrue(Path(d, "laib-names.txt").read_text().startswith("Spiele Einslive, "))
+            self.assertTrue(Path(d, "laib-names.txt").read_text().startswith("Schalte das Licht an, Schalte es aus, Spiele Einslive, "))
             out = io.StringIO()
             with redirect_stdout(out):
                 names.main(os.path.join(d, "laib-names.txt"), "tok", lambda: FakeWS(HOUSE))
             self.assertIn("names changed", out.getvalue(), "the stations gone, the prompt kept them")
-            self.assertEqual(Path(d, "laib-names.txt").read_text(), names.prompt(names.fetch(FakeWS(HOUSE))))
+            self.assertEqual(Path(d, "laib-names.txt").read_text(), names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame([])))
 
 
 class Run(unittest.TestCase):
