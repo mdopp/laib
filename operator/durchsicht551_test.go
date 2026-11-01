@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The log review is durchsicht's script since #839 (skills/durchsicht/run.py,
@@ -16,10 +17,13 @@ import (
 
 // The 48 hours a human read on the Kraftwerk (#551), in the shapes the
 // journal had: journalctl -o short-iso lines, most of them INFO on stderr.
+// Dated within the last hour: the review asks whether a pattern is still
+// happening (#975), and a day eleven days old is over.
 func kraftwerkDay(adguardTimeouts int) map[string]map[string]string {
 	var b strings.Builder
 	line := func(unit, format string, a ...any) {
-		fmt.Fprintf(&b, "2026-10-21T%02d:%02d:%02d+02:00 kraftwerk %s[%d]: %s\n", len(a)%24, (b.Len()/7)%60, b.Len()%60, unit, 1000+b.Len()%900, fmt.Sprintf(format, a...))
+		at := time.Now().Add(-time.Duration(b.Len()%3600) * time.Second).Format(time.RFC3339)
+		fmt.Fprintf(&b, "%s kraftwerk %s[%d]: %s\n", at, unit, 1000+b.Len()%900, fmt.Sprintf(format, a...))
 	}
 	take := func() string { s := b.String(); b.Reset(); return s }
 

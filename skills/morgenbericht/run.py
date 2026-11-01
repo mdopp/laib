@@ -11,7 +11,7 @@ script also reads status and journal and hands a report written from them,
 which the runner writes when the model fails. #859: the Operator's sessions
 of the month (data.sessions) give the day's tokens and model time; #861:
 and, once a month, which lessons they were offered and which findings came
-back.
+back. #975: and the log review's sentence of what became no wish, and why.
 """
 
 import json
@@ -124,6 +124,15 @@ def lessons_line(sessions, now):
     return said + ("Wiedergekommen: " + ", ".join(f"{f} {seen[f]}×{back[f]}" for f in sorted(back, key=lambda f: -seen[f])) + "." if back else "Kein Befund kam wieder.")
 
 
+ASIDE = "Aussortiert, kein Wunsch:"  # durchsicht's sentence (skills/durchsicht/pruefung.py MARK)
+
+
+def aside(journal):
+    """The latest log review's sentence of the patterns it did not file, with the reason (#975)."""
+    said = [field(e, "detail") for e in (journal if isinstance(journal, list) else []) if field(e, "verb") == "note" and ASIDE in field(e, "detail")]
+    return said[-1][said[-1].index(ASIDE):] if said else ""
+
+
 def hm(s, tz):
     """A journal time as the box's clock, or "?"."""
     d = when(s)
@@ -159,7 +168,7 @@ def run(s):
     lines = [rate(history, when(s.now)), stale(history), due_line(s.data.get("due")), model_line(sessions, when(s.now))]
     if field(s.state, "month") != month:  # the month's first report
         lines.append(lessons_line(sessions, when(s.now)))
-    human = " ".join(x for x in lines if x)
     status = s.call("laib_status").json() or {}
     journal = s.call("laib_journal", since="24h").json()
+    human = " ".join(x for x in lines + [aside(journal)] if x)
     return laibskill.done(human=human, fallback=(fallback(status, journal, when(s.now)) + " " + human).strip(), state={"month": month})
