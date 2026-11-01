@@ -117,9 +117,8 @@ def check(s, tool, args):
 
 
 def recheck(s, plan, kept, quiet, read):
-    """#978: the Operator's open wishes about the services' logs, a day after
-    they were filed: no error line of their services → erledigt; only lines
-    today's checks drop → verworfen, with why. Two calls; the morning report says it."""
+    """#978: the Operator's open log wishes, a day after they were filed: no error line of their
+    services → erledigt; only lines today's checks drop → verworfen, with why. Two calls."""
     ws, out = s.call("laib_wish", args="list").json(), []
     for w in ws if isinstance(ws, list) else []:
         svcs, since = field(w, "services", []) or [], when(field(w, "since"))
