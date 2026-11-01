@@ -1,0 +1,29 @@
+[Unit]
+Description=Archiv von ${PERSON}: Nachrichten im Tresor (ADR 0029)
+
+[Container]
+# pinned: msgvault's database lives inside, its storage format may change
+# (alpha); a new archiv image is a template update the owner approves
+Image=${ARCHIV_IMAGE}
+PublishPort=127.0.0.1:18540:8080
+Volume=${DATA_DIR}/${SERVICE}:/data
+# read, write and delete: the archive removes packed backups and keeps the newest in letzte/
+Volume=${DATA_DIR}/archiv-eingang/${PERSON}:/eingang
+# the vault is a gocryptfs (FUSE) mount in the container's own user and mount
+# namespace; labelling off as for Haus's shared inbox, which Haus writes too
+AddDevice=/dev/fuse
+AddCapability=SYS_ADMIN
+SecurityLabelDisable=true
+Environment=ARCHIV_PERSON=${PERSON}
+Environment=PROXY_SECRET=${PROXY}
+Environment=ARCHIV_HAUS_SECRET=${HAUS_SECRET}
+Environment=TZ=${TZ}
+Environment=PUBLIC_URL=https://archiv.${DOMAIN}/
+
+[Service]
+Restart=always
+# closing stops msgvault (≤ 30 s) and unmounts the vault
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

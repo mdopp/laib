@@ -121,11 +121,12 @@ The part the house trusts: it must work when everything else is broken. 20,246 /
 
 ### Services from templates
 
-25 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
+26 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
 
 | Service | Beschreibung | Runs |
 |---|---|---|
 | [AdGuard](templates/adguard/) `adguard` | Namen im Heimnetz, Werbefilter | [adguardhome](https://hub.docker.com/r/adguard/adguardhome) |
+| [Archiv](templates/archiv/) `archiv` | Deine Nachrichten, im Tresor nur für dich | [archiv](https://github.com/mdopp/archiv) (msgvault, gocryptfs, signalbackup-tools) |
 | [Audiobookshelf](templates/audiobookshelf/) `audiobookshelf` | Hörbücher, Hörspiele, Podcasts | [audiobookshelf](https://github.com/advplyr/audiobookshelf) |
 | [Anmeldung](templates/auth/) `auth` | Konten und zweiter Faktor | [authelia](https://hub.docker.com/r/authelia/authelia), [lldap](https://hub.docker.com/r/lldap/lldap), [valkey](https://hub.docker.com/r/valkey/valkey) |
 | [Musik ordnen](templates/beets/) `beets` | Erkennt und sortiert neue Musik | [beets](https://hub.docker.com/r/linuxserver/beets) |
@@ -202,7 +203,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
-| 25 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
+| 26 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what
