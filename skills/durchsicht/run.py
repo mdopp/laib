@@ -116,14 +116,28 @@ def check(s, tool, args):
     return ""
 
 
+def recheck(s, plan, kept, quiet, read):
+    """#978: the Operator's open log wishes, a day after they were filed: no error line of their
+    services → erledigt; only lines today's checks drop → verworfen, with why. Two calls."""
+    ws, out = s.call("laib_wish", args="list").json(), []
+    for w in ws if isinstance(ws, list) else []:
+        svcs, since = field(w, "services", []) or [], when(field(w, "since"))
+        if not field(w, "operator") or field(w, "skill") not in ("", "durchsicht") or not svcs or not set(svcs) <= read or kept & set(svcs) or not since or plan.now - since < timedelta(hours=20):
+            continue
+        why = next((quiet[x] for x in svcs if x in quiet), "")
+        r = max((v for x in svcs for v in plan.of(x) if v.start > since), key=lambda v: v.start, default=None)
+        done = f"seit {r.label} von {r.svc} um {hm(r.start, plan.now)} kein Fehler mehr" if r else f"kein Fehler von {', '.join(svcs)} in 24 Stunden"
+        out.append(f"{field(w, 'id')} " + (f"verworfen würde heute nicht gemeldet: {why}" if why else f"erledigt {done}"))
+    return len(out) if out and not s.call("laib_wish", args="status", stdin="\n".join(out)).error else 0
+
+
 def run(s):
     st = s.call("laib_status")
     services = field(st.json(), "services", None)
     if not isinstance(services, list):
         return laibskill.done(context="Protokoll-Durchsicht: laib status nicht lesbar (" + laibskill.first_line(st.text) + "). Schreib das in die Notiz.")
-    counts, noise, full, unread, runtime, known_harmless, obtained, green = {}, {}, {}, [], {}, {}, {}, {}
-    marks, marks_said = harmless(s)
-    plan = Plan(s)
+    counts, noise, full, unread, runtime, known_harmless, obtained, green, quiet = {}, {}, {}, [], {}, {}, {}, {}, {}
+    (marks, marks_said), plan = harmless(s), Plan(s)
     for name in (field(x, "name") for x in services):
         green[name] = any(field(x, "name") == name and field(x, "state") == "grün" for x in services)
         units = s.call("laib_logs", args=f"{name} --since 24h --lines {REVIEW_LINES} --priority warning").json()
@@ -136,6 +150,7 @@ def run(s):
             for m in filter(None, map(logzeilen.LINE.match, lines)):
                 if m[2] in logzeilen.RUNTIME:
                     runtime[unit] = runtime.get(unit, 0) + 1
+                    quiet.setdefault(name, "Zeilen der Container-Laufzeit (pasta, conmon), nicht des Dienstes")
                     continue
                 t, ident = when(m[1]), IDENT.search(m[3])
                 if ident and t and OBTAINED in m[3]:
@@ -143,12 +158,14 @@ def run(s):
                 why = next((why for rx, why in marks.get(name, []) if rx.search(m[3])), None)
                 if why is not None:
                     known_harmless.setdefault(unit, [0, why])[0] += 1
+                    quiet.setdefault(name, f"als harmlos vermerkt ({why})")
                     continue
                 p, real = logzeilen.pattern(m[3])
                 if not real:
                     noise[unit] = noise.get(unit, 0) + 1
                     continue
                 if plan.during(name, unit, t):
+                    quiet.setdefault(name, "nur während geplanter Neustarts")
                     continue
                 c = counts.setdefault(unit + "\t" + p, {"unit": unit, "svc": name, "pattern": p, "example": m[3], "count": 0, "times": [], "ids": {}})
                 c["count"] += 1
@@ -170,32 +187,34 @@ def run(s):
             known += 1
     for c, why in news:
         gone, said = judge(c, why == "neu", plan, green.get(c["svc"]), obtained)
-        (dropped if gone else checked).append((c, gone) if gone else (c, why, said))
+        if gone:
+            dropped.append((c, gone))
+            quiet.setdefault(c["svc"], gone)
+        else:
+            checked.append((c, why, said))
     checked = sorted(checked, key=lambda n: (-n[0]["count"], n[0]["unit"] + n[0]["pattern"]))[:8]
     shown = {c["unit"] + "\t" + c["pattern"] for c, _, _ in checked}
     nxt = {key: {"count": c["count"], "told": bool((last.get(key) or {}).get("told")) or key in shown} for key, c in counts.items()}
     aside = told(dropped, plan)
+    kept = {c["svc"] for c in counts.values() if not any(c is d for d, _ in dropped)}  # a real error today, not dropped
+    closed = recheck(s, plan, kept, quiet, set(green) - set(unread))
     if not checked and not unread:
         if aside:
             s.call("laib_note", kind="watch", text="Protokoll-Durchsicht: keine neuen Fehlermuster. " + aside)
-        return laibskill.done(outcome="unchanged", why="keine neuen Fehlermuster" + (f"; {len(dropped)} Muster aussortiert" if dropped else ""), state=nxt)
+        return laibskill.done(outcome="unchanged", why="keine neuen Fehlermuster" + (f"; {len(dropped)} Muster aussortiert" if dropped else "") + (f"; {closed} Wünsche geschlossen" if closed else ""), state=nxt)
 
     out = ["Fehlermuster der letzten 24 Stunden (nach Inhalt, nicht nach Journal-Priorität), jedes geprüft wie von einem Menschen:"]
     for c, why, said in checked:
         ex = c["example"] if len(c["example"]) <= 200 else c["example"][:200] + "…"
         out.append(f"- {why}, {c['unit']}, {'mindestens ' if full.get(c['unit']) else ''}{c['count']}×: {c['pattern']}\n  Beispiel: {ex}\n  geprüft: {said}")
-    if known:
-        out.append(f"Schon gemeldet und nicht gewachsen: {known} Muster (nicht wiederholen).")
-    if aside:
-        out.append("Geplante Neustarts, Vorbeis und Behobenes sind aussortiert; die Notiz bekommt die Liste angehängt, kein Wunsch dazu.")
-    if unread:
-        out.append("Logs nicht lesbar: " + ", ".join(unread) + ".")
+    out += [f"Schon gemeldet und nicht gewachsen: {known} Muster (nicht wiederholen)."] if known else []
+    out += ["Geplante Neustarts, Vorbeis und Behobenes sind aussortiert; die Notiz bekommt die Liste angehängt, kein Wunsch dazu."] if aside else []
+    out += ["Logs nicht lesbar: " + ", ".join(unread) + "."] if unread else []
     for title, d in (("Rauschen (stderr ohne Fehler, nur gezählt)", noise), ("Container-Laufzeit (pasta, conmon; nicht der Dienst, nur gezählt)", runtime)):
         if d:
             out.append(title + ": " + ", ".join(f"{u} {d[u]}" for u in sorted(d, key=lambda u: (-d[u], u))[:4]) + ".")
     if known_harmless:
         out.append("Als harmlos vermerkt (ignore.yml, nur gezählt): " + ", ".join(f"{u} {n} ({why})" for u, (n, why) in sorted(known_harmless.items())) + ".")
-    if marks_said:
-        out.append(marks_said)
+    out += [marks_said] if marks_said else []
     s.services = {c["svc"] for c, _, _ in checked}
     return laibskill.done(context="\n".join(out) + "\n", human=aside, state=nxt, checks=["laib_wish"])

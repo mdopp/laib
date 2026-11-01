@@ -14,6 +14,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
@@ -164,6 +165,9 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 		von, words = words[1], words[2:]
 	}
 	text := strings.TrimSpace(strings.Join(words, " "))
+	if len(args) > 0 && (args[0] == "list" || args[0] == "status") { // a wish's status (#978), the kernel's own
+		return inbox.WishCmd(ctx, env, args)
+	}
 	if proposal.Hand(env.Actor) != "ops" || text == "" {
 		return door(ctx, env, "haushalt", "propose", append([]string{"wish"}, args...))
 	}
@@ -172,6 +176,9 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 		return env.Fail(err)
 	}
 	by := "vom Operator (" + env.Actor + ")"
+	if skill := mcp.SkillOf(ctx); skill != "" { // the review re-checks its own (#978)
+		by = "vom Operator (" + env.Actor + ", Fähigkeit " + skill + ")"
+	}
 	if von != "" {
 		by += ", gewünscht von " + von + ","
 	}

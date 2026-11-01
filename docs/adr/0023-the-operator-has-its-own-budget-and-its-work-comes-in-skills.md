@@ -879,6 +879,21 @@ by hand, while the kernel answered the same question for the look in Go
   and its script refuses every wish, so nothing unchecked reaches the
   Inbox.
 
+- **A wish ends.** An approved wish keeps its status in its own file in the
+  state repo (`wishes/<time>.md`, a `---` trailer: offen, erledigt or
+  verworfen, the reason, when, who), set by `laib wish status`, one commit
+  and one journal line each — bookkeeping like a Box-Aufgabe, never a
+  ticket (owner: GitHub issues only for real program bugs, filed by hand).
+  The log review re-checks the Operator's open wishes about the logs a day
+  after they were filed: no error line of their services today →
+  erledigt (since which planned restart, when there was one); only lines
+  today's checks drop (a planned stop, the container runtime, a shape
+  marked harmless, over or resolved) → verworfen, „würde heute nicht
+  gemeldet: …“. A wish says which skill filed it (`Fähigkeit <name>`, from
+  X-Laib-Skill); the review leaves nutzung's and a person's alone. The
+  morning report says once what was closed and why; the Inbox's „Zuletzt
+  entschieden“ shows it.
+
 Weighed against before (#246): one place to fix „planned“ instead of two,
 and the look learns the case #975 found (a client's red while Home
 Assistant is restarted on purpose). Nothing the family sees gets worse.

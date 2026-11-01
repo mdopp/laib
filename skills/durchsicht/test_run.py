@@ -29,6 +29,7 @@ class Fake:
         self.day, self.state, self.status, self.extra, self.calls, self.red = day, state, status, list(extra), [], red
         self.ignore = ignore  # ignore.yml as laib state parses it; None: no such file on main
         self.planned, self.now = planned or {}, now  # #978: laib planned's windows per service, or its error text
+        self.wishes = None  # #978: laib wish list's answer
 
     def call(self, tool, **args):
         self.calls.append((tool, args))
@@ -51,6 +52,8 @@ class Fake:
             if isinstance(self.ignore, str):
                 return laibskill.Reply(self.ignore, True)
             return laibskill.Reply(json.dumps({"path": "ignore.yml", "content": "", "redacted": [], "data": self.ignore}))
+        if tool == "laib_wish" and args.get("args") == "list" and self.wishes is not None:
+            return laibskill.Reply(json.dumps(self.wishes))
         return laibskill.Reply("ok")
 
 
@@ -314,6 +317,47 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von haus um 05:30 nicht mehr, Dienst grün", notes(s)[0])
         r = run.run(Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00", red=["haus"]))
         self.assertIn("vor Anwenden von haus um 05:30, Dienst nicht grün", r["context"])
+
+
+def wish(id, services, skill="durchsicht", operator=True, title="x"):
+    return {"id": id, "title": title, "since": id[:10] + "T" + id[11:19].replace("-", ":") + "Z", "operator": operator, "skill": skill, "services": services, "status": "offen"}
+
+
+class OpenWishes(unittest.TestCase):
+    """#978: the Operator's open wishes about the logs, re-checked a day after they were filed."""
+
+    def closed(self, fake):
+        calls = [a for t, a in fake.calls if t == "laib_wish" and a.get("args") == "status"]
+        return calls[0]["stdin"].split("\n") if calls else []
+
+    def test_each_wish_gets_what_today_says(self):
+        # haus: only lines while Home Assistant was applied (#305); llama: a planned restart since, no line;
+        # bote: only pasta's lines (#915); immich: a real error today; caddy: filed an hour ago;
+        # nutzung's wish about immich and a person's are not the review's
+        day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
+        day.update({"llama": {"llama.service": ""}, "bote": {"bote-pod.service": "\n".join(PASTA)}, "caddy": {"caddy.service": ""},
+                    "immich": {"immich-server.service": line("immich-server", "ERROR thumbnail failed")}})
+        s = Fake(day, planned={"haus": HA_APPLIES, "llama": [win("llama", "Update", "2026-10-31T08:22:22", "2026-10-31T08:22:30")]}, now="2026-11-01T06:30:00+01:00")
+        s.wishes = [wish("2026-10-30T05-30-43.423582", ["haus"]), wish("2026-10-30T05-30-44.000000", ["llama"], skill=""),
+                    wish("2026-10-30T05-30-45.000000", ["bote", "radicale"], skill=""), wish("2026-10-30T05-30-46.000000", ["immich"]),
+                    wish("2026-11-01T04-30-00.000000", ["caddy"]), wish("2026-10-26T07-29-06.545025", ["immich"], skill="nutzung"),
+                    wish("2026-10-26T07-29-07.000000", ["haus"], operator=False)]
+        r = run.run(s)
+        self.assertEqual(self.closed(s), [
+            "2026-10-30T05-30-43.423582 verworfen würde heute nicht gemeldet: nur während geplanter Neustarts",
+            "2026-10-30T05-30-44.000000 erledigt seit Update von llama um 09:22 kein Fehler mehr",
+        ])  # bote names radicale too, whose logs were not read: left open
+        self.assertIn("2 Wünsche geschlossen", r["why"])
+
+    def test_runtime_lines_alone_discard_it_and_no_wishes_no_call(self):
+        s = Fake({"bote": {"bote-pod.service": "\n".join(PASTA)}}, now="2026-11-01T06:30:00+01:00")
+        s.wishes = [wish("2026-10-30T05-30-45.000000", ["bote"], skill="")]
+        run.run(s)
+        self.assertEqual(self.closed(s), ["2026-10-30T05-30-45.000000 verworfen würde heute nicht gemeldet: Zeilen der Container-Laufzeit (pasta, conmon), nicht des Dienstes"])
+        s = Fake({"bote": {"bote-pod.service": ""}}, now="2026-11-01T06:30:00+01:00")
+        s.wishes = []
+        run.run(s)
+        self.assertEqual(self.closed(s), [])
 
 
 if __name__ == "__main__":
