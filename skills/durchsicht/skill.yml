@@ -16,15 +16,23 @@
 # is the runtime's, not the service's, and only counted; a shape the
 # owner or a ticket answered as harmless (laib ignore --log, ignore.yml
 # on main, read with laib state) is only counted, with its reason.
+# #975: before the model sees a pattern, the script checks it as a person
+# would (pruefung.py): a line within minutes of a planned stop of its
+# service or of one it depends on (a unit's Stopping line that the journal
+# accounts for: apply, backup, updates, a restart …) is only counted; a new
+# pattern quiet for six hours, or not seen since a planned restart of a
+# green service, is over; a certificate obtained after its failures is
+# resolved. The note lists what was dropped once, with the reason; the
+# morning report repeats that sentence; a wish must say what was checked.
 description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
 trigger: {daily: "06:30"}
-tools: [status, logs, state, wish, note]
+tools: [status, logs, state, journal, wish, note]
 run: run.py
 context: none
 modell: urteil   # the script read the logs; the model judges the patterns
 output: note
 limits: {wish: 3}
 prompt: |
-  Auslöser: Protokoll-Durchsicht. Unten stehen die Fehlermuster der letzten 24 Stunden, die neu, wiederkehrend oder gewachsen sind. laib hat sie nach Inhalt gruppiert; Rauschen (normale Meldungen auf stderr) ist schon aussortiert und nur gezählt.
+  Auslöser: Protokoll-Durchsicht. Unten stehen die Fehlermuster der letzten 24 Stunden, die neu, wiederkehrend oder gewachsen sind. laib hat sie nach Inhalt gruppiert; Rauschen (normale Meldungen auf stderr) ist schon aussortiert und nur gezählt. Jedes Muster ist schon geprüft wie von einem Menschen (geplante Neustarts, vorbei, behoben); was dabei herausfiel, steht nicht unten und bekommt keinen Vorschlag.
   Schreib eine note mit kind watch: je Muster eine Zeile mit Unit, Muster, Anzahl und der Beispielzeile, das Wichtigste zuerst, und was es für die Familie heißt, wenn die Zeile das hergibt. Erfinde keine Ursache.
-  Braucht ein Muster einen Menschen (eine Einstellung im Template, kaputte Dateien), dann höchstens drei Vorschläge mit wish: text nennt Dienst und Muster, saw die Anzahl und die Beispielzeile. Du änderst nichts selbst.
+  Braucht ein Muster einen Menschen (eine Einstellung im Template, kaputte Dateien), dann höchstens drei Vorschläge mit wish: text nennt Dienst und Muster, saw die Anzahl, die Beispielzeile und die Zeile „geprüft: …“ des Musters. Du änderst nichts selbst.

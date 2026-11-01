@@ -175,9 +175,10 @@ done
 
 # --- the Operator's skills: one per skills/<name>/skill.yml ---------------
 # The owner's measure for them (2026-10-27): at most 50 skills, at most 200
-# lines in a skill's run.py. Shown against both; neither is a gate.
-skillcap=50
-runcap=200
+# lines in a skill's run.py, both +10 % on 2026-10-30 (scripts/loc.sh, which
+# holds them). Shown against both; neither is a gate here.
+skillcap=55
+runcap=220
 flat() { # flat <key> <skill.yml>: a one-line value without its comment
   sed -nE "s/^$1:[[:space:]]*//p" "$2" | head -1 | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//'
 }

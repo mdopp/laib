@@ -60,6 +60,18 @@ class Fallback(unittest.TestCase):
         self.assertTrue(text.startswith("Morgenbericht ohne Modell") and "0 Einträge, keiner rot" in text, text)
 
 
+class Aside(unittest.TestCase):
+    def test_the_log_reviews_dropped_patterns_once(self):  # #975
+        mark = "Aussortiert, kein Wunsch: haus.service 7× während eines geplanten Neustarts (Anwenden von home-assistant 10:08)."
+        journal = [{"verb": "note", "detail": "Protokoll-Durchsicht: keine neuen Fehlermuster. Aussortiert, kein Wunsch: alt."},
+                   {"verb": "note", "detail": "Immich: 44 Vorschaubilder fehlen. " + mark}, {"verb": "apply", "detail": "x"}]
+        self.assertEqual(run.aside(journal), mark)
+        self.assertEqual(run.aside([{"verb": "note", "detail": "nichts"}]), "")
+        self.assertEqual(run.aside(None), "")
+        from durchsicht import pruefung
+        self.assertEqual(run.ASIDE, pruefung.MARK)
+
+
 class ModelUse(unittest.TestCase):
     def test_the_last_24_hours(self):  # #859
         ss = [{"skill": "vorfall", "started": "2026-10-20T22:00:00Z", "in": 5000, "out": 200, "modelMs": 90000},

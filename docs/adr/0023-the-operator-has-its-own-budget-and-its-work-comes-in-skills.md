@@ -778,3 +778,56 @@ Weighed against before (#246): the family sees nothing worse; one red
 costs one model session instead of two, a failing replay no longer asks
 the model every minute, and the owner reads the day's model use on the Box
 page instead of in a log review.
+
+## Amendment 2026-11-01 — the log review checks a pattern as a person would before it becomes a wish (#975)
+
+The review filed wishes the owner had to read and reject for errors that
+were expected or already gone: Haus' „connection refused" to Home
+Assistant in the seconds an approved update restarted it, Music
+Assistant's 502 while the nightly backup stopped Home Assistant, Caddy's
+ACME failure for a name whose record was added that day and whose
+certificate was valid since, the lease's exit 143 at each Laib update.
+The owner (2026-11-01): the Operator should check its wishes on its own,
+as a person does. That check is code, in `durchsicht`'s script, not prose
+in its prompt (rule 1):
+
+- **A planned stop.** A line of a service from two minutes before to three
+  after a planned stop of it, or of a service it depends on, is counted,
+  never a pattern. Planned is a unit's `Stopping` line (systemd writes one
+  only when someone asked; a crash and its automatic restart write none)
+  that the journal accounts for — apply, backup, updates, Laib's own
+  restart (`ready`), converge, restart, stop, start, repair, rollback,
+  restore, pause, resume — within three minutes of its span. A stop the
+  journal does not account for is no planned stop. Dependencies are the
+  templates' `after:`, laib for `needs: [mcp]`, auth for an OIDC login,
+  and Home Assistant for its clients (Haus, Music Assistant, Stimme, the
+  Bote, Gesundheit); the script holds them as a map, and a test holds the
+  map to `templates/*/laib.yml`, because the script cannot read templates
+  on the box.
+- **Still happening?** A pattern new today whose last line is six hours
+  old, or older than the last planned restart of its service or a
+  dependency while the service is green, is over. A pattern the last
+  review saw too is never over: coming back is news.
+- **Already resolved?** Only what the lines already read can tell: a
+  certificate Caddy obtained after the failures, for every name it failed
+  for. No new probe.
+- **What remains carries what was checked**: each pattern the model sees
+  has a line „geprüft: …“; the script refuses a wish whose `saw` lacks it or
+  that names no shown pattern's service.
+- **Nothing disappears silently**: the note ends with one sentence,
+  „Aussortiert, kein Wunsch: …“, each dropped pattern once with its reason;
+  when nothing is news the script writes that note itself. The morning
+  report's script repeats the sentence.
+- **The skill reads `journal`**, a read verb the ops hand already has for
+  `morgenbericht` and `sicherung`, so no grant is asked (#932).
+- **A skill's script may be more than one file**: `run.py` imports
+  `pruefung.py` beside it (`from durchsicht import pruefung`; the door puts
+  `skills/` on the path and reads only there). `scripts/loc.sh` holds every
+  script file of a skill to 220 lines, not only `run.py`.
+
+Weighed against before (#246): the owner reads fewer wishes and none that
+a look at the journal would have answered; a genuine error outside
+restarts is still a wish, now saying what was checked. What it costs: a
+nightly job's error that falls more than six hours before the review is
+dropped the first day and filed the second, when the review's memory
+shows it came back.
