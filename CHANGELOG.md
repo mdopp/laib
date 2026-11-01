@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.59.0](https://github.com/mdopp/laib/compare/v0.58.0...v0.59.0) (2026-11-01)
+
+
+### Features
+
+* **template:** Haus mounts the archive inbox for the phones' message backups (ADR 0029) ([#988](https://github.com/mdopp/laib/issues/988)) ([c52b6ed](https://github.com/mdopp/laib/commit/c52b6ed4e3d0dec346d623ed9dca715ab251064b))
+
 ## [0.58.0](https://github.com/mdopp/laib/compare/v0.57.9...v0.58.0) (2026-11-01)
 
 
