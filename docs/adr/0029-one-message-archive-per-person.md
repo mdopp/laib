@@ -53,7 +53,7 @@ seeing only their own.
      past Authelia, with that instance's key.
    - **Strato:** one record for the name, once, not one per person.
 3. **The vault.** Each person's archive data, their WhatsApp and Signal
-   keys and their IMAP password live in one encrypted folder (gocryptfs).
+   keys, their IMAP password and a Discord bot token live in one encrypted folder (gocryptfs).
    - Its password is known only to that person and is kept in their own
      Vaultwarden.
    - **Locked:** the instance is stopped. Disk, backups (restic stores the
@@ -67,8 +67,9 @@ seeing only their own.
      fallback is an open archive the admin may read, said in those words.
      No silent downgrade.
 4. **One inbox root, one folder per person.**
-   - `${DATA_DIR}/archiv-eingang/<person>/{whatsapp,signal}/` holds phone
-     backups, still encrypted by the messenger, until the vault opens.
+   - `${DATA_DIR}/archiv-eingang/<person>/{whatsapp,signal,discord}/` holds
+     phone backups, still encrypted by the messenger, and Discord data
+     packages, until the vault opens.
    - **Haus** mounts the whole root and writes as the person of the
      device token, never as the request says.
    - **Each instance** mounts only its own person's folder. An instance
@@ -80,6 +81,21 @@ seeing only their own.
    Inbox or a log.
 6. **Mail over IMAP** with an app password, not the Gmail API. A person
    needs no Google Cloud project.
+   **Discord** („lass uns Discord mitdenken“, 2026-11-01) has two halves:
+   - **Server channels:** msgvault's own Discord sync (`sync-discord`)
+     reads the servers a bot was added to. It needs a bot token with only
+     View Channels and Read Message History, and the Message Content
+     intent. That works for servers where the person may add a bot. The
+     token lives in the person's vault, and the sync catches up whenever
+     the vault opens.
+   - **Direct messages:** Discord's API gives them only to a user token,
+     i.e. a selfbot. That is against Discord's terms and risks the
+     account, and msgvault refuses user tokens. So DMs come only from
+     Discord's data package (Einstellungen → Daten & Datenschutz → Daten
+     anfordern). The person shares the zip into Haus, and it lands in
+     `archiv-eingang/<person>/discord/`. msgvault has no importer for it,
+     so a converter is a later issue. Its spike first checks what the
+     package holds; as far as known, only the messages the person sent.
 7. **Deleting a person deletes their vault key.** The archive is then
    unreadable at once, also in every backup snapshot. Without the vault
    (the fallback), snapshots keep it until they expire. The guide says so.
@@ -115,6 +131,7 @@ seeing only their own.
   - one instance with several accounts behind a filter (msgvault's search,
     SQL and MCP see everything);
   - a hostname per person (a Strato record each, names in the CT logs);
+  - a Discord user token for DMs (a selfbot, against Discord's terms);
   - live capture through a linked device (Beeper Desktop is not headless,
     Matrix bridges are heavy and risk the WhatsApp account);
   - true end-to-end encryption (the box could not search; msgvault cannot).
