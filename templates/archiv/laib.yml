@@ -18,7 +18,7 @@ routes:
   - host: archiv
     port: 18540
     exposure: internal
-    auth: one_factor
+    auth: two_factor   # owner, 2026-11-01: the door to the vault's page wants the second factor; the vault password protects the data
     group: family
     proxySecret: ARCHIV_PROXY_SECRET
     proxyHeader: X-Archiv-Proxy
