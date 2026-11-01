@@ -183,6 +183,8 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 			}
 		}
 	}
+	// #978: announced before the stop, cleared once they run again
+	done := apply.Mark(st, env.Paths, "backup", env.Actor, "quiesce", quiesced, time.Hour)
 	for i := len(quiesced) - 1; i >= 0; i-- { // dependents first
 		name := quiesced[i]
 		apply.WritePause(env.Paths, apply.Pause{Service: name, By: "backup:" + env.Actor, Until: time.Now().Add(time.Hour).UTC(), Reason: "quiesce"})
@@ -198,6 +200,7 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		apply.Resume(env.Paths, name)
 	}
+	done(err == nil)
 	entry := journal.Entry{Actor: env.Actor, Verb: "backup", MS: time.Since(start).Milliseconds(), Detail: cli.Tail(out, 400)}
 	if len(quiesced) > 0 {
 		entry.Detail = "angehalten für den Snapshot: " + strings.Join(quiesced, ", ") + "\n" + entry.Detail

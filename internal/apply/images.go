@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
@@ -71,7 +72,7 @@ func ImageRun(ctx context.Context, env *cli.Env, st *state.State) int {
 			continue
 		}
 		moved := strings.Join(slices.Sorted(maps.Keys(before)), ", ")
-		red := restartVerify(ctx, st, name)
+		red := restartVerify(ctx, env, st, name)
 		if red == "" {
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Service: name, Result: "green", Detail: "neues Image, grün: " + moved})
 			continue
@@ -79,7 +80,7 @@ func ImageRun(ctx context.Context, env *cli.Env, st *state.State) int {
 		for img, id := range before {
 			sysd.Run(ctx, "podman", "tag", id, img)
 		}
-		after := restartVerify(ctx, st, name)
+		after := restartVerify(ctx, env, st, name)
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Service: name, Result: "red",
 			Detail: fmt.Sprintf("neues Image rot (%s): %s; zurück auf das vorige Image: %s", moved, red, cmp.Or(after, "grün"))})
 		code = cli.ExitRed
@@ -87,8 +88,11 @@ func ImageRun(ctx context.Context, env *cli.Env, st *state.State) int {
 	return code
 }
 
-// restartVerify restarts the service's units and returns its first red check, "" when green.
-func restartVerify(ctx context.Context, st *state.State, name string) string {
+// restartVerify restarts the service's units and returns its first red check, "" when green;
+// a marker announces it (#978).
+func restartVerify(ctx context.Context, env *cli.Env, st *state.State, name string) (red string) {
+	done := Mark(st, env.Paths, "updates", env.Actor, "neues Image", []string{name}, 10*time.Minute)
+	defer func() { done(red == "") }()
 	for _, u := range PodRestartSet(st.Services[name].UnitNames()) {
 		sysd.Restart(ctx, u)
 	}

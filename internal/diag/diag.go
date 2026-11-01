@@ -124,8 +124,8 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 }
 
 // Service is one service's findings: what its status file says, and its
-// units' and health's reds, expected while an apply or a pause holds it or
-// what it depends on, or a planned stop's window holds it (#907, #978).
+// units' and health's reds, expected while a maintenance marker or a pause
+// holds it or what it depends on (#907, #978).
 func Service(ctx context.Context, env *cli.Env, st *state.State, name string) []Finding {
 	svc := st.Services[name]
 	var own []Finding // its unit and health reds
@@ -149,15 +149,7 @@ func Service(ctx context.Context, env *cli.Env, st *state.State, name string) []
 	if f := Health(ctx, svc); f != nil {
 		own = append(own, *f)
 	}
-	why := held(env, st, name)
-	if why == "" && len(own) > 0 { // the minutes after a planned stop, its entry written (#978)
-		now := time.Now()
-		ws, _ := Windows(ctx, env, st, name, now.Add(-time.Hour))
-		if w := Holding(ws, now); w != nil {
-			why = "geplant: " + w.say()
-		}
-	}
-	return append(out, hold(own, why, apply.Busy(ctx, st, svc, time.Now()))...)
+	return append(out, hold(own, held(env, st, name), apply.Busy(ctx, st, svc, time.Now()))...)
 }
 
 func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []Finding {
@@ -168,6 +160,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 		}
 		out = append(out, Service(ctx, env, st, name)...)
 	}
+	out = append(out, overdue(env, only)...) // a planned restart that did not finish by its until (#978)
 	// Drift: the box differs from the state. Not red: apply fixes it.
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	if p, err := plan.Compute(ctx, st, sec, env.Paths, only); err == nil {

@@ -17,13 +17,17 @@ laib logs <service> [--since 1h] [--lines 200] [--priority err|warning] [--grep 
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
-laib planned <service> [--since 24h]   was a stop planned (#978): the planned stops of the service and of what it depends on
-                                     (its after:, its uses:, laib for needs: [mcp], the SSO role for oidc:, and theirs) — a unit's
-                                     Stopping line that a journal entry accounts for (apply, backup, updates, ready, converge,
-                                     restart, stop, start, repair, rollback, restore, pause, resume), each as a window from two
-                                     minutes before the stop to three after the unit's next Started; `now`, why a red is expected
-                                     right now (an apply or a pause holds it or a dependency, #907, or a window holds now); its
-                                     findings now. diag holds a red by the same answer; the log review asks it (one source)
+laib planned <service>               is a stop planned (#978): the maintenance markers that hold or held the service. Every
+                                     action that stops or starts services on purpose — apply and converge (15 min), laib restart and
+                                     start (5 min), the backup's quiesce (1 h), the updates run's image restart (10 min), Laib's own
+                                     start (its dependents, 3 min) — sets one before it acts: the services it acts on and their
+                                     dependents (after:, uses:, laib for needs: [mcp], the SSO role for oidc:, transitively), who,
+                                     why, until when; it is cleared when the action ends, both journaled (verb marker), kept in
+                                     LAIB_HOME/markers two days. While one holds, diag shows the services' unit and health reds as
+                                     info with `wartet` and no repair (#907); a dependent three minutes past the end. A marker not
+                                     cleared by its until is a red finding of its own (probe wartung: „Der Neustart von … ist bis
+                                     … nicht sauber fertig geworden“) for a day, or until a green restart of the service; `now`,
+                                     why a red is expected right now (a marker or a pause of it or a dependency); its findings now
 laib state [<path>]                  the state repo's files on main, or one file as committed there (box.yml, policy.yml,
                                      services/<s>/values.yml …), to write a --patch against the real text; secrets.age is
                                      never listed or shown, a secret's value and a literal under a declared secret's key
@@ -150,7 +154,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_diag` | `service?` |
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
-| `laib_planned` | `service`, `since?` → `{service, depends, now, windows: [{service, verb, label, stop, start, from, to}], findings, unread?}`: a line at `t` is expected when `from ≤ t ≤ to` of a window; `unread` names what was not checked (#978) |
+| `laib_planned` | `service` → `{service, depends, now, windows: [{id, verb, label, by, reason, services, dependents, since, until, end?, result?, from, to, overdue}], findings}`: a line at `t` is expected when `from ≤ t ≤ to` of a window (#978) |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
 | `laib_state` | `path?` → without it the list of files on main; with it `{path, content, redacted}` (read tier: every hand without a verb list reaches it by its ceiling, #576) |
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |
@@ -669,7 +673,9 @@ service whose units a window takes the card from (`llama`, `stimme`) while a
 mode stands. Apply records the services whose activation it owes
 (`<home>/apply.pending`, `/ready` `pending`) before it writes files and
 clears it after verify; the next apply or converge restarts and verifies
-them even when the file diff is clean. Restart-only converge runs are
+them even when the file diff is clean; what holds a red while it runs is
+its maintenance marker, `<home>/markers/` (#978, `laib planned`), no longer
+the pending list. Restart-only converge runs are
 journaled green with the units and count against the budget of three per
 hour.
 

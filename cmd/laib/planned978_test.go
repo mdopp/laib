@@ -14,22 +14,26 @@ import (
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
+	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// #978: „was this stop planned, and what does this service depend on“ had
-// two answers — diag's apply hold for the look (#907) and the log review's
-// own script with a hand-kept map (#975). `laib planned` is the one: the
-// journal's planned work, the units' Stopping and Started lines, the
-// contract's after:, uses:, needs: and oidc:; diag holds a red by it.
+// #978, the owner: „im Vorfeld einen Marker setzen, dass jetzt bis x Uhr
+// ein Neustart durchgeführt wird und bis dahin bestimmte Tests einfach
+// nicht laufen müssen … sollte der Marker nicht nach der Uhrzeit gelöscht
+// werden, erst dann gibt es eine Problemanalyse“. Before, „planned“ had two
+// answers inferred afterwards — diag's apply hold (#907) and the log
+// review's reading of the journal and the units' Stopping lines (#975).
+// Now an action announces itself; diag, `laib planned` and the skills read
+// the one marker.
 
-// plannedBox is testBox with whoami using home-assistant (uses:, a box
-// without it still loads whoami), whoami's health at url, and journalctl
-// answering each unit's lines from units.
-func plannedBox(t *testing.T, url string, units map[string][]string, down *bool) *cliEnv {
+// markerBox is testBox with whoami using home-assistant (uses:, a box
+// without it still loads whoami) and whoami's health at url; down makes
+// whoami's unit failed, during runs inside home-assistant's restart.
+func markerBox(t *testing.T, url string, down *bool, during func()) *cliEnv {
 	t.Helper()
 	env, _ := testBox(t)
 	ha := filepath.Join(env.Paths.State, "services", "home-assistant")
@@ -51,8 +55,8 @@ func plannedBox(t *testing.T, url string, units map[string][]string, down *bool)
 	t.Cleanup(func() { sysd.Run = prev })
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		switch {
-		case name == "journalctl":
-			return strings.Join(units[args[2]], "\n"), nil
+		case name == "systemctl" && slices.Contains(args, "restart") && slices.Contains(args, "home-assistant.service") && during != nil:
+			during()
 		case name == "systemctl" && slices.Contains(args, "is-active") && slices.Contains(args, "whoami.service") && down != nil && *down:
 			return "failed", nil
 		}
@@ -61,39 +65,13 @@ func plannedBox(t *testing.T, url string, units map[string][]string, down *bool)
 	return env
 }
 
-func stopped(unit string, at ...time.Time) []string {
-	var out []string
-	for i := 0; i+1 < len(at); i += 2 {
-		out = append(out, at[i].UTC().Format(time.RFC3339)+" atHome-Server systemd[1373]: Stopping "+unit+" - x...",
-			at[i+1].UTC().Format("2006-01-02T15:04:05-0700")+" atHome-Server systemd[1373]: Started "+unit+" - x.") // both forms journalctl writes
-	}
-	return out
-}
-
-func utc(s string) time.Time {
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		panic(err)
-	}
-	return t
-}
-
-func record(t *testing.T, env *cliEnv, es ...journal.Entry) {
-	t.Helper()
-	for _, e := range es {
-		if err := journal.Append(env.Paths.Journal, e); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func plannedOf(t *testing.T, env *cliEnv, args ...string) diag.Planned {
+func plannedOf(t *testing.T, env *cliEnv, svc string) diag.Planned {
 	t.Helper()
 	var buf bytes.Buffer
 	env.JSON, env.Out = true, &buf
 	defer func() { env.JSON, env.Out = false, nil }()
-	if code := diag.PlannedCmd(context.Background(), env, args); code != cli.ExitOK {
-		t.Fatalf("laib planned %v: exit %d", args, code)
+	if code := diag.PlannedCmd(context.Background(), env, []string{svc}); code != cli.ExitOK {
+		t.Fatalf("laib planned %s: exit %d", svc, code)
 	}
 	var p diag.Planned
 	if err := json.Unmarshal(buf.Bytes(), &p); err != nil {
@@ -102,108 +80,110 @@ func plannedOf(t *testing.T, env *cliEnv, args ...string) diag.Planned {
 	return p
 }
 
-func said(ws []diag.Window) []string {
-	var out []string
-	for _, w := range ws {
-		out = append(out, w.Service+" "+w.Label+" "+w.From.UTC().Format("01-02T15:04:05")+"–"+w.To.UTC().Format("15:04:05"))
+// #305, #304: haus' and Music Assistant's errors while Home Assistant was
+// restarted on purpose. The restart announces itself before it acts: what
+// depends on Home Assistant is expected red while it runs, to diag and to
+// laib planned alike, and a little after it, for the reconnect; its window
+// is what the log review drops lines by.
+func TestARestartIsAnnouncedAndDiagAndPlannedAgree(t *testing.T) {
+	down := true
+	var during diag.Finding
+	var seen diag.Planned
+	var env *cliEnv
+	env = markerBox(t, sickWhoami(t), &down, func() { during, seen = whoamiUnit(t, env), plannedOf(t, env, "whoami") })
+	if f := whoamiUnit(t, env); f.Severity != "rot" {
+		t.Fatalf("nothing announced: whoami's red is red, %+v", f)
 	}
-	return out
-}
-
-// The #975 shapes, as the Kraftwerk wrote them: wish #305 (haus refused by
-// Home Assistant, which three applies restarted), #304 (Music Assistant's
-// 502 while the backup stopped Home Assistant and a restart followed) and
-// #294 (each updates run stops the lease) — and a stop no entry accounts for.
-func TestPlannedAnswersTheWindowsOfAServiceAndWhatItDependsOn(t *testing.T) {
-	units := map[string][]string{
-		"home-assistant.service": slices.Concat(
-			stopped("home-assistant.service", utc("2026-10-31T09:08:47Z"), utc("2026-10-31T09:08:57Z"), utc("2026-10-31T09:11:03Z"), utc("2026-10-31T09:11:10Z"),
-				utc("2026-10-31T11:11:22Z"), utc("2026-10-31T11:11:27Z")),
-			stopped("home-assistant.service", utc("2026-11-01T03:07:28Z"), utc("2026-11-01T03:08:21Z"), utc("2026-11-01T03:09:27Z"), utc("2026-11-01T03:09:33Z")),
-			stopped("home-assistant.service", utc("2026-11-01T05:00:00Z"), utc("2026-11-01T05:00:30Z"))), // a crash cascade or a hand at systemctl
-		"whoami.service": stopped("whoami.service", utc("2026-10-30T08:22:22Z"), utc("2026-10-30T08:22:23Z"), utc("2026-10-30T11:05:45Z"), utc("2026-10-30T11:05:46Z")),
+	env.Actor = "ops"
+	if code := envelope.Restart(context.Background(), env, []string{"home-assistant"}); code != cli.ExitOK {
+		t.Fatalf("restart: exit %d", code)
 	}
-	env := plannedBox(t, "", units, nil)
-	record(t, env,
-		journal.Entry{T: utc("2026-10-30T08:22:01Z"), Actor: "laib", Verb: "updates", Result: "info", Detail: "Lauf gestartet (--now)"},
-		journal.Entry{T: utc("2026-10-30T11:05:01Z"), Actor: "laib", Verb: "updates", Result: "info", Detail: "Lauf gestartet (--now)"},
-		journal.Entry{T: utc("2026-10-31T09:08:44.7787766Z"), Actor: "human:mdopp", Verb: "apply", Result: "green", MS: 8273},
-		journal.Entry{T: utc("2026-10-31T09:11:37.352074069Z"), Actor: "human:mdopp", Verb: "apply", Result: "green", MS: 125563},
-		journal.Entry{T: utc("2026-10-31T11:11:55.484557492Z"), Actor: "laib", Verb: "apply", Result: "green", MS: 36291},
-		journal.Entry{T: utc("2026-11-01T03:08:22.751834666Z"), Actor: "laib", Verb: "backup", Result: "green", MS: 47085, Detail: "angehalten für den Snapshot: home-assistant"},
-		journal.Entry{T: utc("2026-11-01T03:09:39.5430544Z"), Actor: "ops", Verb: "restart", Service: "home-assistant", Result: "green"},
-		journal.Entry{T: utc("2026-11-01T05:00:10Z"), Actor: "ops", Verb: "restart", Service: "whoami", Result: "green"}, // another service's restart stopped nothing here
-	)
-	p := plannedOf(t, env, "whoami", "--since", "100000h")
-	if !slices.Equal(p.Depends, []string{"home-assistant"}) {
-		t.Fatalf("whoami uses home-assistant: depends %v", p.Depends)
+	if during.Severity != "info" || during.Repair != nil || !strings.HasPrefix(during.Wartet, "geplant: laib restart von home-assistant bis ") {
+		t.Fatalf("diag during home-assistant's restart: %+v", during)
 	}
-	want := []string{
-		"whoami Update 10-30T08:20:22–08:25:23",
-		"whoami Update 10-30T11:03:45–11:08:46",
-		"home-assistant Anwenden 10-31T09:06:47–09:11:57",
-		"home-assistant Anwenden 10-31T09:09:03–09:14:10",
-		"home-assistant Anwenden 10-31T11:09:22–11:14:27",
-		"home-assistant Sicherung 11-01T03:05:28–03:11:21",
-		"home-assistant laib restart 11-01T03:07:27–03:12:33",
-	}
-	if got := said(p.Windows); !slices.Equal(got, want) {
-		t.Fatalf("windows:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-	if p.Findings == nil || len(p.Unread) > 0 || p.Now != "" {
-		t.Fatalf("findings must be a list, nothing unread, nothing planned now: %+v", p)
+	if "geplant: "+strings.TrimPrefix(seen.Now, "geplant: ") != during.Wartet || !slices.ContainsFunc(seen.Findings, func(g diag.Finding) bool { return g.Wartet == during.Wartet }) {
+		t.Fatalf("laib planned says %q with %+v, diag %q", seen.Now, seen.Findings, during.Wartet)
 	}
 
-	// the same answer through MCP, for the Operator's skills, typed
+	// after: the dependent three minutes longer, Home Assistant's own window ends with it
+	p := plannedOf(t, env, "whoami")
+	if !slices.Equal(p.Depends, []string{"home-assistant"}) || len(p.Windows) != 1 {
+		t.Fatalf("whoami depends on home-assistant, one window: %+v", p)
+	}
+	w := p.Windows[0]
+	if w.Label != "laib restart" || w.Result != "green" || w.Overdue || !slices.Equal(w.Services, []string{"home-assistant"}) || !slices.Equal(w.Dependents, []string{"whoami"}) ||
+		!w.From.Equal(w.Since) || !w.To.Equal(w.End.Add(3*time.Minute)) || w.End.Before(w.Since) {
+		t.Fatalf("the restart's window for whoami: %+v", w)
+	}
+	if h := plannedOf(t, env, "home-assistant").Windows; len(h) != 1 || !h[0].To.Equal(h[0].End) {
+		t.Fatalf("home-assistant's own window ends with the restart: %+v", h)
+	}
+	if f := whoamiUnit(t, env); f.Severity != "info" || p.Now == "" {
+		t.Fatalf("a dependent within three minutes of the end is still expected: %+v, now %q", f, p.Now)
+	}
+	es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-time.Hour))
+	if n := len(slices.DeleteFunc(es, func(e journal.Entry) bool { return e.Verb != "marker" })); n != 2 {
+		t.Fatalf("the marker is journaled at its start and its end: %d lines", n)
+	}
+
+	// the same answer through MCP, for the Operator's skills
 	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, code := mcp.Call(context.Background(), env, st, "ops", "laib_planned", map[string]any{"service": "whoami", "since": "100000h"})
-	if code != cli.ExitOK || !strings.Contains(out, `"label": "Sicherung"`) {
+	out, code := mcp.Call(context.Background(), env, st, "ops", "laib_planned", map[string]any{"service": "whoami"})
+	if code != cli.ExitOK || !strings.Contains(out, `"label": "laib restart"`) {
 		t.Fatalf("laib_planned for ops: exit %d: %s", code, out)
 	}
 }
 
-// One source (#978 acceptance): a red inside a planned window of what the
-// service depends on is expected to diag's look and to `laib planned`
-// alike, with the same words; once the window is over it is red to both.
-func TestDiagAndPlannedAgreeOnARedInAPlannedWindow(t *testing.T) {
-	now := time.Now().UTC().Truncate(time.Second)
-	units := map[string][]string{"home-assistant.service": stopped("home-assistant.service", now.Add(-90*time.Second), now.Add(-60*time.Second))}
+// #907's apply hold, now a marker: while an apply holds whoami its red is
+// expected; once it ends, red again at once (its own service gets no
+// grace). An apply that dies leaves its marker; past its until that is red
+// itself — the restart did not finish cleanly — and a later green restart
+// of the service closes it.
+func TestAMarkerNotClearedByItsUntilIsTheFinding(t *testing.T) {
 	down := true
-	env := plannedBox(t, sickWhoami(t), units, &down)
-	unit := func() diag.Finding { return whoamiUnit(t, env) }
-	if f := unit(); f.Severity != "rot" {
-		t.Fatalf("no journal entry accounts for the stop: red, %+v", f)
-	}
-	record(t, env, journal.Entry{T: now.Add(-50 * time.Second), Actor: "human:mdopp", Verb: "apply", Result: "green", MS: 45000})
-	f, p := unit(), plannedOf(t, env, "whoami")
-	if f.Severity != "info" || f.Repair != nil || !strings.HasPrefix(f.Wartet, "geplant: Anwenden von home-assistant um ") {
-		t.Fatalf("diag: a red in the window of home-assistant's apply: %+v", f)
-	}
-	if "geplant: "+p.Now != f.Wartet {
-		t.Fatalf("laib planned says %q, diag %q", p.Now, f.Wartet)
-	}
-	if !slices.ContainsFunc(p.Findings, func(g diag.Finding) bool { return g.Probe == "unit" && g.Wartet == f.Wartet }) {
-		t.Fatalf("laib planned's findings are diag's: %+v", p.Findings)
-	}
-
-	// over: three minutes after the start
-	units["home-assistant.service"] = stopped("home-assistant.service", now.Add(-10*time.Minute), now.Add(-9*time.Minute))
-	if f, p := unit(), plannedOf(t, env, "whoami"); f.Severity != "rot" || p.Now != "" {
-		t.Fatalf("after the window: diag %+v, planned now %q", f, p.Now)
-	}
-
-	// before the entry is written: an apply that holds what whoami uses (#907)
-	unlock, _, err := apply.Lock(env.Paths, "apply:human:mdopp")
+	env := markerBox(t, "", &down, nil)
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unlock()
-	apply.WritePending(env.Paths, []string{"home-assistant"}, "#978")
-	want := "ein Apply richtet home-assistant gerade ein (apply:human:mdopp"
-	if f, p := unit(), plannedOf(t, env, "whoami"); f.Severity != "info" || !strings.HasPrefix(f.Wartet, want) || !strings.HasPrefix(p.Now, want) {
-		t.Fatalf("an apply of a dependency: diag %+v, planned now %q", f, p.Now)
+	done := apply.Mark(st, env.Paths, "apply", "human:mdopp", "#261", []string{"whoami"}, time.Hour)
+	if f := whoamiUnit(t, env); f.Severity != "info" || f.Repair != nil || !strings.Contains(f.Wartet, "Anwenden von whoami bis") {
+		t.Fatalf("a red the apply causes is red to the look, or offers a repair: %+v", f)
+	}
+	done(true)
+	if f := whoamiUnit(t, env); f.Severity != "rot" || !slices.Equal(f.Repair, []string{"restart", "whoami"}) {
+		t.Fatalf("a red that outlives the apply is not red again: %+v", f)
+	}
+
+	apply.Mark(st, env.Paths, "apply", "human:mdopp", "#262", []string{"whoami"}, time.Millisecond) // the apply dies
+	time.Sleep(5 * time.Millisecond)
+	fs := diag.Probes(context.Background(), env, st, "whoami")
+	i := slices.IndexFunc(fs, func(f diag.Finding) bool { return f.Probe == "wartung" })
+	if i < 0 || fs[i].Severity != "rot" || !strings.HasPrefix(fs[i].Detail, "Der Neustart von whoami ist bis ") || !strings.Contains(fs[i].Detail, "nicht sauber fertig geworden") {
+		t.Fatalf("an overdue marker is the finding: %+v", fs)
+	}
+	if p := plannedOf(t, env, "whoami"); p.Now != "" || !p.Windows[len(p.Windows)-1].Overdue {
+		t.Fatalf("an overdue marker holds nothing: %+v", p)
+	}
+	down = false
+	env.Actor = "ops"
+	if code := envelope.Restart(context.Background(), env, []string{"whoami"}); code != cli.ExitOK {
+		t.Fatalf("restart: exit %d", code)
+	}
+	if fs := diag.Probes(context.Background(), env, st, "whoami"); slices.ContainsFunc(fs, func(f diag.Finding) bool { return f.Probe == "wartung" }) {
+		t.Fatalf("a green restart of whoami closes its overdue marker: %+v", fs)
+	}
+}
+
+// Every apply announces itself: converge and the Inbox's approve run
+// through the same ApplyPlan.
+func TestAnApplyLeavesItsMarker(t *testing.T) {
+	c := newCbox(t)
+	ms := apply.Markers(c.env.Paths)
+	if len(ms) != 1 || ms[0].Verb != "apply" || ms[0].Result != "green" || ms[0].End.IsZero() || !slices.Contains(ms[0].Services, "whoami") || ms[0].Until.Sub(ms[0].Since) != 15*time.Minute {
+		t.Fatalf("the first apply's marker: %+v", ms)
 	}
 }
