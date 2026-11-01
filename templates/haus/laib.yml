@@ -68,6 +68,8 @@ data:
     backup: false
   - path: ${DATA_DIR}/file-share/data/musik-eingang   # the app's music uploads for beets' Musik-Eingang (#639): ._<name>.part, then renamed; transient
     backup: false
+  - path: ${DATA_DIR}/archiv-eingang   # the phones' WhatsApp/Signal backups, one folder per person (ADR 0029, haus#207): still encrypted
+    backup: false                     # by the messenger, transient until the person's Archiv imports them
   - path: ${DATA_DIR}/haus-check   # haus-check's status file (#785), beside ${DATA_DIR}/haus as haus-qmd: made again every 15 minutes
     backup: false
   - path: ${DATA_DIR}/stimme/recordings   # the family saying the wake word (#828): Haus writes <wake id>/haus/<person>-<zeit>.wav, the trainer reads them;

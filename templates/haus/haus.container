@@ -102,6 +102,10 @@ Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload
 # music uploads into beets' Musik-Eingang (#639): written as ._<name>.part, renamed when whole;
 # laib status beets says what went in. Nothing else of the share
 Volume=${DATA_DIR}/file-share/data/musik-eingang:/musik-eingang
+# the phones' message backups (ADR 0029, haus#207): Haus writes <person>/<quelle>/… as the device's
+# person, resumable, partials in <person>/.teil/; each person's Archiv mounts only its own folder
+Environment=HAUS_ARCHIV_DIR=/archiv-eingang
+Volume=${DATA_DIR}/archiv-eingang:/archiv-eingang
 Volume=${DATA_DIR}/haus-dokumente:/dokumente:z
 # the network drive's passwords (#296, haus#52): each person sets their own on /netzlaufwerk, Haus
 # hands it to file-share's Samba through the FIFO there (no argv, no file) and reads who has one
