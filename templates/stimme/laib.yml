@@ -12,6 +12,7 @@ upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/
 # GPU set the CPU image and device in values.yml.
 hostNetwork: true
 after: []
+uses: [home-assistant]           # talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
 routes: []
 secrets:
   - name: STIMME_HA_TOKEN            # minted by home-assistant's post-deploy for HA's non-admin user stimme: stimme-names reads the exposed names; without HA Whisper has no names

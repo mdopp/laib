@@ -66,6 +66,7 @@ func init() {
 		{Name: "restore", Tier: "apply", MCP: true, Help: "<snapshot|latest> <service> | --box <snapshot|latest>: restore declared paths, then apply", Flags: []string{"--box"}, Run: backup.Restore},
 		{Name: "converge", Tier: "apply", MCP: true, Help: "[--force]: bring the box back to the state: re-apply drift, restart inactive units, within a budget", Flags: []string{"--force"}, Run: apply.Converge},
 		{Name: "state", Tier: "read", MCP: true, Help: "[<path>]: the state repo's files on main, or one as committed — box.yml, policy.yml, services/<s>/values.yml …, to write a --patch against; secrets.age never, secrets redacted (#576)", Run: cmdState},
+		{Name: "planned", Tier: "read", MCP: true, Help: "<service> [--since 24h]: was a stop planned — the planned stops of the service and of what it depends on (after:, uses:, needs: [mcp], oidc:) that the journal accounts for, each with the window its lines are expected in; what holds it now; its findings now (#978)", Run: diag.PlannedCmd},
 		{Name: "journal", Tier: "read", MCP: true, Help: "show journal entries (--since 24h) [--limit n] [--verb v] [--kind report|incident|watch]: newest n, filtered", Run: cmdJournal},
 		{Name: "context", Tier: "read", MCP: true, Help: "[--since 24h] [--full]: starter bundle for an agent session — the first look (readiness, what is not green, open proposals, the journal short); --full the whole bundle (#579)", Run: cmdContext},
 		{Name: "template", Tier: "read", MCP: true, Help: "lint <dir> | list | sync | update <service>", Run: registry.TemplateCmd},

@@ -123,35 +123,50 @@ func Cmd(ctx context.Context, env *cli.Env, args []string) int {
 	return cli.ExitOK
 }
 
+// Service is one service's findings: what its status file says, and its
+// units' and health's reds, expected while an apply or a pause holds it or
+// what it depends on, or a planned stop's window holds it (#907, #978).
+func Service(ctx context.Context, env *cli.Env, st *state.State, name string) []Finding {
+	svc := st.Services[name]
+	var own []Finding // its unit and health reds
+	for _, u := range svc.UnitNames() {
+		if a := sysd.Active(ctx, u); a != "active" {
+			own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
+		}
+	}
+	for _, u := range svc.Oneshots() {
+		if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
+			own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
+		}
+	}
+	// what the service says about itself (#309); a stale one is re-checked
+	// in the background, the next look shows the result
+	rep := ReadStatus(st, svc)
+	if Stale(svc, rep, time.Now()) {
+		Refresh(ctx, svc)
+	}
+	out := SelfFindings(rep, time.Now())
+	if f := Health(ctx, svc); f != nil {
+		own = append(own, *f)
+	}
+	why := held(env, st, name)
+	if why == "" && len(own) > 0 { // the minutes after a planned stop, its entry written (#978)
+		now := time.Now()
+		ws, _ := Windows(ctx, env, st, name, now.Add(-time.Hour))
+		if w := Holding(ws, now); w != nil {
+			why = "geplant: " + w.say()
+		}
+	}
+	return append(out, hold(own, why, apply.Busy(ctx, st, svc, time.Now()))...)
+}
+
 func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []Finding {
 	var out []Finding
 	for _, name := range st.ServiceNames() {
 		if only != "" && name != only {
 			continue
 		}
-		svc := st.Services[name]
-		var own []Finding // its unit and health reds
-		for _, u := range svc.UnitNames() {
-			if a := sysd.Active(ctx, u); a != "active" {
-				own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
-			}
-		}
-		for _, u := range svc.Oneshots() {
-			if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
-				own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
-			}
-		}
-		// what the service says about itself (#309); a stale one is re-checked
-		// in the background, the next look shows the result
-		rep := ReadStatus(st, svc)
-		if Stale(svc, rep, time.Now()) {
-			Refresh(ctx, svc)
-		}
-		out = append(out, SelfFindings(rep, time.Now())...)
-		if f := Health(ctx, svc); f != nil {
-			own = append(own, *f)
-		}
-		out = append(out, hold(own, held(env, name), apply.Busy(ctx, st, svc, time.Now()))...)
+		out = append(out, Service(ctx, env, st, name)...)
 	}
 	// Drift: the box differs from the state. Not red: apply fixes it.
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)

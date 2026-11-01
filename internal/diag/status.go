@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
@@ -131,15 +132,19 @@ func Refresh(ctx context.Context, svc *state.Service) bool {
 }
 
 // held is why a service's red is expected now (#907): an apply activates
-// it (the lock is held and its marker names the service) or a hand paused
-// it (laib stop, the lease). An apply that died holds nothing: its lock is
+// it or a service it depends on (the lock is held and its marker names
+// the service; #978) or a hand paused one of them (laib stop, the lease,
+// the backup's quiesce). An apply that died holds nothing: its lock is
 // gone with it.
-func held(env *cli.Env, name string) string {
-	if h := apply.LockHolder(env.Paths); h != "" && slices.Contains(apply.Pending(env.Paths), name) {
-		return "ein Apply richtet " + name + " gerade ein (" + h + ")"
-	}
-	if p, ok := apply.Paused(env.Paths)[name]; ok {
-		return "pausiert von " + p.By + " bis " + p.Until.Local().Format("02.01. 15:04")
+func held(env *cli.Env, st *state.State, name string) string {
+	h, pending, paused := apply.LockHolder(env.Paths), apply.Pending(env.Paths), apply.Paused(env.Paths)
+	for _, d := range append([]string{name}, Depends(st, name)...) {
+		if h != "" && slices.Contains(pending, d) {
+			return "ein Apply richtet " + d + " gerade ein (" + h + ")"
+		}
+		if p, ok := paused[d]; ok {
+			return strings.TrimPrefix(d+" ", name+" ") + "pausiert von " + p.By + " bis " + p.Until.Local().Format("02.01. 15:04")
+		}
 	}
 	return ""
 }

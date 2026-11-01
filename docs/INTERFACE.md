@@ -17,6 +17,13 @@ laib logs <service> [--since 1h] [--lines 200] [--priority err|warning] [--grep 
 laib diag [service]                  findings with severity and a proposed diff each
 laib inspect <service>               units, containers, data files, health, last logs (class 1)
 laib read <service> <path>           a file in the service's data paths, secrets redacted (class 1)
+laib planned <service> [--since 24h]   was a stop planned (#978): the planned stops of the service and of what it depends on
+                                     (its after:, its uses:, laib for needs: [mcp], the SSO role for oidc:, and theirs) — a unit's
+                                     Stopping line that a journal entry accounts for (apply, backup, updates, ready, converge,
+                                     restart, stop, start, repair, rollback, restore, pause, resume), each as a window from two
+                                     minutes before the stop to three after the unit's next Started; `now`, why a red is expected
+                                     right now (an apply or a pause holds it or a dependency, #907, or a window holds now); its
+                                     findings now. diag holds a red by the same answer; the log review asks it (one source)
 laib state [<path>]                  the state repo's files on main, or one file as committed there (box.yml, policy.yml,
                                      services/<s>/values.yml …), to write a --patch against the real text; secrets.age is
                                      never listed or shown, a secret's value and a literal under a declared secret's key
@@ -143,6 +150,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_diag` | `service?` |
 | `laib_logs` | `service`, `since?` (`60m`, `24h`) |
 | `laib_inspect`, `laib_restart` | `service` |
+| `laib_planned` | `service`, `since?` → `{service, depends, now, windows: [{service, verb, label, stop, start, from, to}], findings, unread?}`: a line at `t` is expected when `from ≤ t ≤ to` of a window; `unread` names what was not checked (#978) |
 | `laib_read`, `laib_write` | `service`, `path` (`write`: `stdin`) |
 | `laib_state` | `path?` → without it the list of files on main; with it `{path, content, redacted}` (read tier: every hand without a verb list reaches it by its ceiling, #576) |
 | `laib_look`, `laib_exec` | `service`, `container?`, `command` (a list) |

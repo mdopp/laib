@@ -9,19 +9,12 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/sysd"
 )
-
-// ownUnits are Laib's own user units, read under short names like a
-// service's (#947: the Operator's own log was out of reach in #944). A
-// service of the same name wins.
-var ownUnits = map[string][]string{
-	"laib": {"laib.service"}, "operator": {"laib-operator.service"}, "notify": {"laib-notify.service", "laib-notify.timer"},
-	"updates": {"laib-images.service", "laib-images.timer"}, "haushalt": {"laib-haushalt.service"}, "backup": {"laib-backup.service", "laib-backup-check.service"},
-}
 
 // cmdLogs reads journald for every unit of a service, secrets redacted
 // (ADR 0003: journald is the agent).
@@ -101,7 +94,7 @@ func logUnits(env *cliEnv, name string) ([]string, error) {
 	if err == nil {
 		return append(svc.UnitNames(), svc.Oneshots()...), nil
 	}
-	if own, ok := ownUnits[name]; ok {
+	if own, ok := diag.OwnUnits[name]; ok {
 		return own, nil
 	}
 	return nil, err

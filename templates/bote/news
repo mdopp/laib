@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer des Boten nicht mehr als Fehler
 Startet der Bote neu, sagt er das auf Deutsch in einem Satz und meldet sich danach mit „Ich bin wieder da.“
 Der Bote prüft sich jede Nacht mit zehn festen Fragen selbst, und die Box-Seite zeigt, wie viele er richtig und schnell genug beantwortet hat
 Braucht der Bote länger als eine halbe Minute, schreibt er „Moment …“, und ist sein Sprachmodell gerade belegt, sagt er das in einem Satz und wann du es noch einmal versuchen kannst

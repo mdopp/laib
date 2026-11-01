@@ -34,6 +34,7 @@ var mcpParams = map[string][]mcpParam{
 	"logs": {{name: "service", typ: "string", desc: "der Dienst, oder Laib selbst: laib, operator, notify, updates, haushalt, backup (#947)", required: true}, sinceParam, {name: "grep", typ: "string", flag: "--grep", desc: "nur Zeilen, die dieses Muster (RE2) treffen, gefiltert vor dem Schnitt (#916); klein geschrieben = Groß/klein egal"},
 		{name: "lines", typ: "string", flag: "--lines", desc: "höchstens so viele Zeilen je Unit, die neuesten (200)"}},
 	"inspect":  {svcParam},
+	"planned":  {svcParam, {name: "since", typ: "string", flag: "--since", desc: "wie weit zurück, z. B. 24h"}},
 	"read":     {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
 	"state":    {{name: "path", typ: "string", desc: "die Datei im State-Repo, z. B. policy.yml oder services/jellyfin/values.yml; leer = die Liste der Dateien"}},
 	"write":    {svcParam, {name: "path", typ: "string", desc: "die Datei in den Datenpfaden des Dienstes", required: true}},
