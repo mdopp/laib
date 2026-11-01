@@ -256,6 +256,7 @@ type Contract struct {
 	After        []string    `yaml:"after"`    // services restarted and verified before this one (#12)
 	Needs        []string    `yaml:"needs"`    // box facilities a container needs: "mcp" = laib.listen 0.0.0.0 (ADR 0012 §4, #46)
 	Provides     []string    `yaml:"provides"` // purposes this service serves: photos, media, dns … (one per purpose by default)
+	Uses         []string    `yaml:"uses"`     // services it talks to without after: (a box without them still loads it); their planned stops explain its errors (laib planned, #978)
 	// When: a unit file exists only while one of the named values is set (#184).
 	When map[string][]string `yaml:"when"`
 	// Requires: a value that is set needs these set too (#184); a literal is

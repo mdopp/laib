@@ -3,6 +3,7 @@ title: Music Assistant
 beschreibung: Musik auf den Lautsprechern
 template: {registry: builtin, name: music-assistant, version: 1}
 provides: [music-players]
+uses: [home-assistant]           # talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
 upstream: [https://github.com/music-assistant/server, https://music-assistant.io/]   # where the Operator's web search looks first (#544)
 # Music Assistant: the house's player brain for Home Assistant Assist —
 # "spiele Einslive", playlists, podcasts on the speakers (ADR 0015). Host

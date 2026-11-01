@@ -10,8 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/mdopp/laib/internal/apply"
-	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -128,20 +126,6 @@ func Refresh(ctx context.Context, svc *state.Service) bool {
 	}
 	_, err := sysd.Run(ctx, "systemctl", "--user", "start", "--no-block", s.Check)
 	return err == nil
-}
-
-// held is why a service's red is expected now (#907): an apply activates
-// it (the lock is held and its marker names the service) or a hand paused
-// it (laib stop, the lease). An apply that died holds nothing: its lock is
-// gone with it.
-func held(env *cli.Env, name string) string {
-	if h := apply.LockHolder(env.Paths); h != "" && slices.Contains(apply.Pending(env.Paths), name) {
-		return "ein Apply richtet " + name + " gerade ein (" + h + ")"
-	}
-	if p, ok := apply.Paused(env.Paths)[name]; ok {
-		return "pausiert von " + p.By + " bis " + p.Until.Local().Format("02.01. 15:04")
-	}
-	return ""
 }
 
 // hold marks a service's unit and health reds as expected (#907, #908):

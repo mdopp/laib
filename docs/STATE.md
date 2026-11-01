@@ -342,6 +342,7 @@ gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
 upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # repo, release notes, docs: where the Operator's web search looks first (#544); absent: the template's
 after: [authelia]                # restarted and verified before this one
+uses: [home-assistant]           # talks to these without after: (a box without them still loads it); their planned stops explain its errors (laib planned, #978)
 when:                            # a unit exists only while one of its values is set (#184)
   paperless-mail.container: [MAIL_HOST]
 requires:                        # a set value needs these set too (#184)
