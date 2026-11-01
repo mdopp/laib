@@ -1,0 +1,9 @@
+# Rendered by laib: ports declared lan: false are dropped on physical interfaces (en*, eth*, wl*).
+table inet laib
+delete table inet laib
+table inet laib {
+	chain input {
+		type filter hook input priority -10; policy accept;
+		iifname { "en*", "eth*", "wl*" } tcp dport { 9091, 17170, 3890, 8481, 8480 } drop
+	}
+}

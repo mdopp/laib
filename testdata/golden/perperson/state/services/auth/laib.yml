@@ -1,0 +1,38 @@
+name: auth
+template: {registry: builtin, name: auth, version: 1}
+provides: [sso, identity]
+# Authelia (forward-auth, OIDC) and LLDAP (users, groups) in one pod. Laib
+# renders all of Authelia's access rules and the OIDC clients as fragments
+# (render/authelia/*.yml); the hook writes Authelia's own configuration.yml
+# (no access rules: a later file's list replaces it, #249), generates the
+# OIDC signing key once, and seeds LLDAP (groups admins and family, the
+# operator's account).
+routes:
+  - host: auth
+    port: 9091
+    exposure: public
+    auth: none
+  - host: ldap
+    port: 17170
+    exposure: internal
+    auth: two_factor
+    group: admins
+secrets:
+  - name: AUTHELIA_JWT_SECRET
+  - name: AUTHELIA_SESSION_SECRET
+  - name: AUTHELIA_STORAGE_KEY
+  - name: AUTHELIA_OIDC_HMAC_SECRET
+  - name: LLDAP_JWT_SECRET
+  - name: LLDAP_ADMIN_PASSWORD
+  - name: OPERATOR_PASSWORD           # the admin's own first password; change it in LLDAP afterwards
+after: []
+data:
+  - path: ${DATA_DIR}/auth/lldap
+  - path: ${DATA_DIR}/auth/authelia-config
+  - path: ${DATA_DIR}/auth/authelia-data
+health:
+  http: http://127.0.0.1:9091/api/health
+ports:
+  - {port: 9091, lan: false}
+  - {port: 17170, lan: false}
+  - {port: 3890, lan: false}        # LDAP for other pods via host.containers.internal; never the WLAN

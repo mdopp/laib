@@ -1,0 +1,6 @@
+[Unit]
+Description=Notizbuch sync of ${PERSON}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec systemd-${SERVICE} notizbuch sync

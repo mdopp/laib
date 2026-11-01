@@ -17,7 +17,7 @@ complete example is `templates/whoami`, a real app with OIDC is
 2. Write `laib.yml` (below) and `values.example.yml`, replace literals by
    `${VAR}`. Builtins you never declare: `${DOMAIN}`, `${DATA_DIR}`,
    `${TZ}`, `${SERVICE}`, `${LAN_IP}`, `${MODEL_URL}`, `${MODEL_KEY}`,
-   `${MODEL_LEASE}`.
+   `${MODEL_LEASE}`, `${PERSON}` (a per-person template's person).
 3. Write one German sentence for the household at the top of `news`
    (below the `#` comment), what this change brings them, in their words:
    „Joshua lernt die Namen deiner Geräte“, never a key, unit or file;
@@ -69,6 +69,13 @@ after: [auth]                  # started and verified after these services
   published beyond loopback for that); never a hard-coded IP.
 - **Databases:** `quiesce: true` on the data path, no `AutoUpdate=registry`
   on the unit; the image moves by proposal.
+- **One per person** (`perPerson: true`, #986): installed with `laib add
+  <template> --person <p>`, one instance each, all behind one name that
+  hands each signed-in person their own. Name every unit file
+  `<template>…`, units each other `${SERVICE}…`, data paths
+  `${DATA_DIR}/${SERVICE}`; Laib suffixes the secrets and moves the ports.
+  Lint tries two instances side by side (`docs/STATE.md`, "A template per
+  person").
 - **Hooks** (`pre-start`, `post-deploy`) are a last resort, run in the
   hooks image, and print `laib-secret:` / `laib-exec:` lines (ADR 0004
   amendment). Proxy hosts, OIDC clients, Authelia rules and DNS rewrites

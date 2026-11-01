@@ -268,6 +268,16 @@ type Contract struct {
 	// Upstream: where the service's upstream lives — repo, release notes,
 	// docs; the Operator's web search reads these first (#544)
 	Upstream []string `yaml:"upstream"`
+	// PerPerson: the template is installed once per person (#986, ADR 0029),
+	// `laib add <template> --person <p>`, as the service <template>-<p>.
+	PerPerson bool `yaml:"perPerson"`
+	// Person and PortOffset make such a service that person's instance;
+	// laib add --person writes them, a template never: its units are named
+	// after the service, its secrets end in _<PERSON>, its host ports are
+	// the template's plus the offset, and its routes share their host with
+	// the other instances (Instance).
+	Person     string `yaml:"person"`
+	PortOffset int    `yaml:"portOffset"`
 }
 
 // TemplateRef says where a service's files came from.

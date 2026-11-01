@@ -1,0 +1,8 @@
+[Unit]
+Description=Notizbuch sync of ${PERSON}
+
+[Timer]
+OnCalendar=hourly
+
+[Install]
+WantedBy=timers.target

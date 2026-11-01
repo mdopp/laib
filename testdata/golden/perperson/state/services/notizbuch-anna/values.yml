@@ -1,0 +1,2 @@
+IMAGE: docker.io/example/notizbuch:1.0
+KEY: !secret NOTIZBUCH_KEY

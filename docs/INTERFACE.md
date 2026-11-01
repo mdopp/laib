@@ -106,7 +106,8 @@ laib propose --path <file>:<a.b.c>=<VALUE> "<reason>"  one value at a named path
                                      or flow: {city: X}), empty removes it; a segment on a list names its "<segment>:" item
                                      (box.yml:people.mama.signal=+49…); a key box.yml does not know, or a state the loader refuses,
                                      is refused before any proposal; a hand with a verb list only at the paths policy.yml grants it
-laib propose --add <template> [--name svc] [KEY=VALUE…] "<reason>"  agent: a new service from a template
+laib propose --add <template> [--name svc] [--person p] [KEY=VALUE…] "<reason>"  agent: a new service from a template;
+                                     --person: a per-person template for p, as <template>-<p> (#986, docs/STATE.md)
 laib propose --patch "<reason>"      agent: unified diff on stdin (MCP: the patch property), against the text laib state shows; validated in a worktree
 laib propose --grant <hand> <verb> "<reason>"  one verb added to one hand's verb list in policy.yml, a line edit (#575);
                                      class human; an unknown verb or hand, a hand without a list, a verb it has: refused

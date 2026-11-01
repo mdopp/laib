@@ -1,0 +1,17 @@
+# Two persons' instances of one per-person template (#986): no wildcard
+# certificate, so their one name notizen.<domain> is one Caddy site.
+domain: example.home
+timezone: Europe/Berlin
+dataDir: /mnt/data/stacks
+lanIp: 192.168.1.10
+hostNetwork: [caddy]
+roles:
+  proxy: caddy
+  sso: auth
+  identity: auth
+gpu:
+  present: false
+people:
+  martin: ["signal:+4915100000001"]
+  anna: ["signal:+4915100000002"]
+  lena: ["signal:+4915100000003"]   # no notizbuch: denied on notizen.<domain>

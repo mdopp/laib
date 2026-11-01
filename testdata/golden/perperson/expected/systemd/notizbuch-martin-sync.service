@@ -1,0 +1,6 @@
+[Unit]
+Description=Notizbuch sync of martin
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec systemd-notizbuch-martin notizbuch sync

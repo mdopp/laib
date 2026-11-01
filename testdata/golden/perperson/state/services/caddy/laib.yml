@@ -1,0 +1,13 @@
+name: caddy
+provides: [proxy]
+template: {registry: builtin, name: caddy, version: 1}
+hostNetwork: true
+routes: []
+secrets:
+  - name: DNS_API_TOKEN
+    external: true
+data:
+  - path: ${DATA_DIR}/caddy/data
+health:
+  http: http://127.0.0.1:2019/metrics
+ports: []
