@@ -103,21 +103,21 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. 20,227 / 22,000 lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,246 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
-| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,401 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,367 |
+| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,449 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,534 |
 | Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,683 |
-| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,402 |
+| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,404 |
 | Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 265 |
-| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,886 |
-| Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 882 |
+| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,677 |
+| Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,066 |
-| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,780 |
+| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,781 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,383 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,390 |
 
 ### Services from templates
 

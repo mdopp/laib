@@ -70,10 +70,15 @@ not in a ticket.
 ## One source for a box fact
 
 What is true of the box is the kernel's, read through a verb, never
-decided again in a script (#978): was a stop planned, what does a service
-depend on, are its findings gone — `laib planned <service>`. diag holds a
-look's red by the same code, so `routineblick`, `vorfall`'s first aid
-(which only a look's red opens) and `durchsicht` agree by construction.
+decided again in a script (#978). „Is this stop planned?“: every action
+that stops or starts services on purpose announces itself before it acts
+with a maintenance marker — what it acts on, their dependents, until when —
+and clears it at its end. While it holds, diag shows their reds as
+expected, so `routineblick` and `vorfall`'s intake leave them alone, and
+`durchsicht` drops the lines in its window; `laib planned <service>`
+returns the markers, what the service depends on and its findings. A
+marker not cleared by its until is a red finding of its own — only then
+does `vorfall` analyse.
 
 ## The size rule
 
