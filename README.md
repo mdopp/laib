@@ -72,52 +72,52 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 | Program | What it is | Lines / cap |
 |---|---|---:|
-| [`automat/`](automat/) | Home Assistant automations as the Bote's MCP tool | 428 / 600 |
-| [`disk/`](disk/) | laib-disk: the data RAID, SMART and temperatures for diag | 615 / 700 |
-| [`frage/`](frage/) | „was ist …“: web search with a summary, OpenAI-compatible and MCP | **399 / 400, at 95 % or more** |
-| [`haushalt/`](haushalt/) | laib-haushalt behind the kernel's verb door: scan, devices, tell, zuhause, person signal, wish (ADR 0026) | **915 / 920, at 95 % or more** |
-| [`lease/`](lease/) | laib-lease: the model role's policy proxy and the GPU lease (ADR 0011) | 1,226 / 1,300 |
-| [`mcpserver/`](mcpserver/) | The smallest MCP server, shared by the Bote's tools (frage, automat, persona) | 111 / 200 |
-| [`notify/`](notify/) | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | 514 / 600 |
-| [`operator/`](operator/) | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | 2,847 / 3,000 |
-| [`persona/`](persona/) | The Bote's persona engine: how it speaks with each person (ADR 0020) | 854 / 900 |
-| [`stick/`](stick/) | laib-stick on the laptop: builds the install stick for a new box | 1,468 / 1,800 |
-| [`stimme/trainer/`](stimme/trainer/) | trains a wake word for the speakers, the `stimme` template's trainer image | 956 Python, no cap |
+| [`automat/`](automat/) | Home Assistant automations as the Bote's MCP tool | 443 / 660 |
+| [`disk/`](disk/) | laib-disk: the data RAID, SMART and temperatures for diag | 615 / 770 |
+| [`frage/`](frage/) | „was ist …“: web search with a summary, OpenAI-compatible and MCP | 413 / 440 |
+| [`haushalt/`](haushalt/) | laib-haushalt behind the kernel's verb door: scan, devices, tell, zuhause, person signal, wish (ADR 0026) | 929 / 1,012 |
+| [`lease/`](lease/) | laib-lease: the model role's policy proxy and the GPU lease (ADR 0011) | 1,268 / 1,430 |
+| [`mcpserver/`](mcpserver/) | The smallest MCP server, shared by the Bote's tools (frage, automat, persona) | 111 / 220 |
+| [`notify/`](notify/) | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | 574 / 660 |
+| [`operator/`](operator/) | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,255 / 3,300, at 95 % or more** |
+| [`persona/`](persona/) | The Bote's persona engine: how it speaks with each person (ADR 0020) | 869 / 990 |
+| [`stick/`](stick/) | laib-stick on the laptop: builds the install stick for a new box | 1,468 / 1,980 |
+| [`stimme/trainer/`](stimme/trainer/) | trains a wake word for the speakers, the `stimme` template's trainer image | 963 Python, no cap |
 
 ### The Operator's skills
 
-8 / 50 skills in [`skills/`](skills/), each a folder with its `skill.yml` and, where it helps, a `run.py` for the steps that must always happen; the Operator runs them, [`internal/skill`](internal/skill/) checks them. Description, trigger, tools and `modell` are each `skill.yml`'s; the script's lines stand against 200.
+8 / 55 skills in [`skills/`](skills/), each a folder with its `skill.yml` and, where it helps, one `run.py` for the steps that must always happen; the Operator runs them, [`internal/skill`](internal/skill/) checks them. Description, trigger, tools and `modell` are each `skill.yml`'s; the script's lines stand against 220. What they share: [`skills/lib/`](skills/lib/) (99 lines) and the scripts' door [`laibskill.py`](skills/laibskill.py) (198); how they play together, what each produces and who reads it: [`docs/SKILLS.md`](docs/SKILLS.md).
 
 `modell`: **frei**, the model works in a loop with the granted tools; **urteil**, the script prepares and the model judges once; **nein**, the script alone, no model.
 
 | Skill | Description | Runs | Modell | Tools | run.py |
 |---|---|---|---|---|---:|
-| [`aktualisierung`](skills/aktualisierung/) | Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund. | weekly, Saturday 10:00 | urteil | `updates`, `propose`, `note`, `inbox`, `diag` | 84 / 200 |
-| [`durchsicht`](skills/durchsicht/) | Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht. | daily at 06:30 | urteil | `status`, `logs`, `wish`, `note` | 149 / 200 |
-| [`lehre`](skills/lehre/) | Einmal am Tag — aus einem gelösten Vorfall eine Lehre vorschlagen, die der Admin freigibt. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | nein | `propose`, `note` | 48 / 200 |
-| [`morgenbericht`](skills/morgenbericht/) | Jeden Morgen ein Bericht — was nachts passiert ist und was ansteht, Rot zuerst. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | frei | `status`, `diag`, `journal`, `note` | 130 / 200 |
-| [`nutzung`](skills/nutzung/) | Einmal pro Woche — was die Familie nutzt und was ihr fehlt; Vorschläge, die der Admin freigibt. | weekly, Monday 08:00 | urteil | `wish`, `note` | 61 / 200 |
+| [`aktualisierung`](skills/aktualisierung/) | Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund. | weekly, Saturday 10:00 | urteil | `updates`, `propose`, `note`, `inbox`, `diag` | 84 / 220 |
+| [`durchsicht`](skills/durchsicht/) | Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht. | daily at 06:30 | urteil | `status`, `logs`, `state`, `planned`, `wish`, `note` | **220 / 220, at 95 % or more** |
+| [`lehre`](skills/lehre/) | Einmal am Tag — aus einem gelösten Vorfall eine Lehre vorschlagen, die der Admin freigibt. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | urteil | `propose`, `note` | 80 / 220 |
+| [`morgenbericht`](skills/morgenbericht/) | Jeden Morgen ein Bericht — was nachts passiert ist und was ansteht, Rot zuerst. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | frei | `status`, `diag`, `journal`, `note` | 182 / 220 |
+| [`nutzung`](skills/nutzung/) | Einmal pro Woche — was die Familie nutzt und was ihr fehlt; Vorschläge, die der Admin freigibt. | weekly, Monday 08:00 | urteil | `wish`, `note` | 61 / 220 |
 | [`routineblick`](skills/routineblick/) | Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn sich etwas geändert hat. | every tick (`OPERATOR_TICK`, 10 min by default) | frei | `status`, `diag`, `repair`, `note` | — |
-| [`sicherung`](skills/sicherung/) | Einmal pro Woche — die Sicherung prüfen und probeweise wiederherstellen; was nicht stimmt, steht im Morgenbericht. | weekly, Sunday 05:00 | nein | `backup`, `journal`, `note` | 62 / 200 |
-| [`vorfall`](skills/vorfall/) | Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren. | when something turns red | frei | `diag`, `logs`, `inspect`, `restart`, `propose`, `repair`, `escalate`, `note`; with a capable model also `look`, `read`, `journal`, `plan`, `apply` | — |
+| [`sicherung`](skills/sicherung/) | Einmal pro Woche — die Sicherung prüfen und probeweise wiederherstellen; was nicht stimmt, steht im Morgenbericht. | weekly, Sunday 05:00 | nein | `backup`, `journal`, `note` | 62 / 220 |
+| [`vorfall`](skills/vorfall/) | Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren. | when something turns red | frei | `diag`, `logs`, `inspect`, `restart`, `propose`, `repair`, `escalate`, `note`; with a capable model also `look`, `read`, `journal`, `plan`, `apply`, `planned` | 102 / 220 |
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. **19,170 / 20,000, at 95 % or more** lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,227 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
-| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,320 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,327 |
-| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,412 |
-| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,362 |
+| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,401 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,367 |
+| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,683 |
+| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,402 |
 | Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 265 |
-| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,492 |
+| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,886 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 882 |
-| Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 988 |
-| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,708 |
-| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,078 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,336 |
+| Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,066 |
+| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,780 |
+| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,383 |
 
 ### Services from templates
 
@@ -219,6 +219,8 @@ runs there and what is open is `docs/ZIELBILD.md`.
    three pages, the messages to the owner, the readiness signal.
 3. [`docs/STATE.md`](docs/STATE.md) — the state repo layout and every file's
    schema.
+   [`docs/SKILLS.md`](docs/SKILLS.md) is the Operator's skills together:
+   who triggers what, what each leaves, who reads it.
 4. [`docs/adr/`](docs/adr/) — the decisions. Read the index in
    [`docs/adr/README.md`](docs/adr/README.md) before changing anything about
    runtime, identity, proxy, templates or tests.
