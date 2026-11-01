@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.58.0](https://github.com/mdopp/laib/compare/v0.57.9...v0.58.0) (2026-11-01)
+
+
+### Features
+
+* **apply:** a planned restart is announced before it acts ([#978](https://github.com/mdopp/laib/issues/978)) ([d8599f6](https://github.com/mdopp/laib/commit/d8599f66a47198b2e77de1ca2517010c9de9d1bd))
+* **apply:** maintenance markers — a planned restart is announced before it acts; laib planned ([#978](https://github.com/mdopp/laib/issues/978), 1/4) ([7df3543](https://github.com/mdopp/laib/commit/7df3543c1221c756107b22cc860be97f510b4f00))
+* **diag:** laib planned, one answer for "was this stop planned" ([#978](https://github.com/mdopp/laib/issues/978)) ([1098ede](https://github.com/mdopp/laib/commit/1098eded2471507ef654ba61404569716b929b48))
+* **inbox:** a wish ends — offen, erledigt or verworfen, kept with the wish ([#978](https://github.com/mdopp/laib/issues/978), 3/4) ([3f3aebb](https://github.com/mdopp/laib/commit/3f3aebbc043a27def506540683919a21fe0753f5))
+* **inbox:** a wish ends — offen, erledigt or verworfen, kept with the wish ([#978](https://github.com/mdopp/laib/issues/978)) ([0b2a776](https://github.com/mdopp/laib/commit/0b2a77613d6bd40d4555460fd4093e3951f503d0))
+
 ## [0.57.9](https://github.com/mdopp/laib/compare/v0.57.8...v0.57.9) (2026-11-01)
 
 
