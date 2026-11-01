@@ -10,24 +10,19 @@ green, no model. Still red: the model gets the incident, with what was done
 replay from the queue does not restart again and an escalation says what was
 seen. A red the kernel posted, or one aided already, goes to the model as it
 came. #861: a lesson the owner let in for the incident's finding is named
-in the note with its fix, and handed back as used.
+in the note with its fix, and handed back as used. #978: the log line is
+the service's last real error (skills/lib/logzeilen.py, as the log review
+tells one), read from laib logs' {unit: lines}, not its JSON's last line.
 """
 
 import json
-import re
 from datetime import datetime, timedelta, timezone
 
 import laibskill
 from laibskill import field, first_line
+from lib import logzeilen
 
 WAIT = timedelta(minutes=30)  # the runner's incidentWait: still red then, it escalates
-
-
-def last_line(text):
-    """The last line of a text that says something, cut to 200 characters."""
-    lines = (text or "").strip().split("\n")
-    line = lines[-1].strip()
-    return line[:200] + "…" if len(line) > 200 else line
 
 
 def services(tr):
@@ -74,11 +69,6 @@ def lessons_for(tr, lessons):
     return out
 
 
-def when(s):
-    m = re.match(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)$", s or "")
-    return datetime.fromisoformat(m.group(1) + m.group(2).replace("Z", "+00:00")) if m else datetime.now(timezone.utc)
-
-
 def run(s):
     tr = dict(s.trigger)
     if not tr.get("opened") or tr.get("aided"):
@@ -87,15 +77,17 @@ def run(s):
     svcs, saw, done = services(tr), [], []
     for svc in svcs:
         if "logs" in granted:
-            r = s.call("laib_logs", service=svc, since="1h")
-            if not r.error and last_line(r.text):
-                saw.append(f"{svc}: „{last_line(r.text)}“")
+            r = s.call("laib_logs", service=svc, since="1h")  # {unit: lines}: its last real error, else its last line
+            line = "" if r.error else logzeilen.last_error(r.json()) if isinstance(r.json(), dict) else r.text.strip().split("\n")[-1][:200]
+            if line:
+                saw.append(f"{svc}: „{line}“")
         if "restart" in granted and svc in (tr.get("restart") or []):
             r = s.call("laib_restart", service=svc)
-            done.append(f"{svc} neu gestartet ({first_line(r.text or 'ohne Antwort')})")
+            green = field(r.json(), "green", None)  # {checks, green}; a refusal or an error is text
+            done.append(f"{svc} neu gestartet ({'grün' if green is True else 'rot' if green is False else first_line(r.text or 'ohne Antwort')})")
     tr.update(aided=True, saw=" ".join(saw), done=", ".join(done) or "Logs gelesen")
     fixed = bool(done) and "diag" in granted and still_red(s, svcs) == []
-    now = when(s.now)
+    now = laibskill.when(s.now) or datetime.now(timezone.utc)
     text = f"Vorfall {now:%H:%M}: {field(tr, 'detail')}.{said(tr)}"
     taught = lessons_for(tr, s.data.get("lessons"))
     for finding, fix in taught.items():

@@ -74,3 +74,26 @@ func TestTheUpdateRunProposesTheGrantABuiltInSkillsNewToolNeeds(t *testing.T) {
 		t.Fatalf("not exactly the ops line:\n%s", diff)
 	}
 }
+
+// #978: durchsicht now asks laib planned (vorfall's capable model may, an
+// extra the grant does not ask for, as diag does not); the Kraftwerk's ops
+// list (policy.yml, 2026-11-01) has no planned, so the update that brings
+// the skill proposes it, once, naming the skill that needs it.
+func TestTheUpdateRunProposesPlannedForTheKraftwerksOps(t *testing.T) {
+	env, _ := testBox(t)
+	ctx := context.Background()
+	box := "ops: {ceiling: apply, verbs: [status, inbox, diag, inspect, read, look, logs, journal, context, skill, backups, updates, plan, propose, repair, note, escalate, apply, backup, restart, wish, state]}"
+	pol := filepath.Join(env.Paths.State, "policy.yml")
+	os.WriteFile(pol, []byte(strings.Replace(state.DefaultPolicy, "ops: {ceiling: apply}", box, 1)), 0o644)
+	if err := proposal.CommitDirty(ctx, env.Paths.State, "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	env.Actor = "laib"
+	if code := registry.Updates(ctx, env, []string{"--run"}); code != cli.ExitOK {
+		t.Fatalf("updates --run: exit %d", code)
+	}
+	open, _ := proposal.List(cli.InboxDir(env), true)
+	if len(open) != 1 || !strings.Contains(open[0].Reason, "ops +planned") || !strings.Contains(open[0].Reason, "durchsicht") {
+		t.Fatalf("want one proposal granting ops planned for durchsicht: %+v", open)
+	}
+}

@@ -1,5 +1,7 @@
 """durchsicht's script (#551, #839): the classifier and the review, without the runner.
-The runner-level tests are operator/durchsicht551_test.go."""
+The runner-level tests are operator/durchsicht551_test.go; the planned stops
+it asks Laib for (laib planned, #978) are cmd/laib/planned978_test.go's, the
+same journals as the #975 cases here, whose windows these fakes answer."""
 
 import importlib.util
 import json
@@ -7,6 +9,7 @@ import os
 import re
 import sys
 import unittest
+from datetime import timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -15,16 +18,16 @@ import laibskill  # noqa: E402
 spec = importlib.util.spec_from_file_location("durchsicht", os.path.join(HERE, "run.py"))
 run = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(run)
-from durchsicht import pruefung  # noqa: E402
+from lib import logzeilen  # noqa: E402
 
 
 class Fake:
     """A session whose laib answers status and logs from a day."""
 
-    def __init__(self, day, state=None, status=None, extra=(), ignore=None, journal=(), stops=None, now="2026-10-21T06:30:00+02:00", red=()):
+    def __init__(self, day, state=None, status=None, extra=(), ignore=None, planned=None, now="2026-10-21T06:30:00+02:00", red=()):
         self.day, self.state, self.status, self.extra, self.calls, self.red = day, state, status, list(extra), [], red
         self.ignore = ignore  # ignore.yml as laib state parses it; None: no such file on main
-        self.journal, self.stops, self.now = journal, stops or {}, now  # #975: the journal's entries, the units' Stopping/Started lines
+        self.planned, self.now = planned or {}, now  # #978: laib planned's windows per service, or its error text
 
     def call(self, tool, **args):
         self.calls.append((tool, args))
@@ -32,10 +35,10 @@ class Fake:
             if self.status is not None:
                 return laibskill.Reply(self.status, True)
             return laibskill.Reply(json.dumps({"services": [{"name": n, "state": "rot" if n in self.red else "grün"} for n in list(self.day) + self.extra]}))
-        if tool == "laib_logs" and "--grep" in args["args"]:
-            return laibskill.Reply(json.dumps(self.stops.get(args["args"].split(" ")[0], {})))
-        if tool == "laib_journal":
-            return laibskill.Reply(self.journal, True) if isinstance(self.journal, str) else laibskill.Reply(json.dumps(list(self.journal)))
+        if tool == "laib_planned":
+            if isinstance(self.planned, str):
+                return laibskill.Reply(self.planned, True)
+            return laibskill.Reply(json.dumps({"service": args["service"], "depends": [], "windows": self.planned.get(args["service"], []), "findings": []}))
         if tool == "laib_logs":
             svc = args["args"].split(" ")[0]
             if svc not in self.day:
@@ -87,14 +90,14 @@ class LogLinePatterns(unittest.TestCase):
     def test_patterns(self):
         for msg, pattern, real in self.CASES:
             with self.subTest(msg=msg):
-                got, is_real = run.log_pattern(msg)
+                got, is_real = logzeilen.pattern(msg)
                 self.assertEqual(is_real, real)
                 if real:
                     self.assertEqual(got, pattern)
 
     def test_unicode_is_not_a_word_or_digit(self):
         # Go's \\d and \\w are ASCII: an Arabic-Indic digit is no number
-        self.assertEqual(run.log_pattern("ERROR ٣ Ärger at 12")[0], "ERROR ٣ Ärger at <n>")
+        self.assertEqual(logzeilen.pattern("ERROR ٣ Ärger at 12")[0], "ERROR ٣ Ärger at <n>")
 
 
 class Review(unittest.TestCase):
@@ -193,21 +196,18 @@ def at(t, ident, msg):
     return f"{t}+00:00 atHome-Server {ident}: {msg}"
 
 
-def stops(unit, *pairs):
-    """A unit's Stopping/Started lines, as laib logs --grep answers them."""
-    out = []
-    for stop, start in pairs:
-        out += [at(stop, "systemd[1373]", f"Stopping {unit} - x..."), at(start, "systemd[1373]", f"Started {unit} - x.")]
-    return {unit: "\n".join(out)}
-
-
-def entry(t, verb, service=None, ms=None, result="green", detail=""):
-    return {"t": t, "actor": "laib", "verb": verb, "service": service, "ms": ms, "result": result, "detail": detail}
+def win(svc, label, stop, start):
+    """A window as laib planned answers it: from two minutes before the stop to three after the start."""
+    t0, t1 = laibskill.when(stop + "Z"), laibskill.when(start + "Z")
+    f = "%Y-%m-%dT%H:%M:%SZ"
+    return {"service": svc, "label": label, "stop": t0.strftime(f), "start": t1.strftime(f),
+            "from": (t0 - timedelta(minutes=2)).strftime(f), "to": (t1 + timedelta(minutes=3)).strftime(f)}
 
 
 REFUSED = "2026/10/31 10:08:49 haus: HA state_changed: dial tcp 169.254.1.2:8123: connect: connection refused"
-HA_APPLIES = stops("home-assistant.service", ("2026-10-31T09:08:47", "2026-10-31T09:08:57"), ("2026-10-31T09:11:03", "2026-10-31T09:11:10"), ("2026-10-31T11:11:22", "2026-10-31T11:11:27"))
-APPLIES = [entry("2026-10-31T09:08:44.7787766Z", "apply", ms=8273), entry("2026-10-31T09:11:37.352074069Z", "apply", ms=125563), entry("2026-10-31T11:11:55.484557492Z", "apply", ms=36291)]
+# Home Assistant's three applies of 2026-10-31 (#305), as cmd/laib/planned978_test.go computes them
+HA_APPLIES = [win("home-assistant", "Anwenden", "2026-10-31T09:08:47", "2026-10-31T09:08:57"), win("home-assistant", "Anwenden", "2026-10-31T09:11:03", "2026-10-31T09:11:10"),
+              win("home-assistant", "Anwenden", "2026-10-31T11:11:22", "2026-10-31T11:11:27")]
 
 
 def haus(*times):
@@ -221,7 +221,7 @@ def notes(fake):
 class CheckedLikeAPerson(unittest.TestCase):
     def test_305_haus_refused_while_home_assistant_was_applied_is_expected(self):
         day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01", "2026-10-31T09:11:05", "2026-10-31T09:11:09", "2026-10-31T11:11:25", "2026-10-31T11:11:30")
-        s = Fake(day, journal=APPLIES, stops={"home-assistant": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
+        s = Fake(day, planned={"haus": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertEqual(r["state"], {})  # never a pattern: the next review does not call it recurring
@@ -232,10 +232,8 @@ class CheckedLikeAPerson(unittest.TestCase):
         msg = "aiohttp.client_exceptions.WSServerHandshakeError: 502, message='Invalid response status', url='wss://home.dopp.cloud/api/websocket'"
         day = {"music-assistant": {"music-assistant.service": "\n".join(at(t, "systemd-music-assistant[994158]", msg) for t in
                                                                      ("2026-11-01T03:07:40", "2026-11-01T03:08:30", "2026-11-01T03:09:30", "2026-11-01T03:09:35", "2026-11-01T03:11:00"))}}
-        backup = [entry("2026-11-01T03:08:22.751834666Z", "backup", ms=47085, detail="angehalten für den Snapshot: immich, home-assistant, paperless, vaultwarden"),
-                  entry("2026-11-01T03:09:39.5430544Z", "restart", service="home-assistant")]
-        ha = stops("home-assistant.service", ("2026-11-01T03:07:28", "2026-11-01T03:08:21"), ("2026-11-01T03:09:27", "2026-11-01T03:09:33"))
-        s = Fake(day, journal=backup, stops={"home-assistant": ha}, now="2026-11-01T06:30:00+01:00")
+        windows = [win("home-assistant", "Sicherung", "2026-11-01T03:07:28", "2026-11-01T03:08:21"), win("home-assistant", "laib restart", "2026-11-01T03:09:27", "2026-11-01T03:09:33")]
+        s = Fake(day, planned={"music-assistant": windows}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertIn("music-assistant.service 5× während eines geplanten Neustarts (Sicherung von home-assistant 04:07, laib restart von home-assistant 04:09)", notes(s)[0])
@@ -256,16 +254,14 @@ class CheckedLikeAPerson(unittest.TestCase):
     def test_294_the_lease_stopped_by_each_laib_update_is_expected(self):
         times = ["2026-10-30T08:22:22", "2026-10-30T11:05:45", "2026-10-30T16:29:58", "2026-10-30T19:27:26", "2026-10-30T21:09:09", "2026-10-30T22:23:37", "2026-10-30T23:56:48", "2026-10-31T00:46:50"]
         lines = [at(t, "systemd[1373]", "llama-lease.service: Failed with result 'exit-code'.") for t in times]
-        runs = [entry(t[:17] + "01Z", "updates", result="info", detail="Lauf gestartet (--now)") for t in times]
-        lease = stops("llama-lease.service", *[(t, t) for t in times])
-        s = Fake({"llama": {"llama-lease.service": "\n".join(lines)}}, journal=runs, stops={"llama": lease}, now="2026-10-31T06:30:00+01:00")
+        s = Fake({"llama": {"llama-lease.service": "\n".join(lines)}}, planned={"llama": [win("llama", "Update", t, t) for t in times]}, now="2026-10-31T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertIn("llama-lease.service 8× während eines geplanten Neustarts (Update von llama ", notes(s)[0])
 
     def test_a_genuine_error_outside_restarts_is_still_a_wish_and_says_what_was_checked(self):
         day = haus("2026-11-01T05:00:00", "2026-11-01T05:10:00", "2026-11-01T05:20:00")
-        s = Fake(day, journal=APPLIES, stops={"home-assistant": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
+        s = Fake(day, planned={"haus": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "")
         self.assertIn("- neu, haus.service, 3×: haus: HA state_changed: dial tcp <ip>: connect: connection refused\n", r["context"])
@@ -278,12 +274,16 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertEqual(run.check(s, "laib_note", {"text": "x"}), "")
 
     def test_a_stop_the_journal_does_not_account_for_is_not_planned(self):
-        # a crash cascade or a hand at systemctl: no apply, no backup, no restart in the journal
+        # a crash cascade or a hand at systemctl: laib planned has no window (cmd/laib/planned978_test.go)
         day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
-        r = run.run(Fake(day, journal=[], stops={"home-assistant": HA_APPLIES}, now="2026-10-31T11:00:00+01:00"))
+        r = run.run(Fake(day, planned={"haus": []}, now="2026-10-31T11:00:00+01:00"))
         self.assertIn("neu, haus.service, 3×", r["context"])
-        r = run.run(Fake(day, journal="laib: journal away", stops={"home-assistant": HA_APPLIES}, now="2026-10-31T11:00:00+01:00"))
+        self.assertIn("geprüft: nicht während eines geplanten Neustarts", r["context"])
+        s = Fake(day, planned="nicht ausgeführt: laib_planned ist der Fähigkeit durchsicht nicht gewährt", now="2026-10-31T11:00:00+01:00")
+        r = run.run(s)
         self.assertIn("geprüft: geplante Neustarts nicht geprüft (nicht lesbar)", r["context"])
+        # until Laib can answer (the ops grant waits in the Inbox, #932): a note, never an unchecked wish
+        self.assertIn("kein Wunsch", run.check(s, "laib_wish", {"text": "haus erreicht HA nicht", "saw": "haus.service 3×, geprüft: geplante Neustarts nicht geprüft (nicht lesbar)"}))
 
     def test_a_new_pattern_quiet_for_six_hours_is_over_a_recurring_one_is_not(self):
         day = haus("2026-10-31T20:00:00", "2026-10-31T20:05:00", "2026-10-31T20:10:00")
@@ -305,35 +305,12 @@ class CheckedLikeAPerson(unittest.TestCase):
 
     def test_a_new_pattern_gone_since_a_planned_restart_of_a_green_service_is_over(self):
         day = haus("2026-11-01T04:00:00", "2026-11-01T04:05:00", "2026-11-01T04:10:00")
-        apply = [entry("2026-11-01T04:30:20Z", "apply", ms=30000)]
-        restart = {"haus": stops("haus.service", ("2026-11-01T04:30:00", "2026-11-01T04:30:10"))}
-        s = Fake(day, journal=apply, stops=restart, now="2026-11-01T06:30:00+01:00")
+        restart = {"haus": [win("haus", "Anwenden", "2026-11-01T04:30:00", "2026-11-01T04:30:10")]}
+        s = Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00")
         run.run(s)
         self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von haus um 05:30 nicht mehr, Dienst grün", notes(s)[0])
-        r = run.run(Fake(day, journal=apply, stops=restart, now="2026-11-01T06:30:00+01:00", red=["haus"]))
+        r = run.run(Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00", red=["haus"]))
         self.assertIn("vor Anwenden von haus um 05:30, Dienst nicht grün", r["context"])
-
-
-class Dependencies(unittest.TestCase):
-    def test_every_templates_after_needs_and_oidc_is_a_dependency(self):
-        # the script cannot read the templates on the box: its map is held to them here
-        root = os.path.join(HERE, "..", "..", "templates")
-        for name in sorted(os.listdir(root)):
-            try:
-                with open(os.path.join(root, name, "laib.yml"), encoding="utf-8") as f:
-                    yml = f.read()
-            except OSError:
-                continue
-            want = set()
-            for m in re.finditer(r"(?m)^after: \[([^\]]*)\]", yml):
-                want |= {x.strip() for x in m.group(1).split(",") if x.strip()}
-            if re.search(r"(?m)^needs: \[[^\]]*\bmcp\b", yml):
-                want.add("laib")
-            if name != "auth" and re.search(r"(?i)oidc", yml):
-                want.add("auth")
-            with self.subTest(template=name):
-                self.assertLessEqual(want, set(pruefung.DEPENDS.get(name, "").split()))
-        self.assertEqual(pruefung.closure("haus"), ["auth", "haus", "home-assistant", "laib", "mosquitto"])
 
 
 if __name__ == "__main__":

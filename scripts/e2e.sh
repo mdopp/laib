@@ -252,7 +252,7 @@ print(json.dumps(json.load(urllib.request.urlopen(req))["result"]))
 PY3
 }
 mcp_skill routineblick tools/list | python3 -c 'import sys,json; n=[t["name"] for t in json.load(sys.stdin)["tools"]]; assert n==["laib_status","laib_diag","laib_note","laib_repair"], n' || fail "routineblick sees more than its tools"
-mcp_skill durchsicht tools/list | python3 -c 'import sys,json; n=sorted(t["name"] for t in json.load(sys.stdin)["tools"]); assert n==["laib_journal","laib_logs","laib_note","laib_state","laib_status","laib_wish"], n' || fail "the log review sees more than read tools, note and wish (#550)"
+mcp_skill durchsicht tools/list | python3 -c 'import sys,json; n=sorted(t["name"] for t in json.load(sys.stdin)["tools"]); assert n==["laib_logs","laib_note","laib_planned","laib_state","laib_status","laib_wish"], n' || fail "the log review sees more than read tools, note and wish (#550)"
 mcp_skill routineblick tools/call laib_restart | python3 -c 'import sys,json; r=json.load(sys.stdin); assert r["isError"] and "nicht ausgef" in r["content"][0]["text"], r' || fail "a skill called a tool it does not have"
 mcp_skill gibtsnicht tools/call laib_status | python3 -c 'import sys,json; assert json.load(sys.stdin)["isError"]' || fail "an unknown skill's call ran"
 # a skill's script (#839): durchsicht's run.py against the real server, its calls in its skill's name;

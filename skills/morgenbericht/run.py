@@ -124,7 +124,7 @@ def lessons_line(sessions, now):
     return said + ("Wiedergekommen: " + ", ".join(f"{f} {seen[f]}×{back[f]}" for f in sorted(back, key=lambda f: -seen[f])) + "." if back else "Kein Befund kam wieder.")
 
 
-ASIDE = "Aussortiert, kein Wunsch:"  # durchsicht's sentence (skills/durchsicht/pruefung.py MARK)
+ASIDE = "Aussortiert, kein Wunsch:"  # durchsicht's sentence (skills/durchsicht/run.py MARK)
 
 
 def aside(journal):

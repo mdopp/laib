@@ -68,8 +68,8 @@ class Aside(unittest.TestCase):
         self.assertEqual(run.aside(journal), mark)
         self.assertEqual(run.aside([{"verb": "note", "detail": "nichts"}]), "")
         self.assertEqual(run.aside(None), "")
-        from durchsicht import pruefung
-        self.assertEqual(run.ASIDE, pruefung.MARK)
+        with open(os.path.join(os.path.dirname(HERE), "durchsicht", "run.py"), encoding="utf-8") as f:
+            self.assertIn(f'MARK = "{run.ASIDE}"', f.read())
 
 
 class ModelUse(unittest.TestCase):

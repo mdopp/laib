@@ -1,105 +1,31 @@
-"""durchsicht: the log review (#550 point 6, #551), the deterministic part.
+"""durchsicht: the log review (#550, #551, #839), the deterministic part.
 
-Reads every service's warnings and errors of a day, groups them by
-pattern and keeps what the last review saw; the model sees only the real
-patterns that are new, recurring or growing. The journal's err is stderr,
-and most of it is a container's INFO, so a line's content decides, never
-its priority. Moved out of the Operator's Go (operator/durchsicht.go, #839).
-#975: before a pattern reaches the model it is checked as a person would
-(pruefung.py): lines during a planned restart are only counted, a pattern
-that is over or resolved is dropped, and the note says once what was.
+Groups every service's warnings and errors of a day by pattern, by content,
+never by the journal's priority. A pattern is checked as a person would
+(#975): a line in a planned stop's window of its service or of one it
+depends on is only counted, as Laib answers it (laib planned, #978); a new
+pattern quiet for six hours or gone since a planned restart of a green
+service is over; a certificate obtained after its failures is resolved.
+The model sees what is left: new, recurring or growing. docs/SKILLS.md.
 """
 
-import json
 import re
+from collections import namedtuple
+from datetime import datetime, timedelta, timezone
 
 import laibskill
-from durchsicht import pruefung
-from durchsicht.pruefung import check  # noqa: F401 — the runner asks run.py's check about the model's wishes
+from laibskill import field, hm, when
+from lib import logzeilen
 
-REVIEW_LINES = 5000  # per unit and day; a unit that reaches it is "mindestens"
-
-A = re.ASCII  # Go's regexp: \w, \d, \s and \b are ASCII
-JOURNAL_LINE = re.compile(r"^(\S+) \S+ ([^\s\[:]+)(?:\[\d+\])?: (.*)$", A)
-# #915: rootless Podman's network layer and container monitor write into a
-# service's unit; a flow the peer already closed is their line, not the
-# service's error (#903)
-RUNTIME = {"pasta", "passt", "conmon"}
-# the level a line names: level=x, "level":"x", [x] ...
-NAMED_LEVEL = re.compile(r'(?i)(?:\blevel=|"level":\s*"|\blvl=|\[)(trace|debug|dbg|info|inf|notice|warn|warning|wrn|error|err|eror|fatal|ftl|crit|critical|panic)\b', A)
-# ... or as a word in capitals: ERROR (MainThread), INFO:, LOG [Api]
-UPPER_LEVEL = re.compile(r"\b(TRACE|DEBUG|VERBOSE|INFO|NOTICE|LOG|WARN|WARNING|ERROR|FATAL|CRITICAL|PANIC)\b", A)
-ERROR_WORDS = re.compile(r"(?i)\b(error|errors|fatal|panic|exception|failed|failure|timeout|timed out|refused|denied|unauthorized|not connected|aborted|aborting|segfault|cannot|unable)\b|\b[A-Z]\w*(Error|Exception)\b", A)
-NORMALISE = [
-    (re.compile(r"\[?\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z| ?[+-]\d{2}:?\d{2})?\]?", A), ""),
-    (re.compile(r"\d{1,2}/\d{1,2}/\d{4},? \d{1,2}:\d{2}:\d{2}(?: [AP]M)?", A), ""),
-    (re.compile(r"\[?\b\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\]?", A), ""),
-    (re.compile(r"(?:/[\w.@%+-]+){2,}/?", A), "<pfad>"),
-    (re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", A), "<id>"),
-    (re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b", A), "<ip>"),
-    (re.compile(r"\b[0-9a-fA-F]{6,}\b", A), None),  # an id is hex with a digit and a letter
-    (re.compile(r"\d+(?:\.\d+)?", A), "<n>"),
-    (re.compile(r"\s+", A), " "),
-]
-NOISE_LEVELS = {"trace", "debug", "dbg", "verbose", "info", "inf", "notice", "log", "warn", "warning", "wrn"}
-
-
-def _hex(m):
-    s = m.group(0)
-    if not any(c.isdigit() for c in s) or not any(c in "abcdef" for c in s.lower()):
-        return s  # a number stays a number
-    return "<id>"
-
-
-def _json_line(msg):
-    """A JSON line's level, logger, msg and error, matched without case as
-    Go's encoding/json does; None when it is no such line."""
-    try:
-        j = json.loads(msg)
-    except ValueError:
-        return None
-    if not isinstance(j, dict):
-        return None
-    got = {}
-    for k, v in j.items():
-        k = k.lower()
-        if k in ("level", "logger", "msg", "error"):
-            if v is not None and not isinstance(v, str):
-                return None
-            got[k] = v or ""
-    return got if got.get("msg") else None
-
-
-def log_pattern(msg):
-    """A journal message's pattern and whether it is a real error: the level
-    the line names decides; without one, its words do. A JSON line (Caddy)
-    is its logger, message and error."""
-    level = ""
-    j = _json_line(msg) if msg.startswith("{") else None
-    if j is not None:
-        logger = j.get("logger", "")
-        msg, level = (logger + ": " if logger else "") + j["msg"], j.get("level", "").lower()
-        if j.get("error"):
-            msg += " (" + j["error"] + ")"
-    else:
-        n, u = NAMED_LEVEL.search(msg), UPPER_LEVEL.search(msg)
-        if n and (not u or n.start() <= u.start()):
-            level = n.group(1).lower()
-        elif u:
-            level = u.group(1).lower()
-    if level in NOISE_LEVELS or level == "" and not ERROR_WORDS.search(msg):
-        return "", False
-    for rx, repl in NORMALISE:
-        msg = rx.sub(_hex if repl is None else repl, msg)
-    msg = msg.strip()
-    if len(msg) > 160:
-        msg = msg[:160] + "…"
-    return msg, True
+REVIEW_LINES, QUIET = 5000, timedelta(hours=6)  # lines per unit and day ("mindestens" when reached); a new pattern this quiet is over
+IDENT, OBTAINED = re.compile(r'"identifier":"([^"]+)"'), "certificate obtained successfully"
+MARK = "Aussortiert, kein Wunsch:"  # the morning report finds the sentence by it
+Window = namedtuple("Window", "svc label stop start frm to")
 
 
 def harmless(s):
-    """The log shapes the owner or a ticket answered as harmless: ignore.yml's
-    logs (laib ignore --log, #915), per service; and what to say about it."""
+    """ignore.yml's logs (laib ignore --log, #915): the shapes the owner or a
+    ticket answered as harmless, per service; and what to say about it."""
     r = s.call("laib_state", args="ignore.yml")
     if r.error and "is not a file on main" in r.text:
         return {}, ""
@@ -119,19 +45,86 @@ def harmless(s):
     return marks, (f"ignore.yml: {bad} Einträge unter logs ohne gültiges Muster oder Grund; sie gelten nicht." if bad else "")
 
 
+class Plan:
+    """The planned stops of a service and of what it depends on, as Laib
+    answers them (laib planned, #978), asked once per service."""
+
+    def __init__(self, s):
+        self.s, self.now, self.asked, self.unread, self.expected = s, when(s.now) or datetime.now(timezone.utc), {}, set(), {}
+
+    def of(self, svc):
+        if svc not in self.asked:
+            p = self.s.call("laib_planned", service=svc, since="25h").json()
+            ws = field(p, "windows", None)
+            if not isinstance(ws, list) or field(p, "unread", []):
+                self.unread.add(svc)
+            ws = [Window(field(w, "service"), field(w, "label"), *(when(field(w, k)) for k in ("stop", "start", "from", "to"))) for w in ws or [] if isinstance(w, dict)]
+            self.asked[svc] = [w for w in ws if None not in w]
+        return self.asked[svc]
+
+    def during(self, svc, unit, t):
+        """Counts a line inside a planned stop's window as expected; True when it was."""
+        w = max((w for w in self.of(svc) if t and w.frm <= t <= w.to), key=lambda w: (w.stop <= t, -abs((w.stop - t).total_seconds())), default=None)
+        if w:
+            e = self.expected.setdefault(unit, [0, set()])
+            e[0] += 1
+            e[1].add((w.stop, f"{w.label} von {w.svc} {hm(w.stop, self.now)}"))
+        return bool(w)
+
+
+def judge(c, new, plan, green, obtained):
+    """Why a pattern is no wish, or "" and what was checked."""
+    last, ids, now = max(c["times"], default=None), c["ids"], plan.now
+    w = max(plan.of(c["svc"]), key=lambda w: w.start, default=None)
+    if ids and all(obtained.get(i) and obtained[i] > t for i, t in ids.items()):
+        return f"behoben: Zertifikat für {', '.join(sorted(ids))} danach ausgestellt ({hm(max(obtained[i] for i in ids), now)})", ""
+    if new and last and now - last > QUIET:
+        return f"vorbei: zuletzt {hm(last, now)}, seit über {QUIET.seconds // 3600} Stunden nicht mehr", ""
+    if new and last and w and w.start > last and green:
+        return f"vorbei: zuletzt {hm(last, now)}, seit {w.label} von {w.svc} um {hm(w.start, now)} nicht mehr, Dienst grün", ""
+    said = ["geplante Neustarts nicht geprüft (nicht lesbar)" if c["svc"] in plan.unread else "nicht während eines geplanten Neustarts",
+            f"zuletzt {hm(last, now)} (vor {int((now - last).total_seconds() // 60)} min)" if last else "Zeitpunkt nicht lesbar"]
+    if w and last:
+        said.append(f"{'auch nach' if w.start <= last else 'vor'} {w.label} von {w.svc} um {hm(w.start, now)}" + ("" if green or w.start <= last else ", Dienst nicht grün"))
+    else:
+        said.append("kein geplanter Neustart")
+    return "", ", ".join(said + ["noch aktuell" if new else "schon in der letzten Durchsicht"])
+
+
+def told(dropped, plan):
+    """The note's last sentence: what became no wish, and why — once, so nothing disappears silently."""
+    items = [f"{u} {n}× während eines geplanten Neustarts ({', '.join(x for _, x in sorted(hs)[:3])}{f' und {len(hs) - 3} weiteren' if len(hs) > 3 else ''})"
+             for u, (n, hs) in sorted(plan.expected.items())]
+    dropped = sorted(dropped, key=lambda d: -d[0]["count"])  # the note stays under laib note's 4,000 characters
+    items += [f"{c['unit']} „{c['pattern'] if len(c['pattern']) <= 60 else c['pattern'][:60].rstrip() + '…'}“ {c['count']}× {why}" for c, why in dropped[:8]]
+    items += [f"{len(dropped) - 8} weitere Muster ({sum(c['count'] for c, _ in dropped[8:])}×)"] if len(dropped) > 8 else []
+    return f"{MARK} {'; '.join(items)}." if items else ""
+
+
+def check(s, tool, args):
+    """The model's wish names what was checked and one of the shown patterns' services."""
+    services, saw, text = getattr(s, "services", set()), str(args.get("saw", "")), str(args.get("text", ""))
+    if tool != "laib_wish":
+        return ""
+    if "geprüft" not in saw:
+        return "saw nennt, was geprüft wurde: übernimm die Zeile „geprüft: …“ des Musters"
+    if not any(svc.lower() in (text + " " + saw).lower() for svc in services):
+        return "ein Wunsch nur zu einem gezeigten Muster: nenne seinen Dienst (" + ", ".join(sorted(services)) + ")"
+    if "nicht geprüft" in saw:  # laib planned unreadable or not granted yet (#978): a note, no wish
+        return "geplante Neustarts nicht geprüft: kein Wunsch, nur die Notiz"
+    return ""
+
+
 def run(s):
     st = s.call("laib_status")
-    d = st.json()
-    services = (d.get("services") or []) if isinstance(d, dict) else None
+    services = field(st.json(), "services", None)
     if not isinstance(services, list):
         return laibskill.done(context="Protokoll-Durchsicht: laib status nicht lesbar (" + laibskill.first_line(st.text) + "). Schreib das in die Notiz.")
-    counts, noise, full, unread = {}, {}, {}, []
-    runtime, known_harmless, obtained, green = {}, {}, {}, {}
+    counts, noise, full, unread, runtime, known_harmless, obtained, green = {}, {}, {}, [], {}, {}, {}, {}
     marks, marks_said = harmless(s)
-    plan = pruefung.Plan(s, s.call("laib_journal", since="25h").json())
-    for svc in services:
-        name = svc.get("name", "") if isinstance(svc, dict) else ""
-        green[name] = isinstance(svc, dict) and svc.get("state") == "grün"
+    plan = Plan(s)
+    for name in (field(x, "name") for x in services):
+        green[name] = any(field(x, "name") == name and field(x, "state") == "grün" for x in services)
         units = s.call("laib_logs", args=f"{name} --since 24h --lines {REVIEW_LINES} --priority warning").json()
         if not isinstance(units, dict) or not all(t is None or isinstance(t, str) for t in units.values()):
             unread.append(name)
@@ -139,35 +132,31 @@ def run(s):
         for unit, text in units.items():
             lines = (text or "").strip().split("\n")
             full[unit] = len(lines) >= REVIEW_LINES
-            for line in lines:
-                m = JOURNAL_LINE.match(line)
-                if not m:
-                    continue
-                if m.group(2) in RUNTIME:
+            for m in filter(None, map(logzeilen.LINE.match, lines)):
+                if m[2] in logzeilen.RUNTIME:
                     runtime[unit] = runtime.get(unit, 0) + 1
                     continue
-                t, ident = pruefung.when(m.group(1)), pruefung.IDENT.search(m.group(3))
-                if ident and t and pruefung.OBTAINED in m.group(3):
+                t, ident = when(m[1]), IDENT.search(m[3])
+                if ident and t and OBTAINED in m[3]:
                     obtained[ident[1]] = t
-                why = next((why for rx, why in marks.get(name, []) if rx.search(m.group(3))), None)
+                why = next((why for rx, why in marks.get(name, []) if rx.search(m[3])), None)
                 if why is not None:
-                    h = known_harmless.setdefault(unit, [0, why])
-                    h[0] += 1
+                    known_harmless.setdefault(unit, [0, why])[0] += 1
                     continue
-                p, real = log_pattern(m.group(3))
+                p, real = logzeilen.pattern(m[3])
                 if not real:
                     noise[unit] = noise.get(unit, 0) + 1
                     continue
                 if plan.during(name, unit, t):
                     continue
-                c = counts.setdefault(unit + "\t" + p, {"unit": unit, "svc": name, "pattern": p, "example": m.group(3), "count": 0, "times": [], "ids": {}})
+                c = counts.setdefault(unit + "\t" + p, {"unit": unit, "svc": name, "pattern": p, "example": m[3], "count": 0, "times": [], "ids": {}})
                 c["count"] += 1
                 c["times"] += [t] if t else []
                 if ident and t:
                     c["ids"][ident[1]] = t
 
     last = s.state if isinstance(s.state, dict) else {}
-    news, known, dropped = [], 0, []
+    news, known, dropped, checked = [], 0, [], []
     for key, c in counts.items():
         prev = last.get(key)
         if prev is None and c["count"] >= 3:
@@ -178,18 +167,13 @@ def run(s):
             news.append((c, f"wächst (vorher {prev.get('count', 0)}×)"))
         elif prev is not None:
             known += 1
-    checked = []
     for c, why in news:
-        gone, said = pruefung.judge(c, why == "neu", plan, green.get(c["svc"]), obtained)
-        if gone:
-            dropped.append((c, gone))
-        else:
-            checked.append((c, why, said))
-    checked.sort(key=lambda n: (-n[0]["count"], n[0]["unit"] + n[0]["pattern"]))
-    checked = checked[:8]
+        gone, said = judge(c, why == "neu", plan, green.get(c["svc"]), obtained)
+        (dropped if gone else checked).append((c, gone) if gone else (c, why, said))
+    checked = sorted(checked, key=lambda n: (-n[0]["count"], n[0]["unit"] + n[0]["pattern"]))[:8]
     shown = {c["unit"] + "\t" + c["pattern"] for c, _, _ in checked}
     nxt = {key: {"count": c["count"], "told": bool((last.get(key) or {}).get("told")) or key in shown} for key, c in counts.items()}
-    aside = pruefung.told(dropped, plan)
+    aside = told(dropped, plan)
     if not checked and not unread:
         if aside:
             s.call("laib_note", kind="watch", text="Protokoll-Durchsicht: keine neuen Fehlermuster. " + aside)
@@ -197,20 +181,17 @@ def run(s):
 
     out = ["Fehlermuster der letzten 24 Stunden (nach Inhalt, nicht nach Journal-Priorität), jedes geprüft wie von einem Menschen:"]
     for c, why, said in checked:
-        least = "mindestens " if full.get(c["unit"]) else ""
         ex = c["example"] if len(c["example"]) <= 200 else c["example"][:200] + "…"
-        out.append(f"- {why}, {c['unit']}, {least}{c['count']}×: {c['pattern']}\n  Beispiel: {ex}\n  geprüft: {said}")
+        out.append(f"- {why}, {c['unit']}, {'mindestens ' if full.get(c['unit']) else ''}{c['count']}×: {c['pattern']}\n  Beispiel: {ex}\n  geprüft: {said}")
     if known:
         out.append(f"Schon gemeldet und nicht gewachsen: {known} Muster (nicht wiederholen).")
     if aside:
         out.append("Geplante Neustarts, Vorbeis und Behobenes sind aussortiert; die Notiz bekommt die Liste angehängt, kein Wunsch dazu.")
     if unread:
         out.append("Logs nicht lesbar: " + ", ".join(unread) + ".")
-    loud = sorted(noise, key=lambda u: (-noise[u], u))
-    if loud:
-        out.append("Rauschen (stderr ohne Fehler, nur gezählt): " + ", ".join(f"{u} {noise[u]}" for u in loud[:4]) + ".")
-    if runtime:
-        out.append("Container-Laufzeit (pasta, conmon; nicht der Dienst, nur gezählt): " + ", ".join(f"{u} {runtime[u]}" for u in sorted(runtime, key=lambda u: (-runtime[u], u))[:4]) + ".")
+    for title, d in (("Rauschen (stderr ohne Fehler, nur gezählt)", noise), ("Container-Laufzeit (pasta, conmon; nicht der Dienst, nur gezählt)", runtime)):
+        if d:
+            out.append(title + ": " + ", ".join(f"{u} {d[u]}" for u in sorted(d, key=lambda u: (-d[u], u))[:4]) + ".")
     if known_harmless:
         out.append("Als harmlos vermerkt (ignore.yml, nur gezählt): " + ", ".join(f"{u} {n} ({why})" for u, (n, why) in sorted(known_harmless.items())) + ".")
     if marks_said:
