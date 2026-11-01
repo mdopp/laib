@@ -40,6 +40,14 @@ laib stop <service> [--until 2h] ["<grund>"]   stop its units and pause the serv
 laib backups                         read: the last nightly backup (green/red, when, why), the last green one, the off-box copy, the restore test, with diag's backup findings and their fix (#441)
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish [--von <login>] "<was das Haus braucht>"  the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the bote hand a Box-Aufgabe for the admins, „Wunsch aus dem Boten: …“ with von bote:<login>, never a ticket (#883); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
+laib wish list [--alle] | status [<id> offen|erledigt|verworfen "<grund>"]   an approved wish's status (#978), kept in its file
+                                     wishes/<id>.md under a `---` trailer (status, grund, am, von): offen until a hand closes it
+                                     erledigt or verworfen with the reason; list: the open ones (--alle every one) with the
+                                     services they name, whether the Operator filed them and which skill (`Fähigkeit <name>` in
+                                     the by-line, from X-Laib-Skill); status without an id reads one `<id> <status> <grund>` per
+                                     line on stdin. Bookkeeping: one commit on main and one journal line (verb wish, detail
+                                     „erledigt: …“) per wish; ops, claude and humans. The log review closes the Operator's own;
+                                     the morning report says it once; the Inbox's „Zuletzt entschieden“ shows it. No ticket
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
 laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
 laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT]
@@ -164,7 +172,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
 | `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
-| `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`), `von?` (the Bote: the login of who asked, #883) |
+| `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`), `von?` (the Bote: the login of who asked, #883); `args` `list [--alle]` → `[{id, title, text, since, operator, skill?, services, status, grund?, am?, von?}]`, `args` `status` with `stdin` lines `<id> <offen|erledigt|verworfen> <grund>` (#978) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |

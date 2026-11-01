@@ -72,6 +72,16 @@ class Aside(unittest.TestCase):
             self.assertIn(f'MARK = "{run.ASIDE}"', f.read())
 
 
+class ClosedWishes(unittest.TestCase):
+    def test_the_wishes_closed_today_once_with_why(self):  # #978
+        journal = [{"verb": "wish", "reason": "Wunsch: Haus erreicht HA nicht", "detail": "verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts"},
+                   {"verb": "wish", "reason": "Wunsch: llama-lease", "detail": "erledigt: seit Update von llama um 09:22 kein Fehler mehr"},
+                   {"verb": "wish", "reason": "Wunsch: Mehr Licht", "detail": "#12 wartet auf Freigabe"}]
+        self.assertEqual(run.wishes_line(journal), "Wünsche geschlossen: „Haus erreicht HA nicht“ verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts; "
+                                                   "„llama-lease“ erledigt: seit Update von llama um 09:22 kein Fehler mehr.")
+        self.assertEqual(run.wishes_line([]), "")
+
+
 class ModelUse(unittest.TestCase):
     def test_the_last_24_hours(self):  # #859
         ss = [{"skill": "vorfall", "started": "2026-10-20T22:00:00Z", "in": 5000, "out": 200, "modelMs": 90000},

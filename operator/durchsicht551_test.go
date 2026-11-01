@@ -193,7 +193,7 @@ func TestDurchsichtShowsOnlyNewRecurringOrGrowingRealErrors(t *testing.T) {
 		t.Fatalf("an unchanged day asks no model, and says why: %q %+v", user, s)
 	}
 	for _, c := range (*calls)[n:] {
-		if strings.HasPrefix(c, "laib_note") || strings.HasPrefix(c, "laib_wish") {
+		if strings.HasPrefix(c, "laib_note") || strings.HasPrefix(c, "laib_wish") && !strings.HasPrefix(c, "laib_wish list") { // reading the open wishes writes nothing (#978)
 			t.Errorf("an unchanged day writes nothing: %s", c)
 		}
 	}
