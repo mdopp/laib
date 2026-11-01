@@ -38,9 +38,9 @@ lines() { # production Go lines, counted as loc.sh counts them
   [ $# -gt 0 ] || { echo 0; return; }
   find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l | tr -d ' '
 }
-budget() { # budget <prod> <cap>: "2,991 / 3,000", bold and marked at 95 % or more
+budget() { # budget <prod> <cap> [<shown cap>]: "2,991 / 3,000", bold and marked at 95 % or more
   local s
-  s="$(num "$1") / $(num "$2")"
+  s="$(num "$1") / $(num "${3:-$2}")"
   if [ "$1" -ge "$2" ]; then echo "**$s, over the cap**"
   elif [ "$(($1 * 100))" -ge "$(($2 * 95))" ]; then echo "**$s, at 95 % or more**"
   else echo "$s"; fi
@@ -174,11 +174,14 @@ for t in templates/*/; do
 done
 
 # --- the Operator's skills: one per skills/<name>/skill.yml ---------------
-# The owner's measure for them (2026-10-27): at most 50 skills, at most 200
-# lines in a skill's run.py, both +10 % on 2026-10-30 (scripts/loc.sh, which
-# holds them). Shown against both; neither is a gate here.
-skillcap=55
-runcap=220
+# The owner's measure for them (2026-10-27, +10 % 2026-10-30, #978): at most
+# 55 skills, one file each, its run.py at most 220 lines. The caps are read
+# from scripts/loc.sh's line, which holds them, so the table cannot drift
+# from the gate; shown against them, neither is a gate here.
+skillline=$(echo "$loc" | sed -nE 's/^skill scripts production: .*\(cap ([0-9]+), each script file ([0-9]+)\)$/\1 \2/p')
+[ -n "$skillline" ] || { echo "architektur: no skill line in scripts/loc.sh's output" >&2; exit 2; }
+skillcap=${skillline% *}
+runcap=${skillline#* }
 flat() { # flat <key> <skill.yml>: a one-line value without its comment
   sed -nE "s/^$1:[[:space:]]*//p" "$2" | head -1 | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//'
 }
@@ -374,7 +377,7 @@ section() {
   echo
   echo "### The Operator's skills"
   echo
-  echo "${#skills[@]} / $skillcap skills in [\`skills/\`](skills/), each a folder with its \`skill.yml\` and, where it helps, a \`run.py\` for the steps that must always happen; the Operator runs them, [\`internal/skill\`](internal/skill/) checks them. Description, trigger, tools and \`modell\` are each \`skill.yml\`'s; the script's lines stand against $runcap."
+  echo "${#skills[@]} / $skillcap skills in [\`skills/\`](skills/), each a folder with its \`skill.yml\` and, where it helps, one \`run.py\` for the steps that must always happen; the Operator runs them, [\`internal/skill\`](internal/skill/) checks them. Description, trigger, tools and \`modell\` are each \`skill.yml\`'s; the script's lines stand against $runcap. What they share: [\`skills/lib/\`](skills/lib/) ($(cat skills/lib/*.py 2>/dev/null | wc -l | tr -d ' ') lines) and the scripts' door [\`laibskill.py\`](skills/laibskill.py) ($(wc -l <skills/laibskill.py | tr -d ' ')); how they play together, what each produces and who reads it: [\`docs/SKILLS.md\`](docs/SKILLS.md)."
   echo
   echo "\`modell\`: **frei**, the model works in a loop with the granted tools; **urteil**, the script prepares and the model judges once; **nein**, the script alone, no model."
   echo
@@ -387,7 +390,8 @@ section() {
     more=$(flat more "$y")
     [ -z "$more" ] || tools="$tools; with a capable model also $(list "$more")"
     m=$(flat modell "$y"); m=${m:-frei}
-    if [ -f "skills/$s/run.py" ]; then py=$(budget "$(wc -l <"skills/$s/run.py" | tr -d ' ')" "$runcap"); else py="—"; fi
+    if [ -f "skills/$s/run.py" ]; then py=$(budget "$(wc -l <"skills/$s/run.py" | tr -d ' ')" "$((runcap + 1))" "$runcap"); else py="—"; fi # at most runcap, as loc.sh holds it
+    for f in "skills/$s"/*.py; do case $f in */run.py|*/test_*|*'*'*) ;; *) warn "$f beside run.py: one file per skill (scripts/loc.sh, #978)";; esac; done
     d=$(field description "$y"); d=${d//|/\\|}
     echo "| [\`$s\`](skills/$s/) | $d | $(when "$(flat trigger "$y")") | $m | $tools | $py |"
   done

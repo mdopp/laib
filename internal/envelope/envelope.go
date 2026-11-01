@@ -408,6 +408,8 @@ func units(ctx context.Context, env *cli.Env, verb string, args []string) int {
 		fmt.Fprintf(env.W(), "%s gestoppt bis %s (laib start %s startet ihn früher)\n", svc.Name, until.Local().Format("02.01. 15:04"), svc.Name)
 		return cli.ExitOK
 	}
+	green, done := false, apply.Mark(st, env.Paths, verb, env.Actor, "", []string{svc.Name}, 5*time.Minute) // #978
+	defer func() { done(green) }()
 	todo := svc.UnitNames()
 	if verb == "start" {
 		apply.Resume(env.Paths, svc.Name)
@@ -427,7 +429,7 @@ func units(ctx context.Context, env *cli.Env, verb string, args []string) int {
 		}
 	}
 	checks := apply.Verify(ctx, st, []string{svc.Name})
-	green := true
+	green = true
 	var bad []string
 	for _, c := range checks {
 		if !c.OK {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 )
@@ -90,6 +91,10 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 			continue
 		}
 		text, class, running := progress(p, decision, locked)
+		at := p.Decided
+		if w, ok := wishOf(env, p); ok && text == "fertig" { // what came of an approved wish (#978), and when
+			text, at = "Wunsch "+w.Status+strings.TrimSuffix(": "+w.Grund, ": "), maxTime(at, w.Am)
+		}
 		recent := failed || time.Since(p.Decided) < 15*time.Minute
 		here := p.Status == "open" || time.Since(p.Decided) < 15*time.Minute
 		if !(running || failed || p.Status == "approved" || p.Status == "rejected" && recent) {
@@ -104,7 +109,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 			ended.WriteString(c)
 			continue
 		}
-		older = append(older, past{p.Decided, decidedCard(p, all, domain, text, class, running, failed, f.raw, false)})
+		older = append(older, past{at, decidedCard(p, all, domain, text, class, running, failed, f.raw, false)})
 	}
 	// „Zuletzt entschieden“: the five decided last, the newest at the top (owner, 2026-10-30: it
 	// listed #1–#5 from migration day, the cards sorted by id for their places above)
@@ -118,6 +123,24 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 		bottom = "<div id=laeuft><h2>Zuletzt entschieden</h2><div class=liste>" + list.String() + "</div></div>"
 	}
 	return top.String(), ended.String(), bottom, open
+}
+
+// wishOf is the wish an approved proposal added (#978), as it stands now.
+func wishOf(env *cli.Env, p *proposal.Proposal) (inbox.Wish, bool) {
+	for _, f := range p.Files {
+		if id, ok := strings.CutPrefix(f, "wishes/"); ok && p.Status == "approved" {
+			w, err := inbox.ReadWish(env.Paths.State, strings.TrimSuffix(id, ".md"), nil)
+			return w, err == nil
+		}
+	}
+	return inbox.Wish{}, false
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 // decidedCard is a card as it ends (#686): what the box does now, then

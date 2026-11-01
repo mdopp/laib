@@ -91,6 +91,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 	}()
 	// Boot comparison (#9): bereit only once units and files match the state.
 	if st, err := cli.LoadState(env); err == nil {
+		apply.Window(st, env.Paths, "ready", "laib", []string{"laib"}, 3*time.Minute) // #978: what talks to laib reconnects
 		r, _ := CollectStatus(ctx, env, st)
 		if r.Red > 0 || r.Drift > 0 { // what did not come up is red on Status; readiness stays about apply (#856)
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "red", Detail: fmt.Sprintf("boot: %d rot, %d Dateien Drift", r.Red, r.Drift)})

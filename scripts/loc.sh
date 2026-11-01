@@ -60,12 +60,19 @@ pyt=$(find skills -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
 n=$(find skills -mindepth 2 -maxdepth 2 -name skill.yml | wc -l)
 [ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  skills: $n (cap 55, each script file 220)"
 [ "$n" -le 55 ] || { echo "more than 55 skills (#839)"; bad=1; }
-# each file of a skill's script: its run.py and a module beside it that run.py
-# imports (durchsicht's pruefung.py, #975) — no file escapes the cap
+# The rule for a skill's script (owner, 2026-11-01, #978: „was ist sinnvoll,
+# verständlich und wartbar?“): one file, one theme, at most 220 lines — its
+# run.py. A fact about the box (was a stop planned, what a service depends
+# on, is a finding gone) is Laib's, read through a verb (laib planned), never
+# decided again in a script; what two skills share lives in skills/lib/
+# (logzeilen.py: how a journal line is read). A second file in a skill's
+# folder is a warning sign that its theme is two: warned here, not failed.
+# Every file, run.py and skills/lib/'s, is held to the 220.
 for f in skills/*/*.py; do
   case "$f" in */test_*) continue ;; esac
   l=$(wc -l < "$f")
   [ "$l" -le 220 ] || { echo "$f has $l lines, a skill script is at most 220 (#839)"; bad=1; }
+  case "$f" in skills/lib/*|*/run.py) ;; *) [ -n "$diet" ] || echo "warning: $f beside run.py: one file, one theme; shared parts in Laib or skills/lib/ (#978)" ;; esac
 done
 door=$(wc -l < skills/laibskill.py)
 [ "$door" -le 275 ] || { echo "skills/laibskill.py has $door lines, the scripts' door is at most 275 (#839)"; bad=1; }

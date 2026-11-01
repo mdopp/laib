@@ -68,8 +68,18 @@ class Aside(unittest.TestCase):
         self.assertEqual(run.aside(journal), mark)
         self.assertEqual(run.aside([{"verb": "note", "detail": "nichts"}]), "")
         self.assertEqual(run.aside(None), "")
-        from durchsicht import pruefung
-        self.assertEqual(run.ASIDE, pruefung.MARK)
+        with open(os.path.join(os.path.dirname(HERE), "durchsicht", "run.py"), encoding="utf-8") as f:
+            self.assertIn(f'MARK = "{run.ASIDE}"', f.read())
+
+
+class ClosedWishes(unittest.TestCase):
+    def test_the_wishes_closed_today_once_with_why(self):  # #978
+        journal = [{"verb": "wish", "reason": "Wunsch: Haus erreicht HA nicht", "detail": "verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts"},
+                   {"verb": "wish", "reason": "Wunsch: llama-lease", "detail": "erledigt: seit Update von llama um 09:22 kein Fehler mehr"},
+                   {"verb": "wish", "reason": "Wunsch: Mehr Licht", "detail": "#12 wartet auf Freigabe"}]
+        self.assertEqual(run.wishes_line(journal), "Wünsche geschlossen: „Haus erreicht HA nicht“ verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts; "
+                                                   "„llama-lease“ erledigt: seit Update von llama um 09:22 kein Fehler mehr.")
+        self.assertEqual(run.wishes_line([]), "")
 
 
 class ModelUse(unittest.TestCase):

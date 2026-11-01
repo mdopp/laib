@@ -151,6 +151,11 @@ func ApplyHeld(ctx context.Context, env *cli.Env, st *state.State, only, reason 
 	return ApplyPlan(ctx, env, st, p, sec, reason, "apply", true)
 }
 
+// applyDeadline is how long an apply's marker holds (#978): verify waits up
+// to a minute for the units and its health deadline, a post-deploy hook up
+// to ten minutes.
+const applyDeadline = 15 * time.Minute
+
 // ApplyPlan applies a computed plan under the lock the caller holds (or
 // takes it when none is held), journals as `verb`, stores hook secrets.
 func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan, sec map[string]string, reason, verb string, held bool) int {
@@ -169,6 +174,8 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 			p.Services = append(p.Services, name)
 		}
 	}
+	green, done := false, Mark(st, env.Paths, verb, env.Actor, reason, p.Services, applyDeadline) // #978: announced before anything restarts
+	defer func() { done(green) }()
 	start := time.Now()
 	res, err := Run(ctx, st, p, env.Paths, sec, reason)
 	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: only, Reason: reason, Commit: res.Commit, MS: time.Since(start).Milliseconds()}
@@ -240,6 +247,7 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 		}
 	}
 	cli.Record(env, st, entry)
+	green = res.Green
 	if env.JSON {
 		cli.Emit(env, res)
 	} else {

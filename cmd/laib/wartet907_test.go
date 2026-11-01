@@ -59,30 +59,25 @@ func sickWhoami(t *testing.T) string {
 // health red and took it for an incident — a pre-repair snapshot, a second
 // restart and a „Vorfall“ inside the apply's 58 seconds. While an apply
 // activates a service, its red is expected: diag says so, offers no
-// repair, and red it is again once the apply let go.
+// repair, and red it is again once the apply let go. #978: the apply
+// announces it with its marker (ApplyPlan); an apply that dies leaves the
+// marker, which past its until is the finding itself
+// (TestAMarkerNotClearedByItsUntilIsTheFinding).
 func TestAServiceAnApplyActivatesIsNotRedUntilTheApplyLetsGo(t *testing.T) {
 	env, _ := testBox(t)
 	failedWhoami(t)
-	unlock, _, err := apply.Lock(env.Paths, "apply:human:mdopp")
+	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := apply.WritePending(env.Paths, []string{"whoami"}, "#261"); err != nil {
-		t.Fatal(err)
-	}
+	done := apply.Mark(st, env.Paths, "apply", "human:mdopp", "#261", []string{"whoami"}, 15*time.Minute)
 	f := whoamiUnit(t, env)
-	if f.Severity == "rot" || f.Repair != nil || !strings.Contains(f.Detail, "Apply") {
+	if f.Severity == "rot" || f.Repair != nil || !strings.Contains(f.Detail, "Anwenden") {
 		t.Fatalf("a red the apply causes is red to the look, or offers a repair: %+v", f)
 	}
-
-	// an apply that died leaves its marker, but not the lock: no hold
-	unlock()
+	done(false)
 	if f := whoamiUnit(t, env); f.Severity != "rot" || !slices.Equal(f.Repair, []string{"restart", "whoami"}) {
 		t.Fatalf("a red that outlives the apply is not red again: %+v", f)
-	}
-	apply.ClearPending(env.Paths)
-	if f := whoamiUnit(t, env); f.Severity != "rot" {
-		t.Fatalf("after the apply: %+v", f)
 	}
 }
 

@@ -82,7 +82,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 |---|---|
 | Each program under its cap, no import across the boundaries | `scripts/loc.sh` |
 | Lines as gofmt writes them | `gofmt -l` in `ci.yml` |
-| A skill: at most 55, each `run.py` at most 220 lines (#839, +10 % 2026-10-30) | `scripts/loc.sh` |
+| A skill: at most 55; its script one file, one theme, `run.py` at most 220 lines; a fact about the box is Laib's, read through a verb (`laib planned`), what two skills share is in `skills/lib/`; a second file in a skill warns (#839, #978, `docs/SKILLS.md`) | `scripts/loc.sh` |
 | A renderer change ships with its golden file | `TestGolden` |
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |

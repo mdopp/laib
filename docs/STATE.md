@@ -18,6 +18,8 @@ services/
     rendered/         written only by laib: the files as they are on the box
 skills/<name>/skill.yml  an Operator skill added or replaced on this box (ADR 0023, #839)
 wishes/<time>.md      an Operator's wish, added by its proposal; approving it files the intake issue (#270)
+                      and its status under a `---` trailer (status: offen|erledigt|verworfen, grund, am, von),
+                      kept by `laib wish status`, one commit each; no trailer is offen (#978)
 lessons/<name>.md     a lesson from a solved incident, proposed by the Operator, let in by a human; laib context carries it (#544)
 ignore.yml            units on the box that are deliberately unmanaged; logs: shapes answered as harmless, with their reason (laib ignore --log, #915)
 aufgaben.yml          the Box-Aufgaben (#667): the owner's to-dos on the box; laib aufgabe commits it on main, never a proposal
@@ -342,6 +344,7 @@ gpu: false
 provides: [documents]            # purposes; a second service for one purpose is a HINWEIS in plan and Inbox
 upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperless-ngx.com/]   # repo, release notes, docs: where the Operator's web search looks first (#544); absent: the template's
 after: [authelia]                # restarted and verified before this one
+uses: [home-assistant]           # talks to these without after: (a box without them still loads it); their planned stops explain its errors (laib planned, #978)
 when:                            # a unit exists only while one of its values is set (#184)
   paperless-mail.container: [MAIL_HOST]
 requires:                        # a set value needs these set too (#184)

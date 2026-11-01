@@ -17,16 +17,17 @@
 # owner or a ticket answered as harmless (laib ignore --log, ignore.yml
 # on main, read with laib state) is only counted, with its reason.
 # #975: before the model sees a pattern, the script checks it as a person
-# would (pruefung.py): a line within minutes of a planned stop of its
-# service or of one it depends on (a unit's Stopping line that the journal
-# accounts for: apply, backup, updates, a restart …) is only counted; a new
-# pattern quiet for six hours, or not seen since a planned restart of a
-# green service, is over; a certificate obtained after its failures is
-# resolved. The note lists what was dropped once, with the reason; the
-# morning report repeats that sentence; a wish must say what was checked.
+# would: a line in the window of a planned stop of its service or of one it
+# depends on is only counted — Laib answers that, for diag's look too (laib
+# planned, #978: the journal's apply, backup, updates, restart … and the
+# contract's after:, uses:, needs:, oidc:); a new pattern quiet for six
+# hours, or not seen since a planned restart of a green service, is over; a
+# certificate obtained after its failures is resolved. The note lists what
+# was dropped once, with the reason; the morning report repeats that
+# sentence; a wish must say what was checked. docs/SKILLS.md.
 description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
 trigger: {daily: "06:30"}
-tools: [status, logs, state, journal, wish, note]
+tools: [status, logs, state, planned, wish, note]
 run: run.py
 context: none
 modell: urteil   # the script read the logs; the model judges the patterns

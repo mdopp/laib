@@ -31,6 +31,16 @@ var DoorHands = map[string]string{"haushalt": "propose"}
 
 type ceilingKey struct{}
 
+type skillKey struct{}
+
+// InSkill marks ctx as a call in a skill's name (X-Laib-Skill); SkillOf
+// reads it: a wish says which skill filed it (#978).
+func InSkill(ctx context.Context, skill string) context.Context {
+	return context.WithValue(ctx, skillKey{}, skill)
+}
+
+func SkillOf(ctx context.Context) string { s, _ := ctx.Value(skillKey{}).(string); return s }
+
 type rpcRequest struct {
 	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
@@ -96,6 +106,7 @@ func Handler(env *cli.Env) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), ceilingKey{}, ceiling)
 		// a call in a skill's name (ADR 0023): only the skill's granted tools
 		inSkill := r.Header.Get("X-Laib-Skill")
+		ctx = InSkill(ctx, inSkill)
 		switch req.Method {
 		case "initialize":
 			rpcReply(w, req.ID, map[string]any{

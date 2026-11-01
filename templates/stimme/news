@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer von der Stimme nicht mehr als Fehler
 ${PERSONA_DISPLAY} versteht „Schalte … an“ und „Schalte … aus“ jetzt besser
 ${PERSONA_DISPLAY} versteht „Spiele Radio Bob“ und die anderen Radiosender des Hauses jetzt besser
 Auch wenn ein Training des Wake-Words schiefging, zeigt die Box-Seite weiter, wie oft der Lautsprecher heute geweckt wurde, und ein einzelner Fehlalarm bringt das nächste Training nicht mehr zum Scheitern
