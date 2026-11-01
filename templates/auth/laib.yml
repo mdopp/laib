@@ -17,6 +17,7 @@ routes:
     port: 9091
     exposure: public
     auth: none
+    loginProbe: /api/user/info      # Authelia's own API refuses (403) without a session: the portal is open, the account is not (#480)
   - host: ldap
     port: 17170
     exposure: internal
