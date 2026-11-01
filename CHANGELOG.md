@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.9](https://github.com/mdopp/laib/compare/v0.57.8...v0.57.9) (2026-11-01)
+
+
+### Bug Fixes
+
+* **durchsicht:** check a pattern like a person before it becomes a wish ([cbd00d6](https://github.com/mdopp/laib/commit/cbd00d686baa7cb9efc54fd0ab4ec49917f609df))
+* **durchsicht:** check a pattern like a person before it becomes a wish ([b26d842](https://github.com/mdopp/laib/commit/b26d842d4eeada2605a13bb92d152bb9699603f5)), closes [#975](https://github.com/mdopp/laib/issues/975)
+
 ## [0.57.8](https://github.com/mdopp/laib/compare/v0.57.7...v0.57.8) (2026-10-31)
 
 
