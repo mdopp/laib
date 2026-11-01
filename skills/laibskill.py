@@ -29,7 +29,9 @@ gives them no credential. It catches a script that reaches past its door.
 
 import json
 import os
+import re
 import sys
+from datetime import datetime
 
 STDLIB = os.path.dirname(os.__file__)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -156,6 +158,20 @@ def field(d, key, default=""):
         if k.lower() == key.lower():
             return v if v is not None else default
     return default
+
+
+def when(s):
+    """A time as laib and journald write it (RFC 3339 up to nanoseconds, Z
+    or an offset with or without its colon), or None."""
+    m = re.match(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d):?(\d\d)?$", str(s or ""))
+    if not m or m[3] != "Z" and not m[4]:
+        return None
+    return datetime.fromisoformat(m[1] + (m[2] or "")[:7] + ("+00:00" if m[3] == "Z" else m[3] + ":" + m[4]))
+
+
+def hm(t, now):
+    """t on the clock of now's zone: 06:30."""
+    return t.astimezone(now.tzinfo).strftime("%H:%M")
 
 
 def main(script):

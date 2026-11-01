@@ -16,7 +16,7 @@ func TestTheLogReviewSkillIsChecked(t *testing.T) {
 		t.Fatalf("the built-in durchsicht: %+v", d)
 	}
 	for _, tool := range d.Tools {
-		if !slices.Contains([]string{"status", "logs", "state", "journal", "wish", "note"}, tool) {
+		if !slices.Contains([]string{"status", "logs", "state", "planned", "wish", "note"}, tool) {
 			t.Errorf("durchsicht reads and writes notes or wishes only, it names %s", tool)
 		}
 	}

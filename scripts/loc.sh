@@ -60,8 +60,8 @@ pyt=$(find skills -name 'test_*.py' -exec cat {} + 2>/dev/null | wc -l)
 n=$(find skills -mindepth 2 -maxdepth 2 -name skill.yml | wc -l)
 [ -n "$diet" ] || echo "skill scripts production: $py  tests: $pyt  skills: $n (cap 55, each script file 220)"
 [ "$n" -le 55 ] || { echo "more than 55 skills (#839)"; bad=1; }
-# each file of a skill's script: its run.py and a module beside it that run.py
-# imports (durchsicht's pruefung.py, #975) — no file escapes the cap
+# each file of a skill's script, run.py and what skills/lib/ shares (#978), no
+# file escapes the cap
 for f in skills/*/*.py; do
   case "$f" in */test_*) continue ;; esac
   l=$(wc -l < "$f")

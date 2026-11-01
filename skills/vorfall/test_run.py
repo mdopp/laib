@@ -1,6 +1,7 @@
 """vorfall's first aid (#792, #839). The runner-level tests are operator/vorfall792_test.go."""
 
 import importlib.util
+import json
 import os
 import sys
 import unittest
@@ -44,6 +45,17 @@ class FirstAid(unittest.TestCase):
         note = s.calls[-1][1]["text"]
         self.assertTrue(note.startswith("Vorfall 10:31: bote: unit bote-check.service ist failed. Im Log: bote: „Error: exit status 125“."), note)
         self.assertIn("ist es um 11:01 noch rot, eskaliere ich", note)
+
+    def test_the_boxs_json_gives_the_last_real_error_and_the_restarts_result(self):
+        # #978: on the box laib logs answers {unit: lines} and laib restart {checks, green}; the
+        # note of 2026-11-01 04:09 read „Im Log: home-assistant: „}“ … neu gestartet ({)“
+        logs = {"home-assistant.service": "2026-11-01T03:09:20+00:00 atHome-Server home-assistant[7]: 2026-11-01 04:09:20 ERROR (MainThread) [homeassistant.setup] Setup failed for zwave_js\n"
+                                          "2026-11-01T03:09:30+00:00 atHome-Server home-assistant[7]: 2026-11-01 04:09:30 INFO (MainThread) [homeassistant.core] Starting",
+                "home-assistant-check.service": "2026-11-01T03:09:25+00:00 atHome-Server pasta[9]: Flow 0: ERROR on epoll_ctl()"}
+        s = Fake(dict(OPENED, service="home-assistant", restart=["home-assistant"]), diag_after="[]")
+        s.call = lambda tool, **a: s.calls.append((tool, a)) or laibskill.Reply({"laib_logs": json.dumps(logs), "laib_restart": '{"checks": [], "green": true}', "laib_diag": "[]"}.get(tool, "ok"))
+        r = run.run(s)
+        self.assertIn("Im Log: home-assistant: „2026-11-01 04:09:20 ERROR (MainThread) [homeassistant.setup] Setup failed for zwave_js“. Schon getan: home-assistant neu gestartet (grün).", r["note"])
 
     def test_green_after_the_restart_ends_without_a_model(self):
         s = Fake(dict(OPENED), diag_after="[]")
