@@ -135,3 +135,48 @@ seeing only their own.
   - live capture through a linked device (Beeper Desktop is not headless,
     Matrix bridges are heavy and risk the WhatsApp account);
   - true end-to-end encryption (the box could not search; msgvault cannot).
+
+## Amendment 2026-11-01: the Briefkasten, and the latest backup stays
+
+Signal writes a full backup every night (2.7 GB for the owner). While a
+vault stays closed, those piled up in the inbox. The owner asked for an
+import that runs without opening the archive and still cannot read it
+(„Ein Container, der in sich geschlossen den Key hat, aber nicht nach
+draußen gibt“). They chose the box over the phone for now („A“): the
+phone would be safer, but it would have to parse Signal's changing
+backup format itself.
+
+1. **Briefkasten (mailbox).** When the vault is created, an age keypair
+   is generated.
+   - The private key lives in the vault; the public key and the
+     messenger keys (Signal passphrase, later WhatsApp key and IMAP
+     password) live outside it. The person still enters those keys only
+     while the vault is open.
+   - With the vault closed, the importer decrypts a new backup in RAM
+     (tmpfs), takes only messages and attachments it has not seen (HMAC
+     dedupe set), writes one age-encrypted packet to `briefkasten/`, and
+     deletes the plaintext.
+   - When the vault opens, the packets are imported, oldest first and
+     additive only, then deleted.
+   - The packet format is documented in mdopp/archiv, so the phone can
+     produce the same packets later. A person who wants protection from
+     the box's admin as well gets it then, without changing the archive.
+2. **The limit, stated in the guide:** the messenger keys sit on the box
+   and can be used without the person. Root can decrypt future backups as
+   they arrive, while the archive's history still needs the person's
+   password. This replaces decision 5's "the keys live in the vault" for
+   the messenger keys. The vault password, the private key and the
+   archive are unchanged.
+3. **The latest backup stays.** Per person and source,
+   `archiv-eingang/<person>/letzte/` keeps the newest raw backup:
+   - Signal's `.backup` and WhatsApp's `msgstore.db.crypt15`, both
+     encrypted by the messenger;
+   - all WhatsApp media, encrypted to the person's public key.
+
+   An older backup is deleted once a newer one is in the Briefkasten.
+   `letzte/` is `backup: false`: it is itself a backup of the phone, and
+   a 2.7 GB encrypted file that changes every night would grow restic by
+   that much each night.
+4. **Restoring a phone** (haus#209, haus-android#197): Haus serves
+   `letzte/` to a device of the same person, resumable. Media come only
+   through the open archive, because the private key is needed.
