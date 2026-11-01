@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0028**. Each file's first paragraph after the title says *in which
+number: **0030**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -34,3 +34,4 @@ situation* it applies, so an agent can self-select.
 | [0026](0026-household-verbs-live-outside-the-kernel.md) | Household verbs (scan, zuhause, person_*, calendar, net geraete) live outside the kernel: the kernel offers proposals scoped to box.yml/values paths and a verb door to programs that can only read and propose |
 | [0027](0027-only-what-touches-the-host-runs-on-the-host.md) | Only what touches the host runs on the host (laib, laib-disk, self-update, backup); Operator, notify, haushalt and lease run as containers with their own token and folders, never the age key or the state repo |
 | [0028](0028-documents-are-their-own-program.md) | Documents are their own program, Dokumente (scan, split, contracts and invoices, reminders, retry, one status), in its own repo; laib only runs it (the scan template) and keeps the box's part |
+| [0029](0029-one-message-archive-per-person.md) | One message archive per person: msgvault installed once per person, one LAN name `archiv.<domain>` routed by the signed-in person, each archive in a vault only its person opens, phone backups through Haus into `archiv-eingang/<person>/` |

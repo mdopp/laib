@@ -81,6 +81,9 @@ which kind of name goes where.
 | Frage | "was ist …": search plus summary | `frage/`, `templates/frage` |
 | Kraftwerk | the GPU box | — |
 | NUC | the trial box | — |
+| Archiv | a person's message archive (mail, WhatsApp, Signal): one msgvault instance per person, behind `archiv.<domain>` (ADR 0029) | template `msgvault`, `${DATA_DIR}/msgvault-<person>/` |
+| Tresor | the encrypted folder holding one person's Archiv and their keys; only that person opens it, it locks after two idle hours (ADR 0029); not Vaultwarden | inside `${DATA_DIR}/msgvault-<person>/` |
+| Archiv-Eingang | where Haus puts a person's phone backups, still encrypted, until their Tresor opens (ADR 0029) | `${DATA_DIR}/archiv-eingang/<person>/` |
 
 ### Legacy names
 
