@@ -1,7 +1,8 @@
 """durchsicht's script (#551, #839): the classifier and the review, without the runner.
 The runner-level tests are operator/durchsicht551_test.go; the planned stops
-it asks Laib for (laib planned, #978) are cmd/laib/planned978_test.go's, the
-same journals as the #975 cases here, whose windows these fakes answer."""
+it asks Laib for (laib planned, #978), the markers the actions set before they
+act, are cmd/laib/planned978_test.go's; these fakes answer the markers the
+#975 cases' actions would have set."""
 
 import importlib.util
 import json
@@ -196,18 +197,19 @@ def at(t, ident, msg):
     return f"{t}+00:00 atHome-Server {ident}: {msg}"
 
 
-def win(svc, label, stop, start):
-    """A window as laib planned answers it: from two minutes before the stop to three after the start."""
-    t0, t1 = laibskill.when(stop + "Z"), laibskill.when(start + "Z")
-    f = "%Y-%m-%dT%H:%M:%SZ"
-    return {"service": svc, "label": label, "stop": t0.strftime(f), "start": t1.strftime(f),
-            "from": (t0 - timedelta(minutes=2)).strftime(f), "to": (t1 + timedelta(minutes=3)).strftime(f)}
+def win(svc, label, since, end, dependent=True):
+    """A maintenance marker as laib planned answers it (#978): set before the action, cleared at its
+    end; a dependent's lines are expected three minutes longer."""
+    t0, t1 = laibskill.when(since + "Z"), laibskill.when(end + "Z")
+    f = "%Y-%m-%dT%H:%M:%S.%fZ"
+    return {"services": [svc], "label": label, "since": t0.strftime(f), "end": t1.strftime(f), "from": t0.strftime(f),
+            "to": (t1 + timedelta(minutes=3 if dependent else 0)).strftime(f), "overdue": False}
 
 
 REFUSED = "2026/10/31 10:08:49 haus: HA state_changed: dial tcp 169.254.1.2:8123: connect: connection refused"
-# Home Assistant's three applies of 2026-10-31 (#305), as cmd/laib/planned978_test.go computes them
-HA_APPLIES = [win("home-assistant", "Anwenden", "2026-10-31T09:08:47", "2026-10-31T09:08:57"), win("home-assistant", "Anwenden", "2026-10-31T09:11:03", "2026-10-31T09:11:10"),
-              win("home-assistant", "Anwenden", "2026-10-31T11:11:22", "2026-10-31T11:11:27")]
+# Home Assistant's three applies of 2026-10-31 (#305), with the markers they set: from the apply's start to its end
+HA_APPLIES = [win("home-assistant", "Anwenden", "2026-10-31T09:08:36.505", "2026-10-31T09:08:44.778"), win("home-assistant", "Anwenden", "2026-10-31T09:09:31.789", "2026-10-31T09:11:37.352"),
+              win("home-assistant", "Anwenden", "2026-10-31T11:11:19.193", "2026-10-31T11:11:55.484")]
 
 
 def haus(*times):
@@ -226,13 +228,14 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertEqual(r["outcome"], "unchanged")
         self.assertEqual(r["state"], {})  # never a pattern: the next review does not call it recurring
         self.assertEqual(notes(s), ["Protokoll-Durchsicht: keine neuen Fehlermuster. Aussortiert, kein Wunsch: haus.service 7× während eines geplanten Neustarts "
-                                    "(Anwenden von home-assistant 10:08, Anwenden von home-assistant 10:11, Anwenden von home-assistant 12:11)."])
+                                    "(Anwenden von home-assistant 10:08, Anwenden von home-assistant 10:09, Anwenden von home-assistant 12:11)."])
 
     def test_304_music_assistant_502_while_the_backup_stopped_home_assistant_is_expected(self):
         msg = "aiohttp.client_exceptions.WSServerHandshakeError: 502, message='Invalid response status', url='wss://home.dopp.cloud/api/websocket'"
         day = {"music-assistant": {"music-assistant.service": "\n".join(at(t, "systemd-music-assistant[994158]", msg) for t in
                                                                      ("2026-11-01T03:07:40", "2026-11-01T03:08:30", "2026-11-01T03:09:30", "2026-11-01T03:09:35", "2026-11-01T03:11:00"))}}
-        windows = [win("home-assistant", "Sicherung", "2026-11-01T03:07:28", "2026-11-01T03:08:21"), win("home-assistant", "laib restart", "2026-11-01T03:09:27", "2026-11-01T03:09:33")]
+        # the backup's marker from before its quiesce stop to the restart after the snapshot, then ops' restart
+        windows = [win("home-assistant", "Sicherung", "2026-11-01T03:07:27", "2026-11-01T03:08:22.751"), win("home-assistant", "laib restart", "2026-11-01T03:09:26", "2026-11-01T03:09:39.543")]
         s = Fake(day, planned={"music-assistant": windows}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
@@ -254,7 +257,7 @@ class CheckedLikeAPerson(unittest.TestCase):
     def test_294_the_lease_stopped_by_each_laib_update_is_expected(self):
         times = ["2026-10-30T08:22:22", "2026-10-30T11:05:45", "2026-10-30T16:29:58", "2026-10-30T19:27:26", "2026-10-30T21:09:09", "2026-10-30T22:23:37", "2026-10-30T23:56:48", "2026-10-31T00:46:50"]
         lines = [at(t, "systemd[1373]", "llama-lease.service: Failed with result 'exit-code'.") for t in times]
-        s = Fake({"llama": {"llama-lease.service": "\n".join(lines)}}, planned={"llama": [win("llama", "Update", t, t) for t in times]}, now="2026-10-31T06:30:00+01:00")
+        s = Fake({"llama": {"llama-lease.service": "\n".join(lines)}}, planned={"llama": [win("llama", "Update", t, t, dependent=False) for t in times]}, now="2026-10-31T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertIn("llama-lease.service 8× während eines geplanten Neustarts (Update von llama ", notes(s)[0])
@@ -274,7 +277,7 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertEqual(run.check(s, "laib_note", {"text": "x"}), "")
 
     def test_a_stop_the_journal_does_not_account_for_is_not_planned(self):
-        # a crash cascade or a hand at systemctl: laib planned has no window (cmd/laib/planned978_test.go)
+        # a crash cascade or a hand at systemctl: nothing announced it, laib planned has no marker
         day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
         r = run.run(Fake(day, planned={"haus": []}, now="2026-10-31T11:00:00+01:00"))
         self.assertIn("neu, haus.service, 3×", r["context"])
@@ -305,7 +308,7 @@ class CheckedLikeAPerson(unittest.TestCase):
 
     def test_a_new_pattern_gone_since_a_planned_restart_of_a_green_service_is_over(self):
         day = haus("2026-11-01T04:00:00", "2026-11-01T04:05:00", "2026-11-01T04:10:00")
-        restart = {"haus": [win("haus", "Anwenden", "2026-11-01T04:30:00", "2026-11-01T04:30:10")]}
+        restart = {"haus": [win("haus", "Anwenden", "2026-11-01T04:29:50", "2026-11-01T04:30:20", dependent=False)]}
         s = Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00")
         run.run(s)
         self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von haus um 05:30 nicht mehr, Dienst grün", notes(s)[0])

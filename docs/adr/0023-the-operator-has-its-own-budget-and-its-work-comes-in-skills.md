@@ -841,27 +841,37 @@ service depend on“ into durchsicht's script, a second file and a map kept
 by hand, while the kernel answered the same question for the look in Go
 (#907). Two answers, two languages.
 
-- **A fact about the box is the kernel's, read by one verb.** `laib
-  planned <service>` answers the planned stops of a service and of what it
-  depends on, each with the window its lines are expected in, what holds it
-  now and its findings (`internal/diag/planned.go`). diag holds a look's
-  red by the same code, so the look, vorfall's first aid (which only a
-  look's red opens) and the log review agree by construction. What a
-  service depends on is its contract: `after:`, `uses:` (a service it talks
-  to without ordering after it, Home Assistant's clients), `needs: [mcp]`,
-  `oidc:`. The map and the test holding it to the templates are gone.
-  Gesundheit's template, in its own repo, names no `uses:` yet.
+- **A planned stop is announced before it happens, by the kernel.** The
+  owner: „Wäre es nicht sinnvoller, im Vorfeld einen Marker zu setzen, dass
+  jetzt bis x Uhr ein Neustart durchgeführt wird und bis dahin bestimmte
+  Tests einfach nicht laufen müssen? Und sollte der Marker nicht nach der
+  Uhrzeit gelöscht werden, erst dann gibt es eine Problemanalyse …?“ Every
+  action that stops or starts services on purpose sets a maintenance
+  marker first (`internal/apply/marker.go`: apply, converge, restart,
+  start, the backup's quiesce, the updates run, Laib's own start): what it
+  acts on, their dependents, who, until when; it clears the marker at its
+  end. While it holds, diag shows their reds as expected (the look, the
+  incident intake and the log review skip them); one not cleared by its
+  until is red itself, and only then does the Operator analyse. `laib
+  planned <service>` returns the markers that hold or held a service, so
+  diag and the skills read one answer; nothing is guessed afterwards from
+  `Stopping` lines. What a service depends on is its contract: `after:`,
+  `uses:` (a service it talks to without ordering after it, Home
+  Assistant's clients), `needs: [mcp]`, `oidc:`. The map and the test
+  holding it to the templates are gone. Gesundheit's template, in its own
+  repo, names no `uses:` yet.
 - **A skill's script is one file, one theme, at most 220 lines.** What two
   skills share lives in `skills/lib/` (the door's path already reads it):
   `logzeilen.py`, how a journal line is read and whether it is a real
   error, used by durchsicht's grouping and by vorfall's first aid, which
   showed the last line of laib logs' JSON („}“) until now. durchsicht's
   `pruefung.py` is gone; its #975 behaviour is unchanged, its tests moved
-  with it (the windows to `cmd/laib/planned978_test.go`, the judgement on
-  them stays in `skills/durchsicht/test_run.py`). A second file in a
+  with it (the markers to `cmd/laib/planned978_test.go`, the judgement on
+  their windows stays in `skills/durchsicht/test_run.py`, fed the markers
+  the #975 cases' actions would have set). A second file in a
   skill's folder is a sign its theme is two.
 - durchsicht asks `planned` instead of reading `journal` and the units'
-  `Stopping` lines itself; vorfall's capable model may ask it for a red
+  `Stopping` lines itself (#975's way, now gone); vorfall's capable model may ask it for a red
   the kernel posted (`more:`, so a box without the grant loses nothing of
   vorfall's job). The Kraftwerk's narrowed ops has no `planned`: the update
   run proposes the grant for durchsicht, once (#932's mechanism); until a

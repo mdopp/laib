@@ -2,10 +2,11 @@
 
 Groups every service's warnings and errors of a day by pattern, by content,
 never by the journal's priority. A pattern is checked as a person would
-(#975): a line in a planned stop's window of its service or of one it
-depends on is only counted, as Laib answers it (laib planned, #978); a new
-pattern quiet for six hours or gone since a planned restart of a green
-service is over; a certificate obtained after its failures is resolved.
+(#975): a line in the window of a maintenance marker of its service or of
+one it depends on — announced before the restart (laib planned, #978) —
+is only counted; a new pattern quiet for six hours or gone since a planned
+restart of a green service is over; a certificate obtained after its
+failures is resolved.
 The model sees what is left: new, recurring or growing. docs/SKILLS.md.
 """
 
@@ -46,19 +47,19 @@ def harmless(s):
 
 
 class Plan:
-    """The planned stops of a service and of what it depends on, as Laib
-    answers them (laib planned, #978), asked once per service."""
+    """The maintenance markers that held a service — its own and those of what
+    it depends on — as Laib answers them (laib planned, #978), asked once per service."""
 
     def __init__(self, s):
         self.s, self.now, self.asked, self.unread, self.expected = s, when(s.now) or datetime.now(timezone.utc), {}, set(), {}
 
     def of(self, svc):
         if svc not in self.asked:
-            p = self.s.call("laib_planned", service=svc, since="25h").json()
-            ws = field(p, "windows", None)
-            if not isinstance(ws, list) or field(p, "unread", []):
+            ws = field(self.s.call("laib_planned", service=svc).json(), "windows", None)  # its maintenance markers (#978)
+            if not isinstance(ws, list):
                 self.unread.add(svc)
-            ws = [Window(field(w, "service"), field(w, "label"), *(when(field(w, k)) for k in ("stop", "start", "from", "to"))) for w in ws or [] if isinstance(w, dict)]
+            ws = [Window(", ".join(field(w, "services", [])), field(w, "label"), *(when(field(w, k) or field(w, "until")) for k in ("since", "end", "from", "to")))
+                  for w in ws or [] if isinstance(w, dict)]
             self.asked[svc] = [w for w in ws if None not in w]
         return self.asked[svc]
 
