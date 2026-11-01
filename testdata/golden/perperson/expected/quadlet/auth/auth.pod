@@ -1,0 +1,5 @@
+[Pod]
+PodName=auth
+PublishPort=127.0.0.1:9091:9091
+PublishPort=127.0.0.1:17170:17170
+PublishPort=0.0.0.0:3890:3890

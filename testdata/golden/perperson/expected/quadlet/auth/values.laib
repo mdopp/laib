@@ -1,0 +1,14 @@
+# Rendered by laib: the values of auth (#364); a secret by its name only.
+AUTHELIA_IMAGE=docker.io/authelia/authelia:4
+BASE_DN=dc=example,dc=home
+JWT_SECRET=!secret AUTHELIA_JWT_SECRET
+LLDAP_ADMIN=!secret LLDAP_ADMIN_PASSWORD
+LLDAP_IMAGE=docker.io/lldap/lldap:stable
+LLDAP_JWT=!secret LLDAP_JWT_SECRET
+OIDC_HMAC=!secret AUTHELIA_OIDC_HMAC_SECRET
+OPERATOR_DISPLAY=Admin
+OPERATOR_EMAIL=admin@example.home
+OPERATOR_PW=!secret OPERATOR_PASSWORD
+OPERATOR_USER=admin
+SESSION_SECRET=!secret AUTHELIA_SESSION_SECRET
+STORAGE_KEY=!secret AUTHELIA_STORAGE_KEY

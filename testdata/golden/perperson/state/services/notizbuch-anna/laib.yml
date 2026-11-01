@@ -1,0 +1,26 @@
+name: notizbuch-anna
+person: anna
+portOffset: 1
+title: Notizbuch
+beschreibung: Ein Notizbuch je Person, für #986
+# A test template, not shipped (testdata): installed once per person
+# (laib add notizbuch --person <p>), all instances behind notizen.<domain>.
+perPerson: true
+template: {registry: builtin, name: notizbuch, version: 1}
+provides: [notizbuch]
+routes:
+  - host: notizen
+    port: 8480
+    exposure: internal
+    auth: one_factor
+    group: family
+    proxySecret: NOTIZBUCH_KEY
+    proxyHeader: X-API-Key
+secrets:
+  - name: NOTIZBUCH_KEY
+data:
+  - path: ${DATA_DIR}/${SERVICE}
+health:
+  http: http://127.0.0.1:8480/health
+ports:
+  - {port: 8480, lan: false}

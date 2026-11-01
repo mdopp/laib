@@ -92,6 +92,8 @@ type AddService struct {
 	Name     string
 	Template fs.FS // the template folder as a file system
 	Values   map[string]string
+	Person   string // a per-person template's person (#986): Name is <template>-<person>
+	offset   int
 }
 
 // CreateFromEdit applies the edit in a temporary worktree on a new branch,
@@ -327,6 +329,29 @@ func addService(wt string, a *AddService) error {
 	if err != nil {
 		return err
 	}
+	var tpl state.Contract
+	b, _ := fs.ReadFile(a.Template, "laib.yml")
+	if err := yaml.Unmarshal(b, &tpl); err != nil {
+		return fmt.Errorf("the template's laib.yml: %w", err)
+	}
+	switch offset := 0; {
+	case tpl.PerPerson != (a.Person != ""):
+		return fmt.Errorf("template %s: a per-person template is added with --person, and only it (#986)", tpl.Name)
+	case a.Person != "":
+		// the lowest offset no other instance of the template has: its host ports
+		used := map[int]bool{}
+		others, _ := filepath.Glob(filepath.Join(wt, "services", "*", "laib.yml"))
+		for _, f := range others {
+			var c state.Contract
+			if b, err := os.ReadFile(f); err == nil && yaml.Unmarshal(b, &c) == nil && c.Person != "" && c.Template.Name == tpl.Template.Name {
+				used[c.PortOffset] = true
+			}
+		}
+		for used[offset] {
+			offset++
+		}
+		a.offset = offset
+	}
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -340,14 +365,7 @@ func addService(wt string, a *AddService) error {
 			name = "values.yml"
 		}
 		if name == "laib.yml" {
-			// the template's own name line is "name: <template>"; rewrite it.
-			lines := strings.Split(string(b), "\n")
-			for i, l := range lines {
-				if strings.HasPrefix(l, "name: ") {
-					lines[i] = "name: " + a.Name
-				}
-			}
-			b = []byte(strings.Join(lines, "\n"))
+			b = ContractOf(b, a.Name, a.Person, a.offset)
 		}
 		mode := fs.FileMode(0o644)
 		if isHook(name) {
@@ -387,6 +405,10 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	var was state.Contract // a person's instance stays theirs (#986)
+	if b, err := os.ReadFile(filepath.Join(dst, "laib.yml")); err == nil {
+		yaml.Unmarshal(b, &was)
+	}
 	var noBase, conflicts []string
 	shipped := map[string]bool{}
 	for _, e := range entries {
@@ -398,13 +420,7 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 			return nil, err
 		}
 		if e.Name() == "laib.yml" {
-			lines := strings.Split(string(b), "\n")
-			for i, l := range lines {
-				if strings.HasPrefix(l, "name: ") {
-					lines[i] = "name: " + u.Name
-				}
-			}
-			b = []byte(strings.Join(lines, "\n"))
+			b = ContractOf(b, u.Name, was.Person, was.PortOffset)
 		}
 		file := b
 		cur, curErr := os.ReadFile(filepath.Join(dst, e.Name()))
@@ -472,6 +488,22 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 		warn = append(warn, fmt.Sprintf("services/%s: in %s ändern die Box und die Vorlage dieselben Zeilen. Die Vorlage gilt: prüfe im Diff, ob dabei eine Änderung des Besitzers verloren geht.", u.Name, strings.Join(conflicts, ", ")))
 	}
 	return warn, nil
+}
+
+// ContractOf is a template's laib.yml as the service's: its name line
+// "name: <template>" is the service's, and a person's instance (#986)
+// gets its person and port offset after it.
+func ContractOf(b []byte, name, person string, offset int) []byte {
+	lines := strings.Split(string(b), "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "name: ") {
+			lines[i] = "name: " + name
+			if person != "" {
+				lines[i] += fmt.Sprintf("\nperson: %s\nportOffset: %d", person, offset)
+			}
+		}
+	}
+	return []byte(strings.Join(lines, "\n"))
 }
 
 // onlyNames: laib.yml in the worktree differs from main's only in its title

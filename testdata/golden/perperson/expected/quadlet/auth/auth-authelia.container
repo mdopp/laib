@@ -1,0 +1,20 @@
+[Unit]
+Description=Authelia — forward-auth and OIDC (laib role: sso)
+After=auth-lldap.service
+
+[Container]
+Image=docker.io/authelia/authelia:4
+Pod=auth.pod
+Environment=TZ=Europe/Berlin
+Environment=X_AUTHELIA_CONFIG=/config/configuration.yml,/laib/laib-access.yml,/config/oidc-clients.yml
+Environment=X_AUTHELIA_CONFIG_FILTERS=template
+Volume=/mnt/data/stacks/auth/authelia-config:/config:z
+Volume=/mnt/data/stacks/auth/authelia-data:/data:z
+Volume=/mnt/data/laib/render/authelia:/laib:ro,z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

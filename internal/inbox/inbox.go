@@ -37,7 +37,7 @@ import (
 // Propose has two shapes. A human with a shell: `laib propose "<grund>"`
 // commits the working tree. An agent over MCP (issue #11): `--patch` (diff
 // on stdin), `--set services/x/values.yml:KEY=VALUE`, `--add <template>
-// [--name n] [KEY=VALUE…]`, applied in a worktree and validated first.
+// [--name n] [--person p] [KEY=VALUE…]`, applied in a worktree and validated first.
 func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -127,6 +127,12 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 			}
 			edit.Add.Name = args[i+1]
 			i++
+		case "--person": // a per-person template for one person, as <template>-<person> (#986)
+			if edit.Add == nil || i+1 >= len(args) {
+				return env.Fail(errors.New("--person follows --add"))
+			}
+			edit.Add.Person, edit.Add.Name = args[i+1], edit.Add.Name+"-"+args[i+1]
+			i++
 		default:
 			if edit.Add != nil && isValueArg(args[i]) {
 				k, v, _ := strings.Cut(args[i], "=")
@@ -148,7 +154,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	reason := strings.Join(words, " ")
 	if reason == "" {
-		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--path file:a.b=VALUE|--add <template> [--name n] [KEY=VALUE…]|--grant <hand> <verb>] \"<grund>\""))
+		return env.Fail(errors.New("usage: laib propose [--patch|--set path:KEY=VALUE|--path file:a.b=VALUE|--add <template> [--name n] [--person p] [KEY=VALUE…]|--grant <hand> <verb>] \"<grund>\""))
 	}
 	// the finding a proposal answers is one diag shows now, or laib measures nothing (#544)
 	if anchor.Finding != "" && Present != nil && !Present(ctx, env, st, anchor.Finding) {
@@ -362,11 +368,11 @@ func TemplateFS(env *cli.Env, name string) (fs.FS, error) {
 }
 
 // Add is the human's install verb: `laib add <template> [--name n]
-// [KEY=VALUE…] ["reason"]` — the --add proposal, approved by the same
+// [--person p] [KEY=VALUE…] ["reason"]` — the --add proposal, approved by the same
 // human, applied. Agents keep proposing; this is sugar for the shell.
 func Add(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 1 {
-		return env.Fail(errors.New("usage: laib add <template> [--name <service>] [KEY=VALUE…] [\"<grund>\"]"))
+		return env.Fail(errors.New("usage: laib add <template> [--name <service>] [--person <person>] [KEY=VALUE…] [\"<grund>\"]"))
 	}
 	if proposal.Hand(env.Actor) != "human" {
 		return cli.Refused(env, "add is the human's verb; agents use propose --add")
@@ -385,6 +391,9 @@ func Add(ctx context.Context, env *cli.Env, args []string) int {
 		switch {
 		case args[i] == "--name" && i+1 < len(args):
 			add.Name = args[i+1]
+			i++
+		case args[i] == "--person" && i+1 < len(args):
+			add.Person, add.Name = args[i+1], add.Name+"-"+args[i+1]
 			i++
 		case isValueArg(args[i]):
 			k, v, _ := strings.Cut(args[i], "=")

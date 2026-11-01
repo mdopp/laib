@@ -1,0 +1,17 @@
+[Unit]
+Description=Caddy (laib role: proxy)
+After=network-online.target
+
+[Container]
+Image=ghcr.io/mdopp/laib-caddy:2
+Network=host
+Secret=laib.caddy.caddy.LAIB_DNS_TOKEN,type=env,target=LAIB_DNS_TOKEN
+Volume=/mnt/data/laib/render/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,z
+Volume=/mnt/data/stacks/caddy/data:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

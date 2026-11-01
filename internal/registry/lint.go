@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/render"
 	"github.com/mdopp/laib/internal/state"
 	"gopkg.in/yaml.v3"
@@ -30,26 +31,42 @@ func LintTemplate(env *cli.Env, dir string) int {
 		return env.Fail(err)
 	}
 	defer os.RemoveAll(tmp)
-	name := filepath.Base(filepath.Clean(dir))
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+name+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
+	tpl := filepath.Base(filepath.Clean(dir))
+	// a per-person template (#986) is linted as two persons' instances, a
+	// and b, side by side: whatever they share names a collision
+	var pp struct {
+		PerPerson bool `yaml:"perPerson"`
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "laib.yml"))
+	yaml.Unmarshal(b, &pp)
+	names, people, name := []string{tpl}, "", tpl
+	if pp.PerPerson {
+		names, people, name = []string{tpl + "-a", tpl + "-b"}, "people: {a: [\"email:a@lint.example\"], b: [\"email:b@lint.example\"]}\n", tpl+"-a"
+	}
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"+people), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
-	dst := filepath.Join(tmp, "services", name)
-	os.MkdirAll(dst, 0o755)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return env.Fail(err)
 	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	for i, svc := range names {
+		dst := filepath.Join(tmp, "services", svc)
+		os.MkdirAll(dst, 0o755)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			b, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+			if pp.PerPerson && e.Name() == "laib.yml" {
+				b = proposal.ContractOf(b, svc, svc[len(tpl)+1:], i)
+			}
+			os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
 		}
-		b, _ := os.ReadFile(filepath.Join(dir, e.Name()))
-		os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
-	}
-	if _, err := os.Stat(filepath.Join(dst, "values.yml")); err != nil {
-		// A template ships values.example.yml; lint with it.
-		if b, err := os.ReadFile(filepath.Join(dir, "values.example.yml")); err == nil {
-			os.WriteFile(filepath.Join(dst, "values.yml"), b, 0o644)
+		if _, err := os.Stat(filepath.Join(dst, "values.yml")); err != nil {
+			// A template ships values.example.yml; lint with it.
+			if b, err := os.ReadFile(filepath.Join(dir, "values.example.yml")); err == nil {
+				os.WriteFile(filepath.Join(dst, "values.yml"), b, 0o644)
+			}
 		}
 	}
 	// after: names services the template expects to exist; stub them so the
@@ -60,7 +77,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 		}
 		if yaml.Unmarshal(b, &c) == nil {
 			for _, dep := range c.After {
-				if dep == name {
+				if dep == tpl {
 					continue
 				}
 				stub := filepath.Join(tmp, "services", dep)
@@ -83,7 +100,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 	// may be mounted too: the file share's folders in media, immich, paperless
 	var neighbours []string
 	for dep := range st.Services {
-		if dep == name {
+		if slices.Contains(names, dep) {
 			continue
 		}
 		if b, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Clean(dir)), dep, "laib.yml")); err == nil {
@@ -97,7 +114,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out), lintPodNetwork(name, out)); len(errs) > 0 {
+	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out), lintPodNetwork(name, out), lintInstances(names, out)); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(env.Errw(), e)
 		}
@@ -128,7 +145,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 	pods, _ := filepath.Glob(filepath.Join(filepath.Dir(filepath.Clean(dir)), "*", "*.pod"))
 	for _, f := range append(siblings, pods...) {
 		other := filepath.Base(filepath.Dir(f))
-		if other == name {
+		if other == tpl {
 			continue
 		}
 		b, _ := os.ReadFile(f)
@@ -139,8 +156,30 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", name, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
+	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", tpl, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
 	return cli.ExitOK
+}
+
+// lintInstances: two persons' instances (#986) name no container, pod,
+// volume or network alike; a unit name alike is the loader's error.
+func lintInstances(names []string, out render.Output) []string {
+	var errs []string
+	seen := map[string]string{}
+	for _, svc := range names {
+		for _, key := range slices.Sorted(maps.Keys(out)) {
+			for _, line := range strings.Split(out[key], "\n") {
+				k, _, _ := strings.Cut(strings.TrimSpace(line), "=")
+				if !strings.HasPrefix(key, "quadlet/"+svc+"/") || !slices.Contains([]string{"ContainerName", "PodName", "VolumeName", "NetworkName"}, k) {
+					continue
+				}
+				if prev, ok := seen[strings.TrimSpace(line)]; ok && prev != svc {
+					errs = append(errs, fmt.Sprintf("%s: %s is %s's too: a per-person template names it with ${SERVICE} (#986)", key, strings.TrimSpace(line), prev))
+				}
+				seen[strings.TrimSpace(line)] = svc
+			}
+		}
+	}
+	return errs
 }
 
 // lintEnvironment: systemd splits an unquoted Environment= value at

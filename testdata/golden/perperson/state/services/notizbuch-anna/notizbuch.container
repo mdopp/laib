@@ -1,0 +1,15 @@
+[Unit]
+Description=Notizbuch of ${PERSON}
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:8480:8080
+Volume=${DATA_DIR}/${SERVICE}:/data:Z
+Environment=NOTIZBUCH_OWNER=${PERSON}
+Environment=NOTIZBUCH_KEY=${KEY}
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

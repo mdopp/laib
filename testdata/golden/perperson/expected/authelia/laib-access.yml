@@ -1,0 +1,22 @@
+# Rendered by laib: every access rule. Anything unlisted, the bare apex
+# included, is denied.
+access_control:
+  default_policy: deny
+  rules:
+    - domain: laib.example.home
+      policy: two_factor
+      subject: "group:admins"
+    - domain: auth.example.home
+      policy: bypass
+    - domain: ldap.example.home
+      policy: two_factor
+      subject: "group:admins"
+    - domain: notizen.example.home
+      policy: bypass
+      resources: ["^/p/anna/.*$"]
+    - domain: notizen.example.home
+      policy: bypass
+      resources: ["^/p/martin/.*$"]
+    - domain: notizen.example.home
+      policy: one_factor
+      subject: ["group:family", "group:admins"]

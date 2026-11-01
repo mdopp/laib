@@ -148,6 +148,7 @@ func loadService(dir string) (*Service, error) {
 	if err := svc.applyWhen(); err != nil {
 		return nil, err
 	}
+	svc.instance()
 	if s := svc.Contract.Status; s != nil {
 		if !strings.HasPrefix(s.File, "${DATA_DIR}/") || strings.Contains(s.File, "..") {
 			return nil, fmt.Errorf("services/%s/laib.yml: status.file %q must lie under ${DATA_DIR}/", svc.Name, s.File)
@@ -314,6 +315,16 @@ func (st *State) validate() []error {
 		if c.OIDC != nil && c.OIDC.ClientID != "" {
 			declared[OIDCSecretName(c.OIDC.ClientID)] = true // generated with the client, referenced by values
 		}
+		switch person := c.Person; {
+		case person != "" && !c.PerPerson:
+			fail("services/%s/laib.yml: person: on a template that is not perPerson", name)
+		case c.PerPerson && person == "":
+			fail("services/%s: a per-person template is installed for one person: laib add %s --person <name> (#986)", name, c.Template.Name)
+		case person != "" && st.Box.People[person] == nil:
+			fail("services/%s/laib.yml: person %q is not in box.yml people", name, person)
+		case person != "" && c.OIDC != nil:
+			fail("services/%s/laib.yml: a person's instance has no OIDC client: Authelia's login picks the instance (#986)", name)
+		}
 		for _, k := range slices.Sorted(maps.Keys(svc.Values)) {
 			if ref := svc.Values[k].Secret; ref != "" && !declared[ref] {
 				fail("services/%s/values.yml: %s references undeclared secret %s", name, k, ref)
@@ -333,8 +344,12 @@ func (st *State) validate() []error {
 			if r.Host == "" || r.Port == 0 {
 				fail("services/%s/laib.yml: routes[%d] needs host and port", name, i)
 			}
-			if prev, dup := hosts[r.Host]; dup {
+			// the persons' instances of one template share their host (#986)
+			if prev, dup := hosts[r.Host]; dup && (c.Person == "" || st.Services[prev] == nil || st.Services[prev].Contract.Person == "" || st.Services[prev].Contract.Template.Name != c.Template.Name) {
 				fail("services/%s/laib.yml: host %q already published by %s", name, r.Host, prev)
+			}
+			if c.Person != "" && (r.Auth == "none" || len(r.Bypass) > 0) {
+				fail("services/%s/laib.yml: routes[%d]: a person's route has a login and no bypass: Remote-User picks the instance, /p/%s/ is its only way past Authelia (#986)", name, i, c.Person)
 			}
 			hosts[r.Host] = name
 			if r.Auth != "none" && st.Box.Roles.SSO == "" {
@@ -399,6 +414,25 @@ func (st *State) validate() []error {
 			}
 		}
 	}
+	// one unit, one service (#986): Quadlet names a unit by its file, so two
+	// per-person instances of one template must not keep the template's names;
+	// and an instance keeps no data path another instance keeps
+	unit, kept := map[string]string{}, map[string]string{}
+	for _, name := range st.ServiceNames() {
+		for _, file := range slices.Sorted(maps.Keys(st.Services[name].Units)) {
+			if prev, ok := unit[cmp.Or(unitName(file), file)]; ok {
+				fail("services/%s and services/%s both make the unit %s: a per-person template's files start with its name (#986)", prev, name, file)
+			}
+			unit[cmp.Or(unitName(file), file)] = name
+		}
+		for _, d := range st.Services[name].Contract.Data {
+			if prev, ok := kept[d.Path]; ok && st.Services[name].Contract.Person != "" {
+				fail("services/%s and services/%s both keep %s: a person's instance names ${SERVICE} or ${PERSON} in its data paths (#986)", prev, name, d.Path)
+			} else if st.Services[name].Contract.Person != "" {
+				kept[d.Path] = name
+			}
+		}
+	}
 	// one host port, one service (#46): two units publishing the same port
 	// never both start, and podman says so only at the second start
 	owner := map[string]string{}
@@ -449,6 +483,7 @@ var Builtins = []string{"DOMAIN", "DATA_DIR", "TZ", "SERVICE", "LAN_IP", "MODEL_
 	"PERSONA", "PERSONA_DISPLAY", "PERSONA_PHRASE", "PERSONA_WAKEWORD", "PERSONA_VOICE", "PERSONA_LANGUAGES", "PERSONA_REV", // the house persona (ADR 0020)
 	"ZUHAUSE_STREET", "ZUHAUSE_POSTCODE", "ZUHAUSE_CITY", "ZUHAUSE_COUNTRY", "ZUHAUSE_LATITUDE", "ZUHAUSE_LONGITUDE", "ZUHAUSE_ELEVATION", "ZUHAUSE_REV", // box.yml zuhause (#561)
 	"NOTIFY_PERSON", // box.yml notify.person: whom a service tells by default (#568)
+	"PERSON",        // a person's instance: its person, the Remote-User it serves (#986); empty elsewhere
 	"PEOPLE_REV",    // box.yml people (ADR 0022 §3): a unit that carries it gets render/people/people.json
 	"BOTE_SIGNAL",   // the number the household writes to on Signal, a service's channels.signal value (haus#175)
 	"LAIB_PAGE_URL"} // the box page, https://<box.yml laib.host>.<domain>/ (#381, #480)
@@ -594,8 +629,15 @@ func (st *State) Order(names []string) []string {
 func (st *State) purposeWarnings() []string {
 	by := map[string][]string{}
 	for _, name := range st.ServiceNames() {
-		for _, p := range st.Services[name].Contract.Provides {
-			by[p] = append(by[p], name)
+		c := st.Services[name].Contract
+		who := name // the persons' instances of one template are one service here (#986)
+		if c.Person != "" {
+			who = c.Template.Name
+		}
+		for _, p := range c.Provides {
+			if !slices.Contains(by[p], who) {
+				by[p] = append(by[p], who)
+			}
 		}
 	}
 	var out []string

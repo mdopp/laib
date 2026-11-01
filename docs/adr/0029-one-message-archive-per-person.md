@@ -111,7 +111,13 @@ seeing only their own.
 
 - **The kernel gains two things,** both general and neither specific to
   msgvault: a template installed per person, and a route that bundles a
-  template's instances under one name.
+  template's instances under one name. Their shape (laib#986,
+  `docs/STATE.md` "A template per person"): `perPerson: true` in the
+  template, `laib add <template> --person <p>`, the service
+  `<template>-<p>` with `person:` and `portOffset:`; its units, secrets and
+  host ports made its own at load; one Caddy site for the shared host,
+  dispatching on Authelia's `Remote-User`, with `/p/<person>/` past
+  Authelia.
 - **Haus gains three things:**
   - a resumable upload for multi-GB files (Signal backups) beside the 25 MB
     camera upload;

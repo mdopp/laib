@@ -1,0 +1,8 @@
+[Unit]
+Description=Notizbuch sync of martin
+
+[Timer]
+OnCalendar=hourly
+
+[Install]
+WantedBy=timers.target

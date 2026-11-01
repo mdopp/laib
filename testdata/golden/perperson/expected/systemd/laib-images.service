@@ -1,0 +1,12 @@
+# Rendered by laib (#528, #547): Laib's own update, then the images laib keeps current, verify, the previous one back on red.
+[Unit]
+Description=Laib images
+
+[Service]
+Type=oneshot
+ExecStartPre=-/bin/bash /var/opt/laib/self-update.sh
+ExecStart=/var/opt/laib/laib updates --run
+ExecStartPost=-/var/opt/laib/laib template sync --propose
+Environment=LAIB_HOME=/mnt/data/laib
+Environment=LAIB_ACTOR=laib
+Environment=LAIB_UPDATE=auto

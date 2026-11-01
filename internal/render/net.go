@@ -91,12 +91,25 @@ func Net(st *state.State) NetMap {
 	}
 	// Laib's own port: loopback, or for the pods too while nftables keeps the LAN out
 	n.Ports = append(n.Ports, NetPort{Service: "laib", Port: st.Box.Laib.Port, Reach: map[bool]string{true: "nur Box und Pods", false: "nur Box"}[slices.Contains(dropped, st.Box.Laib.Port)]})
+	done := map[string]bool{}
 	for _, name := range st.ServiceNames() {
 		c := st.Services[name].Contract
 		for _, r := range c.Routes {
 			owner[r.Port] = name
-			a := rule(rules, fqdn(st, r.Host))
-			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port), Bypass: r.Bypass, LoginProbe: r.LoginProbe}
+			if done[r.Host] {
+				continue // one name for the persons' instances (#986)
+			}
+			done[r.Host] = true
+			a, up := rule(rules, fqdn(st, r.Host)), fmt.Sprintf("%s 127.0.0.1:%d", name, r.Port)
+			if is := st.Instances(r.Host); is != nil {
+				var each []string
+				for _, i := range is {
+					each = append(each, fmt.Sprintf("%s 127.0.0.1:%d", i.Service.Contract.Person, i.Route.Port))
+					r.Bypass = append(r.Bypass, "/p/"+i.Service.Contract.Person+"/")
+				}
+				up = c.Template.Name + " je Person: " + strings.Join(each, ", ")
+			}
+			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
 				n.Names = append(n.Names, NetName{Name: strings.TrimPrefix(fqdn(st, h), "@."), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})

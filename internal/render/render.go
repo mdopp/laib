@@ -319,6 +319,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		"DATA_DIR": st.Box.DataDir,
 		"TZ":       st.Box.Timezone,
 		"SERVICE":  svc.Name,
+		"PERSON":   svc.Contract.Person, // a person's instance (#986)
 		"LAN_IP":   st.Box.LanIP,
 		// the box page, never a hard-coded laib.<domain> (#381)
 		"LAIB_PAGE_URL": "https://" + fqdn(st, st.Box.Laib.Host) + "/",
@@ -659,9 +660,28 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 		// a name without a route proxies nowhere and says so (#480)
 		fmt.Fprintf(&b, "*.%s {\n%s\timport unknown\n}\n\n", st.Box.Domain, stripRemote)
 	}
+	proxy := func(indent string, svc *state.Service, r state.Route) {
+		if r.ProxySecret != "" {
+			name, base := r.ProxyHeader, svc.Name
+			if svc.Contract.Person != "" {
+				base = svc.Contract.Template.Name // one header name for every instance (#986)
+			}
+			if name == "" {
+				name = "X-" + strings.ToUpper(base[:1]) + base[1:] + "-Proxy"
+			}
+			fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d {\n%s\theader_up %s %q\n%s}\n", indent, r.Port, indent, name, secretValue(secrets, r.ProxySecret), indent)
+		} else {
+			fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d\n", indent, r.Port)
+		}
+	}
+	done := map[string]bool{}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, r := range svc.Contract.Routes {
+			if done[r.Host] {
+				continue // the persons' instances share one site (#986)
+			}
+			done[r.Host] = true
 			fmt.Fprintf(&b, "%s {\n%s\timport down\n", fqdn(st, r.Host), stripRemote)
 			indent := "\t"
 			if r.Exposure == "internal" {
@@ -676,6 +696,14 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				}
 				fmt.Fprintf(&b, "%s@bypass %s\n%shandle @bypass {\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, strings.Join(ms, " "), indent, indent, r.Port, indent)
 			}
+			// an agent reaches a person's instance at /p/<person>/, past
+			// Authelia (its bypass rule) and without the instance's key: the
+			// instance checks the key it is sent (#986)
+			instances := st.Instances(r.Host)
+			for _, i := range instances {
+				p := i.Service.Contract.Person
+				fmt.Fprintf(&b, "%shandle /p/%s/* {\n%s\turi strip_prefix /p/%s\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, p, indent, p, indent, i.Route.Port, indent)
+			}
 			if forwardAuth(st, name, r) {
 				b.WriteString(indent + "import authelia\n")
 			}
@@ -684,14 +712,19 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 					b.WriteString(indent + line + "\n")
 				}
 			}
-			if r.ProxySecret != "" {
-				name := r.ProxyHeader
-				if name == "" {
-					name = "X-" + strings.ToUpper(svc.Name[:1]) + svc.Name[1:] + "-Proxy"
-				}
-				fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d {\n%s\theader_up %s %q\n%s}\n", indent, r.Port, indent, name, secretValue(secrets, r.ProxySecret), indent)
+			// a signed-in person to their own instance: Remote-User is
+			// Authelia's, the site stripped the client's first; anyone else
+			// signed in is denied
+			for _, i := range instances {
+				p := i.Service.Contract.Person
+				fmt.Fprintf(&b, "%s@person_%s header Remote-User %s\n%shandle @person_%s {\n", indent, p, p, indent, p)
+				proxy(indent+"\t", i.Service, i.Route)
+				b.WriteString(indent + "}\n")
+			}
+			if instances != nil {
+				fmt.Fprintf(&b, "%shandle {\n%s\timport denied\n%s}\n", indent, indent, indent)
 			} else {
-				fmt.Fprintf(&b, "%sreverse_proxy 127.0.0.1:%d\n", indent, r.Port)
+				proxy(indent, svc, r)
 			}
 			if r.Exposure == "internal" {
 				b.WriteString("\t}\n\timport lanonly\n")
@@ -720,8 +753,16 @@ type accessRule struct {
 func accessRules(st *state.State) []accessRule {
 	// the Inbox decides what the chat may not (#441): behind the second factor
 	rules := []accessRule{{Domain: fqdn(st, st.Box.Laib.Host), Policy: "two_factor", Subjects: []string{st.Box.Laib.Group}}}
+	done := map[string]bool{}
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
+			if done[r.Host] {
+				continue
+			}
+			done[r.Host] = true
+			for _, i := range st.Instances(r.Host) { // every person's path before the name's rule (#986)
+				r.Bypass = append(r.Bypass, "/p/"+i.Service.Contract.Person+"/")
+			}
 			for _, p := range r.Bypass {
 				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: strings.TrimSuffix(p, "/") + "/"})
 			}

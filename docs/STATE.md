@@ -109,6 +109,8 @@ people:                           # the household's people and their chat channe
 
 Builtins for units: `${LAIB_PAGE_URL}` is the box page,
 `https://<laib.host>.<domain>/` (never a hard-coded `laib.<domain>`, #381).
+`${PERSON}` is a person's instance's person (#986, "A template per
+person" below), empty elsewhere.
 Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
 `model`. Units and hooks both read them inside a container, so the
@@ -350,6 +352,7 @@ when:                            # a unit exists only while one of its values is
 requires:                        # a set value needs these set too (#184)
   MAIL_HOST: [MAIL_PASSWORD]
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
+perPerson: false                 # true: installed once per person (#986), below
 ```
 
 `status` is a file the template keeps about itself. laib reads it fresh on
@@ -403,6 +406,57 @@ of the service.
 Bote: `signal`, `matrix`, `telegram`). A service that declares channels
 needs at least one of them set.
 
+### A template per person
+
+`perPerson: true` makes a template one a person gets for themselves (#986,
+ADR 0029): `laib add <template> --person <p>` (an agent: `laib propose
+--add <template> --person <p>`) installs it as the service
+`<template>-<p>`, and nothing else installs it. The person must be in
+`people`; their name is their Authelia login. Laib writes two lines after
+the name, which no template carries and a template update keeps:
+
+```yaml
+name: msgvault-martin
+person: martin      # whose instance this is: ${PERSON}, the Remote-User it serves
+portOffset: 0       # its host ports are the template's plus this; the lowest one no other instance of the template has
+```
+
+The loader makes such an instance its own, so that two never meet:
+
+- **Units:** a file named `<template>…` becomes `<service>…`
+  (`msgvault.container` is `msgvault-martin.container`, its container
+  `systemd-msgvault-martin`); units name each other through `${SERVICE}`
+  (`Pod=${SERVICE}.pod`). Two services that make one unit fail the load.
+- **Secrets:** each declared secret, and every `!secret` and
+  `proxySecret` naming it, ends in `_<PERSON>` (`MSGVAULT_API_KEY_MARTIN`).
+  A hook reads it through its value, not `LAIB_SECRET_<NAME>`.
+- **Ports:** every published host port, `ports`, the routes' `port` and
+  the health probe's port move by `portOffset`.
+- **Data:** `${SERVICE}` and `${PERSON}` render in `data` and
+  `status.file` (for every template); two instances keeping one path fail
+  the load. `${PERSON}` is a builtin for units, empty outside an
+  instance; a hook gets `LAIB_PERSON`.
+- **Purpose:** the instances of one template are one service for
+  `provides`: no HINWEIS.
+
+The instances' routes share their host (the box has no wildcard
+certificate, so one name is one Strato record). Caddy renders one site for
+it, `internal` behind the LAN check like any route. `/p/<person>/` goes
+past Authelia (a bypass rule each) to that person's instance with the
+prefix stripped and without its key: the instance checks the key an agent
+sends. Everything else is behind Authelia, and a signed-in person reaches
+their own instance by `Remote-User`, which only Authelia sets (the site
+strips the client's `Remote-*` first), with the route's `proxySecret` as
+`proxyHeader` (default `X-<Template>-Proxy`): the person never sees the
+key. A signed-in person without an instance gets the denied page. Such a
+route has a login (no `auth: none`) and no `bypass`; an instance has no
+`oidc`. `laib net` shows the name once, with each person's path. Removing
+an instance is a removal like any other: a human decides in the Inbox.
+
+`laib template lint` lints a per-person template as two instances, `a`
+and `b`, side by side: a unit, container, pod, volume or network name or a
+data path they would share is refused.
+
 This file is what used to be `variables.json` + the subdomain, secret, port
 and backup conventions spread over the ServiceBay codebase. It is the
 irreducible part of a template: an agent writing Quadlet files from an upstream
@@ -412,7 +466,7 @@ compose file does not know on its own that port 8000 must never reach the WLAN.
 
 An executable. Runs after `laib apply` verified the service green, in the
 service folder, with `LAIB_SERVICE`, `LAIB_DOMAIN`, `LAIB_DATA_DIR`,
-`LAIB_TZ`, `LAIB_LAN_IP`, `LAIB_START_URL` (where a login without a target
+`LAIB_TZ`, `LAIB_LAN_IP`, `LAIB_PERSON` (a person's instance, #986), `LAIB_START_URL` (where a login without a target
 lands: Haus once installed, else the box page, #381), every `values.yml` key (secrets resolved) and
 `LAIB_SECRET_<NAME>` for every declared secret in its environment. Ten-minute
 timeout. Its output is journaled with secrets redacted; a non-zero exit turns
