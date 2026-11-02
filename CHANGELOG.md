@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/mdopp/laib/compare/v1.2.0...v1.2.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **journal:** scrub secrets from every line before it is written ([a05d8b3](https://github.com/mdopp/laib/commit/a05d8b34ab9b2388eaddbca0f9050fd1672ff214))
+
 ## [1.2.0](https://github.com/mdopp/laib/compare/v1.1.0...v1.2.0) (2026-11-02)
 
 
