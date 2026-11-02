@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.61.0](https://github.com/mdopp/laib/compare/v0.60.1...v0.61.0) (2026-11-02)
+
+
+### Features
+
+* **radicale:** Haus mirrors a person's phone contacts into &lt;person&gt;/handy-kontakte ([c114b19](https://github.com/mdopp/laib/commit/c114b19be7ba65fc0fbeef1cc0b776f6330d0203))
+* **radicale:** Haus mirrors a person's phone contacts into &lt;person&gt;/handy-kontakte ([e134acb](https://github.com/mdopp/laib/commit/e134acb3ab3f82d1fc1caada371960b83f1790a1))
+
 ## [0.60.1](https://github.com/mdopp/laib/compare/v0.60.0...v0.60.1) (2026-11-02)
 
 
