@@ -541,8 +541,8 @@ var shaInKlammern = regexp.MustCompile(`\s*\(?sha256:[0-9a-f]+\)?`)
 // (a proposal), and the images Laib never takes alone. No digests: a name
 // and, where there is one, the newer version.
 func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
-	var selbst, ha, ohne, lange []string
-	host := false
+	var selbst, ha, fw, ohne, lange []string
+	host, boot := false, ""
 	var list []struct {
 		Service, Image, Current, Patch, Minor, Digest string
 		Auto                                          bool
@@ -571,16 +571,21 @@ func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
 		switch {
 		case f.Probe == "status" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")):
 			d := strings.TrimPrefix(strings.TrimPrefix(f.Detail, "Update: "), "Firmware: ")
-			d = strings.TrimSuffix(d, " (nur gemeldet)")
 			if i := strings.Index(d, " (geprüft"); i > 0 {
 				d = d[:i]
 			}
-			ha = append(ha, "- "+d)
+			if strings.HasPrefix(f.Detail, "Firmware: ") {
+				fw = append(fw, "- "+strings.TrimSuffix(d, " (nur gemeldet)"))
+			} else {
+				ha = append(ha, "- "+d)
+			}
+		case f.Probe == "boot" && strings.Contains(f.Detail, "OS-Update"):
+			boot = f.Detail
 		case f.Probe == "updates" && f.Service != "":
 			lange = append(lange, "- "+f.Service+": "+strings.TrimSpace(shaInKlammern.ReplaceAllString(f.Detail, "")))
 		}
 	}
-	if len(selbst)+len(ha)+len(ohne)+len(lange) == 0 && !host {
+	if len(selbst)+len(ha)+len(fw)+len(ohne)+len(lange) == 0 && !host {
 		return ""
 	}
 	uniq := func(l []string) []string { sort.Strings(l); return slices.Compact(l) }
@@ -589,21 +594,23 @@ func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
 	if len(selbst) > 0 {
 		b.WriteString("\nKommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\n- " + strings.Join(uniq(selbst), ", ") + "\n")
 	}
-	if len(ha) > 0 {
-		b.WriteString("\nFür dich in Home Assistant, unter Einstellungen → System → Updates:\n" + strings.Join(uniq(ha), "\n") + "\n")
+	if len(ha)+len(ohne)+len(lange) > 0 {
+		// the Operator's Saturday run proposes these (docs/INTERFACE.md, aktualisierung)
+		b.WriteString("\nKommt am Samstag als Freigabe in deine Inbox. Gibst du sie frei, spielt Laib sie ein, prüft danach und nimmt bei Rot die alte Version zurück:\n")
+		all := append(append(uniq(ha), uniq(ohne)...), uniq(lange)...)
+		for _, l := range all {
+			b.WriteString("- " + strings.TrimPrefix(l, "- ") + "\n")
+		}
 	}
 	if host {
-		b.WriteString("\nDas Betriebssystem der Box hat eine neue Version. Laib legt sie dir als Freigabe in die Inbox; nach deiner Freigabe startet die Box einmal neu, morgens nach der Sicherung.\n")
+		if boot != "" {
+			b.WriteString("\nDas Betriebssystem der Box hat eine neue Version, aber sie wartet: " + boot + "\n")
+		} else {
+			b.WriteString("\nDas Betriebssystem der Box hat eine neue Version. Sie kommt als Freigabe in deine Inbox; danach startet die Box einmal neu, morgens nach der Sicherung.\n")
+		}
 	}
-	if len(ohne)+len(lange) > 0 {
-		b.WriteString("\nOhne Eile: Laib spielt diese nicht allein ein, weil Daten oder die Grafikkarte daran hängen. Solange alles läuft, ist nichts zu tun; die Werkstatt schlägt sie dir vor, wenn eine nötig wird:\n")
-		if len(ohne) > 0 {
-			b.WriteString("- " + strings.Join(uniq(ohne), "\n- ") + "\n")
-		}
-		b.WriteString(strings.Join(uniq(lange), "\n"))
-		if len(lange) > 0 {
-			b.WriteString("\n")
-		}
+	if len(fw) > 0 {
+		b.WriteString("\nNur gemeldet, Firmware von Geräten: spiel sie selbst in Home Assistant ein (Einstellungen → System → Updates), wenn das Gerät gerade entbehrlich ist:\n" + strings.Join(uniq(fw), "\n") + "\n")
 	}
 	b.WriteString("\nAlle Einzelheiten: laib updates\n")
 	return b.String()

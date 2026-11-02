@@ -170,8 +170,8 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	// #528: "Was ist veraltet" — a floating tag's newer digest too; sorted by
 	// who acts, without digests (owner 2026-11-02: „was mach ich mit so einer Meldung?“)
 	for _, want := range []string{"Subject: Laib: Was ist veraltet", "Kommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\r\n- haus",
-		"Für dich in Home Assistant, unter Einstellungen → System → Updates:\r\n- SENEC 2026.6.3 → 2026.10.0 · https://x/r\r\n- Stecker 9.5.52 → 9.5.60\r\n",
-		"Ohne Eile", "- vaultwarden (server)", "- media: IMAGE liegt seit 31 Tagen hinter seinem Kanal\r\n", "Das Betriebssystem der Box hat eine neue Version"} {
+		"Kommt am Samstag als Freigabe in deine Inbox", "- SENEC 2026.6.3 → 2026.10.0 · https://x/r\r\n",
+		"Nur gemeldet, Firmware von Geräten", "- Stecker 9.5.52 → 9.5.60\r\n", "- vaultwarden (server)", "- media: IMAGE liegt seit 31 Tagen hinter seinem Kanal\r\n", "Das Betriebssystem der Box hat eine neue Version"} {
 		if !strings.Contains(got[0], want) {
 			t.Errorf("the weekly mail lacks %q: %q", want, got[0])
 		}
