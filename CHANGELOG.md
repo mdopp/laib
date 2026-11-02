@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.63.0](https://github.com/mdopp/laib/compare/v0.62.1...v0.63.0) (2026-11-02)
+
+
+### Features
+
+* **home-assistant:** device firmware comes as an approval, Laib flashes it ([a57f58f](https://github.com/mdopp/laib/commit/a57f58f9dd110c159c5769da6bec52210ed1479f))
+* **home-assistant:** device firmware comes as an approval, Laib flashes it ([ec67397](https://github.com/mdopp/laib/commit/ec673974ae4c0add56b86e02962d6f620c679e4a))
+
 ## [0.62.1](https://github.com/mdopp/laib/compare/v0.62.0...v0.62.1) (2026-11-02)
 
 
