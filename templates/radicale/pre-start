@@ -42,6 +42,8 @@ chmod 644 "$C/config"
 # reads its home, where `kalender` copies the family's calendars: a CalDAV client finds only its own home.
 # Haus (`haus`) lists each person's home and makes a calendar "nur für mich" there as privat-<name>, nothing else
 # of theirs; "für die Familie" is haus/familie-<name>, which everyone reads and writes like the Haushalt.
+# <person>/handy-kontakte is the mirror of the person's phone contacts: the Haus app sends them, Haus writes
+# them there (haus/internal/napi, laib ADR 0029); the person owns it like the privat-* calendars.
 cat > "$C/rights" <<'RIGHTS'
 # rendered by laib pre-start (templates/radicale)
 [root]
@@ -91,7 +93,7 @@ permissions: RrWw
 
 [haus-privat]
 user: haus
-collection: [^/]+(/privat-[^/]+(/.*)?)?
+collection: [^/]+(/(privat-[^/]+|handy-kontakte)(/.*)?)?
 permissions: Rrw
 
 [haushalt]

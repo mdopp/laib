@@ -107,6 +107,25 @@ seeing only their own.
    3. The template, instances and route (laib#986).
    4. The import (laib#985).
 
+9. **Phone contacts, SMS and call log come from the Haus app** (the
+   owner, 2026-11-02: „Einfach als optional und mit extra Recht“). Each
+   is a switch in the app, off by default, behind its own Android
+   permission.
+   - **Contacts** are mirrored, all of them every day, into the person's
+     own Radicale address book `<person>/handy-kontakte`, which Haus
+     writes (account `haus`, `Rrw` there, nothing else of theirs). The
+     phone's contacts include its Google contacts, so no Google Cloud
+     project is needed. They are readable by the box's admin like the
+     calendar; the archive reads them from there.
+   - **SMS, MMS and calls** are written on the phone as an SMS Backup &
+     Restore XML and encrypted there with age to the person's Briefkasten
+     key, which the archive puts in its inbox folder
+     (`.briefkasten.pub`) and Haus hands to the app. They arrive in
+     `archiv-eingang/<person>/sms/` already encrypted, wait like a
+     packet, and the archive imports them with msgvault's own SMS import
+     when the vault opens. Nothing of them is readable on the box while
+     it is closed.
+
 ## Consequences
 
 - **The kernel gains two things,** both general and neither specific to
