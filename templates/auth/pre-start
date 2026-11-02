@@ -133,6 +133,14 @@ session:
     - domain: '{DOMAIN}'
       authelia_url: 'https://auth.{DOMAIN}'
       default_redirection_url: '{E["LAIB_START_URL"]}'
+# Passkeys (owner, 2026-11-02): sign in with a passkey instead of name and
+# password. Authelia counts a passkey as one factor; where a route asks for
+# two (two_factor), it then asks for the password too, so a passkey and the
+# password replace password and code. Not the experimental option that lets
+# a passkey alone count as two.
+webauthn:
+  enable_passkey_login: true
+  display_name: 'Box {DOMAIN}'
 storage:
   encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'
   local:

@@ -156,3 +156,15 @@ templates cannot share a script, and the grouping, the cursor folder and
 reader is when it moves into one place). The other templates change only
 what makes their log say who and from where. A door whose unit is not on
 the box exports nothing.
+
+## Passkeys
+
+`enable_passkey_login` is on (owner, 2026-11-02). A person adds a passkey
+once at `https://auth.<domain>/settings` → Zwei-Faktor → WebAuthn
+(„Hinzufügen“; the browser offers to save it as a passkey). From then on
+the login page offers „Mit Passkey anmelden“. Authelia counts a passkey as
+one factor: on a `two_factor` route it then asks for the password as the
+second, so passkey and password replace password and code. A WebAuthn key
+registered earlier as a second factor only may not be a passkey (no
+resident key); adding it again makes it one. The experimental option that
+lets a passkey with user verification count as two factors stays off.
