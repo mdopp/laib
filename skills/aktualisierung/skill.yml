@@ -4,7 +4,8 @@
 # #528, #839: its script (run.py) proposes, once while open, a service with data's
 # new image by digest (an image without data the nightly laib-images.timer
 # takes) and the value a status file offers (Home Assistant's extensions,
-# with their release notes); firmware it only reports. inbox and diag are
+# with their release notes; the device firmware HA can install, HA_FIRMWARE,
+# a proposal of its own); firmware HA cannot install it only reports. inbox and diag are
 # what it reads for that.
 description: Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund.
 trigger: {weekly: "Sa 10:00"}

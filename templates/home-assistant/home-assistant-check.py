@@ -79,8 +79,11 @@ def offers(base: str, token: str, service: str) -> list:
     veraltet" picks them up by these words); the installable extensions are
     also one finding whose fix is a single value proposal, HA_INSTALL, which
     the Operator's weekly aktualisierung files as it stands and post-deploy
-    installs once a person approved it. Firmware is only reported: a failed
-    flash can brick a device."""
+    installs once a person approved it. Device firmware Home Assistant can
+    install comes as its own proposal, HA_FIRMWARE (owner, 2026-11-02: "Sollten
+    das nicht eher Freigaben sein und dann macht Laib das?"): a flash stays on
+    the device whatever „Zurücknehmen“ does, so it is never folded into the
+    extensions' approval. Firmware HA cannot install is only reported."""
     if not token:
         return []
     try:
@@ -89,24 +92,32 @@ def offers(base: str, token: str, service: str) -> list:
             states = json.load(resp)
     except Exception:  # the integrations finding above says HA does not answer
         return []
-    out, install = [], []
+    out, install, flash = [], [], []
     for s in states:
         a = s.get("attributes") or {}
         old, new = a.get("installed_version"), a.get("latest_version")
         if not str(s.get("entity_id", "")).startswith("update.") or s.get("state") != "on" or not old or not new:
             continue
         name = a.get("title") or a.get("friendly_name") or s["entity_id"]
+        installable = int(a.get("supported_features") or 0) & 1 and not any(c in s["entity_id"] + new for c in " ,=")
         if a.get("device_class") == "firmware":
-            out.append({"severity": "info", "detail": f"Firmware: {name} {old} → {new} (nur gemeldet)",
-                        "fix": "einspielen nur auf ein ausdrückliches Ja: Home Assistant → Einstellungen → Updates, wenn das Gerät gerade entbehrlich ist"})
+            if installable:
+                out.append({"severity": "info", "detail": f"Firmware: {name} {old} → {new}", "fix": "der Operator schlägt es samstags vor (HA_FIRMWARE)"})
+                flash.append((f"{s['entity_id']}={new}", f"{name} {old} → {new}"))
+            else:
+                out.append({"severity": "info", "detail": f"Firmware: {name} {old} → {new} (nur gemeldet)",
+                            "fix": "Home Assistant kann sie nicht selbst einspielen: mit der App des Herstellers, wenn das Gerät gerade entbehrlich ist"})
             continue
         notes = f" · {a['release_url']}" if a.get("release_url") else ""
         out.append({"severity": "info", "detail": f"Update: {name} {old} → {new}{notes}", "fix": "der Operator schlägt es samstags vor (HA_INSTALL)"})
-        if int(a.get("supported_features") or 0) & 1 and not any(c in s["entity_id"] + new for c in " ,="):
+        if installable:
             install.append((f"{s['entity_id']}={new}", f"{name} {new}{notes}"))
     if install:
         out.append({"severity": "info", "detail": "Erweiterungen installieren: " + "; ".join(w for _, w in install),
                     "fix": f"laib propose --set services/{service}/values.yml:HA_INSTALL=" + ",".join(v for v, _ in install)})
+    if flash:
+        out.append({"severity": "info", "detail": "Neue Firmware für Geräte einspielen: " + "; ".join(w for _, w in flash),
+                    "fix": f"laib propose --set services/{service}/values.yml:HA_FIRMWARE=" + ",".join(v for v, _ in flash)})
     return out
 
 

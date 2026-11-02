@@ -240,12 +240,13 @@ class Check(unittest.TestCase):
     def test_updates_are_reported_and_the_extensions_offered_as_one_proposal(self):
         # #528: "Einige Plugins in Home Assistant sind schon 4 Monate alt." HA's update entities that are
         # on: the extensions as "Update: …" with their release notes, the installable ones as one HA_INSTALL
-        # proposal (the fix the Operator files as it stands), the firmware as "Firmware: …", only reported.
+        # proposal (the fix the Operator files as it stands), the firmware HA can install as its own HA_FIRMWARE proposal, the rest "(nur gemeldet)".
         upd = lambda eid, title, old, new, feat=1, cls=None, url=None: {"entity_id": eid, "state": "on", "attributes": {
             "title": title, "installed_version": old, "latest_version": new, "supported_features": feat, "device_class": cls, "release_url": url}}
         states = [upd("update.senec_update", "SENEC.Home", "2026.6.3", "2026.10.0", url="https://github.com/x/senec/releases/tag/2026.10.0"),
                   upd("update.meross_lan_update", "Meross LAN", "5.3.0", "5.4.1"),
                   upd("update.plug_firmware", "Steckdose", "9.5.52", "9.5.60", cls="firmware"),
+                  upd("update.remote_firmware", "Fernbedienung", "1.0", "1.1", feat=0, cls="firmware"),
                   upd("update.no_install", "Nur Anzeige", "1", "2", feat=0),
                   {"entity_id": "update.hacs_update", "state": "off", "attributes": {"installed_version": "2.0", "latest_version": "2.0"}},
                   {"entity_id": "sun.sun", "state": "above_horizon", "attributes": {}}]
@@ -265,10 +266,15 @@ class Check(unittest.TestCase):
         by = {f["detail"]: f for f in r["findings"] if f["severity"] == "info"}
         self.assertIn("Update: SENEC.Home 2026.6.3 → 2026.10.0 · https://github.com/x/senec/releases/tag/2026.10.0", by)
         self.assertIn("Update: Meross LAN 5.3.0 → 5.4.1", by)
-        self.assertIn("Firmware: Steckdose 9.5.52 → 9.5.60 (nur gemeldet)", by)
+        # owner 2026-11-02: „Sollten das nicht eher Freigaben sein und dann macht Laib das?“ — firmware HA
+        # can install is its own proposal, HA_FIRMWARE, never folded into the extensions' approval
+        self.assertIn("Firmware: Steckdose 9.5.52 → 9.5.60", by)
+        self.assertIn("Firmware: Fernbedienung 1.0 → 1.1 (nur gemeldet)", by)
         self.assertIn("Update: Nur Anzeige 1 → 2", by)
         offer = [f for f in r["findings"] if f["fix"].startswith("laib propose")]
-        self.assertEqual(len(offer), 1, r)
+        self.assertEqual(len(offer), 2, r)
+        self.assertEqual(offer[1]["fix"], "laib propose --set services/home-assistant/values.yml:HA_FIRMWARE=update.plug_firmware=9.5.60")
+        self.assertEqual(offer[1]["detail"], "Neue Firmware für Geräte einspielen: Steckdose 9.5.52 → 9.5.60")
         self.assertEqual(offer[0]["fix"], "laib propose --set services/home-assistant/values.yml:HA_INSTALL=update.senec_update=2026.10.0,update.meross_lan_update=5.4.1")
         self.assertIn("https://github.com/x/senec/releases/tag/2026.10.0", offer[0]["detail"], "the proposal carries the release notes")
         self.assertNotIn("firmware", offer[0]["fix"])
