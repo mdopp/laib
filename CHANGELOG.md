@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/mdopp/laib/compare/v1.0.0...v1.1.0) (2026-11-02)
+
+
+### Features
+
+* **template:** reitti, the household's timeline without location leaving the box ([2cf18f0](https://github.com/mdopp/laib/commit/2cf18f05e5313f43b10ea20a7e615db98491d52b))
+
 ## [1.0.0](https://github.com/mdopp/laib/compare/v0.63.0...v1.0.0) (2026-11-02)
 
 
