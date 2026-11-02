@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.62.0](https://github.com/mdopp/laib/compare/v0.61.0...v0.62.0) (2026-11-02)
+
+
+### Features
+
+* **auth:** sign in with a passkey ([f33ad61](https://github.com/mdopp/laib/commit/f33ad61de9965ef1e20a8d76c356d828cf41c31d))
+* **auth:** sign in with a passkey ([9cbeebc](https://github.com/mdopp/laib/commit/9cbeebc05b7fcbe7076b318069098060f45f0bb6))
+
 ## [0.61.0](https://github.com/mdopp/laib/compare/v0.60.1...v0.61.0) (2026-11-02)
 
 
