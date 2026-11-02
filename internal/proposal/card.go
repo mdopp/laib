@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -269,6 +270,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855), never a digest (#959)
 		head, _ := imageWords(values[0])
 		d.Summary = Named(values[0].Service) + " bekommt " + head
+		if head == "ein Update" && p.Reason != "" && !Technical(p.Reason) { // no version to name: what it brings, in the proposer's words
+			d.Summary += ": " + p.Reason
+		}
 	case len(values) == 1:
 		v := values[0]
 		d.Summary = Named(v.Service) + ": " + v.Key + " "
@@ -567,6 +571,15 @@ func tag(image string) string {
 // registry's labels name for the old and the new digest, never a digest.
 func imageWords(v Change) (head, line string) {
 	from, to := tag(v.Old), tag(v.New)
+	if hashTag(from) || hashTag(to) { // a commit pin (a Werkstatt app's :<sha>) says no more than a digest (Freigabe #317)
+		switch {
+		case v.OldVersion != "" && v.NewVersion != "" && v.OldVersion != v.NewVersion:
+			return "ein Update: " + v.OldVersion + " → " + v.NewVersion, "Update " + v.OldVersion + " → " + v.NewVersion
+		case v.NewVersion != "":
+			return "ein Update auf " + v.NewVersion, "Update auf " + v.NewVersion
+		}
+		return "ein Update", "neuer Stand des Programms"
+	}
 	switch {
 	case v.Old == "":
 		return "eine neue Version: " + to, "Version " + to
@@ -581,6 +594,12 @@ func imageWords(v Change) (head, line string) {
 	}
 	return "ein Update (neuer Stand von „" + to + "“)", "neuer Stand von „" + to + "“"
 }
+
+// hashTag: a tag that is a commit or a digest (12 to 64 hex digits, also
+// as sha-<hex>): no version a person can read.
+var hashTagRE = regexp.MustCompile(`^(sha-?)?[0-9a-f]{12,64}$`)
+
+func hashTag(t string) bool { return hashTagRE.MatchString(t) }
 
 func valueWord(v string) string {
 	if name, ok := strings.CutPrefix(v, "!secret "); ok {
@@ -749,21 +768,41 @@ func servicesOf(p *Proposal) []string {
 // Title is title for the pages (the key page, #696).
 func Title(name string) string { return title(name) }
 
-var builtinTitles = sync.OnceValue(func() map[string]string {
-	out := map[string]string{}
+type builtinTitle struct {
+	title     string
+	perPerson bool
+}
+
+var builtinTitles = sync.OnceValue(func() map[string]builtinTitle {
+	out := map[string]builtinTitle{}
 	dirs, _ := fs.ReadDir(templates.FS, ".")
 	for _, d := range dirs {
-		var c struct{ Title string }
+		var c struct {
+			Title     string
+			PerPerson bool `yaml:"perPerson"`
+		}
 		if b, err := fs.ReadFile(templates.FS, d.Name()+"/laib.yml"); err == nil && yaml.Unmarshal(b, &c) == nil && c.Title != "" {
-			out[d.Name()] = c.Title
+			out[d.Name()] = builtinTitle{c.Title, c.PerPerson}
 		}
 	}
 	return out
 })
 
 // Named: a service as the Box page names it, its built-in template's
-// title (media → Jellyfin, #785), else title.
-func Named(service string) string { return cmp.Or(builtinTitles()[service], title(service)) }
+// title (media → Jellyfin, #785); a per-person instance as „<title> von
+// <person>“ (archiv-mdopp → Archiv von mdopp, not „Archiv Mdopp“); else title.
+func Named(service string) string {
+	b := builtinTitles()
+	if t, ok := b[service]; ok {
+		return t.title
+	}
+	for tpl, t := range b {
+		if person, ok := strings.CutPrefix(service, tpl+"-"); ok && t.perPerson && person != "" {
+			return t.title + " von " + person
+		}
+	}
+	return title(service)
+}
 
 // title: a service name as people say it (paperless → Paperless, home-assistant → Home Assistant).
 func title(name string) string {
