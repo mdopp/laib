@@ -58,7 +58,14 @@ after: [auth]                  # started and verified after these services
 ```
 
 - **Secrets** are `!secret NAME` in `values.yml`, never a literal; they
-  reach the container as podman secrets, off every argv.
+  reach the container as podman secrets, off every argv: an
+  `Environment=KEY=${VALUE}` line, or `Secret=${VALUE},type=mount,target=<file>`
+  for an app that reads `/run/secrets/<file>`.
+- **A login of the service's own** to another app on the box (Radicale,
+  any LDAP app): `account: <name>` on a generated secret (`archiv-${PERSON}`
+  per person); the auth template seeds that LLDAP account and removes it
+  with the service, and the other app's template says what it may do
+  (docs/STATE.md, laib#1009).
 - **Ports:** publish on `127.0.0.1:<port>:<container port>` and declare
   `lan: false`, unless a device on the LAN must reach it directly (MQTT,
   a media client): then `lan: true`. A port two templates use is refused.

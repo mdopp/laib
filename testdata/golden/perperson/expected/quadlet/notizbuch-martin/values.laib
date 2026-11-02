@@ -1,3 +1,4 @@
 # Rendered by laib: the values of notizbuch-martin (#364); a secret by its name only.
+DAV=!secret NOTIZBUCH_DAV_PASSWORD_MARTIN
 IMAGE=docker.io/example/notizbuch:1.0
 KEY=!secret NOTIZBUCH_KEY_MARTIN

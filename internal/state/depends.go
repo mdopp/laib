@@ -7,7 +7,8 @@ import (
 
 // Depends: the services whose planned stop explains a service's errors
 // (#978) — its after:, its uses:, laib for needs: [mcp], the SSO role for
-// an oidc: client — and theirs, sorted, without itself.
+// an oidc: client, the identity role for a
+// service account — and theirs, sorted, without itself.
 func (st *State) Depends(name string) []string {
 	seen, todo := map[string]bool{name: true}, []string{name}
 	for len(todo) > 0 {
@@ -23,6 +24,9 @@ func (st *State) Depends(name string) []string {
 		}
 		if c.OIDC != nil && st.Box.Roles.SSO != "" {
 			next = append(next, st.Box.Roles.SSO)
+		}
+		if slices.ContainsFunc(c.Secrets, func(s Secret) bool { return s.Account != "" }) && st.Box.Roles.Identity != "" {
+			next = append(next, st.Box.Roles.Identity) // it seeds the account (laib#1009)
 		}
 		for _, d := range next {
 			if !seen[d] {

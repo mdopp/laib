@@ -411,7 +411,9 @@ The loader makes such an instance its own, so that two never meet:
   (`Pod=${SERVICE}.pod`). Two services that make one unit fail the load.
 - **Secrets:** each declared secret, and every `!secret` and
   `proxySecret` naming it, ends in `_<PERSON>` (`MSGVAULT_API_KEY_MARTIN`).
-  A hook reads it through its value, not `LAIB_SECRET_<NAME>`.
+  A hook reads it through its value, not `LAIB_SECRET_<NAME>`. A secret's
+  `account:` takes `${PERSON}` (`archiv-${PERSON}`): each instance its own
+  directory account (laib#1009, "A service's own account").
 - **Ports:** every published host port, `ports`, the routes' `port` and
   the health probe's port move by `portOffset`.
 - **Data:** `${SERVICE}` and `${PERSON}` render in `data` and
@@ -642,6 +644,37 @@ dropped); two assignments, or a key with a comma, quote or blank (podman
 cannot target it), fail the render. With no secret values at all (lint, a
 missing `secrets.age`) plan compares no podman secrets, so it never removes
 their last copy.
+
+A secret the app reads from a file (laib#1009: the archive's Radicale
+password, `RADICALE_PASSWORD_FILE`) is a line
+`Secret=${VALUE},type=mount,target=<file>` in the `.container`: it renders
+as `Secret=laib.<service>.<hash>,type=mount,target=<file>`, mounted at
+`/run/secrets/<file>`, and plan and apply treat that podman secret like an
+`Environment=` line's. The line holds exactly one `${VALUE}` and
+`key=value` options with `type=mount` and a plain file name as `target`;
+any other shape, or a `Secret=` with a secret in a host unit, fails the
+render. An empty value leaves the line out (commented): no file.
+
+### A service's own account in the directory (laib#1009)
+
+`account: <name>` on a generated contract secret makes it the password of
+a service account in the box's directory, kept by the `identity` role
+(LLDAP, the auth template): the archive's Radicale login is
+`ARCHIV_RADICALE_PASSWORD` with `account: archiv-${PERSON}`. `${PERSON}`
+and `${SERVICE}` expand, so each person's instance has its own. Laib
+renders the accounts into `render/identity/accounts.json` (user, secret
+name, service; never a password) and hands the identity service's hooks
+`LAIB_SECRET_<NAME>` for each, no other service's. A change of that file
+runs the identity service's hooks and restarts it, as `authelia/*.yml`
+does the sso role's. The auth template's post-deploy creates each account
+(group `laib_accounts`, no other group), sets its password on every run,
+and deletes a member of `laib_accounts` that is no longer listed, so
+removing the instance removes its account. It never takes over an
+existing account outside that group, nor a name it keeps itself (`haus`,
+`kalender`, the readers, the operator). The loader refuses an account on
+an external secret, on a box without `roles.identity`, a name LDAP cannot
+address, a person's own login and one account claimed twice. What the
+account may do is the other app's business (templates/radicale's rights).
 
 ### Backup target by default
 

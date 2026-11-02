@@ -7,6 +7,7 @@ PublishPort=127.0.0.1:8480:8080
 Volume=/mnt/data/stacks/notizbuch-martin:/data:Z
 Environment=NOTIZBUCH_OWNER=martin
 Secret=laib.notizbuch-martin.notizbuch-martin.NOTIZBUCH_KEY,type=env,target=NOTIZBUCH_KEY
+Secret=laib.notizbuch-martin.4a3e7792d927e5a7ce02e4eb,type=mount,target=dav-password
 
 [Service]
 Restart=always

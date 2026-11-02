@@ -6,7 +6,7 @@ passwords, which LLDAP's GraphQL cannot set, go over its LDAP port as the
 password modify operation (RFC 3062), from this process to LLDAP's socket:
 never on a command line, where ps shows them to every user on the box
 (#214). configuration.yml and the OIDC key are pre-start's."""
-import json, os, socket, sys, time, urllib.request
+import json, os, re, socket, sys, time, urllib.request
 
 E = os.environ
 S = lambda n: E["LAIB_SECRET_" + n]
@@ -20,6 +20,19 @@ READERS = [("radicale", "RADICALE_LDAP_PASSWORD", "Radicale (Lesekonto)"),
 ACCOUNTS = [("haus", "HAUS_RADICALE_PASSWORD", "Haus (Haushalt-Kalender)"),   # owns the household's calendar in Radicale
             ("kalender", "KALENDER_RADICALE_PASSWORD", "Kalender-Abgleich (Abos, Google)"),   # writes the calendar mirrors (#495)
             ("homeassistant", "HA_RADICALE_PASSWORD", "Home Assistant (Kalender)")]   # HA's CalDAV entry reads its copies (#495)
+# the service accounts other services declare (laib#1009: `account:` on a secret, e.g. archiv-<person>,
+# the archive's Radicale login): Laib renders their names into identity/accounts.json and hands this hook
+# their passwords. Each is a member of the group laib_accounts; one in that group and gone from the list
+# (its service removed) is deleted. Without the file (a Laib before it) none is seeded or deleted.
+LIST = os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "identity", "accounts.json")
+DECLARED = json.load(open(LIST)) if os.path.exists(LIST) else None
+MANAGED = "laib_accounts"
+taken = {"admin", op, *(r[0] for r in READERS + ACCOUNTS)}
+for a in DECLARED or []:
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", a["user"]) or a["user"] in taken or not E.get("LAIB_SECRET_" + a["secret"]):
+        print(f"service account {a['user']!r} of {a['service']}: not a name LDAP can address, one this hook keeps itself, or no password: nothing seeded", file=sys.stderr); sys.exit(1)
+    taken.add(a["user"])
+
 # checked before anything is created: an empty password binds anonymously, which
 # proves nothing, and a name with DN specials ("," "+" ...) is another entry's DN
 if not op or set(op) & set(',+"\\<>;=') or op[0] in "# " or op[-1] == " " or \
@@ -146,4 +159,26 @@ for account, secret, display in ACCOUNTS:
             {"u": {"id": account, "email": account + "@" + DOMAIN, "displayName": display}})
         print("service account created:", account)
     set_password(account, S(secret))   # a service secret: set on every run, like the readers' (#209)
+
+if DECLARED is not None:
+    if MANAGED not in groups:
+        groups[MANAGED] = gql("mutation($n:String!){ createGroup(name:$n){ id } }", {"n": MANAGED})["createGroup"]["id"]
+    members = {u["id"] for u in gql("query($g:Int!){ group(groupId:$g){ users { id } } }", {"g": groups[MANAGED]})["group"]["users"]}
+    refused = []
+    for a in DECLARED:
+        user = a["user"]
+        if user in users and user not in members:
+            refused.append(user)   # someone's own account, never taken over: a password set here would lock them out
+            continue
+        if user not in users:
+            gql("mutation($u:CreateUserInput!){ createUser(user:$u){ id } }",
+                {"u": {"id": user, "email": user + "@" + DOMAIN, "displayName": f"{a['service']} (Dienstkonto)"}})
+            gql("mutation($u:String!,$g:Int!){ addUserToGroup(userId:$u, groupId:$g){ ok } }", {"u": user, "g": groups[MANAGED]})
+            print("service account created:", user, "for", a["service"])
+        set_password(user, S(a["secret"]))   # a service secret: set on every run (#209)
+    for user in sorted(members - {a["user"] for a in DECLARED}):
+        gql("mutation($u:String!){ deleteUser(userId:$u){ ok } }", {"u": user})
+        print("service account removed (its service is gone):", user)
+    if refused:
+        print(f"LLDAP: {', '.join(refused)} exists and is no service account Laib made: not taken over", file=sys.stderr); sys.exit(1)
 print("lldap seeded: groups admins, family; operator", op)

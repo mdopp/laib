@@ -336,6 +336,11 @@ type Secret struct {
 	// (#696, „Schlüssel hinterlegen“): only these are offered there, with
 	// the template's German words. Never on a generated or minted one.
 	Owner *OwnerKey `yaml:"owner"`
+	// Account: the secret is the password of a service account in the
+	// box's directory (the identity role, LLDAP) under this name; ${PERSON}
+	// and ${SERVICE} expand. The identity service seeds it and removes it
+	// once no service declares it (laib#1009, the archive's Radicale login).
+	Account string `yaml:"account"`
 }
 
 // OwnerKey is what the key page tells the owner about one key: what it is

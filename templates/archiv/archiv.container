@@ -19,6 +19,11 @@ Environment=PROXY_SECRET=${PROXY}
 Environment=ARCHIV_HAUS_SECRET=${HAUS_SECRET}
 Environment=TZ=${TZ}
 Environment=PUBLIC_URL=https://archiv.${DOMAIN}/
+# contacts and calendars from Radicale, read only (archiv#21, laib#1009): its
+# root on the host, its own login; the password a file, never the environment
+Environment=RADICALE_URL=http://host.containers.internal:5232
+Environment=RADICALE_USER=archiv-${PERSON}
+Secret=${RADICALE_PASSWORD},type=mount,target=radicale-password
 
 [Service]
 Restart=always

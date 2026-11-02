@@ -293,6 +293,7 @@ func (st *State) validate() []error {
 	}
 
 	hosts := map[string]string{st.Box.Laib.Host: "laib (box.yml laib.host)"}
+	accounts := map[string]string{} // a service account's name → its service (laib#1009)
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		c := svc.Contract
@@ -308,6 +309,15 @@ func (st *State) validate() []error {
 		declared := map[string]bool{}
 		for _, s := range c.Secrets {
 			declared[s.Name] = true
+			switch a := s.Account; {
+			case a == "":
+			case s.External || st.Box.Roles.Identity == "":
+				fail("services/%s/laib.yml: %s: account: wants a generated secret and box.yml roles.identity", name, s.Name)
+			case !nameRe.MatchString(a) || st.Box.People[a] != nil || accounts[a] != "":
+				fail("services/%s/laib.yml: %s: account %q: not a name LDAP can address, or a person's or another service's (%s)", name, s.Name, a, accounts[a])
+			default:
+				accounts[a] = name
+			}
 			if o := s.Owner; o != nil && (!s.External || s.Mint != "" || o.Label == "" || o.Warum == "" || o.Hilfe == "" || o.Link != "" && !strings.HasPrefix(o.Link, "https://")) {
 				fail("services/%s/laib.yml: %s: owner: wants external, no mint, a label, warum and hilfe, and an https link", name, s.Name)
 			}

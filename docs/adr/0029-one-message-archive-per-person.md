@@ -205,3 +205,29 @@ backup format itself.
 4. **Restoring a phone** (haus#209, haus-android#197): Haus serves
    `letzte/` to a device of the same person, resumable. Media come only
    through the open archive, because the private key is needed.
+
+## Amendment 2026-11-02: the archive reads contacts and calendars from Radicale
+
+The owner approved it on 2026-11-02: a person's phone contacts and their
+own calendars go into their archive (mdopp/archiv#21). Both already live in
+Radicale, outside the vault (decision 9; the calendar mirrors of #495).
+
+1. **What it reads, and nothing else.** While the vault is open, the
+   archive reads `<person>/handy-kontakte`, `<person>/google-*` (not
+   `google-kontakte`, a Takeout's address book) and `<person>/privat-*`.
+   Radicale's rights (templates/radicale/pre-start) give its account
+   `archiv-<person>` `R` on the person's home and `r` on exactly those, in
+   sections before every general one, and nothing else: not another
+   person's, not the Haushalt, not its own home. The archive's client and
+   its relay for msgvault send only reading requests; contacts become
+   msgvault's persons, calendars a store in the vault that only grows.
+2. **Its own account, per instance.** `ARCHIV_RADICALE_PASSWORD` is
+   generated per instance, reaches the container as a file
+   (`/run/secrets/radicale-password`, never the environment), and is the
+   password of the LLDAP account `archiv-<person>`. The kernel gains one
+   general thing for it: `account:` on a secret, which the identity
+   service (the auth template) seeds and deletes once no service declares
+   it (docs/STATE.md, "A service's own account in the directory").
+   Removing a person's archive removes its account.
+3. **The limit, as before:** the contacts and calendars in Radicale are
+   readable by the box's admin; only the archive's copy is in the vault.

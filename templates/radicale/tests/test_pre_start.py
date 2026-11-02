@@ -37,7 +37,8 @@ class Rights(unittest.TestCase):
         cfg.read(Path(d) / "radicale" / "config" / "config")
         self.assertEqual(cfg["rights"]["type"], "from_file")
         self.assertEqual(cfg["rights"]["file"], "/config/rights", "the config dir is /config in the container")
-        self.rules = rights((Path(d) / "radicale" / "config" / "rights").read_text())
+        self.text = (Path(d) / "radicale" / "config" / "rights").read_text()
+        self.rules = rights(self.text)
         self.auth = cfg["auth"]
 
     def test_logins_are_cached_and_a_password_change_lands_within_minutes(self):
@@ -109,6 +110,35 @@ class Rights(unittest.TestCase):
         self.assertIn("r", allowed(self.rules, "anna", "anna/handy-kontakte/abc.vcf"), "the person reads their mirror")
         self.assertEqual(allowed(self.rules, "ben", "anna/handy-kontakte"), "", "nobody else")
         self.assertEqual(allowed(self.rules, "haus", "anna/google-kontakte"), "", "the Takeout book stays the person's")
+
+    def test_the_archive_reads_its_persons_contacts_and_calendars_and_writes_nothing(self):   # laib#1009, archiv#21
+        self.assertEqual(allowed(self.rules, "archiv-anna", ""), "R", "discovery reads the root")
+        self.assertEqual(allowed(self.rules, "archiv-anna", "anna"), "R", "it lists anna's collections, nothing more")
+        for coll in ("anna/handy-kontakte", "anna/handy-kontakte/abc.vcf", "anna/google-familie", "anna/google-familie/x.ics",
+                     "anna/privat-sport", "anna/privat-sport/y.ics"):
+            self.assertEqual(allowed(self.rules, "archiv-anna", coll), "r", coll)
+        for coll in ("anna/google-kontakte", "anna/google-kontakte/x.vcf", "anna/kalender", "anna/abo-feiertage", "anna/tagebuch/x.ics",
+                     "ben", "ben/handy-kontakte", "ben/privat-sport/y.ics", "ben/google-familie",
+                     "haus", "haus/haushalt", "haus/haushalt-kontakte/x.vcf", "haus/familie-geburtstage", "haus/abo-muell",
+                     "archiv-anna", "archiv-anna/x", "homeassistant", "anna/handy-kontakte-alt", "annax/handy-kontakte"):
+            self.assertEqual(allowed(self.rules, "archiv-anna", coll), "", f"archiv-anna reaches {coll}")
+
+    def test_no_section_before_the_archives_grants_it_more(self):   # laib#1009
+        # Radicale takes the first section that matches: every section above the archive's three may give
+        # an archiv-<person> at most what [root] gives everyone, R on the root itself
+        cp = configparser.ConfigParser(interpolation=None)
+        cp.read_string(self.text)
+        first = cp.sections().index("archiv-home")
+        self.assertEqual(cp.sections()[first:first + 3], ["archiv-home", "archiv-lesen", "archiv-sonst-nichts"])
+        self.assertEqual(cp.sections()[:first], ["root"], "a section before the archive's could give it more")
+
+    def test_the_other_service_accounts_keep_exactly_what_they_had(self):   # laib#1009
+        # the archive's sections match only archiv-<something>: kalender, haus, homeassistant and the family are untouched
+        for who, coll, want in (("kalender", "anna/google-familie", "rw"), ("kalender", "haus/haushalt", "Rr"), ("kalender", "homeassistant", "RrWw"),
+                                ("haus", "anna/privat-sport", "Rrw"), ("haus", "anna/handy-kontakte/x.vcf", "Rrw"), ("haus", "anna/google-familie", "r"),
+                                ("haus", "haus", "RrWw"), ("homeassistant", "homeassistant/x", "Rr"), ("anna", "anna/handy-kontakte", "RrWw"),
+                                ("archiv", "archiv/x", "RrWw"), ("anna", "haus/haushalt", "rw")):
+            self.assertEqual(allowed(self.rules, who, coll), want, (who, coll))
 
 
 if __name__ == "__main__":

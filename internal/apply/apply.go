@@ -238,6 +238,8 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 				restart[st.Box.Roles.Proxy] = true
 			case "authelia":
 				restart[st.Box.Roles.SSO] = true
+			case "identity": // its post-deploy seeds the service accounts (laib#1009)
+				restart[st.Box.Roles.Identity] = true
 			case "adguard":
 				restart[st.Box.Roles.DNS] = true
 			}
@@ -656,6 +658,11 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 		}
 		env = append(env, k+"="+val)
 	}
+	if svc.Name == st.Box.Roles.Identity { // the passwords of the service accounts it seeds (laib#1009)
+		for _, a := range st.Accounts() {
+			env = append(env, "LAIB_SECRET_"+a.Secret+"="+secrets[a.Secret])
+		}
+	}
 	for _, sec := range svc.Contract.Secrets {
 		env = append(env, "LAIB_SECRET_"+sec.Name+"="+secrets[sec.Name])
 		if v, ok := secrets[sec.Name+".next"]; ok && sec.Rotate { // #665: the value to set inside the app
@@ -726,8 +733,9 @@ func PodRestartSet(units []string) []string {
 
 // hookTargets: the services whose hooks run for this plan — those with a
 // change of their own, plus the role holders whose rendered files changed
-// (authelia/*.yml → sso, caddy/Caddyfile → proxy, adguard/rewrites.json →
-// dns): their config is written by their hook from those files.
+// (authelia/*.yml → sso, identity/accounts.json → identity, caddy/Caddyfile
+// → proxy, adguard/rewrites.json → dns): their config is written by their
+// hook from those files.
 func hookTargets(st *state.State, p *plan.Plan) []string {
 	out := append([]string{}, p.Services...)
 	seen := map[string]bool{}
@@ -744,6 +752,8 @@ func hookTargets(st *state.State, p *plan.Plan) []string {
 		switch strings.SplitN(c.Path, "/", 2)[0] {
 		case "authelia":
 			add(st.Box.Roles.SSO)
+		case "identity":
+			add(st.Box.Roles.Identity)
 		case "caddy":
 			add(st.Box.Roles.Proxy)
 		case "adguard":
