@@ -26,11 +26,13 @@ type Entry struct {
 	MS      int64     `json:"ms,omitempty"`
 }
 
-// Append writes one line to today's file.
+// Append writes one line to today's file, its reason and detail scrubbed
+// of secrets first (#1012): every verb's line, whatever output it carries.
 func Append(dir string, e Entry) error {
 	if e.T.IsZero() {
 		e.T = time.Now().UTC()
 	}
+	scrubEntry(&e, knownNow())
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}

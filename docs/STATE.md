@@ -528,6 +528,15 @@ meanwhile, with reason `Freigaben #4, #5, #6 (<from>..<to>)` — the
 proposals and the state's commit range, also kept on each inbox entry as
 `batch`. A red run's `rollback` lines name it per proposal (#609).
 
+No line carries a secret (#1012): every line's `reason` and `detail` are
+scrubbed as they are written, whatever the verb — the box's secret values
+become `${secret:NAME}` (as in `laib logs`), PEM blocks (also one a tail
+cut in half), token shapes (`laib_…`, `sb_…`, an age identity, a bearer, a
+JWT) and the value after a key, password, secret or token name become
+`[geschwärzt]` (`internal/journal/scrub.go`). `laib serve` scrubbed the
+lines written before that once at start, leaving `.scrubbed-1012` in the
+journal directory and one `serve` line with the count.
+
 ### Routes that trust only the proxy
 
 `proxySecret: <NAME>` on a route makes Caddy send `X-<Service>-Proxy:
