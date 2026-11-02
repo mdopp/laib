@@ -12,7 +12,7 @@ import (
 )
 
 // shippedBox loads every shipped template, each with its values.example.yml,
-// into one state.
+// into one state; a per-person template (#986) as the instance of anna.
 func shippedBox(t *testing.T) *state.State {
 	t.Helper()
 	repo := t.TempDir()
@@ -21,6 +21,11 @@ func shippedBox(t *testing.T) *state.State {
 	for _, c := range contracts {
 		src := filepath.Dir(c)
 		name := filepath.Base(src)
+		contract, _ := os.ReadFile(c)
+		perPerson := regexp.MustCompile(`(?m)^perPerson: true`).Match(contract)
+		if perPerson {
+			name += "-anna"
+		}
 		names = append(names, name)
 		dst := filepath.Join(repo, "services", name)
 		os.MkdirAll(dst, 0o755)
@@ -33,10 +38,13 @@ func shippedBox(t *testing.T) *state.State {
 			if e.Name() == "values.example.yml" {
 				os.WriteFile(filepath.Join(dst, "values.yml"), b, 0o644)
 			}
+			if perPerson && e.Name() == "laib.yml" {
+				b = regexp.MustCompile(`(?m)^name: .*$`).ReplaceAll(b, []byte("name: "+name+"\nperson: anna\nportOffset: 0"))
+			}
 			os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
 		}
 	}
-	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: x.home\ndataDir: /d\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: auth, proxy: caddy}\nlaib: {listen: 0.0.0.0}\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: x.home\ndataDir: /d\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: auth, proxy: caddy}\nlaib: {listen: 0.0.0.0}\npeople: {anna: [\"signal:+4915100000002\"]}\n"), 0o644)
 	os.WriteFile(filepath.Join(repo, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	st, err := state.Load(repo)
 	if err != nil {
@@ -56,7 +64,7 @@ func backedBy(t *testing.T, svc *state.Service) map[string]string {
 	if o := svc.Contract.OIDC; o != nil {
 		declared[state.OIDCSecretName(o.ClientID)] = true
 	}
-	b, _ := os.ReadFile(filepath.Join("..", "..", "templates", svc.Name, "values.example.yml"))
+	b, _ := os.ReadFile(filepath.Join("..", "..", "templates", svc.Contract.Template.Name, "values.example.yml"))
 	var doc yaml.Node
 	if err := yaml.Unmarshal(b, &doc); err != nil || len(doc.Content) != 1 {
 		t.Fatalf("%s/values.example.yml: %v", svc.Name, err)

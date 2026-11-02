@@ -12,7 +12,7 @@ import (
 func TestStatefulTemplatesDoNotAutoUpdate(t *testing.T) {
 	// the owner's list (#528): HA with Matter and Z-Wave JS, Immich, Paperless,
 	// Vaultwarden, Jellyfin (media), Authelia and LLDAP (auth)
-	stateful := []string{"immich", "paperless", "vaultwarden", "home-assistant", "auth", "radicale", "audiobookshelf", "media", "beets", "usage-metrics"}
+	stateful := []string{"immich", "paperless", "vaultwarden", "home-assistant", "auth", "radicale", "audiobookshelf", "media", "beets", "usage-metrics", "archiv"}
 	for _, name := range stateful {
 		units, _ := filepath.Glob(filepath.Join("..", "..", "templates", name, "*.container"))
 		if len(units) == 0 {

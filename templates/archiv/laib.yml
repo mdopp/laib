@@ -1,0 +1,40 @@
+name: archiv
+title: Archiv
+beschreibung: Deine Nachrichten, im Tresor nur für dich
+# The message archive (ADR 0029, laib#985/#986): mdopp/archiv runs here,
+# its own repo and image; this template is the box's part. Installed once
+# per person (laib add archiv --person <p>), all instances behind one name,
+# archiv.<domain>: Caddy hands a signed-in person to their own instance and
+# /p/<person>/ to agents with that instance's msgvault key. Inside: the
+# person's vault (gocryptfs, opened only with their Archiv-Passwort), the
+# Briefkasten (packets imported while the vault is closed) and msgvault.
+perPerson: true
+template: {registry: builtin, name: archiv, version: 1}
+provides: [archiv]
+routes:
+  # Authelia does the login for the family group; Caddy sends the proxy
+  # secret as X-Archiv-Proxy on the authenticated handler only, and the
+  # supervisor serves only the instance's own person (ARCHIV_PERSON).
+  - host: archiv
+    port: 18540
+    exposure: internal
+    auth: two_factor   # owner, 2026-11-01: the door to the vault's page wants the second factor; the vault password protects the data
+    group: family
+    proxySecret: ARCHIV_PROXY_SECRET
+    proxyHeader: X-Archiv-Proxy
+secrets:
+  - name: ARCHIV_PROXY_SECRET
+  - name: ARCHIV_HAUS_SECRET     # Haus's way to /intern/… (haus#209: a phone's restore); Haus is given it when that lands
+data:
+  - path: ${DATA_DIR}/${SERVICE}               # the vault's cipher folder, the Briefkasten, the keys (outside the vault, ADR 0029 amendment), the status
+  - path: ${DATA_DIR}/archiv-eingang/${PERSON}  # Haus writes the phone's backups here (haus#207); letzte/ holds the newest per source for a new phone:
+    backup: false                              # itself a backup of the phone, and a 2.7 GB Signal file changing nightly would grow restic by that much
+health:
+  http: http://127.0.0.1:18540/healthz
+status:
+  file: ${DATA_DIR}/${SERVICE}/laib-status.json
+ports:
+  - {port: 18540, lan: false}
+upstream:
+  - https://github.com/mdopp/archiv
+  - https://www.msgvault.io/docs/

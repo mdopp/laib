@@ -1,0 +1,3 @@
+ARCHIV_IMAGE: ghcr.io/mdopp/archiv:aa2e41d7fc646e89fa6002159c2a0262bf9c5dc7   # mdopp/archiv main, CI green 2026-11-01; pinned (a database inside)
+PROXY: !secret ARCHIV_PROXY_SECRET
+HAUS_SECRET: !secret ARCHIV_HAUS_SECRET
