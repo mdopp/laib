@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/mdopp/laib/compare/v1.1.0...v1.2.0) (2026-11-02)
+
+
+### Features
+
+* **template:** the archive reads a person's contacts and calendars from Radicale ([12231bd](https://github.com/mdopp/laib/commit/12231bda7fb4b1b6843756b51a3886c0ab0daed5))
+* **template:** the archive reads a person's contacts and calendars from Radicale ([586f791](https://github.com/mdopp/laib/commit/586f7911c77c7bd9b5660725f63eb9dcd470c7b0)), closes [#1009](https://github.com/mdopp/laib/issues/1009)
+
 ## [1.1.0](https://github.com/mdopp/laib/compare/v1.0.0...v1.1.0) (2026-11-02)
 
 
