@@ -65,6 +65,7 @@ Phone and browser, Signal, the speakers with their wake word, the scanner on USB
 | Haus | [mdopp/haus](https://github.com/mdopp/haus) | the family's pages and app, the Box page; runs as the `haus` template |
 | Dokumente | [mdopp/dokumente](https://github.com/mdopp/dokumente) | scanner, splitting stacks, separator sheets, reading invoices and contracts |
 | Gesundheit | [mdopp/gesundheit](https://github.com/mdopp/gesundheit) | medical records from Paperless as a timeline per person, the daily note (#893); its template comes from the `apps` registry |
+| Archiv | [mdopp/archiv](https://github.com/mdopp/archiv) | each person's Signal, SMS, calls and mail in msgvault, locked in a vault only they open; imports while it is closed through an age-encrypted Briefkasten (ADR 0029); runs as the `archiv` template, once per person |
 
 ### Programs beside the kernel
 
@@ -103,18 +104,18 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. 20,246 / 22,000 lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,570 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
-| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,449 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,534 |
-| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,683 |
+| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,600 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,588 |
+| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,763 |
 | Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,404 |
 | Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 265 |
 | Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,677 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
-| Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,066 |
+| Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,105 |
 | Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,781 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
 | The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,390 |
@@ -126,7 +127,7 @@ The part the house trusts: it must work when everything else is broken. 20,246 /
 | Service | Beschreibung | Runs |
 |---|---|---|
 | [AdGuard](templates/adguard/) `adguard` | Namen im Heimnetz, Werbefilter | [adguardhome](https://hub.docker.com/r/adguard/adguardhome) |
-| [Archiv](templates/archiv/) `archiv` | Deine Nachrichten, im Tresor nur für dich | [archiv](https://github.com/mdopp/archiv) (msgvault, gocryptfs, signalbackup-tools) |
+| [Archiv](templates/archiv/) `archiv` | Deine Nachrichten, im Tresor nur für dich | [archiv](https://github.com/mdopp/archiv) |
 | [Audiobookshelf](templates/audiobookshelf/) `audiobookshelf` | Hörbücher, Hörspiele, Podcasts | [audiobookshelf](https://github.com/advplyr/audiobookshelf) |
 | [Anmeldung](templates/auth/) `auth` | Konten und zweiter Faktor | [authelia](https://hub.docker.com/r/authelia/authelia), [lldap](https://hub.docker.com/r/lldap/lldap), [valkey](https://hub.docker.com/r/valkey/valkey) |
 | [Musik ordnen](templates/beets/) `beets` | Erkennt und sortiert neue Musik | [beets](https://hub.docker.com/r/linuxserver/beets) |
