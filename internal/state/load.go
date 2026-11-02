@@ -23,7 +23,7 @@ var unitExts = map[string]bool{".container": true, ".pod": true, ".volume": true
 
 // assetExts are files copied next to the units without substitution
 // (a presets.json the sidecar reads, a config a hook renders from).
-var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".conf": true, ".py": true, ".sh": true} // .py, .sh: a small program a stock image runs (bote-notify, samba-accounts)
+var assetExts = map[string]bool{".json": true, ".ini": true, ".toml": true, ".conf": true, ".py": true, ".sh": true, ".sql": true} // .py, .sh: a small program a stock image runs (bote-notify, samba-accounts); .sql: what a hook has psql run (reitti)
 
 // Load reads and validates a state repo. All validation errors are joined so
 // an agent sees every problem at once.

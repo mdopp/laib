@@ -1,0 +1,44 @@
+name: reitti
+title: Zeitleiste
+beschreibung: Wo du warst, nur für dich
+template: {registry: builtin, name: reitti, version: 1}
+provides: [timeline]
+upstream: [https://github.com/dedicatedcode/reitti, https://www.dedicatedcode.com/projects/reitti/]   # where the Operator's web search looks first (#544)
+# Reitti: the household's Google Timeline, on the box. Server, PostGIS, Redis
+# and the tile cache in one pod; only the server is published, on loopback.
+# Each person logs in through Authelia's OIDC, the account is made on the
+# first login, local passwords are off, and each sees only their own data.
+# No location leaves the box: no geocoder (post-deploy turns every one off),
+# Panoramax off, tiles through the pod's cache (README.md). Immich photos:
+# each person enters http://host.containers.internal:2283 and their own API
+# key in Reitti's settings. Live recording from the phone (OwnTracks,
+# Overland) is a later step: no ingest route, no bypass.
+after: [auth]
+uses: [immich]                     # each person's photo integration talks to it; a box without Immich still loads (#978)
+routes:
+  - host: reitti
+    port: 8730
+    exposure: internal
+    auth: none                     # Reitti logs in itself, through Authelia's OIDC; local login is off
+    loginProbe: /api/v1/timeline   # refused without a session (401): laib-app check measures the app's own login there (#774)
+    caddy: |
+      request_body {
+        max_size 5GB
+      }
+oidc:
+  clientId: reitti
+  redirectUris: ["https://reitti.${DOMAIN}/login/oauth2/code/oauth"]   # Spring's {baseUrl}/login/oauth2/code/{registration}; Reitti's registration is "oauth"
+  scopes: [openid, profile, email]
+secrets:
+  - name: REITTI_DB_PASSWORD
+    dataBound: true                 # read only when PostGIS makes its data (#353)
+data:
+  - path: ${DATA_DIR}/reitti/data       # uploads and avatars
+  - path: ${DATA_DIR}/reitti/pgdata
+    quiesce: true                 # a database: stopped while it is snapshotted (#40)
+  - path: ${DATA_DIR}/reitti/tiles      # map tiles, fetched again when gone
+    backup: false
+health:
+  http: http://127.0.0.1:8730/actuator/health
+ports:
+  - {port: 8730, lan: false}

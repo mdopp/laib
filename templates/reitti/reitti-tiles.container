@@ -1,0 +1,15 @@
+[Unit]
+Description=Reitti Kartenkacheln (Cache)
+
+[Container]
+Image=${TILES_IMAGE}
+Pod=reitti.pod
+# nginx on port 80 inside the pod, never published: it fetches any address
+# Reitti names in X-Reitti-Upstream-Url and keeps the tile for a year
+Volume=${DATA_DIR}/reitti/tiles:/var/cache/nginx:z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

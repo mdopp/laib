@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# reitti post-deploy: no geocoder sends a place to the internet. Reitti
+# seeds its hosted geocoders (Paikka, Nominatim) enabled in its own
+# database, and a later migration may enable one again (V86 did), so on every
+# apply Laib runs reitti-geocoding.sql in the database container. The apply
+# turns red when psql fails. Reitti has started green before this runs, so
+# its migrations, and the table, are there.
+set -eu
+echo "laib-exec: systemd-reitti-db psql -q -At -v ON_ERROR_STOP=1 -U reitti -d reittidb -f /laib/geocoding.sql"
