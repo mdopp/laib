@@ -1,9 +1,8 @@
-"""#825: the Voice PE woke on „Hey Joshua“ twice in ten minutes, Whisper heard „Ja, ich will push
-her backst.“ and „Auf Wiedersehen.“: room talk. stimme-wakes sits between Home Assistant and
-Whisper, forwards every byte, counts the wakes per day, keeps the audio of one that was not
-addressed to Joshua as a negative for the next training, and „Fehlalarm“ marks the wake before
-it. Household audio: 0600, out of the backups, never printed."""
-import asyncio, importlib.util, io, json, os, stat, tempfile, time, unittest, wave
+"""#825: the Voice PE woke twice in ten minutes, Whisper heard „Ja, ich will push her backst.“
+and „Auf Wiedersehen.“: room talk. stimme-wakes sits between Home Assistant and Whisper,
+forwards every byte, counts the wakes per day and those without a command, and „Fehlalarm“
+marks the wake before it. Nothing it hears is kept or printed."""
+import asyncio, importlib.util, io, json, tempfile, time, unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
@@ -12,7 +11,6 @@ spec = importlib.util.spec_from_file_location("stimme_wakes", T / "stimme-wakes.
 wakes = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wakes)
 
-FMT = (16000, 2, 1)
 PCM = b"\x10\x27" * 16000   # one second
 
 
@@ -27,33 +25,26 @@ class Clock:
 class Judge(unittest.TestCase):
     def setUp(self):
         d = Path(tempfile.mkdtemp())
-        self.rec, self.micro, self.clock = d / "recordings", d / "micro", Clock()
+        self.micro, self.clock = d / "micro", Clock()
         self.micro.mkdir()
-        self.w = wakes.Wakes(self.rec, self.micro, "hey_joshua", "Hey Joshua", keep=3, clock=self.clock)
+        self.w = wakes.Wakes(self.micro, "Hey Mycroft", clock=self.clock)
 
     def heard(self, text, later=120):
         self.clock.t += later
-        return self.w.heard(text, PCM, FMT)
-
-    def negatives(self):
-        return sorted((self.rec / "hey_joshua" / "negativ").glob("*.wav"))
+        return self.w.heard(text)
 
     def today(self):
         return json.loads((self.micro / "laib-wakes.json").read_text())["tage"]["2026-10-27"]
 
-    def test_the_two_false_wakes_from_the_box_are_negatives(self):
+    def test_the_two_false_wakes_from_the_box_are_counted_without_a_command(self):
         self.assertEqual(self.heard("Ja, ich will push her backst."), "ohne")
         self.assertEqual(self.heard("Auf Wiedersehen."), "ohne")
         self.assertEqual(self.today(), {"geweckt": 2, "ohne": 2})
-        self.assertEqual(len(self.negatives()), 2)
-        with wave.open(str(self.negatives()[0])) as w:
-            self.assertEqual((w.getframerate(), w.getsampwidth(), w.getnchannels(), w.getnframes()), (16000, 2, 1, 16000))
 
     def test_a_command_or_the_name_is_addressed_and_kept_nowhere(self):
-        for text in ("Schalte das Sofalicht aus.", "Mach Bambi an", "Wie wird das Wetter morgen?", "Joshua, wie spät ist es?",
-                     "Hey Joschua, stell einen Timer", "Turn off the lights"):
+        for text in ("Schalte das Sofalicht aus.", "Mach Bambi an", "Wie wird das Wetter morgen?", "Mycroft, wie spät ist es?",
+                     "Hey Mycroft, stell einen Timer", "Turn off the lights"):
             self.assertEqual(self.heard(text), "befehl", text)
-        self.assertEqual(self.negatives(), [])
         self.assertEqual(self.today(), {"geweckt": 6, "ohne": 0})
 
     def test_nothing_heard_is_a_wake_without_a_command(self):
@@ -62,42 +53,25 @@ class Judge(unittest.TestCase):
 
     def test_a_follow_up_is_no_wake(self):
         self.heard("Mach das Licht an")
-        self.assertEqual(self.heard("Ja", later=8), "folge", "the device listened on after Joshua asked back")
+        self.assertEqual(self.heard("Ja", later=8), "folge", "the device listened on after the assistant asked back")
         self.assertEqual(self.today(), {"geweckt": 1, "ohne": 0})
-        self.assertEqual(self.negatives(), [])
 
     def test_fehlalarm_marks_the_wake_before_it(self):
         self.heard("Wie bitte ist das")   # a wake Whisper made a question of: counted as addressed
-        self.assertEqual(self.negatives(), [])
         self.assertEqual(self.heard("Fehlalarm.", later=40), "fehlalarm")
-        self.assertEqual(len(self.negatives()), 1, "the wake before became a negative")
-        self.assertEqual(self.today(), {"geweckt": 2, "ohne": 1})
+        self.assertEqual(self.today(), {"geweckt": 2, "ohne": 1}, "the wake before is one without a command")
         self.assertEqual(self.heard("Das war ein Fehlalarm"), "fehlalarm")
-        self.assertEqual(len(self.negatives()), 1, "the Fehlalarm itself is never a negative, nor marked twice")
+        self.assertEqual(self.today(), {"geweckt": 3, "ohne": 1}, "the Fehlalarm itself is never marked, nor the wake twice")
 
     def test_fehlalarm_as_the_follow_up_of_the_false_wake(self):
         self.heard("Wer hat das gesagt")
         self.assertEqual(self.heard("Fehlalarm", later=6), "fehlalarm")
-        self.assertEqual(len(self.negatives()), 1)
         self.assertEqual(self.today(), {"geweckt": 1, "ohne": 1})
 
     def test_a_late_fehlalarm_marks_nothing(self):
         self.heard("Wie geht das")
         self.heard("Fehlalarm", later=3600)
-        self.assertEqual(self.negatives(), [])
-
-    def test_capped_and_rotated_private_and_out_of_the_backups(self):
-        for _ in range(5):
-            self.heard("Auf Wiedersehen.")
-        neg = self.negatives()
-        self.assertEqual(len(neg), 3, "the newest NEGATIVES_MAX stay")
-        self.assertEqual(json.loads((self.micro / "laib-wakes.json").read_text())["gegenbeispiele"], 3)
-        for f in neg:
-            self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(neg[0].parent.stat().st_mode), 0o700)
-        tag = (neg[0].parent / "CACHEDIR.TAG").read_text()
-        self.assertTrue(tag.startswith("Signature: 8a477f597d28d172789f06886806bc55"), "restic --exclude-caches reads this signature")
-        self.assertEqual(self.today(), {"geweckt": 5, "ohne": 5}, "the counts stay what happened")
+        self.assertEqual(self.today(), {"geweckt": 2, "ohne": 0})
 
     def test_the_days_are_kept_two_weeks(self):
         for _ in range(20):
@@ -106,11 +80,11 @@ class Judge(unittest.TestCase):
 
 
 class Forward(unittest.TestCase):
-    """every byte to Whisper and back unchanged; the transcript and the audio read on the side"""
+    """every byte to Whisper and back unchanged; the transcript read on the side"""
 
     def test_a_transcription_passes_and_is_judged(self):
         d = Path(tempfile.mkdtemp())
-        w = wakes.Wakes(d / "rec", d / "micro", "hey_joshua", "Hey Joshua")
+        w = wakes.Wakes(d / "micro", "Hey Mycroft")
         (d / "micro").mkdir()
 
         def ev(kind, data=None, payload=b""):
@@ -145,10 +119,7 @@ class Forward(unittest.TestCase):
         with redirect_stdout(out):
             asyncio.run(run())
         self.assertEqual((got["whisper"], got["ha"]), (client, answer), "a byte changed on the way")
-        neg = list((d / "rec" / "hey_joshua" / "negativ").glob("*.wav"))
-        self.assertEqual(len(neg), 1)
-        with wave.open(str(neg[0])) as f:
-            self.assertEqual(f.readframes(f.getnframes()), PCM)
+        self.assertEqual(json.loads((d / "micro" / "laib-wakes.json").read_text())["tage"].popitem()[1], {"geweckt": 1, "ohne": 1})
         self.assertNotIn("Wiedersehen", out.getvalue(), "what the household said is never printed")
 
     def test_an_event_it_cannot_read_is_still_forwarded(self):
@@ -160,8 +131,8 @@ class Forward(unittest.TestCase):
         u = (T / "stimme-wakes.container").read_text()
         self.assertIn("Environment=WAKES_LISTEN=127.0.0.1:10301", u)
         self.assertIn("Environment=WHISPER=127.0.0.1:10300", u)
-        self.assertIn('Environment="WAKE_PHRASE=${PERSONA_PHRASE}"', u)
-        self.assertIn("Volume=${DATA_DIR}/stimme/recordings:/recordings:z", u)
+        self.assertIn('Environment="WAKE_PHRASE=Hey Mycroft"', u)
+        self.assertNotIn("/recordings", u, "no audio is kept")
         self.assertIn("{port: 10301, lan: false}", (T / "laib.yml").read_text())
         self.assertNotIn("print(text", (T / "stimme-wakes.py").read_text())
 

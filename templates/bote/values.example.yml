@@ -28,7 +28,7 @@ HA_URL: http://host.containers.internal:8123   # Home Assistant, for the `ha` to
 AUTOMAT_IMAGE: ghcr.io/mdopp/laib-automat:latest   # the automation tool; needs BOTE_AUTOMAT_HA_TOKEN
 HA_TOKEN: !secret BOTE_HA_TOKEN                 # minted by Home Assistant's post-deploy (#349): the non-admin user bote
 AUTOMAT_HA_TOKEN: !secret BOTE_AUTOMAT_HA_TOKEN # minted the same: an administrator's, for the Automat only
-PERSONA_IMAGE: ghcr.io/mdopp/laib-persona:latest  # the persona engine (ADR 0020); today Joshua
+DIRECTORY_IMAGE: ghcr.io/mdopp/laib-directory:latest  # the Bote's directory (ADR 0030)
 LAIB_MCP_URL: http://host.containers.internal:5900/mcp
 LAIB_TOOLS_TRUST: untrusted                    # the Laib tools in Hermes (#524): untrusted asks in the chat before propose, note, escalate; full does not (approving stays the Inbox's, #778)
 USAGE_URL: http://host.containers.internal:8094  # usage-metrics (#266): tool calls, turns, unanswered turns; used only with its token

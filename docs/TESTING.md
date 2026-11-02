@@ -36,7 +36,7 @@ Rules:
 - Production lines are capped per program: the kernel (`cmd/`,
   `internal/`, under 22,000), the Operator (`operator/`, under 3,300, ADR
   0023) and each program that left the kernel (`stick/`, `frage/`,
-  `automat/`, `persona/`, `mcpserver/`; #309). `scripts/loc.sh` measures
+  `automat/`, `directory/`, `mcpserver/`; #309). `scripts/loc.sh` measures
   each, warns at 95 %, and fails when a program imports the kernel, the
   kernel imports a program, or a trust-kernel package imports a box chore.
 - Test lines are not capped: a test may be longer than the code it proves

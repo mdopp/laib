@@ -80,9 +80,9 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("automat:", conf)
         self.assertNotIn("api/mcp/assist", conf)
 
-    def test_the_persona_engine_is_a_plugin_in_front_of_the_model_not_a_tool(self):
-        """#471: Hermes wraps every MCP result as untrusted data, so the engine's
-        screens never reached the person. It runs as the plugin laib-persona
+    def test_the_directory_is_a_plugin_in_front_of_the_model_not_a_tool(self):
+        """#471: Hermes wraps every MCP result as untrusted data, so the directory's
+        screens never reached the person. It runs as the plugin laib-directory
         (always, first), and is no MCP server the model calls any more."""
         for usage in ("", "um-tok"):
             with tempfile.TemporaryDirectory() as d:
@@ -94,12 +94,12 @@ class PostDeploy(unittest.TestCase):
                 self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
                 h = Path(d, "bote/hermes")
                 conf, soul = (h / "config.yaml").read_text(), (h / "SOUL.md").read_text()
-                self.assertNotIn("8644", conf, "the persona engine is still an MCP server the model calls")
-                self.assertIn("enabled: [laib-persona" + (", laib-nutzung]" if usage else "]"), conf)
-                self.assertEqual((h / "plugins/laib-persona/__init__.py").read_text(), (HOOK.parent / "persona_plugin.py").read_text())
-                self.assertIn("name: laib-persona", (h / "plugins/laib-persona/plugin.yaml").read_text())
-                self.assertNotIn("Werkzeug persona", soul)
-                self.assertIn("Persona:", soul)
+                self.assertNotIn("8644", conf, "the directory is still an MCP server the model calls")
+                self.assertIn("enabled: [laib-directory" + (", laib-nutzung]" if usage else "]"), conf)
+                self.assertEqual((h / "plugins/laib-directory/__init__.py").read_text(), (HOOK.parent / "directory_plugin.py").read_text())
+                self.assertIn("name: laib-directory", (h / "plugins/laib-directory/plugin.yaml").read_text())
+                self.assertFalse((h / "plugins/laib-persona").exists())
+                self.assertIn("Verzeichnis:", soul)
 
     def test_who_switched_is_a_plugin_while_home_assistant_is_wired(self):
         """#591: laib-journal journals who switched in HA through the Bote; it is placed and on
@@ -115,7 +115,7 @@ class PostDeploy(unittest.TestCase):
                 self.assertEqual("laib-journal" in conf, on, (secrets, conf))
                 self.assertEqual((h / "plugins/laib-journal").exists(), on)
                 if on:
-                    self.assertIn("enabled: [laib-persona, laib-journal]", conf)
+                    self.assertIn("enabled: [laib-directory, laib-journal]", conf)
                     self.assertEqual((h / "plugins/laib-journal/__init__.py").read_text(), (HOOK.parent / "journal_plugin.py").read_text())
                     self.assertIn("name: laib-journal", (h / "plugins/laib-journal/plugin.yaml").read_text())
 
@@ -236,12 +236,12 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("Du hast keine Websuche", soul)
         self.assertIn("sag, dass du es nicht weißt", soul)
 
-    def test_a_persona_line_never_replaces_the_answer(self):
+    def test_a_directory_line_never_replaces_the_answer(self):
         """#587: the owner answered Laib's notice ("Dir sollte die Nummer bekannt sein") and got
-        "AUF WIEDERSEHEN.", a line of the persona. The SOUL: a line of the figure never stands in for
-        the answer, and a reply to one of Laib's notices is read with laib, not guessed."""
+        "AUF WIEDERSEHEN.". The SOUL: whoever says or asks something gets an answer to it, and a
+        reply to one of Laib's notices is read with laib, not guessed."""
         _, _, soul = self.hook()
-        self.assertIn("Ein Spruch der Figur ersetzt nie die Antwort", soul)
+        self.assertIn("Wer etwas sagt oder fragt, bekommt eine Antwort zur Sache", soul)
         self.assertIn("Antwortet jemand auf eine Mitteilung von Laib", soul)
         self.assertIn("box.yml people", soul)
 

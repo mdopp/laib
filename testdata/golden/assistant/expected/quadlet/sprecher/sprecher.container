@@ -1,0 +1,10 @@
+[Unit]
+Description=Sprecher: speaks as Hal
+
+[Container]
+Image=docker.io/library/busybox:1.36
+Environment=ASSISTANT=Hal
+Environment=BOTE_SIGNAL=+4917000000001
+
+[Install]
+WantedBy=default.target

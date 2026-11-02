@@ -12,7 +12,7 @@ func TestPeopleJSONIsPrivate(t *testing.T) {
 	dir := t.TempDir()
 	for file, want := range map[string]os.FileMode{
 		"render/people/people.json": 0o600,
-		"render/persona/chat.yml":   0o644,
+		"render/caddy/Caddyfile":    0o644,
 	} {
 		p := filepath.Join(dir, file)
 		if err := writeAtomic(p, "{}\n"); err != nil {

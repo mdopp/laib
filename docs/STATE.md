@@ -99,9 +99,7 @@ operator:                         # laib-operator's container (ADR 0013, 0027); 
   contextWindow: 131072           # the model's window in tokens (#285); unset = llama-server's /props; budgets grow with it above 32k, a look's stays its own (#550)
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
-persona: joshua                   # the house persona (ADR 0020): wake word, voice, Haus, chat default; joshua when unset
-chatPersonas:                     # a Signal number (E.164) that talks to another persona in the chat
-  "+4917012345678": hal
+assistant: Homes                  # the name the family talks to: Bote, Haus, the app, the speakers' pipeline (ADR 0030); Homes when unset, one word
 people:                           # the household's people and their chat channels, preferred first (ADR 0022 §3)
   mama: ["signal:+4917012345678", "telegram:123456789"]
   lena: ["matrix:!AbCdEf:example.org"]   # a room: the direct chat with the Bote
@@ -115,11 +113,10 @@ Builtins for units and hooks: `${MODEL_URL}`, `${MODEL_KEY}`,
 `${MODEL_LEASE}` resolve from the model role when present, else from
 `model`. Units and hooks both read them inside a container, so the
 model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
-#198, #200), and both get the same `${MODEL_KEY}`. `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`,
-`${PERSONA_WAKEWORD}` (the model name, `hey_joshua`), `${PERSONA_VOICE}`,
-`${PERSONA_LANGUAGES}` (`de,en`) and
-`${PERSONA_REV}` come from the house persona. A unit that carries
-`PERSONA_REV` is restarted on any persona change. `${NOTIFY_PERSON}` is
+#198, #200), and both get the same `${MODEL_KEY}`. `${ASSISTANT}` is
+`assistant`, the name the family talks to (ADR 0030); a hook gets it as
+`LAIB_ASSISTANT`, and a news line's `${ASSISTANT}` is the name on the card.
+`${NOTIFY_PERSON}` is
 `notify.person`, whom a service tells when its values name nobody (the
 scan service's closing message, #568). `${BOTE_SIGNAL}` is the number the
 household writes to on Signal: the value a service names under
@@ -186,21 +183,6 @@ as a patch to this file. A change here is a human's call (the review).
 goes through laib's reboot lock (ADR 0024). On a uCore box it is the one OS
 update path; `install-box.sh` writes the file from the booted deployment when
 it is missing and the box was rebased by tag (#486).
-
-## personas/<name>/ (optional)
-
-A persona package (ADR 0020): `persona.yml` (name, display, languages,
-wakeword.phrase, voice, prompt, greeting, colors, gimmicks), `style.md` (how
-the character talks; style only, the rules are code), `icon.svg`, and
-`icon.png`, the same icon as a square PNG of at least 192 px for phones, which
-draw no SVG (`scripts/persona-icon.sh` makes it from the SVG). Laib
-looks in the state repo first, then `registries/<reg>/personas/<name>`, then
-the built-ins (`personas/` in this repo: joshua). When a service uses a
-persona value, apply writes every persona in use and `chat.yml` (house and
-chat map) to `/mnt/data/laib/render/persona/`, which services mount read-only;
-`persona.json` next to each package holds the resolved fields for readers
-without YAML (Haus).
-A style.md that talks about approvals or rules is a plan warning.
 
 ## policy.yml
 
@@ -360,7 +342,7 @@ every `laib status`, `/ready` and `laib diag` (a file read, no watcher) and
 shows its `detail` on the Box page and its `findings` in diag, each with its
 age ("geprüft vor 12 min"). Until the file exists the line says "noch kein
 Stand". A service that knows when its state changes
-writes the file then (Stimme's trainer). One that cannot (Home Assistant
+writes the file then (Stimme's stimme-names). One that cannot (Home Assistant
 does not push its config) names a `check`: a `.service` of the template
 without `[Install]`. laib starts it with `--no-block` when someone looks at
 diag or the Box page and the file is older than `stale`. The page shows the
@@ -748,7 +730,7 @@ aufgaben:
   ops and laib see the whole list; any other hand none of the personal ones.
 - **The guided way (#878).** `weg` is a Haus page that leads through it
   (`seite`, a path) or a conversation with the Bote (`gespraech: true`):
-  Haus offers „Gemeinsam mit Joshua“, which opens a conversation with
+  Haus offers „Gemeinsam mit Homes“, which opens a conversation with
   „Aufgabe #N mit dir erledigen“ (templates/bote/README.md).
 - An aufgaben.yml from before loads unchanged: a missing `fuer` is
   `admins`, the old key `befund` is `fertig_wenn`; the next change writes

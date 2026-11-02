@@ -531,7 +531,6 @@ var actionWords = map[string]string{
 	"restart":    "Ein Neustart ändert nichts Bleibendes; es gibt nichts zurückzunehmen.",
 	"backup":     "Eine Sicherung ändert nichts an den Diensten; es gibt nichts zurückzunehmen.",
 	"flash":      "Die neue Firmware bleibt auf dem Gerät; „Zurücknehmen“ spielt die alte nicht zurück.",
-	"retrain":    "Das Modell wird neu trainiert; das alte liegt als Kopie daneben, „Zurücknehmen“ holt es nicht zurück.",
 	"servicebay": "Der alte Ordner ist danach gelöscht; zurück kommt er nur aus der Sicherung, die Laib vorher macht.",
 	"restore":    "Die Daten von vorher ersetzen die von jetzt.",
 	"rollback":   "Die Daten fasst Laib dabei nicht an; nur das Programm wechselt wieder auf die neue Version.",

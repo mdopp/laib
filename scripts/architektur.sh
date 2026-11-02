@@ -61,13 +61,13 @@ declare -A role=(
   [operator]="The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027)"
   [lease]="laib-lease: the model role's policy proxy and the GPU lease (ADR 0011)"
   [haushalt]="laib-haushalt behind the kernel's verb door: scan, devices, tell, zuhause, person signal, wish (ADR 0026)"
-  [persona]="The Bote's persona engine: how it speaks with each person (ADR 0020)"
+  [directory]="The Bote's directory: its tools, levels and help, in the assistant's name (ADR 0030)"
   [disk]="laib-disk: the data RAID, SMART and temperatures for diag"
   [notify]="laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail"
   [automat]="Home Assistant automations as the Bote's MCP tool"
   [frage]="„was ist …“: web search with a summary, OpenAI-compatible and MCP"
   [stick]="laib-stick on the laptop: builds the install stick for a new box"
-  [mcpserver]="The smallest MCP server, shared by the Bote's tools (frage, automat, persona)"
+  [mcpserver]="The smallest MCP server, shared by the Bote's tools (frage, automat, directory)"
 )
 loc=$(scripts/loc.sh 2>&1 || true)
 budgets=$(echo "$loc" | sed -nE 's/^([a-z0-9_-]+) production: ([0-9]+)  tests: [0-9]+  \(cap ([0-9]+)\)$/\1 \2 \3/p')
@@ -248,7 +248,6 @@ svg() { # svg light|dark
   # the rows: 1 family, 2 own programs and programs beside the kernel, 3 kernel, 4 services
   local -a pn ps on os
   while read -r name prod cap; do pn+=("$name"); ps+=("$(num "$prod") / $(num "$cap")"); done <<<"$programs"
-  pn+=("stimme/trainer"); ps+=("$(num "$(find stimme/trainer -name '*.py' ! -path '*/tests/*' -exec cat {} + | wc -l | tr -d ' ')") Python")
   for o in "${own[@]}"; do IFS='|' read -r name _ _ sub <<<"$o"; on+=("$name"); os+=("$sub"); done
   local -i ownw progx progw h2 kcols=4 krows h3 h4 y1 y2 y3 y4 H xa xb oy
   ownw=$((16 + ${#on[@]} * 132 + 4)); progx=$((L + ownw + 20)); progw=$((R - L - ownw - 20))
@@ -374,7 +373,6 @@ section() {
     if [ -d "$name" ]; then link="[\`$name/\`]($name/)"; else link="\`$name\`"; fi
     echo "| $link | $what | $(budget "$prod" "$cap") |"
   done <<<"$programs"
-  echo "| [\`stimme/trainer/\`](stimme/trainer/) | trains a wake word for the speakers, the \`stimme\` template's trainer image | $(num "$(find stimme/trainer -name '*.py' ! -path '*/tests/*' -exec cat {} + | wc -l | tr -d ' ')") Python, no cap |"
   echo
   echo "### The Operator's skills"
   echo

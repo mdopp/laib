@@ -1,11 +1,12 @@
-# ADR 0021 — Names: one name, one thing; the family sees the persona
+# ADR 0021 — Names: one name, one thing; the family sees the assistant's name
 
 Applies when you name a template, a container, an image, a Bote tool, a
 hand, a Go package or a page title; when a word you are about to use
 already means something else in the house; or when you meet "Solaris",
 "Balthasar" or "ServiceBay" in code and wonder whether it is still meant.
 
-- **Status:** Accepted, 2026-10-13 (#132)
+- **Status:** Accepted, 2026-10-13 (#132). Rule 2 and the glossary's persona
+  rows amended by ADR 0030 (2026-11-02): no personas, one assistant name.
 - **Deciders:** operator (mdopp): "Ist das alles klar und direkt
   ersichtlich, oder ist das historisch gewachsen und wir müssen eine klare
   Architektur und Namensstruktur einführen?" — "Mach das zu issues und
@@ -26,20 +27,21 @@ which kind of name goes where.
 1. **One name, one thing.** A name used for a service is not also used for
    a tool, a level or a mechanism elsewhere. When two things share a word,
    the one that is not the family-facing meaning is renamed.
-2. **The family sees the persona** (ADR 0020) and German words for what a
-   thing does: Licht, Kalender, Freigabe. Never a template, hand, image or
-   tool name.
+2. **The family sees the assistant's name** (box.yml `assistant`, ADR 0030;
+   until then the persona, ADR 0020) and German words for what a thing
+   does: Licht, Kalender, Freigabe. Never a template, hand, image or tool
+   name.
 3. **A service is one German noun**, and that noun is everything about
    it: the template, the pod or unit (`bote`, `bote-*`), the data dir
    (`${DATA_DIR}/bote`), the secret prefix (`BOTE_`) and its hand where it
    has one. The services are Bote, Haus, Stimme, Frage and Werkstatt, plus
    the plain upstream ones (immich, radicale, …).
 4. **A mechanism is named for what it does, in English**: lease,
-   persona (the engine), watchdog. A mechanism is never named
-   after the persona, the person or the box it serves first. Programs this
+   directory (the persona engine until ADR 0030), watchdog. A mechanism is
+   never named after the assistant, the person or the box it serves first. Programs this
    repo builds are imaged as `laib-<program>` and run as `<pod>-<program>`.
 5. **A Bote tool is named for the system it reaches**: `laib`, `ha`,
-   `frage`, `haushalt`, `automat`, `persona`. The directory label the
+   `frage`, `haushalt`, `automat`, `directory`. The directory label the
    family reads is separate and German.
 6. **A hand is named for who holds it**: `human`, `resident`, `ops`, `pi`,
    `claude`, `bote`, `haus`.
@@ -69,15 +71,15 @@ which kind of name goes where.
 | Hermes | the upstream agent the Bote is built from, as stock | container `bote-hermes` |
 | Automat | Home Assistant automations as a Bote tool | `automat/`, container `bote-automat`, tool `automat` |
 | notify | a message for a person on their chat channel, sent by the Bote with `hermes send` (ADR 0022 §3); Home Assistant calls it as `rest_command.mitteilung` | `templates/bote/notify.py`, container `bote-notify` |
-| persona (engine) | where a person stands in the Bote: directory, levels, context, gimmicks | `persona/`, container `bote-persona`, tool `persona` |
-| Joshua | the first persona: WOPR from WarGames, "Hey Joshua" | persona package (ADR 0020) |
+| assistant | the name the family talks to, set once (ADR 0030): „Homes“ by default | `box.yml assistant`, the builtin `${ASSISTANT}`, `LAIB_ASSISTANT` in hooks |
+| directory | where a person stands in the Bote: its tools, levels, context and help, in the assistant's name | `directory/`, container `bote-directory`, tool and plugin `laib-directory` |
 | Haus | the family's surface: pages, cards, `/napi`, the app's server | repo `mdopp/haus`, `templates/haus`, `haus.<domain>` |
 | Zuhause | the household's address and coordinates, once for every template (#561, ADR 0017 amendment) | `box.yml zuhause`, the `ZUHAUSE_*` builtins, verb `laib zuhause` |
 | Haushalt | the household's data: calendar, contacts, notes, reminders | Haus's MCP source (ADR 0017), Bote tool `haushalt` |
 | memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `haus-qmd` in the haus pod (#195) |
 | Vermittler | serves the memory library: qmd's `/query` on qmd's SDK, plus each hit's cosine (`vec`), until qmd returns it itself | `qmd/vermittler.mjs`, container `haus-qmd` (#198) |
 | ha | Home Assistant as a Bote tool: lights, switches, players | Bote tool `ha` |
-| Stimme | the voice set Home Assistant Assist speaks: wake word, Whisper, Piper, trainer | `templates/stimme` (ADR 0015) |
+| Stimme | the voice set Home Assistant Assist speaks: wake word („Hey Mycroft“), Whisper, Piper | `templates/stimme` (ADR 0015, ADR 0030) |
 | Frage | "was ist …": search plus summary | `frage/`, `templates/frage` |
 | Kraftwerk | the GPU box | — |
 | NUC | the trial box | — |
@@ -101,7 +103,10 @@ names it only where its line, its section or its file says so
 | Name | Ended | Instead |
 |---|---|---|
 | Solaris | 2026-10-14, ADR 0015, ADR 0022 | the Bote (chat), Haus (pages, cards), the Operator (the admin agent) |
-| Balthasar | 2026-10-13 | Joshua |
+| Balthasar | 2026-10-13 | Joshua, since ADR 0030 Homes |
+| Joshua | 2026-11-02, ADR 0030 | the assistant's name, box.yml `assistant` (Homes) |
+| persona | 2026-11-02, ADR 0030 | the assistant's name; the engine is the directory |
+| laib-wakeword-trainer | 2026-11-02, ADR 0030 | the pretrained „Hey Mycroft“ |
 | relay | 2026-10-26, #778 | the Inbox: approvals happen only there |
 | approver | 2026-10-26, #778 (the relay's hand) | the hand `human` in the Inbox |
 
@@ -109,7 +114,8 @@ Ended (2026-10-14, ADR 0022): Solaris, `sol_device_`, `cloud.dopp.solaris://`
 and `/napi/servicebay` — nothing of the Solaris app is carried; the new app
 has its own names. Ended (2026-10-13): `solaris-wakeword-trainer` and Balthasar. #128 built
 the trainer in this repo (`laib-wakeword-trainer`), and Stimme trains the
-house persona's phrase.
+house persona's phrase. Ended (2026-11-02, ADR 0030): that trainer, Joshua
+and the personas; Stimme wakes on the pretrained „Hey Mycroft“.
 
 ## Consequences
 

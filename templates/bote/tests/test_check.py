@@ -109,7 +109,7 @@ def hermes(answers, delay=0.0):
     return serve(H) + "/v1"
 
 
-GOOD = {"Hallo": ("Hallo, hier ist Joshua. Zum Beispiel: …", []), "Hilfe": ("Zum Beispiel: „Licht an“", []),
+GOOD = {"Hallo": ("Hallo, hier ist Homes. Zum Beispiel: …", []), "Hilfe": ("Zum Beispiel: „Licht an“", []),
         "Wie hoch ist die Zugspitze?": ("Die Zugspitze ist 2.962 m hoch (Quelle: wikipedia).", ["mcp__frage__frage"]),
         "Was ist die Hauptstadt von Australien?": ("Canberra.", ["mcp__frage__frage"]),
         "Wer hat die Relativitätstheorie entwickelt?": ("Albert Einstein.", ["mcp__frage__frage"]),

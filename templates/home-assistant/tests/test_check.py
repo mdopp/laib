@@ -324,9 +324,9 @@ class Check(unittest.TestCase):
 
 
 class Voice(unittest.TestCase):
-    """#634: the voice, measured: the persona's pipeline is there and preferred, HA's local intents
+    """#634: the voice, measured: the assistant's pipeline (ADR 0030) is there and preferred, HA's local intents
     recognize a harmless sentence in its language (conversation/agent/homeassistant/debug: recognized,
-    never executed, so nothing switches), the wake word is the persona's or the status says why not,
+    never executed, so nothing switches), the wake word is hey_mycroft or the status says why not,
     the satellites are on the pipeline. Against the fake Home Assistant of test_post_deploy, as the
     check's own non-admin user."""
 
@@ -343,7 +343,7 @@ class Voice(unittest.TestCase):
             ("mqtt", ""), ("mcp_server", ""), ("ollama", "http://127.0.0.1:8710")]]
         H["pipelines"] = [{"id": "p-ha", "name": "Home Assistant", "language": "en", "conversation_engine": "conversation.home_assistant",
                            "prefer_local_intents": False, "wake_word_entity": None, "wake_word_id": None},
-                          {"id": "p-j", "name": "Joshua", "language": "de", "conversation_engine": "conversation.frage", "prefer_local_intents": True,
+                          {"id": "p-j", "name": "Homes", "language": "de", "conversation_engine": "conversation.frage", "prefer_local_intents": True,
                            "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "okay_nabu"}]
         H["preferred"] = "p-j"
         H["wake_words"] = {"wake_word.openwakeword": ["okay_nabu"]}
@@ -353,14 +353,14 @@ class Voice(unittest.TestCase):
                         ("de", "Schalte Sofalicht ein"): hit("HassTurnOn")}
         H["registry"] = [{"entity_id": "light.sofa", "platform": "hue", "disabled_by": None, "options": {"conversation": {"should_expose": True}}},{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
                          {"entity_id": "select.voice_kueche_wake_word", "platform": "esphome", "translation_key": "wake_word", "disabled_by": None}]
-        H["states"] = {"light.sofa": {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}, "select.voice_kueche_pipeline": {"state": "Joshua", "attributes": {"options": ["preferred", "Joshua"], "friendly_name": "Küche Assistent"}},
+        H["states"] = {"light.sofa": {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}, "select.voice_kueche_pipeline": {"state": "Homes", "attributes": {"options": ["preferred", "Homes"], "friendly_name": "Küche Assistent"}},
                        "select.voice_kueche_wake_word": {"state": "Okay Nabu", "attributes": {"options": ["no_wake_word", "Okay Nabu"]}}}
 
     def check(self, **env):
         d = tempfile.mkdtemp()
         out = os.path.join(d, ".laib-status.json")
         e = dict(os.environ, HA_TOKEN=self.token, HA_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_STATUS_FILE=out, ZWAVE_URL="",
-                 MA_TOKEN="", VOICE_PERSONA="Joshua", VOICE_WAKEWORD="hey_joshua", VOICE_PHRASE="Hey Joshua")
+                 MA_TOKEN="", VOICE_NAME="Homes", VOICE_WAKEWORD="hey_mycroft", VOICE_PHRASE="Hey Mycroft")
         e.update(env)
         p = subprocess.run([sys.executable, "-"], stdin=open(SCRIPT), capture_output=True, text=True, env=e)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -375,32 +375,32 @@ class Voice(unittest.TestCase):
         self.assertEqual([c for c in fake.HA["calls"]], [], "the check called a service")
         self.assertEqual(fake.HA["pipeline_updates"], [], "the check changed a pipeline")
 
-    def test_until_the_persona_wake_word_exists_the_status_says_which_one_wakes(self):
+    def test_until_the_wake_word_exists_the_status_says_which_one_wakes(self):
         r = self.check()
-        self.assertIn("Weckwort okay_nabu, bis hey_joshua da ist", r["detail"], r)
+        self.assertIn("Weckwort okay_nabu, bis hey_mycroft da ist", r["detail"], r)
         self.assertFalse([f for f in r["findings"] if f["severity"] != "info" and "Weckwort" in f["detail"]], r)
 
     def test_a_wake_word_on_the_device_is_never_said_to_be_missing(self):
-        """#785, #759: Stimme put „Hey Joshua“ onto the Voice PE; the box's openWakeWord still lacks
-        hey_joshua, but the device's select offers the phrase: the line says where the word is."""
+        """#785, #759: the Voice PE offers „Hey Mycroft“ itself; the box's openWakeWord still lacks
+        hey_mycroft, but the device's select offers the phrase: the line says where the word is."""
         sel = fake.HA["states"]["select.voice_kueche_wake_word"]
-        sel["attributes"]["options"].append("Hey Joshua")
-        sel["state"] = "Hey Joshua"
+        sel["attributes"]["options"].append("Hey Mycroft")
+        sel["state"] = "Hey Mycroft"
         for have in ("okay_nabu", None):
             fake.HA["pipelines"][1].update(wake_word_id=have)
             r = self.check()
-            self.assertIn("Weckwort „Hey Joshua“ am Gerät", r["detail"], r)
-            self.assertNotIn("bis hey_joshua da ist", r["detail"], r)
+            self.assertIn("Weckwort „Hey Mycroft“ am Gerät", r["detail"], r)
+            self.assertNotIn("bis hey_mycroft da ist", r["detail"], r)
             self.assertEqual(self.voice(r), [], r)
 
-    def test_a_persona_wake_word_offered_but_unused_is_a_finding_with_the_apply(self):
-        fake.HA["wake_words"]["wake_word.openwakeword"].append("hey_joshua")
+    def test_the_wake_word_offered_but_unused_is_a_finding_with_the_apply(self):
+        fake.HA["wake_words"]["wake_word.openwakeword"].append("hey_mycroft")
         r = self.check()
         f = [f for f in r["findings"] if "Weckwort" in f["detail"]]
         self.assertTrue(f and f[0]["severity"] == "gelb" and "laib apply home-assistant" in f[0]["fix"], r)
-        fake.HA["pipelines"][1].update(wake_word_id="hey_joshua")
+        fake.HA["pipelines"][1].update(wake_word_id="hey_mycroft")
         r = self.check()
-        self.assertIn("Weckwort hey_joshua", r["detail"])
+        self.assertIn("Weckwort hey_mycroft", r["detail"])
         self.assertEqual(self.voice(r), [], r)
 
     def test_a_dead_wake_word_is_yellow(self):
@@ -415,7 +415,7 @@ class Voice(unittest.TestCase):
         self.assertIn("Sprache: lokale Befehle antworten nicht", r["detail"], r)
         self.assertTrue([f for f in r["findings"] if f["severity"] == "gelb" and f["detail"].startswith("Sprache")], r)
 
-    def test_no_persona_pipeline_or_not_preferred_or_a_satellite_elsewhere_is_named(self):
+    def test_no_assistant_pipeline_or_not_preferred_or_a_satellite_elsewhere_is_named(self):
         fake.HA["preferred"] = "p-ha"
         fake.HA["states"]["select.voice_kueche_pipeline"]["state"] = "Home Assistant"
         r = self.check()
@@ -424,7 +424,7 @@ class Voice(unittest.TestCase):
         self.assertIn("Küche Assistent", details, r)
         fake.HA["pipelines"].pop()
         r = self.check()
-        self.assertIn("Sprache: kein Ablauf „Joshua“", r["detail"], r)
+        self.assertIn("Sprache: kein Ablauf „Homes“", r["detail"], r)
 
     def test_the_five_intents_are_recognized_as_text_and_nothing_switches(self):
         """#864: ADR 0015's five intents (timer, Einslive, music, „was ist …“, a switch) through HA's
@@ -450,15 +450,24 @@ class Voice(unittest.TestCase):
         r = self.check()
         self.assertIn("Absichten: 4 von 4 erkannt · Schalter nicht geprüft", r["detail"], r)
 
-    def test_without_the_persona_no_voice_line(self):
-        r = self.check(VOICE_PERSONA="")
+    def test_without_the_name_no_voice_line(self):
+        r = self.check(VOICE_NAME="")
         self.assertNotIn("Sprache", r["detail"])
 
-    def test_the_unit_hands_the_check_the_persona(self):
+    def test_the_unit_hands_the_check_the_name(self):
         unit = (SCRIPT.parent / "home-assistant-check.service").read_text()
-        for v in ("VOICE_PERSONA", "VOICE_WAKEWORD", "VOICE_PHRASE"):
+        for v in ("VOICE_NAME", "VOICE_WAKEWORD", "VOICE_PHRASE"):
             self.assertIn("-e " + v, unit)
-        self.assertIn('"VOICE_PHRASE=${PERSONA_PHRASE}"', unit, "a phrase with a space, quoted (#627)")
+        self.assertIn('"VOICE_PHRASE=Hey Mycroft"', unit, "a phrase with a space, quoted (#627)")
+        self.assertIn("Environment=VOICE_NAME=${ASSISTANT}", unit)
+
+    def test_openwakewords_versioned_id_is_the_same_word(self):
+        """wyoming-openwakeword may name its built-in model hey_mycroft_v0.1"""
+        fake.HA["wake_words"]["wake_word.openwakeword"].append("hey_mycroft_v0.1")
+        fake.HA["pipelines"][1].update(wake_word_id="hey_mycroft_v0.1")
+        r = self.check()
+        self.assertIn("Weckwort hey_mycroft", r["detail"], r)
+        self.assertEqual(self.voice(r), [], r)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,0 @@
-[Container]
-Image=docker.io/library/python:3-alpine
-# restarted when a person or a channel changes (#177)
-Environment=PEOPLE_REV=5409f2973ec9
-Volume=/mnt/data/laib/render/people:/people:ro,z
-Volume=./melder.py:/app/melder.py:ro,z

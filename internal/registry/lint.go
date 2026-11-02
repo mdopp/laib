@@ -183,9 +183,9 @@ func lintInstances(names []string, out render.Output) []string {
 }
 
 // lintEnvironment: systemd splits an unquoted Environment= value at
-// whitespace, so "Hey Joshua" reaches the container as "Hey" (#571, #627).
-// Lint renders with the built-in persona and values.example.yml, so the
-// rendered line shows a value with a space; quoted, the whole value arrives.
+// whitespace, so "Hey Joshua" reached the container as "Hey" (#571, #627).
+// Lint renders with values.example.yml, so the rendered line shows a value
+// with a space; quoted, the whole value arrives.
 func lintEnvironment(name string, out render.Output) []string {
 	var errs []string
 	for key, text := range out {

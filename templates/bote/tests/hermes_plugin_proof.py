@@ -1,15 +1,15 @@
-"""#266, #471, #520, #521, #591: laib-nutzung, laib-persona, laib-ablage and laib-journal under Hermes' own plugin loader,
+"""#266, #471, #520, #521, #591: laib-nutzung, laib-directory, laib-ablage and laib-journal under Hermes' own plugin loader,
 pre_llm_call collector and turn finalizer, not a fake: run with the image's
 Python and HERMES_HOME pointing at what post-deploy rendered (config.yaml
 enabling both plugins, plugins/laib-*). argv[1]: Hermes' source dir
 (/opt/hermes in the image). The CI job runs it in the Hermes image the
 template pins (values.example.yml), so a hook Hermes renames shows up here
-before counts stop or the persona's screens stop reaching the person."""
+before counts stop or the directory's screens stop reaching the person."""
 import json, logging, os, sys, threading, types
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 SEEN = []
-LINES = []  # what the persona engine was asked
+LINES = []  # what the directory was asked
 
 
 class FakeUsageMetrics(BaseHTTPRequestHandler):
@@ -23,7 +23,7 @@ class FakeUsageMetrics(BaseHTTPRequestHandler):
         self.wfile.write(b"{}")
 
 
-class FakePersona(BaseHTTPRequestHandler):
+class FakeDirectory(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
@@ -31,7 +31,7 @@ class FakePersona(BaseHTTPRequestHandler):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         line = req["params"]["arguments"]["eingabe"]
         LINES.append(line)
-        text = {"Menü": "WOPR\n\n1 SPIELE\n\nJOSHUA>", "Ist das Licht an?": "WEITER: ha\nPROMPT: JOSHUA/GERÄTE>"}.get(line, "WEITER: -\nPROMPT: JOSHUA>")
+        text = {"Menü": "VERZEICHNIS\n\n1 GERÄTE\n\nHOMES>", "Ist das Licht an?": "WEITER: ha\nPROMPT: HOMES/GERÄTE>"}.get(line, "WEITER: -\nPROMPT: HOMES>")
         body = json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [{"type": "text", "text": text}]}}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
@@ -42,9 +42,9 @@ class FakePersona(BaseHTTPRequestHandler):
 srv = HTTPServer(("127.0.0.1", 0), FakeUsageMetrics)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["USAGE_METRICS_URL"] = "http://127.0.0.1:%d" % srv.server_port
-psrv = HTTPServer(("127.0.0.1", 0), FakePersona)
+psrv = HTTPServer(("127.0.0.1", 0), FakeDirectory)
 threading.Thread(target=psrv.serve_forever, daemon=True).start()
-os.environ["PERSONA_MCP_URL"] = "http://127.0.0.1:%d/mcp" % psrv.server_port
+os.environ["DIRECTORY_MCP_URL"] = "http://127.0.0.1:%d/mcp" % psrv.server_port
 # #591: laib-journal notes who switched in HA to Laib's MCP, the context id from HA's state
 NOTES = []
 ASKED = []  # what Home Assistant's conversation API was asked
@@ -95,7 +95,7 @@ from agent.turn_context import _collect_pre_llm_call_context  # noqa: E402  pre_
 from agent.prompt_builder import format_steer_marker  # noqa: E402  Hermes' own steer frame, as it writes it (#520)
 
 plugins.discover_plugins(force=True)
-for name in ["mcp__haushalt__kalender", "mcp__persona__eingabe", "mcp__haushalt__kalender"]:
+for name in ["mcp__haushalt__kalender", "mcp__directory__eingabe", "mcp__haushalt__kalender"]:
     _emit_post_tool_call_hook(function_name=name, function_args={"q": "Anna"}, result="{}", session_id="s-9", turn_id="t1")
 
 
@@ -111,15 +111,15 @@ def pre(turn_id, message, platform="signal", user="+4917000"):
 
 
 # #520: at the top level nothing is routed, so the user turn is the person's words alone
-assert pre("t1", "[Anna] Wann kommt der Müll?") == "", "laib-persona added context to a turn with nothing to route"
-assert pre("t4", "Ist das Licht an?").startswith("Persona:"), "laib-persona's routing did not reach the user turn"
+assert pre("t1", "[Anna] Wann kommt der Müll?") == "", "laib-directory added context to a turn with nothing to route"
+assert pre("t4", "Ist das Licht an?").startswith("Verzeichnis:"), "laib-directory's routing did not reach the user turn"
 a = turn("t1", "[Anna] Wann kommt der Müll?", "[unbeantwortet] Das weiß ich nicht.")
 pre("t2", "Licht an")
-b = turn("t2", "Licht an", "JOSHUA>\nErledigt.")
-# #471: a screen turn is the engine's screen, verbatim, whatever the model wrote
+b = turn("t2", "Licht an", "HOMES>\nErledigt.")
+# #471: a screen turn is the directory's screen, verbatim, whatever the model wrote
 assert "Bildschirm" in pre("t3", "Menü")
-c = turn("t3", "Menü", "Hier ist das Menü: 1. Spiele, 2. Geräte")
-assert c == "```\nWOPR\n\n1 SPIELE\n\nJOSHUA>\n```", c
+c = turn("t3", "Menü", "Hier ist das Menü: 1. Geräte")
+assert c == "```\nVERZEICHNIS\n\n1 GERÄTE\n\nHOMES>\n```", c
 # #520: Hermes' steer frame, copied by the model around the person's words, never reaches the person
 pre("t5", "Bambi aus")
 d = turn("t5", "Bambi aus", "Bambi ist aus." + format_steer_marker("Bambi aus"))

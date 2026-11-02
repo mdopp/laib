@@ -55,7 +55,7 @@ type Finding struct {
 	Effect string `json:"effect,omitempty"`
 	Undo   string `json:"undo,omitempty"`
 	// Does: what the repair does, the card's headline (#746), when the
-	// status file knows it better than laib (the wake word a flash plays)
+	// status file knows it better than laib
 	Does string `json:"does,omitempty"`
 	// Say is what it means to a person, in one plain sentence (#855): the
 	// red mail and a repair's card show it, Detail and Fix stay for the admin.

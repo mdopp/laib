@@ -226,10 +226,8 @@ func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Propos
 	if err != nil {
 		return nil, fmt.Errorf("the proposed state does not load:\n%w", err)
 	}
-	if hp := proposed.HousePersona(); hp != nil {
-		for i := range news {
-			news[i] = strings.ReplaceAll(news[i], "${PERSONA_DISPLAY}", hp.Display)
-		}
+	for i := range news {
+		news[i] = strings.ReplaceAll(news[i], "${ASSISTANT}", proposed.Box.Assistant)
 	}
 	var verdict Verdict
 	if judge != nil {
@@ -527,7 +525,9 @@ const NewsFile = "news"
 func newsSince(was, now []byte) []string {
 	have := strings.Split(string(was), "\n")
 	for i := range have {
-		have[i] = strings.TrimSpace(have[i])
+		// a line from before ADR 0030 named the persona: the same line now, never news again.
+		// Legacy name (ADR 0021 §8), ends once every builtin template was updated on the box after 0030.
+		have[i] = strings.ReplaceAll(strings.TrimSpace(have[i]), "${PERSONA_DISPLAY}", "${ASSISTANT}")
 	}
 	var out []string
 	for _, l := range strings.Split(string(now), "\n") {

@@ -689,7 +689,7 @@ def assist_pipelines(stimme):
                         continue
                     upd[kind + "_language"] = langs[0]
                     if kind == "tts":
-                        upd["tts_voice"] = None   # the voice Piper was started with (PERSONA_VOICE)
+                        upd["tts_voice"] = None   # the voice Piper was started with (Stimme's Thorsten)
                 if field == "wake_word_entity":
                     upd["wake_word_id"] = None
                 if field == "conversation_engine":
@@ -706,10 +706,17 @@ def assist_pipelines(stimme):
         ws.close()
 
 
-PERSONA_JSON = os.path.join(E.get("LAIB_RENDER_DIR") or "/nonexistent", "persona", E.get("PERSONA") or "joshua", "persona.json")
+ASSISTANT = (E.get("LAIB_ASSISTANT") or "").strip()   # the assistant's name, box.yml assistant (ADR 0030): the pipeline's name
+WAKE_ID, WAKE_PHRASE = "hey_mycroft", "Hey Mycroft"   # ADR 0030: pretrained, in openWakeWord and in the Voice PE's firmware
 VAD = E.get("VOICE_VAD", "").strip()
-WAKE_FALLBACK = E.get("VOICE_WAKE_FALLBACK", "").strip()   # the device's word until the persona's is on it (owner, 2026-10-24)
-OLD_PIPELINES = [n.strip() for n in E.get("VOICE_OLD_PIPELINES", "").split(",") if n.strip()]
+WAKE_FALLBACK = E.get("VOICE_WAKE_FALLBACK", "").strip()   # the device's word where it does not offer Hey Mycroft (owner, 2026-10-24)
+# the Solaris era's, and the one named after the persona Joshua before the name was fixed (ADR 0030)
+OLD_PIPELINES = [n.strip() for n in E.get("VOICE_OLD_PIPELINES", "").split(",") + ["Joshua"] if n.strip()]
+
+
+def offers(ids, wid):
+    """the engine's id for wid: wyoming-openwakeword names a built-in model hey_mycroft or hey_mycroft_v0.1"""
+    return next((i for i in ids if i == wid or (i or "").startswith(wid + "_v")), None)
 
 
 def pipeline_users(pid):
@@ -734,20 +741,17 @@ def pipeline_users(pid):
 
 
 def voice(stimme):
-    """#634: one Assist pipeline named after the house persona (ADR 0020), Laib's own: Frage with HA's
-    local intents first (HA's own agent without Frage), Stimme's Whisper and Piper (the persona's
-    voice: tts_voice None is the voice Piper runs with), and the persona's wake word once Stimme's
-    openWakeWord offers it; until then the one the preferred pipeline had, if the engine offers it,
-    else none — never a wake word nobody can say. It is preferred, every satellite's pipeline select
-    is on it, a satellite's wake word is the persona's once the device has it, its end of speech is
-    VOICE_VAD. The pipelines named in VOICE_OLD_PIPELINES (the Solaris era's) go once nothing
-    uses them; one a select or a file under HA's config names is renamed „… (alt)“ instead."""
-    try:
-        with open(PERSONA_JSON) as f:
-            persona = json.load(f)
-        name, lang, wid, phrase = persona["display"], (persona.get("languages") or ["de"])[0], persona["wakeword"], persona["phrase"]
-    except (OSError, ValueError, KeyError) as e:
-        print(f"home-assistant: the house persona is not readable ({type(e).__name__}): the Assist pipelines stay as they are")
+    """#634: one Assist pipeline named after the assistant (box.yml assistant, ADR 0030), Laib's own:
+    Frage with HA's local intents first (HA's own agent without Frage), Stimme's Whisper and Piper
+    (tts_voice None is the voice Piper runs with), and „Hey Mycroft“ as the server's wake word where
+    Stimme's openWakeWord offers it (built in); else the one the preferred pipeline had, if the engine
+    offers it, else none — never a wake word nobody can say. It is preferred, every satellite's
+    pipeline select is on it, a satellite's wake word is „Hey Mycroft“ where the device offers it, its
+    end of speech is VOICE_VAD. The pipelines named in OLD_PIPELINES (the Solaris era's, Joshua's) go
+    once nothing uses them; one a select or a file under HA's config names is renamed „… (alt)“ instead."""
+    name, lang, wid, phrase = ASSISTANT, "de", WAKE_ID, WAKE_PHRASE
+    if not name:
+        print("home-assistant: no assistant's name (LAIB_ASSISTANT): the Assist pipelines stay as they are")
         return
     if not stimme.get("Whisper") or not stimme.get("Piper"):
         print(f'home-assistant: no Assist pipeline "{name}": Stimme is not there (after laib add stimme: laib apply home-assistant)')
@@ -779,14 +783,14 @@ def voice(stimme):
             offered = None   # the engine does not say: the wake word stays as it is
         if offered is None:
             ww = (before.get("wake_word_entity"), before.get("wake_word_id"))
-        elif wid in offered:
-            ww = (wake, wid)
+        elif offers(offered, wid):
+            ww = (wake, offers(offered, wid))
         elif before.get("wake_word_id") in offered:
             ww = (wake, before["wake_word_id"])
-            print(f"home-assistant: wake word {before['wake_word_id']} stays: openWakeWord does not offer {wid} yet (Stimme's trainer)")
+            print(f"home-assistant: wake word {before['wake_word_id']} stays: openWakeWord does not offer {wid}")
         else:
             ww = (None, None)
-            print(f"home-assistant: no wake word on the server: openWakeWord offers neither {wid} (Stimme's trainer) nor "
+            print(f"home-assistant: no wake word on the server: openWakeWord offers neither {wid} nor "
                   f"{before.get('wake_word_id') or 'one from before'}; the satellites wake on the device or by their button")
         agent = conv if conv and (states.get(conv) or {}).get("state") not in ("unavailable", None) else "conversation.home_assistant"
         want = {"name": name, "language": lang, "conversation_engine": agent, "conversation_language": lang, "prefer_local_intents": True,
@@ -829,14 +833,14 @@ def voice(stimme):
                 continue
             st = states.get(eid) or {}
             if tk == "pipeline" or (tk == "pipeline_n" and st.get("state") in retiring):
-                pick(eid, name, "the persona's pipeline")
+                pick(eid, name, "the assistant's pipeline")
             elif tk == "vad_sensitivity" and VAD:
                 pick(eid, VAD, f"VOICE_VAD {VAD}")
             elif tk == "wake_word":
                 opts = (st.get("attributes") or {}).get("options", [])
                 hit = next((o for o in opts if o.casefold() == phrase.casefold()), None)
                 if hit:
-                    pick(eid, hit, "the persona's wake word, on the device")
+                    pick(eid, hit, "the wake word, on the device")
                 elif WAKE_FALLBACK:   # the first slot only: the second (wake_word_n) stays the owner's
                     pick(eid, next((o for o in opts if o.casefold() == WAKE_FALLBACK.casefold()), WAKE_FALLBACK),
                          f"VOICE_WAKE_FALLBACK {WAKE_FALLBACK}, until the device has {phrase}")
@@ -850,7 +854,7 @@ def voice(stimme):
                 print(f'home-assistant: Assist pipeline "{p["name"]}" renamed "{new}", not deleted: ' + ", ".join(users) + " name it")
             else:
                 ws("assist_pipeline/pipeline/delete", pipeline_id=p["id"])
-                print(f'home-assistant: Assist pipeline "{p["name"]}" deleted (Solaris era, nothing uses it)')
+                print(f'home-assistant: Assist pipeline "{p["name"]}" deleted (from before, nothing uses it)')
     finally:
         ws.close()
 
@@ -1407,7 +1411,7 @@ except (RuntimeError, OSError, ValueError, KeyError) as e:  # the pipelines stay
 try:
     voice(stimme)
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the pipelines stay as they were; the check names what is missing
-    print(f"home-assistant: the persona's Assist pipeline NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
+    print(f"home-assistant: the assistant's Assist pipeline NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     spellings()
 except (OSError, subprocess.SubprocessError) as e:  # the timer tries again in 15 minutes

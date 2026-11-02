@@ -134,7 +134,7 @@ class PostDeploy(unittest.TestCase):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
         conf, soul, there, _ = self.run_hook("http://127.0.0.1:%d" % srv.server_port)
-        self.assertIn("enabled: [laib-persona, laib-ablage]", conf)
+        self.assertIn("enabled: [laib-directory, laib-ablage]", conf)
         self.assertTrue(there)
         self.assertIn('mit dem Wort "ablegen"', soul)
         srv.shutdown(); srv.server_close()

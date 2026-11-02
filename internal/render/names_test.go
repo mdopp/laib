@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// ADR 0021 rule 4: a mechanism is named for what it does, never after the
-// persona it serves first. A persona is data; the engine, its command, image,
-// container, MCP tool and values are `persona` (#133).
+// ADR 0021 rule 4: a mechanism is named for what it does (#133), and since
+// ADR 0030 there are no personas: no path, value, Bote tool or pod line is
+// named after Joshua or a persona any more.
 func TestMechanismsAreNotNamedAfterAPersona(t *testing.T) {
-	personas := []string{"joshua"}
+	personas := []string{"joshua", "persona"}
 	root := filepath.Join("..", "..")
 	named := func(what, s string) {
 		for _, p := range personas {
@@ -24,9 +24,6 @@ func TestMechanismsAreNotNamedAfterAPersona(t *testing.T) {
 	}
 	for _, dir := range []string{"cmd", "internal", "templates", ".github/workflows"} {
 		filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
-			if err == nil && d.IsDir() && d.Name() == "personas" {
-				return filepath.SkipDir // a persona package is the persona's data, named after it on purpose
-			}
 			if err == nil {
 				named("path", strings.TrimPrefix(path, root+"/"))
 			}
@@ -100,29 +97,22 @@ func TestPodCommentsCountTheirContainers(t *testing.T) {
 	}
 }
 
-// #128: Stimme trains the house persona's wake word with Laib's own trainer;
-// no Solaris image, no Balthasar, and the microWakeWord model the Voice PE runs
-// lands apart from openWakeWord's custom models (two formats).
-func TestStimmeTrainsTheHousePersonasWakeWord(t *testing.T) {
+// #128, ADR 0030: Stimme wakes on the pretrained „Hey Mycroft“; no Solaris
+// image, no Balthasar, no Joshua and no trainer of its own any more.
+func TestStimmeWakesOnHeyMycroft(t *testing.T) {
 	dir := filepath.Join("..", "..", "templates", "stimme")
 	all := ""
 	files, _ := filepath.Glob(filepath.Join(dir, "*"))
 	for _, f := range files {
 		b, _ := os.ReadFile(f)
 		all += string(b)
-		for _, legacy := range []string{"solaris", "balthasar"} {
+		for _, legacy := range []string{"solaris", "balthasar", "hey_joshua", "laib-wakeword-trainer"} {
 			if strings.Contains(strings.ToLower(string(b)), legacy) {
-				t.Errorf("%s still names %s (ADR 0021)", f, legacy)
+				t.Errorf("%s still names %s (ADR 0021, ADR 0030)", f, legacy)
 			}
 		}
 	}
-	trainer, _ := os.ReadFile(filepath.Join(dir, "stimme-wakeword-trainer.container"))
-	for _, want := range []string{`"WAKE_PHRASE=${PERSONA_PHRASE}"`, "WAKE_ID=${PERSONA_WAKEWORD}", "WAKE_LANGUAGES=${PERSONA_LANGUAGES}", "PERSONA_REV=${PERSONA_REV}", "${DATA_DIR}/stimme/micro:/out"} {
-		if !strings.Contains(string(trainer), want) {
-			t.Errorf("the trainer unit lacks %s", want)
-		}
-	}
-	if !strings.Contains(all, "ghcr.io/mdopp/laib-wakeword-trainer") {
-		t.Error("the trainer image is Laib's own")
+	if !strings.Contains(all, "hey_mycroft") {
+		t.Error("Stimme does not name the wake word hey_mycroft (ADR 0030)")
 	}
 }

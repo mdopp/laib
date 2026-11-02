@@ -25,7 +25,7 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *fakeLaib) {
 	}))
 	t.Cleanup(router.Close)
 	cfg := config42(t, router.URL)
-	cfg.Modes["full"] = Mode{Stops: []string{"model/embed", "voice/wakeword-trainer"}, Voice: "cpu"}
+	cfg.Modes["full"] = Mode{Stops: []string{"model/embed", "voice/whisper"}, Voice: "cpu"}
 	s, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestHouseholdOnlyThenLeaseThenHeld(t *testing.T) {
 	if code != 200 || out["model"] != "full" {
 		t.Fatalf("%d %v", code, out)
 	}
-	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-wakeword-trainer.service restart stimme-piper.service,stimme-whisper.service") {
+	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-whisper.service restart stimme-piper.service,stimme-whisper.service") {
 		t.Fatalf("full did not pause its services with their units: %v", sysd.calls)
 	}
 	if code, _ := post(t, srv.URL+"/v1/chat/completions", `{"model":"qwen3.6-35b-a3b","messages":[]}`); code != 200 {
@@ -132,7 +132,7 @@ func TestExclusiveStopsEverythingAndUnknownIsRefused(t *testing.T) {
 	if l := s.read(); l == nil || l.Mode != "exclusive" || len(l.Allowed) != 0 {
 		t.Fatalf("%+v", l)
 	}
-	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-wakeword-trainer.service") {
+	if !slices.Contains(sysd.calls, "pause llama stop llama-embed.service") || !slices.Contains(sysd.calls, "pause stimme stop stimme-whisper.service") {
 		t.Fatal(sysd.calls)
 	}
 	code, _ = post(t, srv.URL+"/v1/chat/completions", `{"model":"gemma-4-e4b","messages":[]}`)

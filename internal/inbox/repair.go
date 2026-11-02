@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -42,9 +41,6 @@ func Repairable(st *state.State, argv []string) bool {
 			}
 		}
 		return false
-	}
-	if len(argv) == 2 && (argv[0] == "flash" || argv[0] == "retrain") { // #759: a flash unit writes firmware onto a device; #828: a retrain unit trains its model again
-		return st.Services[argv[1]] != nil && slices.Contains(st.Services[argv[1]].Oneshots(), argv[1]+"-"+argv[0]+".service")
 	}
 	if len(argv) == 3 && argv[0] == "restore" { // #853: a red run's snapshot of a service with data back
 		svc := st.Services[argv[2]]

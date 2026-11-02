@@ -300,13 +300,14 @@ def five(ws, lang: str, reg: list, states: dict) -> tuple:
     return f"Absichten: {len(ok)} von {len(probes)} erkannt" + missing, out
 
 
-def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tuple:
-    """#634: the house persona's Assist pipeline, measured, never switched: there and preferred,
+def voice(base: str, token: str, name: str, wake_id: str, phrase: str) -> tuple:
+    """#634: the assistant's Assist pipeline (ADR 0030), measured, never switched: there and preferred,
     HA's local intents recognize PROBE in its language (conversation/agent/homeassistant/debug
-    recognizes and executes nothing), its wake word is the persona's or one the engine offers,
+    recognizes and executes nothing), its wake word is hey_mycroft (wyoming-openwakeword may say
+    hey_mycroft_v0.1) or one the engine offers,
     the satellites are on it. What it does not measure: the microphone, the end of speech, Whisper.
     (detail, findings)"""
-    if not token or not persona:
+    if not token or not name:
         return "", []
     out, wait, on_device, said5, found5 = [], "", False, "", []
     try:
@@ -316,11 +317,11 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
         ws = WS(base, token)
         try:
             listed = ws("assist_pipeline/pipeline/list") or {}
-            ours = next((p for p in listed.get("pipelines") or [] if p.get("name") == persona), None)
+            ours = next((p for p in listed.get("pipelines") or [] if p.get("name") == name), None)
             if ours is None:
-                return f"Sprache: kein Ablauf „{persona}“", [{"severity": "gelb", "detail": f"Sprache: kein Assist-Ablauf „{persona}“", "fix": APPLY}]
+                return f"Sprache: kein Ablauf „{name}“", [{"severity": "gelb", "detail": f"Sprache: kein Assist-Ablauf „{name}“", "fix": APPLY}]
             if listed.get("preferred_pipeline") != ours.get("id"):
-                out.append(("gelb", f"Sprache: der Ablauf „{persona}“ ist nicht bevorzugt", APPLY))
+                out.append(("gelb", f"Sprache: der Ablauf „{name}“ ist nicht bevorzugt", APPLY))
             lang = ours.get("language") or "de"
             sentence = PROBE.get(lang.split("-")[0])
             said = f"Sprache: kein Prüfsatz für {lang}"
@@ -337,15 +338,16 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
                     out.append(("gelb", f"Sprache: Home Assistants lokale Befehle erkennen „{sentence}“ ({lang}) nicht",
                                 "Home Assistant → Einstellungen → Sprachassistenten: die Sprache des Ablaufs; laib logs home-assistant"))
             if ours.get("conversation_engine") != "conversation.home_assistant" and not ours.get("prefer_local_intents"):
-                out.append(("gelb", f"Sprache: „{persona}“ fragt erst den Gesprächsagenten, nicht die lokalen Befehle", APPLY))
+                out.append(("gelb", f"Sprache: „{name}“ fragt erst den Gesprächsagenten, nicht die lokalen Befehle", APPLY))
             have, engine = ours.get("wake_word_id"), ours.get("wake_word_entity")
             try:
                 offered = [w.get("id") for w in (ws("wake_word/info", entity_id=engine) or {}).get("wake_words") or []] if engine else []
             except RuntimeError:
                 offered = None   # the engine does not answer: nothing to say about its models
-            if have == wake_id:
+            ours_id = lambda i: i == wake_id or (i or "").startswith(wake_id + "_v")
+            if ours_id(have):
                 said += f" · Weckwort {wake_id}"
-            elif offered and wake_id in offered:
+            elif offered and any(ours_id(i) for i in offered):
                 out.append(("gelb", f"Weckwort: openWakeWord bietet {wake_id}, der Ablauf nutzt {have or 'keins'}", APPLY))
             elif have and offered is not None and have not in offered:
                 out.append(("gelb", f"Weckwort: {have} bietet openWakeWord nicht an, der Ablauf wacht so nie auf", APPLY))
@@ -362,8 +364,8 @@ def voice(base: str, token: str, persona: str, wake_id: str, phrase: str) -> tup
         if r.get("disabled_by") or not st:
             continue
         who, options = (st.get("attributes") or {}).get("friendly_name") or r.get("entity_id"), (st.get("attributes") or {}).get("options") or []
-        if r.get("translation_key") == "pipeline" and st.get("state") != persona:
-            out.append(("gelb", f"Satellit „{who}“: {st.get('state')}, nicht „{persona}“", APPLY))
+        if r.get("translation_key") == "pipeline" and st.get("state") != name:
+            out.append(("gelb", f"Satellit „{who}“: {st.get('state')}, nicht „{name}“", APPLY))
         if r.get("translation_key") == "wake_word" and phrase and phrase in options:
             on_device = True   # Stimme's word on the device (#785): never say it is missing
             if st.get("state") != phrase:
@@ -389,7 +391,7 @@ if __name__ == "__main__":
     if detail:
         r["findings"] += found
         r["detail"] = (r["detail"] + " · " if r["detail"] else "") + detail
-    detail, found = voice(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("VOICE_PERSONA", ""),
+    detail, found = voice(os.environ.get("HA_URL", "http://127.0.0.1:8123"), os.environ.get("HA_TOKEN", ""), os.environ.get("VOICE_NAME", ""),
                           os.environ.get("VOICE_WAKEWORD", ""), os.environ.get("VOICE_PHRASE", ""))
     if detail:
         r["findings"] += found

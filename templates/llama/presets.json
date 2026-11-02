@@ -8,7 +8,7 @@
   ],
   "modes": {
     "shared": {"label": "geteilt", "presets": ["gemma-4-e4b", "gemma-4-12b"]},
-    "full":   {"label": "alle Modelle", "presets": [], "stops": ["model/embed", "voice/whisper", "voice/wakeword-trainer"], "voice": "cpu"}
+    "full":   {"label": "alle Modelle", "presets": [], "stops": ["model/embed", "voice/whisper"], "voice": "cpu"}
   },
   "voiceUnits": ["voice/whisper", "voice/piper"]
 }

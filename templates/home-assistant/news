@@ -1,10 +1,11 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Der Sprachassistent heißt jetzt ${ASSISTANT} und wacht auf „Hey Mycroft“
 Auch wenn der Lautsprecher „Spieler 1 live“ statt „Spiele Einslive“ versteht, spielt das Radio jetzt
 „Spiele Einslive“ und „Spiele Musik von Queen“ versteht Home Assistant jetzt auch, und die Musik läuft auf dem Lautsprecher im Raum
 Die Box-Seite zeigt jetzt, welche der fünf Sprachbefehle Home Assistant versteht: Timer, Einslive, Musik, „Was ist …“ und Schalter
-${PERSONA_DISPLAY} zählt mit, wie oft der Lautsprecher aufwacht, und lernt aus seinen Fehlalarmen
+${ASSISTANT} zählt mit, wie oft der Lautsprecher aufwacht, und lernt aus seinen Fehlalarmen
 Die Box-Seite meldet das Weckwort nicht mehr als fehlend, wenn es schon auf dem Sprachgerät liegt
 Die Werkstatt prüft jetzt auch nach, dass Home Assistant ohne Anmeldung nichts preisgibt
 Geräte mit zusammengesetzten Namen wie „Sofalicht“ hören jetzt auch auf „Sofa-Licht“ und „Sofa Licht“, und ein Befehl für ein unbekanntes Gerät bekommt eine ehrliche Antwort statt einer Websuche
@@ -14,5 +15,5 @@ Nur noch die Box selbst darf Home Assistant sagen, wer gerade fragt: ein anderes
 Home Assistant ist auch auf einer neu eingerichteten Box gleich von unterwegs erreichbar und sieht, von wo sich jemand anmeldet
 Wenn der Admin es einschaltet, sperrt Home Assistant eine Adresse nach zu vielen falschen Anmeldungen
 Erweiterungen für Home Assistant, die du freigibst, werden jetzt wirklich installiert und danach geprüft, ob Home Assistant sie laden kann
-${PERSONA_DISPLAY} darf die Namen deiner Geräte in Home Assistant lesen
+${ASSISTANT} darf die Namen deiner Geräte in Home Assistant lesen
 Neue Firmware für deine Geräte kommt samstags als Freigabe; nach deinem Ja spielt Laib sie über Home Assistant ein
