@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/mdopp/laib/compare/v0.63.0...v1.0.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* one assistant name in box.yml, no personas, the pretrained Hey Mycroft
+
+### Features
+
+* one assistant name in box.yml, no personas, the pretrained Hey Mycroft ([f88ff7e](https://github.com/mdopp/laib/commit/f88ff7e4a442b6efe72ee6ba8ae25f601eab7c3e))
+
 ## [0.63.0](https://github.com/mdopp/laib/compare/v0.62.1...v0.63.0) (2026-11-02)
 
 
