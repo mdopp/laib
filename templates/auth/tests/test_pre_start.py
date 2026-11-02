@@ -130,6 +130,14 @@ class PreStart(unittest.TestCase):
         self.assertIn("default_redirection_url: 'https://admin.vm.test/'", conf)
         self.assertNotIn("laib.vm.test", conf)
 
+    def test_a_passkey_signs_in_and_counts_as_one_factor(self):
+        # owner 2026-11-02: passkeys for the box login; the experimental
+        # "a passkey alone is two factors" stays off
+        (self.cfg / "oidc.pem").write_text(KEY)
+        _, _, conf = self.run_hook()
+        self.assertIn("  enable_passkey_login: true", conf)
+        self.assertNotIn("experimental_enable_passkey_uv_two_factors", conf)
+
     def test_authelia_reads_the_one_list(self):
         unit = UNIT.read_text()
         self.assertIn("/config/oidc-clients.yml", unit)
