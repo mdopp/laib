@@ -76,6 +76,11 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "firewall: rendered ruleset loaded into the kernel (boot)"})
 		}
 	}
+	if n, err := journal.ScrubOnce(env.Paths.Journal); err != nil { // the lines written before #1012, once
+		fmt.Fprintln(env.Errw(), "laib serve: journal scrub:", err)
+	} else if n > 0 {
+		journal.Append(env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: fmt.Sprintf("journal: %d Einträge von Geheimnissen bereinigt (#1012)", n)})
+	}
 	go inbox.Carry(context.Background(), &cli.Env{Paths: env.Paths, Actor: "laib"}) // a run a restart cut off before it applied what waits (#609)
 	mux := Routes(env, guard)
 	ln, err := net.Listen("tcp", addr)

@@ -23,11 +23,13 @@ import (
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/envelope"
 	"github.com/mdopp/laib/internal/inbox"
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/registry"
+	"github.com/mdopp/laib/internal/secrets"
 )
 
 // Version is set by the release build.
@@ -130,6 +132,7 @@ func runArgs(args []string) int {
 	if env.Actor == "" {
 		env.Actor = "human:" + os.Getenv("USER")
 	}
+	knowSecrets(env)
 	var rest []string
 	for _, a := range args {
 		if a == "--json" {
@@ -156,6 +159,15 @@ func runArgs(args []string) int {
 	fmt.Fprintf(env.Errw(), "laib: unknown verb %q\n\n", rest[0])
 	usage()
 	return 1
+}
+
+// knowSecrets hands the journal the box's secret values: none reaches a
+// journal line (#1012).
+func knowSecrets(env *cliEnv) {
+	journal.Known = func() map[string]string {
+		sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+		return sec
+	}
 }
 
 func usage() {
