@@ -103,6 +103,13 @@ class Rights(unittest.TestCase):
             self.assertIn("w", allowed(self.rules, who, "haus/familie-geburtstage/x.ics"))
             self.assertNotIn("W", allowed(self.rules, who, "haus/familie-geburtstage"))
 
+    def test_haus_mirrors_a_persons_phone_contacts_into_their_own_address_book(self):   # ADR 0029
+        self.assertIn("w", allowed(self.rules, "haus", "anna/handy-kontakte"))
+        self.assertIn("w", allowed(self.rules, "haus", "anna/handy-kontakte/abc.vcf"))
+        self.assertIn("r", allowed(self.rules, "anna", "anna/handy-kontakte/abc.vcf"), "the person reads their mirror")
+        self.assertEqual(allowed(self.rules, "ben", "anna/handy-kontakte"), "", "nobody else")
+        self.assertEqual(allowed(self.rules, "haus", "anna/google-kontakte"), "", "the Takeout book stays the person's")
+
 
 if __name__ == "__main__":
     unittest.main()
