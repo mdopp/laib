@@ -1,0 +1,19 @@
+[Unit]
+Description=Reitti PostGIS
+
+[Container]
+Image=${DB_IMAGE}
+Pod=reitti.pod
+Environment=POSTGRES_USER=reitti
+Environment=POSTGRES_PASSWORD=${DB_PASSWORD}
+Environment=POSTGRES_DB=reittidb
+Volume=${DATA_DIR}/reitti/pgdata:/var/lib/postgresql/data:z
+# post-deploy runs it here through laib-exec: every geocoder off (README)
+Volume=./reitti-geocoding.sql:/laib/geocoding.sql:ro,z
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

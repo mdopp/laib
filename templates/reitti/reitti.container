@@ -1,0 +1,41 @@
+[Unit]
+Description=Reitti — Zeitleiste (Anmeldung über Authelia)
+After=reitti-db.service reitti-redis.service reitti-tiles.service
+
+[Container]
+Image=${IMAGE}
+Pod=reitti.pod
+Environment=TZ=${TZ}
+Environment=POSTGIS_HOST=127.0.0.1
+Environment=POSTGIS_PORT=5432
+Environment=POSTGIS_DB=reittidb
+Environment=POSTGIS_USER=reitti
+Environment=POSTGIS_PASSWORD=${DB_PASSWORD}
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+# the family's login: Authelia's OIDC, an account made on the first login, no
+# local passwords (the login form is gone, the seeded admin has none)
+Environment=OIDC_ENABLED=true
+Environment=OIDC_SIGN_UP_ENABLED=true
+Environment=DISABLE_LOCAL_LOGIN=true
+Environment=OIDC_ISSUER_URI=https://auth.${DOMAIN}
+Environment=OIDC_CLIENT_ID=reitti
+Environment=OIDC_CLIENT_SECRET=${OIDC_SECRET}
+Environment=OIDC_SCOPE=openid,profile,email
+# no location leaves the box: map tiles go through the pod's cache (Reitti
+# fetches them, never the browser); Panoramax would send the map's area to
+# api.panoramax.xyz, so it is off (empty); the hosted geocoders are switched
+# off by post-deploy; the update check would only confuse, images move by proposal
+Environment=TILES_CACHE=http://127.0.0.1:80
+Environment=PANORAMAX_BASE_URL=
+Environment=REITTI_NOTIFICATIONS_UPDATE_CHECK_ENABLED=false
+# the JVM takes a quarter of the box's RAM without a cap
+Environment=JAVA_OPTS=-Xmx${JAVA_HEAP}
+Volume=${DATA_DIR}/reitti/data:/data:z
+# no AutoUpdate: this service keeps a database; images change by proposal with a snapshot first (#46)
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

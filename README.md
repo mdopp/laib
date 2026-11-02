@@ -122,7 +122,7 @@ The part the house trusts: it must work when everything else is broken. 20,570 /
 
 ### Services from templates
 
-26 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
+27 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
 
 | Service | Beschreibung | Runs |
 |---|---|---|
@@ -146,6 +146,7 @@ The part the house trusts: it must work when everything else is broken. 20,570 /
 | [Music Assistant](templates/music-assistant/) `music-assistant` | Musik auf den Lautsprechern | [music-assistant](https://github.com/music-assistant/server) |
 | [Paperless](templates/paperless/) `paperless` | Dokumente, durchsuchbar | [paperless-ngx](https://github.com/paperless-ngx/paperless-ngx), [postgres](https://hub.docker.com/_/postgres), [redis](https://hub.docker.com/_/redis) |
 | [Kalender](templates/radicale/) `radicale` | Termine und Kontakte der Familie | [docker-radicale](https://hub.docker.com/r/tomsquest/docker-radicale) |
+| [Zeitleiste](templates/reitti/) `reitti` | Wo du warst, nur für dich | [reitti](https://hub.docker.com/r/dedicatedcode/reitti), [reitti-tile-cache](https://hub.docker.com/r/dedicatedcode/reitti-tile-cache), [postgis](https://hub.docker.com/r/postgis/postgis), [redis](https://hub.docker.com/_/redis) |
 | [Scannen](templates/scan/) `scan` | Papierstapel nach Paperless, Verträge lesen | [dokumente](https://github.com/mdopp/dokumente) |
 | [Stimme](templates/stimme/) `stimme` | Hören, Sprechen, Weckwort | [faster-whisper](https://hub.docker.com/r/linuxserver/faster-whisper), [wyoming-piper](https://hub.docker.com/r/rhasspy/wyoming-piper), [wyoming-openwakeword](https://hub.docker.com/r/rhasspy/wyoming-openwakeword), [laib-wakeword-trainer](stimme/trainer/) |
 | [Nutzungszähler](templates/usage-metrics/) `usage-metrics` | Wie oft was genutzt wird, anonym | [usage-metrics](https://github.com/mdopp/usage-metrics) |
@@ -204,7 +205,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
 | Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
-| 26 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
+| 27 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what

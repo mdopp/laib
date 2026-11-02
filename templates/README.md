@@ -20,7 +20,7 @@ Two kinds of route, written into every `laib.yml` (#55):
 | Kind | `auth:` | Why | Templates |
 |---|---|---|---|
 | browser only, behind Authelia | `auth: one_factor` / `two_factor` | surfaces people open in a browser; forward-auth does the login | laib, sync (Syncthing), files (File Browser, proxy auth on Remote-User), ldap, dns, adguard, whoami |
-| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless (OIDC, account on the first login), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
+| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless (OIDC, account on the first login), reitti (OIDC, account on the first login, local login off), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
 
 An `auth: none` route fronts an app that really logs in on its own: none
 of its units may trust `Remote-User` or turn the app's login off
@@ -32,7 +32,7 @@ account in `FILEBROWSER_ADMIN_USER` is its admin from the first start, as
 in ServiceBay. An unauthenticated control port on the host network (Z-Wave JS,
 Matter) is declared `lan: false` or listens on loopback.
 
-OIDC clients (immich, vaultwarden, audiobookshelf, paperless) fetch Authelia's
+OIDC clients (immich, vaultwarden, audiobookshelf, paperless, reitti) fetch Authelia's
 discovery document over HTTPS: they need a certificate they trust — real
 certificates (#45, the trial domain at deSEC), never `tls: internal`.
 Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`),
@@ -70,4 +70,5 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | scan | — | paper stacks into Paperless (#568): a file in the share's `scan-eingang` or a SANE network scanner's run; pages turned, read, blanks dropped, the household model marks where documents start; one closing message per stack through bote-notify; ordered with `laib scan` |
 | paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share; a mail inbox from `PAPERLESS_MAIL_*` (README.md) |
+| reitti | — | Zeitleiste (Reitti): where each person was, from the Google Timeline export and Takeout; OIDC through Authelia, local login off, accounts on the first login; PostGIS, Redis and the tile cache in the pod; no geocoder and Panoramax off, so no location leaves the box (README.md) |
 | usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |

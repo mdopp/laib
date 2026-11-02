@@ -1,0 +1,12 @@
+[Unit]
+Description=Reitti Redis (Cache, nicht gesichert)
+
+[Container]
+Image=${REDIS_IMAGE}
+Pod=reitti.pod
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

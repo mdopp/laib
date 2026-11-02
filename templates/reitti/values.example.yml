@@ -1,0 +1,7 @@
+IMAGE: docker.io/dedicatedcode/reitti:5.9.0@sha256:92c5978cb3c7d1eec63127e246842ad7bb78a442298d888a8fc66378dfcde361
+TILES_IMAGE: docker.io/dedicatedcode/reitti-tile-cache:5.9.0@sha256:53d0b673f3bb651124ac14924aa19b6aa352998bfa79682198ee0357a2d6e7ad
+DB_IMAGE: docker.io/postgis/postgis:17-3.5-alpine@sha256:894f570c0cf0664ed5576a8fd5d5bfb8fb1b19d592885b686c3a88c8bd90c41f
+REDIS_IMAGE: docker.io/library/redis:7.4-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
+JAVA_HEAP: 1536m                        # Reitti's JVM heap; without it the JVM takes a quarter of the box's RAM
+DB_PASSWORD: !secret REITTI_DB_PASSWORD
+OIDC_SECRET: !secret OIDC_REITTI_SECRET

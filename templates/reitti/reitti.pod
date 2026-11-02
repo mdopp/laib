@@ -1,0 +1,11 @@
+[Pod]
+PodName=reitti
+# Reitti only, on loopback: Caddy is the one way in. The tile cache (port 80
+# in the pod) is an open proxy to any address Reitti names in a header, so it
+# is never published
+PublishPort=127.0.0.1:8730:8080
+# Authelia for the OIDC discovery and the token exchange: the host gateway is the
+# host (Caddy on 443); under pasta the container has the host's own address, so
+# the LAN IP would stay inside it (ServiceBay #817, #252)
+# on the pod: podman refuses extra hosts on a container that joins one
+AddHost=auth.${DOMAIN}:host-gateway
