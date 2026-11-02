@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-STATE = {"users": [], "groups": [], "adds": []}
+STATE = {"users": [], "groups": [], "adds": [], "members": {}, "deleted": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
            "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw",
@@ -48,8 +48,19 @@ class FakeLLDAP(BaseHTTPRequestHandler):
                 out = {"data": {"createUser": {"id": body["variables"]["u"]["id"]}}}
             elif "user(userId" in q:
                 out = {"data": {"user": {"groups": []}}}
+            elif "group(groupId" in q:
+                out = {"data": {"group": {"users": [{"id": u} for u in STATE["members"].get(body["variables"]["g"], [])]}}}
+            elif "deleteUser" in q:
+                u = body["variables"]["u"]
+                STATE["users"].remove(u)
+                STATE["deleted"].append(u)
+                for m in STATE["members"].values():
+                    m.discard(u)
+                out = {"data": {"deleteUser": {"ok": True}}}
             else:
-                STATE["adds"].append(body.get("variables", {}).get("u"))
+                v = body.get("variables", {})
+                STATE["adds"].append(v.get("u"))
+                STATE["members"].setdefault(v.get("g"), set()).add(v.get("u"))
                 out = {"data": {"addUserToGroup": {"ok": True}}}
         data = json.dumps(out).encode()
         self.send_response(200)
@@ -141,7 +152,7 @@ class PostDeploy(unittest.TestCase):
 
     def run_hook(self, users, groups, ok=True, modify="take", op="core", extra=None, admin=None, **secrets):
         secrets = dict(SECRETS, **secrets)
-        STATE["users"], STATE["groups"], STATE["adds"] = users, groups, []
+        STATE["users"], STATE["groups"], STATE["adds"], STATE["deleted"] = users, groups, [], []
         LDAP["pw"], LDAP["set"], LDAP["binds"], LDAP["modify"] = {ADMIN_DN: admin or secrets["LLDAP_ADMIN_PASSWORD"]}, [], [], modify
         env = dict(os.environ, LAIB_DOMAIN="vm.test", BASE_DN=BASE_DN, OPERATOR_USER=op, OPERATOR_EMAIL="core@vm.test",
                    **{"LAIB_SECRET_" + k: v for k, v in secrets.items()}, **(extra or {}))
@@ -246,6 +257,55 @@ class PostDeploy(unittest.TestCase):
         for kw in ({"RADICALE_LDAP_PASSWORD": ""}, {"FILE_SHARE_LDAP_PASSWORD": ""}, {"JELLYFIN_LDAP_PASSWORD": ""}, {"OPERATOR_PASSWORD": ""}, {"op": "core,ou=admins"}, {"op": "a+b"}, {"op": "a\\,b"}):
             with self.subTest(**kw):
                 self.run_hook([], [], ok=False, **kw)
+                self.assertEqual((STATE["users"], LDAP["set"]), ([], []), "nothing may be created or set first")
+
+    def accounts(self, tmp, declared, users, groups, members=None, ok=True, **secrets):
+        """a run with identity/accounts.json in the render folder (laib#1009); members: group name → users"""
+        os.makedirs(os.path.join(tmp, "identity"), exist_ok=True)
+        with open(os.path.join(tmp, "identity", "accounts.json"), "w") as f:
+            json.dump([{"user": u, "secret": n, "service": u} for u, n in declared], f)
+        STATE["members"] = {groups.index(g): set(m) for g, m in (members or {}).items()}
+        return self.run_hook(users, groups, ok=ok, extra={"LAIB_RENDER_DIR": tmp}, **secrets)
+
+    def test_a_service_account_is_seeded_with_its_password_and_removed_with_its_service(self):   # laib#1009
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        pw = "-archiv-anna-rad-pw"
+        self.accounts(tmp, [("archiv-anna", "ARCHIV_RADICALE_PASSWORD_ANNA")], [], [], ARCHIV_RADICALE_PASSWORD_ANNA=pw)
+        dn = "uid=archiv-anna,ou=people," + BASE_DN
+        self.assertIn("archiv-anna", STATE["users"])
+        self.assertEqual(LDAP["pw"].get(dn), pw, LDAP)
+        self.assertIn((dn, True), LDAP["binds"], "a set that did not take is red, not seeded")
+        managed = STATE["groups"].index("laib_accounts")
+        self.assertEqual(STATE["members"][managed], {"archiv-anna"})
+        for g in ("admins", "family", "lldap_strict_readonly"):
+            self.assertNotIn("archiv-anna", STATE["members"].get(STATE["groups"].index(g), set()), f"a service account in {g}")
+        # the next run sets it again; the instance removed: the account goes, nobody else's
+        users = ["core", "haus", "kalender", "archiv-anna", "archiv-ben"]
+        self.accounts(tmp, [("archiv-anna", "ARCHIV_RADICALE_PASSWORD_ANNA")], users, ["admins", "family", "lldap_strict_readonly", "laib_accounts"],
+                      {"laib_accounts": ["archiv-anna", "archiv-ben"]}, ARCHIV_RADICALE_PASSWORD_ANNA=pw)
+        self.assertIn(dn, LDAP["set"])
+        self.assertEqual(STATE["deleted"], ["archiv-ben"])
+        self.accounts(tmp, [], list(users), ["admins", "family", "lldap_strict_readonly", "laib_accounts"], {"laib_accounts": ["archiv-anna"]})
+        self.assertEqual(STATE["deleted"], ["archiv-anna"], "the last one goes too")
+        self.assertIn("haus", STATE["users"])
+
+    def test_without_the_list_no_service_account_is_touched(self):   # a Laib before laib#1009
+        self.run_hook(["core", "archiv-anna"], ["admins", "family", "lldap_strict_readonly", "laib_accounts"], extra={"LAIB_RENDER_DIR": "/nonexistent"})
+        self.assertEqual(STATE["deleted"], [])
+        self.assertIn("archiv-anna", STATE["users"])
+
+    def test_a_persons_account_or_one_of_the_hooks_own_is_never_taken_over(self):   # laib#1009
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        # archiv-anna exists and is no service account Laib made: its password stays, the run is red
+        err = self.accounts(tmp, [("archiv-anna", "P")], ["core", "archiv-anna"], ["admins", "family", "lldap_strict_readonly"], ok=False, P="-p-1009")
+        self.assertIn("not taken over", err)
+        self.assertNotIn("uid=archiv-anna,ou=people," + BASE_DN, LDAP["set"])
+        # a name the hook keeps itself, one LDAP cannot address, an empty password: red before anything is created
+        for user, pw in (("haus", "-p-1009"), ("core", "-p-1009"), ("a,ou=x", "-p-1009"), ("archiv-anna", "")):
+            with self.subTest(user=user):
+                self.accounts(tmp, [(user, "P")], [], [], ok=False, P=pw)
                 self.assertEqual((STATE["users"], LDAP["set"]), ([], []), "nothing may be created or set first")
 
 

@@ -44,7 +44,7 @@ func shippedBox(t *testing.T) *state.State {
 			os.WriteFile(filepath.Join(dst, e.Name()), b, 0o644)
 		}
 	}
-	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: x.home\ndataDir: /d\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: auth, proxy: caddy}\nlaib: {listen: 0.0.0.0}\npeople: {anna: [\"signal:+4915100000002\"]}\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: x.home\ndataDir: /d\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: auth, identity: auth, proxy: caddy}\nlaib: {listen: 0.0.0.0}\npeople: {anna: [\"signal:+4915100000002\"]}\n"), 0o644)
 	os.WriteFile(filepath.Join(repo, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	st, err := state.Load(repo)
 	if err != nil {

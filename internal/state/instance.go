@@ -23,6 +23,9 @@ func (svc *Service) instance() {
 	if c.Status != nil {
 		c.Status.File = r.Replace(c.Status.File)
 	}
+	for i := range c.Secrets {
+		c.Secrets[i].Account = r.Replace(c.Secrets[i].Account)
+	}
 	if c.Person == "" {
 		return
 	}
@@ -92,6 +95,27 @@ func (st *State) Instances(host string) []Instance {
 		for _, r := range st.Services[name].Contract.Routes {
 			if r.Host == host && st.Services[name].Contract.Person != "" {
 				out = append(out, Instance{st.Services[name], r})
+			}
+		}
+	}
+	return out
+}
+
+// Account is a service account the identity service keeps for a service
+// (Secret.Account): its name, the secret holding its password, the service.
+type Account struct {
+	User    string `json:"user"`
+	Secret  string `json:"secret"`
+	Service string `json:"service"`
+}
+
+// Accounts: every declared service account, in service order.
+func (st *State) Accounts() []Account {
+	var out []Account
+	for _, name := range st.ServiceNames() {
+		for _, s := range st.Services[name].Contract.Secrets {
+			if s.Account != "" {
+				out = append(out, Account{s.Account, s.Name, name})
 			}
 		}
 	}

@@ -85,6 +85,12 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["authelia/laib-access.yml"] = autheliaAccess(st)
 		out["authelia/laib-clients.yml"] = autheliaClients(st, secrets)
 	}
+	if st.Box.Roles.Identity != "" {
+		// the service accounts the identity service seeds (laib#1009): names, never a password;
+		// its hook removes an account it seeded that is gone from here
+		b, _ := json.MarshalIndent(append([]state.Account{}, st.Accounts()...), "", "  ") // [] when none
+		out["identity/accounts.json"] = string(b) + "\n"
+	}
 	if st.Box.Roles.DNS != "" && st.Box.LanIP != "" {
 		out["adguard/rewrites.json"] = adguardRewrites(st)
 	}
@@ -407,8 +413,9 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 
 // secretEnv substitutes a unit; in a .container each Environment= line that
 // names a secret-backed value becomes Secret=<name>,type=env,target=<KEY>
-// (#224): Quadlet puts every Environment= value on podman run's argv, where
-// ps shows it to every user on the box. The values come back under the
+// (#224), and Secret=${VALUE},type=mount,target=<file> names the podman
+// secret mounted as /run/secrets/<file> (laib#1009): Quadlet puts every
+// Environment= value on podman run's argv, where ps shows it to every user on the box. The values come back under the
 // names. An empty value stays an empty Environment= line: nothing to hide,
 // and podman refuses an empty secret. What podman cannot take as one secret
 // (two assignments, a key with a comma, quote or blank) is an error, never
@@ -421,8 +428,26 @@ func secretEnv(svc *state.Service, file, content string, vars map[string]string)
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		k, rest, _ := strings.Cut(line, "=") // systemd takes blanks around the =
-		if strings.TrimSpace(k) != "Environment" || !slices.ContainsFunc(state.Placeholders(rest), isSecret(svc)) {
+		if k = strings.TrimSpace(k); k != "Environment" && k != "Secret" || !slices.ContainsFunc(state.Placeholders(rest), isSecret(svc)) {
 			lines[i] = substitute(line, vars)
+			continue
+		}
+		if k == "Secret" {
+			// a secret as a file (laib#1009): Secret=${VALUE},type=mount,target=<file>
+			// becomes the podman secret mounted at /run/secrets/<file>
+			ref, opts, _ := strings.Cut(strings.TrimSpace(rest), ",")
+			target := mountTarget(opts)
+			if names := state.Placeholders(ref); len(names) != 1 || ref != "${"+names[0]+"}" || target == "" {
+				return "", nil, fmt.Errorf("services/%s/%s: %s: a secret as a file is Secret=${VALUE},type=mount,target=<file> (laib#1009)", svc.Name, file, line)
+			}
+			val := substitute(ref, vars)
+			if val == "" {
+				lines[i] = "# " + strings.TrimSpace(line) + ": not set, no file" // podman refuses an empty secret
+				continue
+			}
+			name := podmanSecretName(svc.Name, strings.TrimSuffix(file, ".container"), target)
+			sec[name] = val
+			lines[i] = "Secret=" + name + "," + opts
 			continue
 		}
 		words := envWords(rest)
@@ -444,6 +469,22 @@ func secretEnv(svc *state.Service, file, content string, vars map[string]string)
 	return strings.Join(lines, "\n"), sec, nil
 }
 
+// mountTarget: the file a Secret= line's options mount the secret as
+// (type=mount,target=<file>), "" for any other shape
+func mountTarget(opts string) string {
+	o := map[string]string{}
+	for _, kv := range strings.Split(opts, ",") {
+		k, v, _ := strings.Cut(kv, "=")
+		if !secretOpt.MatchString(kv) || o[k] != "" {
+			return ""
+		}
+		o[k] = v
+	}
+	return map[bool]string{true: o["target"]}[o["type"] == "mount"]
+}
+
+var secretOpt = regexp.MustCompile(`^[a-z]+=[A-Za-z0-9._-]+$`)
+
 // isSecret: the value is secret-backed, a !secret or the builtin MODEL_KEY.
 func isSecret(svc *state.Service) func(string) bool {
 	return func(v string) bool { return v == "MODEL_KEY" || svc.Values[v].Secret != "" }
@@ -457,12 +498,12 @@ func isSecret(svc *state.Service) func(string) bool {
 func secretOffEnvironment(svc *state.Service, file, content string) error {
 	for i, line := range strings.Split(content, "\n") {
 		k, _, _ := strings.Cut(line, "=")
-		if strings.TrimSpace(k) == "Environment" {
-			continue
+		if k = strings.TrimSpace(k); k == "Environment" || k == "Secret" && strings.HasSuffix(file, ".container") {
+			continue // a container's Secret= mounts it as a file (laib#1009)
 		}
 		names := state.Placeholders(line)
 		if v := slices.IndexFunc(names, isSecret(svc)); v >= 0 {
-			return fmt.Errorf("services/%s/%s:%d: %s: ${%s} is a secret; only an Environment= line may carry one (#224, #233)", svc.Name, file, i+1, line, names[v])
+			return fmt.Errorf("services/%s/%s:%d: %s: ${%s} is a secret; only an Environment= or a container's Secret= line may carry one (#224, #233)", svc.Name, file, i+1, line, names[v])
 		}
 	}
 	return nil

@@ -7,6 +7,7 @@ PublishPort=127.0.0.1:8481:8080
 Volume=/mnt/data/stacks/notizbuch-anna:/data:Z
 Environment=NOTIZBUCH_OWNER=anna
 Secret=laib.notizbuch-anna.notizbuch-anna.NOTIZBUCH_KEY,type=env,target=NOTIZBUCH_KEY
+Secret=laib.notizbuch-anna.a5ab397649ec44f65727ceba,type=mount,target=dav-password
 
 [Service]
 Restart=always

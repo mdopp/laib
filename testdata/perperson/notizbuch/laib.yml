@@ -16,6 +16,8 @@ routes:
     proxyHeader: X-API-Key
 secrets:
   - name: NOTIZBUCH_KEY
+  - name: NOTIZBUCH_DAV_PASSWORD   # its own login to the calendar, seeded by the identity service (laib#1009)
+    account: notizbuch-${PERSON}
 data:
   - path: ${DATA_DIR}/${SERVICE}
 health:

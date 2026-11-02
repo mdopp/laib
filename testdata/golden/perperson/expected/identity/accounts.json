@@ -1,0 +1,12 @@
+[
+  {
+    "user": "notizbuch-anna",
+    "secret": "NOTIZBUCH_DAV_PASSWORD_ANNA",
+    "service": "notizbuch-anna"
+  },
+  {
+    "user": "notizbuch-martin",
+    "secret": "NOTIZBUCH_DAV_PASSWORD_MARTIN",
+    "service": "notizbuch-martin"
+  }
+]

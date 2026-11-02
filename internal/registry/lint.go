@@ -43,7 +43,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 	if pp.PerPerson {
 		names, people, name = []string{tpl + "-a", tpl + "-b"}, "people: {a: [\"email:a@lint.example\"], b: [\"email:b@lint.example\"]}\n", tpl+"-a"
 	}
-	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: "+name+"}\nlaib: {listen: 0.0.0.0}\n"+people), 0o644)
+	os.WriteFile(filepath.Join(tmp, "box.yml"), []byte("domain: lint.example\ndataDir: /mnt/data/stacks\nlanIp: 10.0.0.2\ngpu: {present: true}\nhostNetwork: ["+strings.Join(names, ", ")+"]\nroles: {sso: "+name+", identity: "+name+"}\nlaib: {listen: 0.0.0.0}\n"+people), 0o644)
 	os.WriteFile(filepath.Join(tmp, "policy.yml"), []byte("tiers: [read, propose, apply, destroy]\nhands: {human: {ceiling: destroy}}\n"), 0o644)
 	entries, err := os.ReadDir(dir)
 	if err != nil {

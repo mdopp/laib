@@ -9,6 +9,7 @@ beschreibung: Deine Nachrichten, im Tresor nur für dich
 # person's vault (gocryptfs, opened only with their Archiv-Passwort), the
 # Briefkasten (packets imported while the vault is closed) and msgvault.
 perPerson: true
+uses: [radicale]   # the contacts and calendars, read only, while the vault is open (archiv#21)
 template: {registry: builtin, name: archiv, version: 1}
 provides: [archiv]
 routes:
@@ -25,6 +26,8 @@ routes:
 secrets:
   - name: ARCHIV_PROXY_SECRET
   - name: ARCHIV_HAUS_SECRET     # Haus's way to /intern/… (haus#209: a phone's restore); Haus is given it when that lands
+  - name: ARCHIV_RADICALE_PASSWORD   # the archive's own Radicale login, archiv-<person> (laib#1009): the auth template seeds it, templates/radicale lets it read the person's contacts and calendars and write nothing
+    account: archiv-${PERSON}
 data:
   - path: ${DATA_DIR}/${SERVICE}               # the vault's cipher folder, the Briefkasten, the keys (outside the vault, ADR 0029 amendment), the status
   - path: ${DATA_DIR}/archiv-eingang/${PERSON}  # Haus writes the phone's backups here (haus#207); letzte/ holds the newest per source for a new phone:

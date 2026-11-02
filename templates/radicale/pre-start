@@ -44,12 +44,32 @@ chmod 644 "$C/config"
 # of theirs; "für die Familie" is haus/familie-<name>, which everyone reads and writes like the Haushalt.
 # <person>/handy-kontakte is the mirror of the person's phone contacts: the Haus app sends them, Haus writes
 # them there (haus/internal/napi, laib ADR 0029); the person owns it like the privat-* calendars.
+# The archive (templates/archiv, one instance per person, ADR 0029) logs in as `archiv-<person>` (laib#1009) and
+# only reads: it lists <person>'s home and reads <person>/handy-kontakte, google-* (not google-kontakte) and
+# privat-*. These three sections come before every `.+` and `(.+)` one, and the last gives it nothing else: not
+# its own home archiv-<person>/, not another person's, not the Haushalt. mdopp/archiv's integration.sh runs a
+# real Radicale with these rights.
 cat > "$C/rights" <<'RIGHTS'
 # rendered by laib pre-start (templates/radicale)
 [root]
 user: .+
 collection:
 permissions: R
+
+[archiv-home]
+user: archiv-(.+)
+collection: {0}
+permissions: R
+
+[archiv-lesen]
+user: archiv-(.+)
+collection: {0}/(handy-kontakte|google-(?!kontakte(/|$))[^/]+|privat-[^/]+)(/.*)?
+permissions: r
+
+[archiv-sonst-nichts]
+user: archiv-.+
+collection: .*
+permissions:
 
 [kalender-mirrors]
 user: kalender
