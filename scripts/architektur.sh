@@ -53,6 +53,7 @@ own=(
   "Haus|mdopp/haus|the family's pages and app, the Box page; runs as the \`haus\` template|pages and app of the family"
   "Dokumente|mdopp/dokumente|scanner, splitting stacks, separator sheets, reading invoices and contracts|scan, split, read invoices"
   "Gesundheit|mdopp/gesundheit|medical records from Paperless as a timeline per person, the daily note (#893); its template comes from the \`apps\` registry|medical records as a timeline"
+  "Archiv|mdopp/archiv|each person's Signal, SMS, calls and mail in msgvault, locked in a vault only they open; imports while it is closed through an age-encrypted Briefkasten (ADR 0029); runs as the \`archiv\` template, once per person|messages in a vault"
 )
 
 # --- the programs beside the kernel: what scripts/loc.sh budgets ----------
@@ -287,7 +288,7 @@ svg() { # svg light|dark
   done
   # 2 programs beside the kernel
   rect "$progx" "$y2" "$progw" "$h2" 10 "$progsoft" "$prog"
-  text $((progx + 16)) $((y2 + 24)) 13 "$prog" 600 "" "PROGRAMS BESIDE THE KERNEL  ·  LAIB REPO, OWN CAPS"
+  text $((progx + 16)) $((y2 + 24)) 13 "$prog" 600 "" "BESIDE THE KERNEL  ·  LAIB REPO, OWN CAPS"
   bw=$(( (progw - 32 - (cols - 1) * 10) / cols ))
   for ((i = 0; i < ${#pn[@]}; i++)); do
     r=$((i / cols)); c=$((i % cols)); x0=$((progx + 16 + c * (bw + 10))); y=$((y2 + 38 + r * 54))
