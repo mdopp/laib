@@ -3,7 +3,7 @@
 dashboard has, and which were last built with an older ESPHome than the
 dashboard's own, so an update is ready for them; from the dashboard's GET
 /devices (its configured and importable lists). Only reads: nothing is
-compiled or uploaded (that is esphome-flash, after an approval). A device
+compiled or uploaded. A device
 never built here has no deployed version and counts as no update. A silent
 dashboard is "nicht gemessen" and why.
 

@@ -417,17 +417,17 @@ assert m and m.group(1).strip().strip('"') == "off", m and m.group(1)
 PY
 grep -q "^  threshold_tokens: 32000$" "$HOOKDIR/bote/hermes/config.yaml" || fail "a long conversation is never compressed by token count (#502)"
 grep -qx "laib-exec: systemd-bote-hermes hermes skills opt-out --remove --yes" "$WORK/bote.out" || fail "Hermes' stock skills stay in the Bote (#502)"
-# #122: the Bote's persona is Joshua, every message goes to the persona tool first (ADR 0021), the rules stay,
-# and approvals, warnings and errors are plain words, not role-play
-grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote's persona is Joshua (#122)"
-grep -q "Laibs Persona sieht jede Nachricht vor dir" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the persona engine first (#122, #133, #471)"
-test -s "$HOOKDIR/bote/hermes/plugins/laib-persona/__init__.py" && grep -q "enabled: \[laib-persona" "$HOOKDIR/bote/hermes/config.yaml" || fail "the persona engine is the plugin laib-persona in front of the model (#471)"
+# #122, ADR 0030: the Bote speaks as the assistant (Homes without a name), every message goes to the
+# directory first (ADR 0021), the rules stay, and approvals, warnings and errors are plain words
+grep -q "Du bist Homes" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the Bote is Homes without box.yml assistant (ADR 0030)"
+grep -q "Laibs Verzeichnis sieht jede Nachricht vor dir" "$HOOKDIR/bote/hermes/SOUL.md" || fail "every message goes to the directory first (#122, #133, #471)"
+test -s "$HOOKDIR/bote/hermes/plugins/laib-directory/__init__.py" && grep -q "enabled: \[laib-directory" "$HOOKDIR/bote/hermes/config.yaml" || fail "the directory is the plugin laib-directory in front of the model (#471)"
 grep -q "Klartext" "$HOOKDIR/bote/hermes/SOUL.md" || fail "approvals and warnings stay plain words (#122)"
-grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the approval rule"
-grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the persona dropped the never-list"
+grep -q "Freigaben kannst du nicht erteilen" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL dropped the approval rule"
+grep -q "Löschen, Neustart der Box, öffentliche Routen: nie" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL dropped the never-list"
 grep -q "Laib schreibt dem Admin hierher" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL does not say Laib's messages arrive in the chat (#441)"
 grep -q "nur in der Inbox, mit dem zweiten Faktor" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL lets the chat decide what only the Inbox may (#441)"
-grep -qx "laib" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists the Bote's tools (#121, #133)"
+grep -qx "laib" "$HOOKDIR/bote/directory/faehigkeiten.txt" || fail "the directory lists the Bote's tools (#121, #133)"
 # #184: Signal, Matrix and Telegram are each optional; an unset channel leaves no entry in Hermes' .env
 if grep -q "^MATRIX_\|^TELEGRAM_" "$HOOKDIR/bote/hermes/.env"; then fail "a Signal-only Bote has Matrix or Telegram entries (#184)"; fi
 bote_ch() { ( cd "$ROOT/templates/bote" && env LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
@@ -466,18 +466,15 @@ grep -q "BOTE_DISCORD_TOKEN" "$WORK/bote-ch.out" || fail "the hook names the mis
 # update never drops a plain value), and the hook ignores them
 bote_ch DISCORD_ALLOWED_USERS=112233445566778899 LAIB_SECRET_BOTE_DISCORD_TOKEN=dc_tok ADMIN_DISCORD_ID=999 ADMIN_MXID=@admin:e2e.home || fail "a leftover approval identity fails the hook (#778): $(cat "$WORK/bote-ch.out")"
 if grep -q "999\|Direktchat\|Relais" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "the SOUL still names a chat that decides (#778)"; fi
-# #127: the SOUL is the house persona's style.md plus the fixed rules; the rules are in every persona
-mkdir -p "$WORK/render/persona/hal"
-printf 'Du bist HAL, ruhig und höflich, ein wenig zu ruhig.\n' > "$WORK/render/persona/hal/style.md"
+# ADR 0030: box.yml assistant names the Bote (LAIB_ASSISTANT); the rules stay whatever the name
 ( cd "$ROOT/templates/bote" && LAIB_DATA_DIR="$HOOKDIR" LAIB_SERVICE=bote LAIB_DOMAIN=e2e.home LAIB_TZ=UTC LAIB_LAN_IP=10.0.0.2 \
-  LAIB_RENDER_DIR="$WORK/render" PERSONA=hal \
+  LAIB_ASSISTANT=Jarvis \
   MODEL_URL=http://127.0.0.1:5977/v1 LAIB_MCP_URL=http://host.containers.internal:5900/mcp \
   SIGNAL_ACCOUNT=+491 SIGNAL_ALLOWED_USERS=+492 ADMIN_NUMBER=+492 MODEL_NAME=gemma-4-e4b THINKING_MODEL=qwen \
-  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a persona"
-grep -q "Du bist HAL, ruhig und höflich" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks as the house persona's style.md (#127)"
-if grep -q "Du bist Joshua" "$HOOKDIR/bote/hermes/SOUL.md"; then fail "another house persona still says Joshua (#127)"; fi
-for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "Laibs Persona sieht jede Nachricht vor dir" "FIGUR"; do
-  grep -q "$rule" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the rules are in every persona's SOUL: $rule (#127)"
+  LAIB_SECRET_BOTE_LAIB_TOKEN=laib_bote_x LAIB_SECRET_BOTE_MODEL_KEY= HAUSHALT_MCP_URL= ./post-deploy >/dev/null ) || fail "bote hook with a name"
+grep -q "Du bist Jarvis" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL speaks in box.yml's assistant name (ADR 0030)"
+for rule in "Klartext" "Freigaben kannst du nicht erteilen" "Löschen, Neustart der Box, öffentliche Routen: nie" "Laibs Verzeichnis sieht jede Nachricht vor dir"; do
+  grep -q "$rule" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the rules are in the SOUL whatever the name: $rule (ADR 0030)"
 done
 # a Frage that answers is wired as MCP; a Haushalt that does not answer is left out and named
 python3 -c '
@@ -503,7 +500,7 @@ grep -q "Frage" "$HOOKDIR/bote/hermes/SOUL.md" || fail "the SOUL names Frage onc
 grep -q "^  ha:" "$HOOKDIR/bote/hermes/config.yaml" || fail "Home Assistant is wired as the Bote tool ha (#134)"
 grep -q "url: http://127.0.0.1:8123/api/mcp/assist" "$HOOKDIR/bote/hermes/config.yaml" || fail "the ha tool reaches Home Assistant's Assist API, which it serves a non-admin (#134, #349)"
 if grep -q "^  haus:" "$HOOKDIR/bote/hermes/config.yaml"; then fail "a Bote tool is named haus (#134)"; fi
-grep -qx "ha" "$HOOKDIR/bote/persona/faehigkeiten.txt" || fail "the persona's directory lists ha (#134)"
+grep -qx "ha" "$HOOKDIR/bote/directory/faehigkeiten.txt" || fail "the directory lists ha (#134)"
 # #170: the Haushalt (haus#11) is wired with Haus's bearer; a Haushalt that refuses the token is left out and named
 python3 -c '
 import http.server, sys

@@ -4,6 +4,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -47,12 +48,10 @@ type Box struct {
 	// secrets.age, laib-haushalt's, which files them (#797). Empty = a wish is
 	// kept in the journal.
 	Intake Intake `yaml:"intake"`
-	// Persona is the house's (ADR 0020): the wake word, the speakers' voice,
-	// Haus's start page and the chat default. Joshua when unset.
-	Persona string `yaml:"persona"`
-	// ChatPersonas gives a Signal number (E.164) another persona for the
-	// chat only; a wake word belongs to the room, not the person.
-	ChatPersonas map[string]string `yaml:"chatPersonas"`
+	// Assistant is the name the family talks to, on Signal, in Haus, in
+	// the app and through the speakers (ADR 0030): one name, set here only.
+	// "Homes" when unset.
+	Assistant string `yaml:"assistant"`
 	// People are the household's people and their chat channels (ADR 0022
 	// §3), preferred first: "signal:+49…", "telegram:<chat id>". A message
 	// for a person goes out on these through the Bote, never to a free target.
@@ -493,7 +492,6 @@ type State struct {
 	Box      Box
 	Policy   Policy
 	Services map[string]*Service
-	Personas map[string]*Persona // the house persona and every chat persona, by name
 	Ignore   []string
 	// Warnings are findings that do not stop a load but belong in a plan
 	// and in a proposal's text: today, two services serving one purpose.
@@ -513,3 +511,22 @@ var defaults = func() (p Policy) {
 	}
 	return p
 }()
+
+// DefaultAssistant is the assistant's name on a box whose box.yml names
+// none (ADR 0030): „Homes“, spoken like Holmes.
+const DefaultAssistant = "Homes"
+
+// assistantName: one word of letters, so it reaches a unit's Environment=
+// and a sentence as it is (#627: an unquoted space splits the value).
+var assistantName = regexp.MustCompile(`^\p{L}{1,32}$`)
+
+// defaultAssistant fills in the name and refuses one that is not a word.
+func (b *Box) defaultAssistant() []error {
+	if b.Assistant == "" {
+		b.Assistant = DefaultAssistant
+	}
+	if !assistantName.MatchString(b.Assistant) {
+		return []error{fmt.Errorf("box.yml assistant: %q is not one word of letters (e.g. Homes)", b.Assistant)}
+	}
+	return nil
+}

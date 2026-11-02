@@ -129,7 +129,7 @@ def on_tool(tool_name="", args=None, result=None, session_id=None, status=None, 
 
 
 def handled_by_ha(platform, sender_id, entities):
-    """laib-persona's HA-first path (#520): Home Assistant executed the intent itself, no tool ran,
+    """laib-directory's HA-first path (#520): Home Assistant executed the intent itself, no tool ran,
     so post_tool_call never sees it; the same line, service conversation.process"""
     if not entities or not os.environ.get("LAIB_TOKEN") or not os.environ.get("LAIB_MCP_URL"):
         return

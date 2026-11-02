@@ -19,7 +19,7 @@ them.
    production-line cap in `scripts/loc.sh` with its reason next to the
    number: the kernel 22,000 (#609, +10 % 2026-10-30), the Operator 3,300, and one for each program
    that left the kernel (ADR 0005 amendment #309, ADR 0023): stick, frage,
-   automat, persona, mcpserver, disk, notify, haushalt and, since #677, the
+   automat, directory, mcpserver, disk, notify, haushalt and, since #677, the
    lease. Tests are not
    capped. At 95 % CI warns and opens the
    "Kern-Diät" issue; crossing a cap means raising it in the same PR, with

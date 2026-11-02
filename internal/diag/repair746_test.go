@@ -12,8 +12,6 @@ func TestARepairSaysWhatItDoes(t *testing.T) {
 		{Finding{Service: "jellyfin", Repair: []string{"secret", "rotate", "JELLYFIN_ADMIN_PASSWORD"}}, "Das Admin-Passwort von Jellyfin wird erneuert; danach prüft die Box, ob Jellyfin läuft"},
 		{Finding{Service: "authelia", Repair: []string{"secret", "rotate", "AUTHELIA_STORAGE_KEY"}}, "Das Geheimnis AUTHELIA_STORAGE_KEY von Authelia wird erneuert; danach prüft die Box, ob Authelia läuft"},
 		{Finding{Service: "mosquitto", Repair: []string{"secret", "zurueck", "MQTT_PASSWORD"}}, "Das Geheimnis MQTT_PASSWORD von Mosquitto bekommt den Wert vor der Erneuerung zurück"},
-		{Finding{Service: "stimme", Repair: []string{"flash", "esphome"}, Does: "„Hey Joshua“ wird auf den Lautsprecher gespielt"}, "„Hey Joshua“ wird auf den Lautsprecher gespielt"},
-		{Finding{Repair: []string{"flash", "esphome"}}, "Neue Firmware von Esphome wird auf das Gerät gespielt"},
 		{Finding{Repair: []string{"restart", "home-assistant"}}, "Home Assistant wird neu gestartet"},
 		{Finding{Repair: []string{"servicebay", "remove"}}, "Der alte ServiceBay-Ordner wird gelöscht (vorher gesichert)"},
 		{Finding{Repair: []string{"servicebay", "remove", "--trotzdem"}}, "Der alte ServiceBay-Ordner wird gelöscht (vorher gesichert)"},

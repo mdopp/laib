@@ -66,7 +66,7 @@ func config42(t *testing.T, router string) Config {
 		Presets:   []Preset{{Alias: "gemma-4-e4b"}, {Alias: "gemma-4-12b"}, {Alias: "qwen3.6-35b-a3b"}},
 		Modes: map[string]Mode{
 			"shared": {Presets: []string{"gemma-4-e4b", "gemma-4-12b"}},
-			"full":   {Stops: []string{"voice/whisper", "voice/wakeword-trainer", "model/embed"}, Voice: "cpu"},
+			"full":   {Stops: []string{"voice/whisper", "model/embed"}, Voice: "cpu"},
 		},
 		VoiceUnits: []string{"voice/whisper", "voice/piper"},
 		Laib:       newFake(realServices(t)),
@@ -137,7 +137,7 @@ func TestModesResolveThroughTheRealTemplates(t *testing.T) {
 	if _, err := s.Acquire(context.Background(), "bote", "full", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"pause llama stop llama-embed.service", "pause stimme stop stimme-wakeword-trainer.service,stimme-whisper.service restart stimme-piper.service,stimme-whisper.service"}; !slices.Equal(laib.calls, want) {
+	if want := []string{"pause llama stop llama-embed.service", "pause stimme stop stimme-whisper.service restart stimme-piper.service,stimme-whisper.service"}; !slices.Equal(laib.calls, want) {
 		t.Fatalf("full must pause the real services with their real units:\n%s", strings.Join(laib.calls, "\n"))
 	}
 	cfg = config42(t, "http://127.0.0.1:1")

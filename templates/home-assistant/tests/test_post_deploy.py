@@ -1248,23 +1248,18 @@ class Stimme(Hook):
 
 
 class Voice(Stimme):
-    """#634: one Assist pipeline named after the house persona (ADR 0020): Frage with HA's local
-    intents first, Stimme's Whisper and Piper, the persona's wake word once a model for it exists
+    """#634: one Assist pipeline named after the assistant (box.yml assistant, ADR 0030): Frage with
+    HA's local intents first, Stimme's Whisper and Piper, hey_mycroft where openWakeWord offers it
     and never one the engine does not offer. Preferred, and every satellite's pipeline select on
-    it; the Solaris-era pipelines go once nothing uses them, else they are renamed. The
+    it; the Solaris-era pipelines and Joshua's go once nothing uses them, else they are renamed. The
     satellites' end-of-speech setting is VOICE_VAD. A fictitious household: two satellites."""
-    PERSONA = {"name": "joshua", "display": "Joshua", "languages": ["de", "en"], "phrase": "Hey Joshua", "wakeword": "hey_joshua",
-               "voice": "de_DE-thorsten-high"}
 
     def box(self, offered=("okay_nabu", "hey_jarvis"), device=("Okay Nabu", "Hey Jarvis")):
         """the Kraftwerk as it ran on 2026-10-24: „Home Assistant“ (en), „Sol“ and „Solaris“ (de, Frage, the
         wake word solaris), „Solaris“ preferred, a Voice PE on „Solaris“ in both slots"""
         self.kraftwerk()
         w, pi, ww = self.ports
-        render = os.path.join(self.tmp.name, "render")
-        Path(render, "persona", "joshua").mkdir(parents=True)
-        Path(render, "persona", "joshua", "persona.json").write_text(json.dumps(self.PERSONA))
-        self.env = {"LAIB_RENDER_DIR": render, "PERSONA": "joshua", "VOICE_VAD": "aggressive", "VOICE_OLD_PIPELINES": "Sol,Solaris"}
+        self.env = {"LAIB_ASSISTANT": "Homes", "VOICE_VAD": "aggressive", "VOICE_OLD_PIPELINES": "Sol,Solaris"}
         pipe = lambda i, name, lang, conv: {"id": i, "name": name, "language": lang, "stt_engine": "stt.faster_whisper", "stt_language": lang,
                                             "tts_engine": "tts.piper", "tts_language": "de_DE", "tts_voice": None, "conversation_engine": conv,
                                             "conversation_language": lang, "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "solaris",
@@ -1292,12 +1287,12 @@ class Voice(Stimme):
         return self.run_hook(tokens=tokens, frage=self.url, stimme=self.ports, data_dir=self.tmp.name, voice=dict(self.env, **env))
 
     def ours(self):
-        return next((p for p in HA["pipelines"] if p["name"] == "Joshua"), None)
+        return next((p for p in HA["pipelines"] if p["name"] == "Homes"), None)
 
     def selects(self, tk):
         return {k: v["state"] for k, v in HA["states"].items() if k.startswith("select.voice_") and k.endswith("_" + tk)}
 
-    def test_the_persona_pipeline_is_preferred_the_satellites_follow_and_the_old_ones_go_once(self):
+    def test_the_assistants_pipeline_is_preferred_the_satellites_follow_and_the_old_ones_go_once(self):
         self.box()
         p, handed, log = self.hook()
         self.assertEqual(p.returncode, 0, log)
@@ -1307,21 +1302,21 @@ class Voice(Stimme):
                                             "stt_language", "tts_engine", "tts_language", "tts_voice")},
                          {"language": "de", "conversation_engine": "conversation.frage", "conversation_language": "de", "prefer_local_intents": True,
                           "stt_engine": "stt.faster_whisper", "stt_language": "de", "tts_engine": "tts.piper", "tts_language": "de_DE",
-                          "tts_voice": None}, "tts_voice None is the voice Piper runs with, the persona's")
+                          "tts_voice": None}, "tts_voice None is the voice Piper runs with, Thorsten")
         self.assertEqual(HA["preferred"], j["id"])
-        self.assertEqual(set(self.selects("pipeline").values()) | set(self.selects("pipeline_n").values()), {"Joshua"}, log)
+        self.assertEqual(set(self.selects("pipeline").values()) | set(self.selects("pipeline_n").values()), {"Homes"}, log)
         self.assertEqual(set(self.selects("vad_sensitivity").values()), {"aggressive"})
-        self.assertEqual(set(self.selects("wake_word").values()), {"no_wake_word"}, "the device has no Hey Joshua: its wake word stays")
+        self.assertEqual(set(self.selects("wake_word").values()), {"no_wake_word"}, "the device has no Hey Mycroft: its wake word stays")
         self.assertEqual(sorted(HA["deleted"]), ["p-sol", "p-solaris"], log)
-        self.assertEqual([p["name"] for p in HA["pipelines"]], ["Home Assistant", "Joshua"], "the owner's own pipeline went")
-        self.assertIn('Assist pipeline "Joshua" created', log)
+        self.assertEqual([p["name"] for p in HA["pipelines"]], ["Home Assistant", "Homes"], "the owner's own pipeline went")
+        self.assertIn('Assist pipeline "Homes" created', log)
         self.assertIn('"Sol" deleted', log)
         HA["pipeline_updates"].clear()
         HA["calls"].clear()
         p, _, log = self.hook(tokens=handed)
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((HA["pipeline_updates"], [c for c in HA["calls"] if "select" in c[0]]), ([], []), "a second run changed something: " + log)
-        self.assertIn('Assist pipeline "Joshua" is there', log)
+        self.assertIn('Assist pipeline "Homes" is there', log)
 
     def test_whisper_goes_through_stimme_wakes_once_it_answers(self):
         # #825: stimme-wakes sits in front of Whisper and counts the wakes; HA's Whisper entry is the one on its port
@@ -1336,7 +1331,7 @@ class Voice(Stimme):
         p, handed, log = self.hook(STIMME_WAKES_PORT=str(port))
         self.assertEqual(p.returncode, 0, log)
         self.assertIn((port, "faster-whisper"), self.wyoming(), log)
-        self.assertEqual(self.ours()["stt_engine"], "stt.faster_whisper_2", "the persona's pipeline hears through stimme-wakes")
+        self.assertEqual(self.ours()["stt_engine"], "stt.faster_whisper_2", "the assistant's pipeline hears through stimme-wakes")
         self.assertIn(f"Wyoming Whisper added (127.0.0.1:{port}", log)
         n = len(self.wyoming())
         p, _, log = self.hook(tokens=handed, STIMME_WAKES_PORT=str(port))
@@ -1352,36 +1347,50 @@ class Voice(Stimme):
         p, _, log = self.hook()
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((self.ours()["wake_word_entity"], self.ours()["wake_word_id"]), (None, None), log)
-        self.assertIn("hey_joshua", log)
+        self.assertIn("hey_mycroft", log)
         self.assertIn("solaris", log)
 
-    def test_the_current_wake_word_stays_until_the_persona_one_exists(self):
+    def test_the_current_wake_word_stays_while_openwakeword_lacks_hey_mycroft(self):
         self.box(offered=("okay_nabu", "solaris"))
         p, handed, log = self.hook()
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual((self.ours()["wake_word_entity"], self.ours()["wake_word_id"]), ("wake_word.openwakeword", "solaris"), log)
-        HA["wake_words"]["wake_word.openwakeword"].append("hey_joshua")   # the trainer's model reached openWakeWord
+        HA["wake_words"]["wake_word.openwakeword"].append("hey_mycroft_v0.1")   # built in; wyoming-openwakeword may carry the version
         p, _, log = self.hook(tokens=handed)
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(self.ours()["wake_word_id"], "hey_joshua", log)
+        self.assertEqual(self.ours()["wake_word_id"], "hey_mycroft_v0.1", log)
 
-    def test_the_satellite_wakes_on_the_persona_once_the_device_has_it(self):
-        self.box(device=("Okay Nabu", "Hey Joshua"))
+    def test_joshuas_pipeline_from_before_goes_and_is_no_longer_preferred(self):
+        # ADR 0030: the pipeline was named after the persona; with the name fixed it is one from before
+        self.box()
+        HA["pipelines"].append(dict(HA["pipelines"][1], id="p-j", name="Joshua"))
+        HA["preferred"] = "p-j"
+        for dev in ("kueche", "flur"):
+            HA["states"][f"select.voice_{dev}_pipeline"]["state"] = "Joshua"
+            HA["states"][f"select.voice_{dev}_pipeline"]["attributes"]["options"].append("Joshua")
+        p, _, log = self.hook(VOICE_OLD_PIPELINES="Sol,Solaris")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["preferred"], self.ours()["id"], log)
+        self.assertIn("p-j", HA["deleted"], log)
+        self.assertEqual(set(self.selects("pipeline").values()), {"Homes"}, log)
+
+    def test_the_satellite_wakes_on_hey_mycroft_where_the_device_offers_it(self):
+        self.box(device=("Okay Nabu", "Hey Jarvis", "Hey Mycroft"))
         p, _, log = self.hook()
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Mycroft"}, log)
 
-    def test_until_the_persona_word_exists_the_device_wakes_on_the_fallback(self):
-        # the owner, 2026-10-24: until „Hey Joshua“ is on the device, the Voice PE listens to the word it has
+    def test_a_device_without_hey_mycroft_wakes_on_the_fallback(self):
+        # the owner, 2026-10-24: a device without the house's word listens to the word it has
         self.box(device=("Okay Nabu", "Hey Jarvis"))
         p, _, log = self.hook(VOICE_WAKE_FALLBACK="Okay Nabu")
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(set(self.selects("wake_word").values()), {"Okay Nabu"}, log)
 
-    def test_the_persona_word_wins_over_the_fallback(self):
-        self.box(device=("Okay Nabu", "Hey Jarvis", "Hey Joshua"))
+    def test_hey_mycroft_wins_over_the_fallback(self):
+        self.box(device=("Okay Nabu", "Hey Jarvis", "Hey Mycroft"))
         p, _, log = self.hook(VOICE_WAKE_FALLBACK="Okay Nabu")
-        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Joshua"}, log)
+        self.assertEqual(set(self.selects("wake_word").values()), {"Hey Mycroft"}, log)
 
     def test_a_fallback_the_device_lacks_is_not_set(self):
         self.box(device=("Okay Nabu",))
@@ -1408,24 +1417,24 @@ class Voice(Stimme):
         self.assertEqual(set(self.selects("vad_sensitivity").values()), {"default"})
         self.assertIn("VOICE_VAD schnell", log)
 
-    def test_without_stimme_no_persona_pipeline_and_nothing_goes(self):
+    def test_without_stimme_no_pipeline_and_nothing_goes(self):
         self.box()
         p, _, log = self.run_hook(frage=self.url, data_dir=self.tmp.name, voice=self.env)   # Stimme's ports answer nothing
         self.assertEqual(p.returncode, 0, log)
         self.assertIsNone(self.ours())
         self.assertEqual(HA["deleted"], [])
-        self.assertIn('no Assist pipeline "Joshua"', log)
+        self.assertIn('no Assist pipeline "Homes"', log)
 
-    def test_without_the_persona_file_nothing_changes(self):
+    def test_without_the_name_nothing_changes(self):
         self.box()
-        p, _, log = self.hook(LAIB_RENDER_DIR="/nonexistent")
+        p, _, log = self.hook(LAIB_ASSISTANT="")
         self.assertEqual(p.returncode, 0, log)
         self.assertIsNone(self.ours())
         self.assertEqual(HA["deleted"], [])
 
-    def test_the_check_unit_carries_the_persona_so_a_persona_change_applies_this_hook(self):
+    def test_the_check_unit_carries_the_name_so_a_new_name_applies_this_hook(self):
         unit = (HOOK.parent / "home-assistant-check.service").read_text()
-        for v in ("${PERSONA_DISPLAY}", "${PERSONA_WAKEWORD}", "${PERSONA_PHRASE}", "${VOICE_VAD}"):
+        for v in ("${ASSISTANT}", "hey_mycroft", "Hey Mycroft", "${VOICE_VAD}"):
             self.assertIn(v, unit)
         self.assertIn("VOICE_VAD: default", (HOOK.parent / "values.example.yml").read_text())
 

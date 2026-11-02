@@ -100,10 +100,6 @@ func does(f Finding) string {
 			return what + " bekommt den Wert vor der Erneuerung zurück"
 		}
 		return what + " wird erneuert; danach prüft die Box, ob " + svc + " läuft"
-	case "flash":
-		return cmp.Or(f.Does, "Neue Firmware von "+proposal.Title(a[1])+" wird auf das Gerät gespielt")
-	case "retrain":
-		return cmp.Or(f.Does, proposal.Title(a[1])+" trainiert sein Modell neu")
 	case "restart":
 		return proposal.Named(a[1]) + " wird neu gestartet"
 	case "servicebay":

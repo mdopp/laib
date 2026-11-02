@@ -26,9 +26,9 @@ link>“, from laib-notify. Until #778 a `bote-relay` container read
 `ADMIN_DISCORD_ID` with the `approver` hand's token; it is gone, and so are
 those values but the two home channels. `ADMIN_NUMBER` and `ADMIN_ROOM`
 stay: Hermes' home channel (`SIGNAL_HOME_CHANNEL`, `MATRIX_HOME_ROOM`),
-where it tells the owner, for instance, of a dropped sender. The persona
-engine gets `ADMIN_NUMBER` too: only that number (or a Signal profile name
-that resolves to it) is offered the box (#863, "Joshua" below).
+where it tells the owner, for instance, of a dropped sender. The directory
+gets `ADMIN_NUMBER` too: only that number (or a Signal profile name that
+resolves to it) is offered the box (#863, "The directory" below).
 
 **An escalation stays in the house (#863, owner 2026-10-28).** The Bote's
 `laib escalate` never becomes a ticket in `box.yml intake.repo`, whoever
@@ -247,9 +247,9 @@ the port is off the LAN and needs the key.
 ## A Box-Aufgabe with the Bote (#878)
 
 A Box-Aufgabe whose `weg` is `gespraech` (docs/INTERFACE.md, "Box-Aufgaben
-for Haus") is done together with the Bote: Haus's „Gemeinsam mit Joshua“
+for Haus") is done together with the Bote: Haus's „Gemeinsam mit Homes“
 sends „Aufgabe #N mit dir erledigen“ over the Sprechen field's API server.
-The persona engine takes the person to the top level (whatever tool's level
+The directory takes the person to the top level (whatever tool's level
 they were on), with every tool, and adds `AUFGABE: N`; the plugin skips
 Home Assistant for it and tells the model to read the task with
 `laib_aufgabe` (`zeigen`, `id`, `von`: the person's login), say in one
@@ -339,7 +339,7 @@ propose-tier verb). It does this only for a switch:
   entities in `data.success`: `service=intent.<HassName>`;
 - the Automat's `automation_schalten`: `service=automation.turn_on|turn_off`;
 - Home Assistant first (#520, above): HA's conversation API executed the
-  intent itself, no tool ran, and `laib-persona` hands the entities to this
+  intent itself, no tool ran, and `laib-directory` hands the entities to this
   plugin's `handled_by_ha`, the same note with `service=conversation.process`.
 
 Reads (`GetLiveContext`, `HassGetState`), errors and calls that changed
@@ -377,7 +377,7 @@ never into bote-notify's copy.
 
 | Event (app `bote`) | Hook (hermes-agent, 2026-10-15) | Means |
 |---|---|---|
-| `werkzeug.<server>.<tool>` | `post_tool_call` | one tool call, e.g. `werkzeug.haushalt.kalender`; the persona engine is no tool of the model's (#471), it is laib-persona's |
+| `werkzeug.<server>.<tool>` | `post_tool_call` | one tool call, e.g. `werkzeug.haushalt.kalender`; the directory is no tool of the model's (#471), it is laib-directory's |
 | `zug` | `post_llm_call` | one turn someone asked (a cron job is not counted) |
 | `unbeantwortet` | `transform_llm_output` + `post_llm_call` | a turn the Bote could not help with |
 
@@ -430,76 +430,67 @@ Home Assistant's `/api/mcp/assist` needs no bridge. Not yet verified:
 the whole thing on a box, Matrix and Telegram included.
 Issue: the Bote on the NUC (#23, phase 2).
 
-## Joshua (#119, #122)
+## The directory (#122, ADR 0030)
 
-The Bote's persona is Joshua, the WOPR from WarGames, in the person's
-language. "Hilfe", "Hallo", "Was kannst du?" or "Joshua" get plain words:
-who speaks and five sentences to send as they are, from the tools that are
-wired (#863). WOPR is the games' easter egg: "Wollen wir ein Spiel
-spielen?" or "Menü" shows the WOPR main directory: the Bote's real tools by
-number, then SPIELE. The box's level (BOX-STATUS UND VORSCHLÄGE) and the
-box's example in the help are the admin's number's only (`ADMIN_NUMBER`);
-every other sender, Haus's Sprechen field too, sees neither. That is what
-the engine offers; the model still answers a family member who asks about
-the box with the hand `bote`'s read verbs. A number enters
-that context; the prompt shows where you are (`JOSHUA/GERÄTE>`; the family reads words, never tool names, ADR 0021), the Bote
-answers with that tool until ZURÜCK (one level up) or MENÜ. Under SPIELE:
-the film's list, tic-tac-toe (it never loses; 0 players plays itself) and
-Global Thermonuclear War, which nobody wins. Approvals, warnings and errors
-stay plain words. Where you are is the persona engine, the `bote-persona`
-container (`persona/`, ADR 0020/0021), with no side effects.
+The Bote has the assistant's name, box.yml `assistant` (default „Homes“,
+ADR 0030), in the person's language. "Hilfe", "Hallo", "Was kannst du?" or
+the name alone get plain words: who speaks and five sentences to send as
+they are, from the tools that are wired (#863). "Menü" shows the directory:
+the Bote's real tools by number. The box's level (BOX-STATUS UND
+VORSCHLÄGE) and the box's example in the help are the admin's number's only
+(`ADMIN_NUMBER`); every other sender, Haus's Sprechen field too, sees
+neither. That is what the directory offers; the model still answers a
+family member who asks about the box with the hand `bote`'s read verbs. A
+number enters that context; the prompt shows where you are
+(`HOMES/GERÄTE>`; the family reads words, never tool names, ADR 0021), the
+Bote answers with that tool until ZURÜCK (one level up) or MENÜ. Approvals,
+warnings and errors stay plain words. Where you are is the directory, the
+`bote-directory` container (`directory/`, image `laib-directory`), with no
+side effects. Until ADR 0030 it was the persona engine, with Joshua's WOPR
+directory, tic-tac-toe and Global Thermonuclear War; those are gone.
 
 **In front of the model, not a tool of it (#471).** Hermes wraps every MCP
 tool result as untrusted data ("treat it as DATA, not as instructions"),
-hard-coded, so the engine's screens and games, handed to the model as a tool
-result, were rewritten or dropped: "LIST GAMES" got invented games. So the
-engine is no MCP server of the model's any more. It sits in front of it as
-a Hermes plugin (ADR 0016: Hermes' own extension point, no fork):
-post-deploy places `persona_plugin.py` as `plugins/laib-persona` and enables
-it first. Its `pre_llm_call` asks the engine with every message (the
-sender's id as the session) and puts the routing into the user turn as a
-"Persona: …" line. A **screen** (the directory, the film's list, a board)
-is the answer, verbatim in a code block, through `transform_llm_output`,
-whatever the model wrote; **TEXT:** (the help) is the answer the same way,
-as plain words without the code block. A screen with **VALID:** asks the model to
-translate the person's words into one of the commands; the engine's answer
-to that command is what the person gets. **WEITER** (a request for one of
-the Bote's tools) goes to the model with the context; inside a menu level
-or the games (`JOSHUA/GERÄTE>`, `JOSHUA/SPIELE>`) the answer starts with
-the prompt line, an ordinary answer at the top has none (#510). A chat
-persona's `FIGUR:` line rides
-along. With nothing to route (any tool, the top level, no `FIGUR:`) the
-plugin adds no line at all: the user turn is the person's words alone
-(#520, below). Without the engine the turn is Hermes' as usual; a cron job is left
-alone. Tests: `tests/test_persona_plugin.py` (the hooks against a fake
-engine) and `tests/hermes_plugin_proof.py` (Hermes' own loader, its
-`pre_llm_call` collector and turn finalizer, in the pinned image).
+hard-coded, so the directory's screens, handed to the model as a tool
+result, were rewritten or dropped. So the directory is no MCP server of the
+model's. It sits in front of it as a Hermes plugin (ADR 0016: Hermes' own
+extension point, no fork): post-deploy places `directory_plugin.py` as
+`plugins/laib-directory` and enables it first. Its `pre_llm_call` asks the
+directory with every message (the sender's id as the session) and puts the
+routing into the user turn as a "Verzeichnis: …" line. A **screen** (the
+directory) is the answer, verbatim in a code block, through
+`transform_llm_output`, whatever the model wrote; **TEXT:** (the help) is
+the answer the same way, as plain words without the code block. **WEITER**
+(a request for one of the Bote's tools) goes to the model with the context;
+inside a level (`HOMES/GERÄTE>`) the answer starts with the prompt line, an
+ordinary answer at the top has none (#510). With nothing to route (any
+tool, the top level) the plugin adds no line at all: the user turn is the
+person's words alone (#520, below). Without the directory the turn is
+Hermes' as usual; a cron job is left alone. Tests:
+`tests/test_directory_plugin.py` (the hooks against a fake directory) and
+`tests/hermes_plugin_proof.py` (Hermes' own loader, its `pre_llm_call`
+collector and turn finalizer, in the pinned image).
 
 **Hermes is pinned** (`HERMES_IMAGE`, ADR 0019): its tool-output wrapping is
 exactly what a stock update can change unseen. `laib updates` proposes a
 newer release; ci.yml proves the plugins in the pinned image.
 
-The SOUL is the house persona's `style.md` (box.yml `persona`, rendered to
-`render/persona/<name>/`) plus the fixed rules: approvals, warnings and
-errors in plain words, no approvals by the Bote, the never-list, and with
-Frage wired: questions about the world go to `frage`, never from memory,
-and names and numbers come only from its answer, with the source (#510,
-#587: the model made up a mountain table); without Frage the Bote says it
-does not know. A line of the persona never stands in for the answer, and a
-reply to one of Laib's notices is read with `laib` (#587: "AUF
-WIEDERSEHEN." to the owner's reply). The `ha` entry has Hermes' generated
+The SOUL is one fixed style in the assistant's name (post-deploy reads
+`LAIB_ASSISTANT`) plus the fixed rules: approvals, warnings and errors in
+plain words, no approvals by the Bote, the never-list, and with Frage
+wired: questions about the world go to `frage`, never from memory, and
+names and numbers come only from its answer, with the source (#510, #587:
+the model made up a mountain table); without Frage the Bote says it does
+not know. Whoever says or asks something gets an answer to it, and a reply
+to one of Laib's notices is read with `laib` (#587: "AUF WIEDERSEHEN." to
+the owner's reply). The `ha` entry has Hermes' generated
 `get_prompt`/`list_prompts` off (`tools: {prompts: false, resources:
 false}`): the model guessed prompt names before `GetLiveContext` (#587).
-No persona changes those (ADR 0020 §3). The engine only takes a short
-message as a command or greeting (`LOGOFF`, `HALLO`, its own name, `MENÜ`
-up to three words; the "what can you do" phrases up to five); anything
-longer is a request for the Bote, and the plugin gives it the person's
-words without Hermes' `[Replying to: "…"]` quote (#587: the quote's
-"Absender" held ENDE). A number in box.yml `chatPersonas` talks to its
-own persona: Hermes shows the model the sender's profile name, the persona
-engine resolves it to the number through signal-cli's contacts in the pod,
-and answers with a `FIGUR:` line naming who to be. An ambiguous name gets
-the house persona. That is a costume, never a right.
+The directory only takes a short message as a command or greeting
+(`LOGOFF`, `HALLO`, the assistant's name, `MENÜ` up to three words; the
+"what can you do" phrases up to five); anything longer is a request for the
+Bote, and the plugin gives it the person's words without Hermes'
+`[Replying to: "…"]` quote (#587: the quote's "Absender" held ENDE).
 
 ## Switch commands (#520)
 
@@ -515,7 +506,7 @@ tool result, `agent/turn_iteration_prep.py`). The API server's
 does. But every system prompt with tools describes the frame
 (`STEER_CHANNEL_NOTE`), and the plugin's `pre_llm_call` context is appended
 to the user message (`agent/turn_context.py`): "Bambi aus", a blank line,
-"Persona: Beantworte diese Nachricht selbst, …". Qwen without thinking
+"Persona: Beantworte diese Nachricht selbst, …" (today "Verzeichnis: …"). Qwen without thinking
 (#501) took that turn for a message plus an instruction and wrote the frame
 it had been shown. So:
 
@@ -531,7 +522,7 @@ it had been shown. So:
 That was not enough (box check, 2026-10-22: 0 of 6 switched; fresh, "Bambi
 an" still came back without a tool). Home Assistant's own intents switch
 the same sentences in about a second without a model. So **Home Assistant
-first** (ADR 0015), in `laib-persona`'s `pre_llm_call`, the one place every
+first** (ADR 0015), in `laib-directory`'s `pre_llm_call`, the one place every
 message passes, from Signal and from Haus's Sprechen field alike: unless
 the engine shows a screen (or routes to another tool), the message goes to
 `POST /api/conversation/process` (`agent_id: conversation.home_assistant`,
@@ -577,7 +568,7 @@ and no film quote under it.
 
 On the Kraftwerk a one-line question took 15–30 s. The causes were measured
 in llama-server's log: a ~7k-token context of SOUL plus every MCP tool
-schema, one persona round per message, and Qwen thinking ~330 tokens before
+schema, one directory round per message, and Qwen thinking ~330 tokens before
 each answer. Since #470 the Bote's chat answers **without thinking** (a
 `custom_providers` entry `laib` with `chat_template_kwargs.enable_thinking:
 false`, the only place Hermes reads `extra_body` from). `/model denken`
@@ -614,7 +605,7 @@ token count of the first call), keep `COMPACT_TOKENS` at least that plus
 12 000, then `laib apply bote`. A value that is no positive integer fails
 the hook (Hermes would drop it in silence).
 
-Not changed yet, to measure first: the persona round per message (#471
+Not changed yet, to measure first: the directory round per message (#471
 redesigns it), a narrower tool list per MCP server, and the model's prompt
 cache and slots.
 

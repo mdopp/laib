@@ -75,11 +75,11 @@ class Nutzung(unittest.TestCase):
 
     def test_tool_calls_are_counted_per_tool(self):
         mod, hooks = load(self.url)
-        for name in ["mcp__haushalt__kalender", "mcp__haushalt__kalender", "mcp__ha__HassTurnOn", "mcp__persona__eingabe", "memory"]:
+        for name in ["mcp__haushalt__kalender", "mcp__haushalt__kalender", "mcp__ha__HassTurnOn", "mcp__directory__eingabe", "memory"]:
             hooks["post_tool_call"](tool_name=name, args={"q": "Anna"}, result="geheim", session_id="s-1", status="ok")
         mod.flush()
         self.assertEqual(self.ingested(), {"werkzeug.haushalt.kalender": 2, "werkzeug.ha.hassturnon": 1, "werkzeug.memory": 1},
-                         "the persona router sees every message by rule; its count would be the turn count")
+                         "the directory sees every message by rule; its count would be the turn count")
         for path, auth, body in SEEN:
             self.assertEqual(auth, "Bearer " + TOKEN)
             self.assertEqual(body, {"app": "bote", "event": body["event"], "day": self.day, "count": body["count"]})

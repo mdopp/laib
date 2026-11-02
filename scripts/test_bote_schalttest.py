@@ -73,7 +73,7 @@ class FakeHA(BaseHTTPRequestHandler):
 
 
 def ha_switches(said):
-    """what HA's own intent does with the sentence (the persona plugin sent it there first)"""
+    """what HA's own intent does with the sentence (the directory plugin sent it there first)"""
     s = said.lower()
     if "prozent" in s:
         pct = int(s.split()[-2])
@@ -112,7 +112,7 @@ class SwitchTest(unittest.TestCase):
         self.assertTrue(all(p == "/v1/chat/completions" and b["stream"] for p, _, b in SEEN))
 
     def test_ha_switching_in_front_of_the_model_counts_by_the_lights_state(self):
-        # #520, ADR 0015: the persona plugin hands "Bambi aus" to HA's own intents first. No Hermes tool
+        # #520, ADR 0015: the directory plugin hands "Bambi aus" to HA's own intents first. No Hermes tool
         # runs, so with HA's token in the key file the case is measured where it matters: at the light.
         ha = HTTPServer(("127.0.0.1", 0), FakeHA)
         threading.Thread(target=ha.serve_forever, daemon=True).start()

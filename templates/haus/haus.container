@@ -58,7 +58,7 @@ Environment=HAUS_LLM_KEY=${MODEL_KEY}
 # without the Bote the key renders empty and Haus shows no field
 Environment=HAUS_BOTE_URL=${BOTE_URL}
 Environment=HAUS_BOTE_KEY=${BOTE_KEY}
-# Willkommen's „Joshua auf Signal“ (haus#175): the number the household writes to the Bote on, laib's
+# Willkommen's „Homes auf Signal“ (haus#175): the number the household writes to the Bote on, laib's
 # BOTE_SIGNAL builtin (the Bote's SIGNAL_ACCOUNT); empty without Signal, and then Willkommen names no number
 Environment=HAUS_BOTE_SIGNAL=${BOTE_SIGNAL}
 # podcasts by link (#676, haus#123): Audiobookshelf as this pod reaches it and the key of its user haus
@@ -89,10 +89,8 @@ Environment=HAUS_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
 Environment=HAUS_DATA=/data
 Environment=HAUS_PUBLIC_URL=https://haus.${DOMAIN}
-# the house persona: title, greeting, icon, colours (ADR 0020, #129)
-Environment=HAUS_PERSONA=${PERSONA}
-Environment=PERSONA_REV=${PERSONA_REV}
-Volume=/mnt/data/laib/render/persona:/persona:ro,z
+# the name the family talks to, on the pages and in the app (box.yml assistant, ADR 0030)
+Environment=HAUS_ASSISTANT=${ASSISTANT}
 Volume=${DATA_DIR}/haus:/data:Z
 # the shared file-share tree: never relabelled (:z walks it on every start and
 # fails on an entry core does not own, #230); labelling off for this container
@@ -113,18 +111,9 @@ Environment=HAUS_SAMBA_DIR=/samba-accounts
 # shown to people as \\<address>\data and smb://<address>/data, never used to connect
 Environment=HAUS_SAMBA_HOST=${LAN_IP}
 Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
-# the family saying the wake word (#828, haus#165): Haus writes <person>-<YYYYMMDD-HHMMSS>.wav, 0600, through
-# .<name>.part; Stimme's trainer folds them in as positives, stimme-names counts them and offers a retrain the
-# owner approves. Only this folder of stimme's recordings, never negativ/; the phrase and the id Haus reads
-# from /persona/<persona>/persona.json. Both run as the container's root, the box's user core on the host
-Environment=HAUS_WAKE_RECORDINGS=/stimme-aufnahmen
-Volume=${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus:/stimme-aufnahmen
 AutoUpdate=registry
 
 [Service]
-# the folder exists before podman binds it, 0700, and restic (--exclude-caches) leaves it out like negativ/
-ExecStartPre=/usr/bin/podman unshare mkdir -p -m 0700 ${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus
-ExecStartPre=/usr/bin/podman unshare sh -c 'echo "Signature: 8a477f597d28d172789f06886806bc55" > ${DATA_DIR}/stimme/recordings/${PERSONA_WAKEWORD}/haus/CACHEDIR.TAG'
 Restart=always
 
 [Install]

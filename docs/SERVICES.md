@@ -23,7 +23,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 |---|---|---|
 | home-assistant (8123, zwave 8091, 3 containers) | `home-assistant` | built-in: HA, Z-Wave JS UI, Matter on the host network; onboarding and the Wyoming/CalDAV/MQTT integrations are configuration in HA |
 | solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` and `haus` built-ins exist; Haus is its own repo, `mdopp/haus` |
-| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper, openWakeWord, and Laib's own trainer (`laib-wakeword-trainer`, the persona's phrase, #128) as Wyoming units; Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moved with it: `chronik-whisper` in foundry-chronicle's template (Stimme's Wyoming Whisper returns no timestamps) |
+| solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper and openWakeWord as Wyoming units; the wake word is the pretrained „Hey Mycroft“ (ADR 0030; Laib's own trainer, `laib-wakeword-trainer`, #128, is gone); Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moved with it: `chronik-whisper` in foundry-chronicle's template (Stimme's Wyoming Whisper returns no timestamps) |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video; the family logs in with their LLDAP accounts through the LDAP-Authentication plugin, Quick Connect on (#256); ServiceBay's twin libraries ("Music2" on Music's folders) are removed by media's post-deploy (#646). Audiobookshelf takes Hörbücher, Hörspiele and Podcasts: metadata next to the files, a paced one-time match against audible.de, Hörspiel series from `<NNN> - <Titel>`, the feeds of `podcasts/sync_podcasts.py` subscribed with auto-download (#646); its family login is set from Laib's OIDC secret on every apply, the cached client rebuilt, so the drift that retired it on ServiceBay cannot stay (#255). Music Assistant drives the speakers for Assist, with the share's radio stations as favourites and Audiobookshelf as a source (#646) |
 | immich (4 containers, ML) | `immich` | built-in |
 | paperless (3 containers) | `paperless` | built-in with OIDC logins through Authelia |
@@ -52,7 +52,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 - Built-ins done (23): caddy, auth (Authelia + LLDAP), adguard, whoami,
   werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant,
   radicale, vaultwarden, mosquitto, esphome, beets, home-assistant,
-  immich, file-share, stimme (whisper, piper, openwakeword, trainer),
+  immich, file-share, stimme (whisper, piper, openwakeword),
   paperless, haus, usage-metrics. Every unit that runs on the box today has a Laib template.
 - Not yet run on any box: all of them. The NUC trial (Phase 1 to 3) and
   the Kraftwerk migration (Phase 4) are where they prove themselves.

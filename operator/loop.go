@@ -705,7 +705,7 @@ func firstLine(s string) string {
 	return s
 }
 
-// SystemPrompt is the persona and the rules, with the tools the hand
+// SystemPrompt is the Operator's role and the rules, with the tools the hand
 // really has (#43: the fixed text named laib_diag, which MCP lacked).
 func SystemPrompt(defs []ToolDef) string {
 	has := map[string]bool{}

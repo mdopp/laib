@@ -6,7 +6,7 @@ way Haus's Sprechen field reaches the Bote. A case passes when the device is
 where the sentence puts it (on, off, the percentage, the blind open or closed),
 read from Home Assistant's /api/states with HA_TOKEN from the same key file, the
 answer is not the sentence said back, and it carries no steer frame
-([OUT-OF-BAND USER MESSAGE …]). The device is the measure because the persona
+([OUT-OF-BAND USER MESSAGE …]). The device is the measure because the directory
 plugin hands a sentence to HA's own intents first (#520, ADR 0015): then no
 Hermes tool runs, and the table says "HA"; a switch through the model's ha tool
 says "Modell". Without HA_TOKEN in the file, a Home Assistant tool must have run

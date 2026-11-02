@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Für das Wake-Word muss nichts mehr auf den Lautsprecher gespielt werden: „Hey Mycroft“ kennt er von Haus aus
 Laib merkt sich, welches Wake-Word auf dem Lautsprecher ist, und bietet dir das Aufspielen wieder an, wenn es besser geworden ist
 Auf der Box-Seite steht bei ESPHome, wie viele Geräte eingerichtet sind und ob für eins ein Update bereitliegt
 Laib spielt das Wake-Word auf den Lautsprecher, sobald du es freigibst

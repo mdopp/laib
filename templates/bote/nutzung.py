@@ -36,8 +36,8 @@ def _count(event):
 
 def on_tool(tool_name="", **_):
     name = str(tool_name or "")
-    # the SOUL sends every message to the persona router first: its count is the turn count
-    if not name or name.startswith("mcp__persona__"):
+    # the SOUL sends every message to the directory first: its count is the turn count
+    if not name or name.startswith("mcp__directory__"):
         return
     name = name.removeprefix("mcp__").replace("__", ".").lower()
     name = re.sub(r"[^a-z0-9._-]", "_", name).strip("._-")

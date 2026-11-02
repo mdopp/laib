@@ -90,7 +90,7 @@ the Android widgets (which get the same JSON from `/napi`).
 | **Medien** (`/medien`) | Läuft gerade (Jellyfin, Radio), Weiterschauen, Radio-Presets | everyone |
 | **Notizen & Dokumente** (`/notizen`) | Suche, Zuletzt, Paperless-Eingang (Anzahl), Diktat | per person |
 | **Kalender** (`/kalender`) | Heute, Erinnerungen, Timer | per person |
-| **Box** (`/box`) | *Laib*: readiness line · *Inbox*: proposals read-only with their card, and a link to Laib's inbox (Haus decides nothing, haus#1) · *Morgenbericht* · *Was läuft*: services grouped by purpose · *Operator*: was ich gerade tue · *Werkstatt*: offene Tickets · *Stimme*: the persona's wake word, trained or not (training follows the persona, #128) | admins |
+| **Box** (`/box`) | *Laib*: readiness line · *Inbox*: proposals read-only with their card, and a link to Laib's inbox (Haus decides nothing, haus#1) · *Morgenbericht* · *Was läuft*: services grouped by purpose · *Operator*: was ich gerade tue · *Werkstatt*: offene Tickets · *Stimme*: whether the speakers hear „Hey Mycroft“ (ADR 0030) | admins |
 
 **Sprechen** is not a page: a microphone/text field on every page that
 talks to the Bote. The reply comes back as transient cards into the current page ("Bürolicht ist
@@ -148,7 +148,7 @@ start now; 3 to 7 are solarisbay and haus work with their own issues.
 **Stand 2026-10-13** (tracking: #21):
 - **Steps 1 and 2:** done. The Operator is `operator/` (its own budget, ADR 0023), and llama is a Laib role.
 - **Step 3:** half done.
-  - Haus has the Box page, pairing (`/pair-device`), the four companion keys and the persona.
+  - Haus has the Box page, pairing (`/pair-device`), the four companion keys and the assistant's name.
   - The house paths, tool rows, camera and upload come from Haus (haus#18, haus#25). The bridge and the old names go by ADR 0022.
 - **Step 4:** open (haus#12).
 - **Step 5:** waits on the two checks of ADR 0015 on the box. The Bote (ADR 0016), not Solaris, is the agent people talk to.

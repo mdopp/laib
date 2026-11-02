@@ -286,12 +286,12 @@ A task, as `list` and `zeigen` return it:
 ```json
 {
   "id": 7,
-  "titel": "Stimme aufnehmen",
-  "warum": "damit Joshua dich an der Stimme erkennt",
+  "titel": "Lautsprecher einrichten",
+  "warum": "damit Homes im Wohnzimmer zuhört",
   "seit": "2026-10-28",
   "von": "haus:mdopp",
   "fuer": "person:anna",
-  "weg": {"seite": "/stimme"},
+  "weg": {"seite": "/aktivierungswort"},
   "erinnern": "2026-11-15",
   "fertig_wenn": "status stimme",
   "erledigt": {"am": "2026-10-30", "von": "laib", "wie": "Befund weg"}
@@ -301,7 +301,7 @@ A task, as `list` and `zeigen` return it:
 - `fuer` is always there: `admins` (every task from before #878), `alle`,
   or `person:<login>` (Authelia's `Remote-User`).
 - `weg` is missing, `{"seite": "<path>"}` (a Haus page that leads through
-  it), or `{"gespraech": true}` (Haus offers „Gemeinsam mit Joshua“ and
+  it), or `{"gespraech": true}` (Haus offers „Gemeinsam mit Homes“ and
   opens the Bote with „Aufgabe #7 mit dir erledigen“, below).
 - `fertig_wenn` is missing or the finding that closes the task by itself;
   `erledigt` is missing while it is open. `erledigt.von` is `laib` when

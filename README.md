@@ -74,16 +74,15 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 | Program | What it is | Lines / cap |
 |---|---|---:|
 | [`automat/`](automat/) | Home Assistant automations as the Bote's MCP tool | 443 / 660 |
+| [`directory/`](directory/) | The Bote's directory: its tools, levels and help, in the assistant's name (ADR 0030) | 421 / 530 |
 | [`disk/`](disk/) | laib-disk: the data RAID, SMART and temperatures for diag | 615 / 770 |
 | [`frage/`](frage/) | „was ist …“: web search with a summary, OpenAI-compatible and MCP | 413 / 440 |
 | [`haushalt/`](haushalt/) | laib-haushalt behind the kernel's verb door: scan, devices, tell, zuhause, person signal, wish (ADR 0026) | 929 / 1,012 |
 | [`lease/`](lease/) | laib-lease: the model role's policy proxy and the GPU lease (ADR 0011) | 1,268 / 1,430 |
-| [`mcpserver/`](mcpserver/) | The smallest MCP server, shared by the Bote's tools (frage, automat, persona) | 111 / 220 |
-| [`notify/`](notify/) | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | 574 / 660 |
+| [`mcpserver/`](mcpserver/) | The smallest MCP server, shared by the Bote's tools (frage, automat, directory) | 111 / 220 |
+| [`notify/`](notify/) | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | **648 / 660, at 95 % or more** |
 | [`operator/`](operator/) | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,255 / 3,300, at 95 % or more** |
-| [`persona/`](persona/) | The Bote's persona engine: how it speaks with each person (ADR 0020) | 869 / 990 |
 | [`stick/`](stick/) | laib-stick on the laptop: builds the install stick for a new box | 1,468 / 1,980 |
-| [`stimme/trainer/`](stimme/trainer/) | trains a wake word for the speakers, the `stimme` template's trainer image | 963 Python, no cap |
 
 ### The Operator's skills
 
@@ -93,7 +92,7 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 | Skill | Description | Runs | Modell | Tools | run.py |
 |---|---|---|---|---|---:|
-| [`aktualisierung`](skills/aktualisierung/) | Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund. | weekly, Saturday 10:00 | urteil | `updates`, `propose`, `note`, `inbox`, `diag` | 84 / 220 |
+| [`aktualisierung`](skills/aktualisierung/) | Einmal pro Woche — neuere Patch-Versionen der festgelegten Images als Vorschläge, mit Grund. | weekly, Saturday 10:00 | urteil | `updates`, `propose`, `note`, `inbox`, `diag` | 85 / 220 |
 | [`durchsicht`](skills/durchsicht/) | Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht. | daily at 06:30 | urteil | `status`, `logs`, `state`, `planned`, `wish`, `note` | **220 / 220, at 95 % or more** |
 | [`lehre`](skills/lehre/) | Einmal am Tag — aus einem gelösten Vorfall eine Lehre vorschlagen, die der Admin freigibt. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | urteil | `propose`, `note` | 80 / 220 |
 | [`morgenbericht`](skills/morgenbericht/) | Jeden Morgen ein Bericht — was nachts passiert ist und was ansteht, Rot zuerst. | daily at the report hour (`OPERATOR_REPORT_AT`, 07:00 by default) | frei | `status`, `diag`, `journal`, `note` | 182 / 220 |
@@ -104,21 +103,21 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. 20,570 / 22,000 lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,317 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
-| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,600 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,588 |
+| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,415 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,574 |
 | Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,763 |
-| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,404 |
+| Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,356 |
 | Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 265 |
-| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,677 |
+| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,673 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,105 |
 | Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,781 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,390 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,388 |
 
 ### Services from templates
 
@@ -131,7 +130,7 @@ The part the house trusts: it must work when everything else is broken. 20,570 /
 | [Audiobookshelf](templates/audiobookshelf/) `audiobookshelf` | Hörbücher, Hörspiele, Podcasts | [audiobookshelf](https://github.com/advplyr/audiobookshelf) |
 | [Anmeldung](templates/auth/) `auth` | Konten und zweiter Faktor | [authelia](https://hub.docker.com/r/authelia/authelia), [lldap](https://hub.docker.com/r/lldap/lldap), [valkey](https://hub.docker.com/r/valkey/valkey) |
 | [Musik ordnen](templates/beets/) `beets` | Erkennt und sortiert neue Musik | [beets](https://hub.docker.com/r/linuxserver/beets) |
-| [Bote](templates/bote/) `bote` | Der Assistent in Signal und Co. | [hermes-agent](https://hub.docker.com/r/nousresearch/hermes-agent), [signal-cli-rest-api](https://hub.docker.com/r/bbernhard/signal-cli-rest-api), [laib-automat](automat/), [laib-persona](persona/) |
+| [Bote](templates/bote/) `bote` | Der Assistent in Signal und Co. | [hermes-agent](https://hub.docker.com/r/nousresearch/hermes-agent), [signal-cli-rest-api](https://hub.docker.com/r/bbernhard/signal-cli-rest-api), [laib-automat](automat/), [laib-directory](directory/) |
 | [Webadressen](templates/caddy/) `caddy` | Adressen und Zertifikate der Box | [laib-caddy](caddy/) |
 | [ESPHome](templates/esphome/) `esphome` | Firmware für Sprachgeräte und Sensoren | [esphome](https://github.com/esphome/esphome) |
 | [Netzlaufwerk](templates/file-share/) `file-share` | Gemeinsame Ordner im Heimnetz | [syncthing](https://hub.docker.com/r/syncthing/syncthing), [samba](https://hub.docker.com/r/servercontainers/samba), [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) |
@@ -147,7 +146,7 @@ The part the house trusts: it must work when everything else is broken. 20,570 /
 | [Paperless](templates/paperless/) `paperless` | Dokumente, durchsuchbar | [paperless-ngx](https://github.com/paperless-ngx/paperless-ngx), [postgres](https://hub.docker.com/_/postgres), [redis](https://hub.docker.com/_/redis) |
 | [Kalender](templates/radicale/) `radicale` | Termine und Kontakte der Familie | [docker-radicale](https://hub.docker.com/r/tomsquest/docker-radicale) |
 | [Scannen](templates/scan/) `scan` | Papierstapel nach Paperless, Verträge lesen | [dokumente](https://github.com/mdopp/dokumente) |
-| [Stimme](templates/stimme/) `stimme` | Hören, Sprechen, Weckwort | [faster-whisper](https://hub.docker.com/r/linuxserver/faster-whisper), [wyoming-piper](https://hub.docker.com/r/rhasspy/wyoming-piper), [wyoming-openwakeword](https://hub.docker.com/r/rhasspy/wyoming-openwakeword), [laib-wakeword-trainer](stimme/trainer/) |
+| [Stimme](templates/stimme/) `stimme` | Hören, Sprechen, Weckwort | [faster-whisper](https://hub.docker.com/r/linuxserver/faster-whisper), [wyoming-piper](https://hub.docker.com/r/rhasspy/wyoming-piper), [wyoming-openwakeword](https://hub.docker.com/r/rhasspy/wyoming-openwakeword) |
 | [Nutzungszähler](templates/usage-metrics/) `usage-metrics` | Wie oft was genutzt wird, anonym | [usage-metrics](https://github.com/mdopp/usage-metrics) |
 | [Vaultwarden](templates/vaultwarden/) `vaultwarden` | Passwörter der Familie | [vaultwarden](https://hub.docker.com/r/vaultwarden/server) |
 | [Werkstatt](templates/werkstatt/) `werkstatt` | Arbeitsplatz der Agenten | [laib-werkstatt](werkstatt/) |
@@ -173,8 +172,8 @@ internal/sysd        the systemctl seam
 operator/            the Operator, the admin agent (ADR 0013), a container laib renders (ADR 0027): its own program and line budget (ADR 0023)
 frage/               "was ist …": SearXNG + summary, OpenAI-compatible and MCP; its own program and budget (#309)
 automat/             Home Assistant automations as an MCP tool in the bote pod; its own program and budget
-persona/             the Bote's persona engine: directory, levels, gimmicks (ADR 0020); its own program and budget
-mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, persona)
+directory/           the Bote's directory: tools, levels, help (ADR 0030); its own program and budget
+mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, directory)
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag; its own program and budget (#443)
 haushalt/            laib-haushalt behind the kernel's verb door, a container laib renders (ADR 0027): scan, net geraete, tell, zuhause, person signal and wish, the household verbs (ADR 0026); its own program and budget
@@ -185,7 +184,7 @@ templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop
 qmd/                 the memory library's image: qmd as released, CPU only (#195), served by the Vermittler (#198)
-scripts/             install-box.sh, e2e.sh, loc.sh, drift.sh, architektur.sh, persona-icon.sh
+scripts/             install-box.sh, e2e.sh, loc.sh, drift.sh, architektur.sh
 docs/                KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, INSTALL, BACKUP, adr/
 testdata/golden      renderer golden files
 ```

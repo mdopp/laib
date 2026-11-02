@@ -17,7 +17,7 @@ written down.
 | **Haus** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/haus` | template `haus` |
 | **Haus-Android** | the phone: TWA of Haus plus native widgets and the quick-settings tile | `mdopp/haus-android` | app |
 | **Home Assistant** | the house brain: devices, automations, Assist (intents, timers, media via Music Assistant) | upstream | template `home-assistant` |
-| **Stimme** | the Wyoming set Assist speaks: wake word, Whisper, the Martin voice, the wakeword trainer (ADR 0015) | household registry | templates |
+| **Stimme** | the Wyoming set Assist speaks: wake word, Whisper, the Martin voice (ADR 0015); the wake word is the pretrained „Hey Mycroft“ (ADR 0030) | household registry | templates |
 | **Frage** | search + summary for "was ist …": Assist's conversation agent and a Bote tool | household registry (~300 lines) | template `frage` |
 | **llama** | the model role: router, policy proxy, lease, embeddings (ADR 0011) | `mdopp/laib` template | template `llama` |
 | **Werkstatt** | where things get built: pi, Claude Code, autoloop, tickets, transcripts | `mdopp/laib` `werkstatt/` | template `werkstatt` |

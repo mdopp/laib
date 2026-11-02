@@ -8,7 +8,7 @@ import (
 )
 
 // The Bote's Signal number reaches Haus as HAUS_BOTE_SIGNAL (haus#175), so
-// Willkommen can say „Joshua auf Signal“: the BOTE_SIGNAL builtin is the
+// Willkommen can say „Homes auf Signal“: the BOTE_SIGNAL builtin is the
 // value a service names under channels.signal, E.164 or nothing.
 func TestHausGetsTheBotesSignalNumber(t *testing.T) {
 	for _, tc := range []struct{ account, want string }{

@@ -17,11 +17,12 @@ complete example is `templates/whoami`, a real app with OIDC is
 2. Write `laib.yml` (below) and `values.example.yml`, replace literals by
    `${VAR}`. Builtins you never declare: `${DOMAIN}`, `${DATA_DIR}`,
    `${TZ}`, `${SERVICE}`, `${LAN_IP}`, `${MODEL_URL}`, `${MODEL_KEY}`,
-   `${MODEL_LEASE}`, `${PERSON}` (a per-person template's person).
+   `${MODEL_LEASE}`, `${PERSON}` (a per-person template's person),
+   `${ASSISTANT}` (the name the family talks to, box.yml `assistant`).
 3. Write one German sentence for the household at the top of `news`
    (below the `#` comment), what this change brings them, in their words:
-   „Joshua lernt die Namen deiner Geräte“, never a key, unit or file;
-   `${PERSONA_DISPLAY}` is the house persona's name. Every change of a
+   „${ASSISTANT} lernt die Namen deiner Geräte“, never a key, unit or file;
+   `${ASSISTANT}` is the assistant's name. Every change of a
    template gets its own new line, CI fails without one
    (`scripts/drift.sh`); a template update's card shows the lines the box
    does not have yet as its headline (#687).

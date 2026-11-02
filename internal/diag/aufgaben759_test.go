@@ -38,12 +38,12 @@ func TestAMissingStatusFileMeasuredNothing(t *testing.T) {
 	if fs := unmeasuredStatus(st, nil); len(fs) != 1 || !fs[0].Unmeasured || fs[0].Probe != "status" {
 		t.Fatalf("no status file is no measurement: %+v", fs)
 	}
-	os.WriteFile(filepath.Join(dir, "s.json"), []byte(`{"detail":"x","findings":[{"severity":"gelb","detail":"d","topic":"wakeword","unmeasured":true,"repair":["flash","esphome"],"effect":"e","undo":"u"}]}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "s.json"), []byte(`{"detail":"x","findings":[{"severity":"gelb","detail":"d","topic":"wakeword","unmeasured":true,"repair":["restart","stimme"],"effect":"e","undo":"u"}]}`), 0o644)
 	if fs := unmeasuredStatus(st, nil); len(fs) != 0 {
 		t.Fatalf("a status file is there: %+v", fs)
 	}
 	f := ReadStatus(st, svc).Findings[0]
-	if f.Topic != "wakeword" || !f.Unmeasured || !slices.Equal(f.Repair, []string{"flash", "esphome"}) || f.Effect != "e" || f.Undo != "u" {
+	if f.Topic != "wakeword" || !f.Unmeasured || !slices.Equal(f.Repair, []string{"restart", "stimme"}) || f.Effect != "e" || f.Undo != "u" {
 		t.Fatalf("a status file's finding carries topic, unmeasured, repair, effect and undo: %+v", f)
 	}
 }

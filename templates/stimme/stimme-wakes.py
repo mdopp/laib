@@ -1,36 +1,30 @@
-"""The wakes (#825): between Home Assistant and Whisper, it counts them and keeps a false one's audio.
+"""The wakes (#825): between Home Assistant and Whisper, it counts them.
 
-The Voice PE woke on „Hey Joshua“ twice in ten minutes on its first day, and Whisper heard
-„Ja, ich will push her backst.“ and „Auf Wiedersehen.“: room talk, nobody had called. The
-model had only ever heard Piper's voices. To learn this household's rooms it needs their
-sounds as negatives, and to judge its cutoff the owner needs numbers.
+The Voice PE woke twice in ten minutes on its first day, and Whisper heard „Auf
+Wiedersehen.“: room talk, nobody had called. To judge whether the wake word wakes too
+often, the owner needs numbers.
 
-The device wakes on itself (microWakeWord) and streams what follows to Home Assistant, which
-hands it to Whisper over Wyoming. This sits in that path, the one place that has the audio
-and its transcript together: Home Assistant's Whisper entry points at it (WAKES_LISTEN,
-127.0.0.1:10301, home-assistant's post-deploy prefers it when it answers), and every byte
-goes on to Whisper (WHISPER, 127.0.0.1:10300) and back unchanged. A copy of the events is
-read on the side; an event it cannot read stops the reading, never the forwarding.
+The device wakes on itself (microWakeWord, „Hey Mycroft“ from its firmware) and streams
+what follows to Home Assistant, which hands it to Whisper over Wyoming. This sits in that
+path: Home Assistant's Whisper entry points at it (WAKES_LISTEN, 127.0.0.1:10301,
+home-assistant's post-deploy prefers it when it answers), and every byte goes on to Whisper
+(WHISPER, 127.0.0.1:10300) and back unchanged. A copy of the events is read on the side; an
+event it cannot read stops the reading, never the forwarding.
 
 For each transcript:
 
 - a follow-up (a transcription within FOLLOWUP_SECONDS of the last one, the device listening
-  on after Joshua asked back) is no wake and is not judged;
+  on after the assistant asked back) is no wake and is not judged;
 - „Fehlalarm“ (a short sentence with it) marks the wake before it, within FEHLALARM_SECONDS,
-  as false: its audio, kept in memory until then, becomes a negative; the Fehlalarm itself is
-  a wake with a command;
-- otherwise it is a wake. It is addressed when its text starts with the persona's name (the
+  as one without a command; the Fehlalarm itself is a wake with a command;
+- otherwise it is a wake. It is addressed when its text starts with the wake word's name (the
   phrase's words but a greeting) or with a command the pipeline handles (COMMANDS: the verbs
   and question words HA's intents and Frage answer); anything else, an empty or a
-  hallucinated transcript too, is a wake without a command, and its audio is a negative.
+  hallucinated transcript too, is a wake without a command.
 
-The negatives go to /recordings/<wake id>/negativ/<time>.wav, 0600, the newest NEGATIVES_MAX
-kept, the oldest deleted. The folder carries a CACHEDIR.TAG, so the nightly restic run
-(--exclude-caches) leaves them out: household audio stays on the box. The trainer folds them
-in as negatives on its next run (stimme/trainer); nothing here starts one. The counts per
-day go to /micro/laib-wakes.json, which stimme-names writes into Stimme's status line.
-
-Nothing it hears is printed: no transcript, no audio, only counts. The standard library only.
+The counts per day go to /micro/laib-wakes.json, which stimme-names writes into Stimme's
+status line. Nothing it hears is kept or printed: no transcript, no audio, only counts. The
+standard library only.
 """
 import asyncio
 import json
@@ -39,7 +33,6 @@ import pathlib
 import re
 import sys
 import time
-import wave
 
 COMMANDS = set("""
 schalte schalt schalten mach mache macht stell stelle stellt setz setze setzt dreh drehe öffne öffnen schließe schließ schliesse
@@ -51,7 +44,6 @@ turn switch set what how when where who which why play pause stop open close sta
 """.split())
 GREETINGS = {"hey", "hei", "hallo", "hi", "ok", "okay", "na", "he"}
 SPOKEN = re.compile(r"[a-zäöüß]+")
-MAX_SECONDS = 15   # of a negative: what follows the wake, not a whole conversation
 
 
 def words(text: str) -> list:
@@ -59,7 +51,7 @@ def words(text: str) -> list:
 
 
 def names(phrase: str) -> set:
-    """the persona's name as Whisper may write it: „Hey Joshua“ -> joshua, joschua"""
+    """the wake word's name as Whisper may write it: „Hey Mycroft“ -> mycroft"""
     out = {w for w in words(phrase) if w not in GREETINGS}
     return out | {w.replace("sh", "sch") for w in out}
 
@@ -77,15 +69,14 @@ def fehlalarm(text: str) -> bool:
 
 
 class Wakes:
-    """what the transcripts mean: counts, negatives, the last wake for a Fehlalarm"""
+    """what the transcripts mean: counts, the last wake for a Fehlalarm"""
 
-    def __init__(self, recordings: pathlib.Path, micro: pathlib.Path, wid: str, phrase: str, keep: int = 200,
-                 followup: float = 30, window: float = 600, clock=time.time):
-        self.neg, self.counts = recordings / wid / "negativ", micro / "laib-wakes.json"
-        self.called, self.keep, self.followup, self.window, self.clock = names(phrase), keep, followup, window, clock
-        self.last_end, self.last = None, None   # the last transcription's time; the last wake (time, day, audio, fmt, without)
+    def __init__(self, micro: pathlib.Path, phrase: str, followup: float = 30, window: float = 600, clock=time.time):
+        self.counts = micro / "laib-wakes.json"
+        self.called, self.followup, self.window, self.clock = names(phrase), followup, window, clock
+        self.last_end, self.last = None, None   # the last transcription's time; the last wake (time, day, without)
 
-    def heard(self, text: str, pcm: bytes, fmt: tuple) -> str:
+    def heard(self, text: str) -> str:
         """befehl | ohne | fehlalarm | folge: what this transcript was, after counting it"""
         now = self.clock()
         follow = self.last_end is not None and now - self.last_end < self.followup
@@ -94,7 +85,6 @@ class Wakes:
         if fehlalarm(text):
             prev, self.last = self.last, None
             if prev and now - prev["at"] < self.window and not prev["ohne"]:
-                self.save(prev["pcm"], prev["fmt"], prev["at"])
                 self.count(prev["day"], ohne=1)
             if not follow:
                 self.count(day, geweckt=1)
@@ -102,31 +92,9 @@ class Wakes:
         if follow:
             return "folge"
         ohne = not addressed(text, self.called)
-        self.last = {"at": now, "day": day, "pcm": pcm, "fmt": fmt, "ohne": ohne}
-        if ohne:
-            self.save(pcm, fmt, now)
+        self.last = {"at": now, "day": day, "ohne": ohne}
         self.count(day, geweckt=1, ohne=int(ohne))
         return "ohne" if ohne else "befehl"
-
-    def save(self, pcm: bytes, fmt: tuple, at: float) -> None:
-        rate, width, channels = fmt
-        if not pcm or not rate or not width or not channels:
-            return
-        self.neg.mkdir(mode=0o700, parents=True, exist_ok=True)
-        tag = self.neg / "CACHEDIR.TAG"
-        if not tag.exists():   # restic --exclude-caches: the household's audio stays out of the backups
-            tag.write_text("Signature: 8a477f597d28d172789f06886806bc55\n# laib: household audio, kept on the box only (#825)\n")
-        name = time.strftime("%Y%m%dT%H%M%S", time.gmtime(at)) + f"{int(at * 1000) % 1000:03d}.wav"
-        tmp = self.neg / (name + ".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f, wave.open(f, "wb") as w:
-            w.setnchannels(channels)
-            w.setsampwidth(width)
-            w.setframerate(rate)
-            w.writeframes(pcm)
-        tmp.replace(self.neg / name)
-        for old in sorted(self.neg.glob("*.wav"))[:-self.keep or None]:
-            old.unlink()
 
     def count(self, day: str, geweckt: int = 0, ohne: int = 0) -> None:
         try:
@@ -137,7 +105,7 @@ class Wakes:
         t = tage.setdefault(day, {"geweckt": 0, "ohne": 0})
         t["geweckt"], t["ohne"] = t.get("geweckt", 0) + geweckt, t.get("ohne", 0) + ohne
         c["tage"] = {d: tage[d] for d in sorted(tage)[-14:]}
-        c["gegenbeispiele"] = len(list(self.neg.glob("*.wav"))) if self.neg.is_dir() else 0
+        c.pop("gegenbeispiele", None)
         c.setdefault("seit", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.clock())))
         tmp = self.counts.with_name(self.counts.name + ".tmp")
         tmp.write_text(json.dumps(c, ensure_ascii=False) + "\n")
@@ -175,20 +143,11 @@ class Run:
     """one connection's transcriptions, from both directions' events"""
 
     def __init__(self, wakes: Wakes):
-        self.wakes, self.pcm, self.fmt, self.cap = wakes, bytearray(), (0, 0, 0), 0
+        self.wakes = wakes
 
     def see(self, kind, data, payload) -> None:
-        if kind == "audio-start":
-            self.pcm = bytearray()
-            self.fmt = (int(data.get("rate") or 0), int(data.get("width") or 0), int(data.get("channels") or 0))
-            self.cap = MAX_SECONDS * self.fmt[0] * self.fmt[1] * self.fmt[2]
-        elif kind == "audio-chunk":
-            if len(self.pcm) < self.cap:
-                self.pcm += payload[:self.cap - len(self.pcm)]
-        elif kind == "transcript":
-            said = self.wakes.heard(str(data.get("text") or ""), bytes(self.pcm), self.fmt)
-            self.pcm = bytearray()
-            print(f"stimme-wakes: {said}", flush=True)
+        if kind == "transcript":
+            print(f"stimme-wakes: {self.wakes.heard(str(data.get('text') or ''))}", flush=True)
 
 
 async def pump(src, dst, events: Events, run: Run) -> None:
@@ -227,8 +186,7 @@ def hostport(s: str) -> tuple:
 
 async def main() -> None:
     e = os.environ
-    wakes = Wakes(pathlib.Path(e.get("RECORDINGS", "/recordings")), pathlib.Path(e.get("MICRO", "/micro")), e["WAKE_ID"],
-                  e.get("WAKE_PHRASE", ""), keep=int(e.get("NEGATIVES_MAX") or 200))
+    wakes = Wakes(pathlib.Path(e.get("MICRO", "/micro")), e["WAKE_PHRASE"])
     host, port = hostport(e.get("WAKES_LISTEN", "127.0.0.1:10301"))
     server = await asyncio.start_server(serve(wakes, hostport(e.get("WHISPER", "127.0.0.1:10300"))), host, port)
     print(f"stimme-wakes: on {host}:{port}, Whisper behind it", flush=True)
@@ -237,7 +195,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    if not os.environ.get("WAKE_ID"):
-        print("stimme-wakes: no WAKE_ID (the house persona's wake word)", file=sys.stderr)
+    if not os.environ.get("WAKE_PHRASE"):
+        print("stimme-wakes: no WAKE_PHRASE (the wake word)", file=sys.stderr)
         sys.exit(2)
     asyncio.run(main())

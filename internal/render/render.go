@@ -74,16 +74,6 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 			out["quadlet/"+name+"/"+HooksFile] = hooks(name, svc)
 		}
 	}
-	if uses(st, "PERSONA") {
-		// the packages a service mounts from /mnt/data/laib/render/persona (ADR 0020)
-		for pname, p := range st.Personas {
-			for file, content := range p.Files {
-				out["persona/"+pname+"/"+file] = content
-			}
-			out["persona/"+pname+"/persona.json"] = p.JSON()
-		}
-		out["persona/chat.yml"] = st.ChatMap()
-	}
 	if uses(st, "PEOPLE_REV") {
 		// box.yml people for bote-notify (ADR 0022 §3), mounted as a folder so a rewrite is seen
 		out["people/people.json"] = st.PeopleJSON()
@@ -325,11 +315,7 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		"LAIB_PAGE_URL": "https://" + fqdn(st, st.Box.Laib.Host) + "/",
 	}
 	maps.Copy(vars, ModelVars(st, secrets))
-	if p := st.HousePersona(); p != nil {
-		vars["PERSONA"], vars["PERSONA_DISPLAY"], vars["PERSONA_PHRASE"] = p.Name, p.Display, p.Wakeword.Phrase
-		vars["PERSONA_WAKEWORD"], vars["PERSONA_VOICE"], vars["PERSONA_REV"] = p.WakewordID(), p.Voice, st.PersonaRev()
-		vars["PERSONA_LANGUAGES"] = strings.Join(p.Languages, ",")
-	}
+	vars["ASSISTANT"] = st.Box.Assistant // the name the family talks to (ADR 0030)
 	vars["PEOPLE_REV"], vars["NOTIFY_PERSON"], vars["BOTE_SIGNAL"] = st.PeopleRev(), st.Box.Notify.Person, st.BoteSignal()
 	maps.Copy(vars, st.ZuhauseVars())
 	maps.Copy(vars, resolveValues(svc, secrets, vars))
@@ -379,7 +365,7 @@ func ModelVars(st *state.State, secrets map[string]string) map[string]string {
 	return map[string]string{"MODEL_URL": inContainer(st.ModelURL()), "MODEL_LEASE": inContainer(st.ModelLease()), "MODEL_KEY": key}
 }
 
-// uses: some service's unit names a value starting with prefix (PERSONA…, PEOPLE_REV).
+// uses: some service's unit names a value starting with prefix (PEOPLE_REV).
 func uses(st *state.State, prefix string) bool {
 	return slices.ContainsFunc(slices.Collect(maps.Values(st.Services)), func(svc *state.Service) bool { return svc.Uses(prefix) })
 }

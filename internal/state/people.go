@@ -15,6 +15,9 @@ import (
 // channelRe is a channel's target by platform (ADR 0022 §3): the shapes
 // `hermes send --to <platform>:<target>` takes. A platform not listed here
 // is not one a person can be reached on.
+// e164 is a phone number as Signal and SMS take it.
+var e164 = regexp.MustCompile(`^\+[1-9][0-9]{6,14}$`)
+
 var channelRe = map[string]*regexp.Regexp{
 	"signal":   e164,
 	"sms":      e164,

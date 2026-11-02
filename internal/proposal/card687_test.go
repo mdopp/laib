@@ -34,13 +34,13 @@ func TestTheTemplateUpdateCardSaysWhatItBringsInFiveLines(t *testing.T) {
 		},
 		Changes: []Change{{Op: "~", Service: "stimme", Key: "HA_TOKEN", New: "!secret STIMME_HA_TOKEN"}},
 		Lines:   lines,
-		News:    []string{"Joshua lernt die Namen deiner Geräte"},
+		News:    []string{"Homes lernt die Namen deiner Geräte"},
 	}
 	c := Card(&p, "dopp.cloud")
-	if c.Summary != "Joshua lernt die Namen deiner Geräte" {
+	if c.Summary != "Homes lernt die Namen deiner Geräte" {
 		t.Errorf("the headline is what the update brings, got %q", c.Summary)
 	}
-	if !strings.Contains(c.Why, "Joshua lernt die Namen deiner Geräte") || !strings.Contains(c.Why, "Laib") || !strings.Contains(c.Why, "Stimme") {
+	if !strings.Contains(c.Why, "Homes lernt die Namen deiner Geräte") || !strings.Contains(c.Why, "Laib") || !strings.Contains(c.Why, "Stimme") {
 		t.Errorf("why: who proposes the new template of which service, and what it brings: %q", c.Why)
 	}
 	visible := []string{c.Summary, c.Reversible, c.Why, c.RiskWhy}
@@ -80,7 +80,7 @@ func TestTheTemplateUpdateCardSaysWhatItBringsInFiveLines(t *testing.T) {
 // #687: the sentence's home is the template's news file, one line per
 // change, newest first. A template update reads the lines the box's copy
 // does not have yet — per change, not per template forever — with the
-// house persona's name filled in.
+// assistant's name filled in (ADR 0030).
 func TestATemplateUpdateReadsOnlyTheNewNews(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)
@@ -90,20 +90,20 @@ func TestATemplateUpdateReadsOnlyTheNewNews(t *testing.T) {
 	os.WriteFile(filepath.Join(dst, "laib.yml"), []byte(contract), 0o644)
 	os.WriteFile(filepath.Join(dst, "echo.container"), []byte("[Container]\nImage=docker.io/echo:1\n"), 0o644)
 	os.WriteFile(filepath.Join(dst, "values.yml"), []byte("{}\n"), 0o644)
-	os.WriteFile(filepath.Join(dst, "news"), []byte("# what each change brings\nEcho antwortet schneller\n"), 0o644)
+	os.WriteFile(filepath.Join(dst, "news"), []byte("# what each change brings\nEcho antwortet schneller\n${PERSONA_DISPLAY} kennt Echo\n"), 0o644)
 	git(ctx, repo, "add", "-A")
 	git(ctx, repo, "commit", "-q", "-m", "echo, installed")
 	tpl := fstest.MapFS{
 		"laib.yml":       {Data: []byte(contract)},
 		"echo.container": {Data: []byte("[Container]\nImage=docker.io/echo:2\n")},
-		"news":           {Data: []byte("# what each change brings\n${PERSONA_DISPLAY} hört Echo zu\nEcho spricht leiser\n\nEcho antwortet schneller\n")},
+		"news":           {Data: []byte("# what each change brings\n${ASSISTANT} hört Echo zu\nEcho spricht leiser\n\nEcho antwortet schneller\n${ASSISTANT} kennt Echo\n")},
 	}
 	p, err := CreateFromEdit(ctx, repo, inbox, "laib", "template update echo", Edit{Update: &UpdateService{Name: "echo", From: "echo", Template: tpl}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"Joshua hört Echo zu", "Echo spricht leiser"}; !slices.Equal(p.News, want) {
-		t.Errorf("news %q, want only what the box does not have, %q", p.News, want)
+	if want := []string{"Homes hört Echo zu", "Echo spricht leiser"}; !slices.Equal(p.News, want) {
+		t.Errorf("news %q, want only what the box does not have (a line from before ADR 0030 under its new name too), %q", p.News, want)
 	}
 	if !slices.Contains(p.Files, "services/echo/news") {
 		t.Errorf("the box keeps the template's news, so the next update reads only its own: %v", p.Files)

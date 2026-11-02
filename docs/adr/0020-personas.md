@@ -4,7 +4,8 @@ Applies when you give the house a name, a voice, a wake word or a way of
 talking; when you build a gimmick (a game, a directory, quotes) into the
 Bote; or when a family member wants "their" assistant to be someone else.
 
-- **Status:** Accepted, 2026-10-13 (#124)
+- **Status:** Superseded by ADR 0030 (2026-11-02): one assistant name in
+  box.yml, no personas, the pretrained „Hey Mycroft“. Accepted 2026-10-13 (#124).
 - **Deciders:** operator (mdopp): "Lass uns das so umbauen, dass das System
   Personas unterstützt. Eine davon ist Joshua. Aber man weitere bauen kann.
   Inkl. Wakeword, Stil, ein paar Gimmicks, Icons."

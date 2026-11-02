@@ -5,9 +5,9 @@ template: {registry: builtin, name: stimme, version: 1}
 provides: [voice]
 upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/wyoming-faster-whisper, https://github.com/rhasspy/wyoming-openwakeword]   # where the Operator's web search looks first (#544)
 # The Wyoming set Home Assistant Assist speaks (ADR 0015): Whisper (STT),
-# Piper (TTS, German voice), openWakeWord (the trained wake word), and the
-# wake-word trainer, and stimme-wakes in front of Whisper (#825). Host network so HA finds them at 127.0.0.1. On the
-# GPU box Whisper and the trainer take the card and follow the lease's
+# Piper (TTS, German voice), openWakeWord („Hey Mycroft“, built in, ADR 0030),
+# and stimme-wakes in front of Whisper (#825). Host network so HA finds them at 127.0.0.1. On the
+# GPU box Whisper takes the card and follows the lease's
 # voice-device.env (cpu while a mode holds the card); on a box without a
 # GPU set the CPU image and device in values.yml.
 hostNetwork: true
@@ -23,13 +23,9 @@ data:
     backup: false                  # model cache
   - path: ${DATA_DIR}/stimme/piper
     backup: false
-  - path: ${DATA_DIR}/stimme/wakeword  # openWakeWord's custom models (streaming satellites): keep
-  - path: ${DATA_DIR}/stimme/micro     # the house persona's microWakeWord model for the Voice PE, with its status: keep
-  - path: ${DATA_DIR}/stimme/recordings # the household's own WAVs of the phrase, under <wake id>/ (optional); <wake id>/haus what Haus records (#828), <wake id>/negativ the false wakes' audio: both left out by restic (CACHEDIR.TAG, #825)
-  - path: ${DATA_DIR}/stimme/trainer   # sources, voices, negatives, checkpoints: gigabytes, rebuilt
-    backup: false
+  - path: ${DATA_DIR}/stimme/micro     # Stimme's status and the wakes per day (laib-wakes.json)
 health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}
-status:                            # where the house persona's wake word stands; the trainer writes it on every change (#169, #309)
+status:                            # which satellites listen for „Hey Mycroft“, and the wakes per day; stimme-names writes it (#169, #309)
   file: ${DATA_DIR}/stimme/micro/laib-status.json
 ports:
   - {port: 10300, lan: false}      # whisper

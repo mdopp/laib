@@ -1,0 +1,10 @@
+[Unit]
+Description=Sprecher: speaks as ${ASSISTANT}
+
+[Container]
+Image=${IMAGE}
+Environment=ASSISTANT=${ASSISTANT}
+Environment=BOTE_SIGNAL=${BOTE_SIGNAL}
+
+[Install]
+WantedBy=default.target

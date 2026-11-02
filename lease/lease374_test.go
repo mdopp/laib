@@ -45,7 +45,7 @@ func TestAnUnprovidedRoleDegradesInsteadOfStoppingTheLease(t *testing.T) {
 		}
 	}
 	all := strings.Join(gelb, "\n")
-	for _, want := range []string{"full", "voice/whisper", "voice/wakeword-trainer", "voice/piper"} {
+	for _, want := range []string{"full", "voice/whisper", "voice/piper"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("the status does not name %s: %q", want, gelb)
 		}

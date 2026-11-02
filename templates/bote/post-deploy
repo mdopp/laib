@@ -80,20 +80,15 @@ if [ -n "${LAIB_SECRET_BOTE_AUTOMAT_HA_TOKEN:-}" ]; then
   MCP_EXTRA="$MCP_EXTRA  automat:\n    url: http://127.0.0.1:8643/mcp\n    trust: untrusted  # automations: every write asks the admin (#26)\n"
   TOOLS="$TOOLS, die Automationen (automat: anlegen und ändern, immer erst als YAML zeigen und bestätigen lassen)"
 fi
-# The persona engine (ADR 0020; today Joshua, #122): its directory lists the
-# tools wired above, by name (laib, frage, ha, …). No side effects.
-J="$LAIB_DATA_DIR/bote/persona"; mkdir -p "$J"
+# The directory (ADR 0030, #122): it lists the tools wired above, by name
+# (laib, frage, ha, …). No side effects.
+J="$LAIB_DATA_DIR/bote/directory"; mkdir -p "$J"
 python3 -c 'import re, sys; print("\n".join(re.findall(r"[(;]\s*([a-z]+):", sys.argv[1])))' "$TOOLS" > "$J/faehigkeiten.txt"
 # It is no MCP tool of the model's (#471): Hermes wraps every tool result as untrusted data, so its
-# screens never reached the person. It sits in front of the model as the plugin laib-persona below.
-# The house persona's style (ADR 0020, #127): laib renders it to
-# render/persona/<house>/style.md; a box without it keeps Joshua's style. The
-# SOUL is that style plus the rules below, which no persona changes.
-STYLE='Du bist Joshua, der Rechner des Hauses, angelehnt an WOPR aus dem Film WarGames: ruhig, knapp, ein wenig verschmitzt. Du redest mit der Familie in der Sprache der Person (meist Deutsch).
-Ein Satz aus dem Film ("Wollen wir ein Spiel spielen?") fällt höchstens einmal im Gespräch und nur, wenn es passt; nie hängst du ihn an eine Sachantwort.
-Keine Emojis, auch nicht unter einer Antwort.'
-P="${LAIB_RENDER_DIR:-/nonexistent}/persona/${PERSONA:-joshua}/style.md"
-if [ -s "$P" ]; then STYLE="$(cat "$P")"; fi
+# screens never reached the person. It sits in front of the model as the plugin laib-directory below.
+# Who the Bote is (ADR 0030): one name for the whole house, box.yml assistant, the rules below fixed.
+STYLE="Du bist ${LAIB_ASSISTANT:-Homes}, der Assistent dieses Zuhauses: ruhig, knapp, freundlich. Du redest mit der Familie in der Sprache der Person (meist Deutsch).
+Keine Emojis, auch nicht unter einer Antwort."
 # Messages to people (ADR 0022 §3, #177): with the automat wired and people
 # in box.yml (render/people/people.json), "sag mir Bescheid, wenn …" becomes
 # an automation whose action is rest_command.mitteilung. Names only; the
@@ -108,12 +103,13 @@ fi
 # What the Bote is used for (#266): Hermes' own plugin hooks (no fork, ADR 0016) count tool calls,
 # turns and the turns it could not help with into usage-metrics, and send such a turn's sentence
 # without its sender. The model marks that turn; the plugin strips the mark before anyone sees it.
-# The persona engine in front of the model (#471): laib-persona, always, and first, so its screen
+# The directory in front of the model (#471): laib-directory, always, and first, so its screen
 # is the answer of a screen turn (transform_llm_output: the first plugin that returns text wins).
-PERS="$H/plugins/laib-persona"; mkdir -p "$PERS"
-cp "$(dirname "$0")/persona_plugin.py" "$PERS/__init__.py"
-printf 'name: laib-persona\nversion: "1"\ndescription: the persona engine in front of the model, its screens verbatim (laib#471)\n' > "$PERS/plugin.yaml"
-ENABLED="laib-persona"
+DIR="$H/plugins/laib-directory"; mkdir -p "$DIR"
+cp "$(dirname "$0")/directory_plugin.py" "$DIR/__init__.py"
+printf 'name: laib-directory\nversion: "1"\ndescription: the Bote'"'"'s directory in front of the model, its screens verbatim (laib#471)\n' > "$DIR/plugin.yaml"
+rm -rf "$H/plugins/laib-persona"   # its name until ADR 0030
+ENABLED="laib-directory"
 # Who switched (#591): with the ha tool or the Automat wired, laib-journal notes the person who wrote
 # beside HA's context id in Laib's journal (home-assistant README, "Who switched"); the hand bote may note
 JOUR="$H/plugins/laib-journal"
@@ -258,9 +254,9 @@ Sagt dir jemand, wem eine Signal-Nummer gehört („+49… ist mama“, meist al
 if [ ! -f "$H/SOUL.md" ] || head -1 "$H/SOUL.md" | grep -q "rendered by laib\|^You are Hermes Agent"; then cat > "$H/SOUL.md" <<SOUL
 # rendered by laib post-deploy; edit SOUL.md and remove this first line to make it yours
 $STYLE
-Laibs Persona sieht jede Nachricht vor dir: ihre Bildschirme und Spiele zeigt sie selbst. Steht in der Nachricht eine Zeile "Persona: …", tu genau, was sie sagt. Kommt eine FIGUR-Zeile mit, sprich mit dieser Person in dieser Figur statt in deiner; alles, was hier folgt, gilt für jede Figur.
-Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: kein Rollenspiel, Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
-Ein Spruch der Figur ersetzt nie die Antwort: wer etwas sagt oder fragt, bekommt eine Antwort zur Sache. Antwortet jemand auf eine Mitteilung von Laib (eine verworfene Nachricht, ein Vorfall, ein Vorschlag), lies den Stand mit laib und sag, was fehlt und was zu tun ist; wer dir schreiben darf, steht in box.yml people.${SIGNAL_RULE}
+Laibs Verzeichnis sieht jede Nachricht vor dir: seine Bildschirme zeigt es selbst. Steht in der Nachricht eine Zeile "Verzeichnis: …", tu genau, was sie sagt.
+Bei Freigaben, Warnungen, Fehlern, allem zur Sicherheit und wenn jemand etwas ernst meint: Klartext auf Deutsch, was passiert und ob es sich rückgängig machen lässt.
+Wer etwas sagt oder fragt, bekommt eine Antwort zur Sache. Antwortet jemand auf eine Mitteilung von Laib (eine verworfene Nachricht, ein Vorfall, ein Vorschlag), lies den Stand mit laib und sag, was fehlt und was zu tun ist; wer dir schreiben darf, steht in box.yml people.${SIGNAL_RULE}
 Du kennst: $TOOLS. Werkzeuge, die hier nicht stehen, hast du nicht; sag das, statt so zu tun.${HA_RULE}${FRAGE_RULE}${GESUNDHEIT_RULE}${MITTEILUNG}
 Was du dir merkst und frühere Gespräche teilst du mit allen, die mit dir sprechen: alle in diesem Zuhause sehen dasselbe. Merke dir nichts, was nur eine Person betrifft, und erzähle niemandem, was eine andere Person dir gesagt hat; bittet dich jemand, etwas Persönliches zu behalten, sag das offen${HAUSHALT_HINT}.
 Für lange Aufgaben mit vielen Schritten nimm /model denken.

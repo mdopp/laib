@@ -56,7 +56,7 @@ func TestTheMailFallbackIsTheSameLine(t *testing.T) {
 	g := newGmailSMTP(t)
 	c := f.config(t, g.addr)
 	c.InboxURL = "https://laib.e2e.home/inbox"
-	f.inbox = `[{"id":123,"reason":"x","tier":"apply","class":"human","card":{"summary":"Joshua kennt jetzt alle Namen deiner Geräte","impact":["a","b"],"reversible":"laib rollback"}}]`
+	f.inbox = `[{"id":123,"reason":"x","tier":"apply","class":"human","card":{"summary":"Homes kennt jetzt alle Namen deiner Geräte","impact":["a","b"],"reversible":"laib rollback"}}]`
 	if err := Sweep(context.Background(), c, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestTheMailFallbackIsTheSameLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	line := "Freigabe #123: Joshua kennt jetzt alle Namen deiner Geräte · https://laib.e2e.home/inbox#123"
+	line := "Freigabe #123: Homes kennt jetzt alle Namen deiner Geräte · https://laib.e2e.home/inbox#123"
 	if subj, err := new(mime.WordDecoder).DecodeHeader(m.Header.Get("Subject")); err != nil || subj != line {
 		t.Errorf("the subject is the line: %q %v", subj, err)
 	}
