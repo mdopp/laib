@@ -10,14 +10,16 @@ import (
 // of a service with data — pinned by the registry's digest, the review asks
 // a person and laib snapshots first — and the value a status file offers
 // (Home Assistant's extensions with their release notes, HA_INSTALL). An
-// image the nightly run takes (auto) is no proposal; firmware is only in
-// the note.
+// image the nightly run takes (auto) is no proposal; device firmware HA can
+// install is its own value, HA_FIRMWARE; other firmware is only in the note.
 func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 	updates := `[{"service":"home-assistant","key":"HA_IMAGE","image":"ghcr.io/home-assistant/home-assistant","current":"stable","digest":"sha256:ha2"},` +
 		`{"service":"frage","key":"FRAGE_IMAGE","image":"ghcr.io/mdopp/laib-frage","current":"latest","digest":"sha256:fr2","auto":true},` +
 		`{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:vw2"}]`
 	diag := `[{"severity":"info","probe":"status","service":"home-assistant","detail":"Erweiterungen installieren: SENEC.Home 2026.10.0 · https://x/senec/releases","fix":"laib propose --set services/home-assistant/values.yml:HA_INSTALL=update.senec=2026.10.0"},` +
-		`{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Steckdose 9.5.52 → 9.5.60 (nur gemeldet)","fix":"einspielen nur auf ein ausdrückliches Ja"},` +
+		`{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Steckdose 9.5.52 → 9.5.60 (nur gemeldet)","fix":"mit der App des Herstellers"},` +
+		`{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Lampe 1.2 → 1.3","fix":"der Operator schlägt es samstags vor (HA_FIRMWARE)"},` +
+		`{"severity":"info","probe":"status","service":"home-assistant","detail":"Neue Firmware für Geräte einspielen: Lampe 1.2 → 1.3","fix":"laib propose --set services/home-assistant/values.yml:HA_FIRMWARE=update.lampe=1.3"},` +
 		`{"severity":"info","probe":"status","service":"media","detail":"fremd","fix":"laib propose --set services/home-assistant/values.yml:HA_INSTALL=x"}]`
 	inbox := `[{"id":3,"reason":"vaultwarden: neues Image docker.io/vaultwarden/server:latest (sha256:vw2)"}]`
 	mcp, calls := fakeMCP(t, map[string]string{"laib_updates": updates, "laib_diag": diag, "laib_inbox": inbox})
@@ -34,12 +36,15 @@ func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 		}
 	}
 	all := strings.Join(proposed, "\n")
-	if len(proposed) != 2 || !strings.Contains(all, `"value":"ghcr.io/home-assistant/home-assistant:stable@sha256:ha2"`) || !strings.Contains(all, `"key":"HA_INSTALL"`) ||
+	if len(proposed) != 3 || !strings.Contains(all, `"key":"HA_FIRMWARE"`) || !strings.Contains(all, `"value":"update.lampe=1.3"`) || !strings.Contains(all, `"value":"ghcr.io/home-assistant/home-assistant:stable@sha256:ha2"`) || !strings.Contains(all, `"key":"HA_INSTALL"`) ||
 		!strings.Contains(all, `"value":"update.senec=2026.10.0"`) || !strings.Contains(all, "https://x/senec/releases") {
 		t.Fatalf("want HA's image by digest and the extensions with their notes, nothing else: %q", proposed)
 	}
 	if strings.Contains(all, "laib-frage") || strings.Contains(all, "vaultwarden") || strings.Contains(all, `"value":"x"`) {
 		t.Fatalf("the night's image, an open proposal or another service's offer was proposed: %q", proposed)
+	}
+	if strings.Contains(s.Note, "Firmware: Lampe") {
+		t.Errorf("firmware HA installs is a proposal, not a line for a human: %s", s.Note)
 	}
 	for _, want := range []string{"Firmware: Steckdose", "noch offen", "vorgeschlagen, für einen Menschen"} {
 		if !strings.Contains(s.Note, want) {

@@ -956,7 +956,7 @@ def install_updates():
     downloaded it (HA's service call returns before). Then every custom
     integration must lie where HA loads it (straighten); an approved one whose
     manifest says another version is said. Home Assistant restarts once, as a
-    custom integration needs. Device firmware is never proposed. Returns what
+    custom integration needs. Device firmware is HA_FIRMWARE's (install_firmware). Returns what
     is broken: the hook is red for it after the other steps ran."""
     want = [w.split("=", 1) for w in E.get("HA_INSTALL", "").split(",") if "=" in w]
     installed, broken = [], []
@@ -1001,6 +1001,51 @@ def install_updates():
         call("POST", "/api/services/homeassistant/restart", {}, token=admin_session())
         print("home-assistant: Home Assistant startet neu")
     return broken
+
+
+def install_firmware():
+    """HA_FIRMWARE: the device firmware a person approved, "update.a=1.2,…", as the
+    Operator proposed it from home-assistant-check.py (owner, 2026-11-02). Each is
+    started only while Home Assistant still offers exactly that version, one device
+    after the other. A radio device can take far longer than this hook may wait
+    (a Zigbee flash runs for many minutes), so a flash still running is said, not
+    red: a red hook rolls Home Assistant back, and that brings no firmware back.
+    A flash that did not take shows again in laib diag and comes again as a
+    proposal. Everything it saw is printed; it never makes the hook red."""
+    want = [w.split("=", 1) for w in E.get("HA_FIRMWARE", "").split(",") if "=" in w]
+    for eid, ver in want:
+        st, s = update_state(eid, time.monotonic() + WAIT, lambda s: s.get("state") not in GONE)
+        a = (s or {}).get("attributes") or {}
+        name = a.get("title") or a.get("friendly_name") or eid
+        if st != 200 or (s or {}).get("state") in GONE:
+            print(f"home-assistant: Firmware {name} {ver}: das Gerät antwortet gerade nicht (HTTP {st}, "
+                  f"{(s or {}).get('state') or 'kein Zustand'}); nichts eingespielt, laib diag bietet sie wieder an")
+            continue
+        if a.get("installed_version") == ver:
+            print(f"home-assistant: Firmware {name} {ver}: schon eingespielt")
+            continue
+        if s.get("state") != "on" or a.get("latest_version") != ver:
+            print(f"home-assistant: Firmware {name} {ver}: nichts einzuspielen (drauf: {a.get('installed_version')}, angeboten: {a.get('latest_version')})")
+            continue
+        if a.get("in_progress"):
+            print(f"home-assistant: Firmware {name} {ver}: wird schon eingespielt")
+            continue
+        body = {"entity_id": eid}
+        if int(a.get("supported_features") or 0) & 2:   # UpdateEntityFeature.SPECIFIC_VERSION
+            body["version"] = ver
+        st, _ = call("POST", "/api/services/update/install", body, token=admin_session())
+        if st != 200:
+            print(f"home-assistant: Firmware {name} {ver}: Home Assistant nahm den Auftrag nicht an (HTTP {st})")
+            continue
+        st, s = update_state(eid, time.monotonic() + WAIT, lambda s: not (s.get("attributes") or {}).get("in_progress")
+                             and (s.get("attributes") or {}).get("installed_version") == ver)
+        a = (s or {}).get("attributes") or {}
+        if a.get("installed_version") == ver:
+            print(f"home-assistant: Firmware {name} {ver}: eingespielt")
+        elif a.get("in_progress"):
+            print(f"home-assistant: Firmware {name} {ver}: wird noch eingespielt ({WAIT:.0f} s gewartet); laib diag sagt, wenn sie drauf ist")
+        else:
+            print(f"home-assistant: Firmware {name} {ver}: nicht eingespielt (drauf: {a.get('installed_version')}); laib diag bietet sie wieder an")
 
 
 def sentences():
@@ -1335,6 +1380,10 @@ try:
     caldav_entry()
 except (RuntimeError, OSError, ValueError, KeyError) as e:  # the tokens stand; the calendars come with the next apply
     print(f"home-assistant: CalDAV entry NOT set up: {type(e).__name__}: {e}", file=sys.stderr)
+try:   # before the extensions: their restart would cut a flash HA itself sends (Zigbee) short
+    again(install_firmware)
+except (RuntimeError, OSError, ValueError) as e:   # never red: a rollback brings no firmware back
+    print(f"home-assistant: HA_FIRMWARE NOT done: {type(e).__name__}: {e}", file=sys.stderr)
 try:
     extensions = install_updates()
 except (RuntimeError, OSError, ValueError) as e:   # red once the rest ran

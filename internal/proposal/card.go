@@ -425,6 +425,9 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Risk, d.RiskWhy = "hoch", "Etwas wird von außen oder ohne Anmeldung erreichbar."
 	case p.Tier == "destroy":
 		d.Risk, d.RiskWhy = "mittel", "Es lässt sich nicht zurücknehmen."
+	case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Key == "HA_FIRMWARE" }):
+		d.Risky = true
+		d.Risk, d.RiskWhy = "mittel", "Geräte bekommen neue Firmware; während des Einspielens sind sie kurz weg, und die alte kommt nicht zurück."
 	case data:
 		d.Risk, d.RiskWhy = "mittel", "Ein Dienst mit Daten ändert sich; seine Daten kommen nicht mit einem Tipp zurück."
 	case d.Risky && policyChange:
@@ -498,6 +501,8 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 		}
 	}
 	switch {
+	case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Key == "HA_FIRMWARE" }): // the devices' firmware: the value comes back, the flash does not
+		return false, actionWords["flash"]
 	case p.Tier == "destroy": // #759: a deleted folder
 		return false, "Das lässt sich nicht zurücknehmen: was dabei gelöscht oder überschrieben wird, bleibt weg."
 	case len(p.Adds) > 0:

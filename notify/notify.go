@@ -574,7 +574,7 @@ func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
 			if i := strings.Index(d, " (geprüft"); i > 0 {
 				d = d[:i]
 			}
-			if strings.HasPrefix(f.Detail, "Firmware: ") {
+			if strings.HasSuffix(d, " (nur gemeldet)") { // firmware Home Assistant cannot install; the rest comes as HA_FIRMWARE
 				fw = append(fw, "- "+strings.TrimSuffix(d, " (nur gemeldet)"))
 			} else {
 				ha = append(ha, "- "+d)
@@ -610,7 +610,7 @@ func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
 		}
 	}
 	if len(fw) > 0 {
-		b.WriteString("\nNur gemeldet, Firmware von Geräten: spiel sie selbst in Home Assistant ein (Einstellungen → System → Updates), wenn das Gerät gerade entbehrlich ist:\n" + strings.Join(uniq(fw), "\n") + "\n")
+		b.WriteString("\nNur gemeldet, Firmware, die Home Assistant nicht selbst einspielen kann: spiel sie mit der App des Herstellers ein, wenn das Gerät gerade entbehrlich ist:\n" + strings.Join(uniq(fw), "\n") + "\n")
 	}
 	b.WriteString("\nAlle Einzelheiten: laib updates\n")
 	return b.String()

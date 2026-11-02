@@ -3,8 +3,9 @@
 Moved out of the Operator's Go (operator/loop.go patches, #839). The script
 reads laib updates; it proposes itself, once while open, a service with
 data's new image by digest, a value a status finding offers (Home
-Assistant's extensions) and a new host image; firmware, minor versions and
-registry errors go into the note for a human. The model sees the patch
+Assistant's extensions and, as its own value, HA_FIRMWARE, the device
+firmware it can install) and a new host image; firmware HA cannot install,
+minor versions and registry errors go into the note for a human. The model sees the patch
 versions and weighs which are worth proposing; check() lets it propose only
 those, exactly as offered. Laib's own update is self-update.sh's (#547).
 """
@@ -46,7 +47,7 @@ def run(s):
         svc, detail, m = field(f, "service"), field(f, "detail"), OFFER_FIX.match(field(f, "fix"))
         if field(f, "probe") == "status" and m and m.group(1) == svc:
             propose(f"{svc}: {detail}", reason=f"{svc}: {detail}", service=m.group(1), key=m.group(2), value=m.group(3))
-        elif field(f, "probe") == "status" and detail.startswith("Firmware: "):
+        elif field(f, "probe") == "status" and detail.startswith("Firmware: ") and detail.endswith("(nur gemeldet)"):
             h.append(f"{svc}: {detail}.")
     listed = ["Patch-Versionen, die du vorschlagen kannst:"]
     for u in ups:

@@ -587,9 +587,9 @@ class Hook(unittest.TestCase):
         self.addCleanup(self.srv.shutdown)
 
     def run_hook(self, tokens=None, user="laib", password=ADMIN_PW, bote_password=BOTE_PW, frage="http://127.0.0.1:1", install="", ma="http://127.0.0.1:1",
-                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60", voice=None, extra=None):
+                 stimme=(1, 1, 1), data_dir="", zuhause=None, wait="60", voice=None, extra=None, firmware=""):
         HA["ma_url"] = ma
-        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install,
+        env = {"PATH": os.environ["PATH"], "LAIB_DOMAIN": "box.test", "LAIB_TZ": "Europe/Berlin", "FRAGE_URL": frage, "HA_RETRY_SECONDS": "0.1", "HA_WAIT_SECONDS": wait, "HA_INSTALL": install, "HA_FIRMWARE": firmware,
                "MA_URL": ma, "LAIB_DATA_DIR": data_dir or "/nonexistent",
                "STIMME_WHISPER_PORT": str(stimme[0]), "STIMME_PIPER_PORT": str(stimme[1]), "STIMME_WAKEWORD_PORT": str(stimme[2]),
                "STIMME_WAKES_PORT": "1",   # no stimme-wakes unless a test gives it a port
@@ -961,7 +961,7 @@ class Extensions(Hook):
     After the install the integration must lie where HA loads it, custom_components/<domain>/manifest.json."""
 
     def setUp(self):
-        super().setUp()
+        Hook.setUp(self)   # Firmware borrows this setUp
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.d = self.tmp.name
@@ -1047,6 +1047,37 @@ class Extensions(Hook):
         HA["calls"].clear()
         p, _, log = self.run_hook(data_dir=self.d)
         self.assertEqual((p.returncode, HA["calls"]), (0, []), "straight is straight: " + log)
+
+
+class Firmware(Hook):
+    """HA_FIRMWARE (owner, 2026-11-02: „Sollten das nicht eher Freigaben sein und dann macht Laib das?“): the device
+    firmware a person approved, started while HA offers exactly that version; never red, a rollback brings no
+    firmware back; no restart of Home Assistant for it."""
+    setUp = Extensions.setUp
+
+    def test_approved_firmware_is_flashed_once_without_a_restart(self):
+        p, _, log = self.run_hook(firmware="update.plug_firmware=9.5.60", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(HA["calls"], [("/api/services/update/install", {"entity_id": "update.plug_firmware"})], log)
+        self.assertIn("Firmware update.plug_firmware 9.5.60: eingespielt", log)
+        self.assertEqual(HA["states"]["update.senec"]["state"], "on", "an extension nobody approved stays")
+        HA["calls"].clear()
+        p, _, log = self.run_hook(firmware="update.plug_firmware=9.5.60", data_dir=self.d)
+        self.assertEqual((p.returncode, HA["calls"]), (0, []), "flashed is flashed: " + log)
+        self.assertIn("schon eingespielt", log)
+
+    def test_a_flash_that_runs_longer_than_the_hook_waits_is_said_not_red(self):
+        HA["progress"] = {"update.plug_firmware": 10**6}   # a Zigbee device: many minutes
+        p, _, log = self.run_hook(firmware="update.plug_firmware=9.5.60", data_dir=self.d, wait="1")
+        self.assertEqual(p.returncode, 0, log)
+        self.assertIn("wird noch eingespielt", log)
+
+    def test_a_version_ha_no_longer_offers_and_a_device_that_is_away_are_said_not_red(self):
+        HA["states"]["update.plug_firmware"]["attributes"]["latest_version"] = "9.6.0"
+        p, _, log = self.run_hook(firmware="update.plug_firmware=9.5.60,update.weg=1.0", data_dir=self.d, wait="1")
+        self.assertEqual((p.returncode, HA["calls"]), (0, []), log)
+        self.assertIn("nichts einzuspielen (drauf: 9.5.52, angeboten: 9.6.0)", log)
+        self.assertIn("Firmware update.weg 1.0: das Gerät antwortet gerade nicht", log)
 
 
 class Names(Hook):

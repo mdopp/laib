@@ -299,10 +299,20 @@ all, an entity Home Assistant never shows and a download that does not end
 make the hook red, never a quiet "nichts zu installieren". A manifest with
 another version than the approved one is said (HACS downloads what it
 thinks newest). The check names a folder without a manifest as a finding
-too, so an update from Home Assistant's own page is not missed. Device firmware is `Firmware: …`, reported
-only: a failed flash can brick a device, so it is installed only on an
-explicit yes, by hand in Home Assistant. Both appear in laib-notify's weekly
-"Was ist veraltet". Home Assistant's own image (`stable`) moves by a
+too, so an update from Home Assistant's own page is not missed.
+
+Device firmware is `Firmware: …`. The firmware Home Assistant can install
+comes as its own proposal, `HA_FIRMWARE=update.x=<version>,…` (finding
+"Neue Firmware für Geräte einspielen: …"), never folded into the
+extensions' approval: a flash stays on the device whatever „Zurücknehmen“
+does, and the card says so. After the yes, post-deploy starts each flash
+still offered at that version, before the extensions (whose restart would
+cut a Zigbee flash short), and waits `HA_WAIT_SECONDS` for each. A flash
+that runs longer, a device that is away, a version no longer offered are
+said and never make the hook red: a rollback brings no firmware back, and
+a flash that did not take shows in the check again and comes again as a
+proposal. Firmware Home Assistant cannot install stays `(nur gemeldet)`.
+Both appear in laib-notify's weekly "Was ist veraltet". Home Assistant's own image (`stable`) moves by a
 proposal pinned to the registry's digest (`laib updates`).
 
 ## The family's login (#253)
