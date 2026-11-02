@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.62.1](https://github.com/mdopp/laib/compare/v0.62.0...v0.62.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **notify:** 'Was ist veraltet' says who acts, without digests ([d60cff2](https://github.com/mdopp/laib/commit/d60cff266c1257bcc73143ec42877d5d632b340c))
+* **notify:** 'Was ist veraltet' says who acts, without digests ([2b0a5f3](https://github.com/mdopp/laib/commit/2b0a5f302a0ec5ab7bb6a27bf7c1b4ebbf67dc97))
+* **notify:** say which updates come as Saturday approvals, why the host waits, firmware only reported ([744c84e](https://github.com/mdopp/laib/commit/744c84efc1ee2c8d7fabd67eebe4909064cf8321))
+
 ## [0.62.0](https://github.com/mdopp/laib/compare/v0.61.0...v0.62.0) (2026-11-02)
 
 
