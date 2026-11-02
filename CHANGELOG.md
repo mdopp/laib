@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.60.0](https://github.com/mdopp/laib/compare/v0.59.0...v0.60.0) (2026-11-02)
+
+
+### Features
+
+* **state:** install a template once per person, one name for its instances ([#990](https://github.com/mdopp/laib/issues/990)) ([8ed5371](https://github.com/mdopp/laib/commit/8ed53713a85432e61667982dc0c0239415095ec0)), closes [#986](https://github.com/mdopp/laib/issues/986)
+* **template:** archiv, the message archive once per person behind archiv.&lt;domain&gt; (ADR 0029) ([#994](https://github.com/mdopp/laib/issues/994)) ([40eeba0](https://github.com/mdopp/laib/commit/40eeba046e1a8822fb317789f364faeedc326c14))
+
 ## [0.59.0](https://github.com/mdopp/laib/compare/v0.58.0...v0.59.0) (2026-11-01)
 
 
