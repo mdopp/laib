@@ -153,7 +153,7 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	f := newFakeLaib(t)
 	addr, mails := fakeSMTP(t)
 	c := f.config(t, addr)
-	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"},{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:b2"}]`
+	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"},{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:b2"},{"service":"haus","key":"HAUS_IMAGE","image":"ghcr.io/mdopp/haus","current":"latest","digest":"sha256:d6","auto":true},{"service":"host","key":"image","image":"ghcr.io/ublue-os/ucore-minimal","current":"sha256:85","digest":"sha256:b6"}]`
 	f.diag = `[{"severity":"info","probe":"status","service":"home-assistant","detail":"Update: SENEC 2026.6.3 → 2026.10.0 · https://x/r"},{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Stecker 9.5.52 → 9.5.60 (nur gemeldet)"},{"severity":"gelb","probe":"updates","service":"media","detail":"IMAGE liegt seit 31 Tagen hinter seinem Kanal (sha256:c3)"},{"severity":"info","probe":"status","service":"home-assistant","detail":"alles andere"}]`
 	now := time.Now()
 	sweep := func(at time.Time) {
@@ -164,13 +164,19 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	}
 	sweep(now) // the weekly updates mail; nothing is red
 	got := mails()
-	if len(got) != 1 || !strings.Contains(got[0], "To: admin@example.home") || !strings.Contains(got[0], "- whoami: docker.io/traefik/whoami:v1.11 → v1.12") || strings.Contains(got[0], "- x:") {
+	if len(got) != 1 || !strings.Contains(got[0], "To: admin@example.home") || !strings.Contains(got[0], "- whoami (whoami v1.11 → v1.12)") || strings.Contains(got[0], "- x:") {
 		t.Fatalf("the weekly updates mail to the operator's address: %q", got)
 	}
-	// #528: "Was ist veraltet" — a floating tag's newer digest too
-	if !strings.Contains(got[0], "Subject: Laib: Was ist veraltet") || !strings.Contains(got[0], "Was ist veraltet (laib updates, laib diag):") || !strings.Contains(got[0], "- vaultwarden: docker.io/vaultwarden/server:latest → sha256:b2") ||
-		!strings.Contains(got[0], "- home-assistant: Update: SENEC 2026.6.3 → 2026.10.0 · https://x/r") || !strings.Contains(got[0], "- home-assistant: Firmware: Stecker") ||
-		!strings.Contains(got[0], "- media: IMAGE liegt seit 31 Tagen") || strings.Contains(got[0], "alles andere") {
+	// #528: "Was ist veraltet" — a floating tag's newer digest too; sorted by
+	// who acts, without digests (owner 2026-11-02: „was mach ich mit so einer Meldung?“)
+	for _, want := range []string{"Subject: Laib: Was ist veraltet", "Kommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\r\n- haus",
+		"Für dich in Home Assistant, unter Einstellungen → System → Updates:\r\n- SENEC 2026.6.3 → 2026.10.0 · https://x/r\r\n- Stecker 9.5.52 → 9.5.60\r\n",
+		"Ohne Eile", "- vaultwarden (server)", "- media: IMAGE liegt seit 31 Tagen hinter seinem Kanal\r\n", "Das Betriebssystem der Box hat eine neue Version"} {
+		if !strings.Contains(got[0], want) {
+			t.Errorf("the weekly mail lacks %q: %q", want, got[0])
+		}
+	}
+	if strings.Contains(got[0], "sha256") || strings.Contains(got[0], "alles andere") || strings.Contains(got[0], "(nur gemeldet)") {
 		t.Errorf("the weekly mail: %q", got[0])
 	}
 	f.red = true

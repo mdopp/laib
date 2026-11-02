@@ -107,7 +107,7 @@ func TestTheChatAloneIsEnough(t *testing.T) {
 	if err := Sweep(context.Background(), c, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if got := b.messages(); len(got) != 1 || !strings.Contains(got[0]["text"], "- whoami: docker.io/traefik/whoami:v1.11 → v1.12") {
+	if got := b.messages(); len(got) != 1 || !strings.Contains(got[0]["text"], "- whoami (whoami v1.11 → v1.12)") {
 		t.Fatalf("the weekly updates go to the chat: %v", got)
 	}
 }
