@@ -28,6 +28,8 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -308,10 +310,7 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	var findings []struct {
-		Severity, Probe, Service, Detail, Fix, Say string
-		Aufgabe                                    int
-	}
+	var findings []diagFinding
 	if err := json.Unmarshal([]byte(text), &findings); err != nil {
 		return fmt.Errorf("laib_diag: %w", err)
 	}
@@ -368,25 +367,11 @@ func Sweep(ctx context.Context, c Config, now time.Time) error {
 		// "Was ist veraltet" (#528): the images by tag, pin or digest and the
 		// host, then what diag sees 30 days behind and what a service reports
 		// itself (its extensions, the devices' firmware)
-		var ups []string
-		var list []struct{ Service, Image, Current, Patch, Minor, Digest string }
-		if text, e := call(ctx, c, "laib_updates", map[string]any{}); e == nil && json.Unmarshal([]byte(text), &list) == nil {
-			for _, u := range list {
-				if w := cmp.Or(u.Patch, u.Minor, u.Digest); w != "" {
-					ups = append(ups, fmt.Sprintf("- %s: %s:%s → %s", u.Service, u.Image, u.Current, w))
-				}
-			}
-		}
-		for _, f := range findings {
-			if f.Probe == "updates" && f.Service != "" || f.Probe == "status" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")) {
-				ups = append(ups, "- "+f.Service+": "+f.Detail)
-			}
-		}
+		ups := veraltet(ctx, c, findings)
 		seen.Updates = now
-		sort.Strings(ups)
-		if list := strings.Join(ups, "\n"); list != seen.Listed { // only when it changed (#857)
+		if list := ups; list != seen.Listed { // only when it changed (#857)
 			seen.Listed = list
-			if _, e := r.tell("Laib: Was ist veraltet", "Was ist veraltet (laib updates, laib diag):\n\n"+list+"\n"); list != "" && e != nil {
+			if _, e := r.tell("Laib: Was ist veraltet", list); list != "" && e != nil {
 				seen.Updates, seen.Listed, err = time.Time{}, "", e
 			}
 		}
@@ -540,4 +525,93 @@ func send(c Config, subject, body string) error {
 		return err
 	}
 	return s.Quit()
+}
+
+// diagFinding is one row of laib_diag.
+type diagFinding struct {
+	Severity, Probe, Service, Detail, Fix, Say string
+	Aufgabe                                    int
+}
+
+var shaInKlammern = regexp.MustCompile(`\s*\(?sha256:[0-9a-f]+\)?`)
+
+// veraltet is the weekly „Was ist veraltet“ (#528), sorted by who acts
+// (owner 2026-11-02: „was mach ich mit so einer Meldung?“): what the night
+// takes by itself, what the owner updates in Home Assistant, the host
+// (a proposal), and the images Laib never takes alone. No digests: a name
+// and, where there is one, the newer version.
+func veraltet(ctx context.Context, c Config, findings []diagFinding) string {
+	var selbst, ha, fw, ohne, lange []string
+	host, boot := false, ""
+	var list []struct {
+		Service, Image, Current, Patch, Minor, Digest string
+		Auto                                          bool
+	}
+	if text, e := call(ctx, c, "laib_updates", map[string]any{}); e == nil && json.Unmarshal([]byte(text), &list) == nil {
+		for _, u := range list {
+			if cmp.Or(u.Patch, u.Minor, u.Digest) == "" {
+				continue
+			}
+			name := u.Image[strings.LastIndex(u.Image, "/")+1:]
+			was := u.Service + " (" + name + ")"
+			if v := cmp.Or(u.Patch, u.Minor); v != "" {
+				was = u.Service + " (" + name + " " + u.Current + " → " + v + ")"
+			}
+			switch {
+			case u.Service == "host":
+				host = true
+			case u.Auto:
+				selbst = append(selbst, u.Service)
+			default:
+				ohne = append(ohne, was)
+			}
+		}
+	}
+	for _, f := range findings {
+		switch {
+		case f.Probe == "status" && (strings.HasPrefix(f.Detail, "Update: ") || strings.HasPrefix(f.Detail, "Firmware: ")):
+			d := strings.TrimPrefix(strings.TrimPrefix(f.Detail, "Update: "), "Firmware: ")
+			if i := strings.Index(d, " (geprüft"); i > 0 {
+				d = d[:i]
+			}
+			if strings.HasPrefix(f.Detail, "Firmware: ") {
+				fw = append(fw, "- "+strings.TrimSuffix(d, " (nur gemeldet)"))
+			} else {
+				ha = append(ha, "- "+d)
+			}
+		case f.Probe == "boot" && strings.Contains(f.Detail, "OS-Update"):
+			boot = f.Detail
+		case f.Probe == "updates" && f.Service != "":
+			lange = append(lange, "- "+f.Service+": "+strings.TrimSpace(shaInKlammern.ReplaceAllString(f.Detail, "")))
+		}
+	}
+	if len(selbst)+len(ha)+len(fw)+len(ohne)+len(lange) == 0 && !host {
+		return ""
+	}
+	uniq := func(l []string) []string { sort.Strings(l); return slices.Compact(l) }
+	var b strings.Builder
+	b.WriteString("Neue Versionen auf der Box, und wer sie einspielt.\n")
+	if len(selbst) > 0 {
+		b.WriteString("\nKommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\n- " + strings.Join(uniq(selbst), ", ") + "\n")
+	}
+	if len(ha)+len(ohne)+len(lange) > 0 {
+		// the Operator's Saturday run proposes these (docs/INTERFACE.md, aktualisierung)
+		b.WriteString("\nKommt am Samstag als Freigabe in deine Inbox. Gibst du sie frei, spielt Laib sie ein, prüft danach und nimmt bei Rot die alte Version zurück:\n")
+		all := append(append(uniq(ha), uniq(ohne)...), uniq(lange)...)
+		for _, l := range all {
+			b.WriteString("- " + strings.TrimPrefix(l, "- ") + "\n")
+		}
+	}
+	if host {
+		if boot != "" {
+			b.WriteString("\nDas Betriebssystem der Box hat eine neue Version, aber sie wartet: " + boot + "\n")
+		} else {
+			b.WriteString("\nDas Betriebssystem der Box hat eine neue Version. Sie kommt als Freigabe in deine Inbox; danach startet die Box einmal neu, morgens nach der Sicherung.\n")
+		}
+	}
+	if len(fw) > 0 {
+		b.WriteString("\nNur gemeldet, Firmware von Geräten: spiel sie selbst in Home Assistant ein (Einstellungen → System → Updates), wenn das Gerät gerade entbehrlich ist:\n" + strings.Join(uniq(fw), "\n") + "\n")
+	}
+	b.WriteString("\nAlle Einzelheiten: laib updates\n")
+	return b.String()
 }
