@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.60.1](https://github.com/mdopp/laib/compare/v0.60.0...v0.60.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **card:** a commit pin is no version, and a per-person instance is a person's ([#995](https://github.com/mdopp/laib/issues/995)) ([63003c9](https://github.com/mdopp/laib/commit/63003c90a01b58450211f35ffd3b37a527a41207))
+
 ## [0.60.0](https://github.com/mdopp/laib/compare/v0.59.0...v0.60.0) (2026-11-02)
 
 
