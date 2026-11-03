@@ -521,7 +521,20 @@ func (st *State) ModelLease() string {
 	return st.Box.Model.Lease
 }
 
-func builtin(v string) bool { return slices.Contains(Builtins, v) }
+func builtin(v string) bool {
+	_, legacy := LegacyBuiltins[v]
+	return legacy || slices.Contains(Builtins, v)
+}
+
+// LegacyBuiltins are the persona builtins ADR 0030 retired, with the values
+// 0.x rendered for the builtin Joshua (box.yml persona unset, no
+// chatPersonas): a box's services from before 1.0 still name them, and
+// their template updates arrive only once 1.x runs (#1024). Rendered as
+// before, they change nothing on the update; the owner's template update
+// moves each service to ${ASSISTANT} and „Hey Mycroft“. Legacy name (ADR
+// 0021 §8), ends once no service on the box names one.
+var LegacyBuiltins = map[string]string{"PERSONA": "joshua", "PERSONA_DISPLAY": "Joshua", "PERSONA_PHRASE": "Hey Joshua",
+	"PERSONA_WAKEWORD": "hey_joshua", "PERSONA_VOICE": "de_DE-thorsten-high", "PERSONA_LANGUAGES": "de,en", "PERSONA_REV": "e3a0b0524430"}
 
 // ServiceNames returns the service names sorted, so every output is stable.
 func (st *State) ServiceNames() []string {

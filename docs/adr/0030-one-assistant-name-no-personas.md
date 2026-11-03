@@ -91,6 +91,13 @@ One persona was ever used, Joshua. What it cost:
   deletes them; nothing reads them.
 - `laib-directory` is a new ghcr package: it must be public before the bote
   template update is applied, as `laib-persona` was.
+- A box that ran 0.x keeps services naming the retired builtins until
+  their template updates, which arrive only once 1.x runs: 1.x loads and
+  renders them as 0.x did, Joshua's values, so its self-update changes
+  nothing for them, and the plan leaves `render/persona/` on disk (#1024,
+  ADR 0021 §8, until every builtin template was updated once on the box).
+  The move to `${ASSISTANT}` and „Hey Mycroft“ is each template update the
+  owner approves.
 - News lines from before that name `${PERSONA_DISPLAY}` count as their
   `${ASSISTANT}` form when a template update compares them (ADR 0021 §8,
   until every builtin template was updated once on the box).
