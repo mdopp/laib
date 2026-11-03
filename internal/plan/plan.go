@@ -129,7 +129,9 @@ func Compute(ctx context.Context, st *state.State, secrets map[string]string, pa
 			continue
 		}
 		k := outPathOf(paths, target)
-		if k == "" {
+		// 0.x's persona tree stays until the owner deletes it (ADR 0030): a service
+		// from before 1.0 still mounts it until its template update (#1024)
+		if k == "" || strings.HasPrefix(k, "persona/") {
 			continue
 		}
 		svc := ServiceOf(k)

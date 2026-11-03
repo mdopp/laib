@@ -321,7 +321,8 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 		"LAIB_PAGE_URL": "https://" + fqdn(st, st.Box.Laib.Host) + "/",
 	}
 	maps.Copy(vars, ModelVars(st, secrets))
-	vars["ASSISTANT"] = st.Box.Assistant // the name the family talks to (ADR 0030)
+	maps.Copy(vars, state.LegacyBuiltins) // a unit from before ADR 0030 renders as 0.x rendered it (#1024)
+	vars["ASSISTANT"] = st.Box.Assistant  // the name the family talks to (ADR 0030)
 	vars["PEOPLE_REV"], vars["NOTIFY_PERSON"], vars["BOTE_SIGNAL"] = st.PeopleRev(), st.Box.Notify.Person, st.BoteSignal()
 	maps.Copy(vars, st.ZuhauseVars())
 	maps.Copy(vars, resolveValues(svc, secrets, vars))

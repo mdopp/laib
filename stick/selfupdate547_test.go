@@ -51,7 +51,9 @@ func newSelfBox(t *testing.T) *selfBox {
 for a in "$@"; do [ "$prev" = -o ] && o=$a; prev=$a; done
 u="${@: -1}"
 case "$u" in
-  */ready) cat "$FX/ready";;
+  */ready) # 503 (a state that does not load): curl -f prints nothing
+    for a in "$@"; do case "$a" in -f*) [ ! -f "$FX/ready-503" ] || exit 22;; esac; done
+    cat "$FX/ready";;
   *api.test/releases*) cat "$FX/releases";;
   *dl.test/*) f="$FX/dl/${u#*dl.test/}"; [ -f "$f" ] || exit 22; cp "$f" "$o";;
   *) exit 22;;
@@ -304,5 +306,32 @@ func TestSelfUpdateKeepsSinceWhenItIsBehind(t *testing.T) {
 	s.ready("v0.11.1", "bereit", 0)
 	if _, _, rec := s.run(t); rec["result"] != "updated" || rec["behindSince"] != "" {
 		t.Fatalf("an updated box is not behind: %v", rec)
+	}
+}
+
+// #1024: a release that cannot load the box's state leaves /ready at 503
+// „eingeschränkt“; the rollback line says why — the new laib's own refusal —
+// instead of empty parentheses, and says so when /ready does not answer.
+func TestSelfUpdateSaysWhyTheNewReleaseWasNotGreen(t *testing.T) {
+	refuses := "#!/bin/sh\n[ \"$1\" = plan ] && { echo '{}'; echo 'laib: services/bote/bote-persona.container: ${PERSONA} has no value' >&2; echo 'services/haus/haus.container: ${PERSONA} has no value' >&2; exit 1; }\n" + laibBin("v0.16.0")[len("#!/bin/sh\n"):]
+	for body, want := range map[string]string{
+		`{"state":"eingeschränkt","lock":"x"}`: "nach dem Update nicht grün (eingeschränkt; services/bote/bote-persona.container: ${PERSONA} has no value)",
+		``:                                     "nach dem Update nicht grün (/ready antwortet nicht; services/bote/bote-persona.container: ${PERSONA} has no value)",
+	} {
+		s := newSelfBox(t)
+		s.release("v0.16.0", `cp "$FX/laib-v0.16.0" "$LAIB_BIN_DIR/laib"
+touch "$FX/ready-503"; printf '%s' '`+body+`' > "$FX/ready"
+`, "")
+		os.WriteFile(filepath.Join(s.fx, "laib-v0.16.0"), []byte(refuses), 0o755)
+		_, out, rec := s.run(t)
+		if rec["result"] != "failed" || !strings.HasSuffix(rec["detail"], want) {
+			t.Errorf("/ready %q: the rollback must say %q: %v\n%s", body, want, rec, out)
+		}
+	}
+	// a release that loads the state but stays red says what /ready says
+	s := newSelfBox(t)
+	s.release("v0.16.0", s.installer("v0.16.0", "eingeschränkt"), "")
+	if _, out, rec := s.run(t); !strings.HasSuffix(rec["detail"], "nach dem Update nicht grün (v0.16.0, eingeschränkt, 0 rot)") {
+		t.Errorf("the rollback must say what /ready said: %v\n%s", rec, out)
 	}
 }

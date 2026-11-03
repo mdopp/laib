@@ -35,7 +35,8 @@ record() {
     --arg failed "$failed" --arg behindSince "$behind" '{$at, $running, $latest, $result, $detail, $failed, $behindSince}' >"$REC.tmp" && mv "$REC.tmp" "$REC"
   say "$1: $2"
 }
-green() { curl -fsS --max-time 10 "$READY" 2>/dev/null | jq -e --arg v "$1" '.state == "bereit" and .red == 0 and ($v == "" or .version == $v)' >/dev/null 2>&1; }
+# no answer is not green: jq 1.6 -e passes on empty input
+green() { local b; b="$(curl -fsS --max-time 10 "$READY" 2>/dev/null)" && [ -n "$b" ] && jq -e --arg v "$1" '.state == "bereit" and .red == 0 and ($v == "" or .version == $v)' >/dev/null 2>&1 <<<"$b"; }
 newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "${1#v}" "${2#v}" | sort -V | tail -1)" = "${1#v}" ]; }   # $1 is newer than $2
 
 running="$(version)"; target=""
@@ -85,7 +86,11 @@ if [ "$rc" = 0 ]; then
     green "$target" && { record updated "$running → $target"; note watch "Laib aktualisiert: $running → $target"; exit 0; }
     sleep 1
   done
-  why="nach dem Update nicht grün ($(curl -fsS --max-time 10 "$READY" 2>/dev/null | jq -c '{state, red, version}' 2>/dev/null))"
+  # what /ready says (503 when the state does not load: no -f), and the new laib's own
+  # refusal, which /ready leaves at „eingeschränkt“ (#1024: the line said „nicht grün ()“)
+  seen="$(curl -sS --max-time 10 "$READY" 2>/dev/null | jq -r '[.version, .state, (.red // empty | "\(.) rot")] | map(select(. != null and . != "")) | join(", ")' 2>/dev/null)"
+  load="$(timeout 60 env LAIB_HOME="$HOME_DIR" LAIB_ACTOR=laib "$BIN/laib" plan 2>&1 >/dev/null | grep -m1 '^laib: ')"
+  why="nach dem Update nicht grün (${seen:-/ready antwortet nicht}${load:+; ${load#laib: }})"
 else
   why="install-box.sh brach ab (Exit $rc): $(tail -2 "$HOME_DIR/self-update.log" | tr '\n' ' ')"
 fi

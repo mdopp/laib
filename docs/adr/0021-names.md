@@ -93,6 +93,7 @@ which kind of name goes where.
 | Name | Where it still is | Ends when |
 |---|---|---|
 | ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
+| `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`, `${PERSONA_WAKEWORD}`, `${PERSONA_VOICE}`, `${PERSONA_LANGUAGES}`, `${PERSONA_REV}` | `state.LegacyBuiltins`: a box's units from before ADR 0030 load and render as 0.x rendered them for the builtin Joshua, so the update to 1.x changes nothing for them (#1024); `render/persona/` stays on disk | no service on the box names one: each builtin template that did was updated once on the box after 1.0; then the map goes, with `newsSince`'s `${PERSONA_DISPLAY}` |
 
 ### Retired names
 
