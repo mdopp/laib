@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/mdopp/laib/compare/v1.3.0...v1.3.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* **state:** a box from before ADR 0030 loads and updates to 1.x ([fb1988c](https://github.com/mdopp/laib/commit/fb1988caeca944ebc8fb77923c51be8a8540112b))
+* **state:** a box from before ADR 0030 loads and updates to 1.x ([537f4ad](https://github.com/mdopp/laib/commit/537f4ad94d8116368cc4dc51a7f866af67a24225)), closes [#1024](https://github.com/mdopp/laib/issues/1024)
+
 ## [1.3.0](https://github.com/mdopp/laib/compare/v1.2.1...v1.3.0) (2026-11-03)
 
 
