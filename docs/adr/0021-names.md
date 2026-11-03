@@ -102,7 +102,9 @@ which kind of name goes where.
 | `was: HAUS_…`, `was: ${DATA_DIR}/haus…` | the `was:` lines in templates/homes and the templates that declare its secrets (ADR 0031) | the box moved (#1021 step 7) |
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside `X-Archiv-Homes` and `ARCHIV_HOMES_SECRET` (ADR 0031) | the box moved (#1021 step 7) |
 | `X-HAUS-*`, Haus PRODIDs | iCal properties and PRODIDs in entries Radicale already stores: data, kept on purpose (ADR 0031) | never in code; the stored entries keep them |
-| `haus` (accounts) | the household's logins named `haus` in Radicale/LLDAP, Audiobookshelf, Jellyfin, Paperless and Home Assistant (user „Haus“), and the hook labels „Haus (laib)“, „Haus (Gesehen)“, `laib-haus` (ADR 0031) | the owner's decision in #1021 |
+| `haus` (accounts) | renamed `homes` (the owner, 2026-11-03, ADR 0031): auth deletes the LDAP user `haus` and keeps the name reserved, Home Assistant's post-deploy deletes its user `haus` once `homes` works, Radicale's pre-start moves `haus/` to `homes/`, ABS and Jellyfin rename their user and count the keys „Haus (laib)“, „Haus (Gesehen)“ as Homes's | #1021 step 9 |
+| person `haus` | a calendar subscription stored for it is read as `homes` (`laib calendar`, kalender.py, ADR 0031) | #1021 step 9 |
+| `homeassistant/haus-<collection>` | Home Assistant's copies of the household's calendars keep their path: HA's calendar entities are bound to it (ADR 0031) | kept: stored data |
 
 ### Retired names
 

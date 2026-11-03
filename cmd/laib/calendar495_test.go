@@ -86,7 +86,7 @@ func TestHomesSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 		}
 	}
 	// a public calendar, webcal as phones show it; the list knows both, without addresses
-	if out, code := call(map[string]any{"action": "subscribe", "person": "haus", "name": "feiertage", "kind": "abo", "title": "Feiertage", "stdin": "webcal://openholidaysapi.org/PublicHolidays?countryIsoCode=DE&subdivisionCode=DE-NI"}); code != cli.ExitOK {
+	if out, code := call(map[string]any{"action": "subscribe", "person": "homes", "name": "feiertage", "kind": "abo", "title": "Feiertage", "stdin": "webcal://openholidaysapi.org/PublicHolidays?countryIsoCode=DE&subdivisionCode=DE-NI"}); code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	out, _ = call(map[string]any{"action": "list"})
@@ -101,10 +101,10 @@ func TestHomesSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 	}
 
 	// #619: each calendar its own interval, set at subscribe or changed later without the address
-	if out, code := call(map[string]any{"action": "subscribe", "person": "haus", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "every": "30d", "stdin": "https://example.org/abfuhr.ics"}); code != cli.ExitOK {
+	if out, code := call(map[string]any{"action": "subscribe", "person": "homes", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "every": "30d", "stdin": "https://example.org/abfuhr.ics"}); code != cli.ExitOK {
 		t.Fatalf("subscribe --every: exit %d: %s", code, out)
 	}
-	if out, code := call(map[string]any{"action": "every", "person": "haus", "name": "feiertage", "every": "12h"}); code != cli.ExitOK || !strings.Contains(out, "alle 12h") {
+	if out, code := call(map[string]any{"action": "every", "person": "homes", "name": "feiertage", "every": "12h"}); code != cli.ExitOK || !strings.Contains(out, "alle 12h") {
 		t.Fatalf("every: exit %d: %s", code, out)
 	}
 	sec, _ = secrets.Load(env.Paths.Secrets, env.Paths.Key)
@@ -113,9 +113,9 @@ func TestHomesSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 		t.Fatalf("intervals not kept, or the address lost: %q", raw)
 	}
 	for _, bad := range []map[string]any{
-		{"action": "every", "person": "haus", "name": "feiertage", "every": "15s"},
-		{"action": "every", "person": "haus", "name": "feiertage"},
-		{"action": "every", "person": "haus", "name": "gibtsnicht", "every": "1d"},
+		{"action": "every", "person": "homes", "name": "feiertage", "every": "15s"},
+		{"action": "every", "person": "homes", "name": "feiertage"},
+		{"action": "every", "person": "homes", "name": "gibtsnicht", "every": "1d"},
 	} {
 		if out, code := call(bad); code == cli.ExitOK {
 			t.Fatalf("%v accepted: %s", bad, out)

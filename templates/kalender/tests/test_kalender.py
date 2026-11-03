@@ -62,15 +62,15 @@ class FakeSource:
         self.srv, self.url = serve(H)
 
 
-MIRROR_RIGHTS = ("/lea/google-", "/lea/abo-", "/haus/abo-", "/homeassistant/")
+MIRROR_RIGHTS = ("/lea/google-", "/lea/abo-", "/homes/abo-", "/homeassistant/")
 
 
 class FakeRadicale:
     """collections and items as Radicale keeps them; `kalender` may write only the mirrors and HA's home,
-    and read haus/; a person's home exists only once they logged in (homes)"""
+    and read homes/; a person's home exists only once they logged in (homes)"""
     def __init__(self, pw):
         self.store, self.cols, self.props, self.methods = {}, {}, {}, []
-        self.homes = {"/lea/", "/haus/"}
+        self.homes = {"/lea/", "/homes/"}
         outer, want = self, "Basic " + base64.b64encode(f"kalender:{pw}".encode()).decode()
 
         class H(Base):
@@ -78,7 +78,7 @@ class FakeRadicale:
                 outer.methods.append(f"{self.command} {self.path}")
                 if self.headers.get("Authorization") != want:
                     self.answer(401); return False
-                ok = self.path.startswith(MIRROR_RIGHTS) or (not write and self.path.startswith("/haus/"))
+                ok = self.path.startswith(MIRROR_RIGHTS) or (not write and self.path.startswith("/homes/"))
                 if not ok:
                     self.answer(403); return False
                 return True
@@ -187,11 +187,11 @@ class Mirror(unittest.TestCase):
 
     def test_home_assistant_gets_a_copy_of_every_mirror_and_of_the_familys_calendars_only(self):
         self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
-        self.r.cols["/haus/haushalt/"] = "Haushalt"
-        self.r.cols["/haus/familie-geburtstage/"] = "Geburtstage"
-        self.r.cols["/haus/privat/"] = "privat"
-        self.r.store["/haus/haushalt/x.ics"] = ics(("h1", "Müll raus"))
-        self.r.store["/haus/privat/y.ics"] = ics(("p1", "geheim"))
+        self.r.cols["/homes/haushalt/"] = "Haushalt"
+        self.r.cols["/homes/familie-geburtstage/"] = "Geburtstage"
+        self.r.cols["/homes/privat/"] = "privat"
+        self.r.store["/homes/haushalt/x.ics"] = ics(("h1", "Müll raus"))
+        self.r.store["/homes/privat/y.ics"] = ics(("p1", "geheim"))
         s = self.run_it(self.google)
         self.assertEqual(s["findings"], [], s)
         self.assertIn("/homeassistant/", self.r.homes, "HA's home is made: HA itself may only read")
@@ -200,7 +200,7 @@ class Mirror(unittest.TestCase):
         self.assertIn("/homeassistant/haus-familie-geburtstage/", self.r.cols)
         self.assertNotIn("/homeassistant/haus-privat/", self.r.cols, "only the family's calendars go to HA")
         self.assertNotIn("geheim", "".join(self.r.items("/homeassistant/").values()))
-        self.assertFalse([m for m in self.r.methods if m.startswith(("PUT /haus/", "DELETE /haus/", "PROPPATCH /haus/"))], "Homes's calendars are only read")
+        self.assertFalse([m for m in self.r.methods if m.startswith(("PUT /homes/", "DELETE /homes/", "PROPPATCH /homes/"))], "Homes's calendars are only read")
         self.run_it(self.google, ha="")
         self.assertIn("/homeassistant/lea-google-familie/", self.r.cols, "HA_USER emptied: its copies are left alone")
 
@@ -221,7 +221,7 @@ class Mirror(unittest.TestCase):
         apath = "/abfuhrkalender.ics"
         self.src.cals[apath] = ics(("m1@osb", "Restmüll"))
         self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
-        abo = {"person": "haus", "name": "muellabfuhr", "kind": "abo", "title": "Müllabfuhr", "since": "2026-10-24T00:00:00Z", "url": self.src.url + apath}
+        abo = {"person": "homes", "name": "muellabfuhr", "kind": "abo", "title": "Müllabfuhr", "since": "2026-10-24T00:00:00Z", "url": self.src.url + apath}
         def asked(path):
             return sum(1 for s in self.src.seen if s[0] == path)
         s = self.run_it(abo, self.google, ha="")
@@ -231,17 +231,28 @@ class Mirror(unittest.TestCase):
         self.assertEqual(asked(self.gpath), 2, "Google is fetched every run")
         self.assertIn("2 Termine", s["detail"], "a skipped abo still counts its events")
         st = json.loads(Path(self.data, "state.json").read_text())
-        st["haus/abo-muellabfuhr/"]["ok"] -= 31 * 86400   # a month later
+        st["homes/abo-muellabfuhr/"]["ok"] -= 31 * 86400   # a month later
         Path(self.data, "state.json").write_text(json.dumps(st))
         self.run_it(abo, self.google, ha="")
         self.assertEqual(asked(apath), 2, "after a month the abo is fetched again")
+
+    def test_a_subscription_stored_for_haus_is_mirrored_into_homes(self):
+        # laib#1021, ADR 0031: the household's account was haus; the box's Müllabfuhr was stored for it.
+        # It lands in homes/ now, and Home Assistant's copy keeps its path haus-…, HA's entity hangs on it
+        apath = "/abfuhrkalender.ics"
+        self.src.cals[apath] = ics(("m1@osb", "Restmüll"))
+        old = {"person": "haus", "name": "muellabfuhr", "kind": "abo", "title": "Müllabfuhr", "url": self.src.url + apath}
+        self.run_it(old)
+        self.assertIn("Restmüll", "".join(self.r.items("/homes/abo-muellabfuhr/").values()))
+        self.assertIn("Restmüll", "".join(self.r.items("/homeassistant/haus-abo-muellabfuhr/").values()))
+        self.assertFalse([c for c in self.r.cols if c.startswith(("/haus/", "/homeassistant/homes-"))], self.r.cols)
 
     def test_each_calendar_has_its_own_interval(self):
         # #619: a Google calendar told to wait, a public one told to hurry
         self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
         self.src.cals["/verein.ics"] = ics(("v1", "Training"))
         g = dict(self.google, every="12h")
-        v = {"person": "haus", "name": "verein", "kind": "abo", "title": "Verein", "url": self.src.url + "/verein.ics", "every": "30m"}
+        v = {"person": "homes", "name": "verein", "kind": "abo", "title": "Verein", "url": self.src.url + "/verein.ics", "every": "30m"}
         def asked(path):
             return sum(1 for s in self.src.seen if s[0] == path)
         self.run_it(g, v, ha="")
@@ -285,14 +296,14 @@ class Mirror(unittest.TestCase):
         self.assertEqual(len(self.r.items("/lea/google-familie/")), 1, "a failed fetch deletes nothing")
 
     def test_a_failure_is_quiet_until_the_last_good_run_is_older_than_two_hours(self):
-        pub = {"person": "haus", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "url": self.src.url + "/muell.ics", "every": "1m"}
+        pub = {"person": "homes", "name": "muell", "kind": "abo", "title": "Müllabfuhr", "url": self.src.url + "/muell.ics", "every": "1m"}
         self.src.cals["/muell.ics"] = ics(("m1", "Gelbe Tonne"))
         self.run_it(pub, ha="")
         self.src.cals["/muell.ics"] = "<html>Wartung</html>"
         s = self.run_it(pub, ha="")
         self.assertEqual(s["findings"], [], "one failed run of a public calendar is no finding yet")
         st = json.loads(Path(self.data, "state.json").read_text())
-        st["haus/abo-muell/"]["ok"] -= 3 * 3600
+        st["homes/abo-muell/"]["ok"] -= 3 * 3600
         Path(self.data, "state.json").write_text(json.dumps(st))
         s = self.run_it(pub, ha="", STALE_HOURS="2")
         self.assertEqual([f["severity"] for f in s["findings"]], ["gelb"], s)
@@ -300,7 +311,7 @@ class Mirror(unittest.TestCase):
         self.assertIn("liefert keinen Kalender", s["findings"][0]["detail"])
 
     def test_openholidays_gets_its_date_range(self):
-        pub = {"person": "haus", "name": "feiertage", "kind": "abo", "title": "Feiertage",
+        pub = {"person": "homes", "name": "feiertage", "kind": "abo", "title": "Feiertage",
                "url": self.src.url + "/PublicHolidays?countryIsoCode=DE&subdivisionCode=DE-NI&languageIsoCode=DE"}
         me = load(SCRIPT, "kalender")
         u = me.source_url(pub["url"].replace(self.src.url, "https://openholidaysapi.org"), 1792000000)   # 2026-10

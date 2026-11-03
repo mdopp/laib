@@ -165,7 +165,7 @@ through Home Assistant's own login flow as its administrator, makes one HA
 user per consumer, mints that consumer's long-lived token over HA's
 WebSocket API (`auth/long_lived_access_token`) and hands it back into
 `secrets.age` (`laib-secret:`). A machine never switches as a person: HA's
-logbook says „Haus hat … eingeschaltet“, not the name of whoever onboarded
+logbook says „Homes hat … eingeschaltet“, not the name of whoever onboarded
 HA (#591). HA mints a token only for the user of the session that asks, so
 each of these users has a homeassistant login with a generated password
 that only post-deploy uses:
@@ -173,7 +173,7 @@ that only post-deploy uses:
 | secret | HA user (login, password) | administrator | for |
 |---|---|---|---|
 | `HA_TOKEN` | „Laib-Prüfung“ (`laib-pruefung`, `HA_CHECK_PASSWORD`) | no | the checklist below: config entries and states, which every user may read |
-| `HOMES_HA_TOKEN` | „Haus“ (`haus`, `HA_HAUS_PASSWORD`) | yes: voice counting reads Assist's debug runs, admin-only (below) | Homes's pages and widgets, voice counting |
+| `HOMES_HA_TOKEN` | „Homes“ (`homes`, `HA_HOMES_PASSWORD`; the user haus until ADR 0031, deleted once this token works) | yes: voice counting reads Assist's debug runs, admin-only (below) | Homes's pages and widgets, voice counting |
 | `BOTE_AUTOMAT_HA_TOKEN` | „Bote-Automat“ (`bote-automat`, `HA_BOTE_AUTOMAT_PASSWORD`) | yes: HA's automation config API is admin-only | the Bote's Automat; every write it makes needs the admin's approval code |
 | `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
 | `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |
@@ -441,7 +441,7 @@ conversation agent) and `nicht-erkannt` (an error); the sentence of a
 satellite or conversation id, kept 30 days.
 
 **What you switch on in Home Assistant:** nothing new. Those debug calls are
-admin-only; `HOMES_HA_TOKEN` is the user „Haus“'s, an administrator, minted
+admin-only; `HOMES_HA_TOKEN` is the user „Homes“'s, an administrator, minted
 above (#349, #591). A token set by hand that is not that user's is replaced
 on the next apply. Known limits: more than 10 commands on one pipeline
 within a minute, or an HA restart in between, lose those runs' counts.
@@ -449,7 +449,7 @@ within a minute, or an HA restart in between, lose those runs' counts.
 ## Who switched: the person behind an action (#591)
 
 HA's logbook names the user of the token (`context.user_id`): with the
-tokens above that is „Haus“, „Bote“ or „Bote-Automat“, never a person. Who
+tokens above that is „Homes“, „Bote“ or „Bote-Automat“, never a person. Who
 was signed in to Homes, wrote to the Bote or spoke to a satellite is
 recorded once, in Laib's journal, by the hand that acted, with HA's context
 id so the logbook row and the journal row meet:

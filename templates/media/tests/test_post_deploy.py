@@ -166,6 +166,16 @@ class FakeJellyfin(BaseHTTPRequestHandler):
                 return self.reply(403)
             u["pw"] = b["NewPw"]
             return self.reply(204)
+        if p.startswith("/Users?userId="):   # UpdateUser: a new Name renames the user, its id and tokens kept
+            u = next(u for u in JF["users"].values() if u["Id"] == p.split("=", 1)[1])
+            if b.get("Id") != u["Id"] or not b.get("Name") or b["Name"] in JF["users"]:
+                return self.reply(400)
+            old = u["Name"]
+            JF["users"][b["Name"]] = JF["users"].pop(old)
+            u["Name"] = b["Name"]
+            JF["tokens"] = {t: ((b["Name"], d) if n == old else (n, d)) for t, (n, d) in JF["tokens"].items()}
+            JF["renamed"] = JF.get("renamed", 0) + 1
+            return self.reply(204)
         if m := re.fullmatch(r"/Users/([^/]+)/Policy", p):
             if not b.get("AuthenticationProviderId") or not b.get("PasswordResetProviderId"):
                 return self.reply(400, {"error": "a policy without its providers"})
@@ -260,7 +270,7 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn("uid=admin", x, "the plugin binds as the LLDAP admin")
         self.assertEqual((JF["installs"], JF["restarts"]), (1, 1), "the plugin was not installed and loaded")
         self.assertTrue(JF["config"]["QuickConnectAvailable"])
-        self.assertEqual(set(JF["users"]), {"admin", "haus"}, "a shared login was created next to the family's own")   # haus: Homes' own, hidden (#695)
+        self.assertEqual(set(JF["users"]), {"admin", "homes"}, "a shared login was created next to the family's own")   # homes: Homes' own, hidden (#695)
         self.assertNotIn(LDAP_PW, p.stdout + p.stderr)
         p = self.run_hook()
         self.assertEqual((p.returncode, JF["installs"], JF["restarts"]), (0, 1, 1), p.stdout + p.stderr)
@@ -353,7 +363,7 @@ class PostDeploy(unittest.TestCase):
         self.assertNotIn(HA_PW, p.stdout + p.stderr)
         # the next apply changes nothing; a new secret is the account's new password
         p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD=HA_PW)
-        self.assertEqual((p.returncode, JF["created"]), (0, 2), p.stdout + p.stderr)   # homeassistant and haus (#695), once each
+        self.assertEqual((p.returncode, JF["created"]), (0, 2), p.stdout + p.stderr)   # homeassistant and homes (#695), once each
         p = self.run_hook(LAIB_SECRET_JELLYFIN_HA_PASSWORD="ha-svc-pw-new")
         self.assertEqual((p.returncode, JF["users"]["homeassistant"]["pw"]), (0, "ha-svc-pw-new"), p.stdout + p.stderr)
 
@@ -373,16 +383,16 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual((p.returncode, JF["option_posts"]), (0, 1), p.stdout + p.stderr)
 
     # #695: Homes checks a wished song against the household's music, read only. Jellyfin's API keys have no
-    # levels (each acts as an administrator), so Homes gets the token of a Jellyfin user of its own, `haus`:
+    # levels (each acts as an administrator), so Homes gets the token of a Jellyfin user of its own, `homes`:
     # hidden, no administrator, the music libraries only, no playback, download or deletion.
     def handed(self, p):
         return dict(re.findall(r"^laib-secret: ([A-Z_]+)=(\S+)$", p.stdout, re.M))
 
-    def test_haus_gets_a_music_only_account_and_its_token(self):
+    def test_homes_gets_a_music_only_account_and_its_token(self):
         JF["media"] = {"music", "movies", "tv"}
         p = self.run_hook()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        u = JF["users"].get("haus")
+        u = JF["users"].get("homes")
         self.assertIsNotNone(u, "no Jellyfin account for Homes")
         pol = u["Policy"]
         self.assertFalse(pol["IsAdministrator"], "Homes reads as a Jellyfin administrator")
@@ -393,7 +403,7 @@ class PostDeploy(unittest.TestCase):
             self.assertIs(pol.get(no), False, f"Homes' account keeps {no}")
         tok = self.handed(p).get("HOMES_JELLYFIN_TOKEN")
         self.assertIn(tok, JF["tokens"], "the handed-back token is none Jellyfin knows")
-        self.assertEqual(JF["tokens"][tok][0], "haus", "the token is not Homes' account's")
+        self.assertEqual(JF["tokens"][tok][0], "homes", "the token is not Homes' account's")
         self.assertNotEqual(JF["tokens"][tok][1], "laib-post-deploy", "Homes' token shares the hook's device, the hook's next login logs it out")
         self.assertIn("HOMES_JELLYFIN_TOKEN minted (new)", p.stdout)
         # a token that still works is kept: no new one, none handed back, the old one valid
@@ -408,39 +418,60 @@ class PostDeploy(unittest.TestCase):
         p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_TOKEN=tok)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         new = self.handed(p).get("HOMES_JELLYFIN_TOKEN")
-        self.assertTrue(new and new != tok and JF["tokens"].get(new, ("",))[0] == "haus", p.stdout)
+        self.assertTrue(new and new != tok and JF["tokens"].get(new, ("",))[0] == "homes", p.stdout)
         self.assertIn("HOMES_JELLYFIN_TOKEN minted (replaces one Jellyfin refuses)", p.stdout)
-        self.assertEqual([t for t, v in JF["tokens"].items() if v[0] == "haus"], [new], "an old token of Homes still works")
+        self.assertEqual([t for t, v in JF["tokens"].items() if v[0] == "homes"], [new], "an old token of Homes still works")
 
     # haus#152: Gesehen & Gehört reads what each person watched, which only an administrator may: Homes gets one
-    # API key, "Haus (Gesehen)"; a working one is kept, a refused one deleted and minted again, never two
-    def test_haus_gets_one_api_key_for_what_each_person_watched(self):
+    # API key, "Homes (Gesehen)"; a working one is kept, a refused one deleted and minted again, never two
+    def test_homes_gets_one_api_key_for_what_each_person_watched(self):
         p = self.run_hook()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         key = self.handed(p).get("HOMES_JELLYFIN_KEY")
-        self.assertEqual(JF["keys"], {key: "Haus (Gesehen)"}, p.stdout)
+        self.assertEqual(JF["keys"], {key: "Homes (Gesehen)"}, p.stdout)
         self.assertIn("HOMES_JELLYFIN_KEY minted (new)", p.stdout)
         p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_KEY=key)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertNotIn("HOMES_JELLYFIN_KEY", self.handed(p))
-        self.assertEqual(JF["keys"], {key: "Haus (Gesehen)"})
+        self.assertEqual(JF["keys"], {key: "Homes (Gesehen)"})
         # the owner revoked it in the dashboard, and an old one of Homes' lingers: one new key, the old gone
-        JF["keys"] = {"key-stale": "Haus (Gesehen)", "key-other": "Something else"}
+        JF["keys"] = {"key-stale": "Homes (Gesehen)", "key-other": "Something else"}
         p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_KEY=key)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         new = self.handed(p).get("HOMES_JELLYFIN_KEY")
-        self.assertEqual(JF["keys"], {new: "Haus (Gesehen)", "key-other": "Something else"}, "another app's key was touched, or Haus holds two")
+        self.assertEqual(JF["keys"], {new: "Homes (Gesehen)", "key-other": "Something else"}, "another app's key was touched, or Haus holds two")
         self.assertIn("HOMES_JELLYFIN_KEY minted (replaces one Jellyfin refuses)", p.stdout)
 
-    def test_an_existing_haus_account_is_cut_back_to_the_music(self):
+    def test_the_old_account_haus_is_renamed_homes_and_keeps_its_token_and_key(self):
+        # laib#1021, ADR 0031: renamed in place (same id, what it played kept), its token still answers as
+        # homes (HOMES_JELLYFIN_TOKEN was HAUS_JELLYFIN_TOKEN), its key named "Haus (Gesehen)" still works: kept
+        self.box()
+        JF["users"]["haus"] = {"Name": "haus", "Id": "u-haus", "pw": "random", "Policy": {
+            "IsAdministrator": False, "IsHidden": True, "EnableAllFolders": False, "EnabledFolders": [],
+            "AuthenticationProviderId": "Default", "PasswordResetProviderId": "Default"}}
+        JF["tokens"]["jf-haus-old"] = ("haus", "laib-haus")
+        JF["keys"]["key-haus"] = "Haus (Gesehen)"
+        p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_TOKEN="jf-haus-old", LAIB_SECRET_HOMES_JELLYFIN_KEY="key-haus")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual((JF["users"]["homes"]["Id"], "haus" in JF["users"], JF["created"], JF.get("renamed")), ("u-haus", False, 0, 1))
+        self.assertEqual(self.handed(p), {}, "a token or key that works was replaced")
+        self.assertEqual(JF["tokens"]["jf-haus-old"][0], "homes")
+        self.assertEqual(JF["keys"].get("key-haus"), "Haus (Gesehen)")
+        # the key refused later: the old name counts as Homes's, one new key under the new name
+        JF["keys"] = {"key-haus": "Haus (Gesehen)"}
+        p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_TOKEN="jf-haus-old", LAIB_SECRET_HOMES_JELLYFIN_KEY="a-key-jellyfin-forgot")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(list(JF["keys"].values()), ["Homes (Gesehen)"])
+
+    def test_an_existing_homes_account_is_cut_back_to_the_music(self):
         # one made by hand, an administrator who sees everything, gets the music only; spoken word is no music (#646)
         ids = self.box()
-        JF["users"]["haus"] = {"Name": "haus", "Id": "u-haus", "pw": "by-hand", "Policy": {
+        JF["users"]["homes"] = {"Name": "homes", "Id": "u-homes", "pw": "by-hand", "Policy": {
             "IsAdministrator": True, "EnableAllFolders": True, "EnabledFolders": [], "EnableMediaPlayback": True,
             "AuthenticationProviderId": "Default", "PasswordResetProviderId": "Default"}}
         p = self.run_hook()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        pol = JF["users"]["haus"]["Policy"]
+        pol = JF["users"]["homes"]["Policy"]
         self.assertFalse(pol["IsAdministrator"] or pol["EnableAllFolders"] or pol["EnableMediaPlayback"])
         self.assertEqual(sorted(pol["EnabledFolders"]), sorted([ids["Music"], ids["Music (cdopp)"]]),
                          "Homes sees other libraries than the music")

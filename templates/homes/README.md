@@ -11,9 +11,9 @@ carries the old name, and until when: the route `haus.<domain>` (the old
 app's `/napi/` calls with their device token; the program redirects every
 other request to `homes.<domain>`) and the `was:` lines in `laib.yml`
 that carried the data and secrets along, both until every phone runs the
-Homes app; the household's accounts named `haus` (Radicale, ABS,
-Jellyfin, Home Assistant's user „Haus“) are the household's, not the
-program's, and keep their name.
+Homes app. The program's own logins were renamed with it (the owner,
+2026-11-03): `homes` in LLDAP/Radicale, Audiobookshelf, Jellyfin and Home
+Assistant (each hook renames or replaces the old `haus` one, ADR 0031).
 
 With `HOMES_HA_TOKEN`, an administrator's long-lived token that
 home-assistant's post-deploy mints and hands back (#349; nothing to click
@@ -34,19 +34,20 @@ Music uploads go into the share's `musik-eingang` folder, mounted at
 minute, and `laib status beets` (its status file's `letzte`) says per
 upload what went in and what was kept back; the contract is in
 `templates/beets/README.md`, „Musik-Eingang“.
-Calendar and reminders use the household's Radicale account `haus` (#418). The auth
+Calendar and reminders use the household's Radicale account `homes` (#418). The auth
 template seeds it in LLDAP with the generated `HOMES_RADICALE_PASSWORD`, and
-`RADICALE_USER: haus` is the default. Homes makes the household's calendar
-`Haushalt` (`/haus/haushalt/`) and address book (`/haus/haushalt-kontakte/`)
+`RADICALE_USER: homes` is the default. Homes makes the household's calendar
+`Haushalt` (`/homes/haushalt/`) and address book (`/homes/haushalt-kontakte/`)
 in that account. Radicale's rights let every family account read and write
 their entries, but not delete the calendar. On a phone, add it in DAVx⁵ with
 your own login: Account → CalDAV → the collection URL
-`https://caldav.<domain>/haus/haushalt/`. Without the account the Kalender
+`https://caldav.<domain>/homes/haushalt/` (until ADR 0031 `/haus/haushalt/`:
+a phone subscribed there subscribes again). Without the account the Kalender
 page says so in one sentence (haus, laib#418) instead of landing on Start.
 
 Podcasts (haus#123, #676): Homes subscribes a podcast by its link in
 Audiobookshelf at `HOMES_ABS_URL` with `HOMES_ABS_TOKEN`, the API key of ABS's
-user `haus` (an administrator) that audiobookshelf's post-deploy mints and
+user `homes` (an administrator) that audiobookshelf's post-deploy mints and
 hands back; without ABS both are empty and Homes shows no podcast page. ABS
 keeps each podcast's last three episodes (audiobookshelf's care). Homes asks
 ABS for new episodes every 15 minutes and tells each subscriber with
@@ -70,7 +71,7 @@ Music wishes (#695): Homes asks Jellyfin at `HOMES_JELLYFIN_URL` with
 `HOMES_JELLYFIN_TOKEN` whether a shared song is there already, and every 15
 minutes whether an open wish arrived. The token is a user token, not an API
 key (Jellyfin's API keys have no levels, each is an administrator): the
-Jellyfin user `haus` that media's post-deploy keeps hidden, without
+Jellyfin user `homes` that media's post-deploy keeps hidden, without
 administrator, playback, download or deletion, and with the music libraries
 only. Send it as `Authorization: MediaBrowser Token="…"`. Without media the
 token is empty: the wish list stays, without „hast du schon“ and without
@@ -80,9 +81,9 @@ Gesehen & Gehört (haus#152): the page shows each person the films and series
 they played in Jellyfin and the audiobooks they listened to in Audiobookshelf,
 and puts a wished title on the Radicale list `liste-filme-buecher`. Reading
 another user's played state needs a Jellyfin administrator, so here — and
-only here — Homes holds an API key, `HOMES_JELLYFIN_KEY` ("Haus (Gesehen)" in
+only here — Homes holds an API key, `HOMES_JELLYFIN_KEY` ("Homes (Gesehen)" in
 the dashboard), minted by media's post-deploy; Homes only reads with it. The
-books come with `HOMES_ABS_TOKEN` (ABS's user `haus` is an administrator).
+books come with `HOMES_ABS_TOKEN` (ABS's user `homes` is an administrator).
 Without the key the page shows the books only; without either, no page.
 
 The memory library (haus#13, #195): qmd (github.com/tobi/qmd, MIT) as

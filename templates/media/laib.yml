@@ -38,11 +38,11 @@ secrets:
   - name: HA_MUSIC_ASSISTANT_TOKEN    # minted by music-assistant (#526): media only asks with it whether the radio stations are there (#646)
     external: true
     optional: true
-  - name: HOMES_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user haus (hidden, music only, no administrator), handed back; Homes reads the music with it
+  - name: HOMES_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user homes (was haus, ADR 0031; hidden, music only, no administrator), handed back; Homes reads the music with it
     was: HAUS_JELLYFIN_TOKEN   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true
-  - name: HOMES_JELLYFIN_KEY           # minted here (haus#152): the API key "Haus (Gesehen)", an administrator's as every Jellyfin key, handed back; Homes reads each person's watched films and series with it, nothing else
+  - name: HOMES_JELLYFIN_KEY           # minted here (haus#152): the API key "Homes (Gesehen)" (an older one "Haus (Gesehen)"), an administrator's as every Jellyfin key, handed back; Homes reads each person's watched films and series with it, nothing else
     was: HAUS_JELLYFIN_KEY   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true

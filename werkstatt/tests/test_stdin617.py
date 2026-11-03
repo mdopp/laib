@@ -55,7 +55,7 @@ class Stdin(unittest.TestCase):
         return self.fake.calls[-1]
 
     def test_calendar_subscribe_gets_the_address(self):
-        name, args = self.laib("calendar", "subscribe", "haus", "muell", "abo", "Müllabfuhr", stdin="https://example.invalid/m.ics")
+        name, args = self.laib("calendar", "subscribe", "homes", "muell", "abo", "Müllabfuhr", stdin="https://example.invalid/m.ics")
         self.assertEqual(name, "laib_calendar")
         self.assertEqual(args["stdin"], "https://example.invalid/m.ics")
 

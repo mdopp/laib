@@ -85,7 +85,7 @@ var mcpParams = map[string][]mcpParam{
 	"person_pending": {},
 	"tell": {{name: "person", typ: "string", desc: "der Benutzername in box.yml people, klein", required: true},
 		{name: "text", typ: "string", desc: "ein kurzer deutscher Satz, höchstens 1000 Zeichen", required: true}},
-	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "every", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer; der gemeinsame Kalender der Familie gehört dem Haushaltskonto haus)"},
+	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "every", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer, homes für die Familie: das Haushaltskonto)"},
 		{name: "name", typ: "string", desc: "kurz, klein, a-z 0-9 -"}, {name: "kind", typ: "string", enum: []string{"google", "abo"}, desc: "google: Googles geheime iCal-Adresse; abo: ein öffentlicher Kalender"},
 		{name: "title", typ: "string", desc: "der Name, den die Familie sieht"},
 		{name: "every", typ: "string", flag: "--every", desc: "subscribe, every: wie oft abgeglichen wird, z. B. 30m, 12h, 30d; leer: Google bei jedem Lauf, ein öffentliches Abo einmal im Monat"}},
