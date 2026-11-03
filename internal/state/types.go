@@ -277,6 +277,22 @@ type Contract struct {
 	// the other instances (Instance).
 	Person     string `yaml:"person"`
 	PortOffset int    `yaml:"portOffset"`
+	// Instances: the persons' instances of a per-person template this
+	// service talks to, wired into one of its containers (laib#1016).
+	Instances []Reach `yaml:"instances"`
+}
+
+// Reach wires every person's instance of Template into Unit, a .container
+// of the service: URL is one Environment= listing "<person>=http://
+// host.containers.internal:<port>" separated by blanks, the port the
+// instance's first route's; Secret, which the template declares, reaches
+// the container as Env_<PERSON>, each instance's under its own name only.
+type Reach struct {
+	Template string `yaml:"template"`
+	Unit     string `yaml:"unit"`
+	URL      string `yaml:"url"`
+	Secret   string `yaml:"secret"`
+	Env      string `yaml:"env"`
 }
 
 // TemplateRef says where a service's files came from.

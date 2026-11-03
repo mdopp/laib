@@ -71,6 +71,7 @@ func Load(dir string) (*State, error) {
 	errs = append(errs, st.validatePeople()...)
 	errs = append(errs, st.Box.Zuhause.validate()...)
 	errs = append(errs, st.validate()...)
+	errs = append(errs, st.reach()...)
 	st.Warnings = slices.Concat(st.purposeWarnings(), st.zuhauseWarnings())
 	if len(errs) > 0 {
 		return st, errors.Join(errs...)

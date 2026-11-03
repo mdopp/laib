@@ -1,0 +1,12 @@
+[Unit]
+Description=Leser of every notizbuch
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:8490:8080
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -5,7 +5,8 @@ Description=Archiv von ${PERSON}: Nachrichten im Tresor (ADR 0029)
 # pinned: msgvault's database lives inside, its storage format may change
 # (alpha); a new archiv image is a template update the owner approves
 Image=${ARCHIV_IMAGE}
-PublishPort=127.0.0.1:18540:8080
+# every address, not loopback: Haus reaches /intern/ from its pod (laib#1016); ports lan: false keeps the LAN out
+PublishPort=18540:8080
 Volume=${DATA_DIR}/${SERVICE}:/data
 # read, write and delete: the archive removes packed backups and keeps the newest in letzte/
 Volume=${DATA_DIR}/archiv-eingang/${PERSON}:/eingang

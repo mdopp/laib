@@ -25,7 +25,7 @@ routes:
     proxyHeader: X-Archiv-Proxy
 secrets:
   - name: ARCHIV_PROXY_SECRET
-  - name: ARCHIV_HAUS_SECRET     # Haus's way to /intern/… (haus#209: a phone's restore); Haus is given it when that lands
+  - name: ARCHIV_HAUS_SECRET     # Haus's way to /intern/… (haus#209: a phone's restore); Haus gets each instance's through its instances: (laib#1016)
   - name: ARCHIV_RADICALE_PASSWORD   # the archive's own Radicale login, archiv-<person> (laib#1009): the auth template seeds it, templates/radicale lets it read the person's contacts and calendars and write nothing
     account: archiv-${PERSON}
 data:
@@ -37,7 +37,7 @@ health:
 status:
   file: ${DATA_DIR}/${SERVICE}/laib-status.json
 ports:
-  - {port: 18540, lan: false}
+  - {port: 18540, lan: false}   # on every address, so Haus's pod reaches /intern/ through host.containers.internal (laib#1016); the nftables drop keeps the LAN out
 upstream:
   - https://github.com/mdopp/archiv
   - https://www.msgvault.io/docs/

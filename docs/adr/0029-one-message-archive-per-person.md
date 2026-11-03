@@ -205,6 +205,12 @@ backup format itself.
 4. **Restoring a phone** (haus#209, haus-android#197): Haus serves
    `letzte/` to a device of the same person, resumable. Media come only
    through the open archive, because the private key is needed.
+   Haus reaches each archive's `/intern/` with that instance's
+   `ARCHIV_HAUS_SECRET_<PERSON>` (laib#1016): the haus template's
+   `instances:` hands its container every instance's address and secret
+   (docs/STATE.md, "A service that reaches every person's instance"), and
+   the archive publishes its port on every address for Haus's pod, the
+   nftables drop keeping the LAN out.
 
 ## Amendment 2026-11-02: the archive reads contacts and calendars from Radicale
 

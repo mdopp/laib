@@ -1,10 +1,19 @@
 package state
 
 import (
+	"fmt"
 	"net/url"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
+
+// PersonSuffix ends a person's instance's secret names (#986): _<PERSON>,
+// upper case, '-' as '_'.
+func PersonSuffix(person string) string {
+	return "_" + strings.ToUpper(strings.ReplaceAll(person, "-", "_"))
+}
 
 // instance expands ${SERVICE} and ${PERSON} in the data paths and the
 // status file, and makes a person's instance of a per-person template
@@ -52,7 +61,7 @@ func (svc *Service) instance() {
 	if c.Status != nil {
 		c.Status.Check = rename(c.Status.Check)
 	}
-	suffix, own := "_"+strings.ToUpper(strings.ReplaceAll(c.Person, "-", "_")), map[string]bool{}
+	suffix, own := PersonSuffix(c.Person), map[string]bool{}
 	for i := range c.Secrets {
 		own[c.Secrets[i].Name] = true
 		c.Secrets[i].Name += suffix
@@ -120,4 +129,54 @@ func (st *State) Accounts() []Account {
 		}
 	}
 	return out
+}
+
+var envName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+
+// reach wires the instances a service names under instances: into its
+// container (laib#1016), right after [Container]: one line with every
+// instance's address, and for each instance its secret as a value of the
+// service, so the renderer hands it over as a podman secret like any
+// !secret (never in the unit), a review names it as another service's
+// secret, and a change of it applies the service again (SecretUsers).
+// Adding or removing an instance changes the unit: the service applies
+// again. After validate: the secret values are the instances' own.
+func (st *State) reach() []error {
+	var errs []error
+	for _, name := range st.ServiceNames() {
+		svc := st.Services[name]
+		for _, r := range svc.Contract.Instances {
+			unit, ok := svc.Units[r.Unit]
+			if r.Template == "" || !envName.MatchString(r.URL) || (r.Secret == "") != (r.Env == "") || r.Env != "" && !envName.MatchString(r.Env) ||
+				!ok || !strings.HasSuffix(r.Unit, ".container") || !strings.Contains(unit, "\n[Container]\n") {
+				errs = append(errs, fmt.Errorf("services/%s/laib.yml: instances: %s wants a template, a .container of the service as unit, url as an environment name, and secret with env or neither (laib#1016)", name, r.Template))
+				continue
+			}
+			var urls, lines []string
+			for _, other := range st.ServiceNames() {
+				c := st.Services[other].Contract
+				if c.Person == "" || c.Template.Name != r.Template {
+					continue
+				}
+				if len(c.Routes) == 0 {
+					errs = append(errs, fmt.Errorf("services/%s/laib.yml: instances: %s has no route to reach", name, other))
+					continue
+				}
+				urls = append(urls, fmt.Sprintf("%s=http://host.containers.internal:%d", c.Person, c.Routes[0].Port))
+				if r.Secret == "" {
+					continue
+				}
+				secret, key := r.Secret+PersonSuffix(c.Person), r.Env+PersonSuffix(c.Person)
+				if _, taken := svc.Values[key]; taken || !slices.ContainsFunc(c.Secrets, func(s Secret) bool { return s.Name == secret }) {
+					errs = append(errs, fmt.Errorf("services/%s/laib.yml: instances: %s does not declare %s, or values.yml has %s already", name, other, r.Secret, key))
+					continue
+				}
+				svc.Values[key] = Value{Secret: secret}
+				lines = append(lines, "Environment="+key+"=${"+key+"}")
+			}
+			lines = append([]string{"# each person's " + r.Template + " (laib#1016: instances:)", `Environment="` + r.URL + "=" + strings.Join(urls, " ") + `"`}, lines...)
+			svc.Units[r.Unit] = strings.Replace(unit, "\n[Container]\n", "\n[Container]\n"+strings.Join(lines, "\n")+"\n", 1)
+		}
+	}
+	return errs
 }

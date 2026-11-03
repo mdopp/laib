@@ -335,6 +335,8 @@ requires:                        # a set value needs these set too (#184)
   MAIL_HOST: [MAIL_PASSWORD]
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 perPerson: false                 # true: installed once per person (#986), below
+instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
+  - {template: archiv, unit: haus.container, url: HAUS_ARCHIV_INTERN, secret: ARCHIV_HAUS_SECRET, env: HAUS_ARCHIV_SECRET}
 ```
 
 `status` is a file the template keeps about itself. laib reads it fresh on
@@ -436,6 +438,30 @@ key. A signed-in person without an instance gets the denied page. Such a
 route has a login (no `auth: none`) and no `bypass`; an instance has no
 `oidc`. `laib net` shows the name once, with each person's path. Removing
 an instance is a removal like any other: a human decides in the Inbox.
+
+### A service that reaches every person's instance (laib#1016)
+
+`instances:` lets a service talk to each person's instance of a
+per-person template, without knowing who has one: Haus fetches a new
+phone's WhatsApp media from the person's open archive. Each entry names
+the `template`, a `.container` of the service as `unit`, and `url`; the
+loader puts right after that unit's `[Container]`:
+
+- `Environment="<url>=<person>=http://host.containers.internal:<port> …"`,
+  every instance in name order, the port its first route's (with its
+  `portOffset`), so the instance publishes that port on every address
+  with `lan: false`, not on loopback alone;
+- with `secret` and `env`: for each instance `Environment=<env>_<PERSON>=…`
+  holding that instance's `<secret>_<PERSON>`, a secret the template
+  declares. It is a value of the service like a `!secret` (`values.laib`
+  names it, a hook gets it): it reaches the container as a podman secret,
+  never in a file, and a new value applies the service again.
+
+Adding or removing an instance changes that unit, so the service applies
+again with it. Each one more is another service's secret: the content
+review puts it before a human. A name `values.yml` already has, a secret
+the instance does not declare, an instance without a route or any other
+shape fails the load.
 
 `laib template lint` lints a per-person template as two instances, `a`
 and `b`, side by side: a unit, container, pod, volume or network name or a
