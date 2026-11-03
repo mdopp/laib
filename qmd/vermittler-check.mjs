@@ -42,7 +42,7 @@ check(status.collections?.length > 0 && status.collections.every((c) => c.docume
 
 enableProductionMode();
 const store = await createStore({ dbPath: getDefaultDbPath(), configPath: `${getConfigDir()}/index.yml` });
-const collection = (await store.getDefaultCollectionNames())[0];
+const collections = await store.getDefaultCollectionNames(); // the notes and, since #219, the documents: the Vermittler searches them all
 const shape = "docid,file,title,score,context,line,snippet,vec";
 let compared = 0;
 const files = [];
@@ -54,8 +54,8 @@ for (const q of process.argv.slice(2)) {
   const own = (await (await post(body, qmd)).json()).results;
   const strip = (rs) => JSON.stringify((rs ?? []).map(({ vec, ...r }) => r));
   check(strip(results) === strip(own), `${q}: not what qmd's /query answers:\n  vermittler ${strip(results)}\n  qmd        ${strip(own)}`);
-  // the reference: qmd's vector search over the same collection, the same top list of 20
-  const ref = new Map((await store.searchVector(q, { limit: 20, collection }))
+  // the reference: qmd's vector search over the same collections, a top list of 20 each
+  const ref = new Map((await Promise.all(collections.map((collection) => store.searchVector(q, { limit: 20, collection })))).flat()
     .map((r) => [`qmd://${r.displayPath.split("/").map(encodeURIComponent).join("/")}`, r.score]));
   for (const r of results ?? []) {
     check(Object.keys(r).join(",") === shape, `${q}: ${r.file} has ${Object.keys(r)}, not ${shape}`);
