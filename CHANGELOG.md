@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.0](https://github.com/mdopp/laib/compare/v1.3.1...v2.0.0) (2026-11-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **template:** RADICALE_USER, the Radicale paths and the app logins are homes; phones subscribed to /haus/… subscribe again.
+* **template:** the haus template, the hand haus, provides haus, LAIB_HAUS_URL and the HAUS_* names are gone; a box moves with one proposal (#1021 step 7).
+
+### Features
+
+* **apply:** a renamed service takes its data dir and secrets along (was:) ([#1022](https://github.com/mdopp/laib/issues/1022)) ([3a988bf](https://github.com/mdopp/laib/commit/3a988bfbcf24cc018b6ad699101340338c15b3ab)), closes [#1021](https://github.com/mdopp/laib/issues/1021)
+* **template:** Haus is renamed Homes ([#1023](https://github.com/mdopp/laib/issues/1023)) ([0f8dac6](https://github.com/mdopp/laib/commit/0f8dac6f9d2b09be59e311b6ed233644b542d538))
+* **template:** Homes reaches Reitti for the app's Standortverlauf ([089436a](https://github.com/mdopp/laib/commit/089436aad9d9611398afac504ea74649adc880fe)), closes [#1021](https://github.com/mdopp/laib/issues/1021)
+* **template:** the program's own logins are renamed homes ([#1025](https://github.com/mdopp/laib/issues/1025)) ([d2feaef](https://github.com/mdopp/laib/commit/d2feaef14ba57fed326a779c41dc02e350c032fb)), closes [#1021](https://github.com/mdopp/laib/issues/1021)
+
 ## [1.3.1](https://github.com/mdopp/laib/compare/v1.3.0...v1.3.1) (2026-11-03)
 
 
