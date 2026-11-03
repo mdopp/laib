@@ -726,6 +726,29 @@ off-box copy").
 `mint: <hand>` on an external secret makes `laib add` mint a Laib token for
 that hand (not human) and store it, once. See INTERFACE.md.
 
+### A renamed service takes its data and secrets along (laib#1021)
+
+`was: <old>` on a contract secret or data path names its former place,
+for a service that replaces another under a new name (Haus → Homes). The
+change that renames removes `services/<old>` and adds the new service in
+one proposal; apply then:
+
+- **Data:** stops the old units (their files go, #41), and before
+  anything mounts the new path, renames the former place to it when the
+  new one is missing or empty. Both holding files is a red apply, never a
+  merge. The loader refuses a former place outside `${DATA_DIR}/` or one a
+  service in the state still keeps: the move would take that service's
+  data.
+- **Secrets:** a missing secret takes the former name's value before
+  anything is generated or minted. The old one stays in `secrets.age`.
+
+The review names both ("übernimmt die Daten aus …", "übernimmt das
+Geheimnis … als …"), so a human decides it. A token minted for a hand is
+not carried when the hand is renamed too: the new hand gets a new one. A
+`was:` line is a legacy name (ADR 0021 rule 8): the template drops it once
+every box moved. Restic snapshots from before the move hold the former
+place; `laib restore` reads the declared path.
+
 ### `tls`
 
 `tls: internal` makes Caddy sign every host with its own CA (`local_certs`)
