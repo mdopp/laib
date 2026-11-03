@@ -5,19 +5,19 @@ Description=Archiv von ${PERSON}: Nachrichten im Tresor (ADR 0029)
 # pinned: msgvault's database lives inside, its storage format may change
 # (alpha); a new archiv image is a template update the owner approves
 Image=${ARCHIV_IMAGE}
-# every address, not loopback: Haus reaches /intern/ from its pod (laib#1016); ports lan: false keeps the LAN out
+# every address, not loopback: Homes reaches /intern/ from its pod (laib#1016); ports lan: false keeps the LAN out
 PublishPort=18540:8080
 Volume=${DATA_DIR}/${SERVICE}:/data
 # read, write and delete: the archive removes packed backups and keeps the newest in letzte/
 Volume=${DATA_DIR}/archiv-eingang/${PERSON}:/eingang
 # the vault is a gocryptfs (FUSE) mount in the container's own user and mount
-# namespace; labelling off as for Haus's shared inbox, which Haus writes too
+# namespace; labelling off as for Homes's shared inbox, which Homes writes too
 AddDevice=/dev/fuse
 AddCapability=SYS_ADMIN
 SecurityLabelDisable=true
 Environment=ARCHIV_PERSON=${PERSON}
 Environment=PROXY_SECRET=${PROXY}
-Environment=ARCHIV_HAUS_SECRET=${HAUS_SECRET}
+Environment=ARCHIV_HOMES_SECRET=${HOMES_SECRET}
 Environment=TZ=${TZ}
 Environment=PUBLIC_URL=https://archiv.${DOMAIN}/
 # contacts and calendars from Radicale, read only (archiv#21, laib#1009): its

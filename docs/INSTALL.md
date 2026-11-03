@@ -304,7 +304,7 @@ What makes or breaks the first boot is settled before the stick is built:
   `dopp.cloud` is at Strato (no DNS API, no wildcards) and the house's port
   80 reaches the Kraftwerk. So the NUC uses HTTP-01 through the Kraftwerk:
   at Strato, one subdomain per NUC host as a CNAME to `dopp.cloud`
-  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `haus.nuc`, `dns.nuc`, `whoami.nuc`);
+  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `homes.nuc`, `dns.nuc`, `whoami.nuc`);
   on the Kraftwerk's NPM, one proxy host per name, **HTTP only, no SSL**,
   forwarding to the NUC's LAN address on port 80. `laib-stick --domain
   nuc.dopp.cloud` without `--dns-provider` and without `--tls internal`;
@@ -319,7 +319,7 @@ What makes or breaks the first boot is settled before the stick is built:
   `http://192.168.178.100:11435/api/model-lease`; `laib-stick` probes both
   from the laptop and warns when they do not answer.
 - **No GitHub token**: the repo, its releases and the images
-  (`ghcr.io/mdopp/laib-*`, `ghcr.io/mdopp/haus`) are public since
+  (`ghcr.io/mdopp/laib-*`, `ghcr.io/mdopp/homes`) are public since
   2026-10-12, so the stick carries no token and the box keeps no registry
   login. (`laib-stick --token` still exists for a private fork or mirror;
   then the token is shredded after the first boot and kept for pulls.)
@@ -384,8 +384,8 @@ $laib add caddy
 $laib add auth OPERATOR_USER=mdopp OPERATOR_EMAIL=you@example   # the hook seeds LLDAP: admins, family, your account
 $laib add adguard
 $laib add whoami
-#    the family's surface and the phone's API (Haus, mdopp/haus); its Laib token is minted on add
-$laib add haus
+#    the family's surface and the phone's API (Homes, mdopp/homes); its Laib token is minted on add
+$laib add homes
 
 # 4. look
 $laib status; $laib diag; $laib plan

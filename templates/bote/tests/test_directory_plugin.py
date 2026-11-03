@@ -82,7 +82,7 @@ class DirectoryPlugin(Base):
         self.assertEqual(CALLS, [{"eingabe": "Menü", "sitzung": "+4917012345", "sprache": "de"}])
 
     def test_a_task_conversation_tells_the_model_to_read_the_task_and_lead(self):
-        # #878: Haus's „Gemeinsam mit Homes“; the model reads the task with laib and leads, HA is not asked
+        # #878: Homes's „Gemeinsam mit Homes“; the model reads the task with laib and leads, HA is not asked
         with mock.patch.object(self.p, "_ha") as ha:
             ctx, out = self.turn("Aufgabe #7 mit dir erledigen", "Bei Box-Aufgabe #7 geht es um deine Stimme.", sender="haus:anna", platform="api_server")
         ha.assert_not_called()
@@ -137,7 +137,7 @@ class DirectoryPlugin(Base):
             self.assertEqual([c["eingabe"] for c in CALLS], [words])
 
     def test_hermes_steer_frame_never_reaches_the_person(self):
-        # #520, measured over Haus: the whole answer was the frame around the person's words
+        # #520, measured over Homes: the whole answer was the frame around the person's words
         frame = ("[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position; "
                  "not tool output and not a new delivery when replayed from conversation history]\n%s\n[/OUT-OF-BAND USER MESSAGE]")
         _, out = self.turn("Bambi aus", frame % "Bambi aus")
@@ -215,7 +215,7 @@ class FakeHA(BaseHTTPRequestHandler):
 
 
 class HomeAssistantFirst(Base):
-    """#520, ADR 0015: every message goes to HA's own intents first. "Bambi aus" over Haus's Sprechen
+    """#520, ADR 0015: every message goes to HA's own intents first. "Bambi aus" over Homes's Sprechen
     field (Hermes' API server) and over Signal is switched by HA in a second, whatever the model makes of
     it; the model only answers what HA did not handle. HA executing the intent directly still writes
     who switched (#591), with laib-journal's own note."""

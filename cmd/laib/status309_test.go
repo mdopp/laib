@@ -143,7 +143,7 @@ func TestLaibStatusPrintsTheTemplatesStatusLine(t *testing.T) {
 }
 
 // #688: laib_status for one named service carries its status file's own
-// fields (Haus shows one upload's result); the whole box's answer does not.
+// fields (Homes shows one upload's result); the whole box's answer does not.
 func TestStatusForOneServiceCarriesTheStatusFilesOwnFields(t *testing.T) {
 	c := newCbox(t)
 	svc := filepath.Join(c.env.Paths.State, "services", "whoami")

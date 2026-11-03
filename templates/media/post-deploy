@@ -22,19 +22,19 @@ Music and video only (#646, docs/SERVICES.md): ServiceBay's twin libraries
 Radio go once the owner set SPOKEN_WORD=audiobookshelf and Audiobookshelf
 and Music Assistant answer with them; until then they stay.
 
-Haus reads the household's music (#695): whether a wished song is there
+Homes reads the household's music (#695): whether a wished song is there
 already. Jellyfin's API keys have no levels, each acts as an administrator,
-so Haus gets no key but the token of a Jellyfin user of its own, `haus`:
+so Homes gets no key but the token of a Jellyfin user of its own, `haus`:
 hidden, no administrator, the music libraries only, no playback, download
 or deletion. Its password is random and nobody's; the token is handed back
-as HAUS_JELLYFIN_TOKEN, the haus template renders it. A token that still
+as HOMES_JELLYFIN_TOKEN, the homes template renders it. A token that still
 works is kept; one Jellyfin refuses (its device removed in the dashboard)
-is replaced: a new random password, a new login on Haus' own device.
+is replaced: a new random password, a new login on Homes' own device.
 
-Haus' Gesehen & Gehört (haus#152) shows each person what they watched,
+Homes' Gesehen & Gehört (haus#152) shows each person what they watched,
 and reading another user's played state needs an administrator: that is
-the one thing Haus gets an API key for, HAUS_JELLYFIN_KEY, named "Haus
-(Gesehen)" in the dashboard. Haus only reads with it (/Users, /Items with
+the one thing Homes gets an API key for, HOMES_JELLYFIN_KEY, named "Haus
+(Gesehen)" in the dashboard. Homes only reads with it (/Users, /Items with
 userId, a search of films and series). A key that still works is kept;
 one Jellyfin refuses is deleted and minted again. This widens #695's line
 on purpose: revoking the key in Jellyfin's dashboard ends it, the next
@@ -331,9 +331,11 @@ if HA_PW:
     if not logs_in(HA_USER, HA_PW):
         red(f"the jellyfin account {HA_USER} does not log in with JELLYFIN_HA_PASSWORD: Home Assistant's entry gets 401")
     print(f"jellyfin account {HA_USER} logs in: Home Assistant's Jellyfin entry uses it")
-# 7. Haus' own account (#695): music only, read only; its token on a device of its own, so the logins
-# above (device laib-post-deploy) never log it out, and the check identifies as that same device
-HAUS_USER, HAUS_TOKEN = "haus", E.get("LAIB_SECRET_HAUS_JELLYFIN_TOKEN", "")
+# 7. Homes' own account (#695): music only, read only; its token on a device of its own, so the logins
+# above (device laib-post-deploy) never log it out, and the check identifies as that same device.
+# The account, the client and device names keep „haus“ from before the rename (ADR 0031, #1021): the
+# token is bound to that device, and the key below is found by its name
+HAUS_USER, HOMES_TOKEN = "haus", E.get("LAIB_SECRET_HOMES_JELLYFIN_TOKEN", "")
 HAUS_CLIENT = 'MediaBrowser Client="Haus", Device="Haus", DeviceId="laib-haus", Version="1"'
 music = [f["ItemId"] for f in req("GET", "/Library/VirtualFolders", token=token)
          if (f.get("CollectionType") == "music" or f.get("Name") == "Musik")
@@ -341,7 +343,7 @@ music = [f["ItemId"] for f in req("GET", "/Library/VirtualFolders", token=token)
 u = next((u for u in req("GET", "/Users", token=token) if u["Name"] == HAUS_USER), None)
 if not u:
     u = req("POST", "/Users/New", {"Name": HAUS_USER, "Password": secrets.token_urlsafe(32)}, token=token)
-    print("jellyfin account created:", HAUS_USER, "(Haus': reads the music, nothing else)")
+    print("jellyfin account created:", HAUS_USER, "(Homes': reads the music, nothing else)")
 pol = u.get("Policy") or {}
 want = {**pol, "IsAdministrator": False, "IsHidden": True, "IsDisabled": False, "EnableAllFolders": False, "EnabledFolders": music,
         **dict.fromkeys(("EnableMediaPlayback", "EnableContentDownloading", "EnableContentDeletion", "EnableRemoteControlOfOtherUsers",
@@ -360,15 +362,15 @@ def haus_token_works(t):
         return False
 
 
-if not haus_token_works(HAUS_TOKEN):
+if not haus_token_works(HOMES_TOKEN):
     pw = secrets.token_urlsafe(32)
     req("POST", f"/Users/Password?userId={u['Id']}", {"NewPw": pw}, token=token)
     new = req("POST", "/Users/AuthenticateByName", {"Username": HAUS_USER, "Pw": pw}, client=HAUS_CLIENT)["AccessToken"]
-    print(f"laib-secret: HAUS_JELLYFIN_TOKEN={new}")
-    print("media: HAUS_JELLYFIN_TOKEN minted (" + ("replaces one Jellyfin refuses" if HAUS_TOKEN else "new")
-          + "): Laib re-applies Haus, which finds the household's music")
-# 8. Haus' key for Gesehen & Gehört (haus#152): an API key, as only an administrator reads another user's played state
-KEY_APP, HAUS_KEY = "Haus (Gesehen)", E.get("LAIB_SECRET_HAUS_JELLYFIN_KEY", "")
+    print(f"laib-secret: HOMES_JELLYFIN_TOKEN={new}")
+    print("media: HOMES_JELLYFIN_TOKEN minted (" + ("replaces one Jellyfin refuses" if HOMES_TOKEN else "new")
+          + "): Laib re-applies Homes, which finds the household's music")
+# 8. Homes' key for Gesehen & Gehört (haus#152): an API key, as only an administrator reads another user's played state
+KEY_APP, HOMES_KEY = "Haus (Gesehen)", E.get("LAIB_SECRET_HOMES_JELLYFIN_KEY", "")
 
 
 def key_works(k):
@@ -384,16 +386,16 @@ def haus_keys():
     return [k["AccessToken"] for k in (req("GET", "/Auth/Keys", token=token) or {}).get("Items") or [] if k.get("AppName") == KEY_APP]
 
 
-if not key_works(HAUS_KEY):
-    for k in haus_keys():   # one nobody holds any more: never two keys of Haus'
+if not key_works(HOMES_KEY):
+    for k in haus_keys():   # one nobody holds any more: never two keys of Homes'
         req("DELETE", "/Auth/Keys/" + urllib.parse.quote(k), token=token)
     req("POST", "/Auth/Keys?app=" + urllib.parse.quote(KEY_APP), token=token)
     new = haus_keys()
     if len(new) != 1:
         red(f"jellyfin: the API key {KEY_APP!r} was not made ({len(new)} found)")
-    print(f"laib-secret: HAUS_JELLYFIN_KEY={new[0]}")
-    print("media: HAUS_JELLYFIN_KEY minted (" + ("replaces one Jellyfin refuses" if HAUS_KEY else "new")
-          + "): Laib re-applies Haus, whose Gesehen & Gehört reads what each person watched")
+    print(f"laib-secret: HOMES_JELLYFIN_KEY={new[0]}")
+    print("media: HOMES_JELLYFIN_KEY minted (" + ("replaces one Jellyfin refuses" if HOMES_KEY else "new")
+          + "): Laib re-applies Homes, whose Gesehen & Gehört reads what each person watched")
 if held:  # the owner switched, the replacement is not there: say so, never green while the libraries stay (#646)
     red("SPOKEN_WORD=audiobookshelf, but these stay in Jellyfin until their replacement answers: " + " | ".join(held))
 print("jellyfin provisioned: the family logs in with LLDAP, Quick Connect on, local admin kept")

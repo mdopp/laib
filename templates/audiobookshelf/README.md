@@ -17,10 +17,10 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
 - Music Assistant's account `musicassistant` (listens, changes nothing)
   and an API key for it, handed back as `ABS_MA_TOKEN`; music-assistant
   renders it, so the same apply adds Audiobookshelf as MA's source.
-- Haus' account `haus`, an administrator (subscribing, checking a feed
+- the account `haus`, Homes's, an administrator (subscribing, checking a feed
   and asking for new episodes are admin-only in ABS), and its API key,
-  handed back as `HAUS_ABS_TOKEN` (#676, haus#123); haus renders it as
-  `HAUS_ABS_TOKEN` beside `HAUS_ABS_URL`, so the same apply gives Haus
+  handed back as `HOMES_ABS_TOKEN` (#676, haus#123); haus renders it as
+  `HOMES_ABS_TOKEN` beside `HOMES_ABS_URL`, so the same apply gives Homes
   its podcast page. A key that still works is kept, as Music Assistant's.
 - The family's login (OIDC), rewritten from Laib's secret on every apply.
 - **The box's admins are ABS admins.** ABS registers a person at their
@@ -71,7 +71,7 @@ image; its status is `laib status audiobookshelf` / `laib diag`.
   literal, read as data, never run) are subscribed with auto-download; a
   folder that is already there gets the feed and its episodes renamed
   from it, a new one starts with its three newest episodes. After that,
-  podcasts are added in Haus (by link) or in the app; `sync_podcasts.py`
+  podcasts are added in Homes (by link) or in the app; `sync_podcasts.py`
   can go.
 - **The last three episodes** (#676, the owner 2026-10-25): every
   podcast keeps its newest three (`maxEpisodesToKeep: 3`) and fetches at

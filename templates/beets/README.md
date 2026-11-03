@@ -16,7 +16,7 @@ hand.
 
 **Für die Familie:** Neue Musik kommt in den Ordner `musik-eingang` auf der
 Freigabe (`\\<box>\data\musik-eingang`, in File Browser unter `data`, oder
-über die Haus-App). Hinein darf ein einzelnes Lied (mp3, flac, m4a/aac,
+über die Homes-App). Hinein darf ein einzelnes Lied (mp3, flac, m4a/aac,
 ogg/opus, wav), ein ganzer Album-Ordner, auch mit Unterordnern wie `CD1`
 und `CD2`, oder eine ZIP-Datei. Etwa eine Minute, nachdem das Kopieren
 fertig ist, holt beets die Musik ab, ergänzt die Angaben (Interpret, Album,
@@ -29,7 +29,7 @@ sagt warum. Dort wird nichts gelöscht: aufräumen oder berichtigt zurück in
 bitte als ZIP oder ausgepackt hineinlegen. `laib status beets` (und die
 Box-Seite) zeigt: „Musik-Eingang: zuletzt 12 Titel (2 Alben) importiert,
 1 Datei nicht importiert“. Und nach jedem Abholen kommt eine Nachricht über
-den Boten (Signal) an die Person, die über die Haus-App hochgeladen hat, sonst an die
+den Boten (Signal) an die Person, die über die Homes-App hochgeladen hat, sonst an die
 Person für Mitteilungen im Haushalt:
 
 > 🎵 2 Alben (12 Titel) sind in der Musik: Erfundenes Album, Noch ein Album ·
@@ -80,7 +80,7 @@ on stdin). One run at a time: a run that finds the lock
   Musiksammlung (…)“; at most three names, then „und N weitere“. The names
   are beets' own (`beet ls -a -f '$album' added:<start>..`, `$title` for a
   singleton), the upload's name when beets has none. It is for the uploader
-  Haus named (below), else `NOTIFY_PERSON` (box.yml `notify.person`). An
+  Homes named (below), else `NOTIFY_PERSON` (box.yml `notify.person`). An
   empty upload or a run that took nothing writes none; `MUSIK_MELDEN:
   "false"` writes none.
 - **Sent from the host, never from the container.** beets is not on the
@@ -115,15 +115,15 @@ The status file `/config/laib-status.json`
 `detail` and every `grund` are German and for the family; beets' raw
 output goes only into `einzelheiten` (#588). `letzte` holds the last 20
 uploads, newest first; `eingang` is the upload's name, `von` the uploader
-from Haus' sidecar (empty without one), `namen` beets' names for what went
+from Homes' sidecar (empty without one), `namen` beets' names for what went
 in (albums, or titles for a song), `datei` is relative to `ordner`
 (`_nicht-importiert/<zeit>`). The finding lasts while that
 folder exists: `gelb` when an import failed, `info` for what is simply not
 music or a duplicate.
 
-### Uploading from Haus
+### Uploading from Homes
 
-Haus mounts only `musik-eingang`, at `/musik-eingang` (templates/haus).
+Homes mounts only `musik-eingang`, at `/musik-eingang` (templates/homes).
 The contract for any uploader:
 
 1. Write the file as `._<name>.part` in the folder (or inside the album

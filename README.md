@@ -29,7 +29,7 @@ layer (ADR 0010).
   after, rollback on red, a budget against loops. Only the irreversible
   waits for a human (ADR 0013).
 - **Three human surfaces, one conversation.** The Bote is where you talk
-  (Signal, Haus's Sprechen field), Haus is where the family looks and
+  (Signal, Homes's Sprechen field), Homes is where the family looks and
   switches. The Werkstatt (`dev.<domain>`) is where things get built. The
   box page (`laib.<domain>`) has the Status, the Inbox, where approvals
   happen, and the Journal.
@@ -62,7 +62,7 @@ Phone and browser, Signal, the speakers with their wake word, the scanner on USB
 
 | Program | Repo | What it is |
 |---|---|---|
-| Haus | [mdopp/haus](https://github.com/mdopp/haus) | the family's pages and app, the Box page; runs as the `haus` template |
+| Homes | [mdopp/homes](https://github.com/mdopp/homes) | the family's pages and app, the Box page; runs as the `homes` template |
 | Dokumente | [mdopp/dokumente](https://github.com/mdopp/dokumente) | scanner, splitting stacks, separator sheets, reading invoices and contracts |
 | Gesundheit | [mdopp/gesundheit](https://github.com/mdopp/gesundheit) | medical records from Paperless as a timeline per person, the daily note (#893); its template comes from the `apps` registry |
 | Archiv | [mdopp/archiv](https://github.com/mdopp/archiv) | each person's Signal, SMS, calls and mail in msgvault, locked in a vault only they open; imports while it is closed through an age-encrypted Briefkasten (ADR 0029); runs as the `archiv` template, once per person |
@@ -103,21 +103,21 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. 20,317 / 22,000 lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,718 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
-| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,415 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,574 |
-| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,763 |
+| State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,578 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 3,661 |
+| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,769 |
 | Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,356 |
-| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 265 |
+| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 393 |
 | Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,673 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,105 |
-| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,781 |
+| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,786 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,388 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,400 |
 
 ### Services from templates
 
@@ -135,8 +135,8 @@ The part the house trusts: it must work when everything else is broken. 20,317 /
 | [ESPHome](templates/esphome/) `esphome` | Firmware für Sprachgeräte und Sensoren | [esphome](https://github.com/esphome/esphome) |
 | [Netzlaufwerk](templates/file-share/) `file-share` | Gemeinsame Ordner im Heimnetz | [syncthing](https://hub.docker.com/r/syncthing/syncthing), [samba](https://hub.docker.com/r/servercontainers/samba), [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) |
 | [Fragen](templates/frage/) `frage` | Websuche mit Zusammenfassung | [laib-frage](frage/), [searxng](https://hub.docker.com/r/searxng/searxng) |
-| [Haus](templates/haus/) `haus` | Seiten und App der Familie | [haus](https://github.com/mdopp/haus), [laib-qmd](qmd/) |
 | [Home Assistant](templates/home-assistant/) `home-assistant` | Licht, Geräte, Sprachsteuerung | [home-assistant](https://github.com/home-assistant/home-assistant), [zwave-js-ui](https://github.com/zwave-js/zwave-js-ui), [python-matter-server](https://github.com/home-assistant-libs/python-matter-server) |
+| [Homes](templates/homes/) `homes` | Seiten und App der Familie | [homes](https://github.com/mdopp/homes), [laib-qmd](qmd/) |
 | [Immich](templates/immich/) `immich` | Fotos und Videos | [immich-server](https://github.com/immich-app/immich), [immich-machine-learning](https://github.com/immich-app/immich), [postgres](https://github.com/immich-app/immich), [redis](https://hub.docker.com/_/redis) |
 | [Kalender-Abos](templates/kalender/) `kalender` | Kalender von außen, nach Radicale | own script (Python) |
 | [Sprachmodell](templates/llama/) `llama` | Die KI der Box | [llama.cpp](https://github.com/ggml-org/llama.cpp) |
@@ -203,7 +203,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
 | Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
-| Haus (the surface): Box page, pairing, companion API for the widgets | `mdopp/haus`, `templates/haus` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
+| Homes (the surface): Box page, pairing, companion API for the widgets | `mdopp/homes`, `templates/homes` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
 | 27 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
@@ -230,7 +230,7 @@ runs there and what is open is `docs/ZIELBILD.md`.
    — the one-shot move from ServiceBay (done 2026-10-19; its runbook and
    scripts are in git history).
 6. [`docs/DEKONSTRUKTION.md`](docs/DEKONSTRUKTION.md) — history: how the
-   retired Solaris and its Android app were cut into Haus, Stimme, the Bote
+   retired Solaris and its Android app were cut into Homes, Stimme, the Bote
    and the Laib Operator.
 7. [`docs/C4.md`](docs/C4.md) — the system map in three C4 levels plus the
    "a service for the family" sequence.

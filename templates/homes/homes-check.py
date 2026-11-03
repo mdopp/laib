@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""haus's detail line for the Box page (#785): how many devices are signed in
-to the Haus app, for how many people, and when one was last active.
+"""homes's detail line for the Box page (#785): how many devices are signed in
+to the Homes app, for how many people, and when one was last active.
 
-Read from Haus's own devices.json (a list of {id, name, uid, hash, created,
+Read from Homes's own devices.json (a list of {id, name, uid, hash, created,
 lastSeen}), mounted read-only; only the count, the people and the newest
 lastSeen leave it, never a hash or a device's name. No network. No file yet
 means nobody has paired a device; a file that does not parse is "nicht
 gemessen".
 
-Environment: HAUS_DATA, STATUS_DIR.
+Environment: HOMES_DATA, STATUS_DIR.
 """
 import datetime, json, os, re
 
-DATA = os.environ.get("HAUS_DATA", "/haus")
+DATA = os.environ.get("HOMES_DATA", "/homes")
 STATUS = os.path.join(os.environ.get("STATUS_DIR", "/data"), "laib-status.json")
 
 
@@ -25,7 +25,7 @@ def status(detail, findings=()):
 
 
 def when(s):
-    """Go's RFC 3339 with nanoseconds, as Haus writes it; None when it is not one"""
+    """Go's RFC 3339 with nanoseconds, as Homes writes it; None when it is not one"""
     m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)$", s or "")
     if not m:
         return None
@@ -52,8 +52,8 @@ def main():
     except FileNotFoundError:
         return status("noch kein Gerät angemeldet")
     except (OSError, ValueError) as e:
-        return status("nicht gemessen: Haus' Geräteliste ist nicht lesbar (" + type(e).__name__ + ")",
-                      [{"severity": "info", "unmeasured": True, "detail": "Angemeldete Geräte nicht gezählt: devices.json ist nicht lesbar", "fix": "laib logs haus"}])
+        return status("nicht gemessen: Homes' Geräteliste ist nicht lesbar (" + type(e).__name__ + ")",
+                      [{"severity": "info", "unmeasured": True, "detail": "Angemeldete Geräte nicht gezählt: devices.json ist nicht lesbar", "fix": "laib logs homes"}])
     devices = [d for d in devices if isinstance(d, dict)]
     if not devices:
         return status("noch kein Gerät angemeldet")

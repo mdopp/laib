@@ -30,7 +30,7 @@ building a kernel under 15k lines beside it. One user, one migration
    in `policy.yml` says which classes laib may approve itself, with rollback
    on a red verify. See "Repair" below.
 4. **Hands, not users** (ADR 0006, ADR 0013). Every agent and program
-   acts as a hand: `resident`, `ops`, `pi`, `claude`, `bote`, `haus` and the
+   acts as a hand: `resident`, `ops`, `pi`, `claude`, `bote`, `homes` and the
    program hands in `policy.yml`. Each has a token and a tier ceiling there.
    The `ops` hand is the operator: it observes without limit and corrects
    inside an automatic envelope. Only the irreversible is a request to a
@@ -91,7 +91,7 @@ state or the journal, not as web pages.
 - Credential self-heal and 36 diagnose probes with action buttons. About ten probe scripts remain. One-click repairs come back through the chat, not a button (owner, mdopp, 2026-10-19, #441): a finding's `repair` verb becomes a proposal with `laib repair`, and it runs once a human approves.
 - 64 hand-written MCP tools and the in-code policy table.
 - Learning proposals, the Hermes and Claude-dev modules, the chat embed.
-- The portal with access requests; onboarding residents against LLDAP is a card on Haus's Box page.
+- The portal with access requests; onboarding residents against LLDAP is a card on Homes's Box page.
 - The Go TUI.
 - The Fritz!Box poller, the disk-import worker, the unmanaged bundle builder. The disk import is a Werkstatt skill (`importing-an-old-disk`) with `scripts/laib-import.py` for the copy (#456).
 - socket.io, email notifications, health-check CRUD. Health lives in the template; messages to the owner go through laib-notify: the Bote first, mail as the fallback (#441).
@@ -179,7 +179,7 @@ hand is stopped and `escalate` is the way on.
 ## Every touch answers at once
 
 UX is part of the feature, not a polish pass after it (owner, 2026-10-23,
-#588). Every touch — a button in Haus, a card in the Inbox, an answer of
+#588). Every touch — a button in Homes, a card in the Inbox, an answer of
 the Bote, a verb's reply — answers at once, shows its progress, and ends
 visibly where it began, in one of three states:
 
@@ -193,11 +193,11 @@ fits a phone screen without scrolling to it. Nobody reviews a PR before it
 merges (#866); checks hold this: `cmd/laib/taps854_test.go` runs every POST
 route of the pages and fails one that ends in none of the three states
 (#854), and the `plain855_test.go` lints keep raw text out of what people
-read (#855). What they do not see (a page's own script, Haus) is a
+read (#855). What they do not see (a page's own script, Homes) is a
 guideline, not a gate.
 
-Example: Haus „Scanner einrichten“ showed nothing after the tap. Laib had
-answered in 4 s — no scanner found, enter the address by hand — and Haus
+Example: Homes „Scanner einrichten“ showed nothing after the tap. Laib had
+answered in 4 s — no scanner found, enter the address by hand — and Homes
 never showed that answer. The search worked; the feature did not.
 
 ## The user's path
@@ -374,21 +374,21 @@ the household preset and never takes the lease.
 ## Readiness
 
 Laib has one state with three values, shown in the same place everywhere: the
-first line of the box page, Haus (which reads `/ready`) and the first line of
+first line of the box page, Homes (which reads `/ready`) and the first line of
 `laib status`.
 
 | State | Means | What you can do |
 |---|---|---|
 | `bereit` | daemon answers, state repo readable, apply possible | everything |
 | `eingeschränkt` | daemon answers, apply is locked (an apply is running, or the Werkstatt holds the GPU) | ask, read, propose, approve (it applies with the next run, #609) |
-| `nicht erreichbar` | no answer since time X | the Bote and Haus still answer; what needs Laib waits |
+| `nicht erreichbar` | no answer since time X | the Bote and Homes still answer; what needs Laib waits |
 
 Readiness is about what you can do, not about what is red. A red service, a
 full disk, a failed backup or a missing firewall leave it `bereit`; they are
 the red count and the red lines beside it (#856).
 
 One function computes the verdict (`pages.judge`, #856), and every surface
-reads it: `/ready`, the Status page, `laib status` (and `--json`, which Haus
+reads it: `/ready`, the Status page, `laib status` (and `--json`, which Homes
 reads over `laib_status`). It holds the state, what is red, the last backup
 with its places, its age and why it does not hold, and the last change (the
 last approved proposal). Red is what `laib diag` finds red, the probes the mail

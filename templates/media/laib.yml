@@ -14,7 +14,7 @@ upstream: [https://github.com/jellyfin/jellyfin, https://jellyfin.org/docs/]   #
 # (break-glass), registers the libraries Musik, Filme and Serien for the
 # folders Jellyfin itself sees under /media (#651), and logs the family in with their LLDAP
 # accounts through the LDAP-Authentication plugin (#256), Quick Connect on,
-# and gives Haus a hidden account that reads the music only and its token (#695).
+# and gives Homes a hidden account that reads the music only and its token (#695).
 after: [auth, file-share]        # LLDAP's read-only account (#256); the share's folders are mounted here (#36)
 routes:
   - host: media
@@ -38,10 +38,12 @@ secrets:
   - name: HA_MUSIC_ASSISTANT_TOKEN    # minted by music-assistant (#526): media only asks with it whether the radio stations are there (#646)
     external: true
     optional: true
-  - name: HAUS_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user haus (hidden, music only, no administrator), handed back; haus reads the music with it
+  - name: HOMES_JELLYFIN_TOKEN         # minted here (#695): the token of Jellyfin's user haus (hidden, music only, no administrator), handed back; Homes reads the music with it
+    was: HAUS_JELLYFIN_TOKEN   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true
-  - name: HAUS_JELLYFIN_KEY           # minted here (haus#152): the API key "Haus (Gesehen)", an administrator's as every Jellyfin key, handed back; haus reads each person's watched films and series with it, nothing else
+  - name: HOMES_JELLYFIN_KEY           # minted here (haus#152): the API key "Haus (Gesehen)", an administrator's as every Jellyfin key, handed back; Homes reads each person's watched films and series with it, nothing else
+    was: HAUS_JELLYFIN_KEY   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true
   - name: JELLYFIN_HA_PASSWORD        # Home Assistant's own Jellyfin account `homeassistant` (#375), not an LLDAP login; laib secret set, the same in HA's entry; without it no account

@@ -13,7 +13,7 @@ import (
 
 // #381: Authelia's default_redirection_url (where a login without rd= lands)
 // followed a hard-coded laib.<domain>, not box.yml laib.host. A hook gets
-// LAIB_START_URL: the family's entry (the service that provides haus) once
+// LAIB_START_URL: the family's entry (the service that provides homes) once
 // it is installed, else the box page. ServiceBay landed on its portal (www.).
 func TestHookGetsTheStartURL(t *testing.T) {
 	home := t.TempDir()
@@ -45,10 +45,10 @@ func TestHookGetsTheStartURL(t *testing.T) {
 	}}
 	st.Box.Laib.Host = "admin"
 	if got := startURL(st); got != "https://admin.x.home/" {
-		t.Errorf("with laib.host admin and no haus, LAIB_START_URL=%q, want https://admin.x.home/", got)
+		t.Errorf("with laib.host admin and no homes, LAIB_START_URL=%q, want https://admin.x.home/", got)
 	}
-	st.Services["haus"] = &state.Service{Name: "haus", Contract: state.Contract{Provides: []string{"haus"}, Routes: []state.Route{{Host: "haus", Port: 8650}}}}
-	if got := startURL(st); got != "https://haus.x.home/" {
-		t.Errorf("with haus installed, LAIB_START_URL=%q, want the family's entry https://haus.x.home/", got)
+	st.Services["homes"] = &state.Service{Name: "homes", Contract: state.Contract{Provides: []string{"homes"}, Routes: []state.Route{{Host: "homes", Port: 8650}}}}
+	if got := startURL(st); got != "https://homes.x.home/" {
+		t.Errorf("with homes installed, LAIB_START_URL=%q, want the family's entry https://homes.x.home/", got)
 	}
 }

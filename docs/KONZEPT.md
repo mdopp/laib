@@ -13,9 +13,9 @@ written down.
 |---|---|---|---|
 | **Laib** | the control plane: state repo, plan/apply/converge, proxy, SSO, DNS, model role, backup, journal, inbox, `/mcp` | `mdopp/laib` | one binary, user service |
 | **Operator** | the box's admin agent: watches, inspects, corrects inside the envelope, escalates, writes the morning report (ADR 0013) | `mdopp/laib` `operator/` | template `operator` |
-| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Haus; house and questions for everyone, the box for the admin's number only; one memory shared by everyone who talks to it, not kept apart per person (#884); approves nothing (ADR 0016, #778, #863) | Hermes, stock, configured by a template | template `bote` |
-| **Haus** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/haus` | template `haus` |
-| **Haus-Android** | the phone: TWA of Haus plus native widgets and the quick-settings tile | `mdopp/haus-android` | app |
+| **Bote** | the agent you talk to: Signal (later Matrix, Telegram), the Sprechen field in Homes; house and questions for everyone, the box for the admin's number only; one memory shared by everyone who talks to it, not kept apart per person (#884); approves nothing (ADR 0016, #778, #863) | Hermes, stock, configured by a template | template `bote` |
+| **Homes** | the surface: pages and cards, companion API for the phone, push, favorites, energy, the memory library (ADR 0014) | `mdopp/homes` | template `homes` |
+| **Homes-Android** | the phone: TWA of Homes plus native widgets and the quick-settings tile | `mdopp/homes-android` | app |
 | **Home Assistant** | the house brain: devices, automations, Assist (intents, timers, media via Music Assistant) | upstream | template `home-assistant` |
 | **Stimme** | the Wyoming set Assist speaks: wake word, Whisper, the Martin voice (ADR 0015); the wake word is the pretrained „Hey Mycroft“ (ADR 0030) | household registry | templates |
 | **Frage** | search + summary for "was ist …": Assist's conversation agent and a Bote tool | household registry (~300 lines) | template `frage` |
@@ -24,7 +24,7 @@ written down.
 | **Household registry** | every template the family uses, one Git repo with `laib template lint` in CI | `mdopp/laib-templates` | files |
 
 Retired: ServiceBay (one migration), Solaris as an agent (its memory lives
-on in Haus), the speaker-identity gatekeeper, pi-web as a separate
+on in Homes), the speaker-identity gatekeeper, pi-web as a separate
 surface, the web chat as a primary surface.
 
 ## Division of labour
@@ -35,18 +35,18 @@ surface, the web chat as a primary surface.
 | Install, update, roll back, back up | Laib | proposals and the dial, timers, journal |
 | Notice a red, look inside, fix it, learn | Operator | `inspect`, `exec`, `restart`, values, journal; morning report |
 | Escalate what it cannot fix | Operator → Werkstatt (Claude) | ticket with context bundle; result as PR or journal line |
-| Talk with the family, answer, tell the admin of a proposal (deciding is the Inbox's, #778) | Bote | Signal; Sprechen field; cards in Haus |
+| Talk with the family, answer, tell the admin of a proposal (deciding is the Inbox's, #778) | Bote | Signal; Sprechen field; cards in Homes |
 | Switch, time, play, answer "was ist" by voice | Home Assistant Assist + Stimme + Frage | the speaker answers; no LLM for intents |
-| Show state, switch by tap, pin favorites | Haus + Haus-Android | pages, widgets, tile |
+| Show state, switch by tap, pin favorites | Homes + Homes-Android | pages, widgets, tile |
 | Build a template, a migration, a fix nobody has | Werkstatt: pi first, Claude for the hard ones | PR to the household registry; human merges |
 | Decide the irreversible | the human | the Inbox (behind Authelia's second factor) or the host shell: remove, reboot, public route, money, external secrets (#778) |
-| Keep the knowledge | the journal (facts), the Haus memory (household), the Laib docs and ADRs (decisions), the Werkstatt transcripts (how) | all searchable |
+| Keep the knowledge | the journal (facts), the Homes memory (household), the Laib docs and ADRs (decisions), the Werkstatt transcripts (how) | all searchable |
 
 ## Hands, tiers, tokens
 
 | Hand | Who | Ceiling | May | Never |
 |---|---|---|---|---|
-| resident | family through Haus | read | see status cards | change the box |
+| resident | family through Homes | read | see status cards | change the box |
 | bote | the Bote | read + propose | read box state and journal; propose; everything in the house via HA; Frage; escalate, which lands with the owner as a Box-Aufgabe (#863) | approve; file a ticket in a repo |
 | ops | the Operator | apply | all of class 1 and 2 (ADR 0013) inside the envelope | remove, reboot, public routes, secrets, tokens |
 | pi | the Werkstatt's local coder | propose | propose template updates and values | apply |
@@ -65,7 +65,7 @@ claude) may approve a proposal that is not human-class and not its own
 - **Voice at home:** wake word, then: Wecker und Timer · "spiele Einslive"
   · "spiele Musik von …" / a playlist · "was ist …" · Schalter, Licht,
   Szenen. Guest mode for everyone: nobody is recognised, nobody needs to be.
-- **Haus on the phone and in the browser:** Start (Jetzt, Favoriten,
+- **Homes on the phone and in the browser:** Start (Jetzt, Favoriten,
   Haushalt, Häufig), Räume, Energie, Medien, Notizen & Dokumente,
   Kalender. The Sprechen field on every page talks to the Bote; the reply
   is a card.
@@ -90,7 +90,7 @@ claude) may approve a proposal that is not human-class and not its own
   (#863), and Claude is asked in the Werkstatt; a new proposal arrives as
   „Freigabe #17: … · <Inbox link>“ and is decided in the Inbox (#778).
 - **Box page** `laib.<domain>`: Status, Inbox with Freigeben/Ablehnen,
-  Journal. Also as cards on Haus's Box page: Operator "was ich gerade tue",
+  Journal. Also as cards on Homes's Box page: Operator "was ich gerade tue",
   Was läuft by purpose, Werkstatt tickets, Wakeword training, resident
   onboarding against LLDAP.
 - **Werkstatt** `dev.<domain>` and the Claude Code mobile app: watch pi and
@@ -102,7 +102,7 @@ claude) may approve a proposal that is not human-class and not its own
 - **Operator:** Laib MCP as `ops`; wakes on the webhook, the ten-minute
   tick and the nightly report; llama household preset.
 - **Bote (Hermes):** Signal gateway; HA integration; Laib MCP as `bote`;
-  the Haus MCP source "Haushalt" (calendar, contacts, notes, documents,
+  the Homes MCP source "Haushalt" (calendar, contacts, notes, documents,
   memory) and Frage as tools; reminders are calendar entries, not cron. Because nothing
   here is latency-critical, the Bote may ask the lease for the
   large preset (qwen3.6-35b-a3b, 131k context, MTP drafter) for a
@@ -127,16 +127,16 @@ claude) may approve a proposal that is not human-class and not its own
 
 | Data | Store | Written by | Read by | Surface |
 |---|---|---|---|---|
-| Appointments | Radicale (CalDAV) | you on the phone, the Bote, imports | HA (CalDAV integration), Haus Kalender, the Bote | phone calendar via DAVx⁵, Haus |
-| Contacts | Radicale (CardDAV) | you, imports | the Bote, Haus | phone contacts, Haus |
-| Reminders | calendar entries with alarms in Radicale | the Bote | HA rings, Haus push, phone | the same |
+| Appointments | Radicale (CalDAV) | you on the phone, the Bote, imports | HA (CalDAV integration), Homes Kalender, the Bote | phone calendar via DAVx⁵, Homes |
+| Contacts | Radicale (CardDAV) | you, imports | the Bote, Homes | phone contacts, Homes |
+| Reminders | calendar entries with alarms in Radicale | the Bote | HA rings, Homes push, phone | the same |
 | Timers, alarms | Home Assistant | voice | HA | the speaker |
-| Notes | Markdown files in the file share (Syncthing) | you with any app, the Bote | Haus search (memory library), the Bote | Haus Notizen, any phone app |
-| Documents | Paperless | scanner, import | Haus, the Bote | Paperless, Haus |
+| Notes | Markdown files in the file share (Syncthing) | you with any app, the Bote | Homes search (memory library), the Bote | Homes Notizen, any phone app |
+| Documents | Paperless | scanner, import | Homes, the Bote | Paperless, Homes |
 | What the Bote knows about you | what it noted and past conversations, one store for the whole house, not per person (#884; `templates/bote/README.md`, "Memory") | the Bote (Hermes `memory`, `session_search`) | the Bote, for everyone who talks to it | — |
 
 Agents reach all of it through one MCP source, **Haushalt**, served by
-Haus (calendar, contacts, notes, document search, memory search); Claude
+Homes (calendar, contacts, notes, document search, memory search); Claude
 mounts the same source in the Werkstatt. The Bote's own memory is shared
 by everyone who talks to it (#884); what is personal, it puts in the
 person's Haushalt.
@@ -148,7 +148,7 @@ holds the card (ADR 0011):
 
 | Preset | Used by | Why |
 |---|---|---|
-| household (qwen3.6-35b-a3b, MTP, 131k; owner 2026-10-17, #285) | Operator, Frage, Bote, Haus by default | always resident, the card never switches between them |
+| household (qwen3.6-35b-a3b, MTP, 131k; owner 2026-10-17, #285) | Operator, Frage, Bote, Homes by default | always resident, the card never switches between them |
 | qwen3.6-35b-a3b (MTP, 131k), window `full` | Bote for hard questions, long documents | text waits happily two seconds |
 | qwen3.8-27b, window `full` | Werkstatt (pi) | the window is a timer; the Bote can propose to move it ("heute Filmabend") |
 | gemma-4-12b, window `shared` | foundry-chronicle | fits beside the voice stack |
@@ -161,7 +161,7 @@ Voice has no LLM in its path; the card is free for the agents.
 ## One box, and a trial box
 
 The end state is one box, the Kraftwerk (the GPU box). The Intel NUC is
-the proving ground for the kernel, the agents and Haus: no GPU, so
+the proving ground for the kernel, the agents and Homes: no GPU, so
 `box.yml model.url` points at the Kraftwerk's model proxy; wiped after
 the trial. Two boxes with fixed roles would work (ADR 0018, parked) but
 are not the plan. What runs now is `docs/ZIELBILD.md`; the way there was #23 and #160.
@@ -205,5 +205,5 @@ runtime for voice (Hermes serves text only, as stock).
 ADR 0001 (state repo, one verb, repair in two halves) · 0002 (Quadlet,
 one binary) · 0006 (identities) · 0007 (Caddy) · 0011 (model role) · 0012
 (approval surfaces, trust boundary) · 0013 (the agent is the operator) ·
-0014 (Operator, Solaris, Haus are three programs; Solaris since retired) · 0015 (voice is
+0014 (Operator, Solaris, Homes are three programs; Solaris since retired) · 0015 (voice is
 Assist; Solaris retired) · 0016 (the Bote; Hermes as stock).

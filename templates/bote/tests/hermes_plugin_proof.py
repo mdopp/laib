@@ -148,7 +148,7 @@ for _ in range(50):
 time.sleep(0.3)
 assert NOTES == [("Bearer bote-proof", {"name": "laib_note", "arguments": {"kind": "watch", "text": "ha person=anna service=intent.HassTurnOn entity=light.bambi context=ctx-proof"}})], NOTES
 # #520, ADR 0015: HA's own intents first, on both paths. Signal ("Bambi an" from anna's number) and
-# Haus's Sprechen field (Hermes' API server: platform api_server, no sender): HA switches, the person
+# Homes's Sprechen field (Hermes' API server: platform api_server, no sender): HA switches, the person
 # reads HA's answer whatever the model wrote, and laib-journal still notes who switched (#591)
 NOTES.clear()
 ASKED.clear()

@@ -78,7 +78,7 @@ func TestNutzungProposesAtMostThreeFromTheUsageData(t *testing.T) {
 	}))
 	t.Cleanup(mcp.Close)
 	llm := fakeLLM(t, []Message{
-		{Role: "assistant", ToolCalls: []ToolCall{suggest("1", "9 unbeantwortete Fragen nach der Müllabfuhr in 7 Tagen", "Den Abfuhrkalender als Kalender in Haus anbinden, damit Bote und Stimme antworten können.", "familie")}},
+		{Role: "assistant", ToolCalls: []ToolCall{suggest("1", "9 unbeantwortete Fragen nach der Müllabfuhr in 7 Tagen", "Den Abfuhrkalender als Kalender in Homes anbinden, damit Bote und Stimme antworten können.", "familie")}},
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("2", "Bote: Wann kommt der Müll? (9×)", "Abfuhrkalender anbinden.", "familie")}},
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("3", "energie: 0 Aufrufe in 7 Tagen, haus 182", "Die Energie-Seite von der Startseite nach hinten schieben.", "beides")}},
 		{Role: "assistant", ToolCalls: []ToolCall{suggest("4", "keine Zahlen", "Mehr Musik.", "familie")}},

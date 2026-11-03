@@ -80,7 +80,7 @@ func plannedOf(t *testing.T, env *cliEnv, svc string) diag.Planned {
 	return p
 }
 
-// #305, #304: haus' and Music Assistant's errors while Home Assistant was
+// #305, #304: homes' and Music Assistant's errors while Home Assistant was
 // restarted on purpose. The restart announces itself before it acts: what
 // depends on Home Assistant is expected red while it runs, to diag and to
 // laib planned alike, and a little after it, for the reconnect; its window

@@ -172,7 +172,7 @@ class PostDeploy(unittest.TestCase):
     def run_hook(self, ma_key="", haus_key="", ldap_pw=LDAP_PW):
         env = dict(os.environ, ABS_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DOMAIN="vm.test",
                    OIDC_SECRET=OIDC, LAIB_SECRET_ABS_ROOT_PASSWORD=ROOT, LAIB_SECRET_ABS_MA_TOKEN=ma_key,
-                   LAIB_SECRET_HAUS_ABS_TOKEN=haus_key, LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD=ldap_pw,
+                   LAIB_SECRET_HOMES_ABS_TOKEN=haus_key, LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD=ldap_pw,
                    LLDAP_URL=f"http://127.0.0.1:{self.ldap.server_port}")
         p = subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -229,31 +229,31 @@ class PostDeploy(unittest.TestCase):
         key = self.handed.get("ABS_MA_TOKEN")
         self.assertTrue(key, "no key for Music Assistant")
         self.assertEqual([k["isActive"] for k in ABS["keys"] if k["userId"] == u["id"]], [True])
-        haus = self.handed["HAUS_ABS_TOKEN"]
+        haus = self.handed["HOMES_ABS_TOKEN"]
         self.run_hook(ma_key=key, haus_key=haus)
         self.assertEqual((self.handed, len(ABS["keys"])), ({}, 2), "a working key was replaced")
         self.run_hook(ma_key="a-key-abs-does-not-know", haus_key=haus)
         self.assertEqual(list(self.handed), ["ABS_MA_TOKEN"])
         self.assertEqual([k["apiKey"] for k in ABS["keys"] if k["userId"] == u["id"]], [self.handed["ABS_MA_TOKEN"]], "the old key of that name still works")
-        self.assertIn(haus, [k["apiKey"] for k in ABS["keys"]], "replacing Music Assistant's key took Haus' with it")
+        self.assertIn(haus, [k["apiKey"] for k in ABS["keys"]], "replacing Music Assistant's key took Homes' with it")
         self.assertEqual(len([u for u in ABS["users"] if u["username"] == "musicassistant"]), 1)
 
     def test_haus_gets_an_administrator_and_a_key_of_its_own(self):
-        # #676 (haus#123): Haus subscribes podcasts by link, checks the feed and asks for new episodes, which ABS
+        # #676 (haus#123): Homes subscribes podcasts by link, checks the feed and asks for new episodes, which ABS
         # allows administrators only (isAdminOrUp). Its own account `haus` and an API key, handed back as
-        # HAUS_ABS_TOKEN; the haus template declares it, so the same apply gives Haus its podcast page
+        # HOMES_ABS_TOKEN; the homes template declares it, so the same apply gives Homes its podcast page
         fresh()
         self.run_hook()
         (u,) = [u for u in ABS["users"] if u["username"] == "haus"]
         self.assertEqual(u["type"], "admin")
-        key = self.handed.get("HAUS_ABS_TOKEN")
-        self.assertTrue(key, "no key for Haus")
+        key = self.handed.get("HOMES_ABS_TOKEN")
+        self.assertTrue(key, "no key for Homes")
         self.assertEqual([(k["name"], k["isActive"]) for k in ABS["keys"] if k["userId"] == u["id"]], [("Haus (laib)", True)])
         self.run_hook(ma_key=self.handed["ABS_MA_TOKEN"], haus_key=key)
         self.assertEqual(self.handed, {}, "a working key was replaced")
         self.run_hook(ma_key="", haus_key="a-key-abs-does-not-know")
-        self.assertIn("HAUS_ABS_TOKEN", self.handed)
-        self.assertEqual([k["apiKey"] for k in ABS["keys"] if k["userId"] == u["id"]], [self.handed["HAUS_ABS_TOKEN"]])
+        self.assertIn("HOMES_ABS_TOKEN", self.handed)
+        self.assertEqual([k["apiKey"] for k in ABS["keys"] if k["userId"] == u["id"]], [self.handed["HOMES_ABS_TOKEN"]])
 
     def test_an_account_haus_that_is_no_administrator_becomes_one(self):
         fresh()
@@ -261,7 +261,7 @@ class PostDeploy(unittest.TestCase):
         ABS["users"] = [{"id": "usr-haus", "username": "haus", "type": "user", "permissions": {}}]
         self.run_hook()
         self.assertEqual([u["type"] for u in ABS["users"] if u["username"] == "haus"], ["admin"])
-        self.assertTrue(self.handed.get("HAUS_ABS_TOKEN"))
+        self.assertTrue(self.handed.get("HOMES_ABS_TOKEN"))
 
     # the box's admins are ABS's admins (2026-10-31): an OIDC-registered owner was „user“ in ABS and could make
     # no API key (admin-only there) for an app like Symfonium. LLDAP's group admins is who administers the box

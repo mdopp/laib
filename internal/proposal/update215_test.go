@@ -51,20 +51,20 @@ func TestTemplateUpdateBringsNewValues(t *testing.T) {
 	}
 }
 
-// #215, the case itself: a haus added before the Sprechen field has a
+// #215, the case itself: a homes added before the Sprechen field has a
 // values.yml without BOTE_URL and BOTE_KEY. The template update proposes,
-// loads, and renders Haus's line to the Bote — with the Bote's key when
+// loads, and renders Homes's line to the Bote — with the Bote's key when
 // there is one, empty without — and no hand edit.
-func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
+func TestHomesFromBeforeTheBoteStillPlans(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)
 	box, _ := os.ReadFile(filepath.Join(repo, "box.yml"))
-	os.WriteFile(filepath.Join(repo, "box.yml"), append(box, []byte("laib: {listen: 0.0.0.0}\n")...), 0o644) // haus needs laib's MCP
-	src := filepath.Join("..", "..", "templates", "haus")
-	dst := filepath.Join(repo, "services", "haus")
+	os.WriteFile(filepath.Join(repo, "box.yml"), append(box, []byte("laib: {listen: 0.0.0.0}\n")...), 0o644) // homes needs laib's MCP
+	src := filepath.Join("..", "..", "templates", "homes")
+	dst := filepath.Join(repo, "services", "homes")
 	os.MkdirAll(dst, 0o755)
 	entries, _ := os.ReadDir(src)
-	before := regexp.MustCompile(`(?m)^(BOTE_|Environment=HAUS_BOTE_).*\n`) // what haus had before #215
+	before := regexp.MustCompile(`(?m)^(BOTE_|Environment=HOMES_BOTE_).*\n`) // what homes had before #215
 	for _, e := range entries {
 		b, _ := os.ReadFile(filepath.Join(src, e.Name()))
 		name := e.Name()
@@ -74,7 +74,7 @@ func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
 		case "values.example.yml":
 			name = "values.yml"
 			b = []byte(strings.Replace(string(before.ReplaceAllString(string(b), "")), `ENERGY_FLOW: ""`, `ENERGY_FLOW: pv=sensor.dach`, 1))
-		case "haus.container":
+		case "homes.container":
 			b = before.ReplaceAll(b, nil)
 		}
 		os.WriteFile(filepath.Join(dst, name), b, 0o644)
@@ -83,19 +83,19 @@ func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
 		t.Fatalf("the install from before #215 must load: %v", err)
 	}
 	git(ctx, repo, "add", "-A")
-	git(ctx, repo, "commit", "-q", "-m", "haus, added before #215")
-	p, err := CreateFromEdit(ctx, repo, inbox, "laib", "template update haus", Edit{Update: &UpdateService{Name: "haus", Template: os.DirFS(src)}}, nil)
+	git(ctx, repo, "commit", "-q", "-m", "homes, added before #215")
+	p, err := CreateFromEdit(ctx, repo, inbox, "laib", "template update homes", Edit{Update: &UpdateService{Name: "homes", Template: os.DirFS(src)}}, nil)
 	if err != nil {
-		t.Fatalf("the haus template update must propose on an install from before #215: %v", err)
+		t.Fatalf("the homes template update must propose on an install from before #215: %v", err)
 	}
 	if err := Approve(ctx, repo, inbox, p, "human:core"); err != nil {
 		t.Fatal(err)
 	}
 	st, err := state.Load(repo)
 	if err != nil {
-		t.Fatalf("haus after the update does not load: %v", err)
+		t.Fatalf("homes after the update does not load: %v", err)
 	}
-	if v := st.Services["haus"].Values["ENERGY_FLOW"].Literal; v != "pv=sensor.dach" {
+	if v := st.Services["homes"].Values["ENERGY_FLOW"].Literal; v != "pv=sensor.dach" {
 		t.Errorf("the operator's ENERGY_FLOW became %q", v)
 	}
 	for _, c := range []struct {
@@ -106,17 +106,17 @@ func TestHausFromBeforeTheBoteStillPlans(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		unit := out["quadlet/haus/haus.container"]
-		key := "\nEnvironment=HAUS_BOTE_KEY=\n"
+		unit := out["quadlet/homes/homes.container"]
+		key := "\nEnvironment=HOMES_BOTE_KEY=\n"
 		if c.key != "" { // a podman secret since #224
-			key = "\nSecret=laib.haus.haus.HAUS_BOTE_KEY,type=env,target=HAUS_BOTE_KEY\n"
-			if v := render.PodmanSecrets(st, c.secrets)["laib.haus.haus.HAUS_BOTE_KEY"]; v != c.key {
-				t.Errorf("the HAUS_BOTE_KEY secret holds %q, want %q", v, c.key)
+			key = "\nSecret=laib.homes.homes.HOMES_BOTE_KEY,type=env,target=HOMES_BOTE_KEY\n"
+			if v := render.PodmanSecrets(st, c.secrets)["laib.homes.homes.HOMES_BOTE_KEY"]; v != c.key {
+				t.Errorf("the HOMES_BOTE_KEY secret holds %q, want %q", v, c.key)
 			}
 		}
-		for _, want := range []string{"\nEnvironment=HAUS_BOTE_URL=http://host.containers.internal:8642/v1\n", key} {
+		for _, want := range []string{"\nEnvironment=HOMES_BOTE_URL=http://host.containers.internal:8642/v1\n", key} {
 			if !strings.Contains(unit, want) {
-				t.Errorf("haus.container lacks %q:\n%s", strings.TrimSpace(want), unit)
+				t.Errorf("homes.container lacks %q:\n%s", strings.TrimSpace(want), unit)
 			}
 		}
 	}

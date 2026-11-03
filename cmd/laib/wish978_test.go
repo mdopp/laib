@@ -53,7 +53,7 @@ func TestAWishHasAStatusInTheStateRepo(t *testing.T) {
 		t.Fatalf("one open wish of durchsicht about whoami: %+v", ws)
 	}
 
-	// the Bote and Haus close nothing
+	// the Bote and Homes close nothing
 	if out, code := mcp.Call(ctx, env, st, "bote", "laib_wish", map[string]any{"args": "status", "stdin": ws[0].ID + " erledigt weg"}); code == cli.ExitOK {
 		t.Fatalf("the bote closed a wish: %s", out)
 	}

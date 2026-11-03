@@ -32,7 +32,7 @@ import (
 var routeKinds = map[string]string{
 	"/mcp":                        "machine: JSON-RPC for agents, behind tokens",
 	"/v1/":                        "machine: the FleetLock of the OS updates",
-	"/ready":                      "machine: JSON for Haus and the watchdog",
+	"/ready":                      "machine: JSON for Homes and the watchdog",
 	"/":                           "page",
 	"GET /stand":                  "fragment",
 	"/abmelden":                   "redirect to Authelia's logout",

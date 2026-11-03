@@ -13,14 +13,14 @@ export LAIB_QUADLET="${LAIB_QUADLET:-$HOME/.config/containers/systemd}"
 export LAIB_SYSTEMD="${LAIB_SYSTEMD:-$HOME/.config/systemd/user}"
 cleanup() {
   systemctl --user stop whoami.service 2>/dev/null || true
-  systemctl --user stop usage-metrics.service haus-boot.service 2>/dev/null || true
+  systemctl --user stop usage-metrics.service homes-boot.service 2>/dev/null || true
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
-  for s in HAUS_PROXY_SECRET LAIB_TOKEN HAUS_USAGE_TOKEN; do podman secret rm "laib.haus-boot.haus-boot.$s" >/dev/null 2>&1 || true; done
+  for s in HOMES_PROXY_SECRET LAIB_TOKEN HOMES_USAGE_TOKEN; do podman secret rm "laib.homes-boot.homes-boot.$s" >/dev/null 2>&1 || true; done
   systemctl --user stop laib-operator.service laib-haushalt.service 2>/dev/null || true
   for s in laib-operator.laib-operator.LAIB_TOKEN laib-haushalt.laib-haushalt.LAIB_TOKEN laib-haushalt.laib-haushalt.HAUSHALT_KEY; do podman secret rm "laib.$s" >/dev/null 2>&1 || true; done
   [ -z "${CANARY:-}" ] || sudo rm -rf /mnt/data/laib
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/haus-boot" "$LAIB_QUADLET/laib-operator" "$LAIB_QUADLET/laib-haushalt" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/homes-boot" "$LAIB_QUADLET/laib-operator" "$LAIB_QUADLET/laib-haushalt" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -164,7 +164,7 @@ kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
 grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="restart" and e["actor"]=="ops" for e in es) and any(e["verb"]=="note" for e in es), [e["verb"] for e in es]'
-# (before Haus: its test stops haus-boot on purpose, and enable's apply verifies every service)
+# (before Homes: its test stops homes-boot on purpose, and enable's apply verifies every service)
 # ADR 0027 (#624): the Operator in its own container, for real — the image
 # boot.yml built from this commit (OPERATOR_IMAGE, pinned into this laib),
 # the unit laib renders. Laib's key, secrets.age and the state repo stay out
@@ -211,47 +211,47 @@ podman exec "$OPC" python3 -I -S -c 'open("/proc/self/environ","rb").read()' >/d
 podman exec "$OPC" python3 -I -S -c 'import json; [json.load(open("/evals/" + f)) for f in ("incidents.json", "incidents-typed.json")]' || { echo "FAIL: the eval's cases are not in the Operator's image (#860)"; exit 1; }
 LAIB_ACTOR=human:boot "$BIN" operator disable >/dev/null || { echo "FAIL: operator disable exit $?"; exit 1; }
 [ "$(systemctl --user is-active laib-operator.service)" != active ] || { echo "FAIL: the Operator still runs after disable"; exit 1; }
-# #266: Haus counts what the family uses into usage-metrics, server-side, never who. The image as it
+# #266: Homes counts what the family uses into usage-metrics, server-side, never who. The image as it
 # ships, as a pod reaches usage-metrics (host.containers.internal) with its token as a podman secret.
-# A page view is counted in memory and flushed on the next tick or when Haus stops: stopping it is the
+# A page view is counted in memory and flushed on the next tick or when Homes stops: stopping it is the
 # tick here, so the test does not wait five minutes
-mkdir -p "$LAIB_HOME/state/services/haus-boot"
-cat > "$LAIB_HOME/state/services/haus-boot/laib.yml" <<YML
-name: haus-boot
-template: {registry: builtin, name: haus-boot, version: 1}
+mkdir -p "$LAIB_HOME/state/services/homes-boot"
+cat > "$LAIB_HOME/state/services/homes-boot/laib.yml" <<YML
+name: homes-boot
+template: {registry: builtin, name: homes-boot, version: 1}
 routes: []
 secrets:
-  - name: HAUS_BOOT_PROXY
-  - name: HAUS_BOOT_LAIB
+  - name: HOMES_BOOT_PROXY
+  - name: HOMES_BOOT_LAIB
   - name: USAGE_METRICS_TOKEN
     external: true
 data:
-  - path: \${DATA_DIR}/haus-boot
+  - path: \${DATA_DIR}/homes-boot
 health:
   http: http://127.0.0.1:18650/healthz
 ports: []
 YML
-cat > "$LAIB_HOME/state/services/haus-boot/values.yml" <<YML
-IMAGE: ghcr.io/mdopp/haus:latest
-PROXY: !secret HAUS_BOOT_PROXY
-LAIB: !secret HAUS_BOOT_LAIB
+cat > "$LAIB_HOME/state/services/homes-boot/values.yml" <<YML
+IMAGE: ghcr.io/mdopp/homes:latest
+PROXY: !secret HOMES_BOOT_PROXY
+LAIB: !secret HOMES_BOOT_LAIB
 USAGE_TOKEN: !secret USAGE_METRICS_TOKEN
 YML
-cat > "$LAIB_HOME/state/services/haus-boot/haus-boot.container" <<'UNIT'
+cat > "$LAIB_HOME/state/services/homes-boot/homes-boot.container" <<'UNIT'
 [Unit]
-Description=Haus boot test (#266)
+Description=Homes boot test (#266)
 
 [Container]
 Image=${IMAGE}
 PublishPort=127.0.0.1:18650:8650
-Environment=HAUS_LISTEN=0.0.0.0:8650
+Environment=HOMES_LISTEN=0.0.0.0:8650
 Environment=LAIB_URL=http://127.0.0.1:1
 Environment=LAIB_TOKEN=${LAIB}
-Environment=HAUS_PROXY_SECRET=${PROXY}
-Environment=HAUS_DATA=/data
-Environment=HAUS_USAGE_URL=http://host.containers.internal:8094
-Environment=HAUS_USAGE_TOKEN=${USAGE_TOKEN}
-Volume=${DATA_DIR}/haus-boot:/data:Z
+Environment=HOMES_PROXY_SECRET=${PROXY}
+Environment=HOMES_DATA=/data
+Environment=HOMES_USAGE_URL=http://host.containers.internal:8094
+Environment=HOMES_USAGE_TOKEN=${USAGE_TOKEN}
+Volume=${DATA_DIR}/homes-boot:/data:Z
 
 [Service]
 Restart=no
@@ -259,11 +259,11 @@ Restart=no
 [Install]
 WantedBy=default.target
 UNIT
-LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test: haus" || { echo "apply haus exit $?"; journalctl --user -u haus-boot.service --no-pager | tail -30; exit 1; }
-HP="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.haus-boot.haus-boot.HAUS_PROXY_SECRET)"
-if grep -rqF -- "$UMTOK" "$LAIB_QUADLET/haus-boot"; then echo "FAIL: usage-metrics' token is in Haus's unit"; exit 1; fi
-for _ in 1 2; do curl -fsS -o /dev/null -H "X-Haus-Proxy: $HP" -H "Remote-User: anna" -H "Remote-Name: Anna" "http://127.0.0.1:18650/start?von=widget.device"; done
-systemctl --user stop haus-boot.service
+LAIB_ACTOR=human:boot "$BIN" apply --reason "boot test: homes" || { echo "apply homes exit $?"; journalctl --user -u homes-boot.service --no-pager | tail -30; exit 1; }
+HP="$(podman secret inspect --showsecret --format "{{.SecretData}}" laib.homes-boot.homes-boot.HOMES_PROXY_SECRET)"
+if grep -rqF -- "$UMTOK" "$LAIB_QUADLET/homes-boot"; then echo "FAIL: usage-metrics' token is in Homes's unit"; exit 1; fi
+for _ in 1 2; do curl -fsS -o /dev/null -H "X-Homes-Proxy: $HP" -H "Remote-User: anna" -H "Remote-Name: Anna" "http://127.0.0.1:18650/start?von=widget.device"; done
+systemctl --user stop homes-boot.service
 curl -fsS -H @"$WORK/um.auth" "$UM/summary?days=1" | python3 -c '
 import sys, json
 s = json.load(sys.stdin)

@@ -13,12 +13,12 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 )
 
-// #571: Haus sets the scanner up. einrichten is a proposal, never a change:
+// #571: Homes sets the scanner up. einrichten is a proposal, never a change:
 // without the scan service it adds the template with the chosen device,
 // with it it sets SCANNER; main stays as it was. suchen, pruefen and probe
 // are orders the service carries out. A device name that could break the
 // unit (a quote, a newline, systemd's % and $) is refused.
-func TestHausSetsUpTheScannerByProposalOnly(t *testing.T) {
+func TestHomesSetsUpTheScannerByProposalOnly(t *testing.T) {
 	env, dataDir := testBox(t)
 	withHaushalt(t, env) // served behind the verb door since #598
 	call := func(args map[string]any) (string, int) {
@@ -26,7 +26,7 @@ func TestHausSetsUpTheScannerByProposalOnly(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return mcp.Call(context.Background(), env, st, "haus", "laib_scan", args)
+		return mcp.Call(context.Background(), env, st, "homes", "laib_scan", args)
 	}
 	proposed := func(out string, code int) int {
 		t.Helper()

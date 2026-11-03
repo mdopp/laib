@@ -45,7 +45,7 @@ func TestFuerAndWeg(t *testing.T) {
 	}
 }
 
-// Haus and the Bote act for one person: they see the admins' and
+// Homes and the Bote act for one person: they see the admins' and
 // everyone's tasks, and of the personal ones only that person's. A hand
 // that sees the whole list (a human, claude, ops, laib) sees every one.
 func TestWhoSeesWhichTask(t *testing.T) {

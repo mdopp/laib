@@ -197,7 +197,7 @@ CONTRACT = [("Anbieter", "string"), ("Vertragsnummer", "string"), ("Vertragsbegi
             ("Kündigungsfrist", "string"), ("Nächster Kündigungstermin", "date"), ("Betrag", "monetary"),
             ("Zahlungsintervall", "string"), ("Rechnungsnummer", "string"), ("Fällig am", "date"),   # the last three: invoices (#818, #820)
             ("Verwendungszweck", "string"),
-            ("Stapel", "string")]   # laib#909: Dokumente writes a scan's stack id (2026-10-29T17-07-46); Haus lists a stack by it
+            ("Stapel", "string")]   # laib#909: Dokumente writes a scan's stack id (2026-10-29T17-07-46); Homes lists a stack by it
 
 
 def config(api):

@@ -10,8 +10,8 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// #696 on the box: a haus from before haus#138 has DISCOGS_TOKEN: !secret
-// HAUS_DISCOGS_TOKEN. The new template declares HAUS_DISCOGS_KEY and
+// #696 on the box: a homes from before haus#138 has DISCOGS_TOKEN: !secret
+// HAUS_DISCOGS_TOKEN. The new template declares HOMES_DISCOGS_KEY and
 // _SECRET instead and its example has no DISCOGS_TOKEN, so the kept key
 // referenced an undeclared secret and the update never loaded. A key the
 // example no longer has whose !secret the new contract no longer declares
@@ -21,8 +21,8 @@ func TestTemplateUpdateDropsAValueWhoseSecretTheTemplateRetired(t *testing.T) {
 	repo, inbox := goldenRepo(t)
 	box, _ := os.ReadFile(filepath.Join(repo, "box.yml"))
 	os.WriteFile(filepath.Join(repo, "box.yml"), append(box, []byte("laib: {listen: 0.0.0.0}\n")...), 0o644)
-	src := filepath.Join("..", "..", "templates", "haus")
-	dst := filepath.Join(repo, "services", "haus")
+	src := filepath.Join("..", "..", "templates", "homes")
+	dst := filepath.Join(repo, "services", "homes")
 	os.MkdirAll(dst, 0o755)
 	entries, _ := os.ReadDir(src)
 	for _, e := range entries {
@@ -31,33 +31,33 @@ func TestTemplateUpdateDropsAValueWhoseSecretTheTemplateRetired(t *testing.T) {
 		switch name {
 		case "README.md":
 			continue
-		case "values.example.yml": // the haus from before haus#138, plus two of the owner's own
+		case "values.example.yml": // the homes from before haus#138, plus two of the owner's own
 			name = "values.yml"
-			s = strings.Replace(s, "DISCOGS_KEY: !secret HAUS_DISCOGS_KEY", "DISCOGS_TOKEN: !secret HAUS_DISCOGS_TOKEN", 1)
-			s = strings.Replace(s, "DISCOGS_SECRET: !secret HAUS_DISCOGS_SECRET", "", 1)
-			s += "MINE: hallo # the owner's\nPROXY_TOO: !secret HAUS_PROXY_SECRET\n"
+			s = strings.Replace(s, "DISCOGS_KEY: !secret HOMES_DISCOGS_KEY", "DISCOGS_TOKEN: !secret HAUS_DISCOGS_TOKEN", 1)
+			s = strings.Replace(s, "DISCOGS_SECRET: !secret HOMES_DISCOGS_SECRET", "", 1)
+			s += "MINE: hallo # the owner's\nPROXY_TOO: !secret HOMES_PROXY_SECRET\n"
 		case "laib.yml":
-			s = strings.Replace(s, "name: HAUS_DISCOGS_KEY", "name: HAUS_DISCOGS_TOKEN", 1)
-			s = strings.Replace(s, "name: HAUS_DISCOGS_SECRET", "name: HAUS_DISCOGS_OTHER", 1)
-		case "haus.container":
-			s = strings.Replace(s, "Environment=HAUS_DISCOGS_KEY=${DISCOGS_KEY}\nEnvironment=HAUS_DISCOGS_SECRET=${DISCOGS_SECRET}", "Environment=HAUS_DISCOGS_TOKEN=${DISCOGS_TOKEN}", 1)
+			s = strings.Replace(s, "name: HOMES_DISCOGS_KEY", "name: HAUS_DISCOGS_TOKEN", 1)
+			s = strings.Replace(s, "name: HOMES_DISCOGS_SECRET", "name: HOMES_DISCOGS_OTHER", 1)
+		case "homes.container":
+			s = strings.Replace(s, "Environment=HOMES_DISCOGS_KEY=${DISCOGS_KEY}\nEnvironment=HOMES_DISCOGS_SECRET=${DISCOGS_SECRET}", "Environment=HAUS_DISCOGS_TOKEN=${DISCOGS_TOKEN}", 1)
 		}
 		os.WriteFile(filepath.Join(dst, name), []byte(s), 0o644)
 	}
 	if _, err := state.Load(repo); err != nil {
-		t.Fatalf("the haus from before haus#138 must load: %v", err)
+		t.Fatalf("the homes from before haus#138 must load: %v", err)
 	}
 	git(ctx, repo, "add", "-A")
-	git(ctx, repo, "commit", "-q", "-m", "haus, from before haus#138")
-	p, err := CreateFromEdit(ctx, repo, inbox, "laib", "template update haus", Edit{Update: &UpdateService{Name: "haus", Template: os.DirFS(src)}}, nil)
+	git(ctx, repo, "commit", "-q", "-m", "homes, from before haus#138")
+	p, err := CreateFromEdit(ctx, repo, inbox, "laib", "template update homes", Edit{Update: &UpdateService{Name: "homes", Template: os.DirFS(src)}}, nil)
 	if err != nil {
-		t.Fatalf("the haus template update must propose on a box with HAUS_DISCOGS_TOKEN: %v", err)
+		t.Fatalf("the homes template update must propose on a box with HAUS_DISCOGS_TOKEN: %v", err)
 	}
 	if err := Approve(ctx, repo, inbox, p, "human:core"); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(filepath.Join(dst, "values.yml"))
-	for _, want := range []string{"DISCOGS_KEY: !secret HAUS_DISCOGS_KEY", "DISCOGS_SECRET: !secret HAUS_DISCOGS_SECRET", "MINE: hallo # the owner's", "PROXY_TOO: !secret HAUS_PROXY_SECRET"} {
+	for _, want := range []string{"DISCOGS_KEY: !secret HOMES_DISCOGS_KEY", "DISCOGS_SECRET: !secret HOMES_DISCOGS_SECRET", "MINE: hallo # the owner's", "PROXY_TOO: !secret HOMES_PROXY_SECRET"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("values.yml lacks %q:\n%s", want, b)
 		}
@@ -69,9 +69,9 @@ func TestTemplateUpdateDropsAValueWhoseSecretTheTemplateRetired(t *testing.T) {
 
 // The card says it in Details: a value a template update takes away.
 func TestACardSaysAValueTheTemplateTookAway(t *testing.T) {
-	p := &Proposal{Files: []string{"services/haus/values.yml"}, News: []string{"Haus kann mehr"},
-		Changes: []Change{{Op: "-", Service: "haus", Key: "DISCOGS_TOKEN", Old: "!secret HAUS_DISCOGS_TOKEN"}}}
-	if d := Card(p, "example.org"); !strings.Contains(d.Details, "Haus: DISCOGS_TOKEN entfällt, die Vorlage braucht es nicht mehr (bisher ein Geheimnis (HAUS_DISCOGS_TOKEN))") {
+	p := &Proposal{Files: []string{"services/homes/values.yml"}, News: []string{"Homes kann mehr"},
+		Changes: []Change{{Op: "-", Service: "homes", Key: "DISCOGS_TOKEN", Old: "!secret HAUS_DISCOGS_TOKEN"}}}
+	if d := Card(p, "example.org"); !strings.Contains(d.Details, "Homes: DISCOGS_TOKEN entfällt, die Vorlage braucht es nicht mehr (bisher ein Geheimnis (HAUS_DISCOGS_TOKEN))") {
 		t.Errorf("Details does not say the value goes: %s", d.Details)
 	}
 }

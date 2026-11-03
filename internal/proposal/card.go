@@ -73,7 +73,7 @@ var VerbTier map[string]string
 
 // handWords: the hands by the names the family knows, and what they are.
 var handWords = map[string][2]string{
-	"haus": {"Haus", "die Familienseiten"}, "bote": {"der Bote", "Signal"}, "ops": {"der Operator", ""},
+	"homes": {"Homes", "die Familienseiten"}, "bote": {"der Bote", "Signal"}, "ops": {"der Operator", ""},
 	"claude": {"Claude in der Werkstatt", ""}, "pi": {"pi", ""}, "laib": {"Laib", ""},
 	"notify": {"die Benachrichtigung", "über den Boten oder per Mail"}, "approver": {"die alte Freigabe über Signal", "bis #778"},
 	"werkstatt": {"die Werkstatt", ""}, "resident": {"die Bewohner", ""}, "human": {"ein Mensch", ""},

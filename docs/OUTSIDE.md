@@ -12,7 +12,7 @@ port-forward edges in the network map); Laib does not know the router exists.
 Without the forward nothing changes for a LAN-only (`exposure: internal`)
 name: Caddy answers any source outside the private ranges with 403 before
 Authelia. What the person sees is a German page saying the name works only
-in the home WLAN, and a link to Haus, which works on the road (#480). A
+in the home WLAN, and a link to Homes, which works on the road (#480). A
 device at home that resolves the public address (Android's Private DNS, a
 browser's secure DNS, iCloud Private Relay) comes back through the router,
 which hands Caddy its public address: the page names the address Caddy saw
@@ -38,22 +38,22 @@ about *who* is in a group.
 
 A resident is invited, never signs up (owner, 2026-10-18; no public form, as
 ServiceBay's `dopp.cloud` request page was). `laib person invite <user>
---first F --last L --email E [--group family|admins]`, or Haus's Box card
-through the haus hand's `person_invite` (haus#56), creates the LLDAP user
+--first F --last L --email E [--group family|admins]`, or Homes's Box card
+through the homes hand's `person_invite` (haus#56), creates the LLDAP user
 without a password, in the group, and starts Authelia's "Passwort vergessen"
 for it (#360). Authelia mails the link, in German, with the way to
-`haus.<domain>/willkommen`; the person sets the first password there, so no
-password passes through Laib or Haus. Without a mail server (#359) the verb
+`homes.<domain>/willkommen`; the person sets the first password there, so no
+password passes through Laib or Homes. Without a mail server (#359) the verb
 returns the link to pass on (Signal); it lives 24 hours, and `--resend`
 sends a new one and keeps the group. `laib person pending` lists who has not
 used the link yet. `--signal +49…` also proposes the person's Signal number
 for box.yml `people` (#596), approved by a human like any box.yml change;
-`laib person signal <user> +49…` sets or changes it later. The haus hand may invite into `family` only: an admin is
+`laib person signal <user> +49…` sets or changes it later. The homes hand may invite into `family` only: an admin is
 a human's call at the console. Removing someone stays LLDAP's admin UI
 (`ldap.`, at home only, behind Authelia's two factors and then LLDAP's own
 login). The tool doing the LLDAP and Authelia work is the auth template's
 `person.py`, run in the hooks image like a hook. `dopp.cloud` and `www.`
-redirect to `haus.` (the haus route's `redirectFrom`), so the old entry point
+redirect to `homes.` (the homes route's `redirectFrom`), so the old entry point
 still leads somewhere.
 
 ## No canary channel

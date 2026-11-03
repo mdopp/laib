@@ -82,7 +82,7 @@ func fixture856(t *testing.T) *cli.Env {
 }
 
 // #856: one fixture, one verdict. /ready (Solaris, the watchdog), the Status
-// page, `laib status --json` (Haus reads it over laib_status) and the text
+// page, `laib status --json` (Homes reads it over laib_status) and the text
 // of `laib status` say the same about what is red, the backup and the last
 // change; and what laib diag mails as red is red on them.
 func TestOneFixtureGivesTheSameVerdictOnEverySurface(t *testing.T) {

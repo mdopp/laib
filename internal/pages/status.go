@@ -109,7 +109,7 @@ type ServiceStatus struct {
 }
 
 // CollectStatus reads the box and gives the one verdict (#856) that /ready,
-// the Status page, laib status and Haus show: judge decides, from facts.
+// the Status page, laib status and Homes show: judge decides, from facts.
 func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readiness, []ServiceStatus) {
 	now := time.Now()
 	r := Readiness{LastHeard: now.UTC().Format(time.RFC3339), Version: cli.Version}

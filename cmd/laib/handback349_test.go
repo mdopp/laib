@@ -14,10 +14,10 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// #349: Home Assistant's post-deploy mints Haus's and the Bote's tokens and
+// #349: Home Assistant's post-deploy mints Homes's and the Bote's tokens and
 // hands them back (laib-secret:). Hand-backs were stored after the run, so a
 // service that declares one took it only on the next apply: `laib apply
-// home-assistant` ended green and Haus still had no token. Now each service
+// home-assistant` ended green and Homes still had no token. Now each service
 // that declares a handed-back secret is planned again in the same apply, and
 // applied when its rendered output changed (the new value reaches its
 // container as a podman secret, and the service restarts).

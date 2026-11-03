@@ -1,4 +1,4 @@
-"""#214: bote's post-deploy probes the Haushalt with Haus's bearer and spawns
+"""#214: bote's post-deploy probes the Haushalt with Homes's bearer and spawns
 python3 for it. A spawned process's argv shows in `ps` on the host, to every
 local user, so the bearer must not be on it. The hook runs here with a
 python3 on PATH that records its argv, against a fake Haushalt that records
@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-SECRETS = {"HAUS_HAUSHALT_TOKEN": "hh-bearer-6Zq", "BOTE_LAIB_TOKEN": "laib-tok-9Xr", "GESUNDHEIT_BOTE_TOKEN": "ges-bearer-3Kp"}
+SECRETS = {"HOMES_HAUSHALT_TOKEN": "hh-bearer-6Zq", "BOTE_LAIB_TOKEN": "laib-tok-9Xr", "GESUNDHEIT_BOTE_TOKEN": "ges-bearer-3Kp"}
 SEEN = []
 
 
@@ -49,7 +49,7 @@ class PostDeploy(unittest.TestCase):
             self.assertIn("Bearer ${GESUNDHEIT_TOKEN}", cfg)
             self.assertIn("GESUNDHEIT_TOKEN=" + SECRETS["GESUNDHEIT_BOTE_TOKEN"], Path(d, "bote/hermes/.env").read_text())
             self.assertIn("tagesnotiz_eintragen", Path(d, "bote/hermes/SOUL.md").read_text(), "the rule is in the soul")
-        self.assertIn("Bearer " + SECRETS["HAUS_HAUSHALT_TOKEN"], SEEN, "the probe did not carry the bearer")
+        self.assertIn("Bearer " + SECRETS["HOMES_HAUSHALT_TOKEN"], SEEN, "the probe did not carry the bearer")
         self.assertIn("Bearer " + SECRETS["GESUNDHEIT_BOTE_TOKEN"], SEEN, "gesundheit's probe did not carry its bearer")
         for name, s in SECRETS.items():
             self.assertNotIn(s, argv, f"{name} is on a process's argv, where ps shows it")

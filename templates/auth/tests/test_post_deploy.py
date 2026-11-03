@@ -19,7 +19,7 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": [], "adds": [], "members": {}, "deleted": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
-           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw",
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HOMES_RADICALE_PASSWORD": "-haus-cal-pw",
            "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw", "AUDIOBOOKSHELF_LDAP_PASSWORD": "-abs-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
@@ -205,13 +205,13 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(LDAP["pw"][ADMIN_DN], SECRETS["LLDAP_ADMIN_PASSWORD"])
 
     def test_haus_gets_its_radicale_account(self):
-        # laib#418: Haus reads and writes the household calendar as its own
+        # laib#418: Homes reads and writes the household calendar as its own
         # LLDAP account, seeded here like radicale's reader, but no LDAP reader
         self.run_hook([], [])
         self.assertIn("haus", STATE["users"])
-        self.assertEqual(LDAP["pw"].get("uid=haus,ou=people," + BASE_DN), SECRETS["HAUS_RADICALE_PASSWORD"], LDAP)
+        self.assertEqual(LDAP["pw"].get("uid=haus,ou=people," + BASE_DN), SECRETS["HOMES_RADICALE_PASSWORD"], LDAP)
         self.assertIn(("uid=haus,ou=people," + BASE_DN, True), LDAP["binds"])
-        self.assertNotIn("haus", STATE["adds"], "Haus's calendar account must not read the directory (lldap_strict_readonly) or join a group")
+        self.assertNotIn("haus", STATE["adds"], "Homes's calendar account must not read the directory (lldap_strict_readonly) or join a group")
         # set again on every run, as a service secret (#209)
         self.run_hook(["core", "haus"], ["admins", "family", "lldap_strict_readonly"])
         self.assertIn("uid=haus,ou=people," + BASE_DN, LDAP["set"], LDAP)

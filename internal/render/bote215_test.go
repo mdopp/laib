@@ -9,17 +9,17 @@ import (
 	"testing"
 )
 
-// #215: Haus's Sprechen field reaches the Bote. Haus gets the Bote's
+// #215: Homes's Sprechen field reaches the Bote. Homes gets the Bote's
 // OpenAI base as its pod reaches it (host.containers.internal, ADR 0007,
 // never an IP) and Hermes' API key, a secret the Bote generates: set while
 // the Bote is installed, empty without it (no field). The bote pod
-// publishes Hermes' API port beyond loopback, as haus does 8650 for the
+// publishes Hermes' API port beyond loopback, as homes does 8650 for the
 // Bote (ADR 0012 §4); lan: false keeps it off the physical interfaces.
-func TestHausReachesTheBote(t *testing.T) {
+func TestHomesReachesTheBote(t *testing.T) {
 	st := shippedBox(t)
 	env := func(out Output, name string) (string, bool) {
 		t.Helper()
-		m := regexp.MustCompile(`(?m)^Environment=` + name + `=(.*)$`).FindStringSubmatch(out["quadlet/haus/haus.container"])
+		m := regexp.MustCompile(`(?m)^Environment=` + name + `=(.*)$`).FindStringSubmatch(out["quadlet/homes/homes.container"])
 		if m == nil {
 			return "", false
 		}
@@ -31,15 +31,15 @@ func TestHausReachesTheBote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, ok := env(out, "HAUS_BOTE_URL"); !ok || v != "http://host.containers.internal:8642/v1" {
-		t.Errorf("HAUS_BOTE_URL = %q (set: %v), want the Bote's API as the haus pod reaches it", v, ok)
+	if v, ok := env(out, "HOMES_BOTE_URL"); !ok || v != "http://host.containers.internal:8642/v1" {
+		t.Errorf("HOMES_BOTE_URL = %q (set: %v), want the Bote's API as the homes pod reaches it", v, ok)
 	}
-	if v, ok := env(out, "HAUS_BOTE_KEY"); !ok || v != "k-bote-api" {
-		t.Errorf("HAUS_BOTE_KEY = %q (set: %v), want the Bote's API key", v, ok)
+	if v, ok := env(out, "HOMES_BOTE_KEY"); !ok || v != "k-bote-api" {
+		t.Errorf("HOMES_BOTE_KEY = %q (set: %v), want the Bote's API key", v, ok)
 	}
 	pod := out["quadlet/bote/bote.pod"]
 	if !strings.Contains(pod, "\nPublishPort=8642:8642\n") || strings.Contains(pod, "127.0.0.1:8642") {
-		t.Errorf("the bote pod must publish 8642 beyond loopback for the haus pod:\n%s", pod)
+		t.Errorf("the bote pod must publish 8642 beyond loopback for the homes pod:\n%s", pod)
 	}
 	if nft := out["nftables/laib.nft"]; !regexp.MustCompile(`dport \{[^}]*\b8642\b`).MatchString(nft) {
 		t.Errorf("8642 is not kept off the LAN:\n%s", nft)
@@ -50,8 +50,8 @@ func TestHausReachesTheBote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, ok := env(out, "HAUS_BOTE_KEY"); !ok || v != "" {
-		t.Errorf("without the Bote HAUS_BOTE_KEY must render empty, got %q (set: %v)", v, ok)
+	if v, ok := env(out, "HOMES_BOTE_KEY"); !ok || v != "" {
+		t.Errorf("without the Bote HOMES_BOTE_KEY must render empty, got %q (set: %v)", v, ok)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 
 // #285, owner 2026-10-17: Qwen is the household model. Every consumer's
 // default is the llama template's household preset, so nobody pulls the
-// card away from it: the Operator, Frage, the Bote and Haus.
+// card away from it: the Operator, Frage, the Bote and Homes.
 func TestEveryConsumerDefaultsToTheHouseholdPreset(t *testing.T) {
 	root := filepath.Join("..", "..")
 	var presets struct {
@@ -39,7 +39,7 @@ func TestEveryConsumerDefaultsToTheHouseholdPreset(t *testing.T) {
 		t.Fatalf("the Operator's unit does not default to %s:\n%s", h, unit)
 	}
 	for file, re := range map[string]string{
-		"templates/haus/haus.container":      `HAUS_LLM_MODEL=(\S+)`,
+		"templates/homes/homes.container":    `HOMES_LLM_MODEL=(\S+)`,
 		"templates/bote/values.example.yml":  `(?m)^MODEL_NAME: (\S+)`,
 		"templates/frage/values.example.yml": `(?m)^MODEL_NAME: (\S+)`,
 		"frage/cmd/frage/main.go":            `"MODEL_NAME", "([^"]+)"`,

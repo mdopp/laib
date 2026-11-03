@@ -457,7 +457,7 @@ func liveIf(body string) string {
 
 // statusBody is the status page: the box's line, one card per service with
 // its state and note, the backup and the last change, all from the one
-// verdict (#856); the morning report is Haus's (#798).
+// verdict (#856); the morning report is Homes's (#798).
 func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, show string) string {
 	var b strings.Builder
 	// the owner's filter by state (#785): problems first; a paused service counts green

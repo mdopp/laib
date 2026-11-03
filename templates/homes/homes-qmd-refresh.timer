@@ -1,5 +1,5 @@
 [Unit]
-Description=Haus: refresh the memory library every quarter hour
+Description=Homes: refresh the memory library every quarter hour
 
 [Timer]
 OnCalendar=*:0/15

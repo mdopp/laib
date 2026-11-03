@@ -79,16 +79,16 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 	// laib propose --grant: one verb for one hand, as a proposal
 	env.Actor = "human:test"
 	st, _ := cli.LoadState(env)
-	out, code := mcp.Call(ctx, env, st, "claude", "laib_propose", map[string]any{"reason": "Haus soll scannen", "hand": "haus", "verb": "scan"})
+	out, code := mcp.Call(ctx, env, st, "claude", "laib_propose", map[string]any{"reason": "Homes soll scannen", "hand": "homes", "verb": "scan"})
 	if code != cli.ExitOK || !strings.Contains(out, "policy.yml") {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	for _, bad := range []map[string]any{
-		{"reason": "x", "hand": "haus", "verb": "fly"},    // no such verb
-		{"reason": "x", "hand": "nobody", "verb": "scan"}, // no such hand
-		{"reason": "x", "hand": "claude", "verb": "scan"}, // no list: a list would narrow it
-		{"reason": "x", "hand": "haus", "verb": "status"}, // has it
-		{"reason": "x", "hand": "haus"},                   // half a grant
+		{"reason": "x", "hand": "homes", "verb": "fly"},    // no such verb
+		{"reason": "x", "hand": "nobody", "verb": "scan"},  // no such hand
+		{"reason": "x", "hand": "claude", "verb": "scan"},  // no list: a list would narrow it
+		{"reason": "x", "hand": "homes", "verb": "status"}, // has it
+		{"reason": "x", "hand": "homes"},                   // half a grant
 	} {
 		if out, code := mcp.Call(ctx, env, st, "claude", "laib_propose", bad); code == cli.ExitOK {
 			t.Fatalf("%v: %s", bad, out)

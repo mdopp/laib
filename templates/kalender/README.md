@@ -1,7 +1,7 @@
 # kalender
 
 Calendars from outside into Radicale, one way (#495). The owner decided on
-2026-10-21: Radicale is the one place. Haus, the Bote (`haushalt`:
+2026-10-21: Radicale is the one place. Homes, the Bote (`haushalt`:
 `termine`) and Home Assistant read there; appointments are still made where
 they were (Google), and a mirror only reads.
 
@@ -10,13 +10,13 @@ they were (Google), and a mirror only reads.
   app, nothing that expires after seven days. A public calendar (Feiertage,
   Schulferien from openholidaysapi.org, the municipality's Müllabfuhr) is
   any ICS address.
-- **Entered in Haus, kept by laib.** Haus → Kalender → „Kalender hinzufügen“
+- **Entered in Homes, kept by laib.** Homes → Kalender → „Kalender hinzufügen“
   (haus#66) hands the address to `laib calendar subscribe <person> <name>
   google|abo [<title>]` on stdin. laib keeps every subscription in
   `secrets.age` as `KALENDER_ABOS` and applies this template again. The
-  address is never answered, journalled or put on argv; Haus shows only
+  address is never answered, journalled or put on argv; Homes shows only
   „verbunden seit …, zuletzt abgeglichen vor …“ and **Trennen**
-  (`laib calendar unsubscribe`). For an admin without Haus the same verb
+  (`laib calendar unsubscribe`). For an admin without Homes the same verb
   works on the console, the address piped in.
 - **Read only, as a service account.** `kalender.py` writes as Radicale's
   account `kalender` (seeded by `auth`), whose rights
@@ -62,16 +62,16 @@ behind the app by some hours, which a family calendar tolerates.
    `laib apply home-assistant`: auth legt die Konten `kalender` und
    `homeassistant` an, Radicale bekommt die Rechte, Home Assistant den
    Kalender-Eintrag.
-2. In Haus → Kalender → „Kalender hinzufügen“ → „Google-Kalender
+2. In Homes → Kalender → „Kalender hinzufügen“ → „Google-Kalender
    verbinden“. Die Adresse steht in Google Kalender (im Browser) unter
    Einstellungen → links den Kalender wählen → „Kalender integrieren“ →
-   „Geheime Adresse im iCal-Format“. Kopieren, in Haus einfügen, fertig.
+   „Geheime Adresse im iCal-Format“. Kopieren, in Homes einfügen, fertig.
 3. In Home Assistant unter Einstellungen → Geräte & Dienste den alten
    CalDAV-Eintrag mit deinem eigenen Konto löschen; der neue heißt
    „homeassistant“.
 
 Wenn `laib diag` „Google kennt die geheime Adresse nicht mehr“ meldet: die
-Adresse wurde in Google zurückgesetzt. Die neue Adresse in Haus wieder
+Adresse wurde in Google zurückgesetzt. Die neue Adresse in Homes wieder
 verbinden.
 
 Ein Termin, den jemand auf dem Handy in einen `google-…`- oder

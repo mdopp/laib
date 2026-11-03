@@ -6,7 +6,7 @@ It logs in as Jellyfin's admin (break-glass, the same as post-deploy) under
 its own device id, reads /Items/Counts, /Users and the sessions playing now,
 and logs that session out again, so the timer leaves no device behind. Only
 reads. The family's accounts are those the LDAP plugin made (#256): the
-admin, Haus and the service accounts are not counted. Jellyfin refusing or
+admin, Homes and the service accounts are not counted. Jellyfin refusing or
 not answering is "nicht gemessen" and why, never a number.
 
 Environment: JELLYFIN_URL, JELLYFIN_ADMIN, JELLYFIN_PASSWORD, STATUS_DIR.
