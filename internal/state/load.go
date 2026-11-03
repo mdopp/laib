@@ -444,6 +444,26 @@ func (st *State) validate() []error {
 			}
 		}
 	}
+	// a former place (laib#1021) is under the data dir and no service's own:
+	// apply moves it, so a service still in the state would lose its data
+	keeps := map[string]string{}
+	for _, name := range st.ServiceNames() {
+		for _, d := range st.Services[name].Contract.Data {
+			keeps[d.Path] = name
+		}
+	}
+	for _, name := range st.ServiceNames() {
+		for _, d := range st.Services[name].Contract.Data {
+			if d.Was != "" && (!strings.HasPrefix(d.Was, "${DATA_DIR}/") || strings.Contains(d.Was, "..") || keeps[d.Was] != "") {
+				fail("services/%s/laib.yml: %s was %s: a former place is under ${DATA_DIR}/ and kept by no service (%s) (laib#1021)", name, d.Path, d.Was, keeps[d.Was])
+			}
+		}
+		for _, s := range st.Services[name].Contract.Secrets {
+			if s.Was == s.Name && s.Was != "" {
+				fail("services/%s/laib.yml: %s was itself (laib#1021)", name, s.Name)
+			}
+		}
+	}
 	// one host port, one service (#46): two units publishing the same port
 	// never both start, and podman says so only at the second start
 	owner := map[string]string{}

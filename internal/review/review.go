@@ -522,6 +522,9 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 		if had && reflect.DeepEqual(old, s) { // by value: owner and login are pointers (#782)
 			continue
 		}
+		if s.Was != "" && !had { // laib#1021: a renamed service takes its old secret's value
+			say("übernimmt das Geheimnis %s als %s (%s)", s.Was, s.Name, svc)
+		}
 		if s.Mint != "" {
 			mints[s.Mint] = true
 			say("legt einen Laib-Schlüssel für die Hand %s an (%s in %s)", s.Mint, s.Name, svc)
@@ -540,6 +543,9 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 	}
 	for _, d := range a.Data {
 		old, had := bdata[d.Path]
+		if d.Was != "" && !had { // laib#1021: apply moves the old place's data here
+			say("übernimmt die Daten aus %s nach %s (%s)", d.Was, d.Path, svc)
+		}
 		wasBacked := !had || old == nil || *old
 		if existed && had && wasBacked && d.Backup != nil && !*d.Backup {
 			say("nimmt %s von %s aus der Sicherung", d.Path, svc)

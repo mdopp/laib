@@ -65,3 +65,16 @@ func syncDir(d *os.File, err error) error {
 	defer d.Close()
 	return syncFile(d)
 }
+
+// MoveDir renames a directory to its new place and syncs both parents
+// (laib#1021, a renamed service's data dir): a power cut leaves it at one
+// place or the other, never forgotten in between.
+func MoveDir(old, path string) error {
+	if err := os.Rename(old, path); err != nil {
+		return err
+	}
+	if err := syncDir(os.Open(filepath.Dir(path))); err != nil {
+		return err
+	}
+	return syncDir(os.Open(filepath.Dir(old)))
+}
