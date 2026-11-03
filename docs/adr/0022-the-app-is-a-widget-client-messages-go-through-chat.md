@@ -77,6 +77,30 @@ its stdio MCP server, both of which use Hermes' own per-platform senders.
      gleiche Qualität bitte!" The service keeps only the old app's live
      mechanism; nothing else of its realtime package comes over.
 
+   *(Amended 2026-11-03, haus-android#206, haus#218: the Haus account.)*
+   - **What:** the household's shared contacts, calendars and reminders
+     live in a real Android account „Haus“ on each family member's phone
+     (AccountManager, one sync adapter each for ContactsContract and
+     CalendarContract), so the dialer, WhatsApp, mail and the calendar
+     app use them. Reminders are entries with an alarm in the phone's
+     calendar, not a widget.
+   - **The owner's words:** „Was wir jetzt aufs Handy bringen wollen sind
+     gemeinsame Daten des Hauses.“ „Ich möchte sie ja auch zum
+     Telefonieren, für WhatsApp, für E-Mails usw. nutzen.“
+   - **Source:** Haus's `/napi/gemeinsam/kontakte` (vCard) and
+     `/napi/gemeinsam/kalender` (iCalendar), with the device token. Shared
+     is what lives in Haus's own Radicale home; a person's own calendars
+     and contacts are not sent.
+   - **When:** Android's SyncManager runs the adapters — when a switch is
+     turned on, on „Jetzt abgleichen“, and hourly. That hourly sync is
+     the one exception to "no poll with the screen off": a reminder must
+     reach the phone before it is due. It is Android's own, batched with
+     the other accounts' syncs; Haus's ETag makes an unchanged state a
+     304. The app adds no job, alarm or worker of its own.
+   - **Direction:** read only on the phone; edits happen in Haus. A
+     person's own contacts and calendars keep going the other way, phone
+     → archive (ADR 0029), and the Haus account's entries never join them.
+
 3. **Messages to people go through the person's chat channel, not the
    app.**
    - A message is addressed to a **person**. It goes out on that person's
