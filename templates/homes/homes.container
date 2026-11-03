@@ -19,6 +19,10 @@ Environment=HOMES_STT_PROVIDER=${STT_PROVIDER}
 Environment=HOMES_STT_LANGUAGE=${STT_LANGUAGE}
 Environment=HOMES_HA_PUBLIC_URL=${HA_PUBLIC_URL}
 Environment=HOMES_GESUNDHEIT_URL=${GESUNDHEIT_URL}
+# the app's Standortverlauf (owner 2026-11-02): Reitti as this pod reaches it, and where a person makes
+# their own token; empty without Reitti, and then /napi/standort answers 503 and the page says so
+Environment=HOMES_REITTI_URL=${REITTI_URL}
+Environment=HOMES_REITTI_PUBLIC_URL=${REITTI_PUBLIC_URL}
 Environment=HOMES_ENERGY_STATS=${ENERGY_STATS}
 Environment=HOMES_COVER_INVERTED=${COVER_INVERTED}
 # the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder

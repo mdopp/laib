@@ -10,7 +10,7 @@ provides: [homes]
 # the box migration carries along; they go once the box moved (ADR 0021 rule 8).
 after: [auth]                    # not file-share: the share folders it mounts are declared under data:, so a box without file-share still loads (#639)
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
-uses: [home-assistant]           # talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
+uses: [home-assistant, reitti]   # Reitti too (the Standortverlauf); talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
 instances:                       # each person's open archive gives a new phone its WhatsApp media back (laib#1016, haus#209)
   - template: archiv
     unit: homes.container
