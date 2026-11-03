@@ -42,13 +42,18 @@ Rules:
 - Test lines are not capped: a test may be longer than the code it proves
   (owner, 2026-10-18; the earlier rule "tests at most equal to production"
   is dropped).
-- No ratchets, no invariant scanners at the start. A gate is added the
-  second time a shape breaks (`CLAUDE.md`, regression ⇒ gate).
+- One ratchet (owner, 2026-11-03: "Code sollte immer möglichst sauber
+  sein"): `scripts/ratchet.py` runs deadcode, staticcheck, dupl and
+  gocognit, pinned, and compares their findings with today's in
+  `scripts/ratchet/`. A new or higher finding fails, and so does one that
+  went away until the PR lowers the baseline (`scripts/ratchet.py
+  --update`). Otherwise no invariant scanners: a gate is added the second
+  time a shape breaks (`CLAUDE.md`, regression ⇒ gate).
 - A renderer change without its golden change fails `TestGolden`
   (`internal/render`), for what the golden cases render (#866).
 - `gofmt -l` and `go vet` in CI, plus `scripts/drift.sh` (docs vs code: layout, the
   Operator's tools, ports, counts, tracked artifacts, the release
-  manifest); nothing else.
+  manifest) and `scripts/ratchet.py`; nothing else.
 
 ## Done on the box, after the merge (#867)
 

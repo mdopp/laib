@@ -1,0 +1,6 @@
+# scripts/ratchet.py deadcode: the number is how often
+# written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
+# total 3
+1 test-only internal/journal/journal.go: Last
+1 test-only stick/device.go: diskNumber
+1 test-only stick/device.go: parseWindowsDisk
