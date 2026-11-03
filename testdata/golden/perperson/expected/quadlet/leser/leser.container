@@ -1,0 +1,16 @@
+[Unit]
+Description=Leser of every notizbuch
+
+[Container]
+# each person's notizbuch (laib#1016: instances:)
+Environment="LESER_NOTIZBUECHER=anna=http://host.containers.internal:8481 martin=http://host.containers.internal:8480"
+Secret=laib.leser.leser.LESER_KEY_ANNA,type=env,target=LESER_KEY_ANNA
+Secret=laib.leser.leser.LESER_KEY_MARTIN,type=env,target=LESER_KEY_MARTIN
+Image=docker.io/example/leser:1.0
+PublishPort=127.0.0.1:8490:8080
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

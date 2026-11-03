@@ -1,0 +1,14 @@
+name: leser
+title: Leser
+beschreibung: Liest jedes Notizbuch, für laib#1016
+# A test template, not shipped (testdata): reaches every person's notizbuch
+# from its container, each instance's key under the person's name.
+template: {registry: builtin, name: leser, version: 1}
+instances:
+  - template: notizbuch
+    unit: leser.container
+    url: LESER_NOTIZBUECHER
+    secret: NOTIZBUCH_KEY
+    env: LESER_KEY
+health:
+  http: http://127.0.0.1:8490/health

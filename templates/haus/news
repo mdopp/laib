@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Bekommst du ein neues Handy, holt Haus dir auch die Fotos, Videos und Sprachnachrichten aus WhatsApp zurück, solange dein Archiv geöffnet ist
 Haus nennt den Assistenten jetzt überall „${ASSISTANT}“, in Grün auf Dunkel, und das Vorsprechen des Wake-Words entfällt: der Lautsprecher hört ab Werk auf „Hey Mycroft“
 Unter Mehr → Nachrichten sichern bringt die Haus-App die WhatsApp- und Signal-Sicherungen deines Handys auf die Box, als Grundlage für dein eigenes Nachrichten-Archiv
 Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer von Haus nicht mehr als Fehler

@@ -9,6 +9,12 @@ provides: [haus]
 after: [auth]                    # not file-share: the share folders it mounts are declared under data:, so a box without file-share still loads (#639)
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
 uses: [home-assistant]           # talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
+instances:                       # each person's open archive gives a new phone its WhatsApp media back (laib#1016, haus#209)
+  - template: archiv
+    unit: haus.container
+    url: HAUS_ARCHIV_INTERN        # "<person>=http://host.containers.internal:<port> …"
+    secret: ARCHIV_HAUS_SECRET     # that archive's own, as HAUS_ARCHIV_SECRET_<PERSON>; Haus sends it as X-Archiv-Haus to /intern/
+    env: HAUS_ARCHIV_SECRET
 routes:
   - host: haus
     port: 8650

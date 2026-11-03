@@ -1,0 +1,4 @@
+# Rendered by laib: the values of leser (#364); a secret by its name only.
+IMAGE=docker.io/example/leser:1.0
+LESER_KEY_ANNA=!secret NOTIZBUCH_KEY_ANNA
+LESER_KEY_MARTIN=!secret NOTIZBUCH_KEY_MARTIN
