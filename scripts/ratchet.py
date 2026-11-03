@@ -28,6 +28,7 @@ The tools, pinned (`go run <tool>@<version>`, nothing added to go.mod):
 - dupl, production files, clones of DUPL_TOKENS syntax tokens or more.
 - gocognit, production functions with a cognitive complexity over
   COGNIT_OVER (golangci-lint's default for the same check).
+Production means: not a _test.go file, not testdata/, not a fake package.
 """
 import json
 import os
@@ -73,12 +74,16 @@ def lines_of(out, pattern, tool):
 DEAD = r"^(\S+?):\d+:\d+: unreachable func: (\S+)$"
 
 
+def fake(path):
+    return any(part.endswith("fake") for part in Path(path).parent.parts)
+
+
 def deadcode():
     dead = {f"{f}: {fn}" for f, fn in lines_of(run(["go", "run", DEADCODE, "-test", "./..."]), DEAD, "deadcode")}
     unrun = {f"{f}: {fn}" for f, fn in lines_of(run(["go", "run", DEADCODE, "./..."]), DEAD, "deadcode")}
     found = Counter(f"dead {k}" for k in dead)
     for k in unrun - dead:
-        if not any(part.endswith("fake") for part in Path(k.split(":")[0]).parent.parts):
+        if not fake(k.split(":")[0]):
             found[f"test-only {k}"] += 1
     return found
 
@@ -100,7 +105,7 @@ DUP = r"^(.+?):(\d+)-\d+: duplicate of (.+?):(\d+)-\d+$"
 
 def dupl():
     files = [f for f in run(["git", "ls-files", "*.go"]).split()
-             if not f.endswith("_test.go") and "testdata/" not in f]
+             if not f.endswith("_test.go") and "testdata/" not in f and not fake(f)]
     out = run(["go", "run", DUPL, "-files", "-plumbing", "-t", str(DUPL_TOKENS)], stdin="\n".join(files))
     found = Counter()
     for a, la, b, lb in lines_of(out, DUP, "dupl"):
@@ -110,7 +115,7 @@ def dupl():
 
 
 def gocognit():
-    out = run(["go", "run", GOCOGNIT, "-over", str(COGNIT_OVER), "-ignore", r"_test\.go$|testdata/",
+    out = run(["go", "run", GOCOGNIT, "-over", str(COGNIT_OVER), "-ignore", r"_test\.go$|testdata/|fake/",
                "-f", "{{.Complexity}} {{.Pos.Filename}} {{.PkgName}}.{{.FuncName}}", "."], ok=(0, 1))
     return Counter({f"{f}: {fn}": int(n) for n, f, fn in lines_of(out, r"^(\d+) (\S+) (\S+)$", "gocognit")})
 
