@@ -104,6 +104,13 @@ func ApplyHeld(ctx context.Context, env *cli.Env, st *state.State, only, reason 
 		if _, ok := sec[s.Name]; ok || conflict {
 			continue
 		}
+		if v, ok := sec[s.Was]; ok && s.Was != "" {
+			// a renamed service's secret (laib#1021): the old name's value,
+			// before anything is generated or minted for the new one
+			sec[s.Name], changed = v, true
+			journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "secret", Result: "info", Detail: s.Name + " aus " + s.Was + " übernommen"})
+			continue
+		}
 		if s.External {
 			if s.Mint != "" {
 				// a Laib token the service needs: minted here, once, as the hand the template names

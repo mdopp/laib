@@ -27,7 +27,7 @@ func (svc *Service) instance() {
 	c := &svc.Contract
 	r := strings.NewReplacer("${SERVICE}", svc.Name, "${PERSON}", c.Person)
 	for i := range c.Data {
-		c.Data[i].Path = r.Replace(c.Data[i].Path)
+		c.Data[i].Path, c.Data[i].Was = r.Replace(c.Data[i].Path), r.Replace(c.Data[i].Was)
 	}
 	if c.Status != nil {
 		c.Status.File = r.Replace(c.Status.File)
@@ -65,6 +65,9 @@ func (svc *Service) instance() {
 	for i := range c.Secrets {
 		own[c.Secrets[i].Name] = true
 		c.Secrets[i].Name += suffix
+		if c.Secrets[i].Was != "" {
+			c.Secrets[i].Was += suffix
+		}
 	}
 	for k, v := range svc.Values {
 		if own[v.Secret] {

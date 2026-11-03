@@ -357,6 +357,10 @@ type Secret struct {
 	// and ${SERVICE} expand. The identity service seeds it and removes it
 	// once no service declares it (laib#1009, the archive's Radicale login).
 	Account string `yaml:"account"`
+	// Was: the secret's former name (a renamed service, laib#1021): while
+	// this one is missing from secrets.age, apply takes the old one's value
+	// before it would generate or mint, once. The old one stays.
+	Was string `yaml:"was"`
 }
 
 // OwnerKey is what the key page tells the owner about one key: what it is
@@ -393,6 +397,10 @@ type DataPath struct {
 	// Quiesce: the service is stopped while this path is snapshotted (a
 	// database copied live is not a backup, #40): stop, snapshot, start.
 	Quiesce bool `yaml:"quiesce"`
+	// Was: the path's former place (a renamed service, laib#1021): while
+	// this one is missing or empty, apply renames the old one here, after
+	// the old units stopped and before anything mounts it.
+	Was string `yaml:"was"`
 }
 
 // Health is what apply verifies.
