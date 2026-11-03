@@ -7,13 +7,13 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// The Bote's Signal number reaches Haus as HAUS_BOTE_SIGNAL (haus#175), so
+// The Bote's Signal number reaches Homes as HOMES_BOTE_SIGNAL (haus#175), so
 // Willkommen can say „Homes auf Signal“: the BOTE_SIGNAL builtin is the
 // value a service names under channels.signal, E.164 or nothing.
-func TestHausGetsTheBotesSignalNumber(t *testing.T) {
+func TestHomesGetsTheBotesSignalNumber(t *testing.T) {
 	for _, tc := range []struct{ account, want string }{
 		{"+4915100000000", "+4915100000000"},
-		{"", ""},             // no Signal on the Bote: Haus shows no number
+		{"", ""},             // no Signal on the Bote: Homes shows no number
 		{"0151 0000000", ""}, // not E.164: never shown as if it were one
 	} {
 		st := shippedBox(t)
@@ -22,12 +22,12 @@ func TestHausGetsTheBotesSignalNumber(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := regexp.MustCompile(`(?m)^Environment=HAUS_BOTE_SIGNAL=(.*)$`).FindStringSubmatch(out["quadlet/haus/haus.container"])
+		m := regexp.MustCompile(`(?m)^Environment=HOMES_BOTE_SIGNAL=(.*)$`).FindStringSubmatch(out["quadlet/homes/homes.container"])
 		if m == nil {
-			t.Fatalf("haus.container has no HAUS_BOTE_SIGNAL line")
+			t.Fatalf("homes.container has no HOMES_BOTE_SIGNAL line")
 		}
 		if m[1] != tc.want {
-			t.Errorf("SIGNAL_ACCOUNT %q: HAUS_BOTE_SIGNAL = %q, want %q", tc.account, m[1], tc.want)
+			t.Errorf("SIGNAL_ACCOUNT %q: HOMES_BOTE_SIGNAL = %q, want %q", tc.account, m[1], tc.want)
 		}
 	}
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// #195: a template's timer and the oneshot it fires (haus's library
+// #195: a template's timer and the oneshot it fires (homes's library
 // refresh). The oneshot is inactive between runs: apply neither starts nor
 // waits for it, converge does not restart it, and status is green — until a
 // run fails, which status and diag show red. The timer itself is a unit.

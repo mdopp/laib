@@ -80,8 +80,8 @@ func TestASessionGetsItsOwnShortClaudeToken(t *testing.T) {
 	if code, out, isErr := call(laib, "laib_status", ""); code != 200 || isErr {
 		t.Fatalf("the session's token does not reach /mcp as claude: %d %s", code, out)
 	}
-	haus, _ := session("haus")
-	if haus == laib {
+	homes, _ := session("homes")
+	if homes == laib {
 		t.Fatal("two sessions share a token")
 	}
 	store, _ = token.Load(cli.TokenPath(env))
@@ -91,7 +91,7 @@ func TestASessionGetsItsOwnShortClaudeToken(t *testing.T) {
 			notes = append(notes, r.Note)
 		}
 	}
-	if strings.Join(notes, ",") != "session werkstatt: laib,session werkstatt: haus" {
+	if strings.Join(notes, ",") != "session werkstatt: laib,session werkstatt: homes" {
 		t.Fatalf("token list shows %q, want one per session with its name", notes)
 	}
 	es, _ := journal.Read(env.Paths.Journal, time.Time{})
@@ -105,7 +105,7 @@ func TestASessionGetsItsOwnShortClaudeToken(t *testing.T) {
 		t.Fatalf("%d session mints journaled, want 2: %+v", minted, es)
 	}
 
-	// laib's token runs out: refused; haus's still works; the next session works without the owner
+	// laib's token runs out: refused; homes's still works; the next session works without the owner
 	for i := range store.Records {
 		if store.Records[i].Note == "session werkstatt: laib" {
 			store.Records[i].Expires = time.Now().Add(-time.Minute)
@@ -116,7 +116,7 @@ func TestASessionGetsItsOwnShortClaudeToken(t *testing.T) {
 	if code, _, _ := call(laib, "laib_status", ""); code != http.StatusUnauthorized {
 		t.Fatalf("an expired session token answered %d", code)
 	}
-	if code, out, isErr := call(haus, "laib_status", ""); code != 200 || isErr {
+	if code, out, isErr := call(homes, "laib_status", ""); code != 200 || isErr {
 		t.Fatalf("one session's expiry ended another's: %d %s", code, out)
 	}
 	again, _ := session("laib")

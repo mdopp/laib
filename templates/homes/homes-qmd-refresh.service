@@ -1,0 +1,17 @@
+# The memory library's refresh (#195): qmd watches no files, so its timer
+# runs this. Each step that fails fails the unit, and `laib status` shows
+# homes red until a run succeeds. Never `qmd pull` here: offline it deletes
+# the cached models (haus#13). The first run downloads the embed model.
+# First Homes mirrors Paperless's documents into the folder qmd indexes
+# (homes-documents-export.service, #219). Wanted, not required: whatever the
+# export does, the notes are refreshed.
+[Unit]
+Description=Homes: refresh the memory library (qmd update, qmd embed)
+Wants=homes-documents-export.service
+After=homes-documents-export.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec systemd-homes-qmd qmd update
+ExecStart=/usr/bin/podman exec systemd-homes-qmd qmd embed
+TimeoutStartSec=1h

@@ -86,7 +86,7 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 
 // scanEinrichten proposes the scanner (#571): the scan template with it when
 // scan is not there, else its SCANNER value. The box's review decides the
-// proposal like any other; Haus decides nothing.
+// proposal like any other; Homes decides nothing.
 func scanEinrichten(ctx context.Context, env *Env, svc *ScanService, geraet string) int {
 	if (geraet != "" && !scanGeraet.MatchString(geraet)) || (geraet == "" && svc != nil) {
 		return env.fail(fmt.Errorf("--geraet %q: ein SANE-Gerät wie epson2:net:192.168.1.5 oder fujitsu, ohne Anführungszeichen, %% und $", geraet))

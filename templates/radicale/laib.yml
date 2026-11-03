@@ -5,7 +5,7 @@ template: {registry: builtin, name: radicale, version: 1}
 provides: [calendar, contacts]
 upstream: [https://github.com/Kozea/Radicale, https://radicale.org/]   # where the Operator's web search looks first (#544)
 # CalDAV/CardDAV for the household (ADR 0017): phones via DAVx⁵, Home
-# Assistant's CalDAV integration, Haus, the Bote. Logins are LLDAP accounts
+# Assistant's CalDAV integration, Homes, the Bote. Logins are LLDAP accounts
 # (the auth pod), so every resident has a calendar and the Bote a service
 # account. The app does its own auth; forward-auth would break DAV clients.
 after: [auth]

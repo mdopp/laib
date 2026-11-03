@@ -31,7 +31,7 @@ NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN
 	}
 	p := filepath.Join(t.TempDir(), "values.yml")
 	os.WriteFile(p, []byte(old), 0o644)
-	declared := map[string]bool{"BOTE_NOTIFY_TOKEN": true, "PAPERLESS_TOKEN": true, "DOKUMENTE_WEBHOOK_TOKEN": true, "HAUS_HAUSHALT_TOKEN": true}
+	declared := map[string]bool{"BOTE_NOTIFY_TOKEN": true, "PAPERLESS_TOKEN": true, "DOKUMENTE_WEBHOOK_TOKEN": true, "HOMES_HAUSHALT_TOKEN": true}
 	if err := newValues(p, ex, declared); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN
 	for _, want := range []string{"\nSCANNER: fujitsu\n", "\nSCAN_BACK_FIRST: \"false\"\n", "\nDOKUMENTE_IMAGE: ghcr.io/mdopp/dokumente:latest",
 		"\nVERTRAG_ARTEN: Vertrag, Versicherung, Bescheid\n", "\nVERTRAG_VORLAUF_TAGE: \"28\"\n", "\nRECHNUNG_ARTEN: Rechnung ",
 		"\nHAUSHALT_NAMEN: \"\" ", "\nPAPERLESS_TOKEN: !secret PAPERLESS_TOKEN ", "\nDOKUMENTE_WEBHOOK_TOKEN: !secret DOKUMENTE_WEBHOOK_TOKEN ",
-		"\nHAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN\n"} {
+		"\nHAUSHALT_TOKEN: !secret HOMES_HAUSHALT_TOKEN\n"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("scan's values.yml after the update lacks %q:\n%s", want, b)
 		}

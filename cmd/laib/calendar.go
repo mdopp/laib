@@ -20,7 +20,7 @@ import (
 	"github.com/mdopp/laib/internal/secrets"
 )
 
-// The calendar subscriptions (#495): Haus hands an address over once, laib
+// The calendar subscriptions (#495): Homes hands an address over once, laib
 // keeps it in secrets.age as KALENDER_ABOS and applies the kalender template,
 // whose timer mirrors each into Radicale. The address is never answered,
 // journalled or put on argv: it arrives on stdin.

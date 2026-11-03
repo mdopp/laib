@@ -1,12 +1,12 @@
-"""#785: haus-check.py writes Haus's detail line for the Box page: how many
-devices are signed in to the Haus app, for how many people, and when one was
-last active, read from Haus's devices.json (read-only; the token hashes are
+"""#785: homes-check.py writes Homes's detail line for the Box page: how many
+devices are signed in to the Homes app, for how many people, and when one was
+last active, read from Homes's devices.json (read-only; the token hashes are
 never written anywhere). No file yet is "noch kein Gerät angemeldet"; a file
 that cannot be read is "nicht gemessen", never a number."""
 import datetime, json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "haus-check.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "homes-check.py"
 HASH = "d0950804ca3d0a897d5c1663ff6a00585889624096bbc751563cd25f624175e3"
 
 
@@ -19,7 +19,7 @@ def run(devices):
     if devices is not None:
         with open(os.path.join(data, "devices.json"), "w") as f:
             f.write(devices if isinstance(devices, str) else json.dumps(devices))
-    env = {"PATH": os.environ["PATH"], "HAUS_DATA": data, "STATUS_DIR": d}
+    env = {"PATH": os.environ["PATH"], "HOMES_DATA": data, "STATUS_DIR": d}
     r = subprocess.run([sys.executable, "-"], input=SCRIPT.read_text(), text=True, capture_output=True, env=env, timeout=60)
     with open(os.path.join(d, "laib-status.json")) as f:
         return r, json.load(f)
@@ -52,7 +52,7 @@ class Check(unittest.TestCase):
 
     def test_unreadable_is_not_measured(self):
         _, st = run("{kaputt")
-        self.assertTrue(st["detail"].startswith("nicht gemessen: Haus' Geräteliste ist nicht lesbar"), st["detail"])
+        self.assertTrue(st["detail"].startswith("nicht gemessen: Homes' Geräteliste ist nicht lesbar"), st["detail"])
         self.assertTrue(st["findings"][0]["unmeasured"])
 
 

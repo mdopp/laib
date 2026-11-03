@@ -40,7 +40,7 @@ func callAufgabe(t *testing.T, env *cliEnv, hand string, args map[string]any) (a
 }
 
 // #667: Box-Aufgaben over MCP. ops and claude may add, only a human,
-// claude or Haus checks off or defers; none of it is a proposal, every
+// claude or Homes checks off or defers; none of it is a proposal, every
 // change is one commit of aufgaben.yml on main and one journal line.
 func TestBoxAufgabenOverMCP(t *testing.T) {
 	env, _ := testBox(t)
@@ -151,7 +151,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 	}
 
 	// readiness carries the open count
-	out, code = mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_status", map[string]any{"fresh": true})
+	out, code = mcp.Call(context.Background(), env, mustState(t, env), "homes", "laib_status", map[string]any{"fresh": true})
 	var rd struct {
 		Ready struct {
 			Aufgaben int `json:"aufgaben"`

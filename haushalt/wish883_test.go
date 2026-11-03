@@ -97,11 +97,11 @@ func TestABotesWishIsABoxAufgabeForTheAdmins(t *testing.T) {
 	}
 }
 
-// #883: wishes from every other hand are unchanged: claude's, Haus's and a
+// #883: wishes from every other hand are unchanged: claude's, Homes's and a
 // human's still become an issue in box.yml intake.repo, and nothing is
 // handed to laib's Box-Aufgaben.
 func TestAWishFromAnotherHandIsStillAnIssue(t *testing.T) {
-	for _, actor := range []string{"claude", "haus", "human:core"} {
+	for _, actor := range []string{"claude", "homes", "human:core"} {
 		g := newGitHub(t)
 		k := &tasks{}
 		got, code, errs, _ := run883(t, actor, k, GitHub{API: g.srv.URL, Token: "ghp_haushalt"}, &Intake{Repo: "mdopp/x", Label: "wunsch"}, "wish", "ein Kalender für alle")

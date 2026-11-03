@@ -52,7 +52,7 @@ func TestTheVerbDoorHandsTheCallOverOnlyAfterPolicy(t *testing.T) {
 
 	since := time.Now().Add(-time.Minute)
 	var out, errOut strings.Builder
-	cenv := &cli.Env{Paths: env.Paths, Actor: "haus", JSON: true, Out: &out, ErrOut: &errOut}
+	cenv := &cli.Env{Paths: env.Paths, Actor: "homes", JSON: true, Out: &out, ErrOut: &errOut}
 	if code := verb(t, "scan").Run(context.Background(), cenv, []string{"start", "--person", "mama"}); code != 3 {
 		t.Fatalf("exit %d, want the program's 3", code)
 	}
@@ -61,7 +61,7 @@ func TestTheVerbDoorHandsTheCallOverOnlyAfterPolicy(t *testing.T) {
 	}
 	b := calls[0].body
 	argv, _ := json.Marshal(b["argv"])
-	if string(argv) != `["scan","start","--person","mama"]` || b["json"] != true || b["actor"] != "haus" || b["ceiling"] != "propose" || b["lanIp"] != "10.0.0.2" || b["scan"] != nil {
+	if string(argv) != `["scan","start","--person","mama"]` || b["json"] != true || b["actor"] != "homes" || b["ceiling"] != "propose" || b["lanIp"] != "10.0.0.2" || b["scan"] != nil {
 		t.Fatalf("the program got %v", b)
 	}
 	if out.String() != "ja\n" || errOut.String() != "nein\n" {
@@ -74,7 +74,7 @@ func TestTheVerbDoorHandsTheCallOverOnlyAfterPolicy(t *testing.T) {
 			mine = append(mine, e)
 		}
 	}
-	if len(mine) != 1 || mine[0].Actor != "haus" || mine[0].Verb != "scan" || mine[0].Detail != "start" {
+	if len(mine) != 1 || mine[0].Actor != "homes" || mine[0].Verb != "scan" || mine[0].Detail != "start" {
 		t.Fatalf("the program's journal line, as the caller: %+v", mine)
 	}
 	out.Reset()

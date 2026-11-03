@@ -39,12 +39,12 @@ func TestStatefulTemplatesDoNotAutoUpdate(t *testing.T) {
 			}
 		}
 	}
-	for _, u := range []string{"haus/haus.container", "frage/frage.container", "bote/bote-directory.container", "bote/bote-automat.container", "werkstatt/werkstatt.container", "caddy/caddy.container"} {
+	for _, u := range []string{"homes/homes.container", "frage/frage.container", "bote/bote-directory.container", "bote/bote-automat.container", "werkstatt/werkstatt.container", "caddy/caddy.container"} {
 		if b, _ := os.ReadFile(filepath.Join("..", "..", "templates", u)); !strings.Contains(string(b), "\nAutoUpdate=registry") {
 			t.Errorf("%s: Laib's own image without data must carry AutoUpdate=registry, or nobody updates it (#528)", u)
 		}
 	}
-	for _, name := range []string{"bote", "haus", "werkstatt"} {
+	for _, name := range []string{"bote", "homes", "werkstatt"} {
 		b, _ := os.ReadFile(filepath.Join("..", "..", "templates", name, "laib.yml"))
 		if !strings.Contains(string(b), "needs: [mcp]") {
 			t.Errorf("%s talks to laib's MCP but does not declare needs: [mcp]", name)

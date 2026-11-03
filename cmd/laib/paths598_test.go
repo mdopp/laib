@@ -67,7 +67,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	pol := filepath.Join(env.Paths.State, "policy.yml")
 	old := strings.Replace(state.DefaultPolicy, ", paths: [zuhause, people.*.signal]}", "}", 1)
 	if old == state.DefaultPolicy {
-		t.Fatal("the haus hand's defaults grant no paths")
+		t.Fatal("the homes hand's defaults grant no paths")
 	}
 	os.WriteFile(pol, []byte(old), 0o644)
 	if err := proposal.CommitDirty(ctx, env.Paths.State, "human:test"); err != nil {
@@ -78,7 +78,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 		return out
 	}
 	before := branches()
-	if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", "laib_person_invite", invite); code == cli.ExitOK || len(*calls) != 0 {
+	if out, code := mcp.Call(ctx, env, mustState(t, env), "homes", "laib_person_invite", invite); code == cli.ExitOK || len(*calls) != 0 {
 		t.Fatalf("invite --signal without the path grant: exit %d, %d tool runs: %s", code, len(*calls), out)
 	}
 	if all, _ := proposal.List(cli.InboxDir(env), false); len(all) != 0 || branches() != before {
@@ -93,7 +93,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 		return p
 	}
 	p := sync()
-	if p == nil || p.Class != "human" || !strings.Contains(p.Reason, "haus +zuhause +people.*.signal") {
+	if p == nil || p.Class != "human" || !strings.Contains(p.Reason, "homes +zuhause +people.*.signal") {
 		t.Fatalf("%+v", p)
 	}
 	if diff := proposal.Diff(ctx, env.Paths.State, p); strings.Count(diff, "\n+  ") != 1 || !strings.Contains(diff, "note, tell, aufgabe], paths: [zuhause, people.*.signal]}") {
@@ -106,7 +106,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	if code := inbox.Approve(ctx, env, []string{"1"}); code != cli.ExitOK {
 		t.Fatalf("approve: exit %d", code)
 	}
-	if out, code := mcp.Call(ctx, env, mustState(t, env), "haus", "laib_person_invite", invite); code != cli.ExitOK {
+	if out, code := mcp.Call(ctx, env, mustState(t, env), "homes", "laib_person_invite", invite); code != cli.ExitOK {
 		t.Fatalf("after the grant: exit %d: %s", code, out)
 	}
 }

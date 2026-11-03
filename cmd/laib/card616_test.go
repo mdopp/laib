@@ -39,7 +39,7 @@ func TestAGrantCardSaysWhatChangesAndLeavesTheBoxWarningOut(t *testing.T) {
 		t.Fatalf("the box needs its purpose warning for this test: %v %v", st.Warnings, err)
 	}
 
-	if code := inbox.Propose(ctx, env, []string{"--grant", "haus", "updates", "Haus soll Updates zeigen"}); code != cli.ExitOK {
+	if code := inbox.Propose(ctx, env, []string{"--grant", "homes", "updates", "Homes soll Updates zeigen"}); code != cli.ExitOK {
 		t.Fatalf("--grant: exit %d", code)
 	}
 	open, _ := proposal.List(cli.InboxDir(env), true)
@@ -48,7 +48,7 @@ func TestAGrantCardSaysWhatChangesAndLeavesTheBoxWarningOut(t *testing.T) {
 	}
 	p := open[0]
 	if len(p.Warnings) != 0 {
-		t.Errorf("the box's warning about echo and whoami is on a grant for haus: %v", p.Warnings)
+		t.Errorf("the box's warning about echo and whoami is on a grant for homes: %v", p.Warnings)
 	}
 	var out bytes.Buffer
 	env.JSON, env.Out = true, &out
@@ -65,16 +65,16 @@ func TestAGrantCardSaysWhatChangesAndLeavesTheBoxWarningOut(t *testing.T) {
 	}
 	c := got[0].Card
 	if got[0].Reason == "" || got[0].Class != "human" {
-		t.Errorf("the fields Haus reads are gone: %+v", got[0])
+		t.Errorf("the fields Homes reads are gone: %+v", got[0])
 	}
-	if c.Summary != "Haus darf künftig nach Updates sehen" || c.Risk != "mittel" || c.Primary != "Später" || c.Decider == "" {
+	if c.Summary != "Homes darf künftig nach Updates sehen" || c.Risk != "mittel" || c.Primary != "Später" || c.Decider == "" {
 		t.Errorf("card: %+v", c)
 	}
 	lines := ""
 	for _, l := range c.Changes {
 		lines += l.Op + " " + l.Text + "\n"
 	}
-	if !strings.Contains(lines, "+ nach Updates sehen") || !strings.Contains(lines, "Was Haus schon darf, bleibt: den Zustand der Dienste sehen") {
+	if !strings.Contains(lines, "+ nach Updates sehen") || !strings.Contains(lines, "Was Homes schon darf, bleibt: den Zustand der Dienste sehen") {
 		t.Errorf("changes:\n%s", lines)
 	}
 	if !strings.Contains(strings.Join(c.Impact, " "), "sieht dadurch mehr, ändert aber nichts") {

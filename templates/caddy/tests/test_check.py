@@ -23,7 +23,7 @@ def config(hosts):
     return {"admin": {"listen": "localhost:2019"}, "apps": {"http": {"servers": {
         "srv0": {"listen": [":443"], "routes": [
             {"match": [{"host": [h]}], "handle": [{"handler": "subroute", "routes": [{"handle": [
-                {"handler": "reverse_proxy", "headers": {"request": {"set": {"X-Haus-Proxy": [SECRET]}}}}]}]}]} for h in hosts]
+                {"handler": "reverse_proxy", "headers": {"request": {"set": {"X-Homes-Proxy": [SECRET]}}}}]}]}]} for h in hosts]
             + [{"match": [{"host": ["*.example.org"]}], "handle": []}, {"handle": [{"handler": "static_response"}]}]},
         "srv1": {"listen": [":80"], "routes": [{"match": [{"host": [hosts[0]]}], "handle": []}]}}}}}
 

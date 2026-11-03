@@ -56,7 +56,7 @@ func TestTheBoxIsOfferedOnlyToTheAdmin(t *testing.T) {
 		return ""
 	}
 	j := New(caps, c)
-	for _, sid := range []string{"+4917099999999", "Anna", "", "haus:lena"} {
+	for _, sid := range []string{"+4917099999999", "Anna", "", "homes:lena"} {
 		out := j.Talk(sid, "de", "Menü")
 		if strings.Contains(out, "BOX") || !strings.Contains(out, "1  WEBSUCHE MIT QUELLEN") {
 			t.Fatalf("%q: the family's directory has no box level:\n%s", sid, out)

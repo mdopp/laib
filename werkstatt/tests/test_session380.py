@@ -69,9 +69,9 @@ class SessionToken(unittest.TestCase):
         h1 = json.loads(self.laib("--headers", session="laib"))
         self.assertEqual(h1, {"Authorization": "Bearer laib_claude_s1"})
         self.assertEqual(json.loads(self.laib("--headers", session="laib")), h1, "a reconnect minted again")
-        h2 = json.loads(self.laib("--headers", session="haus"))
+        h2 = json.loads(self.laib("--headers", session="homes"))
         self.assertNotEqual(h2, h1, "two sessions share a token")
-        self.assertEqual(self.fake.mints, ["laib", "haus"])
+        self.assertEqual(self.fake.mints, ["laib", "homes"])
         cache = self.run_dir / "sessions" / "laib.json"
         self.assertEqual(stat.S_IMODE(cache.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(cache.parent.stat().st_mode), 0o700)

@@ -209,14 +209,14 @@ def win(svc, label, since, end, dependent=True):
             "to": (t1 + timedelta(minutes=3 if dependent else 0)).strftime(f), "overdue": False}
 
 
-REFUSED = "2026/10/31 10:08:49 haus: HA state_changed: dial tcp 169.254.1.2:8123: connect: connection refused"
+REFUSED = "2026/10/31 10:08:49 homes: HA state_changed: dial tcp 169.254.1.2:8123: connect: connection refused"
 # Home Assistant's three applies of 2026-10-31 (#305), with the markers they set: from the apply's start to its end
 HA_APPLIES = [win("home-assistant", "Anwenden", "2026-10-31T09:08:36.505", "2026-10-31T09:08:44.778"), win("home-assistant", "Anwenden", "2026-10-31T09:09:31.789", "2026-10-31T09:11:37.352"),
               win("home-assistant", "Anwenden", "2026-10-31T11:11:19.193", "2026-10-31T11:11:55.484")]
 
 
-def haus(*times):
-    return {"haus": {"haus.service": "\n".join(at(t, "systemd-haus[1339921]", REFUSED) for t in times)}}
+def homes(*times):
+    return {"homes": {"homes.service": "\n".join(at(t, "systemd-homes[1339921]", REFUSED) for t in times)}}
 
 
 def notes(fake):
@@ -225,12 +225,12 @@ def notes(fake):
 
 class CheckedLikeAPerson(unittest.TestCase):
     def test_305_haus_refused_while_home_assistant_was_applied_is_expected(self):
-        day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01", "2026-10-31T09:11:05", "2026-10-31T09:11:09", "2026-10-31T11:11:25", "2026-10-31T11:11:30")
-        s = Fake(day, planned={"haus": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
+        day = homes("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01", "2026-10-31T09:11:05", "2026-10-31T09:11:09", "2026-10-31T11:11:25", "2026-10-31T11:11:30")
+        s = Fake(day, planned={"homes": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertEqual(r["state"], {})  # never a pattern: the next review does not call it recurring
-        self.assertEqual(notes(s), ["Protokoll-Durchsicht: keine neuen Fehlermuster. Aussortiert, kein Wunsch: haus.service 7× während eines geplanten Neustarts "
+        self.assertEqual(notes(s), ["Protokoll-Durchsicht: keine neuen Fehlermuster. Aussortiert, kein Wunsch: homes.service 7× während eines geplanten Neustarts "
                                     "(Anwenden von home-assistant 10:08, Anwenden von home-assistant 10:09, Anwenden von home-assistant 12:11)."])
 
     def test_304_music_assistant_502_while_the_backup_stopped_home_assistant_is_expected(self):
@@ -266,57 +266,57 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertIn("llama-lease.service 8× während eines geplanten Neustarts (Update von llama ", notes(s)[0])
 
     def test_a_genuine_error_outside_restarts_is_still_a_wish_and_says_what_was_checked(self):
-        day = haus("2026-11-01T05:00:00", "2026-11-01T05:10:00", "2026-11-01T05:20:00")
-        s = Fake(day, planned={"haus": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
+        day = homes("2026-11-01T05:00:00", "2026-11-01T05:10:00", "2026-11-01T05:20:00")
+        s = Fake(day, planned={"homes": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "")
-        self.assertIn("- neu, haus.service, 3×: haus: HA state_changed: dial tcp <ip>: connect: connection refused\n", r["context"])
+        self.assertIn("- neu, homes.service, 3×: homes: HA state_changed: dial tcp <ip>: connect: connection refused\n", r["context"])
         self.assertIn("  geprüft: nicht während eines geplanten Neustarts, zuletzt 06:20 (vor 10 min), auch nach Anwenden von home-assistant um 12:11, noch aktuell\n", r["context"])
         self.assertEqual(r["checks"], ["laib_wish"])
         # the model's wish says what was checked, about a shown pattern
-        self.assertIn("geprüft", run.check(s, "laib_wish", {"text": "haus: HA nicht erreichbar", "saw": "3× connection refused"}))
-        self.assertIn("nenne seinen Dienst (haus)", run.check(s, "laib_wish", {"text": "Mehr RAM", "saw": "3×, geprüft: nicht während eines Neustarts"}))
-        self.assertEqual(run.check(s, "laib_wish", {"text": "Haus erreicht Home Assistant nicht", "saw": "haus.service 3×, geprüft: nicht während eines geplanten Neustarts, zuletzt 06:20"}), "")
+        self.assertIn("geprüft", run.check(s, "laib_wish", {"text": "homes: HA nicht erreichbar", "saw": "3× connection refused"}))
+        self.assertIn("nenne seinen Dienst (homes)", run.check(s, "laib_wish", {"text": "Mehr RAM", "saw": "3×, geprüft: nicht während eines Neustarts"}))
+        self.assertEqual(run.check(s, "laib_wish", {"text": "Homes erreicht Home Assistant nicht", "saw": "homes.service 3×, geprüft: nicht während eines geplanten Neustarts, zuletzt 06:20"}), "")
         self.assertEqual(run.check(s, "laib_note", {"text": "x"}), "")
 
     def test_a_stop_the_journal_does_not_account_for_is_not_planned(self):
         # a crash cascade or a hand at systemctl: nothing announced it, laib planned has no marker
-        day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
-        r = run.run(Fake(day, planned={"haus": []}, now="2026-10-31T11:00:00+01:00"))
-        self.assertIn("neu, haus.service, 3×", r["context"])
+        day = homes("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
+        r = run.run(Fake(day, planned={"homes": []}, now="2026-10-31T11:00:00+01:00"))
+        self.assertIn("neu, homes.service, 3×", r["context"])
         self.assertIn("geprüft: nicht während eines geplanten Neustarts", r["context"])
         s = Fake(day, planned="nicht ausgeführt: laib_planned ist der Fähigkeit durchsicht nicht gewährt", now="2026-10-31T11:00:00+01:00")
         r = run.run(s)
         self.assertIn("geprüft: geplante Neustarts nicht geprüft (nicht lesbar)", r["context"])
         # until Laib can answer (the ops grant waits in the Inbox, #932): a note, never an unchecked wish
-        self.assertIn("kein Wunsch", run.check(s, "laib_wish", {"text": "haus erreicht HA nicht", "saw": "haus.service 3×, geprüft: geplante Neustarts nicht geprüft (nicht lesbar)"}))
+        self.assertIn("kein Wunsch", run.check(s, "laib_wish", {"text": "homes erreicht HA nicht", "saw": "homes.service 3×, geprüft: geplante Neustarts nicht geprüft (nicht lesbar)"}))
 
     def test_a_new_pattern_quiet_for_six_hours_is_over_a_recurring_one_is_not(self):
-        day = haus("2026-10-31T20:00:00", "2026-10-31T20:05:00", "2026-10-31T20:10:00")
+        day = homes("2026-10-31T20:00:00", "2026-10-31T20:05:00", "2026-10-31T20:10:00")
         s = Fake(day, now="2026-11-01T06:30:00+01:00")
         r = run.run(s)
         self.assertEqual(r["outcome"], "unchanged")
         self.assertIn("3× vorbei: zuletzt 21:10, seit über 6 Stunden nicht mehr", notes(s)[0])
         self.assertEqual(list(r["state"].values()), [{"count": 3, "told": False}])
         r = run.run(Fake(day, state=r["state"], now="2026-11-01T06:30:00+01:00"))  # back the next day
-        self.assertIn("wiederkehrend, haus.service, 3×", r["context"])
+        self.assertIn("wiederkehrend, homes.service, 3×", r["context"])
         self.assertIn("schon in der letzten Durchsicht", r["context"])
 
     def test_the_dropped_list_stays_short_enough_for_a_note(self):
-        many = "\n".join(at(f"2026-10-31T20:{i:02d}:00", "systemd-haus[1]", f"ERROR job {chr(97 + i // 3)}{'x' * 200} failed") for i in range(30))
-        s = Fake({"haus": {"haus.service": many}}, now="2026-11-01T06:30:00+01:00")
+        many = "\n".join(at(f"2026-10-31T20:{i:02d}:00", "systemd-homes[1]", f"ERROR job {chr(97 + i // 3)}{'x' * 200} failed") for i in range(30))
+        s = Fake({"homes": {"homes.service": many}}, now="2026-11-01T06:30:00+01:00")
         run.run(s)
         self.assertIn("; 2 weitere Muster (6×).", notes(s)[0])
         self.assertLess(len(notes(s)[0]), 1500)
 
     def test_a_new_pattern_gone_since_a_planned_restart_of_a_green_service_is_over(self):
-        day = haus("2026-11-01T04:00:00", "2026-11-01T04:05:00", "2026-11-01T04:10:00")
-        restart = {"haus": [win("haus", "Anwenden", "2026-11-01T04:29:50", "2026-11-01T04:30:20", dependent=False)]}
+        day = homes("2026-11-01T04:00:00", "2026-11-01T04:05:00", "2026-11-01T04:10:00")
+        restart = {"homes": [win("homes", "Anwenden", "2026-11-01T04:29:50", "2026-11-01T04:30:20", dependent=False)]}
         s = Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00")
         run.run(s)
-        self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von haus um 05:30 nicht mehr, Dienst grün", notes(s)[0])
-        r = run.run(Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00", red=["haus"]))
-        self.assertIn("vor Anwenden von haus um 05:30, Dienst nicht grün", r["context"])
+        self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von homes um 05:30 nicht mehr, Dienst grün", notes(s)[0])
+        r = run.run(Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00", red=["homes"]))
+        self.assertIn("vor Anwenden von homes um 05:30, Dienst nicht grün", r["context"])
 
 
 def wish(id, services, skill="durchsicht", operator=True, title="x"):
@@ -331,17 +331,17 @@ class OpenWishes(unittest.TestCase):
         return calls[0]["stdin"].split("\n") if calls else []
 
     def test_each_wish_gets_what_today_says(self):
-        # haus: only lines while Home Assistant was applied (#305); llama: a planned restart since, no line;
+        # homes: only lines while Home Assistant was applied (#305); llama: a planned restart since, no line;
         # bote: only pasta's lines (#915); immich: a real error today; caddy: filed an hour ago;
         # nutzung's wish about immich and a person's are not the review's
-        day = haus("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
+        day = homes("2026-10-31T09:08:49", "2026-10-31T09:08:53", "2026-10-31T09:09:01")
         day.update({"llama": {"llama.service": ""}, "bote": {"bote-pod.service": "\n".join(PASTA)}, "caddy": {"caddy.service": ""},
                     "immich": {"immich-server.service": line("immich-server", "ERROR thumbnail failed")}})
-        s = Fake(day, planned={"haus": HA_APPLIES, "llama": [win("llama", "Update", "2026-10-31T08:22:22", "2026-10-31T08:22:30")]}, now="2026-11-01T06:30:00+01:00")
-        s.wishes = [wish("2026-10-30T05-30-43.423582", ["haus"]), wish("2026-10-30T05-30-44.000000", ["llama"], skill=""),
+        s = Fake(day, planned={"homes": HA_APPLIES, "llama": [win("llama", "Update", "2026-10-31T08:22:22", "2026-10-31T08:22:30")]}, now="2026-11-01T06:30:00+01:00")
+        s.wishes = [wish("2026-10-30T05-30-43.423582", ["homes"]), wish("2026-10-30T05-30-44.000000", ["llama"], skill=""),
                     wish("2026-10-30T05-30-45.000000", ["bote", "radicale"], skill=""), wish("2026-10-30T05-30-46.000000", ["immich"]),
                     wish("2026-11-01T04-30-00.000000", ["caddy"]), wish("2026-10-26T07-29-06.545025", ["immich"], skill="nutzung"),
-                    wish("2026-10-26T07-29-07.000000", ["haus"], operator=False)]
+                    wish("2026-10-26T07-29-07.000000", ["homes"], operator=False)]
         r = run.run(s)
         self.assertEqual(self.closed(s), [
             "2026-10-30T05-30-43.423582 verworfen würde heute nicht gemeldet: nur während geplanter Neustarts",

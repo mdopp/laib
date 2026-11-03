@@ -651,7 +651,7 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 		"LAIB_SERVICE="+svc.Name, "LAIB_PERSON="+svc.Contract.Person, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
 		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "LAIB_ASSISTANT="+st.Box.Assistant,
 		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
-		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HAUS_URL="+render.HausURL(st))
+		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HOMES_URL="+render.HomesURL(st))
 	if svc.Uses("ZUHAUSE_") { // the address only where a unit reads it (#561)
 		for k, v := range st.ZuhauseVars() {
 			env = append(env, k+"="+v)

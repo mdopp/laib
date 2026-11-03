@@ -15,7 +15,7 @@
 Only reads. A part not measured says so; no number is made up.
 
 With PROBEN=1 (bote-proben.service, nightly) it instead sends ten fixed
-sentences to Hermes' API server, each in a fresh session, streamed as Haus's
+sentences to Hermes' API server, each in a fresh session, streamed as Homes's
 Sprechen field does, and keeps per probe the reply time, the tools that ran and
 what is wrong: a fact question must call frage and name the fact, something
 nobody can know must be said to be unknown, every reply comes within

@@ -210,7 +210,7 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 			break // a hand-back of the follow-up is stored, not followed again
 		}
 		// A service that declares a handed-back secret takes it in this apply,
-		// not the next (#349: Home Assistant mints Haus's and the Bote's
+		// not the next (#349: Home Assistant mints Homes's and the Bote's
 		// tokens): planned again, applied when its rendered output changed.
 		next := map[string]string{}
 		for _, name := range st.ServiceNames() {

@@ -9,7 +9,7 @@ import (
 	"github.com/mdopp/laib/internal/journal"
 )
 
-// #515: the box pages work on the phone as Haus does (haus#67). One nav on
+// #515: the box pages work on the phone as Homes does (haus#67). One nav on
 // every page — a bar at the bottom on the phone, a list on the right from
 // 900 px — with the current page marked and Abmelden in it; a free-text
 // filter on top of each list page that hides the cards (data-f) whose text

@@ -31,11 +31,11 @@ func grepTree(dir, s string) bool {
 	return found
 }
 
-// #495: Haus hands a Google calendar's secret iCal address to laib once
+// #495: Homes hands a Google calendar's secret iCal address to laib once
 // (laib_calendar, the address as stdin). It lands in secrets.age as
 // KALENDER_ABOS, the kalender service is applied with it, and no answer,
 // journal line or argument carries it.
-func TestHausSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
+func TestHomesSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 	env, _ := testBox(t)
 	svc := filepath.Join(env.Paths.State, "services", "kalender")
 	os.MkdirAll(svc, 0o755)
@@ -50,7 +50,7 @@ func TestHausSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return mcp.Call(context.Background(), env, st, "haus", "laib_calendar", args)
+		return mcp.Call(context.Background(), env, st, "homes", "laib_calendar", args)
 	}
 
 	out, code := call(map[string]any{"action": "subscribe", "person": "lea", "name": "familie", "kind": "google", "title": "Familie", "stdin": secretICS + "\n"})

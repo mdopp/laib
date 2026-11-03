@@ -12,7 +12,7 @@ import (
 // hand with propose and no verb list proposes anything, like claude.
 func TestMayPathMatchesGrantedPathsOnly(t *testing.T) {
 	p := state.Policy{Hands: map[string]state.Hand{
-		"haus":     {Ceiling: "apply", Verbs: []string{"zuhause"}, Paths: []string{"zuhause", "people.*.signal", "services/*/values.yml:SCANNER"}},
+		"homes":    {Ceiling: "apply", Verbs: []string{"zuhause"}, Paths: []string{"zuhause", "people.*.signal", "services/*/values.yml:SCANNER"}},
 		"claude":   {Ceiling: "apply"},
 		"resident": {Ceiling: "read"},
 	}}
@@ -29,8 +29,8 @@ func TestMayPathMatchesGrantedPathsOnly(t *testing.T) {
 		"policy.yml:people.mama.signal":      false,
 		"services/scan/values.yml:SCAN_PATH": false,
 	} {
-		if got := MayPath(p, "haus", at); got != want {
-			t.Errorf("haus %s: %v, want %v", at, got, want)
+		if got := MayPath(p, "homes", at); got != want {
+			t.Errorf("homes %s: %v, want %v", at, got, want)
 		}
 	}
 	if !MayPath(p, "claude", "box.yml:domain") || MayPath(p, "resident", "box.yml:zuhause") || MayPath(p, "nobody", "box.yml:zuhause") {
@@ -41,16 +41,16 @@ func TestMayPathMatchesGrantedPathsOnly(t *testing.T) {
 // #598: the default sync names a built-in hand's missing path grants like its
 // verbs, and Grant adds a paths list to a one-line hand that has none.
 func TestMissingAndGrantCoverPaths(t *testing.T) {
-	cur := state.Policy{Hands: map[string]state.Hand{"haus": {Ceiling: "apply", Verbs: []string{"zuhause"}}, "claude": {Ceiling: "apply"}}}
-	if got := Missing(cur, true); strings.Join(got["haus"], ",") != "zuhause,people.*.signal" || len(got) != 1 {
+	cur := state.Policy{Hands: map[string]state.Hand{"homes": {Ceiling: "apply", Verbs: []string{"zuhause"}}, "claude": {Ceiling: "apply"}}}
+	if got := Missing(cur, true); strings.Join(got["homes"], ",") != "zuhause,people.*.signal" || len(got) != 1 {
 		t.Fatalf("%v", got)
 	}
-	text := "hands:\n  haus: {ceiling: apply, verbs: [zuhause]}   # the family's pages\n"
-	out, err := Grant([]byte(text), "haus", true, "zuhause", "people.*.signal")
-	if err != nil || string(out) != "hands:\n  haus: {ceiling: apply, verbs: [zuhause], paths: [zuhause, people.*.signal]}   # the family's pages\n" {
+	text := "hands:\n  homes: {ceiling: apply, verbs: [zuhause]}   # the family's pages\n"
+	out, err := Grant([]byte(text), "homes", true, "zuhause", "people.*.signal")
+	if err != nil || string(out) != "hands:\n  homes: {ceiling: apply, verbs: [zuhause], paths: [zuhause, people.*.signal]}   # the family's pages\n" {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if out, err = Grant(out, "haus", true, "notify.person"); err != nil || !strings.Contains(string(out), "paths: [zuhause, people.*.signal, notify.person]}") {
+	if out, err = Grant(out, "homes", true, "notify.person"); err != nil || !strings.Contains(string(out), "paths: [zuhause, people.*.signal, notify.person]}") {
 		t.Fatalf("%v: %s", err, out)
 	}
 }

@@ -50,7 +50,7 @@ esc() { local s=$1; s=${s//&/\&amp;}; s=${s//</\&lt;}; s=${s//>/\&gt;}; s=${s//\
 # --- the family's own programs: own repos, run as a template ---------------
 # <name>|<repo>|<what it is, for the table>|<two short words for the picture>
 own=(
-  "Haus|mdopp/haus|the family's pages and app, the Box page; runs as the \`haus\` template|pages and app of the family"
+  "Homes|mdopp/homes|the family's pages and app, the Box page; runs as the \`homes\` template|pages and app of the family"
   "Dokumente|mdopp/dokumente|scanner, splitting stacks, separator sheets, reading invoices and contracts|scan, split, read invoices"
   "Gesundheit|mdopp/gesundheit|medical records from Paperless as a timeline per person, the daily note (#893); its template comes from the \`apps\` registry|medical records as a timeline"
   "Archiv|mdopp/archiv|each person's Signal, SMS, calls and mail in msgvault, locked in a vault only they open; imports while it is closed through an age-encrypted Briefkasten (ADR 0029); runs as the \`archiv\` template, once per person|messages in a vault"

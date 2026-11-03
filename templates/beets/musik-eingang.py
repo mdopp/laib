@@ -30,7 +30,7 @@ kept unpacked are.
 After the run, one message per upload that imported or kept something:
 bote-notify's payload {an, text} plus "at" (epoch), one JSON line each,
 appended to musik-eingang/meldungen.jsonl (staged and renamed). It is for
-the uploader Haus named in the sidecar `._<name>.von` (an LLDAP user,
+the uploader Homes named in the sidecar `._<name>.von` (an LLDAP user,
 which box.yml people names), else for NOTIFY_PERSON. beets is not on the
 host network and bote-notify listens on the host's loopback only, so the
 container never sends: musik-meldungen.sh does, on the host, as the unit's
@@ -38,7 +38,7 @@ ExecStartPost. MUSIK_MELDEN=false switches it off. Lines the sender left
 (bote-notify away) are one line in einzelheiten; the import never waits.
 
 The status, ${DATA_DIR}/beets/config/laib-status.json (laib status beets,
-Haus): {"at", "detail", "einzelheiten", "findings", "wartet",
+Homes): {"at", "detail", "einzelheiten", "findings", "wartet",
 "letzte": [{"at", "eingang", "von", "titel", "alben", "namen", "ordner",
 "nicht_importiert": [{"datei", "grund"}]}]}, the newest upload first.
 The Bestand's line and findings (#727) come from musik-bestand.py's
@@ -210,7 +210,7 @@ def namen(einzeln, seit, konfig):
 
 
 def absender(name):
-    """the uploader Haus named in ._<name>.von, read and removed; "" without one"""
+    """the uploader Homes named in ._<name>.von, read and removed; "" without one"""
     p = os.path.join(EINGANG, "._%s.von" % name)
     try:
         with open(p) as f:

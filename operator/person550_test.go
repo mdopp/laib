@@ -12,7 +12,7 @@ import (
 
 // #550 point 5: an Operator session between two of a person's turns
 // evicted the Bote's prompt cache. While a person asked the model (Bote,
-// Haus, Frage: whatever the lease proxy did not see marked as background)
+// Homes, Frage: whatever the lease proxy did not see marked as background)
 // less than two minutes ago, no session asks it: skipped with its reason,
 // and the next step tries again.
 func TestNoSessionRightAfterAPersonAskedTheModel(t *testing.T) {

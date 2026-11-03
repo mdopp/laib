@@ -7,6 +7,9 @@ already means something else in the house; or when you meet "Solaris",
 
 - **Status:** Accepted, 2026-10-13 (#132). Rule 2 and the glossary's persona
   rows amended by ADR 0030 (2026-11-02): no personas, one assistant name.
+  Rules 1, 3 and 6 amended by ADR 0031 (2026-11-03) for one service: Haus
+  is renamed Homes (template, hand `homes`, app), and the program, the app
+  and the assistant share that one name.
 - **Deciders:** operator (mdopp): "Ist das alles klar und direkt
   ersichtlich, oder ist das historisch gewachsen und wir müssen eine klare
   Architektur und Namensstruktur einführen?" — "Mach das zu issues und
@@ -67,17 +70,17 @@ which kind of name goes where.
 | maintenance marker | an action's announcement before it stops or starts services on purpose: what it acts on, their dependents, who, until when; cleared at its end, a red finding past its until; what „planned“ means for diag and the skills | `internal/apply/marker.go`, `LAIB_HOME/markers/`, verb `laib planned` (#978) |
 | outcome | what came of a proposal, recorded by laib: effective, no effect, rolled back, rejected with the owner's reason, later (a free „nicht jetzt“), applied (nothing to measure) | the inbox entry's `outcome`, journal verb `outcome` (#544) |
 | Werkstatt | the dev container: Claude Code and pi, and the autoloop that works issues | `templates/werkstatt`, `werkstatt/` |
-| Bote | the agent people write to, on Signal and in Haus's Sprechen field | `templates/bote` (ADR 0016) |
+| Bote | the agent people write to, on Signal and in Homes's Sprechen field | `templates/bote` (ADR 0016) |
 | Hermes | the upstream agent the Bote is built from, as stock | container `bote-hermes` |
 | Automat | Home Assistant automations as a Bote tool | `automat/`, container `bote-automat`, tool `automat` |
 | notify | a message for a person on their chat channel, sent by the Bote with `hermes send` (ADR 0022 §3); Home Assistant calls it as `rest_command.mitteilung` | `templates/bote/notify.py`, container `bote-notify` |
 | assistant | the name the family talks to, set once (ADR 0030): „Homes“ by default | `box.yml assistant`, the builtin `${ASSISTANT}`, `LAIB_ASSISTANT` in hooks |
 | directory | where a person stands in the Bote: its tools, levels, context and help, in the assistant's name | `directory/`, container `bote-directory`, tool and plugin `laib-directory` |
-| Haus | the family's surface: pages, cards, `/napi`, the app's server | repo `mdopp/haus`, `templates/haus`, `haus.<domain>` |
+| Homes | the family's surface: pages, cards, `/napi`, the app's server, and the app; was Haus until ADR 0031; the assistant's name too (ADR 0030) | repo `mdopp/homes`, app `mdopp/homes-android`, `templates/homes`, `homes.<domain>`, hand `homes` |
 | Zuhause | the household's address and coordinates, once for every template (#561, ADR 0017 amendment) | `box.yml zuhause`, the `ZUHAUSE_*` builtins, verb `laib zuhause` |
-| Haushalt | the household's data: calendar, contacts, notes, reminders | Haus's MCP source (ADR 0017), Bote tool `haushalt` |
-| memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `haus-qmd` in the haus pod (#195) |
-| Vermittler | serves the memory library: qmd's `/query` on qmd's SDK, plus each hit's cosine (`vec`), until qmd returns it itself | `qmd/vermittler.mjs`, container `haus-qmd` (#198) |
+| Haushalt | the household's data: calendar, contacts, notes, reminders | Homes's MCP source (ADR 0017), Bote tool `haushalt` |
+| memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `homes-qmd` in the homes pod (#195) |
+| Vermittler | serves the memory library: qmd's `/query` on qmd's SDK, plus each hit's cosine (`vec`), until qmd returns it itself | `qmd/vermittler.mjs`, container `homes-qmd` (#198) |
 | ha | Home Assistant as a Bote tool: lights, switches, players | Bote tool `ha` |
 | Stimme | the voice set Home Assistant Assist speaks: wake word („Hey Mycroft“), Whisper, Piper | `templates/stimme` (ADR 0015, ADR 0030) |
 | Frage | "was ist …": search plus summary | `frage/`, `templates/frage` |
@@ -86,13 +89,19 @@ which kind of name goes where.
 | instance | a per-person template installed for one person (`perPerson`, `laib add --person`), the service `<template>-<person>`; its route shares one name with the template's other instances (#986); *Instanz* | `services/<template>-<person>/laib.yml` `person:` |
 | Archiv | a person's message archive (mail, WhatsApp, Signal): one msgvault instance per person, behind `archiv.<domain>` (ADR 0029) | template `msgvault`, `${DATA_DIR}/msgvault-<person>/` |
 | Tresor | the encrypted folder holding one person's Archiv and their keys; only that person opens it, it locks after two idle hours (ADR 0029); not Vaultwarden | inside `${DATA_DIR}/msgvault-<person>/` |
-| Archiv-Eingang | where Haus puts a person's phone backups, still encrypted, until their Tresor opens (ADR 0029) | `${DATA_DIR}/archiv-eingang/<person>/` |
+| Archiv-Eingang | where Homes puts a person's phone backups, still encrypted, until their Tresor opens (ADR 0029) | `${DATA_DIR}/archiv-eingang/<person>/` |
 
 ### Legacy names
 
 | Name | Where it still is | Ends when |
 |---|---|---|
 | ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
+| `haus.<domain>` | the homes template's second route: the old Haus app's `/napi/` calls with their device token (ADR 0031) | every phone runs the Homes app (#1021 step 9); then a `redirectFrom` |
+| `haus_device_` | the device-token prefix of phones paired with the Haus app; Homes accepts it (ADR 0031) | every phone runs the Homes app (#1021 step 9) |
+| `was: HAUS_…`, `was: ${DATA_DIR}/haus…` | the `was:` lines in templates/homes and the templates that declare its secrets (ADR 0031) | the box moved (#1021 step 7) |
+| `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside `X-Archiv-Homes` and `ARCHIV_HOMES_SECRET` (ADR 0031) | the box moved (#1021 step 7) |
+| `X-HAUS-*`, Haus PRODIDs | iCal properties and PRODIDs in entries Radicale already stores: data, kept on purpose (ADR 0031) | never in code; the stored entries keep them |
+| `haus` (accounts) | the household's logins named `haus` in Radicale/LLDAP, Audiobookshelf, Jellyfin, Paperless and Home Assistant (user „Haus“), and the hook labels „Haus (laib)“, „Haus (Gesehen)“, `laib-haus` (ADR 0031) | the owner's decision in #1021 |
 
 ### Retired names
 

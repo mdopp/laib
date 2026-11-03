@@ -20,7 +20,7 @@ func TestTheIdentityServiceGetsTheAccountsPasswordsAndRunsAgainOnAChange(t *test
 	home := t.TempDir()
 	paths := boxfs.Paths{Home: home, Render: filepath.Join(home, "r")}
 	st := &state.State{Box: state.Box{Domain: "x.home", DataDir: filepath.Join(home, "d"), Roles: state.Roles{SSO: "auth", Identity: "auth"}}, Services: map[string]*state.Service{}}
-	for _, name := range []string{"auth", "archiv-anna", "haus"} {
+	for _, name := range []string{"auth", "archiv-anna", "homes"} {
 		dir := filepath.Join(home, "services", name)
 		os.MkdirAll(dir, 0o755)
 		os.WriteFile(filepath.Join(dir, "post-deploy"), []byte("#!/bin/sh\n"), 0o755)
@@ -50,7 +50,7 @@ func TestTheIdentityServiceGetsTheAccountsPasswordsAndRunsAgainOnAChange(t *test
 	if got := hookEnv("auth")["LAIB_SECRET_ARCHIV_RADICALE_PASSWORD_ANNA"]; got != "pw-v1009" {
 		t.Errorf("the identity service's hook gets the account's password: %q", got)
 	}
-	if _, ok := hookEnv("haus")["LAIB_SECRET_ARCHIV_RADICALE_PASSWORD_ANNA"]; ok {
+	if _, ok := hookEnv("homes")["LAIB_SECRET_ARCHIV_RADICALE_PASSWORD_ANNA"]; ok {
 		t.Error("another service's hook sees the account's password")
 	}
 	p := &plan.Plan{Changes: []plan.Change{{Path: "identity/accounts.json"}}}

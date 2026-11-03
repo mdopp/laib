@@ -3,13 +3,13 @@
 Paperless-ngx with OCR, Postgres and Redis in one pod. The family logs in
 through Authelia's OIDC; the local admin stays as break-glass. Ways a
 document gets in, each ending in Paperless with its text recognised and,
-through Haus' library, findable in Haus and by the Bote (haus#13):
+through Homes' library, findable in Homes and by the Bote (haus#13):
 
 | Way | Where it lands | Title, tags |
 |---|---|---|
 | E-mail to the inbox address (`PAPERLESS_MAIL_FILTER_TO`) | Paperless fetches it itself | the subject; the attachments only |
 | The Bote, a photo or PDF with "ablegen" or "archivieren" | `paperless-consume/Bote/<sender>/` | the words besides "ablegen", else sender and time; tags Bote and the sender |
-| Haus, "Dokument ablegen" (page and app) | `paperless-consume/` | the file's name |
+| Homes, "Dokument ablegen" (page and app) | `paperless-consume/` | the file's name |
 | The PC: File Browser or the network drive | `paperless-consume/`, any subfolder | the file's name; each folder on the way is a tag |
 
 ## Logins and groups (#231)
@@ -47,7 +47,7 @@ both of the share's doors show that whole tree:
 
 - **File Browser**, `https://files.<domain>` with the family login: the
   folder `paperless-consume` at the top. Drag files in.
-- **Network drive** (Samba, LAN only; each person's password on Haus'
+- **Network drive** (Samba, LAN only; each person's password on Homes'
   Netzlaufwerk page): `\\<box>\data\paperless-consume` on Windows,
   `smb://<box>/data/paperless-consume` on a Mac or phone.
 
@@ -180,12 +180,12 @@ on every apply, each step changing only what differs:
 The contract and invoice fields (custom fields) are still made here, above,
 and so is **`Stapel`** (text, #909): Dokumente writes into it, on every
 document it files, the id of the scanned stack the document came from (the
-stack's start time, for example `2026-10-29T17-07-46`). Haus lists a stack's
+stack's start time, for example `2026-10-29T17-07-46`). Homes lists a stack's
 documents by it straight from Paperless, so a document renamed, split or
 merged there stays under its stack and a deleted one is gone.
 
 Not here (follow-up issues): questions to the documents through the Bote
-or Haus; upstream, a Paperless setting for names its AI must not suggest.
+or Homes; upstream, a Paperless setting for names its AI must not suggest.
 
 A document recognised before keeps its text: to recognise it again, select
 it in Paperless and reprocess it from the document actions (the values'

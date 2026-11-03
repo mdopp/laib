@@ -182,7 +182,7 @@ class Mirror(unittest.TestCase):
         weekly = [v for k, v in self.r.store.items() if "w@google.com" in v][0]
         self.assertEqual(weekly.count("BEGIN:VEVENT"), 2)      # the override goes with its series
         self.assertIn("TZID:Europe/Berlin", weekly)
-        self.assertIn("<L:abgleich>", self.r.props["/lea/google-familie/"], "Haus shows when it was last mirrored")
+        self.assertIn("<L:abgleich>", self.r.props["/lea/google-familie/"], "Homes shows when it was last mirrored")
         self.assertEqual(self.src.seen[0][2], "text/calendar")
 
     def test_home_assistant_gets_a_copy_of_every_mirror_and_of_the_familys_calendars_only(self):
@@ -200,7 +200,7 @@ class Mirror(unittest.TestCase):
         self.assertIn("/homeassistant/haus-familie-geburtstage/", self.r.cols)
         self.assertNotIn("/homeassistant/haus-privat/", self.r.cols, "only the family's calendars go to HA")
         self.assertNotIn("geheim", "".join(self.r.items("/homeassistant/").values()))
-        self.assertFalse([m for m in self.r.methods if m.startswith(("PUT /haus/", "DELETE /haus/", "PROPPATCH /haus/"))], "Haus's calendars are only read")
+        self.assertFalse([m for m in self.r.methods if m.startswith(("PUT /haus/", "DELETE /haus/", "PROPPATCH /haus/"))], "Homes's calendars are only read")
         self.run_it(self.google, ha="")
         self.assertIn("/homeassistant/lea-google-familie/", self.r.cols, "HA_USER emptied: its copies are left alone")
 
@@ -271,7 +271,7 @@ class Mirror(unittest.TestCase):
         self.assertEqual(len(self.r.items("/lea/google-familie/")), 1)
         self.assertEqual([f["severity"] for f in s["findings"]], ["gelb"])
 
-    def test_google_forgetting_the_address_is_yellow_with_the_way_back_in_haus(self):
+    def test_google_forgetting_the_address_is_yellow_with_the_way_back_in_homes(self):
         self.src.cals[self.gpath] = ics(("a@google.com", "Zahnarzt"))
         self.run_it(self.google)
         del self.src.cals[self.gpath]                           # reset in Google: 404
@@ -280,7 +280,7 @@ class Mirror(unittest.TestCase):
         f = s["findings"][0]
         self.assertEqual(f["severity"], "gelb")
         self.assertIn("geheime Adresse nicht mehr", f["detail"])
-        self.assertIn("Haus", f["fix"])
+        self.assertIn("Homes", f["fix"])
         self.assertIn("geheime Adresse nicht mehr", self.r.props["/lea/google-familie/"])
         self.assertEqual(len(self.r.items("/lea/google-familie/")), 1, "a failed fetch deletes nothing")
 

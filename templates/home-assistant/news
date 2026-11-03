@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Homes, früher Haus, zeigt und schaltet eure Geräte wie bisher
 Der Sprachassistent heißt jetzt ${ASSISTANT} und wacht auf „Hey Mycroft“
 Auch wenn der Lautsprecher „Spieler 1 live“ statt „Spiele Einslive“ versteht, spielt das Radio jetzt
 „Spiele Einslive“ und „Spiele Musik von Queen“ versteht Home Assistant jetzt auch, und die Musik läuft auf dem Lautsprecher im Raum

@@ -153,7 +153,7 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	f := newFakeLaib(t)
 	addr, mails := fakeSMTP(t)
 	c := f.config(t, addr)
-	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"},{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:b2"},{"service":"haus","key":"HAUS_IMAGE","image":"ghcr.io/mdopp/haus","current":"latest","digest":"sha256:d6","auto":true},{"service":"host","key":"image","image":"ghcr.io/ublue-os/ucore-minimal","current":"sha256:85","digest":"sha256:b6"}]`
+	f.updates = `[{"service":"whoami","key":"IMAGE","image":"docker.io/traefik/whoami","current":"v1.11","minor":"v1.12"},{"service":"x","key":"IMAGE","image":"y","current":"1"},{"service":"vaultwarden","key":"IMAGE","image":"docker.io/vaultwarden/server","current":"latest","digest":"sha256:b2"},{"service":"homes","key":"HOMES_IMAGE","image":"ghcr.io/mdopp/homes","current":"latest","digest":"sha256:d6","auto":true},{"service":"host","key":"image","image":"ghcr.io/ublue-os/ucore-minimal","current":"sha256:85","digest":"sha256:b6"}]`
 	f.diag = `[{"severity":"info","probe":"status","service":"home-assistant","detail":"Update: SENEC 2026.6.3 → 2026.10.0 · https://x/r"},{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Stecker 9.5.52 → 9.5.60 (nur gemeldet)"},{"severity":"info","probe":"status","service":"home-assistant","detail":"Firmware: Lampe Flur 1.2 → 1.3"},{"severity":"gelb","probe":"updates","service":"media","detail":"IMAGE liegt seit 31 Tagen hinter seinem Kanal (sha256:c3)"},{"severity":"info","probe":"status","service":"home-assistant","detail":"alles andere"}]`
 	now := time.Now()
 	sweep := func(at time.Time) {
@@ -169,7 +169,7 @@ func TestTheOwnerGetsAMailWhenAServiceIsRedForTenMinutes(t *testing.T) {
 	}
 	// #528: "Was ist veraltet" — a floating tag's newer digest too; sorted by
 	// who acts, without digests (owner 2026-11-02: „was mach ich mit so einer Meldung?“)
-	for _, want := range []string{"Subject: Laib: Was ist veraltet", "Kommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\r\n- haus",
+	for _, want := range []string{"Subject: Laib: Was ist veraltet", "Kommt von selbst, in der Nacht nach der Sicherung (nichts zu tun):\r\n- homes",
 		"Kommt am Samstag als Freigabe in deine Inbox", "- SENEC 2026.6.3 → 2026.10.0 · https://x/r\r\n",
 		"Nur gemeldet, Firmware, die Home Assistant nicht selbst einspielen kann", "- Stecker 9.5.52 → 9.5.60\r\n", "- Lampe Flur 1.2 → 1.3\r\n", "- vaultwarden (server)", "- media: IMAGE liegt seit 31 Tagen hinter seinem Kanal\r\n", "Das Betriebssystem der Box hat eine neue Version"} {
 		if !strings.Contains(got[0], want) {

@@ -14,7 +14,7 @@ import (
 )
 
 // #798: the admin page keeps what approving, keys and repair need. /net,
-// /bote/link and the morning report left it (`laib net` and Haus keep
+// /bote/link and the morning report left it (`laib net` and Homes keep
 // them), family-card and adopt left the verb table.
 func TestTheAdminPageKeepsOnlyApproveKeysAndRepair(t *testing.T) {
 	c := newCbox(t)

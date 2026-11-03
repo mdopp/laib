@@ -1,7 +1,7 @@
 """laib#418: Radicale's rights. Every account owns its own collections, as
-before (owner_only); the household's calendar and address book are Haus's
+before (owner_only); the household's calendar and address book are Homes's
 account's (haus/haushalt, haus/haushalt-kontakte), and every account may
-read and write their entries, so the family adds it in DAVx⁵ and Haus, the
+read and write their entries, so the family adds it in DAVx⁵ and Homes, the
 Bote and the phones share one Haushalt. Nobody reaches another person's
 own calendars. The rules are matched the way Radicale's from_file does:
 the first section whose user and collection patterns match decides."""
@@ -65,8 +65,8 @@ class Rights(unittest.TestCase):
                 self.assertIn("w", p, (who, coll))
                 self.assertNotIn("W", p, f"{who} could delete or replace {coll} itself")
             self.assertIn("w", allowed(self.rules, "haus", coll))
-        self.assertIn("W", allowed(self.rules, "haus", "haus"), "Haus makes the Haushalt when it is missing")
-        # only the Haushalt: Haus's account's other collections stay its own
+        self.assertIn("W", allowed(self.rules, "haus", "haus"), "Homes makes the Haushalt when it is missing")
+        # only the Haushalt: Homes's account's other collections stay its own
         self.assertEqual(allowed(self.rules, "anna", "haus/privat"), "")
         self.assertEqual(allowed(self.rules, "anna", "haus"), "")
 
@@ -85,7 +85,7 @@ class Rights(unittest.TestCase):
             self.assertNotIn("w", allowed(self.rules, "kalender", coll), f"kalender may write {coll}")
         self.assertNotIn("w", allowed(self.rules, "kalender", "haus/haushalt/x.ics"), "the Haushalt is copied for HA, never written")
         self.assertIn("r", allowed(self.rules, "kalender", "haus/haushalt"))
-        self.assertIn("R", allowed(self.rules, "kalender", "haus"), "it lists Haus's calendars to copy them")
+        self.assertIn("R", allowed(self.rules, "kalender", "haus"), "it lists Homes's calendars to copy them")
         self.assertIn("W", allowed(self.rules, "kalender", "homeassistant"), "it makes HA's home")
 
     def test_home_assistant_reads_its_copies_and_nothing_else(self):   # #495
@@ -98,7 +98,7 @@ class Rights(unittest.TestCase):
         self.assertIn("w", allowed(self.rules, "haus", "anna/privat-sport"))
         self.assertIn("w", allowed(self.rules, "anna", "anna/privat-sport"), "the person owns it")
         self.assertEqual(allowed(self.rules, "ben", "anna/privat-sport"), "", "nur für mich")
-        self.assertIn("R", allowed(self.rules, "haus", "anna"), "Haus lists the person's calendars")
+        self.assertIn("R", allowed(self.rules, "haus", "anna"), "Homes lists the person's calendars")
         self.assertEqual(allowed(self.rules, "haus", "anna/kalender"), "", "the person's own calendars stay theirs")
         for who in ("anna", "ben"):
             self.assertIn("w", allowed(self.rules, who, "haus/familie-geburtstage/x.ics"))

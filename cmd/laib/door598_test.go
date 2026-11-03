@@ -15,7 +15,7 @@ func TestACallBackFromBehindTheDoorStopsAtItsCeiling(t *testing.T) {
 	env, _ := testBox(t)
 	t.Setenv("LAIB_HOME", env.Paths.Home)
 	t.Setenv("LAIB_STATE", env.Paths.State)
-	t.Setenv("LAIB_ACTOR", "haus")
+	t.Setenv("LAIB_ACTOR", "homes")
 	t.Setenv("LAIB_CEILING", "propose")
 	for _, argv := range [][]string{{"approve", "1"}, {"apply", "whoami"}, {"secret", "list"}} {
 		if code := runArgs(argv); code != cli.ExitRefused {

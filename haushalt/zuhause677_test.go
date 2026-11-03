@@ -35,7 +35,7 @@ func (p *proposals) Aufgabe(context.Context, string, ...string) (int, error) {
 func run677(t *testing.T, laib Laib, z *Zuhause, args ...string) (map[string]any, int, string, string) {
 	t.Helper()
 	var out, errb, jr bytes.Buffer
-	env := &Env{Call: Call{JSON: true, Actor: "haus", Ceiling: "propose", Zuhause: z}, Laib: laib, Out: &out, Err: &errb, Journal: &jr}
+	env := &Env{Call: Call{JSON: true, Actor: "homes", Ceiling: "propose", Zuhause: z}, Laib: laib, Out: &out, Err: &errb, Journal: &jr}
 	code := Run(context.Background(), env, args)
 	var reply map[string]any
 	json.Unmarshal(out.Bytes(), &reply)

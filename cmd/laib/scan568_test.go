@@ -13,12 +13,12 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 )
 
-// #568: Haus's "Stapel scannen", the Bote's "scann den Stapel" and the
+// #568: Homes's "Stapel scannen", the Bote's "scann den Stapel" and the
 // owner's CLI reach the scan service through laib_scan: status answers the
 // service's own status file, every other action is one order file in its
 // data folder that the service picks up. laib starts nothing itself and
 // decides nothing; a resident's read token may not order a scan.
-func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
+func TestHomesAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 	env, dataDir := testBox(t)
 	withHaushalt(t, env) // served behind the verb door since #598
 	call := func(hand string, args map[string]any) (string, int) {
@@ -28,7 +28,7 @@ func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 		}
 		return mcp.Call(context.Background(), env, st, hand, "laib_scan", args)
 	}
-	if out, code := call("haus", map[string]any{"action": "status"}); code != cli.ExitRefused || !strings.Contains(out, "nicht eingerichtet") {
+	if out, code := call("homes", map[string]any{"action": "status"}); code != cli.ExitRefused || !strings.Contains(out, "nicht eingerichtet") {
 		t.Fatalf("a box without the scan service: exit %d: %s", code, out)
 	}
 
@@ -39,18 +39,18 @@ func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 	if err := proposal.CommitDirty(context.Background(), env.Paths.State, "human:test"); err != nil {
 		t.Fatal(err)
 	}
-	if out, code := call("haus", map[string]any{"action": "status"}); code != cli.ExitRefused || !strings.Contains(out, "noch keinen Zustand") {
+	if out, code := call("homes", map[string]any{"action": "status"}); code != cli.ExitRefused || !strings.Contains(out, "noch keinen Zustand") {
 		t.Fatalf("no status file yet: exit %d: %s", code, out)
 	}
 	os.MkdirAll(filepath.Join(dataDir, "scan"), 0o755)
 	os.WriteFile(filepath.Join(dataDir, "scan", "laib-status.json"), []byte(`{"at":"2026-10-22T10:00:00Z","detail":"bereit","zustand":"bereit","scanner":true}`), 0o644)
-	out, code := call("haus", map[string]any{"action": "status"})
+	out, code := call("homes", map[string]any{"action": "status"})
 	var status map[string]any
 	if code != cli.ExitOK || json.Unmarshal([]byte(out), &status) != nil || status["zustand"] != "bereit" || status["scanner"] != true {
 		t.Fatalf("status: exit %d: %s", code, out)
 	}
 
-	if out, code := call("haus", map[string]any{"action": "start", "person": "mama"}); code != cli.ExitOK || !strings.Contains(out, "angenommen") {
+	if out, code := call("homes", map[string]any{"action": "start", "person": "mama"}); code != cli.ExitOK || !strings.Contains(out, "angenommen") {
 		t.Fatalf("start: exit %d: %s", code, out)
 	}
 	if out, code := call("bote", map[string]any{"action": "redo", "stapel": "2026-10-22T10-15-00"}); code != cli.ExitOK {
@@ -69,7 +69,7 @@ func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 		}
 		got = append(got, m)
 	}
-	if got[0]["aktion"] != "start" || got[0]["person"] != "mama" || !strings.HasPrefix(got[0]["von"], "haus") {
+	if got[0]["aktion"] != "start" || got[0]["person"] != "mama" || !strings.HasPrefix(got[0]["von"], "homes") {
 		t.Fatalf("first order: %v", got[0])
 	}
 	if got[1]["aktion"] != "redo" || got[1]["stapel"] != "2026-10-22T10-15-00" {
@@ -77,7 +77,7 @@ func TestHausAndTheBoteOrderAScanThroughLaib(t *testing.T) {
 	}
 
 	for _, bad := range []map[string]any{{"action": "redo"}, {"action": "redo", "stapel": "../../etc"}, {"action": "start", "person": "Mama Dopp"}} {
-		if out, code := call("haus", bad); code == cli.ExitOK {
+		if out, code := call("homes", bad); code == cli.ExitOK {
 			t.Errorf("%v was taken: %s", bad, out)
 		}
 	}

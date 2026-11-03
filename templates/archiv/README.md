@@ -15,5 +15,5 @@ on Fedora CoreOS with `/dev/fuse` and `SYS_ADMIN`; the first Signal backup
 (41,437 messages) and the Gmail mailbox went in through it.
 
 The inbox folder carries one file the archive writes itself:
-`.briefkasten.pub`, the public key Haus hands to the phone, so the Haus app
+`.briefkasten.pub`, the public key Homes hands to the phone, so the Homes app
 encrypts SMS and calls before they leave it (ADR 0029 §9).

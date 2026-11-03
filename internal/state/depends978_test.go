@@ -10,14 +10,14 @@ import (
 func TestDependsIsAfterUsesNeedsAndTheSSORoleTransitively(t *testing.T) {
 	svc := func(c Contract) *Service { return &Service{Contract: c} }
 	st := &State{Box: Box{Roles: Roles{SSO: "auth"}}, Services: map[string]*Service{
-		"haus":           svc(Contract{After: []string{"auth"}, Needs: []string{"mcp"}, Uses: []string{"home-assistant"}}),
+		"homes":          svc(Contract{After: []string{"auth"}, Needs: []string{"mcp"}, Uses: []string{"home-assistant"}}),
 		"home-assistant": svc(Contract{After: []string{"auth", "mosquitto"}, OIDC: &OIDC{}}),
 		"whoami":         svc(Contract{OIDC: &OIDC{}}),
 		"auth":           svc(Contract{OIDC: &OIDC{}}), // the portal itself: not its own dependency
 		"mosquitto":      svc(Contract{}),
 	}}
 	for name, want := range map[string][]string{
-		"haus":   {"auth", "home-assistant", "laib", "mosquitto"},
+		"homes":  {"auth", "home-assistant", "laib", "mosquitto"},
 		"whoami": {"auth"},
 		"auth":   nil,
 		"gone":   nil,
@@ -26,7 +26,7 @@ func TestDependsIsAfterUsesNeedsAndTheSSORoleTransitively(t *testing.T) {
 			t.Errorf("%s depends on %v, want %v", name, got, want)
 		}
 	}
-	if got := st.Dependents("home-assistant"); !slices.Equal(got, []string{"haus"}) {
+	if got := st.Dependents("home-assistant"); !slices.Equal(got, []string{"homes"}) {
 		t.Errorf("home-assistant's dependents: %v", got)
 	}
 }

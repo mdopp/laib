@@ -43,7 +43,7 @@ by hand once; Frage as conversation agent is added by home-assistant's
 post-deploy once Frage answers (HA's Ollama integration on Frage's Ollama
 API, #491), Music Assistant once music-assistant's post-deploy handed it a
 token (#526); with `HA_TOKEN`, which
-home-assistant's post-deploy mints like Haus's and the Bote's (#349),
+home-assistant's post-deploy mints like Homes's and the Bote's (#349),
 `laib diag` lists what is still missing.
 
 | Template | Role | Notes |
@@ -59,14 +59,14 @@ home-assistant's post-deploy mints like Haus's and the Bote's (#349),
 | audiobookshelf | — | Hörbücher und Podcasts with auto-download and own apps; replaces the hand-rolled podcast script and takes audiobooks out of Jellyfin |
 | music-assistant | — | the house's player brain for Assist: radio, playlists, podcasts on the speakers; host network for discovery; the hook onboards it, adds Jellyfin (its own account `musicassistant`) and Radio Browser, and the family signs in through Home Assistant (#526) |
 | radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |
-| kalender | — | calendars from outside (a Google calendar's secret iCal address, a public ICS) mirrored one way every 15 min into the person's read-only Radicale collection `google-<name>` / `abo-<name>`, as the service account `kalender`, plus copies for Home Assistant's own account (#495); entered in Haus, kept by `laib calendar`; a timer, no daemon; findings in diag |
+| kalender | — | calendars from outside (a Google calendar's secret iCal address, a public ICS) mirrored one way every 15 min into the person's read-only Radicale collection `google-<name>` / `abo-<name>`, as the service account `kalender`, plus copies for Home Assistant's own account (#495); entered in Homes, kept by `laib calendar`; a timer, no daemon; findings in diag |
 | vaultwarden | — | Passwörter with SSO through Authelia's OIDC client |
 | mosquitto | — | MQTT broker; password file by the hook; 1883 open to the LAN for devices |
 | esphome | — | ESPHome dashboard and OTA, host network for discovery |
 | beets | — | music tagging over the file share's music folder, admins only |
 | home-assistant | — | Home Assistant, Z-Wave JS UI and the Matter server on the host network; the house and the voice brain (ADR 0015) |
 | immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
-| file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Haus, the shared `SHARE_USER` as fallback (#296) |
+| file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Homes, the shared `SHARE_USER` as fallback (#296) |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | scan | — | paper stacks into Paperless (#568): a file in the share's `scan-eingang` or a SANE network scanner's run; pages turned, read, blanks dropped, the household model marks where documents start; one closing message per stack through bote-notify; ordered with `laib scan` |
 | paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share; a mail inbox from `PAPERLESS_MAIL_*` (README.md) |

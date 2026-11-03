@@ -78,7 +78,7 @@ func keyFor(st *state.State, name string) *render.OwnerSecret {
 }
 
 // backTo: zurueck= when it stays on this household's pages, https on the
-// box's domain or a name under it (Haus' Discogs settings), else "": never
+// box's domain or a name under it (Homes' Discogs settings), else "": never
 // an open redirect.
 func backTo(st *state.State, raw string) string {
 	u, err := url.Parse(raw)
