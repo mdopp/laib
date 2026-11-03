@@ -16,7 +16,7 @@ answers. Two of Hermes' gateway hooks:
   folder as Bote/<sender>/<title>.<ext>; Paperless makes the folders tags.
   The message is then handled: the person gets "Liegt in Paperless, Titel
   …" and the model never sees it. Hermes itself (uid 10000) cannot write
-  into the share; bote-notify runs as the box's user, as Haus does.
+  into the share; bote-notify runs as the box's user, as Homes does.
 
 The title is what the person wrote besides the word ("Stromrechnung
 ablegen"), else bote-notify makes one from the sender and the time.
@@ -27,7 +27,7 @@ import asyncio, base64, json, os, re, threading, urllib.error, urllib.request, u
 WORDS = re.compile(r"\b(ablegen|archivieren)\b", re.I)
 MARK = re.compile(r"\[laib-ablage:([0-9a-f]{32})\]\s*")
 FILLER = re.compile(r"\b(bitte|in\s+paperless)\b", re.I)
-MAX_FILE = 25 << 20  # as Haus' upload (haus#10)
+MAX_FILE = 25 << 20  # as Homes' upload (haus#10)
 _lock = threading.Lock()
 _waiting = {}  # id -> the cached files; cleared when it grows (a message refused by Hermes never comes back)
 

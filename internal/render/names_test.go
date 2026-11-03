@@ -60,7 +60,7 @@ func TestMechanismsAreNotNamedAfterAPersona(t *testing.T) {
 
 // ADR 0021 rules 1 and 5: a Bote tool is named for the system it reaches. A
 // tool named like a template must reach that template; the Home Assistant
-// tool named `haus` reached HA while `haus` is the family's pages (#134).
+// tool named `homes` reached HA while `homes` is the family's pages (#134).
 func TestBoteToolsAreNamedForTheSystemTheyReach(t *testing.T) {
 	root := filepath.Join("..", "..")
 	hook, _ := os.ReadFile(filepath.Join(root, "templates", "bote", "post-deploy"))

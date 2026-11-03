@@ -9,7 +9,7 @@ Description=beets: the Musik-Eingang into the music library
 After=beets.service
 
 # After the run, one message per upload through the Bote's bote-notify: the importer
-# writes them into /config/musik-eingang/meldungen.jsonl (for the uploader Haus names
+# writes them into /config/musik-eingang/meldungen.jsonl (for the uploader Homes names
 # in ._<name>.von, else box.yml notify.person), and musik-meldungen.sh sends them from
 # here, the host, where bote-notify listens on loopback. "-": a message never fails
 # the unit. The token is the sender's environment, never argv, and never the container's.

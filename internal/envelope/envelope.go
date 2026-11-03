@@ -330,8 +330,8 @@ func units(ctx context.Context, env *cli.Env, verb string, args []string) int {
 		return cli.Refused(env, env.Actor+" may not "+verb)
 	}
 	// mid-work by its own word (#908): a hand's restart or stop waits, a
-	// person's tap (the shell, the Inbox, Haus) does it at once
-	if h := proposal.Hand(env.Actor); verb != "start" && h != "human" && h != "haus" {
+	// person's tap (the shell, the Inbox, Homes) does it at once
+	if h := proposal.Hand(env.Actor); verb != "start" && h != "human" && h != "homes" {
 		if b := apply.Busy(ctx, st, svc, time.Now()); b != "" {
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "info", Detail: waits + b})
 			fmt.Fprintf(env.Errw(), "laib: %s%s; kein %s mitten in der Arbeit. Danach erneut, oder ein Mensch.\n", waits, b, verb)

@@ -2,13 +2,28 @@
 # pre-start (#36): Radicale's config before the unit starts. LDAP auth against LLDAP in the auth pod; the bind
 # account is LLDAP's read-only `radicale` user, seeded by the auth template (#55). Rights (#418): every user owns
 # their own collections, as owner_only did, and every user reads and writes the entries of the household's
-# calendar and address book, which are Haus's account's (haus/haushalt, haus/haushalt-kontakte; the auth
-# template seeds `haus`); the calendar mirrors (#495) belong to the account `kalender`. Rewritten on every apply.
+# calendar and address book, which are the household's account's (homes/haushalt, homes/haushalt-kontakte; the auth
+# template seeds `homes`, which was `haus` until ADR 0031); the calendar mirrors (#495) belong to the account `kalender`. Rewritten on every apply.
 # Login cache (Radicale >= 3.4.0, expiries in seconds): LLDAP's password check makes every bind 0.13-0.30 s, so a
 # login is kept 15 min and a wrong one 90 s. The cache keys on user and password: a new password binds at once and
 # replaces the entry; an old or removed one keeps working until its entry is 15 min old (a restart clears it).
 set -euo pipefail
 C="$LAIB_DATA_DIR/radicale/config"; mkdir -p "$C" "$LAIB_DATA_DIR/radicale/data"
+# The household's account was `haus` until ADR 0031 (#1021): its collections (the Haushalt, its address book,
+# familie-*, abo-*) move to `homes` once, before Radicale starts with the rights below: a plain rename on the same
+# mount, so every entry, its UID and .Radicale.props come along. `homes` missing or holding no collection (only
+# the dot files Radicale writes when the new login first looked): moved. Both holding collections: red, never a
+# merge. Goes at #1021 step 9 (a legacy name, ADR 0021 rule 8).
+R="$LAIB_DATA_DIR/radicale/data/collections/collection-root"
+if [ -d "$R/haus" ]; then
+  if [ -d "$R/homes" ] && [ -n "$(ls -A "$R/homes" | grep -v '^\.' || true)" ]; then
+    echo "radicale: both $R/haus and $R/homes hold collections: the household's calendars were not moved (ADR 0031); merge them by hand, then laib apply radicale" >&2
+    exit 1
+  fi
+  rm -rf "$R/homes"
+  mv "$R/haus" "$R/homes"
+  echo "radicale: the household's collections moved from haus to homes (ADR 0031)"
+fi
 cat > "$C/config" <<CFG
 # rendered by laib pre-start (templates/radicale)
 [server]
@@ -37,13 +52,13 @@ chmod 644 "$C/config"
 # Upper case is a plain collection, lower case a calendar or address book and its entries. The family gets r and w
 # on the Haushalt, never W: an entry may change, the calendar itself not.
 # The mirrors (#495, templates/kalender): <person>/google-<name> and <person>/abo-<name> are written only by the
-# service account `kalender`; the person, Haus and (for haus/abo-*) the family read them. google-kontakte is a
+# service account `kalender`; the person, Homes and (for homes/abo-*) the family read them. google-kontakte is a
 # Takeout's address book (scripts/import-google.py), the person's own. Home Assistant's account `homeassistant`
 # reads its home, where `kalender` copies the family's calendars: a CalDAV client finds only its own home.
-# Haus (`haus`) lists each person's home and makes a calendar "nur für mich" there as privat-<name>, nothing else
-# of theirs; "für die Familie" is haus/familie-<name>, which everyone reads and writes like the Haushalt.
-# <person>/handy-kontakte is the mirror of the person's phone contacts: the Haus app sends them, Haus writes
-# them there (haus/internal/napi, laib ADR 0029); the person owns it like the privat-* calendars.
+# Homes (`homes`) lists each person's home and makes a calendar "nur für mich" there as privat-<name>, nothing else
+# of theirs; "für die Familie" is homes/familie-<name>, which everyone reads and writes like the Haushalt.
+# <person>/handy-kontakte is the mirror of the person's phone contacts: the Homes app sends them, Homes writes
+# them there (homes/internal/napi, laib ADR 0029); the person owns it like the privat-* calendars.
 # The archive (templates/archiv, one instance per person, ADR 0029) logs in as `archiv-<person>` (laib#1009) and
 # only reads: it lists <person>'s home and reads <person>/handy-kontakte, google-* (not google-kontakte) and
 # privat-*. These three sections come before every `.+` and `(.+)` one, and the last gives it nothing else: not
@@ -81,9 +96,9 @@ user: kalender
 collection: homeassistant(/.*)?
 permissions: RrWw
 
-[kalender-haus]
+[kalender-homes]
 user: kalender
-collection: haus(/(haushalt|familie-[^/]+)(/.*)?)?
+collection: homes(/(haushalt|familie-[^/]+)(/.*)?)?
 permissions: Rr
 
 [homeassistant]
@@ -91,8 +106,8 @@ user: homeassistant
 collection: homeassistant(/.*)?
 permissions: Rr
 
-[mirrors-haus]
-user: haus
+[mirrors-homes]
+user: homes
 collection: [^/]+/(google-(?!kontakte(/|$))|abo-)[^/]+(/.*)?
 permissions: r
 
@@ -103,7 +118,7 @@ permissions: r
 
 [abo-family]
 user: .+
-collection: haus/abo-[^/]+(/.*)?
+collection: homes/abo-[^/]+(/.*)?
 permissions: r
 
 [owner]
@@ -111,14 +126,14 @@ user: (.+)
 collection: {0}(/.*)?
 permissions: RrWw
 
-[haus-privat]
-user: haus
+[homes-privat]
+user: homes
 collection: [^/]+(/(privat-[^/]+|handy-kontakte)(/.*)?)?
 permissions: Rrw
 
 [haushalt]
 user: .+
-collection: haus/(haushalt(-kontakte)?|familie-[^/]+)(/.*)?
+collection: homes/(haushalt(-kontakte)?|familie-[^/]+)(/.*)?
 permissions: rw
 RIGHTS
 chmod 644 "$C/rights"

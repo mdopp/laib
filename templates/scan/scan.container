@@ -32,7 +32,7 @@ Environment=PAPERLESS_URL=${PAPERLESS_URL}
 Environment=PAPERLESS_TOKEN=${PAPERLESS_TOKEN}
 Environment=PAPERLESS_USER=${PAPERLESS_USER}
 Environment=PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
-# contracts and invoices, the notice reminders in Haus's Haushalt (#709, #818, #820, #737)
+# contracts and invoices, the notice reminders in Homes's Haushalt (#709, #818, #820, #737)
 Environment="VERTRAG_ARTEN=${VERTRAG_ARTEN}"
 Environment=VERTRAG_VORLAUF_TAGE=${VERTRAG_VORLAUF_TAGE}
 Environment="RECHNUNG_ARTEN=${RECHNUNG_ARTEN}"

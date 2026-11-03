@@ -2,14 +2,14 @@
 """kalender (#495): calendars from outside into Radicale, one way, every
 quarter of an hour (kalender-abgleich.timer).
 
-The owner's decision (2026-10-21): Radicale is the one place. Haus, the Bote
+The owner's decision (2026-10-21): Radicale is the one place. Homes, the Bote
 and Home Assistant read there. A calendar comes in as an address:
 
   google  Google's "Geheime Adresse im iCal-Format" of one calendar. Read only,
           no Google login, no OAuth app. The address is a secret.
   abo     a public ICS: Feiertage, Schulferien, Müllabfuhr, any address.
 
-The owner enters it in Haus (haus#66); Haus hands it to laib (`laib calendar
+The owner enters it in Homes (haus#66); Homes hands it to laib (`laib calendar
 subscribe`, the address on stdin), laib keeps the list in secrets.age as
 KALENDER_ABOS (base64url of [{"person", "name", "kind", "title", "url",
 "since"}]) and applies this template again, so it reaches the unit through
@@ -17,7 +17,7 @@ the environment, never argv. The address is never printed, logged or written
 anywhere else: an error names the host only.
 
 Each subscription is mirrored into <person>/google-<name> or
-<person>/abo-<name> (person `haus`: the family's). This script writes as
+<person>/abo-<name> (person `homes`, the household's account: the family's). This script writes as
 Radicale's service account `kalender`, whose rights (templates/radicale)
 allow exactly those collections and Home Assistant's: nobody's password. The
 person only reads it. What the source drops, the next run removes, in that
@@ -27,14 +27,17 @@ of the same calendar is replaced, not doubled.
 
 Home Assistant (HA_USER, its own Radicale account `homeassistant`) finds only
 the calendars in its own home, as every CalDAV client does. So every mirror,
-and each family calendar of Haus's account (haus/haushalt, haus/familie-*),
-is copied into homeassistant/<person>-<collection>, read only for HA.
+and each family calendar of the household's account (homes/haushalt, homes/familie-*),
+is copied into homeassistant/<person>-<collection>, read only for HA. The
+household's account was `haus` until ADR 0031 (#1021): its copies keep the
+name haus-<collection> there, because Home Assistant's calendar entities are
+bound to the copy's path; a subscription stored for person `haus` is homes's.
 
 Each run writes laib-status.json (laib diag): yellow when a calendar has not
 been mirrored for STALE_HOURS (2) or Google answers 404 (the address was
 reset), red when Radicale refuses the service account. Each mirrored
 collection carries {urn:laib:kalender}abgleich (the last good run) and
-{urn:laib:kalender}problem, which Haus shows. Stdlib only.
+{urn:laib:kalender}problem, which Homes shows. Stdlib only.
 """
 import base64, datetime, hashlib, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request, uuid
 import xml.etree.ElementTree as ET
@@ -44,7 +47,7 @@ OBJECTS = ("VEVENT", "VTODO", "VJOURNAL")
 DAV, CAL, LAIB = "{DAV:}", "{urn:ietf:params:xml:ns:caldav}", "urn:laib:kalender"
 MAX_ICS = 20 << 20
 MIRROR = re.compile(r"^[^/]+/(google|abo)-[a-z0-9-]+/$")   # the only collections a run ever deletes, besides HA's copies
-FIX_HAUS = "in Haus → Kalender → „Kalender hinzufügen“ den Kalender neu verbinden"
+FIX_HOMES = "in Homes → Kalender → „Kalender hinzufügen“ den Kalender neu verbinden"
 
 
 # --- iCalendar, as scripts/import-google.py does it (tests/ holds the two to the same paths) ---
@@ -131,9 +134,14 @@ def collection(abo):
     return "%s/%s-%s/" % (abo["person"], "google" if abo.get("kind") == "google" else "abo", abo["name"])
 
 
+HOUSEHOLD, HA_NAME = "homes", "haus"   # the household's account, and its name in HA's copies (ADR 0031)
+
+
 def ha_collection(home, col):
-    """Home Assistant's copy of a collection: homeassistant/<person>-<collection>/"""
-    return home + col.rstrip("/").replace("/", "-") + "/"
+    """Home Assistant's copy of a collection: homeassistant/<person>-<collection>/; the household's
+    keep haus-<collection>, the path HA's calendar entities were made for (ADR 0031)"""
+    person, rest = col.rstrip("/").split("/", 1)
+    return home + (HA_NAME if person == HOUSEHOLD else person) + "-" + rest.replace("/", "-") + "/"
 
 
 # --- HTTP ---
@@ -207,7 +215,7 @@ class Radicale:
             self.call("MKCOL", home, ok=(201, 405))
 
     def note(self, col, ok_at, problem):
-        """what Haus shows for the collection: the last good run, and what went wrong since"""
+        """what Homes shows for the collection: the last good run, and what went wrong since"""
         p = (f"<L:abgleich>{ok_at}</L:abgleich>" if ok_at else "") + f"<L:problem>{esc(problem)}</L:problem>"
         self.call("PROPPATCH", col, f'<?xml version="1.0" encoding="utf-8"?><D:propertyupdate xmlns:D="DAV:" xmlns:L="{LAIB}"><D:set><D:prop>{p}</D:prop></D:set></D:propertyupdate>'.encode())
 
@@ -244,6 +252,9 @@ def load_abos(raw):
     abos = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
     if not isinstance(abos, list) or not all(isinstance(a, dict) and a.get("url") and a.get("person") and a.get("name") for a in abos):
         raise ValueError("keine Liste von Abos")
+    for a in abos:   # stored before ADR 0031 (#1021): the household's account is homes; goes at #1021 step 9
+        if a["person"] == "haus":
+            a["person"] = HOUSEHOLD
     return abos
 
 
@@ -280,7 +291,7 @@ def why(e):
     if msg == "radicale:409":
         return "gelb", "die Person hat Radicale noch nie geöffnet (ihr Ordner fehlt)", \
             "einmal mit dem Telefon (DAVx⁵) oder auf caldav.<domain>/.web anmelden; der nächste Abgleich holt alles"
-    return "gelb", msg, "systemctl --user status kalender-abgleich.service; hält es an: " + FIX_HAUS
+    return "gelb", msg, "systemctl --user status kalender-abgleich.service; hält es an: " + FIX_HOMES
 
 
 def every(abo, abo_every_days):
@@ -304,7 +315,7 @@ def run(data, raw, dav, ha_user, stale_hours, now=None, abo_every_days=30):
     except (ValueError, TypeError) as e:
         return write_status(data, {"detail": "KALENDER_ABOS nicht lesbar", "findings": [{
             "severity": "rot", "detail": f"Kalender: KALENDER_ABOS ist keine Abo-Liste von laib calendar ({type(e).__name__})",
-            "fix": "laib calendar list; im Zweifel die Kalender in Haus neu verbinden"}]}, now)
+            "fix": "laib calendar list; im Zweifel die Kalender in Homes neu verbinden"}]}, now)
     ha_home = ha_user + "/" if ha_user else ""
     findings, new_state, total = [], {}, 0
     # (collection, shown name, where its items come from, the subscription or None)
@@ -312,9 +323,9 @@ def run(data, raw, dav, ha_user, stale_hours, now=None, abo_every_days=30):
     if ha_home:
         try:
             dav.ensure_home(ha_home)
-            for name in sorted(dav.children("haus/", calendars=True)):
+            for name in sorted(dav.children(HOUSEHOLD + "/", calendars=True)):
                 if name == "haushalt" or name.startswith("familie-"):
-                    targets.append(("haus/" + name + "/", name, lambda n=name: dav.ics("haus/" + n + "/"), None))
+                    targets.append((HOUSEHOLD + "/" + name + "/", name, lambda n=name: dav.ics(HOUSEHOLD + "/" + n + "/"), None))
         except (Fail, ET.ParseError) as e:
             sev, text, fix = why(e)
             findings.append({"severity": sev, "detail": f"Kalender für Home Assistant: {text}", "fix": fix})
@@ -351,7 +362,7 @@ def run(data, raw, dav, ha_user, stale_hours, now=None, abo_every_days=30):
                 sev, text, fix = why(e)
                 gone = e is err and abo.get("kind") == "google" and e.code == 404   # the source, not Radicale
                 if gone:
-                    text, fix = "Google kennt die geheime Adresse nicht mehr (in Google zurückgesetzt?)", FIX_HAUS
+                    text, fix = "Google kennt die geheime Adresse nicht mehr (in Google zurückgesetzt?)", FIX_HOMES
                 last = entry.get("ok")
                 entry["problem"] = text
                 if sev == "rot" or gone or not last or now - last > stale_hours * 3600:

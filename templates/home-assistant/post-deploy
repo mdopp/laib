@@ -6,7 +6,7 @@ consumer's own Home Assistant user, never a person's (#591): HA's logbook
 then names the machine that switched, not whoever onboarded HA.
 
   HA_TOKEN               "Laib-Prüfung", no administrator: the integrations checklist (#55, #309)
-  HAUS_HA_TOKEN          "Haus", administrator: Haus's pages, widgets, voice counting (#266)
+  HOMES_HA_TOKEN          "Homes", administrator: Homes's pages, widgets, voice counting (#266)
   BOTE_AUTOMAT_HA_TOKEN  "Bote-Automat", administrator: the Automat
   BOTE_HA_TOKEN          "Bote", no administrator: the Bote's `ha` tool, so
                          whoever chats with the Bote reaches no admin API
@@ -111,7 +111,7 @@ HA_AUTH = os.path.join(os.path.dirname(HA_STORAGE), "auth")
 # each consumer's own user (#591): secret -> (token name, username, name in HA, administrator, its password's secret)
 MACHINES = {
     "HA_TOKEN": ("laib: home-assistant-check", "laib-pruefung", "Laib-Prüfung", False, "HA_CHECK_PASSWORD"),  # REST config entries and states: every user may
-    "HAUS_HA_TOKEN": ("laib: haus", "haus", "Haus", True, "HA_HAUS_PASSWORD"),   # voice counting: assist_pipeline/pipeline_debug is admin-only (#266)
+    "HOMES_HA_TOKEN": ("laib: homes", "homes", "Homes", True, "HA_HOMES_PASSWORD"),   # voice counting: assist_pipeline/pipeline_debug is admin-only (#266)
     "BOTE_AUTOMAT_HA_TOKEN": ("laib: bote-automat", "bote-automat", "Bote-Automat", True, "HA_BOTE_AUTOMAT_PASSWORD"),  # HA's automation config API is admin-only
     "BOTE_HA_TOKEN": ("laib: bote", "bote", "Bote", False, "HA_BOTE_PASSWORD"),  # Assist API only
     "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
@@ -496,16 +496,32 @@ def strangers():
         print("home-assistant: in Home Assistant and not Laib's (the owner decides, nothing deleted, #591): " + "; ".join(out))
 
 
+def drop_legacy():
+    """the user haus („Haus“), Homes's own until ADR 0031 (#1021), deleted once HOMES_HA_TOKEN works on
+    the user homes (machine() above returned): its tokens go with it. Only the login Laib made; goes at #1021 step 9"""
+    old = next((u for u in USERS or [] if u.get("username") == "haus"), None)
+    if not old:
+        return
+    ws = WS(admin_session())
+    try:
+        ws("config/auth/delete", user_id=old["id"])
+    finally:
+        ws.close()
+    USERS.remove(old)
+    print("home-assistant: user haus deleted, Homes is the user homes now (ADR 0031)")
+
+
 NAMES_TOKEN = ""   # the user Laib-Namen's, once main() has it (#760)
 
 
 def main():
     global session, NAMES_TOKEN
-    session = next((E["LAIB_SECRET_" + n] for n in ("HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
-    for secret in ("HA_TOKEN", "HAUS_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
+    session = next((E["LAIB_SECRET_" + n] for n in ("HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
+    for secret in ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
         machine(secret)
+    drop_legacy()
     NAMES_TOKEN = machine("HA_NAMES_TOKEN")[0]
-    print("home-assistant: tokens for the check, Haus, the Automat, the Bote, Stimme and the names work, each on its own user")
+    print("home-assistant: tokens for the check, Homes, the Automat, the Bote, Stimme and the names work, each on its own user")
 
 
 # Frage's prompt (#760): HA renders it as a template on every request, so its second line is the names of what
@@ -1319,7 +1335,7 @@ def http_settings():
     HA_LOGIN_SPERRE (#703): Home Assistant bans an address after that many failed logins, "aus" never, empty
     leaves it as it is (the default). Only with the proxy trust: otherwise every login from outside is
     127.0.0.1 to HA, and a ban would lock out everyone. A ban HA sets also locks out a consumer on 127.0.0.1
-    whose token went stale (the check, Haus, the Bote): the counter in templates/auth tells the owner of
+    whose token went stale (the check, Homes, the Bote): the counter in templates/auth tells the owner of
     every ban HA logs. Returns what is not set, or None."""
     problems = []
     want = E.get("HA_LOGIN_SPERRE", "").strip().lower()

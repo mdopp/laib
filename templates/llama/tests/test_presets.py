@@ -117,7 +117,7 @@ class Presets(unittest.TestCase):
 
 
     def test_gemma_12b_reads_images(self):
-        """#697: Haus reads a record's catalogue number off 1-4 photos. Gemma 4
+        """#697: Homes reads a record's catalogue number off 1-4 photos. Gemma 4
         12B is multimodal, but without an mmproj the router loads it text only
         and an image_url is refused. The mmproj comes from the preset's own
         repo (post-deploy fetches it from there) and is rendered into
@@ -129,7 +129,7 @@ class Presets(unittest.TestCase):
         self.assertEqual(sections(render(shipped))["gemma-4-12b"].get("mmproj"), "/models/mmproj-gemma-4-12B-it-Q8_0.gguf")
 
     def test_the_readme_names_the_presets_that_read_images(self):
-        """#697: consumers (Haus) pick an image model by the README's list;
+        """#697: consumers (Homes) pick an image model by the README's list;
         it is the presets with an mmproj, no more and no fewer."""
         shipped = json.loads((T / "presets.json").read_text())
         want = sorted(x["alias"] for x in shipped["presets"] if x.get("mmproj"))

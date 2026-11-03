@@ -198,12 +198,12 @@ func hostTemplates(t *testing.T, cfg string) {
 
 // TestAutheliaMailTemplates: the German reset mail pre-start writes (#360)
 // is a template Go parses, names only fields Authelia fills for
-// IdentityVerificationJWT, and carries the link and the way to Haus.
+// IdentityVerificationJWT, and carries the link and the way to Homes.
 func TestAutheliaMailTemplates(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "render", "authelia"), 0o755)
 	hook := exec.Command("python3", "../../templates/auth/pre-start")
-	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://haus.vm.test/", "LAIB_HAUS_URL=https://haus.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
+	hook.Env = []string{"PATH=" + os.Getenv("PATH"), "LAIB_DATA_DIR=" + dir, "LAIB_DOMAIN=vm.test", "BASE_DN=dc=vm,dc=test", "LAIB_START_URL=https://homes.vm.test/", "LAIB_HOMES_URL=https://homes.vm.test/", "LAIB_RENDER_DIR=" + filepath.Join(dir, "render")}
 	for _, s := range []string{"AUTHELIA_JWT_SECRET", "AUTHELIA_SESSION_SECRET", "AUTHELIA_STORAGE_KEY", "AUTHELIA_OIDC_HMAC_SECRET", "LLDAP_ADMIN_PASSWORD"} {
 		hook.Env = append(hook.Env, "LAIB_SECRET_"+s+"=x")
 	}
@@ -226,7 +226,7 @@ func TestAutheliaMailTemplates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", ext, err)
 		}
-		for _, want := range []string{"Hallo Anna Muster", "https://haus.vm.test/willkommen", "24 Stunden", "revoke/reset-password"} {
+		for _, want := range []string{"Hallo Anna Muster", "https://homes.vm.test/willkommen", "24 Stunden", "revoke/reset-password"} {
 			if !strings.Contains(out.String(), want) {
 				t.Errorf("%s: no %q in\n%s", ext, want, out.String())
 			}

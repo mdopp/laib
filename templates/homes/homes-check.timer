@@ -1,5 +1,5 @@
 [Unit]
-Description=Haus: laibs Blick auf die angemeldeten Geräte alle 15 Minuten (#785)
+Description=Homes: laibs Blick auf die angemeldeten Geräte alle 15 Minuten (#785)
 
 [Timer]
 OnCalendar=*:0/15

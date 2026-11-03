@@ -18,7 +18,7 @@ class Fake:
         self.counts = counts if counts is not None else {"MovieCount": 412, "SeriesCount": 38, "EpisodeCount": 1900, "SongCount": 2737, "AlbumCount": 210}
         self.users = users if users is not None else [
             {"Name": "admin", "Policy": {"IsAdministrator": True, "AuthenticationProviderId": DEFAULT}},
-            {"Name": "haus", "Policy": {"IsHidden": True, "AuthenticationProviderId": DEFAULT}},
+            {"Name": "homes", "Policy": {"IsHidden": True, "AuthenticationProviderId": DEFAULT}},
             {"Name": "homeassistant", "Policy": {"AuthenticationProviderId": DEFAULT}},
         ] + [{"Name": n, "Policy": {"AuthenticationProviderId": LDAP}} for n in ("lea", "max", "mia", "tom")]
         self.sessions = sessions or []

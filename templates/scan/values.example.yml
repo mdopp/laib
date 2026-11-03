@@ -16,11 +16,11 @@ PAPERLESS_TOKEN: !secret PAPERLESS_TOKEN          # minted by paperless' post-de
 PAPERLESS_USER: dokumente                         # that user's name, never one of the household's people
 PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN} # the links in notes and messages
 # contract data and notice reminders (#709): the document types and tags that make a document a contract, the
-# household's own names; the reminder this many days before the notice must be in, in Haus's Haushalt (without Haus: none)
+# household's own names; the reminder this many days before the notice must be in, in Homes's Haushalt (without Homes: none)
 VERTRAG_ARTEN: Vertrag, Versicherung, Bescheid
 VERTRAG_VORLAUF_TAGE: "28"
 RECHNUNG_ARTEN: Rechnung                          # #818: the document types and tags that make a document an invoice
-HAUSHALT_URL: http://127.0.0.1:8650/mcp/haushalt  # Haus' Haushalt, from the host network
-HAUSHALT_TOKEN: !secret HAUS_HAUSHALT_TOKEN
+HAUSHALT_URL: http://127.0.0.1:8650/mcp/haushalt  # Homes' Haushalt, from the host network
+HAUSHALT_TOKEN: !secret HOMES_HAUSHALT_TOKEN
 HAUSHALT_NAMEN: ""                                # #737: the household's people without a Paperless login, "Vorname Nachname", comma-separated
 DOKUMENTE_WEBHOOK_TOKEN: !secret DOKUMENTE_WEBHOOK_TOKEN   # Paperless' workflow sends it; empty: the hourly run only

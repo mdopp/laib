@@ -18,7 +18,7 @@ POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
 sends a photo or PDF someone sent with "ablegen", with the same bearer, and
 this writes it into Paperless' consume folder as Bote/<sender>/<title>.<ext>
 (Paperless makes the folders tags). Hermes runs as uid 10000 and may not
-write into the share; this container is the box's user, as Haus is.
+write into the share; this container is the box's user, as Homes is.
 Stdlib only: it runs in the stock Hermes image (templates/bote)."""
 import base64, hmac, json, os, re, shutil, subprocess, sys, threading, time, urllib.request
 from dataclasses import dataclass, field
@@ -40,7 +40,7 @@ class Config:
     deadline: float = 50                   # all channels together; HA's rest_command waits 60 s
     log: object = print
     consume: str = "/consume"              # Paperless' consume folder (#521); missing: /ablage answers 503
-    max_file: int = 25 << 20               # one document, as Haus' upload (haus#10)
+    max_file: int = 25 << 20               # one document, as Homes' upload (haus#10)
     owner: tuple = (1000, 1000)            # Paperless' user (paperless.container USERMAP_UID): it removes what it filed
 
 

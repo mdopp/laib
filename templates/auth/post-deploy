@@ -17,7 +17,7 @@ READERS = [("radicale", "RADICALE_LDAP_PASSWORD", "Radicale (Lesekonto)"),
            ("jellyfin", "JELLYFIN_LDAP_PASSWORD", "Jellyfin (Lesekonto)"),   # its LDAP plugin's bind (#256)
            ("audiobookshelf", "AUDIOBOOKSHELF_LDAP_PASSWORD", "Audiobookshelf (Lesekonto)")]   # who administers the box is ABS admin
 # service accounts that log into a service, not into the directory: no group (#418)
-ACCOUNTS = [("haus", "HAUS_RADICALE_PASSWORD", "Haus (Haushalt-Kalender)"),   # owns the household's calendar in Radicale
+ACCOUNTS = [("homes", "HOMES_RADICALE_PASSWORD", "Homes (Haushalt-Kalender)"),   # owns the household's calendar in Radicale (was `haus`, ADR 0031)
             ("kalender", "KALENDER_RADICALE_PASSWORD", "Kalender-Abgleich (Abos, Google)"),   # writes the calendar mirrors (#495)
             ("homeassistant", "HA_RADICALE_PASSWORD", "Home Assistant (Kalender)")]   # HA's CalDAV entry reads its copies (#495)
 # the service accounts other services declare (laib#1009: `account:` on a secret, e.g. archiv-<person>,
@@ -27,7 +27,10 @@ ACCOUNTS = [("haus", "HAUS_RADICALE_PASSWORD", "Haus (Haushalt-Kalender)"),   # 
 LIST = os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "identity", "accounts.json")
 DECLARED = json.load(open(LIST)) if os.path.exists(LIST) else None
 MANAGED = "laib_accounts"
-taken = {"admin", op, *(r[0] for r in READERS + ACCOUNTS)}
+# the legacy name (ADR 0031, #1021): the household's calendar account was `haus` until the rename; deleted
+# below once `homes` is seeded, kept reserved so no declared account takes it. Goes at #1021 step 9.
+LEGACY = "haus"
+taken = {"admin", op, LEGACY, *(r[0] for r in READERS + ACCOUNTS)}
 for a in DECLARED or []:
     if not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", a["user"]) or a["user"] in taken or not E.get("LAIB_SECRET_" + a["secret"]):
         print(f"service account {a['user']!r} of {a['service']}: not a name LDAP can address, one this hook keeps itself, or no password: nothing seeded", file=sys.stderr); sys.exit(1)
@@ -159,6 +162,9 @@ for account, secret, display in ACCOUNTS:
             {"u": {"id": account, "email": account + "@" + DOMAIN, "displayName": display}})
         print("service account created:", account)
     set_password(account, S(secret))   # a service secret: set on every run, like the readers' (#209)
+if LEGACY in users:   # Radicale's rights name `homes` now (templates/radicale), so the old login reaches nothing
+    gql("mutation($u:String!){ deleteUser(userId:$u){ ok } }", {"u": LEGACY})
+    print("service account removed (renamed homes, ADR 0031):", LEGACY)
 
 if DECLARED is not None:
     if MANAGED not in groups:

@@ -21,7 +21,7 @@ const db = store.internal.db;
 const guard = resolveOriginGuard({ host: HOST }); // qmd's own Host/Origin check for a loopback bind
 
 // The embed model loads at the first vec search (~3 s on the CPU) and qmd
-// drops it after 5 idle minutes; Haus waits 2.5 s. So it stays loaded, and
+// drops it after 5 idle minutes; Homes waits 2.5 s. So it stays loaded, and
 // is loaded before /health answers. Until the first embed (which downloads
 // it) there are no vectors and no search loads it.
 store.internal.llm.inactivityTimeoutMs = 0;

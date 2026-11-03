@@ -22,7 +22,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 | Today | Laib | Status |
 |---|---|---|
 | home-assistant (8123, zwave 8091, 3 containers) | `home-assistant` | built-in: HA, Z-Wave JS UI, Matter on the host network; onboarding and the Wyoming/CalDAV/MQTT integrations are configuration in HA |
-| solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Haus + Bote + Frage | `bote`, `frage` and `haus` built-ins exist; Haus is its own repo, `mdopp/haus` |
+| solaris (4 containers: chat, gatekeeper, …) | retired (ADR 0015); Homes + Bote + Frage | `bote`, `frage` and `homes` built-ins exist; Homes is its own repo, `mdopp/homes` |
 | solaris-whisper, solaris-tts, solaris-wakeword-trainer, solaris-whisper-batch (GPU) | `stimme` | built-in: Whisper, Piper and openWakeWord as Wyoming units; the wake word is the pretrained „Hey Mycroft“ (ADR 0030; Laib's own trainer, `laib-wakeword-trainer`, #128, is gone); Martin (Kokoro, OpenAI API) is not in the Assist path; whisper-batch was foundry-chronicle's and moved with it: `chronik-whisper` in foundry-chronicle's template (Stimme's Wyoming Whisper returns no timestamps) |
 | media (Jellyfin, GPU) | `media` + `audiobookshelf` + `music-assistant` | built-ins: Jellyfin keeps music and video; the family logs in with their LLDAP accounts through the LDAP-Authentication plugin, Quick Connect on (#256); ServiceBay's twin libraries ("Music2" on Music's folders) are removed by media's post-deploy (#646). Audiobookshelf takes Hörbücher, Hörspiele and Podcasts: metadata next to the files, a paced one-time match against audible.de, Hörspiel series from `<NNN> - <Titel>`, the feeds of `podcasts/sync_podcasts.py` subscribed with auto-download (#646); its family login is set from Laib's OIDC secret on every apply, the cached client rebuilt, so the drift that retired it on ServiceBay cannot stay (#255). Music Assistant drives the speakers for Assist, with the share's radio stations as favourites and Audiobookshelf as a source (#646) |
 | immich (4 containers, ML) | `immich` | built-in |
@@ -34,7 +34,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 | beets | `beets` | built-in |
 | claude-dev, pi-web | `werkstatt` | built-in, v1 |
 | solaris-import-google (8097) | one-shot importers into Radicale/Paperless (ADR 0017) | becomes scripts, no service: `scripts/import-google.py` brings a Takeout's calendars and contacts into a person's Radicale over DAV (#372) |
-| usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; Haus and the Bote count into it, unanswered sentences 30 days (#266) |
+| usage-metrics (8095) | `usage-metrics` | built-in (kept, #238): no route, in-box callers on 8094 (8095 is Music Assistant's), the SQLite file at ServiceBay's path; Homes and the Bote count into it, unanswered sentences 30 days (#266) |
 | daggerheart-chronik (8701), daggerheart-asteroids (dead), flutstunde (8092) | external registries (flutstunde, foundry-chronicle) | **their repos add a `laib.yml`**; `laib template sync` pulls them. foundry-chronicle's is `chronik` (`templates/chronik`, foundry-chronicle#362): bot and timestamped Whisper in their own namespaces, Piper from `stimme` for the announcement |
 | foundry-chronicle (lease holder, not a unit here) | client of `laib-lease` | speaks Laib's lease contract from `${MODEL_LEASE}`/`${MODEL_KEY}`, preset `gemma-4-12b` (ADR 0011 amendment 2026-10-14, foundry-chronicle#362) |
 
@@ -42,7 +42,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 
 | Needed by the concept | Where |
 |---|---|
-| Haus (pages, cards, `/napi`, the Haushalt MCP source) | new repo `mdopp/haus` (DEKONSTRUKTION step 3) |
+| Homes (pages, cards, `/napi`, the Haushalt MCP source) | new repo `mdopp/homes` (DEKONSTRUKTION step 3) |
 | searxng | inside the `frage` pod, built-in |
 | signal-cli | inside the `bote` pod while the Bote has Signal, built-in |
 | the household registry itself | new repo `mdopp/laib-templates`, `laib template lint` in CI |
@@ -53,7 +53,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
   werkstatt, bote, frage, llama, media, audiobookshelf, music-assistant,
   radicale, vaultwarden, mosquitto, esphome, beets, home-assistant,
   immich, file-share, stimme (whisper, piper, openwakeword),
-  paperless, haus, usage-metrics. Every unit that runs on the box today has a Laib template.
+  paperless, homes, usage-metrics. Every unit that runs on the box today has a Laib template.
 - Not yet run on any box: all of them. The NUC trial (Phase 1 to 3) and
   the Kraftwerk migration (Phase 4) are where they prove themselves.
 

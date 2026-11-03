@@ -1,7 +1,7 @@
 """laib#418: Radicale's rights. Every account owns its own collections, as
-before (owner_only); the household's calendar and address book are Haus's
-account's (haus/haushalt, haus/haushalt-kontakte), and every account may
-read and write their entries, so the family adds it in DAVx⁵ and Haus, the
+before (owner_only); the household's calendar and address book are Homes's
+account's (homes/haushalt, homes/haushalt-kontakte), and every account may
+read and write their entries, so the family adds it in DAVx⁵ and Homes, the
 Bote and the phones share one Haushalt. Nobody reaches another person's
 own calendars. The rules are matched the way Radicale's from_file does:
 the first section whose user and collection patterns match decides."""
@@ -57,35 +57,35 @@ class Rights(unittest.TestCase):
         self.assertEqual(allowed(self.rules, "anna", "ben"), "")
         self.assertIn("R", allowed(self.rules, "anna", ""), "discovery reads the root")
 
-    def test_the_haushalt_is_haus_and_everyone_reads_and_writes_its_entries(self):
-        for coll in ("haus/haushalt", "haus/haushalt-kontakte"):
+    def test_the_haushalt_is_homes_and_everyone_reads_and_writes_its_entries(self):
+        for coll in ("homes/haushalt", "homes/haushalt-kontakte"):
             for who in ("anna", "ben"):
                 p = allowed(self.rules, who, coll)
                 self.assertIn("r", p, (who, coll))
                 self.assertIn("w", p, (who, coll))
                 self.assertNotIn("W", p, f"{who} could delete or replace {coll} itself")
-            self.assertIn("w", allowed(self.rules, "haus", coll))
-        self.assertIn("W", allowed(self.rules, "haus", "haus"), "Haus makes the Haushalt when it is missing")
-        # only the Haushalt: Haus's account's other collections stay its own
-        self.assertEqual(allowed(self.rules, "anna", "haus/privat"), "")
-        self.assertEqual(allowed(self.rules, "anna", "haus"), "")
+            self.assertIn("w", allowed(self.rules, "homes", coll))
+        self.assertIn("W", allowed(self.rules, "homes", "homes"), "Homes makes the Haushalt when it is missing")
+        # only the Haushalt: Homes's account's other collections stay its own
+        self.assertEqual(allowed(self.rules, "anna", "homes/privat"), "")
+        self.assertEqual(allowed(self.rules, "anna", "homes"), "")
 
     def test_the_mirrors_are_written_only_by_the_kalender_account_and_read_by_their_person(self):   # #495
-        for coll in ("anna/google-familie", "anna/google-familie/x.ics", "anna/abo-feiertage", "haus/abo-muell/y.ics"):
+        for coll in ("anna/google-familie", "anna/google-familie/x.ics", "anna/abo-feiertage", "homes/abo-muell/y.ics"):
             self.assertIn("w", allowed(self.rules, "kalender", coll), coll)
-            self.assertIn("r", allowed(self.rules, "haus", coll), f"the Haushalt's Termine leave out {coll}")
-        for who, coll in (("anna", "anna/google-familie"), ("anna", "anna/abo-feiertage/x.ics"), ("ben", "haus/abo-muell"), ("anna", "haus/abo-muell/y.ics")):
+            self.assertIn("r", allowed(self.rules, "homes", coll), f"the Haushalt's Termine leave out {coll}")
+        for who, coll in (("anna", "anna/google-familie"), ("anna", "anna/abo-feiertage/x.ics"), ("ben", "homes/abo-muell"), ("anna", "homes/abo-muell/y.ics")):
             p = allowed(self.rules, who, coll)
             self.assertIn("r", p, (who, coll))
             self.assertNotIn("w", p, f"{who} could write into the mirror {coll}: the next run would undo it")
         self.assertEqual(allowed(self.rules, "ben", "anna/google-familie"), "", "another person's Google calendar is theirs")
         self.assertIn("w", allowed(self.rules, "anna", "anna/google-kontakte/x.vcf"), "a Takeout's address book stays the person's own")
         self.assertEqual(allowed(self.rules, "kalender", "anna/google-kontakte"), "")
-        for coll in ("anna/kalender", "anna", "haus/privat", "auth"):
+        for coll in ("anna/kalender", "anna", "homes/privat", "auth"):
             self.assertNotIn("w", allowed(self.rules, "kalender", coll), f"kalender may write {coll}")
-        self.assertNotIn("w", allowed(self.rules, "kalender", "haus/haushalt/x.ics"), "the Haushalt is copied for HA, never written")
-        self.assertIn("r", allowed(self.rules, "kalender", "haus/haushalt"))
-        self.assertIn("R", allowed(self.rules, "kalender", "haus"), "it lists Haus's calendars to copy them")
+        self.assertNotIn("w", allowed(self.rules, "kalender", "homes/haushalt/x.ics"), "the Haushalt is copied for HA, never written")
+        self.assertIn("r", allowed(self.rules, "kalender", "homes/haushalt"))
+        self.assertIn("R", allowed(self.rules, "kalender", "homes"), "it lists Homes's calendars to copy them")
         self.assertIn("W", allowed(self.rules, "kalender", "homeassistant"), "it makes HA's home")
 
     def test_home_assistant_reads_its_copies_and_nothing_else(self):   # #495
@@ -94,22 +94,22 @@ class Rights(unittest.TestCase):
         self.assertNotIn("W", allowed(self.rules, "homeassistant", "homeassistant"))
         self.assertEqual(allowed(self.rules, "homeassistant", "anna/kalender"), "")
 
-    def test_haus_makes_a_calendar_for_one_person_or_the_family_and_nothing_else_of_theirs(self):   # haus#66
-        self.assertIn("w", allowed(self.rules, "haus", "anna/privat-sport"))
+    def test_homes_makes_a_calendar_for_one_person_or_the_family_and_nothing_else_of_theirs(self):   # haus#66
+        self.assertIn("w", allowed(self.rules, "homes", "anna/privat-sport"))
         self.assertIn("w", allowed(self.rules, "anna", "anna/privat-sport"), "the person owns it")
         self.assertEqual(allowed(self.rules, "ben", "anna/privat-sport"), "", "nur für mich")
-        self.assertIn("R", allowed(self.rules, "haus", "anna"), "Haus lists the person's calendars")
-        self.assertEqual(allowed(self.rules, "haus", "anna/kalender"), "", "the person's own calendars stay theirs")
+        self.assertIn("R", allowed(self.rules, "homes", "anna"), "Homes lists the person's calendars")
+        self.assertEqual(allowed(self.rules, "homes", "anna/kalender"), "", "the person's own calendars stay theirs")
         for who in ("anna", "ben"):
-            self.assertIn("w", allowed(self.rules, who, "haus/familie-geburtstage/x.ics"))
-            self.assertNotIn("W", allowed(self.rules, who, "haus/familie-geburtstage"))
+            self.assertIn("w", allowed(self.rules, who, "homes/familie-geburtstage/x.ics"))
+            self.assertNotIn("W", allowed(self.rules, who, "homes/familie-geburtstage"))
 
-    def test_haus_mirrors_a_persons_phone_contacts_into_their_own_address_book(self):   # ADR 0029
-        self.assertIn("w", allowed(self.rules, "haus", "anna/handy-kontakte"))
-        self.assertIn("w", allowed(self.rules, "haus", "anna/handy-kontakte/abc.vcf"))
+    def test_homes_mirrors_a_persons_phone_contacts_into_their_own_address_book(self):   # ADR 0029
+        self.assertIn("w", allowed(self.rules, "homes", "anna/handy-kontakte"))
+        self.assertIn("w", allowed(self.rules, "homes", "anna/handy-kontakte/abc.vcf"))
         self.assertIn("r", allowed(self.rules, "anna", "anna/handy-kontakte/abc.vcf"), "the person reads their mirror")
         self.assertEqual(allowed(self.rules, "ben", "anna/handy-kontakte"), "", "nobody else")
-        self.assertEqual(allowed(self.rules, "haus", "anna/google-kontakte"), "", "the Takeout book stays the person's")
+        self.assertEqual(allowed(self.rules, "homes", "anna/google-kontakte"), "", "the Takeout book stays the person's")
 
     def test_the_archive_reads_its_persons_contacts_and_calendars_and_writes_nothing(self):   # laib#1009, archiv#21
         self.assertEqual(allowed(self.rules, "archiv-anna", ""), "R", "discovery reads the root")
@@ -119,7 +119,7 @@ class Rights(unittest.TestCase):
             self.assertEqual(allowed(self.rules, "archiv-anna", coll), "r", coll)
         for coll in ("anna/google-kontakte", "anna/google-kontakte/x.vcf", "anna/kalender", "anna/abo-feiertage", "anna/tagebuch/x.ics",
                      "ben", "ben/handy-kontakte", "ben/privat-sport/y.ics", "ben/google-familie",
-                     "haus", "haus/haushalt", "haus/haushalt-kontakte/x.vcf", "haus/familie-geburtstage", "haus/abo-muell",
+                     "homes", "homes/haushalt", "homes/haushalt-kontakte/x.vcf", "homes/familie-geburtstage", "homes/abo-muell",
                      "archiv-anna", "archiv-anna/x", "homeassistant", "anna/handy-kontakte-alt", "annax/handy-kontakte"):
             self.assertEqual(allowed(self.rules, "archiv-anna", coll), "", f"archiv-anna reaches {coll}")
 
@@ -133,13 +133,71 @@ class Rights(unittest.TestCase):
         self.assertEqual(cp.sections()[:first], ["root"], "a section before the archive's could give it more")
 
     def test_the_other_service_accounts_keep_exactly_what_they_had(self):   # laib#1009
-        # the archive's sections match only archiv-<something>: kalender, haus, homeassistant and the family are untouched
-        for who, coll, want in (("kalender", "anna/google-familie", "rw"), ("kalender", "haus/haushalt", "Rr"), ("kalender", "homeassistant", "RrWw"),
-                                ("haus", "anna/privat-sport", "Rrw"), ("haus", "anna/handy-kontakte/x.vcf", "Rrw"), ("haus", "anna/google-familie", "r"),
-                                ("haus", "haus", "RrWw"), ("homeassistant", "homeassistant/x", "Rr"), ("anna", "anna/handy-kontakte", "RrWw"),
-                                ("archiv", "archiv/x", "RrWw"), ("anna", "haus/haushalt", "rw")):
+        # the archive's sections match only archiv-<something>: kalender, homes, homeassistant and the family are untouched
+        for who, coll, want in (("kalender", "anna/google-familie", "rw"), ("kalender", "homes/haushalt", "Rr"), ("kalender", "homeassistant", "RrWw"),
+                                ("homes", "anna/privat-sport", "Rrw"), ("homes", "anna/handy-kontakte/x.vcf", "Rrw"), ("homes", "anna/google-familie", "r"),
+                                ("homes", "homes", "RrWw"), ("homeassistant", "homeassistant/x", "Rr"), ("anna", "anna/handy-kontakte", "RrWw"),
+                                ("archiv", "archiv/x", "RrWw"), ("anna", "homes/haushalt", "rw")):
             self.assertEqual(allowed(self.rules, who, coll), want, (who, coll))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheHouseholdsCollectionsMove(unittest.TestCase):
+    """laib#1021, ADR 0031: the household's account was `haus`; its collections move to `homes`
+    before Radicale starts with rights that name `homes`, entries, UIDs and props along."""
+
+    def run_hook(self, d):
+        env = dict(os.environ, LAIB_DATA_DIR=d, BASE_DN="dc=vm,dc=test", LAIB_SECRET_RADICALE_LDAP_PASSWORD="ro-pw")
+        return subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=30)
+
+    def root(self, d):
+        return Path(d) / "radicale" / "data" / "collections" / "collection-root"
+
+    def test_homes_moves_to_homes_with_everything_in_it_once(self):
+        d = tempfile.mkdtemp()
+        r = self.root(d)
+        (r / "haus" / "haushalt").mkdir(parents=True)
+        (r / "haus" / "haushalt" / ".Radicale.props").write_text('{"tag": "VCALENDAR"}')
+        (r / "haus" / "haushalt" / "a.ics").write_text("BEGIN:VCALENDAR\nUID:a\nEND:VCALENDAR\n")
+        (r / "homeassistant" / "haus-haushalt").mkdir(parents=True)   # HA's copy keeps its path: HA's entity ids hang on it
+        p = self.run_hook(d)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertFalse((r / "haus").exists())
+        self.assertEqual((r / "homes" / "haushalt" / "a.ics").read_text(), "BEGIN:VCALENDAR\nUID:a\nEND:VCALENDAR\n")
+        self.assertTrue((r / "homes" / "haushalt" / ".Radicale.props").exists())
+        self.assertTrue((r / "homeassistant" / "haus-haushalt").is_dir())
+        p = self.run_hook(d)   # again: nothing left to move, nothing touched
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue((r / "homes" / "haushalt" / "a.ics").exists())
+
+    def test_an_empty_homes_folder_is_taken_over(self):
+        # empty, or only what Radicale writes when the new login looked before the move
+        d = tempfile.mkdtemp()
+        r = self.root(d)
+        (r / "haus" / "haushalt").mkdir(parents=True)
+        (r / "homes").mkdir()
+        (r / "homes" / ".Radicale.props").write_text("{}")
+        p = self.run_hook(d)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertTrue((r / "homes" / "haushalt").is_dir())
+        self.assertFalse((r / "haus").exists())
+
+    def test_both_holding_collections_is_red_and_nothing_moves(self):
+        d = tempfile.mkdtemp()
+        r = self.root(d)
+        (r / "haus" / "haushalt").mkdir(parents=True)
+        (r / "homes" / "abo-muell").mkdir(parents=True)
+        p = self.run_hook(d)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("merge them by hand", p.stderr)
+        self.assertTrue((r / "haus" / "haushalt").is_dir())
+        self.assertEqual(sorted(x.name for x in (r / "homes").iterdir()), ["abo-muell"])
+
+    def test_a_box_without_haus_is_left_alone(self):
+        d = tempfile.mkdtemp()
+        p = self.run_hook(d)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertFalse(self.root(d).exists())

@@ -145,6 +145,13 @@ func Run(ctx context.Context, st *state.State, p *plan.Plan, paths boxfs.Paths, 
 	for _, name := range st.ServiceNames() {
 		for _, d := range st.Services[name].Contract.Data {
 			dir := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
+			if was := strings.ReplaceAll(d.Was, "${DATA_DIR}", st.Box.DataDir); d.Was != "" {
+				if moved, err := carry(dir, was); err != nil {
+					return res, err
+				} else if moved {
+					res.Written = append(res.Written, dir+" (aus "+was+")")
+				}
+			}
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return res, fmt.Errorf("data path %s: %w", dir, err)
 			}
@@ -644,7 +651,7 @@ func hookSpec(st *state.State, svc *state.Service, paths boxfs.Paths, phase stri
 		"LAIB_SERVICE="+svc.Name, "LAIB_PERSON="+svc.Contract.Person, "LAIB_DOMAIN="+st.Box.Domain, "LAIB_DATA_DIR="+st.Box.DataDir,
 		"LAIB_TZ="+st.Box.Timezone, "LAIB_LAN_IP="+st.Box.LanIP, "LAIB_PHASE="+phase, "LAIB_RENDER_DIR="+paths.Render, "LAIB_ASSISTANT="+st.Box.Assistant,
 		"MODEL_URL="+model["MODEL_URL"], "MODEL_LEASE="+model["MODEL_LEASE"], "MODEL_KEY="+model["MODEL_KEY"],
-		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HAUS_URL="+render.HausURL(st))
+		"LAIB_MCP_URL=http://host.containers.internal:"+fmt.Sprint(st.Box.Laib.Port)+"/mcp", "LAIB_START_URL="+render.StartURL(st), "LAIB_HOMES_URL="+render.HomesURL(st))
 	if svc.Uses("ZUHAUSE_") { // the address only where a unit reads it (#561)
 		for k, v := range st.ZuhauseVars() {
 			env = append(env, k+"="+v)
@@ -761,4 +768,26 @@ func hookTargets(st *state.State, p *plan.Plan) []string {
 		}
 	}
 	return out
+}
+
+// carry moves a renamed service's data to its new place (laib#1021): the
+// former place is renamed when the new one is missing or empty. The units
+// that kept it stopped above, its file being deleted; nothing has mounted
+// the new one yet. Both holding files is the owner's to sort out, never a merge.
+func carry(dir, was string) (bool, error) {
+	if _, err := os.Stat(was); err != nil {
+		return false, nil
+	}
+	if entries, err := os.ReadDir(dir); err == nil {
+		if len(entries) > 0 {
+			return false, fmt.Errorf("data path %s and its former place %s both hold files: move one by hand", dir, was)
+		}
+		if err := os.Remove(dir); err != nil {
+			return false, err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return false, err
+	}
+	return true, boxfs.MoveDir(was, dir)
 }

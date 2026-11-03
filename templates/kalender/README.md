@@ -1,7 +1,7 @@
 # kalender
 
 Calendars from outside into Radicale, one way (#495). The owner decided on
-2026-10-21: Radicale is the one place. Haus, the Bote (`haushalt`:
+2026-10-21: Radicale is the one place. Homes, the Bote (`haushalt`:
 `termine`) and Home Assistant read there; appointments are still made where
 they were (Google), and a mirror only reads.
 
@@ -10,19 +10,19 @@ they were (Google), and a mirror only reads.
   app, nothing that expires after seven days. A public calendar (Feiertage,
   Schulferien from openholidaysapi.org, the municipality's Müllabfuhr) is
   any ICS address.
-- **Entered in Haus, kept by laib.** Haus → Kalender → „Kalender hinzufügen“
+- **Entered in Homes, kept by laib.** Homes → Kalender → „Kalender hinzufügen“
   (haus#66) hands the address to `laib calendar subscribe <person> <name>
   google|abo [<title>]` on stdin. laib keeps every subscription in
   `secrets.age` as `KALENDER_ABOS` and applies this template again. The
-  address is never answered, journalled or put on argv; Haus shows only
+  address is never answered, journalled or put on argv; Homes shows only
   „verbunden seit …, zuletzt abgeglichen vor …“ and **Trennen**
-  (`laib calendar unsubscribe`). For an admin without Haus the same verb
+  (`laib calendar unsubscribe`). For an admin without Homes the same verb
   works on the console, the address piped in.
 - **Read only, as a service account.** `kalender.py` writes as Radicale's
   account `kalender` (seeded by `auth`), whose rights
   (`templates/radicale/pre-start`) allow exactly `*/google-*`, `*/abo-*` and
   Home Assistant's home: nobody's password. The person reads
-  `<person>/google-<name>` (or `abo-<name>`); `haus/abo-*` is the family's.
+  `<person>/google-<name>` (or `abo-<name>`); `homes/abo-*` is the family's (`haus/` until ADR 0031).
   What the source drops, the next run removes, only in that collection; an
   empty answer removes nothing and is a finding. Trennen removes the copy.
 - **The Takeout import's paths.** Every item's path is uuid5 of its UID, as
@@ -30,8 +30,10 @@ they were (Google), and a mirror only reads.
   Takeout into `google-<name>` is replaced by the mirror, never doubled.
 - **Home Assistant.** A CalDAV client finds only its own account's
   calendars, so the run copies every mirror and the family's calendars
-  (`haus/haushalt`, `haus/familie-*`) into the home of HA's own account
-  `homeassistant` (`HA_USER`), read only for HA. The home-assistant
+  (`homes/haushalt`, `homes/familie-*`) into the home of HA's own account
+  `homeassistant` (`HA_USER`), read only for HA; the household's keep the
+  name `haus-<collection>` there (ADR 0031: HA's calendar entities are bound
+  to the copy's path, so renaming it would give each a new one). The home-assistant
   template's post-deploy adds that CalDAV entry: nobody types a password into
   HA. This replaces the hand-made `~/ha-caldav.sh`.
 - **Each calendar its own interval (#619).** A subscription's `every` (30m,
@@ -62,16 +64,16 @@ behind the app by some hours, which a family calendar tolerates.
    `laib apply home-assistant`: auth legt die Konten `kalender` und
    `homeassistant` an, Radicale bekommt die Rechte, Home Assistant den
    Kalender-Eintrag.
-2. In Haus → Kalender → „Kalender hinzufügen“ → „Google-Kalender
+2. In Homes → Kalender → „Kalender hinzufügen“ → „Google-Kalender
    verbinden“. Die Adresse steht in Google Kalender (im Browser) unter
    Einstellungen → links den Kalender wählen → „Kalender integrieren“ →
-   „Geheime Adresse im iCal-Format“. Kopieren, in Haus einfügen, fertig.
+   „Geheime Adresse im iCal-Format“. Kopieren, in Homes einfügen, fertig.
 3. In Home Assistant unter Einstellungen → Geräte & Dienste den alten
    CalDAV-Eintrag mit deinem eigenen Konto löschen; der neue heißt
    „homeassistant“.
 
 Wenn `laib diag` „Google kennt die geheime Adresse nicht mehr“ meldet: die
-Adresse wurde in Google zurückgesetzt. Die neue Adresse in Haus wieder
+Adresse wurde in Google zurückgesetzt. Die neue Adresse in Homes wieder
 verbinden.
 
 Ein Termin, den jemand auf dem Handy in einen `google-…`- oder

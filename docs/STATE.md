@@ -99,7 +99,7 @@ operator:                         # laib-operator's container (ADR 0013, 0027); 
   contextWindow: 131072           # the model's window in tokens (#285); unset = llama-server's /props; budgets grow with it above 32k, a look's stays its own (#550)
 peers:                            # the other boxes of the household
   kraftwerk: {lanIp: 192.168.1.20, laib: http://192.168.1.20:5900}
-assistant: Homes                  # the name the family talks to: Bote, Haus, the app, the speakers' pipeline (ADR 0030); Homes when unset, one word
+assistant: Homes                  # the name the family talks to: Bote, Homes, the app, the speakers' pipeline (ADR 0030); Homes when unset, one word
 people:                           # the household's people and their chat channels, preferred first (ADR 0022 §3)
   mama: ["signal:+4917012345678", "telegram:123456789"]
   lena: ["matrix:!AbCdEf:example.org"]   # a room: the direct chat with the Bote
@@ -120,8 +120,8 @@ model role's `127.0.0.1` becomes `host.containers.internal` (ADR 0007,
 `notify.person`, whom a service tells when its values name nobody (the
 scan service's closing message, #568). `${BOTE_SIGNAL}` is the number the
 household writes to on Signal: the value a service names under
-`channels.signal` (the Bote's `SIGNAL_ACCOUNT`), E.164 or empty; Haus shows
-it on Willkommen as `HAUS_BOTE_SIGNAL` (haus#175). It is household data on
+`channels.signal` (the Bote's `SIGNAL_ACCOUNT`), E.164 or empty; Homes shows
+it on Willkommen as `HOMES_BOTE_SIGNAL` (haus#175). It is household data on
 the box: a unit carries it, a repo or a test never (fakes like
 `+4915100000000`).
 
@@ -139,7 +139,7 @@ but only for a service whose units name one; no other service sees the
 address. Coordinates are entered, never looked up: Laib makes no call to a
 geocoding service. An address without coordinates while a service reads
 them is a plan warning, and that service leaves its location alone.
-`laib zuhause set` (Haus's form calls `laib_zuhause`) changes the block as a
+`laib zuhause set` (Homes's form calls `laib_zuhause`) changes the block as a
 proposal of class human ("ändert die Adresse des Haushalts"); the owner
 approves it, the caller never (docs/INTERFACE.md).
 
@@ -159,7 +159,7 @@ has set; a `matrix:` target on a box whose Bote has no Matrix fails plan,
 naming the value that would switch it on (#184).
 
 A person's Signal number gets into `people` by a proposal, never by hand
-(#596): `laib person invite … --signal +49…` (Haus's „Person einladen“) or
+(#596): `laib person invite … --signal +49…` (Homes's „Person einladen“) or
 `laib person signal <user> +49…` (the person page; the Bote, when the owner
 answers its notice about a dropped sender with who it was) sets that
 person's `signal:` channel, in place or after their others, and adds the
@@ -200,7 +200,7 @@ hands:
   haushalt: { ceiling: propose, verbs: [propose] }  # laib-haushalt's call back from behind the verb door (ADR 0026, 0027): its proposals are never the dial's; supplied when missing
   lease:    { ceiling: apply, verbs: [status, pause, resume, note] }  # laib-lease in its container (ADR 0027): pauses and resumes what a GPU window stops, notes a long one; supplied when missing
   pi:       { ceiling: propose }
-  haus:     { ceiling: apply, verbs: [status, inbox, zuhause, person_signal, …], paths: [zuhause, people.*.signal] }  # the family's pages
+  homes:    { ceiling: apply, verbs: [status, inbox, zuhause, person_signal, …], paths: [zuhause, people.*.signal] }  # the family's pages
   claude:   { ceiling: apply, ttl: 8h }
   human:    { ceiling: destroy }
 approvals:
@@ -336,7 +336,7 @@ requires:                        # a set value needs these set too (#184)
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 perPerson: false                 # true: installed once per person (#986), below
 instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
-  - {template: archiv, unit: haus.container, url: HAUS_ARCHIV_INTERN, secret: ARCHIV_HAUS_SECRET, env: HAUS_ARCHIV_SECRET}
+  - {template: archiv, unit: homes.container, url: HOMES_ARCHIV_INTERN, secret: ARCHIV_HOMES_SECRET, env: HOMES_ARCHIV_SECRET}
 ```
 
 `status` is a file the template keeps about itself. laib reads it fresh on
@@ -357,7 +357,7 @@ service is mid-work (scan: `zustand: scannt`, a stack it would lose). While
 the file says so and is younger than `grace` (default 30m), diag shows its
 unit and health reds as gelb, "wartet: scan scannt, längstens bis 18:26",
 with no repair, and a hand's restart or stop waits with that journal line;
-a person (the shell, the Inbox, Haus) restarts at once. A file that has said
+a person (the shell, the Inbox, Homes) restarts at once. A file that has said
 "busy" for longer than the grace is stuck: the red is red again. In the
 same way diag shows a red as info, wartet, while an apply activates the
 service (the lock is held and its marker names it) or a pause holds it
@@ -442,7 +442,7 @@ an instance is a removal like any other: a human decides in the Inbox.
 ### A service that reaches every person's instance (laib#1016)
 
 `instances:` lets a service talk to each person's instance of a
-per-person template, without knowing who has one: Haus fetches a new
+per-person template, without knowing who has one: Homes fetches a new
 phone's WhatsApp media from the person's open archive. Each entry names
 the `template`, a `.container` of the service as `unit`, and `url`; the
 loader puts right after that unit's `[Container]`:
@@ -477,13 +477,13 @@ compose file does not know on its own that port 8000 must never reach the WLAN.
 An executable. Runs after `laib apply` verified the service green, in the
 service folder, with `LAIB_SERVICE`, `LAIB_DOMAIN`, `LAIB_DATA_DIR`,
 `LAIB_TZ`, `LAIB_LAN_IP`, `LAIB_PERSON` (a person's instance, #986), `LAIB_START_URL` (where a login without a target
-lands: Haus once installed, else the box page, #381), every `values.yml` key (secrets resolved) and
+lands: Homes once installed, else the box page, #381), every `values.yml` key (secrets resolved) and
 `LAIB_SECRET_<NAME>` for every declared secret in its environment. Ten-minute
 timeout. Its output is journaled with secrets redacted; a non-zero exit turns
 the apply red. A line `laib-secret: NAME=value` on stdout stores a credential
 the hook created (an API token, a generated admin password) into
 `secrets.age`, so it is never printed again and survives a reinstall. The
-name may be another service's (Home Assistant mints Haus's and the Bote's
+name may be another service's (Home Assistant mints Homes's and the Bote's
 tokens, #349): every service that declares a handed-back secret is planned
 again in the same apply and applied when its rendered output changed, so it
 starts with the new value; a consumer that reads the secret only in a hook
@@ -584,7 +584,7 @@ there instead of Authelia's (#774).
 `redirectFrom: ["@", www]` on a route makes Caddy answer those names with a
 redirect to the route's host, `{uri}` kept; `@` is the domain itself. No
 service and no Authelia behind them: the old entry points `dopp.cloud` and
-`www.` lead to `haus.` (#360).
+`www.` lead to `homes.` (#360).
 
 Caddy strips every client-sent `Remote-*` header on every site, ordered
 before forward-auth (`order request_header first`), so the only
@@ -705,7 +705,7 @@ does the sso role's. The auth template's post-deploy creates each account
 (group `laib_accounts`, no other group), sets its password on every run,
 and deletes a member of `laib_accounts` that is no longer listed, so
 removing the instance removes its account. It never takes over an
-existing account outside that group, nor a name it keeps itself (`haus`,
+existing account outside that group, nor a name it keeps itself (`homes`, and `haus` until #1021 step 9,
 `kalender`, the readers, the operator). The loader refuses an account on
 an external secret, on a box without `roles.identity`, a name LDAP cannot
 address, a person's own login and one account claimed twice. What the
@@ -725,6 +725,29 @@ off-box copy").
 
 `mint: <hand>` on an external secret makes `laib add` mint a Laib token for
 that hand (not human) and store it, once. See INTERFACE.md.
+
+### A renamed service takes its data and secrets along (laib#1021)
+
+`was: <old>` on a contract secret or data path names its former place,
+for a service that replaces another under a new name (Haus → Homes). The
+change that renames removes `services/<old>` and adds the new service in
+one proposal; apply then:
+
+- **Data:** stops the old units (their files go, #41), and before
+  anything mounts the new path, renames the former place to it when the
+  new one is missing or empty. Both holding files is a red apply, never a
+  merge. The loader refuses a former place outside `${DATA_DIR}/` or one a
+  service in the state still keeps: the move would take that service's
+  data.
+- **Secrets:** a missing secret takes the former name's value before
+  anything is generated or minted. The old one stays in `secrets.age`.
+
+The review names both ("übernimmt die Daten aus …", "übernimmt das
+Geheimnis … als …"), so a human decides it. A token minted for a hand is
+not carried when the hand is renamed too: the new hand gets a new one. A
+`was:` line is a legacy name (ADR 0021 rule 8): the template drops it once
+every box moved. Restic snapshots from before the move hold the former
+place; `laib restore` reads the declared path.
 
 ### `tls`
 
@@ -777,7 +800,7 @@ aufgaben:
   - id: 3
     titel: Stimme aufnehmen
     seit: "2026-10-28"
-    von: haus:mdopp
+    von: homes:mdopp
     fuer: person:anna
     weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878)
   - id: 1
@@ -785,20 +808,20 @@ aufgaben:
     seit: "2026-10-25"
     von: human:core
     fuer: admins
-    erledigt: {am: "2026-10-26", von: haus:mdopp}
+    erledigt: {am: "2026-10-26", von: homes:mdopp}
 ```
 
 - **For whom (#878).** `fuer` is `admins` (also when missing: every task
   from before #878), `alle`, or `person:<login>`, the Authelia/LLDAP login,
   which is also the person's name in box.yml `people`. A person's task is
-  theirs: Haus and the Bote act for one person (`--von`) and see the
+  theirs: Homes and the Bote act for one person (`--von`) and see the
   admins', everyone's and that person's own; another person's task is to
   them as if it were not there (list, zeigen, erledigt, zurueckstellen).
-  The kernel enforces this by the caller's hand, not Haus. A human, claude,
+  The kernel enforces this by the caller's hand, not Homes. A human, claude,
   ops and laib see the whole list; any other hand none of the personal ones.
-- **The guided way (#878).** `weg` is a Haus page that leads through it
+- **The guided way (#878).** `weg` is a Homes page that leads through it
   (`seite`, a path) or a conversation with the Bote (`gespraech: true`):
-  Haus offers „Gemeinsam mit Homes“, which opens a conversation with
+  Homes offers „Gemeinsam mit Homes“, which opens a conversation with
   „Aufgabe #N mit dir erledigen“ (templates/bote/README.md).
 - An aufgaben.yml from before loads unchanged: a missing `fuer` is
   `admins`, the old key `befund` is `fertig_wenn`; the next change writes

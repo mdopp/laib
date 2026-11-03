@@ -154,7 +154,7 @@ func TestAnUnsetOptionalSecretRendersEmpty(t *testing.T) {
 			optional[s.Name] = true
 		}
 	}
-	if !optional["HAUS_HA_TOKEN"] || !optional["DNS_API_TOKEN"] {
+	if !optional["HOMES_HA_TOKEN"] || !optional["DNS_API_TOKEN"] {
 		t.Fatalf("the shipped templates no longer declare the optional secrets this test leans on: %v", optional)
 	}
 	out, err := Render(st, secrets)

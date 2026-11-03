@@ -53,9 +53,9 @@ func TestTheBoteProposesASignalNumberAndOnlyAHumanLetsItIn(t *testing.T) {
 	if ch := mustState(t, env).Box.People["mama"]; !slices.Equal(ch, []string{"signal:+4900000002"}) {
 		t.Fatalf("people.mama after the approval: %v", ch)
 	}
-	// changing it later is the same verb; Haus calls it from the person page
-	if out, code := mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_person_signal", map[string]any{"user": "mama", "number": "+4900000009"}); code != cli.ExitOK {
-		t.Fatalf("haus: exit %d: %s", code, out)
+	// changing it later is the same verb; Homes calls it from the person page
+	if out, code := mcp.Call(context.Background(), env, mustState(t, env), "homes", "laib_person_signal", map[string]any{"user": "mama", "number": "+4900000009"}); code != cli.ExitOK {
+		t.Fatalf("homes: exit %d: %s", code, out)
 	}
 	// not a number: refused, no proposal
 	for _, n := range []string{"0151 000", "4900000002", "+49 000 0002"} {
@@ -64,7 +64,7 @@ func TestTheBoteProposesASignalNumberAndOnlyAHumanLetsItIn(t *testing.T) {
 		}
 	}
 	if all, _ := proposal.List(cli.InboxDir(env), false); len(all) != 2 {
-		t.Fatalf("%d proposals, want the approved one and Haus's", len(all))
+		t.Fatalf("%d proposals, want the approved one and Homes's", len(all))
 	}
 	if _, code := mcp.Call(context.Background(), env, mustState(t, env), "resident", "laib_person_signal", map[string]any{"user": "mama", "number": "+4900000002"}); code == cli.ExitOK {
 		t.Fatal("the resident hand proposed a number")
@@ -77,11 +77,11 @@ func TestTheBoteProposesASignalNumberAndOnlyAHumanLetsItIn(t *testing.T) {
 func TestInviteWithASignalNumberFilesTheProposal(t *testing.T) {
 	env, calls := personBox(t, `{"user":"anna","name":"Anna Muster","email":"anna@box.test","mailed":true,"expires":"2026-10-19T10:00:00Z"}`)
 	args := map[string]any{"user": "anna", "first": "Anna", "email": "anna@box.test", "signal": "0151"}
-	if out, code := mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_person_invite", args); code == cli.ExitOK || len(*calls) != 0 {
+	if out, code := mcp.Call(context.Background(), env, mustState(t, env), "homes", "laib_person_invite", args); code == cli.ExitOK || len(*calls) != 0 {
 		t.Fatalf("a bad number: exit %d, %d tool runs: %s", code, len(*calls), out)
 	}
 	args["signal"] = "+4900000005"
-	out, code := mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_person_invite", args)
+	out, code := mcp.Call(context.Background(), env, mustState(t, env), "homes", "laib_person_invite", args)
 	if code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
 	}

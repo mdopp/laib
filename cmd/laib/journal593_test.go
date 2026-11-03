@@ -13,7 +13,7 @@ import (
 	"github.com/mdopp/laib/internal/pages"
 )
 
-// #593: Haus's /box page asks for the 25 newest lines and the last
+// #593: Homes's /box page asks for the 25 newest lines and the last
 // morning report, not 36 hours of journal.
 func TestJournalLimitAndKind(t *testing.T) {
 	home := t.TempDir()
@@ -69,7 +69,7 @@ func TestStatusAnswersFromAFreshReadiness(t *testing.T) {
 	status := func(args ...string) map[string]any {
 		t.Helper()
 		var buf bytes.Buffer
-		env := &cliEnv{Paths: c.env.Paths, Actor: "haus", JSON: true, MCP: true, Out: &buf}
+		env := &cliEnv{Paths: c.env.Paths, Actor: "homes", JSON: true, MCP: true, Out: &buf}
 		if rc := pages.Status(context.Background(), env, args); rc != cli.ExitOK {
 			t.Fatalf("rc %d", rc)
 		}

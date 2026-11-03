@@ -153,7 +153,7 @@ with HA's core config (`GET /api/config`) and, where one differs, sets them
 through `config/core/update`; HA's home zone follows. The same home twice
 is no update. Without coordinates HA keeps the location it has (set in its
 onboarding or by hand) and the hook says why: Laib never looks an address
-up, the coordinates come from whoever enters the address (Haus's form: a
+up, the coordinates come from whoever enters the address (Homes's form: a
 map pin, or a lookup the person starts knowingly). No value reaches the
 hook's log. To change the address: `laib zuhause set …`, a proposal the
 owner approves.
@@ -165,7 +165,7 @@ through Home Assistant's own login flow as its administrator, makes one HA
 user per consumer, mints that consumer's long-lived token over HA's
 WebSocket API (`auth/long_lived_access_token`) and hands it back into
 `secrets.age` (`laib-secret:`). A machine never switches as a person: HA's
-logbook says „Haus hat … eingeschaltet“, not the name of whoever onboarded
+logbook says „Homes hat … eingeschaltet“, not the name of whoever onboarded
 HA (#591). HA mints a token only for the user of the session that asks, so
 each of these users has a homeassistant login with a generated password
 that only post-deploy uses:
@@ -173,7 +173,7 @@ that only post-deploy uses:
 | secret | HA user (login, password) | administrator | for |
 |---|---|---|---|
 | `HA_TOKEN` | „Laib-Prüfung“ (`laib-pruefung`, `HA_CHECK_PASSWORD`) | no | the checklist below: config entries and states, which every user may read |
-| `HAUS_HA_TOKEN` | „Haus“ (`haus`, `HA_HAUS_PASSWORD`) | yes: voice counting reads Assist's debug runs, admin-only (below) | Haus's pages and widgets, voice counting |
+| `HOMES_HA_TOKEN` | „Homes“ (`homes`, `HA_HOMES_PASSWORD`; the user haus until ADR 0031, deleted once this token works) | yes: voice counting reads Assist's debug runs, admin-only (below) | Homes's pages and widgets, voice counting |
 | `BOTE_AUTOMAT_HA_TOKEN` | „Bote-Automat“ (`bote-automat`, `HA_BOTE_AUTOMAT_PASSWORD`) | yes: HA's automation config API is admin-only | the Bote's Automat; every write it makes needs the admin's approval code |
 | `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
 | `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |
@@ -188,19 +188,19 @@ someone moved into the other group is moved back on the next apply.
 On every apply: a token that works, on its own user and of its kind, is
 kept; any other is replaced. The apply that mints also restarts what uses
 the tokens (Laib re-applies every service that declares a handed-back
-secret, #349): Haus and the Bote have theirs in the same apply, and Home
+secret, #349): Homes and the Bote have theirs in the same apply, and Home
 Assistant restarts once, for the check's unit. A consumer added later finds
 its token already there. Tokens and passwords are only ever on the
 `laib-secret:` lines, never on argv or in a log line (#214).
 
-**Moving a box from before #591.** There `HA_TOKEN`, `HAUS_HA_TOKEN`,
+**Moving a box from before #591.** There `HA_TOKEN`, `HOMES_HA_TOKEN`,
 `BOTE_AUTOMAT_HA_TOKEN` and `MUSIC_ASSISTANT_HA_TOKEN` live on the
 administrator, a person's user. Nothing goes dark on the way:
 
 1. post-deploy creates the four users and mints a new token on each; the
    old token still works and is handed back in `HA_RETIRED_TOKENS`, the new
    one in its secret. Music Assistant's plugin gets the new one at once.
-2. Laib stores both and re-applies the consumers (Bote, Haus) with the new
+2. Laib stores both and re-applies the consumers (Bote, Homes) with the new
    tokens, then Home Assistant, whose post-deploy runs again.
 3. That run finds each new token working on its own user and revokes the
    old one it replaced, with the old token's own session
@@ -372,7 +372,7 @@ loopback is added where HA did not trust Caddy at all). Where post-deploy
 cannot set them the apply is red after the other steps ran.
 
 **Why it is off by default:** HA bans by address, and the box's own
-consumers (the check, Haus, the Bote, Stimme) all come from 127.0.0.1. A
+consumers (the check, Homes, the Bote, Stimme) all come from 127.0.0.1. A
 token that went stale makes the same failed-login line; after the threshold
 HA bans 127.0.0.1, and all of them lose Home Assistant until someone
 deletes the line in `ip_bans.yaml` and restarts HA. The counter tells the
@@ -427,21 +427,21 @@ start, so both packages load at once.
 
 ## Voice: what Assist understood, and what not (#266)
 
-Counted by Haus, not by a custom component or an automation: Home
+Counted by Homes, not by a custom component or an automation: Home
 Assistant keeps the last 10 Assist pipeline runs per pipeline in memory
 (`assist_pipeline/pipeline_debug/list|get` on its WebSocket API; verified
 in HA core `homeassistant/components/assist_pipeline`, 2026-10-16), each
 with the sentence (`intent-start` `intent_input`), whether HA's own intents
 handled it (`intent-end` `processed_locally`) and the response type
-(`error`, e.g. `no_intent_match`). Haus reads them every minute with
-its `HAUS_HA_TOKEN` and counts into usage-metrics (app `stimme`):
+(`error`, e.g. `no_intent_match`). Homes reads them every minute with
+its `HOMES_HA_TOKEN` and counts into usage-metrics (app `stimme`):
 `erkannt` (HA's own intents), `weitergereicht` (answered by the fallback
 conversation agent) and `nicht-erkannt` (an error); the sentence of a
 `nicht-erkannt` run goes to `/miss` (`source: stimme`) without device,
 satellite or conversation id, kept 30 days.
 
 **What you switch on in Home Assistant:** nothing new. Those debug calls are
-admin-only; `HAUS_HA_TOKEN` is the user „Haus“'s, an administrator, minted
+admin-only; `HOMES_HA_TOKEN` is the user „Homes“'s, an administrator, minted
 above (#349, #591). A token set by hand that is not that user's is replaced
 on the next apply. Known limits: more than 10 commands on one pipeline
 within a minute, or an HA restart in between, lose those runs' counts.
@@ -449,8 +449,8 @@ within a minute, or an HA restart in between, lose those runs' counts.
 ## Who switched: the person behind an action (#591)
 
 HA's logbook names the user of the token (`context.user_id`): with the
-tokens above that is „Haus“, „Bote“ or „Bote-Automat“, never a person. Who
-was signed in to Haus, wrote to the Bote or spoke to a satellite is
+tokens above that is „Homes“, „Bote“ or „Bote-Automat“, never a person. Who
+was signed in to Homes, wrote to the Bote or spoke to a satellite is
 recorded once, in Laib's journal, by the hand that acted, with HA's context
 id so the logbook row and the journal row meet:
 
@@ -459,7 +459,7 @@ laib_note  kind: watch
            text: "ha person=<user> service=<domain>.<service> entity=<entity_id>[,<entity_id>…] context=<HA context id>"
 ```
 
-- `person`: Haus's `Remote-User` (Authelia), the Bote's person id from
+- `person`: Homes's `Remote-User` (Authelia), the Bote's person id from
   box.yml people; `-` when nobody is known (a voice satellite).
 - `context`: the `context.id` HA returns for the call: the WebSocket
   `call_service` result carries `{"context": {"id": …}}`; over REST, each
@@ -468,15 +468,15 @@ laib_note  kind: watch
 - Only what a person asked for; nothing for reads, nothing for the
   Automat's own triggers (HA's automation is the actor there).
 
-The journal row is `actor=haus` (or `bote`) by the token that wrote it,
-`verb=note`, `reason=watch`; `laib journal` lists it. The haus hand may
+The journal row is `actor=homes` (or `bote`) by the token that wrote it,
+`verb=note`, `reason=watch`; `laib journal` lists it. The homes hand may
 `note` from this release on (`state.DefaultPolicy`); a box from before gets
 that verb as one policy proposal the owner approves (#575). The Bote's hand
 has no verb list and may note already.
 
 Who writes it:
 
-- **Haus**, for a signed-in person's call (mdopp/haus).
+- **Homes**, for a signed-in person's call (mdopp/homes).
 - **The Bote** (Signal, Telegram), with its plugin `laib-journal` (bote
   README, „Who switched“). `person` is the box.yml people name whose
   `signal:`/`telegram:` id wrote the turn, else `-`. `service` is
@@ -489,14 +489,14 @@ Who writes it:
   read from the entity's state when it changed in the last 30 s, else `-`,
   because HA's MCP answer has no context id.
 - **Voice**: a satellite talks to HA's Assist pipeline, not to the Bote,
-  so nothing notes it yet. Haus's Sprechen field reaches the Bote over its
+  so nothing notes it yet. Homes's Sprechen field reaches the Bote over its
   API server and is noted as `person=-`.
 
-Why not one HA user per resident whose token Haus uses: HA mints a token
+Why not one HA user per resident whose token Homes uses: HA mints a token
 only for the session's own user, and residents sign in through
 Familienkonto (auth_oidc) without a password; Laib would have to give each
 person's account a second login it holds, residents who are HA
-administrators would hand Haus administrator tokens in their name again,
+administrators would hand Homes administrator tokens in their name again,
 and the per-person tokens would be a secret that changes with people. The
-journal row reaches Haus, the Bote and voice alike and needs no new
+journal row reaches Homes, the Bote and voice alike and needs no new
 identity in HA.

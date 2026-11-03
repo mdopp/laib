@@ -2,7 +2,7 @@
 
 **History.** The brief of 2026-10-11, kept as it was written. Much of it
 is no longer true: the relay is gone (#778), the Kraftwerk runs Laib since
-2026-10-19, the review of 2026-10-28 is #851. What runs now is
+2026-10-19, the review of 2026-10-28 is #851, Haus is Homes since ADR 0031. What runs now is
 `docs/ZIELBILD.md`.
 
 For a second agent cross-checking this work. Everything below is in Git;

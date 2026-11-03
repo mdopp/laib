@@ -1,0 +1,124 @@
+[Unit]
+Description=Homes: pages and the companion API (laib role: homes)
+
+[Container]
+Image=${HOMES_IMAGE}
+# the pod publishes 8650 (homes.pod)
+Pod=homes.pod
+Environment=HOMES_LISTEN=0.0.0.0:8650
+Environment=LAIB_URL=http://host.containers.internal:5900
+Environment=LAIB_TOKEN=${LAIB_TOKEN}
+Environment=HOMES_PROXY_SECRET=${PROXY_SECRET}
+Environment=LAIB_PUBLIC_URL=${LAIB_PAGE_URL}
+# the house paths from Home Assistant (haus#10); without the token Homes serves none of them
+Environment=HOMES_HA_URL=${HA_URL}
+Environment=HOMES_HA_TOKEN=${HA_TOKEN}
+Environment=HOMES_ENERGY_FLOW=${ENERGY_FLOW}
+Environment=HOMES_ENERGY_TOTALS=${ENERGY_TOTALS}
+Environment=HOMES_STT_PROVIDER=${STT_PROVIDER}
+Environment=HOMES_STT_LANGUAGE=${STT_LANGUAGE}
+Environment=HOMES_HA_PUBLIC_URL=${HA_PUBLIC_URL}
+Environment=HOMES_GESUNDHEIT_URL=${GESUNDHEIT_URL}
+# the app's Standortverlauf (owner 2026-11-02): Reitti as this pod reaches it, and where a person makes
+# their own token; empty without Reitti, and then /napi/standort answers 503 and the page says so
+Environment=HOMES_REITTI_URL=${REITTI_URL}
+Environment=HOMES_REITTI_PUBLIC_URL=${REITTI_PUBLIC_URL}
+Environment=HOMES_ENERGY_STATS=${ENERGY_STATS}
+Environment=HOMES_COVER_INVERTED=${COVER_INVERTED}
+# the Haushalt (haus#11): the Bote's bearer, Radicale, the notes folder
+Environment=HOMES_HAUSHALT_TOKEN=${HAUSHALT_TOKEN}
+Environment=HOMES_RADICALE_URL=${RADICALE_URL}
+Environment=HOMES_RADICALE_USER=${RADICALE_USER}
+Environment=HOMES_RADICALE_PASSWORD=${RADICALE_PASSWORD}
+Environment=HOMES_RADICALE_CALENDAR=${RADICALE_CALENDAR}
+Environment=HOMES_RADICALE_ADDRESSBOOK=${RADICALE_ADDRESSBOOK}
+# Haushalt/Kalender (haus#66): "Kalender in Radicale öffnen" and each calendar's address for the phone
+Environment=HOMES_RADICALE_PUBLIC_URL=${RADICALE_PUBLIC_URL}
+Environment=HOMES_PAPERLESS_URL=${PAPERLESS_URL}
+Environment=HOMES_PAPERLESS_TOKEN=${PAPERLESS_TOKEN}
+Environment=HOMES_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
+# the Dokumente page (haus#68, #521): the address mail is filed from (Paperless fetches it), and
+# whether Paperless opens only at home (its route is internal: from outside, a word instead of the link)
+Environment=HOMES_DOCUMENTS_MAIL=${DOCUMENTS_MAIL}
+Environment=HOMES_PAPERLESS_LAN_ONLY=${PAPERLESS_LAN_ONLY}
+# the Box page's Werkstatt card (haus#15)
+Environment=HOMES_WERKSTATT_REPOS=${WERKSTATT_REPOS}
+Environment=HOMES_NOTES_DIR=/notes
+# the memory library (haus#13): qmd on the pod's loopback (homes-qmd.container); qmd answers only a
+# loopback Host. Its collection is qmd.json's "notizen" over the same folder as HOMES_NOTES_DIR
+Environment=HOMES_QMD_URL=http://127.0.0.1:8181
+Environment=HOMES_QMD_COLLECTION=notizen
+# Paperless's documents in the library (#219): `homes export-documents` (the refresh's first step) mirrors their OCR
+# text into HOMES_DOCUMENTS_DIR, qmd.json's collection "dokumente" indexes it. Without Paperless Homes leaves them out
+Environment=HOMES_QMD_DOCUMENTS=dokumente
+Environment=HOMES_DOCUMENTS_DIR=/dokumente
+# the house model tidies the library's hits (#198), never blocking: the model role's proxy as this pod
+# reaches it (host.containers.internal) and its key. Without a model on the box URL and key render
+# empty and Homes's judge is off
+Environment=HOMES_LLM_URL=${MODEL_URL}
+Environment=HOMES_LLM_MODEL=qwen3.6-35b-a3b
+Environment=HOMES_LLM_KEY=${MODEL_KEY}
+# the Sprechen field (haus#12, #215): the Bote's OpenAI-compatible API as this pod reaches it, and its key;
+# without the Bote the key renders empty and Homes shows no field
+Environment=HOMES_BOTE_URL=${BOTE_URL}
+Environment=HOMES_BOTE_KEY=${BOTE_KEY}
+# Willkommen's „Homes auf Signal“ (haus#175): the number the household writes to the Bote on, laib's
+# BOTE_SIGNAL builtin (the Bote's SIGNAL_ACCOUNT); empty without Signal, and then Willkommen names no number
+Environment=HOMES_BOTE_SIGNAL=${BOTE_SIGNAL}
+# podcasts by link (#676, haus#123): Audiobookshelf as this pod reaches it and the key of its user haus
+# (an administrator: subscribing and checking for new episodes are admin-only in ABS); minted by
+# audiobookshelf's post-deploy, empty without ABS, and then Homes shows no podcast page
+Environment=HOMES_ABS_URL=${ABS_URL}
+Environment=HOMES_ABS_TOKEN=${ABS_TOKEN}
+# the music wish list (#695): Jellyfin as this pod reaches it and the token of its user homes (hidden, the
+# music libraries only, no administrator: API keys have no levels); minted by media's post-deploy, empty
+# without media, and then a wish is never „hast du schon“ nor ticked off by itself
+Environment=HOMES_JELLYFIN_URL=${JELLYFIN_URL}
+Environment=HOMES_JELLYFIN_TOKEN=${JELLYFIN_TOKEN}
+# Gesehen & Gehört (haus#152): what each person watched, read with Jellyfin's API key "Homes (Gesehen)"
+# (only an administrator reads another user's played state); minted by media's post-deploy, empty without
+# media, and then the page shows the books from Audiobookshelf only
+Environment=HOMES_JELLYFIN_KEY=${JELLYFIN_KEY}
+# what the family uses (#266): counts per feature and day, never who, flushed every few minutes to
+# usage-metrics as this pod reaches it; the admins' "Was wird genutzt" card reads it back. Without
+# usage-metrics the token renders empty and Homes counts nothing
+Environment=HOMES_USAGE_URL=${USAGE_URL}
+Environment=HOMES_USAGE_TOKEN=${USAGE_TOKEN}
+# the music wish list's Discogs (#696, haus#138): the household's Discogs app, set by the owner on the box page;
+# each person connects their own account in Homes (OAuth, tokens in Homes' data dir); empty: no Discogs
+Environment=HOMES_DISCOGS_KEY=${DISCOGS_KEY}
+Environment=HOMES_DISCOGS_SECRET=${DISCOGS_SECRET}
+# the app's camera uploads, straight into Paperless's inbox (haus#10)
+Environment=HOMES_UPLOAD_DIR=/upload
+Environment=TZ=${TZ}
+Environment=HOMES_DATA=/data
+Environment=HOMES_PUBLIC_URL=https://homes.${DOMAIN}
+# the name the family talks to, on the pages and in the app (box.yml assistant, ADR 0030)
+Environment=HOMES_ASSISTANT=${ASSISTANT}
+Volume=${DATA_DIR}/homes:/data:Z
+# the shared file-share tree: never relabelled (:z walks it on every start and
+# fails on an entry core does not own, #230); labelling off for this container
+SecurityLabelDisable=true
+Volume=${DATA_DIR}/file-share/data/notes:/notes
+Volume=${DATA_DIR}/file-share/data/paperless-consume:/upload
+# music uploads into beets' Musik-Eingang (#639): written as ._<name>.part, renamed when whole;
+# laib status beets says what went in. Nothing else of the share
+Volume=${DATA_DIR}/file-share/data/musik-eingang:/musik-eingang
+# the phones' message backups (ADR 0029, haus#207): Homes writes <person>/<quelle>/… as the device's
+# person, resumable, partials in <person>/.teil/; each person's Archiv mounts only its own folder
+Environment=HOMES_ARCHIV_DIR=/archiv-eingang
+Volume=${DATA_DIR}/archiv-eingang:/archiv-eingang
+Volume=${DATA_DIR}/homes-dokumente:/dokumente:z
+# the network drive's passwords (#296, haus#52): each person sets their own on /netzlaufwerk, Homes
+# hands it to file-share's Samba through the FIFO there (no argv, no file) and reads who has one
+Environment=HOMES_SAMBA_DIR=/samba-accounts
+# shown to people as \\<address>\data and smb://<address>/data, never used to connect
+Environment=HOMES_SAMBA_HOST=${LAN_IP}
+Volume=${DATA_DIR}/file-share/samba-accounts:/samba-accounts
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

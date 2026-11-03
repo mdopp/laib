@@ -104,6 +104,13 @@ func ApplyHeld(ctx context.Context, env *cli.Env, st *state.State, only, reason 
 		if _, ok := sec[s.Name]; ok || conflict {
 			continue
 		}
+		if v, ok := sec[s.Was]; ok && s.Was != "" {
+			// a renamed service's secret (laib#1021): the old name's value,
+			// before anything is generated or minted for the new one
+			sec[s.Name], changed = v, true
+			journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "secret", Result: "info", Detail: s.Name + " aus " + s.Was + " übernommen"})
+			continue
+		}
 		if s.External {
 			if s.Mint != "" {
 				// a Laib token the service needs: minted here, once, as the hand the template names
@@ -203,7 +210,7 @@ func ApplyPlan(ctx context.Context, env *cli.Env, st *state.State, p *plan.Plan,
 			break // a hand-back of the follow-up is stored, not followed again
 		}
 		// A service that declares a handed-back secret takes it in this apply,
-		// not the next (#349: Home Assistant mints Haus's and the Bote's
+		// not the next (#349: Home Assistant mints Homes's and the Bote's
 		// tokens): planned again, applied when its rendered output changed.
 		next := map[string]string{}
 		for _, name := range st.ServiceNames() {

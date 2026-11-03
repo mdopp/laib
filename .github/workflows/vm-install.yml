@@ -709,7 +709,7 @@ jobs:
             [ "$(au /api/firstfactor -d "{\"username\":\"$1\",\"password\":\"$3\",\"keepMeLoggedIn\":false}")" = 200 ] || { echo "$1 cannot log in with the first password: $(cat /tmp/au.json)"; exit 1; }
             echo "$1 set a first password through the link and logged in"
           }
-          # 1. with the mail server (#359's sink): the link is mailed, German, with the way to Haus
+          # 1. with the mail server (#359's sink): the link is mailed, German, with the way to Homes
           lw person invite lena --first Lena --last Muster --email lena@vm.test --json | tee /tmp/inv.json
           grep -q '"mailed": true' /tmp/inv.json && ! grep -q '"link"' /tmp/inv.json || { echo "the invite was not mailed"; exit 1; }
           grep -q '"user": "lena"' <<<"$(lw person pending --json)" || { echo "lena is not pending"; exit 1; }
@@ -752,7 +752,7 @@ jobs:
           [ "$code" = 200 ] || { echo "the restart logged max out (#369)"; podman logs --tail 20 systemd-auth-authelia; exit 1; }
           grep -q "person" <<<"$(lw journal --since 15m)" || { echo "the invites are not in the journal"; exit 1; }
           EOS
-      - name: file-share — one Samba account per family member, the password through Haus's channel (#296)
+      - name: file-share — one Samba account per family member, the password through Homes's channel (#296)
         if: matrix.part == 'services'
         run: |
           SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
@@ -777,16 +777,16 @@ jobs:
           grep -qx "anna 0" "$A/status" || { echo "anna is not in the status as without a password"; cat "$A/status" || true; exit 1; }
           echo "anna is a member without a password, as the status says"
           test -p "$A/passwords" && [ "$(stat -c %a "$A/passwords")" = 600 ] || { echo "no FIFO, or not 600"; ls -la "$A"; exit 1; }
-          # what Haus writes (haus#52): one line, the password base64 inside, into the FIFO
+          # what Homes writes (haus#52): one line, the password base64 inside, into the FIFO
           printf 'set anna %s\n' "$(printf %s "$PW" | base64 -w0)" > "$A/passwords"
           for i in $(seq 1 15); do grep -q "^anna [1-9]" "$A/status" && break; sleep 1; done
           grep -q "^anna [1-9]" "$A/status" || { echo "anna's password was not set"; journalctl --user -u file-share-samba.service --no-pager | tail -20; exit 1; }
           if grep -qF -- "$PW" <<<"$(journalctl --user -u file-share-samba.service --no-pager)"; then echo "the password is in the log"; exit 1; fi
           # smbclient from the samba image, the credentials in a file (-A), as anna
           smb() { printf 'username=%s\npassword=%s\n' "$1" "$2" > /tmp/smb.cred; rc=0; podman run --rm --network host --security-opt label=disable -v /tmp/smb.cred:/cred:ro -v /etc/hostname:/hn:ro --entrypoint smbclient docker.io/servercontainers/samba:latest "//127.0.0.1/${SHARE:-data}" -A /cred -c "$3" >/tmp/smb.out 2>&1 || rc=$?; rm -f /tmp/smb.cred; return $rc; }
-          smb anna "$PW" "put /hn anna.txt" || { echo "anna cannot log in with the password from Haus's channel"; cat /tmp/smb.out; exit 1; }
+          smb anna "$PW" "put /hn anna.txt" || { echo "anna cannot log in with the password from Homes's channel"; cat /tmp/smb.out; exit 1; }
           f=/mnt/data/stacks/file-share/data/anna.txt; test -f "$f"; [ "$(stat -c %U "$f")" = core ] || { echo "anna's file is not core's: $(stat -c %U "$f")"; exit 1; }
-          echo "anna logged in with the password set through Haus's channel and wrote anna.txt, owned by core"
+          echo "anna logged in with the password set through Homes's channel and wrote anna.txt, owned by core"
           smb anna wrong "ls" && { echo "a wrong password logs in"; exit 1; }
           # #703: the failed login is one auth_audit line in samba's journal, with the name and the address, for the auth counter
           for i in $(seq 1 10); do journalctl --user -u file-share-samba.service --since -3min --no-pager -o cat > /tmp/smb703.log || true; grep -q "status \[NT_STATUS_WRONG_PASSWORD\]" /tmp/smb703.log && break; sleep 1; done
@@ -884,12 +884,12 @@ jobs:
                 printf "default_config:\n\nlogger:\n  default: warning\n" > "$C/configuration.yaml"
                 touch "$C/automations.yaml" "$C/scripts.yaml" "$C/scenes.yaml"
                 podman pull -q ghcr.io/home-assistant/home-assistant:stable >/dev/null; echo "home assistant image pre-pulled"
-                # #349: a stand-in for Haus and the Bote, there before Home Assistant: it declares their tokens as they
+                # #349: a stand-in for Homes and the Bote, there before Home Assistant: it declares their tokens as they
                 # do, so the apply that mints them must hand them to it (as podman secrets the probe can read)
                 T=/mnt/data/laib/registries/vm/templates/tokens; mkdir -p "$T"
-                printf "name: tokens\ntemplate: {registry: vm, name: tokens, version: 1}\nroutes: []\nsecrets:\n  - {name: HAUS_HA_TOKEN, external: true, optional: true}\n  - {name: BOTE_HA_TOKEN, external: true, optional: true}\ndata: []\n" > "$T/laib.yml"
-                printf "IMAGE: mirror.gcr.io/library/busybox:stable\nHAUS: !secret HAUS_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
-                printf "[Container]\nImage=\${IMAGE}\nExec=sleep infinity\nEnvironment=HAUS=\${HAUS}\nEnvironment=BOTE=\${BOTE}\n\n[Install]\nWantedBy=default.target\n" > "$T/tokens.container"
+                printf "name: tokens\ntemplate: {registry: vm, name: tokens, version: 1}\nroutes: []\nsecrets:\n  - {name: HOMES_HA_TOKEN, external: true, optional: true}\n  - {name: BOTE_HA_TOKEN, external: true, optional: true}\ndata: []\n" > "$T/laib.yml"
+                printf "IMAGE: mirror.gcr.io/library/busybox:stable\nHOMES: !secret HOMES_HA_TOKEN\nBOTE: !secret BOTE_HA_TOKEN\n" > "$T/values.example.yml"
+                printf "[Container]\nImage=\${IMAGE}\nExec=sleep infinity\nEnvironment=HOMES=\${HOMES}\nEnvironment=BOTE=\${BOTE}\n\n[Install]\nWantedBy=default.target\n" > "$T/tokens.container"
                 $L add tokens >/dev/null
                 $L add home-assistant | tee /tmp/add-ha.txt
                 grep -q "^ok  home-assistant pre-start" /tmp/add-ha.txt || { echo "home-assistant pre-start is not green"; exit 1; }
@@ -910,17 +910,17 @@ jobs:
                 # #349: the tokens, minted by post-deploy against this real Home Assistant: onboarded as laib, one token
                 # per consumer, the Bote a user of its own; none of it typed, none of it in the output of the apply
                 grep -q "onboarded, administrator laib" /tmp/add-ha.txt || { echo "post-deploy did not onboard Home Assistant"; exit 1; }
-                for n in HA_TOKEN HAUS_HA_TOKEN BOTE_AUTOMAT_HA_TOKEN BOTE_HA_TOKEN; do grep -q "$n minted" /tmp/add-ha.txt || { echo "$n was not minted"; exit 1; }; done
+                for n in HA_TOKEN HOMES_HA_TOKEN BOTE_AUTOMAT_HA_TOKEN BOTE_HA_TOKEN; do grep -q "$n minted" /tmp/add-ha.txt || { echo "$n was not minted"; exit 1; }; done
                 tok() { podman secret inspect --showsecret --format "{{.SecretData}}" "laib.tokens.tokens.$1"; }
-                [ -n "$(tok HAUS)" ] && [ -n "$(tok BOTE)" ] || { echo "the stand-in did not get the tokens in the apply that minted them"; exit 1; }
-                if grep -qFf <(printf "%s\n" "$(tok HAUS)" "$(tok BOTE)") /tmp/add-ha.txt || grep -q "laib-secret" /tmp/add-ha.txt; then echo "a token is in the apply output"; exit 1; fi
+                [ -n "$(tok HOMES)" ] && [ -n "$(tok BOTE)" ] || { echo "the stand-in did not get the tokens in the apply that minted them"; exit 1; }
+                if grep -qFf <(printf "%s\n" "$(tok HOMES)" "$(tok BOTE)") /tmp/add-ha.txt || grep -q "laib-secret" /tmp/add-ha.txt; then echo "a token is in the apply output"; exit 1; fi
                 # the token rides in a header file (curl -H @), never on argv
                 ha() { curl -s -o /tmp/ha-body.json -w "%{http_code}" -H @<(printf "Authorization: Bearer %s" "$(tok "$1")") "http://127.0.0.1:8123$2"; }
-                for i in $(seq 1 45); do code=$(ha HAUS /api/states/sun.sun); [ "$code" = 200 ] && break; sleep 2; done   # a restarted HA sets sun up shortly after it answers
-                echo "Haus reads sun.sun -> HTTP $code"; [ "$code" = 200 ] || { cat /tmp/ha-body.json; exit 1; }
+                for i in $(seq 1 45); do code=$(ha HOMES /api/states/sun.sun); [ "$code" = 200 ] && break; sleep 2; done   # a restarted HA sets sun up shortly after it answers
+                echo "Homes reads sun.sun -> HTTP $code"; [ "$code" = 200 ] || { cat /tmp/ha-body.json; exit 1; }
                 code=$(ha BOTE /api/states/sun.sun); echo "the Bote reads sun.sun -> HTTP $code"; [ "$code" = 200 ]
-                # an admin-only call (the automation config API of HA): Haus is let through (no such automation: 404), the Bote refused
-                code=$(ha HAUS /api/config/automation/config/laib-349); echo "Haus, admin-only call -> HTTP $code"; [ "$code" = 404 ]
+                # an admin-only call (the automation config API of HA): Homes is let through (no such automation: 404), the Bote refused
+                code=$(ha HOMES /api/config/automation/config/laib-349); echo "Homes, admin-only call -> HTTP $code"; [ "$code" = 404 ]
                 code=$(ha BOTE /api/config/automation/config/laib-349); echo "the Bote, admin-only call -> HTTP $code"; [ "$code" = 401 ] || { echo "the Bote token is an administrator token"; exit 1; }
                 # #724: Caddy forwards home.<domain> to 127.0.0.1:8123 with X-Forwarded-For; HA answers a forwarded
                 # request from a proxy it does not trust with 400. post-deploy set the trust on this fresh HA, so through Caddy it is 200
@@ -940,7 +940,7 @@ jobs:
                 # the next apply keeps what works; a token HA refuses is replaced
                 $L apply home-assistant | tee /tmp/apply-ha2.txt
                 if grep -q " minted" /tmp/apply-ha2.txt; then echo "a working token was minted again"; exit 1; fi
-                grep -q "tokens for the check, Haus, the Automat, the Bote, Stimme and the names work" /tmp/apply-ha2.txt
+                grep -q "tokens for the check, Homes, the Automat, the Bote, Stimme and the names work" /tmp/apply-ha2.txt
                 echo vm-not-a-token-349 | $L secret set HA_TOKEN >/dev/null
                 $L apply home-assistant | tee /tmp/apply-ha3.txt
                 grep -q "HA_TOKEN minted (replaces one HA refuses)" /tmp/apply-ha3.txt || { echo "the refused HA_TOKEN was not replaced"; exit 1; }
@@ -981,17 +981,17 @@ jobs:
                 echo "jellyfin login as core with a wrong password: HTTP $code"; [ "$code" = 401 ] || exit 1
                 [ "$(curl -s http://127.0.0.1:8096/QuickConnect/Enabled)" = true ] || { echo "Quick Connect is off"; exit 1; }
                 echo "quick connect on"
-                # #695: the account of Haus (hidden, music only) and its token, minted against this real Jellyfin; the next
-                # apply keeps it, which it does only when Jellyfin answers /Users/Me with that token as user haus
-                grep -q "HAUS_JELLYFIN_TOKEN minted (new)" /tmp/add-media.txt || { echo "HAUS_JELLYFIN_TOKEN was not minted"; exit 1; }
+                # #695: the account of Homes (hidden, music only) and its token, minted against this real Jellyfin; the next
+                # apply keeps it, which it does only when Jellyfin answers /Users/Me with that token as user homes
+                grep -q "HOMES_JELLYFIN_TOKEN minted (new)" /tmp/add-media.txt || { echo "HOMES_JELLYFIN_TOKEN was not minted"; exit 1; }
                 if grep -q "laib-secret" /tmp/add-media.txt; then echo "a token is in the apply output"; exit 1; fi
                 $L apply media | tee /tmp/apply-media2.txt
-                if grep -q "HAUS_JELLYFIN_TOKEN minted" /tmp/apply-media2.txt; then echo "the token Haus got does not work in Jellyfin: minted again"; exit 1; fi
-                # haus#152: the API key "Haus (Gesehen)", minted against this real Jellyfin (/Auth/Keys); the next apply keeps it
+                if grep -q "HOMES_JELLYFIN_TOKEN minted" /tmp/apply-media2.txt; then echo "the token Homes got does not work in Jellyfin: minted again"; exit 1; fi
+                # haus#152: the API key "Homes (Gesehen)", minted against this real Jellyfin (/Auth/Keys); the next apply keeps it
                 # only when Jellyfin answers /System/Info with it
-                grep -q "HAUS_JELLYFIN_KEY minted (new)" /tmp/add-media.txt || { echo "HAUS_JELLYFIN_KEY was not minted"; exit 1; }
-                if grep -q "HAUS_JELLYFIN_KEY minted" /tmp/apply-media2.txt; then echo "the key Haus got does not work in Jellyfin: minted again"; exit 1; fi
-                echo "media: Haus has a music-only Jellyfin account and a token that works (#695)"
+                grep -q "HOMES_JELLYFIN_KEY minted (new)" /tmp/add-media.txt || { echo "HOMES_JELLYFIN_KEY was not minted"; exit 1; }
+                if grep -q "HOMES_JELLYFIN_KEY minted" /tmp/apply-media2.txt; then echo "the key Homes got does not work in Jellyfin: minted again"; exit 1; fi
+                echo "media: Homes has a music-only Jellyfin account and a token that works (#695)"
                 $L remove media >/dev/null
                 rm -rf "$R"; podman unshare rm -rf /mnt/data/stacks/media /mnt/data/stacks/jf-media
                 podman image rm -f docker.io/jellyfin/jellyfin:latest >/dev/null || true

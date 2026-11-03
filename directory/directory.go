@@ -143,7 +143,7 @@ func (t *Terminal) named(in string) bool {
 	return false
 }
 
-// aufgabeRe is Haus's „Gemeinsam mit Homes“ (#878): the conversation
+// aufgabeRe is Homes's „Gemeinsam mit Homes“ (#878): the conversation
 // about one Box-Aufgabe, which the model reads with laib_aufgabe.
 var aufgabeRe = regexp.MustCompile(`^AUFGABE #?([0-9]{1,6}) MIT DIR ERLEDIGEN$`)
 
@@ -179,7 +179,7 @@ func (t *Terminal) Talk(sid, language, line string) string {
 		delete(t.sessions, sid)
 		return w.bye
 	}
-	if m := aufgabeRe.FindStringSubmatch(in); m != nil { // #878: a Box-Aufgabe with the Bote, from Haus
+	if m := aufgabeRe.FindStringSubmatch(in); m != nil { // #878: a Box-Aufgabe with the Bote, from Homes
 		s.ctx = ""
 		return "WEITER: -\nPROMPT: " + t.prompt(s) + "\nAUFGABE: " + m[1]
 	}

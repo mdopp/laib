@@ -87,7 +87,7 @@ without its own login.
 form answers at once, shows its progress, and ends visibly where it was
 touched: done, an error with its reason and the next step (in German, never
 the raw error), or waiting with a choice. No silent button, no spinner
-without a limit; check it on a phone first. Haus „Scanner einrichten“
+without a limit; check it on a phone first. Homes „Scanner einrichten“
 showed nothing while Laib had answered in 4 s: that is the failure to avoid.
 
 ## 3. Build and test, here

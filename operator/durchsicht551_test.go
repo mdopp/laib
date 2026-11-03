@@ -48,9 +48,9 @@ func kraftwerkDay(adguardTimeouts int) map[string]map[string]string {
 	radicale := take()
 
 	for i := 0; i < 12; i++ {
-		line("caddy", `{"level":"error","ts":1729560679.%03d,"logger":"http.handlers.reverse_proxy","msg":"aborting with incomplete response","upstream":"127.0.0.1:8650","duration":%d.5,"request":{"remote_ip":"192.168.178.%d","proto":"HTTP/2.0","method":"GET","host":"haus.dopp.cloud","uri":"/napi/events?since=%d","headers":{"User-Agent":["Mozilla/5.0 (iPhone; CPU iPhone OS 18_%d like Mac OS X)"]}},"error":"reading: context canceled"}`, i, 30+i, 20+i, 1729560000+i, i)
+		line("caddy", `{"level":"error","ts":1729560679.%03d,"logger":"http.handlers.reverse_proxy","msg":"aborting with incomplete response","upstream":"127.0.0.1:8650","duration":%d.5,"request":{"remote_ip":"192.168.178.%d","proto":"HTTP/2.0","method":"GET","host":"homes.dopp.cloud","uri":"/napi/events?since=%d","headers":{"User-Agent":["Mozilla/5.0 (iPhone; CPU iPhone OS 18_%d like Mac OS X)"]}},"error":"reading: context canceled"}`, i, 30+i, 20+i, 1729560000+i, i)
 	}
-	line("caddy", `{"level":"info","ts":1729560600.1,"logger":"tls","msg":"certificate is valid","identifiers":["haus.dopp.cloud"]}`)
+	line("caddy", `{"level":"info","ts":1729560600.1,"logger":"tls","msg":"certificate is valid","identifiers":["homes.dopp.cloud"]}`)
 	caddy := take()
 
 	for i := 0; i < 200; i++ {

@@ -20,7 +20,7 @@ import (
 	"github.com/mdopp/laib/internal/secrets"
 )
 
-// The calendar subscriptions (#495): Haus hands an address over once, laib
+// The calendar subscriptions (#495): Homes hands an address over once, laib
 // keeps it in secrets.age as KALENDER_ABOS and applies the kalender template,
 // whose timer mirrors each into Radicale. The address is never answered,
 // journalled or put on argv: it arrives on stdin.
@@ -71,6 +71,16 @@ func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
 		if err := json.Unmarshal(b, &abos); err != nil {
 			return env.Fail(fmt.Errorf("%s ist nicht lesbar: %v", abosSecret, err))
 		}
+	}
+	// the household's calendar account was haus until ADR 0031 (#1021): a subscription stored
+	// for it is the account homes's, and the next write stores it so; goes at #1021 step 9
+	for i := range abos {
+		if abos[i].Person == "haus" {
+			abos[i].Person = "homes"
+		}
+	}
+	if pos[0] == "haus" {
+		pos[0] = "homes"
 	}
 	msg := ""
 	switch act {

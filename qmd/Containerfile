@@ -1,4 +1,4 @@
-# laib-qmd: qmd (tobi/qmd, MIT) as released, the search of Haus's memory
+# laib-qmd: qmd (tobi/qmd, MIT) as released, the search of Homes's memory
 # library (#195, haus#13). package-lock.json pins every dependency; the
 # image tag is qmd's version. It serves the Vermittler (vermittler.mjs,
 # #198): qmd's /query on qmd's SDK, plus each hit's cosine. CPU only: of

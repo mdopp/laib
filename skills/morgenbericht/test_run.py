@@ -62,7 +62,7 @@ class Fallback(unittest.TestCase):
 
 class Aside(unittest.TestCase):
     def test_the_log_reviews_dropped_patterns_once(self):  # #975
-        mark = "Aussortiert, kein Wunsch: haus.service 7× während eines geplanten Neustarts (Anwenden von home-assistant 10:08)."
+        mark = "Aussortiert, kein Wunsch: homes.service 7× während eines geplanten Neustarts (Anwenden von home-assistant 10:08)."
         journal = [{"verb": "note", "detail": "Protokoll-Durchsicht: keine neuen Fehlermuster. Aussortiert, kein Wunsch: alt."},
                    {"verb": "note", "detail": "Immich: 44 Vorschaubilder fehlen. " + mark}, {"verb": "apply", "detail": "x"}]
         self.assertEqual(run.aside(journal), mark)
@@ -74,10 +74,10 @@ class Aside(unittest.TestCase):
 
 class ClosedWishes(unittest.TestCase):
     def test_the_wishes_closed_today_once_with_why(self):  # #978
-        journal = [{"verb": "wish", "reason": "Wunsch: Haus erreicht HA nicht", "detail": "verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts"},
+        journal = [{"verb": "wish", "reason": "Wunsch: Homes erreicht HA nicht", "detail": "verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts"},
                    {"verb": "wish", "reason": "Wunsch: llama-lease", "detail": "erledigt: seit Update von llama um 09:22 kein Fehler mehr"},
                    {"verb": "wish", "reason": "Wunsch: Mehr Licht", "detail": "#12 wartet auf Freigabe"}]
-        self.assertEqual(run.wishes_line(journal), "Wünsche geschlossen: „Haus erreicht HA nicht“ verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts; "
+        self.assertEqual(run.wishes_line(journal), "Wünsche geschlossen: „Homes erreicht HA nicht“ verworfen: würde heute nicht gemeldet: nur während geplanter Neustarts; "
                                                    "„llama-lease“ erledigt: seit Update von llama um 09:22 kein Fehler mehr.")
         self.assertEqual(run.wishes_line([]), "")
 

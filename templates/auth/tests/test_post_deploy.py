@@ -19,7 +19,7 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": [], "adds": [], "members": {}, "deleted": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
-           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HAUS_RADICALE_PASSWORD": "-haus-cal-pw",
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HOMES_RADICALE_PASSWORD": "-haus-cal-pw",
            "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw", "AUDIOBOOKSHELF_LDAP_PASSWORD": "-abs-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
@@ -204,17 +204,26 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("NOT rotated", err)
         self.assertEqual(LDAP["pw"][ADMIN_DN], SECRETS["LLDAP_ADMIN_PASSWORD"])
 
-    def test_haus_gets_its_radicale_account(self):
-        # laib#418: Haus reads and writes the household calendar as its own
+    def test_homes_gets_its_radicale_account(self):
+        # laib#418: Homes reads and writes the household calendar as its own
         # LLDAP account, seeded here like radicale's reader, but no LDAP reader
         self.run_hook([], [])
-        self.assertIn("haus", STATE["users"])
-        self.assertEqual(LDAP["pw"].get("uid=haus,ou=people," + BASE_DN), SECRETS["HAUS_RADICALE_PASSWORD"], LDAP)
-        self.assertIn(("uid=haus,ou=people," + BASE_DN, True), LDAP["binds"])
-        self.assertNotIn("haus", STATE["adds"], "Haus's calendar account must not read the directory (lldap_strict_readonly) or join a group")
+        self.assertIn("homes", STATE["users"])
+        self.assertEqual(LDAP["pw"].get("uid=homes,ou=people," + BASE_DN), SECRETS["HOMES_RADICALE_PASSWORD"], LDAP)
+        self.assertIn(("uid=homes,ou=people," + BASE_DN, True), LDAP["binds"])
+        self.assertNotIn("homes", STATE["adds"], "Homes's calendar account must not read the directory (lldap_strict_readonly) or join a group")
+        self.assertEqual(STATE["deleted"], [], "nothing to remove on a fresh box")
         # set again on every run, as a service secret (#209)
+        self.run_hook(["core", "homes"], ["admins", "family", "lldap_strict_readonly"])
+        self.assertIn("uid=homes,ou=people," + BASE_DN, LDAP["set"], LDAP)
+
+    def test_the_old_calendar_account_haus_goes_once_homes_is_seeded(self):
+        # laib#1021, ADR 0031: the account was `haus`; the rename seeds `homes` with the same
+        # password (HOMES_RADICALE_PASSWORD was HAUS_RADICALE_PASSWORD) and removes `haus`
         self.run_hook(["core", "haus"], ["admins", "family", "lldap_strict_readonly"])
-        self.assertIn("uid=haus,ou=people," + BASE_DN, LDAP["set"], LDAP)
+        self.assertIn(("uid=homes,ou=people," + BASE_DN, True), LDAP["binds"])
+        self.assertEqual(STATE["deleted"], ["haus"])
+        self.assertNotIn("haus", STATE["users"])
 
     def test_the_calendar_mirror_and_home_assistant_get_their_radicale_accounts(self):
         # laib#495: the mirror writes as `kalender`, Home Assistant reads as `homeassistant`: nobody's password
@@ -281,14 +290,14 @@ class PostDeploy(unittest.TestCase):
         for g in ("admins", "family", "lldap_strict_readonly"):
             self.assertNotIn("archiv-anna", STATE["members"].get(STATE["groups"].index(g), set()), f"a service account in {g}")
         # the next run sets it again; the instance removed: the account goes, nobody else's
-        users = ["core", "haus", "kalender", "archiv-anna", "archiv-ben"]
+        users = ["core", "homes", "kalender", "archiv-anna", "archiv-ben"]
         self.accounts(tmp, [("archiv-anna", "ARCHIV_RADICALE_PASSWORD_ANNA")], users, ["admins", "family", "lldap_strict_readonly", "laib_accounts"],
                       {"laib_accounts": ["archiv-anna", "archiv-ben"]}, ARCHIV_RADICALE_PASSWORD_ANNA=pw)
         self.assertIn(dn, LDAP["set"])
         self.assertEqual(STATE["deleted"], ["archiv-ben"])
         self.accounts(tmp, [], list(users), ["admins", "family", "lldap_strict_readonly", "laib_accounts"], {"laib_accounts": ["archiv-anna"]})
         self.assertEqual(STATE["deleted"], ["archiv-anna"], "the last one goes too")
-        self.assertIn("haus", STATE["users"])
+        self.assertIn("homes", STATE["users"])
 
     def test_without_the_list_no_service_account_is_touched(self):   # a Laib before laib#1009
         self.run_hook(["core", "archiv-anna"], ["admins", "family", "lldap_strict_readonly", "laib_accounts"], extra={"LAIB_RENDER_DIR": "/nonexistent"})
@@ -303,7 +312,7 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("not taken over", err)
         self.assertNotIn("uid=archiv-anna,ou=people," + BASE_DN, LDAP["set"])
         # a name the hook keeps itself, one LDAP cannot address, an empty password: red before anything is created
-        for user, pw in (("haus", "-p-1009"), ("core", "-p-1009"), ("a,ou=x", "-p-1009"), ("archiv-anna", "")):
+        for user, pw in (("homes", "-p-1009"), ("haus", "-p-1009"), ("core", "-p-1009"), ("a,ou=x", "-p-1009"), ("archiv-anna", "")):
             with self.subTest(user=user):
                 self.accounts(tmp, [(user, "P")], [], [], ok=False, P=pw)
                 self.assertEqual((STATE["users"], LDAP["set"]), ([], []), "nothing may be created or set first")

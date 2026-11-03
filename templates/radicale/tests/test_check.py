@@ -21,13 +21,13 @@ def coll(root, path, props, items=0, ext=".ics"):
 def store():
     root = tempfile.mkdtemp()
     os.makedirs(os.path.join(root, "collections", "collection-root", "mdopp"))   # a home without collections
-    coll(root, "haus/haushalt", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VEVENT,VTODO", "D:displayname": "Haushalt"}, 1200)
-    coll(root, "haus/abo-muellabfuhr", {"tag": "VCALENDAR", "D:displayname": "Müllabfuhr"}, 20)
-    coll(root, "haus/einkauf", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VTODO"}, 3)
-    coll(root, "haus/liste-musik", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VTODO"}, 0)
-    coll(root, "haus/haushalt-kontakte", {"tag": "VADDRESSBOOK", "D:displayname": "Haushalt"}, 40, ".vcf")
+    coll(root, "homes/haushalt", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VEVENT,VTODO", "D:displayname": "Haushalt"}, 1200)
+    coll(root, "homes/abo-muellabfuhr", {"tag": "VCALENDAR", "D:displayname": "Müllabfuhr"}, 20)
+    coll(root, "homes/einkauf", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VTODO"}, 3)
+    coll(root, "homes/liste-musik", {"tag": "VCALENDAR", "C:supported-calendar-component-set": "VTODO"}, 0)
+    coll(root, "homes/haushalt-kontakte", {"tag": "VADDRESSBOOK", "D:displayname": "Haushalt"}, 40, ".vcf")
     coll(root, "homeassistant/haus-haushalt", {"tag": "VCALENDAR", "{urn:laib:kalender}abgleich": "x"}, 1200)
-    os.makedirs(os.path.join(root, "collections", "collection-root", "haus", "kein-props"))   # not a collection
+    os.makedirs(os.path.join(root, "collections", "collection-root", "homes", "kein-props"))   # not a collection
     return root
 
 

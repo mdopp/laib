@@ -9,16 +9,16 @@ import (
 	"testing"
 )
 
-// #266: Haus counts what the family uses into usage-metrics. It gets the
+// #266: Homes counts what the family uses into usage-metrics. It gets the
 // service as its pod reaches it (host.containers.internal, ADR 0007, never an
 // IP) and usage-metrics' bearer, a podman secret (#224): on no argv and in no
-// unit file. Without usage-metrics installed the token renders empty and Haus
+// unit file. Without usage-metrics installed the token renders empty and Homes
 // counts nothing.
-func TestHausCountsIntoUsageMetrics(t *testing.T) {
+func TestHomesCountsIntoUsageMetrics(t *testing.T) {
 	st := shippedBox(t)
 	env := func(out Output, name string) (string, bool) {
 		t.Helper()
-		m := regexp.MustCompile(`(?m)^Environment=` + name + `=(.*)$`).FindStringSubmatch(out["quadlet/haus/haus.container"])
+		m := regexp.MustCompile(`(?m)^Environment=` + name + `=(.*)$`).FindStringSubmatch(out["quadlet/homes/homes.container"])
 		if m == nil {
 			return "", false
 		}
@@ -35,19 +35,19 @@ func TestHausCountsIntoUsageMetrics(t *testing.T) {
 		}
 	}
 	out := asContainerSees(st, sec, raw)
-	if v, ok := env(out, "HAUS_USAGE_URL"); !ok || v != "http://host.containers.internal:8094" {
-		t.Errorf("HAUS_USAGE_URL = %q (set: %v), want usage-metrics as the haus pod reaches it", v, ok)
+	if v, ok := env(out, "HOMES_USAGE_URL"); !ok || v != "http://host.containers.internal:8094" {
+		t.Errorf("HOMES_USAGE_URL = %q (set: %v), want usage-metrics as the homes pod reaches it", v, ok)
 	}
-	if v, ok := env(out, "HAUS_USAGE_TOKEN"); !ok || v != "um-tok-266" {
-		t.Errorf("HAUS_USAGE_TOKEN = %q (set: %v), want usage-metrics' token", v, ok)
+	if v, ok := env(out, "HOMES_USAGE_TOKEN"); !ok || v != "um-tok-266" {
+		t.Errorf("HOMES_USAGE_TOKEN = %q (set: %v), want usage-metrics' token", v, ok)
 	}
 
 	out, err = Render(st, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, ok := env(out, "HAUS_USAGE_TOKEN"); !ok || v != "" {
-		t.Errorf("without usage-metrics HAUS_USAGE_TOKEN must render empty, got %q (set: %v)", v, ok)
+	if v, ok := env(out, "HOMES_USAGE_TOKEN"); !ok || v != "" {
+		t.Errorf("without usage-metrics HOMES_USAGE_TOKEN must render empty, got %q (set: %v)", v, ok)
 	}
 }
 

@@ -2,7 +2,7 @@
 """The Bote's switch test set (#520): short and long commands to Hermes' API server.
 
 Each sentence goes in its own session to POST /v1/chat/completions, streamed, the
-way Haus's Sprechen field reaches the Bote. A case passes when the device is
+way Homes's Sprechen field reaches the Bote. A case passes when the device is
 where the sentence puts it (on, off, the percentage, the blind open or closed),
 read from Home Assistant's /api/states with HA_TOKEN from the same key file, the
 answer is not the sentence said back, and it carries no steer frame

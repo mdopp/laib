@@ -16,12 +16,12 @@ import (
 	"github.com/mdopp/laib/internal/state"
 )
 
-// #561: Haus's form hands the household's address to laib (laib_zuhause
-// set); it becomes a box.yml proposal only a human approves — Haus never
+// #561: Homes's form hands the household's address to laib (laib_zuhause
+// set); it becomes a box.yml proposal only a human approves — Homes never
 // decides, and neither the inbox reason nor the journal carries the street.
 // Since #677 laib-haushalt serves it behind the door; the kernel's loader
 // still judges the address and its review still makes it a human's.
-func TestHausProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
+func TestHomesProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
 	env, _ := testBox(t)
 	withHaushalt(t, env)
 	call := func(hand string, args map[string]any) (string, int) {
@@ -32,7 +32,7 @@ func TestHausProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
 		return mcp.Call(context.Background(), env, st, hand, "laib_zuhause", args)
 	}
 	show := func() map[string]any {
-		out, code := call("haus", map[string]any{"action": "show"})
+		out, code := call("homes", map[string]any{"action": "show"})
 		var z map[string]any
 		if code != cli.ExitOK || json.Unmarshal([]byte(out), &z) != nil {
 			t.Fatalf("show: exit %d: %s", code, out)
@@ -44,7 +44,7 @@ func TestHausProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
 	}
 	box, _ := os.ReadFile(filepath.Join(env.Paths.State, "box.yml"))
 
-	out, code := call("haus", map[string]any{"action": "set", "street": "Musterweg 12", "postcode": "12345", "city": "Musterstadt",
+	out, code := call("homes", map[string]any{"action": "set", "street": "Musterweg 12", "postcode": "12345", "city": "Musterstadt",
 		"country": "DE", "latitude": "52.1234", "longitude": "8.0456", "elevation": "63"})
 	if code != cli.ExitOK {
 		t.Fatalf("set: exit %d: %s", code, out)
@@ -72,9 +72,9 @@ func TestHausProposesTheAddressAndOnlyAHumanLetsItIn(t *testing.T) {
 	if strings.Contains(p.Reason, "Musterweg") || grepTree(env.Paths.Journal, "Musterweg") {
 		t.Fatal("the street is in the inbox reason or the journal")
 	}
-	// Haus cannot let it in itself
-	if _, code := mcp.Call(context.Background(), env, mustState(t, env), "haus", "laib_approve", map[string]any{"args": "1"}); code == cli.ExitOK {
-		t.Fatal("the haus hand approved the address")
+	// Homes cannot let it in itself
+	if _, code := mcp.Call(context.Background(), env, mustState(t, env), "homes", "laib_approve", map[string]any{"args": "1"}); code == cli.ExitOK {
+		t.Fatal("the homes hand approved the address")
 	}
 	human := *env
 	if code := inbox.Approve(context.Background(), &human, []string{"1"}); code != cli.ExitOK {
@@ -111,7 +111,7 @@ func TestZuhauseRefusesBadValuesAndResidents(t *testing.T) {
 		{"action": "set", "latitude": "95", "longitude": "8"},
 		{"action": "set"},
 	} {
-		if out, code := mcp.Call(context.Background(), env, st, "haus", "laib_zuhause", args); code == cli.ExitOK {
+		if out, code := mcp.Call(context.Background(), env, st, "homes", "laib_zuhause", args); code == cli.ExitOK {
 			t.Errorf("%v: accepted: %s", args, out)
 		}
 	}

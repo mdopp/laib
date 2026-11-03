@@ -25,7 +25,7 @@ Environment="SAMBA_GLOBAL_STANZA=server min protocol = SMB2"
 # never logged a line. --debug-stdout keeps stdout, so its log reaches the journal (Exec below)
 Environment="SAMBA_CONF_LOG_LEVEL=1 auth_audit:2"
 # the family's accounts (#296): samba-accounts.sh runs beside smbd under the image's runit;
-# the member list comes from file-share-samba-members, the passwords from Haus, both in samba-accounts/
+# the member list comes from file-share-samba-members, the passwords from Homes, both in samba-accounts/
 Exec=/bin/sh -c "sed -i -e '/--debug-stdout/!s/exec smbd --foreground/& --debug-stdout/' /container/config/runit/samba/run && install -D -m 755 /laib/samba-accounts.sh /container/config/runit/accounts/run && exec runsvdir -P /container/config/runit"
 Volume=./samba-accounts.sh:/laib/samba-accounts.sh:ro
 # the shared file-share tree: never relabelled (:z walks it on every start and

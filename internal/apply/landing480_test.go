@@ -17,13 +17,13 @@ import (
 // after a login (default_redirection_url), the reset and invite mail, the
 // Caddyfile's redirects and its denial pages — is a name the box serves.
 // laib.<domain> after the box page moved to admin. was one that never
-// existed; haus.<domain>/willkommen in the mail of a box without Haus is
+// existed; homes.<domain>/willkommen in the mail of a box without Homes is
 // another.
 func TestEveryLandingIsANameTheBoxServes(t *testing.T) {
-	for _, haus := range []bool{false, true} {
-		name := "without haus"
-		if haus {
-			name = "with haus"
+	for _, homes := range []bool{false, true} {
+		name := "without homes"
+		if homes {
+			name = "with homes"
 		}
 		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
@@ -31,9 +31,9 @@ func TestEveryLandingIsANameTheBoxServes(t *testing.T) {
 			copyTree(t, "../../testdata/golden/nuc/state", stDir)
 			hook, _ := os.ReadFile("../../templates/auth/pre-start")
 			os.WriteFile(filepath.Join(stDir, "services", "auth", "pre-start"), hook, 0o755)
-			if haus {
-				copyTree(t, "../../templates/haus", filepath.Join(stDir, "services", "haus"))
-				os.Rename(filepath.Join(stDir, "services", "haus", "values.example.yml"), filepath.Join(stDir, "services", "haus", "values.yml"))
+			if homes {
+				copyTree(t, "../../templates/homes", filepath.Join(stDir, "services", "homes"))
+				os.Rename(filepath.Join(stDir, "services", "homes", "values.example.yml"), filepath.Join(stDir, "services", "homes", "values.yml"))
 			}
 			box, _ := os.ReadFile(filepath.Join(stDir, "box.yml"))
 			os.WriteFile(filepath.Join(stDir, "box.yml"), append(box, "laib: {host: admin, listen: 0.0.0.0}\n"...), 0o644)
@@ -77,7 +77,7 @@ func TestEveryLandingIsANameTheBoxServes(t *testing.T) {
 				}
 			}
 			files := map[string]string{}
-			for p, c := range out { // every rendered file: the Caddyfile, the units (Haus's link to the box page), the access rules
+			for p, c := range out { // every rendered file: the Caddyfile, the units (Homes's link to the box page), the access rules
 				files[p] = c
 			}
 			cfg := filepath.Join(data, "auth", "authelia-config")
@@ -92,7 +92,7 @@ func TestEveryLandingIsANameTheBoxServes(t *testing.T) {
 				t.Fatal("configuration.yml names no default_redirection_url")
 			}
 			url := regexp.MustCompile(`https://([a-z0-9.-]*` + regexp.QuoteMeta(st.Box.Domain) + `)\b`)
-			// an address the owner wrote in values.yml (Haus's HA_PUBLIC_URL: https://home.${DOMAIN}, #647) is
+			// an address the owner wrote in values.yml (Homes's HA_PUBLIC_URL: https://home.${DOMAIN}, #647) is
 			// theirs, rendered since #647, and names a service this box may not have yet; laib's own landings must be served
 			owners := map[string]bool{}
 			for _, svc := range st.Services {

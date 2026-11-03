@@ -53,11 +53,11 @@ stays 30 days after migration day.
 
 ## What the family and the admin use
 
-- **Haus** (`mdopp/haus`) is the family's surface: the pages at
-  `haus.<domain>` and the Haus app. `dopp.cloud` and `www.` redirect to it
+- **Homes** (`mdopp/homes`) is the family's surface: the pages at
+  `homes.<domain>` and the Homes app. `dopp.cloud` and `www.` redirect to it
   (#360). It was added by hand after migration day (#379).
 - **The Bote** (Hermes, ADR 0016) is the text agent on Signal and behind
-  Haus's Sprechen field. It is installed on the Kraftwerk with Signal
+  Homes's Sprechen field. It is installed on the Kraftwerk with Signal
   registered on a spare landline number, with hand fixes in the state
   (#469).
 - **The Werkstatt** (pi, Claude Code, the autoloop) replaces `claude-dev`
@@ -127,7 +127,7 @@ Whether they are gone: auf der Box zu prüfen.
 - **Its disk import** is a Werkstatt skill with `scripts/laib-import.py`
   (#456). Its Google import is `scripts/import-google.py` (#372).
 - **Solaris the agent retires** (ADR 0015). Voice is Home Assistant Assist
-  with Stimme and Frage. Its pages, cards and companion API went to Haus.
+  with Stimme and Frage. Its pages, cards and companion API went to Homes.
   The household chat is the Bote.
 
 ## What is dropped on purpose

@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// #198: haus-qmd runs the Vermittler (qmd's SDK, typed searches, rerank off,
-// each hit's cosine as `vec`) instead of `qmd mcp --http`, and Haus gets the
+// #198: homes-qmd runs the Vermittler (qmd's SDK, typed searches, rerank off,
+// each hit's cosine as `vec`) instead of `qmd mcp --http`, and Homes gets the
 // house model to tidy hits — present only when the box has a model.
-func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
+func TestHomesGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 	st := shippedBox(t)
 	env := func(out Output, file, name string) (string, bool) {
 		t.Helper()
@@ -25,13 +25,13 @@ func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"HAUS_LLM_URL", "HAUS_LLM_KEY"} {
-		if v, _ := env(out, "quadlet/haus/haus.container", name); v != "" {
+	for _, name := range []string{"HOMES_LLM_URL", "HOMES_LLM_KEY"} {
+		if v, _ := env(out, "quadlet/homes/homes.container", name); v != "" {
 			t.Errorf("without the model role %s must be empty (the judge is off), got %q", name, v)
 		}
 	}
 
-	// with it: the proxy as the haus pod reaches it — the host's port over
+	// with it: the proxy as the homes pod reaches it — the host's port over
 	// host.containers.internal, never the pod's own 127.0.0.1 (ADR 0007)
 	st.Box.Roles.Model = "llama"
 	sec := map[string]string{"MODEL_API_KEY": "k-model"}
@@ -41,12 +41,12 @@ func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"HAUS_LLM_URL":   "http://host.containers.internal:11435/v1",
-		"HAUS_LLM_MODEL": "qwen3.6-35b-a3b",
-		"HAUS_LLM_KEY":   "k-model",
+		"HOMES_LLM_URL":   "http://host.containers.internal:11435/v1",
+		"HOMES_LLM_MODEL": "qwen3.6-35b-a3b",
+		"HOMES_LLM_KEY":   "k-model",
 	}
 	for name, w := range want {
-		if v, ok := env(out, "quadlet/haus/haus.container", name); !ok || v != w {
+		if v, ok := env(out, "quadlet/homes/homes.container", name); !ok || v != w {
 			t.Errorf("with the model role %s = %q (set: %v), want %q", name, v, ok, w)
 		}
 	}
@@ -58,13 +58,13 @@ func TestHausGetsTheVermittlerAndTheHouseModel(t *testing.T) {
 		t.Errorf("the Werkstatt's MODEL_LEASE does not reach the lease from its pod: %q", v)
 	}
 
-	// haus-qmd runs the Vermittler, not qmd's own server
-	qmd := out["quadlet/haus/haus-qmd.container"]
+	// homes-qmd runs the Vermittler, not qmd's own server
+	qmd := out["quadlet/homes/homes-qmd.container"]
 	if !strings.Contains(qmd, "\nEntrypoint=qmd-vermittler\n") {
-		t.Errorf("haus-qmd.container does not run the Vermittler:\n%s", qmd)
+		t.Errorf("homes-qmd.container does not run the Vermittler:\n%s", qmd)
 	}
 	if regexp.MustCompile(`(?m)^Exec=`).MatchString(qmd) || strings.Contains(qmd, "--http") {
-		t.Errorf("haus-qmd.container still passes arguments for qmd's own server:\n%s", qmd)
+		t.Errorf("homes-qmd.container still passes arguments for qmd's own server:\n%s", qmd)
 	}
 	if !strings.Contains(qmd, "HealthCmd=qmd-health") {
 		t.Errorf("the health probe is gone:\n%s", qmd)
