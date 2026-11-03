@@ -13,11 +13,11 @@ LLDAP login, Home Assistant's account).
 
 - **Homes reads the music** (#695): Homes checks a wished song against the
   household's music. Jellyfin's API keys have no levels (each acts as an
-  administrator), so post-deploy keeps a Jellyfin user `haus` instead:
+  administrator), so post-deploy keeps a Jellyfin user `homes` (was `haus`, renamed in place, ADR 0031) instead:
   hidden, no administrator, `EnabledFolders` the music libraries only (the
   ones Music Assistant's account sees, spoken word left out), no playback,
   download or deletion. Its password is random and stored nowhere; its
-  token, logged in on the device `laib-haus`, goes back as
+  token, logged in on the device `laib-homes`, goes back as
   `HOMES_JELLYFIN_TOKEN`. A token that still works is kept (`GET /Users/Me`
   as that device); one Jellyfin refuses, e.g. its device removed in the
   dashboard, is replaced by a new random password and a new login.

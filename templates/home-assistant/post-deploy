@@ -111,7 +111,7 @@ HA_AUTH = os.path.join(os.path.dirname(HA_STORAGE), "auth")
 # each consumer's own user (#591): secret -> (token name, username, name in HA, administrator, its password's secret)
 MACHINES = {
     "HA_TOKEN": ("laib: home-assistant-check", "laib-pruefung", "Laib-Prüfung", False, "HA_CHECK_PASSWORD"),  # REST config entries and states: every user may
-    "HOMES_HA_TOKEN": ("laib: haus", "haus", "Haus", True, "HA_HAUS_PASSWORD"),   # voice counting: assist_pipeline/pipeline_debug is admin-only (#266)
+    "HOMES_HA_TOKEN": ("laib: homes", "homes", "Homes", True, "HA_HOMES_PASSWORD"),   # voice counting: assist_pipeline/pipeline_debug is admin-only (#266)
     "BOTE_AUTOMAT_HA_TOKEN": ("laib: bote-automat", "bote-automat", "Bote-Automat", True, "HA_BOTE_AUTOMAT_PASSWORD"),  # HA's automation config API is admin-only
     "BOTE_HA_TOKEN": ("laib: bote", "bote", "Bote", False, "HA_BOTE_PASSWORD"),  # Assist API only
     "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
@@ -496,6 +496,21 @@ def strangers():
         print("home-assistant: in Home Assistant and not Laib's (the owner decides, nothing deleted, #591): " + "; ".join(out))
 
 
+def drop_legacy():
+    """the user haus („Haus“), Homes's own until ADR 0031 (#1021), deleted once HOMES_HA_TOKEN works on
+    the user homes (machine() above returned): its tokens go with it. Only the login Laib made; goes at #1021 step 9"""
+    old = next((u for u in USERS or [] if u.get("username") == "haus"), None)
+    if not old:
+        return
+    ws = WS(admin_session())
+    try:
+        ws("config/auth/delete", user_id=old["id"])
+    finally:
+        ws.close()
+    USERS.remove(old)
+    print("home-assistant: user haus deleted, Homes is the user homes now (ADR 0031)")
+
+
 NAMES_TOKEN = ""   # the user Laib-Namen's, once main() has it (#760)
 
 
@@ -504,6 +519,7 @@ def main():
     session = next((E["LAIB_SECRET_" + n] for n in ("HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
     for secret in ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
         machine(secret)
+    drop_legacy()
     NAMES_TOKEN = machine("HA_NAMES_TOKEN")[0]
     print("home-assistant: tokens for the check, Homes, the Automat, the Bote, Stimme and the names work, each on its own user")
 

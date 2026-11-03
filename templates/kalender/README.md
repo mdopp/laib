@@ -22,7 +22,7 @@ they were (Google), and a mirror only reads.
   account `kalender` (seeded by `auth`), whose rights
   (`templates/radicale/pre-start`) allow exactly `*/google-*`, `*/abo-*` and
   Home Assistant's home: nobody's password. The person reads
-  `<person>/google-<name>` (or `abo-<name>`); `haus/abo-*` is the family's.
+  `<person>/google-<name>` (or `abo-<name>`); `homes/abo-*` is the family's (`haus/` until ADR 0031).
   What the source drops, the next run removes, only in that collection; an
   empty answer removes nothing and is a finding. Trennen removes the copy.
 - **The Takeout import's paths.** Every item's path is uuid5 of its UID, as
@@ -30,8 +30,10 @@ they were (Google), and a mirror only reads.
   Takeout into `google-<name>` is replaced by the mirror, never doubled.
 - **Home Assistant.** A CalDAV client finds only its own account's
   calendars, so the run copies every mirror and the family's calendars
-  (`haus/haushalt`, `haus/familie-*`) into the home of HA's own account
-  `homeassistant` (`HA_USER`), read only for HA. The home-assistant
+  (`homes/haushalt`, `homes/familie-*`) into the home of HA's own account
+  `homeassistant` (`HA_USER`), read only for HA; the household's keep the
+  name `haus-<collection>` there (ADR 0031: HA's calendar entities are bound
+  to the copy's path, so renaming it would give each a new one). The home-assistant
   template's post-deploy adds that CalDAV entry: nobody types a password into
   HA. This replaces the hand-made `~/ha-caldav.sh`.
 - **Each calendar its own interval (#619).** A subscription's `every` (30m,

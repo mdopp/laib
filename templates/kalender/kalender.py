@@ -17,7 +17,7 @@ the environment, never argv. The address is never printed, logged or written
 anywhere else: an error names the host only.
 
 Each subscription is mirrored into <person>/google-<name> or
-<person>/abo-<name> (person `haus`: the family's). This script writes as
+<person>/abo-<name> (person `homes`, the household's account: the family's). This script writes as
 Radicale's service account `kalender`, whose rights (templates/radicale)
 allow exactly those collections and Home Assistant's: nobody's password. The
 person only reads it. What the source drops, the next run removes, in that
@@ -27,8 +27,11 @@ of the same calendar is replaced, not doubled.
 
 Home Assistant (HA_USER, its own Radicale account `homeassistant`) finds only
 the calendars in its own home, as every CalDAV client does. So every mirror,
-and each family calendar of the household's account (haus/haushalt, haus/familie-*),
-is copied into homeassistant/<person>-<collection>, read only for HA.
+and each family calendar of the household's account (homes/haushalt, homes/familie-*),
+is copied into homeassistant/<person>-<collection>, read only for HA. The
+household's account was `haus` until ADR 0031 (#1021): its copies keep the
+name haus-<collection> there, because Home Assistant's calendar entities are
+bound to the copy's path; a subscription stored for person `haus` is homes's.
 
 Each run writes laib-status.json (laib diag): yellow when a calendar has not
 been mirrored for STALE_HOURS (2) or Google answers 404 (the address was
@@ -131,9 +134,14 @@ def collection(abo):
     return "%s/%s-%s/" % (abo["person"], "google" if abo.get("kind") == "google" else "abo", abo["name"])
 
 
+HOUSEHOLD, HA_NAME = "homes", "haus"   # the household's account, and its name in HA's copies (ADR 0031)
+
+
 def ha_collection(home, col):
-    """Home Assistant's copy of a collection: homeassistant/<person>-<collection>/"""
-    return home + col.rstrip("/").replace("/", "-") + "/"
+    """Home Assistant's copy of a collection: homeassistant/<person>-<collection>/; the household's
+    keep haus-<collection>, the path HA's calendar entities were made for (ADR 0031)"""
+    person, rest = col.rstrip("/").split("/", 1)
+    return home + (HA_NAME if person == HOUSEHOLD else person) + "-" + rest.replace("/", "-") + "/"
 
 
 # --- HTTP ---
@@ -244,6 +252,9 @@ def load_abos(raw):
     abos = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
     if not isinstance(abos, list) or not all(isinstance(a, dict) and a.get("url") and a.get("person") and a.get("name") for a in abos):
         raise ValueError("keine Liste von Abos")
+    for a in abos:   # stored before ADR 0031 (#1021): the household's account is homes; goes at #1021 step 9
+        if a["person"] == "haus":
+            a["person"] = HOUSEHOLD
     return abos
 
 
@@ -312,9 +323,9 @@ def run(data, raw, dav, ha_user, stale_hours, now=None, abo_every_days=30):
     if ha_home:
         try:
             dav.ensure_home(ha_home)
-            for name in sorted(dav.children("haus/", calendars=True)):
+            for name in sorted(dav.children(HOUSEHOLD + "/", calendars=True)):
                 if name == "haushalt" or name.startswith("familie-"):
-                    targets.append(("haus/" + name + "/", name, lambda n=name: dav.ics("haus/" + n + "/"), None))
+                    targets.append((HOUSEHOLD + "/" + name + "/", name, lambda n=name: dav.ics(HOUSEHOLD + "/" + n + "/"), None))
         except (Fail, ET.ParseError) as e:
             sev, text, fix = why(e)
             findings.append({"severity": sev, "detail": f"Kalender für Home Assistant: {text}", "fix": fix})

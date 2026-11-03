@@ -14,7 +14,8 @@ may go yet.
   template, the hand and every German text that names the product. The
   app's id changes too (`cloud.dopp.haus` → `cloud.dopp.homes`), accepted
   with its cost: every family phone installs the new app, pairs it again
-  and places its widgets again.
+  and places its widgets again. The same day, option (b) in #1021: the
+  program's own logins in the other apps are renamed `homes` too.
 
 ## Context
 
@@ -70,16 +71,24 @@ What moved, and where it was:
    308-redirects every other request on that host to `homes.<domain>`,
    accepts a paired phone's `haus_device_` token, and tells the old app
    (`GET /napi/app`) where to get Homes.
-5. **What is the household's keeps its name.** The accounts named `haus`
-   in Radicale/LLDAP (the household's calendar and address book,
-   `/haus/haushalt/`), Audiobookshelf, Jellyfin, Paperless and Home
-   Assistant's user „Haus“ are the household's logins the program uses,
-   not the program; renaming them moves the household's calendar and makes
-   every phone subscribe again. They stay until the owner decides
-   otherwise (#1021, „Owner decision needed“). So do the labels a hook
-   finds its key by (Audiobookshelf's „Haus (laib)“, Jellyfin's „Haus
-   (Gesehen)“ and the device `laib-haus`): renamed, the hook would mint a
-   second key next to the first.
+5. **The program's own logins are renamed too** (the owner, 2026-11-03,
+   #1021 option b), each the way that keeps the most:
+   - LLDAP/Radicale: the account `homes` (the same password, by `was:`)
+     owns the household's calendars; Radicale's pre-start moves the
+     collections `haus/` to `homes/` once (entries, UIDs and props along;
+     both holding something is a red apply, never a merge), the rights name
+     `homes`, and auth's post-deploy deletes the LDAP user `haus`. A stored
+     calendar subscription for person `haus` is read as `homes`.
+   - Audiobookshelf and Jellyfin: the user is renamed in place through
+     their APIs; the id, what it played and its key stay. A key named
+     „Haus (laib)“ / „Haus (Gesehen)“ counts as Homes's when one is
+     replaced: neither app can rename a key.
+   - Home Assistant: a new user `homes` („Homes“) with a new password and
+     a new `HOMES_HA_TOKEN` (no `was:`); once it works, post-deploy deletes
+     the user `haus` and its tokens with it. HA cannot rename a login.
+   - Kept: Home Assistant's copies of the household's calendars stay at
+     `homeassistant/haus-<collection>`, because HA's calendar entities are
+     bound to the copy's path; a Paperless login is the owner's.
 
 ## Legacy names and when they end (ADR 0021 rule 8)
 
@@ -91,7 +100,12 @@ What moved, and where it was:
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside the new names | the box moved |
 | the hand `haus`'s token record | the state's tokens | revoked at #1021 step 9 |
 | `X-HAUS-*` iCal properties, PRODIDs | entries already stored in Radicale | kept: stored data, not a name in code |
-| the accounts named `haus`, the hook labels above | Radicale/LLDAP, ABS, Jellyfin, Paperless, HA | the owner's decision in #1021 |
+| the LDAP user `haus` deleted, `haus` kept reserved | templates/auth post-deploy | #1021 step 9 |
+| the HA user `haus` deleted once `homes` works | templates/home-assistant post-deploy | #1021 step 9 |
+| `haus/` moved to `homes/` | templates/radicale pre-start | #1021 step 9 |
+| a subscription for person `haus` read as `homes` | `laib calendar`, kalender.py | #1021 step 9 |
+| the user `haus` renamed `homes`, the keys „Haus (laib)“, „Haus (Gesehen)“ | audiobookshelf, media post-deploy | #1021 step 9 |
+| `homeassistant/haus-<collection>` | HA's copies of the household's calendars (kalender.py) | kept: HA's entities hang on the path |
 
 `Haus` does not go on ADR 0021's retired names: it is an ordinary German
 word, and the docs check would flag the house.
@@ -109,5 +123,10 @@ word, and the docs check would flag the house.
   restored by its restic path by hand until those snapshots age out.
 - `${DATA_DIR}/haus-check` is not carried (it is written again every 15
   minutes) and stays on disk until removed by hand.
+- A phone subscribed in DAVx⁵ to `/haus/haushalt/` (or another collection
+  of the household's account) subscribes again under `/homes/…`; the
+  entries are the same, moved, not copied.
+- Home Assistant's Homes user is new: its logbook says „Homes“ from now on,
+  and the old user „Haus“ with its entries' attribution is gone.
 - The usage counts keep the app id `haus` the program has always sent:
   the history in usage-metrics stays one series.

@@ -114,7 +114,9 @@ class FakeABS(BaseHTTPRequestHandler):
         if self.authed() and (m := re.fullmatch(r"/api/users/([^/]+)", self.path)):
             u = next(u for u in ABS["users"] if u["id"] == m.group(1))
             ABS["user_patches"].append((u["username"], b))
-            u.update({k: v for k, v in b.items() if k in ("type", "isActive", "permissions")})
+            if "username" in b and any(x["username"] == b["username"] for x in ABS["users"] if x is not u):
+                return self.reply(500, {"error": "Username already taken"})   # UserController.update
+            u.update({k: v for k, v in b.items() if k in ("type", "isActive", "permissions", "username")})
             return self.reply(200, {"success": True, "user": u})
         if self.path == "/api/settings" and self.authed():
             ABS["server"].update(b)
@@ -169,10 +171,10 @@ class PostDeploy(unittest.TestCase):
         threading.Thread(target=self.ldap.serve_forever, daemon=True).start()
         self.addCleanup(self.ldap.shutdown)
 
-    def run_hook(self, ma_key="", haus_key="", ldap_pw=LDAP_PW):
+    def run_hook(self, ma_key="", homes_key="", ldap_pw=LDAP_PW):
         env = dict(os.environ, ABS_URL=f"http://127.0.0.1:{self.srv.server_port}", LAIB_DOMAIN="vm.test",
                    OIDC_SECRET=OIDC, LAIB_SECRET_ABS_ROOT_PASSWORD=ROOT, LAIB_SECRET_ABS_MA_TOKEN=ma_key,
-                   LAIB_SECRET_HOMES_ABS_TOKEN=haus_key, LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD=ldap_pw,
+                   LAIB_SECRET_HOMES_ABS_TOKEN=homes_key, LAIB_SECRET_AUDIOBOOKSHELF_LDAP_PASSWORD=ldap_pw,
                    LLDAP_URL=f"http://127.0.0.1:{self.ldap.server_port}")
         p = subprocess.run([sys.executable, str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
@@ -229,39 +231,56 @@ class PostDeploy(unittest.TestCase):
         key = self.handed.get("ABS_MA_TOKEN")
         self.assertTrue(key, "no key for Music Assistant")
         self.assertEqual([k["isActive"] for k in ABS["keys"] if k["userId"] == u["id"]], [True])
-        haus = self.handed["HOMES_ABS_TOKEN"]
-        self.run_hook(ma_key=key, haus_key=haus)
+        homes = self.handed["HOMES_ABS_TOKEN"]
+        self.run_hook(ma_key=key, homes_key=homes)
         self.assertEqual((self.handed, len(ABS["keys"])), ({}, 2), "a working key was replaced")
-        self.run_hook(ma_key="a-key-abs-does-not-know", haus_key=haus)
+        self.run_hook(ma_key="a-key-abs-does-not-know", homes_key=homes)
         self.assertEqual(list(self.handed), ["ABS_MA_TOKEN"])
         self.assertEqual([k["apiKey"] for k in ABS["keys"] if k["userId"] == u["id"]], [self.handed["ABS_MA_TOKEN"]], "the old key of that name still works")
-        self.assertIn(haus, [k["apiKey"] for k in ABS["keys"]], "replacing Music Assistant's key took Homes' with it")
+        self.assertIn(homes, [k["apiKey"] for k in ABS["keys"]], "replacing Music Assistant's key took Homes' with it")
         self.assertEqual(len([u for u in ABS["users"] if u["username"] == "musicassistant"]), 1)
 
-    def test_haus_gets_an_administrator_and_a_key_of_its_own(self):
+    def test_homes_gets_an_administrator_and_a_key_of_its_own(self):
         # #676 (haus#123): Homes subscribes podcasts by link, checks the feed and asks for new episodes, which ABS
-        # allows administrators only (isAdminOrUp). Its own account `haus` and an API key, handed back as
+        # allows administrators only (isAdminOrUp). Its own account `homes` and an API key, handed back as
         # HOMES_ABS_TOKEN; the homes template declares it, so the same apply gives Homes its podcast page
         fresh()
         self.run_hook()
-        (u,) = [u for u in ABS["users"] if u["username"] == "haus"]
+        (u,) = [u for u in ABS["users"] if u["username"] == "homes"]
         self.assertEqual(u["type"], "admin")
         key = self.handed.get("HOMES_ABS_TOKEN")
         self.assertTrue(key, "no key for Homes")
-        self.assertEqual([(k["name"], k["isActive"]) for k in ABS["keys"] if k["userId"] == u["id"]], [("Haus (laib)", True)])
-        self.run_hook(ma_key=self.handed["ABS_MA_TOKEN"], haus_key=key)
+        self.assertEqual([(k["name"], k["isActive"]) for k in ABS["keys"] if k["userId"] == u["id"]], [("Homes (laib)", True)])
+        self.run_hook(ma_key=self.handed["ABS_MA_TOKEN"], homes_key=key)
         self.assertEqual(self.handed, {}, "a working key was replaced")
-        self.run_hook(ma_key="", haus_key="a-key-abs-does-not-know")
+        self.run_hook(ma_key="", homes_key="a-key-abs-does-not-know")
         self.assertIn("HOMES_ABS_TOKEN", self.handed)
         self.assertEqual([k["apiKey"] for k in ABS["keys"] if k["userId"] == u["id"]], [self.handed["HOMES_ABS_TOKEN"]])
 
-    def test_an_account_haus_that_is_no_administrator_becomes_one(self):
+    def test_an_account_homes_that_is_no_administrator_becomes_one(self):
         fresh()
         ABS["init"] = True
-        ABS["users"] = [{"id": "usr-haus", "username": "haus", "type": "user", "permissions": {}}]
+        ABS["users"] = [{"id": "usr-homes", "username": "homes", "type": "user", "permissions": {}}]
         self.run_hook()
-        self.assertEqual([u["type"] for u in ABS["users"] if u["username"] == "haus"], ["admin"])
+        self.assertEqual([u["type"] for u in ABS["users"] if u["username"] == "homes"], ["admin"])
         self.assertTrue(self.handed.get("HOMES_ABS_TOKEN"))
+
+    def test_the_old_account_haus_is_renamed_homes_and_keeps_its_key(self):
+        # laib#1021, ADR 0031: renamed in place, so ABS keeps its id, its podcasts and its API key, which
+        # HOMES_ABS_TOKEN carries (was: HAUS_ABS_TOKEN); no second account, no new key
+        fresh()
+        ABS["init"] = True
+        ABS["users"] = [{"id": "usr-haus", "username": "haus", "type": "admin", "permissions": {}}]
+        ABS["keys"] = [{"id": "key-old", "name": "Haus (laib)", "userId": "usr-haus", "isActive": True, "apiKey": "abs-old-key"}]
+        self.run_hook(homes_key="abs-old-key")
+        self.assertEqual([(u["id"], u["username"]) for u in ABS["users"] if u["id"] == "usr-haus"], [("usr-haus", "homes")])
+        self.assertFalse([u for u in ABS["users"] if u["username"] == "haus"])
+        self.assertNotIn("HOMES_ABS_TOKEN", self.handed, "the key that works was replaced")
+        self.assertIn("abs-old-key", [k["apiKey"] for k in ABS["keys"]])
+        # a refused key is replaced, and the old name counts: never two keys of Homes's
+        self.run_hook(homes_key="a-key-abs-does-not-know")
+        self.assertEqual([(k["name"], k["userId"]) for k in ABS["keys"] if k["userId"] == "usr-haus"], [("Homes (laib)", "usr-haus")])
+        self.assertEqual(sum(1 for u in ABS["users"] if u["username"] == "homes"), 1)
 
     # the box's admins are ABS's admins (2026-10-31): an OIDC-registered owner was „user“ in ABS and could make
     # no API key (admin-only there) for an app like Symfonium. LLDAP's group admins is who administers the box
@@ -276,7 +295,7 @@ class PostDeploy(unittest.TestCase):
         return {u["username"]: u["type"] for u in ABS["users"]}
 
     def person_patches(self):
-        return [(n, b) for n, b in ABS["user_patches"] if n not in ("haus", "musicassistant")]
+        return [(n, b) for n, b in ABS["user_patches"] if n not in ("homes", "musicassistant")]
 
     def test_a_box_admin_becomes_an_abs_admin_and_a_second_run_writes_nothing(self):
         self.household(admins=["admin", "mdopp"], users=[("mdopp", "user")])
@@ -297,21 +316,21 @@ class PostDeploy(unittest.TestCase):
         # a demotion is the owner's in ABS, never a surprise of an apply
         self.household(admins=["mdopp"], family=["cdopp", "oma"], users=[("mdopp", "admin"), ("cdopp", "user"), ("oma", "admin"), ("gast", "guest")])
         self.run_hook()
-        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "cdopp": "user", "oma": "admin", "gast": "guest", "musicassistant": "user", "haus": "admin"})
+        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "cdopp": "user", "oma": "admin", "gast": "guest", "musicassistant": "user", "homes": "admin"})
         self.assertEqual(self.person_patches(), [])
 
     def test_root_and_the_service_accounts_are_never_touched_by_the_admins(self):
         # names in LLDAP's admins that are ABS's own: root stays root, Music Assistant only listens
-        self.household(admins=["root", "musicassistant", "haus"], users=[("musicassistant", "user"), ("haus", "admin")])
+        self.household(admins=["root", "musicassistant", "homes"], users=[("musicassistant", "user"), ("homes", "admin")])
         self.run_hook()
-        self.assertEqual((self.types()["root"], self.types()["musicassistant"], self.types()["haus"]), ("root", "user", "admin"))
+        self.assertEqual((self.types()["root"], self.types()["musicassistant"], self.types()["homes"]), ("root", "user", "admin"))
         self.assertEqual(ABS["user_patches"], [])
 
     def test_a_box_admin_without_an_abs_account_yet_is_skipped(self):
         # ABS registers a person at their first OIDC login; the next apply after it makes them admin
         self.household(admins=["mdopp", "cdopp"], users=[("mdopp", "user")])
         self.run_hook()
-        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "musicassistant": "user", "haus": "admin"})
+        self.assertEqual(self.types(), {"root": "root", "mdopp": "admin", "musicassistant": "user", "homes": "admin"})
 
     def test_without_the_admins_nothing_changes_and_the_apply_stays_green(self):
         for case, pw in (("no reader password (auth not updated yet)", ""), ("LLDAP refuses the reader", "a-wrong-one")):

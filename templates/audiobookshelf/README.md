@@ -17,9 +17,9 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
 - Music Assistant's account `musicassistant` (listens, changes nothing)
   and an API key for it, handed back as `ABS_MA_TOKEN`; music-assistant
   renders it, so the same apply adds Audiobookshelf as MA's source.
-- the account `haus`, Homes's, an administrator (subscribing, checking a feed
+- the account `homes` (was `haus`, renamed in place, ADR 0031), Homes's, an administrator (subscribing, checking a feed
   and asking for new episodes are admin-only in ABS), and its API key,
-  handed back as `HOMES_ABS_TOKEN` (#676, haus#123); haus renders it as
+  handed back as `HOMES_ABS_TOKEN` (#676, haus#123); homes renders it as
   `HOMES_ABS_TOKEN` beside `HOMES_ABS_URL`, so the same apply gives Homes
   its podcast page. A key that still works is kept, as Music Assistant's.
 - The family's login (OIDC), rewritten from Laib's secret on every apply.
@@ -30,7 +30,7 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
   template, `AUDIOBOOKSHELF_LDAP_PASSWORD`) and sets each ABS user of that
   name to admin. A box admin who never logged in to ABS has no account
   yet: the next apply after their first login makes them admin. Never
-  touched: `root`, `musicassistant`, `haus`, and anyone who is not a box
+  touched: `root`, `musicassistant`, `homes`, and anyone who is not a box
   admin. Nobody is demoted: who leaves the admins stays ABS admin until
   the owner changes it in ABS (Einstellungen → Benutzer). LLDAP not read:
   nothing changes, the apply stays green and says so.

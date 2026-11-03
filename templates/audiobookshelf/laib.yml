@@ -30,7 +30,7 @@ secrets:
   - name: AUDIOBOOKSHELF_LDAP_PASSWORD # the read-only LLDAP account post-deploy reads the box's admins with, seeded by the auth template; unset: nobody is made ABS admin
     external: true
     optional: true
-  - name: HOMES_ABS_TOKEN             # minted here (#676, haus#123): the API key of ABS's user haus, an administrator, handed back; Homes subscribes podcasts with it
+  - name: HOMES_ABS_TOKEN             # minted here (#676, haus#123): the API key of ABS's user homes (was haus, ADR 0031), an administrator, handed back; Homes subscribes podcasts with it
     was: HAUS_ABS_TOKEN   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true

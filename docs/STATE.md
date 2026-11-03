@@ -705,7 +705,7 @@ does the sso role's. The auth template's post-deploy creates each account
 (group `laib_accounts`, no other group), sets its password on every run,
 and deletes a member of `laib_accounts` that is no longer listed, so
 removing the instance removes its account. It never takes over an
-existing account outside that group, nor a name it keeps itself (`haus`,
+existing account outside that group, nor a name it keeps itself (`homes`, and `haus` until #1021 step 9,
 `kalender`, the readers, the operator). The loader refuses an account on
 an external secret, on a box without `roles.identity`, a name LDAP cannot
 address, a person's own login and one account claimed twice. What the

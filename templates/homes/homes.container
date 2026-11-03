@@ -66,12 +66,12 @@ Environment=HOMES_BOTE_SIGNAL=${BOTE_SIGNAL}
 # audiobookshelf's post-deploy, empty without ABS, and then Homes shows no podcast page
 Environment=HOMES_ABS_URL=${ABS_URL}
 Environment=HOMES_ABS_TOKEN=${ABS_TOKEN}
-# the music wish list (#695): Jellyfin as this pod reaches it and the token of its user haus (hidden, the
+# the music wish list (#695): Jellyfin as this pod reaches it and the token of its user homes (hidden, the
 # music libraries only, no administrator: API keys have no levels); minted by media's post-deploy, empty
 # without media, and then a wish is never „hast du schon“ nor ticked off by itself
 Environment=HOMES_JELLYFIN_URL=${JELLYFIN_URL}
 Environment=HOMES_JELLYFIN_TOKEN=${JELLYFIN_TOKEN}
-# Gesehen & Gehört (haus#152): what each person watched, read with Jellyfin's API key "Haus (Gesehen)"
+# Gesehen & Gehört (haus#152): what each person watched, read with Jellyfin's API key "Homes (Gesehen)"
 # (only an administrator reads another user's played state); minted by media's post-deploy, empty without
 # media, and then the page shows the books from Audiobookshelf only
 Environment=HOMES_JELLYFIN_KEY=${JELLYFIN_KEY}

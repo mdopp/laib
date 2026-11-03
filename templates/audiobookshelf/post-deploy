@@ -16,11 +16,13 @@ pattern). A key that still works is kept; one ABS refuses is replaced and
 the old ones of its name deleted.
 
 Homes subscribes podcasts by link and tells the subscriber of a new episode
-(#676, haus#123): a user `haus`, an administrator (subscribing, checking a
+(#676, haus#123): a user `homes`, an administrator (subscribing, checking a
 feed and asking for new episodes are isAdminOrUp in ABS), and its API key
 handed back as HOMES_ABS_TOKEN, the same way; the homes template renders it.
-The key keeps its name „Haus (laib)“ from before the rename (ADR 0031): the
-hook finds the key it replaces by that name.
+The user was `haus` until ADR 0031 (#1021): it is renamed in place (ABS keeps
+its id, its podcasts' progress and its API key), and a key named „Haus (laib)“
+counts as Homes's when one is replaced (ABS cannot rename a key). Goes at
+#1021 step 9.
 
 The login: ABS keeps its OIDC settings, the client secret among them, in
 its own database, and builds its OIDC client from them once, in memory. That
@@ -105,8 +107,14 @@ for name, folder, mtype, provider in LIBRARIES:
 LISTENS = {"download": True, "update": False, "delete": False, "upload": False,
            "accessAllLibraries": True, "accessAllTags": True, "accessExplicitContent": True}
 ACCOUNTS = ((MA_USER, "user", KEY_NAME, "ABS_MA_TOKEN", "Laib re-applies Music Assistant, which adds Audiobookshelf as a source"),
-            ("haus", "admin", "Haus (laib)", "HOMES_ABS_TOKEN", "Laib re-applies Homes, which shows its podcast page"))
+            ("homes", "admin", "Homes (laib)", "HOMES_ABS_TOKEN", "Laib re-applies Homes, which shows its podcast page"))
+OLD_KEYS = {"Homes (laib)": "Haus (laib)"}   # the legacy key name (ADR 0031)
 users = req("GET", "/api/users", token=token)["users"]
+old = next((u for u in users if u.get("username") == "haus"), None)
+if old and not any(u.get("username") == "homes" for u in users):   # the legacy user (ADR 0031): renamed, same id
+    req("PATCH", f"/api/users/{old['id']}", {"username": "homes"}, token=token)
+    old["username"] = "homes"
+    print("audiobookshelf: account haus renamed homes (ADR 0031)")
 
 
 def key_works(key, name):
@@ -129,7 +137,7 @@ for name, kind, key_name, secret, then in ACCOUNTS:
     if key_works(have, name):
         continue
     for k in req("GET", "/api/api-keys", token=token)["apiKeys"]:
-        if k.get("name") == key_name:
+        if k.get("name") in (key_name, OLD_KEYS.get(key_name)):
             req("DELETE", "/api/api-keys/" + k["id"], token=token)
     new = req("POST", "/api/api-keys", {"name": key_name, "userId": u["id"], "isActive": True}, token=token)["apiKey"]["apiKey"]
     print(f"laib-secret: {secret}={new}")
@@ -155,7 +163,7 @@ except Exception as e:   # urllib's errors name the URL and the status, never th
     print(f"audiobookshelf: the box's admins not read ({e}): nobody's account type changed", file=sys.stderr)
 else:
     for u in users:
-        if u.get("username") in admins and u["username"] not in (MA_USER, "haus") and u.get("type") not in ("admin", "root"):
+        if u.get("username") in admins and u["username"] not in (MA_USER, "homes") and u.get("type") not in ("admin", "root"):
             req("PATCH", f"/api/users/{u['id']}", {"type": "admin"}, token=token)
             print(f"audiobookshelf: {u['username']} administers the box, so is an administrator here now")
 

@@ -103,7 +103,7 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. 20,718 / 22,000 lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. 20,728 / 22,000 lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
@@ -117,7 +117,7 @@ The part the house trusts: it must work when everything else is broken. 20,718 /
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,105 |
 | Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,786 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,112 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,400 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,410 |
 
 ### Services from templates
 

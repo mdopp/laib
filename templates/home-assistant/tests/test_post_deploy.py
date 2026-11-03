@@ -18,11 +18,11 @@ ADMIN_PW = "-ha-admin-pw-9q"
 BOTE_PW = "-ha-bote-pw-3x"
 ADMIN_SECRETS = ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
 # #591: each consumer on its own Home Assistant user, never a person's: (username, kind)
-MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HOMES_HA_TOKEN": ("haus", "admin"),
+MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HOMES_HA_TOKEN": ("homes", "admin"),
             "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user"),
             "STIMME_HA_TOKEN": ("stimme", "user"),   # the names Whisper hears: the entity registry, every user may list it
             "HA_NAMES_TOKEN": ("laib-namen", "admin")}   # #760: the spellings Whisper writes, as aliases: entity_registry/update is admin-only
-PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HAUS_PASSWORD": "-ha-haus-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
+PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HOMES_PASSWORD": "-ha-homes-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
              "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d", "HA_STIMME_PASSWORD": "-ha-stimme-pw-6e",
              "HA_NAMES_PASSWORD": "-ha-names-pw-7f"}
 HA = {}
@@ -470,6 +470,12 @@ class FakeHA(BaseHTTPRequestHandler):
         if t == "config/auth/create":
             nid = add_user(m["name"], admin="system-admin" in (m.get("group_ids") or []))
             return ok({"user": dict(HA["users"][nid], username=None)})
+        if t == "config/auth/delete":   # @require_admin; the user's tokens and credentials go with it
+            HA["users"].pop(m["user_id"])
+            HA["tokens"] = {k: v for k, v in HA["tokens"].items() if v != m["user_id"]}
+            HA["creds"] = {k: v for k, v in HA["creds"].items() if v[1] != m["user_id"]}
+            HA["deleted_users"] = HA.get("deleted_users", []) + [m["user_id"]]
+            return ok()
         if t == "config/auth/update":
             HA["users"][m["user_id"]]["group_ids"] = m["group_ids"]
             return ok({"user": HA["users"][m["user_id"]]})
@@ -637,11 +643,32 @@ class PostDeploy(Hook):
         self.assertEqual(len({handed[n] for n in handed}), 6, "one token per consumer, each revocable on its own")
         laib = HA["creds"]["laib"][1]
         self.assertFalse([n for t, n in HA["names"].items() if n[0] == laib], "a consumer's token on the administrator's own user (#591)")
-        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Haus", "Bote-Automat", "Bote", "Stimme", "Laib-Namen"})
+        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Homes", "Bote-Automat", "Bote", "Stimme", "Laib-Namen"})
         bote = HA["tokens"][handed["BOTE_HA_TOKEN"]]
         self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user", "the Bote's token must not be an administrator's")
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
         self.assertEqual(HA["creds"]["bote"][0], BOTE_PW)
+
+    def test_the_old_user_haus_goes_once_homes_has_its_token(self):
+        # laib#1021, ADR 0031: Homes's user was haus („Haus“); HOMES_HA_TOKEN is not carried over, it is
+        # minted for the new user homes („Homes“), and the user haus, with its token, is deleted after
+        fresh()
+        _, handed, _ = self.run_hook()
+        uid = HA["creds"]["homes"][1]
+        HA["users"][uid]["name"] = "Haus"   # the box before the rename: the same machine user under its old login
+        HA["creds"]["haus"] = HA["creds"].pop("homes")
+        old = handed.pop("HOMES_HA_TOKEN")
+        p, again, log = self.run_hook(tokens=handed)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual(list(again), ["HOMES_HA_TOKEN"])
+        self.assertOnItsOwnUser(again)
+        self.assertEqual(HA["users"][HA["creds"]["homes"][1]]["name"], "Homes")
+        self.assertNotIn("haus", HA["creds"])
+        self.assertNotIn(uid, HA["users"])
+        self.assertNotIn(old, HA["tokens"], "the old user's token still works")
+        self.assertIn("user haus deleted", log)
+        p, again, log = self.run_hook(tokens={**handed, **again})
+        self.assertEqual((p.returncode, again), (0, {}), log)
 
     def test_working_tokens_are_kept_and_nobody_logs_in(self):
         fresh()
@@ -661,7 +688,7 @@ class PostDeploy(Hook):
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual(set(again), {"HOMES_HA_TOKEN", "BOTE_HA_TOKEN"})
         self.assertOnItsOwnUser(again)
-        self.assertEqual(HA["logins"], ["haus", "bote"], "the administrator logged in although an administrator token works")
+        self.assertEqual(HA["logins"], ["homes", "bote"], "the administrator logged in although an administrator token works")
 
     def test_a_secret_lost_while_ha_still_holds_its_token_by_name_is_replaced(self):
         # HA keeps one long-lived token per name and user: Laib lost HA_TOKEN (or it was set to junk),
@@ -717,7 +744,7 @@ class PostDeploy(Hook):
             if name != "BOTE_HA_TOKEN":   # on the Bote's own user already
                 self.assertNotIn(tok, HA["tokens"], f"the old {name} still works on the owner's user")
         self.assertEqual([n for t, n in HA["names"].items() if n[0] == owner], [], "a Laib token left on the owner's user")
-        self.assertIn('the old token "laib: haus" revoked', log)
+        self.assertIn('the old token "laib: homes" revoked', log)
         self.assertEqual(HA["logins"], [], "logged in although every token works")
         p, third, log = self.run_hook(tokens=dict(stored, **again))
         self.assertEqual((p.returncode, third), (0, {}), "a third run changed something: " + log)
@@ -752,10 +779,10 @@ class PostDeploy(Hook):
             self.assertIn("„Legacy Admin“ (administrator): „legacy-bridge“", log)
             self.assertIn("„Owner“ (owner, HA_ADMIN_USER): „laib: home-assistant-check“", log, "Laib's old token names on a person's user are not named")
             self.assertEqual(log.count("„Owner“"), 2, "the second user of that name is not listed")
-            self.assertNotIn("Haus“", log, "Laib's own users listed as strangers")
+            self.assertNotIn("Homes“", log, "Laib's own users listed as strangers")
             self.assertNotIn(secret, log)
             self.assertNotIn("k-" + secret, log)
-        self.assertEqual(len(HA["users"]), users + 5, "a user deleted, or more than Laib-Prüfung, Haus, Bote-Automat, Stimme and Laib-Namen added")
+        self.assertEqual(len(HA["users"]), users + 5, "a user deleted, or more than Laib-Prüfung, Homes, Bote-Automat, Stimme and Laib-Namen added")
         self.assertIn(secret, HA["tokens"])
 
     def test_a_rotation_changes_the_admin_password_in_home_assistant_and_hands_it_back(self):
@@ -796,7 +823,7 @@ def old_box():
     administrator, the owner's own user; the Bote has its own user already"""
     fresh(onboarded=("laib", ADMIN_PW))
     owner = next(iter(HA["users"]))
-    old = {n: token_for(owner, True, label) for n, label in (("HA_TOKEN", "laib: home-assistant-check"), ("HOMES_HA_TOKEN", "laib: haus"),
+    old = {n: token_for(owner, True, label) for n, label in (("HA_TOKEN", "laib: home-assistant-check"), ("HOMES_HA_TOKEN", "laib: homes"),
                                                               ("BOTE_AUTOMAT_HA_TOKEN", "laib: bote-automat"))}
     bote = add_user("Bote", admin=False)
     HA["creds"]["bote"] = (BOTE_PW, bote)
