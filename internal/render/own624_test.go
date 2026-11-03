@@ -54,7 +54,7 @@ func mountsOf(t *testing.T, name, unit string) []string {
 // back with its own propose-only token, and the door's key is how it knows
 // a call came from laib. Its only mount is the scan service's orders
 // folder, at the same path, and only while scan is there.
-func TestHaushaltRunsInAContainerThatSeesOnlyTheScanOrders(t *testing.T) {
+func TestHomeshaltRunsInAContainerThatSeesOnlyTheScanOrders(t *testing.T) {
 	st, err := state.Load("../../testdata/golden/nuc/state")
 	if err != nil {
 		t.Fatal(err)

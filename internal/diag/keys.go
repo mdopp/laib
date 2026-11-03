@@ -10,7 +10,7 @@ import (
 // keyFindings: an owner's key that is missing while what it serves is in
 // use (#696) — a set value requires it, or it is the DNS-01 token — names
 // it with the link to its own form. Whether a family uses a feature that
-// only the app knows (Haus' Discogs) Laib cannot tell: no finding, no nag.
+// only the app knows (Homes' Discogs) Laib cannot tell: no finding, no nag.
 func keyFindings(st *state.State, sec map[string]string) []Finding {
 	var out []Finding
 	for _, k := range render.OwnerSecrets(st) {

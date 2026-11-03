@@ -45,7 +45,7 @@ type Aufgabe struct {
 	Erledigt   *Erledigt `yaml:"erledigt,omitempty" json:"erledigt,omitempty"`
 }
 
-// Weg is how a task is done (#878): a Haus page that leads through it, or
+// Weg is how a task is done (#878): a Homes page that leads through it, or
 // a conversation with the Bote; one of the two.
 type Weg struct {
 	Seite     string `yaml:"seite,omitempty" json:"seite,omitempty"`
@@ -71,7 +71,7 @@ func Fuer(s string) error {
 	return nil
 }
 
-// ParseWeg reads a weg: a Haus page's path, or gespraech.
+// ParseWeg reads a weg: a Homes page's path, or gespraech.
 func ParseWeg(s string) (*Weg, error) {
 	switch {
 	case s == "gespraech":
@@ -79,11 +79,11 @@ func ParseWeg(s string) (*Weg, error) {
 	case seiteRe.MatchString(s):
 		return &Weg{Seite: s}, nil
 	}
-	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Haus (/stimme) oder gespraech (gemeinsam mit dem Boten)", s)
+	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme) oder gespraech (gemeinsam mit dem Boten)", s)
 }
 
 // Sees: may a caller see a task? whole: its hand sees the whole list;
-// otherwise it acts for person (Haus, the Bote; "" for nobody) and sees
+// otherwise it acts for person (Homes, the Bote; "" for nobody) and sees
 // the admins' and everyone's, and of the personal ones only that person's.
 func Sees(a Aufgabe, whole bool, person string) bool {
 	uid, own := strings.CutPrefix(cmp.Or(a.Fuer, Admins), "person:")

@@ -66,8 +66,8 @@ func TestANewsOnlyTemplateUpdateIsTakenOverWithoutAProposal(t *testing.T) {
 
 // A card that carries news never also says nothing visible changes.
 func TestACardWithNewsDoesNotSayNothingVisibleChanges(t *testing.T) {
-	p := Proposal{ID: 120, Actor: "laib", Reason: "template update haus", Kind: "template-update", Class: "apply",
-		Files: []string{"services/haus/haus.container", "services/haus/news"}, News: []string{"Haus darf für dich Podcasts abonnieren"}}
+	p := Proposal{ID: 120, Actor: "laib", Reason: "template update homes", Kind: "template-update", Class: "apply",
+		Files: []string{"services/homes/homes.container", "services/homes/news"}, News: []string{"Homes darf für dich Podcasts abonnieren"}}
 	c := Card(&p, "dopp.cloud")
 	if s := strings.Join(c.Impact, " "); strings.Contains(s, "nichts Sichtbares") || !strings.Contains(s, "was oben steht") {
 		t.Errorf("impact contradicts the headline: %v", c.Impact)

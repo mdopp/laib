@@ -5,10 +5,10 @@
 # it); a name that leaves the list loses its account. The shared account
 # ($SHARE_USER) is never touched: the fallback, as ServiceBay kept its own.
 #
-# The password is the person's own. Haus writes "set <name> <base64>" (or an
+# The password is the person's own. Homes writes "set <name> <base64>" (or an
 # admin's "clear <name>") into the FIFO $DIR/passwords; it is read here and
 # handed to smbpasswd on stdin: on no argv (#214), in no log, in no file.
-# Until a person sets one they have no account. $DIR/status is what Haus
+# Until a person sets one they have no account. $DIR/status is what Homes
 # shows: "<name> <when the password was set, epoch; 0: none>" per member.
 #
 # The Werkstatt share (#666) is the admins' only: valid users = @admins. The

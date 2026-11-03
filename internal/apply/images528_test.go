@@ -55,10 +55,10 @@ func TestTheImageRunRollsBackARedServiceToItsPreviousImage(t *testing.T) {
 	}
 	st := &state.State{Services: map[string]*state.Service{
 		"frage": {Name: "frage", Values: map[string]state.Value{"IMAGE": {Literal: "ghcr.io/mdopp/laib-frage:latest"}}, Units: unit("frage", "AutoUpdate=registry")},
-		"haus":  {Name: "haus", Values: map[string]state.Value{"IMAGE": {Literal: "ghcr.io/mdopp/haus:latest"}}, Units: unit("haus", "AutoUpdate=registry")},
+		"homes": {Name: "homes", Values: map[string]state.Value{"IMAGE": {Literal: "ghcr.io/mdopp/homes:latest"}}, Units: unit("homes", "AutoUpdate=registry")},
 		"vault": {Name: "vault", Values: map[string]state.Value{"IMAGE": {Literal: "docker.io/vaultwarden/server:latest"}}, Units: unit("vault", "")},
 	}}
-	ids := map[string]string{"ghcr.io/mdopp/laib-frage:latest": "old-frage", "ghcr.io/mdopp/haus:latest": "old-haus"}
+	ids := map[string]string{"ghcr.io/mdopp/laib-frage:latest": "old-frage", "ghcr.io/mdopp/homes:latest": "old-homes"}
 	var calls []string
 	backup, frageRed := "inactive", true
 	real := sysd.Run
@@ -89,12 +89,12 @@ func TestTheImageRunRollsBackARedServiceToItsPreviousImage(t *testing.T) {
 		t.Fatalf("a rolled-back service is a red night: %d", code)
 	}
 	all := strings.Join(calls, "\n")
-	for _, want := range []string{"podman pull -q ghcr.io/mdopp/laib-frage:latest", "podman pull -q ghcr.io/mdopp/haus:latest", "systemctl --user restart frage.service", "podman tag old-frage ghcr.io/mdopp/laib-frage:latest"} {
+	for _, want := range []string{"podman pull -q ghcr.io/mdopp/laib-frage:latest", "podman pull -q ghcr.io/mdopp/homes:latest", "systemctl --user restart frage.service", "podman tag old-frage ghcr.io/mdopp/laib-frage:latest"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("missing %q in:\n%s", want, all)
 		}
 	}
-	if strings.Contains(all, "vaultwarden") || strings.Contains(all, "podman tag old-haus") {
+	if strings.Contains(all, "vaultwarden") || strings.Contains(all, "podman tag old-homes") {
 		t.Fatalf("a service with data was pulled, or a green one rolled back:\n%s", all)
 	}
 	es, _ := journal.Read(env.Paths.Journal, time.Time{})
@@ -105,13 +105,13 @@ func TestTheImageRunRollsBackARedServiceToItsPreviousImage(t *testing.T) {
 	if e := got["frage"]; e.Result != "red" || !strings.Contains(e.Detail, "zurück auf das vorige Image: grün") {
 		t.Fatalf("frage's rollback is not journaled red with its outcome: %+v", e)
 	}
-	if e := got["haus"]; e.Result != "green" || !strings.Contains(e.Detail, "neues Image, grün") {
-		t.Fatalf("haus: %+v", e)
+	if e := got["homes"]; e.Result != "green" || !strings.Contains(e.Detail, "neues Image, grün") {
+		t.Fatalf("homes: %+v", e)
 	}
 	// nothing new: no restart; a paused service and a running backup are left alone
 	calls, frageRed, ids["ghcr.io/mdopp/laib-frage:latest"] = nil, false, "new-frage"
-	WritePause(env.Paths, Pause{Service: "haus", By: "human:x", Until: time.Now().Add(time.Hour).UTC()})
-	if code := ImageRun(context.Background(), env, st); code != cli.ExitOK || strings.Contains(strings.Join(calls, "\n"), "restart") || strings.Contains(strings.Join(calls, "\n"), "haus") {
+	WritePause(env.Paths, Pause{Service: "homes", By: "human:x", Until: time.Now().Add(time.Hour).UTC()})
+	if code := ImageRun(context.Background(), env, st); code != cli.ExitOK || strings.Contains(strings.Join(calls, "\n"), "restart") || strings.Contains(strings.Join(calls, "\n"), "homes") {
 		t.Fatalf("an image that did not move restarts nothing, a paused one is not pulled: %d\n%s", code, strings.Join(calls, "\n"))
 	}
 	backup, calls = "active", nil

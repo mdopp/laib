@@ -9,7 +9,7 @@ upstream: [https://github.com/advplyr/audiobookshelf, https://www.audiobookshelf
 # chapters, has its own apps. This replaces the hand-rolled
 # sync_podcasts.py and takes spoken word out of Jellyfin (docs/SERVICES.md,
 # #646). OIDC through Authelia. post-deploy: the libraries, metadata next to
-# the files, Music Assistant's and Haus' accounts and keys, the box's
+# the files, Music Assistant's and Homes' accounts and keys, the box's
 # admins as ABS admins; abs-pflege.py on a timer:
 # the one-time Audible match, the Hörspiel series, the podcasts subscribed,
 # each keeping its last 3 episodes (#676).
@@ -30,7 +30,8 @@ secrets:
   - name: AUDIOBOOKSHELF_LDAP_PASSWORD # the read-only LLDAP account post-deploy reads the box's admins with, seeded by the auth template; unset: nobody is made ABS admin
     external: true
     optional: true
-  - name: HAUS_ABS_TOKEN             # minted here (#676, haus#123): the API key of ABS's user haus, an administrator, handed back; haus subscribes podcasts with it
+  - name: HOMES_ABS_TOKEN             # minted here (#676, haus#123): the API key of ABS's user haus, an administrator, handed back; Homes subscribes podcasts with it
+    was: HAUS_ABS_TOKEN   # ADR 0031: the value moves along (#1021); goes once the box moved
     external: true
     optional: true
 oidc:

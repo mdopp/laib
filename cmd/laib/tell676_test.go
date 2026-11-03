@@ -16,14 +16,14 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 )
 
-// #676 (haus#123): Haus tells one person something — the subscriber of a
+// #676 (haus#123): Homes tells one person something — the subscriber of a
 // podcast its new episode — with laib_tell {person, text}, served by
 // laib-haushalt behind the verb door (ADR 0026), which hands it to
-// bote-notify. Haus offers the message once laib_tell is in its
-// tools/list, so the haus hand has the verb from DefaultPolicy on (an old
+// bote-notify. Homes offers the message once laib_tell is in its
+// tools/list, so the homes hand has the verb from DefaultPolicy on (an old
 // box gets it as the owner's proposal, #575); a read hand never reaches
 // the program. The kernel journals the call as the caller, without the text.
-func TestHausTellsOnePersonThroughTheDoor(t *testing.T) {
+func TestHomesTellsOnePersonThroughTheDoor(t *testing.T) {
 	env, _ := testBox(t)
 	var sent []map[string]string
 	bote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,14 +47,14 @@ func TestHausTellsOnePersonThroughTheDoor(t *testing.T) {
 	if !policy.KnownVerbs["tell"] || !verb(t, "tell").MCP {
 		t.Fatal("tell is not a verb an agent may reach and policy.yml may name")
 	}
-	if !slices.ContainsFunc(mcp.Tools(st, "haus"), func(tool map[string]any) bool { return tool["name"] == "laib_tell" }) {
-		t.Fatal("laib_tell is not in the haus hand's tools/list: Haus never offers the message")
+	if !slices.ContainsFunc(mcp.Tools(st, "homes"), func(tool map[string]any) bool { return tool["name"] == "laib_tell" }) {
+		t.Fatal("laib_tell is not in the homes hand's tools/list: Homes never offers the message")
 	}
 	if _, code := mcp.Call(context.Background(), env, st, "resident", "laib_tell", map[string]any{"person": "mama", "text": "x"}); code != cli.ExitRefused || len(sent) != 0 {
 		t.Fatalf("a read hand told someone: exit %d, %v", code, sent)
 	}
 	since := time.Now().Add(-time.Minute)
-	out, code := mcp.Call(context.Background(), env, st, "haus", "laib_tell", map[string]any{"person": "mama", "text": "Neue Folge von Gartenfunk: Tomaten im Herbst"})
+	out, code := mcp.Call(context.Background(), env, st, "homes", "laib_tell", map[string]any{"person": "mama", "text": "Neue Folge von Gartenfunk: Tomaten im Herbst"})
 	var r struct {
 		Sent    bool   `json:"sent"`
 		Message string `json:"message"`
@@ -67,7 +67,7 @@ func TestHausTellsOnePersonThroughTheDoor(t *testing.T) {
 	}
 	es, _ := journal.Read(env.Paths.Journal, since)
 	i := slices.IndexFunc(es, func(e journal.Entry) bool { return e.Verb == "tell" })
-	if i < 0 || es[i].Actor != "haus" || !strings.Contains(es[i].Detail, "mama") || strings.Contains(es[i].Detail, "Tomaten") {
-		t.Fatalf("not journaled as haus, without the text: %+v", es)
+	if i < 0 || es[i].Actor != "homes" || !strings.Contains(es[i].Detail, "mama") || strings.Contains(es[i].Detail, "Tomaten") {
+		t.Fatalf("not journaled as homes, without the text: %+v", es)
 	}
 }

@@ -1,6 +1,6 @@
 """file-share's Samba accounts (#296): samba-members.py reads who may have
 one from LLDAP, samba-accounts.sh keeps the passdb in step and takes each
-person's password from Haus through a FIFO.
+person's password from Homes through a FIFO.
 
 LLDAP is a fake GraphQL server; pdbedit, smbpasswd, adduser, deluser and id
 are fakes over a passdb text file in smbpasswd's format, which record their

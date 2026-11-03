@@ -105,7 +105,7 @@ func (st *State) PeopleRev() string {
 
 // BoteSignal is the builtin BOTE_SIGNAL (haus#175): the number the household
 // writes to on Signal, the value a service names under channels.signal (the
-// Bote's SIGNAL_ACCOUNT). E.164 or empty: Haus shows it, so never a value
+// Bote's SIGNAL_ACCOUNT). E.164 or empty: Homes shows it, so never a value
 // that only looks like a number.
 func (st *State) BoteSignal() string {
 	for _, name := range st.ServiceNames() {

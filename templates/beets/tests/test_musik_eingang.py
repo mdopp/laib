@@ -347,7 +347,7 @@ class MusikEingang(unittest.TestCase):
         self.twice()
         m = self.meldungen()
         self.assertEqual(len(m), 2, m)
-        self.assertEqual({x["an"] for x in m}, {"mama"}, "without Haus' sidecar the household's notify person")
+        self.assertEqual({x["an"] for x in m}, {"mama"}, "without Homes' sidecar the household's notify person")
         self.assertEqual({tuple(x) for x in m}, {("an", "text", "at")}, "bote-notify's payload, and when it was written")
         self.assertEqual(sorted(x["text"] for x in m), ["🎵 1 Album (2 Titel) ist in der Musik: Erfundenes Album",
                                                          "🎵 1 Titel ist in der Musik: Erfundenes Lied"])

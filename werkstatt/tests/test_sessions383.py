@@ -59,13 +59,13 @@ class Sessions(unittest.TestCase):
 
     def test_one_window_per_checkout_with_a_claude_md(self):
         self.checkout("laib")
-        self.checkout("haus")
+        self.checkout("homes")
         self.checkout("content", claude_md=False)       # a content repo is not a development target
         self.run_()
-        self.assertEqual(self.windows(), ["haus", "laib"])
+        self.assertEqual(self.windows(), ["homes", "laib"])
         runs = self.wait_log(2)
         self.assertIn("laib --permission-mode default --continue --remote-control laib", runs)
-        self.assertIn("haus --permission-mode default --continue --remote-control haus", runs)
+        self.assertIn("homes --permission-mode default --continue --remote-control homes", runs)
 
     def test_the_permission_mode_is_the_owners_value(self):
         # #898: default asks (#383); bypass runs without asking, the owner's choice.
@@ -184,7 +184,7 @@ class Wiring(unittest.TestCase):
 
 class ClaudeTree(unittest.TestCase):
     def test_the_entrypoint_gives_dev_claude_codes_tree_back(self):
-        """2026-10-25: ~/.claude/projects was root's, so haus-android and laib-608 never saved a
+        """2026-10-25: ~/.claude/projects was root's, so homes-android and laib-608 never saved a
         conversation and came back empty after the restart (Transcript writes are failing, EACCES)"""
         src = (Path(__file__).resolve().parent.parent / "entrypoint.sh").read_text()
         self.assertIn("find /home/dev/.claude -xdev ! -user dev -exec chown dev:dev {} + ||", src)

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// #878: Haus's „Gemeinsam mit Homes“ opens the Bote with „Aufgabe #N mit
+// #878: Homes's „Gemeinsam mit Homes“ opens the Bote with „Aufgabe #N mit
 // dir erledigen“. The engine routes it to the model at the top, with every
 // tool and the task's number, whatever level the person was on, for the
 // admin and the family alike; the next message stays at the top.

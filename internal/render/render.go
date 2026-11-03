@@ -330,8 +330,8 @@ func variables(st *state.State, svc *state.Service, secrets map[string]string) m
 }
 
 // Values are a service's values.yml as a unit and a hook get them: a secret
-// resolved, and a builtin inside a literal rendered (#647: the haus
-// template's RADICALE_PUBLIC_URL: https://caldav.${DOMAIN} reached Haus as
+// resolved, and a builtin inside a literal rendered (#647: the homes
+// template's RADICALE_PUBLIC_URL: https://caldav.${DOMAIN} reached Homes as
 // https://caldav.). Only builtins: one value naming another stays as written.
 func Values(st *state.State, svc *state.Service, secrets map[string]string) map[string]string {
 	return resolveValues(svc, secrets, variables(st, svc, secrets))
@@ -573,22 +573,22 @@ func ssoPort(st *state.State) int {
 	return 9091
 }
 
-// HausURL is the family's entry, Haus's first route, or "" without a
-// service that provides haus.
-func HausURL(st *state.State) string {
+// HomesURL is the family's entry, Homes's first route, or "" without a
+// service that provides homes.
+func HomesURL(st *state.State) string {
 	for _, name := range st.ServiceNames() {
-		if c := st.Services[name].Contract; slices.Contains(c.Provides, "haus") && len(c.Routes) > 0 {
+		if c := st.Services[name].Contract; slices.Contains(c.Provides, "homes") && len(c.Routes) > 0 {
 			return "https://" + fqdn(st, c.Routes[0].Host) + "/"
 		}
 	}
 	return ""
 }
 
-// StartURL is where a login without a target lands (#381): Haus once it is
+// StartURL is where a login without a target lands (#381): Homes once it is
 // installed, else the box page (box.yml laib.host). Both appear in
 // laib-access.yml, so a change to either reruns the sso hook that reads it.
 func StartURL(st *state.State) string {
-	return cmp.Or(HausURL(st), "https://"+fqdn(st, st.Box.Laib.Host)+"/")
+	return cmp.Or(HomesURL(st), "https://"+fqdn(st, st.Box.Laib.Host)+"/")
 }
 
 // LogoutURL is Authelia's logout (#480); its rd, escaped, is where the
@@ -623,7 +623,7 @@ func denyPage(indent, title, body, status string) string {
 // route under the wildcard certificate.
 func denySnippets(st *state.State) string {
 	home := ""
-	if u := HausURL(st); u != "" {
+	if u := HomesURL(st); u != "" {
 		home = `<p><a href="` + u + `">Zur Startseite</a> <span class=muted>– die geht auch unterwegs</span></p>`
 	}
 	lan := "<h1>Diese Seite ist nur zu Hause im WLAN erreichbar</h1><p>{http.request.host} ist mit Absicht nicht aus dem Internet zu öffnen. Dein Gerät ist gerade nicht im WLAN zu Hause, zum Beispiel über mobile Daten.</p><p><b>So geht es:</b> mit dem WLAN zu Hause verbinden und die Seite neu laden.</p><p class=muted>Du bist doch im WLAN zu Hause? Dann fragt dein Gerät einen fremden Namensdienst (am Handy „Privates DNS“, im Browser „Sicheres DNS“, am iPhone „Privat-Relay“) und kommt über das Internet: die Box sieht die Adresse {http.request.remote.host}. Das abschalten, dann geht es.</p>" + home

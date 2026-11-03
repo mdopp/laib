@@ -5,7 +5,7 @@ template: {registry: builtin, name: kalender, version: 1}
 provides: [calendar-mirror]
 # Calendars from outside into Radicale, one way (#495; the owner, 2026-10-21:
 # "ich will das alles an einem Ort"). A Google calendar's secret iCal address
-# or a public ICS, entered in Haus (haus#66) and kept by laib in secrets.age
+# or a public ICS, entered in Homes (haus#66) and kept by laib in secrets.age
 # (`laib calendar subscribe`, KALENDER_ABOS). A timer, no daemon: every
 # quarter of an hour kalender.py fetches each and mirrors it into the
 # person's read-only collection <person>/google-<name> or <person>/abo-<name>,
@@ -15,7 +15,7 @@ provides: [calendar-mirror]
 after: [radicale]
 routes: []
 secrets:
-  - name: KALENDER_ABOS                # written by `laib calendar` only (Haus's "Kalender hinzufügen"): the addresses are secrets
+  - name: KALENDER_ABOS                # written by `laib calendar` only (Homes's "Kalender hinzufügen"): the addresses are secrets
     external: true
     optional: true                     # nothing connected yet: the run says so, nothing is fetched
   - name: KALENDER_RADICALE_PASSWORD   # the Radicale account `kalender`, seeded by the auth template: seeded there, used here

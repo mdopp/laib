@@ -425,7 +425,7 @@ class Pflege(unittest.TestCase):
 
     def test_every_podcast_keeps_its_last_three_episodes_unless_the_owner_set_it_otherwise(self):
         # #676 (haus#123, the owner 2026-10-25): "immer die letzten 3 Folgen", for the podcasts there are and
-        # those Haus or the app subscribe later; no sync_podcasts.py needed. ABS's defaults (keep 0 = all, 3 new
+        # those Homes or the app subscribe later; no sync_podcasts.py needed. ABS's defaults (keep 0 = all, 3 new
         # per check) become 3 and 3; a value the owner chose in ABS stays, also one he set after the care
         pod = lambda i, keep, new: {"id": i, "relPath": i, "mediaType": "podcast", "media": {
             "metadata": {"title": i, "feedUrl": f"https://feeds.example.org/{i}.xml"}, "autoDownloadEpisodes": True,
@@ -439,7 +439,7 @@ class Pflege(unittest.TestCase):
         self.assertIn("Podcasts: 3 abonniert, je die letzten 3 Folgen", st["detail"])
         self.assertIn("1 mit eigener Einstellung", st["detail"])
         ABS["podcasts"]["abs-default"]["media"]["maxEpisodesToKeep"] = 0   # the owner: this one keeps everything
-        ABS["podcasts"]["neu"] = pod("neu", 0, 3)                          # subscribed in Haus or the app since
+        ABS["podcasts"]["neu"] = pod("neu", 0, 3)                          # subscribed in Homes or the app since
         self.run_pflege()
         self.assertEqual((got("abs-default"), got("neu")), ((0, 3), (3, 3)), "the owner's choice was overwritten, or a new one missed")
         self.run_pflege()

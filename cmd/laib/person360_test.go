@@ -52,16 +52,16 @@ func personBox(t *testing.T, reply string) (*cliEnv, *[][]string) {
 	return env, &calls
 }
 
-// #360: the haus hand invites a resident through the MCP tool Haus calls
+// #360: the homes hand invites a resident through the MCP tool Homes calls
 // (laib_person_invite): typed arguments, resend a JSON boolean, the German
 // sentence and the link back, the journal line.
-func TestHausInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
+func TestHomesInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
 	env, calls := personBox(t, `{"user":"anna","name":"Anna Muster","email":"anna@box.test","mailed":false,"link":"https://auth.box.test/reset-password/step2?token=t","expires":"2026-10-19T10:00:00Z"}`)
 	st, err := cli.LoadState(env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, code := mcp.Call(context.Background(), env, st, "haus", "laib_person_invite",
+	out, code := mcp.Call(context.Background(), env, st, "homes", "laib_person_invite",
 		map[string]any{"user": "anna", "first": "Anna", "last": "Muster", "email": "anna@box.test", "group": "family", "resend": false})
 	if code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
@@ -77,15 +77,15 @@ func TestHausInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
 	if len(*calls) != 1 || !slices.Equal((*calls)[0], want) {
 		t.Fatalf("tool argv %q, want %q", *calls, want)
 	}
-	// a resend from Haus: no group, resend true; the group the user has stays (the tool's "-")
-	if out, code := mcp.Call(context.Background(), env, st, "haus", "laib_person_invite",
+	// a resend from Homes: no group, resend true; the group the user has stays (the tool's "-")
+	if out, code := mcp.Call(context.Background(), env, st, "homes", "laib_person_invite",
 		map[string]any{"user": "anna", "first": "Anna", "last": "Muster", "email": "anna@box.test", "resend": true}); code != cli.ExitOK {
 		t.Fatalf("resend: exit %d: %s", code, out)
 	}
 	if got := (*calls)[1][7:]; !slices.Equal(got, []string{"-", "1"}) {
 		t.Fatalf("resend argv tail %q", got)
 	}
-	if _, code := mcp.Call(context.Background(), env, st, "haus", "laib_person_invite", map[string]any{"user": "anna", "first": "A", "email": "a@b.c", "resend": "yes"}); code == cli.ExitOK {
+	if _, code := mcp.Call(context.Background(), env, st, "homes", "laib_person_invite", map[string]any{"user": "anna", "first": "A", "email": "a@b.c", "resend": "yes"}); code == cli.ExitOK {
 		t.Fatal("a string for resend was taken")
 	}
 	all, _ := journal.Read(env.Paths.Journal, time.Time{})
@@ -95,18 +95,18 @@ func TestHausInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
 			lines = append(lines, e.Actor+" "+e.Detail)
 		}
 	}
-	if !slices.Equal(lines, []string{"haus invite anna (mailed false)", "haus resend anna (mailed false)"}) {
+	if !slices.Equal(lines, []string{"homes invite anna (mailed false)", "homes resend anna (mailed false)"}) {
 		t.Fatalf("journal: %q", lines)
 	}
 }
 
-// Admins are a human's call: the haus hand gets a sentence, the tool never runs.
+// Admins are a human's call: the homes hand gets a sentence, the tool never runs.
 func TestOnlyAHumanInvitesAnAdmin(t *testing.T) {
 	env, calls := personBox(t, `{"user":"bob","name":"Bob","email":"bob@box.test","mailed":true,"expires":"2026-10-19T10:00:00Z"}`)
 	st, _ := cli.LoadState(env)
-	out, code := mcp.Call(context.Background(), env, st, "haus", "laib_person_invite", map[string]any{"user": "bob", "first": "Bob", "email": "bob@box.test", "group": "admins"})
+	out, code := mcp.Call(context.Background(), env, st, "homes", "laib_person_invite", map[string]any{"user": "bob", "first": "Bob", "email": "bob@box.test", "group": "admins"})
 	if code == cli.ExitOK || len(*calls) != 0 || !strings.Contains(out, "nur ein Mensch") || strings.Contains(out, "may not") {
-		t.Fatalf("haus invited an admin: exit %d %s", code, out)
+		t.Fatalf("homes invited an admin: exit %d %s", code, out)
 	}
 	var buf bytes.Buffer
 	env.Out = &buf
@@ -126,13 +126,13 @@ func TestOnlyAHumanInvitesAnAdmin(t *testing.T) {
 func TestPersonRefusalAndPending(t *testing.T) {
 	env, _ := personBox(t, `{"error":"Den Benutzer anna gibt es schon. Eine neue Mail schickt „erneut senden“."}`)
 	st, _ := cli.LoadState(env)
-	out, code := mcp.Call(context.Background(), env, st, "haus", "laib_person_invite", map[string]any{"user": "anna", "first": "Anna", "email": "anna@box.test"})
+	out, code := mcp.Call(context.Background(), env, st, "homes", "laib_person_invite", map[string]any{"user": "anna", "first": "Anna", "email": "anna@box.test"})
 	if code == cli.ExitOK || !strings.Contains(out, "gibt es schon") {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	env, calls := personBox(t, `[{"user":"ben","name":"Ben","email":"ben@box.test","invited_at":"2026-10-18T10:00:00Z"}]`)
 	st, _ = cli.LoadState(env)
-	out, code = mcp.Call(context.Background(), env, st, "haus", "laib_person_pending", map[string]any{})
+	out, code = mcp.Call(context.Background(), env, st, "homes", "laib_person_pending", map[string]any{})
 	var rows []Pending
 	if code != cli.ExitOK || json.Unmarshal([]byte(out), &rows) != nil || len(rows) != 1 || rows[0].User != "ben" || (*calls)[0][2] != "pending" {
 		t.Fatalf("pending: exit %d %s %q", code, out, *calls)

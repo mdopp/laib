@@ -16,7 +16,7 @@ rewritten or dropped. Here the directory sees each message before the model:
   (any tool, the top level) the plugin adds no context: the user turn is
   the person's words alone (#520).
 - AUFGABE (#878): with WEITER, the person starts the conversation about one
-  Box-Aufgabe (Haus's „Gemeinsam mit Homes“); the context tells the model to
+  Box-Aufgabe (Homes's „Gemeinsam mit Homes“); the context tells the model to
   read it with laib_aufgabe and lead through it, step by step;
 - TEXT (the help, #863): plain words for the person, which
   transform_llm_output passes on as they are, without a code block;
@@ -118,14 +118,14 @@ def _routing(text):
     return out
 
 
-# #878: Haus's „Gemeinsam mit Homes“ sends „Aufgabe #N mit dir erledigen“; the directory names the task,
+# #878: Homes's „Gemeinsam mit Homes“ sends „Aufgabe #N mit dir erledigen“; the directory names the task,
 # and this is how the Bote leads through it. It reads the task and checks with laib; it never ticks it off.
 _AUFGABE = ("Aufgabe: Die Person möchte Box-Aufgabe #%(n)s mit dir erledigen. Lies sie zuerst mit laib_aufgabe "
             "(action zeigen, id %(n)s, von: der Login der Person, die dir schreibt) und sag in einem Satz, worum es geht und warum. "
             "Gibt es sie nicht, sag das und hör auf. Dann führe die Person Schritt für Schritt hindurch: ein Schritt pro Nachricht, "
             "warte auf ihre Antwort. Prüf jeden Schritt mit laib (laib_diag, laib_status), statt ihn zu raten. Was die Box ändert, "
             "schlägst du vor (laib_propose); einen Wunsch (etwas Neues, Arbeit am Code) gibst du mit laib_wish an den Admin weiter. Abhaken tust du sie nicht: "
-            "das tut Laib, wenn ihr Befund weg ist, oder die Person in Haus.")
+            "das tut Laib, wenn ihr Befund weg ist, oder die Person in Homes.")
 
 
 def _block(screen):

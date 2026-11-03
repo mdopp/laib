@@ -50,7 +50,7 @@ pflegen". The folders are decent (<Autor>/<Titel>, a Hörspiel series as
    the feed (titles without "&amp;"); a new one is created from the
    feed's own metadata, with its three newest episodes.
 7. The last three episodes (#676, haus#123, the owner 2026-10-25): every
-   podcast, subscribed here, in Haus or in the app, keeps its newest three
+   podcast, subscribed here, in Homes or in the app, keeps its newest three
    (maxEpisodesToKeep) and fetches at most three new ones a check
    (maxNewEpisodesToDownload). The care sets a field that is at ABS's
    default and that it never set; a value the owner chose stays, also one

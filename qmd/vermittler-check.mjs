@@ -7,7 +7,7 @@
 // qmd's own vector search reports for that note (0 for a hit outside its
 // top list). Then the refusals and the Host check. Run it on a Vermittler
 // just started with an embedded index: the first search after /health
-// turns 200 must not wait for the embed model (Haus's budget is 2.5 s).
+// turns 200 must not wait for the embed model (Homes's budget is 2.5 s).
 import http from "node:http";
 import { createStore } from "@tobilu/qmd";
 
@@ -42,7 +42,7 @@ check(status.collections?.length > 0 && status.collections.every((c) => c.docume
 
 enableProductionMode();
 const store = await createStore({ dbPath: getDefaultDbPath(), configPath: `${getConfigDir()}/index.yml` });
-const collection = (await store.getDefaultCollectionNames())[0];
+const collections = await store.getDefaultCollectionNames(); // the notes and, since #219, the documents: the Vermittler searches them all
 const shape = "docid,file,title,score,context,line,snippet,vec";
 let compared = 0;
 const files = [];
@@ -54,8 +54,8 @@ for (const q of process.argv.slice(2)) {
   const own = (await (await post(body, qmd)).json()).results;
   const strip = (rs) => JSON.stringify((rs ?? []).map(({ vec, ...r }) => r));
   check(strip(results) === strip(own), `${q}: not what qmd's /query answers:\n  vermittler ${strip(results)}\n  qmd        ${strip(own)}`);
-  // the reference: qmd's vector search over the same collection, the same top list of 20
-  const ref = new Map((await store.searchVector(q, { limit: 20, collection }))
+  // the reference: qmd's vector search over the same collections, a top list of 20 each
+  const ref = new Map((await Promise.all(collections.map((collection) => store.searchVector(q, { limit: 20, collection })))).flat()
     .map((r) => [`qmd://${r.displayPath.split("/").map(encodeURIComponent).join("/")}`, r.score]));
   for (const r of results ?? []) {
     check(Object.keys(r).join(",") === shape, `${q}: ${r.file} has ${Object.keys(r)}, not ${shape}`);
@@ -80,7 +80,7 @@ for (const [body, why] of [
 ]) check((await post(body)).status === 400, `${why} is not refused with 400`);
 check((await post({ searches: lex, rerank: false, limit: 1 })).status === 200, "the health probe's lex search is not 200");
 // fetch sets Host itself; a DNS-rebound page's request carries its own name
-const foreign = await new Promise((resolve, reject) => http.request(`${base}/query`, { method: "POST", headers: { host: "haus.example:8181" } },
+const foreign = await new Promise((resolve, reject) => http.request(`${base}/query`, { method: "POST", headers: { host: "homes.example:8181" } },
   (r) => { r.resume(); resolve(r.statusCode); }).on("error", reject).end(JSON.stringify({ searches: lex })));
 check(foreign === 403, `a foreign Host is answered with ${foreign}, not 403`);
 

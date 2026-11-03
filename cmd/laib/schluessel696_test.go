@@ -82,8 +82,8 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	if _, home := do("GET", "/", nil); !strings.Contains(home, `href="/schluessel"`) {
 		t.Errorf("the Status page has no way to the form:\n%s", home)
 	}
-	// one key's own page, the deep link Haus' settings open (docs/INTERFACE.md)
-	back := "https://haus.example.home/discogs"
+	// one key's own page, the deep link Homes' settings open (docs/INTERFACE.md)
+	back := "https://homes.example.home/discogs"
 	_, one := do("GET", "/schluessel?"+url.Values{"name": {"WHOAMI_KEY"}, "zurueck": {back}}.Encode(), nil)
 	for _, w := range []string{"<h1>Whoami: Testschlüssel</h1>", "für Testseite", "fehlt", "Damit grüßt whoami mit Namen.", "Bei whoami.example unter Konto anlegen.", `href="https://whoami.example/konto"`, `href="` + back + `">Zurück</a>`, `name=zurueck value="` + back + `"`, "type=password", "autocomplete=off", "<small>WHOAMI_KEY</small>"} {
 		if !strings.Contains(one, w) {
@@ -93,7 +93,7 @@ func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	if strings.Contains(one, "Zweiter") {
 		t.Errorf("the key's own page shows another key:\n%s", one)
 	}
-	for _, evil := range []string{"https://evil.example/", "http://haus.example.home/", "//evil.example/", "https://example.home.evil.example/", "javascript:alert(1)"} {
+	for _, evil := range []string{"https://evil.example/", "http://homes.example.home/", "//evil.example/", "https://example.home.evil.example/", "javascript:alert(1)"} {
 		if _, p := do("GET", "/schluessel?"+url.Values{"name": {"WHOAMI_KEY"}, "zurueck": {evil}}.Encode(), nil); strings.Contains(p, "Zurück") || strings.Contains(p, "evil") || strings.Contains(p, "javascript") {
 			t.Errorf("zurueck=%s is offered:\n%s", evil, p)
 		}

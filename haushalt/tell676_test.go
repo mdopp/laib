@@ -54,7 +54,7 @@ func TestTellSendsOneMessageToOnePersonThroughTheBote(t *testing.T) {
 	t.Cleanup(bote.Close)
 	call := func(b Bote, args ...string) (map[string]any, int, string) {
 		var out, errb, jr bytes.Buffer
-		env := &Env{Call: Call{JSON: true, Actor: "haus"}, Bote: b, Out: &out, Err: &errb, Journal: &jr}
+		env := &Env{Call: Call{JSON: true, Actor: "homes"}, Bote: b, Out: &out, Err: &errb, Journal: &jr}
 		code := Run(context.Background(), env, append([]string{"tell"}, args...))
 		var reply map[string]any
 		if out.Len() > 0 {

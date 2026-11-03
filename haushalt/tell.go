@@ -24,7 +24,7 @@ const maxTell = 1000
 
 // Tell: `laib tell <person> "<text>"` (#676, haus#123), one message to one
 // person of box.yml people through bote-notify, which takes that person's
-// first reachable channel. Haus tells the subscriber of a podcast its new
+// first reachable channel. Homes tells the subscriber of a podcast its new
 // episode, later the shopping list's changes. The answer is
 // {sent, message} whatever happened, exit 0 only when it went out; the
 // journal names the person and the channel, never the text.

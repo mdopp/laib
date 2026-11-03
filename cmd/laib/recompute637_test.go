@@ -24,8 +24,8 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 			ctx := context.Background()
 			claude := &cliEnv{Paths: env.Paths, Actor: "claude"}
 			for _, verb := range []string{"wish", "diag"} {
-				if code := inbox.Propose(ctx, claude, []string{"--grant", "haus", verb, "Haus braucht " + verb}); code != cli.ExitOK {
-					t.Fatalf("--grant haus %s: exit %d", verb, code)
+				if code := inbox.Propose(ctx, claude, []string{"--grant", "homes", verb, "Homes braucht " + verb}); code != cli.ExitOK {
+					t.Fatalf("--grant homes %s: exit %d", verb, code)
 				}
 			}
 			var said strings.Builder
@@ -40,12 +40,12 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 			pol, _ := os.ReadFile(filepath.Join(env.Paths.State, "policy.yml"))
 			line := ""
 			for _, l := range strings.Split(string(pol), "\n") {
-				if strings.HasPrefix(l, "  haus:") {
+				if strings.HasPrefix(l, "  homes:") {
 					line = l
 				}
 			}
 			if !strings.Contains(line, ", wish") || !strings.Contains(line, ", diag") {
-				t.Fatalf("not both verbs on haus' line:\n%s", line)
+				t.Fatalf("not both verbs on homes' line:\n%s", line)
 			}
 			second, _ := proposal.Get(cli.InboxDir(env), order[1])
 			if second.Status != "approved" || !second.Recomputed {
@@ -62,7 +62,7 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 	ctx := context.Background()
 	for i, who := range []string{"claude", "pi", "bote"} {
 		verb := []string{"wish", "diag", "wish"}[i]
-		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "haus", verb, "Haus braucht " + verb}); code != cli.ExitOK {
+		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "homes", verb, "Homes braucht " + verb}); code != cli.ExitOK {
 			t.Fatalf("%s: exit %d", who, code)
 		}
 	}
@@ -71,13 +71,13 @@ func TestTwoGrantsOnOneHandBothApplyInEitherOrder(t *testing.T) {
 	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: new(strings.Builder)}, []string{"3"}, true); code == cli.ExitOK {
 		t.Fatal("the same grant applied twice")
 	}
-	if p, _ := proposal.Get(cli.InboxDir(env), 3); p.Status != "stale" || !strings.Contains(p.StaleReason, "haus darf wish schon") {
+	if p, _ := proposal.Get(cli.InboxDir(env), 3); p.Status != "stale" || !strings.Contains(p.StaleReason, "homes darf wish schon") {
 		t.Fatalf("%s: %q", p.Status, p.StaleReason)
 	}
 
 	// the same line twice merges cleanly and changes nothing: no approval of nothing
 	for _, who := range []string{"claude", "pi"} {
-		inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "haus", "updates", "Haus sieht Updates"})
+		inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: who}, []string{"--grant", "homes", "updates", "Homes sieht Updates"})
 	}
 	inbox.Decide(ctx, env, []string{"4"}, true)
 	if code := inbox.Decide(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", ErrOut: new(strings.Builder)}, []string{"5"}, true); code == cli.ExitOK {

@@ -25,19 +25,20 @@ routes:
     proxyHeader: X-Archiv-Proxy
 secrets:
   - name: ARCHIV_PROXY_SECRET
-  - name: ARCHIV_HAUS_SECRET     # Haus's way to /intern/… (haus#209: a phone's restore); Haus gets each instance's through its instances: (laib#1016)
+  - name: ARCHIV_HOMES_SECRET     # Homes's way to /intern/… (haus#209: a phone's restore); Homes gets each instance's through its instances: (laib#1016)
+    was: ARCHIV_HAUS_SECRET   # ADR 0031: the value moves along (#1021); goes once the box moved
   - name: ARCHIV_RADICALE_PASSWORD   # the archive's own Radicale login, archiv-<person> (laib#1009): the auth template seeds it, templates/radicale lets it read the person's contacts and calendars and write nothing
     account: archiv-${PERSON}
 data:
   - path: ${DATA_DIR}/${SERVICE}               # the vault's cipher folder, the Briefkasten, the keys (outside the vault, ADR 0029 amendment), the status
-  - path: ${DATA_DIR}/archiv-eingang/${PERSON}  # Haus writes the phone's backups here (haus#207); letzte/ holds the newest per source for a new phone:
+  - path: ${DATA_DIR}/archiv-eingang/${PERSON}  # Homes writes the phone's backups here (haus#207); letzte/ holds the newest per source for a new phone:
     backup: false                              # itself a backup of the phone, and a 2.7 GB Signal file changing nightly would grow restic by that much
 health:
   http: http://127.0.0.1:18540/healthz
 status:
   file: ${DATA_DIR}/${SERVICE}/laib-status.json
 ports:
-  - {port: 18540, lan: false}   # on every address, so Haus's pod reaches /intern/ through host.containers.internal (laib#1016); the nftables drop keeps the LAN out
+  - {port: 18540, lan: false}   # on every address, so Homes's pod reaches /intern/ through host.containers.internal (laib#1016); the nftables drop keeps the LAN out
 upstream:
   - https://github.com/mdopp/archiv
   - https://www.msgvault.io/docs/

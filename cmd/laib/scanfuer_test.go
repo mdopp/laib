@@ -14,7 +14,7 @@ import (
 )
 
 // Owner 2026-10-28 (mdopp/haus#191): a scanned stack belongs to the
-// household or to one person. Haus sends fuer: "person" with person on
+// household or to one person. Homes sends fuer: "person" with person on
 // start; the household's sends no field. laib writes fuer into the order as
 // given, for dokumente to read, and refuses any other value, fuer on another
 // action, and "person" without a person.
@@ -33,7 +33,7 @@ func TestAScanOrderSaysWhomTheStackIsFor(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return mcp.Call(context.Background(), env, st, "haus", "laib_scan", args)
+		return mcp.Call(context.Background(), env, st, "homes", "laib_scan", args)
 	}
 	dir := filepath.Join(dataDir, "scan", "auftrag")
 	order := func(args map[string]any) map[string]string {

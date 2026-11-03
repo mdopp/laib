@@ -9,7 +9,7 @@ upstream: [https://github.com/syncthing/syncthing, https://docs.syncthing.net/, 
 # audiobooks, podcasts, photos, documents and notes live (ADR 0017). Host
 # network for Samba discovery and Syncthing's local announcements.
 # Samba has one account per family member (#296): who is family comes from
-# LLDAP (the auth pod), each password from the person in Haus.
+# LLDAP (the auth pod), each password from the person in Homes.
 # The Werkstatt's workspace is Samba's share werkstatt, for the admins only
 # (#666): not in File Browser, which writes as core, nor in Syncthing.
 # Syncthing keeps what another device deleted or overwrote for 30 days
@@ -37,7 +37,7 @@ data:
   - path: ${DATA_DIR}/file-share/syncthing-config
   - path: ${DATA_DIR}/file-share/filebrowser
   - path: ${DATA_DIR}/file-share/samba-private   # Samba's TDBs and the passdb with each account's hash (the lint found it unmounted, #36)
-  - path: ${DATA_DIR}/file-share/samba-accounts  # the member list, who has a password, the FIFO Haus hands passwords through (#296)
+  - path: ${DATA_DIR}/file-share/samba-accounts  # the member list, who has a password, the FIFO Homes hands passwords through (#296)
     backup: false                                 # made again from LLDAP and the passdb
   - path: ${DATA_DIR}/file-share/data   # the share itself (the units mount it); backed up folder by folder below
     backup: false

@@ -44,7 +44,7 @@ never becomes a ticket in `box.yml intake.repo`: laib-haushalt, which serves
 the verb behind the door, adds a Box-Aufgabe for the admins („Wunsch aus dem
 Boten: …“, `von: bote:<login>`) with the person's words in its `warum`. The
 owner decides what goes on to the Werkstatt. Wishes from other hands (ops,
-claude, Haus) are unchanged.
+claude, Homes) are unchanged.
 
 `bote-signal` runs only with Signal. `laib plan` refuses, before anything
 restarts: a person in box.yml `people` with a target on a channel the Bote
@@ -160,7 +160,7 @@ Without a number at all, Discord or Matrix work.
    `.env` / `hermes pairing` advice: pre-start writes
    `locales/{en,de}.yaml`, Hermes' overlay for `gateway.unauthorized.owner_notice`.
    The number gets into `people` as a proposal the owner approves (#596):
-   Haus's „Person einladen“ with the number, or `laib person signal <user>
+   Homes's „Person einladen“ with the number, or `laib person signal <user>
    +49…`. The notice asks who it was („Wer ist das?“), names the people in
    `people` without a `signal:` id, and gives the sentence to answer with
    („Anna (+49…) ist oma“); the Bote, reading that answer, proposes the
@@ -220,24 +220,24 @@ Without a number at all, Discord or Matrix work.
    code. The Bote itself has no tool to message anyone: only an automation a
    person confirmed does (Hermes' `send_message` is not a model tool).
 
-## Haus's Sprechen field: Hermes' API server (#215)
+## Homes's Sprechen field: Hermes' API server (#215)
 
-Haus's pages have a Sprechen field (haus#12): a sentence typed there goes
+Homes's pages have a Sprechen field (haus#12): a sentence typed there goes
 to the Bote as the logged-in person, and the reply comes back on the page.
-Haus calls Hermes' OpenAI-compatible API server, `POST /v1/chat/completions`
+Homes calls Hermes' OpenAI-compatible API server, `POST /v1/chat/completions`
 on 8642. `pre-start` turns it on with `API_SERVER_KEY` (the secret
 `BOTE_API_KEY`, generated on add; Hermes starts no API server without a key
 of at least 16 characters) and `API_SERVER_HOST=0.0.0.0`. The pod publishes
-8642 beyond loopback, so the haus pod reaches it at
+8642 beyond loopback, so the homes pod reaches it at
 `host.containers.internal:8642` (ADR 0007, 0012 §4). `lan: false` keeps the
 LAN out, and without the key nothing answers. bote-notify's copy of the
-`.env` does not carry the key. Haus gets the same secret as `HAUS_BOTE_KEY`
-(templates/haus).
+`.env` does not carry the key. Homes gets the same secret as `HOMES_BOTE_KEY`
+(templates/homes).
 
 Who is speaking: Hermes' API server has no per-person field and ignores
-OpenAI's `user`. So Haus names the person (Authelia's `Remote-Name` and
+OpenAI's `user`. So Homes names the person (Authelia's `Remote-Name` and
 `Remote-User`) in a system line, which Hermes adds on top of the SOUL for
-that turn. It also sends `X-Hermes-Session-Key: haus:<login>`, Hermes'
+that turn. It also sends `X-Hermes-Session-Key: homes:<login>`, Hermes'
 per-person memory scope (`gateway/platforms/api_server*.py`, 2026-10-15).
 The API server's tools are `platform_toolsets.api_server` (the same safe
 list as every platform) plus the MCP servers. Hermes logs a warning at
@@ -247,7 +247,7 @@ the port is off the LAN and needs the key.
 ## A Box-Aufgabe with the Bote (#878)
 
 A Box-Aufgabe whose `weg` is `gespraech` (docs/INTERFACE.md, "Box-Aufgaben
-for Haus") is done together with the Bote: Haus's „Gemeinsam mit Homes“
+for Homes") is done together with the Bote: Homes's „Gemeinsam mit Homes“
 sends „Aufgabe #N mit dir erledigen“ over the Sprechen field's API server.
 The directory takes the person to the top level (whatever tool's level
 they were on), with every tool, and adds `AUFGABE: N`; the plugin skips
@@ -257,7 +257,7 @@ sentence what it is about, and lead step by step, checking each step with
 laib's read tools, proposing what changes the box and handing a wish
 (something new, code work) to the admin (`laib_wish`, see below). The Bote's hand sees only that person's own
 tasks besides the admins' and everyone's, and it never ticks one off: Laib
-does when the finding is gone, or the person in Haus.
+does when the finding is gone, or the person in Homes.
 
 ## Tools: only what answers, and a budget (#54)
 
@@ -272,7 +272,7 @@ file yours and stop the hook from rewriting it.
 |---|---|---|
 | `laib` | always, `trust:` is `LAIB_TOOLS_TRUST` (#524) | 16 (hand `bote`: read, propose, note, escalate) |
 | `frage` | `FRAGE_URL` answers (`templates/frage` serves `/mcp`) | 1 |
-| `haushalt` | Haus is installed (it generates `HAUS_HAUSHALT_TOKEN`) **and** answers with that token at `HAUSHALT_MCP_URL` (default: Haus on the host's port 8650, haus#11, #170) | calendar, reminders, notes |
+| `haushalt` | Homes is installed (it generates `HOMES_HAUSHALT_TOKEN`) **and** answers with that token at `HAUSHALT_MCP_URL` (default: Homes on the host's port 8650, haus#11, #170) | calendar, reminders, notes |
 | `ha` | `BOTE_HA_TOKEN` minted (Home Assistant installed, #349) | Home Assistant's Assist tools (depends on the exposed domains) |
 | `automat` | `BOTE_AUTOMAT_HA_TOKEN` minted (the same) | 6 |
 
@@ -314,7 +314,7 @@ folders tags. The sender is the person from box.yml `people` whose channel
 it came on, else their chat name; the title is what they wrote besides the
 word, else sender and time. The person reads "Liegt in Paperless, Titel
 „Stromrechnung“"; the model never sees the message. Only photos (JPG, PNG,
-GIF, WebP) and PDFs, up to 25 MB, as Haus' upload.
+GIF, WebP) and PDFs, up to 25 MB, as Homes' upload.
 
 post-deploy turns the plugin on only while Paperless answers on
 `PAPERLESS_URL`; otherwise the Bote would say "liegt in Paperless" about a
@@ -346,7 +346,7 @@ Reads (`GetLiveContext`, `HassGetState`), errors and calls that changed
 nothing note nothing. The person is the box.yml `people` name whose
 `signal:` or `telegram:` id is the sender. pre-start writes that map,
 turned round, as `personen.json` (mode 600) next to Hermes. An unknown
-sender, a cron job or the API server (Haus's Sprechen field) is `-`.
+sender, a cron job or the API server (Homes's Sprechen field) is `-`.
 HA's MCP answer carries no context id, so the plugin reads
 `/api/states/<entity>` with `HA_TOKEN` and takes the `context.id` of
 a state updated in the last 30 s. If the state did not change (the
@@ -389,7 +389,7 @@ one place a text is kept (owner decision 2026-10-16): without the sender —
 the `[Name]` Hermes puts before a message in a shared chat, a timestamp
 prefix and a backfill's channel context are cut off — and with no number,
 session or platform; at most 280 characters, kept 30 days, admins read it
-on the Box page's "Was wird genutzt" (Haus). A name *inside* the sentence
+on the Box page's "Was wird genutzt" (Homes). A name *inside* the sentence
 stays what it is.
 
 The hooks only touch memory; a daemon thread flushes every five minutes.
@@ -438,7 +438,7 @@ the name alone get plain words: who speaks and five sentences to send as
 they are, from the tools that are wired (#863). "Menü" shows the directory:
 the Bote's real tools by number. The box's level (BOX-STATUS UND
 VORSCHLÄGE) and the box's example in the help are the admin's number's only
-(`ADMIN_NUMBER`); every other sender, Haus's Sprechen field too, sees
+(`ADMIN_NUMBER`); every other sender, Homes's Sprechen field too, sees
 neither. That is what the directory offers; the model still answers a
 family member who asks about the box with the hand `bote`'s read verbs. A
 number enters that context; the prompt shows where you are
@@ -494,7 +494,7 @@ Bote, and the plugin gives it the person's words without Hermes'
 
 ## Switch commands (#520)
 
-Over Haus's Sprechen field "Bambi aus" came back as "Bambi aus." or, once,
+Over Homes's Sprechen field "Bambi aus" came back as "Bambi aus." or, once,
 as Hermes' steer frame around the words (`[OUT-OF-BAND USER MESSAGE — …]
 Bambi aus [/OUT-OF-BAND USER MESSAGE]`), and nothing switched; over Signal
 the same Bote switched. From the source of the pinned v0.22.2: Hermes
@@ -523,7 +523,7 @@ That was not enough (box check, 2026-10-22: 0 of 6 switched; fresh, "Bambi
 an" still came back without a tool). Home Assistant's own intents switch
 the same sentences in about a second without a model. So **Home Assistant
 first** (ADR 0015), in `laib-directory`'s `pre_llm_call`, the one place every
-message passes, from Signal and from Haus's Sprechen field alike: unless
+message passes, from Signal and from Homes's Sprechen field alike: unless
 the engine shows a screen (or routes to another tool), the message goes to
 `POST /api/conversation/process` (`agent_id: conversation.home_assistant`,
 German, `HA_URL` with the user bote's `HA_TOKEN`). `action_done` (it
@@ -538,7 +538,7 @@ executed is noted by `laib-journal`'s own `note`, `service=conversation.process`
 before HA's sentence (Hermes appends a rewrite, as for a screen).
 
 **The test set** belongs to every Bote or llama update, over the API (what
-Haus uses) and over Signal. `scripts/bote-schalttest.py` (stdlib, in the
+Homes uses) and over Signal. `scripts/bote-schalttest.py` (stdlib, in the
 laib repo) sends each sentence in its own session to Hermes' API server,
 streamed, and checks that the device is where the sentence puts it (HA's
 `/api/states` with `HA_TOKEN` from the same `.env`, `--ha-url`
@@ -625,7 +625,7 @@ argv):
 
 Every night at 05:30 `bote-proben.service` runs `bote-check.py` with
 `PROBEN=1`: ten fixed sentences go to Hermes' API server, each in its own
-session (`bote-probe-…`), as Haus's Sprechen field sends them. A probe fails
+session (`bote-probe-…`), as Homes's Sprechen field sends them. A probe fails
 when there is no answer or an error text, when the reply takes longer than
 `PROBE_LIMIT` (30 s), when a fact question does not call `frage` or name the
 fact, or when the question nobody can know („Wie heißt der Hund meines
