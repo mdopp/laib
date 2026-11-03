@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/mdopp/laib/compare/v1.2.1...v1.3.0) (2026-11-03)
+
+
+### Features
+
+* **state:** a service reaches every person's instance; Haus gets each archive ([#1019](https://github.com/mdopp/laib/issues/1019)) ([68043d3](https://github.com/mdopp/laib/commit/68043d368ec725b09d0f6679253656d3218cab2a)), closes [#1016](https://github.com/mdopp/laib/issues/1016)
+
 ## [1.2.1](https://github.com/mdopp/laib/compare/v1.2.0...v1.2.1) (2026-11-02)
 
 
