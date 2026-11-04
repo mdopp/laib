@@ -43,6 +43,11 @@ func (m MCP) Aufgabe(ctx context.Context, ceiling string, args ...string) (int, 
 	return p.Aufgabe.ID, err
 }
 
+// Read runs `laib <tool> <args>`, a read, and decodes its answer into out (#1038).
+func (m MCP) Read(ctx context.Context, ceiling, tool string, out any, args ...string) error {
+	return m.call(ctx, tool, ceiling, args, out)
+}
+
 // call runs one of laib's tools with args quoted one by one (a SANE device
 // name has blanks, never a quote) and decodes its answer into out.
 func (m MCP) call(ctx context.Context, tool, ceiling string, args []string, out any) error {

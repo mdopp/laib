@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -168,7 +169,8 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) > 0 && (args[0] == "list" || args[0] == "status") { // a wish's status (#978), the kernel's own
 		return inbox.WishCmd(ctx, env, args)
 	}
-	if proposal.Hand(env.Actor) != "ops" || text == "" {
+	// Homes' wish for a module and the read of its state are laib-haushalt's for every hand (#1038)
+	if proposal.Hand(env.Actor) != "ops" || text == "" || args[0] == "stand" || slices.Contains(args, "--modul") {
 		return door(ctx, env, "haushalt", "propose", append([]string{"wish"}, args...))
 	}
 	st, err := cli.LoadState(env)

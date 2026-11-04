@@ -40,6 +40,16 @@ laib stop <service> [--until 2h] ["<grund>"]   stop its units and pause the serv
 laib backups                         read: the last nightly backup (green/red, when, why), the last green one, the off-box copy, the restore test, with diag's backup findings and their fix (#441)
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish [--von <login>] "<was das Haus braucht>"  the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the bote hand a Box-Aufgabe for the admins, „Wunsch aus dem Boten: …“ with von bote:<login>, never a ticket (#883); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
+laib wish --modul <name> [--von <login>] "<Titel>"   Homes' wish for one of its modules (#1038, homes ADR 0001 §10): from the homes hand
+                                     only, a Box-Aufgabe for the admins „Wunsch aus Homes: <Titel>“, von homes:<login>, weg /module/<name>;
+                                     its warum says that ticking it off means „wird nicht eingerichtet“ and that Homes ticks it off once the
+                                     module is on. While one for the module is open, files nothing and answers that one (neu: false)
+laib wish stand <modul>=<backend> …  where each module's latest wish stands, as JSON (#1038): laib-haushalt joins the Box-Aufgaben with the
+                                     Inbox it reads back as the haushalt hand. A proposal is for the module when it adds the backend as a
+                                     service or takes the module out of services/homes/values.yml MODULE_AUS; only those filed since the
+                                     wish's day count. angefordert (open, no answer; „später“ and a rolled-back run are none), wartet (one
+                                     open), abgelehnt (the latest rejected, or the task ticked off by anyone but homes), eingerichtet (the
+                                     latest approved), umgesetzt (ticked off by homes itself). A module without a wish is left out
 laib wish list [--alle] | status [<id> offen|erledigt|verworfen "<grund>"]   an approved wish's status (#978), kept in its file
                                      wishes/<id>.md under a `---` trailer (status, grund, am, von): offen until a hand closes it
                                      erledigt or verworfen with the reason; list: the open ones (--alle every one) with the
@@ -173,7 +183,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_context` | `since?`, `full?` (a boolean: the whole bundle, #579) |
 | `laib_inbox` | `id?` (one proposal in full, with its card), `all?` (a boolean), `limit?` (decided ones, 20; `0` all) (#579) |
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544) |
-| `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`), `von?` (the Bote: the login of who asked, #883); `args` `list [--alle]` → `[{id, title, text, since, operator, skill?, services, status, grund?, am?, von?}]`, `args` `status` with `stdin` lines `<id> <offen|erledigt|verworfen> <grund>` (#978) |
+| `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`), `von?` (the Bote and Homes: the login of who asked, #883); `modul?` (Homes only: `--modul`, `text` is the module's title) → `{modul, aufgabe, seit, von, neu, message}`; `stand` (one string of `modul=backend` pairs separated by blanks, `werkstatt=` for none; `text` not needed) → `[{modul, backend, stand, aufgabe, seit, von, vorschlag?, grund?}]` (#1038); `args` `list [--alle]` → `[{id, title, text, since, operator, skill?, services, status, grund?, am?, von?}]`, `args` `status` with `stdin` lines `<id> <offen|erledigt|verworfen> <grund>` (#978) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |

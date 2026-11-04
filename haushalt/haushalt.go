@@ -50,10 +50,13 @@ type ScanService struct {
 }
 
 // Laib is the way back as the haushalt hand, under a ceiling: a proposal,
-// or a Box-Aufgabe for the admins (the Bote's wish, #883).
+// a Box-Aufgabe for the admins (the Bote's wish, #883; Homes' wish for a
+// module, #1038), or a read of one of laib's tools into out (the
+// Box-Aufgaben and the Inbox, for laib wish stand, #1038).
 type Laib interface {
 	Propose(ctx context.Context, ceiling string, args ...string) (id int, class string, err error)
 	Aufgabe(ctx context.Context, ceiling string, args ...string) (id int, err error)
+	Read(ctx context.Context, ceiling, tool string, out any, args ...string) error
 }
 
 // Env is one call's world.
