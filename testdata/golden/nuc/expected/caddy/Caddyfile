@@ -61,6 +61,17 @@ laib.nuc.home {
 	import lanonly
 }
 
+http://192.168.1.10 {
+	@lan remote_ip private_ranges
+	handle @lan {
+		root * /srv/status
+		try_files /index.html /fallback.html
+		header Cache-Control no-store
+		file_server
+	}
+	import lanonly
+}
+
 dns.nuc.home {
 	request_header -Remote-*
 	import down

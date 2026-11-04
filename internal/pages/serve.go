@@ -104,6 +104,7 @@ func Serve(ctx context.Context, env *cli.Env, args []string) int {
 			cli.Record(env, st, journal.Entry{Actor: "laib", Verb: "ready", Result: "green", Detail: fmt.Sprintf("%d Dienste grün", r.Green)})
 		}
 	}
+	go lanLoop(ctx, env) // the status page at the bare LAN address (#1043)
 	journal.Append(env.Paths.Journal, journal.Entry{Actor: "laib", Verb: "serve", Result: "info", Detail: "listening on " + addr})
 	fmt.Fprintln(env.Errw(), "laib serve: listening on", addr)
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {

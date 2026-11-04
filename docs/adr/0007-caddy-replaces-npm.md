@@ -116,3 +116,28 @@ The image pins Caddy (2.10.2) and the desec module. Alternatives not taken:
 moving the zone to an API provider (INWX, deSEC) — more to move for the
 same result; an NS delegation of a subzone (the 2026-10-11 amendment) —
 it changes the names.
+
+## Amendment 2026-11-04 (#1043): the bare LAN address shows a status page, on port 80 only
+
+The owner looks at `http://<lanIp>/` first when the box has trouble; it
+answered nothing, since every site was a name. Now the Caddyfile has one
+`http://<box.yml lanIp>` site: `remote_ip private_ranges` (as every LAN-only
+name), otherwise the lanonly denial. It serves a file, never laib: laib
+serve writes `render/status/index.html` every minute from the status the
+other surfaces share, Render leaves `fallback.html` for before the first,
+and the caddy template mounts the folder read-only at `/srv/status`. So the
+page answers while AdGuard, Authelia or laib itself are down; no login, no
+request beyond the page, no button, no secret, no log, no person. The
+reader's browser compares the page's Stand with its own clock: live while
+under 150 seconds old, else a banner names the old Stand and the services
+are marked last known. ADR 0012 is untouched: no laib page or listener is
+open; the page is a file.
+
+Port 443 on the address has nothing, on purpose: no certificate a browser
+trusts can name a private address, and a `tls internal` page that only says
+„use http://“ would teach the family to click through a certificate
+warning. Browsers open a typed address over http, or fall back to it.
+
+Before (ServiceBay): its own dashboard on the LAN at `<lanIp>:5888`,
+behind its login, down with the app. Now: no port to remember, no login,
+and up while laib is down.

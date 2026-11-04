@@ -59,6 +59,26 @@ jobs:
             echo "quadlet -dryrun $d"
             docker run --rm -e QUADLET_UNIT_DIRS=/q -v "$PWD/$d:/q:ro" quay.io/podman/stable:v5 /usr/libexec/podman/quadlet -dryrun -user >/dev/null
           done
+      - name: the bare LAN address's status page in the real Caddy, for the LAN only (#1043)
+        run: |
+          # the nuc case (tls internal: no ACME from CI); the page Render leaves before laib serve's first
+          d=testdata/golden/nuc/expected
+          docker run -d --name lan --network host -v "$PWD/$d/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/$d/status:/srv/status:ro" ghcr.io/mdopp/laib-caddy:2 >/dev/null
+          for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:2019/config/ && break; sleep 1; done
+          # a LAN client: loopback is one of Caddy's private_ranges
+          code=$(curl -s -o lan.html -w '%{http_code}' -H 'Host: 192.168.1.10' http://127.0.0.1/ || true)
+          echo "LAN client: HTTP $code"
+          [ "$code" = 200 ] && grep -q '<title>Box-Status</title>' lan.html || { cat lan.html; docker logs lan; exit 1; }
+          # a public client: TEST-NET-3 on a veth pair, the client in its own namespace, the same Host
+          sudo ip netns add pub
+          sudo ip link add lanpub type veth peer name lanpubns
+          sudo ip link set lanpubns netns pub
+          sudo ip addr add 203.0.113.1/24 dev lanpub && sudo ip link set lanpub up
+          sudo ip netns exec pub ip addr add 203.0.113.2/24 dev lanpubns && sudo ip netns exec pub ip link set lanpubns up
+          code=$(sudo ip netns exec pub curl -s -m 10 -o pub.html -w '%{http_code}' -H 'Host: 192.168.1.10' http://203.0.113.1/ || true)
+          echo "public client 203.0.113.2: HTTP $code"
+          [ "$code" = 403 ] && grep -q 'nur zu Hause' pub.html && ! grep -q 'Box-Status' pub.html || { cat pub.html; docker logs lan; exit 1; }
+          docker rm -f lan >/dev/null
       - run: python3 -m unittest scripts/test_import_google.py scripts/test_vm_install_reuse.py scripts/test_laib_import.py scripts/test_bote_schalttest.py scripts/test_drift_news.py scripts/test_drift_docs.py scripts/test_ratchet.py werkstatt/tests/test_autoloop.py werkstatt/tests/test_stdin617.py werkstatt/tests/test_werkstatt44.py werkstatt/tests/test_home241.py werkstatt/tests/test_pi261.py werkstatt/tests/test_sessions383.py werkstatt/tests/test_boxcheck867.py werkstatt/tests/test_piweb384.py werkstatt/tests/test_session380.py templates/*/tests/test_*.py werkstatt/tests/test_apps262.py werkstatt/tests/test_skills394.py werkstatt/tests/test_move498.py werkstatt/tests/test_rejections544.py templates/bote/tests/test_notify.py templates/bote/tests/test_post_deploy.py templates/auth/tests/test_post_deploy.py templates/mosquitto/tests/test_hooks.py skills/test_laibskill.py skills/*/test_run.py && python3 -m py_compile werkstatt/laibctl.py werkstatt/boxcheck.py templates/bote/notify.py $(grep -l '^#!/usr/bin/env python3' templates/*/pre-start templates/*/post-deploy)
       - name: the Bote's plugins (usage, directory, ablage, journal) under Hermes' own loader, turn finalizer and gateway hooks (#266, #471, #521, #586, #587, #591)
         run: |
