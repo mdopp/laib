@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/mdopp/laib/compare/v2.1.0...v2.2.0) (2026-11-04)
+
+
+### Features
+
+* **render:** the box's bare LAN address shows a status page ([#1044](https://github.com/mdopp/laib/issues/1044)) ([b80c166](https://github.com/mdopp/laib/commit/b80c16602f2def3446edaefacaa7632c11309421)), closes [#1043](https://github.com/mdopp/laib/issues/1043)
+
 ## [2.1.0](https://github.com/mdopp/laib/compare/v2.0.0...v2.1.0) (2026-11-04)
 
 
