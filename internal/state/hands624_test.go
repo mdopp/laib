@@ -14,7 +14,7 @@ import (
 // policy.yml from before has neither: Load supplies them, as notify's.
 func TestTheHaushaltAndLeaseHandsAreBuiltInAndSupplied(t *testing.T) {
 	want := map[string]Hand{
-		"haushalt": {Ceiling: "propose", Verbs: []string{"propose", "aufgabe", "inbox"}, Paths: []string{"zuhause", "people.*.signal"}}, // #677, #883: the Bote's wish as a Box-Aufgabe; #1038: the Inbox read back for wish stand
+		"haushalt": {Ceiling: "propose", Verbs: []string{"propose", "aufgabe", "inbox"}, Paths: []string{"zuhause", "people.*.signal", "services/homes/values.yml:MODULE_AUS"}}, // #677, #883: the Bote's wish as a Box-Aufgabe; #1038: the Inbox read back for wish stand; #1036: Homes' switch
 		"lease":    {Ceiling: "apply", Verbs: []string{"status", "pause", "resume", "note"}},
 	}
 	for name := range want {

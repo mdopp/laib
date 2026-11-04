@@ -1,6 +1,7 @@
 package haushalt
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -246,4 +247,47 @@ func (e *Env) aufgaben(ctx context.Context) ([]aufgabe, error) {
 		return nil, fmt.Errorf("die Box-Aufgaben: %w", err)
 	}
 	return out.Aufgaben, nil
+}
+
+// moduleAus is where the owner's switch for Homes' modules lives (homes
+// ADR 0001 §5, #1036): the haushalt hand's one path grant in a values.yml.
+const moduleAus = "services/homes/values.yml:MODULE_AUS"
+
+// cmdModule: `laib module aus [<modul>,…]` (#1036): the Homes modules to
+// leave off although their backend runs, as a proposal for
+// services/homes/values.yml MODULE_AUS; empty switches every module on whose
+// backend runs. Filed as the haushalt hand under the verb's ceiling, so the
+// dial never approves it: it waits in the Inbox. A name Homes does not know
+// is its to ignore (Homes and Laib release apart); a malformed one is refused.
+func cmdModule(ctx context.Context, env *Env, args []string) int {
+	usage := errors.New(`usage: laib module aus [<modul>,…] [--grund "<Satz>"] (z. B. podcasts,energie; leer: alle, deren Dienst läuft)`)
+	if len(args) == 0 || args[0] != "aus" {
+		return env.fail(usage)
+	}
+	var names, rest []string
+	grund := ""
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--grund" && i+1 < len(args) {
+			grund, i = strings.Join(strings.Fields(args[i+1]), " "), i+1
+			continue
+		}
+		rest = append(rest, args[i])
+	}
+	for _, n := range strings.Split(strings.Join(rest, ","), ",") {
+		if n = strings.TrimSpace(n); n != "" && !slices.Contains(names, n) {
+			names = append(names, n)
+		}
+		if n != "" && !modulName.MatchString(n) {
+			return env.fail(fmt.Errorf("%q ist kein Modulname: klein, a-z 0-9 -, mit Komma getrennt", n))
+		}
+	}
+	if len([]rune(grund)) > 200 {
+		return env.fail(usage)
+	}
+	// the caller's sentence for the family (Homes names the modules by their titles), else laib's own
+	list, reason := strings.Join(names, ","), cmp.Or(grund, "Alle Bereiche von Homes einschalten, deren Dienst auf der Box läuft")
+	if list != "" && grund == "" {
+		reason = "In Homes ausschalten: " + strings.Join(names, ", ")
+	}
+	return env.propose(ctx, "homes", reason, "Vorschlag #%d: nach der Freigabe in der Inbox startet Homes mit der neuen Auswahl.", "--path", moduleAus+"='"+list+"'")
 }

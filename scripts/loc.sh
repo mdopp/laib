@@ -96,7 +96,9 @@ budget notify 660 notify        # laib-notify: the watchdog ping and the owner's
 # haushalt 1,250: the owner, mdopp, 2026-11-04, approved the raises the Homes modules plan needs
 # (homes ADR 0001 §10): Homes' wish for a module and laib wish stand, which joins the Box-Aufgaben
 # with the Inbox (#1038), behind the door, not in the kernel; 900 lines before, 1,164 with it
-budget haushalt 1250 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038)
+# haushalt 1,320: the same approval: laib module aus, Homes' switch (#1036), a proposal the door files
+# so the dial never approves it; 1,197 lines with it, 95 % of 1,250
+budget haushalt 1320 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
