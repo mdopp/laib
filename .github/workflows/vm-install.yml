@@ -446,6 +446,17 @@ jobs:
                 for i in $(seq 1 30); do code=$(curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /dev/null -w "%{http_code}" https://laib.vm.test/ || true); [ "$code" = 200 ] && break; sleep 2; done
                 echo "https://laib.vm.test -> HTTP $code, certificate verified against the local Caddy root"
                 [ "$code" = 200 ]
+                # #1043: the bare LAN address shows the status laib serve writes, and Caddy serves it on while laib is stopped
+                for i in $(seq 1 60); do [ -s /mnt/data/laib/render/status/index.html ] && break; sleep 2; done
+                code=$(curl -s -o /tmp/lan.html -w "%{http_code}" http://10.0.2.15/ || true)
+                echo "http://10.0.2.15/ -> HTTP $code"
+                [ "$code" = 200 ] && grep -q "data-stand=" /tmp/lan.html || { echo "the bare LAN address does not show the status laib wrote"; ls -la /mnt/data/laib/render/status || true; head -c 400 /tmp/lan.html; exit 1; }
+                systemctl --user stop laib.service
+                code=$(curl -s -o /tmp/lan2.html -w "%{http_code}" http://10.0.2.15/ || true)
+                systemctl --user start laib.service
+                echo "laib stopped: http://10.0.2.15/ -> HTTP $code"
+                [ "$code" = 200 ] && grep -q "data-stand=" /tmp/lan2.html || { echo "with laib stopped, Caddy does not serve the page laib wrote last"; exit 1; }
+                for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:5900/ready && break; sleep 2; done
                 $L journal --since 1h'
       - name: reboot — the firewall is back in the kernel, the registry login survives, services come up (#37)
         if: matrix.part == 'services'

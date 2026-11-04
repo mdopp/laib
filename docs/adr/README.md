@@ -12,7 +12,7 @@ situation* it applies, so an agent can self-select.
 | [0004](0004-templates-are-contracts.md) | Templates are Quadlet files plus a `laib.yml` contract, not forms and generators |
 | [0005](0005-test-pyramid-verify-in-apply.md) | Golden renderers, one booting integration job, verify inside apply; no gates until recurrence (amended: the cap is 16k; #309: the kernel structured, programs out with their own budgets, the cap 15k) |
 | [0006](0006-identities-hands-services-age-key.md) | Three kinds of identity: humans via SSO, four hand tokens, service secrets; one `age` key |
-| [0007](0007-caddy-replaces-npm.md) | Caddy replaces Nginx Proxy Manager; the Caddyfile is rendered from state |
+| [0007](0007-caddy-replaces-npm.md) | Caddy replaces Nginx Proxy Manager; the Caddyfile is rendered from state (amended #1043: the bare LAN address on port 80 serves a status file, LAN only, nothing on 443) |
 | [0008](0008-unmanaged-is-drift.md) | An unmanaged unit is drift: adopt or ignore, no bundle builder |
 | [0009](0009-hermes-threshold.md) | Hermes is not adopted for voice; superseded for text by 0016 |
 | [0010](0010-one-migration-no-compat.md) | One user, one migration, no compatibility layer (amended: carried out 2026-10-19, its tooling removed 2026-10-22) |

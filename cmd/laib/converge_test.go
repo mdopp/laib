@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ func runGitCmd(t *testing.T, args ...string) (string, error) {
 // test says otherwise, every systemctl call recorded.
 type cbox struct {
 	env    *cliEnv
+	mu     sync.Mutex // the status page's writer runs the fake beside the handlers (#1043)
 	calls  []string
 	down   map[string]bool // units reported inactive
 	onStop func()          // runs on every `systemctl --user stop`
@@ -52,18 +54,29 @@ func newCbox(t *testing.T) *cbox {
 	podSecrets := map[string]string{} // the box's podman secrets (#224)
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		line := name + " " + strings.Join(args, " ")
+		c.mu.Lock()
 		c.calls = append(c.calls, line)
+		c.mu.Unlock()
 		switch {
 		case name == "git":
 			return runGitCmd(t, args...)
 		case strings.HasPrefix(line, "podman secret create"):
-			podSecrets[args[len(args)-2]] = sysd.Stdin(ctx) // create [--replace] <name> -
+			in := sysd.Stdin(ctx)
+			c.mu.Lock()
+			podSecrets[args[len(args)-2]] = in // create [--replace] <name> -
+			c.mu.Unlock()
 		case strings.HasPrefix(line, "podman secret rm"):
+			c.mu.Lock()
 			delete(podSecrets, args[2])
+			c.mu.Unlock()
 		case strings.HasPrefix(line, "podman secret ls"):
+			c.mu.Lock()
+			defer c.mu.Unlock()
 			return strings.Join(slices.Sorted(maps.Keys(podSecrets)), "\n"), nil
 		case strings.HasPrefix(line, "podman secret inspect"):
 			var out []string
+			c.mu.Lock()
+			defer c.mu.Unlock()
 			for _, n := range args[5:] {
 				v, _ := json.Marshal(podSecrets[n])
 				out = append(out, n+" "+string(v))

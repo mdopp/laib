@@ -29,6 +29,7 @@ import (
 //
 //	quadlet/<service>/<file>      → ~/.config/containers/systemd/<service>/<file>
 //	caddy/Caddyfile               → /mnt/data/laib/render/caddy/Caddyfile
+//	status/fallback.html          → /mnt/data/laib/render/status/… (Caddy's /srv/status, #1043)
 //	authelia/laib-access.yml      → /mnt/data/laib/render/authelia/…
 //	authelia/laib-clients.yml
 //	adguard/rewrites.json
@@ -81,6 +82,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 	if st.Box.Roles.Proxy != "" {
 		out["caddy/Caddyfile"] = caddyfile(st, secrets)
 	}
+	maps.Copy(out, lanFallback(st))
 	if st.Box.Roles.SSO != "" {
 		out["authelia/laib-access.yml"] = autheliaAccess(st)
 		out["authelia/laib-clients.yml"] = autheliaClients(st, secrets)
@@ -682,6 +684,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 		}
 		fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d {\n\t\t\theader_up X-Laib-Proxy %q\n\t\t}\n\t}\n\timport lanonly\n}\n\n", st.Box.Laib.Port, secretValue(secrets, ProxySecret))
 	}
+	b.WriteString(lanSite(st)) // the status page at the bare LAN address (#1043)
 	if dns01 {
 		// one wildcard certificate: Caddy (2.10+) then gets none per name, a
 		// new route has a certificate at once and no name reaches the CT logs;
