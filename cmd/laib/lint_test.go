@@ -25,8 +25,6 @@ func writeTemplate(t *testing.T, root, name, contract string, files map[string]s
 	return dir
 }
 
-const lintContract = "name: %s\ntemplate: {registry: builtin, name: %s, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: ${DATA_DIR}/%s/data\nhealth: {http: http://127.0.0.1:80/}\n"
-
 func TestLintRefusesAnUndeclaredBindSource(t *testing.T) {
 	root := t.TempDir()
 	c := "name: t\ntemplate: {registry: builtin, name: t, version: 1}\nroutes: []\nsecrets: []\ndata:\n  - path: ${DATA_DIR}/t/data\nhealth: {http: http://127.0.0.1:80/}\n"
