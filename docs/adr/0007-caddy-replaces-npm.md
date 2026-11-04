@@ -138,6 +138,16 @@ trusts can name a private address, and a `tls internal` page that only says
 „use http://“ would teach the family to click through a certificate
 warning. Browsers open a typed address over http, or fall back to it.
 
+Each service names its address without a name too (owner, 2026-11-04:
+„immer die lokale Adresse (also IP:Port)“), from `laib net`'s ports with
+reach LAN: a route's port as a link to `http://<lanIp>:<port>/` (Caddy
+speaks plain http to it), another port as text (`smb://<lanIp>`,
+`mqtt://<lanIp>:1883`, `<lanIp>:<port>`), and a service only Caddy reaches
+by its name says „nur über den Namen erreichbar“. The page opens no port
+and passes no login: a LAN way to such a service is the owner's decision.
+A host-network service's route port that `ports:` does not declare is on
+the map as LAN, as nftables lets it through (Home Assistant's 8123).
+
 Before (ServiceBay): its own dashboard on the LAN at `<lanIp>:5888`,
 behind its login, down with the app. Now: no port to remember, no login,
 and up while laib is down.
