@@ -99,6 +99,10 @@ budget haushalt 1012 haushalt    # laib-haushalt: scan and net geraete, 480; tel
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
 # and atomic write
 budget lease 1430 lease         # laib-lease: the policy proxy and the GPU lease (#677)
+# the shared leaves: what the kernel and the programs used to keep as copies, because a program
+# may not import the kernel. A leaf imports nothing of laib; anyone may import it. Each: its size
+# then, plus a quarter; owner, 2026-11-04, the cleanup train: shared by the programs instead of copies
+budget atomicfile 115 atomicfile # the durable write (#148): the kernel's boxfs, laib-haushalt's and laib-lease's copies, 91
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -116,6 +120,10 @@ for prog in stick frage automat directory mcpserver disk notify haushalt lease; 
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
+done
+for leaf in atomicfile; do
+  up=$(grep -rlE '"github.com/mdopp/laib/' --include='*.go' "$leaf" || true)
+  [ -z "$up" ] || { echo "the leaf $leaf imports laib: $up"; bad=1; }
 done
 if [ -n "$diet" ]; then
   [ "$((kernel * 100))" -ge "$((kernelcap * 95))" ] || exit 3

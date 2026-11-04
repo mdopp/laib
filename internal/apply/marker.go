@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/atomicfile"
+
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/state"
@@ -130,7 +132,7 @@ func Window(st *state.State, paths boxfs.Paths, verb, by string, services []stri
 func writeMarker(paths boxfs.Paths, m Marker) {
 	os.MkdirAll(markerDir(paths), 0o755)
 	b, _ := json.Marshal(m)
-	boxfs.WriteAtomic(filepath.Join(markerDir(paths), m.ID+".tmp"), filepath.Join(markerDir(paths), m.ID+".json"), b, 0o644)
+	atomicfile.Write(filepath.Join(markerDir(paths), m.ID+".tmp"), filepath.Join(markerDir(paths), m.ID+".json"), b, 0o644)
 }
 
 // Markers are the markers kept, oldest first: those that hold, those

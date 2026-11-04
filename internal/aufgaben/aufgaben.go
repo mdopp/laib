@@ -19,9 +19,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mdopp/laib/atomicfile"
+
 	"gopkg.in/yaml.v3"
 
-	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/proposal"
 )
 
@@ -195,7 +196,7 @@ func Update(ctx context.Context, stateDir, actor string, fn func([]Aufgabe) ([]A
 		return err
 	}
 	b = append([]byte("# Box-Aufgaben (#667): kept by laib aufgabe, each change one commit; erledigt ones stay.\n"), b...)
-	if err := boxfs.WriteAtomic(stateDir+".aufgaben.tmp", filepath.Join(stateDir, File), b, 0o644); err != nil {
+	if err := atomicfile.Write(stateDir+".aufgaben.tmp", filepath.Join(stateDir, File), b, 0o644); err != nil {
 		return err
 	}
 	return proposal.CommitPath(ctx, stateDir, File, why, actor)

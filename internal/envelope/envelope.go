@@ -20,10 +20,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/atomicfile"
+
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/backup"
-	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
@@ -260,7 +261,7 @@ func Write(ctx context.Context, env *cli.Env, args []string) int {
 			return env.Fail(fmt.Errorf("%s: %w", p, err))
 		}
 	}
-	if err := boxfs.WriteAtomicIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
+	if err := atomicfile.WriteIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
 		return env.Fail(fmt.Errorf("%s: %w", p, err))
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "write", Service: svc.Name, Result: "info", Detail: fmt.Sprintf("%s (%d → %d Bytes)", p, len(old), len(content))})

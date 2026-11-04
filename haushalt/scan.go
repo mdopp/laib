@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"slices"
 	"time"
+
+	"github.com/mdopp/laib/atomicfile"
 )
 
 var (
@@ -77,7 +79,7 @@ func Scan(ctx context.Context, env *Env, args []string) int {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return env.fail(err)
 	}
-	if err := writeAtomic(filepath.Join(dir, "."+name), filepath.Join(dir, name+".json"), order, 0o644); err != nil {
+	if err := atomicfile.Write(filepath.Join(dir, "."+name), filepath.Join(dir, name+".json"), order, 0o644); err != nil {
 		return env.fail(err)
 	}
 	env.journal(svc.Name, "", act+" "+*stapel)
