@@ -32,6 +32,11 @@ func (p *proposals) Aufgabe(context.Context, string, ...string) (int, error) {
 	return 0, errors.New("unexpected laib aufgabe")
 }
 
+// Read: no verb here reads laib back (wish1038_test's box does).
+func (p *proposals) Read(context.Context, string, string, any, ...string) error {
+	return errors.New("unexpected laib read")
+}
+
 func run677(t *testing.T, laib Laib, z *Zuhause, args ...string) (map[string]any, int, string, string) {
 	t.Helper()
 	var out, errb, jr bytes.Buffer

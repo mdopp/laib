@@ -1,7 +1,8 @@
 // Package haushalt is the program laib-haushalt (ADR 0026, #598): the
 // household verbs that read what the door hands over, leave an order for a
 // service, file a proposal, tell one person something or file a wish —
-// scan, net geraete, tell, zuhause, person signal (#677) and wish (#797). It runs in its own
+// scan, net geraete, tell, zuhause, person signal (#677), wish (#797) and
+// module (#1036). It runs in its own
 // container (ADR 0027): the kernel checks hand, tier and verb, then hands
 // each call over HTTP on 127.0.0.1 with the caller's actor, the verb's
 // ceiling and the facts the verbs need. A proposal goes back to laib over
@@ -50,10 +51,13 @@ type ScanService struct {
 }
 
 // Laib is the way back as the haushalt hand, under a ceiling: a proposal,
-// or a Box-Aufgabe for the admins (the Bote's wish, #883).
+// a Box-Aufgabe for the admins (the Bote's wish, #883; Homes' wish for a
+// module, #1038), or a read of one of laib's tools into out (the
+// Box-Aufgaben and the Inbox, for laib wish stand, #1038).
 type Laib interface {
 	Propose(ctx context.Context, ceiling string, args ...string) (id int, class string, err error)
 	Aufgabe(ctx context.Context, ceiling string, args ...string) (id int, err error)
+	Read(ctx context.Context, ceiling, tool string, out any, args ...string) error
 }
 
 // Env is one call's world.
@@ -83,8 +87,10 @@ func Run(ctx context.Context, env *Env, args []string) int {
 		return cmdPersonSignal(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "wish":
 		return Wish(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "module":
+		return cmdModule(ctx, env, args[1:])
 	}
-	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … | wish … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal, laib wish)"))
+	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … | wish … | module … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal, laib wish, laib module)"))
 }
 
 // Handler serves the door: POST /call with the door's key, GET /health.

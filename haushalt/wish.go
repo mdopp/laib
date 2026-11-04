@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -35,8 +36,9 @@ type Intake struct {
 // Dienst, der …" becomes a GitHub issue with the intake label, never
 // pi:ready: a person triages it first. Without an intake the wish is kept
 // in the journal, which says that nobody reads it yet. The Bote's wish is
-// a Box-Aufgabe for the admins instead (#883). The Operator's wish waits
-// for the admin as a proposal, in the kernel (ADR 0023 §6).
+// a Box-Aufgabe for the admins instead (#883), and so is Homes' wish for a
+// module (--modul, #1038), whose state `wish stand` answers. The Operator's
+// wish waits for the admin as a proposal, in the kernel (ADR 0023 §6).
 func Wish(ctx context.Context, env *Env, args []string) int {
 	in := cmp.Or(env.Intake, &Intake{})
 	if in.Title != "" {
@@ -46,7 +48,12 @@ func Wish(ctx context.Context, env *Env, args []string) int {
 		}
 		return env.emit(map[string]string{"issue": url})
 	}
-	if hand, _, _ := strings.Cut(env.Actor, ":"); hand == "bote" {
+	switch hand, _, _ := strings.Cut(env.Actor, ":"); {
+	case len(args) > 0 && args[0] == "stand":
+		return wishStand(ctx, env, args[1:])
+	case slices.Contains(args, "--modul"):
+		return modulWish(ctx, env, args)
+	case hand == "bote":
 		return boteWish(ctx, env, args)
 	}
 	text := strings.TrimSpace(strings.Join(args, " "))
