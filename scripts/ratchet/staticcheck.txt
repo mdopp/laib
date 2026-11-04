@@ -1,0 +1,11 @@
+# scripts/ratchet.py staticcheck: the number is how often
+# written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
+# total 8
+1 cmd/laib/firewall_test.go: this value of calls is never used (SA4006)
+1 cmd/laib/lint_test.go: const lintContract is unused (U1000)
+1 internal/inbox/inbox.go: this value of b is never used (SA4006)
+1 internal/inbox/inbox.go: this value of text is never used (SA4006)
+1 operator/durchsicht551_test.go: should use constant http.StatusServiceUnavailable instead of numeric literal 503 (ST1013)
+1 operator/eval.go: the surrounding loop is unconditionally terminated (SA4004)
+1 operator/loop_test.go: should use constant http.StatusUnauthorized instead of numeric literal 401 (ST1013)
+1 operator/nutzung_test.go: should use constant http.StatusUnauthorized instead of numeric literal 401 (ST1013)

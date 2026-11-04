@@ -87,8 +87,27 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
 | Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
+| Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
+
+**The ratchet** (owner, 2026-11-03). `scripts/ratchet.py` runs four pinned
+tools and compares with `scripts/ratchet/<tool>.txt`, today's findings
+without line numbers: deadcode over every main package (`dead`: no caller
+even in a test; `test-only`: production code only a test runs, fakes
+aside), staticcheck's default checks with U1000 (not ST1005: the error
+strings are German sentences), dupl at 75 tokens on production files, and
+gocognit over 30 on production functions. CI fails when
+
+- a finding is new or its number rose (a complexity score counts) — fix
+  it; if it must stay, `scripts/ratchet.py --update --accept <tool>`, the
+  reason in the PR and the owner's yes, as for a line cap;
+- a finding went away or its number fell — lower the baseline in the same
+  PR: `scripts/ratchet.py --update` (it lowers only) and commit the files.
+
+A moved or renamed function is new under its new name and gone under the
+old: `--update --accept`, the PR shows the move. `scripts/ratchet.py
+deadcode` runs one tool.
 
 Guidelines, no check: issues first, Conventional Commits, releases via
 release-please, weighing a change against what worked before, regression ⇒
