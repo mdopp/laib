@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.0](https://github.com/mdopp/laib/compare/v2.0.0...v2.1.0) (2026-11-04)
+
+
+### Features
+
+* **haushalt:** a wish for a Homes module and its stand ([#1039](https://github.com/mdopp/laib/issues/1039)) ([619cd8d](https://github.com/mdopp/laib/commit/619cd8dd5cfa7c9184c20125327a6b1403064863)), closes [#1038](https://github.com/mdopp/laib/issues/1038)
+* **template:** Homes' module switch MODULE_AUS and every backend in uses ([#1040](https://github.com/mdopp/laib/issues/1040)) ([ce85e22](https://github.com/mdopp/laib/commit/ce85e2226a72a7cc76b22e1ac186fddf8116b235)), closes [#1036](https://github.com/mdopp/laib/issues/1036)
+
 ## [2.0.0](https://github.com/mdopp/laib/compare/v1.3.1...v2.0.0) (2026-11-03)
 
 
