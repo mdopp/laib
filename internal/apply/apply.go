@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/atomicfile"
+
 	"github.com/mdopp/laib/internal/boxfs"
 	"github.com/mdopp/laib/internal/plan"
 	"github.com/mdopp/laib/internal/proposal"
@@ -401,7 +403,7 @@ func writeAtomic(target, content string) error {
 	if strings.Contains(content, "Environment=") || strings.Contains(content, "header_up X-Laib-Proxy") || strings.HasSuffix(target, "/people/people.json") {
 		mode = 0o600
 	}
-	return boxfs.WriteAtomic(target+".laib-tmp", target, []byte(content), mode)
+	return atomicfile.Write(target+".laib-tmp", target, []byte(content), mode)
 }
 
 // snapshot commits the state repo so the applied state has a hash. A clean
@@ -789,5 +791,5 @@ func carry(dir, was string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 		return false, err
 	}
-	return true, boxfs.MoveDir(was, dir)
+	return true, atomicfile.MoveDir(was, dir)
 }

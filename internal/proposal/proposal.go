@@ -17,7 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/atomicfile"
+
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -506,7 +507,7 @@ func Save(inbox string, p *Proposal) error {
 	}
 	path := filepath.Join(inbox, strconv.Itoa(p.ID)+".json")
 	_, had := os.Stat(path)
-	if err := boxfs.WriteAtomic(path+".tmp", path, b, 0o644); err != nil || had == nil {
+	if err := atomicfile.Write(path+".tmp", path, b, 0o644); err != nil || had == nil {
 		return err
 	}
 	sysd.StartNoBlock(context.Background(), "laib-notify.service")

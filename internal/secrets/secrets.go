@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mdopp/laib/atomicfile"
+
 	"filippo.io/age"
 	"gopkg.in/yaml.v3"
-
-	"github.com/mdopp/laib/internal/boxfs"
 )
 
 // EnsureKey creates the age identity if missing and returns its recipient.
@@ -116,7 +116,7 @@ func Save(path, keyPath string, m map[string]string) error {
 	if err := w.Close(); err != nil {
 		return err
 	}
-	return boxfs.WriteAtomic(path+".tmp", path, enc.Bytes(), 0o600)
+	return atomicfile.Write(path+".tmp", path, enc.Bytes(), 0o600)
 }
 
 // Generate returns a 32-byte random secret, URL-safe base64, no padding.

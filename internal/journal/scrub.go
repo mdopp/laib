@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/mdopp/laib/internal/boxfs"
+	"github.com/mdopp/laib/atomicfile"
+
 	"github.com/mdopp/laib/internal/render"
 )
 
@@ -122,5 +123,5 @@ func scrubFile(file string, known map[string]string) (int, error) {
 	if n == 0 {
 		return 0, nil
 	}
-	return n, boxfs.WriteAtomic(file+".scrub", file, bytes.Join(lines, nil), 0o644)
+	return n, atomicfile.Write(file+".scrub", file, bytes.Join(lines, nil), 0o644)
 }

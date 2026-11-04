@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -146,33 +144,4 @@ func (e *Env) journalAs(result, service, reason, detail string) {
 		b, _ := json.Marshal(map[string]string{"service": service, "reason": reason, "result": result, "detail": detail})
 		e.Journal.Write(append(b, '\n'))
 	}
-}
-
-// writeAtomic is boxfs.WriteAtomic's shape (#148), which this program may
-// not import: the temp file synced before the rename, the directory after.
-func writeAtomic(tmp, path string, data []byte, perm os.FileMode) error {
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(tmp, path)
-	}
-	if err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	d, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
 }

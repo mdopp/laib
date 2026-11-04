@@ -1,4 +1,4 @@
-package boxfs
+package atomicfile
 
 import (
 	"io/fs"
@@ -12,21 +12,19 @@ import (
 
 // #148: a temp file renamed over the target without an fsync can surface
 // as a zero-length file after a power cut (XFS, the data disk), the same
-// shape #107 found in the shell. Every durable write goes through
-// WriteAtomic, so a rename anywhere else is a write that skipped the sync.
+// shape #107 found in the shell. Every durable write of the kernel,
+// laib-haushalt and laib-lease goes through Write, so a rename anywhere
+// else there is a write that skipped the sync.
 func TestEveryRenameIsADurableWrite(t *testing.T) {
-	allowed := map[string]string{
-		"internal/boxfs/atomic.go": "the helper itself",
-		"haushalt/haushalt.go":     "laib-haushalt's copy of it, which may not import the kernel (ADR 0026)",
-	}
+	allowed := map[string]string{"atomicfile/atomicfile.go": "the helper itself"}
 	rename := regexp.MustCompile(`\bRename\(`)
 	var bad []string
-	for _, top := range []string{"cmd", "internal", "haushalt"} {
-		filepath.WalkDir(filepath.Join("..", "..", top), func(p string, d fs.DirEntry, err error) error {
+	for _, top := range []string{"cmd", "internal", "haushalt", "lease"} {
+		filepath.WalkDir(filepath.Join("..", top), func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return err
 			}
-			rel, _ := filepath.Rel(filepath.Join("..", ".."), p)
+			rel, _ := filepath.Rel("..", p)
 			if _, ok := allowed[filepath.ToSlash(rel)]; ok {
 				return nil
 			}
@@ -40,18 +38,18 @@ func TestEveryRenameIsADurableWrite(t *testing.T) {
 		})
 	}
 	if len(bad) > 0 {
-		t.Fatalf("temp+rename without fsync (use boxfs.WriteAtomic): %s", strings.Join(bad, ", "))
+		t.Fatalf("temp+rename without fsync (use atomicfile.Write): %s", strings.Join(bad, ", "))
 	}
 }
 
-func TestWriteAtomicSyncsTheFileThenTheDirectory(t *testing.T) {
+func TestWriteSyncsTheFileThenTheDirectory(t *testing.T) {
 	dir := t.TempDir()
 	var synced []string
 	real := syncFile
 	t.Cleanup(func() { syncFile = real })
 	syncFile = func(f *os.File) error { synced = append(synced, f.Name()); return real(f) }
 	path := filepath.Join(dir, "secrets.age")
-	if err := WriteAtomic(path+".tmp", path, []byte("neu"), 0o600); err != nil {
+	if err := Write(path+".tmp", path, []byte("neu"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{path + ".tmp", dir}; strings.Join(synced, " ") != strings.Join(want, " ") {
@@ -68,20 +66,20 @@ func TestWriteAtomicSyncsTheFileThenTheDirectory(t *testing.T) {
 	}
 }
 
-func TestWriteAtomicInStaysInsideTheRoot(t *testing.T) {
+func TestWriteInStaysInsideTheRoot(t *testing.T) {
 	dir := t.TempDir()
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	if err := WriteAtomicIn(root, "../x.laib-tmp", "x", []byte("raus"), 0o644); err == nil {
+	if err := WriteIn(root, "../x.laib-tmp", "x", []byte("raus"), 0o644); err == nil {
 		t.Fatal("a temp name outside the root was written")
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "conf"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteAtomicIn(root, "conf/a.laib-tmp", "conf/a", []byte("drin"), 0o644); err != nil {
+	if err := WriteIn(root, "conf/a.laib-tmp", "conf/a", []byte("drin"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "conf", "a")); string(b) != "drin" {
