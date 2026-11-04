@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/mdopp/laib/compare/v2.2.0...v2.3.0) (2026-11-04)
+
+
+### Features
+
+* **render:** the status page names each service's LAN address ([#1048](https://github.com/mdopp/laib/issues/1048)) ([f15e41d](https://github.com/mdopp/laib/commit/f15e41d9b9df461f141c79e304a0bc5c5bd2bc6c))
+
 ## [2.2.0](https://github.com/mdopp/laib/compare/v2.1.0...v2.2.0) (2026-11-04)
 
 
