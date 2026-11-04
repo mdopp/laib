@@ -22,7 +22,7 @@
 44 internal/inbox/inbox.go: inbox.List
 79 internal/inbox/inbox.go: inbox.Propose
 36 internal/inbox/rollback.go: inbox.Carry
-78 internal/mcp/schema.go: mcp.Argv
+72 internal/mcp/schema.go: mcp.Argv
 35 internal/pages/status.go: pages.CollectStatus
 54 internal/plan/plan.go: plan.Compute
 48 internal/plan/plan.go: plan.Conflicts

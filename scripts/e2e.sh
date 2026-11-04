@@ -727,6 +727,8 @@ grep -q "laib scan \[propose\]" <<<"$("$BIN" scan --help)" || fail "laib scan --
 rc=0; OUT="$(LAIB_ACTOR=ops "$BIN" scan einrichten --geraet "airscan:e0:Beispiel" --json 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -q 'after names "paperless"' <<<"$OUT" || fail "laib scan einrichten did not reach the kernel's judge through the door (rc $rc): $OUT"
 rc=0; LAIB_ACTOR=ops LAIB_CEILING=propose "$BIN" approve 1 >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ] || fail "a call back from behind the door went above propose (rc $rc)"
+# laib wish stand (#1038): laib-haushalt reads the Box-Aufgaben and the Inbox back as its hand; no wish yet: []
+OUT="$(LAIB_ACTOR=homes "$BIN" wish stand standort=reitti 2>&1)" && [ "$(tr -d ' \n' <<<"$OUT")" = "[]" ] || fail "laib wish stand through the door: $OUT $(cat "$WORK/haushalt.log")"
 # only the door gets in: a call without its key is refused by the program
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"argv":["scan","start"]}' http://127.0.0.1:5979/call)" = 401 ] || fail "laib-haushalt takes a call without the door's key"
 kill "$(cat "$WORK/haushalt.pid")" "$(cat "$WORK/hhserve.pid")"; rm "$WORK/haushalt.pid" "$WORK/hhserve.pid"

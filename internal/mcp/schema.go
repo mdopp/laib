@@ -65,10 +65,12 @@ var mcpParams = map[string][]mcpParam{
 		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"},
 		{name: "hand", typ: "string", desc: "mit verb: die Hand in policy.yml, deren Verbliste ein Verb dazubekommt (#575); ein Mensch entscheidet"},
 		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
-	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze", required: true},
+	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze; mit modul der Titel des Moduls; Pflicht, außer mit stand"},
 		{name: "saw", typ: "string", desc: "was du gesehen hast, mit Zahlen"},
 		{name: "better", typ: "string", enum: []string{"wartung", "familie", "beides"}, desc: "was besser wird: die Wartung, der Komfort der Familie oder beides"},
-		{name: "von", typ: "string", desc: "nur der Bote: der Login der Person, die sich das wünscht; ihr Wunsch geht als Box-Aufgabe an den Admin"}},
+		{name: "von", typ: "string", desc: "nur der Bote und Homes: der Login der Person, die sich das wünscht; ihr Wunsch geht als Box-Aufgabe an den Admin"},
+		{name: "modul", typ: "string", desc: "nur Homes: das Modul, das sich jemand wünscht, z. B. standort (#1038)"},
+		{name: "stand", typ: "string", desc: "statt eines Wunsches: wo die Wünsche dieser Module stehen, modul=backend mit Leerzeichen getrennt, z. B. standort=reitti werkstatt= (#1038)"}},
 	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
 	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
 	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"}},
@@ -267,17 +269,8 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		}
 		return nil, stdin, nil
 	case "wish":
-		text := val["text"]
-		if val["saw"] != "" {
-			text += "\n\nGesehen: " + val["saw"]
-		}
-		if val["better"] != "" {
-			text += "\nBesser wird: " + betterText[val["better"]]
-		}
-		if val["von"] != "" {
-			return []string{"--von", val["von"], text}, stdin, nil
-		}
-		return []string{text}, stdin, nil
+		argv, err := wishArgv(val)
+		return argv, stdin, err
 	}
 	var argv []string
 	for _, p := range params {
@@ -294,6 +287,31 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		}
 	}
 	return argv, stdin, nil
+}
+
+// wishArgv is laib_wish's argv: stand's pairs, or the text with what was
+// seen and what gets better, after Homes' module (#1038) and who asked.
+func wishArgv(val map[string]string) ([]string, error) {
+	if val["stand"] != "" {
+		return append([]string{"stand"}, strings.Fields(val["stand"])...), nil
+	}
+	text := val["text"]
+	if text == "" {
+		return nil, fmt.Errorf("Parameter text fehlt")
+	}
+	if val["saw"] != "" {
+		text += "\n\nGesehen: " + val["saw"]
+	}
+	if val["better"] != "" {
+		text += "\nBesser wird: " + betterText[val["better"]]
+	}
+	var argv []string
+	for _, k := range []string{"modul", "von"} {
+		if val[k] != "" {
+			argv = append(argv, "--"+k, val[k])
+		}
+	}
+	return append(argv, text), nil
 }
 
 func names(ps []mcpParam) string {
