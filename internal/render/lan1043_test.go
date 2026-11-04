@@ -87,8 +87,8 @@ func TestLanPageLinksTheNamesTheLANPortsAndVerwalten(t *testing.T) {
 	st.Services["whoami"].Contract.Ports[0].LAN = true
 	st.Services["adguard"].Contract.Ports = append(st.Services["adguard"].Contract.Ports, state.Port{Port: 1883, LAN: true})
 	p := LanPage(st, nil)
-	if !strings.Contains(p, "<span class=muted>Port 1883 im WLAN</span>") {
-		t.Error("a LAN port without a route is not named")
+	if !strings.Contains(dienst(p, "adguard"), "<span class=muted>mqtt://192.168.1.10:1883</span>") {
+		t.Error("a LAN port without a route is not named by the address")
 	}
 	if !strings.Contains(p, `<a class=verwalten href="https://laib.nuc.home/">Verwalten</a>`) {
 		t.Error("no link to the Laib page")
@@ -283,5 +283,46 @@ func TestLanSiteServesTheLANOnly(t *testing.T) {
 	out, _ := Render(st, nil)
 	if strings.Contains(out["caddy/Caddyfile"], "\nhttp://") || out["status/fallback.html"] != "" {
 		t.Error("without box.yml lanIp there is no bare address to serve")
+	}
+}
+
+// The owner, 2026-11-04: „bitte auch immer die lokale Adresse (also IP:Port)
+// darstellen, so dass ich es auch ohne DNS-Auflösung öffnen kann.“ A route
+// whose port the LAN reaches gets its http://<lanIp>:<port>/ link; one only
+// Caddy reaches by its name says so, never a link that would not open; a
+// port that speaks no web is text; a service without either says that too.
+func TestLanPageGivesEachServiceItsLANAddressOrSaysThereIsNone(t *testing.T) {
+	st := lanState(t)
+	title := func(n string) string { return cmp.Or(st.Services[n].Contract.Title, n) }
+	st.Services["whoami"].Contract.Ports[0].LAN = true // published to the LAN, as Jellyfin's 8096
+	// AdGuard in the host network with its route's port undeclared, as Home Assistant's 8123: nftables lets it through
+	st.Services["adguard"].Contract.Ports = nil
+	// auth: routes, its ports dropped on the LAN: only Caddy reaches it, by name
+	// usage-metrics: a Samba port, no route
+	st.Services["usage-metrics"].Contract.Ports = []state.Port{{Port: 445, LAN: true}, {Port: 139, LAN: true}}
+	for _, page := range []string{LanPage(st, nil), LanPage(st, &LanStatus{At: time.Now(), Rows: lanRows(st, "", "")})} {
+		for _, c := range []struct{ svc, want string }{
+			{"whoami", `<a href="http://192.168.1.10:8080/">192.168.1.10:8080</a>`},
+			{"adguard", `<a href="http://192.168.1.10:8083/">192.168.1.10:8083</a>`},
+			{"auth", "<span class=muted>nur über den Namen erreichbar</span>"},
+			{"usage-metrics", "<span class=muted>smb://192.168.1.10</span></p>"},
+			{"frage", "<span class=muted>keine Adresse zum Öffnen</span>"},
+		} {
+			s := dienst(page, title(c.svc))
+			if !strings.Contains(s, c.want) {
+				t.Errorf("%s: want %s, the line is %.400q", c.svc, c.want, s)
+			}
+			if c.svc != "whoami" && c.svc != "adguard" && strings.Contains(s, "http://192.168.1.10") {
+				t.Errorf("%s: linked by the address, the LAN does not reach its web port: %.400q", c.svc, s)
+			}
+		}
+		if s := dienst(page, title("usage-metrics")); strings.Count(s, "smb://") != 1 {
+			t.Errorf("Samba's two ports are one address: %.300q", s)
+		}
+	}
+	for _, p := range Net(st).Ports {
+		if p.Service == "adguard" && p.Port == 8083 && p.Reach != "LAN" {
+			t.Errorf("the host network's undeclared route port is %q on the map, nftables lets it through", p.Reach)
+		}
 	}
 }

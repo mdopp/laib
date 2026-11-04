@@ -162,32 +162,58 @@ func lanSpan(d time.Duration) string {
 	return fmt.Sprintf("%d Minuten", int(d/time.Minute))
 }
 
-// lanLinks: each service's names, and its route ports the LAN reaches
-// (Net's reach: not dropped by nftables) as http://<lanIp>:<port>, which
-// need no name; a LAN port without a route speaks no web, so it is a line.
+// lanLinks: each service's names, then what the LAN reaches by the box's
+// address alone (Net's ports with reach LAN, not dropped by nftables), so
+// the page works while the names do not: a route's port as a link to
+// http://<lanIp>:<port>/ (Caddy speaks plain http to it, so it does), any
+// other port as text, Samba as smb://<lanIp>. A service with a name and no
+// such port says so; the page opens no port and passes no login (#1043).
 func lanLinks(st *state.State) map[string][]string {
-	lan := map[string]bool{}
+	lan := map[string][]int{}
 	for _, p := range Net(st).Ports {
 		if p.Reach == "LAN" {
-			lan[fmt.Sprint(p.Service, ":", p.Port)] = true
+			lan[p.Service] = append(lan[p.Service], p.Port)
 		}
 	}
-	out := map[string][]string{}
+	out, ip := map[string][]string{}, st.Box.LanIP
 	for _, name := range st.ServiceNames() {
-		c, web := st.Services[name].Contract, map[int]bool{}
-		for _, r := range c.Routes {
-			u := "https://" + fqdn(st, r.Host) + "/"
-			out[name] = append(out[name], fmt.Sprintf("<a href=\"%s\">%s</a>", html.EscapeString(u), html.EscapeString(fqdn(st, r.Host))))
-			if lan[fmt.Sprint(name, ":", r.Port)] && !web[r.Port] {
-				web[r.Port] = true
-				u = fmt.Sprintf("http://%s:%d/", st.Box.LanIP, r.Port)
-				out[name] = append(out[name], fmt.Sprintf("<a href=\"%s\">%s</a>", html.EscapeString(u), html.EscapeString(strings.TrimSuffix(strings.TrimPrefix(u, "http://"), "/"))))
+		c, seen, web, other := st.Services[name].Contract, map[string]bool{}, false, false
+		add := func(s string) {
+			if !seen[s] {
+				seen[s] = true
+				out[name] = append(out[name], s)
 			}
 		}
-		for _, p := range c.Ports {
-			if lan[fmt.Sprint(name, ":", p.Port)] && !web[p.Port] {
-				out[name] = append(out[name], fmt.Sprintf("<span class=muted>Port %d im WLAN</span>", p.Port))
+		for _, r := range c.Routes {
+			add(fmt.Sprintf("<a href=\"https://%[1]s/\">%[1]s</a>", html.EscapeString(fqdn(st, r.Host))))
+		}
+		for _, r := range c.Routes {
+			if slices.Contains(lan[name], r.Port) {
+				web = true
+				add(fmt.Sprintf("<a href=\"http://%[1]s:%[2]d/\">%[1]s:%[2]d</a>", html.EscapeString(ip), r.Port))
 			}
+		}
+		for _, p := range lan[name] {
+			if slices.ContainsFunc(c.Routes, func(r state.Route) bool { return r.Port == p }) {
+				continue
+			}
+			other = true
+			a := fmt.Sprintf("%s:%d", ip, p)
+			switch p {
+			case 139, 445: // Samba: the file share, in the Finder or the Explorer
+				a = "smb://" + ip
+			case 1883:
+				a = "mqtt://" + a
+			}
+			add("<span class=muted>" + html.EscapeString(a) + "</span>")
+		}
+		switch {
+		case len(c.Routes) > 0 && !web && other:
+			add("<span class=muted>Webseite nur über den Namen</span>")
+		case len(c.Routes) > 0 && !web:
+			add("<span class=muted>nur über den Namen erreichbar</span>")
+		case len(c.Routes) == 0 && !other:
+			add("<span class=muted>keine Adresse zum Öffnen</span>")
 		}
 	}
 	return out
