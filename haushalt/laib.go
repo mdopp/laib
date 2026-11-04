@@ -1,7 +1,6 @@
 package haushalt
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/mcpclient"
 )
 
 // MCP is the way back to laib (ADR 0027): laib_propose over laib serve's
@@ -49,34 +50,18 @@ func (m MCP) call(ctx context.Context, tool, ceiling string, args []string, out 
 	if m.URL == "" || m.Token == "" {
 		return errors.New("laib-haushalt has no token for laib (LAIB_TOKEN): laib apply mints it")
 	}
-	quoted := make([]string, len(args))
-	for i, a := range args {
-		quoted[i] = `"` + strings.ReplaceAll(a, `"`, "") + `"`
-	}
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-		"params": map[string]any{"name": tool, "arguments": map[string]string{"args": strings.Join(quoted, " ")}}})
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+m.Token)
-	req.Header.Set("X-Laib-Ceiling", ceiling)
-	resp, err := http.DefaultClient.Do(req)
+	a, err := mcpclient.Post(ctx, http.DefaultClient, m.URL, m.Token, map[string]string{"X-Laib-Ceiling": ceiling},
+		"tools/call", map[string]any{"name": tool, "arguments": mcpclient.Args(args...)})
 	if err != nil {
 		return fmt.Errorf("laib antwortet nicht (%s): %w", m.URL, err)
 	}
-	defer resp.Body.Close()
-	var r struct {
-		Result struct {
-			Content []struct {
-				Text string `json:"text"`
-			} `json:"content"`
-			IsError bool `json:"isError"`
-		} `json:"result"`
+	text, isError, ok := a.Tool()
+	if a.Bad != nil || !ok {
+		return fmt.Errorf("%s: HTTP %d, %v", tool, a.StatusCode, a.Bad)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || len(r.Result.Content) == 0 {
-		return fmt.Errorf("%s: HTTP %d, %v", tool, resp.StatusCode, err)
-	}
-	if text := r.Result.Content[0].Text; r.Result.IsError || json.Unmarshal([]byte(text), out) != nil {
+	if isError || json.Unmarshal([]byte(text), out) != nil {
 		return errors.New(strings.TrimSpace(text))
 	}
 	return nil

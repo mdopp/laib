@@ -103,6 +103,7 @@ budget lease 1430 lease         # laib-lease: the policy proxy and the GPU lease
 # may not import the kernel. A leaf imports nothing of laib; anyone may import it. Each: its size
 # then, plus a quarter; owner, 2026-11-04, the cleanup train: shared by the programs instead of copies
 budget atomicfile 115 atomicfile # the durable write (#148): the kernel's boxfs, laib-haushalt's and laib-lease's copies, 91
+budget mcpclient 110 mcpclient   # the client of laib serve's MCP: laib-haushalt's, laib-lease's, laib-notify's and the Operator's copies, 88
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -121,7 +122,7 @@ for prog in stick frage automat directory mcpserver disk notify haushalt lease; 
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
 done
-for leaf in atomicfile; do
+for leaf in atomicfile mcpclient; do
   up=$(grep -rlE '"github.com/mdopp/laib/' --include='*.go' "$leaf" || true)
   [ -z "$up" ] || { echo "the leaf $leaf imports laib: $up"; bad=1; }
 done

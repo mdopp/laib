@@ -33,6 +33,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/mcpclient"
 )
 
 // Config is the unit's environment.
@@ -172,36 +174,18 @@ var client = &http.Client{Timeout: 2 * time.Minute}
 
 // call runs one of the notify hand's tools and returns its text.
 func call(ctx context.Context, c Config, tool string, args map[string]any) (string, error) {
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": tool, "arguments": args}})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.MCPURL, bytes.NewReader(body))
+	a, err := mcpclient.Post(ctx, client, c.MCPURL, c.Token, nil, "tools/call", map[string]any{"name": tool, "arguments": args})
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
+	if a.Bad != nil {
+		return "", fmt.Errorf("%s: %s: %w", tool, a.Status, a.Bad)
 	}
-	defer resp.Body.Close()
-	var out struct {
-		Result struct {
-			Content []struct{ Text string } `json:"content"`
-			IsError bool                    `json:"isError"`
-		} `json:"result"`
-		Error *struct{ Message string } `json:"error"`
+	if a.Error != nil {
+		return "", fmt.Errorf("%s: %s", tool, a.Error.Message)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("%s: %s: %w", tool, resp.Status, err)
-	}
-	if out.Error != nil {
-		return "", fmt.Errorf("%s: %s", tool, out.Error.Message)
-	}
-	text := ""
-	for _, t := range out.Result.Content {
-		text += t.Text
-	}
-	if out.Result.IsError {
+	text, isError, _ := a.Tool()
+	if isError {
 		return "", fmt.Errorf("%s: %s", tool, text)
 	}
 	return text, nil

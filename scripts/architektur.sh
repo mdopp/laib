@@ -69,6 +69,7 @@ declare -A role=(
   [stick]="laib-stick on the laptop: builds the install stick for a new box"
   [mcpserver]="The smallest MCP server, shared by the Bote's tools (frage, automat, directory)"
   [atomicfile]="The durable write (temp file, fsync, rename), shared by the kernel, laib-haushalt and laib-lease"
+  [mcpclient]="The smallest MCP client of laib serve, shared by laib-haushalt, laib-lease, laib-notify and the Operator"
 )
 loc=$(scripts/loc.sh 2>&1 || true)
 budgets=$(echo "$loc" | sed -nE 's/^([a-z0-9_-]+) production: ([0-9]+)  tests: [0-9]+  \(cap ([0-9]+)\)$/\1 \2 \3/p')

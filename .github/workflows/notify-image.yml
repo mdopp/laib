@@ -5,7 +5,7 @@ name: notify-image
 on:
   push:
     branches: [main]
-    paths: ["notify/**", "go.mod", "go.sum", ".github/workflows/notify-image.yml"]
+    paths: ["notify/**", "mcpclient/**", "go.mod", "go.sum", ".github/workflows/notify-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read

@@ -5,13 +5,13 @@
 package operator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
+
+	"github.com/mdopp/laib/mcpclient"
 )
 
 // MCP is a minimal JSON-RPC client for laib serve's /mcp.
@@ -30,45 +30,28 @@ type Tool struct {
 }
 
 func (m *MCP) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	// one request, one answer over HTTP: the id needs no counter, and a
-	// counter would be shared by the webhook's sessions and the scheduler
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+m.Token)
-	if m.Skill != "" {
-		req.Header.Set("X-Laib-Skill", m.Skill)
-	}
 	client := m.Client
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Minute}
 	}
-	resp, err := client.Do(req)
+	var header map[string]string
+	if m.Skill != "" {
+		header = map[string]string{"X-Laib-Skill": m.Skill}
+	}
+	a, err := mcpclient.Post(ctx, client, m.URL, m.Token, header, method, params)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2000))
-		return nil, fmt.Errorf("mcp %s: %s %s", method, resp.Status, string(b))
+	if a.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("mcp %s: %s %s", method, a.Status, string(a.Body[:min(len(a.Body), 2000)]))
 	}
-	var env struct {
-		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+	if a.Bad != nil {
+		return nil, a.Bad
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return nil, err
+	if a.Error != nil {
+		return nil, fmt.Errorf("mcp %s: %d %s", method, a.Error.Code, a.Error.Message)
 	}
-	if env.Error != nil {
-		return nil, fmt.Errorf("mcp %s: %d %s", method, env.Error.Code, env.Error.Message)
-	}
-	return env.Result, nil
+	return a.Result, nil
 }
 
 // Tools lists what the hand may call.

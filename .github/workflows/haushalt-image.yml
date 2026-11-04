@@ -5,7 +5,7 @@ name: haushalt-image
 on:
   push:
     branches: [main]
-    paths: ["haushalt/**", "atomicfile/**", "go.mod", "go.sum", ".github/workflows/haushalt-image.yml"]
+    paths: ["haushalt/**", "mcpclient/**", "atomicfile/**", "go.mod", "go.sum", ".github/workflows/haushalt-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read

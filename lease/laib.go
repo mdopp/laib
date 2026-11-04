@@ -1,15 +1,15 @@
 package lease
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/mcpclient"
 )
 
 // MCP is laib serve as the lease reaches it from its container (ADR 0027):
@@ -25,45 +25,19 @@ func (m MCP) ask(ctx context.Context, tool string, args ...string) (string, erro
 	if h == nil {
 		h = &http.Client{Timeout: time.Minute}
 	}
-	for i, a := range args { // one word each: the reason has blanks, never a quote
-		args[i] = `"` + strings.ReplaceAll(a, `"`, "") + `"`
-	}
-	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-		"params": map[string]any{"name": "laib_" + tool, "arguments": map[string]string{"args": strings.Join(args, " ")}}})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
+	a, err := mcpclient.Post(ctx, h, m.URL, m.Token, nil, "tools/call",
+		map[string]any{"name": "laib_" + tool, "arguments": mcpclient.Args(args...)})
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+m.Token)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := h.Do(req)
-	if err != nil {
-		return "", err
+	if a.Bad != nil {
+		return "", fmt.Errorf("laib: %s", strings.TrimSpace(string(a.Body)))
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	var env struct {
-		Result struct {
-			Content []struct {
-				Text string `json:"text"`
-			} `json:"content"`
-			IsError bool `json:"isError"`
-		} `json:"result"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
+	if a.Error != nil {
+		return "", errors.New("laib: " + a.Error.Message)
 	}
-	if err := json.Unmarshal(raw, &env); err != nil {
-		return "", fmt.Errorf("laib: %s", strings.TrimSpace(string(raw)))
-	}
-	if env.Error != nil {
-		return "", errors.New("laib: " + env.Error.Message)
-	}
-	text := ""
-	if len(env.Result.Content) > 0 {
-		text = strings.TrimSpace(env.Result.Content[0].Text)
-	}
-	if env.Result.IsError {
+	text, isError, _ := a.Tool()
+	if text = strings.TrimSpace(text); isError {
 		return "", errors.New(text)
 	}
 	return text, nil

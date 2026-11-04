@@ -80,7 +80,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 
 | Rule | Check |
 |---|---|
-| Each program under its cap, no import across the boundaries; a shared leaf (`atomicfile/`) imports nothing of laib | `scripts/loc.sh` |
+| Each program under its cap, no import across the boundaries; a shared leaf (`atomicfile/`, `mcpclient/`) imports nothing of laib | `scripts/loc.sh` |
 | Lines as gofmt writes them | `gofmt -l` in `ci.yml` |
 | A skill: at most 55; its script one file, one theme, `run.py` at most 220 lines; a fact about the box is Laib's, read through a verb (`laib planned`), what two skills share is in `skills/lib/`; a second file in a skill warns (#839, #978, `docs/SKILLS.md`) | `scripts/loc.sh` |
 | A renderer change ships with its golden file | `TestGolden` |

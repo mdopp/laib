@@ -176,6 +176,7 @@ automat/             Home Assistant automations as an MCP tool in the bote pod; 
 directory/           the Bote's directory: tools, levels, help (ADR 0030); its own program and budget
 mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, directory)
 atomicfile/          the durable write (#148), a leaf the kernel and the programs share; imports nothing of laib
+mcpclient/           the smallest MCP client of laib serve, a leaf the programs share; imports nothing of laib
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
 disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag; its own program and budget (#443)
 haushalt/            laib-haushalt behind the kernel's verb door, a container laib renders (ADR 0027): scan, net geraete, tell, zuhause, person signal and wish, the household verbs (ADR 0026); its own program and budget

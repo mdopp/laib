@@ -5,7 +5,7 @@ name: lease-image
 on:
   push:
     branches: [main]
-    paths: ["lease/**", "atomicfile/**", "go.mod", "go.sum", ".github/workflows/lease-image.yml"]
+    paths: ["lease/**", "mcpclient/**", "atomicfile/**", "go.mod", "go.sum", ".github/workflows/lease-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read
