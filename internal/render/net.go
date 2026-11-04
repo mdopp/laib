@@ -115,7 +115,7 @@ func Net(st *state.State) NetMap {
 				n.Names = append(n.Names, NetName{Name: strings.TrimPrefix(fqdn(st, h), "@."), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
 			}
 		}
-		for _, p := range c.Ports {
+		for _, p := range append(slices.Clone(c.Ports), hostRoutePorts(c)...) {
 			owner[p.Port] = name
 			n.Ports = append(n.Ports, NetPort{Service: name, Port: p.Port, Reach: map[bool]string{false: "LAN", true: "nur Box und Pods"}[slices.Contains(dropped, p.Port)]})
 		}
@@ -136,6 +136,20 @@ func Net(st *state.State) NetMap {
 		}
 	}
 	return n
+}
+
+// hostRoutePorts: a host-network service's route ports that no entry of
+// ports: declares; nftables lets them through, so the LAN reaches them, as
+// Home Assistant's 8123 and the llama router's 11435.
+func hostRoutePorts(c state.Contract) []state.Port {
+	var out []state.Port
+	for _, r := range c.Routes {
+		has := func(p state.Port) bool { return p.Port == r.Port }
+		if c.HostNetwork && !slices.ContainsFunc(c.Ports, has) && !slices.ContainsFunc(out, has) {
+			out = append(out, state.Port{Port: r.Port, LAN: true})
+		}
+	}
+	return out
 }
 
 // Mermaid is the map as a flowchart: Internet and LAN to Caddy, Caddy to
