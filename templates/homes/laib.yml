@@ -10,7 +10,10 @@ provides: [homes]
 # the box migration carries along; they go once the box moved (ADR 0021 rule 8).
 after: [auth]                    # not file-share: the share folders it mounts are declared under data:, so a box without file-share still loads (#639)
 needs: [mcp]                     # talks to laib over host.containers.internal: laib.listen 0.0.0.0 (ADR 0012 §4)
-uses: [home-assistant, reitti]   # Reitti too (the Standortverlauf); talks to Home Assistant without after: (a box without it still loads); its planned stops explain these errors (laib planned, #978)
+# every backend of a Homes module (homes ADR 0001 §5, #1036), talked to without after: (a box without
+# them still loads); their planned stops explain its errors (laib planned, #978). The persons' archives
+# are services of their own (archiv-<person>), wired through instances: below
+uses: [home-assistant, reitti, radicale, paperless, audiobookshelf, media, bote, file-share, usage-metrics, gesundheit]
 instances:                       # each person's open archive gives a new phone its WhatsApp media back (laib#1016, haus#209)
   - template: archiv
     unit: homes.container
@@ -37,7 +40,7 @@ routes:
     bypass: [/napi/]
     proxySecret: HOMES_PROXY_SECRET
 secrets:
-  - name: HOMES_LAIB_TOKEN         # minted on `laib add homes` as the homes hand: status, inbox, journal, restart, person_invite, person_pending, person_signal (#596), calendar (#495), note (who switched in HA, #591), tell (a message to one person, #676) — nothing else
+  - name: HOMES_LAIB_TOKEN         # minted on `laib add homes` as the homes hand: status, inbox, journal, restart, person_invite, person_pending, person_signal (#596), calendar (#495), note (who switched in HA, #591), tell (a message to one person, #676), aufgabe, wish (#1038), module (#1036) — nothing else
     external: true                 # no was: the old token is the hand haus's; the hand homes gets its own (ADR 0031)
     mint: homes
   - name: HOMES_PROXY_SECRET       # generated; without it no page request counts (haus#1)

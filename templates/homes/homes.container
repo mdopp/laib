@@ -43,6 +43,9 @@ Environment=HOMES_DOCUMENTS_MAIL=${DOCUMENTS_MAIL}
 Environment=HOMES_PAPERLESS_LAN_ONLY=${PAPERLESS_LAN_ONLY}
 # the Box page's Werkstatt card (haus#15)
 Environment=HOMES_WERKSTATT_REPOS=${WERKSTATT_REPOS}
+# the owner's switch (homes ADR 0001 §5, laib#1036): modules left off although their service runs,
+# a comma list; empty: every module whose service runs. Homes proposes it with laib module aus
+Environment=HOMES_MODULE_AUS=${MODULE_AUS}
 Environment=HOMES_NOTES_DIR=/notes
 # the memory library (haus#13): qmd on the pod's loopback (homes-qmd.container); qmd answers only a
 # loopback Host. Its collection is qmd.json's "notizen" over the same folder as HOMES_NOTES_DIR

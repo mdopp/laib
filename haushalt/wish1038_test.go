@@ -203,3 +203,38 @@ func TestAModuleWishIsHomesAloneAndChecked(t *testing.T) {
 		}
 	}
 }
+
+// #1036: laib module aus is one proposal for Homes' MODULE_AUS, under the
+// call's ceiling, the list as a quoted YAML string; empty switches every
+// module on; a malformed name is refused before anything is filed.
+func TestModuleAusProposesHomesSwitch(t *testing.T) {
+	for _, c := range []struct {
+		args       []string
+		value, why string
+	}{
+		{[]string{"module", "aus", "podcasts,energie"}, "'podcasts,energie'", "In Homes ausschalten: podcasts, energie"},
+		{[]string{"module", "aus", "podcasts,", "energie", "podcasts"}, "'podcasts,energie'", "In Homes ausschalten: podcasts, energie"},
+		{[]string{"module", "aus"}, "''", "Alle Bereiche von Homes einschalten"},
+		{[]string{"module", "aus", ""}, "''", "Alle Bereiche von Homes einschalten"},
+		{[]string{"module", "aus", "podcasts", "--grund", "Podcasts verschwinden aus Homes\nund der App."}, "'podcasts'", "Podcasts verschwinden aus Homes und der App."},
+		{[]string{"module", "aus", "--grund", "Alles kommt zurück.", ""}, "''", "Alles kommt zurück."},
+	} {
+		p := &proposals{}
+		out, code, errs, journal := run1038(t, "homes", p, c.args...)
+		if code != exitOK || len(p.calls) != 1 || p.ceiling != "propose" {
+			t.Fatalf("%q: exit %d %s %s %v", c.args, code, out, errs, p.calls)
+		}
+		if a := p.calls[0]; a[0] != "--path" || a[1] != "services/homes/values.yml:MODULE_AUS="+c.value || !strings.HasPrefix(a[2], c.why) {
+			t.Fatalf("%q: %q", c.args, a)
+		}
+		if !strings.Contains(out, `"proposal": 1`) || !strings.Contains(journal, "wartet auf Freigabe") {
+			t.Fatalf("%q: %s %s", c.args, out, journal)
+		}
+	}
+	for _, bad := range [][]string{{"module"}, {"module", "an", "podcasts"}, {"module", "aus", "Podcasts"}, {"module", "aus", "podcasts'; x"}, {"module", "aus", "a b"}, {"module", "aus", "podcasts", "--grund", strings.Repeat("x", 201)}} {
+		p := &proposals{}
+		if _, code, _, _ := run1038(t, "homes", p, bad...); code == exitOK || len(p.calls) != 0 {
+			t.Errorf("%q was taken: %v", bad, p.calls)
+		}
+	}
+}
