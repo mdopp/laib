@@ -7,11 +7,15 @@ Image=${IMAGE}
 Network=host
 Environment=LAIB_DNS_TOKEN=${DNS_TOKEN}
 Volume=/mnt/data/laib/render/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,z
+# the status page at the box's bare LAN address (#1043): laib serve writes it, Render leaves its fallback
+Volume=/mnt/data/laib/render/status:/srv/status:ro,z
 Volume=${DATA_DIR}/caddy/data:/data:z
 AutoUpdate=registry
 
 [Service]
 Restart=always
+# a missing bind source stops the container: Caddy starts also before laib has written the page
+ExecStartPre=/usr/bin/mkdir -p /mnt/data/laib/render/status
 
 [Install]
 WantedBy=default.target

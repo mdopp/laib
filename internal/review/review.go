@@ -290,7 +290,7 @@ func dirs(base, changed string) Result {
 	// that changed without a reason above: not understood, so a human
 	if len(r.Human)+len(r.unjudged) == before2 {
 		for key, text := range aout {
-			if strings.HasPrefix(key, "quadlet/") {
+			if slices.Contains([]string{"quadlet", "status"}, strings.SplitN(key, "/", 2)[0]) { // status/: the LAN page, its titles and names judged above (#1043)
 				continue
 			}
 			if bout[key] != text {
