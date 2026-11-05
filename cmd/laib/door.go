@@ -167,12 +167,15 @@ func cmdWish(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	text := strings.TrimSpace(strings.Join(words, " "))
 	if len(args) > 0 && (args[0] == "list" || args[0] == "status") { // a wish's status (#978), the kernel's own
+		defer mcp.Hold(env)()
 		return inbox.WishCmd(ctx, env, args)
 	}
-	// Homes' wish for a module and the read of its state are laib-haushalt's for every hand (#1038)
+	// Homes' wish for a module and the read of its state are laib-haushalt's for every hand (#1038),
+	// without the lock: laib-haushalt calls back laib_aufgabe and laib_inbox, which take it (#1051)
 	if proposal.Hand(env.Actor) != "ops" || text == "" || args[0] == "stand" || slices.Contains(args, "--modul") {
 		return door(ctx, env, "haushalt", "propose", append([]string{"wish"}, args...))
 	}
+	defer mcp.Hold(env)()
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
