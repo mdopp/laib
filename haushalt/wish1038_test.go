@@ -48,7 +48,7 @@ func wishTask(id int, day, erledigtVon string) string {
 	if erledigtVon != "" {
 		done = `, "erledigt": {"am": "` + day + `", "von": "` + erledigtVon + `"}`
 	}
-	return `{"id": ` + itoa(id) + `, "titel": "Wunsch aus Homes: Standortverlauf", "seit": "` + day + `", "von": "homes:lena", "fuer": "admins", "weg": {"seite": "/module/standort"}` + done + `}`
+	return `{"id": ` + itoa(id) + `, "titel": "Anfrage aus Homes: Standortverlauf", "seit": "` + day + `", "von": "homes:lena", "fuer": "admins", "weg": {"seite": "/module/standort"}` + done + `}`
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
@@ -86,6 +86,7 @@ func TestWishStandAnswersEachState(t *testing.T) {
 		{"„später“ is no answer", wishTask(3, day, ""), proposalJSON(40, day, "rejected", "later", addsReitti+`, "rejectReason": "später"`), "angefordert", 0, ""},
 		{"approved", wishTask(3, day, ""), proposalJSON(40, day, "approved", "effective", addsReitti), "eingerichtet", 40, ""},
 		{"approved, the run rolled it back", wishTask(3, day, ""), proposalJSON(40, day, "approved", "rolled-back", addsReitti), "angefordert", 0, ""},
+		{"filed before 2026-11-05 as „Wunsch aus Homes“", strings.Replace(wishTask(3, day, ""), "Anfrage aus Homes", "Wunsch aus Homes", 1), "", "angefordert", 0, ""},
 		{"ticked off by Homes itself", wishTask(3, day, "homes"), "", "umgesetzt", 0, ""},
 		{"ticked off by a person", wishTask(3, day, "human:michael"), proposalJSON(40, day, "approved", "effective", addsReitti), "abgelehnt", 0, ""},
 		{"ticked off by a person in Homes", wishTask(3, day, "homes:michael"), "", "abgelehnt", 0, ""},
@@ -149,7 +150,7 @@ func TestHomesWishForAModuleIsABoxAufgabe(t *testing.T) {
 		t.Fatalf("exit %d %s %s %v", code, out, errs, b.added)
 	}
 	a := b.added[0]
-	if a[0] != "add" || a[1] != "Wunsch aus Homes: Standortverlauf" || argAfter(a, "--fuer") != "admins" || argAfter(a, "--weg") != "/module/standort" || argAfter(a, "--von") != "homes:lena" {
+	if a[0] != "add" || a[1] != "Anfrage aus Homes: Standortverlauf" || argAfter(a, "--fuer") != "admins" || argAfter(a, "--weg") != "/module/standort" || argAfter(a, "--von") != "homes:lena" {
 		t.Fatalf("the task: %q", a)
 	}
 	if w := argAfter(a, "--warum"); !strings.Contains(w, "lena") || !strings.Contains(w, "wird nicht eingerichtet") || !strings.Contains(w, "hakt Homes die Aufgabe selbst ab") || strings.ContainsAny(w, "\n\r") {

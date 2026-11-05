@@ -22,9 +22,15 @@ var (
 	backendName = regexp.MustCompile(`^([a-z][a-z0-9-]{0,62})?$`)
 )
 
-// wunschTitel starts the title of Homes' wish for a module; its weg is
-// /module/<name>, the Homes page the admin switches it on (#1038).
-const wunschTitel = "Wunsch aus Homes: "
+// anfrageTitel starts the title of Homes' request for a module; its weg is
+// /module/<name>, the Homes page the admin switches it on (#1038). Until
+// 2026-11-05 the title began altTitel (the owner's call: a module is
+// requested, an „Anfrage“, not wished for); a Box-Aufgabe filed then still
+// counts as the module's request.
+const (
+	anfrageTitel = "Anfrage aus Homes: "
+	altTitel     = "Wunsch aus Homes: "
+)
 
 // aufgabe is a Box-Aufgabe as `laib aufgabe list --alle` answers it.
 type aufgabe struct {
@@ -75,11 +81,11 @@ type Stand struct {
 
 // modulWish: `laib wish --modul <name> [--von <login>] "<Titel>"` from
 // Homes (#1038, homes ADR 0001 §10): a Box-Aufgabe for the admins, as the
-// Bote's wish (#883), „Wunsch aus Homes: <Titel>“, its weg the module's
+// Bote's wish (#883), „Anfrage aus Homes: <Titel>“, its weg the module's
 // Homes page. While one is open, a second files nothing and answers it.
 func modulWish(ctx context.Context, env *Env, args []string) int {
 	if hand, _, _ := strings.Cut(env.Actor, ":"); hand != "homes" {
-		return env.refused("laib wish --modul ist Homes' Wunsch für eines seiner Module; " + env.Actor + " wünscht ohne --modul")
+		return env.refused("laib wish --modul ist Homes' Anfrage für eines seiner Module; " + env.Actor + " wünscht ohne --modul")
 	}
 	var modul, von string
 	var words []string
@@ -106,22 +112,22 @@ func modulWish(ctx context.Context, env *Env, args []string) int {
 	}
 	if a := latestWish(list, modul); a != nil && a.Erledigt == nil {
 		return env.answer(map[string]any{"modul": modul, "aufgabe": a.ID, "seit": a.Seit, "von": a.Von, "neu": false,
-			"message": fmt.Sprintf("Der Wunsch liegt schon beim Admin, als Box-Aufgabe #%d seit %s.", a.ID, a.Seit)})
+			"message": fmt.Sprintf("Die Anfrage liegt schon beim Admin, als Box-Aufgabe #%d seit %s.", a.ID, a.Seit)})
 	}
 	by, who := "homes", "Jemand"
 	if von != "" {
 		by, who = "homes:"+von, von
 	}
-	warum := who + " hat sich in Homes „" + titel + "“ gewünscht, " + time.Now().Format("02.01.2006 15:04") +
+	warum := who + " hat in Homes „" + titel + "“ angefragt, " + time.Now().Format("02.01.2006 15:04") +
 		". Abhaken heißt für Homes: wird nicht eingerichtet. Ist das Modul an, hakt Homes die Aufgabe selbst ab."
-	id, err := env.Laib.Aufgabe(ctx, env.Ceiling, "add", wunschTitel+titel, "--warum", warum, "--fuer", "admins", "--weg", "/module/"+modul, "--von", by)
+	id, err := env.Laib.Aufgabe(ctx, env.Ceiling, "add", anfrageTitel+titel, "--warum", warum, "--fuer", "admins", "--weg", "/module/"+modul, "--von", by)
 	if err != nil {
-		env.journalAs("red", "homes", wunschTitel+titel, err.Error())
+		env.journalAs("red", "homes", anfrageTitel+titel, err.Error())
 		return env.fail(err)
 	}
-	env.journal("homes", wunschTitel+titel, fmt.Sprintf("Box-Aufgabe #%d für die Admins, Modul %s", id, modul))
+	env.journal("homes", anfrageTitel+titel, fmt.Sprintf("Box-Aufgabe #%d für die Admins, Modul %s", id, modul))
 	return env.answer(map[string]any{"modul": modul, "aufgabe": id, "seit": time.Now().Format(time.DateOnly), "von": by, "neu": true,
-		"message": fmt.Sprintf("Der Wunsch liegt beim Admin als Box-Aufgabe #%d.", id)})
+		"message": fmt.Sprintf("Die Anfrage liegt beim Admin als Box-Aufgabe #%d.", id)})
 }
 
 // wishStand: `laib wish stand <name>=<backend> …` (#1038): for each module
@@ -222,7 +228,7 @@ func latestWish(list []aufgabe, modul string) *aufgabe {
 	var w *aufgabe
 	for i := range list {
 		a := &list[i]
-		if a.Weg != nil && a.Weg.Seite == "/module/"+modul && strings.HasPrefix(a.Titel, wunschTitel) && (w == nil || a.ID > w.ID) {
+		if a.Weg != nil && a.Weg.Seite == "/module/"+modul && (strings.HasPrefix(a.Titel, anfrageTitel) || strings.HasPrefix(a.Titel, altTitel)) && (w == nil || a.ID > w.ID) {
 			w = a
 		}
 	}

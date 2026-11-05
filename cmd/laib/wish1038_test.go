@@ -32,7 +32,7 @@ func TestHomesWishForAModuleAndItsStandThroughTheDoor(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("one Box-Aufgabe: %v %v", list, err)
 	}
-	if a := list[0]; a.Titel != "Wunsch aus Homes: Standortverlauf" || a.Von != "homes:lena" || a.Fuer != aufgaben.Admins || a.Weg == nil || a.Weg.Seite != "/module/standort" {
+	if a := list[0]; a.Titel != "Anfrage aus Homes: Standortverlauf" || a.Von != "homes:lena" || a.Fuer != aufgaben.Admins || a.Weg == nil || a.Weg.Seite != "/module/standort" {
 		t.Fatalf("the admins' task for the module: %+v", a)
 	}
 	stand := func() []map[string]any {
