@@ -29,6 +29,12 @@ var (
 	tokenShape = regexp.MustCompile(`\b(?:laib_[a-z0-9-]+_[A-Za-z0-9_-]{16,}|sb_[A-Za-z0-9_-]{16,}|AGE-SECRET-KEY-1[0-9A-Z]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})`)
 	bearer     = regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{16,}`)
 	keyValue   = regexp.MustCompile(`(?i)((?:^|[^{A-Za-z0-9_])[A-Za-z0-9_]*(?:private[_-]?key|secret|password|passwd|token|api[_-]?key)[A-Za-z0-9_]*["']?\s*[:=]\s*["']?)[A-Za-z0-9+/=_.~-]{12,}`)
+	// password hashes (#1054): bcrypt, argon2, sha-crypt, yescrypt; never a
+	// value of secrets.age, and as good as the password to an offline guess
+	hashShape = regexp.MustCompile(`\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{53}|\$argon2(?:id|i|d)\$[A-Za-z0-9+/=$,.-]+|\$[56]\$(?:rounds=\d+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{43,86}|\$y\$[./A-Za-z0-9]+\$[./A-Za-z0-9]+\$[./A-Za-z0-9]{43}`)
+	// the value of a key named …password, …passwd or …hash, of any shape and
+	// length (#1054); a placeholder (${…}, {{…}}) stays
+	secretKey = regexp.MustCompile(`(?i)((?:^|[^A-Za-z0-9_])[A-Za-z0-9_]*(?:password|passwd|hash)["']?[ \t]*[:=][ \t]*["']?)[^\s"'$&,{}][^\s"'&,}]*`)
 )
 
 // Redacted stands where Scrub took something out.
@@ -37,7 +43,8 @@ const Redacted = "[geschwärzt]"
 // Scrub redacts what must never reach the journal (#1012): the box's known
 // secret values the way laib logs does (render.Redact), then key material
 // and token shapes, which no list of known values catches (a key rendered
-// indented into a config file, a token minted elsewhere).
+// indented into a config file, a token minted elsewhere), and password
+// hashes (#1054). laib read, look and exec answer through it too.
 func Scrub(s string, known map[string]string) string {
 	if s == "" {
 		return s
@@ -48,7 +55,9 @@ func Scrub(s string, known map[string]string) string {
 	s = pemBegin.ReplaceAllString(s, Redacted+" ")
 	s = tokenShape.ReplaceAllString(s, Redacted)
 	s = bearer.ReplaceAllString(s, "${1}"+Redacted)
-	return keyValue.ReplaceAllString(s, "${1}"+Redacted)
+	s = keyValue.ReplaceAllString(s, "${1}"+Redacted)
+	s = hashShape.ReplaceAllString(s, Redacted)
+	return secretKey.ReplaceAllString(s, "${1}"+Redacted)
 }
 
 func knownNow() map[string]string {
