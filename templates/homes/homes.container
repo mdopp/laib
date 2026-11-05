@@ -41,6 +41,11 @@ Environment=HOMES_PAPERLESS_PUBLIC_URL=${PAPERLESS_PUBLIC_URL}
 # whether Paperless opens only at home (its route is internal: from outside, a word instead of the link)
 Environment=HOMES_DOCUMENTS_MAIL=${DOCUMENTS_MAIL}
 Environment=HOMES_PAPERLESS_LAN_ONLY=${PAPERLESS_LAN_ONLY}
+# Immich for the contacts (homes 2026-11-05): a contact's „Fotos“, its face on the phones, the suggestions on
+# Kontakte; the owner's API key, empty without it (then „Fotos“ searches by name). Only with the module fotos on
+Environment=HOMES_IMMICH_URL=${IMMICH_URL}
+Environment=HOMES_IMMICH_KEY=${IMMICH_KEY}
+Environment=HOMES_IMMICH_PUBLIC_URL=${IMMICH_PUBLIC_URL}
 # the Box page's Werkstatt card (haus#15)
 Environment=HOMES_WERKSTATT_REPOS=${WERKSTATT_REPOS}
 # the owner's switch (homes ADR 0001 §5, laib#1036): modules left off although their service runs,

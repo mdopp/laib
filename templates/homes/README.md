@@ -151,6 +151,18 @@ upload does (`HOMES_UPLOAD_DIR`). *In Paperless öffnen* goes to
 internal) adds "nur zu Hause im WLAN" and, from outside the house, a
 sentence in place of the link.
 
+Immich for the contacts (homes 2026-11-05): `IMMICH_URL` (Immich as the
+pod reaches it, `http://host.containers.internal:2283`), `IMMICH_PUBLIC_URL`
+(`https://photos.<domain>`) and `IMMICH_KEY: !secret HOMES_IMMICH_KEY`, an
+API key of the owner's Immich account with `person.read` only (Immich
+keeps its people per user, and the face thumbnail needs no more). The
+owner sets it on the box page („Schlüssel hinterlegen“). With it a
+contact's „Fotos“ opens the Immich person of its name, a card without a
+picture reaches the phones with that face, and Immich's named people
+without a contact are offered on Kontakte; Homes keeps the small faces in
+`${DATA_DIR}/homes`. Without it „Fotos“ searches Immich by name. All of it
+only while Laib runs immich (Homes' module `fotos`).
+
 The house model (#198): with a model on the box (the `model` role, or
 `box.yml model.url`) Homes gets `HOMES_LLM_URL` (the proxy's OpenAI base
 as the pod reaches it, `${MODEL_URL}`), `HOMES_LLM_MODEL=qwen3.6-35b-a3b` and
