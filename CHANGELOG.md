@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.1](https://github.com/mdopp/laib/compare/v2.3.0...v2.3.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **envelope:** laib read takes password hashes out ([cbbd8e8](https://github.com/mdopp/laib/commit/cbbd8e8e3e3166f6a72e4d1c4b06c7b6de075b2b))
+* **envelope:** laib read takes password hashes out ([02f7701](https://github.com/mdopp/laib/commit/02f77016dba77c889975ded3b605a43e2bb0f91f)), closes [#1054](https://github.com/mdopp/laib/issues/1054)
+* **install:** 1024 inotify instances for core's containers ([7d1e335](https://github.com/mdopp/laib/commit/7d1e33596d0c3fd39ca68229b0d28c44f4e5f929))
+* **install:** 1024 inotify instances for core's containers ([3565c81](https://github.com/mdopp/laib/commit/3565c8181228b1e393d913693f93240f6d2f6187)), closes [#1052](https://github.com/mdopp/laib/issues/1052)
+* **mcp:** a wish behind the door holds no lock across laib-haushalt's call back ([6213696](https://github.com/mdopp/laib/commit/62136963a1097c763bc9c206d64427ff49124e37))
+* **mcp:** a wish behind the door holds no lock across laib-haushalt's call back ([326882a](https://github.com/mdopp/laib/commit/326882a7d4c5f27cf5ccdfe83d8b2ebbfa212636)), closes [#1051](https://github.com/mdopp/laib/issues/1051)
+* **werkstatt:** a git worktree gets no Claude session ([9a020ba](https://github.com/mdopp/laib/commit/9a020bac8a5841df795f4ee8baa57d5350c6e095))
+* **werkstatt:** a git worktree gets no Claude session ([2b4ea5a](https://github.com/mdopp/laib/commit/2b4ea5a4dd966a8329fc603a877630f6b7e29266)), closes [#1053](https://github.com/mdopp/laib/issues/1053)
+
 ## [2.3.0](https://github.com/mdopp/laib/compare/v2.2.0...v2.3.0) (2026-11-04)
 
 
