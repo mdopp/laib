@@ -223,7 +223,7 @@ func Read(_ context.Context, env *cli.Env, args []string) int {
 		b = b[:1<<20]
 	}
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
-	text := render.Redact(render.Output{"f": string(b)}, sec)["f"]
+	text := journal.Scrub(string(b), sec) // the box's secrets, key material, tokens, password hashes (#1054)
 	if env.JSON {
 		return cli.Emit(env, map[string]string{"path": p, "content": text})
 	}
@@ -251,6 +251,9 @@ func Write(ctx context.Context, env *cli.Env, args []string) int {
 	content, err := io.ReadAll(env.Stdin())
 	if err != nil {
 		return env.Fail(err)
+	}
+	if bytes.Contains(content, []byte(journal.Redacted)) { // a redacted read written back overwrites the secret (#1054)
+		return cli.Refused(env, p+" trägt "+journal.Redacted+" aus laib read: so überschriebe es ein Geheimnis mit der Schwärzung. Ändere die Datei im Container (laib exec, z. B. sed -i), oder schreib sie mit dem echten Wert")
 	}
 	if code := envelope(ctx, env, st, svc, "write", p); code != cli.ExitOK {
 		return code
@@ -519,7 +522,7 @@ func runIn(ctx context.Context, env *cli.Env, svc *state.Service, verb, containe
 	start := time.Now()
 	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
-	out = render.Redact(render.Output{"o": out}, sec)["o"]
+	out = journal.Scrub(out, sec) // a cat of a file shows what laib read would (#1054)
 	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: cli.Tail(out, 1500), MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result = "red"
