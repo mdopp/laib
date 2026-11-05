@@ -41,7 +41,7 @@ laib backups                         read: the last nightly backup (green/red, w
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish [--von <login>] "<was das Haus braucht>"  the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the bote hand a Box-Aufgabe for the admins, „Wunsch aus dem Boten: …“ with von bote:<login>, never a ticket (#883); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
 laib wish --modul <name> [--von <login>] "<Titel>"   Homes' wish for one of its modules (#1038, homes ADR 0001 §10): from the homes hand
-                                     only, a Box-Aufgabe for the admins „Wunsch aus Homes: <Titel>“, von homes:<login>, weg /module/<name>;
+                                     only, a Box-Aufgabe for the admins „Anfrage aus Homes: <Titel>“, von homes:<login>, weg /module/<name>;
                                      its warum says that ticking it off means „wird nicht eingerichtet“ and that Homes ticks it off once the
                                      module is on. While one for the module is open, files nothing and answers that one (neu: false)
 laib wish stand <modul>=<backend> …  where each module's latest wish stands, as JSON (#1038): laib-haushalt joins the Box-Aufgaben with the
