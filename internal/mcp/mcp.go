@@ -229,6 +229,19 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	return out, code
 }
 
+// Hold takes Mu alone, as Call does for a verb that changes something, in
+// a verb whose call goes only in part through the door (wish, #1051): Call
+// takes nothing for it, since laib-haushalt's call back would wait for the
+// lock its caller holds; the kernel's own forms take it here. Outside an
+// MCP call it takes nothing, as Call.
+func Hold(env *cli.Env) func() {
+	if !env.MCP {
+		return func() {}
+	}
+	Mu.Lock()
+	return Mu.Unlock
+}
+
 // SplitArgs splits a command-line string, honouring double quotes.
 func SplitArgs(s string) []string {
 	var out []string

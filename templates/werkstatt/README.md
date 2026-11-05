@@ -83,7 +83,8 @@ tokens.
 
 **Claude's sessions per checkout (#383).** As ServiceBay's `claude-dev`
 did, the dev container starts one Claude Code session with Remote Control
-per checkout in `/workspace` that has a `CLAUDE.md`: a window in the tmux
+per checkout in `/workspace` that has a `CLAUDE.md`, not for a git
+worktree (`.git` is a file there, #1053): a window in the tmux
 session `claude`, named after the checkout, running `claude --continue
 --remote-control <name>` (a fresh session where there is nothing to
 continue). They show up under the checkout's name in the Claude app and on
