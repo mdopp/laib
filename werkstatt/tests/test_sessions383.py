@@ -67,6 +67,18 @@ class Sessions(unittest.TestCase):
         self.assertIn("laib --permission-mode default --continue --remote-control laib", runs)
         self.assertIn("homes --permission-mode default --continue --remote-control homes", runs)
 
+    def test_a_git_worktree_gets_no_session(self):
+        # #1053: every `git worktree add` under /workspace (laib-wt-…) got a
+        # session of its own, ~67 of them, each holding an inotify instance
+        self.checkout("laib")
+        wt = self.ws / "laib-wt-train"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: /workspace/laib/.git/worktrees/laib-wt-train\n")
+        (wt / "CLAUDE.md").write_text("# rules\n")
+        self.run_()
+        self.assertEqual(self.windows(), ["laib"])
+        self.assertEqual(self.wait_log(1), ["laib --permission-mode default --continue --remote-control laib"])
+
     def test_the_permission_mode_is_the_owners_value(self):
         # #898: default asks (#383); bypass runs without asking, the owner's choice.
         # Passed on every start, so a --continue does not keep its old mode.
