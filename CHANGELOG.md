@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.2](https://github.com/mdopp/laib/compare/v2.3.1...v2.3.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* **haushalt:** a module request from Homes is an Anfrage, not a Wunsch ([#1063](https://github.com/mdopp/laib/issues/1063)) ([0c23fbc](https://github.com/mdopp/laib/commit/0c23fbc5facfc71ac708513739ac5608d55812bc))
+
 ## [2.3.1](https://github.com/mdopp/laib/compare/v2.3.0...v2.3.1) (2026-11-05)
 
 
