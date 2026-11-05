@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # werkstatt-sessions: one Claude Code Remote Control session per checkout
 # (#383), as ServiceBay's claude-dev started them (start-claude,
-# reconcile_repos). Every checkout in /workspace with a CLAUDE.md gets a
+# reconcile_repos). Every checkout in /workspace with a CLAUDE.md, not a
+# git worktree (#1053), gets a
 # window in the tmux session `claude`, named after the checkout, running
 # `claude --continue --remote-control <name>`: the session shows up under
 # that name in the Claude app and on claude.ai, and picks its last
@@ -124,7 +125,8 @@ pass() {
   bypass_settled
   for d in "$WS"/*/; do
     name=$(basename -- "$d")
-    valid "$name" && [ -f "$d/CLAUDE.md" ] && [ ! -e "$OFF/$name" ] || continue
+    # a git worktree (.git is a file) is a branch of a checkout, not one: no session (#1053)
+    valid "$name" && [ -f "$d/CLAUDE.md" ] && [ ! -f "$d/.git" ] && [ ! -e "$OFF/$name" ] || continue
     settle "$WS/$name"
     idx=$(window "$name")
     if [ -z "$idx" ]; then
