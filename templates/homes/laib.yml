@@ -13,7 +13,7 @@ needs: [mcp]                     # talks to laib over host.containers.internal: 
 # every backend of a Homes module (homes ADR 0001 §5, #1036), talked to without after: (a box without
 # them still loads); their planned stops explain its errors (laib planned, #978). The persons' archives
 # are services of their own (archiv-<person>), wired through instances: below
-uses: [home-assistant, reitti, radicale, paperless, audiobookshelf, media, bote, file-share, usage-metrics, gesundheit]
+uses: [home-assistant, reitti, radicale, paperless, audiobookshelf, media, bote, file-share, usage-metrics, gesundheit, immich]
 instances:                       # each person's open archive gives a new phone its WhatsApp media back (laib#1016, haus#209)
   - template: archiv
     unit: homes.container
@@ -54,6 +54,10 @@ secrets:
   - name: HOMES_PAPERLESS_TOKEN    # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search
     was: HAUS_PAPERLESS_TOKEN
     owner: {label: "Paperless: Zugang für die Dokumentensuche", warum: "Damit findet Homes eure Dokumente in Paperless, etwa wenn du den Boten nach einem Vertrag fragst.", hilfe: "In Paperless oben rechts auf deinen Namen → Mein Profil, beim API-Token auf Erzeugen tippen und ihn kopieren. Homes findet dann, was dieses Konto sieht.", link: "https://paperless.${DOMAIN}/"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
+    external: true
+    optional: true
+  - name: HOMES_IMMICH_KEY         # an API key of the owner's Immich account (homes 2026-11-05): Immich keeps its people per user, so Homes reads the owner's; without it a contact's „Fotos“ searches Immich by name, no faces, no suggestions
+    owner: {label: "Immich: Schlüssel für Gesichter und Personen", warum: "Damit öffnet „Fotos“ beim Kontakt genau die Person in Immich, Kontakte ohne Bild bekommen das Gesicht aus Immich, und Homes schlägt Personen aus Immich als neue Haushalts-Kontakte vor.", hilfe: "In Immich mit deinem eigenen Konto anmelden, oben rechts auf dein Bild → Kontoeinstellungen → API-Schlüssel → Neuer API-Schlüssel. Als Namen „Homes“ eintragen, bei den Berechtigungen nur person.read ankreuzen, auf Erstellen tippen und den Schlüssel kopieren; Immich zeigt ihn nur einmal.", link: "https://photos.${DOMAIN}/user-settings"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true
   - name: HOMES_HA_TOKEN           # minted by home-assistant's post-deploy (#349) for HA's own user „Homes“ (no was: minted again for it, ADR 0031), an administrator (haus#10, #591): Homes serves the house paths from Home Assistant; without HA there are none
