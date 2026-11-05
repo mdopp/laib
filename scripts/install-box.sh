@@ -77,6 +77,17 @@ box_config() {
     [ -z "$s" ] || { sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=04c5 --attr-match=idProduct=114f; } || true
     echo "udev: a USB scanner (Fujitsu fi-6130) is core's, for the scan service"
   fi
+  # inotify (#1052): every instance of uid core counts against one limit, checked in the host's
+  # user namespace across all its containers (Paperless' consumer, conmon, the Werkstatt's
+  # sessions); the default 128 ran out. A box in use gets it with its next self-update.
+  # max_user_watches stays the kernel's own, sized from the RAM.
+  want="$(printf '%s\n' '# laib (#1052): inotify instances of uid core, shared by all its containers' 'fs.inotify.max_user_instances=1024')"
+  if [ "$(cat "$etc/sysctl.d/90-laib-inotify.conf" 2>/dev/null)" != "$want" ]; then
+    $s mkdir -p "$etc/sysctl.d"
+    printf '%s\n' "$want" | $s tee "$etc/sysctl.d/90-laib-inotify.conf" >/dev/null
+    [ -z "$s" ] || sudo sysctl -q -p /etc/sysctl.d/90-laib-inotify.conf || echo "inotify: sysctl refused it now; it takes effect at the next boot" >&2
+    echo "inotify: 1024 instances for core's containers"
+  fi
   conf="$(dirname "${LAIB_QUADLET:-$HOME/.config/containers/systemd}")/containers.conf.d"
   mkdir -p "$conf" && printf '[containers]\nlog_driver = "journald"\n' > "$conf/50-laib.conf"
   # OS updates (#368): Zincati stages an update and asks laib before it

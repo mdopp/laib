@@ -12,9 +12,8 @@ import (
 // host's fs.inotify.max_user_instances (checked in the init user namespace,
 // across all of core's containers). At the default 128 it ran out:
 // Paperless' consumer crash-looped on "Too many open files", conmon could
-// not watch. install-box.sh's box config raises it, and so does the next
-// self-update on a box in use; the stick's Ignition carries the same file,
-// so a fresh box has it from its first boot.
+// not watch. install-box.sh's box config raises it: on a fresh box at its
+// first boot, on a box in use with its next self-update.
 func TestTheBoxConfigRaisesTheInotifyInstances(t *testing.T) {
 	etc := t.TempDir()
 	cmd := exec.Command("bash", "../../scripts/install-box.sh", "--box-config")
@@ -26,11 +25,8 @@ func TestTheBoxConfigRaisesTheInotifyInstances(t *testing.T) {
 	if err != nil || !strings.Contains(string(conf), "\nfs.inotify.max_user_instances=1024\n") {
 		t.Fatalf("no sysctl drop-in for inotify (%v):\n%s", err, conf)
 	}
-	bu, _ := os.ReadFile("../../usb/fedora-coreos.bu")
-	_, block, ok := strings.Cut(string(bu), "- path: /etc/sysctl.d/90-laib-inotify.conf\n")
-	for _, line := range strings.Split(strings.TrimSpace(string(conf)), "\n") {
-		if !ok || !strings.Contains(block, "          "+line+"\n") {
-			t.Errorf("usb/fedora-coreos.bu's 90-laib-inotify.conf lacks %q: the stick and install-box.sh drift", line)
-		}
+	// one source (#281): the first boot runs install-box.sh before any container starts
+	if bu, _ := os.ReadFile("../../usb/fedora-coreos.bu"); strings.Contains(string(bu), "inotify") {
+		t.Error("usb/fedora-coreos.bu sets inotify too: two sources drift (#281)")
 	}
 }

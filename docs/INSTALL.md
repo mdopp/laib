@@ -342,7 +342,8 @@ to journald (`~/.config/containers/containers.conf.d/50-laib.conf`), so a
 container's output is in `laib logs`, and a udev rule that makes a USB
 scanner's node core's, so the rootless scan service can open it
 (`/etc/udev/rules.d/99-laib-scanner.rules`, matched by vendor and product,
-#801). The stick's Ignition does not carry them: the first boot runs this
+#801), and 1024 inotify instances for core's containers instead of the
+kernel's 128 (`/etc/sysctl.d/90-laib-inotify.conf`, #1052). The stick's Ignition does not carry them: the first boot runs this
 script, so there is one source. `laib diag` is red while either of the first
 two is missing; `install-box.sh --box-config` writes only these.
 
