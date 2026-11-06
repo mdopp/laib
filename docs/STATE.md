@@ -63,6 +63,7 @@ backup:
     env: {RCLONE_CONFIG_NAS_TYPE: ftp, RCLONE_CONFIG_NAS_HOST: 192.168.178.1, RCLONE_CONFIG_NAS_USER: laib,
           RCLONE_CONFIG_NAS_EXPLICIT_TLS: "true", RCLONE_CONFIG_NAS_NO_CHECK_CERTIFICATE: "true", RCLONE_CONFIG_NAS_CONCURRENCY: "2"}
     secrets: [RCLONE_CONFIG_NAS_PASS]   # rclone obscure's output, in secrets.age
+  keep: ["${DATA_DIR}/gesundheit"] # data folders no service declares any more, still backed up: a removed service's (its data stay until a human deletes them)
 dns:                              # DNS-01: one wildcard certificate *.<domain> (#378); absent = HTTP-01 per name
   provider: desec                 # a module in ghcr.io/mdopp/laib-caddy (caddy/Containerfile)
   secretRef: DNS_API_TOKEN        # laib secret set DNS_API_TOKEN (stdin)

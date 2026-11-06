@@ -54,6 +54,23 @@ class PostDeploy(unittest.TestCase):
         for name, s in SECRETS.items():
             self.assertNotIn(s, argv, f"{name} is on a process's argv, where ps shows it")
 
+    def test_without_gesundheits_address_no_tool_no_rule_and_no_token(self):
+        """Gesundheit retired (2026-11-06): its address emptied, its token still in secrets.age;
+        the Bote has neither the tool nor the rule, and Hermes' environment no bearer"""
+        srv = HTTPServer(("127.0.0.1", 0), FakeHaushalt)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
+                       MODEL_NAME="m", THINKING_MODEL="t", GESUNDHEIT_MCP_URL="", **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
+            for hook in (HOOK, HOOK.parent / "pre-start"):
+                p = subprocess.run(["bash", str(hook)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            cfg, soul = Path(d, "bote/hermes/config.yaml").read_text(), Path(d, "bote/hermes/SOUL.md").read_text()
+            self.assertNotIn("gesundheit", cfg.lower())
+            self.assertNotIn("tagesnotiz", soul.lower())
+            self.assertNotIn("Gesundheit", soul)
+            self.assertNotIn("GESUNDHEIT_TOKEN", Path(d, "bote/hermes/.env").read_text())
 
     def test_the_ha_tool_speaks_assist_as_the_bote_and_the_automat_has_its_own_token(self):
         """#349: BOTE_HA_TOKEN belongs to HA's non-admin user bote, and HA serves

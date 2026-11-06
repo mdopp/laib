@@ -531,7 +531,11 @@ a unit file does the same), takes `services/<name>` out of the
 state (a commit: `laib rollback` brings the service back), removes its
 Quadlet and rendered files, applies (Caddy, Authelia, DNS lose the routes).
 Data paths stay, and Laib prints where; deleting data is a separate, human
-act. A role holder (proxy, sso, identity, dns, model) is refused until
+act. They leave the backup with the service unless box.yml `backup.keep`
+names them; a removal proposed as a patch (services/<name> deleted, the
+same change emptying what other services point at it) says both on its
+card: „<Dienst> wird von der Box entfernt“, and whether its data are still
+backed up. A role holder (proxy, sso, identity, dns, model) is refused until
 `box.yml roles` points elsewhere.
 
 ### Tokens a template needs

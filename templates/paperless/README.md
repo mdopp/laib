@@ -223,3 +223,8 @@ and gets exactly Dokumente's shape from this template's post-deploy
 - Without `PAPERLESS_GESUNDHEIT_PASSWORD` (the gesundheit template not
   installed) nothing of this is made and post-deploy says so; Dokumente goes
   on alone.
+- **`GESUNDHEIT_HOOK`** (values) switches Gesundheit: its address is the
+  webhook's. Emptied when the gesundheit service goes (Paperless took over its
+  fields, 2026-11-06): no webhook action, the workflow only Dokumente's, and
+  the user `gesundheit` switched off (`is_active: false`, so its token stops
+  working too); nothing is deleted, and setting the value again switches it on.

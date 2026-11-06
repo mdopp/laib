@@ -196,3 +196,19 @@ func TestUpdatesLaibIsAutoOffOrAVersion(t *testing.T) {
 		}
 	}
 }
+
+// backup.keep (2026-11-06) names data folders backed up with no service
+// declaring them; only a folder under ${DATA_DIR}/ is one.
+func TestBackupKeepIsAFolderUnderTheDataDir(t *testing.T) {
+	dir := minimal(t)
+	write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\nroles: {sso: auth}\nbackup:\n  keep: [\"${DATA_DIR}/gesundheit\"]\n")
+	if st, err := Load(dir); err != nil || len(st.Box.Backup.Keep) != 1 {
+		t.Fatalf("%v %v", st, err)
+	}
+	for _, bad := range []string{"/etc", "${DATA_DIR}/", "${DATA_DIR}/../etc", "${DATA_DIR}/a//b", "gesundheit"} {
+		write(t, dir, "box.yml", "domain: x.home\ndataDir: /d\nroles: {sso: auth}\nbackup:\n  keep: [\""+bad+"\"]\n")
+		if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "backup.keep") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}

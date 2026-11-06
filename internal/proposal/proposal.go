@@ -41,6 +41,7 @@ type Proposal struct {
 	Reasons     []string  `json:"reasons,omitempty"`     // why only a human may allow it (class human), plain German
 	Mints       []string  `json:"mints,omitempty"`       // hands the change mints Laib tokens for
 	Adds        []string  `json:"adds,omitempty"`        // services the change adds
+	Removes     []string  `json:"removes,omitempty"`     // services the change takes off the box
 	Facts       []string  `json:"facts,omitempty"`       // plain facts for the decision card (#58)
 	Changes     []Change  `json:"changes,omitempty"`     // what it changes, before → after, for the card's words (#616)
 	Lines       []string  `json:"lines,omitempty"`       // the single lines Reasons tells grouped by file (#661)
@@ -295,7 +296,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge)
 		}
 	}
 	p := &Proposal{ID: id, Actor: actor, Reason: reason, Branch: fmt.Sprintf("proposal/%d", id), Tier: "apply", Status: "open", Created: now(),
-		Kind: "tree", Class: classOf("tree", verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Changes: verdict.Changes, Lines: verdict.Lines}
+		Kind: "tree", Class: classOf("tree", verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Removes: verdict.Removed, Facts: verdict.Facts, Changes: verdict.Changes, Lines: verdict.Lines}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		// Run trims the output, so the two status columns may be gone; the
 		// path is always the last field.

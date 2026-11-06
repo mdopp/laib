@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Geht Gesundheit von der Box, fragt der Bote nicht mehr nach deinem Tag und nennt keine Werte aus Befunden mehr
 Der Bote findet Kalender, Kontakte und Notizen jetzt bei Homes, so heißt Haus jetzt; ein Gespräch im Sprechen-Feld beginnt dabei einmal neu
 Der Assistent heißt jetzt „${ASSISTANT}“ und spielt keine Filmspiele mehr; „Hilfe“ zeigt weiter, was er für euch tun kann
 Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer des Boten nicht mehr als Fehler

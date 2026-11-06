@@ -495,6 +495,30 @@ class Gesundheit(unittest.TestCase):
         self.assertIn("Gesundheit sieht neue Befunde erst zur vollen Stunde", r.stdout)
         self.assertIn("laib-secret: PAPERLESS_GESUNDHEIT_TOKEN=", r.stdout)
 
+    def test_switched_off_by_its_value_no_hook_and_its_user_may_not_log_in(self):
+        fake = Fake()
+        self.setup(fake)
+        ges = fake.users[1]
+        self.assertTrue(ges["is_active"])
+        r = self.setup(fake, GESUNDHEIT_HOOK="")
+        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4], ["http://host.containers.internal:8720/hook"])
+        self.assertEqual(sorted(fake.workflows[0]["actions"][0]["assign_view_users"]), [fake.users[0]["id"]])
+        self.assertEqual([u["username"] for u in fake.users], ["dokumente", "gesundheit"], "nothing deleted")
+        self.assertFalse(ges["is_active"])
+        self.assertIn("Gesundheit ist abgeschaltet (GESUNDHEIT_HOOK leer)", r.stdout)
+        self.assertNotIn("PAPERLESS_GESUNDHEIT_TOKEN", r.stdout)
+        fake.calls.clear()
+        r = self.setup(fake, GESUNDHEIT_HOOK="")
+        self.assertEqual([c for c in fake.writes() if c[1] != "/api/token/"], [], "a second run writes nothing")
+        r = self.setup(fake, GESUNDHEIT_HOOK="http://host.containers.internal:18529/hook")
+        self.assertTrue(ges["is_active"], "the value set again: on again")
+        self.assertEqual(len([a for a in fake.workflows[0]["actions"] if a["type"] == 4]), 2)
+
+    def test_the_hook_is_the_values_address(self):
+        fake = Fake()
+        self.setup(fake, GESUNDHEIT_HOOK="http://host.containers.internal:18600/hook")
+        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4][1], "http://host.containers.internal:18600/hook")
+
     def test_own_record_types_from_the_value(self):
         fake = Fake()
         self.setup(fake, PAPERLESS_BEFUND_ARTEN="Befund, Arztbrief")

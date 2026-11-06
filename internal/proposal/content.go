@@ -43,12 +43,13 @@ type Grant struct {
 
 // Verdict is what the judge says about a change (internal/review).
 type Verdict struct {
-	Human []string // reasons only a human may allow it; empty = the dial decides
-	Mints []string // hands the change mints Laib tokens for
-	Added []string // services the change adds
-	Facts []string // plain facts for the decision card (#58)
-	Ask   []string // a person decides, not the dial (#528): a warning
-	Snap  []string // services snapshotted before the approved change applies (#528)
+	Human   []string // reasons only a human may allow it; empty = the dial decides
+	Mints   []string // hands the change mints Laib tokens for
+	Added   []string // services the change adds
+	Removed []string // services the change takes off the box
+	Facts   []string // plain facts for the decision card (#58)
+	Ask     []string // a person decides, not the dial (#528): a warning
+	Snap    []string // services snapshotted before the approved change applies (#528)
 	// Changes: what the change does, before → after, for the card (#616)
 	Changes []Change
 	Lines   []string // the single lines Human tells grouped by file (#661)
@@ -247,7 +248,7 @@ func prepare(ctx context.Context, repo, wt string, e Edit, judge Judge) (*Propos
 	if strings.TrimSpace(status) == "" || onlyBase {
 		return nil, errors.New("nothing to propose: the edit changes nothing")
 	}
-	p := &Proposal{Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes, Lines: verdict.Lines, News: news}
+	p := &Proposal{Kind: e.Class(), Class: classOf(e.Class(), verdict), Reasons: verdict.Human, Mints: verdict.Mints, Adds: verdict.Added, Removes: verdict.Removed, Facts: verdict.Facts, Snapshot: verdict.Snap, Changes: verdict.Changes, Lines: verdict.Lines, News: news}
 	for _, line := range strings.Split(strings.TrimSpace(status), "\n") {
 		if f := strings.Fields(line); len(f) > 0 {
 			p.Files = append(p.Files, f[len(f)-1])
