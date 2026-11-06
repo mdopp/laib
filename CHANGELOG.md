@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.7.0](https://github.com/mdopp/laib/compare/v2.6.1...v2.7.0) (2026-11-06)
+
+
+### Features
+
+* **backup:** box.yml backup.keep keeps a removed service's data in the backup ([0fc8d56](https://github.com/mdopp/laib/commit/0fc8d565e6ade068ebbf49d4bbd26fe00b3a00bd))
+* **inbox:** a removal's card says the service goes, whether its data stay backed up, and that Zurücknehmen brings it back to them ([0fc8d56](https://github.com/mdopp/laib/commit/0fc8d565e6ade068ebbf49d4bbd26fe00b3a00bd))
+* **templates:** paperless and bote wire Gesundheit only while its address is set ([0fc8d56](https://github.com/mdopp/laib/commit/0fc8d565e6ade068ebbf49d4bbd26fe00b3a00bd))
+
+
+### Bug Fixes
+
+* **templates:** homes' Immich key: person.create instead of person.statistics, every contact a person ([#1086](https://github.com/mdopp/laib/issues/1086)) ([632709d](https://github.com/mdopp/laib/commit/632709da6e2420f80c6e38b03be67efa222cbdf7))
+
 ## [2.6.1](https://github.com/mdopp/laib/compare/v2.6.0...v2.6.1) (2026-11-06)
 
 
