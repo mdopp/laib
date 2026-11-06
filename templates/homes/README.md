@@ -154,15 +154,18 @@ sentence in place of the link.
 Immich for the contacts (homes 2026-11-05): `IMMICH_URL` (Immich as the
 pod reaches it, `http://host.containers.internal:2283`), `IMMICH_PUBLIC_URL`
 (`https://photos.<domain>`) and `IMMICH_KEY: !secret HOMES_IMMICH_KEY`, an
-API key of the owner's Immich account with `person.read`, `person.update`,
-`person.statistics` and `user.read` (Immich keeps its people per user).
+API key of the owner's Immich account with `person.read`, `person.create`,
+`person.update` and `user.read` (Immich keeps its people per user).
 The owner sets it on the box page („Schlüssel hinterlegen“). With it a
-contact's „Fotos“ opens the Immich person of its name, a card without a
-picture reaches the phones with that face, and the key's owner (the
-login whose e-mail is the Immich account's, `user.read`) names Immich's
-unnamed faces from their own Handy-Kontakte on „Gesichter benennen“
-(`person.update`, with the photo count from `person.statistics`; homes
-2026-11-06). Immich's people are not offered as contacts. Homes keeps the
+contact's „Fotos“ opens its Immich person, a card without a picture
+reaches the phones with that face, and every Haushalts-Kontakt and each of
+the key owner's own Handy-Kontakte gets an Immich person of its name
+(homes 2026-11-06): one Immich has of that name, else one Homes makes
+without a face (`person.create`) and keeps in step with the contact
+(`person.update`). The owner merges a named face into it in Immich. The
+key's owner (the login whose e-mail is the Immich account's, `user.read`)
+opens their own Handy-Kontakte's photos from „Meine Kontakte“. Immich's
+people are not offered as contacts. Homes keeps the mapping and the
 small faces in `${DATA_DIR}/homes`. Without it „Fotos“ searches Immich by name. All of it
 only while Laib runs immich (Homes' module `fotos`).
 
