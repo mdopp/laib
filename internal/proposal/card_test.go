@@ -53,3 +53,34 @@ func TestCardsArePlainGermanAndDefaultToSpaeterWhenRisky(t *testing.T) {
 		}
 	}
 }
+
+// Gesundheit's retirement (2026-11-06): a removal is the headline, even when
+// the same change empties values elsewhere; „Zurücknehmen“ brings the
+// service back to its data; the reason reads as a plain sentence.
+func TestARemovalSaysSo(t *testing.T) {
+	p := Proposal{ID: 11, Actor: "claude", Reason: "Paperless macht das jetzt", Kind: "patch", Class: "human",
+		Files:   []string{"services/gesundheit/laib.yml", "services/bote/values.yml", "box.yml"},
+		Removes: []string{"gesundheit"}, Reasons: []string{"entfernt den Dienst gesundheit"},
+		Facts:   []string{"Die Daten von Gesundheit bleiben auf der Platte und werden weiter gesichert."},
+		Changes: []Change{{Op: "~", Service: "bote", Key: "GESUNDHEIT_MCP_URL", Old: "http://x/mcp", New: ""}}}
+	c := Card(&p, "dopp.home")
+	if c.Summary != "Gesundheit wird von der Box entfernt" {
+		t.Errorf("summary %q", c.Summary)
+	}
+	impact := strings.Join(c.Impact, " ")
+	for _, want := range []string{"weil ein Dienst von der Box geht", "werden weiter gesichert", "Bote startet dafür kurz neu"} {
+		if !strings.Contains(impact, want) {
+			t.Errorf("impact %q lacks %q", impact, want)
+		}
+	}
+	if strings.Contains(impact, "Achtung: entfernt") {
+		t.Errorf("the reason as Laib's words: %q", impact)
+	}
+	if !c.Undoable || !strings.Contains(c.Reversible, "kommt zurück und findet seine Daten wieder") {
+		t.Errorf("reversible %v %q", c.Undoable, c.Reversible)
+	}
+	p.Removes = []string{"gesundheit", "frage"}
+	if c := Card(&p, "dopp.home"); c.Summary != "Gesundheit, Fragen werden von der Box entfernt" {
+		t.Errorf("two: %q", c.Summary)
+	}
+}

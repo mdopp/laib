@@ -158,6 +158,10 @@ type Backup struct {
 	Env     map[string]string `yaml:"env,omitempty"`     // the backend's settings (RCLONE_CONFIG_NAS_HOST …)
 	Secrets []string          `yaml:"secrets,omitempty"` // secrets.age names handed to restic as environment
 	Plain   bool              `yaml:"-"`                 // restic as core, not in podman unshare: a repo-to-repo copy reads no service files
+	// Keep: data folders backed up with no service declaring them, a removed
+	// service's (its data stay until a human deletes them, and so does their
+	// backup): ${DATA_DIR}/<folder>, one per line
+	Keep []string `yaml:"keep,omitempty"`
 }
 
 // DNS is the ACME DNS-01 provider for Caddy (ADR 0007).

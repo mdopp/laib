@@ -255,6 +255,12 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 			d.Summary += " — " + strings.TrimPrefix(f, p.Adds[0]+" ist ")
 			break
 		}
+	case len(p.Removes) > 0: // a removal is the headline, whatever else the change carries along
+		gone := make([]string, 0, len(p.Removes))
+		for _, r := range p.Removes {
+			gone = append(gone, Named(r))
+		}
+		d.Summary = strings.Join(gone, ", ") + map[bool]string{true: " werden", false: " wird"}[len(gone) > 1] + " von der Box entfernt"
 	case len(handOrder) == 1:
 		d.Summary = handHeadline(handOrder[0], hands[handOrder[0]])
 	case len(handOrder) > 1:
@@ -507,6 +513,8 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 		return false, "Das lässt sich nicht zurücknehmen: was dabei gelöscht oder überschrieben wird, bleibt weg."
 	case len(p.Adds) > 0:
 		text = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst wird gestoppt und entfernt, seine Daten bleiben — Löschen ist ein eigener Schritt."
+	case len(p.Removes) > 0: // its data were never touched: the service comes back to them
+		text = "Rückgängig mit einem Tipp („Zurücknehmen“): der Dienst kommt zurück und findet seine Daten wieder."
 	case len(p.Snapshot) > 0: // review.data: the program comes back, the data only from the snapshot (#528, #853)
 		names := make([]string, 0, len(p.Snapshot))
 		for _, s := range p.Snapshot {
@@ -547,6 +555,7 @@ var plainWords = [][2]string{
 	{"Zugriff auf den Ordner|Zugriff auf einen Ordner", "%s an Ordner der Box kommt, die nicht seine sind"},
 	{"Sonderrechte|im Netz der Box|nimmt eine Einschränkung weg", "%s mehr Rechte auf der Box bekommt als üblich"},
 	{"Laib nicht einschätzen kann|die Laib nicht kennt|ohne dass Laib den Grund erkennt", "Laib einige Zeilen nicht selbst prüfen kann"},
+	{"entfernt den Dienst", "ein Dienst von der Box geht"},
 }
 
 // impactMax: the lines of "what it means" a card shows before „und N weitere“ (#661).

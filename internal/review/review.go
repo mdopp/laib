@@ -28,10 +28,11 @@ import (
 
 // Result is what a change does that the autonomy dial alone may not decide.
 type Result struct {
-	Human []string // why only a human may allow the change, in plain German; empty = the dial decides
-	Mints []string // hands a newly declared secret mints a Laib token for
-	Added []string // services the change adds
-	Facts []string // plain facts for the decision card (#58): where a new service is reachable …
+	Human   []string // why only a human may allow the change, in plain German; empty = the dial decides
+	Mints   []string // hands a newly declared secret mints a Laib token for
+	Added   []string // services the change adds
+	Removed []string // services the change takes off the box
+	Facts   []string // plain facts for the decision card (#58): where a new service is reachable …
 	// Ask and Snapshot (#528): a change to a service with data a new image
 	// or setting may migrate — a person decides, not the dial (a warning),
 	// and laib snapshots these services before the approved change applies.
@@ -230,9 +231,17 @@ func dirs(base, changed string) Result {
 		say("%s", loadReason(err))
 		return r
 	}
-	for name := range bst.Services {
+	kept := render.BackupPaths(ast, "", "")
+	for _, name := range bst.ServiceNames() {
 		if _, ok := ast.Services[name]; !ok {
 			say("entfernt den Dienst %s", name)
+			r.Removed = append(r.Removed, name)
+			// its data stay on the disk (laib never deletes them); whether the backup keeps them is box.yml backup.keep's
+			if paths := state.SnapshotPaths(bst, bst.Services[name]); len(paths) > 0 {
+				gesichert := !slices.ContainsFunc(paths, func(p string) bool { return !slices.Contains(kept, p) })
+				r.Facts = append(r.Facts, "Die Daten von "+proposal.Named(name)+" bleiben auf der Platte"+
+					map[bool]string{true: " und werden weiter gesichert.", false: ", werden aber nicht mehr gesichert."}[gesichert])
+			}
 		}
 	}
 	r.Changes = policyChanges(bst.Policy, ast.Policy)

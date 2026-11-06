@@ -141,17 +141,21 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 func BackupPaths(st *state.State, stateDir, journalDir string) []string {
 	seen := map[string]bool{stateDir: true, journalDir: true}
 	out := []string{stateDir, journalDir}
+	add := func(path string) {
+		if p := strings.ReplaceAll(path, "${DATA_DIR}", st.Box.DataDir); !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
 	for _, name := range st.ServiceNames() {
 		for _, d := range st.Services[name].Contract.Data {
-			if d.Backup != nil && !*d.Backup {
-				continue
-			}
-			p := strings.ReplaceAll(d.Path, "${DATA_DIR}", st.Box.DataDir)
-			if !seen[p] {
-				seen[p] = true
-				out = append(out, p)
+			if d.Backup == nil || *d.Backup {
+				add(d.Path)
 			}
 		}
+	}
+	for _, k := range st.Box.Backup.Keep { // a removed service's data: backed up until a human deletes them
+		add(k)
 	}
 	sort.Strings(out[2:])
 	return out

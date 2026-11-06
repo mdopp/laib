@@ -31,7 +31,10 @@ One tool, one declaration per service, one key.
   silence is not an opt-out. An empty list is written as `data: []` with a
   comment saying why.
 - **What is in every snapshot:** the state repo (which includes
-  `secrets.age`), the journal, and every declared path. Not the rendered
+  `secrets.age`), the journal, every declared path, and `box.yml
+  backup.keep`: folders under `${DATA_DIR}` no service declares any more —
+  a removed service's data, which stay on the disk until a human deletes
+  them, and in the backup while they are named there. Not the rendered
   files; they are reproduced by `laib apply`.
 - **No strip rules.** The repo is encrypted; a config file that carries a
   secret on disk is backed up as it is. The `age` key is not in the backup

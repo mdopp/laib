@@ -228,7 +228,7 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				r.Changes[i].OldVersion, r.Changes[i].NewVersion = ImageVersion(c.Old), ImageVersion(c.New)
 			}
 		}
-		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes, Lines: r.Lines}, nil
+		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Removed: r.Removed, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes, Lines: r.Lines}, nil
 	}
 }
 

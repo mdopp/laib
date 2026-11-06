@@ -247,6 +247,11 @@ func (st *State) validate() []error {
 	if st.Box.DataDir == "" {
 		fail("box.yml: dataDir is required")
 	}
+	for _, k := range st.Box.Backup.Keep {
+		if rest, ok := strings.CutPrefix(k, "${DATA_DIR}/"); !ok || rest == "" || slices.Contains(strings.Split(rest, "/"), "..") || slices.Contains(strings.Split(rest, "/"), "") {
+			fail("box.yml: backup.keep %q is no folder under ${DATA_DIR}/", k)
+		}
+	}
 	tier := map[string]bool{}
 	for _, t := range st.Policy.Tiers {
 		tier[t] = true
