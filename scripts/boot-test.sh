@@ -305,7 +305,8 @@ if [ -n "${CI:-}" ]; then
   echo '[]' > "$LAIB_HOME/images-kept.json" # not the first run, which only records
   LAIB_ACTOR=laib "$BIN" updates --run > updates.out || { echo "FAIL: updates --run exit $?"; cat updates.out; "$BIN" journal --verb updates; exit 1; }
   if podman image exists mirror.gcr.io/library/busybox:stable; then echo "FAIL: the green run left an image nothing needs"; podman images; exit 1; fi
-  for i in docker.io/traefik/whoami:v1.10 "$OPERATOR_IMAGE" "$HAUSHALT_IMAGE"; do
+  # (the Operator's image may go: it was disabled above, no unit names it, enable pulls it again)
+  for i in docker.io/traefik/whoami:v1.10 "$HAUSHALT_IMAGE"; do
     [ -z "$i" ] || podman image exists "$i" || { echo "FAIL: the green run removed $i, which a unit names"; exit 1; }
   done
   "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="updates" and "Abbilder entfernt" in e.get("detail","") for e in es), [e.get("detail") for e in es if e["verb"]=="updates"]'
