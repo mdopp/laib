@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.0](https://github.com/mdopp/laib/compare/v2.5.0...v2.6.0) (2026-11-06)
+
+
+### Features
+
+* **diag:** laib auslastung, the box's current values as JSON ([524d284](https://github.com/mdopp/laib/commit/524d284d6deb1a9bc2acc6733315cd39cc750958))
+* **diag:** laib auslastung, the box's current values as JSON ([c1c58b2](https://github.com/mdopp/laib/commit/c1c58b28572d297c076da2171022f565e0b5d8c4)), closes [#1076](https://github.com/mdopp/laib/issues/1076)
+
 ## [2.5.0](https://github.com/mdopp/laib/compare/v2.4.0...v2.5.0) (2026-11-06)
 
 
