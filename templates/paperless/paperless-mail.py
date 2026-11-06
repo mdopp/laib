@@ -222,13 +222,16 @@ def config(api):
 # field definitions, and the users, so it never takes a household person for a sender, #737, and
 # knows whose a sheet is). Nothing else: no deleting (except Gesundheit its own note, gesundheit#5), no mail, no workflows, no settings, no users
 # or groups. One workflow „Dokument hinzugefügt“ gives every client view and change on each new
-# document and posts to each client's hook with its own token.
+# document and posts to each client's hook with its own token. A client with a `schalter` is wired
+# only while that value is set (its hook's address): Gesundheit while the gesundheit service is
+# there; its value emptied when it goes (Paperless took over, 2026-11-06), its user is switched off.
 KUNDEN = [
     {"user": "dokumente", "name": "Dokumente", "passwort": "PAPERLESS_DOKUMENTE_PASSWORD", "token": "PAPERLESS_TOKEN",
      "hook": "http://host.containers.internal:8720/hook", "header": "X-Dokumente-Token", "hook_token": "DOKUMENTE_WEBHOOK_TOKEN",
      "ohne_hook": "Dokumente sieht neue Dokumente erst zur vollen Stunde"},   # the scan service's listener on the host, never through Caddy
     {"user": "gesundheit", "name": "Gesundheit", "passwort": "PAPERLESS_GESUNDHEIT_PASSWORD", "token": "PAPERLESS_GESUNDHEIT_TOKEN",
      "hook": "http://host.containers.internal:18529/hook", "header": "X-Gesundheit-Token", "hook_token": "GESUNDHEIT_WEBHOOK_TOKEN",
+     "schalter": "GESUNDHEIT_HOOK",   # the value's address is the hook; a box whose values.yml has no such key yet: the one above
      "ohne_hook": "Gesundheit sieht neue Befunde erst zur vollen Stunde",   # the gesundheit template's inner port (laib#894)
      # gesundheit#5: its one note per document (the transcript of a page read from its image) is
      # replaced on every reading; Paperless cannot edit a note, so the old one is deleted. Only
@@ -257,6 +260,10 @@ def kunden(api, have):
     template not installed) is left out and said; the others go on. A second run writes nothing."""
     uids, hooks = [], []
     for k in KUNDEN:
+        if k.get("schalter") and not E.get(k["schalter"], k["hook"]):
+            abschalten(api, k)
+            continue
+        k = {**k, "hook": E.get(k["schalter"], k["hook"])} if k.get("schalter") else k
         pw = E.get("LAIB_SECRET_" + k["passwort"], "")
         if not pw:
             print("paperless: kein %s, %s nicht eingerichtet" % (k["passwort"], k["name"]))
@@ -270,6 +277,17 @@ def kunden(api, have):
     if uids:
         workflow(api, uids, hooks)
         besitz(api, uids)
+
+
+def abschalten(api, k):
+    """a client switched off by its value: its user, if there, may no longer log in (its token stops
+    working too); nothing deleted, the next run with the value set switches it on again"""
+    u = next((x for x in api.all("/api/users/") if x.get("username") == k["user"]), None)
+    if u is not None and u.get("is_active"):
+        api("PATCH", "/api/users/%d/" % u["id"], {"is_active": False})
+        print("paperless: %s ist abgeschaltet (%s leer): der Benutzer %s meldet sich nicht mehr an" % (k["name"], k["schalter"], k["user"]))
+    else:
+        print("paperless: %s nicht eingerichtet (%s leer)" % (k["name"], k["schalter"]))
 
 
 def dokumente(api, have):

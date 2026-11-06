@@ -52,8 +52,8 @@ if [ -n "${HAUSHALT_MCP_URL:-}" ]; then
     TOOLS="$TOOLS, das Gedächtnis des Hauses (haushalt: Kalender, Notizen, Erinnerungen)"
   else echo "haushalt: $HAUSHALT_MCP_URL ${why:-antwortet nicht} (Token), weggelassen"; fi
 fi
-# Gesundheit (laib#893, #894): the health program's MCP with its own bearer; without the service, its
-# token or an answer, no tool. The rule below: the Bote enters a day's note only for the person
+# Gesundheit (laib#893, #894): the health program's MCP with its own bearer; without its address (emptied
+# when the gesundheit service goes), its token or an answer, no tool and no rule. The rule below: the Bote enters a day's note only for the person
 # writing, and shows no one another's values.
 GESUNDHEIT_RULE=""
 if [ -n "${GESUNDHEIT_MCP_URL:-}" ]; then
