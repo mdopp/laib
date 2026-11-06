@@ -36,7 +36,9 @@ func AutoImage(svc *state.Service, key string) bool {
 }
 
 // ImageRun pulls, restarts, verifies and on red tags the previous image back.
-func ImageRun(ctx context.Context, env *cli.Env, st *state.State) int {
+// A green run then removes the images nothing needs (#1071); keep names
+// images laib runs beside the units (hooks, rclone).
+func ImageRun(ctx context.Context, env *cli.Env, st *state.State, keep ...string) int {
 	if a := sysd.Active(ctx, "laib-backup.service"); a == "active" || a == "activating" {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Result: "info", Detail: "übersprungen: die Sicherung läuft"})
 		return cli.ExitOK
@@ -84,6 +86,9 @@ func ImageRun(ctx context.Context, env *cli.Env, st *state.State) int {
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Service: name, Result: "red",
 			Detail: fmt.Sprintf("neues Image rot (%s): %s; zurück auf das vorige Image: %s", moved, red, cmp.Or(after, "grün"))})
 		code = cli.ExitRed
+	}
+	if code == cli.ExitOK {
+		PruneImages(ctx, env, st, append(keep, cmp.Or(st.Box.Laib.HooksImage, DefaultHooksImage))...)
 	}
 	return code
 }

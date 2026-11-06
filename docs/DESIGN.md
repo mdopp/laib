@@ -234,7 +234,9 @@ webhook. A service that needs more is flapping, and flapping is a finding,
 not a chore. Images change in two ways (ADR 0002 amendment, #528): those
 of services without data nightly by `laib-images.timer` after the backup,
 verified, the previous image back on red; those with data by a proposal a
-person approves, snapshotted first. podman auto-update stays masked.
+person approves, snapshotted first. podman auto-update stays masked. A green
+night then removes the images nothing needs; what the night before kept
+stays one more night, for a rollback (#1071).
 
 **Understanding, by the dial.** When converge cannot help (a unit that fails
 on every start, a red health, an upstream that changed its config format),
