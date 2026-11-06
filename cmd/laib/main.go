@@ -44,6 +44,7 @@ func init() {
 		{Name: "status", Tier: "read", MCP: true, Help: "[service] [--fresh]: one line per service; first line is the readiness state", Run: pages.Status},
 		{Name: "diag", Tier: "read", MCP: true, Help: "findings with severity and a fix verb each: units, health, drift, disk", Run: diag.Cmd},
 		{Name: "auslastung", Tier: "read", MCP: true, Help: "the box's values now, as JSON: disks (system, data, boot: size, used, free, %), CPU (load 1/5/15, cores, % over a second), RAM and swap, the GPU (%, memory, °C, W, who holds it by the lease), temperatures from hwmon, uptime; kept 4 s; missing says what was not readable; the RAID is diag's (Homes' Box → Auslastung, owner 2026-11-06)", Run: diag.LoadCmd},
+		{Name: "befunde", Tier: "read", MCP: true, Help: "the last whole laib diag run's findings and its time, as JSON {at, findings}; measures nothing, closes no Box-Aufgabe (Homes' Box page, owner 2026-11-06)", Run: diag.Stand},
 		{Name: "plan", Tier: "read", MCP: true, Help: "render the state and diff it against the box", Run: cmdPlan},
 		{Name: "apply", Tier: "apply", MCP: true, Help: "[<service>] [--reason \"<grund>\"] | --proposal <id> (ops): snapshot, write, reload, restart, verify", Flags: []string{"--reason", "--proposal"}, Run: cmdApply},
 		{Name: "inspect", Tier: "read", MCP: true, Help: "<service>: units, containers, data files, health, last logs — the first minute of any diagnosis", Run: envelope.Inspect},
