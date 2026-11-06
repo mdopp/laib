@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/mdopp/laib/compare/v2.6.0...v2.6.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **templates:** homes' Immich key asks for the permissions Gesichter benennen needs ([#1080](https://github.com/mdopp/laib/issues/1080)) ([ea35e1e](https://github.com/mdopp/laib/commit/ea35e1e9d64f2f17a5f71cd6adc6e33dca8a6eac))
+
 ## [2.6.0](https://github.com/mdopp/laib/compare/v2.5.0...v2.6.0) (2026-11-06)
 
 
