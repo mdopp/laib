@@ -157,7 +157,8 @@ on every apply, each step changing only what differs:
 - **The user `dokumente`**, no administrator, no staff, in no group, with
   exactly these rights: view, add and change documents (add: a „nur für
   mich“ stack is uploaded through the API and handed to its person), view and add notes and
-  tags, view correspondents, document types, custom fields and users (so a
+  tags, view and add correspondents (add: intake makes a new sender), view
+  document types, custom fields and users (so a
   household person is never taken for a sender), and its own UI settings
   (`view_uisettings`: Paperless guards `/api/ui_settings/` with it, where a
   client reads which permissions it has; without it Paperless answers 403
@@ -199,7 +200,7 @@ and gets exactly Dokumente's shape from this template's post-deploy
 (`paperless-mail.py kunden`):
 
 - **The user `gesundheit`**, no administrator, with Dokumente's rights
-  (`DOKUMENTE_RECHTE`: documents, notes, tags, the names it reads) and one
+  (`DOKUMENTE_RECHTE`: documents, notes, tags, new senders, the names it reads) and one
   more, `delete_note` (gesundheit#5: its one note per document, with the
   transcript of a page read from its image, is replaced on every reading,
   and Paperless cannot edit a note; Gesundheit deletes only notes it wrote), its
