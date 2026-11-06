@@ -144,6 +144,24 @@ func keep(home string, fs []Finding, now time.Time) {
 	}
 }
 
+// Stand is `laib befunde`: the last whole diag run's findings with its time,
+// as diag.json keeps them; it never probes, settles or closes a Box-Aufgabe,
+// so a page may ask on every look (homes, owner 2026-11-06). Not run yet: at
+// is null and the list empty.
+func Stand(_ context.Context, env *cli.Env, _ []string) int {
+	var k struct {
+		At       *time.Time `json:"at"`
+		Findings []Finding  `json:"findings"`
+	}
+	if b, err := os.ReadFile(keptPath(env.Paths.Home)); err == nil && json.Unmarshal(b, &k) != nil {
+		return env.Fail(fmt.Errorf("diag.json ist nicht lesbar"))
+	}
+	if k.Findings == nil {
+		k.Findings = []Finding{}
+	}
+	return cli.Emit(env, k)
+}
+
 // Kept are the red findings of the last whole diag run that the pages do
 // not probe themselves (RAID, SMART, the certificate, the box's config),
 // each with the time of that run: a slow probe is not run on every look.
