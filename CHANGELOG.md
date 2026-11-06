@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.7.2](https://github.com/mdopp/laib/compare/v2.7.1...v2.7.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* **templates:** homes' Immich key also needs asset.upload, face.read and asset.delete ([984a66f](https://github.com/mdopp/laib/commit/984a66fd3c9a54bbcff71bf8fbb5c2896be58274))
+* **templates:** homes' Immich key also needs asset.upload, face.read and asset.delete ([afe46ea](https://github.com/mdopp/laib/commit/afe46eae9db67cba88a5052758e683cc64082a04))
+* **templates:** homes' news line for „Ist das …?“ ([ce74a79](https://github.com/mdopp/laib/commit/ce74a792bb6df26128036c2ee623bac56c98c7d3))
+
 ## [2.7.1](https://github.com/mdopp/laib/compare/v2.7.0...v2.7.1) (2026-11-06)
 
 
