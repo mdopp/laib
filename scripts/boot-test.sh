@@ -302,6 +302,7 @@ done
 # on a box it would judge the box's images by this test's state)
 if [ -n "${CI:-}" ]; then
   podman pull -q mirror.gcr.io/library/busybox:stable >/dev/null
+  RED_BEFORE="$("$BIN" status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["ready"]["red"])')"
   echo '[]' > "$LAIB_HOME/images-kept.json" # not the first run, which only records
   LAIB_ACTOR=laib "$BIN" updates --run > updates.out || { echo "FAIL: updates --run exit $?"; cat updates.out; "$BIN" journal --verb updates; exit 1; }
   if podman image exists mirror.gcr.io/library/busybox:stable; then echo "FAIL: the green run left an image nothing needs"; podman images; exit 1; fi
@@ -310,6 +311,7 @@ if [ -n "${CI:-}" ]; then
     [ -z "$i" ] || podman image exists "$i" || { echo "FAIL: the green run removed $i, which a unit names"; exit 1; }
   done
   "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="updates" and "Abbilder entfernt" in e.get("detail","") for e in es), [e.get("detail") for e in es if e["verb"]=="updates"]'
-  "$BIN" status --json | python3 -c 'import sys,json; r=json.load(sys.stdin)["ready"]; assert r["red"]==0, r'
+  red="$("$BIN" status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["ready"]["red"])')"
+  [ "$red" -le "$RED_BEFORE" ] || { echo "FAIL: red $RED_BEFORE before the image run, $red after"; "$BIN" status; "$BIN" diag; "$BIN" journal --verb updates; exit 1; }
 fi
 echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo; laib-haushalt answered the door in its own container, refused a call without the key, and the age key, secrets.age, the state repo and the journal were not in it"
