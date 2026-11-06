@@ -58,7 +58,13 @@ yellow while it runs, and while laib's replacement does not).
    templates already used for "no data a new image would migrate",
    docs/INTERFACE.md) whose image floats in #523's sense (`apply.Floats`) —
    restarts and verifies a service whose image moved, and on red tags the
-   previous image back, restarts again and journals it red.
+   previous image back, restarts again and journals it red. A green night
+   then removes the images nothing needs (#1071): kept is what a container
+   uses, what a Quadlet unit or an `*IMAGE` value names (a stopped service
+   has no container), the hooks and rclone images, and what the last green
+   night kept, so an image a service ran before an update stays one more
+   night for `laib rollback`. Only `podman rmi`, never a prune or a volume;
+   the journal says what it freed ("Alte Abbilder entfernt: 12 GB frei").
 2. **With data, by proposal.** For every other image, `laib updates` compares
    the registry's digest of the tag with the pin or the local image (a tag
    such as `stable` or `latest` too, not only semver). The Operator's weekly
