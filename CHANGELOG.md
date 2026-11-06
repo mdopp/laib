@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.7.1](https://github.com/mdopp/laib/compare/v2.7.0...v2.7.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **templates:** homes' Immich key also needs person.merge ([7d03674](https://github.com/mdopp/laib/commit/7d036746fae43dd99924f4acae5bdcad7d283b83))
+* **templates:** homes' Immich key also needs person.merge (homes[#297](https://github.com/mdopp/laib/issues/297)) ([972bfa1](https://github.com/mdopp/laib/commit/972bfa16e8546658eea14a4f5eae63f7bd8a39f5))
+* **templates:** homes' news names person.merge ([38cfd0b](https://github.com/mdopp/laib/commit/38cfd0bd1930f422ab9495a487b0dd20bfbc729a))
+
 ## [2.7.0](https://github.com/mdopp/laib/compare/v2.6.1...v2.7.0) (2026-11-06)
 
 
