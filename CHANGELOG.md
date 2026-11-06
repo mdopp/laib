@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.5.0](https://github.com/mdopp/laib/compare/v2.4.0...v2.5.0) (2026-11-06)
+
+
+### Features
+
+* **diag:** say what podman's images take ([fff833e](https://github.com/mdopp/laib/commit/fff833e1866f5e226ca83c96044fb7d1a7417593)), closes [#1071](https://github.com/mdopp/laib/issues/1071)
+
+
+### Bug Fixes
+
+* **apply:** a green image night removes the images nothing needs ([9a5aa33](https://github.com/mdopp/laib/commit/9a5aa3331304c53e1c20cdc258fc474f9a8a91ef))
+* **apply:** a green image night removes the images nothing needs ([b957b9a](https://github.com/mdopp/laib/commit/b957b9adc4897604d20d1522ab621062203b70b2)), closes [#1071](https://github.com/mdopp/laib/issues/1071)
+
 ## [2.4.0](https://github.com/mdopp/laib/compare/v2.3.2...v2.4.0) (2026-11-05)
 
 
