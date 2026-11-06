@@ -218,7 +218,7 @@ def config(api):
 # and invoices, Gesundheit (laib#893, mdopp/gesundheit, its own template) reads lab sheets and
 # reports. Each through Paperless' API as its own user, never the admin: it sees and changes
 # documents (their tags, notes, custom field values, correspondent and owner), makes tags (prüfen,
-# korrespondent-ok, gesundheit), reads the names it needs (correspondents, document types, custom
+# korrespondent-ok, gesundheit) and new senders (correspondents), reads the names it needs (correspondents, document types, custom
 # field definitions, and the users, so it never takes a household person for a sender, #737, and
 # knows whose a sheet is). Nothing else: no deleting (except Gesundheit its own note, gesundheit#5), no mail, no workflows, no settings, no users
 # or groups. One workflow „Dokument hinzugefügt“ gives every client view and change on each new
@@ -238,7 +238,8 @@ KUNDEN = [
 DOKUMENTE_USER = KUNDEN[0]["user"]
 # add_document: a „nur für mich“ stack goes in through the API, owned by dokumente until it hands it on
 DOKUMENTE_RECHTE = ["view_document", "add_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
-                    "view_correspondent", "view_documenttype", "view_customfield", "view_user",
+                    # add_correspondent: intake makes a sender Paperless does not know yet (owner 2026-11-06)
+                    "view_correspondent", "add_correspondent", "view_documenttype", "view_customfield", "view_user",
                     # its own /api/ui_settings/ (Paperless guards it with view_uisettings): the client reads
                     # its permissions there before a „nur für mich“ stack; without it Paperless answers 403
                     "view_uisettings"]
