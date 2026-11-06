@@ -247,11 +247,7 @@ func (st *State) validate() []error {
 	if st.Box.DataDir == "" {
 		fail("box.yml: dataDir is required")
 	}
-	for _, k := range st.Box.Backup.Keep {
-		if rest, ok := strings.CutPrefix(k, "${DATA_DIR}/"); !ok || rest == "" || slices.Contains(strings.Split(rest, "/"), "..") || slices.Contains(strings.Split(rest, "/"), "") {
-			fail("box.yml: backup.keep %q is no folder under ${DATA_DIR}/", k)
-		}
-	}
+	errs = append(errs, keepErrors(st.Box.Backup.Keep)...)
 	tier := map[string]bool{}
 	for _, t := range st.Policy.Tiers {
 		tier[t] = true
@@ -723,4 +719,21 @@ func PublishedHostPorts(unit string) []string {
 		}
 	}
 	return out
+}
+
+// keepErrors: box.yml backup.keep's entries that are no folder under ${DATA_DIR}/.
+func keepErrors(keep []string) []error {
+	var errs []error
+	for _, k := range slices.DeleteFunc(slices.Clone(keep), underDataDir) {
+		errs = append(errs, fmt.Errorf("box.yml: backup.keep %q is no folder under ${DATA_DIR}/", k))
+	}
+	return errs
+}
+
+// underDataDir: a backup.keep entry is a folder under ${DATA_DIR}/, never
+// above it or the data folder itself.
+func underDataDir(k string) bool {
+	rest, ok := strings.CutPrefix(k, "${DATA_DIR}/")
+	parts := strings.Split(rest, "/")
+	return ok && rest != "" && !slices.Contains(parts, "..") && !slices.Contains(parts, "")
 }

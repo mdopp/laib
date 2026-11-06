@@ -231,17 +231,10 @@ func dirs(base, changed string) Result {
 		say("%s", loadReason(err))
 		return r
 	}
-	kept := render.BackupPaths(ast, "", "")
 	for _, name := range bst.ServiceNames() {
 		if _, ok := ast.Services[name]; !ok {
 			say("entfernt den Dienst %s", name)
-			r.Removed = append(r.Removed, name)
-			// its data stay on the disk (laib never deletes them); whether the backup keeps them is box.yml backup.keep's
-			if paths := state.SnapshotPaths(bst, bst.Services[name]); len(paths) > 0 {
-				gesichert := !slices.ContainsFunc(paths, func(p string) bool { return !slices.Contains(kept, p) })
-				r.Facts = append(r.Facts, "Die Daten von "+proposal.Named(name)+" bleiben auf der Platte"+
-					map[bool]string{true: " und werden weiter gesichert.", false: ", werden aber nicht mehr gesichert."}[gesichert])
-			}
+			r.removed(name, bst, ast)
 		}
 	}
 	r.Changes = policyChanges(bst.Policy, ast.Policy)
@@ -392,6 +385,21 @@ func valueChanges(svc string, b, a map[string]state.Value) []proposal.Change {
 		}
 	}
 	return out
+}
+
+// removed records a service the change takes off the box, and what becomes of
+// its data: on the disk always (laib never deletes them), in the backup while
+// box.yml backup.keep names them.
+func (r *Result) removed(name string, bst, ast *state.State) {
+	r.Removed = append(r.Removed, name)
+	paths := state.SnapshotPaths(bst, bst.Services[name])
+	if len(paths) == 0 {
+		return
+	}
+	kept := render.BackupPaths(ast, "", "")
+	gesichert := !slices.ContainsFunc(paths, func(p string) bool { return !slices.Contains(kept, p) })
+	r.Facts = append(r.Facts, "Die Daten von "+proposal.Named(name)+" bleiben auf der Platte"+
+		map[bool]string{true: " und werden weiter gesichert.", false: ", werden aber nicht mehr gesichert."}[gesichert])
 }
 
 // loadReason turns a loader error into the plain reason a human reads. The

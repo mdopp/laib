@@ -256,11 +256,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 			break
 		}
 	case len(p.Removes) > 0: // a removal is the headline, whatever else the change carries along
-		gone := make([]string, 0, len(p.Removes))
-		for _, r := range p.Removes {
-			gone = append(gone, Named(r))
-		}
-		d.Summary = strings.Join(gone, ", ") + map[bool]string{true: " werden", false: " wird"}[len(gone) > 1] + " von der Box entfernt"
+		d.Summary = removed(p.Removes)
 	case len(handOrder) == 1:
 		d.Summary = handHeadline(handOrder[0], hands[handOrder[0]])
 	case len(handOrder) > 1:
@@ -556,6 +552,15 @@ var plainWords = [][2]string{
 	{"Sonderrechte|im Netz der Box|nimmt eine Einschränkung weg", "%s mehr Rechte auf der Box bekommt als üblich"},
 	{"Laib nicht einschätzen kann|die Laib nicht kennt|ohne dass Laib den Grund erkennt", "Laib einige Zeilen nicht selbst prüfen kann"},
 	{"entfernt den Dienst", "ein Dienst von der Box geht"},
+}
+
+// removed is a removal's headline: „Gesundheit wird von der Box entfernt“.
+func removed(services []string) string {
+	gone := make([]string, 0, len(services))
+	for _, r := range services {
+		gone = append(gone, Named(r))
+	}
+	return strings.Join(gone, ", ") + map[bool]string{true: " werden", false: " wird"}[len(gone) > 1] + " von der Box entfernt"
 }
 
 // impactMax: the lines of "what it means" a card shows before „und N weitere“ (#661).
