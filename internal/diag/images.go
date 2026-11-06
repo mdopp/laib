@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -66,4 +67,25 @@ func imageFindings(ctx context.Context, home, only string, now time.Time) (out [
 		out = append(out, Finding{Severity: "gelb", Probe: "updates", Detail: "podman-auto-update.timer läuft neben laib-images.timer: ein zweiter Update-Weg ohne Laibs Sperre, Prüfung und Rücknahme", Fix: "systemctl --user mask --now podman-auto-update.timer (install-box.sh --box-config)"})
 	}
 	return out
+}
+
+// storageFinding (#1071): what podman's images take, as info. Sizes count a
+// layer two images share in both, so the sums are upper bounds; an image
+// without a container may still be one a stopped unit names, which the
+// nightly run keeps.
+func storageFinding(ctx context.Context) []Finding {
+	imgs, err := apply.StoredImages(ctx)
+	if err != nil || len(imgs) == 0 {
+		return nil
+	}
+	var all, idle int64
+	n := 0
+	for _, i := range imgs {
+		all += i.Size
+		if i.Containers == 0 {
+			idle, n = idle+i.Size, n+1
+		}
+	}
+	return []Finding{{Severity: "info", Probe: "abbilder", Detail: fmt.Sprintf("%d Container-Abbilder belegen höchstens %s, %d davon ohne Container höchstens %s (gemeinsame Schichten zählen mehrfach)",
+		len(imgs), apply.Gigabytes(uint64(all)), n, apply.Gigabytes(uint64(idle))), Fix: "laib journal --verb updates (die Nacht räumt nach einem grünen Lauf auf)"}}
 }

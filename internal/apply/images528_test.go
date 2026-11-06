@@ -94,6 +94,9 @@ func TestTheImageRunRollsBackARedServiceToItsPreviousImage(t *testing.T) {
 			t.Fatalf("missing %q in:\n%s", want, all)
 		}
 	}
+	if strings.Contains(all, "podman images") {
+		t.Fatalf("a red night removed images (#1071):\n%s", all)
+	}
 	if strings.Contains(all, "vaultwarden") || strings.Contains(all, "podman tag old-homes") {
 		t.Fatalf("a service with data was pulled, or a green one rolled back:\n%s", all)
 	}
@@ -113,6 +116,9 @@ func TestTheImageRunRollsBackARedServiceToItsPreviousImage(t *testing.T) {
 	WritePause(env.Paths, Pause{Service: "homes", By: "human:x", Until: time.Now().Add(time.Hour).UTC()})
 	if code := ImageRun(context.Background(), env, st); code != cli.ExitOK || strings.Contains(strings.Join(calls, "\n"), "restart") || strings.Contains(strings.Join(calls, "\n"), "homes") {
 		t.Fatalf("an image that did not move restarts nothing, a paused one is not pulled: %d\n%s", code, strings.Join(calls, "\n"))
+	}
+	if !strings.Contains(strings.Join(calls, "\n"), "podman images --format json") {
+		t.Fatalf("a green night removes the images nothing needs (#1071):\n%s", strings.Join(calls, "\n"))
 	}
 	backup, calls = "active", nil
 	if code := ImageRun(context.Background(), env, st); code != cli.ExitOK || strings.Contains(strings.Join(calls, "\n"), "pull") {

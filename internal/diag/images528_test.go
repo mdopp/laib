@@ -41,3 +41,20 @@ func TestDiagIsYellowForAMonthBehindAndForNoUpdatePath(t *testing.T) {
 		t.Fatalf("no laib-images.timer and podman's beside it: %v", says)
 	}
 }
+
+// #1071: no read verb saw podman's storage; diag says what the images take,
+// and how much of it no container uses, as upper bounds.
+func TestDiagSaysWhatTheImagesTake(t *testing.T) {
+	real := sysd.Run
+	t.Cleanup(func() { sysd.Run = real })
+	out := ""
+	sysd.Run = func(_ context.Context, name string, args ...string) (string, error) { return out, nil }
+	if f := storageFinding(context.Background()); f != nil {
+		t.Fatalf("podman said nothing, diag invents: %+v", f)
+	}
+	out = `[{"Id":"a","Containers":1,"Size":2147483648},{"Id":"b","Containers":0,"Size":12884901888},{"Id":"c","Size":1073741824}]`
+	f := storageFinding(context.Background())
+	if len(f) != 1 || f[0].Severity != "info" || f[0].Detail != "3 Container-Abbilder belegen höchstens 15 GB, 2 davon ohne Container höchstens 13 GB (gemeinsame Schichten zählen mehrfach)" {
+		t.Fatalf("%+v", f)
+	}
+}

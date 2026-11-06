@@ -31,6 +31,7 @@ var says = map[string]string{
 	"operator":     "Der Operator, der nachts nach der Box sieht, arbeitet nicht richtig.",
 	"secret":       "Geräte von %s kennen ein erneuertes Geheimnis noch nicht.",
 	"updates":      "Für %s liegt ein Update bereit.",
+	"abbilder":     "So viel Platz belegen die Programme der Box.",
 	"os-update":    "Mit dem System-Update der Box stimmt etwas nicht.",
 	"self-update":  "Laib bringt sich nicht von selbst auf den neuesten Stand.",
 	"skill":        "Eine Fähigkeit des Operators braucht Aufmerksamkeit.",

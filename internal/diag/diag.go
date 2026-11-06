@@ -210,6 +210,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 	}
 	out = append(out, imageFindings(ctx, env.Paths.Home, only, time.Now())...) // #528
 	if only == "" {
+		out = append(out, storageFinding(ctx)...)                                                                                // #1071
 		out = append(out, selfUpdateFindings(env.Paths.Home, cmp.Or(os.Getenv("LAIB_BIN_DIR"), "/var/opt/laib"), time.Now())...) // #547
 	}
 	// #368: without the boot check a broken OS update stays broken until someone has SSH.

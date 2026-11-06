@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/backup"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/inbox"
@@ -361,7 +362,7 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		if _, err := inbox.ProposeDefaults(ctx, env, st); err != nil {
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "updates", Result: "red", Detail: "Standard-Verben: " + err.Error()})
 		}
-		code = apply.ImageRun(ctx, env, st) // laib-images.timer's nightly run (#528)
+		code = apply.ImageRun(ctx, env, st, backup.RcloneImage) // laib-images.timer's nightly run (#528)
 	}
 	ups := ImageUpdates(ctx, st)
 	u, ok := laibRow(env.Paths.Home, cli.Version)
