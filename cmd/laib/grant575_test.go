@@ -26,7 +26,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 	if b, _ := os.ReadFile(pol); string(b) != state.DefaultPolicy {
 		t.Fatal("laib init does not write state.DefaultPolicy")
 	}
-	old := strings.Replace(state.DefaultPolicy, ", zuhause, scan, note, tell, aufgabe, wish, module]", ", zuhause]", 1)
+	old := strings.Replace(state.DefaultPolicy, ", zuhause, scan, note, tell, aufgabe, wish, module, auslastung]", ", zuhause]", 1)
 	old = strings.Replace(old, "verbs: [diag, updates, inbox, note]", "verbs: [diag, updates, inbox]", 1)
 	old = strings.Replace(old, "  human: {ceiling: destroy}\n", "  human: {ceiling: destroy}\n  kiosk: {ceiling: read, verbs: [status]}   # the owner's\n", 1)
 	os.WriteFile(pol, []byte(old), 0o644)
@@ -51,7 +51,7 @@ func TestAnOldBoxGetsTheNewDefaultVerbsAsOneProposal(t *testing.T) {
 		t.Fatalf("%+v", p)
 	}
 	diff := proposal.Diff(ctx, env.Paths.State, p)
-	if strings.Count(diff, "\n+  ") != 2 || strings.Count(diff, "\n-  ") != 2 || !strings.Contains(diff, "zuhause, scan, note, tell, aufgabe, wish, module]") || !strings.Contains(diff, "updates, inbox, note]") {
+	if strings.Count(diff, "\n+  ") != 2 || strings.Count(diff, "\n-  ") != 2 || !strings.Contains(diff, "zuhause, scan, note, tell, aufgabe, wish, module, auslastung]") || !strings.Contains(diff, "updates, inbox, note]") {
 		t.Fatalf("not exactly the two lines:\n%s", diff)
 	}
 	if b, _ := os.ReadFile(pol); string(b) != old {
