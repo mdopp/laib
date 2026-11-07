@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.9.0](https://github.com/mdopp/laib/compare/v2.8.0...v2.9.0) (2026-11-07)
+
+
+### Features
+
+* **template:** Homes moves to www.&lt;domain&gt;, homes. and haus. are gone ([f3a62c1](https://github.com/mdopp/laib/commit/f3a62c1059ca95020f10cbc25ab99f8c8aaa5f06))
+* **template:** Homes moves to www.&lt;domain&gt;, homes. and haus. are gone ([96b877b](https://github.com/mdopp/laib/commit/96b877bc37f21bf0779028df43a9b950b64bda63))
+
 ## [2.8.0](https://github.com/mdopp/laib/compare/v2.7.2...v2.8.0) (2026-11-07)
 
 
