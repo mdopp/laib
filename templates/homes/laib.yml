@@ -21,24 +21,16 @@ instances:                       # each person's open archive gives a new phone 
     secret: ARCHIV_HOMES_SECRET    # that archive's own, as HOMES_ARCHIV_SECRET_<PERSON>; Homes sends it as X-Archiv-Homes to /intern/
     env: HOMES_ARCHIV_SECRET
 routes:
-  - host: homes
+  # Homes is the family's entry, so it lives on www.<domain> (owner 2026-11-07, ADR 0031 amendment); the
+  # domain itself leads here. Its first route is the family's entry for Laib too (render.HomesURL): the
+  # login's start page, the welcome mail's link. homes.<domain> and haus.<domain> are gone, no redirect.
+  - host: www
     port: 8650
     exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
     auth: one_factor
     bypass: [/napi/]
     proxySecret: HOMES_PROXY_SECRET # Caddy sends it as X-Homes-Proxy on the authenticated handler only (ADR 0012 §3)
-    redirectFrom: ["@", www]       # ServiceBay's entry points (the domain itself and www.) lead to Homes (#360)
-  # The legacy name (ADR 0031, ADR 0021 rule 8), until every phone runs the Homes app (#1021 step 9):
-  # the old app (cloud.dopp.haus) keeps calling /napi/ here with its device token. Not a redirectFrom:
-  # OkHttp drops Authorization on a cross-host redirect, so a Caddy redirect would log the phone out.
-  # The program 308-redirects everything else on this host to homes.<domain>. Same port, same proxy
-  # secret: Caddy sends X-Homes-Proxy on both, the header is named for the service.
-  - host: haus
-    port: 8650
-    exposure: public
-    auth: one_factor
-    bypass: [/napi/]
-    proxySecret: HOMES_PROXY_SECRET
+    redirectFrom: ["@"]            # the domain itself leads to Homes (#360)
 secrets:
   - name: HOMES_LAIB_TOKEN         # minted on `laib add homes` as the homes hand: status, inbox, journal, restart, person_invite, person_pending, person_signal (#596), calendar (#495), note (who switched in HA, #591), tell (a message to one person, #676), aufgabe, wish (#1038), module (#1036) — nothing else
     external: true                 # no was: the old token is the hand haus's; the hand homes gets its own (ADR 0031)
