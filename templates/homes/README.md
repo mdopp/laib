@@ -6,6 +6,17 @@ the Box keys under `/napi/box/*` come from Laib. Nothing of the Solaris app
 is carried. Port 8650 is published beyond loopback for the Bote's pod
 (below); the LAN reaches it only through Caddy.
 
+Kontakt prüfen lassen (owner 2026-11-07, mdopp/homes `kontaktantwort`) is
+the one page of Homes without a login, and it has a host and a port of its
+own: the route `kontakt.<domain>` (`auth: none`, public) proxies to port
+8652, where Homes (`HOMES_KONTAKT_LISTEN`) registers nothing but that page,
+`/<token>`. `homes.<domain>` keeps its one bypass, `/napi/`, and nothing
+else. Caddy limits the new host to 30 requests per address in 10 minutes
+(caddy-ratelimit, pinned in `caddy/Containerfile`) and a 32 KB body; Homes
+limits both again, keeps only a hash of each link and answers every link
+that is none with the same page. The name needs its own Strato record, as
+every name on this box.
+
 Homes was called Haus until 2026-11-03 (ADR 0031, #1021). What still
 carries the old name, and until when: the route `haus.<domain>` (the old
 app's `/napi/` calls with their device token; the program redirects every
