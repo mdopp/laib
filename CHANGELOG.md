@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.11.0](https://github.com/mdopp/laib/compare/v2.10.0...v2.11.0) (2026-11-07)
+
+
+### Features
+
+* **template:** fotos limits a share's page and the password form per address ([7100634](https://github.com/mdopp/laib/commit/7100634c54f8be97d1a562f038869a2187f6d66b))
+* **template:** the family's apps LAN-only, fotos.&lt;domain&gt; for shared albums ([b644714](https://github.com/mdopp/laib/commit/b64471496ec016fd1847de5c1812b4531542bea9))
+* **template:** the family's apps LAN-only, fotos.&lt;domain&gt; for shared albums ([e06f117](https://github.com/mdopp/laib/commit/e06f1170746efe7aabe1bca2218bd4a5f729d07d))
+
 ## [2.10.0](https://github.com/mdopp/laib/compare/v2.9.0...v2.10.0) (2026-11-07)
 
 
