@@ -13,7 +13,7 @@ needs: [mcp]                     # talks to laib over host.containers.internal: 
 # every backend of a Homes module (homes ADR 0001 §5, #1036), talked to without after: (a box without
 # them still loads); their planned stops explain its errors (laib planned, #978). The persons' archives
 # are services of their own (archiv-<person>), wired through instances: below
-uses: [home-assistant, reitti, radicale, paperless, audiobookshelf, media, bote, file-share, usage-metrics, gesundheit, immich]
+uses: [home-assistant, reitti, radicale, paperless, audiobookshelf, media, bote, file-share, usage-metrics, immich]
 instances:                       # each person's open archive gives a new phone its WhatsApp media back (laib#1016, haus#209)
   - template: archiv
     unit: homes.container

@@ -437,87 +437,27 @@ class Dokumente(unittest.TestCase):
         self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout, "the hourly run still gets its token")
 
 
-class Gesundheit(unittest.TestCase):
-    """laib#893/#894: Gesundheit is Paperless' second client, beside Dokumente, through the same
-    code: its own user and token (PAPERLESS_GESUNDHEIT_TOKEN), its own webhook action in the one
-    workflow with its own header, view and change on a person's documents for both, and the document
-    types of medical records. Without its password (template not installed) Dokumente alone."""
+class Befunde(unittest.TestCase):
+    """laib#893: the document types of medical records, made when missing and nobody's, so dokumente
+    sees them. Gesundheit, once a second client, is gone (2026-11-07): Dokumente is the only one,
+    and a leftover GESUNDHEIT_HOOK wires nothing."""
     setUp, run_setup = PaperlessMail.setUp, PaperlessMail.run_setup
-    KEYS = {**Dokumente.KEYS, "LAIB_SECRET_PAPERLESS_GESUNDHEIT_PASSWORD": "ges-pw", "LAIB_SECRET_GESUNDHEIT_WEBHOOK_TOKEN": "ges-hook"}
 
     def setup(self, fake, **extra):
-        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", **self.KEYS, **extra}, password="")
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", **Dokumente.KEYS, **extra}, password="")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         return r
 
-    def test_two_clients_one_workflow_both_tokens(self):
-        fake = Fake(documents=[{"id": 2, "owner": 3, "permissions": {"view": {"users": [3], "groups": []}, "change": {"users": [3], "groups": []}}}],
-                    types=[{"id": 1, "name": "Rechnung"}, {"id": 2, "name": "labor", "owner": 3}])
-        r = self.setup(fake)
-        dok, ges = fake.users
-        self.assertEqual((dok["username"], ges["username"], ges["is_superuser"], ges["groups"]), ("dokumente", "gesundheit", False, []))
-        # gesundheit#5: Gesundheit replaces its one note per document; Paperless cannot edit a note
-        self.assertEqual(set(ges["user_permissions"]), set(dok["user_permissions"]) | {"delete_note"})
-        self.assertNotIn("delete_note", dok["user_permissions"])
-        self.assertEqual(fake.passwords["gesundheit"], "ges-pw")
-        lines = r.stdout.splitlines()
-        self.assertIn("laib-secret: PAPERLESS_TOKEN=" + fake.tokens["dokumente"], lines)
-        self.assertIn("laib-secret: PAPERLESS_GESUNDHEIT_TOKEN=" + fake.tokens["gesundheit"], lines)
-        [w] = fake.workflows
-        assign, hook_dok, hook_ges = w["actions"]
-        self.assertEqual((assign["type"], sorted(assign["assign_view_users"]), sorted(assign["assign_change_users"])), (1, sorted([dok["id"], ges["id"]]), sorted([dok["id"], ges["id"]])))
-        self.assertEqual((hook_dok["webhook"]["url"], hook_dok["webhook"]["headers"]), ("http://host.containers.internal:8720/hook", {"X-Dokumente-Token": "hook-tok"}))
-        self.assertEqual((hook_ges["webhook"]["url"], hook_ges["webhook"]["headers"]), ("http://host.containers.internal:18529/hook", {"X-Gesundheit-Token": "ges-hook"}))
-        self.assertEqual(sorted(fake.documents[0]["permissions"]["change"]["users"]), sorted([3, dok["id"], ges["id"]]))
-        # the record types: made when missing, found by name whatever the case, the others untouched;
-        # nobody's, so dokumente and gesundheit see them (the admin-owned „labor“ from before is handed to all)
+    def test_the_record_types_are_nobodys_and_dokumente_is_the_only_client(self):
+        fake = Fake(types=[{"id": 1, "name": "Rechnung"}, {"id": 2, "name": "labor", "owner": 3}])
+        r = self.setup(fake, GESUNDHEIT_HOOK="http://host.containers.internal:18529/hook",
+                       LAIB_SECRET_PAPERLESS_GESUNDHEIT_PASSWORD="ges-pw", LAIB_SECRET_GESUNDHEIT_WEBHOOK_TOKEN="ges-hook")
+        self.assertEqual([u["username"] for u in fake.users], ["dokumente"])
+        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4], ["http://host.containers.internal:8720/hook"])
+        self.assertNotIn("GESUNDHEIT", r.stdout)
         self.assertEqual([t["name"] for t in fake.types], ["Rechnung", "labor", "Befund", "Arztbrief", "Röntgen", "Atemtest", "Lungenfunktion"])
         self.assertEqual([t.get("owner") for t in fake.types[1:]], [None] * 6)
-        self.assertIn("paperless: Dokumenttyp labor gehört jetzt allen", lines)
-        # the next apply with both tokens handed back: nothing written
-        fake.calls.clear()
-        r = self.setup(fake, LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"], LAIB_SECRET_PAPERLESS_GESUNDHEIT_TOKEN=fake.tokens["gesundheit"])
-        self.assertEqual([c for c in fake.writes() if c[1] != "/api/token/"], [])
-        self.assertNotIn("laib-secret:", r.stdout)
-
-    def test_without_its_password_dokumente_alone(self):
-        fake = Fake()
-        r = self.setup(fake, LAIB_SECRET_PAPERLESS_GESUNDHEIT_PASSWORD="")
-        self.assertEqual([u["username"] for u in fake.users], ["dokumente"])
-        self.assertEqual(len(fake.workflows[0]["actions"]), 2)
-        self.assertIn("Gesundheit nicht eingerichtet", r.stdout)
-
-    def test_without_its_hook_token_the_hourly_run_only(self):
-        fake = Fake()
-        r = self.setup(fake, LAIB_SECRET_GESUNDHEIT_WEBHOOK_TOKEN="")
-        self.assertEqual([u["username"] for u in fake.users], ["dokumente", "gesundheit"])
-        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4], ["http://host.containers.internal:8720/hook"])
-        self.assertIn("Gesundheit sieht neue Befunde erst zur vollen Stunde", r.stdout)
-        self.assertIn("laib-secret: PAPERLESS_GESUNDHEIT_TOKEN=", r.stdout)
-
-    def test_switched_off_by_its_value_no_hook_and_its_user_may_not_log_in(self):
-        fake = Fake()
-        self.setup(fake)
-        ges = fake.users[1]
-        self.assertTrue(ges["is_active"])
-        r = self.setup(fake, GESUNDHEIT_HOOK="")
-        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4], ["http://host.containers.internal:8720/hook"])
-        self.assertEqual(sorted(fake.workflows[0]["actions"][0]["assign_view_users"]), [fake.users[0]["id"]])
-        self.assertEqual([u["username"] for u in fake.users], ["dokumente", "gesundheit"], "nothing deleted")
-        self.assertFalse(ges["is_active"])
-        self.assertIn("Gesundheit ist abgeschaltet (GESUNDHEIT_HOOK leer)", r.stdout)
-        self.assertNotIn("PAPERLESS_GESUNDHEIT_TOKEN", r.stdout)
-        fake.calls.clear()
-        r = self.setup(fake, GESUNDHEIT_HOOK="")
-        self.assertEqual([c for c in fake.writes() if c[1] != "/api/token/"], [], "a second run writes nothing")
-        r = self.setup(fake, GESUNDHEIT_HOOK="http://host.containers.internal:18529/hook")
-        self.assertTrue(ges["is_active"], "the value set again: on again")
-        self.assertEqual(len([a for a in fake.workflows[0]["actions"] if a["type"] == 4]), 2)
-
-    def test_the_hook_is_the_values_address(self):
-        fake = Fake()
-        self.setup(fake, GESUNDHEIT_HOOK="http://host.containers.internal:18600/hook")
-        self.assertEqual([a["webhook"]["url"] for a in fake.workflows[0]["actions"] if a["type"] == 4][1], "http://host.containers.internal:18600/hook")
+        self.assertIn("paperless: Dokumenttyp labor gehört jetzt allen", r.stdout.splitlines())
 
     def test_own_record_types_from_the_value(self):
         fake = Fake()

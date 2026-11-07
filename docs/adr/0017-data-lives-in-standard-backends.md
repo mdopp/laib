@@ -68,6 +68,14 @@ Setup, so dass wir Adressen auch nachträglich ändern können."
 
 ## Amendment 2026-10-28 (#893): a person's health data has no standard backend here
 
+> **Superseded 2026-11-07.** The owner removed the Gesundheit program and
+> its wiring (Paperless' second client, the Bote's tool, Homes' module).
+> Medical records are Paperless documents again, found under Dokumente
+> (the Bereich `gesundheit`, the medical types, Fachrichtung,
+> Anlass/Diagnose and Medikamente that Dokumente's `ordnen` fills), as §1
+> says. Gesundheit's folder `${DATA_DIR}/gesundheit` stays on the disk and
+> in the backup (`box.yml backup.keep`). What follows is history.
+
 Gesundheit (`mdopp/gesundheit`) reads lab sheets and reports out of Paperless
 into a timeline per person and takes a short daily note. The documents stay
 in Paperless (§1). The values read and the daily notes are a person's own

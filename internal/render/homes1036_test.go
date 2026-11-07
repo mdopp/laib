@@ -35,17 +35,17 @@ func TestHomesGetsTheModulesLeftOff(t *testing.T) {
 }
 
 // #1036: uses: names every backend of a Homes module, and a box without
-// some of them (this one has no gesundheit, whose template lives in its
-// own repo) still loads.
+// some of them still renders (uses: is no after:).
 func TestHomesUsesEveryBackend(t *testing.T) {
 	st := shippedBox(t)
 	uses := st.Services["homes"].Contract.Uses
-	for _, b := range []string{"home-assistant", "reitti", "radicale", "paperless", "audiobookshelf", "media", "bote", "file-share", "usage-metrics", "gesundheit"} {
+	for _, b := range []string{"home-assistant", "reitti", "radicale", "paperless", "audiobookshelf", "media", "bote", "file-share", "usage-metrics", "immich"} {
 		if !slices.Contains(uses, b) {
 			t.Errorf("uses: lacks %s: %v", b, uses)
 		}
 	}
-	if st.Services["gesundheit"] != nil {
-		t.Fatal("the shipped box has gesundheit: the test proves nothing about a box without it")
+	delete(st.Services, "reitti")
+	if _, err := Render(st, nil); err != nil {
+		t.Fatalf("a box without reitti, which homes uses: %v", err)
 	}
 }
