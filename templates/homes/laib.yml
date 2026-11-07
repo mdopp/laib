@@ -39,6 +39,28 @@ routes:
     auth: one_factor
     bypass: [/napi/]
     proxySecret: HOMES_PROXY_SECRET
+  # Kontakt prüfen lassen (owner 2026-11-07): the one page of Homes without a login, on a host of its own
+  # (homes.<domain> stays wholly behind Authelia) and a port of its own: Homes registers nothing but that
+  # page on 8652 (HOMES_KONTAKT_LISTEN), so no routing mistake here reaches another Homes route. Caddy limits
+  # the rate per address and the body; Homes limits both again, keeps only a hash of each link and answers
+  # every link that is none with one page.
+  - host: kontakt
+    port: 8652
+    exposure: public               # the contact opens the link wherever they are
+    auth: none                     # the link's token is the capability; no other Homes route is on this port
+    caddy: |
+      request_body {
+      	max_size 32KB
+      }
+      route {
+      	rate_limit {
+      		zone kontakt {
+      			key {remote_host}
+      			events 30
+      			window 10m
+      		}
+      	}
+      }
 secrets:
   - name: HOMES_LAIB_TOKEN         # minted on `laib add homes` as the homes hand: status, inbox, journal, restart, person_invite, person_pending, person_signal (#596), calendar (#495), note (who switched in HA, #591), tell (a message to one person, #676), aufgabe, wish (#1038), module (#1036) — nothing else
     external: true                 # no was: the old token is the hand haus's; the hand homes gets its own (ADR 0031)
@@ -122,3 +144,4 @@ status:                          # the Box page's line (#785): "3 Geräte angeme
   stale: 20m                     # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8650, lan: false}
+  - {port: 8652, lan: false}       # Kontakt prüfen lassen's page alone, for Caddy's kontakt.<domain>

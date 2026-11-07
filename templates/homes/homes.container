@@ -100,6 +100,9 @@ Environment=HOMES_UPLOAD_DIR=/upload
 Environment=TZ=${TZ}
 Environment=HOMES_DATA=/data
 Environment=HOMES_PUBLIC_URL=https://homes.${DOMAIN}
+# Kontakt prüfen lassen (owner 2026-11-07): the page without a login, on its own listener and host
+Environment=HOMES_KONTAKT_LISTEN=0.0.0.0:8652
+Environment=HOMES_KONTAKT_URL=https://kontakt.${DOMAIN}
 # the name the family talks to, on the pages and in the app (box.yml assistant, ADR 0030)
 Environment=HOMES_ASSISTANT=${ASSISTANT}
 Volume=${DATA_DIR}/homes:/data:Z
