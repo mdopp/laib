@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.0](https://github.com/mdopp/laib/compare/v2.9.0...v2.10.0) (2026-11-07)
+
+
+### Features
+
+* **caddy:** the rate limit module, pinned ([26eb7c6](https://github.com/mdopp/laib/commit/26eb7c60d098dd9cd359d0ea7cbcd1e0fbe53570))
+* **template:** homes gets kontakt.&lt;domain&gt; for Kontakt prüfen lassen ([2b3566e](https://github.com/mdopp/laib/commit/2b3566e5540be960f620e43df41b0fa3dafd8462))
+
 ## [2.9.0](https://github.com/mdopp/laib/compare/v2.8.0...v2.9.0) (2026-11-07)
 
 
