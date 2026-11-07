@@ -6,14 +6,20 @@ the Box keys under `/napi/box/*` come from Laib. Nothing of the Solaris app
 is carried. Port 8650 is published beyond loopback for the Bote's pod
 (below); the LAN reaches it only through Caddy.
 
-Homes was called Haus until 2026-11-03 (ADR 0031, #1021). What still
-carries the old name, and until when: the route `haus.<domain>` (the old
-app's `/napi/` calls with their device token; the program redirects every
-other request to `homes.<domain>`) and the `was:` lines in `laib.yml`
-that carried the data and secrets along, both until every phone runs the
-Homes app. The program's own logins were renamed with it (the owner,
-2026-11-03): `homes` in LLDAP/Radicale, Audiobookshelf, Jellyfin and Home
-Assistant (each hook renames or replaces the old `haus` one, ADR 0031).
+Homes answers at `www.<domain>`, and the domain itself redirects there
+(owner 2026-11-07, ADR 0031 amendment): the family's entry is the domain's
+own name. `HOMES_PUBLIC_URL` in `homes.container` names the same host as
+the first route; `TestHomesPublicURLIsItsRoute` holds the two together.
+Its first route is also where Laib sends a login without a target and the
+welcome mail (`render.HomesURL`).
+
+Homes was called Haus until 2026-11-03 (ADR 0031, #1021). Its addresses
+`haus.<domain>` and `homes.<domain>` are gone since 2026-11-07, no
+redirect: a phone paired to either pairs again with `www.<domain>`. What
+still carries the old name: the `was:` lines in `laib.yml` that carried the
+data and secrets along. The program's own logins were renamed with it (the
+owner, 2026-11-03): `homes` in LLDAP/Radicale, Audiobookshelf, Jellyfin and
+Home Assistant (each hook renames or replaces the old `haus` one, ADR 0031).
 
 With `HOMES_HA_TOKEN`, an administrator's long-lived token that
 home-assistant's post-deploy mints and hands back (#349; nothing to click
@@ -60,7 +66,7 @@ registers one Discogs app (discogs.com, Settings, Developers) and the owner
 sets its `HOMES_DISCOGS_KEY` (Consumer-Key) and `HOMES_DISCOGS_SECRET`
 (Consumer-Secret) on the box page, „Schlüssel hinterlegen“. Each person then
 connects their own account in Homes (Mehr → Discogs, OAuth; the way back is
-`https://homes.<domain>/discogs/zurueck`, behind Authelia like every family
+`https://www.<domain>/discogs/zurueck`, behind Authelia like every family
 page); Homes keeps those tokens in its data dir for that person alone. The
 wish list then reads that person's collection ("habt ihr schon auf Vinyl"),
 puts record wishes on their wantlist and marks a wish arrived once the record
@@ -137,12 +143,12 @@ once without `LAIB_TOKEN`) shows homes red but never stops the notes'
 refresh.
 qmd indexes the folder read-only as the collection `dokumente`
 (`HOMES_QMD_DOCUMENTS`); Homes checks each hit against Paperless and links
-it to `homes.<domain>/dokumente/<id>`. Without `HOMES_PAPERLESS_TOKEN` the
+it to `www.<domain>/dokumente/<id>`. Without `HOMES_PAPERLESS_TOKEN` the
 export does nothing and the library is the notes. The folder is a cache
 (Paperless is the documents' home), not backed up, and beside
 `${DATA_DIR}/homes` and `homes-qmd`, mounted `:z` since both containers use it.
 
-The Dokumente page (haus#68, #521): `homes.<domain>/dokumente` shows the
+The Dokumente page (haus#68, #521): `www.<domain>/dokumente` shows the
 ways into Paperless. *Per E-Mail ablegen* is a mailto to `DOCUMENTS_MAIL`,
 the address paperless fetches (its `PAPERLESS_MAIL_FILTER_TO`; empty: no
 button). *Dokument ablegen* stores into the consume folder as the app's
@@ -198,7 +204,7 @@ every new key of `values.example.yml` to `values.yml`; no hand edit.
    as `X-Homes-Proxy` to the pages — nothing else reaches them (haus#1).
 2. Homes decides nothing: the Box page links to `laib.<domain>/inbox`, the
    one approval surface; the phone's approve buttons answer 403.
-3. `laib add homes`. To pair a phone, enter `https://homes.<domain>` in the
+3. `laib add homes`. To pair a phone, enter `https://www.<domain>` in the
    app: it opens `/pair-device`, the person logs in and confirms, and the
    app is paired (haus#6). `/box/geraete` lists and removes devices.
 

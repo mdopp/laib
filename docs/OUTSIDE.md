@@ -42,7 +42,7 @@ ServiceBay's `dopp.cloud` request page was). `laib person invite <user>
 through the homes hand's `person_invite` (haus#56), creates the LLDAP user
 without a password, in the group, and starts Authelia's "Passwort vergessen"
 for it (#360). Authelia mails the link, in German, with the way to
-`homes.<domain>/willkommen`; the person sets the first password there, so no
+`www.<domain>/willkommen` (Homes' first route, `render.HomesURL`); the person sets the first password there, so no
 password passes through Laib or Homes. Without a mail server (#359) the verb
 returns the link to pass on (Signal); it lives 24 hours, and `--resend`
 sends a new one and keeps the group. `laib person pending` lists who has not
@@ -52,9 +52,9 @@ for box.yml `people` (#596), approved by a human like any box.yml change;
 a human's call at the console. Removing someone stays LLDAP's admin UI
 (`ldap.`, at home only, behind Authelia's two factors and then LLDAP's own
 login). The tool doing the LLDAP and Authelia work is the auth template's
-`person.py`, run in the hooks image like a hook. `dopp.cloud` and `www.`
-redirect to `homes.` (the homes route's `redirectFrom`), so the old entry point
-still leads somewhere.
+`person.py`, run in the hooks image like a hook. Homes lives on `www.`
+and `dopp.cloud` redirects there (the homes route's `redirectFrom`, ADR 0031
+amendment 2026-11-07), so the domain itself leads somewhere.
 
 ## No canary channel
 

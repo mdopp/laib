@@ -54,8 +54,8 @@ stays 30 days after migration day.
 ## What the family and the admin use
 
 - **Homes** (`mdopp/homes`) is the family's surface: the pages at
-  `homes.<domain>` and the Homes app. `dopp.cloud` and `www.` redirect to it
-  (#360). It was added by hand after migration day (#379).
+  `www.<domain>` and the Homes app. `dopp.cloud` redirects to it
+  (#360, ADR 0031 amendment 2026-11-07). It was added by hand after migration day (#379).
 - **The Bote** (Hermes, ADR 0016) is the text agent on Signal and behind
   Homes's Sprechen field. It is installed on the Kraftwerk with Signal
   registered on a spare landline number, with hand fixes in the state
