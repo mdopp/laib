@@ -35,7 +35,7 @@ func TestTheFamilysAppsAreLANOnlyAndFotosIsTheSharesAlone(t *testing.T) {
 		}
 	}
 	f := site("fotos")
-	for _, want := range []string{"@notshare not path /share /share/* /s/* /upload/healthcheck", "respond @notshare 403", "reverse_proxy 127.0.0.1:2284"} {
+	for _, want := range []string{"@notshare not path /share /share/* /s/* /upload/healthcheck", "respond @notshare 403", "zone fotos {", "path_regexp ^/(share|s)/[^/]+/?$", "key {remote_host}", "reverse_proxy 127.0.0.1:2284"} {
 		if !strings.Contains(f, want) {
 			t.Errorf("fotos lacks %q:\n%s", want, f)
 		}

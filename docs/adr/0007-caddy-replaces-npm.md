@@ -178,9 +178,10 @@ LAN-only before.
   lanonly page, which names that cause (`docs/OUTSIDE.md`).
 - **`fotos` is Immich Public Proxy** (`templates/immich-public-proxy`):
   shares only, `auth: none` because the share key is the capability, and
-  Caddy lets only its paths through. Immich's share links move there by
-  immich's `SHARE_URL`, set by its post-deploy once the proxy answers. No
-  rate limit until the Caddy image carries caddy-ratelimit (#1101).
+  Caddy lets only its paths through and limits a share's page and the
+  password form per address (caddy-ratelimit, #1101). Immich's share links
+  move there by immich's `SHARE_URL`, set by its post-deploy once the
+  proxy answers.
 - **Certificates and names.** HTTP-01 still reaches every name on port 80
   from Let's Encrypt, LAN-only or not: the Strato records of the LAN-only
   names stay.

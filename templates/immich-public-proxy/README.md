@@ -14,11 +14,11 @@ state.
   upload probe) with 403, so nothing of Immich's API is on this name even
   if IPP misroutes; `loginProbe: /api/server/ping` (which Immich answers
   to anyone) measures exactly that with `laib-app check fotos.<domain>`.
-- **No rate limit yet.** Share keys are long random strings, but a share
+- **The rate limit.** Share keys are long random strings, but a share
   with a password or a short custom slug (`/s/<slug>`) can be guessed at.
-  The Caddy rate-limit module comes with Laib's kontakt train (#1101);
-  once it is in the Caddy image, a `rate_limit` zone belongs on this
-  route as on `kontakt`.
+  Caddy (caddy-ratelimit, pinned in `caddy/Containerfile`, #1101) allows a
+  share's page and the password form 60 times in 10 minutes per address;
+  the pictures of an album are not counted, a gallery loads dozens at once.
 - **Metadata** stays IPP's default: no EXIF, no place, no GPS for
   visitors (every field is opt-in upstream); downloads follow each share's
   own setting in Immich. Visitor uploads (IPP's second image) are not run.

@@ -18,10 +18,25 @@ routes:
     port: 2284
     exposure: public               # guests open a shared album wherever they are
     auth: none                     # a share key is the capability; IPP knows nothing else of Immich
+    # Caddy: IPP's paths only; a share's page and the password form (POST /share/unlock) at most 60 times in
+    # 10 minutes per address (caddy-ratelimit, #1101), so a key, a short slug or a share's password is not
+    # guessed at; the album's pictures are not counted, a gallery loads dozens at once
     loginProbe: /api/server/ping   # Immich answers it to anyone: here it must be refused, so Immich's API is not on this name (#774)
     caddy: |
       @notshare not path /share /share/* /s/* /upload/healthcheck
       respond @notshare 403
+      route {
+      	rate_limit {
+      		zone fotos {
+      			match {
+      				path_regexp ^/(share|s)/[^/]+/?$
+      			}
+      			key {remote_host}
+      			events 60
+      			window 10m
+      		}
+      	}
+      }
 secrets: []
 data: []
 health:
