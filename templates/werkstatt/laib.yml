@@ -8,7 +8,7 @@ needs: [mcp]                     # talks to laib over host.containers.internal: 
 routes:
   - host: pi
     port: 8791
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: two_factor
     group: admins
 provides: [werkstatt]

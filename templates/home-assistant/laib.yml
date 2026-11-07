@@ -13,7 +13,7 @@ after: [auth, mosquitto]
 routes:
   - host: home
     port: 8123
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: none                     # HA has its own login; the companion app and Voice PE need it
     loginProbe: /api/              # refused without a session: laib-app check measures the app's own login there (#774)
   - host: zwave

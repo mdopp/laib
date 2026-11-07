@@ -8,3 +8,4 @@ ADMIN_EMAIL: ""                           # Immich's admin; empty: admin@<domain
 PHOTOS_RO: /mnt/data/stacks/file-share/data/photos
 ADMIN_PW: !secret IMMICH_ADMIN_PASSWORD   # immich-check logs in with it to read the statistics (#785)
 CHECK_IMAGE: docker.io/library/python:3.13-alpine    # immich-check.py, the standard library only (#785)
+SHARE_URL: ""                             # Immich's External domain for share links, e.g. https://fotos.<domain> (immich-public-proxy); set once the proxy answers; empty: left as the admin set it

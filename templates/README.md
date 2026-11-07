@@ -20,7 +20,7 @@ Two kinds of route, written into every `laib.yml` (#55):
 | Kind | `auth:` | Why | Templates |
 |---|---|---|---|
 | browser only, behind Authelia | `auth: one_factor` / `two_factor` | surfaces people open in a browser; forward-auth does the login | laib, sync (Syncthing), files (File Browser, proxy auth on Remote-User), ldap, dns, adguard, whoami |
-| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless (OIDC, account on the first login), reitti (OIDC, account on the first login, local login off), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant |
+| own login or OIDC | `auth: none` | the app has native clients that cannot pass forward-auth, or logs in through Authelia's OIDC itself | media (Jellyfin, LDAP-Auth plugin against LLDAP), paperless (OIDC, account on the first login), reitti (OIDC, account on the first login, local login off), auth, immich, vaultwarden, hoerbuecher (Audiobookshelf), caldav (Radicale, LLDAP accounts), home-assistant, fotos (Immich Public Proxy: the share key is the capability, Caddy passes only its paths) |
 
 An `auth: none` route fronts an app that really logs in on its own: none
 of its units may trust `Remote-User` or turn the app's login off
@@ -66,6 +66,7 @@ home-assistant's post-deploy mints like Homes's and the Bote's (#349),
 | beets | — | music tagging over the file share's music folder, admins only |
 | home-assistant | — | Home Assistant, Z-Wave JS UI and the Matter server on the host network; the house and the voice brain (ADR 0015) |
 | immich | — | photos: server, GPU machine learning, Postgres with vectors, Redis in one pod; OIDC via Authelia |
+| immich-public-proxy | — | `fotos.<domain>`, the one public way to the photos: Immich Public Proxy serves only what Immich shares (no key, no login, no state); Caddy lets only its paths through; immich's `SHARE_URL` points Immich's share links here once it answers (owner 2026-11-07) |
 | file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Homes, the shared `SHARE_USER` as fallback (#296) |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | scan | — | paper stacks into Paperless (#568): a file in the share's `scan-eingang` or a SANE network scanner's run; pages turned, read, blanks dropped, the household model marks where documents start; one closing message per stack through bote-notify; ordered with `laib scan` |

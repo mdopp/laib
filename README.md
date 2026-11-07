@@ -121,7 +121,7 @@ The part the house trusts: it must work when everything else is broken. **21,608
 
 ### Services from templates
 
-27 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
+28 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
 
 | Service | Beschreibung | Runs |
 |---|---|---|
@@ -137,6 +137,7 @@ The part the house trusts: it must work when everything else is broken. **21,608
 | [Fragen](templates/frage/) `frage` | Websuche mit Zusammenfassung | [laib-frage](frage/), [searxng](https://hub.docker.com/r/searxng/searxng) |
 | [Home Assistant](templates/home-assistant/) `home-assistant` | Licht, Geräte, Sprachsteuerung | [home-assistant](https://github.com/home-assistant/home-assistant), [zwave-js-ui](https://github.com/zwave-js/zwave-js-ui), [python-matter-server](https://github.com/home-assistant-libs/python-matter-server) |
 | [Homes](templates/homes/) `homes` | Seiten und App der Familie | [homes](https://github.com/mdopp/homes), [laib-qmd](qmd/) |
+| [Geteilte Fotos](templates/immich-public-proxy/) `immich-public-proxy` | Geteilte Alben für Gäste | [immich-public-proxy](https://github.com/alangrainger/immich-public-proxy) |
 | [Immich](templates/immich/) `immich` | Fotos und Videos | [immich-server](https://github.com/immich-app/immich), [immich-machine-learning](https://github.com/immich-app/immich), [postgres](https://github.com/immich-app/immich), [redis](https://hub.docker.com/_/redis) |
 | [Kalender-Abos](templates/kalender/) `kalender` | Kalender von außen, nach Radicale | own script (Python) |
 | [Sprachmodell](templates/llama/) `llama` | Die KI der Box | [llama.cpp](https://github.com/ggml-org/llama.cpp) |
@@ -205,7 +206,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
 | Homes (the surface): Box page, pairing, companion API for the widgets | `mdopp/homes`, `templates/homes` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
-| 27 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
+| 28 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what

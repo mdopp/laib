@@ -117,12 +117,40 @@ if code != 200:
     red(f"immich: cannot read the system config (HTTP {code})")
 if all(conf["oauth"].get(k) == v for k, v in WANT.items()):
     print("immich: family login (OIDC via Authelia) unchanged")
+else:
+    conf["oauth"].update(WANT)
+    code, _ = call("PUT", "/api/system-config", conf, key=KEY)
+    if code not in (200, 201):
+        red(f"immich: the OAuth settings were refused (HTTP {code})")
+    code, conf = call("GET", "/api/system-config", key=KEY)
+    if code != 200 or any(conf["oauth"].get(k) != v for k, v in WANT.items()):
+        red("immich: the OAuth settings did not stick")
+    print("immich: family login (OIDC via Authelia) set from Laib's secret")
+
+# The share links (owner 2026-11-07): Immich writes them with its External domain (server.externalDomain),
+# which SHARE_URL sets, e.g. https://fotos.<domain> (immich-public-proxy). Empty: Laib leaves it as the admin
+# set it. Set only once the proxy answers there, so no link ever points at a proxy that is not up yet; once
+# set, a proxy that is down later does not make this hook red. Immich reads the setting per request: no restart.
+SHARE = E.get("SHARE_URL", "").strip().rstrip("/")
+if not SHARE:
     sys.exit(0)
-conf["oauth"].update(WANT)
+srv = conf.setdefault("server", {})
+if srv.get("externalDomain") == SHARE:
+    print("immich: share links unchanged, on " + SHARE)
+    sys.exit(0)
+try:
+    with urllib.request.urlopen(SHARE + "/share/healthcheck", timeout=15) as resp:
+        ok = resp.status == 200 and resp.read(16).strip() == b"ok"
+except (OSError, urllib.error.URLError):
+    ok = False
+if not ok:
+    red(f"immich: the share links were NOT moved to {SHARE}: {SHARE}/share/healthcheck does not answer ok "
+        "(is immich-public-proxy green, its name in the DNS?); they stay on " + (srv.get("externalDomain") or "Immich's own address"))
+srv["externalDomain"] = SHARE
 code, _ = call("PUT", "/api/system-config", conf, key=KEY)
 if code not in (200, 201):
-    red(f"immich: the OAuth settings were refused (HTTP {code})")
+    red(f"immich: the External domain was refused (HTTP {code})")
 code, conf = call("GET", "/api/system-config", key=KEY)
-if code != 200 or any(conf["oauth"].get(k) != v for k, v in WANT.items()):
-    red("immich: the OAuth settings did not stick")
-print("immich: family login (OIDC via Authelia) set from Laib's secret")
+if code != 200 or (conf.get("server") or {}).get("externalDomain") != SHARE:
+    red("immich: the External domain did not stick")
+print("immich: share links now on " + SHARE)
