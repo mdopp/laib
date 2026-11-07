@@ -4,3 +4,5 @@ PodName=homes
 # and pages, /napi and /mcp each check their own secret (#170). qmd's port is not published: the
 # library has no auth and stays on the pod's loopback (#195)
 PublishPort=8650:8650
+# Kontakt prüfen lassen's page alone (HOMES_KONTAKT_LISTEN), behind kontakt.<domain>; lan: false
+PublishPort=8652:8652
