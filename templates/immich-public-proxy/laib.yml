@@ -1,0 +1,30 @@
+name: immich-public-proxy
+title: Geteilte Fotos
+beschreibung: Geteilte Alben für Gäste
+template: {registry: builtin, name: immich-public-proxy, version: 1}
+provides: [photo-shares]
+upstream: [https://github.com/alangrainger/immich-public-proxy, https://docs.ipp.nz/]   # where the Operator's web search looks first (#544)
+# Immich Public Proxy (owner 2026-11-07): the one public way to the photos.
+# Immich itself is LAN-only (at home, or through the Fritz!Box's WireGuard);
+# a guest opens a shared link on fotos.<domain>, and IPP passes through only
+# what Immich shares: the share's page, its assets, a password form for a
+# protected share. It has no API key and no login, stores nothing, and reads
+# Immich at its LAN port. Immich's share links point here once immich's
+# SHARE_URL names this host (immich's post-deploy sets Immich's External
+# domain, after it has seen this route answer).
+after: [immich]
+routes:
+  - host: fotos
+    port: 2284
+    exposure: public               # guests open a shared album wherever they are
+    auth: none                     # a share key is the capability; IPP knows nothing else of Immich
+    loginProbe: /api/server/ping   # Immich answers it to anyone: here it must be refused, so Immich's API is not on this name (#774)
+    caddy: |
+      @notshare not path /share /share/* /s/* /upload/healthcheck
+      respond @notshare 403
+secrets: []
+data: []
+health:
+  http: http://127.0.0.1:2284/share/healthcheck   # ok only while IPP reaches Immich
+ports:
+  - {port: 2284, lan: false}       # Caddy's fotos.<domain> only

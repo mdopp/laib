@@ -23,7 +23,8 @@ def fresh():
                   "timeout": 30000, "buttonText": "Login with OAuth", "autoRegister": True, "autoLaunch": False,
                   "tokenEndpointAuthMethod": "client_secret_post", "profileSigningAlgorithm": "none", "signingAlgorithm": "RS256",
                   "scope": "openid email profile", "mobileOverrideEnabled": False, "mobileRedirectUri": ""},
-                  "storageTemplate": {"enabled": True, "template": "{{y}}/{{MM}}"}})
+                  "storageTemplate": {"enabled": True, "template": "{{y}}/{{MM}}"},
+                  "server": {"externalDomain": "", "loginPageMessage": "Willkommen"}}, proxy="ok")
 
 
 class FakeImmich(BaseHTTPRequestHandler):
@@ -50,6 +51,14 @@ class FakeImmich(BaseHTTPRequestHandler):
         return None
 
     def do_GET(self):
+        if self.path == "/share/healthcheck":   # immich-public-proxy, on the same fake for the test
+            if IMMICH["proxy"] is None:
+                return self.reply(503)
+            data = IMMICH["proxy"].encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
         if self.path == "/api/server/ping":
             return self.reply(200, {"res": "pong"})
         if self.path == "/api/server/config":
@@ -185,6 +194,33 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("IMMICH_ADMIN_PASSWORD", p.stderr)
         self.assertIn("ADMIN_EMAIL", p.stderr)
         self.assertEqual(IMMICH["puts"], 0)
+
+
+    # owner 2026-11-07: Immich's share links point at fotos.<domain>, set by Laib, never before the proxy answers
+    def test_the_share_links_move_to_the_proxy_once_it_answers_and_stay_there(self):
+        share = f"http://127.0.0.1:{self.srv.server_port}"
+        p = self.run_hook(ADMIN_EMAIL="admin@vm.test", SHARE_URL=share + "/")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(IMMICH["config"]["server"], {"externalDomain": share, "loginPageMessage": "Willkommen"})
+        key = next(l.split("=", 1)[1] for l in p.stdout.splitlines() if l.startswith("laib-secret: IMMICH_API_KEY="))
+        puts, IMMICH["proxy"] = IMMICH["puts"], None       # the proxy is down later: nothing to do, not red
+        p = self.run_hook(key=key, ADMIN_EMAIL="admin@vm.test", SHARE_URL=share)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(IMMICH["puts"], puts, "an unchanged External domain was written again")
+
+    def test_the_share_links_stay_while_the_proxy_does_not_answer(self):
+        IMMICH["proxy"] = None
+        p = self.run_hook(ADMIN_EMAIL="admin@vm.test", SHARE_URL=f"http://127.0.0.1:{self.srv.server_port}")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("NOT moved", p.stderr)
+        self.assertEqual(IMMICH["config"]["server"]["externalDomain"], "")
+        self.assertTrue(IMMICH["config"]["oauth"]["enabled"], "the family login waited for the share links")
+
+    def test_without_a_share_url_the_admins_external_domain_stays(self):
+        IMMICH["config"]["server"]["externalDomain"] = "https://set-by-the-admin.example"
+        p = self.run_hook(ADMIN_EMAIL="admin@vm.test")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(IMMICH["config"]["server"]["externalDomain"], "https://set-by-the-admin.example")
 
 
 if __name__ == "__main__":

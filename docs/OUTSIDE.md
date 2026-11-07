@@ -16,7 +16,10 @@ in the home WLAN, and a link to Homes, which works on the road (#480). A
 device at home that resolves the public address (Android's Private DNS, a
 browser's secure DNS, iCloud Private Relay) comes back through the router,
 which hands Caddy its public address: the page names the address Caddy saw
-and that cause. Laib has no VPN; that is the "anything else" below.
+and that cause. Laib has no VPN of its own: the household's way home is
+the Fritz!Box's WireGuard (owner, 2026-11-07, ADR 0007 amendment), whose
+clients have home-network addresses and the Fritz!Box's DNS, so a LAN-only
+name works on the road with the VPN on.
 
 A service that does not answer (restarting, paused, Authelia down) gets a
 German "antwortet gerade nicht" page with the status Caddy had (502, 503,

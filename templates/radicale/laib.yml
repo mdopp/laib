@@ -12,7 +12,7 @@ after: [auth]
 routes:
   - host: caldav
     port: 5232
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: none
 secrets:
   - name: RADICALE_LDAP_PASSWORD      # the read-only LLDAP account, seeded by the auth template (#55)

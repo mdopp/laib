@@ -14,7 +14,7 @@ gpu: true
 routes:
   - host: llama                  # llama.<domain>: humans with a browser, Authelia-gated
     port: 11435
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: one_factor
 secrets:
   - name: MODEL_API_KEY            # the model key (builtin MODEL_KEY on this box): generated on the first apply; a peer box sets the same value by hand

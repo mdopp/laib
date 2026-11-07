@@ -17,7 +17,7 @@ after: [auth, file-share]        # LLDAP's read-only account (the box's admins);
 routes:
   - host: hoerbuecher
     port: 13378
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: none                     # ABS does its own login (OIDC via Authelia); forward-auth would break its apps
     loginProbe: /api/me            # refused without a session: laib-app check measures the app's own login there (#774)
 secrets:
