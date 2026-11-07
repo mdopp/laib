@@ -73,9 +73,10 @@ class Launcher(unittest.TestCase):
 
 
 class Wiring(unittest.TestCase):
-    def test_the_route_is_admins_only_with_two_factors(self):
+    def test_the_route_is_admins_only_with_two_factors_and_lan_only(self):
         contract = (TPL / "laib.yml").read_text()
-        self.assertRegex(contract, r"(?m)^  - host: pi\n    port: 8791\n    exposure: public\n    auth: two_factor\n    group: admins")
+        # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard
+        self.assertRegex(contract, r"(?m)^  - host: pi\n    port: 8791\n    exposure: internal\b.*\n    auth: two_factor\n    group: admins")
         self.assertRegex(contract, r"\{port: 8791, lan: false\}")
         unit = (TPL / "werkstatt.container").read_text()
         self.assertIn("PublishPort=127.0.0.1:8791:8791", unit, "the web pi on the LAN, past Authelia")

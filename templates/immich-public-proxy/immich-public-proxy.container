@@ -1,0 +1,22 @@
+[Unit]
+Description=Immich Public Proxy — geteilte Alben für Gäste
+
+[Container]
+Image=${IMAGE}
+PublishPort=127.0.0.1:2284:3000
+# Immich at its LAN port (immich's ports: 2283, lan: true), never its public name: Immich is LAN-only
+Environment=IMMICH_URL=http://host.containers.internal:2283
+# the og:image link previews in messengers want the public https address
+Environment=PUBLIC_BASE_URL=https://fotos.${DOMAIN}
+# upstream's lock-down (its compose file): the image writes nothing and needs no capability
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+# stateless, no database: the pinned tag follows its rebuilds; a new release comes by proposal (#287)
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

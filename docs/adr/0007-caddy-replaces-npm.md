@@ -151,3 +151,43 @@ the map as LAN, as nftables lets it through (Home Assistant's 8123).
 Before (ServiceBay): its own dashboard on the LAN at `<lanIp>:5888`,
 behind its login, down with the app. Now: no port to remember, no login,
 and up while laib is down.
+
+## Amendment 2026-11-07: five names face the internet; the Fritz!Box's WireGuard is the way home
+
+Owner, 2026-11-07: the box shows the internet only what a person without
+a home connection must reach. Public: `www` (Homes, its `/napi/` bypass
+for the app), `auth`, `files` (with its share-link bypass), `kontakt` and
+`fotos`. LAN-only (`exposure: internal`): `pi`, `llama`, `home`, `caldav`,
+`media`, `hoerbuecher`, `photos`, `vault`, next to the names that were
+LAN-only before.
+
+- **Why it holds.** No box component reaches these names from outside:
+  the Homes app talks to `/napi/` on `www` only (its calendars and
+  contacts through the Homes-Konto, not CalDAV); OIDC redirects and
+  back-channels stay on the box or in the person's browser; nothing
+  calls in (no webhook, no push from a cloud).
+- **The road is a VPN, not a route.** The family reaches the LAN-only
+  names through the Fritz!Box's WireGuard, set to stay on. LAN is still
+  Caddy's `remote_ip private_ranges` (Authelia has no network rules): a
+  WireGuard client of the Fritz!Box has an address in the home network
+  (`192.168.178.x`) and asks the Fritz!Box for names, which answers the
+  box's LAN address (checked 2026-11-07, as AdGuard does), so Caddy sees
+  a private address. A phone that resolves the public address instead
+  (Android's Private DNS set to a provider, a browser's secure DNS) comes
+  back through the router's hairpin with the public address and gets the
+  lanonly page, which names that cause (`docs/OUTSIDE.md`).
+- **`fotos` is Immich Public Proxy** (`templates/immich-public-proxy`):
+  shares only, `auth: none` because the share key is the capability, and
+  Caddy lets only its paths through and limits a share's page and the
+  password form per address (caddy-ratelimit, #1101). Immich's share links
+  move there by immich's `SHARE_URL`, set by its post-deploy once the
+  proxy answers.
+- **Certificates and names.** HTTP-01 still reaches every name on port 80
+  from Let's Encrypt, LAN-only or not: the Strato records of the LAN-only
+  names stay.
+
+Before: every family app public behind its own login (ServiceBay's shape,
+each app's login the only wall). Now: fewer doors, each app's login a
+second wall behind the LAN. The cost: the WireGuard app on each phone,
+kept on; without it the family's apps answer only at home, while Homes,
+its app, the file share's links and shared albums work anywhere.

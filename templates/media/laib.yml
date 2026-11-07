@@ -19,7 +19,7 @@ after: [auth, file-share]        # LLDAP's read-only account (#256); the share's
 routes:
   - host: media
     port: 8096
-    exposure: public
+    exposure: internal             # owner 2026-11-07: at home, or on the road through the Fritz!Box's WireGuard (ADR 0007)
     auth: none                     # Jellyfin logs in itself (its apps cannot pass forward-auth, #55); LDAP-Auth plugin against LLDAP (#256)
     loginProbe: /Users/Me          # refused without a session: laib-app check measures the app's own login there (#774)
     # no caddy: snippet: Caddy's reverse_proxy streams and passes websockets as it is.
