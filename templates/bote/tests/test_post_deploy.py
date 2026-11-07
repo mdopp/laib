@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
-SECRETS = {"HOMES_HAUSHALT_TOKEN": "hh-bearer-6Zq", "BOTE_LAIB_TOKEN": "laib-tok-9Xr", "GESUNDHEIT_BOTE_TOKEN": "ges-bearer-3Kp"}
+SECRETS = {"HOMES_HAUSHALT_TOKEN": "hh-bearer-6Zq", "BOTE_LAIB_TOKEN": "laib-tok-9Xr"}
 SEEN = []
 
 
@@ -38,31 +38,26 @@ class PostDeploy(unittest.TestCase):
             env = dict(os.environ, PATH=f"{shims}:{os.environ['PATH']}", ARGV_LOG=str(log), REAL_PYTHON=sys.executable,
                        LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
                        MODEL_NAME="m", THINKING_MODEL="t", HAUSHALT_MCP_URL=f"http://127.0.0.1:{srv.server_port}/mcp/haushalt",
-                       GESUNDHEIT_MCP_URL=f"http://127.0.0.1:{srv.server_port}/mcp",   # laib#894: the same shape, its own bearer
                        **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
             p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             argv = log.read_text() if log.exists() else ""
             cfg = Path(d, "bote/hermes/config.yaml").read_text()
             self.assertIn("haushalt:", cfg, p.stdout)
-            self.assertIn("gesundheit:", cfg, p.stdout)
-            self.assertIn("Bearer ${GESUNDHEIT_TOKEN}", cfg)
-            self.assertIn("GESUNDHEIT_TOKEN=" + SECRETS["GESUNDHEIT_BOTE_TOKEN"], Path(d, "bote/hermes/.env").read_text())
-            self.assertIn("tagesnotiz_eintragen", Path(d, "bote/hermes/SOUL.md").read_text(), "the rule is in the soul")
         self.assertIn("Bearer " + SECRETS["HOMES_HAUSHALT_TOKEN"], SEEN, "the probe did not carry the bearer")
-        self.assertIn("Bearer " + SECRETS["GESUNDHEIT_BOTE_TOKEN"], SEEN, "gesundheit's probe did not carry its bearer")
         for name, s in SECRETS.items():
             self.assertNotIn(s, argv, f"{name} is on a process's argv, where ps shows it")
 
-    def test_without_gesundheits_address_no_tool_no_rule_and_no_token(self):
-        """Gesundheit retired (2026-11-06): its address emptied, its token still in secrets.age;
-        the Bote has neither the tool nor the rule, and Hermes' environment no bearer"""
+    def test_a_leftover_gesundheit_address_wires_nothing(self):
+        """Gesundheit removed (2026-11-07): a box whose values.yml still has GESUNDHEIT_MCP_URL, with an
+        MCP answering there and the old bearer in secrets.age, gets neither a tool nor a rule nor a token"""
         srv = HTTPServer(("127.0.0.1", 0), FakeHaushalt)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
         with tempfile.TemporaryDirectory() as d:
             env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="+490000",
-                       MODEL_NAME="m", THINKING_MODEL="t", GESUNDHEIT_MCP_URL="", **{"LAIB_SECRET_" + k: v for k, v in SECRETS.items()})
+                       MODEL_NAME="m", THINKING_MODEL="t", GESUNDHEIT_MCP_URL=f"http://127.0.0.1:{srv.server_port}/mcp",
+                       **{"LAIB_SECRET_" + k: v for k, v in {**SECRETS, "GESUNDHEIT_BOTE_TOKEN": "ges-bearer-3Kp"}.items()})
             for hook in (HOOK, HOOK.parent / "pre-start"):
                 p = subprocess.run(["bash", str(hook)], env=env, capture_output=True, text=True, timeout=60)
                 self.assertEqual(p.returncode, 0, p.stdout + p.stderr)

@@ -214,29 +214,19 @@ def config(api):
             print("paperless: Feld %s angelegt" % name)
 
 
-# Paperless' clients: Dokumente (ADR 0028, mdopp/dokumente, run by the scan template) reads contracts
-# and invoices, Gesundheit (laib#893, mdopp/gesundheit, its own template) reads lab sheets and
-# reports. Each through Paperless' API as its own user, never the admin: it sees and changes
-# documents (their tags, notes, custom field values, correspondent and owner), makes tags (prüfen,
-# korrespondent-ok, gesundheit) and new senders (correspondents), reads the names it needs (correspondents, document types, custom
-# field definitions, and the users, so it never takes a household person for a sender, #737, and
-# knows whose a sheet is). Nothing else: no deleting (except Gesundheit its own note, gesundheit#5), no mail, no workflows, no settings, no users
-# or groups. One workflow „Dokument hinzugefügt“ gives every client view and change on each new
-# document and posts to each client's hook with its own token. A client with a `schalter` is wired
-# only while that value is set (its hook's address): Gesundheit while the gesundheit service is
-# there; its value emptied when it goes (Paperless took over, 2026-11-06), its user is switched off.
+# Paperless' client: Dokumente (ADR 0028, mdopp/dokumente, run by the scan template) reads contracts,
+# invoices and medical records, through Paperless' API as its own user, never the admin: it sees and
+# changes documents (their tags, notes, custom field values, correspondent and owner), makes tags
+# (prüfen, korrespondent-ok) and new senders (correspondents), reads the names it needs (correspondents,
+# document types, custom field definitions, and the users, so it never takes a household person for a
+# sender, #737). Nothing else: no deleting, no mail, no workflows, no settings, no users or groups.
+# One workflow „Dokument hinzugefügt“ gives it view and change on each new document and posts to its
+# hook with its token. Gesundheit was a second client until the owner removed it (2026-11-07); its
+# Paperless user stays as it was left, switched off.
 KUNDEN = [
     {"user": "dokumente", "name": "Dokumente", "passwort": "PAPERLESS_DOKUMENTE_PASSWORD", "token": "PAPERLESS_TOKEN",
      "hook": "http://host.containers.internal:8720/hook", "header": "X-Dokumente-Token", "hook_token": "DOKUMENTE_WEBHOOK_TOKEN",
      "ohne_hook": "Dokumente sieht neue Dokumente erst zur vollen Stunde"},   # the scan service's listener on the host, never through Caddy
-    {"user": "gesundheit", "name": "Gesundheit", "passwort": "PAPERLESS_GESUNDHEIT_PASSWORD", "token": "PAPERLESS_GESUNDHEIT_TOKEN",
-     "hook": "http://host.containers.internal:18529/hook", "header": "X-Gesundheit-Token", "hook_token": "GESUNDHEIT_WEBHOOK_TOKEN",
-     "schalter": "GESUNDHEIT_HOOK",   # the value's address is the hook; a box whose values.yml has no such key yet: the one above
-     "ohne_hook": "Gesundheit sieht neue Befunde erst zur vollen Stunde",   # the gesundheit template's inner port (laib#894)
-     # gesundheit#5: its one note per document (the transcript of a page read from its image) is
-     # replaced on every reading; Paperless cannot edit a note, so the old one is deleted. Only
-     # this client, only notes: it deletes no document, and only notes it wrote itself
-     "dazu": ["delete_note"]},
 ]
 DOKUMENTE_USER = KUNDEN[0]["user"]
 # add_document: a „nur für mich“ stack goes in through the API, owned by dokumente until it hands it on
@@ -249,7 +239,7 @@ DOKUMENTE_RECHTE = ["view_document", "add_document", "change_document", "view_no
 WORKFLOW = "Dokument hinzugefügt"
 HOOK_URL = KUNDEN[0]["hook"]
 # the document types that are medical records (laib#893): made once each, found by name, never
-# changed; the gesundheit template's BEFUND_ARTEN names the same (compared folded)
+# changed (compared folded); ordnen fills their fields
 BEFUND_ARTEN = "Befund,Arztbrief,Labor,Röntgen,Atemtest,Lungenfunktion"
 
 
@@ -260,10 +250,6 @@ def kunden(api, have):
     template not installed) is left out and said; the others go on. A second run writes nothing."""
     uids, hooks = [], []
     for k in KUNDEN:
-        if k.get("schalter") and not E.get(k["schalter"], k["hook"]):
-            abschalten(api, k)
-            continue
-        k = {**k, "hook": E.get(k["schalter"], k["hook"])} if k.get("schalter") else k
         pw = E.get("LAIB_SECRET_" + k["passwort"], "")
         if not pw:
             print("paperless: kein %s, %s nicht eingerichtet" % (k["passwort"], k["name"]))
@@ -279,17 +265,6 @@ def kunden(api, have):
         besitz(api, uids)
 
 
-def abschalten(api, k):
-    """a client switched off by its value: its user, if there, may no longer log in (its token stops
-    working too); nothing deleted, the next run with the value set switches it on again"""
-    u = next((x for x in api.all("/api/users/") if x.get("username") == k["user"]), None)
-    if u is not None and u.get("is_active"):
-        api("PATCH", "/api/users/%d/" % u["id"], {"is_active": False})
-        print("paperless: %s ist abgeschaltet (%s leer): der Benutzer %s meldet sich nicht mehr an" % (k["name"], k["schalter"], k["user"]))
-    else:
-        print("paperless: %s nicht eingerichtet (%s leer)" % (k["name"], k["schalter"]))
-
-
 def dokumente(api, have):
     """kept for the tests and the README: Paperless' side of its clients"""
     kunden(api, have)
@@ -299,7 +274,7 @@ def benutzer(api, have, k, pw):
     """one client's user (no administrator, exactly its rights, the box's password) and its token,
     printed as laib-secret when it differs from the one the box has"""
     want = {"is_superuser": False, "is_staff": False, "is_active": True, "groups": [],
-            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE + k.get("dazu", []) if c in have)}
+            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE if c in have)}
     u = next((x for x in api.all("/api/users/") if x.get("username") == k["user"]), None)
     if u is None:
         u = api("POST", "/api/users/", {"username": k["user"], "first_name": k["name"], "password": pw, **want})
@@ -384,8 +359,8 @@ def befunde(api):
     for name in arten:
         t = have.get(name.casefold())
         if t is None:
-            # owner None: a type the admin owns is invisible to dokumente and gesundheit (object
-            # permissions), and Gesundheit read 0 documents on the box for a day (gesundheit#3)
+            # owner None: a type the admin owns is invisible to dokumente (object permissions;
+            # a client read 0 documents on the box for a day, gesundheit#3)
             api("POST", "/api/document_types/", {"name": name, "matching_algorithm": 0, "owner": None})
             print("paperless: Dokumenttyp %s angelegt" % name)
         elif t.get("owner") is not None:

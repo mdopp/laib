@@ -5,7 +5,7 @@
   <rect x="20" y="16" width="960" height="70" rx="10" fill="#f2e4eb" stroke="#7a3b5c"/>
   <text x="36" y="40" font-size="13" fill="#7a3b5c" font-weight="600">FAMILY AND DEVICES</text>
   <text x="36" y="66" font-size="14" fill="#1d2420">phone and browser  ·  Signal  ·  speakers with their wake word  ·  scanner on USB  ·  lights, switches, sensors</text>
-  <rect x="20" y="110" width="548" height="206" rx="10" fill="#f3e9dd" stroke="#8a5a2b"/>
+  <rect x="20" y="110" width="416" height="206" rx="10" fill="#f3e9dd" stroke="#8a5a2b"/>
   <text x="36" y="134" font-size="13" fill="#8a5a2b" font-weight="600">OWN PROGRAMS, OWN REPOS</text>
   <rect x="36" y="176" width="120" height="96" rx="8" fill="#ffffff" stroke="#8a5a2b"/>
   <text x="96" y="210" font-size="15" fill="#1d2420" font-weight="600" text-anchor="middle">Homes</text>
@@ -16,94 +16,93 @@
   <text x="228" y="232" font-size="11" fill="#5d6a63" text-anchor="middle">scan, split,</text>
   <text x="228" y="248" font-size="11" fill="#5d6a63" text-anchor="middle">read invoices</text>
   <rect x="300" y="176" width="120" height="96" rx="8" fill="#ffffff" stroke="#8a5a2b"/>
-  <text x="360" y="210" font-size="15" fill="#1d2420" font-weight="600" text-anchor="middle">Gesundheit</text>
-  <text x="360" y="232" font-size="11" fill="#5d6a63" text-anchor="middle">medical</text>
-  <text x="360" y="248" font-size="11" fill="#5d6a63" text-anchor="middle">records as a timeline</text>
-  <rect x="432" y="176" width="120" height="96" rx="8" fill="#ffffff" stroke="#8a5a2b"/>
-  <text x="492" y="210" font-size="15" fill="#1d2420" font-weight="600" text-anchor="middle">Archiv</text>
-  <text x="492" y="232" font-size="11" fill="#5d6a63" text-anchor="middle">messages</text>
-  <text x="492" y="248" font-size="11" fill="#5d6a63" text-anchor="middle">in a vault</text>
-  <rect x="588" y="110" width="392" height="206" rx="10" fill="#e4eaf4" stroke="#3d5a8a"/>
-  <text x="604" y="134" font-size="13" fill="#3d5a8a" font-weight="600">BESIDE THE KERNEL  ·  LAIB REPO, OWN CAPS</text>
-  <rect x="604" y="148" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="645" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">automat</text>
-  <text x="645" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">443 / 660</text>
-  <rect x="696" y="148" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="737" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">directory</text>
-  <text x="737" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">421 / 530</text>
-  <rect x="788" y="148" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="829" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">disk</text>
-  <text x="829" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">615 / 770</text>
-  <rect x="880" y="148" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="921" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">frage</text>
-  <text x="921" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">413 / 440</text>
-  <rect x="604" y="202" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="645" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">haushalt</text>
-  <text x="645" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">929 / 1,012</text>
-  <rect x="696" y="202" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="737" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">lease</text>
-  <text x="737" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">1,268 / 1,430</text>
-  <rect x="788" y="202" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="829" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">mcpserver</text>
-  <text x="829" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">111 / 220</text>
-  <rect x="880" y="202" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="921" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">notify</text>
-  <text x="921" y="237" font-size="11" fill="#a5561b" font-weight="600" text-anchor="middle">648 / 660</text>
-  <rect x="604" y="256" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="645" y="275" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">operator</text>
-  <text x="645" y="291" font-size="11" fill="#a5561b" font-weight="600" text-anchor="middle">3,255 / 3,300</text>
-  <rect x="696" y="256" width="82" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
-  <text x="737" y="275" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">stick</text>
-  <text x="737" y="291" font-size="11" fill="#5d6a63" text-anchor="middle">1,468 / 1,980</text>
+  <text x="360" y="210" font-size="15" fill="#1d2420" font-weight="600" text-anchor="middle">Archiv</text>
+  <text x="360" y="232" font-size="11" fill="#5d6a63" text-anchor="middle">messages</text>
+  <text x="360" y="248" font-size="11" fill="#5d6a63" text-anchor="middle">in a vault</text>
+  <rect x="456" y="110" width="524" height="206" rx="10" fill="#e4eaf4" stroke="#3d5a8a"/>
+  <text x="472" y="134" font-size="13" fill="#3d5a8a" font-weight="600">BESIDE THE KERNEL  ·  LAIB REPO, OWN CAPS</text>
+  <rect x="472" y="148" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="529" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">atomicfile</text>
+  <text x="529" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">91 / 115</text>
+  <rect x="597" y="148" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="654" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">automat</text>
+  <text x="654" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">443 / 660</text>
+  <rect x="722" y="148" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="779" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">directory</text>
+  <text x="779" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">421 / 530</text>
+  <rect x="847" y="148" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="904" y="167" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">disk</text>
+  <text x="904" y="183" font-size="11" fill="#5d6a63" text-anchor="middle">615 / 770</text>
+  <rect x="472" y="202" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="529" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">frage</text>
+  <text x="529" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">413 / 440</text>
+  <rect x="597" y="202" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="654" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">haushalt</text>
+  <text x="654" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">1,217 / 1,320</text>
+  <rect x="722" y="202" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="779" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">lease</text>
+  <text x="779" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">1,238 / 1,430</text>
+  <rect x="847" y="202" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="904" y="221" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">mcpserver</text>
+  <text x="904" y="237" font-size="11" fill="#5d6a63" text-anchor="middle">111 / 220</text>
+  <rect x="472" y="256" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="529" y="275" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">notify</text>
+  <text x="529" y="291" font-size="11" fill="#a5561b" font-weight="600" text-anchor="middle">648 / 660</text>
+  <rect x="597" y="256" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="654" y="275" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">operator</text>
+  <text x="654" y="291" font-size="11" fill="#a5561b" font-weight="600" text-anchor="middle">3,255 / 3,300</text>
+  <rect x="722" y="256" width="115" height="44" rx="7" fill="#ffffff" stroke="#3d5a8a"/>
+  <text x="779" y="275" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">stick</text>
+  <text x="779" y="291" font-size="11" fill="#5d6a63" text-anchor="middle">1,468 / 1,980</text>
   <rect x="20" y="348" width="960" height="234" rx="12" fill="#e3efe8" stroke="#2f6b52" stroke-width="2"/>
-  <text x="36" y="374" font-size="13" fill="#2f6b52" font-weight="600">LAIB KERNEL  ·  the part the house trusts  ·  20,728 of 22,000 lines</text>
+  <text x="36" y="374" font-size="13" fill="#2f6b52" font-weight="600">LAIB KERNEL  ·  the part the house trusts  ·  21,608 of 22,000 lines</text>
   <rect x="36" y="388" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="147" y="410" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">State</text>
-  <text x="147" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">2,578 lines</text>
+  <text x="147" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">2,533 lines</text>
   <rect x="271" y="388" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="382" y="410" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Render, apply, converge</text>
-  <text x="382" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">3,661 lines</text>
+  <text x="382" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">4,091 lines</text>
   <rect x="506" y="388" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="617" y="410" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Inbox, proposal, review</text>
-  <text x="617" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">4,769 lines</text>
+  <text x="617" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">4,804 lines</text>
   <rect x="741" y="388" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="852" y="410" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Policy and hands</text>
-  <text x="852" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">1,356 lines</text>
+  <text x="852" y="428" font-size="11" fill="#5d6a63" text-anchor="middle">1,360 lines</text>
   <rect x="36" y="452" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="147" y="474" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Journal</text>
-  <text x="147" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">393 lines</text>
+  <text x="147" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">403 lines</text>
   <rect x="271" y="452" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="382" y="474" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Diag and repair</text>
-  <text x="382" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">1,673 lines</text>
+  <text x="382" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">1,992 lines</text>
   <rect x="506" y="452" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="617" y="474" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Backup</text>
   <text x="617" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">885 lines</text>
   <rect x="741" y="452" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="852" y="474" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Self-update</text>
-  <text x="852" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">1,105 lines</text>
+  <text x="852" y="492" font-size="11" fill="#5d6a63" text-anchor="middle">1,106 lines</text>
   <rect x="36" y="516" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="147" y="538" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">Admin pages</text>
-  <text x="147" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,786 lines</text>
+  <text x="147" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,868 lines</text>
   <rect x="271" y="516" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="382" y="538" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">MCP and verb door</text>
-  <text x="382" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,112 lines</text>
+  <text x="382" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,153 lines</text>
   <rect x="506" y="516" width="223" height="54" rx="7" fill="#ffffff" stroke="#2f6b52"/>
   <text x="617" y="538" font-size="13" fill="#1d2420" font-weight="600" text-anchor="middle">The verbs</text>
-  <text x="617" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,410 lines</text>
+  <text x="617" y="556" font-size="11" fill="#5d6a63" text-anchor="middle">1,413 lines</text>
   <rect x="20" y="610" width="960" height="138" rx="10" fill="#ececf1" stroke="#5f5f6e"/>
   <text x="36" y="634" font-size="13" fill="#5f5f6e" font-weight="600">27 SERVICES FROM TEMPLATES  ·  Laib sets them up, checks them, backs them up</text>
   <text x="36" y="662" font-size="13" fill="#1d2420">AdGuard · Archiv · Audiobookshelf · Anmeldung · Musik ordnen · Bote · Webadressen · ESPHome</text>
   <text x="36" y="686" font-size="13" fill="#1d2420">Netzlaufwerk · Fragen · Home Assistant · Homes · Immich · Kalender-Abos · Sprachmodell · Jellyfin</text>
   <text x="36" y="710" font-size="13" fill="#1d2420">Gerätenachrichten · Music Assistant · Paperless · Kalender · Zeitleiste · Scannen · Stimme</text>
   <text x="36" y="734" font-size="13" fill="#1d2420">Nutzungszähler · Vaultwarden · Werkstatt · Testseite</text>
-  <path d="M294 86 L294 108" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
-  <text x="302" y="102" font-size="11" fill="#5d6a63">types, talks</text>
-  <path d="M784 86 L784 108" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
-  <text x="792" y="102" font-size="11" fill="#5d6a63">writes, calls</text>
-  <path d="M294 316 L294 346" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
-  <text x="302" y="338" font-size="11" fill="#5d6a63">asks, proposes over MCP</text>
-  <path d="M784 316 L784 346" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
-  <text x="792" y="338" font-size="11" fill="#5d6a63">reads, repairs through verbs</text>
+  <path d="M228 86 L228 108" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+  <text x="236" y="102" font-size="11" fill="#5d6a63">types, talks</text>
+  <path d="M718 86 L718 108" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+  <text x="726" y="102" font-size="11" fill="#5d6a63">writes, calls</text>
+  <path d="M228 316 L228 346" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+  <text x="236" y="338" font-size="11" fill="#5d6a63">asks, proposes over MCP</text>
+  <path d="M718 316 L718 346" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+  <text x="726" y="338" font-size="11" fill="#5d6a63">reads, repairs through verbs</text>
   <path d="M310 582 L310 608" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
   <text x="318" y="602" font-size="11" fill="#5d6a63">sets up</text>
   <path d="M682 582 L682 608" stroke="#5d6a63" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>

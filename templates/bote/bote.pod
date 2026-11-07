@@ -4,6 +4,6 @@ PublishPort=127.0.0.1:8085:8080
 # Hermes' API beyond loopback so the homes pod reaches it over host.containers.internal (#215, ADR 0012 §4);
 # lan: false keeps the LAN out, and only BOTE_API_KEY gets an answer
 PublishPort=8642:8642
-# bote-notify beyond loopback so the gesundheit pod reaches it over host.containers.internal for the
-# daily question (laib#894, ADR 0012 §4); lan: false keeps the LAN out, and only the bearer gets an answer
-PublishPort=8645:8645
+# bote-notify on loopback: Home Assistant, laib-notify and laib-haushalt (host network) and the host's
+# units post to it there; nothing in a pod needs it since Gesundheit went (2026-11-07, #894 undone)
+PublishPort=127.0.0.1:8645:8645
