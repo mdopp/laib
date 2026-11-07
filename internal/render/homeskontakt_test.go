@@ -37,7 +37,8 @@ func TestHomesKontaktIsItsOwnHostWithoutLoginAndHomesStaysBehindAuthelia(t *test
 			t.Errorf("kontakt site has %q:\n%s", not, k)
 		}
 	}
-	h := site("homes.x.home")
+	homes := st.Services["homes"].Contract.Routes[0].Host // wherever Homes lives (its host may move)
+	h := site(homes + ".x.home")
 	if strings.Count(h, "path ") != 1 || !strings.Contains(h, "@bypass path /napi/*") || !strings.Contains(h, "import authelia") || strings.Contains(h, "8652") {
 		t.Errorf("homes site changed:\n%s", h)
 	}
@@ -45,8 +46,8 @@ func TestHomesKontaktIsItsOwnHostWithoutLoginAndHomesStaysBehindAuthelia(t *test
 	if !strings.Contains(access, "domain: kontakt.x.home\n      policy: bypass") {
 		t.Errorf("Authelia has no bypass for kontakt.x.home:\n%s", access)
 	}
-	if strings.Contains(access, "domain: homes.x.home\n      policy: bypass\n      resources: [\"^/k/") {
-		t.Error("homes has a path without login besides /napi/")
+	if n := strings.Count(access, "domain: "+homes+".x.home\n      policy: bypass\n"); n != 1 {
+		t.Errorf("Homes' host has %d paths without login, want 1 (/napi/):\n%s", n, access)
 	}
 	if p := os.Getenv("LAIB_CADDYFILE_OUT"); p != "" { // checked by a real caddy with the rate limit, by hand
 		os.WriteFile(p, []byte(caddy), 0o600)
