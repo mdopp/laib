@@ -1,4 +1,5 @@
-# Caddy with DNS-01 providers for "public certificates, no public
+# Caddy with DNS-01 providers and the rate limit (caddy-ratelimit, pinned: kontakt.<domain>, the
+# one page of Homes without a login, owner 2026-11-07) for "public certificates, no public
 # reachability" (ADR 0007). Pinned Caddy, the common German and generic
 # providers; add one by appending a --with line. Caddy and the desec
 # module (the house's, #378) are pinned: a new version is a PR.
@@ -14,6 +15,7 @@ RUN xcaddy build \
     --with github.com/caddy-dns/duckdns \
     --with github.com/caddy-dns/porkbun \
     --with github.com/caddy-dns/ovh \
-    --with github.com/caddy-dns/route53
+    --with github.com/caddy-dns/route53 \
+    --with github.com/mholt/caddy-ratelimit@v0.1.0
 FROM docker.io/library/caddy:2.10.2
 COPY --from=build /usr/bin/caddy /usr/bin/caddy
