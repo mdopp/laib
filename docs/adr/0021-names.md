@@ -76,7 +76,7 @@ which kind of name goes where.
 | notify | a message for a person on their chat channel, sent by the Bote with `hermes send` (ADR 0022 §3); Home Assistant calls it as `rest_command.mitteilung` | `templates/bote/notify.py`, container `bote-notify` |
 | assistant | the name the family talks to, set once (ADR 0030): „Homes“ by default | `box.yml assistant`, the builtin `${ASSISTANT}`, `LAIB_ASSISTANT` in hooks |
 | directory | where a person stands in the Bote: its tools, levels, context and help, in the assistant's name | `directory/`, container `bote-directory`, tool and plugin `laib-directory` |
-| Homes | the family's surface: pages, cards, `/napi`, the app's server, and the app; was Haus until ADR 0031; the assistant's name too (ADR 0030) | repo `mdopp/homes`, app `mdopp/homes-android`, `templates/homes`, `homes.<domain>`, hand `homes` |
+| Homes | the family's surface: pages, cards, `/napi`, the app's server, and the app; was Haus until ADR 0031; the assistant's name too (ADR 0030) | repo `mdopp/homes`, app `mdopp/homes-android`, `templates/homes`, `www.<domain>` (ADR 0031 amendment), hand `homes` |
 | Zuhause | the household's address and coordinates, once for every template (#561, ADR 0017 amendment) | `box.yml zuhause`, the `ZUHAUSE_*` builtins, verb `laib zuhause` |
 | Haushalt | the household's data: calendar, contacts, notes, reminders | Homes's MCP source (ADR 0017), Bote tool `haushalt` |
 | memory library | one search over the household's notes, by words and by meaning (ADR 0017 §3, haus#13) | qmd, container `homes-qmd` in the homes pod (#195) |
@@ -97,7 +97,6 @@ which kind of name goes where.
 |---|---|---|
 | ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
 | `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`, `${PERSONA_WAKEWORD}`, `${PERSONA_VOICE}`, `${PERSONA_LANGUAGES}`, `${PERSONA_REV}` | `state.LegacyBuiltins`: a box's units from before ADR 0030 load and render as 0.x rendered them for the builtin Joshua, so the update to 1.x changes nothing for them (#1024); `render/persona/` stays on disk | no service on the box names one: each builtin template that did was updated once on the box after 1.0; then the map goes, with `newsSince`'s `${PERSONA_DISPLAY}` |
-| `haus.<domain>` | the homes template's second route: the old Haus app's `/napi/` calls with their device token (ADR 0031) | every phone runs the Homes app (#1021 step 9); then a `redirectFrom` |
 | `haus_device_` | the device-token prefix of phones paired with the Haus app; Homes accepts it (ADR 0031) | every phone runs the Homes app (#1021 step 9) |
 | `was: HAUS_…`, `was: ${DATA_DIR}/haus…` | the `was:` lines in templates/homes and the templates that declare its secrets (ADR 0031) | the box moved (#1021 step 7) |
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside `X-Archiv-Homes` and `ARCHIV_HOMES_SECRET` (ADR 0031) | the box moved (#1021 step 7) |
