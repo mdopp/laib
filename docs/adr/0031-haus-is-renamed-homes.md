@@ -2,9 +2,10 @@
 
 Applies when you meet „Haus“ or `haus` in code, templates, docs or on the
 box and wonder whether it is the family's program (now Homes) or the
-ordinary German word; when you touch the legacy route `haus.<domain>`,
-a `was:` line, the device-token prefix `haus_device_` or archiv's
-`X-Archiv-Haus` fallback; or when you want to know whether one of them
+ordinary German word; when you move Homes' address (`www.<domain>` since
+the amendment at the end) or meet the gone names `homes.<domain>` and
+`haus.<domain>`; when you touch a `was:` line, the device-token prefix
+`haus_device_` or archiv's `X-Archiv-Haus` fallback; or when you want to know whether one of them
 may go yet.
 
 - **Status:** Accepted, 2026-11-03 (#1021). Amends ADR 0021 rules 1 and 3
@@ -94,7 +95,7 @@ What moved, and where it was:
 
 | Name | Where | Ends when |
 |---|---|---|
-| `haus.<domain>` | the homes template's second route | every phone runs the Homes app (#1021 step 9); then it becomes a `redirectFrom` |
+| `haus.<domain>` | gone 2026-11-07 with `homes.<domain>` (amendment below) | ended |
 | `haus_device_` | the program accepts a paired phone's old tokens | the same |
 | `was:` lines | templates/homes, bote, scan, auth, archiv, audiobookshelf, media, home-assistant | the box moved (#1021 step 7) |
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside the new names | the box moved |
@@ -130,3 +131,27 @@ word, and the docs check would flag the house.
   and the old user „Haus“ with its entries' attribution is gone.
 - The usage counts keep the app id `haus` the program has always sent:
   the history in usage-metrics stays one series.
+
+## Amendment 2026-11-07: Homes moves to `www.<domain>`
+
+- **Deciders:** the owner, 2026-11-07: Homes answers at `www.<domain>`, the
+  domain itself redirects there, and `homes.<domain>` goes at once, with no
+  redirect („Sofort ganz weg“).
+- **Decision.** The homes template's first route is `www` with
+  `redirectFrom: ["@"]`; it keeps everything `homes.` had: one factor for
+  `family` and `admins`, `/napi/` past Authelia, the proxy secret.
+  `HOMES_PUBLIC_URL` names the same host (`TestHomesPublicURLIsItsRoute`).
+  Laib's own links to Homes (a login without a target, the welcome mail)
+  follow the route by themselves (`render.HomesURL`), and Authelia's cookie
+  is the domain's, so nobody signs in again. `haus.<domain>` goes in the
+  same change: the old app's `/napi/` calls there stopped on 2026-11-03,
+  and since then every paired phone calls `homes.`; no `redirectFrom` is
+  left for it either.
+- **Consequences.** A phone paired to `homes.<domain>` cannot reach Homes
+  once the change is applied: the app keeps its address and does not
+  follow a move, so it is unpaired and paired again with `www.<domain>`.
+  The contacts' links in the Homes account follow by themselves on the
+  next sync (Homes makes them from `HOMES_PUBLIC_URL` when it serves them).
+  Caddy has no site for `homes.` or `haus.` any more and renews no
+  certificate for them; their Strato records point nowhere useful and
+  can be deleted.

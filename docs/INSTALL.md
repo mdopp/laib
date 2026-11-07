@@ -304,7 +304,7 @@ What makes or breaks the first boot is settled before the stick is built:
   `dopp.cloud` is at Strato (no DNS API, no wildcards) and the house's port
   80 reaches the Kraftwerk. So the NUC uses HTTP-01 through the Kraftwerk:
   at Strato, one subdomain per NUC host as a CNAME to `dopp.cloud`
-  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `homes.nuc`, `dns.nuc`, `whoami.nuc`);
+  (`laib.nuc`, `auth.nuc`, `ldap.nuc`, `www.nuc`, `dns.nuc`, `whoami.nuc`);
   on the Kraftwerk's NPM, one proxy host per name, **HTTP only, no SSL**,
   forwarding to the NUC's LAN address on port 80. `laib-stick --domain
   nuc.dopp.cloud` without `--dns-provider` and without `--tls internal`;

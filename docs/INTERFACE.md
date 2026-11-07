@@ -440,7 +440,7 @@ Other places that need a key link here instead of explaining
 Laib can see (a set value `requires` it, or the DNS-01 token) with this
 link (`render.KeyLink`); an app links it from its own settings (Homes'
 Discogs settings, haus#148: `name=HOMES_DISCOGS_KEY` and `HOMES_DISCOGS_SECRET`,
-`zurueck=https://homes.<domain>/discogs`). `zurueck` is offered as „Zurück“,
+`zurueck=https://www.<domain>/discogs`). `zurueck` is offered as „Zurück“,
 also after saving, only when it is `https://` on the box's domain or a
 name under it; anything else (another site, `http://`, `//host`) is
 dropped, so the link is no open redirect. A name the page may not set
@@ -521,7 +521,7 @@ approve of a human-class proposal is refused with the same reasons.
 
 A route may list path prefixes that skip Authelia on its host, for a
 token-only API next to pages: Homes serves `/napi/` to the phone's device
-token and `/box` behind Authelia on `homes.<domain>`. Caddy proxies the
+token and `/box` behind Authelia on `www.<domain>`. Caddy proxies the
 bypass paths straight through; Authelia gets a bypass rule per prefix.
 
 ### `laib remove <service>`
