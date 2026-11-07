@@ -9,7 +9,6 @@ ENERGY_TOTALS: ""                                        # label=sensor.…,…;
 STT_PROVIDER: ""                                         # HA speech-to-text entity for the microphone (haus#63), e.g. stt.faster_whisper; empty: no button
 STT_LANGUAGE: de                                         # the language Homes asks HA's STT for
 HA_PUBLIC_URL: https://home.${DOMAIN}                     # "In Home Assistant öffnen" (haus#64)
-GESUNDHEIT_URL: ""                                       # the Gesundheit program (laib#893, haus#192): https://gesundheit.${DOMAIN} once it is installed; empty: no card on Mehr
 REITTI_URL: ""                                           # Reitti (laib#1021): http://host.containers.internal:8730 once it is installed; empty: no Standortverlauf
 REITTI_PUBLIC_URL: ""                                    # where a person makes their Reitti token: https://reitti.${DOMAIN}; empty: no link
 ENERGY_STATS: ""                                         # bezug=sensor.…,einspeisung=…,solar=…: HA long-term statistics for the history (haus#65); empty: the counters Homes finds

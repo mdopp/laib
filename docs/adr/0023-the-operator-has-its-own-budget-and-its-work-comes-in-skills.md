@@ -859,7 +859,7 @@ by hand, while the kernel answered the same question for the look in Go
   `uses:` (a service it talks to without ordering after it, Home
   Assistant's clients), `needs: [mcp]`, `oidc:`. The map and the test
   holding it to the templates are gone. Gesundheit's template, in its own
-  repo, names no `uses:` yet.
+  repo, named no `uses:` (history: Gesundheit was removed 2026-11-07).
 - **A skill's script is one file, one theme, at most 220 lines.** What two
   skills share lives in `skills/lib/` (the door's path already reads it):
   `logzeilen.py`, how a journal line is read and whether it is a real

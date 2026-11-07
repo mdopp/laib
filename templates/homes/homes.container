@@ -18,7 +18,6 @@ Environment=HOMES_ENERGY_TOTALS=${ENERGY_TOTALS}
 Environment=HOMES_STT_PROVIDER=${STT_PROVIDER}
 Environment=HOMES_STT_LANGUAGE=${STT_LANGUAGE}
 Environment=HOMES_HA_PUBLIC_URL=${HA_PUBLIC_URL}
-Environment=HOMES_GESUNDHEIT_URL=${GESUNDHEIT_URL}
 # the app's Standortverlauf (owner 2026-11-02): Reitti as this pod reaches it, and where a person makes
 # their own token; empty without Reitti, and then /napi/standort answers 503 and the page says so
 Environment=HOMES_REITTI_URL=${REITTI_URL}

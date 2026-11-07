@@ -15,7 +15,7 @@ import (
 // them (#1038). A module Homes adds later is added here too; until then
 // laib refuses a wish for it, and Homes says so.
 var homesModule = []string{"geraete", "energie", "sprechen", "kalender", "kontakte", "konto", "einkauf", "notizen",
-	"dokumente", "musik", "podcasts", "gesehen", "sicherung", "standort", "netzlaufwerk", "gesundheit", "werkstatt", "nutzung"}
+	"dokumente", "musik", "podcasts", "gesehen", "sicherung", "standort", "netzlaufwerk", "werkstatt", "nutzung"}
 
 var (
 	modulName   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)

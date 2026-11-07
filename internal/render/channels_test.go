@@ -177,9 +177,9 @@ func TestBoteWithoutSignalHasNoPort8085(t *testing.T) {
 	if strings.Contains(out[pod], "8085") || strings.Contains(out[nft], "8085") {
 		t.Fatalf("no Signal: 8085 is published or declared:\n%s\n%s", out[pod], out[nft])
 	}
-	// #894: bote-notify beyond loopback for the gesundheit pod (host.containers.internal), lan: false in nft
-	if !strings.Contains(out[pod], "PublishPort=8645:8645\n") || strings.Contains(out[pod], "127.0.0.1:8645") || !strings.Contains(out[nft], "8645") {
-		t.Fatalf("no Signal: bote-notify's port stays, beyond loopback:\n%s\n%s", out[pod], out[nft])
+	// bote-notify on loopback again (2026-11-07: Gesundheit, the one pod that reached it, is gone), lan: false in nft
+	if !strings.Contains(out[pod], "PublishPort=127.0.0.1:8645:8645\n") || !strings.Contains(out[nft], "8645") {
+		t.Fatalf("no Signal: bote-notify's port stays, on loopback:\n%s\n%s", out[pod], out[nft])
 	}
 	out, err = boteBox(t, "", nil) // values.example.yml: Signal only
 	if err != nil {
