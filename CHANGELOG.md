@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.0](https://github.com/mdopp/laib/compare/v2.7.2...v2.8.0) (2026-11-07)
+
+
+### Features
+
+* **template:** remove the wiring to the Gesundheit program ([#1096](https://github.com/mdopp/laib/issues/1096)) ([dec766c](https://github.com/mdopp/laib/commit/dec766ced4c6651390ffb726f2ba825cd06b8f08))
+* **template:** remove the wiring to the Gesundheit program (train 2026-11-07a) ([3310396](https://github.com/mdopp/laib/commit/3310396a037399d0782b02df20dbab937f8b1ace))
+
 ## [2.7.2](https://github.com/mdopp/laib/compare/v2.7.1...v2.7.2) (2026-11-06)
 
 
