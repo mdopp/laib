@@ -35,13 +35,26 @@ routes:
   # (Homes' own host stays wholly behind Authelia) and a port of its own: Homes registers nothing but that
   # page on 8652 (HOMES_KONTAKT_LISTEN), so no routing mistake here reaches another Homes route. Caddy limits
   # the rate per address and the body; Homes limits both again, keeps only a hash of each link and answers
-  # every link that is none with one page.
+  # every link that is none with one page. The body: 32 KB, the form's text; 6 MB only for the answer with
+  # the contact's own photo (owner 2026-11-08, homes#304: a multipart POST; Homes takes 5 MB of photo and 32 KB
+  # of text from it, decodes the photo and keeps a new JPEG of at most 512 px).
   - host: kontakt
     port: 8652
     exposure: public               # the contact opens the link wherever they are
     auth: none                     # the link's token is the capability; no other Homes route is on this port
     caddy: |
-      request_body {
+      @foto {
+      	method POST
+      	header Content-Type multipart/form-data*
+      }
+      request_body @foto {
+      	max_size 6MB
+      }
+      @klein not {
+      	method POST
+      	header Content-Type multipart/form-data*
+      }
+      request_body @klein {
       	max_size 32KB
       }
       route {
