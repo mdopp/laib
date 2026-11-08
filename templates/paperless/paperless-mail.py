@@ -219,7 +219,9 @@ def config(api):
 # changes documents (their tags, notes, custom field values, correspondent and owner), makes tags
 # (prüfen, korrespondent-ok) and new senders (correspondents), reads the names it needs (correspondents,
 # document types, custom field definitions, and the users, so it never takes a household person for a
-# sender, #737). Nothing else: no deleting, no mail, no workflows, no settings, no users or groups.
+# sender, #737), and puts a document scanned twice into Paperless' trash (dokumente's doppelt.py, owner
+# 2026-11-08: the household's only, restorable there). Nothing else: no emptying the trash, no mail, no
+# workflows, no settings, no users or groups.
 # One workflow „Dokument hinzugefügt“ gives it view and change on each new document and posts to its
 # hook with its token. Gesundheit was a second client until the owner removed it (2026-11-07); its
 # Paperless user stays as it was left, switched off.
@@ -235,7 +237,11 @@ DOKUMENTE_RECHTE = ["view_document", "add_document", "change_document", "view_no
                     "view_correspondent", "add_correspondent", "view_documenttype", "view_customfield", "view_user",
                     # its own /api/ui_settings/ (Paperless guards it with view_uisettings): the client reads
                     # its permissions there before a „nur für mich“ stack; without it Paperless answers 403
-                    "view_uisettings"]
+                    "view_uisettings",
+                    # delete_document: a partial rescan goes to the trash once the whole scan took its metadata, two
+                    # halves into one new document (owner 2026-11-08); only the household's (no owner) and a document
+                    # dokumente owns: Paperless lets nobody else's go, and the trash keeps it 30 days
+                    "delete_document"]
 WORKFLOW = "Dokument hinzugefügt"
 HOOK_URL = KUNDEN[0]["hook"]
 # the document types that are medical records (laib#893): made once each, found by name, never
