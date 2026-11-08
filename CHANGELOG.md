@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.11.1](https://github.com/mdopp/laib/compare/v2.11.0...v2.11.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **bote, caddy:** three yellows that were the probes, not the box ([069e7a0](https://github.com/mdopp/laib/commit/069e7a059af22046749a905c3030dcdcaf0950fe))
+* **bote, caddy:** three yellows that were the probes, not the box ([7aa1cde](https://github.com/mdopp/laib/commit/7aa1cde965d80c36b2dc4be57e77de7eb842ac6b))
+
 ## [2.11.0](https://github.com/mdopp/laib/compare/v2.10.0...v2.11.0) (2026-11-07)
 
 
