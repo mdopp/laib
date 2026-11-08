@@ -35,8 +35,8 @@ func TestANewProposalIsOneLineWithTheInboxLink(t *testing.T) {
 		t.Fatalf("three open proposals, three messages: %v", got)
 	}
 	for _, m := range got {
-		if !want[m["text"]] || len(m) != 2 || m["an"] != "martin" {
-			t.Errorf("a proposal is one line and nothing else (no poll): %q", m)
+		if !want[m["text"]] || len(m) != 3 || m["an"] != "martin" || !strings.HasPrefix(m["text"], "Freigabe #"+m["freigabe"]+":") {
+			t.Errorf("a proposal is one line and its number for deleting it (#1113), nothing else (no poll): %q", m)
 		}
 		delete(want, m["text"])
 	}

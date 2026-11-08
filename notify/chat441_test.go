@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,11 +14,13 @@ import (
 )
 
 // fakeBote is bote-notify's POST /mitteilung (templates/bote/notify.py):
-// it keeps each message, checks the bearer and the size, and fails while down.
+// it keeps each message, checks the bearer and the size, and fails while down;
+// POST /loeschen's bodies (#1113) it keeps in gone.
 type fakeBote struct {
 	mu   sync.Mutex
 	down bool
 	got  []map[string]string
+	gone []string
 	srv  *httptest.Server
 }
 
@@ -26,6 +29,12 @@ func newFakeBote(t *testing.T) *fakeBote {
 	b.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b.mu.Lock()
 		defer b.mu.Unlock()
+		if r.URL.Path == "/loeschen" && r.Header.Get("Authorization") == "Bearer bote-n" {
+			body, _ := io.ReadAll(r.Body)
+			b.gone = append(b.gone, string(body))
+			w.Write([]byte(`{"ok": true, "geloescht": true}`))
+			return
+		}
 		if r.URL.Path != "/mitteilung" || r.Header.Get("Authorization") != "Bearer bote-n" {
 			http.Error(w, "nein", http.StatusUnauthorized)
 			return
@@ -55,6 +64,12 @@ func (b *fakeBote) messages() []map[string]string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]map[string]string(nil), b.got...)
+}
+
+func (b *fakeBote) deleted() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.gone...)
 }
 
 func chatConfig(t *testing.T, f *fakeLaib, b *fakeBote, smtpAddr string) Config {
