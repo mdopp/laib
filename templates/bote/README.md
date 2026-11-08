@@ -629,7 +629,11 @@ session (`bote-probe-…`), as Homes's Sprechen field sends them. A probe fails
 when there is no answer or an error text, when the reply takes longer than
 `PROBE_LIMIT` (30 s), when a fact question does not call `frage` or name the
 fact, or when the question nobody can know („Wie heißt der Hund meines
-Nachbarn?“) gets an answer instead of „weiß ich nicht“. One line goes to the
+Nachbarn?“) gets an answer with no word that says not (a made-up name), or
+when „Welche Lichter sind gerade an?“ is answered with „kann ich nicht“ or „keinen
+Zugriff“: the directory asks Home Assistant first (#520), so the answer is often
+HA's own („Keins“, or the lights' names) with no tool run. A failed probe's
+finding carries the start of the answer. One line goes to the
 unit's journal (`laib logs bote --grep Bote-Proben`), the result into
 `proben.json`, and the Box page's line says „Proben 9 von 10 (30.10. 05:31),
 Antwort meist 6,1 s“ with a yellow finding per failed probe. Nothing
