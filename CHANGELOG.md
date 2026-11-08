@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.0](https://github.com/mdopp/laib/compare/v2.12.0...v2.13.0) (2026-11-08)
+
+
+### Features
+
+* **paperless:** dokumente may put a duplicate scan into the trash ([#1117](https://github.com/mdopp/laib/issues/1117)) ([4c10c05](https://github.com/mdopp/laib/commit/4c10c05330b4bc745e0e54b8d220ca3e1f59d8cf))
+
 ## [2.12.0](https://github.com/mdopp/laib/compare/v2.11.1...v2.12.0) (2026-11-08)
 
 
