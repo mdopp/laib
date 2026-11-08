@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.12.0](https://github.com/mdopp/laib/compare/v2.11.1...v2.12.0) (2026-11-08)
+
+
+### Features
+
+* **bote:** delete a proposal's chat notice once it is decided ([ecdc9b8](https://github.com/mdopp/laib/commit/ecdc9b89bcae75da86cec050f5a5e2515de033d5))
+* **bote:** delete a proposal's chat notice once it is decided ([fc42c2e](https://github.com/mdopp/laib/commit/fc42c2eb07eba658dc3b04ecebf6625746fb6e0b)), closes [#1113](https://github.com/mdopp/laib/issues/1113)
+
+
+### Bug Fixes
+
+* **bote:** the Hermes fallback keeps the deadline after a failed direct Signal send ([f88d7a2](https://github.com/mdopp/laib/commit/f88d7a2df3beeab726e8b1d44c0040f03facd367))
+
 ## [2.11.1](https://github.com/mdopp/laib/compare/v2.11.0...v2.11.1) (2026-11-08)
 
 
