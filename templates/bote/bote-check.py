@@ -17,7 +17,7 @@ Only reads. A part not measured says so; no number is made up.
 With PROBEN=1 (bote-proben.service, nightly) it instead sends ten fixed
 sentences to Hermes' API server, each in a fresh session, streamed as Homes's
 Sprechen field does, and keeps per probe the reply time, the tools that ran and
-what is wrong: a fact question must call frage and name the fact, something
+what is wrong, with the start of a failed probe's answer: a fact question must call frage and name the fact, something
 nobody can know must be said to be unknown, every reply comes within
 PROBE_LIMIT seconds and carries no error text. One line goes to the unit's
 journal, the result to proben.json.
@@ -41,6 +41,10 @@ def has(*words):
     return lambda a, t: "" if any(re.search(r"(?i)\b" + re.escape(w) + r"\b", a) for w in words) else "sagt nicht: " + " / ".join(words)
 
 
+def lacks(*words):
+    return lambda a, t: next(("sagt: " + w for w in words if re.search(r"(?i)\b" + re.escape(w) + r"\b", a)), "")
+
+
 def ran(server):
     return lambda a, t: "" if any(x.startswith(f"mcp__{server}__") for x in t) else f"kein {server}-Werkzeug" + (f" (nur {', '.join(t)})" if t else "")
 
@@ -57,9 +61,13 @@ PROBES = [
     ("Zugspitze", "Wie hoch ist die Zugspitze?", both(ran("frage"), has("2962", "2.962", "2 962"))),
     ("Australien", "Was ist die Hauptstadt von Australien?", both(ran("frage"), has("Canberra"))),
     ("Relativität", "Wer hat die Relativitätstheorie entwickelt?", both(ran("frage"), has("Einstein"))),
-    ("Unbekannt", "Wie heißt der Hund meines Nachbarn?", has("weiß ich nicht", "weiß nicht", "keine Ahnung", "nicht bekannt", "kann ich nicht",
-                                                           "nicht sagen", "nichts gefunden", "nicht herausfinden", "keine Information", "keine Informationen")),
-    ("Lichter", "Welche Lichter sind gerade an?", has("Licht", "Lichter", "Lampe", "Lampen", "an", "aus", "keine")),
+    # something nobody can know: any word that says not (the box's own nights: „keinen Zugriff“, „kein Werkzeug“,
+    # „kann ich leider nicht helfen“); a made-up name („Er heißt Bello.“) has none
+    ("Unbekannt", "Wie heißt der Hund meines Nachbarn?", has("nicht", "nichts", "kein", "keine", "keinen", "keiner", "keinerlei")),
+    # the directory asks Home Assistant first (#520): its answer is HA's own, „Keins“ or the lights' names with no
+    # tool run, so the probe names a Bote that says it cannot see them, not one that leaves out the word Licht
+    ("Lichter", "Welche Lichter sind gerade an?", lacks("kann ich nicht", "kann ich leider nicht", "keinen Zugriff", "kein Werkzeug",
+                                                          "nicht helfen", "nicht möglich", "nicht erreichbar", "weiß ich nicht")),
     ("Uhrzeit", "Wie spät ist es?", lambda a, t: "" if re.search(r"\d", a) else "keine Uhrzeit"),
     ("Witz", "Erzähl mir einen kurzen Witz.", lambda a, t: ""),
     ("Danke", "Danke!", lambda a, t: ""),
@@ -108,7 +116,7 @@ def proben(key):
         why = ("keine Antwort" if not answer else "Fehlertext" if "⚠" in answer or "OUT-OF-BAND" in answer
                else f"zu langsam ({secs[-1]:.0f} s)" if secs[-1] > LIMIT else check(answer, tools))
         if why:
-            failed.append({"name": name, "why": why})
+            failed.append({"name": name, "why": why, "answer": answer[:160]})
     else:
         r = {"at": at, "n": len(PROBES), "ok": len(PROBES) - len(failed), "median": round(statistics.median(secs), 1),
              "max": round(max(secs), 1), "failed": failed}
@@ -132,7 +140,7 @@ def probed():
                                                     "fix": "laib logs bote"}]
     med = str(r["median"]).replace(".", ",")
     return f"Proben {r['ok']} von {r['n']} ({when}), Antwort meist {med} s", [
-        {"severity": "gelb", "detail": f"Bote-Probe „{f['name']}“: {f['why']}", "fix": "templates/bote/README.md, „Proben“; laib logs bote"} for f in r.get("failed") or []]
+        {"severity": "gelb", "detail": f"Bote-Probe „{f['name']}“: {f['why']}" + (f" (Antwort: „{f['answer']}“)" if f.get("answer") else ""), "fix": "templates/bote/README.md, „Proben“; laib logs bote"} for f in r.get("failed") or []]
 
 
 def status(detail, findings=()):

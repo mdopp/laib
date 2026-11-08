@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Die Box-Seite meldet die Statusseite unter der Nummer der Box nicht mehr fälschlich als Adresse ohne Zertifikat
 Wer zu Hause im WLAN die Nummer der Box im Browser öffnet, sieht jetzt, was auf der Box läuft und ob es geht, auch wenn sonst nichts mehr geht
 Auf der Box-Seite steht bei Caddy, wie viele Adressen die Box hat und bis wann ihre Zertifikate gelten
 Den Zugang zum DNS-Anbieter für die Zertifikate hinterlegst du auf der Box-Seite, mit einer Anleitung, woher du ihn bekommst

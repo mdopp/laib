@@ -3,8 +3,9 @@
 serves and until when the certificates it hands out are valid.
 
 The addresses come from Caddy's running config (its admin API on the host's
-127.0.0.1:2019, /config/apps/http/servers): every host name a route matches,
-the wildcard catch-all left out. The config carries the proxy secrets; this
+127.0.0.1:2019, /config/apps/http/servers): every host name a route matches
+on a server that answers TLS, the wildcard catch-all and the plain-http sites
+(the bare LAN address, #1043) left out. The config carries the proxy secrets; this
 reads the host names only and prints nothing else of it. For each address
 one TLS handshake to 127.0.0.1:443 with its name, as a phone sees it, reads
 the served certificate's end, unverified (a box with tls: internal has
@@ -30,9 +31,17 @@ def status(detail, findings=()):
     os.replace(STATUS + ".tmp", STATUS)
 
 
+def tls(srv):
+    """a server that answers TLS: not one on port 80 alone, as the http:// site of the box's
+    bare LAN address (#1043, ADR 0007: no certificate is valid for an address)"""
+    return not all(str(a).rsplit(":", 1)[-1] == "80" for a in srv.get("listen") or [":443"])
+
+
 def hosts(servers):
     out = set()
     for srv in (servers or {}).values():
+        if not tls(srv):
+            continue
         for route in srv.get("routes") or []:
             for m in route.get("match") or []:
                 out.update(h for h in m.get("host") or [] if "*" not in h)

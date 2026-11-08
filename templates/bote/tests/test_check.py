@@ -154,6 +154,28 @@ class Proben(unittest.TestCase):
         self.assertIn("„Unbekannt“: sagt nicht", found)
         self.assertIn("„Danke“: Fehlertext", found)
 
+    def test_the_boxs_honest_answers_are_green(self):
+        """measured on the box 2026-11-05..08: every night's „Unbekannt“ said it does not know in its own
+        words, and „Lichter“ is Home Assistant's own answer (the directory asks HA first, #520), „Keins“,
+        with no tool run; none of them is made up, so none is yellow"""
+        for unknown, lights in [("Ich habe keinen Zugriff auf Informationen über Nachbarn oder deren Haustiere.", ("Keins", [])),
+                                ("Dabei kann ich leider nicht helfen.", ("Bambi und Küche", [])),
+                                ("Ich habe kein Werkzeug, um nach Informationen über Nachbarn zu suchen.", ("Keine Lichter sind an.", ["mcp__ha__GetLiveContext"]))]:
+            good = dict(GOOD)
+            good["Wie heißt der Hund meines Nachbarn?"] = (unknown, [])
+            good["Welche Lichter sind gerade an?"] = lights
+            r, st = probe(hermes(good))
+            self.assertIn("Proben 10 von 10", st["detail"], (unknown, lights, st["findings"]))
+
+    def test_a_bote_that_cannot_see_the_lights_is_named_with_its_answer(self):
+        bad = dict(GOOD)
+        bad["Welche Lichter sind gerade an?"] = ("Dabei kann ich leider nicht helfen.", [])
+        r, st = probe(hermes(bad))
+        self.assertIn("Proben 9 von 10", st["detail"])
+        found = " | ".join(f["detail"] for f in st["findings"] if f["severity"] == "gelb")
+        self.assertIn("„Lichter“: sagt: kann ich", found)
+        self.assertIn("Antwort: „Dabei kann ich leider nicht helfen.“", found)
+
     def test_a_slow_reply_fails_its_limit(self):
         r, st = probe(hermes(GOOD, delay=0.3), PROBE_LIMIT="0.1")
         self.assertIn("Proben 0 von 10", st["detail"])
