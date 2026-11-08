@@ -12,7 +12,9 @@ own: the route `kontakt.<domain>` (`auth: none`, public) proxies to port
 8652, where Homes (`HOMES_KONTAKT_LISTEN`) registers nothing but that page,
 `/<token>`. Homes' own host (`www.<domain>`) keeps its one bypass, `/napi/`,
 and nothing else. Caddy limits the new host to 30 requests per address in 10 minutes
-(caddy-ratelimit, pinned in `caddy/Containerfile`) and a 32 KB body; Homes
+(caddy-ratelimit, pinned in `caddy/Containerfile`) and a 32 KB body, 6 MB
+only for a multipart POST, the answer with the contact's own photo (owner
+2026-11-08, homes#304); Homes
 limits both again, keeps only a hash of each link and answers every link
 that is none with the same page. The name needs its own Strato record, as
 every name on this box.

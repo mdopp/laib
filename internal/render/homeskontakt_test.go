@@ -27,10 +27,16 @@ func TestHomesKontaktIsItsOwnHostWithoutLoginAndHomesStaysBehindAuthelia(t *test
 		return caddy[i : i+strings.Index(caddy[i:], "\n}\n")]
 	}
 	k := site("kontakt.x.home")
-	for _, want := range []string{"request_header -Remote-*", "reverse_proxy 127.0.0.1:8652", "max_size 32KB", "rate_limit {", "zone kontakt {", "key {remote_host}", "events 30", "window 10m"} {
+	// the body: 32 KB, 6 MB only for the multipart POST that carries the contact's photo (owner 2026-11-08, homes#304)
+	for _, want := range []string{"request_header -Remote-*", "reverse_proxy 127.0.0.1:8652", "rate_limit {", "zone kontakt {", "key {remote_host}", "events 30", "window 10m",
+		"@foto {\n\t\tmethod POST\n\t\theader Content-Type multipart/form-data*\n\t}\n\trequest_body @foto {\n\t\tmax_size 6MB\n\t}",
+		"@klein not {\n\t\tmethod POST\n\t\theader Content-Type multipart/form-data*\n\t}\n\trequest_body @klein {\n\t\tmax_size 32KB\n\t}"} {
 		if !strings.Contains(k, want) {
 			t.Errorf("kontakt site lacks %q:\n%s", want, k)
 		}
+	}
+	if strings.Count(k, "request_body") != 2 {
+		t.Errorf("a body limit without its matcher:\n%s", k)
 	}
 	for _, not := range []string{"import authelia", "X-Homes-Proxy", "psec", "8650", "@lan"} {
 		if strings.Contains(k, not) {
