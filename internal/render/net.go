@@ -112,7 +112,7 @@ func Net(st *state.State) NetMap {
 			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
-				n.Names = append(n.Names, NetName{Name: strings.TrimPrefix(fqdn(st, h), "@."), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
+				n.Names = append(n.Names, NetName{Name: fqdn(st, h), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
 			}
 		}
 		for _, p := range append(slices.Clone(c.Ports), hostRoutePorts(c)...) {

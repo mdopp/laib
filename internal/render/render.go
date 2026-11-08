@@ -568,7 +568,14 @@ func substitute(content string, vars map[string]string) string {
 	return content
 }
 
-func fqdn(st *state.State, host string) string { return host + "." + st.Box.Domain }
+// fqdn is a route's name: host.<domain>; "@" is the domain itself (a route
+// on the apex, homes' teaser, or a redirectFrom name).
+func fqdn(st *state.State, host string) string {
+	if host == "@" {
+		return st.Box.Domain
+	}
+	return host + "." + st.Box.Domain
+}
 
 // ssoPort is the Authelia listener Caddy forwards auth to: the sso service's
 // first route port.
@@ -768,7 +775,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 			if len(r.RedirectFrom) > 0 {
 				var from []string
 				for _, h := range r.RedirectFrom {
-					from = append(from, strings.TrimPrefix(fqdn(st, h), "@."))
+					from = append(from, fqdn(st, h))
 				}
 				fmt.Fprintf(&b, "%s {\n\tredir https://%s{uri}\n}\n\n", strings.Join(from, ", "), fqdn(st, r.Host))
 			}

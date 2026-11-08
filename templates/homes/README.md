@@ -19,12 +19,25 @@ limits both again, keeps only a hash of each link and answers every link
 that is none with the same page. The name needs its own Strato record, as
 every name on this box.
 
-Homes answers at `www.<domain>`, and the domain itself redirects there
-(owner 2026-11-07, ADR 0031 amendment): the family's entry is the domain's
-own name. `HOMES_PUBLIC_URL` in `homes.container` names the same host as
-the first route; `TestHomesPublicURLIsItsRoute` holds the two together.
-Its first route is also where Laib sends a login without a target and the
-welcome mail (`render.HomesURL`).
+Homes answers at `www.<domain>` (owner 2026-11-07, ADR 0031 amendment).
+`HOMES_PUBLIC_URL` in `homes.container` names the same host as the first
+route; `TestHomesPublicURLIsItsRoute` holds the two together. Its first
+route is also where Laib sends a login without a target and the welcome
+mail (`render.HomesURL`).
+
+The domain itself is the box's public face (owner 2026-11-08): the route
+`host: "@"` (`auth: none`, public) proxies to the same port 8652, where
+Homes tells the two hosts apart (`HOMES_TEASER_HOST`; any other Host there
+is 404). A visitor without an account sees one static page — what the box
+is, „Anmelden“ to `www.<domain>`, and „Zugang anfragen“, a request a person
+reads, never a registration. Caddy allows a POST only on `/zugang`, a
+32 KB body and 60 requests per address in 10 minutes (zone `teaser`);
+Homes accepts one request per address an hour and twenty a day, keeps them
+in its data folder (`zugang.json`, a salted hash of the address, never the
+address), tells `notify.person` (`HOMES_TEASER_PERSON`, `${NOTIFY_PERSON}`)
+over the Bote, and shows the open ones to the admins on Start, „Braucht
+dich“, with „Erledigt“. Until 2026-11-08 the domain redirected to `www.`
+(`redirectFrom: ["@"]`); the apex keeps its own certificate either way.
 
 Homes was called Haus until 2026-11-03 (ADR 0031, #1021). Its addresses
 `haus.<domain>` and `homes.<domain>` are gone since 2026-11-07, no
