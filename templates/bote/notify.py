@@ -110,6 +110,7 @@ def deliver(cfg, channels, text, ident=False):
                 return ch, str(signal_rpc(cfg, "send", {"message": text, **signal_to(ch)}, min(cfg.channel_timeout, left))["timestamp"])
             except (OSError, ValueError, KeyError, TypeError) as e:
                 cfg.log(f"mitteilung: signal direkt nicht gesendet ({type(e).__name__}), über Hermes")
+                left = end - time.monotonic()
         try:
             r = subprocess.run([*cfg.send, "--to", ch, "--file", "-", *(["--json"] if ident else [])], input=text, text=True,
                                env=env, capture_output=True, timeout=min(cfg.channel_timeout, left))
