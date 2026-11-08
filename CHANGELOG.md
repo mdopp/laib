@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.0](https://github.com/mdopp/laib/compare/v2.13.0...v2.14.0) (2026-11-08)
+
+
+### Features
+
+* **template:** homes' teaser on the domain itself, a route on the apex ([#1119](https://github.com/mdopp/laib/issues/1119)) ([e81e306](https://github.com/mdopp/laib/commit/e81e306d3b201a2fed6b859de9959b9fe0bfe223))
+
 ## [2.13.0](https://github.com/mdopp/laib/compare/v2.12.0...v2.13.0) (2026-11-08)
 
 
