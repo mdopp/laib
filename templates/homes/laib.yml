@@ -30,7 +30,34 @@ routes:
     auth: one_factor
     bypass: [/napi/]
     proxySecret: HOMES_PROXY_SECRET # Caddy sends it as X-Homes-Proxy on the authenticated handler only (ADR 0012 §3)
-    redirectFrom: ["@"]            # the domain itself leads to Homes (#360)
+  # The domain itself (owner 2026-11-08): a visitor without an account sees a short public page, what the box is,
+  # „Anmelden“ to www.<domain> and „Zugang anfragen“, a request a person reads (never a registration). It is served by
+  # the same listener as Kontakt prüfen lassen (port 8652, HOMES_TEASER_HOST tells the two hosts apart; any other
+  # Host there is 404). Caddy allows a POST only on /zugang, a 32 KB body and 60 requests per address in 10 minutes;
+  # Homes takes one request per address an hour and twenty a day, keeps them in its data folder with a hash of the
+  # address, and tells box.yml notify.person (HOMES_TEASER_PERSON) over the Bote. www.<domain> stays behind Authelia.
+  - host: "@"
+    port: 8652
+    exposure: public               # the public face of the box
+    auth: none                     # nothing of the household is on this port; the form is a request to a person
+    caddy: |
+      @fremd {
+      	method POST
+      	not path /zugang
+      }
+      respond @fremd 405
+      request_body {
+      	max_size 32KB
+      }
+      route {
+      	rate_limit {
+      		zone teaser {
+      			key {remote_host}
+      			events 60
+      			window 10m
+      		}
+      	}
+      }
   # Kontakt prüfen lassen (owner 2026-11-07): the one page of Homes without a login, on a host of its own
   # (Homes' own host stays wholly behind Authelia) and a port of its own: Homes registers nothing but that
   # page on 8652 (HOMES_KONTAKT_LISTEN), so no routing mistake here reaches another Homes route. Caddy limits
@@ -149,4 +176,4 @@ status:                          # the Box page's line (#785): "3 Geräte angeme
   stale: 20m                     # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8650, lan: false}
-  - {port: 8652, lan: false}       # Kontakt prüfen lassen's page alone, for Caddy's kontakt.<domain>
+  - {port: 8652, lan: false}       # the public listener: Kontakt prüfen lassen (kontakt.<domain>) and the teaser (<domain>)

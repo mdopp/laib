@@ -104,6 +104,10 @@ Environment=HOMES_PUBLIC_URL=https://www.${DOMAIN}
 # Kontakt prüfen lassen (owner 2026-11-07): the page without a login, on its own listener and host
 Environment=HOMES_KONTAKT_LISTEN=0.0.0.0:8652
 Environment=HOMES_KONTAKT_URL=https://kontakt.${DOMAIN}
+# the teaser on the domain itself (owner 2026-11-08), on the same listener: its Host, and whom a
+# „Zugang anfragen“ request is told (box.yml notify.person, over the Bote)
+Environment=HOMES_TEASER_HOST=${DOMAIN}
+Environment=HOMES_TEASER_PERSON=${NOTIFY_PERSON}
 # the name the family talks to, on the pages and in the app (box.yml assistant, ADR 0030)
 Environment=HOMES_ASSISTANT=${ASSISTANT}
 Volume=${DATA_DIR}/homes:/data:Z

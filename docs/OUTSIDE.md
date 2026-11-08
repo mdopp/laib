@@ -56,8 +56,9 @@ a human's call at the console. Removing someone stays LLDAP's admin UI
 (`ldap.`, at home only, behind Authelia's two factors and then LLDAP's own
 login). The tool doing the LLDAP and Authelia work is the auth template's
 `person.py`, run in the hooks image like a hook. Homes lives on `www.`
-and `dopp.cloud` redirects there (the homes route's `redirectFrom`, ADR 0031
-amendment 2026-11-07), so the domain itself leads somewhere.
+(ADR 0031 amendment 2026-11-07); `dopp.cloud` itself is Homes' public
+teaser (the homes route `host: "@"`, owner 2026-11-08): what the box is,
+„Anmelden“ to `www.`, and „Zugang anfragen“.
 
 ## No canary channel
 
